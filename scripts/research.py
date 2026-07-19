@@ -239,23 +239,37 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
 
     with ThreadPoolExecutor(max_workers=min(len(sub_queries), 4)) as ex:
         futures = {ex.submit(_search_one, sq): sq for sq in sub_queries}
-        for fut in as_completed(futures, timeout=timeout * 2 + 5):
-            try:
-                sr = fut.result()
-                sub_results.append(sr)
-                all_results.extend(sr["results"])
-                engines_used.update(sr["engines_used"])
-            except Exception as e:
-                sq = futures[fut]
-                sub_results.append({
-                    "sub_query": sq["query"],
-                    "intent": sq["intent"],
-                    "strategy": sq["strategy"],
-                    "results": [],
-                    "engines_used": [],
-                    "error": str(e),
-                    "elapsed_ms": 0,
-                })
+        all_futures = list(futures.keys())
+        try:
+            for fut in as_completed(futures, timeout=timeout * 2 + 5):
+                try:
+                    sr = fut.result()
+                    sub_results.append(sr)
+                    all_results.extend(sr["results"])
+                    engines_used.update(sr["engines_used"])
+                except Exception as e:
+                    sq = futures[fut]
+                    sub_results.append({
+                        "sub_query": sq["query"],
+                        "intent": sq["intent"],
+                        "strategy": sq["strategy"],
+                        "results": [],
+                        "engines_used": [],
+                        "error": str(e),
+                        "elapsed_ms": 0,
+                    })
+        except Exception:
+            # 超时后收集已完成的 futures
+            for fut in all_futures:
+                if fut.done() and not fut.cancelled():
+                    try:
+                        sr = fut.result()
+                        if sr not in sub_results:
+                            sub_results.append(sr)
+                            all_results.extend(sr["results"])
+                            engines_used.update(sr["engines_used"])
+                    except Exception:
+                        pass
 
     # RRF 融合
     result_lists = [sr["results"] for sr in sub_results if sr["results"]]

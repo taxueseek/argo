@@ -447,7 +447,7 @@ def analyze_query(query: str) -> dict[str, Any]:
 
     # 歧义检测
     for term, info in AMBIGUOUS_TERMS.items():
-        if term in query or (term.isascii() and term.isupper() and re.search(r'\b' + re.escape(term) + r'\b', query)):
+        if term in query or (term.isascii() and re.search(r'\b' + re.escape(term) + r'\b', query, re.I)):
             # 检查上下文关键词
             matched_meanings = []
             for meaning in info["meanings"]:
@@ -488,7 +488,7 @@ def analyze_query(query: str) -> dict[str, Any]:
                     "top_choice": top["meaning"],
                     "confidence": round(conf, 2),
                 })
-                analysis["confidence"] *= conf
+                analysis["confidence"] = min(analysis["confidence"], conf)
             else:
                 # 无法消歧
                 analysis["ambiguities"].append({
@@ -497,7 +497,7 @@ def analyze_query(query: str) -> dict[str, Any]:
                     "top_choice": info["meanings"][0]["text"],
                     "confidence": info["meanings"][0]["weight"],
                 })
-                analysis["confidence"] *= 0.6
+                analysis["confidence"] = min(analysis["confidence"], 0.6)
 
     # 意图分类
     for intent_key, intent_info in INTENT_PATTERNS.items():

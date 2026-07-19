@@ -102,7 +102,7 @@ def score_authority(url: str, source: str = "") -> dict[str, Any]:
     best_reason = "通用域名"
 
     for pattern, score in AUTHORITY_TIERS.items():
-        if domain == pattern or domain.endswith("." + pattern) or pattern in domain:
+        if domain == pattern or domain.endswith("." + pattern):
             if score > best_score:
                 best_score = score
                 best_reason = f"域名匹配：{pattern}"
@@ -168,8 +168,11 @@ def score_freshness(result: dict[str, Any], query_time: float = None) -> dict[st
         year = 2000 + int(year_match.group(1))
         from datetime import datetime
         age_years = datetime.now().year - year
-        if age_years <= 0:
-            score = 1.0
+        if age_years < 0:
+            score = 0.4
+            reason = f"{year}年（未来年份）"
+        elif age_years == 0:
+            score = 0.8
             reason = f"{year}年（今年）"
         elif age_years == 1:
             score = 0.9

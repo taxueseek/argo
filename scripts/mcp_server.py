@@ -95,6 +95,67 @@ TOOLS = [
             "required": ["query"]
         }
     },
+    {
+        "name": "unified_crawl",
+        "description": "站点级爬取：通过 sitemap.xml 或 BFS 策略批量抓取站点页面，输出页面 URL、正文片段和深度。适用于整站内容审计、站内多页对比、批量抓取等场景。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "目标站点根 URL（如 https://docs.python.org/）"
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["sitemap", "bfs"],
+                    "description": "爬取策略（默认 bfs）",
+                    "default": "bfs"
+                },
+                "max_pages": {
+                    "type": "integer",
+                    "description": "最大抓取页面数（默认 10，sitemap 策略默认 20）",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 50
+                },
+                "max_depth": {
+                    "type": "integer",
+                    "description": "BFS 最大深度（默认 2）",
+                    "default": 2,
+                    "minimum": 1,
+                    "maximum": 5
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "单页超时秒数（默认 8）",
+                    "default": 8,
+                    "minimum": 3,
+                    "maximum": 30
+                }
+            },
+            "required": ["url"]
+        }
+    },
+    {
+        "name": "unified_extract",
+        "description": "结构化数据提取：从页面 HTML 中抽取表格、<meta> 元数据、OpenGraph、JSON-LD 等结构化信息。适用于价格表抽取、SEO 元数据分析、富媒体结构化数据解析等场景。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "目标页面 URL"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["tables", "metadata", "jsonld", "all"],
+                    "description": "提取模式（默认 all）",
+                    "default": "all"
+                }
+            },
+            "required": ["url"]
+        }
+    },
 ]
 
 
@@ -128,6 +189,36 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             analysis["routing"] = routing
             return {"content": [{"type": "text", "text": json.dumps(analysis, ensure_ascii=False, indent=2)}]}
 
+        elif name == "unified_crawl":
+            from crawl import crawl_bfs, crawl_sitemap
+            strategy = arguments.get("strategy", "bfs")
+            max_pages = arguments.get("max_pages", 10)
+            max_depth = arguments.get("max_depth", 2)
+            timeout = arguments.get("timeout", 8)
+            if strategy == "sitemap":
+                result = crawl_sitemap(arguments["url"], max_pages=max_pages, timeout=timeout)
+            else:
+                result = crawl_bfs(arguments["url"], max_pages=max_pages, max_depth=max_depth, timeout=timeout)
+            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+
+        elif name == "unified_extract":
+            from extract import extract_tables, extract_metadata, extract_jsonld
+            from fetch import fetch_page
+            mode = arguments.get("mode", "all")
+            fetch_result = fetch_page(arguments["url"], max_chars=50000, timeout=15)
+            if not fetch_result["success"]:
+                return {"content": [{"type": "text", "text": json.dumps({"error": fetch_result.get("error", "fetch failed")}, ensure_ascii=False)}], "isError": True}
+            html = fetch_result["content"]
+            output = {}
+            if mode in ("tables", "all"):
+                output["tables"] = extract_tables(html)
+            if mode in ("metadata", "all"):
+                output["metadata"] = extract_metadata(html)
+            if mode in ("jsonld", "all"):
+                output["jsonld"] = extract_jsonld(html)
+            output["url"] = fetch_result["url"]
+            return {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False, indent=2)}]}
+
         else:
             return {"error": {"code": -32601, "message": f"Unknown tool: {name}"}}
 
@@ -148,9 +239,9 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "unified-search",
-                "version": "2.0.0"
+                "version": "2.4.0"
             },
-            "instructions": "unified-search MCP 提供 3 个工具：unified_research（深度研究）、unified_evidence（可信度评估）、unified_clarify（意图消歧）。底层使用 47 个搜索引擎的统一搜索基础设施。"
+            "instructions": "unified-search MCP 提供 5 个工具：unified_research（深度研究）、unified_evidence（可信度评估）、unified_clarify（意图消歧）、unified_crawl（站点爬取）、unified_extract（结构化数据提取）。底层使用 47 个搜索引擎的统一搜索基础设施。"
         }
 
     elif method == "tools/list":

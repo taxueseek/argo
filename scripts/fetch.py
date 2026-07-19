@@ -60,7 +60,7 @@ def fetch_page(url: str, max_chars: int = 3000, timeout: int = 8) -> dict[str, A
             # 编码检测
             charset = "utf-8"
             if "charset=" in content_type:
-                charset = content_type.split("charset=")[-1].strip()
+                charset = content_type.split("charset=")[-1].strip().split(";")[0]
             html = raw.decode(charset, errors="replace")
 
         extractor = ContentExtractor()
