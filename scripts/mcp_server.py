@@ -239,7 +239,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "unified-search",
-                "version": "2.2.0"
+                "version": "2.4.0"
             },
             "instructions": "unified-search MCP 提供 5 个工具：unified_research（深度研究）、unified_evidence（可信度评估）、unified_clarify（意图消歧）、unified_crawl（站点爬取）、unified_extract（结构化数据提取）。底层使用 47 个搜索引擎的统一搜索基础设施。"
         }
