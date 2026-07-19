@@ -19,7 +19,7 @@
   "author": "Argo Search",
   "repository": {
     "type": "git",
-    "url": "https://github.com/taxuexunxian/argo-mcp"
+    "url": "https://github.com/taxueseek/unified-search"
   },
   "bin": {
     "argo-mcp": "./bin/argo.js"
