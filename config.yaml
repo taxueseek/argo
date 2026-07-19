@@ -224,22 +224,13 @@ engines:
   anysearch:
     cmd:
     - python3
-    - ~/.agents/skills/anysearch-skill/scripts/anysearch_cli.py
-    domain_search:
-    - search
-    - '{query}'
-    - --domain
-    - '{domain}'
-    - --sub_domain
-    - '{sub_domain}'
-    - --max_results
-    - '{n}'
+    - ~/.claude/skills/argo/scripts/anysearch_http.py
     enabled: true
     env: {}
     search_args:
     - search
     - '{query}'
-    - --max_results
+    - '-n'
     - '{n}'
     type: cli
   arxiv:
@@ -444,6 +435,8 @@ engines:
       list: search
       srlimit: '{n}'
     format: json
+    headers:
+      User-Agent: argo-search/1.0
     method: GET
     query_param: srsearch
     timeout: 8
@@ -462,17 +455,24 @@ engines:
     url: https://api.wolframalpha.com/v2/query
   zhihu:
     enabled: true
-    extra_params:
-      count: '{n}'
     format: json
     headers:
       Authorization: Bearer {ZHIHU_ACCESS_SECRET}
       Content-Type: application/json
+      X-Request-Timestamp: '{TIMESTAMP}'
     method: GET
-    query_param: query
+    query_param: Query
+    extra_params:
+      Count: '{n}'
+    output_map:
+      items: Data.Items
+      item_title: Title
+      item_url: Url
+      item_summary: ContentText
+      item_source: AuthorName
     timeout: 10
     type: http
-    url: https://developer.zhihu.com/api/v1/content/global_search
+    url: https://developer.zhihu.com/api/v1/content/zhihu_search
 
 # 成本分级（用于成本感知路由）
 cost_tiers:

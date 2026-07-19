@@ -262,7 +262,7 @@ def _parse_xml(text: str, engine_name: str) -> list[dict[str, Any]]:
 def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[str, Any]]:
     """通用 JSON 解析：自动探测常见字段。"""
     items = None
-    for key in ["results", "items", "data", "works", "message.items"]:
+    for key in ["results", "items", "data", "works", "search"]:
         if "." in key:
             parts = key.split(".")
             obj = data
@@ -278,7 +278,7 @@ def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[st
     if items is None and isinstance(data, dict):
         for v in data.values():
             if isinstance(v, dict):
-                for key in ["results", "items", "value"]:
+                for key in ["results", "items", "value", "search"]:
                     if key in v and isinstance(v[key], list):
                         items = v[key]
                         break

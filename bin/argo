@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""argo — 6-tool unified search CLI. Usage: argo <subcommand> [args...]"""
+import sys, os, json, subprocess
+
+ARGO_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPTS = os.path.join(ARGO_HOME, "scripts")
+
+USAGE = """argo — 47-engine unified search CLI
+
+Usage:
+  argo search    "query"          统一搜索（47引擎，TF-IDF路由+RRF融合）
+  argo research  "query"          深度研究（问题分解→多源采集→综合报告）
+  argo evidence  "query"          可信度评估（自动搜索 → 评分，或 pipe 搜索结果）
+  argo clarify   "query"          意图消歧（歧义检测+意图分类+路由建议）
+  argo crawl     "url"            站点爬取（sitemap/BFS，多页抓取）
+  argo extract   "url"            结构化提取（表格/Meta/JSON-LD）
+
+Common flags: --json --mode {fast|auto|deep|budget} --max-results N --depth {fast|balanced|deep}
+"""
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        print(USAGE)
+        sys.exit(1)
+
+    sub = sys.argv[1]
+    rest = sys.argv[2:]
+
+    scripts = {
+        "search":   ("search.py",   ["--json"]),
+        "research": ("research.py", ["--json"]),
+        "evidence": ("evidence.py", ["--stdin", "--json"]),
+        "clarify":  ("clarify.py",  ["--json"]),
+        "crawl":    ("crawl.py",    []),
+        "extract":  ("extract.py",  []),
+    }
+
+    if sub not in scripts:
+        print(f"Unknown subcommand: {sub}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        sys.exit(1)
+
+    script, defaults = scripts[sub]
+    path = os.path.join(SCRIPTS, script)
+
+    # evidence: auto search → evidence pipeline (when no stdin data)
+    if sub == "evidence":
+        stdin_has_data = not sys.stdin.isatty()
+        query = rest[0] if rest and not rest[0].startswith("-") else ""
+
+        if not stdin_has_data and query:
+            # 自动搜索 → 管道 → evidence
+            search_path = os.path.join(SCRIPTS, "search.py")
+            search_cmd = [sys.executable, search_path, query, "--json",
+                          "--mode", "fast", "--max-results", "10"]
+            result = subprocess.run(search_cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                print(result.stderr, file=sys.stderr)
+                sys.exit(result.returncode)
+
+            evidence_cmd = [sys.executable, path, query, "--stdin", "--json"]
+            proc = subprocess.run(evidence_cmd, input=result.stdout,
+                                  capture_output=True, text=True, timeout=60)
+            print(proc.stdout, end="")
+            if proc.stderr:
+                print(proc.stderr, file=sys.stderr)
+            sys.exit(proc.returncode)
+
+        elif stdin_has_data:
+            # 管道模式：stdin → evidence
+            # 提取 query
+            evidence_args = defaults + rest
+            cmd = [sys.executable, path] + evidence_args
+            os.execv(sys.executable, cmd)
+        else:
+            print("evidence 需要查询词。用法：argo evidence \"query\"", file=sys.stderr)
+            sys.exit(1)
+
+    # --explain 与 --json 冲突（explain 输出纯文本干扰 JSON），自动去 --json
+    if "--explain" in rest and "--json" in defaults:
+        defaults.remove("--json")
+
+    cmd = [sys.executable, path] + defaults + rest
+    os.execv(sys.executable, cmd)
+
+if __name__ == "__main__":
+    main()

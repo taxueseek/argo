@@ -1,7 +1,7 @@
 {
   "name": "argo-search",
   "version": "1.0.1",
-  "description": "Argo — 47-engine unified search MCP server with TF-IDF routing, RRF fusion, and Bocha reranker. 6 tools: search, research, evidence, clarify, crawl, extract.",
+  "description": "Argo \u2014 47-engine unified search MCP server with TF-IDF routing, RRF fusion, and Bocha reranker. 6 tools: search, research, evidence, clarify, crawl, extract.",
   "keywords": [
     "mcp",
     "mcp-server",
