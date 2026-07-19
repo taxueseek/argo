@@ -1,0 +1,554 @@
+cache:
+  db_path: ~/.cache/unified-search/cache.db
+  enabled: true
+  max_size_mb: 200
+  ttl: 3600
+
+domains:
+- desc: 基金筛选/基金数据
+  engines_combo:
+  - eastmoney
+  - anysearch
+  fallback: anysearch
+  name: fund_query
+  parallel: false
+  patterns:
+  - (?i)(基金|公募|私募|ETF|LOF|FOF|基金经理|基金净值|基金排行|选基)
+  primary: eastmoney
+  quote: true
+- desc: 股票/行情查询
+  engines_combo:
+  - eastmoney
+  - anysearch
+  fallback: anysearch
+  name: stock_query
+  parallel: false
+  patterns:
+  - (?i)(股价|行情|涨跌|K线|大盘|指数|涨停|跌停|板块|概念股)
+  - (?i)(stock|quote|price|market\s+cap)
+  - A股|港股|美股|股票|ETF|板块
+  primary: eastmoney
+  quote: true
+- desc: 财经资讯/研报/公告
+  engines_combo:
+  - byted
+  - eastmoney
+  - anysearch
+  fallback: eastmoney
+  name: financial_news
+  parallel: true
+  patterns:
+  - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
+  - (?i)(financial|earnings|report|announcement)
+  primary: byted
+- desc: 知乎/观点/经验/评测
+  engines_combo:
+  - zhihu
+  - anysearch
+  fallback: anysearch
+  name: zhihu_content
+  parallel: true
+  patterns:
+  - (?i)(知乎|怎么看待|如何评价|体验|评测|对比|推荐|哪个好|值得买|好不好|要不要|推荐吗|求推荐|有什么)
+  primary: zhihu
+- desc: 学术论文搜索
+  engines_combo:
+  - arxiv
+  - openalex
+  - crossref
+  - semantic_scholar
+  fallback: semantic_scholar
+  name: academic
+  parallel: true
+  patterns:
+  - (?i)(论文|paper|arXiv|preprint|DOI|引用|citation|学术)
+  - \b\d{4}\.\d{4,5}\b
+  - (?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)
+  primary: arxiv
+- desc: 购物评测/选购推荐
+  engines_combo:
+  - zhihu
+  - anysearch
+  fallback: anysearch
+  name: shopping
+  parallel: true
+  patterns:
+  - (?i)(评测|推荐|哪个好|值得买|选购|入手|踩坑|避雷|best|review|comparison)
+  primary: zhihu
+- desc: 技术深度研究
+  engines_combo:
+  - semantic_scholar
+  - arxiv
+  - openalex
+  - github
+  fallback: arxiv
+  name: tech_deep
+  parallel: true
+  patterns:
+  - (?i)(research|deep dive|综述|survey|state of the art|SOTA)
+  - (?i)(原理|底层|实现|源码分析|架构设计|论文)
+  primary: semantic_scholar
+- desc: 代码搜索/开源项目
+  engines_combo:
+  - github
+  - anysearch
+  fallback: anysearch
+  name: code_search
+  parallel: true
+  patterns:
+  - (?i)(github|source code|代码|源码|开源|函数|API|实现|用法|example|snippet)
+  - (?i)\b(repo|repository|library|package|npm|pip|cargo)\b
+  primary: github
+- desc: 事实查询/快速问答
+  engines_combo:
+  - duckduckgo
+  - wikipedia
+  - wolframalpha
+  fallback: duckduckgo
+  name: fact_check
+  parallel: true
+  patterns:
+  - (?i)(what is|who is|when did|where is|how many|how much)
+  - (?i)(是什么|是谁|什么时候|在哪里|多少|多少钱)
+  primary: duckduckgo
+- desc: 实时新闻/事件
+  engines_combo:
+  - byted
+  - duckduckgo
+  fallback: duckduckgo
+  name: news_realtime
+  parallel: true
+  patterns:
+  - (?i)(最新新闻|最新进展|今天发生|突发|breaking)
+  - (?i)\b(news|latest)\b
+  primary: byted
+- desc: 中文通用搜索
+  engines_combo:
+  - bocha
+  - byted
+  fallback: bocha
+  name: chinese_general
+  parallel: true
+  patterns:
+  - '[一-鿿]'
+  primary: bocha
+- desc: 本地中文搜索
+  engines_combo:
+  - local_search
+  - bocha
+  fallback: local_search
+  name: local_chinese
+  parallel: true
+  patterns:
+  - (?i)(百度|搜狗|site:baidu.com|site:sogou.com)
+  primary: local_search
+- desc: 本地新闻搜索
+  engines_combo:
+  - local_search
+  - byted
+  fallback: byted
+  name: local_news
+  parallel: true
+  patterns:
+  - (?i)(本地新闻|bing news|google news|news rss)
+  primary: local_search
+- desc: 本地代码搜索
+  engines_combo:
+  - local_search
+  - github
+  - anysearch
+  fallback: anysearch
+  name: local_code
+  parallel: true
+  patterns:
+  - (?i)(stackoverflow|npm package|gitlab repo|github repo|site:stackoverflow.com)
+  primary: local_search
+- desc: 本地学术搜索
+  engines_combo:
+  - local_search
+  - arxiv
+  - semantic_scholar
+  fallback: arxiv
+  name: local_academic
+  parallel: true
+  patterns:
+  - (?i)(arxiv api|semantic scholar|crossref|pubmed|site:arxiv.org)
+  primary: local_search
+- desc: 本地参考百科
+  engines_combo:
+  - local_search
+  - wikipedia
+  - duckduckgo
+  fallback: duckduckgo
+  name: local_reference
+  parallel: true
+  patterns:
+  - (?i)(wikipedia api|wiktionary|wikiquote|nominatim|openstreetmap)
+  primary: local_search
+- desc: 本地通用搜索（兜底）
+  engines_combo:
+  - local_search
+  - anysearch
+  fallback: anysearch
+  name: local_general
+  parallel: true
+  patterns:
+  - (?i)(本地搜索|local search|零成本|free search)
+  primary: local_search
+- desc: 通用搜索（兜底）
+  engines_combo:
+  - anysearch
+  - bocha
+  - brave
+  fallback: anysearch
+  name: general_search
+  parallel: true
+  patterns: []
+  primary: anysearch
+
+engines:
+  local_search:
+    type: cli
+    enabled: true
+    cmd:
+    - python3
+    - sub-skills/local-search/search_v3.py
+    search_args:
+    - '{query}'
+    - --n
+    - '{n}'
+    - --mode
+    - '{mode}'
+    - --json
+    env: {}
+  anysearch:
+    cmd:
+    - python3
+    - ~/.agents/skills/anysearch-skill/scripts/anysearch_cli.py
+    domain_search:
+    - search
+    - '{query}'
+    - --domain
+    - '{domain}'
+    - --sub_domain
+    - '{sub_domain}'
+    - --max_results
+    - '{n}'
+    enabled: true
+    env: {}
+    search_args:
+    - search
+    - '{query}'
+    - --max_results
+    - '{n}'
+    type: cli
+  arxiv:
+    enabled: true
+    format: xml
+    method: GET
+    query_param: search_query
+    timeout: 15
+    type: http
+    url: http://export.arxiv.org/api/query
+  bocha:
+    body:
+      count: '{n}'
+      freshness: oneYear
+      query: '{query}'
+      summary: true
+    enabled: true
+    headers:
+      Authorization: Bearer {BOCHA_API_KEY}
+      Content-Type: application/json
+    method: POST
+    timeout: 8
+    type: http
+    url: https://api.bochaai.com/v1/web-search
+  brave:
+    enabled: false
+    extra_params:
+      count: '{n}'
+    format: json
+    headers:
+      Accept: application/json
+      Accept-Encoding: gzip
+      X-Subscription-Token: '{BRAVE_API_KEY}'
+    method: GET
+    query_param: q
+    timeout: 8
+    type: http
+    url: https://api.search.brave.com/res/v1/web/search
+  byted:
+    body:
+      Count: '{n}'
+      NeedSummary: true
+      Query: '{query}'
+      SearchType: web
+    enabled: true
+    headers:
+      Authorization: Bearer {WEB_SEARCH_API_KEY}
+      Content-Type: application/json
+      X-Traffic-Tag: skill_web_search
+    method: POST
+    output_map:
+      item_source: SiteName
+      item_summary: Summary
+      item_title: Title
+      item_url: Url
+      items: Result.WebResults
+    timeout: 8
+    type: http
+    url: https://open.feedcoopapi.com/search_api/web_search
+  crossref:
+    enabled: false
+    extra_params:
+      mailto: unified-search@local
+      rows: '{n}'
+    format: json
+    method: GET
+    query_param: query
+    timeout: 12
+    type: http
+    url: https://api.crossref.org/works
+  duckduckgo:
+    enabled: true
+    format: json
+    method: GET
+    query_param: q
+    timeout: 5
+    type: http
+    url: https://api.duckduckgo.com/
+  eastmoney:
+    cmd:
+    - python3
+    - ~/.agents/skills/eastmoney-financial-search/scripts/search.py
+    enabled: true
+    env: {}
+    search_args:
+    - search-news
+    - --query
+    - '{query}'
+    - --count
+    - '{n}'
+    type: cli
+  felo:
+    body:
+      query: '{query}'
+    enabled: false
+    headers:
+      Accept: application/json
+      Authorization: Bearer {FELO_API_KEY}
+      Content-Type: application/json
+      User-Agent: unified-search/1.0.1
+    method: POST
+    timeout: 15
+    type: http
+    url: https://openapi.felo.ai/v2/chat
+  github:
+    enabled: true
+    extra_params:
+      per_page: '{n}'
+    format: json
+    headers:
+      Accept: application/vnd.github.v3+json
+      Authorization: token {GITHUB_TOKEN}
+      User-Agent: unified-search
+    method: GET
+    query_param: q
+    timeout: 10
+    type: http
+    url: https://api.github.com/search/repositories
+  metaso:
+    body:
+      query: '{query}'
+      search_size: '{n}'
+      source: web
+    enabled: false
+    headers:
+      Authorization: Bearer {METASO_API_KEY}
+      Content-Type: application/json
+    method: POST
+    timeout: 10
+    type: http
+    url: https://metaso.cn/api/open/search
+  openalex:
+    enabled: false
+    extra_params:
+      mailto: unified-search@local
+      per_page: '{n}'
+    format: json
+    method: GET
+    query_param: search
+    timeout: 12
+    type: http
+    url: https://api.openalex.org/works
+  searxng:
+    enabled: false
+    format: json
+    method: GET
+    query_param: q
+    timeout: 10
+    type: http
+    url: http://127.0.0.1:8888/search
+  semantic_scholar:
+    enabled: true
+    format: json
+    method: GET
+    query_param: query
+    timeout: 10
+    type: http
+    url: https://api.semanticscholar.org/graph/v1/paper/search
+  tavily:
+    body:
+      api_key: '{TAVILY_API_KEY}'
+      max_results: '{n}'
+      query: '{query}'
+      search_depth: basic
+      topic: general
+      include_answer: basic
+    enabled: true
+    headers:
+      Content-Type: application/json
+    method: POST
+    timeout: 10
+    type: http
+    url: https://api.tavily.com/search
+  uapi:
+    body:
+      count: '{n}'
+      query: '{query}'
+    enabled: false
+    headers:
+      Content-Type: application/json
+    method: POST
+    timeout: 8
+    type: http
+    url: https://uapis.cn/api/v1/search/aggregate
+  wigolo:
+    body:
+      include_content: false
+      max_results: '{n}'
+      query: '{query}'
+      search_depth: fast
+    enabled: true
+    headers:
+      Content-Type: application/json
+    timeout: 8
+    type: http
+    url: http://127.0.0.1:3333/v1/search
+  wikipedia:
+    enabled: true
+    extra_params:
+      action: query
+      format: json
+      list: search
+      srlimit: '{n}'
+    format: json
+    method: GET
+    query_param: srsearch
+    timeout: 8
+    type: http
+    url: https://en.wikipedia.org/w/api.php
+  wolframalpha:
+    enabled: false
+    extra_params:
+      appid: '{WOLFRAM_APPID}'
+      output: json
+    format: json
+    method: GET
+    query_param: input
+    timeout: 10
+    type: http
+    url: https://api.wolframalpha.com/v2/query
+  zhihu:
+    enabled: true
+    extra_params:
+      count: '{n}'
+    format: json
+    headers:
+      Authorization: Bearer {ZHIHU_ACCESS_SECRET}
+      Content-Type: application/json
+    method: GET
+    query_param: query
+    timeout: 10
+    type: http
+    url: https://developer.zhihu.com/api/v1/content/global_search
+
+# 成本分级（用于成本感知路由）
+cost_tiers:
+  free:
+    - local_search
+    - local_arxiv
+    - local_wikipedia
+    - local_stackoverflow
+    - local_github
+    - local_bing
+    - local_google
+    - local_mojeek
+    - local_yandex
+    - local_startpage
+    - local_duckduckgo
+    - local_baidu
+    - local_sogou
+    - local_pubmed
+    - local_crossref
+    - local_semantic_scholar
+    - local_bing_news
+    - local_google_news
+    - local_duckduckgo_news
+    - local_gitlab
+    - local_npm
+    - local_wiktionary
+    - local_wikiquote
+    - local_imdb
+    - local_goodreads
+    - local_openstreetmap
+    - anysearch
+    - zhihu
+    - eastmoney
+    - arxiv
+    - wigolo
+    - duckduckgo
+    - uapi
+    - semantic_scholar
+    - openalex
+    - crossref
+    - github
+    - wikipedia
+    - searxng
+    - wolframalpha
+  low:
+    - bocha
+    - metaso
+    - byted
+    - brave
+  paid:
+    - tavily
+    - felo
+
+execution:
+  default_timeout: 8
+  max_parallel_engines: 3
+  parallel_timeout: 6
+  retry_count: 1
+  retry_on_empty: true
+  budget:
+    fast:
+      max_cost_per_query: 0.0
+      allow_paid: false
+    auto:
+      max_cost_per_query: 0.01
+      allow_paid: true
+    deep:
+      max_cost_per_query: 1.0
+      allow_paid: true
+    budget:
+      max_cost_per_query: 0.005
+      allow_paid: false
+      quota_threshold: 0.2
+
+output:
+  format: auto
+  include_routing_decision: true
+  include_scores: true
+version: 1.0.1

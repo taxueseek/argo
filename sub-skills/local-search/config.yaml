@@ -1,0 +1,328 @@
+# local-search 子技能专属配置
+# 与 unified-search/config.yaml 解耦，local_search_adapter.py / search_v3.py 直接读取本文件。
+
+settings:
+  default_timeout: 8
+  default_results: 5
+  max_parallel_engines: 5
+  user_agent: "Mozilla/5.0 (compatible; unified-search-local/1.0.1; +https://local)"
+  request_interval_ms: 500
+  health_check:
+    canary_query: "test"
+    ttl_minutes: 5
+    interval_minutes: 5
+    unavailable_threshold: 2
+    timeout: 8
+    max_parallel: 5
+
+engines:
+  local_bing:
+    type: html
+    enabled: true
+    categories: [web_general]
+    url: "https://www.bing.com/search"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: html
+    extra_params:
+      setlang: zh-Hans
+
+  local_google:
+    type: html
+    enabled: false
+    categories: [web_general]
+    url: "https://www.google.com/search"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: html
+    extra_params:
+      hl: zh-CN
+
+  local_mojeek:
+    type: html
+    enabled: true
+    categories: [web_general]
+    url: "https://www.mojeek.com/search"
+    query_param: q
+    method: GET
+    timeout: 10
+    format: html
+
+  local_yandex:
+    type: html
+    enabled: false
+    categories: [web_general]
+    url: "https://yandex.com/search/"
+    query_param: text
+    method: GET
+    timeout: 10
+    format: html
+
+  local_startpage:
+    type: html
+    enabled: true
+    categories: [web_general]
+    url: "https://www.startpage.com/do/dsearch"
+    query_param: query
+    method: GET
+    timeout: 10
+    format: html
+
+  local_duckduckgo:
+    type: html
+    enabled: true
+    categories: [web_general]
+    url: "https://html.duckduckgo.com/html/"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: html
+
+  local_baidu:
+    type: html
+    enabled: true
+    categories: [chinese]
+    url: "https://www.baidu.com/s"
+    query_param: wd
+    method: GET
+    timeout: 8
+    format: html
+    extra_params:
+      ie: utf-8
+
+  local_sogou:
+    type: html
+    enabled: true
+    categories: [chinese]
+    url: "https://www.sogou.com/web"
+    query_param: query
+    method: GET
+    timeout: 8
+    format: html
+
+  local_arxiv:
+    type: xml
+    enabled: true
+    categories: [academic]
+    url: "http://export.arxiv.org/api/query"
+    query_param: search_query
+    method: GET
+    timeout: 15
+    format: xml
+    extra_params:
+      start: 0
+      max_results: "{n}"
+
+  local_pubmed:
+    type: json
+    enabled: true
+    categories: [academic]
+    url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    query_param: term
+    method: GET
+    timeout: 12
+    format: json
+    extra_params:
+      db: pubmed
+      retmode: json
+      retmax: "{n}"
+
+  local_crossref:
+    type: json
+    enabled: true
+    categories: [academic]
+    url: "https://api.crossref.org/works"
+    query_param: query
+    method: GET
+    timeout: 12
+    format: json
+    extra_params:
+      rows: "{n}"
+      mailto: unified-search@local
+
+  local_semantic_scholar:
+    type: json
+    enabled: true
+    categories: [academic]
+    url: "https://api.semanticscholar.org/graph/v1/paper/search"
+    query_param: query
+    method: GET
+    timeout: 12
+    format: json
+    extra_params:
+      limit: "{n}"
+      fields: title,abstract,url
+
+  local_bing_news:
+    type: rss
+    enabled: true
+    categories: [news]
+    url: "https://www.bing.com/news/search"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: rss
+    extra_params:
+      format: rss
+
+  local_google_news:
+    type: rss
+    enabled: true
+    categories: [news]
+    url: "https://news.google.com/rss/search"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: rss
+
+  local_duckduckgo_news:
+    type: rss
+    enabled: false
+    categories: [news]
+    url: "https://duckduckgo.com/html/"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: html
+
+  local_github:
+    type: json
+    enabled: true
+    categories: [code]
+    url: "https://api.github.com/search/repositories"
+    query_param: q
+    method: GET
+    timeout: 10
+    format: json
+    extra_params:
+      per_page: "{n}"
+    headers:
+      Accept: application/vnd.github.v3+json
+      User-Agent: unified-search-local/1.0.1
+
+  local_stackoverflow:
+    type: json
+    enabled: true
+    categories: [code]
+    url: "https://api.stackexchange.com/2.3/search/advanced"
+    query_param: q
+    method: GET
+    timeout: 10
+    format: json
+    extra_params:
+      site: stackoverflow
+      pagesize: "{n}"
+      order: desc
+      sort: relevance
+
+  local_gitlab:
+    type: json
+    enabled: true
+    categories: [code]
+    url: "https://gitlab.com/api/v4/search"
+    query_param: search
+    method: GET
+    timeout: 10
+    format: json
+    extra_params:
+      per_page: "{n}"
+      scope: projects
+
+  local_npm:
+    type: json
+    enabled: true
+    categories: [code]
+    url: "https://registry.npmjs.org/-/v1/search"
+    query_param: text
+    method: GET
+    timeout: 8
+    format: json
+    extra_params:
+      size: "{n}"
+
+  local_wikipedia:
+    type: json
+    enabled: true
+    categories: [reference]
+    url: "https://en.wikipedia.org/w/api.php"
+    query_param: srsearch
+    method: GET
+    timeout: 8
+    format: json
+    extra_params:
+      action: query
+      list: search
+      format: json
+      srlimit: "{n}"
+
+  local_wiktionary:
+    type: json
+    enabled: true
+    categories: [reference]
+    url: "https://en.wiktionary.org/w/api.php"
+    query_param: srsearch
+    method: GET
+    timeout: 8
+    format: json
+    extra_params:
+      action: query
+      list: search
+      format: json
+      srlimit: "{n}"
+
+  local_wikiquote:
+    type: json
+    enabled: true
+    categories: [reference]
+    url: "https://en.wikiquote.org/w/api.php"
+    query_param: srsearch
+    method: GET
+    timeout: 8
+    format: json
+    extra_params:
+      action: query
+      list: search
+      format: json
+      srlimit: "{n}"
+
+  local_imdb:
+    type: html
+    enabled: false
+    categories: [vertical]
+    url: "https://www.imdb.com/find/"
+    query_param: q
+    method: GET
+    timeout: 10
+    format: html
+    extra_params:
+      ref_: nv_sr_sm
+
+  local_goodreads:
+    type: html
+    enabled: false
+    categories: [vertical]
+    url: "https://www.goodreads.com/search"
+    query_param: q
+    method: GET
+    timeout: 10
+    format: html
+    extra_params:
+      search_type: books
+
+  local_openstreetmap:
+    type: json
+    enabled: true
+    categories: [vertical]
+    url: "https://nominatim.openstreetmap.org/search"
+    query_param: q
+    method: GET
+    timeout: 10
+    format: json
+    extra_params:
+      format: json
+      limit: "{n}"
+      addressdetails: 1
+    headers:
+      User-Agent: unified-search-local/1.0.1

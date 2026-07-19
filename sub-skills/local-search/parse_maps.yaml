@@ -1,0 +1,184 @@
+# local-search HTML/RSS/JSON 解析映射
+# 页面结构变化时，只需修改本文件，无需改代码。
+
+settings:
+  max_snippet_length: 300
+  max_title_length: 200
+  resolve_relative_urls: true
+
+html:
+  local_bing:
+    container: "li.b_algo"
+    title: "h2 a"
+    url: "h2 a"
+    snippet: ".b_caption p, .b_lineclamp2, .b_paractl"
+    url_attr: href
+    score: 0.75
+
+  local_google:
+    container: "div.g"
+    title: "h3"
+    url: "a"
+    snippet: "div.VwiC3b, div.s, span.aCOpRe"
+    url_attr: href
+    score: 0.75
+
+  local_mojeek:
+    container: "li.results-standard-list"
+    title: "a.ob"
+    url: "a.ob"
+    snippet: "p.s"
+    url_attr: href
+    score: 0.7
+
+  local_yandex:
+    container: "li.serp-item"
+    title: "a.Link"
+    url: "a.Link"
+    snippet: "div.TextContainer"
+    url_attr: href
+    score: 0.65
+
+  local_startpage:
+    container: "div.result"
+    title: "a.result-title"
+    url: "a.result-title"
+    snippet: "p.result-snippet"
+    url_attr: href
+    score: 0.7
+
+  local_duckduckgo:
+    container: ".result"
+    title: "a.result__a"
+    url: "a.result__a"
+    snippet: "a.result__snippet"
+    url_attr: href
+    score: 0.7
+
+  local_baidu:
+    container: ".result, .c-container"
+    title: "h3"
+    url: "a"
+    snippet: ".content-right_8Zs40, .c-abstract, .content-left_3d_H4"
+    url_attr: href
+    score: 0.7
+
+  local_sogou:
+    container: ".vrwrap, .result"
+    title: "h3 a, h3"
+    url: "h3 a"
+    snippet: "p.str-text, .str_info"
+    url_attr: href
+    score: 0.65
+
+  local_stackoverflow:
+    container: ".question-summary"
+    title: "a.question-hyperlink"
+    url: "a.question-hyperlink"
+    snippet: ".excerpt"
+    url_attr: href
+    score: 0.8
+
+  local_imdb:
+    container: ".findResult"
+    title: "td.result_text a"
+    url: "td.result_text a"
+    snippet: "td.result_text"
+    url_attr: href
+    score: 0.7
+
+  local_goodreads:
+    container: "tr.bookBox"
+    title: "a.bookTitle"
+    url: "a.bookTitle"
+    snippet: "span.smallText, span.greyText"
+    url_attr: href
+    score: 0.7
+
+xml:
+  local_arxiv:
+    entry_path: ".//{http://www.w3.org/2005/Atom}entry"
+    title: "atom:title"
+    url: "atom:id"
+    snippet: "atom:summary"
+    namespaces:
+      atom: "http://www.w3.org/2005/Atom"
+
+rss:
+  default:
+    item_path: "./channel/item"
+    title: "title"
+    url: "link"
+    snippet: "description"
+
+json:
+  local_wikipedia:
+    items: "query.search"
+    title: "title"
+    url: null
+    snippet: "snippet"
+    url_template: "https://en.wikipedia.org/wiki/{title}"
+
+  local_wiktionary:
+    items: "query.search"
+    title: "title"
+    url: null
+    snippet: "snippet"
+    url_template: "https://en.wiktionary.org/wiki/{title}"
+
+  local_wikiquote:
+    items: "query.search"
+    title: "title"
+    url: null
+    snippet: "snippet"
+    url_template: "https://en.wikiquote.org/wiki/{title}"
+
+  local_github:
+    items: "items"
+    title: "full_name"
+    url: "html_url"
+    snippet: "description"
+
+  local_npm:
+    items: "objects"
+    title: "package.name"
+    url: "package.links.npm"
+    snippet: "package.description"
+
+  local_gitlab:
+    items: "."
+    title: "name_with_namespace"
+    url: "web_url"
+    snippet: "description"
+
+  local_stackoverflow:
+    items: "items"
+    title: "title"
+    url: "link"
+    snippet: null
+
+  local_crossref:
+    items: "message.items"
+    title: "title"
+    url: "URL"
+    snippet: "abstract"
+
+  local_semantic_scholar:
+    items: "data"
+    title: "title"
+    url: "url"
+    snippet: "abstract"
+
+  local_pubmed:
+    items: "esearchresult.idlist"
+    title: null
+    url: null
+    snippet: null
+    url_template: "https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+
+  local_openstreetmap:
+    items: "."
+    title: "display_name"
+    url: null
+    snippet: "type"
+    url_template: "https://www.openstreetmap.org/{osm_type}/{osm_id}"
