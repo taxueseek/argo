@@ -105,6 +105,19 @@ class TestRoute(unittest.TestCase):
         self.assertIn("reason", d)
         self.assertTrue(len(d["reason"]) > 0)
 
+    def test_zero_tfidf_not_eastmoney(self):
+        """P0：TF-IDF 全 0 时禁止塌缩到 eastmoney 等垂直引擎。"""
+        d = route_query("pytest fixtures")
+        self.assertNotEqual(d["engine"], "eastmoney")
+        forbidden = {"eastmoney", "ths_hot", "cls_telegraph", "em_global_news"}
+        self.assertNotIn(d["engine"], forbidden)
+        for eng in d.get("engines", []):
+            self.assertNotIn(eng, forbidden)
+
+    def test_finance_still_eastmoney(self):
+        d = route_query("贵州茅台股价")
+        self.assertEqual(d["engine"], "eastmoney")
+
 
 class TestTfidfRouter(unittest.TestCase):
     def test_route_returns_scores(self):
@@ -169,6 +182,87 @@ class TestCache(unittest.TestCase):
                        domain="general", ttl=0)
         time.sleep(0.05)
         self.assertIsNone(self.cache.get("q3", "anysearch", 5, domain="general"))
+
+    def test_depth_isolation(self):
+        """P0：fast/deep 缓存互不污染。"""
+        self.cache.set(
+            "qd", "anysearch", 5,
+            {"results": [{"title": "fast", "url": "http://a"}]},
+            domain="general", mode="auto", depth="fast",
+        )
+        hit_fast = self.cache.get("qd", "anysearch", 5, domain="general",
+                                  mode="auto", depth="fast")
+        hit_deep = self.cache.get("qd", "anysearch", 5, domain="general",
+                                  mode="auto", depth="deep")
+        self.assertIsNotNone(hit_fast)
+        self.assertIsNone(hit_deep)
+
+    def test_soft_max_results(self):
+        """P1：cached_n >= requested_n 可柔性命中。"""
+        self.cache.set(
+            "qn", "anysearch", 5,
+            {"results": [{"title": str(i), "url": f"http://x/{i}"} for i in range(5)]},
+            domain="general", mode="auto", depth="fast",
+        )
+        hit3 = self.cache.get("qn", "anysearch", 3, domain="general",
+                              mode="auto", depth="fast")
+        self.assertIsNotNone(hit3)
+        self.assertEqual(len(hit3["results"]), 3)
+        hit10 = self.cache.get("qn", "anysearch", 10, domain="general",
+                               mode="auto", depth="fast")
+        self.assertIsNone(hit10)  # 缓存不足 → miss
+
+    def test_empty_result_short_ttl(self):
+        self.cache.set(
+            "qe", "anysearch", 5, {"results": []},
+            domain="general", mode="auto", depth="fast",
+        )
+        hit = self.cache.get("qe", "anysearch", 5, domain="general",
+                             mode="auto", depth="fast")
+        self.assertIsNotNone(hit)
+        self.assertLessEqual(hit.get("_ttl", 999), 60)
+
+    def test_per_engine_and_fetch(self):
+        self.cache.set_engine(
+            "qe2", "local_bing", 3,
+            [{"title": "a", "url": "http://a"}],
+            domain="general", mode="auto", depth="fast",
+        )
+        eng = self.cache.get_engine(
+            "qe2", "local_bing", 3, domain="general", mode="auto", depth="fast",
+        )
+        self.assertEqual(len(eng), 1)
+        self.cache.set_fetch("https://example.com/x", {"success": True, "content": "hi"})
+        fh = self.cache.get_fetch("https://example.com/x")
+        self.assertTrue(fh.get("success"))
+
+
+class TestCircuitBreaker(unittest.TestCase):
+    def test_negative_and_open(self):
+        from circuit_breaker import CircuitBreaker
+        path = os.path.join(tempfile.mkdtemp(), "cb.json")
+        cb = CircuitBreaker(state_path=path)
+        eng = "test_dead_engine_xyz"
+        self.assertTrue(cb.allow(eng)[0])
+        cb.record_failure(eng, kind="timeout")
+        cb.record_failure(eng, kind="timeout")
+        allowed, reason = cb.allow(eng)
+        self.assertFalse(allowed)
+        self.assertIn("circuit_open", reason)
+        cb.set_negative("q", eng, status="no-results", ttl=30)
+        self.assertIsNotNone(cb.get_negative("q", eng))
+
+
+class TestRrfConsensus(unittest.TestCase):
+    def test_consensus_engines(self):
+        from search import rrf_merge
+        a = [{"url": "http://u1", "title": "t", "source": "anysearch", "_engine": "anysearch"}]
+        b = [{"url": "http://u1", "title": "t", "source": "duckduckgo", "_engine": "duckduckgo"}]
+        merged = rrf_merge([a, b])
+        self.assertEqual(len(merged), 1)
+        cons = merged[0].get("consensus_engines") or []
+        self.assertIn("anysearch", cons)
+        self.assertIn("duckduckgo", cons)
 
 
 class TestEngines(unittest.TestCase):

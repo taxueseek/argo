@@ -37,12 +37,17 @@
     "google.com.hk"
   ],
   "serp_url_patterns": [
-    "/s?",
-    "/link?",
-    "/search?",
+    "baidu.com/s?",
     "baidu.com/link",
     "sogou.com/link",
-    "google.com/url?"
+    "sogou.com/web?",
+    "so.com/s?",
+    "bing.com/search?",
+    "google.com/search?",
+    "google.com/url?",
+    "google.com.hk/search?",
+    "google.com.hk/url?",
+    "weixin.sogou.com/weixin"
   ],
   "social_narrative_only": {
     "x.com": 0.45,

@@ -263,3 +263,45 @@ T ≈ T_route(<10ms) + T_rewrite(<20ms)
 5. **ab_eval + golden 20** 固化基线后再动 rerank/research  
 
 每步合并条件：单测绿 + 对应 KPI 不劣化（或明确 trade-off 写进 commit）。
+
+---
+
+## 11. P0/P1 落地验收（2026-07-23）
+
+### 实现范围
+
+| 项 | 状态 | 关键文件 |
+|----|------|----------|
+| TF-IDF 零分/低分回退 + 社交误路由过滤 | ✅ | `route.py`（MIN_SCORE=0.12） |
+| cache depth + 柔性命中 + 空结果短 TTL | ✅ | `cache.py` |
+| per-engine / fetch URL 缓存 | ✅ | `cache.py` + `search.py` + `fetch_v3.py` |
+| 熔断 + 负缓存 | ✅ | `circuit_breaker.py` |
+| engine_outcomes + wasted_engine_ms | ✅ | `search.py` |
+| SERP bing/google/搜狗微信 | ✅ | `evidence.py` + `source_types_cn.json` |
+| social_sentiment `engine=` 修复 | ✅ | `research.py` |
+| RRF consensus_engines + 共识加权 | ✅ | `search.py` |
+| source_type 保底分 | ✅ | `evidence.py` |
+| fast 跳过 rerank + 可观测 | ✅ | `search.py` |
+
+### 实测（`python3 scripts/ab_eval_p0p1.py`）
+
+| 指标 | 结果 | 预期 |
+|------|------|------|
+| ab_eval | **23/23 PASS** | 全绿 |
+| 单测 | **64 passed** | 全绿 |
+| `pytest fixtures` 路由 | anysearch / general_search | ≠ eastmoney |
+| `React hooks` 路由 | anysearch（不再 bilibili） | ≠ 社交误中 |
+| 金融路由 | eastmoney 保持 | 不回归 |
+| 冷延迟 | ~3.5s | 可接受 |
+| 热延迟 L2 | **10–12ms** | <50ms |
+| 加速比 | **~300×** | ≥10× |
+| soft n=2 命中 | cached=true | ✅ |
+| reranker fast | `skipped_fast` | ✅ |
+
+### 回归命令
+
+```bash
+cd ~/.claude/skills/argo
+python3 -m pytest tests/test_unit.py tests/test_evidence_v22.py -q
+python3 scripts/ab_eval_p0p1.py
+```

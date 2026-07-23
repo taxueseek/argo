@@ -457,7 +457,7 @@ def social_sentiment_research(query: str, platforms: list[str] | None = None,
 
     for platform in platforms:
         try:
-            result = super_search(query, n=max_results, engines=[platform], mode="fast")
+            result = super_search(query, engine=platform, n=max_results, mode="fast")
             results = result.get("results", [])
             platform_results[platform] = results
             all_results.extend(results)

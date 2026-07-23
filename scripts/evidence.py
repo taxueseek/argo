@@ -153,19 +153,31 @@ def is_serp_or_jump_url(url: str) -> bool:
     for pat in cfg.get("serp_url_patterns") or []:
         if pat.lower() in low:
             return True
-    # baidu 相关搜索页
-    if "baidu.com/s?" in low or "baidu.com/s?" in low.replace("&", "?"):
-        return True
+    # 显式搜索/跳转模式
     if re.search(r"baidu\.com/s\?", low):
         return True
+    if "baidu.com/link" in low or "sogou.com/link" in low:
+        return True
+    if "google.com/url?" in low or "google.com.hk/url?" in low:
+        return True
+    if re.search(r"(bing|google|google\.com\.hk)\.com/search\?", low):
+        return True
+    if "weixin.sogou.com/weixin" in low:
+        return True
     host = _normalize_domain(url)
-    # 纯搜索 host 且 path 像搜索
     try:
         path = urlparse(url).path or ""
+        query = urlparse(url).query or ""
     except Exception:
-        path = ""
-    if host in ("baidu.com", "www.baidu.com", "sogou.com", "www.sogou.com", "so.com"):
-        if path in ("", "/", "/s", "/web") or "link" in path or path.startswith("/s"):
+        path, query = "", ""
+    serp_hosts = set(cfg.get("serp_host_markers") or []) | {
+        "baidu.com", "sogou.com", "so.com", "bing.com",
+        "google.com", "google.com.hk", "weixin.sogou.com",
+    }
+    host_bare = host[4:] if host.startswith("www.") else host
+    if host_bare in serp_hosts or host in serp_hosts:
+        if path in ("", "/", "/s", "/web", "/search") or path.startswith("/s") \
+                or "link" in path or "search" in path or "q=" in query or "wd=" in query:
             return True
     return False
 
@@ -191,16 +203,7 @@ def score_authority(url: str, source: str = "") -> dict[str, Any]:
     best_reason = "通用域名"
     cfg = _load_cn_source_types()
 
-    # 精确/后缀匹配 AUTHORITY_TIERS
-    for pattern, score in AUTHORITY_TIERS.items():
-        if domain == pattern or domain.endswith("." + pattern):
-            if score > best_score or domain == pattern or domain.endswith("." + pattern):
-                # 取更具体匹配优先：更长 pattern 优先
-                if domain == pattern or len(pattern) >= len(best_reason):
-                    best_score = score
-                    best_reason = f"域名匹配：{pattern}"
-
-    # 重新做最长后缀匹配（修复上面逻辑）
+    # 最长后缀匹配 AUTHORITY_TIERS
     best_score = 0.5
     best_reason = "通用域名"
     best_len = -1
@@ -245,20 +248,20 @@ def score_authority(url: str, source: str = "") -> dict[str, Any]:
         best_score = min(best_score + 0.05, 1.0)
         best_reason += "（论文路径）"
 
-    # 来源类型：仅当域名仍是「通用默认 0.5」时可上调；
-    # 已明确高/低分的域名（白名单/降权表）不被 anysearch 等抬平
+    # 来源类型：作为保底分（max），本地 SERP 聚合引擎不抬升
     if source and source in SOURCE_TYPE_MAP:
         type_name, type_score = SOURCE_TYPE_MAP[source]
-        domain_was_default = best_reason == "通用域名"
-        if (
-            domain_was_default
-            and type_score > best_score
-            and not source.startswith("local_")
-        ):
-            best_score = type_score
-            best_reason = f"来源类型：{type_name}"
-        elif not domain_was_default:
-            best_reason += f"（引擎={source}）"
+        if source.startswith("local_") and type_score < 0.5:
+            # 搜索结果页聚合：压低
+            best_score = min(best_score, type_score)
+            best_reason += f"（引擎={source}/{type_name}）"
+        else:
+            if type_score > best_score:
+                best_score = type_score
+                best_reason = f"来源类型：{type_name}" if best_reason == "通用域名" \
+                    else f"{best_reason}（引擎={source}↑）"
+            else:
+                best_reason += f"（引擎={source}）"
 
     tier = (
         "high" if best_score >= 0.8

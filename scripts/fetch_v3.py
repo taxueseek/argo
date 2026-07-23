@@ -376,30 +376,42 @@ def _optimize_url(url: str) -> str:
 def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
              use_browser_fallback: bool = True,
              actions: list[dict] | None = None,
-             force_browser: bool = False) -> dict:
+             force_browser: bool = False,
+             skip_cache: bool = False) -> dict:
     """三级抓取主函数。
 
     第一级：增强 HTTP（UA 轮换 + Cookie 积累）
     第二级：Chrome CDP 浏览器（自动降级或 actions 触发）
     第三级：质量评估（content_ok/page_type/quality_score）
 
-    Args:
-        url: 目标 URL
-        max_chars: 最大返回字符数
-        timeout: HTTP 超时（浏览器模式固定 15s）
-        use_browser_fallback: HTTP 失败时自动升级浏览器
-        actions: 页面交互序列（设置则强制使用浏览器）
-        force_browser: 强制使用浏览器
-
-    Returns:
-        统一 schema 的 dict（含 content_ok/page_type/quality_score）
+    URL 级缓存：无 actions 的成功结果写入 SearchCache（L1+L2）。
     """
     # URL 优化（Reddit 重写、追踪参数清理）
     url = _optimize_url(url)
 
-    # 有 actions → 强制浏览器模式
+    # 有 actions → 强制浏览器模式，且不读缓存
     if actions:
         force_browser = True
+        skip_cache = True
+
+    # 读 URL 缓存
+    if not skip_cache and not force_browser:
+        try:
+            from cache import SearchCache
+            hit = SearchCache().get_fetch(url)
+            if hit and hit.get("success"):
+                # 缓存内容可能比本次 max_chars 更长 → 截断
+                out = {k: v for k, v in hit.items() if not str(k).startswith("_")}
+                content = out.get("content") or ""
+                if max_chars and len(content) > max_chars:
+                    out["content"] = content[:max_chars]
+                    out["length"] = len(out["content"])
+                out["cached"] = True
+                out["cache_level"] = hit.get("_cache_level", "L?")
+                out["url"] = url
+                return out
+        except Exception:
+            pass
 
     if force_browser:
         result = _browser_fetch(url, max_chars, timeout=15.0, actions=actions)
@@ -417,6 +429,26 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
     # 第三级：质量评估
     result = _assess_quality(result)
 
+    # 写 URL 缓存（不存大块 html，省空间）
+    if not skip_cache and result.get("success"):
+        try:
+            from cache import SearchCache, FETCH_DEFAULT_TTL
+            to_store = {
+                k: v for k, v in result.items()
+                if k not in ("html",) and not str(k).startswith("_")
+            }
+            # 按内容类型粗略 TTL：新闻短、文档长
+            ttl = FETCH_DEFAULT_TTL
+            st = (result.get("source_type") or result.get("page_type") or "")
+            if st in ("news", "realtime"):
+                ttl = 600
+            elif st in ("docs", "documentation", "reference"):
+                ttl = 86400
+            SearchCache().set_fetch(url, to_store, ttl=ttl)
+        except Exception:
+            pass
+
+    result["cached"] = False
     return result
 
 

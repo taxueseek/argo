@@ -50,6 +50,17 @@ class TestSerpDemotion(unittest.TestCase):
         self.assertTrue(auth["is_serp"])
         self.assertLessEqual(auth["score"], 0.15)
 
+    def test_bing_google_serp(self):
+        self.assertTrue(is_serp_or_jump_url("https://www.bing.com/search?q=pytest"))
+        self.assertTrue(is_serp_or_jump_url("https://www.google.com/search?q=pytest"))
+        self.assertTrue(is_serp_or_jump_url("https://www.google.com/url?q=http://example.com"))
+        self.assertTrue(is_serp_or_jump_url("https://weixin.sogou.com/weixin?type=2&query=foo"))
+
+    def test_source_type_floor_eastmoney(self):
+        # 通用域名 + eastmoney 引擎 → 类型保底抬升
+        auth = score_authority("https://example-finance-blog.test/a/1", source="eastmoney")
+        self.assertGreaterEqual(auth["score"], 0.85)
+
 
 class TestEvidenceDensity(unittest.TestCase):
     def test_numbers_and_compare_boost(self):

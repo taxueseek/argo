@@ -278,29 +278,40 @@ class SQLiteCache:
 
 # ── 双层缓存入口 ───────────────────────────────────────────────────────────────
 
+# 空结果正缓存极短 TTL（秒）— 避免把失败固化成「无结果」
+EMPTY_RESULT_TTL = 45
+# fetch URL 默认 TTL
+FETCH_DEFAULT_TTL = 3600
+
+
 class SearchCache:
     """
     双层缓存引擎：L1 LRU + L2 SQLite
-    缓存键 = SHA256(query + "|" + engine + "|" + str(max_results) + "|" + domain)[:32]
 
-    缓存策略：
-      - 时效性域（financial/news/realtime）：短 TTL，确保数据新鲜度
-      - 非时效性域（general/research/evergreen）：当天内相同查询命中缓存，
-        避免重复拉取，显著降低等待时间
+    缓存键（v2.4）= SHA256(query|engine|domain|mode|depth)[:32]
+      - 不含 max_results：支持柔性命中（cached_n >= requested_n 可截断返回）
+      - depth / mode 隔离，防 fast/deep、budget 污染
+
+    分层：
+      combo 结果 / per-engine 结果 / fetch URL（前缀区分）
     """
 
     def __init__(self, db_path: str = DEFAULT_DB_PATH, ttl: int = DEFAULT_TTL):
         cfg = get_cache_config()
-        self._db_path = os.path.expanduser(cfg.get("db_path", db_path))
+        # 允许测试传入显式 db_path 覆盖配置
+        if db_path != DEFAULT_DB_PATH:
+            self._db_path = os.path.expanduser(db_path)
+        else:
+            self._db_path = os.path.expanduser(cfg.get("db_path", db_path))
         self._ttl = cfg.get("ttl", ttl)
         self._l1 = LRUCache(max_size=MAX_MEMORY_ITEMS)
         self._l2 = SQLiteCache(db_path=self._db_path, ttl=self._ttl)
 
     @staticmethod
-    def _key(query: str, engine: str, max_results: int, domain: str = "general",
-             mode: str = "auto") -> str:
-        """生成缓存键，包含 domain + mode 防止跨域和跨预算模式缓存污染。"""
-        raw = f"{query}|{engine}|{max_results}|{domain}|{mode}"
+    def _key(query: str, engine: str, max_results: int = 0, domain: str = "general",
+             mode: str = "auto", depth: str = "fast", kind: str = "combo") -> str:
+        """生成缓存键。max_results 不参与 key（柔性命中）；kind 区分 combo/engine/fetch。"""
+        raw = f"{kind}|{query}|{engine}|{domain}|{mode}|{depth}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
     @staticmethod
@@ -318,47 +329,112 @@ class SearchCache:
         return max(int((end_of_day - now).total_seconds()), 60)
 
     def _resolve_effective_ttl(self, domain: str, base_ttl: int | None = None) -> int:
-        """解析有效 TTL：非时效性域在当天内延长缓存至日末。
-
-        策略：
-          - base_ttl 显式传入时，信任调用者的意图（如 ttl=0 强制过期）
-          - base_ttl 为 None（使用默认 TTL）时，非时效性域延长至日末，
-            确保当天内相同查询命中缓存，避免重复拉取
-        """
+        """解析有效 TTL：非时效性域在当天内延长缓存至日末。"""
         tier = DOMAIN_TIER_MAP.get(domain, "general")
         ttl = base_ttl if base_ttl is not None else self.resolve_ttl(domain)
         if tier in SAME_DAY_ELIGIBLE_TIERS and base_ttl is None:
             return max(ttl, self._seconds_until_end_of_day())
         return ttl
 
-    def get(self, query: str, engine: str, max_results: int,
-            domain: str = "general", mode: str = "auto") -> Optional[dict]:
-        """先查 L1，未命中再查 L2。缓存键含 mode 防跨预算模式污染。"""
-        key = self._key(query, engine, max_results, domain, mode)
+    def _read(self, key: str) -> Optional[dict]:
         hit = self._l1.get(key)
         if hit is not None:
-            # L1 层做简单的 TTL 检查：显式 ttl=0 或已过期则跳过
             ttl = hit.get("_ttl", 0)
             if ttl > 0 and time.time() - hit.get("_ts", 0) < ttl:
-                hit["_cache_level"] = "L1"
-                return hit
+                out = dict(hit)
+                out["_cache_level"] = "L1"
+                return out
             self._l1.remove(key)
 
         hit = self._l2.get(key)
         if hit is not None:
             self._l1.set(key, hit)
-            hit["_cache_level"] = "L2"
-            return hit
+            out = dict(hit)
+            out["_cache_level"] = "L2"
+            return out
         return None
 
+    def _write(self, key: str, query: str, engine: str, max_results: int,
+               value: dict, domain: str, ttl: int) -> None:
+        payload = {**value, "_domain": domain, "_ttl": ttl, "_ts": time.time(),
+                   "_max_results": max_results}
+        self._l1.set(key, payload)
+        self._l2.set(key, query, engine, max_results, payload, domain=domain, ttl=ttl)
+
+    @staticmethod
+    def _soft_slice(hit: dict, max_results: int) -> Optional[dict]:
+        """柔性命中：缓存条数足够则截断返回；不足则 miss 以便升级拉取。"""
+        results = hit.get("results")
+        if results is None:
+            # fetch 等非 results 形态直接返回
+            return hit
+        cached_n = int(hit.get("_max_results") or len(results) or 0)
+        if cached_n >= max_results or len(results) >= max_results:
+            out = dict(hit)
+            out["results"] = list(results)[:max_results]
+            out["count"] = len(out["results"])
+            out["_soft_hit"] = True
+            return out
+        return None  # 需要更多条 → 视为 miss
+
+    def get(self, query: str, engine: str, max_results: int,
+            domain: str = "general", mode: str = "auto",
+            depth: str = "fast") -> Optional[dict]:
+        """先查 L1，未命中再查 L2。支持 depth 隔离 + max_results 柔性命中。"""
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
+        hit = self._read(key)
+        if hit is None:
+            return None
+        sliced = self._soft_slice(hit, max_results)
+        return sliced
+
     def set(self, query: str, engine: str, max_results: int, results: dict,
-            domain: str = "general", ttl: int | None = None, mode: str = "auto"):
-        """写入双层缓存，含 mode 维度防跨预算模式污染。"""
-        key = self._key(query, engine, max_results, domain, mode)
-        effective_ttl = self._resolve_effective_ttl(domain, ttl)
-        value = {**results, "_domain": domain, "_ttl": effective_ttl, "_ts": time.time()}
-        self._l1.set(key, value)
-        self._l2.set(key, query, engine, max_results, value, domain=domain, ttl=effective_ttl)
+            domain: str = "general", ttl: int | None = None, mode: str = "auto",
+            depth: str = "fast"):
+        """写入双层缓存。空结果强制短 TTL。"""
+        result_list = results.get("results") if isinstance(results, dict) else None
+        is_empty = isinstance(result_list, list) and len(result_list) == 0
+        if is_empty:
+            effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
+        else:
+            effective_ttl = self._resolve_effective_ttl(domain, ttl)
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
+        self._write(key, query, engine, max_results, results, domain, effective_ttl)
+
+    # ── per-engine 结果缓存 ──────────────────────────────────────────────────
+
+    def get_engine(self, query: str, engine: str, max_results: int,
+                   domain: str = "general", mode: str = "auto",
+                   depth: str = "fast") -> Optional[list]:
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine")
+        hit = self._read(key)
+        if hit is None:
+            return None
+        sliced = self._soft_slice(hit, max_results)
+        if sliced is None:
+            return None
+        return list(sliced.get("results") or [])
+
+    def set_engine(self, query: str, engine: str, max_results: int,
+                   results: list, domain: str = "general", mode: str = "auto",
+                   depth: str = "fast", ttl: int | None = None):
+        is_empty = not results
+        if is_empty:
+            effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
+        else:
+            effective_ttl = self._resolve_effective_ttl(domain, ttl)
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine")
+        self._write(key, query, engine, max_results, {"results": results}, domain, effective_ttl)
+
+    # ── fetch URL 缓存 ───────────────────────────────────────────────────────
+
+    def get_fetch(self, url: str) -> Optional[dict]:
+        key = self._key(url, "fetch", 0, "fetch", "auto", "any", kind="fetch")
+        return self._read(key)
+
+    def set_fetch(self, url: str, payload: dict, ttl: int = FETCH_DEFAULT_TTL):
+        key = self._key(url, "fetch", 0, "fetch", "auto", "any", kind="fetch")
+        self._write(key, url, "fetch", 0, payload, "fetch", ttl)
 
     def clear(self, older_than_hours: int = 24):
         self._l2.clear(older_than_hours=older_than_hours)

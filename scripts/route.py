@@ -312,13 +312,32 @@ def route_query(query: str, engine_override: str = "auto",
     cfg = load_config()
     enabled = set(get_engines(cfg).keys())
 
-    # TF-IDF 语义路由
+    # TF-IDF 语义路由（分数过低视为无效，禁止垂直引擎零分塌缩）
+    TFIDF_MIN_SCORE = 0.12
+    SOCIAL_ENGINES = {"twitter", "reddit", "xiaohongshu", "bilibili", "weibo"}
     tfidf_best = None
+    tfidf_best_score = 0.0
     tfidf_scores = []
     try:
         tfidf_scores = semantic_route(query, top_k=3)
         if tfidf_scores:
-            tfidf_best = tfidf_scores[0][0]
+            cand, score, _ = tfidf_scores[0]
+            # 社交引擎仅在查询像 UGC/舆情时才允许作为 TF-IDF 主引擎
+            social_ok = True
+            if cand in SOCIAL_ENGINES:
+                ql = query.lower()
+                social_signals = (
+                    "微博", "小红书", "推特", "twitter", "reddit", "舆情",
+                    "讨论", "网友", "评论", "b站", "bilibili", "抖音",
+                )
+                social_ok = any(s in ql for s in social_signals)
+            if score >= TFIDF_MIN_SCORE and social_ok:
+                tfidf_best = cand
+                tfidf_best_score = score
+            else:
+                # 全零/极低分/误中社交：不采用 TF-IDF 主引擎
+                tfidf_best = None
+                tfidf_best_score = score
     except ImportError:
         pass  # tfidf_router 模块不可用
     except Exception as e:
@@ -345,8 +364,7 @@ def route_query(query: str, engine_override: str = "auto",
             # 扩展 local_search → 子引擎
             engines_combo = _expand_local_search(engines_combo, features)
 
-        # TF-IDF 验证 + catch-all 修复
-        tfidf_best_score = tfidf_scores[0][1] if tfidf_scores else 0.0
+        # TF-IDF 验证 + catch-all 修复（仅高分才覆写）
         is_catch_all = not domain.get("patterns", [])  # 无模式 = 兜底域
 
         if tfidf_best and tfidf_best in engines_combo:
@@ -386,7 +404,7 @@ def route_query(query: str, engine_override: str = "auto",
             mode=mode,
         )
 
-    # 正则未命中，用 TF-IDF 结果
+    # 正则未命中，用 TF-IDF 结果（已过滤低分）
     if tfidf_best and tfidf_best in enabled:
         engines_combo = [tfidf_best]
         if "anysearch" in enabled and "anysearch" not in engines_combo:
@@ -396,31 +414,51 @@ def route_query(query: str, engine_override: str = "auto",
         engines_combo = _expand_local_search(engines_combo, features)
         # 🔑 为中文/学术查询追加本地引擎
         engines_combo = _add_language_engines(engines_combo, features)
+        if mode == "fast":
+            parallel = False
+        else:
+            parallel = len(engines_combo) > 1
 
         return _done(
             engine=engines_combo[0],
             engines=engines_combo,
             engines_combo=engines_combo,
-            reason=f"TF-IDF 语义路由 → {_ENGINE_NAMES.get(engines_combo[0], engines_combo[0])} (正则未命中)",
+            reason=(
+                f"TF-IDF 语义路由 → {_ENGINE_NAMES.get(engines_combo[0], engines_combo[0])}"
+                f" (score={tfidf_best_score:.3f}, 正则未命中)"
+            ),
             confidence=0.85, features=features, domain=None,
-            parallel=len(engines_combo) > 1,
+            parallel=parallel,
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
             mode=mode,
         )
 
-    # 兜底
-    fallback_combo = [e for e in ["local_search", "anysearch", "duckduckgo"] if e in enabled]
+    # 兜底：免费通用引擎（零分 TF-IDF 也走这里）
+    fallback_combo = [e for e in ["local_search", "anysearch", "duckduckgo", "local_bing"] if e in enabled]
     if not fallback_combo:
         fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
     fallback_combo = _expand_local_search(fallback_combo, features)
+    fallback_combo = _add_language_engines(fallback_combo, features)
+    # fast：最多 2 个免费
+    if mode == "fast":
+        fallback_combo = fallback_combo[:2]
+
+    low = tfidf_scores and all(s[1] < TFIDF_MIN_SCORE for s in tfidf_scores)
+    reason = (
+        f"TF-IDF 低分回退通用引擎 → {_ENGINE_NAMES.get(fallback_combo[0], fallback_combo[0])}"
+        if low else
+        f"无匹配域，回退 {_ENGINE_NAMES.get(fallback_combo[0], fallback_combo[0])}"
+    )
 
     return _done(
         engine=fallback_combo[0],
         engines=fallback_combo,
         engines_combo=fallback_combo,
         engines_fallback=[],
-        reason=f"无匹配域，回退 {_ENGINE_NAMES.get(fallback_combo[0], fallback_combo[0])}",
-        confidence=0.3, features=features, domain=None, parallel=False,
+        reason=reason,
+        confidence=0.35 if low else 0.3,
+        features=features, domain="general_search",
+        parallel=False if mode == "fast" else len(fallback_combo) > 1,
         tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
         mode=mode,
     )
