@@ -12,6 +12,7 @@
 <p align="center">
   <a href="#这是什么">介绍</a> ·
   <a href="#快速开始">快速开始</a> ·
+  <a href="#适用平台">适用平台</a> ·
   <a href="#能做什么">能力</a> ·
   <a href="#引擎与路由">引擎</a> ·
   <a href="#使用示例">示例</a> ·
@@ -84,28 +85,104 @@
 
 ## 快速开始
 
+### 方式一：本地安装（推荐开发者）
+
 ```bash
-# 克隆
+# 1. 克隆仓库
 git clone https://github.com/taxueseek/argo.git
 cd argo
 
-# 依赖（仅 PyYAML；多数路径用标准库即可）
+# 2. 安装依赖（仅 PyYAML，多数路径用标准库即可）
 pip install pyyaml
 
-# 直接搜
+# 3. 验证安装
 python3 scripts/search.py "Python asyncio"
-
-# 金融
-python3 scripts/search.py "贵州茅台股价" --json
-
-# 看路由怎么判的
-python3 scripts/search.py "transformer attention paper" --explain
-
-# 也可用 CLI 入口（若已配置 bin）
-./bin/argo search "查询词" --json
 ```
 
-不配任何 API Key 也能用：免费引擎 + 本地 `local_*` 引擎会兜底。配了 Key 的引擎质量通常更好，没配则自动跳过。
+看到 JSON 输出即表示安装成功。接下来可以试试：
+
+```bash
+# 金融查询（自动路由到东方财富）
+python3 scripts/search.py "贵州茅台股价" --json
+
+# 查看路由决策（TF-IDF 分数 + 引擎选择）
+python3 scripts/search.py "transformer attention paper" --explain
+
+# 列出所有可用引擎
+python3 scripts/search.py --list-engines
+```
+
+### 方式二：MCP 接入（推荐 Agent 用户）
+
+Argo 提供 16 个 MCP 工具，可直接挂到 Claude Code / Kimi / Grok 等客户端：
+
+```bash
+# 启动 MCP 服务
+python3 scripts/mcp_server.py
+```
+
+然后在客户端配置 MCP server（以 Claude Code 为例）：
+
+```json
+{
+  "mcpServers": {
+    "argo": {
+      "command": "python3",
+      "args": ["/path/to/argo/scripts/mcp_server.py"]
+    }
+  }
+}
+```
+
+配置完成后，Agent 会自动调用 `argo_search`、`argo_research`、`argo_evidence` 等工具，无需手动操作。
+
+### 方式三：作为 Python 库调用
+
+```python
+from search import super_search
+
+# 基础搜索
+result = super_search("Python asyncio", n=5, mode="fast")
+for item in result["results"]:
+    print(item["title"], item.get("credibility_fast"), item["url"])
+
+# 指定引擎、跳过缓存
+result = super_search("黄金价格", engine="eastmoney", n=3, skip_cache=True)
+```
+
+> **零配置可用**：不配任何 API Key 也能运行，免费引擎 + 本地 `local_*` 引擎会兜底。配了 Key 的引擎质量通常更好，没配则自动跳过。
+
+---
+
+## 适用平台
+
+Argo 通过 MCP 协议接入各种 AI Agent 客户端，也支持命令行和库调用：
+
+| 平台 | 接入方式 | 说明 |
+|------|---------|------|
+| **Claude Code** | MCP Server | 配置 `mcp_server.py` 路径，自动获得 16 个搜索工具 |
+| **Kimi** | MCP Server | 同上，Kimi 客户端直接调用 |
+| **Grok Build** | MCP Server | 同上 |
+| **Cursor** | 手动配置 | 通过 MCP 协议接入 |
+| **Cline / Continue** | MCP Server | 支持 MCP 的 IDE 插件均可 |
+| **命令行** | 直接运行 | `python3 scripts/search.py "查询词"` |
+| **Python 项目** | 库调用 | `from search import super_search` |
+
+### 安装后验证
+
+```bash
+# 检查 Python 版本（需要 3.10+）
+python3 --version
+
+# 检查依赖
+python3 -c "import yaml; print('PyYAML OK')"
+
+# 运行单元测试
+python3 -m pytest tests/test_unit.py -q
+
+# 检查引擎健康状态
+python3 scripts/search.py --list-engines
+```
 
 ---
 
@@ -244,41 +321,61 @@ python3 scripts/mcp_server.py
 
 ## 安装与配置
 
-### 环境
+### 环境要求
 
-- Python 3.10+
-- `pip install pyyaml`
-- 无需 Node.js，也无需自建 SearXNG
+| 项目 | 要求 |
+|------|------|
+| Python | 3.10+ |
+| 依赖 | `pip install pyyaml`（仅此一个） |
+| Node.js | 不需要 |
+| SearXNG | 不需要（内置本地引擎替代） |
 
-### API Key（可选）
+### API Key（全部可选）
 
-不配置则跳过对应引擎。请用环境变量，不要把真实 Key 写进仓库。
+不配置则跳过对应引擎，免费引擎自动兜底。请用环境变量，不要把真实 Key 写进仓库。
 
 ```bash
-export TAVILY_API_KEY="你的密钥"
-export BOCHA_API_KEY="你的密钥"
-export BRAVE_API_KEY="你的密钥"
-export METASO_API_KEY="你的密钥"
-export FELO_API_KEY="你的密钥"
-export ZHIHU_ACCESS_SECRET="你的密钥"
-export GITHUB_TOKEN="你的密钥"          # 可选，提高 GitHub 限频
-export WEB_SEARCH_API_KEY="你的密钥"    # 字节搜索等
-export ANYSEARCH_API_KEY="你的密钥"     # 可选
+# 推荐配置（提升搜索质量）
+export TAVILY_API_KEY="你的密钥"          # 国际搜索
+export BOCHA_API_KEY="你的密钥"            # 中文网页（AI 友好）
+export METASO_API_KEY="你的密钥"           # 中文 AI 搜索
+export ZHIHU_ACCESS_SECRET="你的密钥"      # 知乎观点
+
+# 可选配置
+export BRAVE_API_KEY="你的密钥"            # 隐私搜索
+export FELO_API_KEY="你的密钥"             # AI 综合答案
+export GITHUB_TOKEN="你的密钥"             # 提高 GitHub 限频
+export WEB_SEARCH_API_KEY="你的密钥"       # 字节搜索等
+export ANYSEARCH_API_KEY="你的密钥"        # 垂直域搜索
 ```
 
-### 缓存
+### 缓存配置
 
 默认写在用户目录下的 SQLite（路径见 `config.yaml` 的 `cache.db_path`，一般为 `~/.cache/unified-search/cache.db`）。
 
-| 类型 | 大致 TTL |
-|------|----------|
-| 金融 | 约 5 分钟 |
-| 新闻 / 实时 | 约 10–15 分钟 |
-| 通用 | 约 1 小时（非时效域可拉长到当日） |
-| 研究 / 常青 | 约 2–24 小时 |
-| 空结果 | 很短（避免把失败固化成「没结果」） |
+| 类型 | 大致 TTL | 说明 |
+|------|----------|------|
+| 金融 | 约 5 分钟 | 股价等实时数据 |
+| 新闻 / 实时 | 约 10–15 分钟 | 快讯类内容 |
+| 通用 | 约 1 小时 | 非时效域可拉长到当日 |
+| 研究 / 常青 | 约 2–24 小时 | 学术类内容 |
+| 空结果 | 很短 | 避免把失败固化成「没结果」 |
 
 缓存键会区分预算模式与搜索深度；请求条数更少时，可用已有更多结果做柔性命中。
+
+### 常见问题
+
+**Q：不配 API Key 能用吗？**
+
+A：完全能用。Argo 内置 25+ 本地零成本引擎和多个免费 API 引擎，不配 Key 时自动走免费路径。
+
+**Q：如何确认引擎是否正常工作？**
+
+A：运行 `python3 scripts/search.py --list-engines` 查看引擎列表，或 `python3 scripts/search.py "测试" --explain` 查看路由决策。
+
+**Q：MCP 和命令行模式有什么区别？**
+
+A：底层能力完全相同。MCP 模式适合集成到 Agent 工作流中，由 Agent 自动调用；命令行模式适合脚本和手动查询。
 
 ---
 
