@@ -218,29 +218,62 @@ def _deduplicate_sub_queries(sub_queries: list[dict[str, str]]) -> list[dict[str
 
 def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
                     timeout: int = 15, depth: str = "balanced",
-                    mode: str = "auto") -> dict[str, Any]:
-    """对每个子查询并行执行搜索，返回聚合结果。"""
+                    mode: str = "auto",
+                    engines_priority: list[str] | None = None) -> dict[str, Any]:
+    """对每个子查询并行执行搜索，返回聚合结果。
+
+    共享同一 SearchCache 实例，使子查询间 L1/per-engine 可复用，减少重复联网。
+    engines_priority：选题 profile 引擎优先表；按子查询轮转指定 engine，
+    失败/无结果时仍依赖 super_search 内部路由与 RRF。
+    """
     all_results = []
     engines_used = set()
     sub_results = []
     t0 = time.time()
+    try:
+        from cache import SearchCache
+        shared_cache = SearchCache()
+    except Exception:
+        shared_cache = None
 
-    def _search_one(sq: dict[str, str]) -> dict[str, Any]:
+    prio = [e for e in (engines_priority or []) if e]
+
+    def _search_one(sq: dict[str, str], idx: int = 0) -> dict[str, Any]:
+        # context=research：分层标记；子查询不走 plan_only，避免嵌套计划
+        # 首个子查询尽量走 auto 保底广度；后续轮转 profile 优先引擎
+        engine = "auto"
+        if prio:
+            if idx == 0:
+                engine = "auto"
+            else:
+                engine = prio[(idx - 1) % len(prio)]
+        # 子查询可自带 preferred_engine
+        if sq.get("preferred_engine"):
+            engine = sq["preferred_engine"]
         result = super_search(
             sq["query"], n=max_results, timeout=timeout,
-            depth=depth, mode=mode, skip_cache=False
+            depth=depth, mode=mode, skip_cache=False,
+            cache=shared_cache,
+            engine=engine,
+            context="research",
+            envelope=False,  # 研究合成自管结构，减子查询噪音
         )
         return {
             "sub_query": sq["query"],
             "intent": sq["intent"],
             "strategy": sq["strategy"],
+            "engine_hint": engine,
             "results": result.get("results", []),
             "engines_used": result.get("engines_used", []),
             "elapsed_ms": result.get("elapsed_ms", 0),
+            "cached": result.get("cached", False),
         }
 
     with ThreadPoolExecutor(max_workers=min(len(sub_queries), 4)) as ex:
-        futures = {ex.submit(_search_one, sq): sq for sq in sub_queries}
+        futures = {
+            ex.submit(_search_one, sq, i): sq
+            for i, sq in enumerate(sub_queries)
+        }
         all_futures = list(futures.keys())
         try:
             for fut in as_completed(futures, timeout=timeout * 2 + 5):
@@ -370,16 +403,43 @@ def synthesize_report(query: str, collection: dict[str, Any],
         src = r.get("source", "unknown")
         source_counts[src] = source_counts.get(src, 0) + 1
 
-    # 引用列表
+    # 引用列表 + 标准化 sources（与日常搜索 sources[] 同构）
     citations = []
+    sources = []
     for i, r in enumerate(merged[:15]):
+        ref = i + 1
+        url = r.get("url") or ""
+        title = r.get("title") or ""
+        eng = r.get("source") or ""
         citations.append({
-            "id": f"[{i+1}]",
-            "title": r.get("title", ""),
-            "url": r.get("url", ""),
-            "source": r.get("source", ""),
+            "id": f"[{ref}]",
+            "ref": ref,
+            "title": title,
+            "url": url,
+            "source": eng,
             "score": r.get("score", 0),
+            "snippet": (r.get("snippet") or "")[:160] or None,
         })
+        if url:
+            sources.append({
+                "ref": ref,
+                "title": title[:160],
+                "url": url,
+                "engine": eng,
+                "score": r.get("score"),
+                "snippet": (r.get("snippet") or "")[:160] or None,
+            })
+
+    # 关键发现挂上 citation ref，便于正文用 [n] 标注
+    url_to_ref = {c["url"]: c["ref"] for c in citations if c.get("url")}
+    for kf in key_findings:
+        top = kf.get("top_result") or {}
+        u = top.get("url") or ""
+        if u and u in url_to_ref:
+            top["ref"] = url_to_ref[u]
+            kf["citation_refs"] = [url_to_ref[u]]
+        else:
+            kf["citation_refs"] = []
 
     # 交叉引用检测
     all_results = []
@@ -394,6 +454,7 @@ def synthesize_report(query: str, collection: dict[str, Any],
         "engines_used": collection["engines_used"],
         "source_distribution": source_counts,
         "citations": citations,
+        "sources": sources,  # 与 search sources[] 对齐
         "cross_references": cross_refs,
         "gaps": gaps,
         "elapsed_ms": collection["elapsed_ms"],
@@ -405,9 +466,31 @@ def synthesize_report(query: str, collection: dict[str, Any],
 
 def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
                   timeout: int = 15, depth: str = "balanced",
-                  mode: str = "auto") -> dict[str, Any]:
-    """执行深度研究。"""
-    # 0. 查询改写
+                  mode: str = "auto",
+                  profile: dict[str, Any] | None = None) -> dict[str, Any]:
+    """执行深度研究。
+
+    流程（单次，无 plan↔search 死循环）：
+      1. 离线 build_plan 一次（元数据 / limitations）
+      2. 查询改写 + 子查询分解（有 profile 时优先模板）
+      3. 多源采集（super_search 直搜，context=research 仅作分层标记）
+      4. 综合报告；挂上质量门禁/报告结构；requires_confirmation 恒 False
+    """
+    original_query = query
+    engines_priority = list((profile or {}).get("engines_priority") or [])
+
+    # 0. 离线 plan 一次（不联网、不回调 research）
+    plan_info: dict[str, Any] | None = None
+    try:
+        from plan import build_plan
+        plan_info = build_plan(
+            query, mode=mode, depth=depth, max_results=max_results,
+            context="research",
+        )
+    except Exception:
+        plan_info = None
+
+    # 1. 查询改写
     rewrite_result = None
     try:
         from query_rewriter import rewrite_query as do_rewrite
@@ -417,17 +500,85 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
     except Exception:
         pass
 
-    # 1. 问题分解
-    sub_queries = decompose_query(query, num_sub_queries)
+    # 2. 问题分解：profile 模板优先，再用启发式补足
+    sub_queries: list[dict[str, str]] = []
+    if profile:
+        try:
+            from topic_research_profiles import build_profile_sub_queries
+            sub_queries = build_profile_sub_queries(
+                query, profile, num_sub_queries
+            )
+        except Exception:
+            sub_queries = []
+    heuristic = decompose_query(query, num_sub_queries)
+    # 合并去重
+    seen_q = {sq["query"] for sq in sub_queries}
+    for sq in heuristic:
+        if len(sub_queries) >= num_sub_queries:
+            break
+        if sq["query"] not in seen_q:
+            sub_queries.append(sq)
+            seen_q.add(sq["query"])
+    if not sub_queries:
+        sub_queries = heuristic
+    sub_queries = _deduplicate_sub_queries(sub_queries[:num_sub_queries])
 
-    # 2. 多源采集
-    collection = collect_sources(sub_queries, max_results, timeout, depth, mode)
+    # 3. 多源采集（子查询直搜；不再 build_plan）
+    collection = collect_sources(
+        sub_queries, max_results, timeout, depth, mode,
+        engines_priority=engines_priority or None,
+    )
 
-    # 3. 知识缺口
+    # 4. 知识缺口
     gaps = identify_gaps(collection["sub_results"], query)
 
-    # 4. 综合报告
+    # 5. 综合报告
     report = synthesize_report(query, collection, gaps)
+
+    report["execution_tier"] = "deep_research"
+    report["requires_confirmation"] = False
+    report["query_original"] = original_query
+    report["sub_queries"] = [
+        {"query": sq["query"], "intent": sq["intent"], "strategy": sq["strategy"]}
+        for sq in sub_queries
+    ]
+    if profile:
+        try:
+            from topic_research_profiles import profile_meta
+            meta = profile_meta(profile)
+        except Exception:
+            meta = {
+                "name": profile.get("name"),
+                "discipline": profile.get("discipline"),
+                "quality_gates": profile.get("quality_gates") or [],
+                "report_sections": profile.get("report_sections") or [],
+                "source_grades": profile.get("source_grades") or {},
+            }
+        report["topic_profile"] = meta.get("name")
+        report["topic_profile_key"] = None  # 由 main 回填
+        report["discipline"] = meta.get("discipline")
+        report["quality_gates"] = meta.get("quality_gates") or []
+        report["report_sections"] = meta.get("report_sections") or []
+        report["source_grades"] = meta.get("source_grades") or {}
+        report["engines_priority"] = meta.get("engines_priority") or engines_priority
+        # 金融域固定免责（研究包）
+        if meta.get("discipline") == "finance":
+            report["disclaimer"] = (
+                "本输出基于公开检索结果整理，供研究线索与信息核验，"
+                "不构成投资建议；关键数据请回源核对。"
+            )
+        if meta.get("discipline") == "academic":
+            report["academic_discipline"] = {
+                "no_fabricated_doi": True,
+                "separate_evidence_layers": True,
+                "note": "公开摘要≠已审稿结论；DOI/期刊要求须回官方核验",
+            }
+    if plan_info is not None:
+        report["plan"] = plan_info
+        # 计划中的 limitations 并入 gaps 旁白，不阻断
+        plan_lims = plan_info.get("limitations") or []
+        if plan_lims:
+            report.setdefault("plan_limitations", plan_lims)
 
     if rewrite_result and rewrite_result["rewritten"]:
         report["rewritten_query"] = {
@@ -512,17 +663,107 @@ def social_sentiment_research(query: str, platforms: list[str] | None = None,
 
 def main():
     parser = argparse.ArgumentParser(description="深度研究工具")
-    parser.add_argument("query", help="研究查询")
-    parser.add_argument("--sub-queries", type=int, default=4, help="子查询数量")
-    parser.add_argument("-n", "--max-results", type=int, default=5, help="每个子查询最大结果数")
+    parser.add_argument("query", nargs="?", default=None, help="研究查询（--topic help 时可省略）")
+    parser.add_argument("--sub-queries", type=int, default=None, help="子查询数量（默认 4，或由 --topic 覆盖）")
+    parser.add_argument("-n", "--max-results", type=int, default=None, help="每个子查询最大结果数")
     parser.add_argument("--timeout", type=int, default=15, help="超时秒数")
-    parser.add_argument("--depth", choices=["fast", "balanced", "deep"], default="balanced")
+    parser.add_argument("--depth", choices=["fast", "balanced", "deep"], default=None)
     parser.add_argument("--mode", choices=["fast", "auto", "deep", "budget", "social-sentiment"], default="auto",
                         help="研究模式：fast/auto/deep/budget/social-sentiment")
     parser.add_argument("--platforms", type=str, default=None,
                         help="社交平台列表（仅 social-sentiment 模式），逗号分隔")
+    parser.add_argument("--topic", type=str, default=None,
+                        help="选题类型：ai/investment/finance/academic/tech/tool/internet/social；"
+                             "省略时按查询启发式推断。--topic help 列出全部")
+    parser.add_argument("--no-auto-topic", action="store_true",
+                        help="禁用根据查询自动推断 --topic")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
+    parser.add_argument(
+        "--no-archive",
+        action="store_true",
+        help="跳过工作区归档（研究默认归档；日常搜索不归档）",
+    )
+    parser.add_argument("--archive-dir", type=str, default=None, help="归档根目录")
+    parser.add_argument("--archive-tag", default=None, help="归档标签")
+    parser.add_argument("--archive-note", default=None, help="归档备注")
     args = parser.parse_args()
+    # 研究层默认归档；--no-archive 退出
+    do_archive = not args.no_archive
+
+    # 选题类型 profile 应用（参照 zhihu-creator ENTITY_DOMAIN_MAP 模式）
+    profile_obj: dict[str, Any] | None = None
+    profile_applied = None
+    profile_key = None
+    try:
+        from topic_research_profiles import (
+            get_profile, list_profiles, detect_topic_from_query, list_triggers,
+        )
+    except ImportError:
+        get_profile = list_profiles = detect_topic_from_query = list_triggers = None  # type: ignore
+
+    # --topic help: 列出所有可用选题类型 + 触发词（可无 query）
+    if args.topic and str(args.topic).lower() in ("help", "list", "--help"):
+        if list_profiles:
+            print("可用选题类型（--topic）：")
+            print(f"  {'键名':15s} {'名称':14s} {'深度':8s} {'领域':10s} {'引擎':36s}")
+            print(f"  {'-'*15} {'-'*14} {'-'*8} {'-'*10} {'-'*36}")
+            for p in list_profiles():
+                engines = ", ".join(p["engines"][:3])
+                print(
+                    f"  {p['key']:15s} {p['name']:14s} {p['depth']:8s} "
+                    f"{p.get('discipline', ''):10s} {engines}"
+                )
+            print()
+            if list_triggers:
+                trig = list_triggers()
+                print("深度研究触发词（示例）：", "、".join(trig["deep_research_triggers"][:8]), "…")
+                print("主斜杠：", trig.get("main_slash") or "/argo")
+                print("子技能斜杠：", " ".join(trig.get("slash_commands") or []))
+                print("深度研究斜杠：", " ".join(trig.get("research_slash_commands") or [])[:120])
+            print()
+            print("示例：")
+            print("  python3 research.py \"Claude Opus 5\" --topic ai")
+            print("  python3 research.py \"CRISPR 脱靶综述\" --topic academic")
+            print("  python3 research.py \"台积电估值分歧\" --topic finance")
+            print("  python3 research.py \"离岸信托\" --topic investment")
+        sys.exit(0)
+
+    if not args.query:
+        parser.error("需要研究查询；或使用 --topic help 查看选题与触发词")
+
+    if args.topic and get_profile and list_profiles:
+        profile_obj = get_profile(args.topic)
+        if not profile_obj:
+            available = ", ".join(p["key"] for p in list_profiles())
+            print(f"⚠️  未知选题类型 '{args.topic}'。可用: {available}", file=sys.stderr)
+            sys.exit(1)
+        profile_key = args.topic.strip().lower()
+        from topic_research_profiles import ALIASES
+        profile_key = ALIASES.get(args.topic.strip()) or ALIASES.get(profile_key) or profile_key
+    elif not args.no_auto_topic and detect_topic_from_query and get_profile:
+        auto_key = detect_topic_from_query(args.query)
+        if auto_key:
+            profile_obj = get_profile(auto_key)
+            profile_key = auto_key
+            if profile_obj and not args.json:
+                print(f"  [topic auto] → {auto_key}（{profile_obj['name']}）", file=sys.stderr)
+
+    if profile_obj:
+        if args.sub_queries is None:
+            args.sub_queries = int(profile_obj.get("sub_queries") or 4)
+        if args.max_results is None:
+            args.max_results = int(profile_obj.get("max_results") or 5)
+        if args.depth is None:
+            args.depth = str(profile_obj.get("depth") or "balanced")
+        profile_applied = profile_obj["name"]
+
+    # 无 profile 时的默认
+    if args.sub_queries is None:
+        args.sub_queries = 4
+    if args.max_results is None:
+        args.max_results = 5
+    if args.depth is None:
+        args.depth = "balanced"
 
     # 社交舆情模式
     if args.mode == "social-sentiment":
@@ -531,12 +772,84 @@ def main():
     else:
         report = deep_research(
             args.query, args.sub_queries, args.max_results,
-            args.timeout, args.depth, args.mode
+            args.timeout, args.depth, args.mode,
+            profile=profile_obj,
         )
+
+    if profile_applied:
+        report["topic_profile"] = profile_applied
+        if profile_key:
+            report["topic_profile_key"] = profile_key
+
+    if do_archive:
+        try:
+            from archive_run import write_search_archive, resolve_archive_root
+            # 研究包投影为可归档 envelope（优先 citations/sources）
+            flat_results = []
+            for c in report.get("citations") or report.get("sources") or []:
+                if isinstance(c, dict) and c.get("url"):
+                    flat_results.append({
+                        "title": c.get("title") or c.get("url"),
+                        "url": c.get("url"),
+                        "snippet": c.get("snippet") or "",
+                        "source": c.get("source") or c.get("engine") or "research",
+                        "score": c.get("score"),
+                    })
+            if not flat_results:
+                for block in report.get("key_findings") or []:
+                    if not isinstance(block, dict):
+                        continue
+                    top = block.get("top_result") or {}
+                    if top.get("url"):
+                        flat_results.append({
+                            "title": top.get("title") or top.get("url"),
+                            "url": top.get("url"),
+                            "snippet": top.get("snippet") or "",
+                            "source": top.get("source") or "research",
+                        })
+            envelope = {
+                "query": report.get("query") or args.query,
+                "status": "completed",
+                "mode": report.get("mode") or args.mode,
+                "depth": args.depth,
+                "engine": "research",
+                "engines": report.get("engines_used") or ["research"],
+                "results": flat_results,
+                "count": len(flat_results),
+                "sources": report.get("sources") or [],
+                "citations": report.get("citations") or [],
+                "input_kind": "keyword",
+                "limitations": [
+                    "research archive: multi-hop discovery package; snippets not verified body",
+                ],
+                "research_meta": {
+                    "sub_queries": report.get("sub_queries"),
+                    "gaps": report.get("gaps"),
+                    "source_distribution": report.get("source_distribution"),
+                    "topic_profile": report.get("topic_profile"),
+                    "key_findings": report.get("key_findings"),
+                },
+                "errors": report.get("errors") or [],
+            }
+            root = resolve_archive_root(args.archive_dir) if args.archive_dir else None
+            meta = write_search_archive(
+                envelope,
+                root=root,
+                tag=args.archive_tag or "research",
+                note=args.archive_note,
+                source="argo_research",
+            )
+            report["archive"] = meta
+            if not args.json:
+                print(f"  [archive] {meta.get('run_id')} → {meta.get('run_dir')}", file=sys.stderr)
+        except Exception as e:
+            print(f"  [archive error] {type(e).__name__}: {e}", file=sys.stderr)
 
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
+        if profile_applied:
+            print(f"📋 选题类型：{profile_applied}", file=sys.stderr)
         if report.get("mode") == "social-sentiment":
             _print_social_report(report)
         else:
@@ -577,11 +890,24 @@ def _print_social_report(report: dict):
 
 
 def _print_deep_report(report: dict):
-    """打印深度研究报告（人类可读格式）"""
+    """打印深度研究报告：正文用 [n] 标注，链接统一沉底「相关信源」。"""
     elapsed_s = report.get("elapsed_ms", 0) / 1000
     sub_count = report.get("sub_query_count", len(report.get("sub_findings", [])))
     total_sources = report.get("total_sources", 0)
-    citations_count = len(report.get("citations", []))
+    citations = report.get("citations") or []
+    sources = report.get("sources") or []
+    if not sources and citations:
+        sources = [
+            {
+                "ref": c.get("ref") or i + 1,
+                "title": c.get("title"),
+                "url": c.get("url"),
+                "engine": c.get("source"),
+            }
+            for i, c in enumerate(citations)
+            if isinstance(c, dict) and c.get("url")
+        ]
+    citations_count = len(citations) or len(sources)
 
     print(f"\n{'='*60}")
     print("=== 深度研究报告 ===")
@@ -591,36 +917,32 @@ def _print_deep_report(report: dict):
         rq = report["rewritten_query"]
         print(f"改写：{rq.get('original', '')} → {rq.get('rewritten', '')}（置信度 {rq.get('confidence', 0):.2f}）")
     print(f"子查询：{sub_count} 个 | 来源：{total_sources} 个 | 引用：{citations_count} 个 | 耗时：{elapsed_s:.1f}s")
+    if report.get("archive"):
+        print(f"归档：{report['archive'].get('run_dir', '')}")
     print()
 
-    # 关键发现
+    # 关键发现（链接用 [n]，不在正文刷 URL）
     print("## 关键发现")
     print()
     for i, kf in enumerate(report.get("key_findings", []), 1):
         aspect = kf.get("aspect", kf.get("sub_query", ""))
-        print(f"### [{i}] {aspect}")
-        top = kf.get("top_result", {})
+        refs = kf.get("citation_refs") or []
+        ref_s = "".join(f"[{r}]" for r in refs) if refs else ""
+        print(f"### {i}. {aspect} {ref_s}".rstrip())
+        top = kf.get("top_result", {}) or {}
         if top:
-            print(f"  {top.get('title', '')}")
-            print(f"  来源：{top.get('url', '')}")
+            tref = top.get("ref")
+            tmark = f"[{tref}] " if tref else ""
+            print(f"  {tmark}{top.get('title', '')}")
             snippet = top.get("snippet", "")
             if snippet:
                 print(f"  {snippet[:200]}")
         findings = kf.get("findings", [])
         if findings:
             for f in findings:
-                src = f.get("url", f.get("source", ""))
                 title = f.get("title", "")
-                print(f"  - {title}（来源：{src}）")
-        print(f"  （本报告共 {kf.get('result_count', 0)} 条结果）")
-        print()
-
-    # 引用
-    citations = report.get("citations", [])
-    if citations:
-        print(f"## 引用（{len(citations)}）")
-        for c in citations:
-            print(f"  {c.get('id', '')} {c.get('title', '')} - {c.get('url', '')}")
+                print(f"  - {title}")
+        print(f"  （本方面 {kf.get('result_count', 0)} 条结果）")
         print()
 
     # 知识缺口
@@ -639,18 +961,71 @@ def _print_deep_report(report: dict):
             print(f"  - 「{cr.get('ngram', '')}」被 {cr.get('source_count', 0)} 个来源佐证：{', '.join(cr.get('domains', [])[:5])}")
         print()
 
+    # 知识缺口
+    gaps = report.get("gaps") or []
+    if gaps:
+        print("## 知识缺口 / 盲区")
+        for g in gaps[:8]:
+            print(f"  - {g}")
+        print()
+
+    # 专业质量门禁（选题 profile）
+    gates = report.get("quality_gates") or []
+    if gates:
+        print("## 质量门禁（交付前自检）")
+        for g in gates:
+            print(f"  - [ ] {g}")
+        print()
+
+    sections = report.get("report_sections") or []
+    if sections:
+        print("## 建议报告结构")
+        print("  → " + " / ".join(sections))
+        print()
+
+    grades = report.get("source_grades") or {}
+    if grades:
+        print("## 信源级别参考")
+        for level, items in grades.items():
+            if isinstance(items, list):
+                print(f"  - {level}：{', '.join(str(x) for x in items[:6])}")
+            else:
+                print(f"  - {level}：{items}")
+        print()
+
+    if report.get("disclaimer"):
+        print(f"⚠ {report['disclaimer']}")
+        print()
+
     # 来源分布
     source_dist = report.get("source_distribution", {})
     if source_dist:
-        print("## 来源分布")
+        print("## 引擎分布")
         for src, cnt in sorted(source_dist.items(), key=lambda x: x[1], reverse=True):
             print(f"  - {src}: {cnt}")
         print()
 
-    # 引擎
     engines = report.get("engines_used", [])
     if engines:
         print(f"使用引擎：{', '.join(engines)}")
+        print()
+
+    # 底部相关信源（传统搜索引擎形态；引用与 sources 统一）
+    if sources or citations:
+        print(f"── 相关信源（{len(sources) or len(citations)}）──")
+        rows = sources if sources else citations
+        for c in rows:
+            if not isinstance(c, dict):
+                continue
+            ref = c.get("ref") or (c.get("id") or "").strip("[]") or "?"
+            title = (c.get("title") or "")[:70]
+            eng = c.get("engine") or c.get("source") or ""
+            url = c.get("url") or ""
+            eng_s = f" · {eng}" if eng else ""
+            if title:
+                print(f"  [{ref}] {title}{eng_s}")
+            if url:
+                print(f"      {url}")
         print()
 
 

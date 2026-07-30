@@ -1,7 +1,7 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。核心不是「返回链接」，而是「最大化可被 Agent 吸收的可核验证据」。工具：argo_search + research + evidence（Selection×Absorption 两阶段）+ clarify + fetch/crawl/extract + 社交引擎。TF-IDF路由 + RRF + 证据密度 + SERP降权 + 中文信源表。
-version: 2.3.0
+description: Argo 阿尔戈 — 统一搜索与证据核验。核心不是「返回链接」，而是「最大化可被 Agent 吸收的可核验证据」。工具：argo_search + research + evidence（Selection×Absorption 两阶段）+ clarify + fetch/crawl/extract + 社交引擎。TF-IDF路由 + RRF + 证据密度 + SERP降权 + 中文信源表。深度研究走 research.py（academic/finance 专业 profile）。
+version: 2.4.1
 triggers:
   - 搜索
   - 查一下
@@ -12,6 +12,39 @@ triggers:
   - search for
   - look up
   - fact check
+  - 投资价值
+  - 研报
+  - 估值
+  - 公司分析
+  - 财报
+  - 行情
+  - research
+  - argo
+  # ── 深度研究专用（走 research.py，禁止当日常 SERP）──
+  - 深度研究
+  - 深度调研
+  - 深度报告
+  - 深度分析
+  - 全面调研
+  - 系统研究
+  - 系统综述
+  - 文献综述
+  - 科研调研
+  - 深入研究
+  - deep research
+  - deep-research
+  - thorough research
+  - literature review
+  # 主命令 + 子技能斜杠（见 ~/.claude/commands/argo*.md）
+  - /argo
+  - /argo-search
+  - /argo-research
+  - /deep-research
+  - /argo-research-academic
+  - /argo-research-finance
+  - /argo-evidence
+  - /argo-clarify
+  - /argo-fetch
 engines:
   - local_search
   - anysearch
@@ -48,7 +81,17 @@ engines:
   - em_global_news
 ---
 
-## Argo v2.3.0
+## Argo v2.4.1（WorkBuddy 版）
+
+> **安装路径**：`~/.workbuddy/skills/argo/`
+> 所有命令请先 `cd ~/.workbuddy/skills/argo/` 后再执行。
+> 配置已在 config.yaml 中更新为指向 `~/.workbuddy/skills/argo/`。
+
+### WorkBuddy 快速调用
+
+Argo 已安装为 WorkBuddy 用户级 skill，可在对话中通过以下方式触发：
+- 直接说「用 Argo 搜一下...」
+- 说「搜索/查一下/核实...」等触发词（Argo 会自动响应）
 
 ### 问题重定义（第一性原理）
 
@@ -88,11 +131,76 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 
 ### Agent 执行纪律
 
-1. **高后果问题**：search → evidence（或看 `credibility_fast`）→ fetch 高分 URL → 再下结论  
-2. **数字**：必须标注口径（全市场/主动/持仓市值 vs 占比）；冲突时并列  
-3. **SERP 链**（baidu/s、sogou/link）：禁止当正文来源  
-4. **社交帖**：叙事/舆情，不进事实真值  
-5. **分层查询**：事实类 deep 至少 2–3 条子查询（来源 / 对比数据 / 关键主体）
+1. **日常直搜（默认）**：`mode=auto|fast|budget` 且 `depth≠deep` → **直接 `argo_search`，禁止先确认、禁止强制 plan**  
+2. **专业 / 深度**：`mode=deep` 或 `depth=deep` → 直搜同时可读 `plan` 元数据；高后果再 evidence/fetch  
+3. **斜杠分层**：主命令 `/argo`；日常 `/argo-search`；深度 `/argo-research`（及 academic/finance）；核验 `/argo-evidence`；消歧 `/argo-clarify`；正文 `/argo-fetch`  
+3b. **深度研究**：触发词见 frontmatter（「深度研究」「文献综述」「deep research」等）或 `/argo-research` / `/argo research` → **只**走 `argo_research` / `research.py`；顶层离线 plan **一次**后拆子查询；**不得** plan↔search 循环；**禁止**用日常 `search.py` 冒充深度研究  
+4. **专业选题**：`--topic academic|finance|investment|ai|…`；省略时启发式自动推断；输出挂 `quality_gates` / `report_sections` / `source_grades`  
+5. **高后果问题**：search → evidence（或看 `credibility_fast`）→ fetch 高分 URL → 再下结论  
+6. **数字**：必须标注口径（全市场/主动/持仓市值 vs 占比）；冲突时并列  
+7. **SERP 链**（baidu/s、sogou/link）：禁止当正文来源  
+8. **社交帖**：叙事/舆情，不进事实真值  
+9. **分层查询**：事实类 deep 至少 2–3 条子查询（来源 / 对比数据 / 关键主体）
+10. **input_kind**：纯 URL / 已知链接默认 `known-url`，**禁止**多引擎热搜，改 `argo_fetch`；只有「搜索引用/讨论该 URL」才用 `url-seed`（这是工具分流，不是用户确认门）
+11. **snippet 是线索**：`verification.status=candidate` 时不得把摘要当已核验事实；引用前 fetch/extract
+12. **plan 显式开关**：仅调试或专业路径用 `plan.py` / `--plan-only`；日常热路径 `execution_tier=daily` 且 `requires_confirmation=false`
+13. **归档分层**：日常 `search` **默认不归档**（仅显式 `--archive`）；`research` **默认归档**（`--no-archive` 退出）。归档≠已核验  
+14. **信源沉底**：人读输出正文用 `[n]` + 标题/摘要；完整 URL 在底部「相关信源」；JSON 带 `sources[]`
+15. **学术纪律**：`--topic academic` 禁止编造 DOI/论文/期刊要求；区分共识 vs 开放问题  
+16. **金融纪律**：`--topic finance|investment` 标注信源级别与盲区；输出免责声明；**不**给买卖指令
+
+### 离线计划与候选交接
+
+```bash
+# 离线计划（不联网）
+python3 scripts/plan.py "贵州茅台股价" --json
+python3 scripts/search.py "https://example.com/a" --plan-only --json
+
+# 已知 URL：默认 handoff，不烧配额
+python3 scripts/search.py "https://docs.python.org/3/" --json
+
+# 把 URL 当发现种子
+python3 scripts/search.py "搜索引用 https://example.com/a 的报道" --input-kind url-seed --json
+```
+
+搜索 JSON 附加字段（不破坏原 `results[]`）：`schema_version` / `input_kind` / `candidates[]` / `coverage[]` / `limitations[]`。
+
+### 信源显示（日常 SERP）
+
+```bash
+# 人读：正文 [n]+标题+摘要；底部「相关信源」给链接
+python3 scripts/search.py "查询词"
+
+# 机器：results[] + sources[]（ref/title/url/engine）
+python3 scripts/search.py "查询词" --json
+```
+
+### 工作区归档（分层）
+
+| 场景 | 默认 | 开关 |
+|------|------|------|
+| 日常 `search` | **不归档** | 显式 `--archive` |
+| 深度 `research` | **归档** | `--no-archive` 退出 |
+
+落盘根：`数据/argo-search-archive/`（`ARGO_ARCHIVE_ROOT` 可覆盖）。**不**抓正文、**不**下媒体、**不**覆盖旧 run。
+
+```bash
+# 日常：一般不要 --archive
+python3 scripts/search.py "快问" 
+
+# 确需复现的单次搜索
+python3 scripts/search.py "专题" --archive --archive-tag adhoc
+
+# 研究：默认归档
+python3 scripts/research.py "议题" --json
+python3 scripts/research.py "议题" --no-archive   # 轻试
+
+python3 scripts/archive_run.py list --limit 20
+python3 scripts/archive_run.py root
+```
+
+每个 run：`run-summary.json` · `envelope.json` · `sources.jsonl` · `candidates.jsonl` · `results.jsonl` · `coverage.json` · `INDEX.md`。  
+问题重定义：`docs/PROBLEM_REFRAME_SEARCH_UX_v2.4.5.md`；细则：`docs/SEARCH_ARCHIVE.md`。
 
 ### 能力清单
 
@@ -103,16 +211,50 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **预算模式**：fast / auto / deep / budget 四档配额追踪 + 自动降级
 - **渐进式多源**：engines_combo 先快后全 + 并行模式
 - **AnySearch 垂直域**：19 个垂直域结构化搜索，匿名兜底
-- **双层缓存**：L1 LRU + L2 SQLite + gzip，分级 TTL
+- **双层缓存**：L1 LRU + L2 SQLite + gzip，分级 TTL；**query 归一化键** + 时效 query 硬 cap≤900s（v2.4.1）
+- **渐进 early-stop**：auto/fast/budget 下主引擎足够则跳过其余并行波次（v2.4.1）
 - **RRF 融合**：多引擎 Reciprocal Rank Fusion 去重合并
 - **Bocha Reranker**：语义精排后处理
 - **Selection×Absorption**：SERP 降权 + 证据密度 + 中文信源表（v2.2）
 - **自适应学习**：success × latency × cost 三维评分，SQLite 持久化
 - **社交引擎**：Twitter/Reddit/小红书/B站/微博 5 大平台原生搜索
+- **引擎生命周期（v2.4.4）**：外置 YAML 声明 + env 注入 + `engine_validate` 准入 + 自动路由过滤 blocked/缺 Key
 
-### 用法
+### 引擎接入与验证（v2.4.4）
 
 ```bash
+cd ~/.workbuddy/skills/argo/
+
+# 状态一览（env / admission / routable）
+python3 scripts/search.py --list-engines --detail
+python3 scripts/search.py --list-engines --detail --routable-only
+python3 scripts/engine_status.py --engine tavily --json
+
+# 标准化验证 → 准入
+python3 scripts/engine_validate.py --engine hackernews --stage health --admit --write-doc
+python3 scripts/engine_validate.py --engine hackernews --stage all --admit
+python3 scripts/engine_validate.py --all-free --stage health
+
+# 环境变量（新名优先，旧名兼容）
+export ARGO_TAVILY_API_KEY=...
+export ARGO_EXA_API_KEY=...
+export ARGO_ENABLE_ENGINES="hackernews,eastmoney,tavily"   # 可选白名单
+export ARGO_DISABLE_ENGINES="brave"                        # 可选黑名单
+
+# 新引擎 L1：复制模板 → 改 YAML → 配 Key → validate
+# 详见 docs/ADDING_NEW_ENGINE.md
+# cp engines/_template_http.yaml engines/specs/myengine.yaml
+```
+
+自动路由只使用 **routable** 引擎（config enabled ∧ env 就绪 ∧ 未 blocked）。  
+`--engine` 强制指定不受 admission 限制（便于调试）。
+
+### 用法（从 `~/.workbuddy/skills/argo/` 目录执行）
+
+```bash
+# 先切换到 argo 目录
+cd ~/.workbuddy/skills/argo/
+
 # 自动路由（推荐）
 python3 scripts/search.py "查询词"
 
@@ -150,6 +292,8 @@ python3 scripts/search.py "查询词" --mode budget   # 配额控制
 python3 scripts/search.py "查询词" --no-cache
 python3 scripts/search.py "查询词" --depth fast|balanced|deep
 python3 scripts/search.py --list-engines
+python3 scripts/search.py --list-engines --detail
+python3 scripts/engine_validate.py --engine hackernews --stage health --admit
 python3 scripts/quota.py stats
 
 # AnySearch 垂直域搜索
@@ -158,10 +302,25 @@ python3 scripts/search.py "AAPL" --domain finance --sub_domain finance.us_stock
 # TF-IDF 路由测试
 python3 scripts/tfidf_router.py "查询词"
 
-# ── 深度研究（问题分解→多源采集→综合报告）──
+# ── 深度研究（问题分解→多源采集→综合报告；默认归档）──
+# 触发：深度研究触发词，或 /argo · /argo-research · /argo academic|finance
+# 斜杠一览：/argo（主） /argo-search /argo-research /argo-research-academic
+#           /argo-research-finance /deep-research /argo-evidence /argo-clarify /argo-fetch
 python3 scripts/research.py "CRISPR脱靶效应AI预测方法综述"
 python3 scripts/research.py "CVE-2024-6387 生产环境影响" --depth deep --json
 python3 scripts/research.py "React vs Vue 2025 生产环境对比" --sub-queries 5
+
+# ── 选题研究（模板子查询 + 引擎优先 + 质量门禁 + 报告结构）──
+python3 scripts/research.py "Claude Opus 5" --topic ai              # AI/大模型
+python3 scripts/research.py "CRISPR 脱靶" --topic academic           # 科研/文献：arxiv 优先 + 学术门禁
+python3 scripts/research.py "台积电估值分歧" --topic finance          # 金融深度：IC 风格门禁 + 免责
+python3 scripts/research.py "离岸信托新政" --topic investment        # 投资线索（非买卖建议）
+python3 scripts/research.py "显卡涨价" --topic tech
+python3 scripts/research.py "Obsidian插件" --topic tool
+python3 scripts/research.py "SpaceX商业闭环" --topic internet
+python3 scripts/research.py "苹果Vision Pro 口碑" --topic social
+python3 scripts/research.py "带综述关键词的查询"                      # 无 --topic 时自动推断
+python3 scripts/research.py --topic help                             # 选题 + 触发词 + 斜杠命令
 
 # ── 来源可信度评估 ──
 echo '{"results": [...]}' | python3 scripts/evidence.py "查询词" --stdin --json
@@ -258,7 +417,7 @@ python3 scripts/quota.py stats
 
 | 引擎 | cost_tier | 特点 | 认证 |
 |------|-----------|------|------|
-| twitter | free | Twitter/X 推文搜索 | 可选（nitter 兜底） |
+| twitter / fxtwitter | free | X/Twitter 推文搜索（FxTwitter 主路径） | 零 Key；nitter/tw 兜底 |
 | reddit | free | Reddit 帖子+评论 | 无需认证 |
 | xiaohongshu | free | 小红书笔记+评论 | xhs login |
 | bilibili | free | B站视频+弹幕 | 无需认证 |
@@ -274,20 +433,29 @@ python3 scripts/quota.py stats
 | `evidence` | 权威性+时效性+交叉验证的综合可信度评分 | 高后果决策、学术引用、新闻真伪 | ~300/次 |
 | `clarify` | 歧义检测+意图分类+推荐路由策略 | 歧义查询、意图不明确、多语言混合 | ~200/次 |
 
-#### research — 深度研究
+#### research — 深度研究（专业 profile）
+
+**何时用**：用户明确要深度研究 / 综述 / 研报级信息包；或斜杠 `/argo-research`、`/argo-research-academic`、`/argo-research-finance`、`/deep-research`。  
+**何时不用**：日常快问 → 只用 `search.py`，底部给链接即可，**不**归档、**不**展开质量门禁长文。
 
 ```bash
-# 自动分解问题，多源采集
+# 自动分解问题，多源采集（默认归档；轻试加 --no-archive）
 python3 scripts/research.py "你的复杂查询"
 
 # 控制子查询数量和搜索深度
 python3 scripts/research.py "查询" --sub-queries 5 --depth deep
 
+# 专业选题（academic / finance 吸收了科研与投研质量纪律）
+python3 scripts/research.py "查询" --topic academic --json
+python3 scripts/research.py "查询" --topic finance --json
+
 # JSON 输出供 Agent 消费
 python3 scripts/research.py "查询" --json
 ```
 
-输出包含：`key_findings`（按子查询分组的关键发现）、`citations`（引用列表）、`gaps`（知识缺口）、`source_distribution`（来源统计）。
+输出包含：`key_findings`、`citations` / `sources[]`、`gaps`、`source_distribution`、  
+`quality_gates`（交付自检清单）、`report_sections`（建议结构）、`source_grades`（信源级别）、  
+`discipline`、`disclaimer`（金融域）。人读时链接仍沉底「相关信源」。
 
 #### evidence — 可信度评估（v2.2 Selection×Absorption）
 
@@ -341,7 +509,11 @@ python3 scripts/mcp_server.py
 python3 scripts/mcp_server.py --test
 ```
 
-MCP 工具名：`argo_search`、`argo_research`（含 social-sentiment 模式）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_extract`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_social_sentiment`、`argo_twitter_search`、`argo_reddit_search`、`argo_xiaohongshu_search`、`argo_bilibili_search`、`argo_weibo_search`。
+MCP 工具名：`argo_search`、`argo_research`（含 social-sentiment / topic）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_extract`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_social_sentiment`、`argo_twitter_search`、`argo_reddit_search`、`argo_xiaohongshu_search`、`argo_bilibili_search`、`argo_weibo_search`。
+
+**深度研究边界**：`argo_research` **只**用 argo 内 `research.py` + `topic_research_profiles.py`。academic/finance 的方法（门禁/结构/信源级别）已内化进 profile，**运行时不**调用 super-research / invest-analyst / rw-research-router 等外部 skill。需要整份 IC 研报写作或科研投稿工作流时，再由 Agent 另开对应 skill——那是写作/编排层，不是搜索 MCP 依赖。
+
+**MCP 性能**：延迟加载 + initialize 后台 warm search/cache；默认紧凑 JSON（无 indent）+ `summary` 砍重字段；社交多平台并行；`argo_research` 支持 `topic`/`auto_topic`。
 
 ### 成本感知路由公式
 
@@ -386,42 +558,32 @@ SearXNG 实例。强制使用本地聚合：
 python3 scripts/search.py "查询词" --local-first
 ```
 
-### 文件结构
+### 文件结构（`~/.workbuddy/skills/argo/`）
 
 ```
-argo-v2/
+~/workbuddy/skills/argo/
 ├── SKILL.md              # 本文件 — 技能注册文档
 ├── config.yaml           # 引擎配置 & 路由规则
+├── engines/              # [v2.4.4] 外置引擎声明 + 插件
+│   ├── _template_http.yaml
+│   ├── specs/*.yaml      # L1/L2 声明式引擎
+│   └── plugins/*.py      # L3 自定义 builder
+├── docs/
+│   └── ADDING_NEW_ENGINE.md
 ├── backends/
 │   ├── domain_profiles.json   # TF-IDF 领域文档
 │   └── quota_profiles.json    # 配额配置
 ├── scripts/
-│   ├── config.py         # 配置加载器
+│   ├── config.py         # 配置加载器（merge 外置 YAML）
+│   ├── engine_env.py     # [v2.4.4] Key 别名 / ENABLE·DISABLE
+│   ├── engine_admission.py # [v2.4.4] 生产准入状态
+│   ├── engine_status.py  # [v2.4.4] list --detail
+│   ├── engine_validate.py # [v2.4.4] 标准化验证 CLI
 │   ├── search.py         # CLI 入口 & 执行编排
-│   ├── route.py          # 三层路由决策
-│   ├── engines.py        # 引擎适配层
-│   ├── cache.py          # 双层缓存
-│   ├── adaptive.py       # 自适应学习
-│   ├── tfidf_router.py   # TF-IDF 语义路由
-│   ├── quota.py          # 配额管理
-│   ├── search_types.py   # 统一类型系统
-│   ├── research.py       # [新] 深度研究工具
-│   ├── evidence.py       # [新] 可信度评估工具
-│   ├── clarify.py        # [新] 意图消歧工具
-│   ├── crawl.py          # [新] 站点爬取工具
-│   ├── extract.py         # 结构化提取工具
-│   ├── fetch.py           # 页面抓取工具（urllib）
-│   ├── fetch_v2.py        # [v2.0] 智能抓取（HTTP + Hound 浏览器降级）
-│   ├── content_signals.py # [v2.0] 内容质量信号系统
-│   ├── focus_extract.py   # [v2.0] BM25 聚焦提取
-│   ├── pdf_extract.py     # [v2.0] PDF 结构化提取
-│   ├── mcp_server.py      # MCP 服务层（14 工具）
-│   └── social_engines/    # [v2.1] 社交平台引擎
-│       ├── twitter_engine.py
-│       ├── reddit_engine.py
-│       ├── xiaohongshu_engine.py
-│       ├── bilibili_engine.py
-│       └── weibo_engine.py
+│   ├── route.py          # 三层路由（routable 过滤）
+│   ├── engines.py        # 引擎适配层 + 插件加载
+│   ├── mcp_server.py     # MCP 服务层
+│   └── social_engines/   # 社交平台引擎
 ├── sub-skills/
 │   └── local-search/     # 本地引擎子技能
 └── tests/

@@ -62,13 +62,14 @@ _RE_DEPTH = re.compile(
 
 _ENGINE_NAMES = {
     "anysearch": "AnySearch", "tavily": "Tavily",
-    "zhihu": "知乎", "eastmoney": "东方财富", "byted": "字节搜索",
+    "zhihu": "知乎", "zhihu_global": "知乎全网搜索",
+    "eastmoney": "东方财富", "byted": "字节搜索",
     "arxiv": "arXiv", "searxng": "SearXNG", "felo": "Felo",
     "bocha": "博查", "openalex": "OpenAlex", "crossref": "Crossref",
     "github": "GitHub", "wikipedia": "Wikipedia", "metaso": "秘塔",
     "wolframalpha": "WolframAlpha", "brave": "Brave",
     "duckduckgo": "DuckDuckGo", "uapi": "UAPI", "semantic_scholar": "Semantic Scholar",
-    "exa": "Exa 语义搜索", "wechat_sogou": "搜狗微信搜索",
+    "exa": "Exa 语义搜索", "octen": "Octen 搜索", "wechat_sogou": "搜狗微信搜索",
     "hackernews": "Hacker News", "stackoverflow": "Stack Overflow",
     "google_scholar": "Google Scholar", "v2ex": "V2EX",
     "ths_hot": "同花顺热点", "cls_telegraph": "财联社电报", "em_global_news": "东财全球资讯",
@@ -76,11 +77,15 @@ _ENGINE_NAMES = {
 
 
 def extract_features(query: str) -> dict[str, Any]:
-    """提取查询特征向量。"""
+    """提取查询特征向量。
+
+    P0-001：并入 has_geo / has_negation / intents，供下游路由/并行度决策使用。
+    查询理解不可用时退化为纯正则特征，不影响原有字段。
+    """
     total = len(query)
     chinese = len(_RE_CHINESE.findall(query))
     ratio = chinese / max(total, 1)
-    return {
+    features: dict[str, Any] = {
         "chinese_ratio": ratio,
         "english_ratio": 1.0 - ratio,
         "length": total,
@@ -88,7 +93,23 @@ def extract_features(query: str) -> dict[str, Any]:
         "has_technical": bool(_RE_TECH.search(query)),
         "has_question": bool(_RE_QUESTION.search(query)),
         "has_depth_word": bool(_RE_DEPTH.search(query)),
+        "has_geo": False,
+        "has_negation": False,
+        "intents": [],
     }
+    try:
+        from query_understanding import understand
+        qu = understand(query)
+        features["has_geo"] = bool(qu.geo)
+        features["has_negation"] = bool(qu.exclude_terms)
+        features["intents"] = list(qu.intents)
+    except ImportError:
+        pass  # query_understanding 不可用，保留默认值
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search.route").debug(
+            f"查询理解特征跳过: {type(e).__name__}")
+    return features
 
 
 def _feature_labels(features: dict[str, Any]) -> str:
@@ -193,6 +214,70 @@ def _add_language_engines(engine_list: list[str], features: dict | None = None) 
         if eng not in result:
             result.append(eng)
     return result
+
+
+def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
+                          enabled: set[str]) -> list[str]:
+    """P0-001：geo 查询追加 local_openstreetmap（地理编码/POI）。"""
+    if not features or not features.get("has_geo"):
+        return engine_list
+    if "local_openstreetmap" not in enabled:
+        return engine_list
+    if "local_openstreetmap" in engine_list:
+        return engine_list
+    return engine_list + ["local_openstreetmap"]
+
+
+# 意图 → (期望引擎数, 是否并行)。P0-005 动态并行度。
+_INTENT_PARALLELISM: dict[str, tuple[int, bool]] = {
+    "definition": (1, False),
+    "fact": (1, False),
+    "news": (2, True),
+    "compare": (3, True),
+    "social": (3, True),
+}
+
+
+def _apply_intent_parallelism(engine_list: list[str], features: dict | None,
+                              domain: dict | None, mode: str,
+                              default_parallel: bool) -> tuple[list[str], bool]:
+    """P0-005：按意图动态裁剪引擎数与并行度。
+
+    definition/fact → 1 引擎串行；news → 2 引擎并行；compare/social → 3 引擎并行。
+    深度研究词（has_depth_word）视为 research，保持 3 引擎并行。
+    fast 模式强制串行（但仍可裁剪引擎数）。
+
+    Returns:
+        (裁剪后的引擎列表, 是否并行)
+    """
+    if not engine_list:
+        return engine_list, default_parallel
+
+    intents = (features or {}).get("intents") or []
+    is_research = bool((features or {}).get("has_depth_word"))
+
+    target_n: int | None = None
+    want_parallel = default_parallel
+
+    # research/compare 优先（更需要多源）
+    if is_research or "compare" in intents:
+        target_n, want_parallel = 3, True
+    elif "social" in intents:
+        target_n, want_parallel = 3, True
+    elif "news" in intents:
+        target_n, want_parallel = 2, True
+    elif "definition" in intents or "fact" in intents:
+        target_n, want_parallel = 1, False
+
+    if target_n is None:
+        return engine_list, default_parallel
+
+    trimmed = engine_list[:target_n]
+    if mode == "fast":
+        want_parallel = False
+    if len(trimmed) <= 1:
+        want_parallel = False
+    return trimmed, want_parallel
 
 
 def _select_sub_engines(sub_engines: list[str], features: dict | None = None) -> list[str]:
@@ -310,7 +395,14 @@ def route_query(query: str, engine_override: str = "auto",
 
     features = extract_features(query)
     cfg = load_config()
-    enabled = set(get_engines(cfg).keys())
+    # 自动路由：仅启用且 env 就绪、未 blocked 的引擎
+    try:
+        enabled = set(get_engines(cfg, routable_only=True).keys())
+    except TypeError:
+        enabled = set(get_engines(cfg).keys())
+    # 若过滤过狠导致空集，回退到 enabled 全集（避免完全不可用）
+    if not enabled:
+        enabled = set(get_engines(cfg).keys())
 
     # TF-IDF 语义路由（分数过低视为无效，禁止垂直引擎零分塌缩）
     TFIDF_MIN_SCORE = 0.12
@@ -382,10 +474,17 @@ def route_query(query: str, engine_override: str = "auto",
                 engines_combo.insert(0, tfidf_best)
                 confidence = 0.8
 
+        # P0-001：geo 查询追加 OpenStreetMap
+        engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
+
         parallel = bool(domain.get("parallel", False)) or len(engines_combo) > 2
         # fast 模式强制串行，先 local_search 成功即避免额外 HTTP 开销
         if mode == "fast":
             parallel = False
+
+        # P0-005：意图驱动动态并行度（覆写域默认 parallel）
+        engines_combo, parallel = _apply_intent_parallelism(
+            engines_combo, features, domain, mode, parallel)
 
         return _done(
             engine=engines_combo[0],
@@ -414,10 +513,16 @@ def route_query(query: str, engine_override: str = "auto",
         engines_combo = _expand_local_search(engines_combo, features)
         # 🔑 为中文/学术查询追加本地引擎
         engines_combo = _add_language_engines(engines_combo, features)
+        # P0-001：geo 查询追加 OpenStreetMap
+        engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
         if mode == "fast":
             parallel = False
         else:
             parallel = len(engines_combo) > 1
+
+        # P0-005：意图驱动动态并行度
+        engines_combo, parallel = _apply_intent_parallelism(
+            engines_combo, features, None, mode, parallel)
 
         return _done(
             engine=engines_combo[0],
@@ -439,6 +544,8 @@ def route_query(query: str, engine_override: str = "auto",
         fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
     fallback_combo = _expand_local_search(fallback_combo, features)
     fallback_combo = _add_language_engines(fallback_combo, features)
+    # P0-001：geo 查询追加 OpenStreetMap
+    fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
     # fast：最多 2 个免费
     if mode == "fast":
         fallback_combo = fallback_combo[:2]

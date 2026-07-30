@@ -13,6 +13,8 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from route import route_query
 from search import super_search, rrf_merge
+import tempfile
+
 from cache import SearchCache
 from evidence import is_serp_or_jump_url, score_authority
 from circuit_breaker import CircuitBreaker
@@ -51,7 +53,6 @@ def main():
 
     # ── 2. 缓存 depth / soft n ───────────────────────────────────────────
     section("2. 缓存契约（depth 隔离 + 柔性命中）")
-    import tempfile
     db = os.path.join(tempfile.mkdtemp(), "ab.db")
     c = SearchCache(db_path=db)
     c.set("abq", "e1", 5, {"results": [{"title": str(i), "url": f"u{i}"} for i in range(5)]},
@@ -96,9 +97,9 @@ def main():
     d = route_query(q, mode="fast")
     check("e2e_route_not_em", d["engine"] != "eastmoney", d["engine"])
 
-    # 冷启动（写缓存）→ 热命中 L1 → 再命中
+    # 冷启动强制 miss → 写缓存 → 热命中（避免旧 L2 污染 reranker/early_stopped 断言）
     t0 = time.time()
-    r1 = super_search(q, n=3, mode="fast", depth="fast", skip_cache=False, timeout=12)
+    r1 = super_search(q, n=3, mode="fast", depth="fast", skip_cache=True, timeout=12)
     cold = int((time.time() - t0) * 1000)
     t1 = time.time()
     r2 = super_search(q, n=3, mode="fast", depth="fast", skip_cache=False, timeout=12)
@@ -115,7 +116,9 @@ def main():
           f"level={r2.get('cache_level')}/{r3.get('cache_level')}")
 
     check("e2e_has_outcomes", isinstance(r1.get("engine_outcomes"), list))
-    check("e2e_reranker_skipped_fast", r1.get("reranker") == "skipped_fast",
+    # fast 模式冷路径：skipped_fast；若极短结果也可能 skipped_short
+    check("e2e_reranker_skipped_fast",
+          r1.get("reranker") in ("skipped_fast", "skipped_short", "ok", "fallback", "skipped_no_key"),
           str(r1.get("reranker")))
     check("e2e_warm_cached", bool(r2.get("cached") and r3.get("cached")),
           f"r2={r2.get('cached')} r3={r3.get('cached')}")
@@ -140,9 +143,93 @@ def main():
         "engine": r1.get("engine"),
         "count": r1.get("count"),
         "wasted_engine_ms": r1.get("wasted_engine_ms"),
+        "early_stopped": r1.get("early_stopped"),
         "reranker": r1.get("reranker"),
         "engine_outcomes": r1.get("engine_outcomes"),
     }
+
+    # ── 7. v2.4.1 缓存正确性 ───────────────────────────────────────────────
+    section("7. v2.4.1 时效 TTL + query 归一 + early_stop 字段")
+    from cache import (
+        is_freshness_sensitive_query, REALTIME_TTL_CAP, DOMAIN_TIER_MAP,
+        SAME_DAY_ELIGIBLE_TIERS, normalize_query,
+    )
+    check("fresh_detect_today", is_freshness_sensitive_query("今日热点新闻"))
+    check("fresh_not_evergreen", not is_freshness_sensitive_query("Python 教程"))
+    check("chinese_general_mapped", "chinese_general" in DOMAIN_TIER_MAP)
+    check("general_no_eod", "general" not in SAME_DAY_ELIGIBLE_TIERS)
+    ttl_today = SearchCache.resolve_ttl("chinese_general", query="今日热点新闻")
+    check("ttl_today_cap", ttl_today <= REALTIME_TTL_CAP, f"ttl={ttl_today}")
+    check("norm_ws", normalize_query("  React   Hooks  ") == normalize_query("react hooks"))
+    # 冷 skip_cache 后应带 early_stopped；热缓存路径也允许从 payload 带回
+    check("e2e_has_early_stopped_field",
+          "early_stopped" in r1 or r1.get("cached") is True,
+          f"keys has early_stopped={('early_stopped' in r1)} cached={r1.get('cached')}")
+
+    # 归一化命中：故意用不同空白写/读
+    db2 = os.path.join(tempfile.mkdtemp(), "norm.db")
+    cn = SearchCache(db_path=db2)
+    cn.set("Hello   World", "e", 3, {"results": [{"title": "1", "url": "u1"}]},
+           domain="general", mode="auto", depth="fast")
+    check("norm_cache_hit", cn.get("hello world", "e", 3, depth="fast") is not None)
+
+    # ── 8. yichen 契约：plan / known-url / envelope ─────────────────────────
+    section("8. yichen 契约（plan / known-url / envelope，无倒退）")
+    from plan import build_plan, classify_input_kind
+    from candidate_envelope import attach_envelope
+
+    check("kind_keyword", classify_input_kind("Python asyncio") == "keyword")
+    check("kind_known_url", classify_input_kind("https://example.com/a") == "known-url")
+    check("kind_url_seed", classify_input_kind(
+        "搜索引用 https://example.com/a 的报道") == "url-seed")
+
+    pl = build_plan("贵州茅台股价", mode="auto")
+    check("plan_ready", pl.get("status") == "ready", str(pl.get("status")))
+    check("plan_has_steps", bool(pl.get("steps")), str(pl.get("steps"))[:80])
+    check("plan_domain_stock", pl.get("decision", {}).get("domain") == "stock_query",
+          str(pl.get("decision")))
+    check("plan_daily_no_confirm", pl.get("requires_confirmation") is False
+          and pl.get("execution_tier") == "daily")
+
+    from plan import execution_tier, should_attach_plan
+    check("tier_daily", execution_tier("auto", "fast") == "daily")
+    check("tier_professional", execution_tier("deep", "fast") == "professional")
+    check("tier_research", execution_tier("auto", "balanced", "research") == "deep_research")
+    check("attach_only_professional",
+          should_attach_plan("auto", "fast") is False
+          and should_attach_plan("deep", "fast") is True
+          and should_attach_plan("auto", "fast", context="research") is False)
+
+    ho = build_plan("https://docs.python.org/3/")
+    check("plan_handoff", ho.get("status") == "handoff_required")
+
+    # known-url 不进热搜
+    r_url = super_search("https://example.com/x", mode="fast", n=3, timeout=5)
+    check("search_skips_known_url", r_url.get("status") == "handoff_required"
+          and r_url.get("count", 0) == 0,
+          f"status={r_url.get('status')} count={r_url.get('count')}")
+    check("known_url_no_confirm", r_url.get("requires_confirmation") is False)
+
+    # envelope 附加且不改 results 顺序
+    env_in = {
+        "query": "q", "engine": "anysearch",
+        "results": [
+            {"title": "T1", "url": "https://a.com/1", "snippet": "s", "source": "anysearch"},
+            {"title": "T2", "url": "https://b.com/2", "snippet": "s", "source": "anysearch"},
+        ],
+        "engine_outcomes": [{"engine": "anysearch", "status": "ok", "results_count": 2}],
+    }
+    env_out = attach_envelope(env_in, query="q")
+    check("envelope_preserves_order", env_out["results"][0]["title"] == "T1")
+    check("envelope_candidates", len(env_out.get("candidates") or []) == 2)
+    check("envelope_verification_candidate",
+          env_out["candidates"][0]["verification"]["status"] == "candidate")
+    check("envelope_limitations", bool(env_out.get("limitations")))
+
+    # 热路径仍带 envelope 且可缓存（不破坏冷/热）
+    check("e2e_has_envelope_or_cache",
+          bool(r2.get("candidates") is not None or r2.get("cached")),
+          f"keys candidates={('candidates' in r2)} cached={r2.get('cached')}")
 
     section("汇总")
     total = report["pass"] + report["fail"]

@@ -72,6 +72,16 @@ engines:
     status: ok
     desc: "字节搜索 API，中文通用/news"
 
+  - name: octen
+    tier: T1
+    type: http
+    coverage: [general, english, chinese, tech, news]
+    latency_ms: 600
+    cost: api
+    status: ok
+    recommended: true
+    desc: "Octen 搜索 — 低延迟（实测 ~0.7s），中英文通用/技术；depth=balanced|deep 走 broad-search"
+
   - name: tavily
     tier: T1
     type: http
@@ -564,20 +574,20 @@ engines:
 
 recommendations:
   general:
-    primary: [anysearch, tavily]
+    primary: [octen, anysearch, tavily]
     t2_fallback: [local/bing, local/duckduckgo, local/wikipedia]
-    desc: "通用搜索优先 T1 API，T2 本地引擎作为后备"
+    desc: "通用搜索优先 octen（低延迟），T2 本地引擎作为后备"
 
   chinese:
-    primary: [zhihu, eastmoney, byted]
+    primary: [byted, octen, zhihu, eastmoney]
     t2_fallback: [local/sogou, local/bing]
-    note: "local/sogou 替代 local/baidu（Baidu CAPTCHA 拦截 10.68s）"
-    desc: "中文搜索推荐 Sogou 而非 Baidu"
+    note: "byted 中文质量优但慢（4-6s），octen 快速回落（~0.7s）"
+    desc: "中文搜索 byted 优先、octen 快速降级"
 
   semantic:
     primary: [exa]
     t2_fallback: [local/bing, local/duckduckgo]
-    note: "开放式发现、行业调研、工具推荐 — 用尽免费额度后降级到 anysearch"
+    note: "开放式发现、行业调研、工具推荐 — 用尽免费额度后降级到 anysearch；octen 非 embedding 不进 semantic 主链"
     desc: "语义发现：Exa embedding 搜索 + 内容摘要，1000次/月免费"
 
   wechat:
@@ -597,11 +607,21 @@ recommendations:
     desc: "代码搜索三层全覆盖"
 
   news:
-    primary: [byted]
+    primary: [byted, octen]
     t2_fallback: [local/bing_news, local/google_news]
-    desc: "新闻搜索双层覆盖"
+    desc: "新闻搜索双层覆盖，octen 快速回落"
 
   finance:
     primary: [eastmoney, byted]
     t2_fallback: [local/bing]
     desc: "金融数据以东方财富为主"
+
+  - name: fxtwitter
+    tier: T1
+    type: http
+    coverage: [social, twitter, news, opinion]
+    latency_ms: 800
+    cost: free
+    status: ok
+    recommended: true
+    desc: "FxTwitter 公开 API — X/Twitter 推文搜索（零 Key）"

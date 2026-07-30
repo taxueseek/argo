@@ -1,3 +1,4 @@
+# Argo 统一搜索配置 — v2.5.1（zhihu_global 独立全网搜索引擎接入）
 cache:
   db_path: ~/.cache/unified-search/cache.db
   enabled: true
@@ -85,6 +86,72 @@ domains:
   - (?i)(东财资讯|全球资讯|7x24|财经快讯|市场快讯)
   - (?i)(eastmoney news|global news|financial news)
   primary: em_global_news
+- desc: 天气查询（和风天气）
+  engines_combo:
+  - qweather
+  - duckduckgo
+  fallback: duckduckgo
+  name: weather_query
+  parallel: false
+  patterns:
+  - (?i)(天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)
+  primary: qweather
+- desc: 美股筛选/分析（Finviz + Seeking Alpha + 通用）
+  engines_combo:
+  - finviz
+  - seeking_alpha
+  - exa
+  - anysearch
+  - eastmoney
+  fallback: anysearch
+  name: us_stock
+  parallel: true
+  patterns:
+  - (?i)(NASDAQ|NYSE|美股|盘前|盘后|premarket|afterhours)
+  - (?i)\b(AAPL|TSLA|NVDA|MSFT|GOOG|GOOGL|AMZN|META|AMD|NFLX)\b
+  primary: finviz
+- desc: 财经快讯（金十数据）
+  engines_combo:
+  - jin10
+  - cls_telegraph
+  fallback: cls_telegraph
+  name: jin10_flash
+  parallel: false
+  patterns:
+  - (?i)(金十|jin10|财经快讯|市场快讯|7x24快讯)
+  primary: jin10
+- desc: 医疗健康（症状/用药/临床指南）
+  engines_combo:
+  - anysearch
+  - duckduckgo
+  - wikipedia
+  fallback: anysearch
+  name: medical
+  parallel: true
+  patterns:
+  - (?i)(症状|用药|适应症|临床|指南|副作用|禁忌|诊断|治疗|病因)
+  primary: anysearch
+- desc: 法律法规（刑法/民法/判例/法规）
+  engines_combo:
+  - anysearch
+  - byted
+  - duckduckgo
+  fallback: anysearch
+  name: legal
+  parallel: true
+  patterns:
+  - (?i)(刑法|民法|司法解释|判例|法规|裁判文书|案由|案号|法院判决)
+  primary: anysearch
+- desc: 裁判文书检索
+  engines_combo:
+  - wenshu
+  - anysearch
+  fallback: anysearch
+  name: wenshu_query
+  parallel: false
+  patterns:
+  - (?i)(裁判文书|判决书|裁定书|wenshu|court\.gov)
+  primary: wenshu
 - desc: 基金筛选/基金数据
   engines_combo:
   - eastmoney
@@ -99,6 +166,7 @@ domains:
 - desc: 股票/行情查询
   engines_combo:
   - eastmoney
+  - exa
   - anysearch
   fallback: anysearch
   name: stock_query
@@ -106,12 +174,13 @@ domains:
   patterns:
   - (?i)(股价|行情|涨跌|K线|大盘|指数|涨停|跌停|板块|概念股)
   - (?i)(stock|quote|price|market\s+cap)
-  - A股|港股|美股|股票|ETF|板块
+  - A股|港股|股票|ETF|板块
   primary: eastmoney
   quote: true
 - desc: 财经资讯/研报/公告
   engines_combo:
   - byted
+  - exa
   - eastmoney
   - anysearch
   fallback: eastmoney
@@ -120,10 +189,12 @@ domains:
   patterns:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings|report|announcement)
+  - (?i)(投资价值|估值|公司分析|投资分析|评级|目标价)
   primary: byted
 - desc: 知乎/观点/经验/评测
   engines_combo:
   - zhihu
+  - zhihu_global
   - anysearch
   fallback: anysearch
   name: zhihu_content
@@ -155,7 +226,7 @@ domains:
   patterns:
   - (?i)(评测|推荐|哪个好|值得买|选购|入手|踩坑|避雷|best|review|comparison)
   primary: zhihu
-- desc: 语义发现/开放式调研（Exa 语义引擎）
+- desc: 语义发现/开放式调研（Exa 语义引擎；octen 非 embedding，不进 combo）
   engines_combo:
   - exa
   - anysearch
@@ -204,28 +275,53 @@ domains:
   - (?i)(what is|who is|when did|where is|how many|how much)
   - (?i)(是什么|是谁|什么时候|在哪里|多少|多少钱)
   primary: duckduckgo
-- desc: 实时新闻/事件
+- desc: 实时新闻/事件（byted 质量 + octen 低延迟回落，WorkBuddy 实测）
   engines_combo:
   - byted
-  - duckduckgo
-  fallback: duckduckgo
+  - octen
+  fallback: octen
   name: news_realtime
   parallel: true
   patterns:
-  - (?i)(最新新闻|最新进展|今天发生|突发|breaking)
-  - (?i)\b(news|latest)\b
+  - (?i)(最新新闻|最新进展|今天发生|今天.{0,8}新闻|突发|breaking|热点新闻)
+  - (?i)\b(news|latest|breaking)\b
   primary: byted
-- desc: 中文通用搜索
+# 注意：更具体的中文/英文域必须写在 chinese_general / 泛匹配之前
+# chinese_tech_deep 必须含中文，避免误吸纯英文技术查询
+- desc: 中文技术深挖（先于 chinese_general；要求含中文）
   engines_combo:
-  - bocha
   - byted
-  - wechat_sogou
-  fallback: bocha
+  - octen
+  fallback: anysearch
+  name: chinese_tech_deep
+  parallel: true
+  patterns:
+  - (?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南)
+  - (?i)[一-鿿].*(Rust|Python|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|AI编程|LLM|大模型)
+  primary: byted
+- desc: 英文技术通用（octen 主搜，低延迟；先于 catch-all）
+  engines_combo:
+  - octen
+  - exa
+  - anysearch
+  fallback: anysearch
+  name: english_tech
+  parallel: true
+  patterns:
+  - (?i)(async|performance|best practices|tutorial|guide|how to|internals|API|SDK|framework)
+  - (?i)\b(Rust|Python|JavaScript|TypeScript|React|Vue|Node|Docker|Kubernetes|asyncio)\b
+  primary: octen
+- desc: 中文通用搜索（byted 质量优先 + octen 快回落；WorkBuddy 路由）
+  engines_combo:
+  - byted
+  - octen
+  - zhihu
+  fallback: octen
   name: chinese_general
   parallel: true
   patterns:
   - '[一-鿿]'
-  primary: bocha
+  primary: byted
 - desc: 本地中文搜索
   engines_combo:
   - local_search
@@ -323,7 +419,7 @@ engines:
   anysearch:
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/anysearch_http.py
+    - ~/.workbuddy/skills/argo/scripts/anysearch_http.py
     enabled: true
     env: {}
     search_args:
@@ -413,6 +509,12 @@ engines:
     enabled: true
     timeout: 15
     type: exa
+  octen:
+    cost_tier: api
+    enabled: true
+    # WorkBuddy 实测 ~0.7s；保留 type:octen 专用 builder（支持 broad-search）
+    timeout: 6
+    type: octen
   eastmoney:
     enabled: true
     timeout: 12
@@ -584,26 +686,73 @@ engines:
     timeout: 10
     type: http
     url: https://developer.zhihu.com/api/v1/content/zhihu_search
+  zhihu_global:
+    enabled: true
+    format: json
+    headers:
+      Authorization: Bearer {ZHIHU_ACCESS_SECRET}
+      Content-Type: application/json
+      X-Request-Timestamp: '{TIMESTAMP}'
+    method: GET
+    query_param: Query
+    extra_params:
+      Count: '{n}'
+    output_map:
+      items: Data.Items
+      item_title: Title
+      item_url: Url
+      item_summary: ContentText
+      item_source: AuthorName
+    timeout: 10
+    type: http
+    url: https://developer.zhihu.com/api/v1/content/global_search
+
+  # ── 新引擎（v2.5 接入）──────────────────────────────────────────────────────
+  finviz:
+    type: finviz
+    enabled: true
+    timeout: 10
+  seeking_alpha:
+    type: seeking_alpha
+    enabled: true
+    timeout: 12
+  qweather:
+    type: qweather
+    enabled: true
+    timeout: 8
+  wenshu:
+    type: wenshu
+    enabled: true
+    timeout: 12
+  jin10:
+    type: jin10
+    enabled: true
+    timeout: 8
 
   # ── 社交平台引擎 ────────────────────────────────────────────────────────────
+  # FxTwitter L1 声明式引擎见 engines/specs/fxtwitter.yaml（自动 merge）
   twitter:
     type: cli
     enabled: true
+    # 主路径：scripts/social_engines/twitter_engine.py → FxTwitter /2/search
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/twitter_engine.py
+    - ~/.workbuddy/skills/argo/scripts/social_engines/twitter_engine.py
     search_args:
     - search
     - '{query}'
     - '-n'
     - '{n}'
+    - '--json'
     env: {}
+    canary_query: OpenAI
+    desc: "Twitter/X 搜索（FxTwitter 主路径，tw CLI / nitter 兜底）"
   reddit:
     type: cli
     enabled: true
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/reddit_engine.py
+    - ~/.workbuddy/skills/argo/scripts/social_engines/reddit_engine.py
     search_args:
     - search
     - '{query}'
@@ -929,7 +1078,7 @@ engines:
     enabled: true
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/xiaohongshu_engine.py
+    - ~/.workbuddy/skills/argo/scripts/social_engines/xiaohongshu_engine.py
     search_args:
     - search
     - '{query}'
@@ -941,7 +1090,7 @@ engines:
     enabled: true
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/bilibili_engine.py
+    - ~/.workbuddy/skills/argo/scripts/social_engines/bilibili_engine.py
     search_args:
     - search
     - '{query}'
@@ -953,7 +1102,7 @@ engines:
     enabled: true
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/weibo_engine.py
+    - ~/.workbuddy/skills/argo/scripts/social_engines/weibo_engine.py
     search_args:
     - search
     - '{query}'
@@ -992,6 +1141,7 @@ cost_tiers:
     - local_openstreetmap
     - anysearch
     - zhihu
+    - zhihu_global
     - eastmoney
     - arxiv
     - duckduckgo
@@ -1008,6 +1158,11 @@ cost_tiers:
     - xiaohongshu
     - bilibili
     - weibo
+    - finviz
+    - seeking_alpha
+    - qweather
+    - wenshu
+    - jin10
   low:
     - bocha
     - metaso

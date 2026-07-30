@@ -125,13 +125,28 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
     # 延迟导入避免循环依赖
     from clarify import AMBIGUOUS_TERMS, BRAND_COLLISIONS
 
+    # P0-001：先做查询理解，用 clean_query（去否定片段）做消歧，
+    # 避免否定实体（如「除了百度」的百度）污染消歧信号。
+    understanding = None
+    disambig_source = query
+    try:
+        from query_understanding import understand
+        understanding = understand(query)
+        if understanding.clean_query:
+            disambig_source = understanding.clean_query
+    except ImportError:
+        pass  # query_understanding 不可用，退回原查询
+    except Exception:
+        pass  # 理解失败不阻断改写
+
     rewritten_parts: list[str] = []
     reasons: list[str] = []
     total_confidence = 0.0
     match_count = 0
 
     # ── 策略 1：歧义消解改写 ──
-    query_lower = query.lower()
+    # 用 clean_query（去否定片段）做歧义定位，避免被排除实体干扰
+    query_lower = disambig_source.lower()
     for term, info in AMBIGUOUS_TERMS.items():
         # 在查询中定位歧义词（大小写不敏感）
         term_lower = term.lower()
@@ -227,6 +242,8 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
             match_count += 1
 
     # ── 构建结果 ──
+    understanding_dict = understanding.to_dict() if understanding is not None else None
+
     if not rewritten_parts:
         return {
             "original": query,
@@ -234,6 +251,7 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
             "confidence": 0.0,
             "reason": "无需改写",
             "type": "direct",
+            "understanding": understanding_dict,
         }
 
     avg_confidence = round(total_confidence / match_count, 2)
@@ -245,6 +263,7 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
         "confidence": avg_confidence,
         "reason": "；".join(reasons),
         "type": "disambiguate",
+        "understanding": understanding_dict,
     }
 
 

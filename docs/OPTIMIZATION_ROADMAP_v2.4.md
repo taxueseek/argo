@@ -305,3 +305,81 @@ cd ~/.claude/skills/argo
 python3 -m pytest tests/test_unit.py tests/test_evidence_v22.py -q
 python3 scripts/ab_eval_p0p1.py
 ```
+
+---
+
+## 12. v2.4.1 落地（2026-07-29）
+
+| 项 | 状态 | 关键文件 |
+|----|------|----------|
+| 时效 query TTL 硬 cap（≤900s） | ✅ | `cache.py` `is_freshness_sensitive_query` |
+| `chinese_general` / `fact_check` 入 `DOMAIN_TIER_MAP` | ✅ | `cache.py` |
+| general 取消日末延长（仅 research/evergreen） | ✅ | `SAME_DAY_ELIGIBLE_TIERS` |
+| query 归一化进 cache key | ✅ | `normalize_query` |
+| 并行渐进 early-stop + `early_stopped` 字段 | ✅ | `search.py` |
+| 真实打网写配额 | ✅ | `search.py` `_record_quota` |
+| research 子查询共享 SearchCache | ✅ | `research.py` |
+| 版本 | **2.4.1** | `SKILL.md` / `package.json` / `mcp_server.py` |
+
+---
+
+## 13. WorkBuddy 差异吸纳（2026-07-29）
+
+对比 `~/.workbuddy/skills/argo` 与 `~/.agents/skills/argo`：
+
+| WorkBuddy 改动 | 是否吸纳 | 处理 |
+|----------------|----------|------|
+| octen 作为新闻/中文低延迟回落 | ✅ | `config.yaml` news_realtime / chinese_general |
+| 新域 `chinese_tech_deep` / `english_tech` | ✅ | 并修正：**中文域必须含中文**；tech 域排在 general 前 |
+| semantic 去掉 octen | ✅ | octen 非 embedding，不进 semantic_discovery |
+| octen 改 generic `type: http` | ❌ | 保留 agents 专用 `type: octen`（broad-search + depth） |
+| registry 推荐主推 octen | ✅ | general/chinese/news recommendations |
+| route 显示名 `Octen 搜索` | ✅ | `route.py` |
+| timeout 6s | ✅ | `config.yaml` octen.timeout |
+
+同步：合并结果回写 WorkBuddy（config / registry / route + v2.4.1 cache/search/research）。
+
+---
+
+## 14. yichen-unified-search 契约吸纳（v2.4.2）
+
+| 吸纳项 | 实现 | 验收 |
+|--------|------|------|
+| 离线 plan 状态机 | `scripts/plan.py` + `--plan-only` | status ready/handoff/needs_auth |
+| input_kind 分流 | keyword / url-seed / known-url | 纯 URL 不热搜 |
+| candidates envelope | `candidate_envelope.py` | results 顺序不变 + candidates[] |
+| coverage / limitations | 附加字段 | ab_eval §8 全绿 |
+| 摘要≠事实 | verification.status=candidate | 单测断言 |
+
+**不吸纳**：AnySearch 单后端替换、OpenCLI 登录默认路径、整包 skill 依赖。
+
+回归：`pytest` 130+；`ab_eval_p0p1.py` **44/44 PASS**；冷搜 p50 不劣化（实测 cold~0.8s octen，warm~15ms）。
+
+---
+
+## 15. 执行分层：日常直搜 / 专业挂 plan / 研究一次 plan（v2.4.3）
+
+| 原则 | 实现 | 防倒退 |
+|------|------|--------|
+| 日常不先确认 | `execution_tier=daily`，`requires_confirmation=false`，不挂 `plan` | `test_daily_keyword_no_plan_no_confirm` |
+| 专业才挂 plan 元数据 | `mode=deep` 或 `depth=deep` → `should_attach_plan` | `test_professional_*` |
+| 研究顶层 plan 一次 | `deep_research` 调 `build_plan` 一次；子查询 `envelope=False` | `test_research_plan_once_offline` |
+| 无死循环 | `plan.py` 禁止 import search/research | 静态源码断言 |
+| known-url 是分流非确认 | handoff_required + requires_confirmation=false | ab_eval §8 |
+
+**产品纪律**：想清楚再动手 = 深度研究/专业路径的**元数据与核验**，不是日常搜索的人机确认门。
+
+---
+
+## 16. 工作区搜索归档（v2.4.5）
+
+| 项 | 实现 | 验收 |
+|----|------|------|
+| 发现层落盘 | `scripts/archive_run.py` + `search --archive` | run 目录含 envelope/candidates/coverage |
+| 研究可归档 | `research --archive` | source=`argo_research` |
+| 默认路径 | `数据/argo-search-archive`（可 `ARGO_ARCHIVE_ROOT`） | `archive_run.py root` |
+| 防覆盖 | 每次新 `run_id` 目录 | 双写路径不同 |
+| 边界 | 不抓正文、不下媒体 | `boundaries.discovery_only=true` |
+| 复用 | `index.jsonl` + list/show | `test_archive_run.py` |
+
+文档：`docs/SEARCH_ARCHIVE.md`。不改变热搜默认行为（未加 `--archive` 时不落盘）。

@@ -19,7 +19,16 @@
     "thepaper.cn": 0.82,
     "nbd.com.cn": 0.8,
     "eeo.com.cn": 0.8,
-    "ssap.com.cn": 0.75
+    "ssap.com.cn": 0.75,
+    "finviz.com": 0.82,
+    "seekingalpha.com": 0.8,
+    "qweather.com": 0.9,
+    "wenshu.court.gov.cn": 0.96,
+    "court.gov.cn": 0.96,
+    "jin10.com": 0.78,
+    "zhihu.com": 0.90,
+    "zhuanlan.zhihu.com": 0.85,
+    "www.zhihu.com": 0.90
   },
   "demote_domains": {
     "maigoo.com": {"score": 0.28, "class": "commercial_recommendation", "reason": "商业品牌榜单"},

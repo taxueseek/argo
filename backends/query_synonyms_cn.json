@@ -1,0 +1,35 @@
+{
+  "_doc": "空结果恢复用同义/中英对照小表（P0-002 L2）。key 为原词，value 为可替换的等价词列表。保持小而精，避免语义漂移。",
+  "version": "1.0.0",
+  "synonyms": {
+    "财报": ["earnings", "财务报告", "季报", "年报"],
+    "股价": ["行情", "股票价格", "stock price", "quote"],
+    "教程": ["guide", "tutorial", "入门", "指南"],
+    "评测": ["review", "测评", "体验", "评价"],
+    "对比": ["comparison", "vs", "比较"],
+    "推荐": ["recommendation", "推荐榜", "best"],
+    "价格": ["price", "报价", "多少钱"],
+    "攻略": ["guide", "strategy", "指南"],
+    "原理": ["principle", "机制", "how it works"],
+    "最新": ["latest", "newest", "近期"],
+    "下载": ["download", "安装包"],
+    "用法": ["usage", "how to use", "使用方法"],
+    "报错": ["error", "exception", "bug"],
+    "配置": ["config", "configuration", "设置"],
+    "面试": ["interview", "面试题"],
+    "论文": ["paper", "preprint", "研究"],
+    "症状": ["symptom", "临床表现"],
+    "用药": ["medication", "药物", "治疗"],
+    "判例": ["case law", "案例", "裁判文书"],
+    "天气": ["weather", "气象"]
+  },
+  "en_to_cn": {
+    "earnings": ["财报", "财务报告"],
+    "guide": ["教程", "指南"],
+    "review": ["评测", "测评"],
+    "price": ["价格", "行情"],
+    "tutorial": ["教程", "入门"],
+    "paper": ["论文"],
+    "weather": ["天气"]
+  }
+}

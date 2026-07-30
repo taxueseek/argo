@@ -53,6 +53,29 @@
       "怎么": 1.2, "如何": 1.2, "为什么": 1.2, "哪款": 1.3
     }
   },
+  "zhihu_global": {
+    "label": "知乎全网搜索",
+    "documents": [
+      "全网搜索 高可信 权威信源 结构化结果 真人专家",
+      "科技 编程 AI 大模型 技术方案 最佳实践 踩坑记录",
+      "职场 求职 面试 职业发展 创业 商业分析 行业洞察",
+      "医学 健康 用药 临床指南 专家建议 医疗知识",
+      "教育 考研 留学 学习方法 课程推荐 学术研究",
+      "生活经验 产品评测 购物推荐 避坑指南 种草拔草",
+      "社会热点 观点讨论 深度分析 多角度思考",
+      "金融 投资 理财 基金 股票 经济 市场分析",
+      "法律 法规 判例 合同 司法知识",
+      "数码 手机 电脑 硬件 软件 测评 推荐"
+    ],
+    "boost_keywords": {
+      "搜索": 1.5, "全网": 2.0, "权威": 1.5, "高可信": 1.5,
+      "科技": 1.3, "编程": 1.3, "AI": 1.5, "技术": 1.3,
+      "职场": 1.3, "医学": 1.3, "教育": 1.3, "法律": 1.3,
+      "金融": 1.3, "投资": 1.3, "评测": 1.3, "推荐": 1.2,
+      "怎么": 1.2, "如何": 1.2, "什么": 1.2, "为什么": 1.2,
+      "最新": 1.3, "深度": 1.3, "分析": 1.2, "对比": 1.2
+    }
+  },
   "tavily": {
     "label": "Tavily",
     "documents": [
@@ -435,6 +458,128 @@
       "八卦": 1.5, "娱乐": 1.3, "明星": 1.3,
       "转发": 1.3, "评论": 1.3, "点赞": 1.2,
       "社会": 1.2, "民生": 1.2, "舆论": 1.5
+    }
+  },
+  "finviz": {
+    "label": "Finviz美股筛选",
+    "documents": [
+      "US stock screener quote NASDAQ NYSE ticker",
+      "market cap PE ratio price change earnings",
+      "AAPL TSLA NVDA MSFT GOOGL AMZN META AMD",
+      "美股 筛选 市值 市盈率 股价 涨跌幅",
+      "盘前 盘后 premarket afterhours 成交量"
+    ],
+    "boost_keywords": {
+      "finviz": 2.0, "美股": 2.0, "NASDAQ": 2.0, "NYSE": 2.0,
+      "ticker": 1.5, "market cap": 1.5, "PE": 1.3,
+      "盘前": 1.5, "盘后": 1.5, "premarket": 1.5,
+      "AAPL": 1.5, "TSLA": 1.5, "NVDA": 1.5
+    },
+    "boost_combos": {
+      "美股 筛选": 0.5, "AAPL 股价": 0.4
+    }
+  },
+  "seeking_alpha": {
+    "label": "SeekingAlpha美股分析",
+    "documents": [
+      "US stock analysis rating target price research",
+      "earnings call transcript dividend valuation",
+      "strong buy hold sell recommendation analyst",
+      "美股 分析 评级 目标价 研报 估值",
+      "买入 卖出 持有 分析师 财报电话会"
+    ],
+    "boost_keywords": {
+      "seeking alpha": 2.0, "美股": 1.5, "评级": 1.8, "目标价": 1.8,
+      "rating": 1.8, "target price": 1.8, "analyst": 1.5,
+      "estimate": 1.3, "valuation": 1.3, "买入": 1.3, "卖出": 1.3
+    },
+    "boost_combos": {
+      "美股 分析": 0.5, "美股 评级": 0.5
+    }
+  },
+  "qweather": {
+    "label": "和风天气",
+    "documents": [
+      "weather forecast temperature humidity wind",
+      "天气 预报 气温 温度 湿度 风力",
+      "今天 明天 实时 下雨 降水 多少度",
+      "城市天气 空气质量 生活指数"
+    ],
+    "boost_keywords": {
+      "天气": 2.0, "weather": 2.0, "气温": 1.8, "温度": 1.8,
+      "预报": 1.8, "forecast": 1.8, "下雨": 1.5, "湿度": 1.5,
+      "风力": 1.5, "多少度": 1.5
+    },
+    "boost_combos": {
+      "北京 天气": 0.5, "今天 天气": 0.5
+    }
+  },
+  "wenshu": {
+    "label": "裁判文书网",
+    "documents": [
+      "裁判文书 判决书 裁定书 案号 案由 法院",
+      "刑事 民事 行政 判决 裁定 执行",
+      "court judgment verdict case law China",
+      "法官 当事人 原告 被告 裁判日期"
+    ],
+    "boost_keywords": {
+      "裁判文书": 2.0, "判决书": 2.0, "裁定书": 2.0,
+      "wenshu": 2.0, "案号": 1.8, "案由": 1.8,
+      "法院判决": 1.8, "判例": 1.5, "court": 1.3
+    },
+    "boost_combos": {
+      "裁判 文书": 0.5, "法院 判决": 0.4
+    }
+  },
+  "jin10": {
+    "label": "金十数据",
+    "documents": [
+      "金十数据 财经快讯 市场快讯 7x24 实时",
+      "宏观 数据 央行 非农 CPI 利率 汇率",
+      "financial flash news market realtime",
+      "突发 快讯 财经 行情 消息"
+    ],
+    "boost_keywords": {
+      "金十": 2.0, "jin10": 2.0, "财经快讯": 2.0,
+      "市场快讯": 1.8, "7x24": 1.5, "快讯": 1.5,
+      "非农": 1.5, "宏观": 1.3, "实时": 1.3
+    },
+    "boost_combos": {
+      "财经 快讯": 0.5, "金十 数据": 0.5
+    }
+  },
+  "medical": {
+    "label": "医疗健康",
+    "documents": [
+      "症状 用药 适应症 临床 指南 副作用 禁忌",
+      "疾病 诊断 治疗 病因 预防 康复",
+      "medical symptom medication clinical guideline diagnosis",
+      "药物 剂量 不良反应 处方 医生 医院"
+    ],
+    "boost_keywords": {
+      "症状": 2.0, "用药": 2.0, "适应症": 1.8, "临床": 1.8,
+      "指南": 1.5, "副作用": 1.5, "禁忌": 1.5, "诊断": 1.5,
+      "治疗": 1.3, "病因": 1.3, "symptom": 1.5, "medication": 1.5
+    },
+    "boost_combos": {
+      "症状 用药": 0.5, "临床 指南": 0.5
+    }
+  },
+  "legal": {
+    "label": "法律法规",
+    "documents": [
+      "刑法 民法 司法解释 判例 法规 条例",
+      "法律 诉讼 合同 侵权 责任 赔偿",
+      "law regulation legal case statute litigation",
+      "法院 律师 起诉 辩护 仲裁 执行"
+    ],
+    "boost_keywords": {
+      "刑法": 2.0, "民法": 2.0, "司法解释": 2.0, "判例": 1.8,
+      "法规": 1.8, "法律": 1.5, "诉讼": 1.5, "合同": 1.3,
+      "侵权": 1.5, "law": 1.3, "regulation": 1.3
+    },
+    "boost_combos": {
+      "刑法 第": 0.5, "司法 解释": 0.5
     }
   }
 }

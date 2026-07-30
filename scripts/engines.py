@@ -72,7 +72,7 @@ def _run(cmd: list[str], timeout: float = 8, engine_name: str = "?") -> str:
 
 
 def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> list[str] | str:
-    """替换模板占位符。"""
+    """替换模板占位符；环境变量支持 ARGO_ 前缀别名。"""
     if isinstance(template, list):
         return [_resolve(item, query, n, **extra) for item in template]
     s = template.replace("{query}", query).replace("{n}", str(n))
@@ -81,7 +81,11 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
         s = s.replace(f"{{{key}}}", str(val))
     if s.startswith("~"):
         s = str(Path.home() / s[1:])
-    return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), m.group(0)), s)
+    try:
+        from engine_env import expand_placeholders
+        return expand_placeholders(s)
+    except ImportError:
+        return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), m.group(0)), s)
 
 
 def _extract_items(data: Any, path: str) -> list[dict]:
@@ -346,9 +350,13 @@ def _build_exa_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, depth: str = "fast", **kwargs) -> list[dict[str, Any]]:
         to = _timeout or timeout
-        api_key = os.environ.get("EXA_API_KEY", "")
+        try:
+            from engine_env import get_env
+            api_key = get_env(["ARGO_EXA_API_KEY", "EXA_API_KEY"], "")
+        except ImportError:
+            api_key = os.environ.get("EXA_API_KEY", "") or os.environ.get("ARGO_EXA_API_KEY", "")
         if not api_key:
-            logger.warning("EXA_API_KEY 未设置")
+            logger.warning("EXA_API_KEY / ARGO_EXA_API_KEY 未设置")
             return []
         url = "https://api.exa.ai/search"
         body = json.dumps({
@@ -736,15 +744,17 @@ def _build_eastmoney_engine(spec: dict[str, Any]) -> Any:
         import re
         to = _timeout or timeout
 
-        # 判断是股票代码（6位数字）还是关键词
-        is_stock_code = re.match(r'^\d{6}$', query.strip())
+        # 判断是股票代码还是关键词
+        # 支持 A股6位、港股5位，也支持从文本中提取代码
+        stripped = query.strip()
+        code_match = re.match(r'^(\d{5,6})$', stripped) or re.search(r'(\d{5,6})', stripped)
+        is_stock_code = bool(code_match)
 
         if is_stock_code:
-            # 按股票代码搜新闻
-            return _eastmoney_stock_news(query.strip(), n, to)
+            code = code_match.group(1)
+            return _eastmoney_stock_news(code, n, to)
         else:
-            # 按关键词搜全球资讯
-            return _eastmoney_keyword_news(query, n, to)
+            return _eastmoney_keyword_search(query, n, to)
 
     def _eastmoney_stock_news(code: str, n: int, to: float) -> list[dict[str, Any]]:
         """按股票代码搜新闻"""
@@ -781,46 +791,501 @@ def _build_eastmoney_engine(spec: dict[str, Any]) -> Any:
             logger.warning(f"东财个股新闻搜索失败: {e}")
             return []
 
-    def _eastmoney_keyword_news(query: str, n: int, to: float) -> list[dict[str, Any]]:
-        """按关键词搜全球资讯"""
-        import uuid
-        url = "https://np-weblist.eastmoney.com/comm/web/getFastNewsList"
-        params = {
-            "client": "web", "biz": "web_724", "fastColumn": "102",
-            "sortEnd": "", "pageSize": str(n * 2),
-            "req_trace": str(uuid.uuid4()),
-        }
-        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://kuaixun.eastmoney.com/"}
+    def _eastmoney_keyword_search(query: str, n: int, to: float) -> list[dict[str, Any]]:
+        """按关键词搜东财新闻（统一使用 search API）"""
+        import json as _json
+        import urllib.parse as up
+        cb = "jq_search"
+        url = "https://search-api-web.eastmoney.com/search/jsonp"
+        inner_params = _json.dumps({
+            "uid": "", "keyword": query, "type": ["cmsArticleWebOld"],
+            "client": "web", "clientType": "web", "clientVersion": "curr",
+            "param": {"cmsArticleWebOld": {"searchScope": "default", "sort": "default",
+                      "pageIndex": 1, "pageSize": n, "preTag": "", "postTag": ""}},
+        }, separators=(',', ':'))
+        params = {"cb": cb, "param": inner_params}
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://so.eastmoney.com/"}
         try:
-            full_url = url + "?" + "&".join(f"{k}={v}" for k, v in params.items())
+            full_url = url + "?" + "&".join(f"{k}={up.quote(str(v))}" for k, v in params.items())
             req = urllib.request.Request(full_url, headers=headers)
             with urllib.request.urlopen(req, timeout=to) as resp:
-                d = json.loads(resp.read())
+                text = resp.read().decode("utf-8")
+            json_str = text[text.index("(") + 1:text.rindex(")")]
+            d = _json.loads(json_str)
+            articles = d.get("result", {}).get("cmsArticleWebOld", []) or []
             results = []
-            for item in d.get("data", {}).get("fastNewsList", [])[:n]:
-                title = item.get("title", "")
-                summary = (item.get("summary", "") or "")[:200]
-                if query:
-                    keywords = query.strip().split()
-                    if not any(kw.lower() in (title + summary).lower() for kw in keywords):
-                        continue
+            for a in articles[:n]:
                 results.append({
-                    "title": title[:80],
-                    "url": "https://kuaixun.eastmoney.com/",
-                    "snippet": f"{item.get('showTime', '')} | {summary}",
+                    "title": re.sub(r'<[^>]+>', '', a.get("title", ""))[:80],
+                    "url": a.get("url", ""),
+                    "snippet": re.sub(r'<[^>]+>', '', a.get("content", ""))[:200],
                     "source": "eastmoney",
                 })
             return results
         except Exception as e:
-            logger.warning(f"东财资讯搜索失败: {e}")
+            logger.warning(f"东财关键词搜索失败: {e}")
             return []
 
     return _engine
 
 
-_BUILDERS = {"cli": _build_cli_engine, "http": _build_http_engine, "html": _build_html_engine, "exa": _build_exa_engine, "wechat_sogou": _build_wechat_sogou_engine, "hackernews": _build_hackernews_engine, "stackoverflow": _build_stackoverflow_engine, "google_scholar": _build_google_scholar_engine, "v2ex": _build_v2ex_engine, "ths_hot": _build_ths_hot_engine, "cls_telegraph": _build_cls_telegraph_engine, "em_global_news": _build_em_global_news_engine, "eastmoney": _build_eastmoney_engine}
+# ── Finviz 美股筛选引擎（HTML 抓取）─────────────────────────────────────────────
+
+def _build_finviz_engine(spec: dict[str, Any]) -> Any:
+    """Finviz 个股快照（finviz.com/quote.ashx?t=TICKER）
+
+    从 snapshot 表格提取：公司名、行业、市值、PE、价格、涨跌幅。
+    query 视为 ticker（大写）；非纯字母时取首个字母 token 作 ticker。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        m = re.search(r"[A-Za-z]{1,6}", query or "")
+        if not m:
+            return []
+        ticker = m.group(0).upper()
+        url = f"https://finviz.com/quote.ashx?t={ticker}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        if _detect_anti_bot(html):
+            return []
+
+        # snapshot 表格是 key-value 交替单元格
+        cells = re.findall(r'<td[^>]*class="[^"]*snapshot-td2[^"]*"[^>]*>(.*?)</td>', html, re.DOTALL)
+        cleaned = [re.sub(r"<[^>]+>", "", c).strip() for c in cells]
+        kv: dict[str, str] = {}
+        for i in range(0, len(cleaned) - 1, 2):
+            kv[cleaned[i]] = cleaned[i + 1]
+
+        # 公司名 / 行业
+        name_m = re.search(r'<title>([^<]+)</title>', html)
+        company = name_m.group(1).split("Stock")[0].strip() if name_m else ticker
+
+        if not kv and company == ticker:
+            return []
+
+        price = kv.get("Price", "")
+        change = kv.get("Change", "")
+        market_cap = kv.get("Market Cap", "")
+        pe = kv.get("P/E", "")
+        snippet = (f"行业信息见页面 | 市值 {market_cap} | PE {pe} | "
+                   f"价格 {price} | 涨跌幅 {change}")
+        return [{
+            "title": f"{company} ({ticker}) 美股快照",
+            "url": url,
+            "snippet": snippet[:300],
+            "source": "finviz",
+            "score": 0.9,
+            "facts": {"ticker": ticker, "price": price, "change": change,
+                      "market_cap": market_cap, "pe": pe},
+        }]
+    return _engine
+
+
+# ── Seeking Alpha 美股分析引擎（HTML 抓取）───────────────────────────────────────
+
+def _build_seeking_alpha_engine(spec: dict[str, Any]) -> Any:
+    """Seeking Alpha 个股概览（seekingalpha.com/symbol/TICKER）
+
+    提取：评级 / 目标价 / 分析摘要（尽力而为，站点反爬较强，失败返回 []）。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        m = re.search(r"[A-Za-z]{1,6}", query or "")
+        if not m:
+            return []
+        ticker = m.group(0).upper()
+        url = f"https://seekingalpha.com/symbol/{ticker}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        if _detect_anti_bot(html):
+            return []
+
+        desc_m = re.search(r'<meta[^>]+name="description"[^>]+content="([^"]+)"', html)
+        summary = desc_m.group(1).strip() if desc_m else ""
+        rating_m = re.search(r'(Strong Buy|Buy|Hold|Sell|Strong Sell)', html)
+        rating = rating_m.group(1) if rating_m else "N/A"
+        target_m = re.search(r'Price Target[^0-9]{0,20}(\d+\.\d+)', html)
+        target = target_m.group(1) if target_m else ""
+
+        if not summary and rating == "N/A":
+            return []
+        snippet = f"评级 {rating}" + (f" | 目标价 {target}" if target else "") + \
+                  (f" | {summary}" if summary else "")
+        return [{
+            "title": f"{ticker} — Seeking Alpha 分析",
+            "url": url,
+            "snippet": snippet[:300],
+            "source": "seeking_alpha",
+            "score": 0.85,
+            "facts": {"ticker": ticker, "rating": rating, "target_price": target},
+        }]
+    return _engine
+
+
+# ── 和风天气引擎（HTTP JSON API，需 QWEATHER_KEY）─────────────────────────────────
+
+def _build_qweather_engine(spec: dict[str, Any]) -> Any:
+    """和风天气实时天气（devapi.qweather.com）
+
+    需环境变量 QWEATHER_KEY。先用 GeoAPI 将城市名解析为 LocationID，
+    再查实时天气。提取：温度、天气描述、湿度、风力。
+    无 key 时显式返回错误项（不静默）。
+    """
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        try:
+            from engine_env import get_env
+            key = get_env(["ARGO_QWEATHER_KEY", "QWEATHER_KEY"], "")
+        except ImportError:
+            key = os.environ.get("QWEATHER_KEY", "") or os.environ.get("ARGO_QWEATHER_KEY", "")
+        if not key:
+            logger.warning("QWEATHER_KEY 未设置，跳过和风天气")
+            return [{"error": "QWEATHER_KEY 未设置", "source": "qweather"}]
+
+        # 从 query 抽取城市名（去掉天气/预报等词）
+        city = re.sub(r"(天气|预报|气温|温度|今天|明天|实时|怎么样|多少度)", "", query or "").strip()
+        city = city or query.strip()
+
+        # 1) GeoAPI: 城市 → LocationID
+        geo_url = f"https://geoapi.qweather.com/v2/city/lookup?location={up.quote(city)}&key={key}"
+        req = urllib.request.Request(geo_url, headers={"User-Agent": "argo-search/1.0"})
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            geo = json.loads(resp.read().decode("utf-8"))
+        locations = geo.get("location") or []
+        if not locations:
+            return []
+        loc = locations[0]
+        loc_id = loc.get("id", "")
+        loc_name = loc.get("name", city)
+
+        # 2) 实时天气
+        now_url = f"https://devapi.qweather.com/v7/weather/now?location={loc_id}&key={key}"
+        req2 = urllib.request.Request(now_url, headers={"User-Agent": "argo-search/1.0"})
+        with urllib.request.urlopen(req2, timeout=to) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        now = data.get("now") or {}
+        if not now:
+            return []
+        temp = now.get("temp", "")
+        text = now.get("text", "")
+        humidity = now.get("humidity", "")
+        wind = f"{now.get('windDir', '')}{now.get('windScale', '')}级"
+        snippet = f"{loc_name}：{text} {temp}°C | 湿度 {humidity}% | 风力 {wind}"
+        return [{
+            "title": f"{loc_name}实时天气",
+            "url": now.get("fxLink", "https://www.qweather.com/"),
+            "snippet": snippet[:300],
+            "source": "qweather",
+            "score": 1.0,
+            "facts": {"temp": temp, "text": text, "humidity": humidity, "wind": wind},
+        }]
+    return _engine
+
+
+# ── 中国裁判文书网引擎（HTML/JSON 抓取）──────────────────────────────────────────
+
+def _build_wenshu_engine(spec: dict[str, Any]) -> Any:
+    """中国裁判文书网（wenshu.court.gov.cn）法律文书检索。
+
+    该站有较强反爬（参数加密），此处走公开列表接口，尽力而为；
+    失败或被拦截时显式返回 []（不伪造结果）。
+    提取：案号、案由、裁判日期、法院。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        # 公开检索页（列表 HTML）——政府站结构可能变化，解析失败即空
+        url = f"https://wenshu.court.gov.cn/website/wenshu/181217BMTKHNT2W0/index.html?q={up.quote(query)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Referer": "https://wenshu.court.gov.cn/",
+        }
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            logger.warning(f"裁判文书网访问失败: {e}")
+            return []
+        if _detect_anti_bot(html):
+            return []
+
+        results: list[dict[str, Any]] = []
+        # 尝试解析嵌入的 JSON 数据块（站点结构变化时降级为空）
+        blocks = re.findall(r'\{[^{}]*"caseName"[^{}]*\}', html)
+        for b in blocks[:n]:
+            try:
+                item = json.loads(b)
+            except Exception:
+                continue
+            results.append({
+                "title": item.get("caseName", "")[:100],
+                "url": "https://wenshu.court.gov.cn/",
+                "snippet": (f"案号 {item.get('caseNo', '')} | 案由 {item.get('caseType', '')} | "
+                            f"法院 {item.get('court', '')} | 裁判日期 {item.get('judgeDate', '')}")[:300],
+                "source": "wenshu",
+                "facts": {"case_no": item.get("caseNo", ""), "court": item.get("court", ""),
+                          "judge_date": item.get("judgeDate", "")},
+            })
+        return results
+    return _engine
+
+
+# ── 金十数据引擎（HTTP JSON API 财经快讯）────────────────────────────────────────
+
+def _build_jin10_engine(spec: dict[str, Any]) -> Any:
+    """金十数据财经快讯（flash-api.jin10.com/get_flash_list）
+
+    提取：时间、标题、内容摘要；按关键词过滤（query 命中）。
+    """
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 10, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = f"https://flash-api.jin10.com/get_flash_list?channel=-8200&vip=1&t={int(time.time() * 1000)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "x-app-id": "bVBF4FyRTn5NJF5n",
+            "x-version": "1.0.0",
+            "Referer": "https://www.jin10.com/",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        items = data.get("data") or []
+        keywords = [k for k in (query or "").strip().split() if k]
+        results: list[dict[str, Any]] = []
+        for it in items:
+            d = it.get("data") or {}
+            content = d.get("content", "") or d.get("pic", "") or ""
+            title = d.get("title", "") or content[:40]
+            text = f"{title} {content}"
+            if keywords and not any(k.lower() in text.lower() for k in keywords):
+                continue
+            results.append({
+                "title": title[:80] or "金十快讯",
+                "url": "https://www.jin10.com/",
+                "snippet": f"{it.get('time', '')} | {content[:150]}",
+                "source": "jin10",
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+# ── Octen AI 搜索引擎 ─────────────────────────────────────────────────────────
+
+def _build_octen_engine(spec: dict[str, Any]) -> Any:
+    """Octen AI 搜索（高速语义搜索 + broad-search 多查询分解）
+
+    支持两种模式：
+      - 标准搜索: /search（单次查询）
+      - 广域搜索: /broad-search（自动分解为子查询并行执行）
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, depth: str = "fast", **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        try:
+            from engine_env import get_env
+            api_key = get_env(["ARGO_OCTEN_API_KEY", "OCTEN_API_KEY"], "")
+        except ImportError:
+            api_key = os.environ.get("OCTEN_API_KEY", "") or os.environ.get("ARGO_OCTEN_API_KEY", "")
+        if not api_key:
+            logger.warning("OCTEN_API_KEY / ARGO_OCTEN_API_KEY 未设置")
+            return []
+
+        # broad-search 模式（多子查询分解），支持 depth 参数
+        use_broad = depth in ("deep", "balanced")
+        if use_broad:
+            url = "https://api.octen.ai/broad-search"
+            max_q = 3 if depth == "balanced" else 5
+            body = json.dumps({
+                "query": query,
+                "max_queries": max_q,
+                "search_options": {
+                    "count": min(n, 5),
+                    "topic": "general",
+                    "safesearch": "off",
+                    "highlight": {"enable": True, "max_tokens": 512},
+                    "full_content": {"enable": False},
+                    "include_images": False,
+                },
+            }).encode("utf-8")
+        else:
+            url = "https://api.octen.ai/search"
+            body = json.dumps({
+                "query": query,
+                "count": min(n, 10),
+                "topic": "general",
+                "safesearch": "off",
+                "highlight": {"enable": True, "max_tokens": 512},
+                "full_content": {"enable": False},
+                "include_images": False,
+            }).encode("utf-8")
+
+        headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+        req = urllib.request.Request(url, data=body, headers=headers)
+
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                items = data.get("data", {})
+                results = []
+
+                if use_broad:
+                    # broad-search: 遍历所有子查询结果
+                    seen = set()
+                    for group in items.get("search_results", []):
+                        for r in group.get("results", []):
+                            url_key = r.get("url", "")
+                            if url_key and url_key not in seen:
+                                seen.add(url_key)
+                                results.append({
+                                    "title": r.get("title", ""),
+                                    "url": url_key,
+                                    "snippet": r.get("highlight", "")[:300],
+                                    "source": "octen",
+                                    "score": 0.8,
+                                })
+                                if len(results) >= n:
+                                    return results
+                else:
+                    # 标准搜索
+                    for r in items.get("results", [])[:n]:
+                        results.append({
+                            "title": r.get("title", ""),
+                            "url": r.get("url", ""),
+                            "snippet": r.get("highlight", "")[:300],
+                            "source": "octen",
+                            "score": r.get("score", 0.5),
+                        })
+
+                # 如果结果太少，补充 quick 数据源的查询（不走 broad 兜底）
+                if not results and not use_broad:
+                    logger.info("Octen 标准搜索无结果，兜底空列表返回")
+                return results
+
+        except Exception as e:
+            logger.warning(f"Octen 引擎失败: {e}")
+            return []
+    return _engine
+
+
+_BUILDERS = {"cli": _build_cli_engine, "http": _build_http_engine, "html": _build_html_engine, "exa": _build_exa_engine, "octen": _build_octen_engine, "wechat_sogou": _build_wechat_sogou_engine, "hackernews": _build_hackernews_engine, "stackoverflow": _build_stackoverflow_engine, "google_scholar": _build_google_scholar_engine, "v2ex": _build_v2ex_engine, "ths_hot": _build_ths_hot_engine, "cls_telegraph": _build_cls_telegraph_engine, "em_global_news": _build_em_global_news_engine, "eastmoney": _build_eastmoney_engine, "finviz": _build_finviz_engine, "seeking_alpha": _build_seeking_alpha_engine, "qweather": _build_qweather_engine, "wenshu": _build_wenshu_engine, "jin10": _build_jin10_engine}
+
+# ── 插件加载（engines/plugins/*.py）────────────────────────────────────────────
+
+_PLUGINS_DIR = Path(__file__).resolve().parent.parent / "engines" / "plugins"
+_plugins_loaded = False
+
+
+def _load_plugins() -> None:
+    """加载 engines/plugins 下插件，注册自定义 type → builder。
+
+    插件约定：
+      ENGINE_TYPE = "my_type"          # 或 TYPES = ["a","b"]
+      def build_engine(spec): ...      # 返回 search callable
+    跳过 _ 前缀文件。
+    """
+    global _plugins_loaded
+    if _plugins_loaded:
+        return
+    _plugins_loaded = True
+    if not _PLUGINS_DIR.is_dir():
+        return
+    import importlib.util
+    for path in sorted(_PLUGINS_DIR.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        try:
+            mod_name = f"argo_engine_plugin_{path.stem}"
+            spec = importlib.util.spec_from_file_location(mod_name, path)
+            if spec is None or spec.loader is None:
+                continue
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            builder = getattr(mod, "build_engine", None) or getattr(mod, "build", None)
+            if not callable(builder):
+                logger.warning(f"插件 {path.name} 缺少 build_engine()")
+                continue
+            types: list[str] = []
+            if hasattr(mod, "ENGINE_TYPE"):
+                types.append(str(mod.ENGINE_TYPE))
+            if hasattr(mod, "TYPES"):
+                types.extend(str(t) for t in mod.TYPES)
+            if not types:
+                types = [path.stem]
+            for t in types:
+                if t in _BUILDERS:
+                    logger.info(f"插件覆盖 builder type={t} from {path.name}")
+                _BUILDERS[t] = builder
+                logger.info(f"已注册插件 type={t} ← {path.name}")
+        except Exception as e:
+            logger.warning(f"加载插件失败 {path.name}: {e}")
+
 
 # ── 通用解析器 ─────────────────────────────────────────────────────────────────
+
+def _normalize_cli_item(item: dict[str, Any], engine_name: str) -> dict[str, Any]:
+    """CLI JSON 条目归一化：保留 social_meta 等扩展字段。"""
+    snippet = item.get("snippet", item.get("content", "")) or ""
+    if isinstance(snippet, str) and len(snippet) > 300:
+        snippet = snippet[:300]
+    out: dict[str, Any] = {
+        "title": item.get("title", "") or "",
+        "url": item.get("url", "") or "",
+        "snippet": snippet,
+        "source": item.get("source") or engine_name,
+    }
+    if item.get("score") is not None:
+        out["score"] = item["score"]
+    if item.get("published_at"):
+        out["published_at"] = item["published_at"]
+    meta = item.get("social_meta")
+    if isinstance(meta, dict) and meta:
+        out["social_meta"] = meta
+    # 透传其余非空简单字段（避免丢引擎特有信息）
+    for k, v in item.items():
+        if k in out or k in {"content"}:
+            continue
+        if v is None or v == "":
+            continue
+        if isinstance(v, (str, int, float, bool, dict, list)):
+            out.setdefault(k, v)
+    return out
+
 
 def _parse_text_output(text: str, engine_name: str) -> list[dict[str, Any]]:
     """通用 CLI 文本解析：优先 JSON，其次结构化文本。"""
@@ -830,15 +1295,17 @@ def _parse_text_output(text: str, engine_name: str) -> list[dict[str, Any]]:
     try:
         data = json.loads(text)
         if isinstance(data, list):
-            return [{"title": i.get("title", ""), "url": i.get("url", ""),
-                     "snippet": i.get("snippet", i.get("content", ""))[:300],
-                     "source": engine_name} for i in data if isinstance(i, dict)]
+            return [
+                _normalize_cli_item(i, engine_name)
+                for i in data if isinstance(i, dict)
+            ]
         if isinstance(data, dict):
             items = data.get("results", data.get("items", data.get("data", [])))
             if isinstance(items, list):
-                return [{"title": i.get("title", ""), "url": i.get("url", ""),
-                         "snippet": i.get("snippet", i.get("content", ""))[:300],
-                         "source": engine_name} for i in items if isinstance(i, dict)]
+                return [
+                    _normalize_cli_item(i, engine_name)
+                    for i in items if isinstance(i, dict)
+                ]
     except (json.JSONDecodeError, ValueError):
         pass
 
@@ -937,12 +1404,30 @@ _engine_registry: dict[str, Any] = {}
 _engine_registry_loaded = False
 
 
+def reload_registry() -> dict[str, Any]:
+    """强制重载配置、插件与引擎 registry（热加引擎后调用）。"""
+    global _engine_registry, _engine_registry_loaded, _plugins_loaded
+    _engine_registry = {}
+    _engine_registry_loaded = False
+    _plugins_loaded = False
+    # 清 config 缓存
+    try:
+        import config as _cfg_mod
+        _cfg_mod._config_cache = None
+        _cfg_mod._config_mtime = 0.0
+    except Exception:
+        pass
+    return get_registry()
+
+
 def _load_registry():
     global _engine_registry, _engine_registry_loaded
     if _engine_registry_loaded:
         return
+    _load_plugins()
     cfg = load_config()
-    engines = get_engines(cfg)
+    # 注册层加载全部 enabled 引擎（含缺 Key），保证 --engine 强制调试可用
+    engines = get_engines(cfg, routable_only=False)
     registry = {}
     for name, spec in engines.items():
         spec = dict(spec)
@@ -961,12 +1446,25 @@ def get_registry() -> dict[str, Any]:
     return _engine_registry
 
 
-def available_engines() -> list[str]:
-    return sorted(get_registry().keys())
+def available_engines(*, routable_only: bool = False) -> list[str]:
+    """列出已注册引擎。routable_only=True 时过滤缺 Key / blocked / env 黑白名单。"""
+    names = sorted(get_registry().keys())
+    if not routable_only:
+        return names
+    try:
+        cfg = load_config()
+        routable = set(get_engines(cfg, routable_only=True).keys())
+        return [n for n in names if n in routable]
+    except Exception:
+        return names
 
 
 def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str = "fast", mode: str = "fast") -> list[dict[str, Any]]:
-    """统一引擎调用入口；失败返回空 list，不抛异常。"""
+    """统一引擎调用入口；失败返回空 list，不抛异常。
+
+    强制指定引擎时不检查 admission（便于验证调试）。
+    缺 Key 的付费引擎通常返回 []。
+    """
     registry = get_registry()
     fn = registry.get(engine)
     if not fn:
@@ -990,6 +1488,7 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
             if isinstance(r, dict) and "error" not in r:
                 r["_engine"] = engine
                 r["_elapsed"] = round(elapsed, 3)
+                r.setdefault("source", engine)
     return results if isinstance(results, list) else []
 
 

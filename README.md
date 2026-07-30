@@ -23,7 +23,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.4.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.4.1-informational">
 </p>
 
 ---
@@ -53,9 +53,11 @@
 - **40+ 引擎**：API / 本地零成本 / 社交 / 金融 / 学术，按意图组合
 - **语义路由 + 规则域**：TF-IDF 与正则域配合；低分不再误跳垂直引擎
 - **证据两阶段**：Selection（能不能进候选）× Absorption（正文/摘要里有没有可吸收证据）
+- **日常搜索 vs 深度研究**：日常 SERP 轻量、链接沉底；深度研究走独立子技能与专业选题 profile
 - **研究与消歧**：`research` 拆子问题、`clarify` 处理歧义、`evidence` 打可信度
 - **抓取栈**：HTTP → 浏览器降级，支持聚焦摘录与 PDF
-- **MCP 接入**：可直接挂到 Claude / Grok / Kimi 等客户端
+- **MCP 接入**：紧凑回包、后台预热、社交并行；可挂到 Claude / Grok / Kimi 等客户端
+- **斜杠分层（Agent 侧）**：`/argo` 主入口，`/argo-search` / `/argo-research` / academic·finance 等子命令
 
 ```
 查询
@@ -335,18 +337,27 @@ python3 scripts/mcp_server.py
 不配置则跳过对应引擎，免费引擎自动兜底。请用环境变量，不要把真实 Key 写进仓库。
 
 ```bash
-# 推荐配置（提升搜索质量）
-export TAVILY_API_KEY="你的密钥"          # 国际搜索
-export BOCHA_API_KEY="你的密钥"            # 中文网页（AI 友好）
-export METASO_API_KEY="你的密钥"           # 中文 AI 搜索
-export ZHIHU_ACCESS_SECRET="你的密钥"      # 知乎观点
+# 推荐：ARGO_ 前缀（与旧名兼容，新名优先）
+export ARGO_TAVILY_API_KEY="你的密钥"     # 国际搜索
+export ARGO_BOCHA_API_KEY="你的密钥"      # 中文网页（AI 友好）
+export ARGO_METASO_API_KEY="你的密钥"     # 中文 AI 搜索
+export ARGO_BRAVE_API_KEY="你的密钥"      # 隐私搜索
+export ARGO_FELO_API_KEY="你的密钥"       # AI 综合答案
+export ARGO_EXA_API_KEY="你的密钥"        # 语义搜索
+export ARGO_OCTEN_API_KEY="你的密钥"
+export ARGO_WEB_SEARCH_API_KEY="你的密钥" # 字节 byted
+export ZHIHU_ACCESS_SECRET="你的密钥"     # 知乎观点
+export GITHUB_TOKEN="你的密钥"            # 提高 GitHub 限频
+export ANYSEARCH_API_KEY="你的密钥"       # 垂直域搜索
+# 旧名仍可用：TAVILY_API_KEY / BOCHA_API_KEY / EXA_API_KEY / WEB_SEARCH_API_KEY ...
 
-# 可选配置
-export BRAVE_API_KEY="你的密钥"            # 隐私搜索
-export FELO_API_KEY="你的密钥"             # AI 综合答案
-export GITHUB_TOKEN="你的密钥"             # 提高 GitHub 限频
-export WEB_SEARCH_API_KEY="你的密钥"       # 字节搜索等
-export ANYSEARCH_API_KEY="你的密钥"        # 垂直域搜索
+# 可选：引擎白名单 / 黑名单
+# export ARGO_ENABLE_ENGINES="hackernews,eastmoney,tavily"
+# export ARGO_DISABLE_ENGINES="brave"
+
+# 新引擎接入与验证见 docs/ADDING_NEW_ENGINE.md
+# python3 scripts/engine_validate.py --engine <id> --stage health --admit
+# python3 scripts/search.py --list-engines --detail
 ```
 
 ### 缓存配置
@@ -437,12 +448,42 @@ python3 scripts/search.py [选项] 查询词
 
 | 版本 | 说明 |
 |------|------|
+| **v2.4.1** | 见下方「v2.4.1 增量」；性能与 MCP 紧凑回包、搜索体验标准化、深度研究子技能与专业选题、引擎生命周期与归档分层 |
 | **v2.4.0** | 路由低分回退与社交误吸过滤；缓存 depth / 柔性命中；熔断与负缓存；`engine_outcomes`；RRF 共识源；fetch URL 缓存；介绍页与发布整理 |
 | **v2.2–v2.3** | 证据两阶段、中文信源表、content_signals、fetch 栈、引擎扩充、MCP 能力增强 |
 | **v2.1** | 社交引擎层（多平台 UGC） |
 | **v1.x** | 统一命名为 Argo，多引擎路由与双层缓存成型 |
 
-更细的优化说明见 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
+### v2.4.1 增量
+
+**性能与 MCP**
+
+- 初始化后台预热 search/cache，摊平首次 `tools/call` 延迟
+- 默认紧凑 JSON（无 indent）+ `summary` 精简重字段，显著降低 Agent 上下文占用
+- 社交多平台并行抓取；模块进程内缓存
+- 检索排序与引擎召回逻辑不变；需要全量摘要时 MCP 传 `summary: false`
+
+**搜索体验标准化**
+
+- 日常搜索：链接沉底「相关信源」，默认不归档
+- 深度研究：默认归档、可 `--no-archive`；JSON 统一 `sources[]` / 引用 `[n]`
+- 已知 URL 走 fetch/handoff，避免当关键词热搜
+- 引擎声明 / env 注入 / 准入校验（`engine_validate`）与 routable 过滤
+
+**深度研究子技能（argo 内建，不外挂其他 skill）**
+
+- 选题 profile：`ai` / `investment` / `finance` / `academic` / `tech` / `tool` / `internet` / `social`
+- 模板子查询、引擎优先、质量门禁、建议报告结构、信源级别
+- 金融免责声明；学术禁止编造 DOI/论文类主张
+- 触发词与斜杠：`/argo`、`/argo-search`、`/argo-research`、`/argo-research-academic`、`/argo-research-finance`、`/deep-research` 等
+
+```bash
+python3 scripts/research.py "议题" --topic academic --json
+python3 scripts/research.py "议题" --topic finance --json
+python3 scripts/research.py --topic help
+```
+
+更细的优化说明见 `docs/OPTIMIZATION_ROADMAP_v2.4.md`、`docs/SEARCH_ARCHIVE.md`、`docs/PROBLEM_REFRAME_SEARCH_UX_v2.4.5.md`。
 
 ---
 
