@@ -30,7 +30,7 @@
 
 ## 这是什么
 
-**Argo 是一套给 AI Agent 用的搜索基础设施。**
+**Argo 是一套给 AI Agent 用的搜索基础设施。** 由 我的另一个agent 项目 kimix 开发、测试创作的专业搜索agent  https://github.com/taxueseek/kimix
 
 你问「贵州茅台股价」，它会优先走东方财富；问「transformer attention paper」，会优先走 arXiv；问「React 和 Vue 怎么选」，会多源召回再合并去重。更重要的是：它会尽量判断**哪些结果值得当真**——是不是搜索结果页壳、有没有数字和披露、多个域名是否说同一件事。
 
