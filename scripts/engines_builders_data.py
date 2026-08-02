@@ -59,7 +59,80 @@ def _build_open_library_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-# ── 英英词典引擎 ─────────────────────────────────────────────────────────────
+# ── 微信读书图书引擎 ─────────────────────────────────────────────────────────
+
+def _build_weread_engine(spec: dict[str, Any]) -> Any:
+    """微信读书图书搜索（Agent Gateway /store/search，需 WEREAD_API_KEY）。
+
+    返回中文书目为主，附评分/评分人数/在读人数，比 Open Library 更适合中文图书。
+    """
+    timeout = spec.get("timeout", 10)
+    gateway = "https://i.weread.qq.com/api/agent/gateway"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        key = os.environ.get("WEREAD_API_KEY") or os.environ.get("ARGO_WEREAD_API_KEY")
+        if not key:
+            logger.warning("Weread 缺 WEREAD_API_KEY")
+            return []
+        body = json.dumps({
+            "api_name": "/store/search",
+            "keyword": query,
+            "count": min(n, 10),
+            "skill_version": "1.0.3",
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            gateway, data=body, method="POST",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "User-Agent": "argo-search/2.4 (unified-search@local)",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"微信读书搜索失败: {e}")
+            return []
+        if isinstance(data, dict) and data.get("errcode"):
+            logger.warning(f"微信读书 API 错误: {data.get('errcode')} {data.get('errmsg') or ''}")
+            return []
+        results = []
+        seen: set[str] = set()
+        for group in (data.get("results") or []):
+            for item in (group.get("books") or [])[:n]:
+                bi = item.get("bookInfo") or {}
+                title = bi.get("title", "")
+                if not title or title in seen:
+                    continue
+                seen.add(title)
+                author = bi.get("author", "")
+                rating = bi.get("newRating")
+                rating_txt = f"{rating / 10:.1f}分" if isinstance(rating, (int, float)) and rating > 0 else ""
+                rating_count = bi.get("newRatingCount")
+                reading_count = item.get("readingCount")
+                parts = [p for p in (
+                    author,
+                    rating_txt,
+                    f"{rating_count}人评分" if rating_count else "",
+                    f"{reading_count}人在读" if reading_count else "",
+                ) if p]
+                results.append({
+                    "title": title,
+                    "url": bi.get("deepLink") or f"https://weread.qq.com/book-detail?type=1&bookId={bi.get('bookId', '')}",
+                    "snippet": " · ".join(parts)[:300],
+                    "source": "weread",
+                    "score": 0.85,
+                })
+                if len(results) >= n:
+                    break
+            if len(results) >= n:
+                break
+        return results
+    return _engine
 
 def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
     """英英词典（dictionaryapi.dev，免认证，响应为数组需专门解析）"""

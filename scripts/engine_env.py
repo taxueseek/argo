@@ -37,6 +37,7 @@ KNOWN_ENV_ALIASES: dict[str, list[str]] = {
     "zhihu": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "zhihu_global": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "anysearch": ["ARGO_ANYSEARCH_API_KEY", "ANYSEARCH_API_KEY"],  # 可选
+    "weread": ["ARGO_WEREAD_API_KEY", "WEREAD_API_KEY"],  # 微信读书 Agent Gateway
 }
 
 # 占位符名 → 候选 env（用于 config 中 {TAVILY_API_KEY} 展开）
@@ -54,6 +55,7 @@ PLACEHOLDER_ALIASES: dict[str, list[str]] = {
     "WOLFRAM_APPID": ["ARGO_WOLFRAM_APPID", "WOLFRAM_APPID"],
     "ZHIHU_ACCESS_SECRET": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "ANYSEARCH_API_KEY": ["ARGO_ANYSEARCH_API_KEY", "ANYSEARCH_API_KEY"],
+    "WEREAD_API_KEY": ["ARGO_WEREAD_API_KEY", "WEREAD_API_KEY"],
 }
 
 _PLACEHOLDER_RE = re.compile(r"\{([A-Z_][A-Z0-9_]*)\}")

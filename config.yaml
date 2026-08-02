@@ -339,8 +339,9 @@ domains:
   patterns:
   - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|动画|galgame|vtuber|虚拟主播|东方project|型月|fate)
   primary: moegirl
-- desc: 书籍/图书搜索（Open Library）
+- desc: 书籍/图书搜索（微信读书 + Open Library）
   engines_combo:
+  - weread
   - open_library
   - anysearch
   fallback: anysearch
@@ -349,7 +350,7 @@ domains:
   patterns:
   - (?i)(小说|书籍|图书|书单|好书|荐书|书荒|名著|畅销书|电子书|看书|出版社|ISBN|小说推荐|科幻小说|推理小说)
   - (?i)\b(book|novel|isbn|ebook|bestseller)\b
-  primary: open_library
+  primary: weread
 - desc: 音乐/影视/播客媒体搜索
   engines_combo:
   - itunes
@@ -2069,6 +2070,20 @@ engines:
     - book
     - library
     desc: Open Library 图书搜索（免认证）
+    timeout: 10
+  weread:
+    type: weread
+    enabled: true
+    label: 微信读书
+    cost_tier: free
+    qps: 3
+    priority: 35
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - book
+    desc: 微信读书图书搜索（中文书目/评分/在读，需 WEREAD_API_KEY）
     timeout: 10
   free_dictionary:
     type: free_dictionary
