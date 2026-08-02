@@ -344,8 +344,14 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
         # 这些源命中即答案，且 cninfo 是官方公告源，权威分也保底。
         if domain == "stock_query" and _src_has(source, "sina_quote"):
             relevance = max(relevance, 1.0)
+        if domain == "stock_query" and _src_has(source, "tencent_quote"):
+            relevance = max(relevance, 1.0)
+        if domain == "stock_query" and _src_has(source, "em_flow"):
+            relevance = max(relevance, 0.9)
         if domain == "macro_data" and _src_has(source, "fx_rate"):
             relevance = max(relevance, 0.9)
+        if domain == "macro_data" and _src_has(source, "worldbank"):
+            relevance = max(relevance, 0.85)
         if domain == "financial_news" and _src_has(source, "cninfo"):
             relevance = max(relevance, 0.85)
         if _has_evidence:
@@ -359,10 +365,13 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
                 freshness = 0.5
             # cninfo/sina/fx 域名被 evidence 判为低权威（0.5-0.55），
             # 实为官方公告/行情源，权威分保底避免被商业站碾压。
-            if _src_has(source, "cninfo") or _src_has(source, "sina_quote") or _src_has(source, "fx_rate"):
+            if (_src_has(source, "cninfo") or _src_has(source, "sina_quote")
+                    or _src_has(source, "fx_rate") or _src_has(source, "tencent_quote")
+                    or _src_has(source, "em_flow") or _src_has(source, "worldbank")):
                 authority = max(authority, 0.85)
-            # 行情/汇率快照是「实时答案」，时效分保底，避免被陈旧新闻页压制。
-            if _src_has(source, "sina_quote") or _src_has(source, "fx_rate"):
+            # 行情/汇率/资金流快照是「实时答案」，时效分保底，避免被陈旧新闻页压制。
+            if (_src_has(source, "sina_quote") or _src_has(source, "fx_rate")
+                    or _src_has(source, "tencent_quote") or _src_has(source, "em_flow")):
                 freshness = max(freshness, 0.85)
         else:
             authority, freshness = 0.5, 0.5

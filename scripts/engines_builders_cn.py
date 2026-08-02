@@ -425,6 +425,323 @@ def _build_sina_quote_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── 腾讯行情引擎（实时行情快照，含换手率/市盈率/五档） ───────────────────────
+
+def _build_tencent_quote_engine(spec: dict[str, Any]) -> Any:
+    """腾讯实时行情快照（qt.gtimg.cn + smartbox 代码解析）。
+
+    免费直连 GBK 接口，比新浪多换手率/市盈率/市净率/总市值等字段，
+    与 sina_quote 互为交叉验证，适合「茅台股价」「上证指数」类查询。
+    """
+    timeout = spec.get("timeout", 8)
+    suggest_url = "https://smartbox.gtimg.cn/s3/?v=2&t=all&q="
+    quote_url = "https://qt.gtimg.cn/q="
+
+    @safe_search
+    def _engine(query: str, n: int = 3, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                   "Referer": "https://gu.qq.com/"}
+        symbol = _resolve_symbol(query, to, headers)
+        if not symbol:
+            return []
+        try:
+            req = urllib.request.Request(quote_url + symbol, headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                text = resp.read().decode("gbk", "replace").strip()
+        except Exception as e:
+            logger.warning(f"腾讯行情失败: {e}")
+            return []
+        if "=" not in text:
+            return []
+        var_part = text.split("=", 1)[1].strip().strip('"')
+        fields = var_part.split("~")
+        if len(fields) < 35:
+            return []
+        name, code = fields[1], fields[2]
+        cur, prev, opn = fields[3], fields[4], fields[5]
+        try:
+            chg = float(fields[31]) if fields[31] else 0.0
+            pct = float(fields[32]) if fields[32] else 0.0
+        except ValueError:
+            chg, pct = 0.0, 0.0
+        arrow = "↑" if pct > 0 else ("↓" if pct < 0 else "→")
+        title = f"{name} {cur} {arrow}{pct:+.2f}%" if cur else f"{name} 行情"
+        parts = [
+            f"现价 {cur}", f"涨跌 {chg:+.2f} ({pct:+.2f}%)",
+            f"今开 {opn}", f"昨收 {prev}",
+            f"最高 {fields[33]}", f"最低 {fields[34]}",
+            f"成交量 {fields[36]}手" if len(fields) > 36 and fields[36] else "",
+            f"成交额 {float(fields[37]) / 1e4:.2f}亿" if len(fields) > 37 and fields[37] else "",
+            f"换手率 {fields[38]}%" if len(fields) > 38 and fields[38] else "",
+            f"市盈率(动) {fields[39]}" if len(fields) > 39 and fields[39] else "",
+        ]
+        return [{
+            "title": title[:80],
+            "url": f"https://gu.qq.com/{symbol}/gp",
+            "snippet": " | ".join(p for p in parts if p)[:220],
+            "source": "tencent_quote",
+            "score": 0.9,
+        }]
+
+    def _resolve_symbol(q: str, to: float, headers: dict) -> str:
+        import urllib.parse as up
+        _STOP = ("股价", "行情", "股票", "价格", "走势", "最新", "今日", "报价", "查询",
+                 "怎么样", "多少", "怎么", "了", "吗", "的", "a股", "港股", "美股")
+        cands = [q]
+        for token in re.split(r"[\s,，、/]+", q):
+            t = token.strip()
+            if not t:
+                continue
+            for stop in _STOP:
+                t = t.replace(stop, "")
+            t = t.strip()
+            if 2 <= len(t) <= 8 and t not in cands:
+                cands.append(t)
+        for c in cands:
+            try:
+                req = urllib.request.Request(suggest_url + up.quote(c), headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    text = resp.read().decode("gbk", "replace")
+            except Exception as e:
+                logger.warning(f"腾讯代码解析失败: {e}")
+                continue
+            # v_hint="sh~600519~贵州茅台~600519~gp~A股~贵州茅台~GP-A"
+            for m in re.finditer(r'v_hint="([^"]+)"', text):
+                parts = m.group(1).split("~")
+                if len(parts) >= 3 and parts[2]:
+                    return parts[0] + parts[1]
+        return ""
+    return _engine
+
+
+# ── 东财资金流引擎（个股主力资金流/北向资金/板块资金流） ─────────────────────
+
+def _build_em_flow_engine(spec: dict[str, Any]) -> Any:
+    """东方财富资金流向（push2delay.eastmoney.com，免认证直连）。
+
+    三类数据：个股主力资金流（fflow/kline）、北向资金（kamt/get）、
+    板块资金流排行（clist/get）。「资金流/主力/北向」类查询的答案源。
+    """
+    timeout = spec.get("timeout", 8)
+    smartbox_url = "https://smartbox.gtimg.cn/s3/?v=2&t=all&q="
+    fflow_url = "https://push2delay.eastmoney.com/api/qt/stock/fflow/kline/get"
+    kamt_url = "https://push2delay.eastmoney.com/api/qt/kamt/get"
+    clist_url = "https://push2delay.eastmoney.com/api/qt/clist/get"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                   "Referer": "https://data.eastmoney.com/"}
+        q = query.lower()
+        if "北向" in q or "沪深港通" in q or ("外资" in q and "流入" in q):
+            res = _northbound(to, headers)
+            if res:
+                return res
+        if "板块" in q and ("资金" in q or "流入" in q or "净额" in q):
+            res = _sector_flow(to, headers, n)
+            if res:
+                return res
+        symbol = _resolve_symbol(query, to, headers)
+        if symbol:
+            res = _stock_flow(symbol, to, headers)
+            if res:
+                return res
+        return _sector_flow(to, headers, n)
+
+    def _northbound(to: float, headers: dict) -> list[dict[str, Any]]:
+        data = None
+        for _a in range(2):
+            try:
+                req = urllib.request.Request(
+                    kamt_url + "?fields1=f1,f3&fields2=f51,f52,f53,f54,f55,f56",
+                    headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+                break
+            except Exception as e:
+                logger.warning(f"北向资金失败(重试): {e}")
+                time.sleep(0.3)
+        if data is None:
+            return []
+        try:
+            hk2sh = data["data"]["hk2sh"]
+            hk2sz = data["data"]["hk2sz"]
+        except (KeyError, TypeError):
+            return []
+        rows = []
+        for name, leg in (("沪股通", hk2sh), ("深股通", hk2sz)):
+            amt = leg.get("dayNetAmtIn")
+            date = leg.get("date2") or leg.get("date") or ""
+            rows.append((name, amt, date))
+        results = []
+        total = 0.0
+        for name, amt, date in rows:
+            try:
+                f = float(amt) / 1e8
+            except (TypeError, ValueError):
+                continue
+            total += f
+            results.append({
+                "title": f"北向资金-{name} 当日净流入 {f:+.2f} 亿元",
+                "url": "https://data.eastmoney.com/hsgt/index.html",
+                "snippet": f"日期 {date} | 沪深港通北向资金 | 东方财富数据中心".strip(),
+                "source": "em_flow",
+                "score": 0.9,
+            })
+        if total:
+            results.append({
+                "title": f"北向资金合计 当日净流入 {total:+.2f} 亿元",
+                "url": "https://data.eastmoney.com/hsgt/index.html",
+                "snippet": "沪股通 + 深股通合计 | 东方财富数据中心",
+                "source": "em_flow",
+                "score": 0.85,
+            })
+        return results
+
+    def _sector_flow(to: float, headers: dict, n: int) -> list[dict[str, Any]]:
+        url = (clist_url + "?pn=1&pz=%d&po=1&np=1&fltt=2&invt=2&fid=f62"
+               "&fs=m:90+t:2&fields=f12,f14,f2,f3,f62,f184" % min(max(n, 3), 10))
+        data = None
+        for _a in range(2):
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+                break
+            except Exception as e:
+                logger.warning(f"板块资金流失败(重试): {e}")
+                time.sleep(0.3)
+        if data is None:
+            return []
+        try:
+            diff = data["data"]["diff"] or []
+        except (KeyError, TypeError):
+            return []
+        results = []
+        for it in diff:
+            name = it.get("f14", "")
+            chg = it.get("f3")
+            flow = it.get("f62")
+            pct = it.get("f184")
+            if not name:
+                continue
+            try:
+                flow_yi = float(flow) / 1e8
+            except (TypeError, ValueError):
+                flow_yi = 0.0
+            try:
+                chg_s = f"{float(chg):+.2f}%" if chg is not None else ""
+            except (TypeError, ValueError):
+                chg_s = ""
+            try:
+                pct_s = f"主力净占比 {float(pct):.2f}%"
+            except (TypeError, ValueError):
+                pct_s = ""
+            results.append({
+                "title": f"板块 {name} 主力净流入 {flow_yi:+.2f} 亿元",
+                "url": "https://data.eastmoney.com/bkzj/hy.html",
+                "snippet": " | ".join(x for x in (chg_s, pct_s, "东方财富板块资金流") if x)[:200],
+                "source": "em_flow",
+                "score": 0.9,
+            })
+        return results
+
+    def _stock_flow(symbol: str, to: float, headers: dict) -> list[dict[str, Any]]:
+        # symbol 形如 sh600519 / sz000858，secid 沪市=1.xxx 深市=0.xxx
+        market = "1" if symbol.startswith("sh") else "0"
+        code = symbol[2:]
+        url = (fflow_url + "?lmt=0&klt=101&fields1=f1,f2,f3,f7"
+               "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63"
+               "&secid=%s.%s" % (market, code))
+        data = None
+        for _a in range(2):
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+                break
+            except Exception as e:
+                logger.warning(f"个股资金流失败(重试): {e}")
+                time.sleep(0.3)
+        if data is None:
+            return []
+        try:
+            klines = data["data"]["klines"] or []
+            name = data["data"]["name"] or code
+        except (KeyError, TypeError):
+            return []
+        if not klines:
+            return []
+        last = klines[-1].split(",")
+        if len(last) < 6:
+            return []
+        # push2delay 返回 6 字段: 0日期 1主力 2小单 3中单 4大单 5超大单
+        # push2 完整 13 字段: 6-10 净占比 11收盘 12涨跌幅（延迟源仅 6 字段）
+        date, main, small, mid, big, xbig = last[0], last[1], last[2], last[3], last[4], last[5]
+        try:
+            main_yi = float(main) / 1e8
+        except (TypeError, ValueError):
+            main_yi = 0.0
+        main_ratio, chg = 0.0, 0.0
+        if len(last) >= 13:
+            try:
+                main_ratio = float(last[6]) if last[6] else 0.0
+                chg = float(last[12]) if last[12] else 0.0
+            except (TypeError, ValueError):
+                pass
+        try:
+            detail = (f"超大单 {float(xbig) / 1e8:+.2f}亿 大单 {float(big) / 1e8:+.2f}亿"
+                      f" 中单 {float(mid) / 1e8:+.2f}亿 小单 {float(small) / 1e8:+.2f}亿")
+        except (TypeError, ValueError):
+            detail = ""
+        extra = " | ".join(x for x in (
+            f"主力净占比 {main_ratio:+.2f}%" if main_ratio else "",
+            f"涨跌幅 {chg:+.2f}%" if chg else "",
+        ) if x)
+        snippet = " | ".join(x for x in (f"日期 {date}", extra, detail, "东方财富资金流向") if x)
+        return [{
+            "title": f"{name} 主力资金净流入 {main_yi:+.2f} 亿元",
+            "url": f"https://data.eastmoney.com/zjlx/{code}.html",
+            "snippet": snippet[:220],
+            "source": "em_flow",
+            "score": 0.9,
+        }]
+
+    def _resolve_symbol(q: str, to: float, headers: dict) -> str:
+        import urllib.parse as up
+        _STOP = ("股价", "行情", "股票", "价格", "走势", "最新", "今日", "资金流", "资金",
+                 "主力", "净流入", "净流出", "查询", "怎么样", "多少", "怎么", "了", "吗",
+                 "的", "a股", "港股", "美股")
+        cands = [q]
+        for token in re.split(r"[\s,，、/]+", q):
+            t = token.strip()
+            if not t:
+                continue
+            for stop in _STOP:
+                t = t.replace(stop, "")
+            t = t.strip()
+            if 2 <= len(t) <= 8 and t not in cands:
+                cands.append(t)
+        for c in cands:
+            try:
+                req = urllib.request.Request(smartbox_url + up.quote(c), headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    text = resp.read().decode("gbk", "replace")
+            except Exception as e:
+                logger.warning(f"东财代码解析失败: {e}")
+                continue
+            for m in re.finditer(r'v_hint="([^"]+)"', text):
+                parts = m.group(1).split("~")
+                if len(parts) >= 3 and parts[2]:
+                    return parts[0] + parts[1]
+        return ""
+    return _engine
+
+
 # ── 东财财经搜索引擎 ─────────────────────────────────────────────────────────
 
 def _build_eastmoney_engine(spec: dict[str, Any]) -> Any:

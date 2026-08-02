@@ -409,6 +409,114 @@ def _build_fx_rate_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── 世界银行开放数据引擎（宏观指标，免认证） ─────────────────────────────────
+
+def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
+    """世界银行开放数据（api.worldbank.org，免认证，300+ 指标）。
+
+    覆盖 GDP/人均GDP/通胀/失业/贸易/人口/利率等国家宏观指标，
+    macro_data 域与 FRED 互补：FRED 偏美国，worldbank 覆盖全球。
+    """
+    timeout = spec.get("timeout", 12)
+    # 默认按时间倒序返回最新数据，per_page 直取最近年份；mrnev 参数实测易超时
+    api = "https://api.worldbank.org/v2/country/{cc}/indicator/{ind}?format=json&per_page=6"
+
+    _COUNTRIES: dict[str, str] = {
+        "中国": "CHN", "美国": "USA", "日本": "JPN", "德国": "DEU", "英国": "GBR",
+        "法国": "FRA", "印度": "IND", "巴西": "BRA", "俄罗斯": "RUS", "韩国": "KOR",
+        "加拿大": "CAN", "澳大利亚": "AUS", "意大利": "ITA", "西班牙": "ESP",
+        "世界": "WLD", "欧元区": "EMU", "香港": "HKG", "台湾": "TWN", "新加坡": "SGP",
+    }
+    _INDICATORS: list[tuple[tuple[str, ...], str, str]] = [
+        (("gdp", "国内生产总值", "生产总值", "经济总量"), "NY.GDP.MKTP.CD", "GDP（现价美元）"),
+        (("人均gdp", "人均国内生产总值"), "NY.GDP.PCAP.CD", "人均GDP（现价美元）"),
+        (("gdp增速", "gdp增长", "经济增长率"), "NY.GDP.MKTP.KD.ZG", "GDP年增长率"),
+        (("cpi", "通胀", "通货膨胀", "物价"), "FP.CPI.TOTL.ZG", "CPI通胀率"),
+        (("失业", "失业率"), "SL.UEM.TOTL.ZS", "失业率"),
+        (("人口",), "SP.POP.TOTL", "总人口"),
+        (("贸易", "进出口", "对外贸易"), "NE.TRD.GNFS.ZS", "贸易占GDP比重"),
+        (("利率", "贷款利率"), "FR.INR.LEND", "贷款利率"),
+        (("经常账户", "经常项目"), "BN.CAB.XOKA.GD.ZS", "经常账户占GDP比重"),
+    ]
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        headers = {"User-Agent": "argo-search/2.4 (unified-search@local)"}
+        cc, ind, ind_label = _parse(query)
+        if not cc or not ind:
+            return []
+        try:
+            req = urllib.request.Request(api.format(cc=cc, ind=ind), headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"世界银行数据失败: {e}")
+            return []
+        if not isinstance(data, list) or len(data) < 2:
+            return []
+        rows = data[1]
+        if not rows:
+            return []
+        cname = rows[0].get("country", {}).get("value", cc)
+        results = []
+        for it in rows:
+            year = it.get("date", "")
+            val = it.get("value")
+            if val is None or year is None:
+                continue
+            try:
+                f = float(val)
+            except (TypeError, ValueError):
+                continue
+            title = _fmt_title(cname, ind_label, year, f, ind)
+            results.append({
+                "title": title,
+                "url": f"https://data.worldbank.org/indicator/{ind}?locations={cc}",
+                "snippet": f"{ind_label} | {cname} | 世界银行开放数据 | 数据截至 {year}".strip(),
+                "source": "worldbank",
+                "score": 0.9,
+            })
+            if len(results) >= min(n, 5):
+                break
+        return results
+
+    def _parse(q: str) -> tuple[str, str, str]:
+        low = q.lower()
+        cc = ""
+        for name, code in _COUNTRIES.items():
+            if name in q:
+                cc = code
+                break
+        if not cc:
+            return "", "", ""
+        ind, ind_label = "", ""
+        for keys, code, label in _INDICATORS:
+            if any(k in low for k in keys):
+                ind, ind_label = code, label
+                break
+        return cc, ind, ind_label
+
+    def _fmt_title(cname: str, label: str, year: str, val: float, ind: str) -> str:
+        if ind == "SP.POP.TOTL":
+            return f"{cname} 总人口（{year}）：{val / 1e8:.2f} 亿人"
+        if ind == "NY.GDP.MKTP.CD":
+            return f"{cname} {label}（{year}）：{val / 1e12:.2f} 万亿美元"
+        if ind == "NY.GDP.PCAP.CD":
+            return f"{cname} 人均GDP（{year}）：{val / 1e4:.2f} 万美元"
+        if ind in ("FP.CPI.TOTL.ZG", "NY.GDP.MKTP.KD.ZG"):
+            return f"{cname} {label}（{year}）：{val:+.2f}%"
+        if ind == "SL.UEM.TOTL.ZS":
+            return f"{cname} 失业率（{year}）：{val:.2f}%"
+        if ind in ("NE.TRD.GNFS.ZS", "BN.CAB.XOKA.GD.ZS"):
+            return f"{cname} {label}（{year}）：{val:.2f}%"
+        if ind == "FR.INR.LEND":
+            return f"{cname} 贷款利率（{year}）：{val:.2f}%"
+        return f"{cname} {label}（{year}）：{val:,.2f}"
+    return _engine
+
+
 def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
     """英英词典（dictionaryapi.dev，免认证，响应为数组需专门解析）"""
     timeout = spec.get("timeout", 8)
