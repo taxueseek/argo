@@ -1110,5 +1110,143 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "baidu_baike": {
+    "label": "百度百科",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "pypi": {
+    "label": "PyPI",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "npm": {
+    "label": "npm",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "huggingface": {
+    "label": "Hugging Face",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "mdn": {
+    "label": "MDN Web Docs",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "juejin": {
+    "label": "掘金",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "europepmc": {
+    "label": "Europe PMC",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "dblp": {
+    "label": "DBLP",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "clinicaltrials": {
+    "label": "ClinicalTrials",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "openfda": {
+    "label": "openFDA",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "docker_hub": {
+    "label": "Docker Hub",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "devto": {
+    "label": "DEV.to",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "archive_org": {
+    "label": "Internet Archive",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "steam": {
+    "label": "Steam",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "polymarket": {
+    "label": "Polymarket",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "finviz": {
+    "label": "Finviz",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "seeking_alpha": {
+    "label": "Seeking Alpha",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "jin10": {
+    "label": "金十数据",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "models_dev": {
+    "label": "models.dev",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "octen": {
+    "label": "Octen",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "qweather": {
+    "label": "和风天气",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "wenshu": {
+    "label": "裁判文书网",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "zhihu_global": {
+    "label": "知乎全局搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

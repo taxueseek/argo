@@ -100,17 +100,32 @@ def cosine_similarity(vec_a: dict[str, float], vec_b: dict[str, float]) -> float
     return dot / (norm_a * norm_b)
 
 
-# ── 配额感知 ──────────────────────────────────────────────────────────────────
+# ── 配额 / 成本（mtime 缓存，避免 route 每次为每个引擎读盘） ──────────────────
+
+_quota_state_cache: dict | None = None
+_quota_state_mtime: float = -1.0
+_cost_profiles_cache: dict | None = None
+_cost_profiles_mtime: float = -1.0
+_COST_TIER_FACTOR = {"free": 1.0, "low": 0.85, "paid": 0.6}
+
 
 def _load_quota_state() -> dict:
-    """加载配额状态文件。"""
+    """加载配额状态文件（mtime 缓存）。"""
+    global _quota_state_cache, _quota_state_mtime
     quota_path = Path.home() / ".cache" / "unified-search" / "quota.json"
-    if not quota_path.exists():
-        return {}
     try:
-        return json.loads(quota_path.read_text())
-    except (json.JSONDecodeError, OSError):
+        mtime = quota_path.stat().st_mtime
+    except OSError:
         return {}
+    if _quota_state_cache is not None and mtime == _quota_state_mtime:
+        return _quota_state_cache
+    try:
+        data = json.loads(quota_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        data = {}
+    _quota_state_cache = data if isinstance(data, dict) else {}
+    _quota_state_mtime = mtime
+    return _quota_state_cache
 
 
 def _quota_ratio(engine: str, quota_state: dict) -> float:
@@ -125,20 +140,33 @@ def _quota_ratio(engine: str, quota_state: dict) -> float:
     return max(0.0, min(1.0, (limit - used) / limit))
 
 
-# ── 成本感知 ──────────────────────────────────────────────────────────────────
-
-def _cost_factor(engine: str) -> float:
-    """获取引擎成本因子：free=1.0, low=0.85, paid=0.6。"""
+def _load_cost_profiles() -> dict:
+    global _cost_profiles_cache, _cost_profiles_mtime
     tiers_path = BACKENDS_DIR / "quota_profiles.json"
-    if not tiers_path.exists():
-        return 1.0
     try:
-        profiles = json.loads(tiers_path.read_text())
+        mtime = tiers_path.stat().st_mtime
+    except OSError:
+        return {}
+    if _cost_profiles_cache is not None and mtime == _cost_profiles_mtime:
+        return _cost_profiles_cache
+    try:
+        data = json.loads(tiers_path.read_text())
     except (json.JSONDecodeError, OSError):
-        return 1.0
+        data = {}
+    _cost_profiles_cache = data if isinstance(data, dict) else {}
+    _cost_profiles_mtime = mtime
+    return _cost_profiles_cache
+
+
+def _cost_factor(engine: str, profiles: dict | None = None) -> float:
+    """获取引擎成本因子：free=1.0, low=0.85, paid=0.6。"""
+    if profiles is None:
+        profiles = _load_cost_profiles()
     profile = profiles.get(engine, {})
+    if not isinstance(profile, dict):
+        return 1.0
     tier = profile.get("cost_tier", "free")
-    return {"free": 1.0, "low": 0.85, "paid": 0.6}.get(tier, 1.0)
+    return _COST_TIER_FACTOR.get(tier, 1.0)
 
 
 # ── 主路由引擎 ─────────────────────────────────────────────────────────────────
@@ -196,6 +224,8 @@ class SemanticRouter:
         query_vec = self.vectorizer.transform(query)
         scores = []
         quota_state = _load_quota_state() if quota_aware else {}
+        cost_profiles = _load_cost_profiles()
+        q_lower = query.lower()  # 一次即可，避免每个引擎重复 lower
 
         for name in self.engine_names:
             sim = cosine_similarity(query_vec, self.engine_vectors[name])
@@ -205,7 +235,7 @@ class SemanticRouter:
             boost = 1.0
             hit_kws = []
             for kw, weight in self.boost_keywords.get(name, {}).items():
-                if kw.lower() in query.lower():
+                if kw.lower() in q_lower:
                     boost += weight - 1.0
                     hit_kws.append(kw)
             if hit_kws:
@@ -214,7 +244,7 @@ class SemanticRouter:
             # 组合关键词加成
             hit_combos = []
             for combo, bonus in self.boost_combos.get(name, {}).items():
-                if all(w.lower() in query.lower() for w in combo.split()):
+                if all(w.lower() in q_lower for w in combo.split()):
                     boost += bonus
                     hit_combos.append(combo)
             if hit_combos:
@@ -222,8 +252,8 @@ class SemanticRouter:
 
             final_score = sim * boost
 
-            # 成本感知
-            cf = _cost_factor(name)
+            # 成本感知（profiles 已缓存，不再每引擎读盘）
+            cf = _cost_factor(name, cost_profiles)
             if cf < 1.0:
                 final_score *= cf
                 parts.append(f"cost={cf}")

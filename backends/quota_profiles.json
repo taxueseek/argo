@@ -10,6 +10,16 @@
     "cost_tier": "free",
     "priority": 1
   },
+  "archive_org": {
+    "label": "Internet Archive",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 53
+  },
   "arxiv": {
     "label": "arXiv学术论文",
     "qps": 1,
@@ -19,6 +29,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 7
+  },
+  "baidu_baike": {
+    "label": "百度百科",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 41
   },
   "baidu_hot": {
     "label": "百度热搜",
@@ -80,6 +100,16 @@
     "cost_tier": "low",
     "priority": 2
   },
+  "clinicaltrials": {
+    "label": "ClinicalTrials",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 49
+  },
   "cls_telegraph": {
     "label": "财联社电报",
     "qps": 2,
@@ -118,7 +148,37 @@
     "cost_per_call": 0.0,
     "cost_unit": "free",
     "cost_tier": "free",
-    "priority": 50
+    "priority": 40
+  },
+  "dblp": {
+    "label": "DBLP",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 48
+  },
+  "devto": {
+    "label": "DEV.to",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 52
+  },
+  "docker_hub": {
+    "label": "Docker Hub",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 51
   },
   "duckduckgo": {
     "label": "DuckDuckGo",
@@ -150,6 +210,16 @@
     "cost_tier": "free",
     "priority": 22
   },
+  "europepmc": {
+    "label": "Europe PMC",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 47
+  },
   "exa": {
     "label": "Exa语义搜索",
     "qps": 1,
@@ -169,6 +239,16 @@
     "cost_unit": "credit",
     "cost_tier": "paid",
     "priority": 8
+  },
+  "finviz": {
+    "label": "Finviz",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 56
   },
   "free_dictionary": {
     "label": "英英词典",
@@ -210,6 +290,16 @@
     "cost_tier": "free",
     "priority": 16
   },
+  "huggingface": {
+    "label": "Hugging Face",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 44
+  },
   "itotii": {
     "label": "itotii梗百科",
     "qps": 3,
@@ -229,6 +319,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 30
+  },
+  "jin10": {
+    "label": "金十数据",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 58
+  },
+  "juejin": {
+    "label": "掘金",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 46
   },
   "know_your_meme": {
     "label": "Know Your Meme",
@@ -490,6 +600,16 @@
     "cost_tier": "free",
     "priority": 23
   },
+  "mdn": {
+    "label": "MDN Web Docs",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 45
+  },
   "metaso": {
     "label": "秘塔",
     "qps": 2,
@@ -499,6 +619,16 @@
     "cost_unit": "free",
     "cost_tier": "low",
     "priority": 50
+  },
+  "models_dev": {
+    "label": "models.dev",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 59
   },
   "moegirl": {
     "label": "萌娘百科",
@@ -520,6 +650,26 @@
     "cost_tier": "free",
     "priority": 35
   },
+  "npm": {
+    "label": "npm",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 43
+  },
+  "octen": {
+    "label": "Octen",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "api",
+    "cost_tier": "api",
+    "priority": 20
+  },
   "open_library": {
     "label": "Open Library 图书",
     "qps": 3,
@@ -538,6 +688,16 @@
     "cost_per_call": 0.0,
     "cost_unit": "free",
     "cost_tier": "free",
+    "priority": 39
+  },
+  "openfda": {
+    "label": "openFDA",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
     "priority": 50
   },
   "openverse": {
@@ -549,6 +709,36 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 31
+  },
+  "polymarket": {
+    "label": "Polymarket",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 55
+  },
+  "pypi": {
+    "label": "PyPI",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 42
+  },
+  "qweather": {
+    "label": "和风天气",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 60
   },
   "reddit": {
     "label": "Reddit",
@@ -570,6 +760,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "seeking_alpha": {
+    "label": "Seeking Alpha",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 57
+  },
   "semantic_scholar": {
     "label": "Semantic Scholar",
     "qps": 2,
@@ -589,6 +789,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 17
+  },
+  "steam": {
+    "label": "Steam",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 54
   },
   "tavily": {
     "label": "Tavily",
@@ -680,6 +890,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "wenshu": {
+    "label": "裁判文书网",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 61
+  },
   "wikidata": {
     "label": "维基数据实体",
     "qps": 2,
@@ -739,5 +959,15 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 4
+  },
+  "zhihu_global": {
+    "label": "知乎全局搜索",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "api",
+    "cost_tier": "api",
+    "priority": 35
   }
 }

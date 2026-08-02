@@ -28,9 +28,10 @@ REWRITE_MAP: dict[tuple[str, str], str] = {
     # 科技公司/产品
     ("苹果", "finance"): "Apple 公司 AAPL 股票行情",
     ("苹果", "tech"): "Apple 公司 iPhone Mac iOS",
-    ("Python", "tech"): "Python 编程语言 pip 库 框架",
+    # 改写词不得触发 package_search 等域规则（禁止 pip/npm/pypi/cargo 等包管理词）
+    ("Python", "tech"): "Python 编程语言 异步 开发",
     ("Java", "tech"): "Java 编程语言 JDK Spring JVM",
-    ("Rust", "tech"): "Rust 编程语言 cargo crate 所有权",
+    ("Rust", "tech"): "Rust 编程语言 所有权 并发",
     ("小米", "tech"): "小米科技 手机 MIUI HyperOS",
     ("小米", "auto"): "小米汽车 SU7",
     ("华为", "tech"): "华为技术 鸿蒙 5G 芯片 Mate",

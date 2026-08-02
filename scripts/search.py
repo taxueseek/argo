@@ -251,6 +251,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 "tfidf_scores": tfidf_scores,
                 "results": hit.get("results", []),
                 "count": len(hit.get("results", [])),
+                "engines_used": hit.get("engines_used") or engines,
                 "mode": mode, "depth": depth,
                 "reranker": "skipped_cache",
                 "engine_outcomes": hit.get("engine_outcomes") or [],
@@ -452,8 +453,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         merged.sort(key=lambda r: abs(r.get("score", 0) or 0), reverse=True)
         merged = merged[:max_results]
 
-    # 内嵌两阶段信号
-    if merged:
+    # 内嵌两阶段信号：fast 模式跳过（MCP 默认紧凑也不返回这些字段）
+    if merged and mode != "fast" and depth != "fast":
         try:
             from evidence import score_authority, score_freshness
             from content_signals import score_evidence_density
@@ -468,7 +469,6 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 selection = auth["score"]
                 if auth.get("is_serp"):
                     selection = min(selection, 0.15)
-                # 多引擎共识抬升 selection
                 cons = r.get("consensus_engines") or []
                 if len(cons) >= 2 and not auth.get("is_serp"):
                     selection = min(1.0, selection * (1.0 + 0.1 * min(len(cons) - 1, 2)))
@@ -582,18 +582,25 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         mode: 预算模式
         local_first: 强制本地优先
         rewrite: 是否自动改写查询（默认 True）
+
+    注意：路由永远基于原始 query。改写词只用于引擎检索，避免
+    「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
     """
     cache = cache if cache is not None else SearchCache()
+    original_query = query
 
-    # 查询改写：追加领域关键词提升搜索质量
+    # 查询改写：仅影响检索串，不影响路由
     rewrite_result = None
+    search_query = original_query
     if rewrite:
-        query, rewrite_result = _apply_query_rewrite(query)
+        rewritten, rewrite_result = _apply_query_rewrite(original_query)
+        if rewrite_result and rewrite_result.get("rewritten"):
+            search_query = rewritten
 
     if local_first:
-        decision = route_query(query, engine_override="local_search", mode=mode)
+        decision = route_query(original_query, engine_override="local_search", mode=mode)
     else:
-        decision = route_query(query, engine_override=engine, mode=mode)
+        decision = route_query(original_query, engine_override=engine, mode=mode)
     if explain:
         combo = decision.get('engines_combo', decision.get('engines', []))
         print(
@@ -602,10 +609,16 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             f"tfidf={decision.get('tfidf_scores', [])} mode={mode}",
             file=sys.stderr,
         )
-    result = execute_search(query=query, decision=decision, max_results=n,
-                          timeout=timeout, depth=depth, cache=cache,
-                          skip_cache=skip_cache, mode=mode)
-    if rewrite_result and rewrite_result["rewritten"]:
+        if search_query != original_query:
+            print(f"[改写] {original_query} → {search_query}", file=sys.stderr)
+    result = execute_search(
+        query=search_query, decision=decision, max_results=n,
+        timeout=timeout, depth=depth, cache=cache,
+        skip_cache=skip_cache, mode=mode,
+    )
+    # 对外仍报告用户原始 query
+    result["query"] = original_query
+    if rewrite_result and rewrite_result.get("rewritten"):
         result["rewritten_query"] = {
             "original": rewrite_result["original"],
             "rewritten": rewrite_result["rewritten"],
@@ -697,13 +710,15 @@ def main():
         parser.error("必须提供搜索关键词")
 
     cache = SearchCache()
+    # 路由用原始 query；改写仅用于检索串
     if args.local_first:
         decision = route_query(args.query, engine_override="local_search", mode=args.mode)
     else:
         decision = route_query(args.query, engine_override=args.engine, mode=args.mode)
 
-    # 查询改写
     search_query, rewrite_result = _apply_query_rewrite(args.query)
+    if not (rewrite_result and rewrite_result.get("rewritten")):
+        search_query = args.query
 
     if args.explain:
         combo = decision.get('engines_combo', decision.get('engines', []))
@@ -713,7 +728,7 @@ def main():
             f"tfidf={decision.get('tfidf_scores', [])} mode={args.mode}",
             file=sys.stderr,
         )
-        if rewrite_result and rewrite_result["rewritten"]:
+        if rewrite_result and rewrite_result.get("rewritten"):
             print(
                 f"[改写] {rewrite_result['original']} → {rewrite_result['rewritten']} "
                 f"({rewrite_result['confidence']:.0%})",
@@ -730,8 +745,9 @@ def main():
         timeout=args.timeout, depth=args.depth, cache=cache,
         skip_cache=args.no_cache, mode=args.mode, on_progress=on_progress,
     )
+    results["query"] = args.query
 
-    if rewrite_result and rewrite_result["rewritten"]:
+    if rewrite_result and rewrite_result.get("rewritten"):
         results["rewritten_query"] = {
             "original": rewrite_result["original"],
             "rewritten": rewrite_result["rewritten"],

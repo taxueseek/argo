@@ -62,6 +62,31 @@ engines:
   - open_library
   - free_dictionary
   - moegirl
+  - openalex
+  - crossref
+  - baidu_baike
+  - pypi
+  - npm
+  - huggingface
+  - mdn
+  - juejin
+  - europepmc
+  - dblp
+  - clinicaltrials
+  - openfda
+  - docker_hub
+  - devto
+  - archive_org
+  - steam
+  - polymarket
+  - finviz
+  - seeking_alpha
+  - jin10
+  - models_dev
+  - octen
+  - qweather
+  - wenshu
+  - zhihu_global
 ---
 
 ## Argo v2.3.0
@@ -318,39 +343,75 @@ python3 scripts/quota.py stats
 | free_dictionary | free | 英英词典（词义+例句） | api.dictionaryapi.dev |
 | moegirl | free | 萌娘百科（ACG 词条） | zh.moegirl.org.cn HTML 解析 |
 
-路由规则（域名均在 `zhihu_content` 之前，先匹配先命中）：
-`crypto_search`（比特币/以太坊/加密货币）→ coingecko；`package_search`（crates.io/cargo 包）→ crates + github；
-`dictionary_search`（词典/单词/define）→ free_dictionary；`anime_encyclopedia`（萌娘百科/番剧/二次元）→ moegirl + zh_wikipedia；
-`book_search`（小说/书籍/图书）→ open_library；`media_search`（音乐/歌曲/电影/播客）→ itunes + musicbrainz；
-`image_search`（图片/壁纸/素材）→ openverse；`entity_search`（维基数据/实体）→ wikidata + wikipedia。
+### P0/P1 扩展引擎（v2.6 新增）
 
-实现说明：open_library 与 free_dictionary 因响应形态特殊（数组/需拼接字段）走专用 builder；
-其余均为 `config.yaml` 声明式 `output_map` 配置。修复了 `url_template` 与 `item_url` 并存时
-URL 退化为原始标题/ID 的既有 bug（影响 zh_wikipedia、local_wikipedia、openstreetmap、pubmed 等）。
-调用示例：`python3 scripts/search.py "Rust 有哪本书" --engine open_library`、`python3 scripts/search.py "define serendipity"`。
+复活学术双引擎 + 新增 15 个免认证垂直源，补齐包管理、文档、模型、中文百科/社区、医学、游戏与预测市场：
 
-### 标准化：单一真源注册（v2.6）
+| 引擎 | cost_tier | 特点 | 数据源 |
+|------|-----------|------|--------|
+| openalex | free | 2.5 亿+论文索引（复活） | api.openalex.org/works |
+| crossref | free | DOI/引用元数据（复活） | api.crossref.org/works |
+| europepmc | free | 生物医学文献（SS 429 后备） | ebi.ac.uk/europepmc |
+| dblp | free | CS 文献（偶发 SSL 抖动） | dblp.org/search/publ/api |
+| baidu_baike | free | 百度百科词条 | baike suggest + OpenAPI |
+| pypi | free | Python 包精确查询 | pypi.org/pypi/{name}/json |
+| npm | free | JS 包搜索 | registry.npmjs.org |
+| huggingface | free | ML 模型检索 | huggingface.co/api/models |
+| mdn | free | Web 官方文档 | developer.mozilla.org API |
+| juejin | free | 中文技术文章 | api.juejin.cn search |
+| docker_hub | free | 容器镜像 | hub.docker.com v2 search |
+| devto | free | 英文技术文 | dev.to/api/articles/search |
+| clinicaltrials | free | 临床试验 | clinicaltrials.gov v2 |
+| openfda | free | 药品标签 | api.fda.gov/drug/label |
+| archive_org | free | 互联网档案馆 | archive.org advancedsearch |
+| steam | free | 游戏商店 | store.steampowered.com |
+| polymarket | free | 预测市场（叙事，非真值） | gamma-api public-search |
 
-从 v2.6 起，「新增搜索源」收敛为只改 `config.yaml` 一处声明，其余注册表全部自动派生：
+路由（先匹配先命中）：
+`package_search` → pypi + npm + crates + docker_hub + github；
+`web_docs` → mdn + stackoverflow；
+`ml_models` → huggingface + github；
+`cn_tech_community` → juejin + v2ex + devto；
+`medical` → clinicaltrials + openfda + local_pubmed；
+`cn_encyclopedia` / `entity_search` → baidu_baike + 维基系；
+`academic` → arxiv + openalex + crossref + europepmc + dblp + SS；
+`game_search` → steam；`prediction_market` → polymarket；`web_archive` → archive_org。
 
-- **唯一真源**：`config.yaml` 的 `engines:` 段。每个引擎内联声明 `type / enabled / label / cost_tier / qps / priority / limit / period / cost_per_call / cost_unit / coverage / desc`。
-- **派生脚本**：`python3 scripts/sync_backends.py` 从引擎声明派生 `backends/quota_profiles.json`（配额/成本/限频）、`backends/engine_registry.yaml`（引擎注册表文档）、校验并补全 `backends/domain_profiles.json`（TF-IDF 领域文档）。`--check` 模式只校验不写入，CI 可依赖退出码。
-- **成本分级**：原独立 `cost_tiers:` 配置段已删除，`config.get_cost_tiers()` 改为从引擎 `cost_tier` 字段聚合；路由 reason 的引擎显示名也从引擎 `label` 动态构建，`bin/argo` 与 MCP 工具描述的引擎计数同理。全库无手工同步关卡。
+实现：字段解析支持点分路径与根数组；baidu_baike / pypi / clinicaltrials / openfda / juejin 为专用 builder；
+其余声明式 `output_map`。调用示例：
+`python3 scripts/search.py "httpx" --engine pypi`、
+`python3 scripts/search.py "Fetch API" --engine mdn`、
+`python3 scripts/search.py "bert" --engine huggingface`。
+
+### 标准化：单一真源（v2.6）
+
+磁盘上只保留**一份** argo 代码（本仓库）。引擎注册在仓库内派生；宿主入口用符号链接指回真源。**禁止** rsync/多副本；**禁止**在产品代码里写死主机 skill 路径。
+
+| 层 | 真源 / 工具 | 说明 |
+|----|-------------|------|
+| 代码 | 本仓库根目录 | 唯一可改业务代码的位置 |
+| 引擎声明 | `config.yaml` → `engines:` | type / enabled / label / cost_tier / qps / … |
+| 注册表派生 | `python3 scripts/sync_backends.py` | → `backends/*`；`--check` 只校验 |
+| 宿主入口 | `python3 scripts/link_source.py` | 把**调用方声明的**路径 symlink 到真源；目标仅来自 `--to` / `ARGO_LINK_TARGETS` / 本机 `installs.local.yaml`（gitignore） |
+| MCP | 客户端配置 `…/scripts/mcp_server.py` | 路径由宿主配置，README 用 `/path/to/argo` 占位 |
+
+曾分散在各 skill 副本里的引擎（`octen` / `finviz` / `jin10` / `models_dev` / `qweather` / `wenshu` / `seeking_alpha` / `zhihu_global`）已并回本仓库，与 P0/P1 同一套声明与 `_BUILDERS`。
 
 **新增一个搜索源的标准流程**：
 
 ```bash
-# 1. 在 config.yaml engines 段声明（type 决定解析 builder）
-#    type: 支持 cli/http/html/exa/wechat_sogou/hackernews/stackoverflow/
-#          google_scholar/v2ex/ths_hot/cls_telegraph/em_global_news/eastmoney/
-#          itotii/baidu_hot/toutiao_hot/bilibili_hot/open_library/free_dictionary
-# 2. 派生注册表 + 校验
+# 1. 只在本仓库改 config.yaml engines（必要时 engines.py 注册 builder）
+# 2. 派生 backends
 python3 scripts/sync_backends.py && python3 scripts/sync_backends.py --check
-# 3. 回归
+# 3. （可选）本机入口指回真源——路径由你声明，脚本无默认地址
+#    cp installs.local.yaml.example installs.local.yaml  # 填写 link_targets
+python3 scripts/link_source.py --check
+# 4. 回归
+python3 scripts/search.py "httpx" --engine pypi --json
 python3 -m pytest tests/ -q
 ```
 
-需要新解析逻辑时才在 `scripts/engines.py` 的 `_BUILDERS` 注册新 builder（如既有 18 种 type 无法表达），否则纯声明即可。
+需要新解析逻辑时才在 `scripts/engines.py` 的 `_BUILDERS` 注册新 builder，否则纯声明即可。
 
 ### 三大增强工具（v2.0 新增）
 
@@ -484,6 +545,7 @@ argo-v2/
 │   └── quota_profiles.json    # 配额配置（sync 派生）
 ├── scripts/
 │   ├── sync_backends.py   # 注册表派生 + 一致性校验（单一真源 config.yaml）
+│   ├── link_source.py     # 宿主入口 symlink 到真源（目标由调用方声明）
 │   ├── config.py         # 配置加载器
 │   ├── search.py         # CLI 入口 & 执行编排
 │   ├── route.py          # 三层路由决策

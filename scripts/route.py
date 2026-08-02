@@ -106,7 +106,11 @@ def _feature_labels(features: dict[str, Any]) -> str:
     return " + ".join(labels) if labels else "通用查询"
 
 
-# ── 域匹配 ────────────────────────────────────────────────────────────────────
+# ── 域匹配（预编译 + mtime 缓存，避免每次 route 重新 compile 全部正则） ────────
+
+_compiled_domains: list[dict[str, Any]] | None = None
+_compiled_domains_id: int | None = None  # id(domains list) or len+name fingerprint
+
 
 def _compile_domain_patterns(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
     compiled = []
@@ -124,11 +128,22 @@ def _compile_domain_patterns(domains: list[dict[str, Any]]) -> list[dict[str, An
     return compiled
 
 
+def _get_compiled_domains(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    global _compiled_domains, _compiled_domains_id
+    # domains 列表在 load_config 缓存命中时是同一对象
+    dom_id = id(domains)
+    if _compiled_domains is not None and _compiled_domains_id == dom_id:
+        return _compiled_domains
+    _compiled_domains = _compile_domain_patterns(domains)
+    _compiled_domains_id = dom_id
+    return _compiled_domains
+
+
 def match_domain(query: str, domains: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
     """按 config.yaml domains 顺序匹配；无命中返回 catch-all。"""
     if domains is None:
         domains = get_domains()
-    compiled = _compile_domain_patterns(domains)
+    compiled = _get_compiled_domains(domains)
     catch_all: dict[str, Any] | None = None
     for domain in compiled:
         if not domain.get("patterns", []):
@@ -313,45 +328,49 @@ def route_query(query: str, engine_override: str = "auto",
     cfg = load_config()
     enabled = set(get_engines(cfg).keys())
 
-    # TF-IDF 语义路由（分数过低视为无效，禁止垂直引擎零分塌缩）
-    TFIDF_MIN_SCORE = 0.12
-    SOCIAL_ENGINES = {"twitter", "reddit", "xiaohongshu", "bilibili", "weibo"}
-    tfidf_best = None
-    tfidf_best_score = 0.0
-    tfidf_scores = []
-    try:
-        tfidf_scores = semantic_route(query, top_k=3)
-        if tfidf_scores:
-            cand, score, _ = tfidf_scores[0]
-            # 社交引擎仅在查询像 UGC/舆情时才允许作为 TF-IDF 主引擎
-            social_ok = True
-            if cand in SOCIAL_ENGINES:
-                ql = query.lower()
-                social_signals = (
-                    "微博", "小红书", "推特", "twitter", "reddit", "舆情",
-                    "讨论", "网友", "评论", "b站", "bilibili", "抖音",
-                )
-                social_ok = any(s in ql for s in social_signals)
-            if score >= TFIDF_MIN_SCORE and social_ok:
-                tfidf_best = cand
-                tfidf_best_score = score
-            else:
-                # 全零/极低分/误中社交：不采用 TF-IDF 主引擎
-                tfidf_best = None
-                tfidf_best_score = score
-    except ImportError:
-        pass  # tfidf_router 模块不可用
-    except Exception as e:
-        import logging
-        logging.getLogger("unified_search.route").debug(f"TF-IDF 路由跳过: {type(e).__name__}")
-
     # 预算模式过滤可用引擎
     quota_mgr = get_quota_manager()
     if mode in ("fast", "budget"):
         enabled = {e for e in enabled if quota_mgr.is_available(e, mode=mode)}
 
-    # 正则硬规则匹配
-    domain = match_domain(query, get_domains(cfg))
+    # 正则硬规则优先（cheap）；fast + 实域命中时跳过 TF-IDF，省掉语义路由开销
+    domains_cfg = get_domains(cfg)
+    domain = match_domain(query, domains_cfg)
+    hard_domain = bool(domain and domain.get("patterns"))
+
+    TFIDF_MIN_SCORE = 0.12
+    SOCIAL_ENGINES = {"twitter", "reddit", "xiaohongshu", "bilibili", "weibo"}
+    tfidf_best = None
+    tfidf_best_score = 0.0
+    tfidf_scores: list = []
+    skip_tfidf = mode == "fast" and hard_domain
+
+    if not skip_tfidf:
+        try:
+            tfidf_scores = semantic_route(query, top_k=3)
+            if tfidf_scores:
+                cand, score, _ = tfidf_scores[0]
+                social_ok = True
+                if cand in SOCIAL_ENGINES:
+                    ql = query.lower()
+                    social_signals = (
+                        "微博", "小红书", "推特", "twitter", "reddit", "舆情",
+                        "讨论", "网友", "评论", "b站", "bilibili", "抖音",
+                    )
+                    social_ok = any(s in ql for s in social_signals)
+                if score >= TFIDF_MIN_SCORE and social_ok:
+                    tfidf_best = cand
+                    tfidf_best_score = score
+                else:
+                    tfidf_best = None
+                    tfidf_best_score = score
+        except ImportError:
+            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search.route").debug(
+                f"TF-IDF 路由跳过: {type(e).__name__}"
+            )
 
     if domain:
         engines_combo = _get_engines_combo(domain, enabled, mode, features)

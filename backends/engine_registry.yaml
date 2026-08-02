@@ -13,6 +13,18 @@ engines:
   status: ok
   recommended: true
   desc: 通用搜索主力，本地 CLI，零 token
+- name: archive_org
+  tier: T1
+  type: http
+  coverage:
+  - archive
+  - history
+  - reference
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Internet Archive 高级搜索（免认证）
 - name: arxiv
   tier: T1
   type: http
@@ -23,6 +35,18 @@ engines:
   status: ok
   recommended: true
   desc: arXiv 论文搜索
+- name: baidu_baike
+  tier: T1
+  type: baidu_baike
+  coverage:
+  - chinese
+  - encyclopedia
+  - reference
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 百度百科词条（suggest + OpenAPI 卡片，免认证）
 - name: baidu_hot
   tier: T1
   type: baidu_hot
@@ -92,6 +116,17 @@ engines:
   status: ok
   recommended: true
   desc: 字节搜索 API，中文通用/news
+- name: clinicaltrials
+  tier: T1
+  type: clinicaltrials
+  coverage:
+  - medical
+  - clinical
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: ClinicalTrials.gov v2 临床试验（免认证）
 - name: cls_telegraph
   tier: T1
   type: cls_telegraph
@@ -135,9 +170,44 @@ engines:
   - academic
   latency_ms: 2000
   cost: free
-  status: disabled
+  status: ok
   recommended: true
-  desc: Crossref DOI 元数据 API
+  desc: Crossref DOI 元数据 API（免认证，礼貌池 mailto）
+- name: dblp
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - cs
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: DBLP 计算机科学文献（免认证，偶发 SSL 抖动）
+- name: devto
+  tier: T1
+  type: http
+  coverage:
+  - tech
+  - community
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: DEV.to 技术文章搜索（免认证）
+- name: docker_hub
+  tier: T1
+  type: http
+  coverage:
+  - code
+  - infra
+  - package
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Docker Hub 镜像搜索（免认证）
 - name: duckduckgo
   tier: T1
   type: http
@@ -173,6 +243,17 @@ engines:
   status: ok
   recommended: true
   desc: 东财全球资讯（7×24 财经快讯）
+- name: europepmc
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - biomedical
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Europe PMC 生物医学文献（免认证，SS 429 后备）
 - name: exa
   tier: T1
   type: exa
@@ -197,6 +278,17 @@ engines:
   status: disabled
   recommended: true
   desc: Felo AI 搜索 API
+- name: finviz
+  tier: T1
+  type: finviz
+  coverage:
+  - finance
+  - us_stock
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Finviz 美股快照（HTML，免认证）
 - name: free_dictionary
   tier: T1
   type: free_dictionary
@@ -244,6 +336,19 @@ engines:
   status: ok
   recommended: true
   desc: Hacker News（Algolia API，科技新闻+讨论）
+- name: huggingface
+  tier: T1
+  type: http
+  coverage:
+  - ml
+  - model
+  - dataset
+  - code
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Hugging Face 模型搜索（免认证）
 - name: itotii
   tier: T1
   type: itotii
@@ -270,6 +375,29 @@ engines:
   status: ok
   recommended: true
   desc: iTunes Search API（音乐/影视/播客/应用，免认证）
+- name: jin10
+  tier: T1
+  type: jin10
+  coverage:
+  - finance
+  - news
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 金十数据财经快讯（免认证）
+- name: juejin
+  tier: T1
+  type: juejin
+  coverage:
+  - chinese
+  - tech
+  - community
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 掘金技术文章搜索（免认证）
 - name: know_your_meme
   tier: T1
   type: html
@@ -532,6 +660,20 @@ engines:
   status: disabled
   recommended: true
   desc: Yandex本地（html）
+- name: mdn
+  tier: T1
+  type: http
+  coverage:
+  - docs
+  - web
+  - javascript
+  - css
+  - html
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: MDN Web Docs 搜索（en/官方 API，免认证）
 - name: metaso
   tier: T1
   type: http
@@ -543,6 +685,18 @@ engines:
   status: disabled
   recommended: true
   desc: 秘塔搜索 API（中文 AI 搜索）
+- name: models_dev
+  tier: T1
+  type: models_dev
+  coverage:
+  - ml
+  - model
+  - pricing
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: models.dev AI 模型目录（全量缓存，免认证）
 - name: moegirl
   tier: T1
   type: html
@@ -568,6 +722,30 @@ engines:
   status: ok
   recommended: true
   desc: MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）
+- name: npm
+  tier: T1
+  type: http
+  coverage:
+  - code
+  - javascript
+  - package
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: npm 包搜索（registry.npmjs.org，免认证）
+- name: octen
+  tier: T1
+  type: octen
+  coverage:
+  - general
+  - tech
+  - semantic
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  desc: Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search）
 - name: open_library
   tier: T1
   type: open_library
@@ -586,9 +764,20 @@ engines:
   - academic
   latency_ms: 2000
   cost: free
-  status: disabled
+  status: ok
   recommended: true
-  desc: OpenAlex 开放学术 API
+  desc: OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto）
+- name: openfda
+  tier: T1
+  type: openfda
+  coverage:
+  - medical
+  - drug
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: openFDA 药品标签（免认证）
 - name: openverse
   tier: T1
   type: http
@@ -601,6 +790,39 @@ engines:
   status: ok
   recommended: true
   desc: Openverse 开放版权图库（免认证，CC 素材）
+- name: polymarket
+  tier: T1
+  type: http
+  coverage:
+  - prediction
+  - social
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Polymarket 预测市场搜索（叙事源，非事实真值）
+- name: pypi
+  tier: T1
+  type: pypi
+  coverage:
+  - code
+  - python
+  - package
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: PyPI 包查询（/pypi/{name}/json 精确解析，免认证）
+- name: qweather
+  tier: T1
+  type: qweather
+  coverage:
+  - weather
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 和风天气实时天气（需 QWEATHER_KEY）
 - name: reddit
   tier: T1
   type: cli
@@ -621,6 +843,17 @@ engines:
   status: disabled
   recommended: true
   desc: SearXNG 直连（已废弃，由 T3 替代）
+- name: seeking_alpha
+  tier: T1
+  type: seeking_alpha
+  coverage:
+  - finance
+  - us_stock
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Seeking Alpha 美股分析（HTML，反爬较强）
 - name: semantic_scholar
   tier: T1
   type: http
@@ -644,6 +877,17 @@ engines:
   status: ok
   recommended: true
   desc: Stack Overflow（Stack Exchange API，编程问答）
+- name: steam
+  tier: T1
+  type: http
+  coverage:
+  - game
+  - media
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Steam 商店搜索（免认证）
 - name: tavily
   tier: T1
   type: http
@@ -747,6 +991,16 @@ engines:
   status: ok
   recommended: true
   desc: 微博
+- name: wenshu
+  tier: T1
+  type: wenshu
+  coverage:
+  - legal
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 中国裁判文书网（反爬较强，尽力而为）
 - name: wikidata
   tier: T1
   type: http
@@ -815,3 +1069,14 @@ engines:
   status: ok
   recommended: true
   desc: 知乎搜索，中文观点/评测
+- name: zhihu_global
+  tier: T1
+  type: http
+  coverage:
+  - chinese
+  - community
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  desc: 知乎开放平台全局搜索（需 ZHIHU_ACCESS_SECRET）

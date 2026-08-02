@@ -84,37 +84,93 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
     return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), m.group(0)), s)
 
 
-def _extract_items(data: Any, path: str) -> list[dict]:
-    """从嵌套 dict 按路径提取列表。data 为 None 或非 dict 时返回 []。"""
+def _get_path(obj: Any, path: str) -> Any:
+    """按点分路径取值，支持 list 下标（如 authors.0.name）。空路径返回 obj。"""
+    if path in ("", ".", "$", "[]", None):
+        return obj
+    cur = obj
+    for part in str(path).split("."):
+        if cur is None:
+            return None
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        elif isinstance(cur, (list, tuple)) and part.isdigit():
+            idx = int(part)
+            cur = cur[idx] if 0 <= idx < len(cur) else None
+        else:
+            return None
+    return cur
+
+
+def _coerce_field(val: Any, *, max_len: int | None = None) -> str:
+    """把 API 字段压成字符串：list 取首项、dict 丢弃、其余 str。"""
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        if not val:
+            return ""
+        val = val[0]
+    if isinstance(val, dict):
+        return ""
+    s = str(val).strip()
+    if max_len is not None and len(s) > max_len:
+        return s[:max_len]
+    return s
+
+
+def _format_url_template(template: str, item: dict) -> str:
+    """支持 {field} 与 {a.b.c} 点分路径的 URL 模板。"""
+    def repl(m: re.Match) -> str:
+        return _coerce_field(_get_path(item, m.group(1)))
+    try:
+        return re.sub(r"\{([^}]+)\}", repl, template)
+    except Exception:
+        return ""
+
+
+def _extract_items(data: Any, path: str) -> list:
+    """从 JSON 按路径提取列表。path 为 . / $ / [] / 空 且 data 为 list 时直接返回。"""
+    if path in ("", ".", "$", "[]"):
+        return data if isinstance(data, list) else []
     if not isinstance(data, dict):
         return []
-    obj = data
-    for part in path.split("."):
-        if isinstance(obj, dict):
-            obj = obj.get(part, [])
-        else:
-            return []
-    return obj if isinstance(obj, list) else []
+    obj = _get_path(data, path)
+    if isinstance(obj, list):
+        return obj
+    # DBLP 等 API 在 h=1 时把 hit 收成对象而非数组
+    if isinstance(obj, dict):
+        return [obj]
+    return []
 
 
 def _make_field_parser(path: str, fields: dict[str, str], url_template: str | None = None) -> Callable:
-    """构造声明式 parser。url_template 支持从字段值构造 URL（如 Wikipedia）。"""
+    """构造声明式 parser。支持点分路径字段与 url_template（含嵌套占位）。"""
     def parser(data: Any) -> list[dict[str, Any]]:
-        items = _extract_items(data, path) if isinstance(data, dict) else []
+        if isinstance(data, list) and path in ("", ".", "$", "[]"):
+            items = data
+        elif isinstance(data, dict):
+            items = _extract_items(data, path)
+        else:
+            items = []
         results = []
         for item in items:
             if not isinstance(item, dict):
                 continue
-            r = {ok: iv[:300] if ok == "snippet" and isinstance(iv, str) else iv
-                 for ok, ik in fields.items() if (iv := item.get(ik, ""))}
-            # url_template 支持：item_url 仅为占位字段（如 title/id）时，
-            # 用模板构造真实 URL，避免 URL 退化成原始字符串
+            r: dict[str, Any] = {}
+            for ok, ik in fields.items():
+                if not ik:
+                    continue
+                raw = _get_path(item, ik) if "." in str(ik) else item.get(ik, "")
+                # 兼容顶层点分键名不存在时回退 get
+                if raw in ("", None) and "." not in str(ik):
+                    raw = item.get(ik, "")
+                coerced = _coerce_field(raw, max_len=300 if ok == "snippet" else 500)
+                if coerced:
+                    r[ok] = coerced
             if url_template and (not r.get("url") or not str(r["url"]).startswith(("http://", "https://"))):
-                try:
-                    r["url"] = url_template.format(**item)
-                except (KeyError, ValueError):
-                    pass
-            # 协议相对 URL 归一化（如 //www.wikidata.org/wiki/Qxxxx）
+                built = _format_url_template(url_template, item)
+                if built.startswith(("http://", "https://")):
+                    r["url"] = built
             if isinstance(r.get("url"), str) and r["url"].startswith("//"):
                 r["url"] = "https:" + r["url"]
             if r.get("title") or r.get("url"):
@@ -160,12 +216,18 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
 
         if is_get:
             resolved_url = _resolve(url_template, query, n)
-            separator = "&" if "?" in resolved_url else "?"
-            full_url = f"{resolved_url}{separator}{query_param}={up.quote(query)}"
+            parts: list[str] = []
+            if query_param:  # 空字符串表示该 API 不用查询参数名（仅 extra_params）
+                parts.append(f"{query_param}={up.quote(query)}")
             if fmt:
-                full_url += f"&format={fmt}"
+                parts.append(f"format={up.quote(str(fmt))}")
             for k, v in extra_params.items():
-                full_url += f"&{k}={up.quote(_resolve(str(v), query, n))}"
+                parts.append(f"{k}={up.quote(_resolve(str(v), query, n))}")
+            if parts:
+                separator = "&" if "?" in resolved_url else "?"
+                full_url = resolved_url + separator + "&".join(parts)
+            else:
+                full_url = resolved_url
             req = urllib.request.Request(full_url, headers={k: _resolve(v, query, n) for k, v in headers.items()})
         else:
             body: dict[str, Any] = {}
@@ -195,12 +257,24 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                     return _parse_xml(raw, spec.get("_name", ""))
                 data = json.loads(raw)
                 if output_map:
-                    return _make_field_parser(output_map.get("items", ""), {
+                    items_path = output_map.get("items", "")
+                    # 根节点即为数组时（HF / dev.to / polymarket），items 用 "."
+                    if isinstance(data, list) and not items_path:
+                        items_path = "."
+                    parsed = _make_field_parser(items_path, {
                         "title": output_map.get("item_title", "title"),
                         "url": output_map.get("item_url", "url"),
                         "snippet": output_map.get("item_summary", "snippet"),
                         "source": output_map.get("item_source", "source"),
                     }, url_template=output_map.get("url_template"))(data)
+                    eng = spec.get("_name", "")
+                    for r in parsed:
+                        r.setdefault("source", eng)
+                        if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
+                            r["snippet"] = r["snippet"][:300]
+                    return parsed[: max(1, int(n or 5))]
+                if isinstance(data, list):
+                    return _parse_generic({"results": data}, spec.get("_name", ""))
                 return _parse_generic(data, spec.get("_name", ""))
         except Exception as e:
             logger.warning(f"HTTP 引擎失败: {e}")
@@ -1081,7 +1155,810 @@ def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-_BUILDERS = {"cli": _build_cli_engine, "http": _build_http_engine, "html": _build_html_engine, "exa": _build_exa_engine, "wechat_sogou": _build_wechat_sogou_engine, "hackernews": _build_hackernews_engine, "stackoverflow": _build_stackoverflow_engine, "google_scholar": _build_google_scholar_engine, "v2ex": _build_v2ex_engine, "ths_hot": _build_ths_hot_engine, "cls_telegraph": _build_cls_telegraph_engine, "em_global_news": _build_em_global_news_engine, "eastmoney": _build_eastmoney_engine, "itotii": _build_itotii_engine, "baidu_hot": _build_baidu_hot_engine, "toutiao_hot": _build_toutiao_hot_engine, "bilibili_hot": _build_bilibili_hot_engine, "open_library": _build_open_library_engine, "free_dictionary": _build_free_dictionary_engine}
+# ── 百度百科（suggest 接口，免认证）──────────────────────────────────────────
+
+def _build_baidu_baike_engine(spec: dict[str, Any]) -> Any:
+    """百度百科词条搜索：优先 searchui/suggest，OpenAPI 卡片作精确补充。"""
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        q = query.strip()
+        if not q:
+            return []
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+            "Referer": "https://baike.baidu.com/",
+            "Accept": "application/json,text/plain,*/*",
+        }
+        results: list[dict[str, Any]] = []
+        # 1) suggest 多候选
+        sug_url = "https://baike.baidu.com/api/searchui/suggest?" + up.urlencode({"enc": "utf8", "wd": q})
+        try:
+            with urllib.request.urlopen(urllib.request.Request(sug_url, headers=headers), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+            for item in (data.get("list") or [])[:n]:
+                title = item.get("lemmaTitle") or ""
+                lid = item.get("lemmaId") or ""
+                desc = item.get("lemmaDesc") or ""
+                if not title:
+                    continue
+                path = up.quote(title)
+                url = f"https://baike.baidu.com/item/{path}/{lid}" if lid else f"https://baike.baidu.com/item/{path}"
+                results.append({
+                    "title": title,
+                    "url": url,
+                    "snippet": str(desc)[:300],
+                    "source": "baidu_baike",
+                    "score": 0.85,
+                })
+        except Exception as e:
+            logger.warning(f"baidu_baike suggest 失败: {e}")
+        # 2) OpenAPI 卡片补充（精确词条摘要，可能 errno=2）
+        if len(results) < n:
+            card_url = "https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?" + up.urlencode({
+                "scope": "103", "format": "json", "appid": "379020",
+                "bk_key": q, "bk_length": "600",
+            })
+            try:
+                with urllib.request.urlopen(urllib.request.Request(card_url, headers=headers), timeout=to) as resp:
+                    card = json.loads(resp.read().decode("utf-8", "replace"))
+                if isinstance(card, dict) and card.get("errno") in (None, 0) and (card.get("title") or card.get("key")):
+                    title = card.get("title") or card.get("key") or q
+                    abstract = card.get("abstract") or card.get("desc") or ""
+                    curl = card.get("url") or f"https://baike.baidu.com/item/{up.quote(str(title))}"
+                    if not any(r.get("title") == title for r in results):
+                        results.insert(0, {
+                            "title": str(title),
+                            "url": str(curl),
+                            "snippet": str(abstract)[:300],
+                            "source": "baidu_baike",
+                            "score": 0.9,
+                        })
+            except Exception:
+                pass
+        return results[:n]
+    return _engine
+
+
+# ── PyPI（精确包名 JSON；搜索页有 JS challenge 故不做 HTML 搜）────────────────
+
+def _build_pypi_engine(spec: dict[str, Any]) -> Any:
+    """PyPI 包查询：从查询词抽取候选包名，逐个请求 /pypi/{name}/json。"""
+    timeout = spec.get("timeout", 10)
+
+    def _candidates(query: str) -> list[str]:
+        q = query.strip()
+        # 去掉常见修饰语
+        q2 = re.sub(
+            r"(?i)\b(pypi|python\s+package|python\s+lib(?:rary)?|pip\s+install|package|库|包|模块|依赖)\b",
+            " ", q,
+        )
+        q2 = re.sub(r"\s+", " ", q2).strip()
+        cands: list[str] = []
+        for raw in (q2, q, *re.findall(r"[A-Za-z0-9][A-Za-z0-9._-]{1,80}", q2)):
+            name = raw.strip().strip("\"'").lower().replace(" ", "-")
+            name = re.sub(r"[^a-z0-9._-]", "", name)
+            if len(name) >= 2 and name not in cands:
+                cands.append(name)
+        return cands[:8]
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        headers = {"User-Agent": "argo-search/2.5 (unified-search@local)", "Accept": "application/json"}
+        for name in _candidates(query):
+            if len(results) >= n:
+                break
+            url = f"https://pypi.org/pypi/{name}/json"
+            try:
+                with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+            except Exception:
+                continue
+            info = data.get("info") if isinstance(data, dict) else None
+            if not isinstance(info, dict):
+                continue
+            pkg = (info.get("name") or name).strip()
+            key = pkg.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            summary = info.get("summary") or ""
+            ver = info.get("version") or ""
+            home = info.get("package_url") or info.get("project_url") or f"https://pypi.org/project/{pkg}/"
+            snippet = f"{summary} · v{ver}".strip(" ·") if ver else summary
+            results.append({
+                "title": pkg,
+                "url": home,
+                "snippet": snippet[:300],
+                "source": "pypi",
+                "score": 0.9,
+            })
+        return results[:n]
+    return _engine
+
+
+# ── ClinicalTrials.gov v2 ────────────────────────────────────────────────────
+
+def _build_clinicaltrials_engine(spec: dict[str, Any]) -> Any:
+    """ClinicalTrials.gov API v2 试验检索（免认证）。"""
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = "https://clinicaltrials.gov/api/v2/studies?" + up.urlencode({
+            "query.term": query,
+            "pageSize": min(n, 20),
+            "format": "json",
+        })
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    url, headers={"User-Agent": "argo-search/2.5", "Accept": "application/json"}), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"clinicaltrials 失败: {e}")
+            return []
+        results = []
+        for st in (data.get("studies") or [])[:n]:
+            ps = st.get("protocolSection") or {}
+            ident = ps.get("identificationModule") or {}
+            desc = ps.get("descriptionModule") or {}
+            status = (ps.get("statusModule") or {}).get("overallStatus") or ""
+            nct = ident.get("nctId") or ""
+            title = ident.get("briefTitle") or ident.get("officialTitle") or nct
+            summary = desc.get("briefSummary") or status
+            if not title and not nct:
+                continue
+            results.append({
+                "title": str(title)[:200],
+                "url": f"https://clinicaltrials.gov/study/{nct}" if nct else "",
+                "snippet": str(summary).replace("\n", " ")[:300],
+                "source": "clinicaltrials",
+                "score": 0.85,
+            })
+        return results
+    return _engine
+
+
+# ── openFDA 药品标签 ─────────────────────────────────────────────────────────
+
+def _build_openfda_engine(spec: dict[str, Any]) -> Any:
+    """openFDA drug label 搜索（免认证）。"""
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        # 清洗查询，优先 brand/generic 字段检索
+        q = re.sub(r"(?i)\b(drug|medicine|药品|药物|说明书|openfda|fda)\b", " ", query).strip()
+        q = q or query.strip()
+        search = f'openfda.brand_name:"{q}" openfda.generic_name:"{q}"'
+        url = "https://api.fda.gov/drug/label.json?" + up.urlencode({
+            "search": search,
+            "limit": min(n, 20),
+        })
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    url, headers={"User-Agent": "argo-search/2.5", "Accept": "application/json"}), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            # 回退：全文检索
+            try:
+                url2 = "https://api.fda.gov/drug/label.json?" + up.urlencode({
+                    "search": q, "limit": min(n, 20),
+                })
+                with urllib.request.urlopen(urllib.request.Request(
+                        url2, headers={"User-Agent": "argo-search/2.5"}), timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+            except Exception as e2:
+                logger.warning(f"openfda 失败: {e2}")
+                return []
+        results = []
+        for item in (data.get("results") or [])[:n]:
+            of = item.get("openfda") or {}
+            brands = of.get("brand_name") or []
+            generics = of.get("generic_name") or []
+            title = (brands[0] if brands else "") or (generics[0] if generics else "") or item.get("id", "drug label")
+            purpose = item.get("purpose") or item.get("indications_and_usage") or []
+            if isinstance(purpose, list):
+                purpose = purpose[0] if purpose else ""
+            set_id = (of.get("spl_set_id") or [None])[0] if isinstance(of.get("spl_set_id"), list) else of.get("spl_set_id")
+            url_out = f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={set_id}" if set_id else "https://open.fda.gov/apis/drug/label/"
+            results.append({
+                "title": str(title)[:200],
+                "url": url_out,
+                "snippet": str(purpose).replace("\n", " ")[:300],
+                "source": "openfda",
+                "score": 0.8,
+            })
+        return results
+    return _engine
+
+
+# ── 掘金搜索 ─────────────────────────────────────────────────────────────────
+
+def _build_juejin_engine(spec: dict[str, Any]) -> Any:
+    """掘金文章搜索（search_api，免认证）。"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        # 官方搜索接口（GET）
+        url = "https://api.juejin.cn/search_api/v1/search?" + up.urlencode({
+            "query": query,
+            "id_type": 0,
+            "cursor": "0",
+            "limit": min(n, 20),
+            "search_type": 0,
+            "sort_type": 0,
+        })
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+            "Accept": "application/json",
+            "Referer": "https://juejin.cn/",
+        }
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"juejin 失败: {e}")
+            return []
+        results = []
+        for item in (data.get("data") or [])[: n * 2]:
+            model = item.get("result_model") or {}
+            info = model.get("article_info") or model
+            title = info.get("title") or item.get("title_highlight") or ""
+            # 去 HTML 高亮
+            title = re.sub(r"<[^>]+>", "", str(title)).strip()
+            aid = info.get("article_id") or model.get("article_id") or ""
+            brief = info.get("brief_content") or info.get("content") or item.get("content_highlight") or ""
+            brief = re.sub(r"<[^>]+>", "", str(brief)).strip()
+            if not title:
+                continue
+            # 文章 / 专栏 / 其他
+            aurl = f"https://juejin.cn/post/{aid}" if aid else "https://juejin.cn/search?query=" + up.quote(query)
+            results.append({
+                "title": title[:200],
+                "url": aurl,
+                "snippet": brief[:300],
+                "source": "juejin",
+                "score": 0.75,
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+
+# ── models.dev AI 模型信息引擎 ──────────────────────────────────────────────────
+
+_models_dev_cache: tuple[float, Any] = (0.0, None)  # (timestamp, data)
+_MODELS_DEV_TTL = 86400  # 24h（evergreen，模型信息更新不频繁）
+
+
+def _build_models_dev_engine(spec: dict[str, Any]) -> Any:
+    """models.dev AI 模型信息搜索（结构化数据，零认证，全量缓存）。
+
+    数据源：https://models.dev/api.json（176 provider × 5907+ 模型）
+    策略：全量拉取后本地过滤，缓存 24h。
+    过滤维度：模型名/family/description 关键词 + 能力维度（vision/tool/reasoning/context/免费/开源）。
+    """
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        global _models_dev_cache
+        to = _timeout or spec.get("timeout", 15)
+        ql = query.lower().strip()
+
+        # 拉取全量数据（带缓存）
+        now = time.time()
+        ts, cached = _models_dev_cache
+        if cached is None or (now - ts) > _MODELS_DEV_TTL:
+            req = urllib.request.Request(
+                "https://models.dev/api.json",
+                headers={"User-Agent": "argo-search/1.0 (+models.dev)"},
+            )
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                cached = json.loads(resp.read().decode("utf-8"))
+            _models_dev_cache = (now, cached)
+
+        # 能力维度过滤
+        want_vision = any(k in ql for k in ("vision", "视觉", "图片", "多模态", "multimodal"))
+        want_tool = any(k in ql for k in ("tool", "工具调用", "function call"))
+        want_long = any(k in ql for k in ("1m", "100万", "长上下文", "long context", "百万"))
+        want_free = any(k in ql for k in ("免费", "free", "zero cost"))
+        want_open = any(k in ql for k in ("开源", "open weight", "open source"))
+
+        # 关键词提取（去掉能力词后剩下的当搜索词）
+        search_terms = ql
+        for drop in ("vision", "视觉", "图片", "多模态", "multimodal", "tool", "工具调用",
+                     "function call", "1m", "100万", "长上下文", "long context", "百万",
+                     "免费", "free", "zero cost", "开源", "open weight", "open source",
+                     "模型", "model", "价格", "price", "pricing", "多少钱", "api"):
+            search_terms = search_terms.replace(drop, "")
+        search_terms = search_terms.strip()
+
+        results: list[dict[str, Any]] = []
+        for prov_id, prov in (cached or {}).items():
+            if not isinstance(prov, dict):
+                continue
+            prov_name = prov.get("name", prov_id)
+            prov_doc = prov.get("doc", "https://models.dev")
+            for mid, m in (prov.get("models") or {}).items():
+                if not isinstance(m, dict):
+                    continue
+                # 能力过滤
+                if want_vision and not m.get("attachment"):
+                    continue
+                if want_tool and not m.get("tool_call"):
+                    continue
+                if want_open and not m.get("open_weights"):
+                    continue
+                lim = m.get("limit") or {}
+                cost = m.get("cost") or {}
+                if want_long and (lim.get("context") or 0) < 500000:
+                    continue
+                if want_free and (cost.get("input") or 0) > 0:
+                    continue
+
+                # 关键词匹配
+                name = m.get("name", mid)
+                family = m.get("family", "")
+                desc = m.get("description", "")
+                haystack = f"{name} {family} {desc} {prov_name}".lower()
+                if search_terms:
+                    terms = [t for t in search_terms.split() if len(t) >= 2]
+                    if terms and not any(t in haystack for t in terms):
+                        continue
+                elif not any(k in ql for k in ("模型", "model", "llm", "gpt", "claude",
+                         "gemini", "glm", "llama", "mistral", "deepseek", "价格", "price")):
+                    # 无明确搜索词也无能力词时，只返回大上下文热门模型（兜底）
+                    if (lim.get("context") or 0) < 200000:
+                        continue
+
+                # 构建 snippet
+                mods_in = m.get("modalities", {}).get("input", [])
+                snippet = (
+                    f"ctx={lim.get('context', '?')} | out={lim.get('output', '?')} | "
+                    f"in=${cost.get('input', '?')}/M out=${cost.get('output', '?')}/M | "
+                    f"tools={m.get('tool_call')} | vision={m.get('attachment')} | "
+                    f"reasoning={m.get('reasoning')} | input={','.join(mods_in)} | "
+                    f"{desc[:80]}"
+                )
+                results.append({
+                    "title": f"{name} ({prov_name})",
+                    "url": prov_doc,
+                    "snippet": snippet[:300],
+                    "source": "models_dev",
+                    "score": 0.95,
+                })
+                if len(results) >= n:
+                    break
+            if len(results) >= n:
+                break
+
+        return results
+    return _engine
+
+# ── Finviz 美股筛选引擎（HTML 抓取）─────────────────────────────────────────────
+
+def _build_finviz_engine(spec: dict[str, Any]) -> Any:
+    """Finviz 个股快照（finviz.com/quote.ashx?t=TICKER）
+
+    从 snapshot 表格提取：公司名、行业、市值、PE、价格、涨跌幅。
+    query 视为 ticker（大写）；非纯字母时取首个字母 token 作 ticker。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        m = re.search(r"[A-Za-z]{1,6}", query or "")
+        if not m:
+            return []
+        ticker = m.group(0).upper()
+        url = f"https://finviz.com/quote.ashx?t={ticker}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        if _detect_anti_bot(html):
+            return []
+
+        # snapshot 表格是 key-value 交替单元格
+        cells = re.findall(r'<td[^>]*class="[^"]*snapshot-td2[^"]*"[^>]*>(.*?)</td>', html, re.DOTALL)
+        cleaned = [re.sub(r"<[^>]+>", "", c).strip() for c in cells]
+        kv: dict[str, str] = {}
+        for i in range(0, len(cleaned) - 1, 2):
+            kv[cleaned[i]] = cleaned[i + 1]
+
+        # 公司名 / 行业
+        name_m = re.search(r'<title>([^<]+)</title>', html)
+        company = name_m.group(1).split("Stock")[0].strip() if name_m else ticker
+
+        if not kv and company == ticker:
+            return []
+
+        price = kv.get("Price", "")
+        change = kv.get("Change", "")
+        market_cap = kv.get("Market Cap", "")
+        pe = kv.get("P/E", "")
+        snippet = (f"行业信息见页面 | 市值 {market_cap} | PE {pe} | "
+                   f"价格 {price} | 涨跌幅 {change}")
+        return [{
+            "title": f"{company} ({ticker}) 美股快照",
+            "url": url,
+            "snippet": snippet[:300],
+            "source": "finviz",
+            "score": 0.9,
+            "facts": {"ticker": ticker, "price": price, "change": change,
+                      "market_cap": market_cap, "pe": pe},
+        }]
+    return _engine
+
+# ── Seeking Alpha 美股分析引擎（HTML 抓取）───────────────────────────────────────
+
+def _build_seeking_alpha_engine(spec: dict[str, Any]) -> Any:
+    """Seeking Alpha 个股概览（seekingalpha.com/symbol/TICKER）
+
+    提取：评级 / 目标价 / 分析摘要（尽力而为，站点反爬较强，失败返回 []）。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        m = re.search(r"[A-Za-z]{1,6}", query or "")
+        if not m:
+            return []
+        ticker = m.group(0).upper()
+        url = f"https://seekingalpha.com/symbol/{ticker}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        if _detect_anti_bot(html):
+            return []
+
+        desc_m = re.search(r'<meta[^>]+name="description"[^>]+content="([^"]+)"', html)
+        summary = desc_m.group(1).strip() if desc_m else ""
+        rating_m = re.search(r'(Strong Buy|Buy|Hold|Sell|Strong Sell)', html)
+        rating = rating_m.group(1) if rating_m else "N/A"
+        target_m = re.search(r'Price Target[^0-9]{0,20}(\d+\.\d+)', html)
+        target = target_m.group(1) if target_m else ""
+
+        if not summary and rating == "N/A":
+            return []
+        snippet = f"评级 {rating}" + (f" | 目标价 {target}" if target else "") + \
+                  (f" | {summary}" if summary else "")
+        return [{
+            "title": f"{ticker} — Seeking Alpha 分析",
+            "url": url,
+            "snippet": snippet[:300],
+            "source": "seeking_alpha",
+            "score": 0.85,
+            "facts": {"ticker": ticker, "rating": rating, "target_price": target},
+        }]
+    return _engine
+
+# ── 和风天气引擎（HTTP JSON API，需 QWEATHER_KEY）─────────────────────────────────
+
+def _build_qweather_engine(spec: dict[str, Any]) -> Any:
+    """和风天气实时天气（devapi.qweather.com）
+
+    需环境变量 QWEATHER_KEY。先用 GeoAPI 将城市名解析为 LocationID，
+    再查实时天气。提取：温度、天气描述、湿度、风力。
+    无 key 时显式返回错误项（不静默）。
+    """
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        key = os.environ.get("QWEATHER_KEY", "")
+        if not key:
+            logger.warning("QWEATHER_KEY 未设置，跳过和风天气")
+            return [{"error": "QWEATHER_KEY 未设置", "source": "qweather"}]
+
+        # 从 query 抽取城市名（去掉天气/预报等词）
+        city = re.sub(r"(天气|预报|气温|温度|今天|明天|实时|怎么样|多少度)", "", query or "").strip()
+        city = city or query.strip()
+
+        # 1) GeoAPI: 城市 → LocationID
+        geo_url = f"https://geoapi.qweather.com/v2/city/lookup?location={up.quote(city)}&key={key}"
+        req = urllib.request.Request(geo_url, headers={"User-Agent": "argo-search/1.0"})
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            geo = json.loads(resp.read().decode("utf-8"))
+        locations = geo.get("location") or []
+        if not locations:
+            return []
+        loc = locations[0]
+        loc_id = loc.get("id", "")
+        loc_name = loc.get("name", city)
+
+        # 2) 实时天气
+        now_url = f"https://devapi.qweather.com/v7/weather/now?location={loc_id}&key={key}"
+        req2 = urllib.request.Request(now_url, headers={"User-Agent": "argo-search/1.0"})
+        with urllib.request.urlopen(req2, timeout=to) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        now = data.get("now") or {}
+        if not now:
+            return []
+        temp = now.get("temp", "")
+        text = now.get("text", "")
+        humidity = now.get("humidity", "")
+        wind = f"{now.get('windDir', '')}{now.get('windScale', '')}级"
+        snippet = f"{loc_name}：{text} {temp}°C | 湿度 {humidity}% | 风力 {wind}"
+        return [{
+            "title": f"{loc_name}实时天气",
+            "url": now.get("fxLink", "https://www.qweather.com/"),
+            "snippet": snippet[:300],
+            "source": "qweather",
+            "score": 1.0,
+            "facts": {"temp": temp, "text": text, "humidity": humidity, "wind": wind},
+        }]
+    return _engine
+
+# ── 中国裁判文书网引擎（HTML/JSON 抓取）──────────────────────────────────────────
+
+def _build_wenshu_engine(spec: dict[str, Any]) -> Any:
+    """中国裁判文书网（wenshu.court.gov.cn）法律文书检索。
+
+    该站有较强反爬（参数加密），此处走公开列表接口，尽力而为；
+    失败或被拦截时显式返回 []（不伪造结果）。
+    提取：案号、案由、裁判日期、法院。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        # 公开检索页（列表 HTML）——政府站结构可能变化，解析失败即空
+        url = f"https://wenshu.court.gov.cn/website/wenshu/181217BMTKHNT2W0/index.html?q={up.quote(query)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Referer": "https://wenshu.court.gov.cn/",
+        }
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            logger.warning(f"裁判文书网访问失败: {e}")
+            return []
+        if _detect_anti_bot(html):
+            return []
+
+        results: list[dict[str, Any]] = []
+        # 尝试解析嵌入的 JSON 数据块（站点结构变化时降级为空）
+        blocks = re.findall(r'\{[^{}]*"caseName"[^{}]*\}', html)
+        for b in blocks[:n]:
+            try:
+                item = json.loads(b)
+            except Exception:
+                continue
+            results.append({
+                "title": item.get("caseName", "")[:100],
+                "url": "https://wenshu.court.gov.cn/",
+                "snippet": (f"案号 {item.get('caseNo', '')} | 案由 {item.get('caseType', '')} | "
+                            f"法院 {item.get('court', '')} | 裁判日期 {item.get('judgeDate', '')}")[:300],
+                "source": "wenshu",
+                "facts": {"case_no": item.get("caseNo", ""), "court": item.get("court", ""),
+                          "judge_date": item.get("judgeDate", "")},
+            })
+        return results
+    return _engine
+
+# ── 金十数据引擎（HTTP JSON API 财经快讯）────────────────────────────────────────
+
+def _build_jin10_engine(spec: dict[str, Any]) -> Any:
+    """金十数据财经快讯（flash-api.jin10.com/get_flash_list）
+
+    提取：时间、标题、内容摘要；按关键词过滤（query 命中）。
+    """
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 10, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = f"https://flash-api.jin10.com/get_flash_list?channel=-8200&vip=1&t={int(time.time() * 1000)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "x-app-id": "bVBF4FyRTn5NJF5n",
+            "x-version": "1.0.0",
+            "Referer": "https://www.jin10.com/",
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        items = data.get("data") or []
+        keywords = [k for k in (query or "").strip().split() if k]
+        # 去掉路由触发词，避免「金十」「快讯」本身当过滤条件
+        stop = {"金十", "jin10", "财经快讯", "市场快讯", "7x24", "快讯", "电报"}
+        keywords = [k for k in keywords if k.lower() not in stop and k not in stop]
+        results: list[dict[str, Any]] = []
+        for it in items:
+            d = it.get("data") or {}
+            content = d.get("content", "") or d.get("pic", "") or ""
+            title = d.get("title", "") or content[:40]
+            text = f"{title} {content}"
+            if keywords and not any(k.lower() in text.lower() for k in keywords):
+                continue
+            results.append({
+                "title": title[:80] or "金十快讯",
+                "url": "https://www.jin10.com/",
+                "snippet": f"{it.get('time', '')} | {content[:150]}",
+                "source": "jin10",
+            })
+            if len(results) >= n:
+                break
+        # 关键词未命中当前快讯池时，回退最新 N 条（金十是滚动电报，非全库检索）
+        if not results and items:
+            for it in items[:n]:
+                d = it.get("data") or {}
+                content = d.get("content", "") or d.get("pic", "") or ""
+                title = d.get("title", "") or content[:40]
+                results.append({
+                    "title": title[:80] or "金十快讯",
+                    "url": "https://www.jin10.com/",
+                    "snippet": f"{it.get('time', '')} | {content[:150]}",
+                    "source": "jin10",
+                })
+        return results
+    return _engine
+
+# ── Octen AI 搜索引擎 ─────────────────────────────────────────────────────────
+
+def _build_octen_engine(spec: dict[str, Any]) -> Any:
+    """Octen AI 搜索（高速语义搜索 + broad-search 多查询分解）
+
+    支持两种模式：
+      - 标准搜索: /search（单次查询）
+      - 广域搜索: /broad-search（自动分解为子查询并行执行）
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, depth: str = "fast", **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        api_key = os.environ.get("OCTEN_API_KEY", "")
+        if not api_key:
+            logger.warning("OCTEN_API_KEY 未设置")
+            return []
+
+        # broad-search 模式（多子查询分解），支持 depth 参数
+        use_broad = depth in ("deep", "balanced")
+        if use_broad:
+            url = "https://api.octen.ai/broad-search"
+            max_q = 3 if depth == "balanced" else 5
+            body = json.dumps({
+                "query": query,
+                "max_queries": max_q,
+                "search_options": {
+                    "count": min(n, 5),
+                    "topic": "general",
+                    "safesearch": "off",
+                    "highlight": {"enable": True, "max_tokens": 512},
+                    "full_content": {"enable": False},
+                    "include_images": False,
+                },
+            }).encode("utf-8")
+        else:
+            url = "https://api.octen.ai/search"
+            body = json.dumps({
+                "query": query,
+                "count": min(n, 10),
+                "topic": "general",
+                "safesearch": "off",
+                "highlight": {"enable": True, "max_tokens": 512},
+                "full_content": {"enable": False},
+                "include_images": False,
+            }).encode("utf-8")
+
+        headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+        req = urllib.request.Request(url, data=body, headers=headers)
+
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                items = data.get("data", {})
+                results = []
+
+                if use_broad:
+                    # broad-search: 遍历所有子查询结果
+                    seen = set()
+                    for group in items.get("search_results", []):
+                        for r in group.get("results", []):
+                            url_key = r.get("url", "")
+                            if url_key and url_key not in seen:
+                                seen.add(url_key)
+                                results.append({
+                                    "title": r.get("title", ""),
+                                    "url": url_key,
+                                    "snippet": r.get("highlight", "")[:300],
+                                    "source": "octen",
+                                    "score": 0.8,
+                                })
+                                if len(results) >= n:
+                                    return results
+                else:
+                    # 标准搜索
+                    for r in items.get("results", [])[:n]:
+                        results.append({
+                            "title": r.get("title", ""),
+                            "url": r.get("url", ""),
+                            "snippet": r.get("highlight", "")[:300],
+                            "source": "octen",
+                            "score": r.get("score", 0.5),
+                        })
+
+                # 如果结果太少，补充 quick 数据源的查询（不走 broad 兜底）
+                if not results and not use_broad:
+                    logger.info("Octen 标准搜索无结果，兜底空列表返回")
+                return results
+
+        except Exception as e:
+            logger.warning(f"Octen 引擎失败: {e}")
+            return []
+    return _engine
+
+_BUILDERS = {
+    "cli": _build_cli_engine,
+    "http": _build_http_engine,
+    "html": _build_html_engine,
+    "exa": _build_exa_engine,
+    "wechat_sogou": _build_wechat_sogou_engine,
+    "hackernews": _build_hackernews_engine,
+    "stackoverflow": _build_stackoverflow_engine,
+    "google_scholar": _build_google_scholar_engine,
+    "v2ex": _build_v2ex_engine,
+    "ths_hot": _build_ths_hot_engine,
+    "cls_telegraph": _build_cls_telegraph_engine,
+    "em_global_news": _build_em_global_news_engine,
+    "eastmoney": _build_eastmoney_engine,
+    "itotii": _build_itotii_engine,
+    "baidu_hot": _build_baidu_hot_engine,
+    "toutiao_hot": _build_toutiao_hot_engine,
+    "bilibili_hot": _build_bilibili_hot_engine,
+    "open_library": _build_open_library_engine,
+    "free_dictionary": _build_free_dictionary_engine,
+    "baidu_baike": _build_baidu_baike_engine,
+    "pypi": _build_pypi_engine,
+    "clinicaltrials": _build_clinicaltrials_engine,
+    "openfda": _build_openfda_engine,
+    "juejin": _build_juejin_engine,
+    "models_dev": _build_models_dev_engine,
+    "finviz": _build_finviz_engine,
+    "seeking_alpha": _build_seeking_alpha_engine,
+    "qweather": _build_qweather_engine,
+    "wenshu": _build_wenshu_engine,
+    "jin10": _build_jin10_engine,
+    "octen": _build_octen_engine,
+}
 
 # ── 通用解析器 ─────────────────────────────────────────────────────────────────
 

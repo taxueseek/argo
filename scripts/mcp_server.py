@@ -12,10 +12,12 @@ mcp_server.py — Argo MCP 服务层
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
-import traceback
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -32,18 +34,37 @@ if os.path.isdir(SUB_SKILLS_DIR):
 os.chdir(ARGO_DIR)
 
 # 启动日志（写入 stderr，不影响 stdio 通信）
-sys.stderr.write("[argo-mcp] starting (lazy imports enabled)\n")
+sys.stderr.write("[argo-mcp] starting (lazy imports, deferred config)\n")
 sys.stderr.flush()
 
-# 延迟导入：避免启动时加载所有模块导致超时，按需导入
-import importlib
+# ── 延迟导入 / 缓存 ──────────────────────────────────────────────────────────
 
-def _lazy_import(module_name: str):
-    """延迟导入模块，首次调用时加载。"""
-    return importlib.import_module(module_name)
-
+_module_cache: dict[str, Any] = {}
 _cache_instance = None
 _response_format = "content-length"  # 根据客户端请求自动切换
+_JSON_SEP = (",", ":")  # 紧凑 JSON，降低序列化与 LLM token 开销
+
+# 结果字段白名单（MCP 默认裁剪内部打分/路由噪声）
+_RESULT_FIELDS = (
+    "title", "url", "snippet", "source", "score", "date", "published",
+    "consensus_engines",
+)
+_TOP_FIELDS = (
+    "query", "engines_used", "cached", "cache_level", "elapsed_ms", "count",
+    "results", "errors", "domain", "mode", "depth", "rewritten_query", "engine",
+    "platforms", "platform_breakdown", "total_posts", "engagement_totals",
+    "posts", "source",
+)
+
+
+def _lazy_import(module_name: str):
+    """延迟导入模块，进程内缓存。"""
+    mod = _module_cache.get(module_name)
+    if mod is None:
+        mod = importlib.import_module(module_name)
+        _module_cache[module_name] = mod
+    return mod
+
 
 def _get_cache():
     global _cache_instance
@@ -53,31 +74,154 @@ def _get_cache():
     return _cache_instance
 
 
-# ── 引擎统计（从 config.yaml 动态计算，唯一真源） ─────────────────────────────
+def _dumps(obj: Any) -> str:
+    """紧凑 JSON 序列化（无 indent）。"""
+    return json.dumps(obj, ensure_ascii=False, separators=_JSON_SEP, default=str)
+
+
+def _tool_ok(payload: Any) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": _dumps(payload)}]}
+
+
+def _tool_err(payload: Any) -> dict[str, Any]:
+    return {
+        "content": [{"type": "text", "text": _dumps(payload)}],
+        "isError": True,
+    }
+
+
+def _compact_item(item: dict[str, Any], *, summary: bool, snippet_max: int) -> dict[str, Any]:
+    out = {k: item[k] for k in _RESULT_FIELDS if k in item and item[k] is not None}
+    # 社交字段
+    if "social_meta" in item and item["social_meta"] is not None:
+        out["social_meta"] = item["social_meta"]
+    snip = out.get("snippet")
+    if isinstance(snip, str):
+        cap = 80 if summary else snippet_max
+        if len(snip) > cap:
+            out["snippet"] = snip[:cap]
+    return out
+
+
+def _compact_for_mcp(
+    data: dict[str, Any],
+    *,
+    summary: bool = False,
+    verbose: bool = False,
+    snippet_max: int = 300,
+) -> dict[str, Any]:
+    """裁剪 MCP 返回体：去掉 tfidf/outcomes 等内部字段，控制 snippet 长度。"""
+    if verbose or not isinstance(data, dict):
+        return data
+    out: dict[str, Any] = {k: data[k] for k in _TOP_FIELDS if k in data}
+    if "results" in data and isinstance(data["results"], list):
+        out["results"] = [
+            _compact_item(r, summary=summary, snippet_max=snippet_max)
+            if isinstance(r, dict) else r
+            for r in data["results"]
+        ]
+    # 社交舆情等结构
+    if "posts" in data and isinstance(data["posts"], list):
+        out["posts"] = [
+            _compact_item(r, summary=summary, snippet_max=snippet_max)
+            if isinstance(r, dict) else r
+            for r in data["posts"]
+        ]
+        for k in ("platforms", "platform_breakdown", "total_posts", "engagement_totals"):
+            if k in data:
+                out[k] = data[k]
+    if "source" in data and "source" not in out:
+        out["source"] = data["source"]
+    return out
+
+
+def _search_platforms(
+    platforms: list[str], query: str, n: int
+) -> tuple[dict[str, list], list[str], list[str]]:
+    """并行调用社交引擎，返回 (platform_results, engines_used, errors)。
+
+    platform_results 按请求 platforms 顺序保留键；engines_used 同序。
+    """
+    by_platform: dict[str, list] = {}
+    errors: list[str] = []
+
+    def _one(platform: str) -> tuple[str, list | None, str | None]:
+        module_name = platform.replace("-", "_") + "_engine"
+        try:
+            mod = importlib.import_module(f"social_engines.{module_name}")
+            return platform, mod.search(query, n=n), None
+        except ImportError:
+            return platform, None, f"Platform {platform} not available (module social_engines.{module_name})"
+        except Exception as e:
+            return platform, None, f"{platform}: {str(e)[:100]}"
+
+    raw: dict[str, list | None] = {}
+    if len(platforms) <= 1:
+        for p in platforms:
+            name, results, err = _one(p)
+            raw[name] = results
+            if err:
+                errors.append(err)
+    else:
+        with ThreadPoolExecutor(max_workers=min(4, len(platforms))) as pool:
+            futs = [pool.submit(_one, p) for p in platforms]
+            for fut in as_completed(futs):
+                name, results, err = fut.result()
+                raw[name] = results
+                if err:
+                    errors.append(err)
+
+    engines_used: list[str] = []
+    for p in platforms:
+        results = raw.get(p)
+        if results is not None:
+            by_platform[p] = results
+            engines_used.append(p)
+        else:
+            by_platform[p] = []
+    return by_platform, engines_used, errors
+
+
+# ── 引擎统计（延迟：不在 import 时读 config.yaml） ─────────────────────────────
+
+_engine_counts_cache: tuple[int, int, int] | None = None
+
 
 def _engine_counts() -> tuple[int, int, int]:
-    """返回 (启用引擎总数, 本地引擎数, 远程引擎数)。
-
-    新增引擎只需改 config.yaml，工具描述与说明自动跟随，无需手工同步数字。
-    """
+    """返回 (启用引擎总数, 本地引擎数, 远程引擎数)。首次调用才加载 config。"""
+    global _engine_counts_cache
+    if _engine_counts_cache is not None:
+        return _engine_counts_cache
     try:
         cfg = _lazy_import("config")
         engines = cfg.get_engines()
         local = sum(1 for name in engines if name.startswith("local_"))
-        return len(engines), local, len(engines) - local
+        _engine_counts_cache = (len(engines), local, len(engines) - local)
     except Exception:
-        return 61, 21, 40  # 兜底：配置不可读时退回旧文案
+        _engine_counts_cache = (61, 21, 40)  # 兜底
+    return _engine_counts_cache
 
 
-_ENG_TOTAL, _ENG_LOCAL, _ENG_REMOTE = _engine_counts()
+def _warm_hot_path() -> None:
+    """后台预热 search/cache，缩短首次 tools/call 延迟。"""
+    try:
+        _lazy_import("config").load_config()
+        _lazy_import("search")
+        _get_cache()
+        _engine_counts()
+        sys.stderr.write("[argo-mcp] warm complete\n")
+        sys.stderr.flush()
+    except Exception as e:
+        sys.stderr.write(f"[argo-mcp] warm skipped: {type(e).__name__}: {e}\n")
+        sys.stderr.flush()
 
 
-# ── 工具定义（MCP schema） ────────────────────────────────────────────────────
+# ── 工具定义（MCP schema；描述不依赖 import 时 config） ───────────────────────
 
 TOOLS = [
     {
         "name": "argo_search",
-        "description": f"统一搜索引擎：{_ENG_TOTAL} 个引擎（{_ENG_REMOTE} 远程 + {_ENG_LOCAL} 本地）统一搜索，支持 TF-IDF 语义路由 + RRF 多引擎融合 + Bocha 语义精排 + 双层缓存。适用于所有通用搜索场景：查资料、找答案、搜新闻、学术检索、代码搜索、中文内容搜索等。",
+        "description": "统一搜索引擎：多引擎（远程+本地）统一搜索，支持 TF-IDF 语义路由 + RRF 多引擎融合 + Bocha 语义精排 + 双层缓存。默认返回紧凑字段（title/url/snippet/source）。适用于查资料、找答案、搜新闻、学术检索、代码搜索、中文内容搜索等。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -116,7 +260,12 @@ TOOLS = [
                 },
                 "summary": {
                     "type": "boolean",
-                    "description": "精简模式：snippet 截断到 80 字符，节省 LLM token（默认 false）",
+                    "description": "精简模式：snippet 截断到 80 字符，进一步节省 LLM token（默认 false）",
+                    "default": False
+                },
+                "verbose": {
+                    "type": "boolean",
+                    "description": "完整模式：保留路由/打分/可信度等内部字段（默认 false，MCP 已默认紧凑）",
                     "default": False
                 }
             },
@@ -466,18 +615,19 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 mode=arguments.get("mode", "auto"),
                 cache=_get_cache(),
             )
-            if arguments.get("summary", False):
-                for r in result.get("results", []):
-                    if r.get("snippet"):
-                        r["snippet"] = r["snippet"][:80]
-            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+            payload = _compact_for_mcp(
+                result,
+                summary=bool(arguments.get("summary", False)),
+                verbose=bool(arguments.get("verbose", False)),
+            )
+            return _tool_ok(payload)
 
         elif name == "argo_research":
             research_mod = _lazy_import("research")
             mode = arguments.get("mode", "auto")
             if mode == "social-sentiment":
                 platforms_str = arguments.get("platforms", "twitter,reddit,xiaohongshu")
-                platforms = [p.strip() for p in platforms_str.split(",")]
+                platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
                 result = research_mod.social_sentiment_research(
                     query=arguments["query"],
                     platforms=platforms,
@@ -491,28 +641,17 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     depth=arguments.get("depth", "balanced"),
                     mode=mode,
                 )
-            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(result)
 
         elif name == "argo_social_search":
-            # 直接调用社交引擎，不走 engine_registry（社交引擎未注册到主引擎层）
             platforms_str = arguments.get("platforms", "twitter,reddit,xiaohongshu")
-            platforms = [p.strip() for p in platforms_str.split(",")]
+            platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
             query = arguments["query"]
             n = arguments.get("max_results", 5)
+            by_platform, engines_used, errors = _search_platforms(platforms, query, n)
             all_results: list = []
-            errors: list = []
-            engines_used: list = []
-            for platform in platforms:
-                module_name = platform.replace("-", "_") + "_engine"
-                try:
-                    mod = importlib.import_module(f"social_engines.{module_name}")
-                    results = mod.search(query, n=n)
-                    all_results.extend(results)
-                    engines_used.append(platform)
-                except ImportError:
-                    errors.append(f"Platform {platform} not available (module social_engines.{module_name})")
-                except Exception as e:
-                    errors.append(f"{platform}: {str(e)[:100]}")
+            for p in platforms:
+                all_results.extend(by_platform.get(p) or [])
             output = {
                 "query": query,
                 "platforms": platforms,
@@ -522,37 +661,25 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             }
             if errors:
                 output["errors"] = errors
-            return {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp(output, summary=bool(arguments.get("summary", False))))
 
         elif name == "argo_social_sentiment":
-            # 直接循环调用各社交引擎的 search()，聚合统计舆情
             platforms_str = arguments.get("platforms", "twitter,reddit,xiaohongshu")
-            platforms = [p.strip() for p in platforms_str.split(",")]
+            platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
             query = arguments["query"]
             n = arguments.get("max_results", 5)
-            platform_results: dict = {}
+            by_platform, engines_used, errors = _search_platforms(platforms, query, n)
             all_posts: list = []
-            errors: list = []
-            for platform in platforms:
-                module_name = platform.replace("-", "_") + "_engine"
-                try:
-                    mod = importlib.import_module(f"social_engines.{module_name}")
-                    results = mod.search(query, n=n)
-                    platform_results[platform] = results
-                    all_posts.extend(results)
-                except ImportError:
-                    errors.append(f"Platform {platform} not available")
-                except Exception as e:
-                    errors.append(f"{platform}: {str(e)[:100]}")
-            # 聚合统计
+            for p in platforms:
+                all_posts.extend(by_platform.get(p) or [])
             engagement_totals = {"likes": 0, "comments": 0, "reposts": 0, "shares": 0}
             for post in all_posts:
-                meta = post.get("social_meta", {})
+                meta = post.get("social_meta") or {}
                 engagement_totals["likes"] += meta.get("likes", 0) or meta.get("like_count", 0) or 0
                 engagement_totals["comments"] += meta.get("comments", 0) or 0
                 engagement_totals["reposts"] += meta.get("reposts", 0) or 0
                 engagement_totals["shares"] += meta.get("shares", 0) or 0
-            platform_breakdown = {p: len(r) for p, r in platform_results.items()}
+            platform_breakdown = {p: len(by_platform.get(p) or []) for p in platforms}
             output = {
                 "query": query,
                 "platforms": platforms,
@@ -560,35 +687,36 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 "total_posts": len(all_posts),
                 "engagement_totals": engagement_totals,
                 "posts": all_posts,
+                "engines_used": engines_used,
             }
             if errors:
                 output["errors"] = errors
-            return {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp(output, summary=bool(arguments.get("summary", False))))
 
         elif name == "argo_twitter_search":
             from social_engines.twitter_engine import search as twitter_search
             results = twitter_search(arguments["query"], arguments.get("max_results", 5))
-            return {"content": [{"type": "text", "text": json.dumps({"results": results, "source": "twitter"}, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp({"results": results, "source": "twitter", "count": len(results)}))
 
         elif name == "argo_reddit_search":
             from social_engines.reddit_engine import search as reddit_search
             results = reddit_search(arguments["query"], arguments.get("max_results", 5))
-            return {"content": [{"type": "text", "text": json.dumps({"results": results, "source": "reddit"}, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp({"results": results, "source": "reddit", "count": len(results)}))
 
         elif name == "argo_xiaohongshu_search":
             from social_engines.xiaohongshu_engine import search as xhs_search
             results = xhs_search(arguments["query"], arguments.get("max_results", 5))
-            return {"content": [{"type": "text", "text": json.dumps({"results": results, "source": "xiaohongshu"}, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp({"results": results, "source": "xiaohongshu", "count": len(results)}))
 
         elif name == "argo_bilibili_search":
             from social_engines.bilibili_engine import search as bilibili_search
             results = bilibili_search(arguments["query"], arguments.get("max_results", 5))
-            return {"content": [{"type": "text", "text": json.dumps({"results": results, "source": "bilibili"}, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp({"results": results, "source": "bilibili", "count": len(results)}))
 
         elif name == "argo_weibo_search":
             from social_engines.weibo_engine import search as weibo_search
             results = weibo_search(arguments["query"], arguments.get("max_results", 5))
-            return {"content": [{"type": "text", "text": json.dumps({"results": results, "source": "weibo"}, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(_compact_for_mcp({"results": results, "source": "weibo", "count": len(results)}))
 
         elif name == "argo_evidence":
             results_json_str = arguments.get("results_json", "")
@@ -607,14 +735,14 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 results = results_data.get("results", [])
             evidence_mod = _lazy_import("evidence")
             result = evidence_mod.compute_credibility(results, arguments["query"])
-            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(result)
 
         elif name == "argo_clarify":
             clarify_mod = _lazy_import("clarify")
             analysis = clarify_mod.analyze_query(arguments["query"])
             routing = clarify_mod.recommend_routing(analysis)
             analysis["routing"] = routing
-            return {"content": [{"type": "text", "text": json.dumps(analysis, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(analysis)
 
         elif name == "argo_crawl":
             crawl_mod = _lazy_import("crawl")
@@ -626,7 +754,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 result = crawl_mod.crawl_sitemap(arguments["url"], max_pages=max_pages, timeout=timeout)
             else:
                 result = crawl_mod.crawl_bfs(arguments["url"], max_pages=max_pages, max_depth=max_depth, timeout=timeout)
-            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(result)
 
         elif name == "argo_extract":
             extract_mod = _lazy_import("extract")
@@ -634,9 +762,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             mode = arguments.get("mode", "all")
             fetch_result = fetch_mod.fetch_page(arguments["url"], max_chars=50000, timeout=15, raw=True)
             if not fetch_result["success"]:
-                return {"content": [{"type": "text", "text": json.dumps({"error": fetch_result.get("error", "fetch failed")}, ensure_ascii=False)}], "isError": True}
+                return _tool_err({"error": fetch_result.get("error", "fetch failed")})
             html = fetch_result["html"]
-            output = {}
+            output: dict[str, Any] = {}
             if mode in ("tables", "all"):
                 output["tables"] = extract_mod.extract_tables(html)
             if mode in ("metadata", "all"):
@@ -644,7 +772,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             if mode in ("jsonld", "all"):
                 output["jsonld"] = extract_mod.extract_jsonld(html)
             output["url"] = fetch_result["url"]
-            return {"content": [{"type": "text", "text": json.dumps(output, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(output)
 
         elif name == "argo_fetch":
             fetch_v3_mod = _lazy_import("fetch_v3")
@@ -656,14 +784,13 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 force_browser=arguments.get("use_browser", False),
                 actions=json.loads(arguments["actions"]) if arguments.get("actions") else None,
             )
-            # BM25 聚焦提取
             focus_query = arguments.get("focus")
             if focus_query and result.get("success"):
                 focus_mod = _lazy_import("focus_extract")
                 result["content"] = focus_mod.focus_extract(result["content"], focus_query)
                 result["length"] = len(result["content"])
                 result["focus_applied"] = True
-            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(result)
 
         elif name == "argo_screenshot":
             import time as _time
@@ -676,11 +803,10 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 path = cdp.screenshot(output, full_page=full_page)
                 cdp.stop()
                 if path and os.path.exists(path):
-                    return {"content": [{"type": "text", "text": json.dumps({"success": True, "screenshot": path, "url": arguments["url"]}, ensure_ascii=False)}]}
-                else:
-                    return {"content": [{"type": "text", "text": json.dumps({"success": False, "error": "screenshot failed"}, ensure_ascii=False)}], "isError": True}
+                    return _tool_ok({"success": True, "screenshot": path, "url": arguments["url"]})
+                return _tool_err({"success": False, "error": "screenshot failed"})
             except Exception as e:
-                return {"content": [{"type": "text", "text": json.dumps({"success": False, "error": str(e)[:200]}, ensure_ascii=False)}], "isError": True}
+                return _tool_err({"success": False, "error": str(e)[:200]})
 
         elif name == "argo_pdf":
             pdf_mod = _lazy_import("pdf_extract")
@@ -689,16 +815,13 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 pages=arguments.get("pages"),
                 password=arguments.get("password"),
             )
-            return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, indent=2)}]}
+            return _tool_ok(result)
 
         else:
             return {"error": {"code": -32601, "message": f"Unknown tool: {name}"}}
 
     except Exception as e:
-        return {
-            "content": [{"type": "text", "text": json.dumps({"error": {"code": -32000, "message": f"{type(e).__name__}: {e}"}}, ensure_ascii=False)}],
-            "isError": True
-        }
+        return _tool_err({"error": {"code": -32000, "message": f"{type(e).__name__}: {e}"}})
 
 
 # ── MCP JSON-RPC 处理 ────────────────────────────────────────────────────────
@@ -706,14 +829,22 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
     """处理 JSON-RPC 请求。"""
     if method == "initialize":
+        eng_total, eng_local, eng_remote = _engine_counts()
         return {
             "protocolVersion": "2025-06-18",
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "argo",
-                "version": "2.1.0"
+                "version": "2.2.0"
             },
-            "instructions": f"Argo MCP 提供 16 个工具：argo_search（{_ENG_TOTAL} 引擎统一搜索）、argo_research（深度研究+社交舆情）、argo_evidence（可信度评估）、argo_clarify（意图消歧）、argo_crawl（站点爬取）、argo_extract（结构化数据提取）、argo_fetch（智能页面抓取+反检测浏览器降级）、argo_screenshot（页面截图）、argo_pdf（PDF 结构化提取）、argo_social_search（社交平台搜索）、argo_social_sentiment（社交舆情分析）、argo_twitter_search、argo_reddit_search、argo_xiaohongshu_search、argo_bilibili_search、argo_weibo_search。底层使用 {_ENG_TOTAL} 个搜索引擎的统一搜索基础设施，支持 TF-IDF 语义路由、RRF 多引擎融合、Bocha 语义精排、双层缓存和成本感知预算控制。"
+            "instructions": (
+                f"Argo MCP 提供 16 个工具：argo_search（{eng_total} 引擎：{eng_remote} 远程+{eng_local} 本地）、"
+                "argo_research、argo_evidence、argo_clarify、argo_crawl、argo_extract、argo_fetch、"
+                "argo_screenshot、argo_pdf、argo_social_search、argo_social_sentiment、"
+                "argo_twitter_search、argo_reddit_search、argo_xiaohongshu_search、argo_bilibili_search、"
+                "argo_weibo_search。默认紧凑 JSON（无 indent、裁剪内部字段）；argo_search 可用 verbose=true 看全量。"
+                "底层：TF-IDF 路由、RRF 融合、Bocha 精排、双层缓存、成本预算。"
+            ),
         }
 
     elif method == "tools/list":
@@ -737,12 +868,12 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
 
 def run_stdio():
     """运行 MCP stdio 服务。MCP 帧协议：Content-Length: N\\r\\n\\r\\n{json}"""
-    import sys, os, time as _time
-
     global _response_format
 
     sys.stderr.write("[argo-mcp] ready, waiting for stdin\n")
     sys.stderr.flush()
+    # 后台预热 config/search/cache，不阻塞 initialize
+    threading.Thread(target=_warm_hot_path, name="argo-mcp-warm", daemon=True).start()
 
     while True:
         try:
@@ -794,8 +925,8 @@ def run_stdio():
 
 
 def _send_response(response: dict):
-    """发送 MCP 响应，根据客户端请求格式自动选择。"""
-    data = json.dumps(response, ensure_ascii=False)
+    """发送 MCP 响应，根据客户端请求格式自动选择（紧凑 JSON）。"""
+    data = _dumps(response)
     if _response_format == "ndjson":
         sys.stdout.write(data + "\n")
     else:
@@ -806,12 +937,11 @@ def _send_response(response: dict):
 
 def _send_error(request_id, code: int, message: str):
     """发送 JSON-RPC 错误响应。"""
-    resp = {
+    _send_response({
         "jsonrpc": "2.0",
         "id": request_id,
-        "error": {"code": code, "message": message}
-    }
-    _send_response(resp)
+        "error": {"code": code, "message": message},
+    })
 
 def test_mode():
     """本地测试。"""

@@ -3,7 +3,6 @@ cache:
   enabled: true
   max_size_mb: 200
   ttl: 3600
-
 domains:
 - desc: 微信公众号文章搜索
   engines_combo:
@@ -93,7 +92,8 @@ domains:
   name: fund_query
   parallel: false
   patterns:
-  - (?i)(基金|公募|私募|ETF|LOF|FOF|基金经理|基金净值|基金排行|选基)
+  - (?i)(基金|公募|私募|基金经理|基金净值|基金排行|选基)
+  - (?i)\b(ETF|LOF|FOF)\b
   primary: eastmoney
   quote: true
 - desc: 股票/行情查询
@@ -121,6 +121,40 @@ domains:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings|report|announcement)
   primary: byted
+- desc: 天气查询（和风天气）
+  engines_combo:
+  - qweather
+  - duckduckgo
+  fallback: duckduckgo
+  name: weather_query
+  parallel: false
+  patterns:
+  - (?i)(天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)
+  primary: qweather
+- desc: 美股筛选/分析（Finviz + Seeking Alpha + 通用）
+  engines_combo:
+  - finviz
+  - seeking_alpha
+  - exa
+  - anysearch
+  - eastmoney
+  fallback: anysearch
+  name: us_stock
+  parallel: true
+  patterns:
+  - (?i)(NASDAQ|NYSE|美股|盘前|盘后|premarket|afterhours)
+  - (?i)\b(AAPL|TSLA|NVDA|MSFT|GOOG|GOOGL|AMZN|META|AMD|NFLX)\b
+  primary: finviz
+- desc: 财经快讯（金十数据）
+  engines_combo:
+  - jin10
+  - cls_telegraph
+  fallback: cls_telegraph
+  name: jin10_flash
+  parallel: false
+  patterns:
+  - (?i)(金十|jin10|财经快讯|市场快讯|7x24快讯)
+  primary: jin10
 - desc: 全网热搜/热榜
   engines_combo:
   - baidu_hot
@@ -143,17 +177,149 @@ domains:
   - (?i)(比特币|以太坊|莱特币|狗狗币|加密货币|虚拟货币|数字货币|币价|币种|山寨币|空气币|代币|区块链|挖矿|钱包地址|token 经济|稳定币)
   - (?i)\b(bitcoin|ethereum|btc|eth|crypto|altcoin|defi|nft|blockchain|coin)\b
   primary: coingecko
-- desc: Rust 包/库查询（crates.io）
+- desc: 包管理器/语言包查询（PyPI/npm/crates/Docker）
   engines_combo:
+  - pypi
+  - npm
   - crates
+  - docker_hub
   - github
-  fallback: crates
+  fallback: pypi
   name: package_search
-  parallel: false
+  parallel: true
   patterns:
   - (?i)(crates\.io|cargo 包|rust 包|rust 库|crate 库|rust crate|rust 依赖|rust 生态|rust.*\bcrate|好用的 crate)
   - (?i)\b(crates\.io|crates|crate|cargo\s+package|serde)\b
-  primary: crates
+  - (?i)(pypi|pip install|python 包|python package|python 库|python lib|npm 包|npm package|node 包|yarn add|pnpm add|docker.?hub|docker
+    image|docker 镜像)
+  - (?i)\b(pip|pypi|npm|npx|yarn|pnpm|docker\s+pull|dockerfile)\b
+  primary: pypi
+- desc: Web 开发文档（MDN）
+  engines_combo:
+  - mdn
+  - stackoverflow
+  fallback: mdn
+  name: web_docs
+  parallel: false
+  patterns:
+  - (?i)(mdn|mozilla developer|web api|dom api|css 属性|html 元素|javascript api|js api|fetch api|web docs)
+  - (?i)(developer\.mozilla|site:developer\.mozilla)
+  primary: mdn
+- desc: ML 模型/数据集（Hugging Face）
+  engines_combo:
+  - huggingface
+  - github
+  fallback: huggingface
+  name: ml_models
+  parallel: false
+  patterns:
+  - (?i)(hugging\s*face|huggingface|hf\.co|hf model|预训练模型|开源模型|llm 模型|embedding 模型|数据集 dataset)
+  - (?i)\b(bert|llama|mistral|whisper|stable.?diffusion|safetensors)\b.*\b(model|checkpoint|权重)\b
+  - (?i)(模型下载|模型检索|模型库|diffusion model|text.to.image model)
+  primary: huggingface
+- desc: AI 模型信息搜索（价格/上下文/能力/多模态，models.dev）
+  engines_combo:
+  - models_dev
+  - huggingface
+  - anysearch
+  fallback: anysearch
+  name: ai_model
+  parallel: false
+  patterns:
+  - (?i)(模型|model|LLM|GPT|Claude|Gemini|GLM|Llama|Mistral|DeepSeek|Qwen)
+  - (?i)(API price|pricing|context window|token limit|vision model|tool call)
+  - (?i)(多少钱|价格|上下文|支持视觉|支持图片|开源模型|免费模型)
+  primary: models_dev
+- desc: 中文技术社区文章（掘金 + V2EX + dev.to）
+  engines_combo:
+  - juejin
+  - v2ex
+  - devto
+  fallback: juejin
+  name: cn_tech_community
+  parallel: true
+  patterns:
+  - (?i)(掘金|juejin|稀土掘金|技术博客|前端文章|后端文章|dev\.to|devto)
+  - (?i)(写得不错的技术文|技术分享文章)
+  primary: juejin
+- desc: 法律法规（刑法/民法/判例/法规）
+  engines_combo:
+  - anysearch
+  - byted
+  - duckduckgo
+  - wenshu
+  fallback: anysearch
+  name: legal
+  parallel: true
+  patterns:
+  - (?i)(刑法|民法|司法解释|判例|法规|裁判文书|案由|案号|法院判决)
+  primary: anysearch
+- desc: 裁判文书检索
+  engines_combo:
+  - wenshu
+  - anysearch
+  fallback: anysearch
+  name: wenshu_query
+  parallel: false
+  patterns:
+  - (?i)(裁判文书|判决书|裁定书|wenshu|court\.gov)
+  primary: wenshu
+- desc: 医学/临床试验/药品标签
+  engines_combo:
+  - clinicaltrials
+  - openfda
+  - local_pubmed
+  - wikipedia
+  - anysearch
+  fallback: clinicaltrials
+  name: medical
+  parallel: true
+  patterns:
+  - (?i)(临床试验|clinical trial|nct\d+|clinicaltrials\.gov|openfda|fda 药品|药品说明书|药物标签|drug label|适应症|不良反应)
+  - (?i)(medicine|pharmaceutical|dosage|contraindication|药物|药品|处方药|otc)
+  - (?i)(症状|用药|适应症|临床|指南|副作用|禁忌|诊断|治疗|病因)
+  primary: clinicaltrials
+- desc: 游戏商店（Steam）
+  engines_combo:
+  - steam
+  fallback: steam
+  name: game_search
+  parallel: false
+  patterns:
+  - (?i)(steam|steam 游戏|steam 商店|3a 游戏| indies? 游戏|好玩的游戏|游戏推荐|metacritic)
+  - (?i)\b(steam\s+game|pc\s+game|steamdb)\b
+  primary: steam
+- desc: 预测市场（Polymarket，叙事源非事实真值）
+  engines_combo:
+  - polymarket
+  fallback: polymarket
+  name: prediction_market
+  parallel: false
+  patterns:
+  - (?i)(polymarket|预测市场|prediction market|博彩盘口|事件合约|谁会当选|会不会发生)
+  primary: polymarket
+- desc: 互联网档案馆 / 历史网页
+  engines_combo:
+  - archive_org
+  - wikipedia
+  fallback: archive_org
+  name: web_archive
+  parallel: false
+  patterns:
+  - (?i)(internet archive|archive\.org|wayback|网页快照|历史网页|数字图书馆 archive)
+  primary: archive_org
+- desc: 中文百科（百度百科 + 中文维基）
+  engines_combo:
+  - baidu_baike
+  - zh_wikipedia
+  - wikidata
+  fallback: baidu_baike
+  name: cn_encyclopedia
+  parallel: true
+  patterns:
+  - (?i)(百度百科|baike\.baidu|百科词条|查百科|词条解释)
+  - (?i)(是什么(?!梗)|什么是|简介|定义一下).{0,8}$
+  primary: baidu_baike
 - desc: 英文单词/词典查询
   engines_combo:
   - free_dictionary
@@ -208,17 +374,20 @@ domains:
   primary: openverse
 - desc: 知识实体/维基数据查询
   engines_combo:
+  - baidu_baike
   - wikidata
   - wikipedia
-  fallback: wikidata
+  - zh_wikipedia
+  fallback: baidu_baike
   name: entity_search
-  parallel: false
+  parallel: true
   patterns:
-  - (?i)(维基数据|wikidata|知识实体|实体查询|词条实体|QID|SPARQL|知识图谱)
+  - (?i)(维基数据|wikidata|知识实体|实体查询|词条实体|QID|SPARQL|知识图谱|百度百科)
   primary: wikidata
 - desc: 知乎/观点/经验/评测
   engines_combo:
   - zhihu
+  - zhihu_global
   - anysearch
   fallback: anysearch
   name: zhihu_content
@@ -231,15 +400,31 @@ domains:
   - arxiv
   - openalex
   - crossref
+  - europepmc
+  - dblp
   - semantic_scholar
-  fallback: semantic_scholar
+  fallback: openalex
   name: academic
   parallel: true
   patterns:
-  - (?i)(论文|paper|arXiv|preprint|DOI|引用|citation|学术)
+  - (?i)(论文|paper|arXiv|preprint|DOI|引用|citation|学术|openalex|crossref|europe pmc|dblp)
   - \b\d{4}\.\d{4,5}\b
   - (?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)
   primary: arxiv
+- desc: 技术深度研究
+  engines_combo:
+  - openalex
+  - arxiv
+  - semantic_scholar
+  - github
+  - europepmc
+  fallback: openalex
+  name: tech_deep
+  parallel: true
+  patterns:
+  - (?i)(research|deep dive|综述|survey|state of the art|SOTA)
+  - (?i)(原理|底层|实现|源码分析|架构设计|论文)
+  primary: openalex
 - desc: 购物评测/选购推荐
   engines_combo:
   - zhihu
@@ -248,7 +433,9 @@ domains:
   name: shopping
   parallel: true
   patterns:
-  - (?i)(评测|推荐|哪个好|值得买|选购|入手|踩坑|避雷|best|review|comparison)
+  # 注意：不要用裸 \bbest\b / review / comparison，会误伤 "best practices" 等技术查询
+  - (?i)(评测|推荐|哪个好|值得买|选购|入手|踩坑|避雷|种草|拔草|海淘)
+  - (?i)\b(product\s+review|buyer's?\s+guide|worth\s+buying|best\s+buy|shopping)\b
   primary: zhihu
 - desc: 语义发现/开放式调研（Exa 语义引擎）
   engines_combo:
@@ -262,25 +449,13 @@ domains:
   - (?i)(有哪些值得关注|最新进展|行业格局|赛道分析|盘点一下|梳理一下)
   primary: exa
   cost_tier: api
-- desc: 技术深度研究
-  engines_combo:
-  - semantic_scholar
-  - arxiv
-  - openalex
-  - github
-  - exa
-  fallback: arxiv
-  name: tech_deep
-  parallel: true
-  patterns:
-  - (?i)(research|deep dive|综述|survey|state of the art|SOTA)
-  - (?i)(原理|底层|实现|源码分析|架构设计|论文)
-  primary: semantic_scholar
 - desc: 代码搜索/开源项目
   engines_combo:
   - github
+  - mdn
+  - huggingface
   - anysearch
-  fallback: anysearch
+  fallback: github
   name: code_search
   parallel: true
   patterns:
@@ -316,6 +491,7 @@ domains:
   engines_combo:
   - byted
   - duckduckgo
+  - octen
   fallback: duckduckgo
   name: news_realtime
   parallel: true
@@ -323,11 +499,36 @@ domains:
   - (?i)(最新新闻|最新进展|今天发生|突发|breaking)
   - (?i)\b(news|latest)\b
   primary: byted
+- desc: 中文技术深挖（先于 chinese_general；要求含中文）
+  engines_combo:
+  - byted
+  - octen
+  - juejin
+  fallback: byted
+  name: chinese_tech_deep
+  parallel: true
+  patterns:
+  - (?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南)
+  - (?i)[一-鿿].*(Rust|Python|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|AI编程|LLM|大模型)
+  primary: byted
+- desc: 英文技术通用（octen 主搜，低延迟；先于 catch-all）
+  engines_combo:
+  - octen
+  - exa
+  - anysearch
+  fallback: anysearch
+  name: english_tech
+  parallel: true
+  patterns:
+  - (?i)(async|performance|best practices|tutorial|guide|how to|internals|API|SDK|framework)
+  - (?i)\b(Rust|Python|JavaScript|TypeScript|React|Vue|Node|Docker|Kubernetes|asyncio)\b
+  primary: octen
 - desc: 中文通用搜索
   engines_combo:
   - bocha
   - byted
   - wechat_sogou
+  - octen
   fallback: bocha
   name: chinese_general
   parallel: true
@@ -412,18 +613,17 @@ domains:
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   primary: twitter
   quote: false
-
 engines:
   local_search:
     type: cli
     enabled: true
-    label: "Local Search 聚合"
+    label: Local Search 聚合
     cost_tier: free
     qps: 10
     priority: 1
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     cmd:
     - python3
     - sub-skills/local-search/search_v3.py
@@ -440,33 +640,36 @@ engines:
     - python3
     - ~/.claude/skills/argo/scripts/anysearch_http.py
     enabled: true
-    label: "AnySearch"
+    label: AnySearch
     cost_tier: free
     qps: 5
     priority: 1
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["general", "tech"]
-    desc: "通用搜索主力，本地 CLI，零 token"
+    cost_unit: free
+    coverage:
+    - general
+    - tech
+    desc: 通用搜索主力，本地 CLI，零 token
     env: {}
     search_args:
     - search
     - '{query}'
-    - '-n'
+    - -n
     - '{n}'
     type: cli
   arxiv:
     enabled: true
-    label: "arXiv学术论文"
+    label: arXiv学术论文
     cost_tier: free
     qps: 1
     priority: 7
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["academic"]
-    desc: "arXiv 论文搜索"
+    cost_unit: free
+    coverage:
+    - academic
+    desc: arXiv 论文搜索
     format: xml
     method: GET
     query_param: search_query
@@ -480,16 +683,18 @@ engines:
       query: '{query}'
       summary: true
     enabled: true
-    label: "博查搜索"
+    label: 博查搜索
     cost_tier: low
     qps: 5
     priority: 9
     limit: 10000
-    period: "month"
+    period: month
     cost_per_call: 0.0001
-    cost_unit: "credit"
-    coverage: ["chinese", "general"]
-    desc: "博查搜索 API（中文）"
+    cost_unit: credit
+    coverage:
+    - chinese
+    - general
+    desc: 博查搜索 API（中文）
     headers:
       Authorization: Bearer {BOCHA_API_KEY}
       Content-Type: application/json
@@ -499,10 +704,11 @@ engines:
     url: https://api.bochaai.com/v1/web-search
   brave:
     enabled: false
-    label: "Brave"
+    label: Brave
     cost_tier: low
-    coverage: ["general"]
-    desc: "Brave Search API"
+    coverage:
+    - general
+    desc: Brave Search API
     extra_params:
       count: '{n}'
     format: json
@@ -522,15 +728,18 @@ engines:
       Query: '{query}'
       SearchType: web
     enabled: true
-    label: "字节搜索"
+    label: 字节搜索
     cost_tier: low
     qps: 5
     priority: 2
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["general", "news", "chinese"]
-    desc: "字节搜索 API，中文通用/news"
+    cost_unit: free
+    coverage:
+    - general
+    - news
+    - chinese
+    desc: 字节搜索 API，中文通用/news
     headers:
       Authorization: Bearer {WEB_SEARCH_API_KEY}
       Content-Type: application/json
@@ -546,31 +755,44 @@ engines:
     type: http
     url: https://open.feedcoopapi.com/search_api/web_search
   crossref:
-    enabled: false
-    label: "Crossref"
+    enabled: true
+    label: Crossref
     cost_tier: free
-    coverage: ["academic"]
-    desc: "Crossref DOI 元数据 API"
+    qps: 2
+    priority: 40
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    desc: Crossref DOI 元数据 API（免认证，礼貌池 mailto）
     extra_params:
       mailto: unified-search@local
       rows: '{n}'
-    format: json
     method: GET
     query_param: query
     timeout: 12
     type: http
     url: https://api.crossref.org/works
+    output_map:
+      items: message.items
+      item_title: title
+      item_url: URL
+      item_summary: publisher
+    headers:
+      User-Agent: argo-search/2.5 (mailto:unified-search@local)
   duckduckgo:
     enabled: true
-    label: "DuckDuckGo"
+    label: DuckDuckGo
     cost_tier: free
     qps: 5
     priority: 13
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["general"]
-    desc: "DuckDuckGo Instant Answer API（T2 替代）"
+    cost_unit: free
+    coverage:
+    - general
+    desc: DuckDuckGo Instant Answer API（T2 替代）
     format: json
     method: GET
     query_param: q
@@ -579,136 +801,172 @@ engines:
     url: https://api.duckduckgo.com/
   exa:
     enabled: true
-    label: "Exa语义搜索"
+    label: Exa语义搜索
     cost_tier: api
     qps: 1
     priority: 14
     limit: 1000
-    period: "month"
+    period: month
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["semantic", "general", "english", "chinese"]
-    desc: "Exa 语义搜索（embedding 匹配 + 内容摘要，1000次/月免费）"
+    cost_unit: free
+    coverage:
+    - semantic
+    - general
+    - english
+    - chinese
+    desc: Exa 语义搜索（embedding 匹配 + 内容摘要，1000次/月免费）
     timeout: 15
     type: exa
   eastmoney:
     enabled: true
-    label: "东财金融"
+    label: 东财金融
     cost_tier: free
     qps: 1
     priority: 3
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["finance", "stock", "fund"]
-    desc: "东方财富，金融数据首选"
+    cost_unit: free
+    coverage:
+    - finance
+    - stock
+    - fund
+    desc: 东方财富，金融数据首选
     timeout: 12
     type: eastmoney
   v2ex:
     enabled: true
-    label: "V2EX"
+    label: V2EX
     cost_tier: free
     qps: 3
     priority: 19
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "tech", "community", "discussion"]
-    desc: "V2EX（中文技术社区搜索）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - tech
+    - community
+    - discussion
+    desc: V2EX（中文技术社区搜索）
     timeout: 10
     type: v2ex
   google_scholar:
     enabled: true
-    label: "GoogleScholar"
+    label: GoogleScholar
     cost_tier: free
     qps: 2
     priority: 18
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["academic", "paper", "research"]
-    desc: "Google Scholar（学术论文搜索，HTTP 页面解析）"
+    cost_unit: free
+    coverage:
+    - academic
+    - paper
+    - research
+    desc: Google Scholar（学术论文搜索，HTTP 页面解析）
     timeout: 12
     type: google_scholar
   hackernews:
     enabled: true
-    label: "HackerNews"
+    label: HackerNews
     cost_tier: free
     qps: 5
     priority: 16
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["tech", "news", "discussion", "english"]
-    desc: "Hacker News（Algolia API，科技新闻+讨论）"
+    cost_unit: free
+    coverage:
+    - tech
+    - news
+    - discussion
+    - english
+    desc: Hacker News（Algolia API，科技新闻+讨论）
     timeout: 8
     type: hackernews
   stackoverflow:
     enabled: true
-    label: "StackOverflow"
+    label: StackOverflow
     cost_tier: free
     qps: 3
     priority: 17
     limit: 300
-    period: "day"
+    period: day
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["code", "programming", "qa", "english"]
-    desc: "Stack Overflow（Stack Exchange API，编程问答）"
+    cost_unit: free
+    coverage:
+    - code
+    - programming
+    - qa
+    - english
+    desc: Stack Overflow（Stack Exchange API，编程问答）
     timeout: 8
     type: stackoverflow
   ths_hot:
     enabled: true
-    label: "同花顺热点"
+    label: 同花顺热点
     cost_tier: free
     qps: 2
     priority: 20
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "stock", "hot", "theme"]
-    desc: "同花顺热点（当日强势股+题材归因，独家能力）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - stock
+    - hot
+    - theme
+    desc: 同花顺热点（当日强势股+题材归因，独家能力）
     timeout: 10
     type: ths_hot
   cls_telegraph:
     enabled: true
-    label: "财联社电报"
+    label: 财联社电报
     cost_tier: free
     qps: 2
     priority: 21
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "news", "telegraph", "realtime"]
-    desc: "财联社电报（全市场实时快讯，v1 API+本地签名零key）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - news
+    - telegraph
+    - realtime
+    desc: 财联社电报（全市场实时快讯，v1 API+本地签名零key）
     timeout: 10
     type: cls_telegraph
   em_global_news:
     enabled: true
-    label: "东财全球资讯"
+    label: 东财全球资讯
     cost_tier: free
     qps: 2
     priority: 22
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "news", "global", "finance"]
-    desc: "东财全球资讯（7×24 财经快讯）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - news
+    - global
+    - finance
+    desc: 东财全球资讯（7×24 财经快讯）
     timeout: 10
     type: em_global_news
   felo:
     body:
       query: '{query}'
     enabled: false
-    label: "Felo AI搜索"
+    label: Felo AI搜索
     cost_tier: paid
     qps: 1
     priority: 8
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "credit"
-    coverage: ["general", "tech"]
-    desc: "Felo AI 搜索 API"
+    cost_unit: credit
+    coverage:
+    - general
+    - tech
+    desc: Felo AI 搜索 API
     headers:
       Accept: application/json
       Authorization: Bearer {FELO_API_KEY}
@@ -720,16 +978,17 @@ engines:
     url: https://openapi.felo.ai/v2/chat
   github:
     enabled: true
-    label: "GitHub"
+    label: GitHub
     cost_tier: free
     qps: 5
     priority: 11
     limit: 1000
-    period: "day"
+    period: day
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["code"]
-    desc: "GitHub 代码搜索 API"
+    cost_unit: free
+    coverage:
+    - code
+    desc: GitHub 代码搜索 API
     extra_params:
       per_page: '{n}'
     format: json
@@ -748,10 +1007,12 @@ engines:
       search_size: '{n}'
       source: web
     enabled: false
-    label: "秘塔"
+    label: 秘塔
     cost_tier: low
-    coverage: ["chinese", "general"]
-    desc: "秘塔搜索 API（中文 AI 搜索）"
+    coverage:
+    - chinese
+    - general
+    desc: 秘塔搜索 API（中文 AI 搜索）
     headers:
       Authorization: Bearer {METASO_API_KEY}
       Content-Type: application/json
@@ -760,26 +1021,39 @@ engines:
     type: http
     url: https://metaso.cn/api/open/search
   openalex:
-    enabled: false
-    label: "OpenAlex"
+    enabled: true
+    label: OpenAlex
     cost_tier: free
-    coverage: ["academic"]
-    desc: "OpenAlex 开放学术 API"
+    qps: 2
+    priority: 39
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    desc: OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto）
     extra_params:
       mailto: unified-search@local
       per_page: '{n}'
-    format: json
     method: GET
     query_param: search
     timeout: 12
     type: http
     url: https://api.openalex.org/works
+    output_map:
+      items: results
+      item_title: title
+      item_url: id
+      item_summary: publication_year
+    headers:
+      User-Agent: argo-search/2.5 (mailto:unified-search@local)
   searxng:
     enabled: false
-    label: "SearXNG"
+    label: SearXNG
     cost_tier: free
-    coverage: ["general"]
-    desc: "SearXNG 直连（已废弃，由 T3 替代）"
+    coverage:
+    - general
+    desc: SearXNG 直连（已废弃，由 T3 替代）
     format: json
     method: GET
     query_param: q
@@ -788,15 +1062,16 @@ engines:
     url: http://127.0.0.1:8888/search
   semantic_scholar:
     enabled: true
-    label: "Semantic Scholar"
+    label: Semantic Scholar
     cost_tier: free
     qps: 2
     priority: 10
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["academic"]
-    desc: "Semantic Scholar API（备选）"
+    cost_unit: free
+    coverage:
+    - academic
+    desc: Semantic Scholar API（备选）
     format: json
     method: GET
     query_param: query
@@ -812,16 +1087,17 @@ engines:
       topic: general
       include_answer: basic
     enabled: true
-    label: "Tavily"
+    label: Tavily
     cost_tier: paid
     qps: 1.67
     priority: 5
     limit: 1000
-    period: "month"
+    period: month
     cost_per_call: 0.001
-    cost_unit: "credit"
-    coverage: ["general"]
-    desc: "Tavily AI 搜索 API"
+    cost_unit: credit
+    coverage:
+    - general
+    desc: Tavily AI 搜索 API
     headers:
       Content-Type: application/json
     method: POST
@@ -833,10 +1109,11 @@ engines:
       count: '{n}'
       query: '{query}'
     enabled: false
-    label: "UAPI"
+    label: UAPI
     cost_tier: free
-    coverage: ["general"]
-    desc: "UAPI 聚合搜索"
+    coverage:
+    - general
+    desc: UAPI 聚合搜索
     headers:
       Content-Type: application/json
     method: POST
@@ -845,15 +1122,17 @@ engines:
     url: https://uapis.cn/api/v1/search/aggregate
   wikipedia:
     enabled: true
-    label: "Wikipedia"
+    label: Wikipedia
     cost_tier: free
     qps: 10
     priority: 12
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["wiki", "factual"]
-    desc: "Wikipedia API（T2 替代）"
+    cost_unit: free
+    coverage:
+    - wiki
+    - factual
+    desc: Wikipedia API（T2 替代）
     extra_params:
       action: query
       format: json
@@ -869,10 +1148,12 @@ engines:
     url: https://en.wikipedia.org/w/api.php
   wolframalpha:
     enabled: false
-    label: "WolframAlpha"
+    label: WolframAlpha
     cost_tier: free
-    coverage: ["factual", "math"]
-    desc: "WolframAlpha 计算知识引擎"
+    coverage:
+    - factual
+    - math
+    desc: WolframAlpha 计算知识引擎
     extra_params:
       appid: '{WOLFRAM_APPID}'
       output: json
@@ -884,16 +1165,19 @@ engines:
     url: https://api.wolframalpha.com/v2/query
   zhihu:
     enabled: true
-    label: "知乎"
+    label: 知乎
     cost_tier: free
     qps: 2
     priority: 4
     limit: 1000
-    period: "day"
+    period: day
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "review", "opinion"]
-    desc: "知乎搜索，中文观点/评测"
+    cost_unit: free
+    coverage:
+    - chinese
+    - review
+    - opinion
+    desc: 知乎搜索，中文观点/评测
     format: json
     headers:
       Authorization: Bearer {ZHIHU_ACCESS_SECRET}
@@ -912,22 +1196,22 @@ engines:
     timeout: 10
     type: http
     url: https://developer.zhihu.com/api/v1/content/zhihu_search
-
   wechat_sogou:
     type: wechat_sogou
     enabled: true
-    label: "搜狗微信搜索"
+    label: 搜狗微信搜索
     cost_tier: free
     qps: 2
     priority: 5
-    coverage: ["chinese", "wechat", "article"]
-    desc: "搜狗微信搜索引擎（公众号文章，免登录）"
+    coverage:
+    - chinese
+    - wechat
+    - article
+    desc: 搜狗微信搜索引擎（公众号文章，免登录）
     timeout: 10
-
-  # ── 社交平台引擎 ────────────────────────────────────────────────────────────
   twitter:
     type: cli
-    label: "Twitter/X"
+    label: Twitter/X
     enabled: true
     cost_tier: free
     cmd:
@@ -936,12 +1220,12 @@ engines:
     search_args:
     - search
     - '{query}'
-    - '-n'
+    - -n
     - '{n}'
     env: {}
   reddit:
     type: cli
-    label: "Reddit"
+    label: Reddit
     enabled: true
     cost_tier: free
     cmd:
@@ -950,365 +1234,345 @@ engines:
     search_args:
     - search
     - '{query}'
-    - '-n'
+    - -n
     - '{n}'
     env: {}
-
-  # ── Local Search 子引擎（v2.1 上游化）──────────────────────────────────────
   local_bing:
     type: html
     enabled: true
-    label: "Bing本地"
+    label: Bing本地
     cost_tier: free
     qps: 5
     priority: 20
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.bing.com/search"
+    cost_unit: free
+    url: https://www.bing.com/search
     query_param: q
     extra_params:
       setlang: zh-Hans
     timeout: 8
-
   local_google:
     type: html
     enabled: false
-    label: "Google本地"
+    label: Google本地
     cost_tier: free
     qps: 3
     priority: 21
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.google.com/search"
+    cost_unit: free
+    url: https://www.google.com/search
     query_param: q
     extra_params:
       hl: zh-CN
     timeout: 8
-
   local_mojeek:
     type: html
     enabled: true
-    label: "Mojeek本地"
+    label: Mojeek本地
     cost_tier: free
     qps: 3
     priority: 22
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.mojeek.com/search"
+    cost_unit: free
+    url: https://www.mojeek.com/search
     query_param: q
     timeout: 10
-
   local_yandex:
     type: html
     enabled: false
-    label: "Yandex本地"
+    label: Yandex本地
     cost_tier: free
     qps: 3
     priority: 23
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://yandex.com/search/"
+    cost_unit: free
+    url: https://yandex.com/search/
     query_param: text
     timeout: 10
-
   local_startpage:
     type: html
     enabled: true
-    label: "Startpage本地"
+    label: Startpage本地
     cost_tier: free
     qps: 3
     priority: 24
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.startpage.com/do/dsearch"
+    cost_unit: free
+    url: https://www.startpage.com/do/dsearch
     query_param: query
     timeout: 10
-
   local_duckduckgo:
     type: html
     enabled: true
-    label: "DuckDuckGo本地"
+    label: DuckDuckGo本地
     cost_tier: free
     qps: 5
     priority: 25
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://html.duckduckgo.com/html/"
+    cost_unit: free
+    url: https://html.duckduckgo.com/html/
     query_param: q
     timeout: 8
-
   local_baidu:
     type: html
     enabled: true
-    label: "百度本地"
+    label: 百度本地
     cost_tier: free
     qps: 3
     priority: 26
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.baidu.com/s"
+    cost_unit: free
+    url: https://www.baidu.com/s
     query_param: wd
     extra_params:
       ie: utf-8
     timeout: 8
-
   local_sogou:
     type: html
     enabled: true
-    label: "搜狗本地"
+    label: 搜狗本地
     cost_tier: free
     qps: 3
     priority: 27
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.sogou.com/web"
+    cost_unit: free
+    url: https://www.sogou.com/web
     query_param: query
     timeout: 8
-
   local_arxiv:
     type: http
     enabled: true
-    label: "arXiv本地"
+    label: arXiv本地
     cost_tier: free
     qps: 1
     priority: 28
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: xml
     method: GET
     query_param: search_query
     extra_params:
       start: 0
-      max_results: "{n}"
+      max_results: '{n}'
     timeout: 15
-    url: "http://export.arxiv.org/api/query"
-
+    url: http://export.arxiv.org/api/query
   local_pubmed:
     type: http
     enabled: true
-    label: "PubMed本地"
+    label: PubMed本地
     cost_tier: free
     qps: 1
     priority: 29
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: term
     extra_params:
       db: pubmed
       retmode: json
-      retmax: "{n}"
+      retmax: '{n}'
     output_map:
-      items: "esearchresult.idlist"
-      item_title: "pmid"
-      item_url: "pmid"
-      item_summary: "pmid"
+      items: esearchresult.idlist
+      item_title: pmid
+      item_url: pmid
+      item_summary: pmid
     timeout: 12
-    url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-
+    url: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi
   local_crossref:
     type: http
     enabled: true
-    label: "Crossref本地"
+    label: Crossref本地
     cost_tier: free
     qps: 2
     priority: 30
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: query
     extra_params:
-      rows: "{n}"
+      rows: '{n}'
       mailto: unified-search@local
     output_map:
-      items: "message.items"
-      item_title: "title"
-      item_url: "URL"
-      item_summary: "abstract"
+      items: message.items
+      item_title: title
+      item_url: URL
+      item_summary: abstract
     timeout: 12
-    url: "https://api.crossref.org/works"
-
+    url: https://api.crossref.org/works
   local_semantic_scholar:
     type: http
     enabled: true
-    label: "Semantic Scholar本地"
+    label: Semantic Scholar本地
     cost_tier: free
     qps: 2
     priority: 31
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: query
     extra_params:
-      limit: "{n}"
+      limit: '{n}'
       fields: title,abstract,url
     output_map:
-      items: "data"
-      item_title: "title"
-      item_url: "url"
-      item_summary: "abstract"
+      items: data
+      item_title: title
+      item_url: url
+      item_summary: abstract
     timeout: 12
-    url: "https://api.semanticscholar.org/graph/v1/paper/search"
-
+    url: https://api.semanticscholar.org/graph/v1/paper/search
   local_bing_news:
     type: http
     enabled: true
-    label: "Bing News本地"
+    label: Bing News本地
     cost_tier: free
     qps: 3
     priority: 32
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: xml
     method: GET
     query_param: q
     extra_params:
       format: rss
     timeout: 8
-    url: "https://www.bing.com/news/search"
-
+    url: https://www.bing.com/news/search
   local_google_news:
     type: http
     enabled: true
-    label: "Google News本地"
+    label: Google News本地
     cost_tier: free
     qps: 3
     priority: 33
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: xml
     method: GET
     query_param: q
     timeout: 8
-    url: "https://news.google.com/rss/search"
-
+    url: https://news.google.com/rss/search
   local_github:
     type: http
     enabled: true
-    label: "GitHub本地"
+    label: GitHub本地
     cost_tier: free
     qps: 5
     priority: 35
     limit: 1000
-    period: "day"
+    period: day
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: q
     extra_params:
-      per_page: "{n}"
+      per_page: '{n}'
     headers:
       Accept: application/vnd.github.v3+json
       User-Agent: argo-search/2.1
     output_map:
-      items: "items"
-      item_title: "full_name"
-      item_url: "html_url"
-      item_summary: "description"
+      items: items
+      item_title: full_name
+      item_url: html_url
+      item_summary: description
     timeout: 10
-    url: "https://api.github.com/search/repositories"
-
+    url: https://api.github.com/search/repositories
   local_stackoverflow:
     type: http
     enabled: true
-    label: "StackOverflow本地"
+    label: StackOverflow本地
     cost_tier: free
     qps: 5
     priority: 36
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: q
     extra_params:
       site: stackoverflow
-      pagesize: "{n}"
+      pagesize: '{n}'
       order: desc
       sort: relevance
     output_map:
-      items: "items"
-      item_title: "title"
-      item_url: "link"
-      item_summary: "excerpt"
+      items: items
+      item_title: title
+      item_url: link
+      item_summary: excerpt
     timeout: 10
-    url: "https://api.stackexchange.com/2.3/search/advanced"
-
+    url: https://api.stackexchange.com/2.3/search/advanced
   local_gitlab:
     type: http
     enabled: true
-    label: "GitLab本地"
+    label: GitLab本地
     cost_tier: free
     qps: 3
     priority: 37
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: search
     extra_params:
-      per_page: "{n}"
+      per_page: '{n}'
       scope: projects
     output_map:
-      items: "."
-      item_title: "name_with_namespace"
-      item_url: "web_url"
-      item_summary: "description"
+      items: .
+      item_title: name_with_namespace
+      item_url: web_url
+      item_summary: description
     timeout: 10
-    url: "https://gitlab.com/api/v4/search"
-
+    url: https://gitlab.com/api/v4/search
   local_npm:
     type: http
     enabled: true
-    label: "NPM本地"
+    label: NPM本地
     cost_tier: free
     qps: 5
     priority: 38
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: text
     extra_params:
-      size: "{n}"
+      size: '{n}'
     output_map:
-      items: "objects"
-      item_title: "package.name"
-      item_url: "package.links.npm"
-      item_summary: "package.description"
+      items: objects
+      item_title: package.name
+      item_url: package.links.npm
+      item_summary: package.description
     timeout: 8
-    url: "https://registry.npmjs.org/-/v1/search"
-
+    url: https://registry.npmjs.org/-/v1/search
   local_wikipedia:
     type: http
     enabled: true
-    label: "Wikipedia本地"
+    label: Wikipedia本地
     cost_tier: free
     qps: 10
     priority: 39
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: srsearch
@@ -1316,26 +1580,25 @@ engines:
       action: query
       list: search
       format: json
-      srlimit: "{n}"
+      srlimit: '{n}'
     output_map:
-      items: "query.search"
-      item_title: "title"
-      item_url: "title"
-      item_summary: "snippet"
-      url_template: "https://en.wikipedia.org/wiki/{title}"
+      items: query.search
+      item_title: title
+      item_url: title
+      item_summary: snippet
+      url_template: https://en.wikipedia.org/wiki/{title}
     timeout: 8
-    url: "https://en.wikipedia.org/w/api.php"
-
+    url: https://en.wikipedia.org/w/api.php
   local_wiktionary:
     type: http
     enabled: true
-    label: "Wiktionary本地"
+    label: Wiktionary本地
     cost_tier: free
     qps: 5
     priority: 40
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: srsearch
@@ -1343,26 +1606,25 @@ engines:
       action: query
       list: search
       format: json
-      srlimit: "{n}"
+      srlimit: '{n}'
     output_map:
-      items: "query.search"
-      item_title: "title"
-      item_url: "title"
-      item_summary: "snippet"
-      url_template: "https://en.wiktionary.org/wiki/{title}"
+      items: query.search
+      item_title: title
+      item_url: title
+      item_summary: snippet
+      url_template: https://en.wiktionary.org/wiki/{title}
     timeout: 8
-    url: "https://en.wiktionary.org/w/api.php"
-
+    url: https://en.wiktionary.org/w/api.php
   local_wikiquote:
     type: http
     enabled: true
-    label: "Wikiquote本地"
+    label: Wikiquote本地
     cost_tier: free
     qps: 5
     priority: 41
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: srsearch
@@ -1370,75 +1632,72 @@ engines:
       action: query
       list: search
       format: json
-      srlimit: "{n}"
+      srlimit: '{n}'
     output_map:
-      items: "query.search"
-      item_title: "title"
-      item_url: "title"
-      item_summary: "snippet"
-      url_template: "https://en.wikiquote.org/wiki/{title}"
+      items: query.search
+      item_title: title
+      item_url: title
+      item_summary: snippet
+      url_template: https://en.wikiquote.org/wiki/{title}
     timeout: 8
-    url: "https://en.wikiquote.org/w/api.php"
-
+    url: https://en.wikiquote.org/w/api.php
   local_imdb:
     type: html
     enabled: false
-    label: "IMDb本地"
+    label: IMDb本地
     cost_tier: free
     qps: 2
     priority: 42
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.imdb.com/find/"
+    cost_unit: free
+    url: https://www.imdb.com/find/
     query_param: q
     extra_params:
       ref_: nv_sr_sm
     timeout: 10
-
   local_goodreads:
     type: html
     enabled: false
-    label: "Goodreads本地"
+    label: Goodreads本地
     cost_tier: free
     qps: 2
     priority: 43
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    url: "https://www.goodreads.com/search"
+    cost_unit: free
+    url: https://www.goodreads.com/search
     query_param: q
     extra_params:
       search_type: books
     timeout: 10
-
   local_openstreetmap:
     type: http
     enabled: true
-    label: "OpenStreetMap本地"
+    label: OpenStreetMap本地
     cost_tier: free
     qps: 1
     priority: 44
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
+    cost_unit: free
     format: json
     method: GET
     query_param: q
     extra_params:
       format: json
-      limit: "{n}"
+      limit: '{n}'
     output_map:
-      items: "."
-      item_title: "display_name"
-      item_url: "osm_id"
-      item_summary: "type"
-      url_template: "https://www.openstreetmap.org/{osm_type}/{osm_id}"
+      items: .
+      item_title: display_name
+      item_url: osm_id
+      item_summary: type
+      url_template: https://www.openstreetmap.org/{osm_type}/{osm_id}
     timeout: 8
-    url: "https://nominatim.openstreetmap.org/search"
+    url: https://nominatim.openstreetmap.org/search
   xiaohongshu:
     type: cli
-    label: "小红书"
+    label: 小红书
     enabled: true
     cost_tier: free
     cmd:
@@ -1447,12 +1706,12 @@ engines:
     search_args:
     - search
     - '{query}'
-    - '-n'
+    - -n
     - '{n}'
     env: {}
   bilibili:
     type: cli
-    label: "B站"
+    label: B站
     enabled: true
     cost_tier: free
     cmd:
@@ -1461,12 +1720,12 @@ engines:
     search_args:
     - search
     - '{query}'
-    - '-n'
+    - -n
     - '{n}'
     env: {}
   weibo:
     type: cli
-    label: "微博"
+    label: 微博
     enabled: true
     cost_tier: free
     cmd:
@@ -1475,332 +1734,886 @@ engines:
     search_args:
     - search
     - '{query}'
-    - '-n'
+    - -n
     - '{n}'
     env: {}
-
-  # ── 垂直内容引擎（v2.4 新增：梗百科 / 俚语 / 热榜）──────────────────────
   itotii:
     type: itotii
     enabled: true
-    label: "itotii梗百科"
+    label: itotii梗百科
     cost_tier: free
     qps: 3
     priority: 23
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "meme", "slang", "culture"]
-    desc: "itotii 梗百科（中文流行语/网络梗溯源，WordPress REST，免认证）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - meme
+    - slang
+    - culture
+    desc: itotii 梗百科（中文流行语/网络梗溯源，WordPress REST，免认证）
     timeout: 10
   urban_dictionary:
     type: http
     enabled: true
-    label: "Urban Dictionary"
+    label: Urban Dictionary
     cost_tier: free
     qps: 3
     priority: 24
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["english", "slang", "meme"]
-    desc: "Urban Dictionary（英文俚语定义与例句，官方 API）"
+    cost_unit: free
+    coverage:
+    - english
+    - slang
+    - meme
+    desc: Urban Dictionary（英文俚语定义与例句，官方 API）
     format: json
     method: GET
     query_param: term
     output_map:
-      items: "list"
-      item_title: "word"
-      item_url: "permalink"
-      item_summary: "definition"
+      items: list
+      item_title: word
+      item_url: permalink
+      item_summary: definition
     timeout: 8
-    url: "https://api.urbandictionary.com/v0/define"
+    url: https://api.urbandictionary.com/v0/define
   know_your_meme:
     type: html
     enabled: true
-    label: "Know Your Meme"
+    label: Know Your Meme
     cost_tier: free
     qps: 2
     priority: 25
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["english", "meme", "culture"]
-    desc: "Know Your Meme（英文 meme 词条溯源，HTML 解析）"
-    url: "https://knowyourmeme.com/search"
+    cost_unit: free
+    coverage:
+    - english
+    - meme
+    - culture
+    desc: Know Your Meme（英文 meme 词条溯源，HTML 解析）
+    url: https://knowyourmeme.com/search
     query_param: q
     timeout: 10
   zh_wikipedia:
     type: http
     enabled: true
-    label: "中文维基百科"
+    label: 中文维基百科
     cost_tier: free
     qps: 2
     priority: 26
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "wiki", "factual"]
-    desc: "中文维基百科（MediaWiki API，与 en.wikipedia 同构）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - wiki
+    - factual
+    desc: 中文维基百科（MediaWiki API，与 en.wikipedia 同构）
     format: json
     method: GET
     query_param: srsearch
     headers:
-      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36
     extra_params:
       action: query
       list: search
       format: json
-      srlimit: "{n}"
+      srlimit: '{n}'
     output_map:
-      items: "query.search"
-      item_title: "title"
-      item_url: "title"
-      item_summary: "snippet"
-      url_template: "https://zh.wikipedia.org/wiki/{title}"
+      items: query.search
+      item_title: title
+      item_url: title
+      item_summary: snippet
+      url_template: https://zh.wikipedia.org/wiki/{title}
     timeout: 8
-    url: "https://zh.wikipedia.org/w/api.php"
+    url: https://zh.wikipedia.org/w/api.php
   baidu_hot:
     type: baidu_hot
     enabled: true
-    label: "百度热搜"
+    label: 百度热搜
     cost_tier: free
     qps: 2
     priority: 27
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "hot", "trending", "realtime"]
-    desc: "百度热搜（实时热搜榜，HTML 解析，免认证）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - hot
+    - trending
+    - realtime
+    desc: 百度热搜（实时热搜榜，HTML 解析，免认证）
     timeout: 10
   toutiao_hot:
     type: toutiao_hot
     enabled: true
-    label: "今日头条热榜"
+    label: 今日头条热榜
     cost_tier: free
     qps: 2
     priority: 28
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "hot", "trending", "realtime"]
-    desc: "今日头条热榜（hot-board JSON，免认证）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - hot
+    - trending
+    - realtime
+    desc: 今日头条热榜（hot-board JSON，免认证）
     timeout: 10
   bilibili_hot:
     type: bilibili_hot
     enabled: true
-    label: "B站热搜"
+    label: B站热搜
     cost_tier: free
     qps: 2
     priority: 29
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "hot", "trending", "bilibili"]
-    desc: "B站热搜（search/square 热搜词，免认证）"
+    cost_unit: free
+    coverage:
+    - chinese
+    - hot
+    - trending
+    - bilibili
+    desc: B站热搜（search/square 热搜词，免认证）
     timeout: 10
-
-  # ── 广义垂直引擎（v2.5 新增）───────────────────────────────────────────────
   itunes:
     type: http
     enabled: true
-    label: "iTunes 媒体库"
+    label: iTunes 媒体库
     cost_tier: free
     qps: 3
     priority: 30
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["media", "music", "movie", "podcast"]
-    desc: "iTunes Search API（音乐/影视/播客/应用，免认证）"
+    cost_unit: free
+    coverage:
+    - media
+    - music
+    - movie
+    - podcast
+    desc: iTunes Search API（音乐/影视/播客/应用，免认证）
     format: json
     method: GET
     query_param: term
     extra_params:
-      limit: "{n}"
+      limit: '{n}'
     output_map:
-      items: "results"
-      item_title: "trackName"
-      item_url: "trackViewUrl"
-      item_summary: "artistName"
+      items: results
+      item_title: trackName
+      item_url: trackViewUrl
+      item_summary: artistName
     timeout: 8
-    url: "https://itunes.apple.com/search"
+    url: https://itunes.apple.com/search
   openverse:
     type: http
     enabled: true
-    label: "Openverse 图库"
+    label: Openverse 图库
     cost_tier: free
     qps: 3
     priority: 31
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["image", "media", "cc"]
-    desc: "Openverse 开放版权图库（免认证，CC 素材）"
+    cost_unit: free
+    coverage:
+    - image
+    - media
+    - cc
+    desc: Openverse 开放版权图库（免认证，CC 素材）
     format: json
     method: GET
     query_param: q
     headers:
-      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0 Safari/537.36"
+      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0 Safari/537.36
     extra_params:
-      page_size: "{n}"
+      page_size: '{n}'
     output_map:
-      items: "results"
-      item_title: "title"
-      item_url: "foreign_landing_url"
-      item_summary: "creator"
+      items: results
+      item_title: title
+      item_url: foreign_landing_url
+      item_summary: creator
     timeout: 10
-    url: "https://api.openverse.org/v1/images"
+    url: https://api.openverse.org/v1/images
   coingecko:
     type: http
     enabled: true
-    label: "CoinGecko 币种"
+    label: CoinGecko 币种
     cost_tier: free
     qps: 3
     priority: 32
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["crypto", "finance"]
-    desc: "CoinGecko 币种搜索（免认证）"
+    cost_unit: free
+    coverage:
+    - crypto
+    - finance
+    desc: CoinGecko 币种搜索（免认证）
     format: json
     method: GET
     query_param: query
     output_map:
-      items: "coins"
-      item_title: "name"
-      item_url: "id"
-      item_summary: "symbol"
-      url_template: "https://www.coingecko.com/en/coins/{id}"
+      items: coins
+      item_title: name
+      item_url: id
+      item_summary: symbol
+      url_template: https://www.coingecko.com/en/coins/{id}
     timeout: 10
-    url: "https://api.coingecko.com/api/v3/search"
+    url: https://api.coingecko.com/api/v3/search
   wikidata:
     type: http
     enabled: true
-    label: "维基数据实体"
+    label: 维基数据实体
     cost_tier: free
     qps: 2
     priority: 33
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["entity", "knowledge", "wiki"]
-    desc: "Wikidata 实体搜索（wbsearchentities，免认证，限流较严）"
+    cost_unit: free
+    coverage:
+    - entity
+    - knowledge
+    - wiki
+    desc: Wikidata 实体搜索（wbsearchentities，免认证，限流较严）
     format: json
     method: GET
     query_param: search
     headers:
-      User-Agent: "argo-search/2.4 (unified-search@local)"
+      User-Agent: argo-search/2.4 (unified-search@local)
     extra_params:
       action: wbsearchentities
       format: json
       language: zh
       uselang: zh
-      limit: "{n}"
+      limit: '{n}'
     output_map:
-      items: "search"
-      item_title: "label"
-      item_url: "url"
-      item_summary: "description"
+      items: search
+      item_title: label
+      item_url: url
+      item_summary: description
     timeout: 10
-    url: "https://www.wikidata.org/w/api.php"
+    url: https://www.wikidata.org/w/api.php
   crates:
     type: http
     enabled: true
-    label: "crates.io 包"
+    label: crates.io 包
     cost_tier: free
     qps: 2
     priority: 34
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["code", "rust", "package"]
-    desc: "crates.io Rust 包搜索（免认证，需 UA）"
+    cost_unit: free
+    coverage:
+    - code
+    - rust
+    - package
+    desc: crates.io Rust 包搜索（免认证，需 UA）
     format: json
     method: GET
     query_param: q
     headers:
-      User-Agent: "argo-search/2.4 (unified-search@local)"
+      User-Agent: argo-search/2.4 (unified-search@local)
     extra_params:
-      per_page: "{n}"
+      per_page: '{n}'
     output_map:
-      items: "crates"
-      item_title: "name"
-      item_url: "name"
-      item_summary: "description"
-      url_template: "https://crates.io/crates/{name}"
+      items: crates
+      item_title: name
+      item_url: name
+      item_summary: description
+      url_template: https://crates.io/crates/{name}
     timeout: 10
-    url: "https://crates.io/api/v1/crates"
+    url: https://crates.io/api/v1/crates
   musicbrainz:
     type: http
     enabled: true
-    label: "MusicBrainz 音乐人"
+    label: MusicBrainz 音乐人
     cost_tier: free
     qps: 1
     priority: 35
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["music", "artist", "metadata"]
-    desc: "MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）"
+    cost_unit: free
+    coverage:
+    - music
+    - artist
+    - metadata
+    desc: MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）
     format: json
     method: GET
     query_param: query
     headers:
-      User-Agent: "argo-search/2.4 (unified-search@local)"
+      User-Agent: argo-search/2.4 (unified-search@local)
     extra_params:
       fmt: json
-      limit: "{n}"
+      limit: '{n}'
     output_map:
-      items: "artists"
-      item_title: "name"
-      item_url: "id"
-      item_summary: "disambiguation"
-      url_template: "https://musicbrainz.org/artist/{id}"
+      items: artists
+      item_title: name
+      item_url: id
+      item_summary: disambiguation
+      url_template: https://musicbrainz.org/artist/{id}
     timeout: 10
-    url: "https://musicbrainz.org/ws/2/artist"
+    url: https://musicbrainz.org/ws/2/artist
   open_library:
     type: open_library
     enabled: true
-    label: "Open Library 图书"
+    label: Open Library 图书
     cost_tier: free
     qps: 3
     priority: 36
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["book", "library"]
-    desc: "Open Library 图书搜索（免认证）"
+    cost_unit: free
+    coverage:
+    - book
+    - library
+    desc: Open Library 图书搜索（免认证）
     timeout: 10
   free_dictionary:
     type: free_dictionary
     enabled: true
-    label: "英英词典"
+    label: 英英词典
     cost_tier: free
     qps: 3
     priority: 37
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["dictionary", "english", "word"]
-    desc: "dictionaryapi.dev 英英词典（免认证，响应为数组）"
+    cost_unit: free
+    coverage:
+    - dictionary
+    - english
+    - word
+    desc: dictionaryapi.dev 英英词典（免认证，响应为数组）
     timeout: 8
   moegirl:
     type: html
     enabled: true
-    label: "萌娘百科"
+    label: 萌娘百科
     cost_tier: free
     qps: 2
     priority: 38
-    period: "second"
+    period: second
     cost_per_call: 0.0
-    cost_unit: "free"
-    coverage: ["chinese", "anime", "acg", "wiki"]
-    desc: "萌娘百科（zh.moegirl.org.cn 搜索页 HTML 解析，免认证）"
-    url: "https://zh.moegirl.org.cn/index.php"
+    cost_unit: free
+    coverage:
+    - chinese
+    - anime
+    - acg
+    - wiki
+    desc: 萌娘百科（zh.moegirl.org.cn 搜索页 HTML 解析，免认证）
+    url: https://zh.moegirl.org.cn/index.php
     query_param: search
     timeout: 12
-
+  baidu_baike:
+    type: baidu_baike
+    enabled: true
+    label: 百度百科
+    cost_tier: free
+    qps: 2
+    priority: 41
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - chinese
+    - encyclopedia
+    - reference
+    desc: 百度百科词条（suggest + OpenAPI 卡片，免认证）
+    timeout: 8
+  pypi:
+    type: pypi
+    enabled: true
+    label: PyPI
+    cost_tier: free
+    qps: 3
+    priority: 42
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - code
+    - python
+    - package
+    desc: PyPI 包查询（/pypi/{name}/json 精确解析，免认证）
+    timeout: 10
+  npm:
+    type: http
+    enabled: true
+    label: npm
+    cost_tier: free
+    qps: 3
+    priority: 43
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - code
+    - javascript
+    - package
+    desc: npm 包搜索（registry.npmjs.org，免认证）
+    format: json
+    method: GET
+    query_param: text
+    extra_params:
+      size: '{n}'
+    output_map:
+      items: objects
+      item_title: package.name
+      item_url: package.links.npm
+      item_summary: package.description
+    timeout: 8
+    url: https://registry.npmjs.org/-/v1/search
+    headers:
+      User-Agent: argo-search/2.5
+  huggingface:
+    type: http
+    enabled: true
+    label: Hugging Face
+    cost_tier: free
+    qps: 2
+    priority: 44
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - ml
+    - model
+    - dataset
+    - code
+    desc: Hugging Face 模型搜索（免认证）
+    format: json
+    method: GET
+    query_param: search
+    extra_params:
+      limit: '{n}'
+    output_map:
+      items: .
+      item_title: id
+      item_url: id
+      item_summary: pipeline_tag
+      url_template: https://huggingface.co/{id}
+    timeout: 10
+    url: https://huggingface.co/api/models
+    headers:
+      User-Agent: argo-search/2.5
+  mdn:
+    type: http
+    enabled: true
+    label: MDN Web Docs
+    cost_tier: free
+    qps: 3
+    priority: 45
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - docs
+    - web
+    - javascript
+    - css
+    - html
+    desc: MDN Web Docs 搜索（en/官方 API，免认证）
+    format: json
+    method: GET
+    query_param: q
+    extra_params:
+      locale: en-US
+    output_map:
+      items: documents
+      item_title: title
+      item_url: mdn_url
+      item_summary: summary
+      url_template: https://developer.mozilla.org{mdn_url}
+    timeout: 8
+    url: https://developer.mozilla.org/api/v1/search
+    headers:
+      User-Agent: argo-search/2.5
+  juejin:
+    type: juejin
+    enabled: true
+    label: 掘金
+    cost_tier: free
+    qps: 2
+    priority: 46
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - chinese
+    - tech
+    - community
+    desc: 掘金技术文章搜索（免认证）
+    timeout: 10
+  europepmc:
+    type: http
+    enabled: true
+    label: Europe PMC
+    cost_tier: free
+    qps: 2
+    priority: 47
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - biomedical
+    desc: Europe PMC 生物医学文献（免认证，SS 429 后备）
+    method: GET
+    query_param: query
+    extra_params:
+      format: json
+      pageSize: '{n}'
+    output_map:
+      items: resultList.result
+      item_title: title
+      item_url: doi
+      item_summary: authorString
+      url_template: https://doi.org/{doi}
+    timeout: 12
+    url: https://www.ebi.ac.uk/europepmc/webservices/rest/search
+    headers:
+      User-Agent: argo-search/2.5
+  dblp:
+    type: http
+    enabled: true
+    label: DBLP
+    cost_tier: free
+    qps: 1
+    priority: 48
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - cs
+    desc: DBLP 计算机科学文献（免认证，偶发 SSL 抖动）
+    method: GET
+    query_param: q
+    extra_params:
+      format: json
+      h: '{n}'
+    output_map:
+      items: result.hits.hit
+      item_title: info.title
+      item_url: info.url
+      item_summary: info.venue
+    timeout: 12
+    url: https://dblp.uni-trier.de/search/publ/api
+    headers:
+      User-Agent: argo-search/2.5
+      Accept: application/json
+  clinicaltrials:
+    type: clinicaltrials
+    enabled: true
+    label: ClinicalTrials
+    cost_tier: free
+    qps: 2
+    priority: 49
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - medical
+    - clinical
+    desc: ClinicalTrials.gov v2 临床试验（免认证）
+    timeout: 12
+  openfda:
+    type: openfda
+    enabled: true
+    label: openFDA
+    cost_tier: free
+    qps: 2
+    priority: 50
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - medical
+    - drug
+    desc: openFDA 药品标签（免认证）
+    timeout: 12
+  docker_hub:
+    type: http
+    enabled: true
+    label: Docker Hub
+    cost_tier: free
+    qps: 2
+    priority: 51
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - code
+    - infra
+    - package
+    desc: Docker Hub 镜像搜索（免认证）
+    format: json
+    method: GET
+    query_param: query
+    extra_params:
+      page_size: '{n}'
+    output_map:
+      items: results
+      item_title: repo_name
+      item_url: repo_name
+      item_summary: short_description
+      url_template: https://hub.docker.com/r/{repo_name}
+    timeout: 10
+    url: https://hub.docker.com/v2/search/repositories/
+    headers:
+      User-Agent: argo-search/2.5
+  devto:
+    type: http
+    enabled: true
+    label: DEV.to
+    cost_tier: free
+    qps: 2
+    priority: 52
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - tech
+    - community
+    - english
+    desc: DEV.to 技术文章搜索（免认证）
+    method: GET
+    query_param: q
+    output_map:
+      items: .
+      item_title: title
+      item_url: url
+      item_summary: description
+    timeout: 10
+    url: https://dev.to/api/articles/search
+    headers:
+      User-Agent: argo-search/2.5
+  archive_org:
+    type: http
+    enabled: true
+    label: Internet Archive
+    cost_tier: free
+    qps: 1
+    priority: 53
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - archive
+    - history
+    - reference
+    desc: Internet Archive 高级搜索（免认证）
+    method: GET
+    query_param: q
+    extra_params:
+      fl[]: identifier,title
+      rows: '{n}'
+      output: json
+    output_map:
+      items: response.docs
+      item_title: title
+      item_url: identifier
+      item_summary: identifier
+      url_template: https://archive.org/details/{identifier}
+    timeout: 12
+    url: https://archive.org/advancedsearch.php
+    headers:
+      User-Agent: argo-search/2.5
+  steam:
+    type: http
+    enabled: true
+    label: Steam
+    cost_tier: free
+    qps: 2
+    priority: 54
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - game
+    - media
+    desc: Steam 商店搜索（免认证）
+    format: json
+    method: GET
+    query_param: term
+    extra_params:
+      l: english
+      cc: US
+    output_map:
+      items: items
+      item_title: name
+      item_url: id
+      item_summary: metascore
+      url_template: https://store.steampowered.com/app/{id}
+    timeout: 10
+    url: https://store.steampowered.com/api/storesearch/
+    headers:
+      User-Agent: argo-search/2.5
+  polymarket:
+    type: http
+    enabled: true
+    label: Polymarket
+    cost_tier: free
+    qps: 2
+    priority: 55
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - prediction
+    - social
+    desc: Polymarket 预测市场搜索（叙事源，非事实真值）
+    method: GET
+    query_param: q
+    output_map:
+      items: events
+      item_title: title
+      item_url: slug
+      item_summary: description
+      url_template: https://polymarket.com/event/{slug}
+    timeout: 10
+    url: https://gamma-api.polymarket.com/public-search
+    headers:
+      User-Agent: argo-search/2.5
+  finviz:
+    type: finviz
+    enabled: true
+    label: Finviz
+    cost_tier: free
+    qps: 2
+    priority: 56
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - us_stock
+    desc: Finviz 美股快照（HTML，免认证）
+    timeout: 10
+  seeking_alpha:
+    type: seeking_alpha
+    enabled: true
+    label: Seeking Alpha
+    cost_tier: free
+    qps: 1
+    priority: 57
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - us_stock
+    desc: Seeking Alpha 美股分析（HTML，反爬较强）
+    timeout: 12
+  jin10:
+    type: jin10
+    enabled: true
+    label: 金十数据
+    cost_tier: free
+    qps: 2
+    priority: 58
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - news
+    desc: 金十数据财经快讯（免认证）
+    timeout: 8
+  models_dev:
+    type: models_dev
+    enabled: true
+    label: models.dev
+    cost_tier: free
+    qps: 1
+    priority: 59
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - ml
+    - model
+    - pricing
+    desc: models.dev AI 模型目录（全量缓存，免认证）
+    timeout: 15
+  octen:
+    type: octen
+    enabled: true
+    label: Octen
+    cost_tier: api
+    qps: 3
+    priority: 20
+    period: second
+    cost_per_call: 0.0
+    cost_unit: api
+    coverage:
+    - general
+    - tech
+    - semantic
+    desc: Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search）
+    timeout: 6
+  qweather:
+    type: qweather
+    enabled: true
+    label: 和风天气
+    cost_tier: free
+    qps: 2
+    priority: 60
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - weather
+    desc: 和风天气实时天气（需 QWEATHER_KEY）
+    timeout: 8
+  wenshu:
+    type: wenshu
+    enabled: true
+    label: 裁判文书网
+    cost_tier: free
+    qps: 1
+    priority: 61
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - legal
+    desc: 中国裁判文书网（反爬较强，尽力而为）
+    timeout: 12
+  zhihu_global:
+    type: http
+    enabled: true
+    label: 知乎全局搜索
+    cost_tier: api
+    qps: 2
+    priority: 35
+    period: second
+    cost_per_call: 0.0
+    cost_unit: api
+    coverage:
+    - chinese
+    - community
+    desc: 知乎开放平台全局搜索（需 ZHIHU_ACCESS_SECRET）
+    format: json
+    headers:
+      Authorization: Bearer {ZHIHU_ACCESS_SECRET}
+      Content-Type: application/json
+      X-Request-Timestamp: '{TIMESTAMP}'
+    method: GET
+    query_param: Query
+    extra_params:
+      Count: '{n}'
+    output_map:
+      items: Data.Items
+      item_title: Title
+      item_url: Url
+      item_summary: ContentText
+      item_source: AuthorName
+    timeout: 10
+    url: https://developer.zhihu.com/api/v1/content/global_search
 execution:
   default_timeout: 8
   max_parallel_engines: 3
@@ -1821,7 +2634,6 @@ execution:
       max_cost_per_query: 0.005
       allow_paid: false
       quota_threshold: 0.2
-
 output:
   format: auto
   include_routing_decision: true

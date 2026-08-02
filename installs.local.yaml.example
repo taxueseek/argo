@@ -1,0 +1,11 @@
+# 本机消费者入口声明（复制为 installs.local.yaml 后按需改路径）。
+# installs.local.yaml 应加入 .gitignore，不进仓库。
+#
+# 作用：python3 scripts/link_source.py 会读取 link_targets，
+# 把下列路径做成指向「本仓库真源」的符号链接（不复制、不写死默认路径）。
+#
+# MCP / Skill 宿主各自约定目录不同；只在你本机列出需要出现 argo 名字的入口即可。
+
+link_targets:
+  # - ~/.claude/skills/argo
+  # - ~/.agents/skills/argo

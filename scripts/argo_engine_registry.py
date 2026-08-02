@@ -26,16 +26,38 @@ LOCAL_SEARCH_DIR = ARGO_DIR / "sub-skills" / "local-search"
 LOCAL_SEARCH_CONFIG = LOCAL_SEARCH_DIR / "config.yaml"
 HEALTH_STATE_PATH = Path(os.path.expanduser("~/.cache/unified-search")) / "argo_engine_health.json"
 
+# ── YAML mtime 缓存（route 热路径会高频调用 list_local_engines） ──────────────
+_yaml_cache: dict[str, Any] | None = None
+_yaml_mtime: float = -1.0
+_yaml_path_key: str = ""
+
 
 def _load_yaml(path: Path) -> dict:
-    if not path.exists():
+    """按 mtime 缓存 YAML；同一文件重复解析是 route 最大 CPU 开销。"""
+    global _yaml_cache, _yaml_mtime, _yaml_path_key
+    path_key = str(path)
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
         return {}
+    if (
+        _yaml_cache is not None
+        and _yaml_path_key == path_key
+        and mtime == _yaml_mtime
+    ):
+        return _yaml_cache
     try:
         import yaml
-        with open(path) as f:
-            return yaml.safe_load(f) or {}
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
     except Exception:
-        return {}
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    _yaml_cache = data
+    _yaml_mtime = mtime
+    _yaml_path_key = path_key
+    return data
 
 
 class EngineRegistry:
@@ -43,6 +65,8 @@ class EngineRegistry:
 
     def __init__(self):
         self._health: dict = {}
+        self._local_names_cache: list[str] | None = None
+        self._local_names_mtime: float = -1.0
         self._load_health()
 
     def _load_health(self):
@@ -55,7 +79,9 @@ class EngineRegistry:
     def _save_health(self):
         try:
             HEALTH_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            HEALTH_STATE_PATH.write_text(json.dumps(self._health, ensure_ascii=False, indent=2))
+            HEALTH_STATE_PATH.write_text(
+                json.dumps(self._health, ensure_ascii=False, separators=(",", ":"))
+            )
         except Exception:
             pass
 
@@ -65,6 +91,8 @@ class EngineRegistry:
         engines = cfg.get("engines", {})
         result = {}
         for name, spec in engines.items():
+            if not isinstance(spec, dict):
+                continue
             merged = dict(spec)
             merged["name"] = name
             merged["_source"] = "local-search"
@@ -82,13 +110,34 @@ class EngineRegistry:
         return bool(health.get("available", True))
 
     def list_local_engines(self, available_only: bool = False) -> list[str]:
-        """列出 local-search 子引擎名。"""
-        result = []
-        for name, spec in self.get_local_search_engines().items():
+        """列出 local-search 子引擎名（mtime 缓存全量列表）。"""
+        global _yaml_mtime
+        # 全量列表可缓存；available_only 需结合 health 过滤
+        if not available_only:
+            try:
+                mtime = LOCAL_SEARCH_CONFIG.stat().st_mtime
+            except OSError:
+                mtime = -1.0
+            if (
+                self._local_names_cache is not None
+                and mtime == self._local_names_mtime
+            ):
+                return list(self._local_names_cache)
+
+        engines = self.get_local_search_engines()
+        names = []
+        for name, spec in engines.items():
             if available_only and not spec.get("available", True):
                 continue
-            result.append(name)
-        return result
+            names.append(name)
+
+        if not available_only:
+            try:
+                self._local_names_mtime = LOCAL_SEARCH_CONFIG.stat().st_mtime
+            except OSError:
+                self._local_names_mtime = -1.0
+            self._local_names_cache = list(names)
+        return names
 
     def update_health(self, name: str, available: bool, **extra):
         """更新引擎健康状态并持久化。"""
