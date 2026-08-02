@@ -152,12 +152,285 @@ def _build_em_global_news_engine(spec: dict[str, Any]) -> Any:
 
 
 
+# ── 东财妙想搜索（官方权威信源） ─────────────────────────────────────────────
+
+def _build_em_miaoxiang_engine(spec: dict[str, Any]) -> Any:
+    """东财妙想搜索（mkapi2.dfcfs.com/finskillshub，需 EASTMONEY_APIKEY）。
+
+    官方金融信源智能筛选：研报/公告/政策/解读，authorityLevel 权威分级，
+    比公开 search-api-web 接口更适合金融资讯场景。
+    """
+    timeout = spec.get("timeout", 12)
+    url = "https://mkapi2.dfcfs.com/finskillshub/api/claw/news-search"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import json as _json
+        to = _timeout or timeout
+        key = os.environ.get("EASTMONEY_APIKEY") or os.environ.get("ARGO_EASTMONEY_APIKEY")
+        if not key:
+            logger.warning("妙想搜索缺 EASTMONEY_APIKEY")
+            return []
+        body = _json.dumps({"query": query, "size": min(n + 3, 15)}).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=body, method="POST",
+            headers={
+                "apikey": key,
+                "Content-Type": "application/json",
+                "User-Agent": "argo-search/2.4 (unified-search@local)",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = _json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"妙想搜索失败: {e}")
+            return []
+        items = []
+        try:
+            items = data["data"]["data"]["llmSearchResponse"]["data"] or []
+        except (KeyError, TypeError):
+            logger.warning("妙想搜索返回结构异常")
+            return []
+        results = []
+        seen: set[str] = set()
+        for it in items:
+            title = (it.get("title") or "").strip()
+            if not title or title in seen:
+                continue
+            seen.add(title)
+            content = (it.get("content") or "").strip().replace("\n", " ")
+            date = it.get("date") or ""
+            authority = it.get("authorityLevel") or ""
+            info_type = it.get("informationType") or ""
+            parts = [p for p in (date, authority, info_type, content[:200]) if p]
+            results.append({
+                "title": title[:120],
+                "url": it.get("jumpUrl") or "https://eastmoney.com",
+                "snippet": " | ".join(parts)[:280],
+                "source": "em_miaoxiang",
+                "score": 0.85,
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+# ── 巨潮资讯公告引擎（官方公告） ──────────────────────────────────────────────
+
+def _build_cninfo_engine(spec: dict[str, Any]) -> Any:
+    """巨潮资讯网官方公告检索（www.cninfo.com.cn/new/hisAnnouncement/query）。
+
+    A 股上市公司公告第一官方源，覆盖沪深京三所，免认证。
+    查询词命中公司名/公告标题关键词，返回标题/日期/PDF 原文链接。
+    """
+    timeout = spec.get("timeout", 12)
+    url = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+
+        def _search_once(keyword: str) -> list[dict[str, Any]]:
+            body = up.urlencode({
+                "pageNum": "1",
+                "pageSize": str(min(n + 2, 15)),
+                "column": "szse",
+                "tabName": "fulltext",
+                "plate": "", "stock": "", "searchkey": keyword,
+                "secid": "", "category": "", "trade": "", "seDate": "",
+                "sortName": "", "sortType": "", "isHLtitle": "true",
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=body, method="POST",
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": "https://www.cninfo.com.cn/new/commonUrl/pageOfSearch",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+            except Exception as e:
+                logger.warning(f"巨潮公告搜索失败: {e}")
+                return []
+            items = data.get("announcements") or []
+            if not items:
+                return []
+            results = []
+            seen: set[str] = set()
+            for it in items:
+                raw_title = (it.get("announcementTitle") or "").strip()
+                if not raw_title or raw_title in seen:
+                    continue
+                seen.add(raw_title)
+                title = re.sub(r"<[^>]+>", "", raw_title)[:100]
+                sec = re.sub(r"<[^>]+>", "", it.get("secName") or "").strip()
+                ts = it.get("announcementTime")
+                date = time.strftime("%Y-%m-%d", time.localtime(ts / 1000)) if ts else ""
+                adjunct = it.get("adjunctUrl") or ""
+                pdf_url = "https://static.cninfo.com.cn/" + adjunct if adjunct else "https://www.cninfo.com.cn/"
+                results.append({
+                    "title": f"{sec} {title}" if sec and sec not in title else title,
+                    "url": pdf_url,
+                    "snippet": " | ".join(p for p in (date, "公告原文 PDF", "巨潮资讯网官方") if p)[:280],
+                    "source": "cninfo",
+                    "score": 0.9,
+                })
+                if len(results) >= n:
+                    break
+            return results
+
+        # 候选词干：super_search 的查询改写会把原句拼上「贵州茅台 600519 白酒 股票行情」
+        # 等扩展词，整句全文搜索命中率反而低。先试整句，0 结果时按分词去 STOP 词重试。
+        _STOP = ("公告", "披露", "查询", "什么", "怎么样", "多少", "怎么", "了", "吗",
+                 "今日", "最新", "股票", "股价", "行情", "走势", "报价", "分红方案",
+                 "利润分配", "每股", "多少钱")
+        cands = [query]
+        for token in re.split(r"[\s,，、/]+", query):
+            t = token.strip()
+            if not t:
+                continue
+            for stop in _STOP:
+                t = t.replace(stop, "")
+            t = t.strip()
+            if 2 <= len(t) <= 20 and t not in cands:
+                cands.append(t)
+        for c in cands:
+            res = _search_once(c)
+            if res:
+                return res
+        return []
+    return _engine
+
+
+# ── 新浪行情引擎（实时行情快照） ─────────────────────────────────────────────
+
+def _build_sina_quote_engine(spec: dict[str, Any]) -> Any:
+    """新浪实时行情快照（hq.sinajs.cn + suggest3 代码解析）。
+
+    免认证直连：suggest3.sinajs.cn 把中文名/拼音/代码解析为证券代码，
+    再拉 hq.sinajs.cn 实时快照（现价/涨跌/开高低/成交量），适合"茅台股价"类查询。
+    """
+    timeout = spec.get("timeout", 8)
+    suggest_url = "https://suggest3.sinajs.cn/suggest/type=11,12,15,21,31,41&key="
+    quote_url = "https://hq.sinajs.cn/list="
+
+    _MARKET_PREFIX = {
+        "sh": "沪", "sz": "深", "bj": "北",
+        "hk": "港", "us": "美", "hf": "期货",
+        "gb_": "外盘", "rt_hk": "港", "znb_": "银行",
+    }
+
+    @safe_search
+    def _engine(query: str, n: int = 3, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                   "Referer": "https://finance.sina.com.cn/"}
+        code = _resolve_code(query, to, headers)
+        if not code:
+            return []
+        symbol = code.split(",")[0] if "," in code else code
+        try:
+            req = urllib.request.Request(quote_url + symbol, headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                text = resp.read().decode("gbk", "replace").strip()
+        except Exception as e:
+            logger.warning(f"新浪行情失败: {e}")
+            return []
+        if not text or "=" not in text:
+            return []
+        var_part = text.split("=", 1)[1].strip().strip('"')
+        fields = var_part.split(",")
+        if not fields or len(fields) < 4:
+            return []
+        name = fields[0]
+        # A 股字段：0名称 1今开 2昨收 3现价 4最高 5最低 6买一 7卖一 8成交量 9成交额
+        if len(fields) >= 10:
+            cur, prev = fields[3], fields[2]
+            try:
+                chg = float(cur) - float(prev) if cur and prev else 0.0
+                pct = chg / float(prev) * 100 if prev and float(prev) else 0.0
+            except ValueError:
+                chg, pct = 0.0, 0.0
+            arrow = "↑" if pct > 0 else ("↓" if pct < 0 else "→")
+            title = f"{name} {cur} {arrow}{pct:+.2f}%" if cur else f"{name} 行情"
+            snip_parts = [
+                f"现价 {cur}", f"涨跌 {chg:+.2f} ({pct:+.2f}%)" if chg else "",
+                f"今开 {fields[1]}", f"昨收 {prev}",
+                f"最高 {fields[4]}", f"最低 {fields[5]}",
+                f"成交量 {_fmt_vol(fields[8])}" if fields[8] else "",
+            ]
+        else:
+            title = f"{name} 行情"
+            snip_parts = [f"数据 {var_part[:60]}"]
+        market = symbol[:2]
+        prefix = _MARKET_PREFIX.get(market, "")
+        quote_page = "https://finance.sina.com.cn/realstock/company/" + symbol + "/nc.shtml"
+        return [{
+            "title": title[:80],
+            "url": quote_page,
+            "snippet": " | ".join(p for p in snip_parts if p)[:200],
+            "source": "sina_quote",
+            "score": 0.9,
+        }]
+
+    def _resolve_code(q: str, to: float, headers: dict) -> str:
+        import urllib.parse as up
+        # 候选词干：先整句，再逐词试；去掉常见行情后缀词
+        _STOP = ("股价", "行情", "股票", "价格", "走势", "最新", "今日", "报价", "查询",
+                 "怎么样", "多少", "怎么", "了", "吗", "的", "a股", "港股", "美股")
+        cands = [q]
+        for token in re.split(r"[\s,，、/]+", q):
+            t = token.strip()
+            if not t:
+                continue
+            for stop in _STOP:
+                t = t.replace(stop, "")
+            t = t.strip()
+            if 2 <= len(t) <= 8 and t not in cands:
+                cands.append(t)
+        for c in cands:
+            try:
+                req = urllib.request.Request(suggest_url + up.quote(c), headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    text = resp.read().decode("gbk", "replace")
+            except Exception as e:
+                logger.warning(f"新浪代码解析失败: {e}")
+                continue
+            if "suggestvalue=" not in text:
+                continue
+            val = text.split("suggestvalue=", 1)[1].strip().strip('"')
+            # 格式: 名称,类型,代码,符号,拼音,... 取第一个符号
+            parts = val.split(",")
+            if len(parts) >= 4 and parts[3]:
+                return parts[3]
+        return ""
+
+    def _fmt_vol(v: str) -> str:
+        try:
+            f = float(v)
+        except ValueError:
+            return v
+        if f >= 1e8:
+            return f"{f / 1e8:.2f}亿手"
+        if f >= 1e4:
+            return f"{f / 1e4:.2f}万手"
+        return v
+    return _engine
+
+
 # ── 东财财经搜索引擎 ─────────────────────────────────────────────────────────
 
 def _build_eastmoney_engine(spec: dict[str, Any]) -> Any:
     """东财经搜搜索（纯 HTTP API，零外部依赖）
 
-    支持：
+160→    支持：
     - 个股新闻搜索（按股票代码或关键词）
     - 东财全球资讯（7×24 财经快讯）
     """

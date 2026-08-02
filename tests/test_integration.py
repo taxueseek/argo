@@ -41,7 +41,8 @@ class TestEndToEnd(unittest.TestCase):
 
     def test_routes_stock_to_eastmoney(self):
         data = self.run_search("贵州茅台股价")
-        self.assertEqual(data.get("engine"), "eastmoney")
+        self.assertEqual(data.get("engine"), "sina_quote")
+        self.assertIn("eastmoney", data.get("engines_combo") or [])
         self.assertIn("elapsed_ms", data)
 
     def test_routes_fund_to_eastmoney(self):

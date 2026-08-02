@@ -310,6 +310,105 @@ def _build_fred_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── 汇率引擎（open.er-api.com 免认证） ───────────────────────────────────────
+
+_CURRENCY_ALIASES: dict[str, str] = {
+    "人民币": "CNY", "美元": "USD", "欧元": "EUR", "英镑": "GBP", "日元": "JPY",
+    "港币": "HKD", "澳元": "AUD", "加元": "CAD", "瑞郎": "CHF", "新西兰元": "NZD",
+    "新加坡元": "SGD", "韩元": "KRW", "卢布": "RUB", "印度卢比": "INR",
+    "泰铢": "THB", "林吉特": "MYR", "印尼盾": "IDR", "越南盾": "VND",
+}
+
+def _build_fx_rate_engine(spec: dict[str, Any]) -> Any:
+    """实时汇率（open.er-api.com/v6/latest，免认证）。
+
+    命中"美元兑人民币"类查询：解析两种货币代码，返回最新汇率快照。
+    """
+    timeout = spec.get("timeout", 10)
+    api_url = "https://open.er-api.com/v6/latest/"
+
+    @safe_search
+    def _engine(query: str, n: int = 3, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        base, target = _parse_pair(query)
+        if not base or not target:
+            return []
+        try:
+            req = urllib.request.Request(api_url + base, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"})
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"汇率接口失败 ({base}): {e}")
+            return []
+        if data.get("result") != "success":
+            return []
+        rates = data.get("rates") or {}
+        if target not in rates:
+            return []
+        rate = rates[target]
+        date = data.get("time_last_update_utc") or data.get("time_last_update_unix") or ""
+        results = [{
+            "title": f"1 {base} = {rate:g} {target}",
+            "url": f"https://www.exchangerate-api.com/{base.lower()}-{target.lower()}",
+            "snippet": f"实时汇率 {base}/{target} = {rate:g}（{date}，open.er-api.com）",
+            "source": "fx_rate",
+            "score": 0.9,
+        }]
+        # 反向汇率补充一条
+        if rate:
+            results.append({
+                "title": f"1 {target} = {1 / rate:.4g} {base}",
+                "url": f"https://www.exchangerate-api.com/{target.lower()}-{base.lower()}",
+                "snippet": f"反向汇率 {target}/{base} = {1 / rate:.4g}（open.er-api.com）",
+                "source": "fx_rate",
+                "score": 0.8,
+            })
+        return results
+
+    def _parse_pair(q: str) -> tuple[str, str]:
+        import re as _re
+
+        def _match_currency(token: str) -> str:
+            """精确匹配别名或代码；失败时前缀匹配（人民币汇率→人民币）。"""
+            token = token.strip()
+            if not token:
+                return ""
+            if token in _CURRENCY_ALIASES:
+                return _CURRENCY_ALIASES[token]
+            if _re.fullmatch(r"[A-Z]{3}", token):
+                return token
+            # 前缀匹配：token 以某别名开头，或某别名以 token 开头
+            for name, code in _CURRENCY_ALIASES.items():
+                if token.startswith(name) or name.startswith(token):
+                    return code
+            return ""
+
+        codes = _re.findall(r"\b([A-Z]{3})\b", q.upper())
+        aliases = [c for c in _CURRENCY_ALIASES if c in q]
+        base, target = "", ""
+        if len(codes) >= 2:
+            base, target = codes[0], codes[1]
+        elif len(codes) == 1 and aliases:
+            if codes[0] in ("CNY", "USD", "EUR"):
+                base, target = codes[0], _CURRENCY_ALIASES[aliases[0]]
+            else:
+                base, target = "CNY", codes[0]
+        elif len(aliases) >= 2:
+            base, target = _CURRENCY_ALIASES[aliases[0]], _CURRENCY_ALIASES[aliases[1]]
+        elif len(aliases) == 1:
+            base, target = "CNY", _CURRENCY_ALIASES[aliases[0]]
+        # 中文"兑"字方向修正：X兑Y → base=X, target=Y
+        if "兑" in q:
+            seg = q.split("兑")
+            if len(seg) == 2:
+                lc = _match_currency(seg[0])
+                rc = _match_currency(seg[1])
+                if lc and rc:
+                    base, target = lc, rc
+        return base, target
+    return _engine
+
+
 def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
     """英英词典（dictionaryapi.dev，免认证，响应为数组需专门解析）"""
     timeout = spec.get("timeout", 8)

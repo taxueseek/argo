@@ -10,6 +10,9 @@ from engines_builders_tech import (
     _build_v2ex_engine,
 )
 from engines_builders_cn import (
+    _build_em_miaoxiang_engine,
+    _build_cninfo_engine,
+    _build_sina_quote_engine,
     _build_ths_hot_engine,
     _build_cls_telegraph_engine,
     _build_em_global_news_engine,
@@ -24,6 +27,7 @@ from engines_builders_data import (
     _build_weread_engine,
     _build_douban_book_engine,
     _build_fred_engine,
+    _build_fx_rate_engine,
     _build_free_dictionary_engine,
     _build_baidu_baike_engine,
     _build_pypi_engine,
@@ -40,6 +44,9 @@ from engines_builders_data import (
 )
 
 __all__ = [
+    "_build_em_miaoxiang_engine",
+    "_build_cninfo_engine",
+    "_build_sina_quote_engine",
     "_build_exa_engine",
     "_build_wechat_sogou_engine",
     "_build_hackernews_engine",
@@ -58,6 +65,7 @@ __all__ = [
     "_build_weread_engine",
     "_build_douban_book_engine",
     "_build_fred_engine",
+    "_build_fx_rate_engine",
     "_build_free_dictionary_engine",
     "_build_baidu_baike_engine",
     "_build_pypi_engine",

@@ -67,7 +67,7 @@ class TestRoute(unittest.TestCase):
 
     def test_stock_domain(self):
         d = route_query("英伟达股价")
-        self.assertEqual(d["engine"], "eastmoney")
+        self.assertEqual(d["engine"], "sina_quote")
         self.assertIn("eastmoney", d["engines"])
         self.assertEqual(d["domain"], "stock_query")
 
@@ -127,7 +127,8 @@ class TestRoute(unittest.TestCase):
 
     def test_finance_still_eastmoney(self):
         d = route_query("贵州茅台股价")
-        self.assertEqual(d["engine"], "eastmoney")
+        self.assertEqual(d["engine"], "sina_quote")
+        self.assertIn("eastmoney", d["engines"])
 
 
 class TestTfidfRouter(unittest.TestCase):

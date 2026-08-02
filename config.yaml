@@ -98,6 +98,7 @@ domains:
   quote: true
 - desc: 股票/行情查询
   engines_combo:
+  - sina_quote
   - eastmoney
   - anysearch
   fallback: anysearch
@@ -107,22 +108,25 @@ domains:
   - (?i)(股价|行情|涨跌|K线|大盘|指数|涨停|跌停|板块|概念股)
   - (?i)(stock|quote|price|market\s+cap)
   - A股|港股|美股|股票|ETF|板块
-  primary: eastmoney
+  primary: sina_quote
   quote: true
-- desc: 宏观数据查询（FRED 时序数据）
+- desc: 宏观数据查询（FRED 时序数据 + 实时汇率）
   engines_combo:
   - fred
+  - fx_rate
   - anysearch
   fallback: anysearch
   name: macro_data
   parallel: false
   patterns:
   - (?i)(美国|美).{0,4}(CPI|通胀|失业率|非农|PPI|GDP增速|零售销售|M2|PCE)
-  - (通胀率|失业率|非农就业|国债收益率|美债收益率|十年期国债|10年期国债|三十年期国债|30年期国债|两年期国债|2年期国债|联邦基金利率|美联储利率|隔夜回购|SOFR|美元指数|货币供应)
-  - (?i)\b(US\s+CPI|unemployment\s+rate|treasury\s+yield|fed\s+funds\s+rate|nonfarm\s+payrolls?|US\s+GDP|M2\s+supply)\b
+  - (通胀率|失业率|非农就业|国债收益率|美债收益率|十年期国债|10年期国债|三十年期国债|30年期国债|两年期国债|2年期国债|联邦基金利率|美联储利率|隔夜回购|SOFR|美元指数|货币供应|汇率|兑人民币|兑美元)
+  - (?i)\b(US\s+CPI|unemployment\s+rate|treasury\s+yield|fed\s+funds\s+rate|nonfarm\s+payrolls?|US\s+GDP|M2\s+supply|USD\s+CNY|exchange\s+rate)\b
   primary: fred
 - desc: 财经资讯/研报/公告
   engines_combo:
+  - em_miaoxiang
+  - cninfo
   - byted
   - eastmoney
   - anysearch
@@ -132,7 +136,7 @@ domains:
   patterns:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings|report|announcement)
-  primary: byted
+  primary: em_miaoxiang
 - desc: 天气查询（和风天气）
   engines_combo:
   - qweather
@@ -846,6 +850,63 @@ engines:
     desc: 东方财富，金融数据首选
     timeout: 12
     type: eastmoney
+  em_miaoxiang:
+    enabled: true
+    label: 东财妙想
+    cost_tier: free
+    qps: 1
+    priority: 2
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    desc: 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY）
+    timeout: 12
+    type: em_miaoxiang
+  cninfo:
+    enabled: true
+    label: 巨潮资讯
+    cost_tier: free
+    qps: 2
+    priority: 3
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    desc: 巨潮资讯网官方公告（A股公告第一官方源，免认证）
+    timeout: 12
+    type: cninfo
+  sina_quote:
+    enabled: true
+    label: 新浪行情
+    cost_tier: free
+    qps: 2
+    priority: 3
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - stock
+    - finance
+    desc: 新浪实时行情快照（现价/涨跌/成交量，免认证）
+    timeout: 8
+    type: sina_quote
+  fx_rate:
+    enabled: true
+    label: 实时汇率
+    cost_tier: free
+    qps: 2
+    priority: 3
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    desc: 实时汇率（open.er-api.com 免认证）
+    timeout: 10
+    type: fx_rate
   v2ex:
     enabled: true
     label: V2EX

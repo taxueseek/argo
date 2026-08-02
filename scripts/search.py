@@ -303,6 +303,11 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
     if not results:
         return results
 
+    def _src_has(source: str, name: str) -> bool:
+        # rrf_merge 会把同 URL 结果的 source 合并成 "local_bing/sina_quote"，
+        # 精确匹配会漏掉合并后的结果，这里按「/」切分做成员判断。
+        return name in str(source).split("/")
+
     # 权重表（MECE，和为 1）
     is_tech = domain in ("tech_deep", "code_search", "local_code", "academic")
     if is_tech:
@@ -334,6 +339,15 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
         # 直接按网页标准评 relevance 会被列表页碾压。给书目源保底相关分。
         if domain == "book_search" and source in ("weread", "douban_book", "open_library"):
             relevance = max(relevance, 0.6)
+        # 金融答案型源保底：行情快照/汇率/官方公告的标题是「答案」而非「网页」，
+        # token 覆盖率天然低（「茅台股价」vs「贵州茅台 1350.600 ↓-0.82%」）。
+        # 这些源命中即答案，且 cninfo 是官方公告源，权威分也保底。
+        if domain == "stock_query" and _src_has(source, "sina_quote"):
+            relevance = max(relevance, 1.0)
+        if domain == "macro_data" and _src_has(source, "fx_rate"):
+            relevance = max(relevance, 0.9)
+        if domain == "financial_news" and _src_has(source, "cninfo"):
+            relevance = max(relevance, 0.85)
         if _has_evidence:
             try:
                 authority = float(score_authority(url, source).get("score", 0.5))
@@ -343,6 +357,13 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
                 freshness = float(score_freshness(r).get("score", 0.5))
             except Exception:
                 freshness = 0.5
+            # cninfo/sina/fx 域名被 evidence 判为低权威（0.5-0.55），
+            # 实为官方公告/行情源，权威分保底避免被商业站碾压。
+            if _src_has(source, "cninfo") or _src_has(source, "sina_quote") or _src_has(source, "fx_rate"):
+                authority = max(authority, 0.85)
+            # 行情/汇率快照是「实时答案」，时效分保底，避免被陈旧新闻页压制。
+            if _src_has(source, "sina_quote") or _src_has(source, "fx_rate"):
+                freshness = max(freshness, 0.85)
         else:
             authority, freshness = 0.5, 0.5
         completeness = _score_completeness(title, snippet)

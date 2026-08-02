@@ -272,9 +272,10 @@ class TestSuperSearchGates(unittest.TestCase):
         ))
 
     def test_keyword_still_returns_results_shape(self):
-        # 路由不倒退
+        # 路由不倒退：行情查询走新浪快照，东财仍在 combo
         d = route_query("贵州茅台股价")
-        self.assertEqual(d["engine"], "eastmoney")
+        self.assertEqual(d["engine"], "sina_quote")
+        self.assertIn("eastmoney", d.get("engines") or [])
         d2 = route_query("pytest fixtures")
         self.assertNotEqual(d2["engine"], "eastmoney")
 
@@ -307,7 +308,9 @@ class TestNoRegressionRoute(unittest.TestCase):
     """确保吸纳后路由黄金集不倒退。"""
 
     def test_finance(self):
-        self.assertEqual(route_query("贵州茅台股价")["engine"], "eastmoney")
+        d = route_query("贵州茅台股价")
+        self.assertEqual(d["engine"], "sina_quote")
+        self.assertIn("eastmoney", d.get("engines") or [])
 
     def test_tech_en(self):
         d = route_query("React hooks tutorial")

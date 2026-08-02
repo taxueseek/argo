@@ -38,6 +38,7 @@ KNOWN_ENV_ALIASES: dict[str, list[str]] = {
     "zhihu_global": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "anysearch": ["ARGO_ANYSEARCH_API_KEY", "ANYSEARCH_API_KEY"],  # 可选
     "weread": ["ARGO_WEREAD_API_KEY", "WEREAD_API_KEY"],  # 微信读书 Agent Gateway
+    "em_miaoxiang": ["ARGO_EASTMONEY_APIKEY", "EASTMONEY_APIKEY"],  # 东财妙想（可选）
 }
 
 # 占位符名 → 候选 env（用于 config 中 {TAVILY_API_KEY} 展开）
