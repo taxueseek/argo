@@ -30,6 +30,14 @@ except ImportError:
     from tfidf_router import semantic_route, get_router
     from quota import get_quota_manager
 
+# 世界银行国家表：macro_data 域按国家词分流（非美国国家查询让 worldbank 优先，
+# 避免 FRED 美国序列冒充「中国GDP」这类答案）
+try:
+    from engines_builders_data import is_foreign_macro_query
+except Exception:
+    def is_foreign_macro_query(query: str) -> bool:
+        return False
+
 # 自适应学习（可选依赖）
 try:
     from adaptive import get_learner
@@ -516,6 +524,12 @@ def route_query(query: str, engine_override: str = "auto",
             if not engines_combo:
                 engines_combo = [e for e in ["arxiv", "anysearch", "local_search"]
                                  if e in enabled]
+        # 🔑 macro_data 域 + 非美国国家词 → worldbank 前置（FRED 无该国数据，
+        # 且错误结果会触发 early-stop 短路，导致「中国GDP」只回美国数据）
+        if (domain.get("name") == "macro_data"
+                and is_foreign_macro_query(query)
+                and "worldbank" in engines_combo):
+            engines_combo = ["worldbank"] + [e for e in engines_combo if e != "worldbank"]
         # 🔑 为中文/学术查询追加本地引擎
         engines_combo = _add_language_engines(engines_combo, features)
         if not engines_combo:

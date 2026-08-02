@@ -258,6 +258,10 @@ def _build_fred_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         to = _timeout or timeout
+        # 国家词守卫：FRED 序列均为美国或全球口径，明确指向其他国家时放弃，
+        # 避免「中国GDP」被美国序列冒充（由 worldbank 按国家参数接管）
+        if is_foreign_macro_query(query):
+            return []
         q = query.lower()
         series_id = None
         for kw, sid in _FRED_SERIES.items():
@@ -411,6 +415,29 @@ def _build_fx_rate_engine(spec: dict[str, Any]) -> Any:
 
 # ── 世界银行开放数据引擎（宏观指标，免认证） ─────────────────────────────────
 
+# 模块级国家表：worldbank 引擎解析国家、fred 引擎国家词守卫、route 层分流共用
+WORLDBANK_COUNTRIES: dict[str, str] = {
+    "中国": "CHN", "美国": "USA", "日本": "JPN", "德国": "DEU", "英国": "GBR",
+    "法国": "FRA", "印度": "IND", "巴西": "BRA", "俄罗斯": "RUS", "韩国": "KOR",
+    "加拿大": "CAN", "澳大利亚": "AUS", "意大利": "ITA", "西班牙": "ESP",
+    "世界": "WLD", "欧元区": "EMU", "香港": "HKG", "台湾": "TWN", "新加坡": "SGP",
+}
+
+
+def is_foreign_macro_query(query: str) -> bool:
+    """查询是否明确指向非美国国家/地区。
+
+    FRED 序列均为美国或全球口径，遇到「中国GDP」「日本通胀」这类查询时
+    应放弃响应（返回 True），由 worldbank 按国家参数接管，避免美国数据冒充。
+    """
+    for name in WORLDBANK_COUNTRIES:
+        if name == "美国":
+            continue
+        if name in query:
+            return True
+    return False
+
+
 def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
     """世界银行开放数据（api.worldbank.org，免认证，300+ 指标）。
 
@@ -421,12 +448,6 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
     # 默认按时间倒序返回最新数据，per_page 直取最近年份；mrnev 参数实测易超时
     api = "https://api.worldbank.org/v2/country/{cc}/indicator/{ind}?format=json&per_page=6"
 
-    _COUNTRIES: dict[str, str] = {
-        "中国": "CHN", "美国": "USA", "日本": "JPN", "德国": "DEU", "英国": "GBR",
-        "法国": "FRA", "印度": "IND", "巴西": "BRA", "俄罗斯": "RUS", "韩国": "KOR",
-        "加拿大": "CAN", "澳大利亚": "AUS", "意大利": "ITA", "西班牙": "ESP",
-        "世界": "WLD", "欧元区": "EMU", "香港": "HKG", "台湾": "TWN", "新加坡": "SGP",
-    }
     _INDICATORS: list[tuple[tuple[str, ...], str, str]] = [
         (("gdp", "国内生产总值", "生产总值", "经济总量"), "NY.GDP.MKTP.CD", "GDP（现价美元）"),
         (("人均gdp", "人均国内生产总值"), "NY.GDP.PCAP.CD", "人均GDP（现价美元）"),
@@ -447,12 +468,17 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
         cc, ind, ind_label = _parse(query)
         if not cc or not ind:
             return []
-        try:
-            req = urllib.request.Request(api.format(cc=cc, ind=ind), headers=headers)
-            with urllib.request.urlopen(req, timeout=to) as resp:
-                data = json.loads(resp.read().decode("utf-8", "replace"))
-        except Exception as e:
-            logger.warning(f"世界银行数据失败: {e}")
+        data = None
+        for _a in range(2):
+            try:
+                req = urllib.request.Request(api.format(cc=cc, ind=ind), headers=headers)
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    data = json.loads(resp.read().decode("utf-8", "replace"))
+                break
+            except Exception as e:
+                logger.warning(f"世界银行数据失败(重试): {e}")
+                time.sleep(0.3)
+        if data is None:
             return []
         if not isinstance(data, list) or len(data) < 2:
             return []
@@ -485,7 +511,7 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
     def _parse(q: str) -> tuple[str, str, str]:
         low = q.lower()
         cc = ""
-        for name, code in _COUNTRIES.items():
+        for name, code in WORLDBANK_COUNTRIES.items():
             if name in q:
                 cc = code
                 break
