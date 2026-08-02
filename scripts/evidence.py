@@ -179,7 +179,9 @@ def is_serp_or_jump_url(url: str) -> bool:
     # 显式搜索/跳转模式
     if re.search(r"baidu\.com/s\?", low):
         return True
-    if "baidu.com/link" in low or "sogou.com/link" in low:
+    if "baidu.com/link" in low or "baidu.com/baidu.php" in low:
+        return True
+    if "sogou.com/link" in low:
         return True
     if "google.com/url?" in low or "google.com.hk/url?" in low:
         return True

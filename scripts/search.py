@@ -95,46 +95,88 @@ class Stage(str, Enum):
 
 # ── RRF 融合 ───────────────────────────────────────────────────────────────────
 
+_TRACKING_PARAMS = frozenset({
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "spm", "ref", "from", "share_token", "source", "refer", "trace",
+    "clicktime", "clickid", "scid", "scene", "sessionid",
+})
+
+
+def _canonical_url(url: str) -> str:
+    """URL 归一化：统一 http/https、小写、去 www.、去 tracking 参数、去 fragment 与尾斜杠。
+
+    用于融合/去重的键，保证 http/https、www、utm 等变体合并为同一结果。
+    """
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+        p = urlparse(url.lower())
+        netloc = p.netloc
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        scheme = "https" if p.scheme in ("http", "https") else p.scheme
+        q = [(k, v) for k, v in parse_qsl(p.query, keep_blank_values=True)
+             if k.lower() not in _TRACKING_PARAMS]
+        path = p.path.rstrip("/")
+        return urlunparse((scheme, netloc, path, p.params, urlencode(q), ""))
+    except Exception:
+        return url
+
+
 def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60) -> list[dict[str, Any]]:
-    """Reciprocal Rank Fusion 合并多引擎结果，保留 consensus_engines。"""
+    """Reciprocal Rank Fusion 合并多引擎结果，保留 consensus_engines。
+
+    键用归一化 URL（http/https、www、utm 变体合并）；RRF 分单独存 _rrf_score，
+    首次遇到的结果保留完整字段，后续同 URL 只累加共识、择优补充 snippet，
+    避免「score 字段赢家通吃」覆盖共识内容。
+    """
     scores: dict[str, float] = {}
     items: dict[str, dict[str, Any]] = {}
 
     for results in ranked_lists:
         for i, r in enumerate(results):
-            url = r.get("url", "") or f"__title__:{r.get('title', '')}"
-            scores[url] = scores.get(url, 0.0) + 1.0 / (k + i + 1)
+            key = _canonical_url(r.get("url", "")) or f"__title__:{r.get('title', '')}"
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + i + 1)
             eng = r.get("_engine") or r.get("source", "") or ""
-            if url not in items:
+            if key not in items:
                 item = dict(r)
+                item["_rrf_score"] = 0.0  # 排序后统一写回
                 cons: list[str] = []
                 if eng:
                     cons.append(eng)
                 item["consensus_engines"] = cons
-                items[url] = item
+                items[key] = item
             else:
-                if r.get("score", 0) > items[url].get("score", 0):
-                    # 保留已累积的 consensus
-                    prev_cons = list(items[url].get("consensus_engines") or [])
-                    items[url].update(r)
-                    items[url]["consensus_engines"] = prev_cons
-                sources = {items[url].get("source", ""), r.get("source", "")}
-                items[url]["source"] = "/".join(s for s in sources if s)
-                cons = list(items[url].get("consensus_engines") or [])
+                cur = items[key]
+                # 择优保留内容更完整的版本（title+snippet 更长者胜），不覆盖其余字段
+                new_txt = f"{r.get('title', '')} {r.get('snippet', '')}"
+                cur_txt = f"{cur.get('title', '')} {cur.get('snippet', '')}"
+                if len(new_txt) > len(cur_txt):
+                    cur["title"] = r.get("title", cur.get("title"))
+                    cur["snippet"] = r.get("snippet", cur.get("snippet"))
+                sources = {cur.get("source", ""), r.get("source", "")}
+                cur["source"] = "/".join(s for s in sources if s)
+                cons = list(cur.get("consensus_engines") or [])
                 if eng and eng not in cons:
                     cons.append(eng)
-                items[url]["consensus_engines"] = cons
+                cur["consensus_engines"] = cons
 
     ranked = sorted(scores.items(), key=lambda x: -x[1])
-    return [items[url] for url, _ in ranked]
+    out = []
+    for key, _ in ranked:
+        item = items[key]
+        item["_rrf_score"] = round(scores[key], 6)
+        out.append(item)
+    return out
 
 
 def deduplicate_by_url(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """URL 去重。"""
+    """URL 去重（归一化键）。"""
     seen: set[str] = set()
     out = []
     for r in results:
-        key = r.get("url", "") or f"title:{r.get('title', '')}"
+        key = _canonical_url(r.get("url", "")) or f"title:{r.get('title', '')}"
         if key not in seen:
             seen.add(key)
             out.append(r)
@@ -654,9 +696,9 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             clean_lists.append(clean)
 
     if len(clean_lists) > 1:
-        merged = rrf_merge(clean_lists)[:max_results]
+        merged = rrf_merge(clean_lists)
     elif clean_lists:
-        merged = deduplicate_by_url(clean_lists[0])[:max_results]
+        merged = deduplicate_by_url(clean_lists[0])
         # 单引擎也补 consensus
         for r in merged:
             eng = r.get("_engine") or r.get("source") or ""
@@ -664,6 +706,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 r.setdefault("consensus_engines", [eng])
     else:
         merged = []
+
+    # ── P0：过滤 SERP/跳转 URL（搜索结果页、baidu.com/link 等不可当信源正文）──
+    if merged:
+        try:
+            from evidence import is_serp_or_jump_url as _is_serp
+            merged = [r for r in merged if not _is_serp(r.get("url", ""))]
+        except ImportError:
+            pass  # evidence 不可用时跳过（本地五维 rerank 已对 SERP 降权）
+
+    # 放宽截断：rerank 阶段看到 max_results*3 条，最终输出再截断
+    merged = merged[:max(max_results * 3, 15)]
 
     # ── P0-001：按 exclude_terms 过滤（否定约束）──
     excluded_count = 0
@@ -732,7 +785,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if mode == "fast" or depth == "fast":
         reranker_status = "skipped_fast"
     elif merged and len(merged) > 1:
-        merged, reranker_status = rerank_results(query, merged, top_n=max_results)
+        # 全量重排（top_n=len），由最终输出统一截断 max_results
+        merged, reranker_status = rerank_results(query, merged, top_n=len(merged))
         if reranker_status == "ok":
             rank_method = "bocha"
 
@@ -741,7 +795,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             "skipped_no_key", "fallback", "skipped_fast", "skipped_short"):
         try:
             merged = local_five_dim_rerank(query, merged, domain=domain,
-                                           top_n=max_results)
+                                           top_n=len(merged))
             rank_method = "local_five_dim"
         except Exception as e:
             import logging

@@ -465,6 +465,14 @@ def route_query(query: str, engine_override: str = "auto",
 
     if domain:
         engines_combo = _get_engines_combo(domain, enabled, mode, features)
+        # 🔑 中文查询 + 学术类域 → 剔除英文论文源（openalex/europepmc 对中文查询噪声大）
+        if (domain.get("name") in ("tech_deep", "academic")
+                and any("\u4e00" <= ch <= "\u9fff" for ch in query)):
+            engines_combo = [e for e in engines_combo
+                             if e not in ("openalex", "europepmc")]
+            if not engines_combo:
+                engines_combo = [e for e in ["arxiv", "anysearch", "local_search"]
+                                 if e in enabled]
         # 🔑 为中文/学术查询追加本地引擎
         engines_combo = _add_language_engines(engines_combo, features)
         if not engines_combo:
