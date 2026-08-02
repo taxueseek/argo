@@ -109,112 +109,102 @@
 
 ## 快速开始
 
-任选一种即可。**零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
+任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；npm registry 上的旧包可能滞后，可不走）。
 
-### 方式一：安装脚本（推荐本机长期用）
+**零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
-一条命令克隆到本机、装依赖，并打印 MCP 配置示例：
+### 方式一：一键脚本（推荐本机长期用，只要 git + Python）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 ```
 
-可选参数与环境变量：
+装到指定目录、并挂 Skill 入口：
 
 ```bash
-# 指定安装目录（默认 ~/.local/share/argo）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh \
-  | bash -s -- --home "$HOME/.local/share/argo"
-
-# 安装后把 Skill 挂到 Claude / 通用 Agent 目录（符号链接，不复制代码）
-curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh \
-  | bash -s -- --link "$HOME/.claude/skills/argo"
-
-# 或克隆后本地执行
-git clone https://github.com/taxueseek/argo.git
-cd argo
-bash scripts/install.sh --link ~/.claude/skills/argo
+  | bash -s -- --home "$HOME/.local/share/argo" --link "$HOME/.claude/skills/argo"
 ```
 
 验证：
 
 ```bash
-python3 ~/.local/share/argo/scripts/search.py "Python asyncio" --json
+python3 ~/.local/share/argo/scripts/search.py "贵州茅台股价" --json
 python3 ~/.local/share/argo/scripts/search.py --list-engines
 ```
 
-### 方式二：npx 启动 MCP（推荐 Agent 用户快速试用）
+### 方式二：MCP 不装包，直接用 GitHub（推荐 Agent 快速挂载）
 
-需要 **Node.js 18+** 和 **Python 3.10+**（首次请 `pip install pyyaml`）。
+需要 **Node.js 18+** 和 **Python 3.10+**，首次执行一次：
 
 ```bash
-# 直接启动 MCP 服务（stdio）
-npx -y argo-search
+pip3 install pyyaml
+```
 
-# 若 npm 尚未收录最新版，可从 GitHub 拉
+**启动 MCP（从 GitHub 拉最新，不走 npm 版本号）：**
+
+```bash
 npx -y github:taxueseek/argo
 ```
 
-在 Claude Code / Cursor / Kimi 等客户端里配置：
+客户端配置示例（Claude Code / Cursor / Kimi 等）：
 
 ```json
 {
   "mcpServers": {
     "argo": {
       "command": "npx",
-      "args": ["-y", "argo-search"]
+      "args": ["-y", "github:taxueseek/argo"]
     }
   }
 }
 ```
 
-Python 不在默认路径时，可设环境变量：
-
-```bash
-export ARGO_PYTHON=/path/to/python3
-```
-
-配置完成后，Agent 会自动调用 `argo_search`、`argo_research`、`argo_evidence` 等工具。
-
-### 方式三：克隆源码（推荐开发者）
-
-```bash
-git clone https://github.com/taxueseek/argo.git
-cd argo
-pip install pyyaml
-
-# 验证
-python3 scripts/search.py "Python asyncio"
-python3 scripts/search.py "贵州茅台股价" --json
-python3 scripts/search.py "transformer attention paper" --explain
-python3 scripts/search.py --list-engines
-```
-
-启动 MCP：
-
-```bash
-python3 scripts/mcp_server.py
-```
-
-客户端配置（路径请改成你的本机绝对路径，下面是占位写法）：
+更稳、完全不依赖 Node 的写法：先装脚本（方式一），再指向本机 Python：
 
 ```json
 {
   "mcpServers": {
     "argo": {
       "command": "python3",
-      "args": ["/path/to/argo/scripts/mcp_server.py"]
+      "args": ["/Users/你的用户名/.local/share/argo/scripts/mcp_server.py"]
     }
   }
 }
 ```
 
-### 方式四：挂到 Skill 目录（符号链接，单一真源）
+Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口会读）。
+
+### 方式三：Release 源码包（离线 / 固定版本）
+
+打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.5.1.tar.gz`** 或 zip：
+
+```bash
+tar -xzf argo-2.5.1.tar.gz
+cd argo-2.5.1
+pip3 install pyyaml
+python3 scripts/search.py "Python asyncio" --json
+python3 scripts/mcp_server.py   # 启动 MCP
+```
+
+### 方式四：git clone（开发 / 改源码）
+
+```bash
+git clone https://github.com/taxueseek/argo.git
+cd argo
+pip3 install pyyaml
+bash scripts/install.sh --link ~/.claude/skills/argo   # 可选
+python3 scripts/search.py --list-engines
+```
+
+配置完成后，Agent 会自动调用 `argo_search`、`argo_research`、`argo_evidence` 等工具。
+
+### 方式五：挂到 Skill 目录（符号链接，单一真源）
 
 磁盘上只保留一份 Argo 代码。需要出现在 Claude / 其他 Agent 约定目录时，用链接而不是复制：
 
 ```bash
-# 单次指定
+# 单次指定（仓库根目录下执行）
 python3 scripts/link_source.py --to ~/.claude/skills/argo
 python3 scripts/link_source.py --to ~/.agents/skills/argo
 
@@ -225,7 +215,7 @@ python3 scripts/link_source.py
 python3 scripts/link_source.py --check
 ```
 
-### 方式五：作为 Python 库调用
+### 方式六：作为 Python 库调用
 
 ```python
 import sys

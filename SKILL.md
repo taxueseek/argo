@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、16 MCP 工具。入口：安装脚本 / npx argo-search / mcp_server.py。
+description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、16 MCP 工具。入口：install.sh / npx github:taxueseek/argo / mcp_server.py（不依赖 npm 发版）。
 version: 2.5.1
 triggers:
   - 搜索
@@ -142,18 +142,19 @@ engines:
 任选其一（详见仓库 [README](https://github.com/taxueseek/argo)）：
 
 ```bash
-# 1) 一键安装脚本
+# 1) 一键安装（推荐，不依赖 npm）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 2) npx 启动 MCP（需 Node 18+ 与 Python 3.10+）
-npx -y argo-search
+# 2) MCP：从 GitHub 拉最新（不走 npm 包版本）
+pip3 install pyyaml
+npx -y github:taxueseek/argo
 
-# 3) 源码
-git clone https://github.com/taxueseek/argo.git && cd argo && pip install pyyaml
+# 3) 源码 / Release 包
+git clone https://github.com/taxueseek/argo.git && cd argo && pip3 install pyyaml
 python3 scripts/mcp_server.py
 ```
 
-MCP 配置可用 `npx -y argo-search`，或 `python3 /path/to/argo/scripts/mcp_server.py`（路径用本机占位，勿提交真实家目录）。
+MCP 推荐：`npx -y github:taxueseek/argo`，或 `python3 ~/.local/share/argo/scripts/mcp_server.py`（路径用本机占位）。
 
 Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/skills/argo`。
 
