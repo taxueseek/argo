@@ -19,17 +19,34 @@
       "港股 美股 中概股 AH溢价 南下资金"
     ],
     "boost_keywords": {
-      "股票": 2.0, "基金": 2.0, "财报": 2.0, "行情": 2.0,
-      "研报": 2.0, "净值": 2.0, "PE": 2.0, "ROE": 2.0,
-      "IPO": 2.0, "黄金": 1.5, "期货": 1.5, "利率": 1.5,
-      "英伟达": 1.1, "特斯拉": 1.1, "苹果": 1.1,
-      "比特币": 1.5, "半导体": 1.5, "新能源": 1.5
+      "股票": 2.0,
+      "基金": 2.0,
+      "财报": 2.0,
+      "行情": 2.0,
+      "研报": 2.0,
+      "净值": 2.0,
+      "PE": 2.0,
+      "ROE": 2.0,
+      "IPO": 2.0,
+      "黄金": 1.5,
+      "期货": 1.5,
+      "利率": 1.5,
+      "英伟达": 1.1,
+      "特斯拉": 1.1,
+      "苹果": 1.1,
+      "比特币": 1.5,
+      "半导体": 1.5,
+      "新能源": 1.5
     },
     "boost_combos": {
-      "英伟达 财报": 0.5, "英伟达 股票": 0.5,
-      "特斯拉 股价": 0.5, "特斯拉 销量": 0.3,
-      "基金 净值": 0.5, "基金 定投": 0.5,
-      "黄金 价格": 0.3, "原油 价格": 0.3
+      "英伟达 财报": 0.5,
+      "英伟达 股票": 0.5,
+      "特斯拉 股价": 0.5,
+      "特斯拉 销量": 0.3,
+      "基金 净值": 0.5,
+      "基金 定投": 0.5,
+      "黄金 价格": 0.3,
+      "原油 价格": 0.3
     }
   },
   "zhihu": {
@@ -47,10 +64,22 @@
       "摄影 设计 绘画 创作 技巧 教程"
     ],
     "boost_keywords": {
-      "技术": 1.5, "编程": 1.5, "职场": 1.5, "面试": 1.5,
-      "电影": 1.5, "书籍": 1.5, "推荐": 1.3, "评价": 1.3,
-      "创业": 1.5, "学术": 1.5, "论文": 1.5, "思考": 1.3,
-      "怎么": 1.2, "如何": 1.2, "为什么": 1.2, "哪款": 1.3
+      "技术": 1.5,
+      "编程": 1.5,
+      "职场": 1.5,
+      "面试": 1.5,
+      "电影": 1.5,
+      "书籍": 1.5,
+      "推荐": 1.3,
+      "评价": 1.3,
+      "创业": 1.5,
+      "学术": 1.5,
+      "论文": 1.5,
+      "思考": 1.3,
+      "怎么": 1.2,
+      "如何": 1.2,
+      "为什么": 1.2,
+      "哪款": 1.3
     }
   },
   "tavily": {
@@ -68,11 +97,23 @@
       "startup innovation venture capital silicon valley"
     ],
     "boost_keywords": {
-      "latest": 1.5, "news": 1.5, "research": 2.0, "analysis": 1.5,
-      "trend": 1.5, "report": 1.5, "international": 1.5, "global": 1.5,
-      "AI": 1.5, "artificial intelligence": 2.0, "machine learning": 2.0,
-      "cryptocurrency": 1.5, "blockchain": 1.5, "startup": 1.5,
-      "paper": 1.5, "study": 1.5, "science": 1.5
+      "latest": 1.5,
+      "news": 1.5,
+      "research": 2.0,
+      "analysis": 1.5,
+      "trend": 1.5,
+      "report": 1.5,
+      "international": 1.5,
+      "global": 1.5,
+      "AI": 1.5,
+      "artificial intelligence": 2.0,
+      "machine learning": 2.0,
+      "cryptocurrency": 1.5,
+      "blockchain": 1.5,
+      "startup": 1.5,
+      "paper": 1.5,
+      "study": 1.5,
+      "science": 1.5
     }
   },
   "anysearch": {
@@ -86,9 +127,16 @@
       "开源项目 GitHub 代码仓库 技术栈"
     ],
     "boost_keywords": {
-      "搜索": 1.3, "查询": 1.3, "教程": 1.3, "文档": 1.3,
-      "API": 1.5, "GitHub": 1.5, "开源": 1.5,
-      "评测": 1.3, "对比": 1.3, "推荐": 1.2
+      "搜索": 1.3,
+      "查询": 1.3,
+      "教程": 1.3,
+      "文档": 1.3,
+      "API": 1.5,
+      "GitHub": 1.5,
+      "开源": 1.5,
+      "评测": 1.3,
+      "对比": 1.3,
+      "推荐": 1.2
     }
   },
   "byted": {
@@ -106,10 +154,19 @@
       "游戏 手游 网游 攻略 评测 电竞"
     ],
     "boost_keywords": {
-      "新闻": 1.5, "热点": 1.5, "时事": 1.5, "动态": 1.3,
-      "测评": 1.5, "推荐": 1.3, "最新": 1.3,
-      "攻略": 1.5, "怎么": 1.2, "排行": 1.3,
-      "价格": 1.3, "多少钱": 1.3, "好不好": 1.3
+      "新闻": 1.5,
+      "热点": 1.5,
+      "时事": 1.5,
+      "动态": 1.3,
+      "测评": 1.5,
+      "推荐": 1.3,
+      "最新": 1.3,
+      "攻略": 1.5,
+      "怎么": 1.2,
+      "排行": 1.3,
+      "价格": 1.3,
+      "多少钱": 1.3,
+      "好不好": 1.3
     }
   },
   "arxiv": {
@@ -129,10 +186,19 @@
       "强化学习 生成模型 扩散模型 注意力机制"
     ],
     "boost_keywords": {
-      "paper": 2.0, "arXiv": 2.0, "preprint": 2.0,
-      "DOI": 2.0, "citation": 1.5, "abstract": 1.5,
-      "论文": 2.0, "学术": 1.5, "arxiv": 2.0,
-      "transformer": 1.5, "attention": 1.5, "BERT": 1.5, "GPT": 1.5
+      "paper": 2.0,
+      "arXiv": 2.0,
+      "preprint": 2.0,
+      "DOI": 2.0,
+      "citation": 1.5,
+      "abstract": 1.5,
+      "论文": 2.0,
+      "学术": 1.5,
+      "arxiv": 2.0,
+      "transformer": 1.5,
+      "attention": 1.5,
+      "BERT": 1.5,
+      "GPT": 1.5
     }
   },
   "duckduckgo": {
@@ -147,10 +213,24 @@
       "定义 解释 含义 概念 术语"
     ],
     "boost_keywords": {
-      "what": 2.0, "how": 2.0, "why": 2.0, "when": 2.0, "where": 2.0, "who": 2.0,
-      "is": 1.5, "does": 1.5, "do": 1.5,
-      "是什么": 2.0, "怎么": 2.0, "为什么": 2.0, "哪里": 2.0, "谁": 2.0,
-      "天气": 1.5, "时间": 1.5, "定义": 1.5, "含义": 1.5
+      "what": 2.0,
+      "how": 2.0,
+      "why": 2.0,
+      "when": 2.0,
+      "where": 2.0,
+      "who": 2.0,
+      "is": 1.5,
+      "does": 1.5,
+      "do": 1.5,
+      "是什么": 2.0,
+      "怎么": 2.0,
+      "为什么": 2.0,
+      "哪里": 2.0,
+      "谁": 2.0,
+      "天气": 1.5,
+      "时间": 1.5,
+      "定义": 1.5,
+      "含义": 1.5
     }
   },
   "uapi": {
@@ -164,9 +244,15 @@
       "购物推荐 比价 优惠 折扣"
     ],
     "boost_keywords": {
-      "搜索": 1.5, "查询": 1.5, "新闻": 1.5, "资讯": 1.5,
-      "评测": 1.5, "推荐": 1.3, "教程": 1.3,
-      "中文": 1.5, "国内": 1.5
+      "搜索": 1.5,
+      "查询": 1.5,
+      "新闻": 1.5,
+      "资讯": 1.5,
+      "评测": 1.5,
+      "推荐": 1.3,
+      "教程": 1.3,
+      "中文": 1.5,
+      "国内": 1.5
     }
   },
   "semantic_scholar": {
@@ -183,10 +269,18 @@
       "期刊 会议 评审 作者 机构 大学"
     ],
     "boost_keywords": {
-      "paper": 2.0, "research": 2.0, "citation": 2.0,
-      "study": 1.5, "experiment": 1.5, "methodology": 1.5,
-      "论文": 2.0, "引用": 2.0, "学术": 1.5, "研究": 1.5,
-      "survey": 1.5, "review": 1.5
+      "paper": 2.0,
+      "research": 2.0,
+      "citation": 2.0,
+      "study": 1.5,
+      "experiment": 1.5,
+      "methodology": 1.5,
+      "论文": 2.0,
+      "引用": 2.0,
+      "学术": 1.5,
+      "研究": 1.5,
+      "survey": 1.5,
+      "review": 1.5
     }
   },
   "felo": {
@@ -202,10 +296,21 @@
       "技术文档 框架 库 最佳实践 对比分析"
     ],
     "boost_keywords": {
-      "what is": 1.5, "explain": 1.5, "overview": 1.5, "summary": 1.5,
-      "tutorial": 1.3, "how does": 1.5, "deep dive": 1.5,
-      "是什么": 1.5, "怎么": 1.3, "如何": 1.3, "解释": 1.5,
-      "概述": 1.5, "综述": 1.5, "原理": 1.5, "教程": 1.3
+      "what is": 1.5,
+      "explain": 1.5,
+      "overview": 1.5,
+      "summary": 1.5,
+      "tutorial": 1.3,
+      "how does": 1.5,
+      "deep dive": 1.5,
+      "是什么": 1.5,
+      "怎么": 1.3,
+      "如何": 1.3,
+      "解释": 1.5,
+      "概述": 1.5,
+      "综述": 1.5,
+      "原理": 1.5,
+      "教程": 1.3
     }
   },
   "bocha": {
@@ -218,9 +323,14 @@
       "生活服务 旅游 美食 健康"
     ],
     "boost_keywords": {
-      "搜索": 1.3, "中文": 1.3, "资讯": 1.3,
-      "新闻": 1.3, "热点": 1.3, "推荐": 1.2,
-      "AI": 1.2, "语义": 1.2
+      "搜索": 1.3,
+      "中文": 1.3,
+      "资讯": 1.3,
+      "新闻": 1.3,
+      "热点": 1.3,
+      "推荐": 1.2,
+      "AI": 1.2,
+      "语义": 1.2
     }
   },
   "github": {
@@ -233,9 +343,17 @@
       "编程 开发 库 框架 工具"
     ],
     "boost_keywords": {
-      "code": 2.0, "github": 2.0, "repository": 1.5, "repo": 1.5,
-      "source": 1.5, "open source": 2.0, "library": 1.5,
-      "代码": 2.0, "开源": 2.0, "仓库": 1.5, "函数": 1.5
+      "code": 2.0,
+      "github": 2.0,
+      "repository": 1.5,
+      "repo": 1.5,
+      "source": 1.5,
+      "open source": 2.0,
+      "library": 1.5,
+      "代码": 2.0,
+      "开源": 2.0,
+      "仓库": 1.5,
+      "函数": 1.5
     }
   },
   "wikipedia": {
@@ -248,9 +366,14 @@
       "科学 技术 地理 文化 艺术"
     ],
     "boost_keywords": {
-      "wiki": 2.0, "wikipedia": 2.0, "encyclopedia": 2.0,
-      "definition": 1.5, "history": 1.5, "百科": 2.0,
-      "定义": 1.5, "历史": 1.5
+      "wiki": 2.0,
+      "wikipedia": 2.0,
+      "encyclopedia": 2.0,
+      "definition": 1.5,
+      "history": 1.5,
+      "百科": 2.0,
+      "定义": 1.5,
+      "历史": 1.5
     }
   },
   "local_search": {
@@ -268,9 +391,14 @@
       "中文搜索 学术搜索 代码搜索 新闻搜索 百科"
     ],
     "boost_keywords": {
-      "local": 2.0, "fallback": 1.5, "zero cost": 1.5,
-      "本地": 2.0, "兜底": 1.5, "零成本": 1.5,
-      "search": 1.2, "搜索": 1.2
+      "local": 2.0,
+      "fallback": 1.5,
+      "zero cost": 1.5,
+      "本地": 2.0,
+      "兜底": 1.5,
+      "零成本": 1.5,
+      "search": 1.2,
+      "搜索": 1.2
     }
   },
   "local_baidu": {
@@ -283,8 +411,12 @@
       "技术文档 教程 指南 帮助"
     ],
     "boost_keywords": {
-      "百度": 2.0, "中文": 1.5, "国内": 1.5,
-      "搜索": 1.3, "资讯": 1.3, "教程": 1.3
+      "百度": 2.0,
+      "中文": 1.5,
+      "国内": 1.5,
+      "搜索": 1.3,
+      "资讯": 1.3,
+      "教程": 1.3
     }
   },
   "local_sogou": {
@@ -296,8 +428,12 @@
       "生活服务 旅游 美食 健康 教育"
     ],
     "boost_keywords": {
-      "搜狗": 2.0, "微信": 1.5, "知乎": 1.5,
-      "中文": 1.3, "搜索": 1.2, "资讯": 1.2
+      "搜狗": 2.0,
+      "微信": 1.5,
+      "知乎": 1.5,
+      "中文": 1.3,
+      "搜索": 1.2,
+      "资讯": 1.2
     }
   },
   "local_github": {
@@ -310,9 +446,14 @@
       "编程 开发 库 框架 工具"
     ],
     "boost_keywords": {
-      "github": 2.0, "repository": 1.5, "repo": 1.5,
-      "source code": 2.0, "open source": 2.0,
-      "代码": 2.0, "开源": 2.0, "仓库": 1.5
+      "github": 2.0,
+      "repository": 1.5,
+      "repo": 1.5,
+      "source code": 2.0,
+      "open source": 2.0,
+      "代码": 2.0,
+      "开源": 2.0,
+      "仓库": 1.5
     }
   },
   "local_arxiv": {
@@ -328,8 +469,12 @@
       "机器学习 深度学习 神经网络 模型 训练"
     ],
     "boost_keywords": {
-      "arxiv": 2.0, "paper": 2.0, "preprint": 2.0,
-      "论文": 2.0, "学术": 1.5, "研究": 1.5
+      "arxiv": 2.0,
+      "paper": 2.0,
+      "preprint": 2.0,
+      "论文": 2.0,
+      "学术": 1.5,
+      "研究": 1.5
     }
   },
   "local_stackoverflow": {
@@ -342,9 +487,14 @@
       "函数 类 库 框架 API 用法"
     ],
     "boost_keywords": {
-      "stackoverflow": 2.0, "error": 1.5, "debug": 1.5,
-      "question": 1.3, "answer": 1.3,
-      "报错": 1.5, "调试": 1.5, "解决方案": 1.3
+      "stackoverflow": 2.0,
+      "error": 1.5,
+      "debug": 1.5,
+      "question": 1.3,
+      "answer": 1.3,
+      "报错": 1.5,
+      "调试": 1.5,
+      "解决方案": 1.3
     }
   },
   "twitter": {
@@ -358,10 +508,18 @@
       "热点 实时 资讯 观点"
     ],
     "boost_keywords": {
-      "twitter": 2.0, "tweet": 2.0, "retweet": 1.5,
-      "thread": 1.5, "trending": 1.5, "viral": 1.3,
-      "推特": 2.0, "推文": 2.0, "转发": 1.3,
-      "热门": 1.3, "话题": 1.3, "讨论": 1.2
+      "twitter": 2.0,
+      "tweet": 2.0,
+      "retweet": 1.5,
+      "thread": 1.5,
+      "trending": 1.5,
+      "viral": 1.3,
+      "推特": 2.0,
+      "推文": 2.0,
+      "转发": 1.3,
+      "热门": 1.3,
+      "话题": 1.3,
+      "讨论": 1.2
     }
   },
   "reddit": {
@@ -376,10 +534,17 @@
       "upvote comment award"
     ],
     "boost_keywords": {
-      "reddit": 2.0, "ama": 2.0, "subreddit": 2.0,
-      "upvote": 1.5, "downvote": 1.3, "comment": 1.3,
-      "reddit": 2.0, "帖子": 1.5, "讨论": 1.3,
-      "评论": 1.3, "社区": 1.2, "推荐": 1.3
+      "reddit": 2.0,
+      "ama": 2.0,
+      "subreddit": 2.0,
+      "upvote": 1.5,
+      "downvote": 1.3,
+      "comment": 1.3,
+      "帖子": 1.5,
+      "讨论": 1.3,
+      "评论": 1.3,
+      "社区": 1.2,
+      "推荐": 1.3
     }
   },
   "xiaohongshu": {
@@ -393,12 +558,24 @@
       "口碑 真实体验 避坑"
     ],
     "boost_keywords": {
-      "小红书": 2.0, "xhs": 2.0, "种草": 2.0,
-      "拔草": 2.0, "笔记": 1.5, "推荐": 1.3,
-      "测评": 1.5, "体验": 1.3, "心得": 1.3,
-      "攻略": 1.5, "避坑": 1.5, "博主": 1.3,
-      "美妆": 1.5, "穿搭": 1.5, "护肤": 1.5,
-      "好用": 1.3, "安利": 1.3, "真实": 1.2
+      "小红书": 2.0,
+      "xhs": 2.0,
+      "种草": 2.0,
+      "拔草": 2.0,
+      "笔记": 1.5,
+      "推荐": 1.3,
+      "测评": 1.5,
+      "体验": 1.3,
+      "心得": 1.3,
+      "攻略": 1.5,
+      "避坑": 1.5,
+      "博主": 1.3,
+      "美妆": 1.5,
+      "穿搭": 1.5,
+      "护肤": 1.5,
+      "好用": 1.3,
+      "安利": 1.3,
+      "真实": 1.2
     }
   },
   "bilibili": {
@@ -412,11 +589,20 @@
       "番剧 动漫 音乐 舞蹈"
     ],
     "boost_keywords": {
-      "bilibili": 2.0, "b站": 2.0, "bilibili": 2.0,
-      "视频": 1.5, "up主": 2.0, "弹幕": 1.5,
-      "评论": 1.3, "播放": 1.3, "教程": 1.3,
-      "数码": 1.3, "游戏": 1.3, "科技": 1.3,
-      "番剧": 1.5, "动漫": 1.5, "鬼畜": 1.5
+      "bilibili": 2.0,
+      "b站": 2.0,
+      "视频": 1.5,
+      "up主": 2.0,
+      "弹幕": 1.5,
+      "评论": 1.3,
+      "播放": 1.3,
+      "教程": 1.3,
+      "数码": 1.3,
+      "游戏": 1.3,
+      "科技": 1.3,
+      "番剧": 1.5,
+      "动漫": 1.5,
+      "鬼畜": 1.5
     }
   },
   "weibo": {
@@ -430,11 +616,499 @@
       "社会 民生 热点 舆论"
     ],
     "boost_keywords": {
-      "微博": 2.0, "weibo": 2.0, "热搜": 2.0,
-      "话题": 1.5, "超话": 1.5, "粉丝": 1.3,
-      "八卦": 1.5, "娱乐": 1.3, "明星": 1.3,
-      "转发": 1.3, "评论": 1.3, "点赞": 1.2,
-      "社会": 1.2, "民生": 1.2, "舆论": 1.5
+      "微博": 2.0,
+      "weibo": 2.0,
+      "热搜": 2.0,
+      "话题": 1.5,
+      "超话": 1.5,
+      "粉丝": 1.3,
+      "八卦": 1.5,
+      "娱乐": 1.3,
+      "明星": 1.3,
+      "转发": 1.3,
+      "评论": 1.3,
+      "点赞": 1.2,
+      "社会": 1.2,
+      "民生": 1.2,
+      "舆论": 1.5
     }
+  },
+  "itotii": {
+    "label": "itotii 梗百科",
+    "documents": [
+      "网络梗 流行语 热词 解释 是什么意思 出处 来源 为什么流行",
+      "抽象话 玩梗 出圈 破防 绷不住 蚌埠住了 栓Q 显眼包 电子榨菜",
+      "圈层黑话 饭圈用语 二次元 直播弹幕 游戏术语 方言梗",
+      "表情包 固定句式 谐音梗 缩写 数字谐音 网络用语 新梗",
+      "梗百科 梗词典 网络热词释义 流行语溯源"
+    ],
+    "boost_keywords": {
+      "梗": 2.5,
+      "流行语": 2.0,
+      "黑话": 2.0,
+      "网络用语": 2.0,
+      "热词": 1.8,
+      "抽象话": 1.8,
+      "玩梗": 1.8,
+      "出圈": 1.5,
+      "表情包": 1.5,
+      "谐音": 1.5,
+      "语录": 1.3,
+      "meme": 1.5
+    }
+  },
+  "urban_dictionary": {
+    "label": "Urban Dictionary",
+    "documents": [
+      "slang term meaning definition example usage",
+      "internet slang acronym abbreviation shorthand",
+      "british american informal colloquial expression",
+      "funny words meme phrase dictionary",
+      "俚语 俚语词典 英语口语 网络缩写 英文流行词"
+    ],
+    "boost_keywords": {
+      "slang": 2.5,
+      "俚语": 2.5,
+      "meaning": 1.5,
+      "definition": 1.5,
+      "acronym": 1.5,
+      "abbreviation": 1.5,
+      "colloquial": 1.8,
+      "urbandictionary": 2.0,
+      "口语": 1.5,
+      "英文俚语": 2.0
+    }
+  },
+  "know_your_meme": {
+    "label": "Know Your Meme",
+    "documents": [
+      "meme origin history explanation viral internet culture",
+      "know your meme entry author example usage",
+      "internet phenomenon viral video image macro reaction gif",
+      "meme 来源 起源 历史 病毒式传播 网络文化 表情包 起源"
+    ],
+    "boost_keywords": {
+      "meme": 2.5,
+      "know your meme": 2.5,
+      "kym": 2.0,
+      "origin": 1.5,
+      "history": 1.5,
+      "viral": 1.5,
+      "internet culture": 1.5,
+      "梗": 1.3,
+      "起源": 1.3
+    }
+  },
+  "itunes": {
+    "label": "iTunes 媒体库",
+    "documents": [
+      "音乐 歌曲 专辑 歌手 艺人 新歌 单曲 歌词 音乐人",
+      "电影 电视剧 纪录片 影视 影片 大片 影评 导演",
+      "播客 podcast 有声书 电台 节目 音频",
+      "APP 应用 软件 iPhone iOS 应用商店"
+    ],
+    "boost_keywords": {
+      "音乐": 2.0,
+      "歌曲": 2.0,
+      "专辑": 2.0,
+      "歌手": 1.8,
+      "电影": 2.0,
+      "电视剧": 1.8,
+      "播客": 2.0,
+      "新歌": 2.0,
+      "歌词": 1.8,
+      "music": 1.5,
+      "song": 1.5,
+      "podcast": 1.5
+    }
+  },
+  "openverse": {
+    "label": "Openverse 图库",
+    "documents": [
+      "图片 壁纸 照片 图库 素材 插画 头像 背景图",
+      "无版权 免费图片 CC0 开放版权 商用 素材下载",
+      "photo image wallpaper picture illustration"
+    ],
+    "boost_keywords": {
+      "图片": 2.2,
+      "壁纸": 2.2,
+      "照片": 2.0,
+      "图库": 2.2,
+      "素材": 2.0,
+      "插画": 2.0,
+      "无版权": 2.5,
+      "免费图片": 2.5,
+      "头像": 1.8,
+      "wallpaper": 2.0,
+      "image": 1.5,
+      "photo": 1.5
+    }
+  },
+  "coingecko": {
+    "label": "CoinGecko 币种",
+    "documents": [
+      "比特币 以太坊 莱特币 狗狗币 加密货币 虚拟货币",
+      "币价 币种 市值 代币 山寨币 空气币 稳定币 区块链",
+      "bitcoin ethereum crypto defi nft token"
+    ],
+    "boost_keywords": {
+      "比特币": 2.5,
+      "以太坊": 2.5,
+      "加密货币": 2.5,
+      "虚拟货币": 2.5,
+      "数字货币": 2.5,
+      "币价": 2.2,
+      "币种": 2.2,
+      "代币": 2.0,
+      "区块链": 1.8,
+      "bitcoin": 2.0,
+      "ethereum": 2.0,
+      "crypto": 1.8
+    }
+  },
+  "wikidata": {
+    "label": "维基数据实体",
+    "documents": [
+      "实体 知识图谱 结构化数据 词条 属性 关系",
+      "维基数据 wikidata QID 实体查询 SPARQL",
+      "entity knowledge graph structured data"
+    ],
+    "boost_keywords": {
+      "维基数据": 2.5,
+      "实体": 2.2,
+      "知识图谱": 2.2,
+      "实体查询": 2.5,
+      "wikidata": 2.5,
+      "QID": 2.5,
+      "词条": 1.5
+    }
+  },
+  "crates": {
+    "label": "crates.io 包",
+    "documents": [
+      "Rust 包 库 依赖 生态 crates.io cargo",
+      "crate 序列化 异步 框架 工具 命令行",
+      "serde tokio axum clap rust package"
+    ],
+    "boost_keywords": {
+      "crates": 2.5,
+      "cargo": 1.8,
+      "Rust": 2.2,
+      "rust": 2.2,
+      "依赖": 1.8,
+      "crate": 2.2,
+      "包管理": 1.5,
+      "库": 1.2
+    }
+  },
+  "musicbrainz": {
+    "label": "MusicBrainz 音乐人",
+    "documents": [
+      "歌手 乐队 音乐人 艺术家 乐手 主唱 创作人",
+      "专辑列表 discography 出道 国籍 流派 乐队成员",
+      "artist band singer musician discography"
+    ],
+    "boost_keywords": {
+      "歌手": 1.8,
+      "乐队": 2.0,
+      "音乐人": 2.0,
+      "艺术家": 1.8,
+      "乐手": 2.0,
+      "主唱": 2.0,
+      "discography": 2.2,
+      "artist": 1.5,
+      "band": 1.5
+    }
+  },
+  "open_library": {
+    "label": "Open Library 图书",
+    "documents": [
+      "小说 书籍 图书 名著 畅销书 电子书 书单",
+      "作者 出版社 ISBN 出版年份 科幻 推理 文学",
+      "book novel isbn ebook library reading"
+    ],
+    "boost_keywords": {
+      "小说": 2.2,
+      "书籍": 2.0,
+      "图书": 2.0,
+      "书单": 2.0,
+      "名著": 1.8,
+      "畅销书": 2.0,
+      "电子书": 1.8,
+      "ISBN": 2.2,
+      "book": 1.5,
+      "novel": 1.5
+    }
+  },
+  "free_dictionary": {
+    "label": "英英词典",
+    "documents": [
+      "单词 英文单词 释义 定义 音标 读音 词性",
+      "词典 字典 英英 查词 例句 用法 同义词",
+      "dictionary definition word meaning pronounce"
+    ],
+    "boost_keywords": {
+      "单词": 2.2,
+      "词典": 2.2,
+      "字典": 2.2,
+      "释义": 2.2,
+      "定义": 1.8,
+      "音标": 2.0,
+      "读音": 2.0,
+      "怎么读": 2.2,
+      "define": 2.0,
+      "definition": 2.0,
+      "dictionary": 2.2
+    }
+  },
+  "moegirl": {
+    "label": "萌娘百科",
+    "documents": [
+      "萌娘百科 二次元 ACG 动漫 番剧 新番 动画",
+      "声优 手办 同人 轻小说 漫画 游戏 galgame",
+      "vtuber 虚拟主播 东方project 型月 fate 角色 设定"
+    ],
+    "boost_keywords": {
+      "萌娘百科": 2.5,
+      "二次元": 2.2,
+      "ACG": 2.2,
+      "动漫": 2.0,
+      "番剧": 2.2,
+      "新番": 2.2,
+      "声优": 2.0,
+      "手办": 2.0,
+      "同人": 2.0,
+      "轻小说": 2.2,
+      "galgame": 2.0,
+      "vtuber": 2.0
+    }
+  },
+  "brave": {
+    "label": "Brave",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "crossref": {
+    "label": "Crossref",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "exa": {
+    "label": "Exa语义搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "v2ex": {
+    "label": "V2EX",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "google_scholar": {
+    "label": "GoogleScholar",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "hackernews": {
+    "label": "HackerNews",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "stackoverflow": {
+    "label": "StackOverflow",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "ths_hot": {
+    "label": "同花顺热点",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "cls_telegraph": {
+    "label": "财联社电报",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "em_global_news": {
+    "label": "东财全球资讯",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "metaso": {
+    "label": "秘塔",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "openalex": {
+    "label": "OpenAlex",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "searxng": {
+    "label": "SearXNG",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "wolframalpha": {
+    "label": "WolframAlpha",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "wechat_sogou": {
+    "label": "搜狗微信搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_bing": {
+    "label": "Bing本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_google": {
+    "label": "Google本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_mojeek": {
+    "label": "Mojeek本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_yandex": {
+    "label": "Yandex本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_startpage": {
+    "label": "Startpage本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_duckduckgo": {
+    "label": "DuckDuckGo本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_pubmed": {
+    "label": "PubMed本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_crossref": {
+    "label": "Crossref本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_semantic_scholar": {
+    "label": "Semantic Scholar本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_bing_news": {
+    "label": "Bing News本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_google_news": {
+    "label": "Google News本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_gitlab": {
+    "label": "GitLab本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_npm": {
+    "label": "NPM本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_wikipedia": {
+    "label": "Wikipedia本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_wiktionary": {
+    "label": "Wiktionary本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_wikiquote": {
+    "label": "Wikiquote本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_imdb": {
+    "label": "IMDb本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_goodreads": {
+    "label": "Goodreads本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_openstreetmap": {
+    "label": "OpenStreetMap本地",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "zh_wikipedia": {
+    "label": "中文维基百科",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "baidu_hot": {
+    "label": "百度热搜",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "toutiao_hot": {
+    "label": "今日头条热榜",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "bilibili_hot": {
+    "label": "B站热搜",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

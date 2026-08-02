@@ -95,6 +95,21 @@ html:
     url_attr: href
     score: 0.7
 
+  know_your_meme:
+    container: "a.item"
+    title: "h3"
+    url: "a"
+    url_attr: href
+    score: 0.7
+
+  moegirl:
+    container: "li.mw-search-result"
+    title: "div.mw-search-result-heading a"
+    url: "div.mw-search-result-heading a"
+    snippet: "div.searchresult"
+    url_attr: href
+    score: 0.7
+
 xml:
   local_arxiv:
     entry_path: ".//{http://www.w3.org/2005/Atom}entry"

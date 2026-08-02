@@ -43,7 +43,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     ],
     "cache": {"enabled": True, "db_path": "~/.cache/unified-search/cache.db", "ttl": 3600, "max_size_mb": 200},
     "execution": {"default_timeout": 8, "parallel_timeout": 6, "max_parallel_engines": 3, "retry_count": 0},
-    "cost_tiers": {"free": ["anysearch"], "low": [], "paid": []},
     "budget": {
         "fast": {"max_cost_per_query": 0.0, "allow_paid": False},
         "auto": {"max_cost_per_query": 0.01, "allow_paid": True},
@@ -206,9 +205,19 @@ def get_output_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 def get_cost_tiers(config: dict[str, Any] | None = None) -> dict[str, list[str]]:
-    """返回成本分级配置。"""
+    """返回成本分级：从引擎声明的 cost_tier 字段聚合（唯一真源 config.yaml engines 段）。
+
+    自 v2.6 起 cost_tiers 不再是独立配置段，新增引擎只需在 engines 段声明
+    cost_tier 字段，此处自动归入对应分级。
+    """
     cfg = config if config is not None else load_config()
-    return cfg.get("cost_tiers", {})
+    tiers: dict[str, list[str]] = {}
+    for name, spec in cfg.get("engines", {}).items():
+        if not isinstance(spec, dict):
+            continue
+        tier = spec.get("cost_tier", "free")
+        tiers.setdefault(tier, []).append(name)
+    return tiers
 
 
 def get_budget_config(mode: str = "auto") -> dict[str, Any]:
@@ -219,7 +228,10 @@ def get_budget_config(mode: str = "auto") -> dict[str, Any]:
 
 
 def get_cost_factor(engine: str) -> float:
-    """获取引擎的 cost_factor：free=1.0, low=0.7, paid=0.3。"""
+    """获取引擎的 cost_factor：free=1.0, low=0.7, paid=0.3。
+
+    由 get_cost_tiers 聚合结果驱动；未声明 cost_tier 的引擎按 free 兜底。
+    """
     tiers = get_cost_tiers()
     if engine in tiers.get("free", []):
         return 1.0

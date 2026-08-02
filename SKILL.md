@@ -46,6 +46,22 @@ engines:
   - ths_hot
   - cls_telegraph
   - em_global_news
+  - itotii
+  - urban_dictionary
+  - know_your_meme
+  - zh_wikipedia
+  - baidu_hot
+  - toutiao_hot
+  - bilibili_hot
+  - itunes
+  - openverse
+  - coingecko
+  - wikidata
+  - crates
+  - musicbrainz
+  - open_library
+  - free_dictionary
+  - moegirl
 ---
 
 ## Argo v2.3.0
@@ -171,7 +187,7 @@ python3 scripts/clarify.py "Python 吞苹果 兼容吗" --explain
 python3 scripts/clarify.py "苹果股价" --json
 ```
 
-### 引擎全景（28 个引擎 + Reranker）
+### 引擎全景（核心 28 引擎 + Reranker，全量 74 引擎 / 62 启用）
 
 | 引擎 | cost_tier | 特点 | 延迟 |
 |------|-----------|------|------|
@@ -265,6 +281,76 @@ python3 scripts/quota.py stats
 | weibo | free | 微博帖子+话题 | 无需认证 |
 
 社交引擎统一输出 `social_meta` 字段，包含作者、互动数据（点赞/评论/转发）、平台元信息。
+
+### 垂直内容引擎（v2.4 新增）
+
+新增 7 个免认证垂直引擎，覆盖网络梗/俚语与全网热榜两个新方向：
+
+| 引擎 | cost_tier | 特点 | 数据源 |
+|------|-----------|------|--------|
+| itotii | free | 中文流行语/网络梗词条 | geng.itotii.com WordPress REST |
+| urban_dictionary | free | 英文俚语定义+例句 | api.urbandictionary.com |
+| know_your_meme | free | 英文 meme 溯源（作者+条目） | knowyourmeme.com HTML 解析 |
+| zh_wikipedia | free | 中文维基百科 | zh.wikipedia.org MediaWiki |
+| baidu_hot | free | 百度实时热搜榜 | top.baidu.com HTML 解析 |
+| toutiao_hot | free | 今日头条热榜 | toutiao.com hot-board JSON |
+| bilibili_hot | free | B站热搜词 | api.bilibili.com search/square |
+
+路由规则：`meme_slang` 域（梗/俚语/黑话/流行语/玩梗等触发词）→ itotii + urban_dictionary + know_your_meme；
+`hot_trending` 域（热搜/热榜/热门话题等触发词）→ baidu_hot + toutiao_hot + bilibili_hot + ths_hot。
+三个热榜引擎与既有 ths_hot 同型：拉取当前榜单，查询词仅作路由触发，返回 top-N 热搜词条。
+调用示例：`python3 scripts/search.py "这是什么梗" --engine itotii`、`python3 scripts/search.py "今天热搜"`。
+
+### 广义垂直引擎（v2.5 新增）
+
+在 v2.4 的梗/热榜细分类之外，新增 9 个免认证的广义垂直引擎，覆盖媒体、图书、包管理、
+实体、词典、百科、加密七大方向，全部免 API key：
+
+| 引擎 | cost_tier | 特点 | 数据源 |
+|------|-----------|------|--------|
+| itunes | free | 音乐/影视/播客/应用 | itunes.apple.com/search |
+| openverse | free | 开放版权图片/素材 | api.openverse.org/v1/images |
+| coingecko | free | 加密货币/币种 | api.coingecko.com/api/v3/search |
+| wikidata | free | 结构化知识实体 | www.wikidata.org wbsearchentities |
+| crates | free | Rust 包/库（需 UA） | crates.io/api/v1/crates |
+| musicbrainz | free | 音乐人/作品元数据（限速 1rps） | musicbrainz.org/ws/2/artist |
+| open_library | free | 图书（作者·年份） | openlibrary.org/search.json |
+| free_dictionary | free | 英英词典（词义+例句） | api.dictionaryapi.dev |
+| moegirl | free | 萌娘百科（ACG 词条） | zh.moegirl.org.cn HTML 解析 |
+
+路由规则（域名均在 `zhihu_content` 之前，先匹配先命中）：
+`crypto_search`（比特币/以太坊/加密货币）→ coingecko；`package_search`（crates.io/cargo 包）→ crates + github；
+`dictionary_search`（词典/单词/define）→ free_dictionary；`anime_encyclopedia`（萌娘百科/番剧/二次元）→ moegirl + zh_wikipedia；
+`book_search`（小说/书籍/图书）→ open_library；`media_search`（音乐/歌曲/电影/播客）→ itunes + musicbrainz；
+`image_search`（图片/壁纸/素材）→ openverse；`entity_search`（维基数据/实体）→ wikidata + wikipedia。
+
+实现说明：open_library 与 free_dictionary 因响应形态特殊（数组/需拼接字段）走专用 builder；
+其余均为 `config.yaml` 声明式 `output_map` 配置。修复了 `url_template` 与 `item_url` 并存时
+URL 退化为原始标题/ID 的既有 bug（影响 zh_wikipedia、local_wikipedia、openstreetmap、pubmed 等）。
+调用示例：`python3 scripts/search.py "Rust 有哪本书" --engine open_library`、`python3 scripts/search.py "define serendipity"`。
+
+### 标准化：单一真源注册（v2.6）
+
+从 v2.6 起，「新增搜索源」收敛为只改 `config.yaml` 一处声明，其余注册表全部自动派生：
+
+- **唯一真源**：`config.yaml` 的 `engines:` 段。每个引擎内联声明 `type / enabled / label / cost_tier / qps / priority / limit / period / cost_per_call / cost_unit / coverage / desc`。
+- **派生脚本**：`python3 scripts/sync_backends.py` 从引擎声明派生 `backends/quota_profiles.json`（配额/成本/限频）、`backends/engine_registry.yaml`（引擎注册表文档）、校验并补全 `backends/domain_profiles.json`（TF-IDF 领域文档）。`--check` 模式只校验不写入，CI 可依赖退出码。
+- **成本分级**：原独立 `cost_tiers:` 配置段已删除，`config.get_cost_tiers()` 改为从引擎 `cost_tier` 字段聚合；路由 reason 的引擎显示名也从引擎 `label` 动态构建，`bin/argo` 与 MCP 工具描述的引擎计数同理。全库无手工同步关卡。
+
+**新增一个搜索源的标准流程**：
+
+```bash
+# 1. 在 config.yaml engines 段声明（type 决定解析 builder）
+#    type: 支持 cli/http/html/exa/wechat_sogou/hackernews/stackoverflow/
+#          google_scholar/v2ex/ths_hot/cls_telegraph/em_global_news/eastmoney/
+#          itotii/baidu_hot/toutiao_hot/bilibili_hot/open_library/free_dictionary
+# 2. 派生注册表 + 校验
+python3 scripts/sync_backends.py && python3 scripts/sync_backends.py --check
+# 3. 回归
+python3 -m pytest tests/ -q
+```
+
+需要新解析逻辑时才在 `scripts/engines.py` 的 `_BUILDERS` 注册新 builder（如既有 18 种 type 无法表达），否则纯声明即可。
 
 ### 三大增强工具（v2.0 新增）
 
@@ -393,9 +479,11 @@ argo-v2/
 ├── SKILL.md              # 本文件 — 技能注册文档
 ├── config.yaml           # 引擎配置 & 路由规则
 ├── backends/
-│   ├── domain_profiles.json   # TF-IDF 领域文档
-│   └── quota_profiles.json    # 配额配置
+│   ├── domain_profiles.json   # TF-IDF 领域文档（sync 派生/校验）
+│   ├── engine_registry.yaml   # 引擎注册表文档（sync 派生）
+│   └── quota_profiles.json    # 配额配置（sync 派生）
 ├── scripts/
+│   ├── sync_backends.py   # 注册表派生 + 一致性校验（单一真源 config.yaml）
 │   ├── config.py         # 配置加载器
 │   ├── search.py         # CLI 入口 & 执行编排
 │   ├── route.py          # 三层路由决策

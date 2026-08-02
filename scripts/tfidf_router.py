@@ -120,7 +120,9 @@ def _quota_ratio(engine: str, quota_state: dict) -> float:
         return 1.0
     limit = info.get("limit", 100)
     used = info.get("used", 0)
-    return max(0, limit - used) / limit
+    if limit is None or limit <= 0:
+        return 1.0  # 无配额约束或状态异常，不做惩罚
+    return max(0.0, min(1.0, (limit - used) / limit))
 
 
 # ── 成本感知 ──────────────────────────────────────────────────────────────────

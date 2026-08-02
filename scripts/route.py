@@ -60,19 +60,20 @@ _RE_DEPTH = re.compile(
     r"\b(deep|comprehensive|review|survey|research|paper|thesis)\b|"
     r"(对比分析|深度|全面|详细|深入|系统|完整|综述|研究|探究|详解|论文)", re.I)
 
-_ENGINE_NAMES = {
-    "anysearch": "AnySearch", "tavily": "Tavily",
-    "zhihu": "知乎", "eastmoney": "东方财富", "byted": "字节搜索",
-    "arxiv": "arXiv", "searxng": "SearXNG", "felo": "Felo",
-    "bocha": "博查", "openalex": "OpenAlex", "crossref": "Crossref",
-    "github": "GitHub", "wikipedia": "Wikipedia", "metaso": "秘塔",
-    "wolframalpha": "WolframAlpha", "brave": "Brave",
-    "duckduckgo": "DuckDuckGo", "uapi": "UAPI", "semantic_scholar": "Semantic Scholar",
-    "exa": "Exa 语义搜索", "wechat_sogou": "搜狗微信搜索",
-    "hackernews": "Hacker News", "stackoverflow": "Stack Overflow",
-    "google_scholar": "Google Scholar", "v2ex": "V2EX",
-    "ths_hot": "同花顺热点", "cls_telegraph": "财联社电报", "em_global_news": "东财全球资讯",
-}
+def _build_engine_names() -> dict[str, str]:
+    """从 config.yaml 引擎声明的 label 构建显示名映射（唯一真源）。
+
+    新增引擎只需在 config.yaml 声明 label，路由 reason 自动使用，
+    不再需要手工同步本表。
+    """
+    try:
+        engines = get_engines()
+    except Exception:
+        return {}
+    return {name: spec.get("label") or name for name, spec in engines.items()}
+
+
+_ENGINE_NAMES = _build_engine_names()
 
 
 def extract_features(query: str) -> dict[str, Any]:

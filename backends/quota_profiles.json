@@ -1,265 +1,5 @@
 {
-  "_description": "各引擎的配额/成本/限频配置。用于智能编排调度。",
-  "local_search": {
-    "label": "Local Search 聚合",
-    "qps": 10,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 1
-  },
-  "local_bing": {
-    "label": "Bing本地",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 20
-  },
-  "local_google": {
-    "label": "Google本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 21
-  },
-  "local_mojeek": {
-    "label": "Mojeek本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 22
-  },
-  "local_yandex": {
-    "label": "Yandex本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 23
-  },
-  "local_startpage": {
-    "label": "Startpage本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 24
-  },
-  "local_duckduckgo": {
-    "label": "DuckDuckGo本地",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 25
-  },
-  "local_baidu": {
-    "label": "百度本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 26
-  },
-  "local_sogou": {
-    "label": "搜狗本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 27
-  },
-  "local_arxiv": {
-    "label": "arXiv本地",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 28
-  },
-  "local_pubmed": {
-    "label": "PubMed本地",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 29
-  },
-  "local_crossref": {
-    "label": "Crossref本地",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 30
-  },
-  "local_semantic_scholar": {
-    "label": "Semantic Scholar本地",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 31
-  },
-  "local_bing_news": {
-    "label": "Bing News本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
-  },
-  "local_google_news": {
-    "label": "Google News本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 33
-  },
-  "local_duckduckgo_news": {
-    "label": "DuckDuckGo News本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 34
-  },
-  "local_github": {
-    "label": "GitHub本地",
-    "qps": 5,
-    "limit": 1000,
-    "period": "day",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 35
-  },
-  "local_stackoverflow": {
-    "label": "StackOverflow本地",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 36
-  },
-  "local_gitlab": {
-    "label": "GitLab本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 37
-  },
-  "local_npm": {
-    "label": "NPM本地",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 38
-  },
-  "local_wikipedia": {
-    "label": "Wikipedia本地",
-    "qps": 10,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 39
-  },
-  "local_wiktionary": {
-    "label": "Wiktionary本地",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 40
-  },
-  "local_wikiquote": {
-    "label": "Wikiquote本地",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 41
-  },
-  "local_imdb": {
-    "label": "IMDb本地",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 42
-  },
-  "local_goodreads": {
-    "label": "Goodreads本地",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 43
-  },
-  "local_openstreetmap": {
-    "label": "OpenStreetMap本地",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 44
-  },
+  "_description": "各引擎的配额/成本/限频配置。由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。",
   "anysearch": {
     "label": "AnySearch",
     "qps": 5,
@@ -269,47 +9,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 1
-  },
-  "byted": {
-    "label": "字节搜索",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "low",
-    "priority": 2
-  },
-  "eastmoney": {
-    "label": "东财金融",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 3
-  },
-  "zhihu": {
-    "label": "知乎",
-    "qps": 2,
-    "limit": 1000,
-    "period": "day",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 4
-  },
-  "tavily": {
-    "label": "Tavily",
-    "qps": 1.67,
-    "limit": 1000,
-    "period": "month",
-    "cost_per_call": 0.001,
-    "cost_unit": "credit",
-    "credits_per_search": 1,
-    "cost_tier": "paid",
-    "priority": 5
   },
   "arxiv": {
     "label": "arXiv学术论文",
@@ -321,15 +20,35 @@
     "cost_tier": "free",
     "priority": 7
   },
-  "felo": {
-    "label": "Felo AI搜索",
-    "qps": 1,
+  "baidu_hot": {
+    "label": "百度热搜",
+    "qps": 2,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
-    "cost_unit": "credit",
-    "cost_tier": "paid",
-    "priority": 8
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 27
+  },
+  "bilibili": {
+    "label": "B站",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "bilibili_hot": {
+    "label": "B站热搜",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 29
   },
   "bocha": {
     "label": "博查搜索",
@@ -338,120 +57,28 @@
     "period": "month",
     "cost_per_call": 0.0001,
     "cost_unit": "credit",
-    "credits_per_search": 1,
     "cost_tier": "low",
     "priority": 9
   },
-  "semantic_scholar": {
-    "label": "Semantic Scholar",
+  "brave": {
+    "label": "Brave",
     "qps": 2,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
     "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 10
+    "cost_tier": "low",
+    "priority": 50
   },
-  "github": {
-    "label": "GitHub",
-    "qps": 5,
-    "limit": 1000,
-    "period": "day",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 11
-  },
-  "wikipedia": {
-    "label": "Wikipedia",
-    "qps": 10,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 12
-  },
-  "duckduckgo": {
-    "label": "DuckDuckGo",
+  "byted": {
+    "label": "字节搜索",
     "qps": 5,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
     "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 13
-  },
-  "exa": {
-    "label": "Exa语义搜索",
-    "qps": 1,
-    "limit": 1000,
-    "period": "month",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "credits_per_search": 1,
-    "cost_tier": "api",
-    "priority": 14
-  },
-  "wechat_sogou": {
-    "label": "搜狗微信搜索",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 15
-  },
-  "hackernews": {
-    "label": "HackerNews",
-    "qps": 5,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 16
-  },
-  "stackoverflow": {
-    "label": "StackOverflow",
-    "qps": 3,
-    "limit": 300,
-    "period": "day",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 17
-  },
-  "google_scholar": {
-    "label": "GoogleScholar",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 18
-  },
-  "v2ex": {
-    "label": "V2EX",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 19
-  },
-  "ths_hot": {
-    "label": "同花顺热点",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 20
+    "cost_tier": "low",
+    "priority": 2
   },
   "cls_telegraph": {
     "label": "财联社电报",
@@ -463,6 +90,56 @@
     "cost_tier": "free",
     "priority": 21
   },
+  "coingecko": {
+    "label": "CoinGecko 币种",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 32
+  },
+  "crates": {
+    "label": "crates.io 包",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 34
+  },
+  "crossref": {
+    "label": "Crossref",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "duckduckgo": {
+    "label": "DuckDuckGo",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 13
+  },
+  "eastmoney": {
+    "label": "东财金融",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 3
+  },
   "em_global_news": {
     "label": "东财全球资讯",
     "qps": 2,
@@ -472,5 +149,595 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 22
+  },
+  "exa": {
+    "label": "Exa语义搜索",
+    "qps": 1,
+    "limit": 1000,
+    "period": "month",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "api",
+    "priority": 14
+  },
+  "felo": {
+    "label": "Felo AI搜索",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "credit",
+    "cost_tier": "paid",
+    "priority": 8
+  },
+  "free_dictionary": {
+    "label": "英英词典",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 37
+  },
+  "github": {
+    "label": "GitHub",
+    "qps": 5,
+    "limit": 1000,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 11
+  },
+  "google_scholar": {
+    "label": "GoogleScholar",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 18
+  },
+  "hackernews": {
+    "label": "HackerNews",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 16
+  },
+  "itotii": {
+    "label": "itotii梗百科",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 23
+  },
+  "itunes": {
+    "label": "iTunes 媒体库",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
+  },
+  "know_your_meme": {
+    "label": "Know Your Meme",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 25
+  },
+  "local_arxiv": {
+    "label": "arXiv本地",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 28
+  },
+  "local_baidu": {
+    "label": "百度本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 26
+  },
+  "local_bing": {
+    "label": "Bing本地",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
+  },
+  "local_bing_news": {
+    "label": "Bing News本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 32
+  },
+  "local_crossref": {
+    "label": "Crossref本地",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
+  },
+  "local_duckduckgo": {
+    "label": "DuckDuckGo本地",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 25
+  },
+  "local_github": {
+    "label": "GitHub本地",
+    "qps": 5,
+    "limit": 1000,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
+  },
+  "local_gitlab": {
+    "label": "GitLab本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 37
+  },
+  "local_goodreads": {
+    "label": "Goodreads本地",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 43
+  },
+  "local_google": {
+    "label": "Google本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 21
+  },
+  "local_google_news": {
+    "label": "Google News本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 33
+  },
+  "local_imdb": {
+    "label": "IMDb本地",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 42
+  },
+  "local_mojeek": {
+    "label": "Mojeek本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 22
+  },
+  "local_npm": {
+    "label": "NPM本地",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 38
+  },
+  "local_openstreetmap": {
+    "label": "OpenStreetMap本地",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 44
+  },
+  "local_pubmed": {
+    "label": "PubMed本地",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 29
+  },
+  "local_search": {
+    "label": "Local Search 聚合",
+    "qps": 10,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 1
+  },
+  "local_semantic_scholar": {
+    "label": "Semantic Scholar本地",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 31
+  },
+  "local_sogou": {
+    "label": "搜狗本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 27
+  },
+  "local_stackoverflow": {
+    "label": "StackOverflow本地",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 36
+  },
+  "local_startpage": {
+    "label": "Startpage本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 24
+  },
+  "local_wikipedia": {
+    "label": "Wikipedia本地",
+    "qps": 10,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 39
+  },
+  "local_wikiquote": {
+    "label": "Wikiquote本地",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 41
+  },
+  "local_wiktionary": {
+    "label": "Wiktionary本地",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 40
+  },
+  "local_yandex": {
+    "label": "Yandex本地",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 23
+  },
+  "metaso": {
+    "label": "秘塔",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "low",
+    "priority": 50
+  },
+  "moegirl": {
+    "label": "萌娘百科",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 38
+  },
+  "musicbrainz": {
+    "label": "MusicBrainz 音乐人",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
+  },
+  "open_library": {
+    "label": "Open Library 图书",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 36
+  },
+  "openalex": {
+    "label": "OpenAlex",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "openverse": {
+    "label": "Openverse 图库",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 31
+  },
+  "reddit": {
+    "label": "Reddit",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "searxng": {
+    "label": "SearXNG",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "semantic_scholar": {
+    "label": "Semantic Scholar",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 10
+  },
+  "stackoverflow": {
+    "label": "StackOverflow",
+    "qps": 3,
+    "limit": 300,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 17
+  },
+  "tavily": {
+    "label": "Tavily",
+    "qps": 1.67,
+    "limit": 1000,
+    "period": "month",
+    "cost_per_call": 0.001,
+    "cost_unit": "credit",
+    "cost_tier": "paid",
+    "priority": 5
+  },
+  "ths_hot": {
+    "label": "同花顺热点",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
+  },
+  "toutiao_hot": {
+    "label": "今日头条热榜",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 28
+  },
+  "twitter": {
+    "label": "Twitter/X",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "uapi": {
+    "label": "UAPI",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "urban_dictionary": {
+    "label": "Urban Dictionary",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 24
+  },
+  "v2ex": {
+    "label": "V2EX",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 19
+  },
+  "wechat_sogou": {
+    "label": "搜狗微信搜索",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 5
+  },
+  "weibo": {
+    "label": "微博",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "wikidata": {
+    "label": "维基数据实体",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 33
+  },
+  "wikipedia": {
+    "label": "Wikipedia",
+    "qps": 10,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
+  "wolframalpha": {
+    "label": "WolframAlpha",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "xiaohongshu": {
+    "label": "小红书",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "zh_wikipedia": {
+    "label": "中文维基百科",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 26
+  },
+  "zhihu": {
+    "label": "知乎",
+    "qps": 2,
+    "limit": 1000,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 4
   }
 }

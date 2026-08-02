@@ -53,12 +53,31 @@ def _get_cache():
     return _cache_instance
 
 
+# ── 引擎统计（从 config.yaml 动态计算，唯一真源） ─────────────────────────────
+
+def _engine_counts() -> tuple[int, int, int]:
+    """返回 (启用引擎总数, 本地引擎数, 远程引擎数)。
+
+    新增引擎只需改 config.yaml，工具描述与说明自动跟随，无需手工同步数字。
+    """
+    try:
+        cfg = _lazy_import("config")
+        engines = cfg.get_engines()
+        local = sum(1 for name in engines if name.startswith("local_"))
+        return len(engines), local, len(engines) - local
+    except Exception:
+        return 61, 21, 40  # 兜底：配置不可读时退回旧文案
+
+
+_ENG_TOTAL, _ENG_LOCAL, _ENG_REMOTE = _engine_counts()
+
+
 # ── 工具定义（MCP schema） ────────────────────────────────────────────────────
 
 TOOLS = [
     {
         "name": "argo_search",
-        "description": "统一搜索引擎：47 个引擎（22 远程 + 25 本地）统一搜索，支持 TF-IDF 语义路由 + RRF 多引擎融合 + Bocha 语义精排 + 双层缓存。适用于所有通用搜索场景：查资料、找答案、搜新闻、学术检索、代码搜索、中文内容搜索等。",
+        "description": f"统一搜索引擎：{_ENG_TOTAL} 个引擎（{_ENG_REMOTE} 远程 + {_ENG_LOCAL} 本地）统一搜索，支持 TF-IDF 语义路由 + RRF 多引擎融合 + Bocha 语义精排 + 双层缓存。适用于所有通用搜索场景：查资料、找答案、搜新闻、学术检索、代码搜索、中文内容搜索等。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -694,7 +713,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
                 "name": "argo",
                 "version": "2.1.0"
             },
-            "instructions": "Argo MCP 提供 16 个工具：argo_search（47 引擎统一搜索）、argo_research（深度研究+社交舆情）、argo_evidence（可信度评估）、argo_clarify（意图消歧）、argo_crawl（站点爬取）、argo_extract（结构化数据提取）、argo_fetch（智能页面抓取+反检测浏览器降级）、argo_screenshot（页面截图）、argo_pdf（PDF 结构化提取）、argo_social_search（社交平台搜索）、argo_social_sentiment（社交舆情分析）、argo_twitter_search、argo_reddit_search、argo_xiaohongshu_search、argo_bilibili_search、argo_weibo_search。底层使用 47 个搜索引擎的统一搜索基础设施，支持 TF-IDF 语义路由、RRF 多引擎融合、Bocha 语义精排、双层缓存和成本感知预算控制。"
+            "instructions": f"Argo MCP 提供 16 个工具：argo_search（{_ENG_TOTAL} 引擎统一搜索）、argo_research（深度研究+社交舆情）、argo_evidence（可信度评估）、argo_clarify（意图消歧）、argo_crawl（站点爬取）、argo_extract（结构化数据提取）、argo_fetch（智能页面抓取+反检测浏览器降级）、argo_screenshot（页面截图）、argo_pdf（PDF 结构化提取）、argo_social_search（社交平台搜索）、argo_social_sentiment（社交舆情分析）、argo_twitter_search、argo_reddit_search、argo_xiaohongshu_search、argo_bilibili_search、argo_weibo_search。底层使用 {_ENG_TOTAL} 个搜索引擎的统一搜索基础设施，支持 TF-IDF 语义路由、RRF 多引擎融合、Bocha 语义精排、双层缓存和成本感知预算控制。"
         }
 
     elif method == "tools/list":

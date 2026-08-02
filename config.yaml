@@ -121,6 +121,101 @@ domains:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings|report|announcement)
   primary: byted
+- desc: 全网热搜/热榜
+  engines_combo:
+  - baidu_hot
+  - toutiao_hot
+  - bilibili_hot
+  - ths_hot
+  fallback: baidu_hot
+  name: hot_trending
+  parallel: true
+  patterns:
+  - (?i)(热搜|热榜|热搜榜|实时热搜|今日热搜|今天热搜|微博热搜|百度热搜|B站热搜|bilibili热搜|头条热榜|抖音热榜|热门话题|trending now|hot search|top trends)
+  primary: baidu_hot
+- desc: 加密货币/币种查询
+  engines_combo:
+  - coingecko
+  fallback: coingecko
+  name: crypto_search
+  parallel: false
+  patterns:
+  - (?i)(比特币|以太坊|莱特币|狗狗币|加密货币|虚拟货币|数字货币|币价|币种|山寨币|空气币|代币|区块链|挖矿|钱包地址|token 经济|稳定币)
+  - (?i)\b(bitcoin|ethereum|btc|eth|crypto|altcoin|defi|nft|blockchain|coin)\b
+  primary: coingecko
+- desc: Rust 包/库查询（crates.io）
+  engines_combo:
+  - crates
+  - github
+  fallback: crates
+  name: package_search
+  parallel: false
+  patterns:
+  - (?i)(crates\.io|cargo 包|rust 包|rust 库|crate 库|rust crate|rust 依赖|rust 生态|rust.*\bcrate|好用的 crate)
+  - (?i)\b(crates\.io|crates|crate|cargo\s+package|serde)\b
+  primary: crates
+- desc: 英文单词/词典查询
+  engines_combo:
+  - free_dictionary
+  fallback: free_dictionary
+  name: dictionary_search
+  parallel: false
+  patterns:
+  - (?i)(词典|字典|英英|英汉词典|英文单词|单词.*意思|英文.*意思|怎么读|咋读|读音|查词|define|definition|dictionary|meaning of|the word)
+  - (?i)\b[a-z]{3,}\b\s*什么意思|什么意思\s*\b[a-z]{3,}\b|[a-zA-Z]{3,}.*(意思是什么|的意思)
+  primary: free_dictionary
+- desc: 动漫/二次元百科（萌娘百科）
+  engines_combo:
+  - moegirl
+  - zh_wikipedia
+  fallback: moegirl
+  name: anime_encyclopedia
+  parallel: false
+  patterns:
+  - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|动画|galgame|vtuber|虚拟主播|东方project|型月|fate)
+  primary: moegirl
+- desc: 书籍/图书搜索（Open Library）
+  engines_combo:
+  - open_library
+  - anysearch
+  fallback: anysearch
+  name: book_search
+  parallel: true
+  patterns:
+  - (?i)(小说|书籍|图书|书单|好书|荐书|书荒|名著|畅销书|电子书|看书|出版社|ISBN|小说推荐|科幻小说|推理小说)
+  - (?i)\b(book|novel|isbn|ebook|bestseller)\b
+  primary: open_library
+- desc: 音乐/影视/播客媒体搜索
+  engines_combo:
+  - itunes
+  - musicbrainz
+  fallback: itunes
+  name: media_search
+  parallel: true
+  patterns:
+  - (?i)(歌曲|音乐|专辑|新歌|单曲|MV|mp3|歌词|歌手|乐队|音乐人|主唱|好听的歌|好歌推荐|听歌|歌单|的歌|电影(?!梗概)|电视剧|纪录片|影视|大片|主题曲|片尾曲|插曲|播客|有声书)
+  - (?i)\b(music|song|album|movie|film|tv show|podcast|soundtrack|soundtrack|lyrics|singer|band)\b
+  primary: itunes
+- desc: 图片/素材搜索（Openverse 开放版权图库）
+  engines_combo:
+  - openverse
+  fallback: openverse
+  name: image_search
+  parallel: false
+  patterns:
+  - (?i)(图片|壁纸|照片|图库|素材|插画|无版权|免费图片|头像|背景图|表情图|png|jpg 图片|壁纸下载)
+  - (?i)\b(wallpaper|photo|image|picture|illustration|stock photo|free image)\b
+  primary: openverse
+- desc: 知识实体/维基数据查询
+  engines_combo:
+  - wikidata
+  - wikipedia
+  fallback: wikidata
+  name: entity_search
+  parallel: false
+  patterns:
+  - (?i)(维基数据|wikidata|知识实体|实体查询|词条实体|QID|SPARQL|知识图谱)
+  primary: wikidata
 - desc: 知乎/观点/经验/评测
   engines_combo:
   - zhihu
@@ -192,6 +287,19 @@ domains:
   - (?i)(github|source code|代码|源码|开源|函数|API|实现|用法|example|snippet)
   - (?i)\b(repo|repository|library|package|npm|pip|cargo)\b
   primary: github
+- desc: 网络梗/流行语/俚语/黑话
+  engines_combo:
+  - itotii
+  - urban_dictionary
+  - know_your_meme
+  - anysearch
+  fallback: itotii
+  name: meme_slang
+  parallel: true
+  patterns:
+  - (?i)(梗(?!概)|meme|俚语|slang|黑话|流行语|网络用语|网络热词|玩梗|出圈|抽象话|缩写|圈层用语|语录|表情包|梗百科|热梗)
+  - (?i)(这是什么梗|啥意思|什么意思.*梗|梗.*意思|internet culture)
+  primary: itotii
 - desc: 事实查询/快速问答
   engines_combo:
   - duckduckgo
@@ -309,6 +417,13 @@ engines:
   local_search:
     type: cli
     enabled: true
+    label: "Local Search 聚合"
+    cost_tier: free
+    qps: 10
+    priority: 1
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     cmd:
     - python3
     - sub-skills/local-search/search_v3.py
@@ -325,6 +440,15 @@ engines:
     - python3
     - ~/.claude/skills/argo/scripts/anysearch_http.py
     enabled: true
+    label: "AnySearch"
+    cost_tier: free
+    qps: 5
+    priority: 1
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["general", "tech"]
+    desc: "通用搜索主力，本地 CLI，零 token"
     env: {}
     search_args:
     - search
@@ -334,6 +458,15 @@ engines:
     type: cli
   arxiv:
     enabled: true
+    label: "arXiv学术论文"
+    cost_tier: free
+    qps: 1
+    priority: 7
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["academic"]
+    desc: "arXiv 论文搜索"
     format: xml
     method: GET
     query_param: search_query
@@ -347,6 +480,16 @@ engines:
       query: '{query}'
       summary: true
     enabled: true
+    label: "博查搜索"
+    cost_tier: low
+    qps: 5
+    priority: 9
+    limit: 10000
+    period: "month"
+    cost_per_call: 0.0001
+    cost_unit: "credit"
+    coverage: ["chinese", "general"]
+    desc: "博查搜索 API（中文）"
     headers:
       Authorization: Bearer {BOCHA_API_KEY}
       Content-Type: application/json
@@ -356,6 +499,10 @@ engines:
     url: https://api.bochaai.com/v1/web-search
   brave:
     enabled: false
+    label: "Brave"
+    cost_tier: low
+    coverage: ["general"]
+    desc: "Brave Search API"
     extra_params:
       count: '{n}'
     format: json
@@ -375,6 +522,15 @@ engines:
       Query: '{query}'
       SearchType: web
     enabled: true
+    label: "字节搜索"
+    cost_tier: low
+    qps: 5
+    priority: 2
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["general", "news", "chinese"]
+    desc: "字节搜索 API，中文通用/news"
     headers:
       Authorization: Bearer {WEB_SEARCH_API_KEY}
       Content-Type: application/json
@@ -391,6 +547,10 @@ engines:
     url: https://open.feedcoopapi.com/search_api/web_search
   crossref:
     enabled: false
+    label: "Crossref"
+    cost_tier: free
+    coverage: ["academic"]
+    desc: "Crossref DOI 元数据 API"
     extra_params:
       mailto: unified-search@local
       rows: '{n}'
@@ -402,6 +562,15 @@ engines:
     url: https://api.crossref.org/works
   duckduckgo:
     enabled: true
+    label: "DuckDuckGo"
+    cost_tier: free
+    qps: 5
+    priority: 13
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["general"]
+    desc: "DuckDuckGo Instant Answer API（T2 替代）"
     format: json
     method: GET
     query_param: q
@@ -409,46 +578,137 @@ engines:
     type: http
     url: https://api.duckduckgo.com/
   exa:
-    cost_tier: api
     enabled: true
+    label: "Exa语义搜索"
+    cost_tier: api
+    qps: 1
+    priority: 14
+    limit: 1000
+    period: "month"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["semantic", "general", "english", "chinese"]
+    desc: "Exa 语义搜索（embedding 匹配 + 内容摘要，1000次/月免费）"
     timeout: 15
     type: exa
   eastmoney:
     enabled: true
+    label: "东财金融"
+    cost_tier: free
+    qps: 1
+    priority: 3
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["finance", "stock", "fund"]
+    desc: "东方财富，金融数据首选"
     timeout: 12
     type: eastmoney
   v2ex:
     enabled: true
+    label: "V2EX"
+    cost_tier: free
+    qps: 3
+    priority: 19
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "tech", "community", "discussion"]
+    desc: "V2EX（中文技术社区搜索）"
     timeout: 10
     type: v2ex
   google_scholar:
     enabled: true
+    label: "GoogleScholar"
+    cost_tier: free
+    qps: 2
+    priority: 18
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["academic", "paper", "research"]
+    desc: "Google Scholar（学术论文搜索，HTTP 页面解析）"
     timeout: 12
     type: google_scholar
   hackernews:
     enabled: true
+    label: "HackerNews"
+    cost_tier: free
+    qps: 5
+    priority: 16
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["tech", "news", "discussion", "english"]
+    desc: "Hacker News（Algolia API，科技新闻+讨论）"
     timeout: 8
     type: hackernews
   stackoverflow:
     enabled: true
+    label: "StackOverflow"
+    cost_tier: free
+    qps: 3
+    priority: 17
+    limit: 300
+    period: "day"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["code", "programming", "qa", "english"]
+    desc: "Stack Overflow（Stack Exchange API，编程问答）"
     timeout: 8
     type: stackoverflow
   ths_hot:
     enabled: true
+    label: "同花顺热点"
+    cost_tier: free
+    qps: 2
+    priority: 20
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "stock", "hot", "theme"]
+    desc: "同花顺热点（当日强势股+题材归因，独家能力）"
     timeout: 10
     type: ths_hot
   cls_telegraph:
     enabled: true
+    label: "财联社电报"
+    cost_tier: free
+    qps: 2
+    priority: 21
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "news", "telegraph", "realtime"]
+    desc: "财联社电报（全市场实时快讯，v1 API+本地签名零key）"
     timeout: 10
     type: cls_telegraph
   em_global_news:
     enabled: true
+    label: "东财全球资讯"
+    cost_tier: free
+    qps: 2
+    priority: 22
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "news", "global", "finance"]
+    desc: "东财全球资讯（7×24 财经快讯）"
     timeout: 10
     type: em_global_news
   felo:
     body:
       query: '{query}'
     enabled: false
+    label: "Felo AI搜索"
+    cost_tier: paid
+    qps: 1
+    priority: 8
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "credit"
+    coverage: ["general", "tech"]
+    desc: "Felo AI 搜索 API"
     headers:
       Accept: application/json
       Authorization: Bearer {FELO_API_KEY}
@@ -460,6 +720,16 @@ engines:
     url: https://openapi.felo.ai/v2/chat
   github:
     enabled: true
+    label: "GitHub"
+    cost_tier: free
+    qps: 5
+    priority: 11
+    limit: 1000
+    period: "day"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["code"]
+    desc: "GitHub 代码搜索 API"
     extra_params:
       per_page: '{n}'
     format: json
@@ -478,6 +748,10 @@ engines:
       search_size: '{n}'
       source: web
     enabled: false
+    label: "秘塔"
+    cost_tier: low
+    coverage: ["chinese", "general"]
+    desc: "秘塔搜索 API（中文 AI 搜索）"
     headers:
       Authorization: Bearer {METASO_API_KEY}
       Content-Type: application/json
@@ -487,6 +761,10 @@ engines:
     url: https://metaso.cn/api/open/search
   openalex:
     enabled: false
+    label: "OpenAlex"
+    cost_tier: free
+    coverage: ["academic"]
+    desc: "OpenAlex 开放学术 API"
     extra_params:
       mailto: unified-search@local
       per_page: '{n}'
@@ -498,6 +776,10 @@ engines:
     url: https://api.openalex.org/works
   searxng:
     enabled: false
+    label: "SearXNG"
+    cost_tier: free
+    coverage: ["general"]
+    desc: "SearXNG 直连（已废弃，由 T3 替代）"
     format: json
     method: GET
     query_param: q
@@ -506,6 +788,15 @@ engines:
     url: http://127.0.0.1:8888/search
   semantic_scholar:
     enabled: true
+    label: "Semantic Scholar"
+    cost_tier: free
+    qps: 2
+    priority: 10
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["academic"]
+    desc: "Semantic Scholar API（备选）"
     format: json
     method: GET
     query_param: query
@@ -521,6 +812,16 @@ engines:
       topic: general
       include_answer: basic
     enabled: true
+    label: "Tavily"
+    cost_tier: paid
+    qps: 1.67
+    priority: 5
+    limit: 1000
+    period: "month"
+    cost_per_call: 0.001
+    cost_unit: "credit"
+    coverage: ["general"]
+    desc: "Tavily AI 搜索 API"
     headers:
       Content-Type: application/json
     method: POST
@@ -532,6 +833,10 @@ engines:
       count: '{n}'
       query: '{query}'
     enabled: false
+    label: "UAPI"
+    cost_tier: free
+    coverage: ["general"]
+    desc: "UAPI 聚合搜索"
     headers:
       Content-Type: application/json
     method: POST
@@ -540,6 +845,15 @@ engines:
     url: https://uapis.cn/api/v1/search/aggregate
   wikipedia:
     enabled: true
+    label: "Wikipedia"
+    cost_tier: free
+    qps: 10
+    priority: 12
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["wiki", "factual"]
+    desc: "Wikipedia API（T2 替代）"
     extra_params:
       action: query
       format: json
@@ -555,6 +869,10 @@ engines:
     url: https://en.wikipedia.org/w/api.php
   wolframalpha:
     enabled: false
+    label: "WolframAlpha"
+    cost_tier: free
+    coverage: ["factual", "math"]
+    desc: "WolframAlpha 计算知识引擎"
     extra_params:
       appid: '{WOLFRAM_APPID}'
       output: json
@@ -566,6 +884,16 @@ engines:
     url: https://api.wolframalpha.com/v2/query
   zhihu:
     enabled: true
+    label: "知乎"
+    cost_tier: free
+    qps: 2
+    priority: 4
+    limit: 1000
+    period: "day"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "review", "opinion"]
+    desc: "知乎搜索，中文观点/评测"
     format: json
     headers:
       Authorization: Bearer {ZHIHU_ACCESS_SECRET}
@@ -585,10 +913,23 @@ engines:
     type: http
     url: https://developer.zhihu.com/api/v1/content/zhihu_search
 
+  wechat_sogou:
+    type: wechat_sogou
+    enabled: true
+    label: "搜狗微信搜索"
+    cost_tier: free
+    qps: 2
+    priority: 5
+    coverage: ["chinese", "wechat", "article"]
+    desc: "搜狗微信搜索引擎（公众号文章，免登录）"
+    timeout: 10
+
   # ── 社交平台引擎 ────────────────────────────────────────────────────────────
   twitter:
     type: cli
+    label: "Twitter/X"
     enabled: true
+    cost_tier: free
     cmd:
     - python3
     - ~/.claude/skills/argo/scripts/social_engines/twitter_engine.py
@@ -600,7 +941,9 @@ engines:
     env: {}
   reddit:
     type: cli
+    label: "Reddit"
     enabled: true
+    cost_tier: free
     cmd:
     - python3
     - ~/.claude/skills/argo/scripts/social_engines/reddit_engine.py
@@ -615,6 +958,13 @@ engines:
   local_bing:
     type: html
     enabled: true
+    label: "Bing本地"
+    cost_tier: free
+    qps: 5
+    priority: 20
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.bing.com/search"
     query_param: q
     extra_params:
@@ -624,6 +974,13 @@ engines:
   local_google:
     type: html
     enabled: false
+    label: "Google本地"
+    cost_tier: free
+    qps: 3
+    priority: 21
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.google.com/search"
     query_param: q
     extra_params:
@@ -633,6 +990,13 @@ engines:
   local_mojeek:
     type: html
     enabled: true
+    label: "Mojeek本地"
+    cost_tier: free
+    qps: 3
+    priority: 22
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.mojeek.com/search"
     query_param: q
     timeout: 10
@@ -640,6 +1004,13 @@ engines:
   local_yandex:
     type: html
     enabled: false
+    label: "Yandex本地"
+    cost_tier: free
+    qps: 3
+    priority: 23
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://yandex.com/search/"
     query_param: text
     timeout: 10
@@ -647,6 +1018,13 @@ engines:
   local_startpage:
     type: html
     enabled: true
+    label: "Startpage本地"
+    cost_tier: free
+    qps: 3
+    priority: 24
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.startpage.com/do/dsearch"
     query_param: query
     timeout: 10
@@ -654,6 +1032,13 @@ engines:
   local_duckduckgo:
     type: html
     enabled: true
+    label: "DuckDuckGo本地"
+    cost_tier: free
+    qps: 5
+    priority: 25
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://html.duckduckgo.com/html/"
     query_param: q
     timeout: 8
@@ -661,6 +1046,13 @@ engines:
   local_baidu:
     type: html
     enabled: true
+    label: "百度本地"
+    cost_tier: free
+    qps: 3
+    priority: 26
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.baidu.com/s"
     query_param: wd
     extra_params:
@@ -670,6 +1062,13 @@ engines:
   local_sogou:
     type: html
     enabled: true
+    label: "搜狗本地"
+    cost_tier: free
+    qps: 3
+    priority: 27
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.sogou.com/web"
     query_param: query
     timeout: 8
@@ -677,6 +1076,13 @@ engines:
   local_arxiv:
     type: http
     enabled: true
+    label: "arXiv本地"
+    cost_tier: free
+    qps: 1
+    priority: 28
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: xml
     method: GET
     query_param: search_query
@@ -689,6 +1095,13 @@ engines:
   local_pubmed:
     type: http
     enabled: true
+    label: "PubMed本地"
+    cost_tier: free
+    qps: 1
+    priority: 29
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: term
@@ -707,6 +1120,13 @@ engines:
   local_crossref:
     type: http
     enabled: true
+    label: "Crossref本地"
+    cost_tier: free
+    qps: 2
+    priority: 30
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: query
@@ -724,6 +1144,13 @@ engines:
   local_semantic_scholar:
     type: http
     enabled: true
+    label: "Semantic Scholar本地"
+    cost_tier: free
+    qps: 2
+    priority: 31
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: query
@@ -741,6 +1168,13 @@ engines:
   local_bing_news:
     type: http
     enabled: true
+    label: "Bing News本地"
+    cost_tier: free
+    qps: 3
+    priority: 32
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: xml
     method: GET
     query_param: q
@@ -752,6 +1186,13 @@ engines:
   local_google_news:
     type: http
     enabled: true
+    label: "Google News本地"
+    cost_tier: free
+    qps: 3
+    priority: 33
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: xml
     method: GET
     query_param: q
@@ -761,6 +1202,14 @@ engines:
   local_github:
     type: http
     enabled: true
+    label: "GitHub本地"
+    cost_tier: free
+    qps: 5
+    priority: 35
+    limit: 1000
+    period: "day"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: q
@@ -780,6 +1229,13 @@ engines:
   local_stackoverflow:
     type: http
     enabled: true
+    label: "StackOverflow本地"
+    cost_tier: free
+    qps: 5
+    priority: 36
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: q
@@ -799,6 +1255,13 @@ engines:
   local_gitlab:
     type: http
     enabled: true
+    label: "GitLab本地"
+    cost_tier: free
+    qps: 3
+    priority: 37
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: search
@@ -816,6 +1279,13 @@ engines:
   local_npm:
     type: http
     enabled: true
+    label: "NPM本地"
+    cost_tier: free
+    qps: 5
+    priority: 38
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: text
@@ -832,6 +1302,13 @@ engines:
   local_wikipedia:
     type: http
     enabled: true
+    label: "Wikipedia本地"
+    cost_tier: free
+    qps: 10
+    priority: 39
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: srsearch
@@ -852,6 +1329,13 @@ engines:
   local_wiktionary:
     type: http
     enabled: true
+    label: "Wiktionary本地"
+    cost_tier: free
+    qps: 5
+    priority: 40
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: srsearch
@@ -872,6 +1356,13 @@ engines:
   local_wikiquote:
     type: http
     enabled: true
+    label: "Wikiquote本地"
+    cost_tier: free
+    qps: 5
+    priority: 41
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: srsearch
@@ -892,6 +1383,13 @@ engines:
   local_imdb:
     type: html
     enabled: false
+    label: "IMDb本地"
+    cost_tier: free
+    qps: 2
+    priority: 42
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.imdb.com/find/"
     query_param: q
     extra_params:
@@ -901,6 +1399,13 @@ engines:
   local_goodreads:
     type: html
     enabled: false
+    label: "Goodreads本地"
+    cost_tier: free
+    qps: 2
+    priority: 43
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     url: "https://www.goodreads.com/search"
     query_param: q
     extra_params:
@@ -910,6 +1415,13 @@ engines:
   local_openstreetmap:
     type: http
     enabled: true
+    label: "OpenStreetMap本地"
+    cost_tier: free
+    qps: 1
+    priority: 44
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
     format: json
     method: GET
     query_param: q
@@ -926,7 +1438,9 @@ engines:
     url: "https://nominatim.openstreetmap.org/search"
   xiaohongshu:
     type: cli
+    label: "小红书"
     enabled: true
+    cost_tier: free
     cmd:
     - python3
     - ~/.claude/skills/argo/scripts/social_engines/xiaohongshu_engine.py
@@ -938,7 +1452,9 @@ engines:
     env: {}
   bilibili:
     type: cli
+    label: "B站"
     enabled: true
+    cost_tier: free
     cmd:
     - python3
     - ~/.claude/skills/argo/scripts/social_engines/bilibili_engine.py
@@ -950,7 +1466,9 @@ engines:
     env: {}
   weibo:
     type: cli
+    label: "微博"
     enabled: true
+    cost_tier: free
     cmd:
     - python3
     - ~/.claude/skills/argo/scripts/social_engines/weibo_engine.py
@@ -961,63 +1479,327 @@ engines:
     - '{n}'
     env: {}
 
-# 成本分级（用于成本感知路由）
-cost_tiers:
-  free:
-    - local_search
-    - local_arxiv
-    - local_wikipedia
-    - local_stackoverflow
-    - local_github
-    - local_bing
-    - local_google
-    - local_mojeek
-    - local_yandex
-    - local_startpage
-    - local_duckduckgo
-    - local_baidu
-    - local_sogou
-    - local_pubmed
-    - local_crossref
-    - local_semantic_scholar
-    - local_bing_news
-    - local_google_news
-    - local_duckduckgo_news
-    - local_gitlab
-    - local_npm
-    - local_wiktionary
-    - local_wikiquote
-    - local_imdb
-    - local_goodreads
-    - local_openstreetmap
-    - anysearch
-    - zhihu
-    - eastmoney
-    - arxiv
-    - duckduckgo
-    - uapi
-    - semantic_scholar
-    - openalex
-    - crossref
-    - github
-    - wikipedia
-    - searxng
-    - wolframalpha
-    - twitter
-    - reddit
-    - xiaohongshu
-    - bilibili
-    - weibo
-  low:
-    - bocha
-    - metaso
-    - byted
-    - brave
-  api:
-    - exa
-  paid:
-    - tavily
-    - felo
+  # ── 垂直内容引擎（v2.4 新增：梗百科 / 俚语 / 热榜）──────────────────────
+  itotii:
+    type: itotii
+    enabled: true
+    label: "itotii梗百科"
+    cost_tier: free
+    qps: 3
+    priority: 23
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "meme", "slang", "culture"]
+    desc: "itotii 梗百科（中文流行语/网络梗溯源，WordPress REST，免认证）"
+    timeout: 10
+  urban_dictionary:
+    type: http
+    enabled: true
+    label: "Urban Dictionary"
+    cost_tier: free
+    qps: 3
+    priority: 24
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["english", "slang", "meme"]
+    desc: "Urban Dictionary（英文俚语定义与例句，官方 API）"
+    format: json
+    method: GET
+    query_param: term
+    output_map:
+      items: "list"
+      item_title: "word"
+      item_url: "permalink"
+      item_summary: "definition"
+    timeout: 8
+    url: "https://api.urbandictionary.com/v0/define"
+  know_your_meme:
+    type: html
+    enabled: true
+    label: "Know Your Meme"
+    cost_tier: free
+    qps: 2
+    priority: 25
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["english", "meme", "culture"]
+    desc: "Know Your Meme（英文 meme 词条溯源，HTML 解析）"
+    url: "https://knowyourmeme.com/search"
+    query_param: q
+    timeout: 10
+  zh_wikipedia:
+    type: http
+    enabled: true
+    label: "中文维基百科"
+    cost_tier: free
+    qps: 2
+    priority: 26
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "wiki", "factual"]
+    desc: "中文维基百科（MediaWiki API，与 en.wikipedia 同构）"
+    format: json
+    method: GET
+    query_param: srsearch
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+    extra_params:
+      action: query
+      list: search
+      format: json
+      srlimit: "{n}"
+    output_map:
+      items: "query.search"
+      item_title: "title"
+      item_url: "title"
+      item_summary: "snippet"
+      url_template: "https://zh.wikipedia.org/wiki/{title}"
+    timeout: 8
+    url: "https://zh.wikipedia.org/w/api.php"
+  baidu_hot:
+    type: baidu_hot
+    enabled: true
+    label: "百度热搜"
+    cost_tier: free
+    qps: 2
+    priority: 27
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "hot", "trending", "realtime"]
+    desc: "百度热搜（实时热搜榜，HTML 解析，免认证）"
+    timeout: 10
+  toutiao_hot:
+    type: toutiao_hot
+    enabled: true
+    label: "今日头条热榜"
+    cost_tier: free
+    qps: 2
+    priority: 28
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "hot", "trending", "realtime"]
+    desc: "今日头条热榜（hot-board JSON，免认证）"
+    timeout: 10
+  bilibili_hot:
+    type: bilibili_hot
+    enabled: true
+    label: "B站热搜"
+    cost_tier: free
+    qps: 2
+    priority: 29
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "hot", "trending", "bilibili"]
+    desc: "B站热搜（search/square 热搜词，免认证）"
+    timeout: 10
+
+  # ── 广义垂直引擎（v2.5 新增）───────────────────────────────────────────────
+  itunes:
+    type: http
+    enabled: true
+    label: "iTunes 媒体库"
+    cost_tier: free
+    qps: 3
+    priority: 30
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["media", "music", "movie", "podcast"]
+    desc: "iTunes Search API（音乐/影视/播客/应用，免认证）"
+    format: json
+    method: GET
+    query_param: term
+    extra_params:
+      limit: "{n}"
+    output_map:
+      items: "results"
+      item_title: "trackName"
+      item_url: "trackViewUrl"
+      item_summary: "artistName"
+    timeout: 8
+    url: "https://itunes.apple.com/search"
+  openverse:
+    type: http
+    enabled: true
+    label: "Openverse 图库"
+    cost_tier: free
+    qps: 3
+    priority: 31
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["image", "media", "cc"]
+    desc: "Openverse 开放版权图库（免认证，CC 素材）"
+    format: json
+    method: GET
+    query_param: q
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0 Safari/537.36"
+    extra_params:
+      page_size: "{n}"
+    output_map:
+      items: "results"
+      item_title: "title"
+      item_url: "foreign_landing_url"
+      item_summary: "creator"
+    timeout: 10
+    url: "https://api.openverse.org/v1/images"
+  coingecko:
+    type: http
+    enabled: true
+    label: "CoinGecko 币种"
+    cost_tier: free
+    qps: 3
+    priority: 32
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["crypto", "finance"]
+    desc: "CoinGecko 币种搜索（免认证）"
+    format: json
+    method: GET
+    query_param: query
+    output_map:
+      items: "coins"
+      item_title: "name"
+      item_url: "id"
+      item_summary: "symbol"
+      url_template: "https://www.coingecko.com/en/coins/{id}"
+    timeout: 10
+    url: "https://api.coingecko.com/api/v3/search"
+  wikidata:
+    type: http
+    enabled: true
+    label: "维基数据实体"
+    cost_tier: free
+    qps: 2
+    priority: 33
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["entity", "knowledge", "wiki"]
+    desc: "Wikidata 实体搜索（wbsearchentities，免认证，限流较严）"
+    format: json
+    method: GET
+    query_param: search
+    headers:
+      User-Agent: "argo-search/2.4 (unified-search@local)"
+    extra_params:
+      action: wbsearchentities
+      format: json
+      language: zh
+      uselang: zh
+      limit: "{n}"
+    output_map:
+      items: "search"
+      item_title: "label"
+      item_url: "url"
+      item_summary: "description"
+    timeout: 10
+    url: "https://www.wikidata.org/w/api.php"
+  crates:
+    type: http
+    enabled: true
+    label: "crates.io 包"
+    cost_tier: free
+    qps: 2
+    priority: 34
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["code", "rust", "package"]
+    desc: "crates.io Rust 包搜索（免认证，需 UA）"
+    format: json
+    method: GET
+    query_param: q
+    headers:
+      User-Agent: "argo-search/2.4 (unified-search@local)"
+    extra_params:
+      per_page: "{n}"
+    output_map:
+      items: "crates"
+      item_title: "name"
+      item_url: "name"
+      item_summary: "description"
+      url_template: "https://crates.io/crates/{name}"
+    timeout: 10
+    url: "https://crates.io/api/v1/crates"
+  musicbrainz:
+    type: http
+    enabled: true
+    label: "MusicBrainz 音乐人"
+    cost_tier: free
+    qps: 1
+    priority: 35
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["music", "artist", "metadata"]
+    desc: "MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）"
+    format: json
+    method: GET
+    query_param: query
+    headers:
+      User-Agent: "argo-search/2.4 (unified-search@local)"
+    extra_params:
+      fmt: json
+      limit: "{n}"
+    output_map:
+      items: "artists"
+      item_title: "name"
+      item_url: "id"
+      item_summary: "disambiguation"
+      url_template: "https://musicbrainz.org/artist/{id}"
+    timeout: 10
+    url: "https://musicbrainz.org/ws/2/artist"
+  open_library:
+    type: open_library
+    enabled: true
+    label: "Open Library 图书"
+    cost_tier: free
+    qps: 3
+    priority: 36
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["book", "library"]
+    desc: "Open Library 图书搜索（免认证）"
+    timeout: 10
+  free_dictionary:
+    type: free_dictionary
+    enabled: true
+    label: "英英词典"
+    cost_tier: free
+    qps: 3
+    priority: 37
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["dictionary", "english", "word"]
+    desc: "dictionaryapi.dev 英英词典（免认证，响应为数组）"
+    timeout: 8
+  moegirl:
+    type: html
+    enabled: true
+    label: "萌娘百科"
+    cost_tier: free
+    qps: 2
+    priority: 38
+    period: "second"
+    cost_per_call: 0.0
+    cost_unit: "free"
+    coverage: ["chinese", "anime", "acg", "wiki"]
+    desc: "萌娘百科（zh.moegirl.org.cn 搜索页 HTML 解析，免认证）"
+    url: "https://zh.moegirl.org.cn/index.php"
+    query_param: search
+    timeout: 12
 
 execution:
   default_timeout: 8

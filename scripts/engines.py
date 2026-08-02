@@ -107,12 +107,16 @@ def _make_field_parser(path: str, fields: dict[str, str], url_template: str | No
                 continue
             r = {ok: iv[:300] if ok == "snippet" and isinstance(iv, str) else iv
                  for ok, ik in fields.items() if (iv := item.get(ik, ""))}
-            # url_template 支持
-            if url_template and not r.get("url"):
+            # url_template 支持：item_url 仅为占位字段（如 title/id）时，
+            # 用模板构造真实 URL，避免 URL 退化成原始字符串
+            if url_template and (not r.get("url") or not str(r["url"]).startswith(("http://", "https://"))):
                 try:
                     r["url"] = url_template.format(**item)
                 except (KeyError, ValueError):
                     pass
+            # 协议相对 URL 归一化（如 //www.wikidata.org/wiki/Qxxxx）
+            if isinstance(r.get("url"), str) and r["url"].startswith("//"):
+                r["url"] = "https:" + r["url"]
             if r.get("title") or r.get("url"):
                 results.append(r)
         return results[:10]
@@ -313,17 +317,39 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             containers = soup.select(container_sel)
         except Exception:
             return []
+        from bs4 import NavigableString
+
+        def _el_text(el) -> str:
+            """提取元素文本。兼容 bs4 4.13+ 将页面文本标记为 TemplateString、
+            get_text()/strings() 失效（如萌娘百科搜索结果页）的情况。"""
+            if el is None:
+                return ""
+            if isinstance(el, str):
+                return el
+            parts = []
+            stack = list(el.contents)
+            while stack:
+                node = stack.pop(0)
+                if isinstance(node, NavigableString):
+                    parts.append(str(node))
+                elif hasattr(node, "contents"):
+                    stack = node.contents + stack
+            return "".join(parts)
+
         results = []
         for idx, item in enumerate(containers[:n * 2]):
             try:
                 title_el = item.select_one(title_sel) if title_sel else None
                 url_el = item.select_one(url_sel) if url_sel else None
                 snippet_el = item.select_one(snippet_sel) if snippet_sel else None
-                title = title_el.get_text(strip=True)[:200] if title_el else ""
+                title = _el_text(title_el).strip()[:200] if title_el else ""
                 url = ""
                 if url_el and url_el.has_attr(url_attr):
                     url = url_el[url_attr]
-                snippet = snippet_el.get_text(strip=True)[:300] if snippet_el else ""
+                elif item.has_attr(url_attr):
+                    # 容器自身带链接属性（如 <a class="item" href="..."> 自引用结构）
+                    url = item[url_attr]
+                snippet = _el_text(snippet_el).strip()[:300] if snippet_el else ""
                 if not title and not url:
                     continue
                 if url and url.startswith("/"):
@@ -818,7 +844,244 @@ def _build_eastmoney_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-_BUILDERS = {"cli": _build_cli_engine, "http": _build_http_engine, "html": _build_html_engine, "exa": _build_exa_engine, "wechat_sogou": _build_wechat_sogou_engine, "hackernews": _build_hackernews_engine, "stackoverflow": _build_stackoverflow_engine, "google_scholar": _build_google_scholar_engine, "v2ex": _build_v2ex_engine, "ths_hot": _build_ths_hot_engine, "cls_telegraph": _build_cls_telegraph_engine, "em_global_news": _build_em_global_news_engine, "eastmoney": _build_eastmoney_engine}
+# ── itotii 梗百科引擎 ────────────────────────────────────────────────────────
+
+def _build_itotii_engine(spec: dict[str, Any]) -> Any:
+    """itotii 梗百科（中文流行语/网络梗词条，WordPress REST API，免认证）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = (
+            "https://geng.itotii.com/wp-json/wp/v2/posts?search="
+            + up.quote(query) + f"&per_page={min(n, 10)}"
+        )
+        headers = {"User-Agent": "Mozilla/5.0"}
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+            results = []
+            for p in data:
+                title = p.get("title", {})
+                title = title.get("rendered", "") if isinstance(title, dict) else str(title)
+                content = p.get("content", {})
+                content = content.get("rendered", "") if isinstance(content, dict) else str(content)
+                title = re.sub(r"<[^>]+>", "", title).strip()
+                content = re.sub(r"<[^>]+>", "", content).strip()
+                if not title:
+                    continue
+                results.append({
+                    "title": title[:80],
+                    "url": p.get("link", ""),
+                    "snippet": f"{p.get('date', '')[:10]} | {content[:200]}",
+                    "source": "itotii",
+                    "score": max(1.0 - len(results) * 0.1, 0.1),
+                })
+            return results[:n]
+        except Exception as e:
+            logger.warning(f"itotii 梗百科失败: {e}")
+            return []
+    return _engine
+
+
+# ── 百度热搜引擎 ─────────────────────────────────────────────────────────────
+
+def _build_baidu_hot_engine(spec: dict[str, Any]) -> Any:
+    """百度热搜（top.baidu.com 实时热搜榜，HTML 解析）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 10, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = "https://top.baidu.com/board?tab=realtime"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                page = resp.read().decode("utf-8", "replace")
+            words = re.findall(r'word":"([^"]+)"', page)
+            results, seen = [], set()
+            for w in words:
+                if w in seen:
+                    continue
+                seen.add(w)
+                results.append({
+                    "title": w[:60],
+                    "url": "https://www.baidu.com/s?wd=" + up.quote(w),
+                    "snippet": "百度热搜",
+                    "source": "baidu_hot",
+                    "score": max(1.0 - len(results) * 0.05, 0.1),
+                })
+                if len(results) >= n:
+                    break
+            return results
+        except Exception as e:
+            logger.warning(f"百度热搜失败: {e}")
+            return []
+    return _engine
+
+
+# ── 今日头条热榜引擎 ─────────────────────────────────────────────────────────
+
+def _build_toutiao_hot_engine(spec: dict[str, Any]) -> Any:
+    """今日头条热榜（hot-board JSON，免认证）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 10, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = "https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc"
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.toutiao.com/"}
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+            results = []
+            for i, item in enumerate(data.get("data", [])[:n]):
+                hot = item.get("HotValue", "")
+                results.append({
+                    "title": item.get("Title", "")[:60],
+                    "url": item.get("Url", ""),
+                    "snippet": f"热度 {hot}" if hot else "今日头条热榜",
+                    "source": "toutiao_hot",
+                    "score": max(1.0 - i * 0.05, 0.1),
+                })
+            return results
+        except Exception as e:
+            logger.warning(f"今日头条热榜失败: {e}")
+            return []
+    return _engine
+
+
+# ── B站热搜引擎 ──────────────────────────────────────────────────────────────
+
+def _build_bilibili_hot_engine(spec: dict[str, Any]) -> Any:
+    """B站热搜（search/square 热搜词，免认证）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 10, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = "https://api.bilibili.com/x/web-interface/search/square?limit=20"
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.bilibili.com"}
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+            items = data.get("data", {}).get("trending", {}).get("list", [])
+            results = []
+            for i, item in enumerate(items[:n]):
+                kw = item.get("keyword", "")
+                if not kw:
+                    continue
+                results.append({
+                    "title": kw[:60],
+                    "url": "https://search.bilibili.com/all?keyword=" + up.quote(kw),
+                    "snippet": "B站热搜",
+                    "source": "bilibili_hot",
+                    "score": max(1.0 - i * 0.05, 0.1),
+                })
+            return results
+        except Exception as e:
+            logger.warning(f"B站热搜失败: {e}")
+            return []
+    return _engine
+
+
+# ── Open Library 图书引擎 ────────────────────────────────────────────────────
+
+def _build_open_library_engine(spec: dict[str, Any]) -> Any:
+    """Open Library 图书搜索（openlibrary.org/search.json，免认证）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        # OpenLibrary 要求查询至少 3 个字符（如「三体」只有 2 字会 422）
+        q = query if len(query) >= 3 else query * 2
+        url = "https://openlibrary.org/search.json?" + up.urlencode({
+            "q": q, "limit": min(n, 20),
+        })
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"Open Library 失败: {e}")
+            return []
+        results = []
+        for d in (data.get("docs") or [])[:n]:
+            title = d.get("title", "")
+            key = d.get("key", "")
+            if not title and not key:
+                continue
+            authors = ", ".join((d.get("author_name") or [])[:3])
+            year = d.get("first_publish_year") or ""
+            parts = [p for p in (authors, str(year)) if p]
+            results.append({
+                "title": title,
+                "url": f"https://openlibrary.org{key}" if key else "",
+                "snippet": " · ".join(parts)[:300],
+                "source": "open_library",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── 英英词典引擎 ─────────────────────────────────────────────────────────────
+
+def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
+    """英英词典（dictionaryapi.dev，免认证，响应为数组需专门解析）"""
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        q = re.sub(r"(?i)^(what\s+(does|is|do|are)\s+|define\s+|definition\s+of\s+|meaning\s+of\s+|the\s+word\s+)", "", query.strip())
+        q = re.sub(r"(是什么意思|什么意思|怎么读|读音|英文|单词|的含义|的定义|咋读)$", "", q).strip()
+        word = re.split(r"\s+", q)[0] if q else ""
+        if not word:
+            return []
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{up.quote(word)}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    url, headers={"User-Agent": "argo-search/2.4"}), timeout=to) as resp:
+                entries = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception:
+            return []
+        if not isinstance(entries, list):
+            return []
+        results = []
+        for e in entries[:n]:
+            w = e.get("word", "")
+            if not w:
+                continue
+            urls = e.get("sourceUrls") or []
+            eurl = urls[0] if urls else f"https://en.wiktionary.org/wiki/{w}"
+            defs = []
+            for m in (e.get("meanings") or [])[:3]:
+                for d in (m.get("definitions") or [])[:2]:
+                    defs.append(d.get("definition", ""))
+            results.append({
+                "title": w,
+                "url": eurl,
+                "snippet": " / ".join(x for x in defs if x)[:300],
+                "source": "free_dictionary",
+                "score": 0.8,
+            })
+        return results
+    return _engine
+
+
+_BUILDERS = {"cli": _build_cli_engine, "http": _build_http_engine, "html": _build_html_engine, "exa": _build_exa_engine, "wechat_sogou": _build_wechat_sogou_engine, "hackernews": _build_hackernews_engine, "stackoverflow": _build_stackoverflow_engine, "google_scholar": _build_google_scholar_engine, "v2ex": _build_v2ex_engine, "ths_hot": _build_ths_hot_engine, "cls_telegraph": _build_cls_telegraph_engine, "em_global_news": _build_em_global_news_engine, "eastmoney": _build_eastmoney_engine, "itotii": _build_itotii_engine, "baidu_hot": _build_baidu_hot_engine, "toutiao_hot": _build_toutiao_hot_engine, "bilibili_hot": _build_bilibili_hot_engine, "open_library": _build_open_library_engine, "free_dictionary": _build_free_dictionary_engine}
 
 # ── 通用解析器 ─────────────────────────────────────────────────────────────────
 
