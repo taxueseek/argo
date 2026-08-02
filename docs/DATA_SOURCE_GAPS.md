@@ -53,11 +53,29 @@
 
 ## 五、未接入源待办（按优先级）
 
-- [ ] PubChem PUG REST（chem 域）
-- [ ] ChEMBL 活性数据（chem 域）
+- [x] PubChem PUG REST（chem 域，30d21da 后接入）
+- [x] ChEMBL 活性数据（chem 域，并入 pubchem 引擎兜底）
+- [x] Eurostat SDMX（macro_data 域，EU 国家 GDP/人均GDP/失业率/人口）
+- [x] GBIF 物种检索（species 域，学名/英文俗名）
+- [x] RFC Editor / IETF Datatracker（rfc_search 域）
+- [ ] GDELT 2.0（news 域）—— 持续 429 限流（本机 IP 两次实测均被拒），暂缓
 - [ ] Common Crawl 索引 + Wayback CDX（通用增强）
 - [ ] CourtListener（legal 域，注意配额）
 - [ ] GeoNames 地理消歧（geo 层增强）
 - [ ] MusicBrainz 实体消歧层（music 域）
 - [ ] Wikidata SPARQL 图查询增强
 - [ ] ClinicalTrials.gov 路由强化（medical 域）
+
+## 六、新增引擎实测结论（2026-08-02）
+
+- **PubChem**：名称查询走 `compound/name/{q}/cids` + `property`（分子式/分子量/IUPAC/SMILES）；
+  `compound/formula` 端点是异步等待模式（返回 Waiting + ListKey），不做轮询，分子式查询由
+  ChEMBL 兜底（C9H8O4 → ASPIRIN/CAFFEIC ACID）。ChEMBL 需 `search.json` 后缀或
+  `Accept: application/json`，否则返回 XML。
+- **Eurostat**：SDMX 2.1 免认证；已验证维度 GDP(nama_10_gdp/B1GQ/CP_MEUR)、
+  人均GDP(nama_10_pc/CP_EUR_HAB)、失业率(une_rt_a/Y15-74/PC_ACT)、人口(demo_pjan/age=TOTAL)。
+  HICP 数据集（prc_hicp_manr）400 未用，通胀由 worldbank 覆盖。unit 维度 label 的 key 是编码非索引。
+- **GBIF**：`/v1/species/search?q=` 对拉丁学名准确，对中文俗名返回无关属种
+  （「大熊猫」→ 植物属 Panda 等），引擎加 ASCII 守卫：纯中文查询直接放弃，交给百科类引擎。
+- **RFC**：datatracker `name__icontains` 只匹配文档名（rfc9000 名里无 quic），
+  必须用 `title__icontains` + `type__slug=rfc`；`type=rfc` 直接过滤无效（type 是 URI）。

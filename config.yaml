@@ -118,6 +118,7 @@ domains:
   - fred
   - worldbank
   - nbs_stats
+  - eurostat
   - fx_rate
   - anysearch
   fallback: anysearch
@@ -130,6 +131,36 @@ domains:
   - (中国|美国|日本|德国|印度|世界).{0,6}(GDP|通胀|CPI|失业率|人口|贸易|经济增长)
   - (GDP|通货膨胀|CPI|失业率|人口数据|经济增长率)
   primary: fred
+- desc: 化学/药学化合物检索
+  engines_combo:
+  - pubchem
+  fallback: pubchem
+  name: chem_search
+  parallel: false
+  patterns:
+  - (化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物|结构式|CAS\s*[- ]?\d)
+  - (?i)(chemical\s+formula|molecular\s+weight|iupac|cas\s+number|compound|drug|molecule|smiles)
+  primary: pubchem
+- desc: 生物物种检索
+  engines_combo:
+  - gbif
+  fallback: gbif
+  name: species_search
+  parallel: false
+  patterns:
+  - (物种|学名|生物分类|拉丁名|界门纲|科属种|动物志|植物志|濒危)
+  - (?i)(species|scientific\s+name|taxonomy|taxon|binomial|endangered\s+species)
+  primary: gbif
+- desc: RFC/互联网标准文档
+  engines_combo:
+  - rfc_editor
+  fallback: rfc_editor
+  name: rfc_search
+  parallel: false
+  patterns:
+  - (?i)\b(rfc\s*\d{2,5}|internet\s+standard|request\s+for\s+comments)\b
+  - (互联网标准|rfc\d{2,5}|请求意见稿)
+  primary: rfc_editor
 - desc: 财经资讯/研报/公告
   engines_combo:
   - em_miaoxiang
@@ -972,6 +1003,65 @@ engines:
     desc: 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证）
     timeout: 12
     type: nbs_stats
+  pubchem:
+    enabled: true
+    label: PubChem/ChEMBL 化合物
+    cost_tier: free
+    qps: 3
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - science
+    - chem
+    desc: 化学/药学化合物检索（分子式/分子量/IUPAC/SMILES，pubchem.ncbi.nlm.nih.gov 免认证）
+    timeout: 12
+    type: pubchem
+  eurostat:
+    enabled: true
+    label: Eurostat 欧盟统计
+    cost_tier: free
+    qps: 2
+    priority: 7
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - macro
+    desc: 欧盟统计局宏观数据（EU 国家 GDP/人均GDP/失业率/人口，ec.europa.eu SDMX 免认证）
+    timeout: 15
+    type: eurostat
+  gbif:
+    enabled: true
+    label: GBIF 物种
+    cost_tier: free
+    qps: 3
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - science
+    - biology
+    desc: 全球生物多样性物种检索（学名/俗名，api.gbif.org 免认证）
+    timeout: 12
+    type: gbif
+  rfc_editor:
+    enabled: true
+    label: RFC/互联网标准
+    cost_tier: free
+    qps: 3
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - tech
+    - standards
+    desc: RFC/互联网标准文档检索（datatracker.ietf.org 免认证）
+    timeout: 15
+    type: rfc_editor
   v2ex:
     enabled: true
     label: V2EX

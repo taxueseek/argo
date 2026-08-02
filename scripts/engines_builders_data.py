@@ -1605,3 +1605,354 @@ def _build_octen_engine(spec: dict[str, Any]) -> Any:
             return []
     return _engine
 
+
+# ── PubChem + ChEMBL 化学引擎（chem 域） ────────────────────────────────────
+
+_PUBCHEM_API = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+_CHEMBL_API = "https://www.ebi.ac.uk/chembl/api/data"
+_RE_FORMULA = re.compile(r"^[A-Z][a-z]?\d*([A-Z][a-z]?\d*)*$")
+
+
+def _build_pubchem_engine(spec: dict[str, Any]) -> Any:
+    """化学/药学化合物检索：PubChem PUG REST 主路径 + ChEMBL 兜底。
+
+    支持化合物名、分子式、CAS 号、IUPAC 名查询，返回分子式/分子量/IUPAC/SMILES。
+    """
+    timeout = spec.get("timeout", 10)
+    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+
+    def _jget(url: str, to: float) -> dict:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = query.strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        results: list[dict[str, Any]] = []
+
+        # 1. PubChem 主路径：名称 → CID → 属性（formula 端点是异步等待，交给 ChEMBL 兜底）
+        cid = ""
+        try:
+            d = _jget(f"{_PUBCHEM_API}/compound/name/{urllib.parse.quote(q)}/cids/JSON", to)
+            cids = (d.get("IdentifierList") or {}).get("CID") or []
+            if cids:
+                cid = str(cids[0])
+        except Exception:
+            pass
+        if cid:
+            try:
+                d = _jget(
+                    f"{_PUBCHEM_API}/compound/cid/{cid}/property/"
+                    f"MolecularFormula,MolecularWeight,IUPACName,CanonicalSMILES/JSON", to)
+                props = ((d.get("PropertyTable") or {}).get("Properties") or [{}])[0]
+                formula = props.get("MolecularFormula", "")
+                mw = props.get("MolecularWeight", "")
+                iupac = props.get("IUPACName", "") or ""
+                smiles = props.get("CanonicalSMILES", "") or ""
+                title = f"{q} (PubChem CID {cid})"
+                if formula:
+                    title += f" 分子式 {formula}"
+                if mw:
+                    title += f" 分子量 {mw}"
+                snippet = f"CID {cid}"
+                if iupac:
+                    snippet += f" | IUPAC: {iupac}"
+                if smiles:
+                    snippet += f" | SMILES: {smiles}"
+                results.append({
+                    "title": title,
+                    "url": f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}",
+                    "snippet": snippet[:400],
+                    "source": "pubchem",
+                    "score": 0.95,
+                })
+            except Exception as e:
+                logger.warning(f"PubChem 属性失败: {e}")
+
+        # 2. ChEMBL 兜底（PubChem 未命中时）
+        if not results:
+            try:
+                d = _jget(f"{_CHEMBL_API}/molecule/search.json?q={urllib.parse.quote(q)}&limit={min(n, 5)}", to)
+                for m in (d.get("molecules") or [])[:n]:
+                    props = m.get("molecule_properties") or {}
+                    chembl_id = m.get("molecule_chembl_id", "")
+                    title = m.get("pref_name") or chembl_id or q
+                    if props.get("mw_freebase"):
+                        title += f" 分子量 {props['mw_freebase']}"
+                    parts = [f"ChEMBL {chembl_id}"]
+                    if props.get("full_molformula"):
+                        parts.append(f"分子式 {props['full_molformula']}")
+                    if props.get("canonical_smiles"):
+                        parts.append(f"SMILES {props['canonical_smiles'][:100]}")
+                    results.append({
+                        "title": title,
+                        "url": (f"https://www.ebi.ac.uk/chembl/explore/compound/{chembl_id}"
+                                if chembl_id else "https://www.ebi.ac.uk/chembl/"),
+                        "snippet": " | ".join(parts)[:400],
+                        "source": "chembl",
+                        "score": 0.9,
+                    })
+            except Exception as e:
+                logger.warning(f"ChEMBL 失败: {e}")
+        return results[: max(n, 3)]
+
+    return _engine
+
+
+# ── Eurostat 欧盟统计引擎（macro_data 域） ───────────────────────────────────
+
+_EUROSTAT_GEO: dict[str, str] = {
+    "德国": "DE", "法国": "FR", "英国": "UK", "意大利": "IT", "西班牙": "ES",
+    "荷兰": "NL", "比利时": "BE", "奥地利": "AT", "爱尔兰": "IE", "葡萄牙": "PT",
+    "希腊": "EL", "芬兰": "FI", "瑞典": "SE", "丹麦": "DK", "波兰": "PL",
+    "捷克": "CZ", "匈牙利": "HU", "罗马尼亚": "RO", "保加利亚": "BG", "斯洛伐克": "SK",
+    "斯洛文尼亚": "SI", "克罗地亚": "HR", "立陶宛": "LT", "拉脱维亚": "LV",
+    "爱沙尼亚": "EE", "塞浦路斯": "CY", "卢森堡": "LU", "马耳他": "MT",
+    "欧盟": "EU27_2020", "欧元区": "EA20",
+}
+# 指标关键词 → (数据集, 维度参数, 指标名)。维度均已实测验证
+_EUROSTAT_INDICATORS: list[tuple[tuple[str, ...], str, str, str]] = [
+    (("人均gdp", "人均生产总值", "人均国内生产总值"), "nama_10_pc", "na_item=B1GQ&unit=CP_EUR_HAB", "人均GDP"),
+    (("gdp", "生产总值", "国内生产总值", "经济总量"), "nama_10_gdp", "na_item=B1GQ&unit=CP_MEUR", "GDP"),
+    (("失业",), "une_rt_a", "age=Y15-74&sex=T&unit=PC_ACT", "失业率"),
+    (("人口",), "demo_pjan", "age=TOTAL&sex=T", "人口"),
+]
+# unit 编码 → 简短单位标签（未命中时回退 API 原文）
+_EUROSTAT_UNIT: dict[str, str] = {
+    "CP_MEUR": "百万欧元", "CP_EUR_HAB": "欧元/人", "PC_ACT": "%", "PERSON": "人",
+}
+
+
+def _build_eurostat_engine(spec: dict[str, Any]) -> Any:
+    """欧盟统计局 Eurostat 数据（ec.europa.eu SDMX 2.1，免认证）。
+
+    支持 EU 国家/欧盟/欧元区的 GDP、人均GDP、失业率、人口年度查询。
+    """
+    timeout = spec.get("timeout", 15)
+    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _BASE = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data"
+
+    def _jget(url: str, to: float) -> dict:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = query.strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        low = q.lower()
+
+        country = ""
+        for name, code in _EUROSTAT_GEO.items():
+            if name in q:
+                country = code
+                break
+        if not country:
+            return []
+
+        ds = dims = label = ""
+        for keys, d, dm, lb in _EUROSTAT_INDICATORS:
+            if any(k in low for k in keys):
+                ds, dims, label = d, dm, lb
+                break
+        if not ds:
+            return []
+
+        ym = re.search(r"(20\d{2})", q)
+        year = ym.group(1) if ym else ""
+
+        url = f"{_BASE}/{ds}?format=JSON&lang=en&geo={country}&{dims}"
+        if year:
+            url += f"&time={year}"
+        try:
+            d = _jget(url, to)
+        except Exception as e:
+            logger.warning(f"Eurostat 取数失败: {e}")
+            return []
+        vals = d.get("value") or {}
+        if not vals:
+            return []
+        # 最新观测
+        v = list(vals.values())[0]
+        dims_meta = d.get("dimension", {})
+        if not year:
+            # 无年份时取最新观测：value 键为观测索引（按时间升序），映射回时间标签
+            t_idx = max(vals.keys(), key=lambda k: int(k) if str(k).isdigit() else 0)
+            t_cat = (dims_meta.get("time") or {}).get("category", {})
+            t_code = next((c for c, i in (t_cat.get("index") or {}).items()
+                           if str(i) == str(t_idx)), "")
+            year = (t_cat.get("label") or {}).get(t_code, t_code)[:4]
+        # 单位标签：unit 维度 category 的 key 是编码（如 CP_MEUR），先查短标签表再回退 API 标签
+        du = ""
+        try:
+            unit_cat = (dims_meta.get("unit") or {}).get("category", {})
+            ucode = next(iter((unit_cat.get("index") or {}).keys()), "")
+            du = _EUROSTAT_UNIT.get(ucode) or (unit_cat.get("label") or {}).get(ucode, "")
+        except Exception:
+            pass
+        cname = next((k for k, v in _EUROSTAT_GEO.items() if v == country), country)
+        try:
+            fv = float(v)
+            val_s = f"{fv:,.1f}"
+        except (TypeError, ValueError):
+            val_s = str(v)
+        title = f"{cname} {year}年 {label}: {val_s} {du}".strip()
+        results = [{
+            "title": title,
+            "url": f"https://ec.europa.eu/eurostat/databrowser/view/{ds}",
+            "snippet": f"{cname} {label}（{year}）| 数据来源：Eurostat | 数据集 {ds}",
+            "source": "eurostat",
+            "score": 0.93,
+        }]
+        return results[: max(n, 3)]
+
+    return _engine
+
+
+# ── GBIF 生物多样性引擎（species 域） ────────────────────────────────────────
+
+_GBIF_API = "https://api.gbif.org/v1"
+_GBIF_RANK_ORDER = {"SPECIES": 3, "SUBSPECIES": 2, "GENUS": 1}
+
+
+def _build_gbif_engine(spec: dict[str, Any]) -> Any:
+    """GBIF 物种检索（api.gbif.org/v1/species/search，免认证）。
+
+    学名/俗名搜索，优先学名包含查询词的 ACCEPTED 物种条目。
+    """
+    timeout = spec.get("timeout", 12)
+    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)"}
+
+    def _jget(url: str, to: float) -> dict:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = query.strip()
+        if not q:
+            return []
+        # 剥离中文查询噪声词（学名/物种/俗名等）；GBIF 只对拉丁学名/英文俗名可靠，
+        # 纯中文俗名（如「大熊猫」）搜出来的是无关属种，直接放弃
+        q = re.sub(r"(学名|物种|俗名|拉丁名|生物|分类|是什么|有哪些|查询|搜索)", "", q).strip()
+        if not re.search(r"[A-Za-z]{2,}", q):
+            return []
+        to = _timeout or timeout
+        ql = q.lower()
+        url = f"{_GBIF_API}/species/search?q={urllib.parse.quote(q)}&limit={min(n * 3, 20)}"
+        try:
+            d = _jget(url, to)
+        except Exception as e:
+            logger.warning(f"GBIF 失败: {e}")
+            return []
+
+        def _key(r: dict) -> tuple:
+            sn = (r.get("scientificName") or "").lower()
+            name_hit = ql in sn  # 学名包含查询词优先（俗名匹配的噪声大）
+            status_ok = (r.get("taxonomicStatus") or "") == "ACCEPTED"
+            rank = _GBIF_RANK_ORDER.get(r.get("rank"), 0)
+            return (name_hit, status_ok, rank)
+
+        items = sorted((r for r in (d.get("results") or []) if r.get("scientificName")), key=_key, reverse=True)
+        results = []
+        for r in items[:n]:
+            sci = r.get("scientificName", "")
+            rank = r.get("rank", "")
+            kingdom = r.get("kingdom") or r.get("kingdomKey") or ""
+            status = r.get("taxonomicStatus") or ""
+            key = r.get("nubKey") or r.get("key")
+            title = f"{sci} ({rank})"
+            if status == "ACCEPTED":
+                title = f"{sci}（有效名）"
+            snip = f"界 {kingdom} | 分类 {rank}"
+            if status:
+                snip += f" | 状态 {status}"
+            if r.get("vernacularName"):
+                snip += f" | 俗名 {r['vernacularName']}"
+            results.append({
+                "title": title,
+                "url": f"https://www.gbif.org/species/{key}" if key else "https://www.gbif.org/",
+                "snippet": snip,
+                "source": "gbif",
+                "score": 0.92,
+            })
+        return results[: max(n, 3)]
+
+    return _engine
+
+
+# ── RFC Editor / IETF 标准引擎（tech 域） ────────────────────────────────────
+
+_DATATRACKER_API = "https://datatracker.ietf.org/api/v1"
+
+
+def _build_rfc_editor_engine(spec: dict[str, Any]) -> Any:
+    """RFC / IETF 标准文档检索（datatracker.ietf.org API，免认证）。
+
+    「RFC 9000」直接定位单篇；「QUIC RFC」按标题搜索 RFC 类型文档。
+    """
+    timeout = spec.get("timeout", 15)
+    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+
+    def _jget(url: str, to: float) -> dict:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+
+    def _mk(r: dict) -> dict[str, Any]:
+        name = r.get("name", "")
+        num = re.search(r"(\d+)", name)
+        title = r.get("title") or ""
+        url = (f"https://www.rfc-editor.org/rfc/rfc{num.group(1)}.txt"
+               if num else "https://www.rfc-editor.org/")
+        snip = "Internet 标准文档（IETF）"
+        if r.get("abstract"):
+            snip = r["abstract"][:300]
+        return {
+            "title": f"{name.upper()}: {title}" if num else title,
+            "url": url,
+            "snippet": snip,
+            "source": "rfc_editor",
+            "score": 0.93,
+        }
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = query.strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        # 1. 直接 RFC 编号
+        m = re.search(r"(?i)(?:rfc\s*|RFC)(\d{2,5})", q)
+        if m:
+            num = m.group(1)
+            try:
+                d = _jget(f"{_DATATRACKER_API}/doc/document/rfc{num}/", to)
+                if d.get("name"):
+                    return [_mk(d)][: max(n, 3)]
+            except Exception:
+                pass
+        # 2. 标题搜索：剥掉 RFC/标准等噪声词后按标题检索
+        search_q = re.sub(r"(?i)\b(rfc|ietf|internet standard|standard)\b|互联网标准|标准文档|文档", " ", q)
+        search_q = re.sub(r"\s+", " ", search_q).strip()
+        if not search_q:
+            return []
+        url = (f"{_DATATRACKER_API}/doc/document/?title__icontains="
+               f"{urllib.parse.quote(search_q)}&type__slug=rfc&limit={min(n, 10)}")
+        try:
+            d = _jget(url, to)
+        except Exception as e:
+            logger.warning(f"RFC 搜索失败: {e}")
+            return []
+        return [_mk(o) for o in (d.get("objects") or [])[:n]][: max(n, 3)]
+
+    return _engine
+
