@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""engines_builders — 聚合专用构建器导出（兼容 from engines_builders import *）。"""
+
+from engines_builders_tech import (
+    _build_exa_engine,
+    _build_wechat_sogou_engine,
+    _build_hackernews_engine,
+    _build_stackoverflow_engine,
+    _build_google_scholar_engine,
+    _build_v2ex_engine,
+)
+from engines_builders_cn import (
+    _build_ths_hot_engine,
+    _build_cls_telegraph_engine,
+    _build_em_global_news_engine,
+    _build_eastmoney_engine,
+    _build_itotii_engine,
+    _build_baidu_hot_engine,
+    _build_toutiao_hot_engine,
+    _build_bilibili_hot_engine,
+)
+from engines_builders_data import (
+    _build_open_library_engine,
+    _build_free_dictionary_engine,
+    _build_baidu_baike_engine,
+    _build_pypi_engine,
+    _build_clinicaltrials_engine,
+    _build_openfda_engine,
+    _build_juejin_engine,
+    _build_models_dev_engine,
+    _build_finviz_engine,
+    _build_seeking_alpha_engine,
+    _build_qweather_engine,
+    _build_wenshu_engine,
+    _build_jin10_engine,
+    _build_octen_engine,
+)
+
+__all__ = [
+    "_build_exa_engine",
+    "_build_wechat_sogou_engine",
+    "_build_hackernews_engine",
+    "_build_stackoverflow_engine",
+    "_build_google_scholar_engine",
+    "_build_v2ex_engine",
+    "_build_ths_hot_engine",
+    "_build_cls_telegraph_engine",
+    "_build_em_global_news_engine",
+    "_build_eastmoney_engine",
+    "_build_itotii_engine",
+    "_build_baidu_hot_engine",
+    "_build_toutiao_hot_engine",
+    "_build_bilibili_hot_engine",
+    "_build_open_library_engine",
+    "_build_free_dictionary_engine",
+    "_build_baidu_baike_engine",
+    "_build_pypi_engine",
+    "_build_clinicaltrials_engine",
+    "_build_openfda_engine",
+    "_build_juejin_engine",
+    "_build_models_dev_engine",
+    "_build_finviz_engine",
+    "_build_seeking_alpha_engine",
+    "_build_qweather_engine",
+    "_build_wenshu_engine",
+    "_build_jin10_engine",
+    "_build_octen_engine",
+]
+
