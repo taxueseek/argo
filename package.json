@@ -1,7 +1,7 @@
 {
   "name": "argo-search",
-  "version": "2.5.0",
-  "description": "Argo 阿尔戈 — 统一搜索与证据核验。88 引擎路由、RRF 融合、Selection×Absorption 证据评分、查询改写、双层缓存、16 MCP 工具。",
+  "version": "2.5.1",
+  "description": "Argo 阿尔戈 — 统一搜索与证据核验。110 引擎路由（含金融/宏观/化学等垂直源）、RRF 融合、引擎分层与 combo 预算、Selection×Absorption、16 MCP 工具。",
   "keywords": [
     "mcp",
     "mcp-server",

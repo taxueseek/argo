@@ -23,8 +23,8 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.5.0-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-88-orange">
+  <img alt="version" src="https://img.shields.io/badge/version-2.5.1-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-110-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-16%20tools-purple">
 </p>
 
@@ -34,7 +34,7 @@
 
 **Argo 是一套给 AI Agent 用的搜索基础设施。**
 
-你问「贵州茅台股价」，它会优先走东方财富；问「transformer attention paper」，会优先走 arXiv；问「React 和 Vue 怎么选」，会多源召回再合并去重。更重要的是：它会尽量判断**哪些结果值得当真**——是不是搜索结果页壳、有没有数字和披露、多个域名是否说同一件事。
+你问「贵州茅台股价」，会优先走 **A 股行情快照**（新浪 / 腾讯等），而不是扫一堆网页标题；问「AAPL 美股」，走美股专线；问「美国 CPI / 中国 GDP」，走宏观数据源；问「阿司匹林分子式」，走化合物库；问「transformer attention paper」，走 arXiv。更重要的是：它会尽量判断**哪些结果值得当真**——是不是搜索结果页壳、有没有数字和披露、多个域名是否说同一件事。
 
 一句话：
 
@@ -45,24 +45,38 @@
 | 常见做法 | Argo |
 |---------|------|
 | 绑死一个引擎、一个 Key | 多引擎自动选路，免费优先、可配预算 |
+| 啥问题都泛搜网页 | **垂直源优先**：行情、宏观、化学等先给答案型结果 |
 | 搜完直接拼摘要 | 选择门槛 × 证据密度 × 时效 × 多源共识 |
 | 引擎挂了整条链路挂 | 熔断、负缓存、降级到本地引擎或缓存 |
 | 每次查询都重新打网 | 双层缓存（内存 + SQLite），热查询约 10ms 级 |
+| 日常和研究一个慢 | **日常少开引擎、研究再放宽**（引擎分层 + combo 预算） |
 | 只给链接 | 附带 selection / absorption / 引擎状态等字段 |
 | Agent 上下文被长 JSON 撑爆 | MCP 响应可紧凑裁剪，snippet 可控 |
 
-### 当前大致能力（v2.5）
+### 当前大致能力（v2.5.1）
 
-- **87 个搜索源**：API / 本地零成本 / 社交 / 金融 / 学术 / 开发者社区，配置真源在 `config.yaml`
+- **约 110 个搜索源**：通用网页 + **金融行情 / 宏观数据 / 化学物种 / 图书档案** 等垂直源，配置真源在 `config.yaml`
 - **16 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情一站挂上
+- **垂直搜索更好用（本版重点）**：
+  - **日常金融**：A 股快照、资金流、美股盘口类查询，能 early-stop，几百毫秒到两秒级常见
+  - **宏观与汇率**：FRED、世界银行、国统局、欧统、汇率等，减少「搜中国 GDP 却回美国数据」类错位
+  - **化学 / 物种 / 标准文档**：PubChem、GBIF、RFC 等窄域直达
+  - **深度研究**：研究路径会 **抬高垂直源优先级**，但不锁死某一个源（boost，不是硬锁）
+- **日常更快、研究更全**：`engine_policy` 统一分层——日常 combo 收紧，deep / research 再放开长尾源
 - **语义路由 + 规则域**：TF-IDF 与正则域配合；低分回退通用引擎，避免误进垂直站
 - **查询改写**：口语问题可改成更利于检索的表述；改写词**不会污染**路由域匹配
-- **路由热路径缓存**：同一类查询重复路由接近亚毫秒级，不再每次重解析配置
-- **证据两阶段**：Selection（能不能进候选）× Absorption（正文/摘要里有没有可吸收证据）
-- **研究与消歧**：`research` 拆子问题、`clarify` 处理歧义、`evidence` 打可信度
-- **抓取栈**：HTTP → 浏览器降级，支持聚焦摘录、截图与 PDF
-- **熔断与负缓存**：挂掉的源短时间跳过，二次调用接近 0ms
-- **MCP 紧凑响应**：默认裁掉内部字段、控制摘要长度，省 Agent token
+- **路由热路径缓存**：同一类查询重复路由接近亚毫秒级
+- **证据两阶段**：Selection × Absorption；研究与消歧、抓取栈、熔断负缓存、MCP 紧凑响应仍在
+
+### 举几个「问啥像啥」的例子
+
+| 你这样问 | 大致会怎样 |
+|----------|------------|
+| 贵州茅台股价 | A 股行情域，优先快照源，够用就停 |
+| AAPL / 美股盘前 | 美股域，与 A 股分流 |
+| 美国 CPI、中国 GDP | 宏观数据域；非美国国别会优先世界银行等 |
+| 阿司匹林 分子式 | 化学域 → PubChem 类答案 |
+| 台积电估值分歧（深度研究） | 拆子问题 + 多源并行，金融垂直源被 boost 进来 |
 
 ```
 查询
@@ -82,10 +96,11 @@
 
 | 痛点 | Argo 的做法 |
 |------|------------|
-| 中文、金融、学术场景要换来换去 | 自动按域选引擎，东财 / 知乎 / arXiv 等有专线 |
+| 中文、金融、学术场景要换来换去 | 自动按域选引擎；行情 / 宏观 / 化学 / 知乎 / arXiv 有专线 |
+| 问股价却只得到新闻标题 | 答案型垂直源 + early-stop，优先可吸收事实 |
 | 摘要里有数，正文对不上 | 高后果场景建议再 `fetch` + `evidence`，不只信 snippet |
 | 搜索结果页、跳转链被当成信源 | SERP / 跳转壳识别并降权 |
-| 付费额度紧张 | `fast` / `auto` / `deep` / `budget` 四档预算 |
+| 付费额度紧张 / 日常太慢 | 四档预算 + **日常 combo 条数限制**；研究再全开 |
 | 重复问题反复等几秒 | 分级 TTL + 柔性命中（条数够可截断复用） |
 | 引擎空转白等 | 熔断 + 短 TTL 负缓存 |
 | 「苹果股价」却路由到购物站 | 查询改写与域匹配解耦，减少购物类误吸 |
@@ -525,13 +540,14 @@ python3 scripts/search.py [选项] 查询词
 
 | 版本 | 说明 |
 |------|------|
-| **v2.5.0** | 88 源 + 16 MCP；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应；engines/MCP 模块拆分；注册表单一真源；安装脚本 + npx 双路径；介绍页重写 |
+| **v2.5.1** | 约 110 源；金融/宏观/化学等垂直答案源加厚；引擎分层 + combo 预算（日常快、研究全）；研究 boost 不锁死；回归 harness；详见 [发布说明](docs/RELEASE_NOTES_v2.5.1.md) |
+| **v2.5.0** | 安装脚本 + npx；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应；engines/MCP 模块拆分；介绍页重写 |
 | **v2.4.0** | 路由低分回退与社交误吸过滤；缓存 depth / 柔性命中；熔断与负缓存；`engine_outcomes`；RRF 共识源；fetch URL 缓存 |
 | **v2.2–v2.3** | 证据两阶段、中文信源表、content_signals、fetch 栈、引擎扩充、MCP 能力增强 |
 | **v2.1** | 社交引擎层（多平台 UGC） |
 | **v1.x** | 统一命名为 Argo，多引擎路由与双层缓存成型 |
 
-更细的优化说明见 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
+更细说明见 `docs/RELEASE_NOTES_v2.5.1.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
 
 ---
 

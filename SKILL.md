@@ -1,7 +1,7 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。88 引擎 TF-IDF 路由 + RRF 融合、查询改写（不污染域匹配）、Selection×Absorption 证据评分、双层缓存、熔断负缓存、16 MCP 工具（紧凑响应）。入口：安装脚本 / npx argo-search / mcp_server.py。
-version: 2.5.0
+description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、16 MCP 工具。入口：安装脚本 / npx argo-search / mcp_server.py。
+version: 2.5.1
 triggers:
   - 搜索
   - 查一下
@@ -24,21 +24,31 @@ engines:
   - byted
   - clinicaltrials
   - cls_telegraph
+  - cninfo
   - coingecko
+  - courtlistener
   - crates
   - crossref
   - dblp
   - devto
   - docker_hub
+  - douban_book
   - duckduckgo
   - eastmoney
+  - em_flow
   - em_global_news
   - europepmc
+  - eurostat
   - exa
   - finviz
+  - fred
   - free_dictionary
+  - fx_rate
+  - fxtwitter
+  - gbif
   - github
   - google_scholar
+  - gutenberg
   - hackernews
   - huggingface
   - itotii
@@ -71,6 +81,8 @@ engines:
   - models_dev
   - moegirl
   - musicbrainz
+  - nasa_cmr
+  - nbs_stats
   - npm
   - octen
   - open_library
@@ -78,30 +90,52 @@ engines:
   - openfda
   - openverse
   - polymarket
+  - pubchem
   - pypi
   - qweather
+  - rcsb_pdb
   - reddit
+  - rfc_editor
   - seeking_alpha
   - semantic_scholar
+  - sina_quote
   - stackoverflow
   - steam
   - tavily
+  - tencent_quote
   - ths_hot
   - toutiao_hot
   - twitter
+  - uniprot
   - urban_dictionary
+  - usgs
   - v2ex
+  - wayback_cdx
   - wechat_sogou
   - weibo
   - wenshu
+  - weread
   - wikidata
   - wikipedia
+  - worldbank
   - xiaohongshu
   - zh_wikipedia
   - zhihu
   - zhihu_global
 ---
-## Argo v2.5.0
+## Argo v2.5.1
+
+### 本版你多了什么（通俗）
+
+**问啥像啥，日常更快。** 金融行情、宏观数据、化学物种等垂直源进日常；长尾源留给深度研究；研究用 boost 抬优先级，不锁死单源。详见 `docs/RELEASE_NOTES_v2.5.1.md`。
+
+| 你问的 | 大概走哪类 | 体感 |
+|--------|------------|------|
+| A 股行情 | 新浪 / 腾讯行情、资金流 | 快照 + early-stop |
+| 美股 | Finviz 等 | 与 A 股分流 |
+| CPI / GDP / 汇率 | FRED / 世行 / 国统局 / 欧统 / 汇率 | 数据感结果 |
+| 分子式 | PubChem | 化合物答案源 |
+| 深度研报 / 综述 | research + vertical boost | 更全且不易整条空 |
 
 ### 安装与接入（摘要）
 
@@ -127,8 +161,10 @@ Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/
 
 | 能力 | 说明 |
 |------|------|
-| 87 搜索源 | `config.yaml` 单一真源，含 local_* / 金融 / 社交 / 学术 / 开发者社区 |
+| 约 110 搜索源 | `config.yaml` 真源：local_* / 金融行情 / 宏观 / 化学物种 / 社交 / 学术 / 开发者社区 |
 | 16 MCP 工具 | search / research / evidence / clarify / fetch / crawl / extract / screenshot / pdf / social* |
+| 引擎分层 + combo 预算 | 日常精简、研究放宽（`engine_policy`） |
+| 垂直答案源 | 行情 / 宏观 / 化合物等优先可吸收事实 |
 | 查询改写 | 口语 → 检索友好；**不污染**路由域匹配 |
 | 路由热缓存 | 重复路由接近亚毫秒 |
 | MCP 紧凑响应 | 控制 snippet 与内部字段，省 token |
@@ -257,7 +293,20 @@ python3 scripts/clarify.py "Python 吞苹果 兼容吗" --explain
 python3 scripts/clarify.py "苹果股价" --json
 ```
 
-### 引擎全景（核心 28 引擎 + Reranker，全量 74 引擎 / 62 启用）
+### 答案型垂直源（v2.5.1 加厚）
+
+| 引擎 | 方向 | 说明 |
+|------|------|------|
+| sina_quote / tencent_quote / em_flow | A 股行情 | 快照与资金流，日常优先 |
+| finviz | 美股 | 美股域专线 |
+| fred / worldbank / nbs_stats / eurostat / fx_rate | 宏观与汇率 | 数据问句直达 |
+| pubchem | 化学 | 化合物 / 分子式 |
+| gbif / rfc_editor | 物种 / 标准 | 窄域直达 |
+| weread / douban_book / cninfo | 图书与公告 | 按域启用 |
+
+日常 `depth=fast` 会收紧 combo；`research` / `deep` 再放开长尾（如 seeking_alpha、archive 等）。
+
+### 引擎全景（摘要；全量约 110，以 `config.yaml` / `--list-engines` 为准）
 
 | 引擎 | cost_tier | 特点 | 延迟 |
 |------|-----------|------|------|

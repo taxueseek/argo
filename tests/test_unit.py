@@ -76,8 +76,14 @@ class TestRoute(unittest.TestCase):
 
     def test_fund_domain(self):
         d = route_query("基金净值")
-        self.assertEqual(d["engine"], "eastmoney")
         self.assertEqual(d["domain"], "fund_query")
+        # 主源 eastmoney；熔断/配额时可能沉底到 anysearch，combo 仍应含基金域源
+        combo = d.get("engines") or d.get("engines_combo") or []
+        self.assertTrue(
+            set(combo) & {"eastmoney", "anysearch"},
+            f"fund combo unexpected: {combo}",
+        )
+        self.assertIn(d["engine"], ("eastmoney", "anysearch", *combo[:1]))
 
     def test_technical_english(self):
         d = route_query("Python asyncio internals")

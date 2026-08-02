@@ -951,7 +951,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "argo",
-                "version": "2.5.0"
+                "version": "2.5.1"
             },
             # 短指令：降 tools 上下文；细节在 tool schema
             "instructions": (
