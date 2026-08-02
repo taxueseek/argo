@@ -411,18 +411,6 @@ domains:
   - \b\d{4}\.\d{4,5}\b
   - (?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)
   primary: arxiv
-- desc: 中文技术深挖（先于英文技术域/中文通用域；要求含中文）
-  engines_combo:
-  - byted
-  - octen
-  - juejin
-  fallback: byted
-  name: chinese_tech_deep
-  parallel: true
-  patterns:
-  - (?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南|原理|底层|综述|深入|深挖|架构设计)
-  - (?i)[一-鿿].*(Rust|Python|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|AI编程|LLM|大模型|量子|神经网络|机器学习|深度学习)
-  primary: byted
 - desc: 技术深度研究
   engines_combo:
   - openalex
@@ -435,7 +423,6 @@ domains:
   parallel: true
   patterns:
   - (?i)(research|deep dive|综述|survey|state of the art|SOTA)
-  - (?i)(原理|底层|实现|源码分析|架构设计|论文)
   primary: openalex
 - desc: 购物评测/选购推荐
   engines_combo:
@@ -510,6 +497,18 @@ domains:
   patterns:
   - (?i)(最新新闻|最新进展|今天发生|突发|breaking)
   - (?i)\b(news|latest)\b
+  primary: byted
+- desc: 中文技术深挖（先于英文技术域/中文通用域；要求含中文）
+  engines_combo:
+  - byted
+  - octen
+  - juejin
+  fallback: byted
+  name: chinese_tech_deep
+  parallel: true
+  patterns:
+  - (?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南|原理|底层|综述|深入|深挖|架构设计|实现|用法)
+  - (?i)[一-鿿].*(Rust|Python|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|AI编程|LLM|大模型|量子|神经网络|机器学习|深度学习)
   primary: byted
 - desc: 英文技术通用（octen 主搜，低延迟；先于 catch-all）
   engines_combo:
