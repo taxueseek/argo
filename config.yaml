@@ -117,6 +117,7 @@ domains:
   engines_combo:
   - fred
   - worldbank
+  - nbs_stats
   - fx_rate
   - anysearch
   fallback: anysearch
@@ -956,6 +957,21 @@ engines:
     desc: 世界银行宏观指标（GDP/通胀/失业/人口，api.worldbank.org 免认证）
     timeout: 12
     type: worldbank
+  nbs_stats:
+    enabled: true
+    label: 国家统计局
+    cost_tier: free
+    qps: 2
+    priority: 6
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - macro
+    desc: 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证）
+    timeout: 12
+    type: nbs_stats
   v2ex:
     enabled: true
     label: V2EX

@@ -543,6 +543,250 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── 国家统计局数据引擎（data.stats.gov.cn V2 API，免认证） ────────────────────
+
+_NBS_PROVINCES: dict[str, str] = {
+    "北京": "110000000000", "天津": "120000000000", "河北": "130000000000",
+    "山西": "140000000000", "内蒙古": "150000000000", "辽宁": "210000000000",
+    "吉林": "220000000000", "黑龙江": "230000000000", "上海": "310000000000",
+    "江苏": "320000000000", "浙江": "330000000000", "安徽": "340000000000",
+    "福建": "350000000000", "江西": "360000000000", "山东": "370000000000",
+    "河南": "410000000000", "湖北": "420000000000", "湖南": "430000000000",
+    "广东": "440000000000", "广西": "450000000000", "海南": "460000000000",
+    "重庆": "500000000000", "四川": "510000000000", "贵州": "520000000000",
+    "云南": "530000000000", "西藏": "540000000000", "陕西": "610000000000",
+    "甘肃": "620000000000", "青海": "630000000000", "宁夏": "640000000000",
+    "新疆": "650000000000",
+}
+_NBS_PROVINCE_NAMES = tuple(_NBS_PROVINCES.keys())
+
+# 指标关键词 → (搜索后缀, 全国搜索词, 显示名匹配子串)。顺序重要：人均类必须先于总量类匹配
+_NBS_INDICATORS: list[tuple[tuple[str, ...], str, str, tuple[str, ...]]] = [
+    (("人均gdp", "人均生产总值", "人均国内生产总值"), "人均gdp", "人均gdp",
+     ("人均地区生产总值", "人均国内生产总值")),
+    (("gdp", "生产总值", "国内生产总值", "经济总量"), "gdp", "国内生产总值",
+     ("地区生产总值", "国内生产总值")),
+    (("cpi", "物价", "居民消费价格", "通货膨胀", "通胀"), "居民消费价格", "居民消费价格",
+     ("居民消费价格指数",)),
+    (("ppi", "工业生产者", "生产者价格"), "工业生产者价格", "工业生产者价格",
+     ("工业生产者出厂价格指数",)),
+    (("失业",), "失业", "失业", ("城镇登记失业", "城镇调查失业")),
+    (("就业",), "就业", "就业", ("就业人员",)),
+    (("人口",), "人口", "人口", ("人口数",)),
+    (("固定资产投资", "投资"), "固定资产投资", "固定资产投资", ("固定资产投资",)),
+    (("社会消费品零售", "零售"), "社会消费品零售", "社会消费品零售", ("社会消费品零售总额",)),
+    (("财政收入",), "财政收入", "财政收入", ("财政收入",)),
+    (("进出口", "出口", "外贸"), "进出口", "进出口", ("进出口",)),
+    (("m2", "货币供应"), "货币供应", "货币供应", ("货币供应",)),
+    (("pmi", "采购经理"), "采购经理", "采购经理", ("采购经理指数",)),
+    (("人均可支配", "可支配收入"), "可支配收入", "可支配收入", ("人均可支配收入",)),
+    (("出生", "生育"), "出生", "出生", ("出生人口",)),
+    (("死亡",), "死亡", "死亡", ("死亡人口",)),
+]
+
+# 显示名中的噪声词：指数/拉动/贡献率/环比/季度累计/不变价/构成等派生指标一律降级
+_NBS_NOISE = ("指数", "拉动", "贡献", "环比", "当季", "累计", "不变价",
+              "支出法", "收入法", "构成", "1978", "1985", "定基", "增速", "增长")
+
+_NBS_ROOT_ID = "69c574ab128a44e595cc0b24502b771b"
+_NBS_API = "https://data.stats.gov.cn/dg/website/publicrelease/web/external"
+
+
+def _build_nbs_stats_engine(spec: dict[str, Any]) -> Any:
+    """国家统计局数据（data.stats.gov.cn V2 API，免认证）。
+
+    三步走：搜索定位 cid（含省名才触发分省数据）→ esData 批量取数。
+    支持全国/单省/31省排行三类查询，GDP/CPI/PPI/人口/就业/投资等指标。
+    """
+    timeout = spec.get("timeout", 12)
+    _HEADERS = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": "https://data.stats.gov.cn/",
+    }
+
+    def _search(kw: str, to: float) -> list[dict]:
+        """搜索指标元数据，返回原始条目列表。"""
+        url = f"{_NBS_API}/query?search={urllib.parse.quote(kw)}&pagenum=1&pageSize=15"
+        try:
+            req = urllib.request.Request(url, headers=_HEADERS)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                d = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"统计局搜索失败: {e}")
+            return []
+        items = (d.get("data") or {}).get("data") or []
+        return [it for it in items if isinstance(it, dict) and it.get("cid")]
+
+    def _fetch(cid: str, indicator_ids: list[str], das: list[dict],
+               dts: list[str], to: float) -> list[dict]:
+        """esData 批量取数，返回 [{code,name,values:[...]}]。"""
+        body = {
+            "cid": cid, "indicatorIds": indicator_ids, "das": das,
+            "dts": dts, "showType": "2", "rootId": _NBS_ROOT_ID,
+        }
+        try:
+            req = urllib.request.Request(
+                f"{_NBS_API}/stream/esData",
+                data=json.dumps(body).encode(),
+                headers={**_HEADERS, "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                d = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"统计局取数失败: {e}")
+            return []
+        data = d.get("data")
+        return data if isinstance(data, list) else []
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import datetime as _dt
+        to = _timeout or timeout
+        q = query.strip()
+        low = q.lower()
+        if not low:
+            return []
+
+        # 1. 省份解析：单省 / 全部31省（各省、排名）/ 全国
+        province = ""
+        for name in _NBS_PROVINCE_NAMES:
+            if name in q:
+                province = name
+                break
+        all_prov = bool(province) and any(k in q for k in ("各省", "31省", "省份", "排名", "排行", "对比", "全部"))
+        if not province and any(k in q for k in ("各省", "31省", "省份", "全国各省")):
+            all_prov = True
+
+        # 2. 指标解析
+        suffix = national = ""
+        matches: tuple[str, ...] = ()
+        for keys, s, ns, ms in _NBS_INDICATORS:
+            if any(k in low for k in keys):
+                suffix, national, matches = s, ns, ms
+                break
+        if not suffix:
+            return []
+
+        # 3. 年份解析：指定年或默认最新（用搜索命中条目的年份）
+        ym = re.search(r"(20\d{2})\s*年?", q)
+        year = ym.group(1) if ym else ""
+
+        # 4. 搜索定位 cid：分省查询必须带省名才能触发分省数据
+        if province:
+            search_kw = f"{province}{suffix}"
+        elif all_prov:
+            search_kw = f"北京{suffix}"
+        else:
+            search_kw = national
+        items = _search(search_kw, to)
+        if not items:
+            return []
+
+        # 5. 从搜索结果选最佳条目：指标名命中 > 无噪声派生词 > 年度 > 地域匹配
+        def _score(it: dict) -> int:
+            sn = (it.get("show_name") or "").strip()
+            s = 0
+            if any(m in sn for m in matches):
+                s += 100
+                if any(m in sn[:8] for m in matches):
+                    s += 30
+            if any(w in sn for w in _NBS_NOISE):
+                s -= 60
+            if "(上年=100)" in sn or "(上年同期=100)" in sn:
+                s += 20
+            if "分省" in (it.get("type_text") or ""):
+                s += 15
+            if "年度" in (it.get("type_text") or ""):
+                s += 20
+            elif "季度" in (it.get("type_text") or ""):
+                s -= 30
+            if province and not all_prov:
+                if (it.get("da_name") or "").startswith(province):
+                    s += 40
+            elif not province and not all_prov:
+                if (it.get("da_name") or "") == "全国":
+                    s += 40
+            return s
+        items.sort(key=_score, reverse=True)
+        hit = items[0]
+        cid = hit["cid"]
+        indicator_id = hit["indic_id"]
+        show_name = (hit.get("show_name") or "").strip()
+        hit_year = (hit.get("dt") or "")[:4]
+        if not year:
+            year = hit_year
+
+        # 6. 构造 das / dts
+        if all_prov:
+            das = [{"text": name, "value": code} for name, code in _NBS_PROVINCES.items()]
+        elif province:
+            das = [{"text": province, "value": _NBS_PROVINCES[province]}]
+        else:
+            das = [{"text": "全国", "value": "000000000000"}]
+
+        rows = _fetch(cid, [indicator_id], das, [f"{year}YY-{year}YY"], to)
+        if not rows and year != hit_year:
+            # 指定年份数据未发布时回退到命中条目的年份
+            year = hit_year
+            rows = _fetch(cid, [indicator_id], das, [f"{year}YY-{year}YY"], to)
+        if not rows:
+            return []
+
+        # 7. 格式化：31省按值排序逐条输出，单省/全国输出一条
+        if all_prov:
+            label = f"{year}年各省{show_name}"
+        elif province:
+            label = f"{province} {year}年 {show_name}"
+        else:
+            label = f"全国 {year}年 {show_name}"
+        results = []
+        if all_prov:
+            parsed = []
+            for it in rows:
+                vals = it.get("values") or []
+                if not vals:
+                    continue
+                v = vals[0]
+                try:
+                    fv = float(v.get("value"))
+                except (TypeError, ValueError):
+                    continue
+                parsed.append((fv, it.get("name", "")))
+            parsed.sort(reverse=True)
+            du = (rows[0].get("values") or [{}])[0].get("du_name") or ""
+            if du == "无":
+                du = ""
+            for i, (fv, pname) in enumerate(parsed[: min(n, 31)], 1):
+                results.append({
+                    "title": f"{i}. {pname} {show_name} {fv:,.1f} {du}",
+                    "url": "https://data.stats.gov.cn/easyquery.htm",
+                    "snippet": f"{label} 排行第{i}名 | 数据来源：国家统计局",
+                    "source": "nbs_stats",
+                    "score": 0.95,
+                })
+        else:
+            for it in rows:
+                vals = it.get("values") or []
+                if not vals:
+                    continue
+                v = vals[0]
+                val = v.get("value")
+                du = v.get("du_name") or ""
+                if du == "无":
+                    du = ""
+                dt_name = v.get("dt_name") or f"{year}年"
+                results.append({
+                    "title": f"{label}: {val} {du}".strip(),
+                    "url": "https://data.stats.gov.cn/easyquery.htm",
+                    "snippet": f"{label} | 数据来源：国家统计局 | 统计周期 {dt_name}",
+                    "source": "nbs_stats",
+                    "score": 0.95,
+                })
+        return results[: max(n, 5)]
+
+    return _engine
+
+
 def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
     """英英词典（dictionaryapi.dev，免认证，响应为数组需专门解析）"""
     timeout = spec.get("timeout", 8)
