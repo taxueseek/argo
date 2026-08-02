@@ -1,4 +1,10 @@
 node_modules/
 __pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+*.sqlite
+*.db
+cache/
 installs.local.yaml
 *.bak-before-link

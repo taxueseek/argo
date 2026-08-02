@@ -18,7 +18,7 @@ sys.path.insert(0, str(LOCAL_SEARCH_DIR))
 
 from config import load_config, get_engines, get_domains, get_cost_factor, get_cost_tiers
 from route import extract_features, match_domain, route_query
-from cache import SearchCache, DOMAIN_TIER_MAP, CACHE_TIERS
+from cache import SearchCache, DOMAIN_TIER_MAP, CACHE_TIERS  # noqa: F401
 from engines import get_registry, available_engines, search as engine_search
 from tfidf_router import semantic_route, SemanticRouter
 from quota import QuotaManager
@@ -187,6 +187,55 @@ class TestCache(unittest.TestCase):
         self.assertEqual(SearchCache.resolve_ttl("tech_deep"), 7200)
         self.assertEqual(SearchCache.resolve_ttl("general_search"), 3600)
         self.assertEqual(SearchCache.resolve_ttl("unknown"), 3600)
+        # v2.4.1：缺失域补全
+        self.assertIn("chinese_general", DOMAIN_TIER_MAP)
+        self.assertIn("fact_check", DOMAIN_TIER_MAP)
+        self.assertEqual(SearchCache.resolve_ttl("chinese_general"), 3600)
+        self.assertEqual(SearchCache.resolve_ttl("fact_check"), 7200)
+
+    def test_freshness_ttl_cap(self):
+        """时效敏感查询强制 TTL ≤ 900，即使 domain 是 general。"""
+        from cache import is_freshness_sensitive_query, REALTIME_TTL_CAP
+        self.assertTrue(is_freshness_sensitive_query("今日热点新闻"))
+        self.assertTrue(is_freshness_sensitive_query("A股 实时 行情"))
+        self.assertFalse(is_freshness_sensitive_query("Python asyncio 教程"))
+        ttl = SearchCache.resolve_ttl("chinese_general", query="今日热点新闻")
+        self.assertLessEqual(ttl, REALTIME_TTL_CAP)
+        # set 后写入的 _ttl 也不得超过 cap
+        self.cache.set(
+            "今日热点新闻", "anysearch", 5,
+            {"results": [{"title": "n", "url": "http://n"}]},
+            domain="chinese_general", mode="auto", depth="fast",
+        )
+        hit = self.cache.get("今日热点新闻", "anysearch", 5,
+                             domain="chinese_general", mode="auto", depth="fast")
+        self.assertIsNotNone(hit)
+        self.assertLessEqual(hit.get("_ttl", 99999), REALTIME_TTL_CAP)
+
+    def test_query_normalize_cache_hit(self):
+        """空白/大小写差异应命中同一缓存键。"""
+        self.cache.set(
+            "React  Hooks", "anysearch", 5,
+            {"results": [{"title": "r", "url": "http://r"}]},
+            domain="general", mode="auto", depth="fast",
+        )
+        hit = self.cache.get("react  hooks", "anysearch", 5,
+                             domain="general", mode="auto", depth="fast")
+        self.assertIsNotNone(hit)
+        hit2 = self.cache.get("  React   Hooks  ", "anysearch", 5,
+                              domain="general", mode="auto", depth="fast")
+        self.assertIsNotNone(hit2)
+
+    def test_general_no_eod_extension(self):
+        """general 域不再日末延长；research 仍可。"""
+        from cache import SAME_DAY_ELIGIBLE_TIERS
+        self.assertNotIn("general", SAME_DAY_ELIGIBLE_TIERS)
+        self.assertIn("research", SAME_DAY_ELIGIBLE_TIERS)
+        self.assertIn("evergreen", SAME_DAY_ELIGIBLE_TIERS)
+        ttl_g = self.cache._resolve_effective_ttl("general_search")
+        self.assertEqual(ttl_g, 3600)
+        ttl_r = self.cache._resolve_effective_ttl("tech_deep")
+        self.assertGreaterEqual(ttl_r, 7200)
 
     def test_ttl_expiry(self):
         self.cache.set("q3", "anysearch", 5, {"results": [{"title": "z"}]},

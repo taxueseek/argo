@@ -1,0 +1,29 @@
+# FxTwitter / FxEmbed 公开 API — X/Twitter 推文搜索（零 Key）
+# 文档: https://docs.fxembed.com/api/twitter/
+# 验证:
+#   python3 scripts/engine_validate.py --engine fxtwitter --stage all --admit --write-doc
+#   python3 scripts/search.py "OpenAI" --engine fxtwitter --json
+
+engine_id: fxtwitter
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://api.fxtwitter.com/2/search
+timeout: 10
+query_param: q
+canary_query: "OpenAI"
+desc: "FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据）"
+
+headers:
+  User-Agent: argo-search/1.0 (+fxtwitter)
+  Accept: application/json
+
+extra_params:
+  count: "{n}"
+
+output_map:
+  items: results
+  item_title: text
+  item_url: url
+  item_summary: text

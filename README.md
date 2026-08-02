@@ -24,7 +24,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.5.0-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-87-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-88-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-16%20tools-purple">
 </p>
 
@@ -525,7 +525,7 @@ python3 scripts/search.py [选项] 查询词
 
 | 版本 | 说明 |
 |------|------|
-| **v2.5.0** | 87 源 + 16 MCP；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应；engines/MCP 模块拆分；注册表单一真源；安装脚本 + npx 双路径；介绍页重写 |
+| **v2.5.0** | 88 源 + 16 MCP；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应；engines/MCP 模块拆分；注册表单一真源；安装脚本 + npx 双路径；介绍页重写 |
 | **v2.4.0** | 路由低分回退与社交误吸过滤；缓存 depth / 柔性命中；熔断与负缓存；`engine_outcomes`；RRF 共识源；fetch URL 缓存 |
 | **v2.2–v2.3** | 证据两阶段、中文信源表、content_signals、fetch 栈、引擎扩充、MCP 能力增强 |
 | **v2.1** | 社交引擎层（多平台 UGC） |

@@ -15,6 +15,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -49,9 +50,13 @@ CACHE_TIERS = {
     "evergreen": 86400,  # 24 小时
 }
 
-# 当天缓存策略：非时效性域在当天内延长缓存至日末
-# 时效性域（financial/news/realtime）保持短 TTL，确保数据新鲜度
-SAME_DAY_ELIGIBLE_TIERS = {"general", "research", "evergreen"}
+# 当天缓存策略：仅 evergreen/research 可延长至日末。
+# general 不再日末延长，避免「今日热点」等泛中文域被错误拉到超长 TTL。
+SAME_DAY_ELIGIBLE_TIERS = {"research", "evergreen"}
+
+# 时效敏感查询硬上限（秒）— 覆盖 domain 误分到 general 的情况
+REALTIME_TTL_CAP = 900
+FRESHNESS_QUERY_RE = None  # 延迟编译，见 is_freshness_sensitive_query
 
 # query domain → TTL tier 映射
 DOMAIN_TIER_MAP = {
@@ -63,6 +68,14 @@ DOMAIN_TIER_MAP = {
     "english_tech": "research",
     "news_realtime": "realtime",
     "general_search": "general",
+    "chinese_general": "general",
+    "chinese_tech_deep": "research",
+    "english_tech": "research",
+    "fact_check": "research",
+    "code_search": "research",
+    "wechat_search": "news",
+    "shopping": "general",
+    "reference": "evergreen",
     "social": "general",
     "local_chinese": "general",
     "local_news": "news",
@@ -77,7 +90,36 @@ DOMAIN_TIER_MAP = {
     "deep": "research",  # 别名：深度/研究类
     "general": "general",
     "auto": "general",
+    "fetch": "general",
 }
+
+
+def normalize_query(query: str) -> str:
+    """缓存键用查询归一化：折叠空白、全半角空格、两端 trim、小写英文字母。
+
+    不改变语义实体大小写敏感场景时仍用 lower；中文不受影响。
+    目标：同一问句不同空白/大小写命中同一 key。
+    """
+    if not query:
+        return ""
+    # 全角空格 → 半角；连续空白折叠
+    q = query.replace("\u3000", " ").strip()
+    q = re.sub(r"\s+", " ", q)
+    return q.casefold()
+
+
+def is_freshness_sensitive_query(query: str) -> bool:
+    """检测查询是否时效敏感（今日/实时/盘中/快讯等）。"""
+    global FRESHNESS_QUERY_RE
+    if FRESHNESS_QUERY_RE is None:
+        FRESHNESS_QUERY_RE = re.compile(
+            r"(今日|今天|昨晚|昨夜|本周|本月|实时|即时|最新|刚刚|"
+            r"盘中|盘前|盘后|快讯|直播|热点新闻|头条|"
+            r"today|tonight|breaking|live\s*update|just\s*now|"
+            r"right\s*now|this\s*(morning|week|month))",
+            re.I,
+        )
+    return bool(FRESHNESS_QUERY_RE.search(query or ""))
 
 
 # ── LRU 内存缓存 ───────────────────────────────────────────────────────────────
@@ -301,9 +343,11 @@ class SearchCache:
     """
     双层缓存引擎：L1 LRU + L2 SQLite
 
-    缓存键（v2.4）= SHA256(query|engine|domain|mode|depth)[:32]
+    缓存键（v2.4.1）= SHA256(kind|norm_query|engine|domain|mode|depth)[:32]
+      - query 归一化后入 key（空白/大小写）
       - 不含 max_results：支持柔性命中（cached_n >= requested_n 可截断返回）
       - depth / mode 隔离，防 fast/deep、budget 污染
+      - 时效敏感 query 强制 TTL ≤ REALTIME_TTL_CAP
 
     分层：
       combo 结果 / per-engine 结果 / fetch URL（前缀区分）
@@ -324,14 +368,22 @@ class SearchCache:
     def _key(query: str, engine: str, max_results: int = 0, domain: str = "general",
              mode: str = "auto", depth: str = "fast", kind: str = "combo") -> str:
         """生成缓存键。max_results 不参与 key（柔性命中）；kind 区分 combo/engine/fetch。"""
-        raw = f"{kind}|{query}|{engine}|{domain}|{mode}|{depth}"
+        nq = normalize_query(query)
+        raw = f"{kind}|{nq}|{engine}|{domain}|{mode}|{depth}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
     @staticmethod
-    def resolve_ttl(domain: str = "general") -> int:
-        """根据 domain 返回基础 TTL（秒）。"""
+    def resolve_ttl(domain: str = "general", query: str | None = None) -> int:
+        """根据 domain（及可选 query 时效信号）返回基础 TTL（秒）。"""
         tier = DOMAIN_TIER_MAP.get(domain, "general")
-        return CACHE_TIERS.get(tier, DEFAULT_TTL)
+        ttl = CACHE_TIERS.get(tier, DEFAULT_TTL)
+        if query and is_freshness_sensitive_query(query):
+            ttl = min(ttl, REALTIME_TTL_CAP)
+        # 时效域硬上限，防止调用方传入超长 base_ttl 后绕过
+        if tier in ("financial", "news", "realtime"):
+            cap = {"financial": 300, "news": 600, "realtime": REALTIME_TTL_CAP}[tier]
+            ttl = min(ttl, cap)
+        return ttl
 
     @staticmethod
     def _seconds_until_end_of_day() -> int:
@@ -341,10 +393,23 @@ class SearchCache:
         end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=0)
         return max(int((end_of_day - now).total_seconds()), 60)
 
-    def _resolve_effective_ttl(self, domain: str, base_ttl: int | None = None) -> int:
-        """解析有效 TTL：非时效性域在当天内延长缓存至日末。"""
+    def _resolve_effective_ttl(self, domain: str, base_ttl: int | None = None,
+                               query: str | None = None) -> int:
+        """解析有效 TTL：仅 research/evergreen 可日末延长；时效 query 强制 cap。"""
         tier = DOMAIN_TIER_MAP.get(domain, "general")
-        ttl = base_ttl if base_ttl is not None else self.resolve_ttl(domain)
+        if base_ttl is not None:
+            ttl = base_ttl
+        else:
+            ttl = self.resolve_ttl(domain, query=query)
+
+        # 时效敏感查询：禁止日末延长，硬 cap
+        if query and is_freshness_sensitive_query(query):
+            return min(ttl, REALTIME_TTL_CAP)
+
+        if tier in ("financial", "news", "realtime"):
+            cap = {"financial": 300, "news": 600, "realtime": REALTIME_TTL_CAP}[tier]
+            return min(ttl, cap)
+
         if tier in SAME_DAY_ELIGIBLE_TIERS and base_ttl is None:
             return max(ttl, self._seconds_until_end_of_day())
         return ttl
@@ -404,13 +469,13 @@ class SearchCache:
     def set(self, query: str, engine: str, max_results: int, results: dict,
             domain: str = "general", ttl: int | None = None, mode: str = "auto",
             depth: str = "fast"):
-        """写入双层缓存。空结果强制短 TTL。"""
+        """写入双层缓存。空结果强制短 TTL；时效 query 强制 cap。"""
         result_list = results.get("results") if isinstance(results, dict) else None
         is_empty = isinstance(result_list, list) and len(result_list) == 0
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
-            effective_ttl = self._resolve_effective_ttl(domain, ttl)
+            effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
         key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         self._write(key, query, engine, max_results, results, domain, effective_ttl)
 
@@ -435,7 +500,7 @@ class SearchCache:
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
-            effective_ttl = self._resolve_effective_ttl(domain, ttl)
+            effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
         key = self._key(query, engine, max_results, domain, mode, depth, kind="engine")
         self._write(key, query, engine, max_results, {"results": results}, domain, effective_ttl)
 

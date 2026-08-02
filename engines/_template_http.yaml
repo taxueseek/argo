@@ -1,0 +1,37 @@
+# 复制本文件到 engines/specs/<engine_id>.yaml 后修改
+# 文件名或 engine_id 字段即为引擎 ID
+# 标准 REST 搜索 API 通常只需 YAML + 环境变量，无需改 Python
+#
+# 接入后验证：
+#   export ARGO_MYENGINE_API_KEY=...
+#   python3 scripts/engine_validate.py --engine myengine --stage health --admit
+#   python3 scripts/search.py --list-engines --detail
+
+engine_id: myengine
+# 展示名（可选）
+# name: My Engine Search
+type: http
+enabled: true
+cost_tier: low          # free | low | api | paid
+method: POST            # GET | POST
+url: https://api.example.com/v1/search
+timeout: 10
+required_env:
+  - ARGO_MYENGINE_API_KEY   # 也兼容 MYENGINE_API_KEY（见 engine_env 别名扩展）
+
+headers:
+  Authorization: Bearer {ARGO_MYENGINE_API_KEY}
+  Content-Type: application/json
+
+# POST body；GET 时用 query_param + extra_params
+body:
+  query: "{query}"
+  count: "{n}"
+
+# 声明式字段映射（JSON）
+output_map:
+  items: results
+  item_title: title
+  item_url: url
+  item_summary: snippet
+  # item_source: source

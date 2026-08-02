@@ -52,6 +52,35 @@ def _apply_query_rewrite(query: str) -> tuple[str, dict | None]:
     return query, None
 
 
+def _results_sufficient(results: list[dict[str, Any]], mode: str = "auto") -> bool:
+    """渐进检索 early-stop：首引擎结果是否已够用。
+
+    轻量启发式（不依赖网络/LLM）：
+      - 至少 3 条非错误结果
+      - 至少 2 条带非空 snippet
+      - fast 再放宽到 2 条 + 1 个 snippet
+    """
+    goods = [r for r in results if isinstance(r, dict) and "error" not in r]
+    if not goods:
+        return False
+    with_snippet = sum(
+        1 for r in goods
+        if (r.get("snippet") or r.get("title") or "").strip()
+    )
+    if mode == "fast":
+        return len(goods) >= 2 and with_snippet >= 1
+    return len(goods) >= 3 and with_snippet >= 2
+
+
+def _record_quota(engine: str, success: bool) -> None:
+    """真实打网后写配额；失败静默。"""
+    try:
+        from quota import get_quota_manager
+        get_quota_manager().record(engine, success=success)
+    except Exception:
+        pass
+
+
 # ── 进度阶段 ──────────────────────────────────────────────────────────────────
 
 class Stage(str, Enum):
@@ -169,6 +198,145 @@ def rerank_results(query: str, results: list[dict[str, Any]],
     return results, "fallback"
 
 
+# ── P0-003：本地五维 Rerank 兜底 ──────────────────────────────────────────────
+
+_CJK_OR_WORD = None  # 延迟编译
+
+
+def _tokens(text: str) -> list[str]:
+    """轻量分词：中文单字 + 英文单词，统一小写（复用 tfidf 风格）。"""
+    global _CJK_OR_WORD
+    if _CJK_OR_WORD is None:
+        import re as _re
+        _CJK_OR_WORD = _re.compile(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+")
+    return [t for t in _CJK_OR_WORD.findall((text or "").lower())]
+
+
+def _bigrams(tokens: list[str]) -> set[str]:
+    return {f"{tokens[i]}_{tokens[i+1]}" for i in range(len(tokens) - 1)}
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
+def _score_relevance(query_tokens: set[str], title: str, snippet: str) -> float:
+    """相关性：查询 token 在 title+snippet 的覆盖率（title 权重更高）。"""
+    if not query_tokens:
+        return 0.5
+    t_tokens = set(_tokens(title))
+    s_tokens = set(_tokens(snippet))
+    title_cov = len(query_tokens & t_tokens) / len(query_tokens)
+    snip_cov = len(query_tokens & s_tokens) / len(query_tokens)
+    return round(min(1.0, 0.65 * title_cov + 0.35 * snip_cov), 4)
+
+
+def _score_completeness(title: str, snippet: str) -> float:
+    """完整性：snippet 长度 + 是否含数字/结构信号，归一到 0-1。"""
+    length = len(snippet or "")
+    length_score = min(length / 200.0, 1.0)
+    has_digit = 1.0 if any(c.isdigit() for c in (snippet or "")) else 0.0
+    has_title = 1.0 if (title or "").strip() else 0.0
+    return round(min(1.0, 0.6 * length_score + 0.2 * has_digit + 0.2 * has_title), 4)
+
+
+def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
+                          domain: str = "general", top_n: int = 10
+                          ) -> list[dict[str, Any]]:
+    """本地五维精排（无 Bocha Key / fallback 时兜底）。
+
+    维度权重（通用）：
+      相关性 0.30 + 权威性 0.30 + 时效性 0.20 + 完整性 0.15 + 新颖性 0.05
+    tech/code 域：权威 0.20、相关 0.40（技术查询更看内容匹配）。
+
+    新颖性：标题 bigram 与「已排更高结果」的 Jaccard 互补（1 − overlap），
+    奖励信息增量，抑制近重复堆叠。
+
+    每个结果写入 rerank_dims 明细，供可观测。
+    """
+    if not results:
+        return results
+
+    # 权重表（MECE，和为 1）
+    is_tech = domain in ("tech_deep", "code_search", "local_code", "academic")
+    if is_tech:
+        w = {"relevance": 0.40, "authority": 0.20, "freshness": 0.20,
+             "completeness": 0.15, "novelty": 0.05}
+    else:
+        w = {"relevance": 0.30, "authority": 0.30, "freshness": 0.20,
+             "completeness": 0.15, "novelty": 0.05}
+
+    # 复用 evidence 的权威/时效评分（若可用）
+    try:
+        from evidence import score_authority, score_freshness
+        _has_evidence = True
+    except ImportError:
+        _has_evidence = False
+
+    query_tokens = set(_tokens(query))
+
+    # 先计算前四维静态分
+    enriched = []
+    for r in results:
+        title = r.get("title", "") or ""
+        snippet = r.get("snippet", "") or ""
+        url = r.get("url", "") or ""
+        source = r.get("source", "") or ""
+        relevance = _score_relevance(query_tokens, title, snippet)
+        if _has_evidence:
+            try:
+                authority = float(score_authority(url, source).get("score", 0.5))
+            except Exception:
+                authority = 0.5
+            try:
+                freshness = float(score_freshness(r).get("score", 0.5))
+            except Exception:
+                freshness = 0.5
+        else:
+            authority, freshness = 0.5, 0.5
+        completeness = _score_completeness(title, snippet)
+        enriched.append({
+            "r": r, "title": title,
+            "relevance": relevance, "authority": authority,
+            "freshness": freshness, "completeness": completeness,
+        })
+
+    # 贪心排序：每步选边际得分最高者，novelty 相对已选集合动态计算
+    ranked: list[dict[str, Any]] = []
+    selected_bigrams: set[str] = set()
+    pool = enriched[:]
+    while pool:
+        best_idx, best_score, best_novelty = 0, -1.0, 1.0
+        for i, e in enumerate(pool):
+            bg = _bigrams(_tokens(e["title"]))
+            novelty = 1.0 - _jaccard(bg, selected_bigrams)
+            score = (w["relevance"] * e["relevance"]
+                     + w["authority"] * e["authority"]
+                     + w["freshness"] * e["freshness"]
+                     + w["completeness"] * e["completeness"]
+                     + w["novelty"] * novelty)
+            if score > best_score:
+                best_idx, best_score, best_novelty = i, score, novelty
+        chosen = pool.pop(best_idx)
+        r = chosen["r"]
+        r["score"] = round(best_score, 4)
+        r["rerank_dims"] = {
+            "relevance": chosen["relevance"],
+            "authority": round(chosen["authority"], 4),
+            "freshness": round(chosen["freshness"], 4),
+            "completeness": chosen["completeness"],
+            "novelty": round(best_novelty, 4),
+        }
+        selected_bigrams |= _bigrams(_tokens(chosen["title"]))
+        ranked.append(r)
+
+    return ranked[:top_n]
+
+
 # ── 执行层 ─────────────────────────────────────────────────────────────────────
 
 def _classify_engine_outcome(eng: str, res: list[dict[str, Any]],
@@ -217,12 +385,28 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                    timeout: int, depth: str, cache: SearchCache, skip_cache: bool,
                    mode: str = "auto",
                    on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None) -> dict[str, Any]:
-    """执行搜索：缓存 → 熔断/负缓存 → 引擎 → 融合 → 精排 → 写缓存。"""
+    """执行搜索：缓存 → 熔断/负缓存 → 引擎 → 融合 → 精排 → 过滤 → 写缓存。"""
     domain = decision.get("domain") or "general"
     engine_label = decision.get("engine", "auto")
     engines_combo = decision.get("engines_combo", decision.get("engines", [engine_label]))
     engines = list(engines_combo)
     parallel = decision.get("parallel", False) and len(engines) > 1
+
+    # P0-001：查询理解 — clean_query 用于检索，exclude_terms 用于融合后过滤
+    exclude_terms: list[str] = []
+    retrieval_query = query
+    try:
+        from query_understanding import understand
+        qu = understand(query)
+        exclude_terms = qu.exclude_terms
+        # 仅当去否定片段后仍有实义内容时才替换检索词，避免空检索
+        if qu.clean_query and qu.clean_query.strip():
+            retrieval_query = qu.clean_query
+    except ImportError:
+        pass  # query_understanding 不可用
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(f"查询理解跳过: {type(e).__name__}")
 
     if on_progress:
         on_progress(Stage.START, {"query": query})
@@ -277,16 +461,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     retry_count = exec_cfg.get("retry_count", 0)
 
     def _exec_engine(eng: str, retries: int = retry_count) -> list[dict[str, Any]]:
+        # P0-001：用 retrieval_query（clean_query）检索
         last_result: list[dict[str, Any]] = []
         for _attempt in range(retries + 1):
             last_result = engine_search(
-                query, eng, n=max_results, timeout=timeout, depth=depth, mode=mode,
+                retrieval_query, eng, n=max_results, timeout=timeout, depth=depth, mode=mode,
             )
             if last_result and any("error" not in r for r in last_result):
                 return last_result
         if depth != "balanced":
             last_result = engine_search(
-                query, eng, n=max_results, timeout=timeout, depth="balanced", mode=mode,
+                retrieval_query, eng, n=max_results, timeout=timeout, depth="balanced", mode=mode,
             )
         return last_result
 
@@ -339,6 +524,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
         outcome = _classify_engine_outcome(eng, res, lat)
         goods = [r for r in res if isinstance(r, dict) and "error" not in r]
+        _record_quota(eng, success=bool(goods))
 
         if breaker is not None:
             if outcome["status"] == "ok":
@@ -368,8 +554,54 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
         return eng, (goods if goods else res), outcome, lat
 
+    def _ingest(eng: str, res: list, outcome: dict, lat: int) -> None:
+        raw_results[eng] = res
+        engine_outcomes.append(outcome)
+        engine_latency[eng] = lat
+        if outcome["status"] not in ("ok", "ok-cached", "partial"):
+            nonlocal_wasted[0] += lat
+
+    nonlocal_wasted = [0]
+    early_stopped = False
     to_run = list(engines)
-    if parallel and to_run:
+    # deep 模式全量并行；fast/auto/budget 可渐进 early-stop
+    allow_early = mode in ("fast", "auto", "budget") and depth != "deep"
+
+    if parallel and to_run and allow_early and len(to_run) > 1:
+        # Wave-1：主引擎；足够则停，否则 wave-2 并行补全
+        primary, rest = to_run[0], to_run[1:]
+        e, res, outcome, lat = _run_one(primary)
+        _ingest(e, res, outcome, lat)
+        goods_primary = [r for r in res if isinstance(r, dict) and "error" not in r]
+        if _results_sufficient(goods_primary, mode=mode):
+            early_stopped = True
+        else:
+            with ThreadPoolExecutor(max_workers=min(len(rest), 3)) as ex:
+                futures = {ex.submit(_run_one, eng): eng for eng in rest}
+                try:
+                    for fut in as_completed(futures, timeout=timeout + 2):
+                        eng = futures[fut]
+                        try:
+                            e2, res2, outcome2, lat2 = fut.result()
+                            _ingest(e2, res2, outcome2, lat2)
+                        except Exception as exc:
+                            raw_results[eng] = [{"error": str(exc), "source": eng}]
+                            engine_outcomes.append(_classify_engine_outcome(
+                                eng, raw_results[eng], 0,
+                            ))
+                except TimeoutError:
+                    for fut, eng in futures.items():
+                        if not fut.done():
+                            fut.cancel()
+                            raw_results[eng] = [{"error": "timeout", "source": eng}]
+                            engine_outcomes.append(_classify_engine_outcome(
+                                eng, raw_results[eng], timeout * 1000, "timeout",
+                            ))
+                            nonlocal_wasted[0] += timeout * 1000
+                for fut in futures:
+                    if not fut.done():
+                        fut.cancel()
+    elif parallel and to_run:
         with ThreadPoolExecutor(max_workers=min(len(to_run), 3)) as ex:
             futures = {ex.submit(_run_one, eng): eng for eng in to_run}
             try:
@@ -377,11 +609,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                     eng = futures[fut]
                     try:
                         e, res, outcome, lat = fut.result()
-                        raw_results[e] = res
-                        engine_outcomes.append(outcome)
-                        engine_latency[e] = lat
-                        if outcome["status"] not in ("ok", "ok-cached", "partial"):
-                            wasted_ms += lat
+                        _ingest(e, res, outcome, lat)
                     except Exception as e:
                         raw_results[eng] = [{"error": str(e), "source": eng}]
                         engine_outcomes.append(_classify_engine_outcome(
@@ -395,21 +623,22 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                         engine_outcomes.append(_classify_engine_outcome(
                             eng, raw_results[eng], timeout * 1000, "timeout",
                         ))
-                        wasted_ms += timeout * 1000
+                        nonlocal_wasted[0] += timeout * 1000
             for fut in futures:
                 if not fut.done():
                     fut.cancel()
     else:
         for eng in to_run:
             e, res, outcome, lat = _run_one(eng)
-            raw_results[e] = res
-            engine_outcomes.append(outcome)
-            engine_latency[e] = lat
-            if outcome["status"] not in ("ok", "ok-cached", "partial"):
-                wasted_ms += lat
-            if res and any(isinstance(r, dict) and "error" not in r for r in res):
+            _ingest(e, res, outcome, lat)
+            goods = [r for r in res if isinstance(r, dict) and "error" not in r]
+            if goods:
+                # 串行：首个有结果即停（原行为）
+                if allow_early and _results_sufficient(goods, mode=mode):
+                    early_stopped = True
                 break
 
+    wasted_ms = nonlocal_wasted[0]
     elapsed = int((time.time() - t0) * 1000)
 
     # 融合
@@ -436,12 +665,88 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     else:
         merged = []
 
+    # ── P0-001：按 exclude_terms 过滤（否定约束）──
+    excluded_count = 0
+    if merged and exclude_terms:
+        kept = []
+        low_terms = [t.lower() for t in exclude_terms if t]
+        for r in merged:
+            hay = f"{r.get('title', '')} {r.get('snippet', '')} {r.get('url', '')}".lower()
+            if any(t in hay for t in low_terms):
+                excluded_count += 1
+                continue
+            kept.append(r)
+        merged = kept
+
+    # ── P0-002：空结果错误恢复决策树 ──
+    recovery_info: dict[str, Any] | None = None
+    if not merged:
+        try:
+            from recovery import run_recovery
+            tried = list(raw_results.keys()) or list(engines)
+            fallback_engines = decision.get("engines_fallback") or []
+            try:
+                enabled_set = set(available_engines())
+            except Exception:
+                enabled_set = None
+
+            def _recovery_executor(rq: str, rengines: list[str]) -> list[dict[str, Any]]:
+                """恢复执行器：串行跑候选引擎，取首个非空。跳过缓存避免污染。"""
+                out: list[dict[str, Any]] = []
+                for eng in rengines:
+                    try:
+                        res = engine_search(rq, eng, n=max_results,
+                                            timeout=timeout, depth=depth, mode=mode)
+                    except Exception:
+                        res = []
+                    goods = [r for r in (res or [])
+                             if isinstance(r, dict) and "error" not in r]
+                    if goods:
+                        for r in goods:
+                            r.setdefault("_engine", eng)
+                            r.setdefault("_recovered", True)
+                        out.extend(goods)
+                        break
+                return out
+
+            rec_results, rec_result = run_recovery(
+                query, tried, _recovery_executor,
+                engines_fallback=fallback_engines, enabled=enabled_set, mode=mode)
+            recovery_info = rec_result.to_dict()
+            if rec_results:
+                merged = deduplicate_by_url(rec_results)[:max_results]
+                for r in merged:
+                    eng = r.get("_engine") or r.get("source") or ""
+                    if eng:
+                        r.setdefault("consensus_engines", [eng])
+        except ImportError:
+            pass  # recovery 模块不可用
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"错误恢复跳过: {type(e).__name__}")
+
     # Reranker：fast 模式跳过
     reranker_status = "skipped_short"
+    rank_method = "none"
     if mode == "fast" or depth == "fast":
         reranker_status = "skipped_fast"
     elif merged and len(merged) > 1:
         merged, reranker_status = rerank_results(query, merged, top_n=max_results)
+        if reranker_status == "ok":
+            rank_method = "bocha"
+
+    # P0-003：无 Bocha Key / fallback / fast 跳过时，启用本地五维 rerank 兜底
+    if merged and len(merged) > 1 and reranker_status in (
+            "skipped_no_key", "fallback", "skipped_fast", "skipped_short"):
+        try:
+            merged = local_five_dim_rerank(query, merged, domain=domain,
+                                           top_n=max_results)
+            rank_method = "local_five_dim"
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"本地五维 rerank 跳过: {type(e).__name__}")
 
     if merged:
         # 共识加权后再按 score 排
@@ -497,6 +802,19 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             import logging
             logging.getLogger("unified_search").debug(f"可信度评分跳过: {type(e).__name__}")
 
+    # ── P0-004：关键事实交叉标记（仅 deep/auto 且结果 ≥3；fast 跳过）──
+    fact_alignment: dict[str, Any] | None = None
+    if merged:
+        try:
+            from fact_align import align_facts
+            fact_alignment = align_facts(merged, min_results=3, mode=mode, depth=depth)
+        except ImportError:
+            pass  # fact_align 模块不可用
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"事实交叉标记跳过: {type(e).__name__}")
+
     if on_progress:
         on_progress(Stage.MERGING, {"count": len(merged)})
 
@@ -507,13 +825,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "engine_outcomes": engine_outcomes,
     }
 
-    # 写 combo 缓存：空结果短 TTL（cache.set 内处理）
+    # 写 combo 缓存：空结果短 TTL / 时效 cap 由 cache.set 处理
     if not skip_cache:
         effective_ttl = None
         if merged and elapsed > 2000:
+            # 慢查询略延长；时效域最多 2×，且仍受 resolve_ttl cap
+            base_ttl = cache.resolve_ttl(domain, query=query)
             multiplier = min(2 ** (elapsed // 2000), 8)
-            base_ttl = cache.resolve_ttl(domain)
-            effective_ttl = base_ttl * multiplier
+            if base_ttl <= 900:
+                effective_ttl = min(base_ttl * min(multiplier, 2), base_ttl * 2)
+            else:
+                effective_ttl = base_ttl * multiplier
         cache.set(
             query, cache_engine_key, max_results, result_payload,
             domain=domain, ttl=effective_ttl, mode=mode, depth=depth,
@@ -550,7 +872,13 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "errors": _collect_errors(raw_results),
         "engine_outcomes": engine_outcomes,
         "wasted_engine_ms": wasted_ms,
+        "early_stopped": early_stopped,
         "reranker": reranker_status,
+        "rank_method": rank_method,
+        "recovery": recovery_info,
+        "fact_alignment": fact_alignment,
+        "exclude_terms": exclude_terms,
+        "excluded_count": excluded_count,
         "mode": mode, "depth": depth,
     }
 
@@ -571,8 +899,18 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  depth: str = "fast", mode: str = "auto", local_first: bool = False,
                  rewrite: bool = True, cache: Any = None,
                  on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None,
-                 ) -> dict[str, Any]:
+                 input_kind: str = "auto",
+                 plan_only: bool = False,
+                 force_search: bool = False,
+                 envelope: bool = True,
+                 context: str = "search") -> dict[str, Any]:
     """统一搜索便捷入口。
+
+    执行分层（不阻塞日常）：
+      - daily（默认 auto/fast）：直搜，不挂 plan，不要求用户确认
+      - professional（mode=deep 或 depth=deep）：直搜 + 附加 plan 元数据
+      - plan_only：仅离线计划（显式开关，不进热路径默认）
+      - known-url：工具分流 handoff（不是「请确认后再搜」）
 
     Args:
         query: 搜索查询词
@@ -586,6 +924,11 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         local_first: 强制本地优先
         rewrite: 是否自动改写查询（默认 True）
         on_progress: 可选进度回调 (stage, data)
+        input_kind: auto|keyword|url-seed|known-url
+        plan_only: 仅离线计划，不联网
+        force_search: 即使判定 known-url 也强制多引擎搜索
+        envelope: 附加 candidates/coverage/limitations
+        context: search | research
 
     注意：路由永远基于原始 query。改写词只用于引擎检索，避免
     「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
@@ -593,9 +936,72 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     cache = cache if cache is not None else SearchCache()
     original_query = query
 
-    # 查询改写：仅影响检索串，不影响路由
+    # 查询改写：仅影响检索串，不影响路由（在执行引擎前应用）
     rewrite_result = None
     search_query = original_query
+
+    # ── 离线计划 / URL 分流（离线计划 / 输入分流）──
+    # 纪律：build_plan 无网络、不回调本函数 → 无 plan↔search 死循环
+    kind = "keyword"
+    tier = "daily"
+    plan_info: dict[str, Any] | None = None
+    try:
+        from plan import (
+            build_plan, classify_input_kind, execution_tier, should_attach_plan,
+        )
+        kind = classify_input_kind(query, input_kind)
+        tier = execution_tier(mode, depth, context)
+        if plan_only:
+            return build_plan(
+                query, mode=mode, depth=depth, max_results=n,
+                engine=engine if not local_first else "local_search",
+                input_kind=input_kind,
+                context=context,
+            )
+        if kind == "known-url" and not force_search:
+            plan_info = build_plan(
+                query, mode=mode, depth=depth, max_results=n,
+                engine=engine, input_kind="known-url", context=context,
+            )
+            # 不发起多引擎搜索；返回 handoff 形态，避免把读链接当热搜
+            out = {
+                "query": query,
+                "engine": None,
+                "engines": [],
+                "engines_combo": [],
+                "cached": False,
+                "domain": None,
+                "elapsed_ms": 0,
+                "results": [],
+                "count": 0,
+                "errors": [],
+                "engine_outcomes": [],
+                "wasted_engine_ms": 0,
+                "early_stopped": False,
+                "mode": mode,
+                "depth": depth,
+                "status": "handoff_required",
+                "input_kind": "known-url",
+                "execution_tier": tier,
+                "requires_confirmation": False,
+                "plan": plan_info,
+                "handoff": plan_info.get("handoff"),
+                "limitations": plan_info.get("limitations") or [],
+                "schema_version": "1.0",
+                "candidates": [],
+                "coverage": [],
+            }
+            return out
+    except ImportError:
+        kind = "keyword"
+        tier = "daily"
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(f"plan 分流跳过: {type(e).__name__}")
+
+    # 查询改写：追加领域关键词提升搜索质量
+    rewrite_result = None
+    original_query = query
     if rewrite:
         rewritten, rewrite_result = _apply_query_rewrite(original_query)
         if rewrite_result and rewrite_result.get("rewritten"):
@@ -610,7 +1016,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         print(
             f"[路由] {decision['reason']} → engine={decision['engine']} "
             f"combo={combo} domain={decision.get('domain')} "
-            f"tfidf={decision.get('tfidf_scores', [])} mode={mode}",
+            f"tfidf={decision.get('tfidf_scores', [])} mode={mode} kind={kind} tier={tier}",
             file=sys.stderr,
         )
         if search_query != original_query:
@@ -629,13 +1035,117 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             "confidence": rewrite_result["confidence"],
             "reason": rewrite_result["reason"],
         }
+    result["input_kind"] = kind
+    result["status"] = "completed"
+    result["execution_tier"] = tier
+    result["requires_confirmation"] = False  # 日常/专业热路径永不阻塞等确认
+    if original_query != query:
+        result["query_original"] = original_query
+
+    # professional：附加离线 plan 元数据（不阻断、不二次搜索）
+    try:
+        from plan import build_plan, should_attach_plan
+        if should_attach_plan(mode, depth, context, plan_only=False):
+            result["plan"] = build_plan(
+                original_query, mode=mode, depth=depth, max_results=n,
+                engine=engine if not local_first else "local_search",
+                input_kind=kind if kind != "auto" else "auto",
+                context=context,
+            )
+    except Exception:
+        pass
+
+    # 候选交接包（附加字段，不改 results 排序）
+    if envelope:
+        try:
+            from candidate_envelope import attach_envelope
+            extra_lim = []
+            if kind == "url-seed":
+                extra_lim.append(
+                    "url-seed: seed URL was not fetched; results are related discovery only"
+                )
+            if result.get("recovery"):
+                extra_lim.append("recovery used; engine fallback may differ from primary route")
+            if tier == "daily":
+                extra_lim.append(
+                    "daily tier: direct search; no pre-confirm gate"
+                )
+            elif tier == "professional":
+                extra_lim.append(
+                    "professional tier: plan metadata attached; verify top-k before hard claims"
+                )
+            attach_envelope(
+                result,
+                query=query,
+                input_kind=kind,
+                route_reason=decision.get("reason"),
+                extra_limitations=extra_lim,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"envelope 跳过: {type(e).__name__}")
+            result.setdefault("schema_version", "1.0")
+            result.setdefault("limitations", [])
+
+    # 相关信源标准化（日常搜索底部引用列表；与 results 顺序一致）
+    result["sources"] = build_sources(result.get("results") or [])
+
     return result
+
+
+# ── 信源标准化 ─────────────────────────────────────────────────────────────────
+
+def build_sources(results: list[Any] | None) -> list[dict[str, Any]]:
+    """将 results 投影为编号信源列表（传统搜索引擎底部「相关链接」形态）。
+
+    规则：
+      - ref 与列表序号一致，从 1 起
+      - 无 URL 的条目跳过（不占号？——保留占位会错位；跳过并重编号）
+      - 字段齐全便于 Agent/归档复用，不伪造 metrics
+    """
+    sources: list[dict[str, Any]] = []
+    ref = 0
+    for r in results or []:
+        if not isinstance(r, dict):
+            continue
+        url = (r.get("url") or "").strip()
+        if not url:
+            continue
+        ref += 1
+        sources.append({
+            "ref": ref,
+            "title": (r.get("title") or "")[:160],
+            "url": url,
+            "engine": r.get("source") or r.get("_engine") or r.get("engine"),
+            "score": r.get("score"),
+            "snippet": ((r.get("snippet") or "")[:160] or None),
+        })
+    return sources
 
 
 # ── 输出格式化 ─────────────────────────────────────────────────────────────────
 
 def format_text_output(results: dict[str, Any]) -> str:
+    """日常搜索人读格式：条目正文 + 底部「相关信源」链接（类传统 SERP）。"""
     lines = []
+    if results.get("status") == "handoff_required":
+        ho = results.get("handoff") or {}
+        lines.append("=== HANDOFF (known-url, search skipped) ===")
+        lines.append(f"  url: {ho.get('url')}")
+        lines.append(f"  suggest: {', '.join(ho.get('suggested_tools') or [])}")
+        for lim in (results.get("limitations") or [])[:4]:
+            lines.append(f"  ! {lim}")
+        return "\n".join(lines)
+    if results.get("status") in ("ready",) and results.get("steps") and not results.get("results"):
+        # plan-only
+        lines.append(f"=== PLAN {results.get('status')} kind={results.get('input_kind')} ===")
+        route = results.get("route") or {}
+        lines.append(f"  engine={route.get('backend')} domain={route.get('domain')} combo={route.get('engines_combo')}")
+        for lim in (results.get("limitations") or [])[:5]:
+            lines.append(f"  ! {lim}")
+        return "\n".join(lines)
+
     count = results.get("count", 0)
     elapsed = results.get("elapsed_ms", 0)
     engine = results.get("engine", "?")
@@ -651,22 +1161,61 @@ def format_text_output(results: dict[str, Any]) -> str:
         header += f" [domain:{domain}]"
     if mode != "auto":
         header += f" [mode:{mode}]"
+    if results.get("input_kind"):
+        header += f" [kind:{results.get('input_kind')}]"
     lines.append(header)
 
     for err in results.get("errors", [])[:3]:
         lines.append(f"  [ERROR] {err}")
 
-    for r in results.get("results", []):
+    # 正文区：编号 + 标题 + 摘要（链接沉底，避免噪声）
+    sources = results.get("sources")
+    if not isinstance(sources, list) or not sources:
+        sources = build_sources(results.get("results") or [])
+
+    # 用 URL 对齐 ref
+    url_to_ref = {s.get("url"): s.get("ref") for s in sources if isinstance(s, dict)}
+    body_items = [r for r in (results.get("results") or []) if isinstance(r, dict)]
+    for r in body_items:
+        url = (r.get("url") or "").strip()
+        ref = url_to_ref.get(url)
+        if ref is None and url:
+            # 未进 sources 时临时编号
+            ref = "?"
         score = r.get("score", 0)
-        title = r.get("title", "?")[:80]
-        url = r.get("url", "")
-        prefix = f"[{score:.2f}]" if score else "[?]"
-        lines.append(f"  {prefix} {title}")
-        if url:
-            lines.append(f"    {url}")
-        snippet = r.get("snippet", "")
+        title = (r.get("title") or "?")[:80]
+        score_s = f"{score:.2f}" if isinstance(score, (int, float)) and score else "—"
+        lines.append(f"  [{ref}] {title}")
+        snippet = (r.get("snippet") or "").strip()
         if snippet:
-            lines.append(f"    {snippet[:120]}")
+            lines.append(f"      {snippet[:140]}")
+        elif score:
+            lines.append(f"      (score={score_s})")
+
+    # 底部相关信源（传统搜索引擎形态）
+    if sources:
+        lines.append("")
+        lines.append("── 相关信源 ──")
+        for s in sources:
+            if not isinstance(s, dict):
+                continue
+            ref = s.get("ref", "?")
+            eng = s.get("engine") or ""
+            title = (s.get("title") or "")[:60]
+            url = s.get("url") or ""
+            eng_s = f" · {eng}" if eng else ""
+            if title:
+                lines.append(f"  [{ref}] {title}{eng_s}")
+                if url:
+                    lines.append(f"      {url}")
+            elif url:
+                lines.append(f"  [{ref}] {url}{eng_s}")
+
+    if results.get("limitations"):
+        lines.append("")
+        lines.append("── limitations ──")
+        for lim in results["limitations"][:4]:
+            lines.append(f"  ! {lim}")
 
     return "\n".join(lines)
 
@@ -694,7 +1243,12 @@ def main():
     parser.add_argument("--explain", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--timeout", "-t", type=int, default=10)
-    parser.add_argument("--list-engines", action="store_true")
+    parser.add_argument("--list-engines", action="store_true",
+                        help="列出引擎；加 --detail 看 env/准入/routable 状态")
+    parser.add_argument("--detail", action="store_true",
+                        help="与 --list-engines 联用：输出详细状态")
+    parser.add_argument("--routable-only", action="store_true",
+                        help="与 --list-engines 联用：仅可自动路由的引擎")
     parser.add_argument("--mode", default="auto",
                         choices=["fast", "auto", "deep", "budget"],
                         help="预算模式: fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制")
@@ -703,67 +1257,103 @@ def main():
     parser.add_argument("--domain", default="", help="AnySearch 垂直域")
     parser.add_argument("--sub_domain", default="", help="AnySearch 子域")
     parser.add_argument("--progress", action="store_true")
+    parser.add_argument(
+        "--input-kind", default="auto",
+        choices=["auto", "keyword", "url-seed", "known-url"],
+        help="输入类型：known-url 默认不热搜；url-seed 只作发现线索",
+    )
+    parser.add_argument("--plan-only", action="store_true",
+                        help="仅输出离线计划（不联网）")
+    parser.add_argument("--force-search", action="store_true",
+                        help="known-url 也强制多引擎搜索（不推荐）")
+    parser.add_argument("--no-envelope", action="store_true",
+                        help="不附加 candidates/coverage/limitations")
+    parser.add_argument(
+        "--archive",
+        action="store_true",
+        help="将本次搜索 envelope 落盘到工作区归档（不抓正文/不下载）",
+    )
+    parser.add_argument(
+        "--archive-dir",
+        type=str,
+        default=None,
+        help="归档根目录（默认 ARGO_ARCHIVE_ROOT 或 工作区/数据/argo-search-archive）",
+    )
+    parser.add_argument("--archive-tag", default=None, help="归档标签，便于 list 过滤")
+    parser.add_argument("--archive-note", default=None, help="归档备注")
 
     args = parser.parse_args()
 
     if args.list_engines:
-        print(json.dumps(available_engines(), ensure_ascii=False, indent=2))
+        if args.detail:
+            try:
+                from engine_status import list_engines_detail, format_engines_table
+                rows = list_engines_detail(routable_only=args.routable_only)
+                if args.json_output:
+                    print(json.dumps(rows, ensure_ascii=False, indent=2))
+                else:
+                    print(format_engines_table(rows))
+            except Exception as e:
+                print(json.dumps({"error": str(e), "engines": available_engines()}, ensure_ascii=False, indent=2))
+        else:
+            try:
+                names = available_engines(routable_only=args.routable_only)
+            except TypeError:
+                names = available_engines()
+            print(json.dumps(names, ensure_ascii=False, indent=2))
         return
 
     if not args.query:
         parser.error("必须提供搜索关键词")
 
-    cache = SearchCache()
-    # 路由用原始 query；改写仅用于检索串
-    if args.local_first:
-        decision = route_query(args.query, engine_override="local_search", mode=args.mode)
-    else:
-        decision = route_query(args.query, engine_override=args.engine, mode=args.mode)
-
-    search_query, rewrite_result = _apply_query_rewrite(args.query)
-    if not (rewrite_result and rewrite_result.get("rewritten")):
-        search_query = args.query
-
-    if args.explain:
-        combo = decision.get('engines_combo', decision.get('engines', []))
-        print(
-            f"[路由] {decision['reason']} → engine={decision['engine']} "
-            f"combo={combo} domain={decision.get('domain')} "
-            f"tfidf={decision.get('tfidf_scores', [])} mode={args.mode}",
-            file=sys.stderr,
-        )
-        if rewrite_result and rewrite_result.get("rewritten"):
-            print(
-                f"[改写] {rewrite_result['original']} → {rewrite_result['rewritten']} "
-                f"({rewrite_result['confidence']:.0%})",
-                file=sys.stderr,
-            )
-
-    on_progress = None
-    if args.progress:
-        def on_progress(stage: Stage, data: dict[str, Any]):
-            print(f"[progress] {stage.value} {data}", file=sys.stderr)
-
-    results = execute_search(
-        query=search_query, decision=decision, max_results=args.max_results,
-        timeout=args.timeout, depth=args.depth, cache=cache,
-        skip_cache=args.no_cache, mode=args.mode, on_progress=on_progress,
+    # 归档需要 envelope；--archive 时强制保留
+    use_envelope = (not args.no_envelope) or args.archive
+    results = super_search(
+        query=args.query,
+        engine=args.engine,
+        n=args.max_results,
+        explain=args.explain,
+        skip_cache=args.no_cache,
+        timeout=args.timeout,
+        depth=args.depth,
+        mode=args.mode,
+        local_first=args.local_first,
+        input_kind=args.input_kind,
+        plan_only=args.plan_only,
+        force_search=args.force_search,
+        envelope=use_envelope,
     )
     results["query"] = args.query
 
-    if rewrite_result and rewrite_result.get("rewritten"):
-        results["rewritten_query"] = {
-            "original": rewrite_result["original"],
-            "rewritten": rewrite_result["rewritten"],
-            "confidence": rewrite_result["confidence"],
-            "reason": rewrite_result["reason"],
-        }
+    if args.archive and results.get("status") != "handoff_required":
+        try:
+            from archive_run import write_search_archive, resolve_archive_root
+            root = resolve_archive_root(args.archive_dir) if args.archive_dir else None
+            if args.archive_dir:
+                root = resolve_archive_root(args.archive_dir)
+            meta = write_search_archive(
+                results,
+                root=root,
+                tag=args.archive_tag,
+                note=args.archive_note,
+                source="argo_search",
+            )
+            if not args.json_output:
+                print(
+                    f"  [archive] {meta.get('run_id')} → {meta.get('run_dir')}",
+                    file=sys.stderr,
+                )
+        except Exception as e:
+            print(f"  [archive error] {type(e).__name__}: {e}", file=sys.stderr)
 
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}
         print(json.dumps(public, ensure_ascii=False, indent=2))
     else:
         print(format_text_output(results))
+        if results.get("archive"):
+            ar = results["archive"]
+            print(f"  archived → {ar.get('run_dir')}")
 
 
 if __name__ == "__main__":

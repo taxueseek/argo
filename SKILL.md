@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。87 引擎 TF-IDF 路由 + RRF 融合、查询改写（不污染域匹配）、Selection×Absorption 证据评分、双层缓存、熔断负缓存、16 MCP 工具（紧凑响应）。入口：安装脚本 / npx argo-search / mcp_server.py。
+description: Argo 阿尔戈 — 统一搜索与证据核验。88 引擎 TF-IDF 路由 + RRF 融合、查询改写（不污染域匹配）、Selection×Absorption 证据评分、双层缓存、熔断负缓存、16 MCP 工具（紧凑响应）。入口：安装脚本 / npx argo-search / mcp_server.py。
 version: 2.5.0
 triggers:
   - 搜索

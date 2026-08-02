@@ -638,7 +638,7 @@ engines:
   anysearch:
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/anysearch_http.py
+    - scripts/anysearch_http.py
     enabled: true
     label: AnySearch
     cost_tier: free
@@ -1216,7 +1216,7 @@ engines:
     cost_tier: free
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/twitter_engine.py
+    - scripts/social_engines/twitter_engine.py
     search_args:
     - search
     - '{query}'
@@ -1230,7 +1230,7 @@ engines:
     cost_tier: free
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/reddit_engine.py
+    - scripts/social_engines/reddit_engine.py
     search_args:
     - search
     - '{query}'
@@ -1702,7 +1702,7 @@ engines:
     cost_tier: free
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/xiaohongshu_engine.py
+    - scripts/social_engines/xiaohongshu_engine.py
     search_args:
     - search
     - '{query}'
@@ -1716,7 +1716,7 @@ engines:
     cost_tier: free
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/bilibili_engine.py
+    - scripts/social_engines/bilibili_engine.py
     search_args:
     - search
     - '{query}'
@@ -1730,7 +1730,7 @@ engines:
     cost_tier: free
     cmd:
     - python3
-    - ~/.claude/skills/argo/scripts/social_engines/weibo_engine.py
+    - scripts/social_engines/weibo_engine.py
     search_args:
     - search
     - '{query}'
@@ -2639,3 +2639,67 @@ output:
   include_routing_decision: true
   include_scores: true
 version: 1.0.1
+
+# 成本分级（用于成本感知路由）
+cost_tiers:
+  free:
+    - local_search
+    - local_arxiv
+    - local_wikipedia
+    - local_stackoverflow
+    - local_github
+    - local_bing
+    - local_google
+    - local_mojeek
+    - local_yandex
+    - local_startpage
+    - local_duckduckgo
+    - local_baidu
+    - local_sogou
+    - local_pubmed
+    - local_crossref
+    - local_semantic_scholar
+    - local_bing_news
+    - local_google_news
+    - local_duckduckgo_news
+    - local_gitlab
+    - local_npm
+    - local_wiktionary
+    - local_wikiquote
+    - local_imdb
+    - local_goodreads
+    - local_openstreetmap
+    - anysearch
+    - zhihu
+    - zhihu_global
+    - eastmoney
+    - arxiv
+    - duckduckgo
+    - uapi
+    - semantic_scholar
+    - openalex
+    - crossref
+    - github
+    - wikipedia
+    - searxng
+    - wolframalpha
+    - twitter
+    - reddit
+    - xiaohongshu
+    - bilibili
+    - weibo
+    - finviz
+    - seeking_alpha
+    - qweather
+    - wenshu
+    - jin10
+  low:
+    - bocha
+    - metaso
+    - byted
+    - brave
+  api:
+    - exa
+  paid:
+    - tavily
+    - felo
