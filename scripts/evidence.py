@@ -133,6 +133,7 @@ SOURCE_TYPE_MAP = {
     "qweather": ("天气数据", 0.9),
     "wenshu": ("裁判文书", 0.75),
     "zhihu_global": ("社区观点", 0.8),
+    "zhihu_hot": ("社区热榜", 0.55),
 }
 
 _CN_OVERRIDES: dict[str, Any] | None = None

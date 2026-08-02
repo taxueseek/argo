@@ -67,6 +67,8 @@ DOMAIN_TIER_MAP = {
     "tech_deep": "research",
     "english_tech": "research",
     "news_realtime": "realtime",
+    "hot_trending": "realtime",
+    "zhihu_hot_list": "realtime",
     "general_search": "general",
     "chinese_general": "general",
     "chinese_tech_deep": "research",

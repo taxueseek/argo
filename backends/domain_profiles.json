@@ -1380,5 +1380,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "zhihu_hot": {
+    "label": "知乎热榜",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

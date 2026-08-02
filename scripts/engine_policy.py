@@ -37,6 +37,7 @@ FORCE_DAILY_CORE: frozenset[str] = frozenset({
     "pubchem", "rfc_editor", "gbif", "clinicaltrials",
     "finviz", "anysearch", "duckduckgo", "byted", "octen",
     "arxiv", "github", "wikipedia",
+    "zhihu", "zhihu_hot",
 })
 
 

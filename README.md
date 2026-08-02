@@ -318,6 +318,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 | anysearch | 通用 / 技术 | 免费 |
 | eastmoney | 股票 / 基金 | 免费 |
 | zhihu / zhihu_global | 中文观点 / 评测 | API |
+| zhihu_hot | 知乎热榜（日配额约 100） | API |
 | arxiv / semantic_scholar / openalex | 学术 | 免费为主 |
 | github / stackoverflow / pypi / npm | 代码与包 | 视配置 |
 | byted / bocha / metaso / octen | 中文网页 / AI 搜索 | API / 低成本 |

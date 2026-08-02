@@ -1189,5 +1189,15 @@
     "cost_unit": "api",
     "cost_tier": "api",
     "priority": 35
+  },
+  "zhihu_hot": {
+    "label": "知乎热榜",
+    "qps": 1,
+    "limit": 100,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 26
   }
 }

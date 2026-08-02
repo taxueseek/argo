@@ -1315,3 +1315,16 @@ engines:
   status: ok
   recommended: true
   desc: 知乎开放平台全局搜索（需 ZHIHU_ACCESS_SECRET）
+- name: zhihu_hot
+  tier: T1
+  type: http
+  coverage:
+  - chinese
+  - hot
+  - trending
+  - realtime
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 知乎开放平台热榜 hot_list（日配额约 100；需 ZHIHU_ACCESS_SECRET；原 zhihu skill 迁入）

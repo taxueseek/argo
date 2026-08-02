@@ -36,6 +36,7 @@ KNOWN_ENV_ALIASES: dict[str, list[str]] = {
     "wolframalpha": ["ARGO_WOLFRAM_APPID", "WOLFRAM_APPID"],
     "zhihu": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "zhihu_global": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
+    "zhihu_hot": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "anysearch": ["ARGO_ANYSEARCH_API_KEY", "ANYSEARCH_API_KEY"],  # 可选
     "weread": ["ARGO_WEREAD_API_KEY", "WEREAD_API_KEY"],  # 微信读书 Agent Gateway
     "em_miaoxiang": ["ARGO_EASTMONEY_APIKEY", "EASTMONEY_APIKEY"],  # 东财妙想（可选）

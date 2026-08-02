@@ -122,6 +122,7 @@ engines:
   - zh_wikipedia
   - zhihu
   - zhihu_global
+  - zhihu_hot
 ---
 ## Argo v2.5.1
 
@@ -251,6 +252,7 @@ python3 scripts/search.py "查询词" --engine byted
 python3 scripts/search.py "查询词" --engine arxiv
 python3 scripts/search.py "查询词" --engine eastmoney
 python3 scripts/search.py "查询词" --engine zhihu
+python3 scripts/search.py "知乎热榜" --engine zhihu_hot
 python3 scripts/search.py "查询词" --engine bocha
 python3 scripts/search.py "查询词" --engine exa
 python3 scripts/search.py "查询词" --engine wechat_sogou
@@ -313,6 +315,7 @@ python3 scripts/clarify.py "苹果股价" --json
 |------|-----------|------|------|
 | anysearch | free | 垂直领域通用 | ~2.7s |
 | zhihu | free | 知乎观点 | ~700ms |
+| zhihu_hot | free | 知乎热榜（hot_list，日约 100 次） | ~500ms |
 | eastmoney | free | 金融数据 | ~400ms |
 | arxiv | free | 学术论文 | ~1s |
 | duckduckgo | free | 快速事实 | ~500ms |

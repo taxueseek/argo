@@ -248,12 +248,22 @@ domains:
   patterns:
   - (?i)(金十|jin10|财经快讯|市场快讯|7x24快讯)
   primary: jin10
+- desc: 知乎热榜（官方 hot_list，日配额约 100 次）
+  engines_combo:
+  - zhihu_hot
+  fallback: zhihu_hot
+  name: zhihu_hot_list
+  parallel: false
+  patterns:
+  - (?i)(知乎热榜|知乎热搜|知乎热点|知乎今日热|zhihu\s*hot|zhihu\s*trending|zhihu\s*hotlist)
+  primary: zhihu_hot
 - desc: 全网热搜/热榜
   engines_combo:
   - baidu_hot
   - toutiao_hot
   - bilibili_hot
   - ths_hot
+  - zhihu_hot
   fallback: baidu_hot
   name: hot_trending
   parallel: true
@@ -3033,6 +3043,40 @@ engines:
       item_source: AuthorName
     timeout: 10
     url: https://developer.zhihu.com/api/v1/content/global_search
+  zhihu_hot:
+    type: http
+    enabled: true
+    label: 知乎热榜
+    cost_tier: free
+    qps: 1
+    priority: 26
+    limit: 100
+    period: day
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - chinese
+    - hot
+    - trending
+    - realtime
+    desc: 知乎开放平台热榜 hot_list（日配额约 100；需 ZHIHU_ACCESS_SECRET；原 zhihu skill 迁入）
+    format: json
+    headers:
+      Authorization: Bearer {ZHIHU_ACCESS_SECRET}
+      Content-Type: application/json
+      X-Request-Timestamp: '{TIMESTAMP}'
+    method: GET
+    # 热榜无关键词检索，空 query_param 仅带 Limit
+    query_param: ""
+    extra_params:
+      Limit: '{n}'
+    output_map:
+      items: Data.Items
+      item_title: Title
+      item_url: Url
+      item_summary: Summary
+    timeout: 8
+    url: https://developer.zhihu.com/api/v1/content/hot_list
 execution:
   default_timeout: 8
   max_parallel_engines: 3
@@ -3091,6 +3135,7 @@ cost_tiers:
     - anysearch
     - zhihu
     - zhihu_global
+    - zhihu_hot
     - eastmoney
     - arxiv
     - duckduckgo
