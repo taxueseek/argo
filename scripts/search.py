@@ -61,6 +61,7 @@ class Stage(str, Enum):
     SEARCHING = "searching"
     MERGING = "merging"
     DONE = "done"
+    ERROR = "error"
 
 
 # ── RRF 融合 ───────────────────────────────────────────────────────────────────
@@ -568,7 +569,9 @@ def _collect_errors(raw_results: dict[str, list[dict[str, Any]]]) -> list[str]:
 def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = False,
                  skip_cache: bool = False, timeout: int = 10,
                  depth: str = "fast", mode: str = "auto", local_first: bool = False,
-                 rewrite: bool = True, cache: Any = None) -> dict[str, Any]:
+                 rewrite: bool = True, cache: Any = None,
+                 on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None,
+                 ) -> dict[str, Any]:
     """统一搜索便捷入口。
 
     Args:
@@ -582,6 +585,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         mode: 预算模式
         local_first: 强制本地优先
         rewrite: 是否自动改写查询（默认 True）
+        on_progress: 可选进度回调 (stage, data)
 
     注意：路由永远基于原始 query。改写词只用于引擎检索，避免
     「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
@@ -614,7 +618,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     result = execute_search(
         query=search_query, decision=decision, max_results=n,
         timeout=timeout, depth=depth, cache=cache,
-        skip_cache=skip_cache, mode=mode,
+        skip_cache=skip_cache, mode=mode, on_progress=on_progress,
     )
     # 对外仍报告用户原始 query
     result["query"] = original_query

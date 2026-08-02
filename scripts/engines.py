@@ -31,7 +31,24 @@ from engines_base import (
     _parse_generic,
     _parse_text_output,
     _parse_xml,
+    _parse_duckduckgo,
+    _parse_uapi,
+    _parse_semantic_scholar,
+    _ensure_engine_source,
+    _CUSTOM_JSON_PARSERS,
 )
+
+# 对外/测试兼容：专用解析器与 source 纠正
+__all__ = [
+    "search",
+    "available_engines",
+    "get_registry",
+    "safe_search",
+    "_parse_duckduckgo",
+    "_parse_uapi",
+    "_parse_semantic_scholar",
+    "_ensure_engine_source",
+]
 from engines_builders import (
     _build_exa_engine,
     _build_wechat_sogou_engine,

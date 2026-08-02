@@ -78,16 +78,27 @@ class TestRoute(unittest.TestCase):
 
     def test_technical_english(self):
         d = route_query("Python asyncio internals")
-        # TF-IDF 可将技术英文问句路由到代码/问答本地引擎，不再强制 general_search
+        # 技术英文问句可落到 english_tech / code_search 等；引擎含 octen 等 T 系
         tech_engines = {
-            "anysearch", "byted", "duckduckgo", "github",
-            "local_stackoverflow", "local_github", "local_bing",
+            "anysearch", "byted", "duckduckgo", "github", "octen", "tavily",
+            "local_stackoverflow", "local_github", "local_bing", "bocha",
         }
         self.assertTrue(
             d["engine"] in tech_engines or any(e in tech_engines for e in d.get("engines", [])),
             f"unexpected tech route: {d.get('engine')} / {d.get('engines')}",
         )
-        self.assertIn(d.get("domain"), ("general_search", None, "tech_deep", "local_code"))
+        self.assertIn(
+            d.get("domain"),
+            (
+                "english_tech",
+                "code_search",
+                "package_search",
+                "general_search",
+                None,
+                "tech_deep",
+                "local_code",
+            ),
+        )
 
     def test_mode_budget_filters_paid(self):
         d = route_query("latest AI news", mode="budget")

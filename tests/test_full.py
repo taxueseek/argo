@@ -132,7 +132,16 @@ class TestRoute(unittest.TestCase):
 
     def test_route_english_tech(self):
         d = route_query("Python asyncio")
-        self.assertIn(d["engine"], ["github", "anysearch", "tavily", "byted"])
+        # english_tech 主引擎含 octen；兼容 anysearch/github 等回退
+        allowed = {"github", "anysearch", "tavily", "byted", "octen", "bocha", "duckduckgo"}
+        self.assertTrue(
+            d["engine"] in allowed or any(e in allowed for e in d.get("engines", [])),
+            f"unexpected tech engine: {d.get('engine')} / {d.get('engines')}",
+        )
+        self.assertIn(
+            d.get("domain"),
+            {"english_tech", "code_search", "package_search", "general_search", "tech_deep"},
+        )
 
     def test_route_override(self):
         d = route_query("test query", engine_override="eastmoney")

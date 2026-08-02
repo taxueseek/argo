@@ -252,6 +252,12 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 if fmt == "xml":
                     return _parse_xml(raw, spec.get("_name", ""))
                 data = json.loads(raw)
+                eng = spec.get("_name", "")
+                limit = max(1, int(n or 5))
+                # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）
+                custom = _CUSTOM_JSON_PARSERS.get(eng)
+                if custom:
+                    return _ensure_engine_source(custom(data), eng)[:limit]
                 if output_map:
                     items_path = output_map.get("items", "")
                     # 根节点即为数组时（HF / dev.to / polymarket），items 用 "."
@@ -263,15 +269,16 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                         "snippet": output_map.get("item_summary", "snippet"),
                         "source": output_map.get("item_source", "source"),
                     }, url_template=output_map.get("url_template"))(data)
-                    eng = spec.get("_name", "")
                     for r in parsed:
                         r.setdefault("source", eng)
                         if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
                             r["snippet"] = r["snippet"][:300]
-                    return parsed[: max(1, int(n or 5))]
+                    return _ensure_engine_source(parsed, eng)[:limit]
                 if isinstance(data, list):
-                    return _parse_generic({"results": data}, spec.get("_name", ""))
-                return _parse_generic(data, spec.get("_name", ""))
+                    return _ensure_engine_source(
+                        _parse_generic({"results": data}, eng), eng
+                    )[:limit]
+                return _ensure_engine_source(_parse_generic(data, eng), eng)[:limit]
         except Exception as e:
             logger.warning(f"HTTP 引擎失败: {e}")
             return []
@@ -541,5 +548,124 @@ def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[st
         results.append({"title": str(title)[:200], "url": str(url),
                         "snippet": str(snippet), "score": score, "source": engine_name})
     return results[:10]
+
+
+def _ensure_engine_source(
+    results: list[dict[str, Any]] | Any, engine_name: str
+) -> list[dict[str, Any]]:
+    """纠正结果 source，避免 HTTP 解析器错标（如 uapi→stackoverflow）。
+
+    规则：
+      - 空 / generic → 设为引擎名
+      - source 既不等于引擎名、也不以「引擎名/」开头 → 纠正为引擎名
+      - wigolo_npx 允许保留 wigolo/... 子源标注
+    """
+    if not isinstance(results, list) or not engine_name:
+        return results if isinstance(results, list) else []
+    for r in results:
+        if not isinstance(r, dict) or "error" in r:
+            continue
+        src = str(r.get("source") or "")
+        if engine_name == "wigolo_npx" and src.startswith("wigolo"):
+            continue
+        if not src or src == "generic":
+            r["source"] = engine_name
+        elif src != engine_name and not src.startswith(engine_name + "/"):
+            r["source"] = engine_name
+    return results
+
+
+def _parse_duckduckgo(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """解析 DuckDuckGo Instant Answer API 响应。"""
+    if not isinstance(data, dict):
+        return []
+    results: list[dict[str, Any]] = []
+
+    abstract = data.get("Abstract", "")
+    if abstract:
+        results.append({
+            "title": data.get("Heading", "DuckDuckGo Answer"),
+            "url": data.get("AbstractURL", ""),
+            "snippet": abstract[:300],
+            "source": "duckduckgo",
+        })
+
+    for topic in data.get("RelatedTopics", [])[:5]:
+        if isinstance(topic, dict) and "Text" in topic:
+            results.append({
+                "title": topic.get("Text", "")[:100],
+                "url": topic.get("FirstURL", ""),
+                "snippet": topic.get("Text", "")[:300],
+                "source": "duckduckgo",
+            })
+
+    return results[:5]
+
+
+def _parse_uapi(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """解析 UAPI 搜索响应。"""
+    if not isinstance(data, dict):
+        return []
+    results = data.get("results", [])
+    if not isinstance(results, list):
+        return []
+    return [
+        {
+            "title": r.get("title", ""),
+            "url": r.get("url", ""),
+            "snippet": r.get("snippet", "")[:300],
+            "source": "uapi",
+        }
+        for r in results if isinstance(r, dict)
+    ][:10]
+
+
+def _parse_semantic_scholar(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """解析 Semantic Scholar API 响应。"""
+    if not isinstance(data, dict):
+        return []
+    papers = data.get("data") or []
+    if not isinstance(papers, list):
+        return []
+    results: list[dict[str, Any]] = []
+
+    for paper in papers:
+        if not isinstance(paper, dict):
+            continue
+
+        title = paper.get("title", "")
+        abstract = paper.get("abstract", "") or ""
+        citation_count = paper.get("citationCount", 0) or 0
+
+        pdf_info = paper.get("openAccessPdf", {})
+        url = pdf_info.get("url", "") if isinstance(pdf_info, dict) else ""
+
+        authors = paper.get("authors", [])
+        author_names = [a.get("name", "") for a in authors if isinstance(a, dict)][:3]
+        author_str = ", ".join(author_names)
+
+        snippet = f"{abstract[:200]}"
+        if citation_count:
+            snippet += f" [引用: {citation_count}]"
+        if author_str:
+            snippet += f" [作者: {author_str}]"
+
+        results.append({
+            "title": title,
+            "url": url,
+            "snippet": snippet[:300],
+            "score": min(1.0, citation_count / 1000) if citation_count else 0.5,
+            "source": "semantic_scholar",
+        })
+
+    return results[:10]
+
+
+# 引擎名 → 专用 JSON 解析器（无 output_map 时的精确格式）
+_CUSTOM_JSON_PARSERS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]] = {
+    "duckduckgo": _parse_duckduckgo,
+    "uapi": _parse_uapi,
+    "semantic_scholar": _parse_semantic_scholar,
+}
 
 

@@ -60,6 +60,7 @@ DOMAIN_TIER_MAP = {
     "financial_news": "news",
     "zhihu_content": "general",
     "tech_deep": "research",
+    "english_tech": "research",
     "news_realtime": "realtime",
     "general_search": "general",
     "social": "general",
@@ -73,6 +74,7 @@ DOMAIN_TIER_MAP = {
     "fund": "financial",
     "news": "realtime",
     "tech": "research",
+    "deep": "research",  # 别名：深度/研究类
     "general": "general",
     "auto": "general",
 }
@@ -144,10 +146,21 @@ class SQLiteCache:
         self._lock = threading.RLock()
         self._hits = 0
         self._misses = 0
-        os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+        # :memory: 必须单连接（每次 connect(":memory:") 都是独立空库）
+        self._mem_conn: sqlite3.Connection | None = None
+        # :memory: / 空路径 / URI 无需建目录
+        if self._db_path not in (":memory:", "") and not self._db_path.startswith("file:"):
+            parent = os.path.dirname(self._db_path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+        if self._db_path == ":memory:":
+            self._mem_conn = sqlite3.connect(":memory:", timeout=10)
+            self._mem_conn.execute("PRAGMA synchronous=NORMAL")
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
+        if self._mem_conn is not None:
+            return self._mem_conn
         conn = sqlite3.connect(self._db_path, timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
