@@ -109,6 +109,18 @@ domains:
   - A股|港股|美股|股票|ETF|板块
   primary: eastmoney
   quote: true
+- desc: 宏观数据查询（FRED 时序数据）
+  engines_combo:
+  - fred
+  - anysearch
+  fallback: anysearch
+  name: macro_data
+  parallel: false
+  patterns:
+  - (?i)(美国|美).{0,4}(CPI|通胀|失业率|非农|PPI|GDP增速|零售销售|M2|PCE)
+  - (通胀率|失业率|非农就业|国债收益率|美债收益率|十年期国债|10年期国债|三十年期国债|30年期国债|两年期国债|2年期国债|联邦基金利率|美联储利率|隔夜回购|SOFR|美元指数|货币供应)
+  - (?i)\b(US\s+CPI|unemployment\s+rate|treasury\s+yield|fed\s+funds\s+rate|nonfarm\s+payrolls?|US\s+GDP|M2\s+supply)\b
+  primary: fred
 - desc: 财经资讯/研报/公告
   engines_combo:
   - byted
@@ -339,14 +351,16 @@ domains:
   patterns:
   - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|动画|galgame|vtuber|虚拟主播|东方project|型月|fate)
   primary: moegirl
-- desc: 书籍/图书搜索（微信读书 + Open Library）
+- desc: 书籍/图书搜索（微信读书 + 豆瓣读书 + Open Library）
   engines_combo:
   - weread
+  - douban_book
   - open_library
   - anysearch
   fallback: anysearch
   name: book_search
   parallel: true
+  no_early_stop: true
   patterns:
   - (?i)(小说|书籍|图书|书单|好书|荐书|书荒|名著|畅销书|电子书|看书|出版社|ISBN|小说推荐|科幻小说|推理小说)
   - (?i)\b(book|novel|isbn|ebook|bestseller)\b
@@ -2084,6 +2098,35 @@ engines:
     coverage:
     - book
     desc: 微信读书图书搜索（中文书目/评分/在读，需 WEREAD_API_KEY）
+    timeout: 10
+  douban_book:
+    type: douban_book
+    enabled: true
+    label: 豆瓣读书
+    cost_tier: free
+    qps: 3
+    priority: 34
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - book
+    desc: 豆瓣读书搜索（评分/出版社/年份/价格，免认证）
+    timeout: 10
+  fred:
+    type: fred
+    enabled: true
+    label: FRED 宏观数据
+    cost_tier: free
+    qps: 3
+    priority: 33
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - macro
+    desc: FRED 宏观时序数据（CPI/失业率/国债收益率/GDP/M2，免认证）
     timeout: 10
   free_dictionary:
     type: free_dictionary

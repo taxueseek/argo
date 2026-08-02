@@ -569,6 +569,7 @@ def route_query(query: str, engine_override: str = "auto",
             ),
             confidence=confidence, features=features,
             domain=domain.get("name"), parallel=parallel,
+            no_early_stop=bool(domain.get("no_early_stop", False)),
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
             mode=mode,
         )

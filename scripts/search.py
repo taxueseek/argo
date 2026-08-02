@@ -329,6 +329,11 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
         url = r.get("url", "") or ""
         source = r.get("source", "") or ""
         relevance = _score_relevance(query_tokens, title, snippet)
+        # book_search 域：微信读书/豆瓣/Open Library 的书目结果是「答案型」，
+        # 书名对查询词的 token 覆盖率天然低（「三体全集」vs「科幻小说推荐」），
+        # 直接按网页标准评 relevance 会被列表页碾压。给书目源保底相关分。
+        if domain == "book_search" and source in ("weread", "douban_book", "open_library"):
+            relevance = max(relevance, 0.6)
         if _has_evidence:
             try:
                 authority = float(score_authority(url, source).get("score", 0.5))
@@ -610,12 +615,13 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     allow_early = mode in ("fast", "auto", "budget") and depth != "deep"
 
     if parallel and to_run and allow_early and len(to_run) > 1:
-        # Wave-1：主引擎；足够则停，否则 wave-2 并行补全
+        # Wave-1：主引擎；足够则停（no_early_stop 域除外），否则 wave-2 并行补全
+        no_early = bool(decision.get("no_early_stop", False))
         primary, rest = to_run[0], to_run[1:]
         e, res, outcome, lat = _run_one(primary)
         _ingest(e, res, outcome, lat)
         goods_primary = [r for r in res if isinstance(r, dict) and "error" not in r]
-        if _results_sufficient(goods_primary, mode=mode):
+        if not no_early and _results_sufficient(goods_primary, mode=mode):
             early_stopped = True
         else:
             with ThreadPoolExecutor(max_workers=min(len(rest), 3)) as ex:

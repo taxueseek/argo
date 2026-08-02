@@ -22,6 +22,8 @@ from engines_builders_cn import (
 from engines_builders_data import (
     _build_open_library_engine,
     _build_weread_engine,
+    _build_douban_book_engine,
+    _build_fred_engine,
     _build_free_dictionary_engine,
     _build_baidu_baike_engine,
     _build_pypi_engine,
@@ -54,6 +56,8 @@ __all__ = [
     "_build_bilibili_hot_engine",
     "_build_open_library_engine",
     "_build_weread_engine",
+    "_build_douban_book_engine",
+    "_build_fred_engine",
     "_build_free_dictionary_engine",
     "_build_baidu_baike_engine",
     "_build_pypi_engine",

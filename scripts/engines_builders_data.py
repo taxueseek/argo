@@ -134,6 +134,182 @@ def _build_weread_engine(spec: dict[str, Any]) -> Any:
         return results
     return _engine
 
+
+# ── 豆瓣读书引擎 ─────────────────────────────────────────────────────────────
+
+def _build_douban_book_engine(spec: dict[str, Any]) -> Any:
+    """豆瓣读书搜索（search.douban.com/book/subject_search，免认证）。
+
+    页面内嵌 window.__DATA__ JSON，含评分/评分人数/出版社/年份/价格，
+    与微信读书互补（出版社维度）。无官方 API，走网页内嵌数据。
+    """
+    timeout = spec.get("timeout", 10)
+    _UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = "https://search.douban.com/book/subject_search?" + up.urlencode({
+            "search_text": query, "cat": "1001",
+        })
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": _UA})
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                html = resp.read().decode("utf-8", "replace")
+        except Exception as e:
+            logger.warning(f"豆瓣读书搜索失败: {e}")
+            return []
+        marker = "window.__DATA__ = "
+        i = html.find(marker)
+        if i < 0:
+            return []
+        try:
+            dec = json.JSONDecoder()
+            data, _ = dec.raw_decode(html[i + len(marker):].lstrip())
+        except Exception as e:
+            logger.warning(f"豆瓣 __DATA__ 解析失败: {e}")
+            return []
+        results = []
+        seen: set[str] = set()
+        for item in (data.get("items") or []):
+            if item.get("tpl_name") != "search_subject":
+                continue
+            title = item.get("title", "")
+            if not title or title in seen:
+                continue
+            seen.add(title)
+            rating = item.get("rating") or {}
+            rv = rating.get("value")
+            rc = rating.get("count")
+            parts = [p for p in (
+                item.get("abstract") or "",
+                f"{rv}分" if rv else "",
+                f"{rc}人评分" if rc else "",
+            ) if p]
+            results.append({
+                "title": title,
+                "url": item.get("url") or f"https://book.douban.com/subject/{item.get('id', '')}/",
+                "snippet": " · ".join(parts)[:300],
+                "source": "douban_book",
+                "score": 0.85,
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+# ── FRED 宏观数据引擎 ────────────────────────────────────────────────────────
+
+# 常用宏观指标 → FRED series_id（关键词前缀匹配，命中即拉取）
+_FRED_SERIES: dict[str, str] = {
+    # 物价
+    "cpi": "CPIAUCSL", "通胀": "CPIAUCSL", "消费者物价": "CPIAUCSL", "物价指数": "CPIAUCSL",
+    "核心cpi": "CPILFESL", "ppi": "PPIACO", "生产者价格": "PPIACO", "pce": "PCEPI",
+    "个人消费支出": "PCEPI",
+    # 就业
+    "失业率": "UNRATE", "非农": "PAYEMS", "就业": "PAYEMS", "初请": "ICSA", "申请失业金": "ICSA",
+    # 利率
+    "联邦基金": "FEDFUNDS", "联邦基金利率": "FEDFUNDS", "美联储利率": "FEDFUNDS",
+    "十年期": "DGS10", "10年期": "DGS10", "国债收益率": "DGS10", "美债收益率": "DGS10",
+    "三十年期": "DGS30", "30年期": "DGS30", "两年期": "DGS2", "2年期": "DGS2",
+    "三个月国债": "TB3MS", "3个月国债": "TB3MS", "国库券": "TB3MS",
+    "sofr": "SOFR", "隔夜回购": "SOFR",
+    # 增长 / 货币
+    "gdp": "GDP", "国内生产总值": "GDP",
+    "m2": "M2SL", "货币供应": "M2SL", "m1": "M1SL",
+    "零售": "RSAFS", "零售销售": "RSAFS",
+    "美元指数": "DTWEXBGS", "贸易加权美元": "DTWEXBGS",
+}
+_FRED_SERIES_FALLBACK = ["CPIAUCSL", "UNRATE", "FEDFUNDS", "DGS10", "GDP", "M2SL"]
+
+# series_id → 展示标签（标题用中文指标名）
+_FRED_LABELS: dict[str, str] = {
+    "CPIAUCSL": "美国CPI（消费者物价指数）",
+    "CPILFESL": "美国核心CPI",
+    "PPIACO": "美国PPI（生产者价格指数）",
+    "PCEPI": "美国PCE（个人消费支出物价）",
+    "UNRATE": "美国失业率",
+    "PAYEMS": "美国非农就业",
+    "ICSA": "美国初请失业金",
+    "FEDFUNDS": "美国联邦基金利率",
+    "DGS10": "美国10年期国债收益率",
+    "DGS30": "美国30年期国债收益率",
+    "DGS2": "美国2年期国债收益率",
+    "TB3MS": "美国3个月国库券收益率",
+    "SOFR": "SOFR（隔夜融资利率）",
+    "GDP": "美国GDP（国内生产总值）",
+    "M2SL": "美国M2货币供应",
+    "M1SL": "美国M1货币供应",
+    "RSAFS": "美国零售销售",
+    "DTWEXBGS": "美元指数（贸易加权）",
+}
+
+
+def _build_fred_engine(spec: dict[str, Any]) -> Any:
+    """FRED 宏观数据（fredgraph.csv 免认证）。
+
+    按关键词映射 series_id，拉取近 N 个观测值，展示最新值 + 趋势方向。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = query.lower()
+        series_id = None
+        for kw, sid in _FRED_SERIES.items():
+            if kw in q:
+                series_id = sid
+                break
+        if not series_id:
+            return []
+        url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"})
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                text = resp.read().decode("utf-8", "replace")
+        except Exception as e:
+            logger.warning(f"FRED 拉取失败 ({series_id}): {e}")
+            return []
+        rows = []
+        for line in text.strip().splitlines()[1:]:
+            if "," not in line:
+                continue
+            date, _, val = line.partition(",")
+            val = val.strip()
+            if val in ("", "."):
+                continue
+            try:
+                rows.append((date, float(val)))
+            except ValueError:
+                continue
+        if not rows:
+            return []
+        # 近 N 期各为一条结果（url 带日期锚点防去重合并），RRF 分数累计上浮
+        label = _FRED_LABELS.get(series_id, f"FRED {series_id}")
+        results = []
+        for date, val in rows[-min(n, 5):]:
+            results.append({
+                "title": f"{label} · {date} = {val:g}",
+                "url": f"https://fred.stlouisfed.org/series/{series_id}?obs={date}",
+                "snippet": f"FRED {series_id} 最新值 {val:g}（截至 {date}）",
+                "source": "fred",
+                "score": 0.9,
+            })
+        # 首条附趋势方向
+        if len(results) > 1:
+            prev = rows[-2]
+            diff = rows[-1][1] - prev[1]
+            arrow = "↑" if diff > 0 else ("↓" if diff < 0 else "→")
+            results[0]["snippet"] = (f"FRED {series_id} 最新值 {rows[-1][1]:g}（{rows[-1][0]}）"
+                                     f" {arrow}{abs(diff):.2f}")
+        return results
+    return _engine
+
+
 def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
     """英英词典（dictionaryapi.dev，免认证，响应为数组需专门解析）"""
     timeout = spec.get("timeout", 8)
