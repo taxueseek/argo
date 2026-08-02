@@ -78,6 +78,7 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
         "description": "AI模型发布、技术评测、行业趋势分析",
         "discipline": "tech",
         "engines_priority": ["zhihu", "arxiv", "anysearch", "semantic_scholar"],
+        "vertical_engines": ["arxiv", "semantic_scholar", "openalex", "github"],
         "query_templates": [
             "{query} technical overview architecture",
             "{query} 技术评测 benchmark 对比",
@@ -121,6 +122,9 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
         "description": "政策解读、市场分析、投资策略线索收集（非买卖建议）",
         "discipline": "finance",
         "engines_priority": ["eastmoney", "zhihu", "byted", "cls_telegraph"],
+        "vertical_engines": [
+            "sina_quote", "em_flow", "eastmoney", "fred", "cls_telegraph",
+        ],
         "query_templates": [
             "{query} 政策解读 影响分析",
             "{query} 市场影响 数据",
@@ -165,6 +169,10 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
         "description": "IC 风格深度：市场疑问、证据层级、共识/分歧、风险清单（非投资建议）",
         "discipline": "finance",
         "engines_priority": ["eastmoney", "cls_telegraph", "byted", "zhihu", "anysearch"],
+        "vertical_engines": [
+            "sina_quote", "tencent_quote", "em_flow", "eastmoney",
+            "fred", "worldbank", "fx_rate", "finviz", "cls_telegraph",
+        ],
         "query_templates": [
             "{query} 核心投资逻辑 市场疑问",
             "{query} 财报 业绩 指引 一致预期",
@@ -222,6 +230,10 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
         "discipline": "academic",
         "engines_priority": [
             "arxiv", "semantic_scholar", "openalex", "crossref", "anysearch", "zhihu",
+        ],
+        "vertical_engines": [
+            "arxiv", "semantic_scholar", "openalex", "crossref",
+            "europepmc", "pubchem", "clinicaltrials", "uniprot",
         ],
         "query_templates": [
             "{query} systematic review survey taxonomy",
@@ -502,6 +514,7 @@ def apply_profile(profile: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, 
 
     for key in (
         "engines_priority",
+        "vertical_engines",
         "depth",
         "sub_queries",
         "max_results",
@@ -616,6 +629,7 @@ def profile_meta(profile: dict[str, Any]) -> dict[str, Any]:
         "name": profile.get("name"),
         "discipline": profile.get("discipline"),
         "engines_priority": list(profile.get("engines_priority") or []),
+        "vertical_engines": list(profile.get("vertical_engines") or []),
         "quality_gates": list(profile.get("quality_gates") or []),
         "report_sections": list(profile.get("report_sections") or []),
         "source_grades": profile.get("source_grades") or {},

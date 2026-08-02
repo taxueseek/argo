@@ -253,7 +253,10 @@ def build_plan(
     # ── 正常 keyword / url-seed：对齐 route_query（离线，无网络）──
     try:
         from route import route_query
-        decision = route_query(search_query, engine_override=engine, mode=mode)
+        decision = route_query(
+            search_query, engine_override=engine, mode=mode,
+            depth=depth, context=context,
+        )
     except Exception as e:
         return {
             "schema_version": "1.0",

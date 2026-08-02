@@ -304,7 +304,16 @@ class TestNewDomains(unittest.TestCase):
     def test_weather_domain(self):
         d = route_query("北京天气预报")
         self.assertEqual(d["domain"], "weather_query")
-        self.assertEqual(d["engine"], "qweather")
+        # qweather 需 API key 才进 routable；无 key 时回退 duckduckgo 等通用源
+        from config import get_engines, load_config
+        try:
+            enabled = get_engines(load_config(), routable_only=True)
+        except TypeError:
+            enabled = get_engines(load_config())
+        if "qweather" in enabled:
+            self.assertEqual(d["engine"], "qweather")
+        else:
+            self.assertIn(d["engine"], ("duckduckgo", "anysearch", "byted", "local_bing"))
 
     def test_medical_domain(self):
         d = route_query("高血压 症状 用药 临床指南")

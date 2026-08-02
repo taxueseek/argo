@@ -68,8 +68,11 @@ class TestRoute(unittest.TestCase):
     def test_stock_domain(self):
         d = route_query("英伟达股价")
         self.assertEqual(d["engine"], "sina_quote")
-        self.assertIn("eastmoney", d["engines"])
         self.assertEqual(d["domain"], "stock_query")
+        # daily depth=fast 预算 2：答案主源 + 备选；eastmoney 在 depth=deep 全量 combo
+        self.assertLessEqual(len(d.get("engines") or []), 2)
+        d_deep = route_query("英伟达股价", depth="deep")
+        self.assertIn("eastmoney", d_deep.get("engines") or [])
 
     def test_fund_domain(self):
         d = route_query("基金净值")
@@ -128,7 +131,10 @@ class TestRoute(unittest.TestCase):
     def test_finance_still_eastmoney(self):
         d = route_query("贵州茅台股价")
         self.assertEqual(d["engine"], "sina_quote")
-        self.assertIn("eastmoney", d["engines"])
+        self.assertEqual(d.get("domain"), "stock_query")
+        # 深度路径仍保留东财（日常 budget 只保留前 2 答案源）
+        d_deep = route_query("贵州茅台股价", depth="deep")
+        self.assertIn("eastmoney", d_deep.get("engines") or [])
 
 
 class TestTfidfRouter(unittest.TestCase):

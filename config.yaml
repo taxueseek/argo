@@ -96,7 +96,22 @@ domains:
   - (?i)\b(ETF|LOF|FOF)\b
   primary: eastmoney
   quote: true
-- desc: 股票/行情查询
+- desc: 美股筛选/分析（Finviz + Seeking Alpha；须排在 stock_query 前，避免「美股/ticker」被 A 股域吸走）
+  engines_combo:
+  - finviz
+  - seeking_alpha
+  - exa
+  - anysearch
+  - eastmoney
+  fallback: anysearch
+  name: us_stock
+  parallel: true
+  patterns:
+  - (?i)(NASDAQ|NYSE|美股|盘前|盘后|premarket|afterhours)
+  - (?i)\b(AAPL|TSLA|NVDA|MSFT|GOOG|GOOGL|AMZN|META|AMD|NFLX)\b
+  primary: finviz
+  early_stop_min_results: 1
+- desc: A股/港股行情与资金流（答案型快照，1 条即可 early-stop）
   engines_combo:
   - sina_quote
   - tencent_quote
@@ -109,10 +124,11 @@ domains:
   patterns:
   - (?i)(股价|行情|涨跌|K线|大盘|指数|涨停|跌停|板块|概念股)
   - (?i)(stock|quote|price|market\s+cap)
-  - A股|港股|美股|股票|ETF|板块
+  - A股|港股|股票|ETF|板块
   - (资金流|主力资金|北向|龙虎榜|大宗交易|换手率)
   primary: sina_quote
   quote: true
+  early_stop_min_results: 1
 - desc: 宏观数据查询（FRED 时序数据 + 实时汇率）
   engines_combo:
   - fred
@@ -131,6 +147,7 @@ domains:
   - (中国|美国|日本|德国|印度|世界).{0,6}(GDP|通胀|CPI|失业率|人口|贸易|经济增长)
   - (GDP|通货膨胀|CPI|失业率|人口数据|经济增长率)
   primary: fred
+  early_stop_min_results: 1
 - desc: 化学/药学化合物检索
   engines_combo:
   - pubchem
@@ -141,6 +158,7 @@ domains:
   - (化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物|结构式|CAS\s*[- ]?\d)
   - (?i)(chemical\s+formula|molecular\s+weight|iupac|cas\s+number|compound|drug|molecule|smiles)
   primary: pubchem
+  early_stop_min_results: 1
 - desc: 生物物种检索
   engines_combo:
   - gbif
@@ -161,6 +179,41 @@ domains:
   - (?i)\b(rfc\s*\d{2,5}|internet\s+standard|request\s+for\s+comments)\b
   - (互联网标准|rfc\d{2,5}|请求意见稿)
   primary: rfc_editor
+- desc: 蛋白质/基因组检索（UniProt + RCSB PDB）
+  engines_combo:
+  - uniprot
+  - rcsb_pdb
+  fallback: uniprot
+  name: protein_search
+  parallel: true
+  patterns:
+  - (基因|蛋白|蛋白质|氨基酸序列|结构域|基因组|转录因子|受体蛋白|uniprot)
+  - (?i)\b(protein|gene|genome|amino\s+acid|sequence|uniprot|rcsb|pdb)\b
+  - (?i)\b(p53|tp53|brca1|brca2|egfr|her2|pdl1|pd-1|hemoglobin|insulin|p21)\b
+  primary: uniprot
+- desc: 美国法律判例（CourtListener）
+  engines_combo:
+  - courtlistener
+  - anysearch
+  fallback: courtlistener
+  name: us_legal
+  parallel: false
+  patterns:
+  - (?i)(supreme\s+court|court\s+of\s+appeals|circuit\s+court|case\s+law|precedent|docket\s+number|courtlistener)
+  - (?i)\b(roe\s+v\.?\s*wade|marbury\s+v\.?\s*madison|brown\s+v\.?\s*board|miranda\s+v\.?\s*arizona)\b
+  - (美国判例|美国最高法院|判例法|联邦法院|美国法律)
+  primary: courtlistener
+- desc: 地球科学/遥感数据（USGS 地震 + NASA CMR）
+  engines_combo:
+  - usgs
+  - nasa_cmr
+  fallback: usgs
+  name: earth_science
+  parallel: true
+  patterns:
+  - (地震|震级|余震|地质|遥感|卫星数据|震中)
+  - (?i)(earthquake|seismic|usgs|geology|remote\s+sensing|satellite\s+data)
+  primary: usgs
 - desc: 财经资讯/研报/公告
   engines_combo:
   - em_miaoxiang
@@ -185,20 +238,6 @@ domains:
   patterns:
   - (?i)(天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)
   primary: qweather
-- desc: 美股筛选/分析（Finviz + Seeking Alpha + 通用）
-  engines_combo:
-  - finviz
-  - seeking_alpha
-  - exa
-  - anysearch
-  - eastmoney
-  fallback: anysearch
-  name: us_stock
-  parallel: true
-  patterns:
-  - (?i)(NASDAQ|NYSE|美股|盘前|盘后|premarket|afterhours)
-  - (?i)\b(AAPL|TSLA|NVDA|MSFT|GOOG|GOOGL|AMZN|META|AMD|NFLX)\b
-  primary: finviz
 - desc: 财经快讯（金十数据）
   engines_combo:
   - jin10
@@ -354,6 +393,7 @@ domains:
 - desc: 互联网档案馆 / 历史网页
   engines_combo:
   - archive_org
+  - wayback_cdx
   - wikipedia
   fallback: archive_org
   name: web_archive
@@ -393,11 +433,12 @@ domains:
   patterns:
   - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|动画|galgame|vtuber|虚拟主播|东方project|型月|fate)
   primary: moegirl
-- desc: 书籍/图书搜索（微信读书 + 豆瓣读书 + Open Library）
+- desc: 书籍/图书搜索（微信读书 + 豆瓣读书 + Open Library + Gutenberg）
   engines_combo:
   - weread
   - douban_book
   - open_library
+  - gutenberg
   - anysearch
   fallback: anysearch
   name: book_search
@@ -1062,6 +1103,112 @@ engines:
     desc: RFC/互联网标准文档检索（datatracker.ietf.org 免认证）
     timeout: 15
     type: rfc_editor
+  uniprot:
+    enabled: true
+    label: UniProt 蛋白质
+    cost_tier: free
+    qps: 3
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - science
+    - biology
+    - bio
+    desc: UniProt 蛋白质/基因组检索（rest.uniprot.org 免认证）
+    timeout: 12
+    type: uniprot
+  rcsb_pdb:
+    enabled: true
+    label: RCSB PDB 结构
+    cost_tier: free
+    qps: 2
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - science
+    - biology
+    desc: RCSB PDB 蛋白质结构检索（search.rcsb.org v2 免认证）
+    timeout: 15
+    type: rcsb_pdb
+  courtlistener:
+    enabled: true
+    label: CourtListener 判例
+    cost_tier: free
+    qps: 1
+    priority: 12
+    period: minute
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - law
+    - legal
+    desc: CourtListener 美国判例全文检索（匿名可用，2026-05 起约 5 次/分限额）
+    timeout: 12
+    type: courtlistener
+  gutenberg:
+    enabled: true
+    label: Project Gutenberg
+    cost_tier: free
+    qps: 2
+    priority: 10
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - books
+    - literature
+    desc: Project Gutenberg 公版书全文检索（gutendex.com 免认证）
+    timeout: 15
+    type: gutenberg
+  wayback_cdx:
+    enabled: true
+    label: Wayback CDX 快照
+    cost_tier: free
+    qps: 2
+    priority: 15
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - archive
+    - web
+    desc: Wayback Machine CDX 历史快照检索（web.archive.org 免认证）
+    timeout: 20
+    type: wayback_cdx
+  usgs:
+    enabled: true
+    label: USGS 地震
+    cost_tier: free
+    qps: 2
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - science
+    - geo
+    desc: USGS 地震目录（最近 30 天 M2.5+，earthquake.usgs.gov 免认证）
+    timeout: 12
+    type: usgs
+  nasa_cmr:
+    enabled: true
+    label: NASA CMR 地球数据
+    cost_tier: free
+    qps: 2
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - science
+    - earth
+    desc: NASA CMR 地球科学数据目录（MODIS/遥感，cmr.earthdata.nasa.gov 免认证）
+    timeout: 12
+    type: nasa_cmr
   v2ex:
     enabled: true
     label: V2EX

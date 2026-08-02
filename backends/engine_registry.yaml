@@ -140,6 +140,16 @@ engines:
   status: ok
   recommended: true
   desc: 财联社电报（全市场实时快讯，v1 API+本地签名零key）
+- name: cninfo
+  tier: T1
+  type: cninfo
+  coverage:
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 巨潮资讯网官方公告（A股公告第一官方源，免认证）
 - name: coingecko
   tier: T1
   type: http
@@ -151,6 +161,17 @@ engines:
   status: ok
   recommended: true
   desc: CoinGecko 币种搜索（免认证）
+- name: courtlistener
+  tier: T1
+  type: courtlistener
+  coverage:
+  - law
+  - legal
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: CourtListener 美国判例全文检索（匿名可用，2026-05 起约 5 次/分限额）
 - name: crates
   tier: T1
   type: http
@@ -208,6 +229,16 @@ engines:
   status: ok
   recommended: true
   desc: Docker Hub 镜像搜索（免认证）
+- name: douban_book
+  tier: T1
+  type: douban_book
+  coverage:
+  - book
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 豆瓣读书搜索（评分/出版社/年份/价格，免认证）
 - name: duckduckgo
   tier: T1
   type: http
@@ -230,6 +261,16 @@ engines:
   status: ok
   recommended: true
   desc: 东方财富，金融数据首选
+- name: em_flow
+  tier: T1
+  type: em_flow
+  coverage:
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 东财资金流向（个股主力/北向/板块，push2.eastmoney.com 免认证）
 - name: em_global_news
   tier: T1
   type: em_global_news
@@ -243,6 +284,16 @@ engines:
   status: ok
   recommended: true
   desc: 东财全球资讯（7×24 财经快讯）
+- name: em_miaoxiang
+  tier: T1
+  type: em_miaoxiang
+  coverage:
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY）
 - name: europepmc
   tier: T1
   type: http
@@ -254,6 +305,16 @@ engines:
   status: ok
   recommended: true
   desc: Europe PMC 生物医学文献（免认证，SS 429 后备）
+- name: eurostat
+  tier: T1
+  type: eurostat
+  coverage:
+  - macro
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 欧盟统计局宏观数据（EU 国家 GDP/人均GDP/失业率/人口，ec.europa.eu SDMX 免认证）
 - name: exa
   tier: T1
   type: exa
@@ -289,6 +350,17 @@ engines:
   status: ok
   recommended: true
   desc: Finviz 美股快照（HTML，免认证）
+- name: fred
+  tier: T1
+  type: fred
+  coverage:
+  - finance
+  - macro
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: FRED 宏观时序数据（CPI/失业率/国债收益率/GDP/M2，免认证）
 - name: free_dictionary
   tier: T1
   type: free_dictionary
@@ -301,6 +373,27 @@ engines:
   status: ok
   recommended: true
   desc: dictionaryapi.dev 英英词典（免认证，响应为数组）
+- name: fx_rate
+  tier: T1
+  type: fx_rate
+  coverage:
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 实时汇率（open.er-api.com 免认证）
+- name: gbif
+  tier: T1
+  type: gbif
+  coverage:
+  - science
+  - biology
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 全球生物多样性物种检索（学名/俗名，api.gbif.org 免认证）
 - name: github
   tier: T1
   type: http
@@ -323,6 +416,17 @@ engines:
   status: ok
   recommended: true
   desc: Google Scholar（学术论文搜索，HTTP 页面解析）
+- name: gutenberg
+  tier: T1
+  type: gutenberg
+  coverage:
+  - books
+  - literature
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Project Gutenberg 公版书全文检索（gutendex.com 免认证）
 - name: hackernews
   tier: T1
   type: hackernews
@@ -722,6 +826,28 @@ engines:
   status: ok
   recommended: true
   desc: MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）
+- name: nasa_cmr
+  tier: T1
+  type: nasa_cmr
+  coverage:
+  - science
+  - earth
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: NASA CMR 地球科学数据目录（MODIS/遥感，cmr.earthdata.nasa.gov 免认证）
+- name: nbs_stats
+  tier: T1
+  type: nbs_stats
+  coverage:
+  - finance
+  - macro
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证）
 - name: npm
   tier: T1
   type: http
@@ -801,6 +927,17 @@ engines:
   status: ok
   recommended: true
   desc: Polymarket 预测市场搜索（叙事源，非事实真值）
+- name: pubchem
+  tier: T1
+  type: pubchem
+  coverage:
+  - science
+  - chem
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 化学/药学化合物检索（分子式/分子量/IUPAC/SMILES，pubchem.ncbi.nlm.nih.gov 免认证）
 - name: pypi
   tier: T1
   type: pypi
@@ -823,6 +960,17 @@ engines:
   status: ok
   recommended: true
   desc: 和风天气实时天气（需 QWEATHER_KEY）
+- name: rcsb_pdb
+  tier: T1
+  type: rcsb_pdb
+  coverage:
+  - science
+  - biology
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: RCSB PDB 蛋白质结构检索（search.rcsb.org v2 免认证）
 - name: reddit
   tier: T1
   type: cli
@@ -833,6 +981,17 @@ engines:
   status: ok
   recommended: true
   desc: Reddit
+- name: rfc_editor
+  tier: T1
+  type: rfc_editor
+  coverage:
+  - tech
+  - standards
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: RFC/互联网标准文档检索（datatracker.ietf.org 免认证）
 - name: searxng
   tier: T1
   type: http
@@ -864,6 +1023,17 @@ engines:
   status: ok
   recommended: true
   desc: Semantic Scholar API（备选）
+- name: sina_quote
+  tier: T1
+  type: sina_quote
+  coverage:
+  - stock
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 新浪实时行情快照（现价/涨跌/成交量，免认证）
 - name: stackoverflow
   tier: T1
   type: stackoverflow
@@ -898,6 +1068,16 @@ engines:
   status: ok
   recommended: true
   desc: Tavily AI 搜索 API
+- name: tencent_quote
+  tier: T1
+  type: tencent_quote
+  coverage:
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 腾讯实时行情（qt.gtimg.cn 免认证，含换手率/市盈率/五档）
 - name: ths_hot
   tier: T1
   type: ths_hot
@@ -944,6 +1124,18 @@ engines:
   status: disabled
   recommended: true
   desc: UAPI 聚合搜索
+- name: uniprot
+  tier: T1
+  type: uniprot
+  coverage:
+  - science
+  - biology
+  - bio
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: UniProt 蛋白质/基因组检索（rest.uniprot.org 免认证）
 - name: urban_dictionary
   tier: T1
   type: http
@@ -956,6 +1148,17 @@ engines:
   status: ok
   recommended: true
   desc: Urban Dictionary（英文俚语定义与例句，官方 API）
+- name: usgs
+  tier: T1
+  type: usgs
+  coverage:
+  - science
+  - geo
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: USGS 地震目录（最近 30 天 M2.5+，earthquake.usgs.gov 免认证）
 - name: v2ex
   tier: T1
   type: v2ex
@@ -969,6 +1172,17 @@ engines:
   status: ok
   recommended: true
   desc: V2EX（中文技术社区搜索）
+- name: wayback_cdx
+  tier: T1
+  type: wayback_cdx
+  coverage:
+  - archive
+  - web
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Wayback Machine CDX 历史快照检索（web.archive.org 免认证）
 - name: wechat_sogou
   tier: T1
   type: wechat_sogou
@@ -1001,6 +1215,16 @@ engines:
   status: ok
   recommended: true
   desc: 中国裁判文书网（反爬较强，尽力而为）
+- name: weread
+  tier: T1
+  type: weread
+  coverage:
+  - book
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 微信读书图书搜索（中文书目/评分/在读，需 WEREAD_API_KEY）
 - name: wikidata
   tier: T1
   type: http
@@ -1035,6 +1259,17 @@ engines:
   status: disabled
   recommended: true
   desc: WolframAlpha 计算知识引擎
+- name: worldbank
+  tier: T1
+  type: worldbank
+  coverage:
+  - finance
+  - macro
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 世界银行宏观指标（GDP/通胀/失业/人口，api.worldbank.org 免认证）
 - name: xiaohongshu
   tier: T1
   type: cli

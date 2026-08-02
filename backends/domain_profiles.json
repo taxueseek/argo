@@ -1248,5 +1248,137 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "em_miaoxiang": {
+    "label": "东财妙想",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "cninfo": {
+    "label": "巨潮资讯",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "sina_quote": {
+    "label": "新浪行情",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "fx_rate": {
+    "label": "实时汇率",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "tencent_quote": {
+    "label": "腾讯行情",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "em_flow": {
+    "label": "东财资金流",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "worldbank": {
+    "label": "世界银行开放数据",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "nbs_stats": {
+    "label": "国家统计局",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "pubchem": {
+    "label": "PubChem/ChEMBL 化合物",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "eurostat": {
+    "label": "Eurostat 欧盟统计",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "gbif": {
+    "label": "GBIF 物种",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "rfc_editor": {
+    "label": "RFC/互联网标准",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "weread": {
+    "label": "微信读书",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "douban_book": {
+    "label": "豆瓣读书",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "fred": {
+    "label": "FRED 宏观数据",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "uniprot": {
+    "label": "UniProt 蛋白质",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "rcsb_pdb": {
+    "label": "RCSB PDB 结构",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "courtlistener": {
+    "label": "CourtListener 判例",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "gutenberg": {
+    "label": "Project Gutenberg",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "wayback_cdx": {
+    "label": "Wayback CDX 快照",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "usgs": {
+    "label": "USGS 地震",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "nasa_cmr": {
+    "label": "NASA CMR 地球数据",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

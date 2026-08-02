@@ -120,6 +120,16 @@
     "cost_tier": "free",
     "priority": 21
   },
+  "cninfo": {
+    "label": "巨潮资讯",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 3
+  },
   "coingecko": {
     "label": "CoinGecko 币种",
     "qps": 3,
@@ -129,6 +139,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 32
+  },
+  "courtlistener": {
+    "label": "CourtListener 判例",
+    "qps": 1,
+    "limit": null,
+    "period": "minute",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
   },
   "crates": {
     "label": "crates.io 包",
@@ -180,6 +200,16 @@
     "cost_tier": "free",
     "priority": 51
   },
+  "douban_book": {
+    "label": "豆瓣读书",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 34
+  },
   "duckduckgo": {
     "label": "DuckDuckGo",
     "qps": 5,
@@ -200,6 +230,16 @@
     "cost_tier": "free",
     "priority": 3
   },
+  "em_flow": {
+    "label": "东财资金流",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 5
+  },
   "em_global_news": {
     "label": "东财全球资讯",
     "qps": 2,
@@ -210,6 +250,16 @@
     "cost_tier": "free",
     "priority": 22
   },
+  "em_miaoxiang": {
+    "label": "东财妙想",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 2
+  },
   "europepmc": {
     "label": "Europe PMC",
     "qps": 2,
@@ -219,6 +269,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 47
+  },
+  "eurostat": {
+    "label": "Eurostat 欧盟统计",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 7
   },
   "exa": {
     "label": "Exa语义搜索",
@@ -250,6 +310,16 @@
     "cost_tier": "free",
     "priority": 56
   },
+  "fred": {
+    "label": "FRED 宏观数据",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 33
+  },
   "free_dictionary": {
     "label": "英英词典",
     "qps": 3,
@@ -259,6 +329,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 37
+  },
+  "fx_rate": {
+    "label": "实时汇率",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 3
+  },
+  "gbif": {
+    "label": "GBIF 物种",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
   },
   "github": {
     "label": "GitHub",
@@ -279,6 +369,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 18
+  },
+  "gutenberg": {
+    "label": "Project Gutenberg",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 10
   },
   "hackernews": {
     "label": "HackerNews",
@@ -650,6 +750,26 @@
     "cost_tier": "free",
     "priority": 35
   },
+  "nasa_cmr": {
+    "label": "NASA CMR 地球数据",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
+  "nbs_stats": {
+    "label": "国家统计局",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 6
+  },
   "npm": {
     "label": "npm",
     "qps": 3,
@@ -720,6 +840,16 @@
     "cost_tier": "free",
     "priority": 55
   },
+  "pubchem": {
+    "label": "PubChem/ChEMBL 化合物",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
   "pypi": {
     "label": "PyPI",
     "qps": 3,
@@ -740,6 +870,16 @@
     "cost_tier": "free",
     "priority": 60
   },
+  "rcsb_pdb": {
+    "label": "RCSB PDB 结构",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
   "reddit": {
     "label": "Reddit",
     "qps": 2,
@@ -749,6 +889,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "rfc_editor": {
+    "label": "RFC/互联网标准",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
   },
   "searxng": {
     "label": "SearXNG",
@@ -780,6 +930,16 @@
     "cost_tier": "free",
     "priority": 10
   },
+  "sina_quote": {
+    "label": "新浪行情",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 3
+  },
   "stackoverflow": {
     "label": "StackOverflow",
     "qps": 3,
@@ -809,6 +969,16 @@
     "cost_unit": "credit",
     "cost_tier": "paid",
     "priority": 5
+  },
+  "tencent_quote": {
+    "label": "腾讯行情",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 4
   },
   "ths_hot": {
     "label": "同花顺热点",
@@ -850,6 +1020,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "uniprot": {
+    "label": "UniProt 蛋白质",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
   "urban_dictionary": {
     "label": "Urban Dictionary",
     "qps": 3,
@@ -860,6 +1040,16 @@
     "cost_tier": "free",
     "priority": 24
   },
+  "usgs": {
+    "label": "USGS 地震",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
   "v2ex": {
     "label": "V2EX",
     "qps": 3,
@@ -869,6 +1059,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 19
+  },
+  "wayback_cdx": {
+    "label": "Wayback CDX 快照",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 15
   },
   "wechat_sogou": {
     "label": "搜狗微信搜索",
@@ -900,6 +1100,16 @@
     "cost_tier": "free",
     "priority": 61
   },
+  "weread": {
+    "label": "微信读书",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
+  },
   "wikidata": {
     "label": "维基数据实体",
     "qps": 2,
@@ -929,6 +1139,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "worldbank": {
+    "label": "世界银行开放数据",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 6
   },
   "xiaohongshu": {
     "label": "小红书",

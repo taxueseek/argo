@@ -144,6 +144,7 @@ def _compact_research_result(report: dict[str, Any], summary: bool = False) -> d
         "discipline", "quality_gates", "report_sections", "source_grades", "disclaimer",
         "academic_discipline", "engines_used", "source_distribution", "elapsed_ms",
         "sub_query_count", "total_sources", "gaps", "mode", "sub_queries",
+        "engines_priority", "vertical_engines",
     )
     out: dict[str, Any] = {k: report[k] for k in keys if k in report and report[k] is not None}
 
@@ -676,6 +677,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     try:
         if name == "argo_search":
             search_mod = _lazy_cached("search")
+            # MCP 默认 envelope=False：减 candidates/coverage 构造开销；
+            # 紧凑序列化仍由 _compact_search_result 负责
             result = search_mod.super_search(
                 query=arguments["query"],
                 engine=arguments.get("engine", "auto"),
@@ -685,6 +688,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 depth=arguments.get("depth", "fast"),
                 mode=arguments.get("mode", "auto"),
                 cache=_get_cache(),
+                envelope=False,
+                context="search",
             )
             # 默认精简；pretty 且 summary=false 时返回接近全量
             summary = arguments.get("summary", True)

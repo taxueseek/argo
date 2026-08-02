@@ -272,10 +272,11 @@ class TestSuperSearchGates(unittest.TestCase):
         ))
 
     def test_keyword_still_returns_results_shape(self):
-        # 路由不倒退：行情查询走新浪快照，东财仍在 combo
+        # 路由不倒退：行情查询走新浪快照；日常 budget 截断后东财在 deep combo
         d = route_query("贵州茅台股价")
         self.assertEqual(d["engine"], "sina_quote")
-        self.assertIn("eastmoney", d.get("engines") or [])
+        d_deep = route_query("贵州茅台股价", depth="deep")
+        self.assertIn("eastmoney", d_deep.get("engines") or [])
         d2 = route_query("pytest fixtures")
         self.assertNotEqual(d2["engine"], "eastmoney")
 
@@ -310,7 +311,8 @@ class TestNoRegressionRoute(unittest.TestCase):
     def test_finance(self):
         d = route_query("贵州茅台股价")
         self.assertEqual(d["engine"], "sina_quote")
-        self.assertIn("eastmoney", d.get("engines") or [])
+        d_deep = route_query("贵州茅台股价", depth="deep")
+        self.assertIn("eastmoney", d_deep.get("engines") or [])
 
     def test_tech_en(self):
         d = route_query("React hooks tutorial")
@@ -322,7 +324,12 @@ class TestNoRegressionRoute(unittest.TestCase):
 
     def test_academic(self):
         d = route_query("transformer attention paper")
-        self.assertIn(d["engine"], ("arxiv", "semantic_scholar", "openalex"))
+        # 学术主源可为 arxiv/s2/openalex/crossref 等（budget 后首位仍属学术系）
+        academic = {
+            "arxiv", "semantic_scholar", "openalex", "crossref",
+            "europepmc", "dblp", "local_arxiv", "local_semantic_scholar",
+        }
+        self.assertIn(d["engine"], academic)
 
 
 if __name__ == "__main__":

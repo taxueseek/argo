@@ -219,12 +219,16 @@ def _deduplicate_sub_queries(sub_queries: list[dict[str, str]]) -> list[dict[str
 def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
                     timeout: int = 15, depth: str = "balanced",
                     mode: str = "auto",
-                    engines_priority: list[str] | None = None) -> dict[str, Any]:
+                    engines_priority: list[str] | None = None,
+                    profile: dict[str, Any] | None = None) -> dict[str, Any]:
     """对每个子查询并行执行搜索，返回聚合结果。
 
     共享同一 SearchCache 实例，使子查询间 L1/per-engine 可复用，减少重复联网。
-    engines_priority：选题 profile 引擎优先表；按子查询轮转指定 engine，
-    失败/无结果时仍依赖 super_search 内部路由与 RRF。
+
+    P0 策略（boost 不 lock）：
+      - 始终 engine=auto，由路由 + 域规则决定主源
+      - engines_boost 前置 vertical/priority（research_engine_hints）
+      - preferred_engine 仅作 boost 首位，不再锁死单引擎（避免冷门源失败整条空）
     """
     all_results = []
     engines_used = set()
@@ -236,33 +240,48 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
     except Exception:
         shared_cache = None
 
+    try:
+        from engine_policy import research_engine_hints
+    except ImportError:
+        research_engine_hints = None  # type: ignore
+
     prio = [e for e in (engines_priority or []) if e]
 
-    def _search_one(sq: dict[str, str], idx: int = 0) -> dict[str, Any]:
-        # context=research：分层标记；子查询不走 plan_only，避免嵌套计划
-        # 首个子查询尽量走 auto 保底广度；后续轮转 profile 优先引擎
-        engine = "auto"
-        if prio:
-            if idx == 0:
-                engine = "auto"
+    def _boost_for(idx: int, sq: dict[str, str]) -> list[str]:
+        boosts: list[str] = []
+        if research_engine_hints and profile:
+            boosts = list(research_engine_hints(profile, idx) or [])
+        elif prio:
+            # 无 profile 时用 priority 轮转 2 个
+            if idx <= 0:
+                boosts = prio[:3]
             else:
-                engine = prio[(idx - 1) % len(prio)]
-        # 子查询可自带 preferred_engine
-        if sq.get("preferred_engine"):
-            engine = sq["preferred_engine"]
+                n = len(prio)
+                start = (idx - 1) % n
+                boosts = [prio[(start + i) % n] for i in range(min(2, n))]
+        pref = sq.get("preferred_engine")
+        if pref and pref != "auto":
+            boosts = [pref] + [e for e in boosts if e != pref]
+        return boosts
+
+    def _search_one(sq: dict[str, str], idx: int = 0) -> dict[str, Any]:
+        # context=research：放行 research_only + 全 combo；boost 抬垂直源
+        boosts = _boost_for(idx, sq)
         result = super_search(
             sq["query"], n=max_results, timeout=timeout,
             depth=depth, mode=mode, skip_cache=False,
             cache=shared_cache,
-            engine=engine,
+            engine="auto",
             context="research",
+            engines_boost=boosts or None,
             envelope=False,  # 研究合成自管结构，减子查询噪音
         )
         return {
             "sub_query": sq["query"],
             "intent": sq["intent"],
             "strategy": sq["strategy"],
-            "engine_hint": engine,
+            "engine_hint": "auto",
+            "engines_boost": boosts,
             "results": result.get("results", []),
             "engines_used": result.get("engines_used", []),
             "elapsed_ms": result.get("elapsed_ms", 0),
@@ -478,6 +497,7 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
     """
     original_query = query
     engines_priority = list((profile or {}).get("engines_priority") or [])
+    vertical_engines = list((profile or {}).get("vertical_engines") or [])
 
     # 0. 离线 plan 一次（不联网、不回调 research）
     plan_info: dict[str, Any] | None = None
@@ -523,10 +543,11 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
         sub_queries = heuristic
     sub_queries = _deduplicate_sub_queries(sub_queries[:num_sub_queries])
 
-    # 3. 多源采集（子查询直搜；不再 build_plan）
+    # 3. 多源采集：auto + engines_boost（vertical/priority），不锁死单引擎
     collection = collect_sources(
         sub_queries, max_results, timeout, depth, mode,
         engines_priority=engines_priority or None,
+        profile=profile,
     )
 
     # 4. 知识缺口
@@ -561,6 +582,7 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
         report["report_sections"] = meta.get("report_sections") or []
         report["source_grades"] = meta.get("source_grades") or {}
         report["engines_priority"] = meta.get("engines_priority") or engines_priority
+        report["vertical_engines"] = meta.get("vertical_engines") or vertical_engines
         # 金融域固定免责（研究包）
         if meta.get("discipline") == "finance":
             report["disclaimer"] = (

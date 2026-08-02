@@ -337,7 +337,11 @@ def _select_sub_engines(sub_engines: list[str], features: dict | None = None) ->
 def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "auto",
                        features: dict | None = None) -> list[str]:
     """从域配置获取 engines_combo，过滤不可用/付费（budget 模式）。
-    自动将 local_search 扩展为子引擎（消灭黑盒）。"""
+    自动将 local_search 扩展为子引擎（消灭黑盒）。
+
+    注意：depth/context 的 combo 预算与 research_only 截断在 route_query 末尾
+    统一走 engine_policy.filter_combo_by_policy，本函数只做可用性/成本/健康过滤。
+    """
     combo = domain.get("engines_combo", [])
     if combo:
         filtered = [e for e in combo if e in enabled]
@@ -364,11 +368,10 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         others = [e for e in filtered if not e.startswith("local_")]
         filtered = free_locals + others
 
-    # fast 模式：只保留免费引擎，最多 2 个
+    # fast 模式：只保留免费引擎（条数预算交给 engine_policy）
     if mode == "fast":
         from config import get_cost_factor
         filtered = [e for e in filtered if get_cost_factor(e) >= 0.85]
-        filtered = filtered[:2]
 
     # 自适应学习过滤（保留主引擎不被过滤）
     if _adaptive_learner is not None and len(filtered) > 1:
@@ -430,16 +433,71 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     return filtered
 
 
+def _apply_engine_policy(
+    engines_combo: list[str],
+    *,
+    mode: str = "auto",
+    depth: str = "fast",
+    context: str = "search",
+    engines_boost: list[str] | None = None,
+    enabled: set[str] | None = None,
+    must_keep: list[str] | None = None,
+) -> list[str]:
+    """boost 垂直源 + tier/budget 截断（单一策略入口）。
+
+    must_keep：预算截断后仍强制保留的引擎（如 geo 的 local_openstreetmap），
+    必要时从尾部腾位，避免特化源被 budget 裁掉。
+    """
+    try:
+        from engine_policy import boost_into_combo, combo_budget, filter_combo_by_policy
+    except ImportError:
+        return engines_combo
+    out = list(engines_combo or [])
+    if engines_boost:
+        out = boost_into_combo(out, engines_boost, enabled=enabled)
+    out = filter_combo_by_policy(out, mode=mode, depth=depth, context=context)
+    if must_keep:
+        budget = combo_budget(mode=mode, depth=depth, context=context)
+        for e in must_keep:
+            if not e or e in out:
+                continue
+            if enabled is not None and e not in enabled:
+                continue
+            if budget is not None and len(out) >= budget:
+                # 保留首位主源，替换末位
+                if len(out) <= 1:
+                    out.append(e)
+                else:
+                    out = out[:-1] + [e]
+            else:
+                out.append(e)
+        # 去重保序
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for e in out:
+            if e not in seen:
+                seen.add(e)
+                deduped.append(e)
+        out = deduped
+    return out
+
+
 # ── 路由主函数 ─────────────────────────────────────────────────────────────────
 
 def route_query(query: str, engine_override: str = "auto",
-                mode: str = "auto") -> dict[str, Any]:
+                mode: str = "auto",
+                depth: str = "fast",
+                context: str = "search",
+                engines_boost: list[str] | None = None) -> dict[str, Any]:
     """路由决策主函数。
 
     Args:
         query: 查询词
         engine_override: 用户指定引擎
         mode: 预算模式 (fast/auto/deep/budget)
+        depth: 搜索深度 (fast/balanced/deep)，参与 combo 预算
+        context: search | research；research 放行 research_only 且不截断 combo
+        engines_boost: 垂直引擎前置（研究子查询 boost，不锁死单引擎）
 
     Returns:
         dict: {engine, engines, engines_combo, reason, confidence, domain, ...}
@@ -457,6 +515,7 @@ def route_query(query: str, engine_override: str = "auto",
             engines_combo=[engine_override],
             reason=f"用户指定: {engine_override}", confidence=1.0,
             features={}, domain=None, parallel=False, mode=mode,
+            depth=depth, context=context,
         )
 
     features = extract_features(query)
@@ -570,6 +629,23 @@ def route_query(query: str, engine_override: str = "auto",
         engines_combo, parallel = _apply_intent_parallelism(
             engines_combo, features, domain, mode, parallel)
 
+        # P0：boost + tier/budget（depth/context）— 放在意图裁剪之后统一截断
+        must_keep = []
+        if features.get("has_geo") and "local_openstreetmap" in enabled:
+            must_keep.append("local_openstreetmap")
+        engines_combo = _apply_engine_policy(
+            engines_combo, mode=mode, depth=depth, context=context,
+            engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,
+        )
+        if not engines_combo:
+            engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
+        # budget 截断后对齐 parallel，避免短 combo 仍开多余并行
+        if mode == "fast" or len(engines_combo) <= 1:
+            parallel = False
+        elif len(engines_combo) <= 2 and not domain.get("parallel", False):
+            # 双引擎默认串行，利于 early-stop（答案域）
+            parallel = parallel and len(engines_combo) > 2
+
         return _done(
             engine=engines_combo[0],
             engines=engines_combo,
@@ -579,13 +655,15 @@ def route_query(query: str, engine_override: str = "auto",
                 f"{_feature_labels(features)} → 命中域 [{domain.get('name', '?')}]"
                 + (f" [TF-IDF→{tfidf_best}]" if tfidf_best else "")
                 + (f" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in engines_combo else "")
+                + (f" [boost={engines_boost}]" if engines_boost else "")
                 + f" → {_ENGINE_NAMES.get(engines_combo[0], engines_combo[0])}"
             ),
             confidence=confidence, features=features,
             domain=domain.get("name"), parallel=parallel,
             no_early_stop=bool(domain.get("no_early_stop", False)),
+            early_stop_min_results=domain.get("early_stop_min_results"),
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
-            mode=mode,
+            mode=mode, depth=depth, context=context,
         )
 
     # 正则未命中，用 TF-IDF 结果（已过滤低分）
@@ -609,6 +687,20 @@ def route_query(query: str, engine_override: str = "auto",
         engines_combo, parallel = _apply_intent_parallelism(
             engines_combo, features, None, mode, parallel)
 
+        must_keep = []
+        if features.get("has_geo") and "local_openstreetmap" in enabled:
+            must_keep.append("local_openstreetmap")
+        engines_combo = _apply_engine_policy(
+            engines_combo, mode=mode, depth=depth, context=context,
+            engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,
+        )
+        if not engines_combo:
+            engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
+        if mode == "fast":
+            parallel = False
+        else:
+            parallel = len(engines_combo) > 1
+
         return _done(
             engine=engines_combo[0],
             engines=engines_combo,
@@ -616,11 +708,12 @@ def route_query(query: str, engine_override: str = "auto",
             reason=(
                 f"TF-IDF 语义路由 → {_ENGINE_NAMES.get(engines_combo[0], engines_combo[0])}"
                 f" (score={tfidf_best_score:.3f}, 正则未命中)"
+                + (f" [boost={engines_boost}]" if engines_boost else "")
             ),
             confidence=0.85, features=features, domain=None,
             parallel=parallel,
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
-            mode=mode,
+            mode=mode, depth=depth, context=context,
         )
 
     # 兜底：免费通用引擎（零分 TF-IDF 也走这里）
@@ -631,9 +724,15 @@ def route_query(query: str, engine_override: str = "auto",
     fallback_combo = _add_language_engines(fallback_combo, features)
     # P0-001：geo 查询追加 OpenStreetMap
     fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
-    # fast：最多 2 个免费
-    if mode == "fast":
-        fallback_combo = fallback_combo[:2]
+    must_keep_fb = []
+    if features.get("has_geo") and "local_openstreetmap" in enabled:
+        must_keep_fb.append("local_openstreetmap")
+    fallback_combo = _apply_engine_policy(
+        fallback_combo, mode=mode, depth=depth, context=context,
+        engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,
+    )
+    if not fallback_combo:
+        fallback_combo = ["anysearch"]
 
     low = tfidf_scores and all(s[1] < TFIDF_MIN_SCORE for s in tfidf_scores)
     reason = (
@@ -652,7 +751,7 @@ def route_query(query: str, engine_override: str = "auto",
         features=features, domain="general_search",
         parallel=False if mode == "fast" else len(fallback_combo) > 1,
         tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
-        mode=mode,
+        mode=mode, depth=depth, context=context,
     )
 
 

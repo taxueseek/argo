@@ -52,13 +52,17 @@ def _apply_query_rewrite(query: str) -> tuple[str, dict | None]:
     return query, None
 
 
-def _results_sufficient(results: list[dict[str, Any]], mode: str = "auto") -> bool:
+def _results_sufficient(
+    results: list[dict[str, Any]],
+    mode: str = "auto",
+    min_results: int | None = None,
+) -> bool:
     """渐进检索 early-stop：首引擎结果是否已够用。
 
     轻量启发式（不依赖网络/LLM）：
-      - 至少 3 条非错误结果
-      - 至少 2 条带非空 snippet
-      - fast 再放宽到 2 条 + 1 个 snippet
+      - 默认 auto：至少 3 条非错误 + 2 条有 snippet
+      - 默认 fast：至少 2 条 + 1 个 snippet
+      - min_results：域配置覆盖（答案型源 1 条快照即够用）
     """
     goods = [r for r in results if isinstance(r, dict) and "error" not in r]
     if not goods:
@@ -67,6 +71,14 @@ def _results_sufficient(results: list[dict[str, Any]], mode: str = "auto") -> bo
         1 for r in goods
         if (r.get("snippet") or r.get("title") or "").strip()
     )
+    if min_results is not None:
+        try:
+            need = max(1, int(min_results))
+        except (TypeError, ValueError):
+            need = 1
+        # 答案型 1 条要求有可展示正文；≥3 条时至少 2 条有 snippet
+        need_snip = 1 if need <= 2 else max(2, need - 1)
+        return len(goods) >= need and with_snippet >= min(need_snip, len(goods))
     if mode == "fast":
         return len(goods) >= 2 and with_snippet >= 1
     return len(goods) >= 3 and with_snippet >= 2
@@ -644,6 +656,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     # deep 模式全量并行；fast/auto/budget 可渐进 early-stop
     allow_early = mode in ("fast", "auto", "budget") and depth != "deep"
 
+    early_min = decision.get("early_stop_min_results")
     if parallel and to_run and allow_early and len(to_run) > 1:
         # Wave-1：主引擎；足够则停（no_early_stop 域除外），否则 wave-2 并行补全
         no_early = bool(decision.get("no_early_stop", False))
@@ -651,7 +664,9 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         e, res, outcome, lat = _run_one(primary)
         _ingest(e, res, outcome, lat)
         goods_primary = [r for r in res if isinstance(r, dict) and "error" not in r]
-        if not no_early and _results_sufficient(goods_primary, mode=mode):
+        if not no_early and _results_sufficient(
+            goods_primary, mode=mode, min_results=early_min,
+        ):
             early_stopped = True
         else:
             with ThreadPoolExecutor(max_workers=min(len(rest), 3)) as ex:
@@ -710,10 +725,16 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             e, res, outcome, lat = _run_one(eng)
             _ingest(e, res, outcome, lat)
             goods = [r for r in res if isinstance(r, dict) and "error" not in r]
-            if goods:
-                # 串行：首个有结果即停（原行为）
-                if allow_early and _results_sufficient(goods, mode=mode):
-                    early_stopped = True
+            if not goods:
+                continue  # 无结果：串行试下一引擎
+            # 答案型域 min_results=1：1 条快照即 early-stop
+            if allow_early and _results_sufficient(
+                goods, mode=mode, min_results=early_min,
+            ):
+                early_stopped = True
+                break
+            # 默认串行：任一引擎有结果即停（历史行为）；答案型不够用则继续补源
+            if early_min is None:
                 break
 
     wasted_ms = nonlocal_wasted[0]
@@ -993,7 +1014,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  plan_only: bool = False,
                  force_search: bool = False,
                  envelope: bool = True,
-                 context: str = "search") -> dict[str, Any]:
+                 context: str = "search",
+                 engines_boost: list[str] | None = None) -> dict[str, Any]:
     """统一搜索便捷入口。
 
     执行分层（不阻塞日常）：
@@ -1019,6 +1041,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         force_search: 即使判定 known-url 也强制多引擎搜索
         envelope: 附加 candidates/coverage/limitations
         context: search | research
+        engines_boost: 垂直引擎前置列表（研究路径 boost，不锁死单引擎）
 
     注意：路由永远基于原始 query。改写词只用于引擎检索，避免
     「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
@@ -1098,9 +1121,15 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             search_query = rewritten
 
     if local_first:
-        decision = route_query(original_query, engine_override="local_search", mode=mode)
+        decision = route_query(
+            original_query, engine_override="local_search", mode=mode,
+            depth=depth, context=context, engines_boost=engines_boost,
+        )
     else:
-        decision = route_query(original_query, engine_override=engine, mode=mode)
+        decision = route_query(
+            original_query, engine_override=engine, mode=mode,
+            depth=depth, context=context, engines_boost=engines_boost,
+        )
     if explain:
         combo = decision.get('engines_combo', decision.get('engines', []))
         print(
