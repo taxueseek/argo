@@ -219,8 +219,9 @@ def _add_language_engines(engine_list: list[str], features: dict | None = None) 
 
     selected: list[str] = []
     # 只要含中文字符就追加中文引擎（阈值 0.1 覆盖中英混合查询）
+    # 百度/搜狗质量低，仅作印证；自动追加只用 local_bing
     if chinese_ratio > 0.1:
-        selected = [e for e in ["local_baidu", "local_sogou", "local_bing"] if e in sub_engines]
+        selected = [e for e in ["local_bing"] if e in sub_engines]
     elif features.get("has_depth_word"):
         selected = [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
 
@@ -251,6 +252,15 @@ _INTENT_PARALLELISM: dict[str, tuple[int, bool]] = {
     "compare": (3, True),
     "social": (3, True),
 }
+
+# 窄域引擎单点保护：这类引擎「永不返回零结果」或只覆盖单一主题
+# （跨域查询产出噪声，如 mdn 的 quantum computing → Cloud computing）。
+# definition/fact 意图裁到 1 引擎时，若主引擎是窄域引擎，强制保留 2 引擎，
+# 避免单引擎独占时噪声无处可挡。
+_NARROW_ENGINES = frozenset({
+    "mdn", "models_dev", "huggingface", "devto",
+    "wikipedia", "baidu_baike", "openalex", "europepmc",
+})
 
 
 def _apply_intent_parallelism(engine_list: list[str], features: dict | None,
@@ -283,6 +293,9 @@ def _apply_intent_parallelism(engine_list: list[str], features: dict | None,
         target_n, want_parallel = 2, True
     elif "definition" in intents or "fact" in intents:
         target_n, want_parallel = 1, False
+        # 窄域引擎单点保护：primary 是窄域引擎时保留 2 引擎并行
+        if engine_list and engine_list[0] in _NARROW_ENGINES and len(engine_list) > 1:
+            target_n, want_parallel = 2, True
 
     if target_n is None:
         return engine_list, default_parallel
@@ -302,7 +315,9 @@ def _select_sub_engines(sub_engines: list[str], features: dict | None = None) ->
 
     chinese_ratio = features.get("chinese_ratio", 0)
     if chinese_ratio > 0.1:
-        return [e for e in ["local_baidu", "local_sogou", "local_bing"] if e in sub_engines]
+        # 百度/搜狗结果质量低（SERP 跳转链为主），仅作印证不主动纳入；
+        # 中文补充源只用 local_bing/local_duckduckgo
+        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
     elif features.get("has_technical"):
         return [e for e in ["local_github", "local_stackoverflow", "local_bing"] if e in sub_engines]
     elif features.get("has_depth_word"):
@@ -375,6 +390,34 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
                 filtered = healthy
         except ImportError:
             pass
+
+    # ── 配额/熔断感知沉底：主引擎不可用时自动切换相近备选 ──────────────
+    # 正常路径（全部引擎可用）顺序不变 → 引擎集合不变 → 缓存键不变 → 零速度倒退。
+    # 仅当主引擎配额耗尽或熔断打开时沉底，主引擎位置自动落到第一个可用的
+    # 相近备选（同一域 combo 内的其他引擎，天然是同主题的备选源）。
+    if len(filtered) > 1:
+        usable, unusable = [], []
+        for e in filtered:
+            ok = True
+            try:
+                if not get_quota_manager().is_available(e, mode=mode):
+                    ok = False
+            except Exception:
+                pass
+            if ok:
+                try:
+                    from circuit_breaker import get_breaker
+                    st = get_breaker().status(e)
+                    if st.get("state") == "open":
+                        ok = False
+                except ImportError:
+                    pass
+                except Exception:
+                    pass
+            (usable if ok else unusable).append(e)
+        # 首位不可用才重排（避免无谓的顺序扰动）；重排保持集合不变
+        if usable and unusable and filtered[0] in unusable:
+            filtered = usable + unusable
 
     return filtered
 

@@ -215,37 +215,37 @@ def _build_eastmoney_engine(spec: dict[str, Any]) -> Any:
             return []
 
     def _eastmoney_keyword_news(query: str, n: int, to: float) -> list[dict[str, Any]]:
-        """按关键词搜全球资讯"""
-        import uuid
-        url = "https://np-weblist.eastmoney.com/comm/web/getFastNewsList"
-        params = {
-            "client": "web", "biz": "web_724", "fastColumn": "102",
-            "sortEnd": "", "pageSize": str(n * 2),
-            "req_trace": str(uuid.uuid4()),
-        }
-        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://kuaixun.eastmoney.com/"}
+        """按关键词搜东财资讯（search-api-web 检索接口，按词真正检索）"""
+        import urllib.parse as up
+        cb = "jQuery_news"
+        url = "https://search-api-web.eastmoney.com/search/jsonp"
+        inner_params = json.dumps({
+            "uid": "", "keyword": query, "type": ["cmsArticleWebOld"],
+            "client": "web", "clientType": "web", "clientVersion": "curr",
+            "param": {"cmsArticleWebOld": {"searchScope": "default", "sort": "default",
+                      "pageIndex": 1, "pageSize": n, "preTag": "", "postTag": ""}},
+        }, separators=(',', ':'))
+        params = {"cb": cb, "param": inner_params}
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://so.eastmoney.com/"}
         try:
-            full_url = url + "?" + "&".join(f"{k}={v}" for k, v in params.items())
+            full_url = url + "?" + "&".join(f"{k}={up.quote(str(v))}" for k, v in params.items())
             req = urllib.request.Request(full_url, headers=headers)
             with urllib.request.urlopen(req, timeout=to) as resp:
-                d = json.loads(resp.read())
+                text = resp.read().decode("utf-8")
+            json_str = text[text.index("(") + 1:text.rindex(")")]
+            d = json.loads(json_str)
+            articles = d.get("result", {}).get("cmsArticleWebOld", []) or []
             results = []
-            for item in d.get("data", {}).get("fastNewsList", [])[:n]:
-                title = item.get("title", "")
-                summary = (item.get("summary", "") or "")[:200]
-                if query:
-                    keywords = query.strip().split()
-                    if not any(kw.lower() in (title + summary).lower() for kw in keywords):
-                        continue
+            for a in articles[:n]:
                 results.append({
-                    "title": title[:80],
-                    "url": "https://kuaixun.eastmoney.com/",
-                    "snippet": f"{item.get('showTime', '')} | {summary}",
+                    "title": re.sub(r'<[^>]+>', '', a.get("title", ""))[:80],
+                    "url": a.get("url", "") or "https://so.eastmoney.com/",
+                    "snippet": re.sub(r'<[^>]+>', '', a.get("content", ""))[:200],
                     "source": "eastmoney",
                 })
             return results
         except Exception as e:
-            logger.warning(f"东财资讯搜索失败: {e}")
+            logger.warning(f"东财关键词搜索失败: {e}")
             return []
 
     return _engine

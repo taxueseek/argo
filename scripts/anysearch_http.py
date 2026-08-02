@@ -32,6 +32,16 @@ def search(query: str, n: int = 5, domain: str = "", sub_domain: str = "") -> di
         return {"error": str(e), "results": []}
 
     content = data.get("result", {}).get("content", [])
+    # 先拼接全部文本，检测配额耗尽/限流 → 结构化 error（加速熔断，
+    # 路由层据此将 anysearch 沉底，自动切换到同域相近备选）
+    joined_text = ""
+    for item in content:
+        joined_text += (item.get("text", "") if isinstance(item, dict) else str(item))
+    low = joined_text.lower()
+    if any(k in low for k in ("quota", "exhausted", "recharge", "rate limit", "429",
+                              "daily_free_quota")):
+        return {"error": "anysearch_quota_exhausted", "results": []}
+
     results = []
     for item in content:
         text = item.get("text", "") if isinstance(item, dict) else str(item)

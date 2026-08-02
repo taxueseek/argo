@@ -473,9 +473,9 @@ def _build_models_dev_engine(spec: dict[str, Any]) -> Any:
                         continue
                 elif not any(k in ql for k in ("模型", "model", "llm", "gpt", "claude",
                          "gemini", "glm", "llama", "mistral", "deepseek", "价格", "price")):
-                    # 无明确搜索词也无能力词时，只返回大上下文热门模型（兜底）
-                    if (lim.get("context") or 0) < 200000:
-                        continue
+                    # 无明确搜索词也无能力词 → 诚实零结果（不兜底热门模型，
+                    # 避免产出「看起来像结果」的噪声稀释融合）
+                    continue
 
                 # 构建 snippet
                 mods_in = m.get("modalities", {}).get("input", [])
@@ -488,10 +488,13 @@ def _build_models_dev_engine(spec: dict[str, Any]) -> Any:
                 )
                 results.append({
                     "title": f"{name} ({prov_name})",
-                    "url": prov_doc,
+                    # 可定位到具体模型页（prov_doc 是 provider 首页，多个结果
+                    # 共享同一 URL，导致下游去重/引用全部失效）
+                    "url": f"https://models.dev/?model={mid}",
                     "snippet": snippet[:300],
                     "source": "models_dev",
-                    "score": 0.95,
+                    # 0.8 固定基线分（结构化目录条目，非语义搜索，不宜 0.95 压过真实相关结果）
+                    "score": 0.8,
                 })
                 if len(results) >= n:
                     break

@@ -30,6 +30,12 @@ DB_DIR = Path.home() / ".cache" / "unified-search"
 DB_PATH = DB_DIR / "adaptive.db"
 WINDOW_DAYS = 7
 
+# 数据过时阈值：窗口内有历史数据但最近一次调用距今超过该值，
+# 视为历史快照失效（引擎可能已恢复健康），返回中性分让其重新进入组合。
+# 被降权引擎不会出现在组合里 → 没有新记录 → 分数永远卡低（死锁），
+# 此机制类似熔断器的 half-open 探测，是自适应学习的标准恢复通道。
+STALE_AFTER_SECONDS = 24 * 3600
+
 # ── 成本分级因子 ─────────────────────────────────────────────────────────────
 
 COST_FACTORS = {"free": 1.0, "low": 0.85, "paid": 0.6}
@@ -114,10 +120,19 @@ class AdaptiveLearner:
         if not total or total == 0:
             score = 0.5  # 无数据时中性分
         else:
-            success_rate = avg_success or 0.5
-            latency_factor = min(1.0, 2000.0 / max(avg_latency or 2000, 1))
-            cost_factor = max(0.3, 1.0 - (avg_cost or 0.0) * 10)
-            score = round(success_rate * latency_factor * cost_factor, 4)
+            # 数据过时恢复：最后一次调用距今过久 → 中性分，给恢复探测机会
+            last_row = conn.execute(
+                "SELECT MAX(created_at) FROM engine_perf WHERE engine = ? AND created_at > ?",
+                (engine, cutoff),
+            ).fetchone()
+            last_ts = float(last_row[0] or 0)
+            if last_ts and (now - last_ts) > STALE_AFTER_SECONDS:
+                score = 0.5
+            else:
+                success_rate = avg_success or 0.5
+                latency_factor = min(1.0, 2000.0 / max(avg_latency or 2000, 1))
+                cost_factor = max(0.3, 1.0 - (avg_cost or 0.0) * 10)
+                score = round(success_rate * latency_factor * cost_factor, 4)
 
         self._score_cache[engine] = (score, now + self.SCORE_CACHE_TTL)
         return score

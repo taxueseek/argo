@@ -226,15 +226,14 @@ domains:
   name: ai_model
   parallel: false
   patterns:
-  - (?i)(模型|model|LLM|GPT|Claude|Gemini|GLM|Llama|Mistral|DeepSeek|Qwen)
+  - (?i)\b(LLM|GPT|Claude|Gemini|GLM|Llama|Mistral|DeepSeek|Qwen|Grok)\b
+  - (?i)(模型|model).{0,24}(价格|pricing|多少钱|上下文|context|token|支持视觉|vision|能力|对比|免费|开源)
   - (?i)(API price|pricing|context window|token limit|vision model|tool call)
-  - (?i)(多少钱|价格|上下文|支持视觉|支持图片|开源模型|免费模型)
   primary: models_dev
-- desc: 中文技术社区文章（掘金 + V2EX + dev.to）
+- desc: 中文技术社区文章（掘金 + V2EX）
   engines_combo:
   - juejin
   - v2ex
-  - devto
   fallback: juejin
   name: cn_tech_community
   parallel: true
@@ -248,7 +247,7 @@ domains:
   - byted
   - duckduckgo
   - wenshu
-  fallback: anysearch
+  fallback: byted
   name: legal
   parallel: true
   patterns:
@@ -515,7 +514,7 @@ domains:
   - octen
   - exa
   - anysearch
-  fallback: anysearch
+  fallback: exa
   name: english_tech
   parallel: true
   patterns:
@@ -528,7 +527,7 @@ domains:
   - byted
   - wechat_sogou
   - octen
-  fallback: bocha
+  fallback: byted
   name: chinese_general
   parallel: true
   patterns:

@@ -59,6 +59,24 @@ class CircuitBreaker:
 
     # ── 引擎熔断 ────────────────────────────────────────────────────────────
 
+    def status(self, engine: str) -> dict[str, Any]:
+        """只读查询引擎熔断状态（不推进 half-open 探测、不落盘）。
+
+        供路由层做「配额/熔断感知沉底」：主引擎熔断打开时自动切换到
+        相近备选，正常路径组合集合不变，缓存键不变，速度零影响。
+        """
+        with self._lock:
+            st = self._engines.get(engine) or {}
+            state = st.get("state", "closed")
+            opened_at = float(st.get("opened_at") or 0)
+            return {
+                "state": state,
+                "failures": int(st.get("failures") or 0),
+                "opened_at": opened_at,
+                "cooldown_remain": max(0, int(OPEN_SECONDS - (time.time() - opened_at)))
+                if state == "open" else 0,
+            }
+
     def allow(self, engine: str) -> tuple[bool, str]:
         """是否允许调用该引擎。返回 (allowed, reason)。"""
         with self._lock:

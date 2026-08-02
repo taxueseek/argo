@@ -44,12 +44,20 @@ def _build_exa_engine(spec: dict[str, Any]) -> Any:
                 data = json.loads(resp.read().decode("utf-8"))
                 results = []
                 for r in data.get("results", []):
+                    snippet = (r.get("text") or r.get("snippet") or "")[:300]
+                    # 轻量清洗：去掉 YAML front-matter（--- 开头的内容块）与导航噪声
+                    if snippet.startswith("---"):
+                        idx = snippet.find("---", 3)
+                        if idx != -1:
+                            snippet = snippet[idx + 3:].strip()
                     results.append({
                         "title": r.get("title", ""),
                         "url": r.get("url", ""),
-                        "snippet": r.get("text", "")[:300] if r.get("text") else r.get("snippet", ""),
+                        "snippet": snippet,
                         "source": "exa",
-                        "score": r.get("score", 0.0),
+                        # type:auto 模式不返回 score 字段（恒 0 会被 RRF 埋没），
+                        # 无 score 时给固定基线分
+                        "score": r.get("score") or 0.75,
                     })
                 return results
         except Exception as e:
