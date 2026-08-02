@@ -1,7 +1,7 @@
 {
   "name": "argo-search",
-  "version": "2.4.0",
-  "description": "Argo 阿尔戈 — 统一搜索与证据核验。多引擎路由、RRF 融合、Selection×Absorption 证据评分、双层缓存、MCP。",
+  "version": "2.5.0",
+  "description": "Argo 阿尔戈 — 统一搜索与证据核验。87 引擎路由、RRF 融合、Selection×Absorption 证据评分、查询改写、双层缓存、16 MCP 工具。",
   "keywords": [
     "mcp",
     "mcp-server",
@@ -13,7 +13,8 @@
     "grok",
     "kimi",
     "codex",
-    "argo"
+    "argo",
+    "npx"
   ],
   "license": "MIT",
   "author": "Argo Search",
@@ -29,7 +30,10 @@
     "scripts/",
     "config.yaml",
     "backends/",
-    "sub-skills/"
+    "sub-skills/",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"

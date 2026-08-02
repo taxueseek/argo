@@ -1,7 +1,7 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。核心不是「返回链接」，而是「最大化可被 Agent 吸收的可核验证据」。工具：argo_search + research + evidence（Selection×Absorption 两阶段）+ clarify + fetch/crawl/extract + 社交引擎。TF-IDF路由 + RRF + 证据密度 + SERP降权 + 中文信源表。
-version: 2.3.0
+description: Argo 阿尔戈 — 统一搜索与证据核验。87 引擎 TF-IDF 路由 + RRF 融合、查询改写（不污染域匹配）、Selection×Absorption 证据评分、双层缓存、熔断负缓存、16 MCP 工具（紧凑响应）。入口：安装脚本 / npx argo-search / mcp_server.py。
+version: 2.5.0
 triggers:
   - 搜索
   - 查一下
@@ -13,83 +13,128 @@ triggers:
   - look up
   - fact check
 engines:
-  - local_search
   - anysearch
-  - tavily
-  - zhihu
-  - eastmoney
-  - byted
-  - arxiv
-  - duckduckgo
-  - uapi
-  - semantic_scholar
-  - felo
-  - bocha
-  - openalex
-  - crossref
-  - github
-  - wikipedia
-  - metaso
-  - wolframalpha
-  - brave
-  - twitter
-  - reddit
-  - xiaohongshu
-  - bilibili
-  - weibo
-  - exa
-  - wechat_sogou
-  - hackernews
-  - stackoverflow
-  - google_scholar
-  - v2ex
-  - ths_hot
-  - cls_telegraph
-  - em_global_news
-  - itotii
-  - urban_dictionary
-  - know_your_meme
-  - zh_wikipedia
-  - baidu_hot
-  - toutiao_hot
-  - bilibili_hot
-  - itunes
-  - openverse
-  - coingecko
-  - wikidata
-  - crates
-  - musicbrainz
-  - open_library
-  - free_dictionary
-  - moegirl
-  - openalex
-  - crossref
-  - baidu_baike
-  - pypi
-  - npm
-  - huggingface
-  - mdn
-  - juejin
-  - europepmc
-  - dblp
-  - clinicaltrials
-  - openfda
-  - docker_hub
-  - devto
   - archive_org
-  - steam
-  - polymarket
+  - arxiv
+  - baidu_baike
+  - baidu_hot
+  - bilibili
+  - bilibili_hot
+  - bocha
+  - byted
+  - clinicaltrials
+  - cls_telegraph
+  - coingecko
+  - crates
+  - crossref
+  - dblp
+  - devto
+  - docker_hub
+  - duckduckgo
+  - eastmoney
+  - em_global_news
+  - europepmc
+  - exa
   - finviz
-  - seeking_alpha
+  - free_dictionary
+  - github
+  - google_scholar
+  - hackernews
+  - huggingface
+  - itotii
+  - itunes
   - jin10
+  - juejin
+  - know_your_meme
+  - local_arxiv
+  - local_baidu
+  - local_bing
+  - local_bing_news
+  - local_crossref
+  - local_duckduckgo
+  - local_github
+  - local_gitlab
+  - local_google_news
+  - local_mojeek
+  - local_npm
+  - local_openstreetmap
+  - local_pubmed
+  - local_search
+  - local_semantic_scholar
+  - local_sogou
+  - local_stackoverflow
+  - local_startpage
+  - local_wikipedia
+  - local_wikiquote
+  - local_wiktionary
+  - mdn
   - models_dev
+  - moegirl
+  - musicbrainz
+  - npm
   - octen
+  - open_library
+  - openalex
+  - openfda
+  - openverse
+  - polymarket
+  - pypi
   - qweather
+  - reddit
+  - seeking_alpha
+  - semantic_scholar
+  - stackoverflow
+  - steam
+  - tavily
+  - ths_hot
+  - toutiao_hot
+  - twitter
+  - urban_dictionary
+  - v2ex
+  - wechat_sogou
+  - weibo
   - wenshu
+  - wikidata
+  - wikipedia
+  - xiaohongshu
+  - zh_wikipedia
+  - zhihu
   - zhihu_global
 ---
+## Argo v2.5.0
 
-## Argo v2.3.0
+### 安装与接入（摘要）
+
+任选其一（详见仓库 [README](https://github.com/taxueseek/argo)）：
+
+```bash
+# 1) 一键安装脚本
+curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
+
+# 2) npx 启动 MCP（需 Node 18+ 与 Python 3.10+）
+npx -y argo-search
+
+# 3) 源码
+git clone https://github.com/taxueseek/argo.git && cd argo && pip install pyyaml
+python3 scripts/mcp_server.py
+```
+
+MCP 配置可用 `npx -y argo-search`，或 `python3 /path/to/argo/scripts/mcp_server.py`（路径用本机占位，勿提交真实家目录）。
+
+Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/skills/argo`。
+
+### 能力增量（相对早期版本）
+
+| 能力 | 说明 |
+|------|------|
+| 87 搜索源 | `config.yaml` 单一真源，含 local_* / 金融 / 社交 / 学术 / 开发者社区 |
+| 16 MCP 工具 | search / research / evidence / clarify / fetch / crawl / extract / screenshot / pdf / social* |
+| 查询改写 | 口语 → 检索友好；**不污染**路由域匹配 |
+| 路由热缓存 | 重复路由接近亚毫秒 |
+| MCP 紧凑响应 | 控制 snippet 与内部字段，省 token |
+| 熔断 + 负缓存 + 柔性命中 | 失败可观测，热查询更快 |
+| 证据两阶段 | Selection × Absorption + 共识 / 时效 |
+
 
 ### 问题重定义（第一性原理）
 

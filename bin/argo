@@ -13,7 +13,7 @@ def _engine_count() -> int:
         from config import get_engines
         return len(get_engines())
     except Exception:
-        return 61  # 兜底：配置不可读时退回旧文案
+        return 87  # 兜底：配置不可读时退回近期规模
 
 
 def _usage() -> str:
