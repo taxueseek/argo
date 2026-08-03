@@ -55,6 +55,8 @@ except Exception:
 # ── 特征提取 ──────────────────────────────────────────────────────────────────
 
 _RE_CHINESE = re.compile(r"[一-鿿]")
+_RE_KANA = re.compile(r"[\u3040-\u30ff]")
+_RE_HANGUL = re.compile(r"[\uac00-\ud7af]")
 _RE_COMPARE = re.compile(r"\b(vs|versus)\b|(对比|比较|区别|相比|哪个好)", re.I)
 _RE_TECH = re.compile(
     r"\b(api|python|javascript|typescript|code|react|vue|node|rust|go|"
@@ -89,14 +91,53 @@ def extract_features(query: str) -> dict[str, Any]:
 
     P0-001：并入 has_geo / has_negation / intents，供下游路由/并行度决策使用。
     查询理解不可用时退化为纯正则特征，不影响原有字段。
+
+    多语种（v2.7）：primary_lang 判定主语言（zh/en/ja/ko/latin/cyrillic/thai/
+    arabic/hebrew/greek/devanagari/mixed/other），script 给出书写系统类别，
+    is_latin 标记是否为拉丁语系查询。跨语言回退依据：非拉丁书写系统的主语言
+    在通用英文源覆盖可能不足，路由会追加英文通用源（duckduckgo/anysearch）。
     """
     total = len(query)
     chinese = len(_RE_CHINESE.findall(query))
+    latin = len(re.findall(r"[A-Za-z]", query))
     ratio = chinese / max(total, 1)
+
+    # 主语言判定统一走 lang_detect（假名/谚文/西里尔/泰/阿/希伯来/希腊强信号优先）
+    primary_lang = "mixed"
+    script = "other"
+    is_latin = False
+    try:
+        from lang_detect import detect_language, detect_script
+        primary_lang = detect_language(query)
+        script = detect_script(query)
+        is_latin = primary_lang in ("en", "latin")
+    except ImportError:
+        kana = len(_RE_KANA.findall(query))
+        hangul = len(_RE_HANGUL.findall(query))
+        if kana / max(total, 1) >= 0.15:
+            primary_lang = "ja"
+            script = "kana"
+        elif hangul / max(total, 1) >= 0.15:
+            primary_lang = "ko"
+            script = "hangul"
+        elif ratio > 0.3:
+            primary_lang = "zh"
+            script = "cjk"
+        elif latin / max(total, 1) > 0.5:
+            primary_lang = "en"
+            script = "latin"
+            is_latin = True
+        else:
+            primary_lang = "mixed"
+            script = "mixed"
+
     features: dict[str, Any] = {
         "chinese_ratio": ratio,
-        "english_ratio": 1.0 - ratio,
+        "english_ratio": latin / max(total, 1),
         "length": total,
+        "primary_lang": primary_lang,
+        "script": script,
+        "is_latin": is_latin,
         "has_compare": bool(_RE_COMPARE.search(query)),
         "has_technical": bool(_RE_TECH.search(query)),
         "has_question": bool(_RE_QUESTION.search(query)),
@@ -183,6 +224,28 @@ def match_domain(query: str, domains: list[dict[str, Any]] | None = None) -> dic
     return catch_all
 
 
+def _enabled_local_engines() -> list[str]:
+    """返回已注册（enabled）的本地子引擎名。
+
+    路由选择的引擎必须能被执行层真正调用。list_local_engines(available_only=False)
+    返回全部子引擎（含 config.yaml enabled:false 的，如 local_yandex/local_google），
+    若路由选到这些引擎，执行层注册表里不存在 → 「未知引擎」空跑。
+    这里以 config.yaml 的 enabled 字段为准过滤，保证路由与执行一致。
+    """
+    if _get_registry is None:
+        return []
+    try:
+        from config import get_engines, load_config
+        cfg = load_config()
+        engines = get_engines(cfg) or {}
+        return [
+            e for e in _get_registry().list_local_engines(available_only=False)
+            if isinstance(engines.get(e), dict) and engines[e].get("enabled", True)
+        ]
+    except Exception:
+        return []
+
+
 def _expand_local_search(engine_list: list[str], features: dict | None = None) -> list[str]:
     """将 local_search 扩展为具体的子引擎（基于查询特征）。"""
     if "local_search" not in engine_list:
@@ -191,7 +254,7 @@ def _expand_local_search(engine_list: list[str], features: dict | None = None) -
         return engine_list
 
     registry = _get_registry()
-    sub_engines = registry.list_local_engines(available_only=False)
+    sub_engines = _enabled_local_engines()
     if not sub_engines:
         return engine_list
 
@@ -208,28 +271,54 @@ def _add_language_engines(engine_list: list[str], features: dict | None = None) 
 
     当 TF-IDF 已选中主引擎后，根据查询语言特征追加本地子引擎，
     实现多源融合（网页引擎 + 本地零成本引擎）。
+
+    多语种（v2.7）：按 primary_lang 追加对应语言的本地引擎——
+      中文 → local_bing；日文 → local_yandex（日文索引更好）或 local_bing；
+      韩文 → local_google（韩国站点覆盖好）或 local_bing。
     """
     if _get_registry is None:
         return engine_list
     if not features:
         return engine_list
 
+    primary_lang = features.get("primary_lang", "")
     chinese_ratio = features.get("chinese_ratio", 0)
+    sub_engines = _enabled_local_engines()
+
+    # 日/韩主查询：中文域引擎（byted/bocha 等）是噪声源，追加日韩本地引擎
+    # 时不因「combo 已有 local_ 引擎」而跳过——中文引擎对日韩查询无用。
+    # 注：local_yandex / local_google 默认 enabled:false，实际常落到 local_bing，
+    # 由 engines_base 按 query 动态改 setlang/hl，不依赖禁用引擎空跑。
+    if primary_lang in ("ja", "ko"):
+        if primary_lang == "ja":
+            preferred = ["local_yandex", "local_bing", "local_duckduckgo"]
+        else:
+            preferred = ["local_google", "local_bing", "local_duckduckgo"]
+        selected = [e for e in preferred if e in sub_engines]
+        cn_noise = {"bocha", "byted", "wechat_sogou", "zhihu", "zhihu_global", "baidu_baike"}
+        result = [e for e in engine_list if e not in cn_noise]
+        for eng in selected[:2]:
+            if eng not in result:
+                result.append(eng)
+        return result
 
     # 已包含 local_ 引擎则跳过
     if any(e.startswith("local_") for e in engine_list):
         return engine_list
 
-    registry = _get_registry()
-    sub_engines = registry.list_local_engines(available_only=False)
     if not sub_engines:
         return engine_list
 
     selected: list[str] = []
-    # 只要含中文字符就追加中文引擎（阈值 0.1 覆盖中英混合查询）
-    # 百度/搜狗质量低，仅作印证；自动追加只用 local_bing
     if chinese_ratio > 0.1:
+        # 只要含中文字符就追加中文引擎（阈值 0.1 覆盖中英混合查询）
+        # 百度/搜狗质量低，仅作印证；自动追加只用 local_bing
         selected = [e for e in ["local_bing"] if e in sub_engines]
+    elif primary_lang in (
+        "cyrillic", "thai", "arabic", "hebrew", "greek", "devanagari",
+    ):
+        # 其他非拉丁语：local_bing 靠动态 setlang 吃多语言索引
+        selected = [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
     elif features.get("has_depth_word"):
         selected = [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
 
@@ -250,6 +339,31 @@ def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
     if "local_openstreetmap" in engine_list:
         return engine_list
     return engine_list + ["local_openstreetmap"]
+
+
+# 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
+# 中文 / 其它语种：_add_language_engines 软追加即可，must_keep 会与垂直域抢预算
+# （实测：zh must_keep local_bing 会把 finance_macro 多源压成单源、挤掉 openstreetmap）。
+_LANG_PREFERRED_ENGINES: dict[str, list[str]] = {
+    "ja": ["local_yandex", "local_bing"],
+    "ko": ["local_google", "local_bing"],
+}
+
+
+def _lang_must_keep(features: dict | None, enabled: set[str]) -> list[str]:
+    """返回语言相关的 must_keep 引擎（仅日/韩）。
+
+    专用源（yandex/google）默认 disabled 时落到 local_bing；
+    多语言结果质量仍靠 engines_base 动态 setlang，不依赖强制占位。
+    """
+    if not features or not enabled:
+        return []
+    lang = features.get("primary_lang", "")
+    preferred = _LANG_PREFERRED_ENGINES.get(lang, [])
+    for eng in preferred:
+        if eng in enabled:
+            return [eng]
+    return []
 
 
 # 意图 → (期望引擎数, 是否并行)。P0-005 动态并行度。
@@ -321,7 +435,14 @@ def _select_sub_engines(sub_engines: list[str], features: dict | None = None) ->
     if not features:
         return [e for e in ["local_bing", "local_duckduckgo", "local_mojeek"] if e in sub_engines]
 
+    primary_lang = features.get("primary_lang", "")
     chinese_ratio = features.get("chinese_ratio", 0)
+
+    # 多语种（v2.7）：日/韩查询优先对应语言的本地引擎
+    if primary_lang == "ja":
+        return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"] if e in sub_engines]
+    if primary_lang == "ko":
+        return [e for e in ["local_google", "local_bing", "local_duckduckgo"] if e in sub_engines]
     if chinese_ratio > 0.1:
         # 百度/搜狗结果质量低（SERP 跳转链为主），仅作印证不主动纳入；
         # 中文补充源只用 local_bing/local_duckduckgo
@@ -662,6 +783,7 @@ def route_query(query: str, engine_override: str = "auto",
         must_keep = []
         if features.get("has_geo") and "local_openstreetmap" in enabled:
             must_keep.append("local_openstreetmap")
+        must_keep.extend(_lang_must_keep(features, enabled))
         engines_combo = _apply_engine_policy(
             engines_combo, mode=mode, depth=depth, context=context,
             engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,
@@ -719,6 +841,7 @@ def route_query(query: str, engine_override: str = "auto",
         must_keep = []
         if features.get("has_geo") and "local_openstreetmap" in enabled:
             must_keep.append("local_openstreetmap")
+        must_keep.extend(_lang_must_keep(features, enabled))
         engines_combo = _apply_engine_policy(
             engines_combo, mode=mode, depth=depth, context=context,
             engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,
@@ -749,13 +872,20 @@ def route_query(query: str, engine_override: str = "auto",
     fallback_combo = [e for e in ["local_search", "anysearch", "duckduckgo", "local_bing"] if e in enabled]
     if not fallback_combo:
         fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
-    fallback_combo = _expand_local_search(fallback_combo, features)
+    # 日/韩主查询：直接用语言专用本地引擎组合，避免默认 local_bing（zh 参数）兜底
+    if features.get("primary_lang") in ("ja", "ko") and _get_registry is not None:
+        lang_combo = _select_sub_engines(_enabled_local_engines(), features)
+        non_local = [e for e in fallback_combo if not e.startswith("local_")]
+        fallback_combo = (lang_combo[:2] + non_local) if lang_combo else fallback_combo
+    else:
+        fallback_combo = _expand_local_search(fallback_combo, features)
     fallback_combo = _add_language_engines(fallback_combo, features)
     # P0-001：geo 查询追加 OpenStreetMap
     fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
     must_keep_fb = []
     if features.get("has_geo") and "local_openstreetmap" in enabled:
         must_keep_fb.append("local_openstreetmap")
+    must_keep_fb.extend(_lang_must_keep(features, enabled))
     fallback_combo = _apply_engine_policy(
         fallback_combo, mode=mode, depth=depth, context=context,
         engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,

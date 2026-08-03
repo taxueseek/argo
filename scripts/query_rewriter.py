@@ -221,7 +221,16 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
                 match_count += 1
 
     # ── 策略 2：混合语言拆分 ──
-    if _has_chinese(query) and _has_english(query):
+    # 多语种（v2.7）：主语言非英文（日/韩/西里尔/泰/阿等）且含拉丁术语时
+    # 也做混合拆分，抽出英文技术词补检索；中文+英文逻辑保持原样。
+    lang = "en"
+    try:
+        from lang_detect import detect_language
+        lang = detect_language(query)
+    except ImportError:
+        pass
+    mixed_latin = _has_chinese(query) or lang not in ("en", "latin")
+    if mixed_latin and _has_english(query):
         eng_terms = _extract_english_terms(query)
         technical = any(
             t

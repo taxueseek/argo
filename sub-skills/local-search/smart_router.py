@@ -22,6 +22,8 @@ if not logger.handlers:
 
 # 查询特征正则
 _RE_CHINESE = re.compile(r"[一-鿿]")
+_RE_KANA = re.compile(r"[\u3040-\u30ff]")
+_RE_HANGUL = re.compile(r"[\uac00-\ud7af]")
 _RE_ACADEMIC = re.compile(
     r"\b(paper|arxiv|preprint|doi|citation|abstract|journal|conference|"
     r"peer[-\s]?review|research|survey|review|thesis|dissertation)\b|"
@@ -61,6 +63,8 @@ CATEGORY_PRIORITY = {
     "code": ["local_github", "local_stackoverflow", "local_gitlab", "local_npm"],
     "news": ["local_bing_news", "local_google_news", "local_duckduckgo_news"],
     "chinese": ["local_baidu", "local_sogou", "local_bing", "local_duckduckgo"],
+    "japanese": ["local_yandex", "local_bing", "local_duckduckgo"],
+    "korean": ["local_google", "local_bing", "local_duckduckgo"],
     "reference": ["local_wikipedia", "local_wiktionary", "local_wikiquote"],
     "vertical": ["local_openstreetmap", "local_imdb", "local_goodreads"],
     "web_general": ["local_bing", "local_duckduckgo", "local_mojeek", "local_startpage"],
@@ -71,9 +75,29 @@ def extract_features(query: str) -> dict[str, Any]:
     """提取查询特征向量。"""
     total = max(len(query), 1)
     chinese = len(_RE_CHINESE.findall(query))
+    # 主语言判定：优先复用 scripts/lang_detect 单真源
+    primary_lang = "en"
+    try:
+        from lang_detect import detect_language
+        primary_lang = detect_language(query)
+    except ImportError:
+        kana = len(_RE_KANA.findall(query))
+        hangul = len(_RE_HANGUL.findall(query))
+        if kana / total >= 0.15 or (kana and chinese / total >= 0.3):
+            primary_lang = "ja"
+        elif hangul / total >= 0.15:
+            primary_lang = "ko"
+        elif chinese / total >= 0.3:
+            primary_lang = "zh"
+        else:
+            primary_lang = "en"
     return {
         "chinese_ratio": chinese / total,
-        "is_chinese": chinese / total > 0.3,
+        # is_chinese：仅当真主语言为 zh 时标中文（日文汉字查询不再误入 chinese 分类）
+        "is_chinese": primary_lang == "zh" or (
+            primary_lang not in ("ja", "ko") and chinese / total > 0.3
+        ),
+        "primary_lang": primary_lang,
         "is_academic": bool(_RE_ACADEMIC.search(query)),
         "is_code": bool(_RE_CODE.search(query)),
         "is_news": bool(_RE_NEWS.search(query)),
@@ -116,6 +140,11 @@ def route_query(
 
     # 特征 → 候选分类
     candidates: list[tuple[str, float]] = []
+    # 日/韩主语言：优先对应语言的本地引擎分类
+    if features.get("primary_lang") == "ja":
+        candidates.append(("japanese", 1.0))
+    elif features.get("primary_lang") == "ko":
+        candidates.append(("korean", 1.0))
     if features["is_academic"]:
         candidates.append(("academic", 1.0))
     if features["is_code"]:
@@ -130,7 +159,7 @@ def route_query(
         # 事实查询优先百科与通用搜索
         candidates.append(("reference", 0.85))
         candidates.append(("web_general", 0.7))
-    if features["is_chinese"]:
+    if features["is_chinese"] and features.get("primary_lang") != "ja":
         candidates.append(("chinese", 0.85))
         # 中文新闻类查询增强
         if features["is_news"]:

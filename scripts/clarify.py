@@ -555,23 +555,36 @@ def analyze_query(query: str) -> dict[str, Any]:
 
 
 def _detect_language(text: str) -> str:
-    """检测主要语言。"""
-    cn_count = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
-    en_count = sum(1 for c in text if c.isascii() and c.isalpha())
-    ja_count = sum(1 for c in text if "\u3040" <= c <= "\u30ff")
-
-    total = cn_count + en_count + ja_count
-    if total == 0:
-        return "unknown"
-
-    if cn_count / total > 0.5:
-        return "zh" if en_count / total < 0.3 else "zh-en"
-    elif ja_count / total > 0.3:
-        return "ja" if cn_count / total < 0.3 else "zh-ja"
-    elif en_count / total > 0.5:
-        return "en"
-    else:
+    """检测主要语言（委托 lang_detect 单真源，兼容旧标签）。"""
+    try:
+        from lang_detect import detect_language
+        lang = detect_language(text or "")
+    except ImportError:
+        cn_count = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
+        en_count = sum(1 for c in text if c.isascii() and c.isalpha())
+        ja_count = sum(1 for c in text if "\u3040" <= c <= "\u30ff")
+        total = cn_count + en_count + ja_count
+        if total == 0:
+            return "unknown"
+        if cn_count / total > 0.5:
+            return "zh" if en_count / total < 0.3 else "zh-en"
+        if ja_count / total > 0.3:
+            return "ja" if cn_count / total < 0.3 else "zh-ja"
+        if en_count / total > 0.5:
+            return "en"
         return "mixed"
+    # 兼容 clarify 下游可能依赖的旧混合标签
+    if lang == "other":
+        return "unknown"
+    if lang == "zh" and any(c.isascii() and c.isalpha() for c in (text or "")):
+        han = sum(1 for c in text if "\u4e00" <= c <= "\u9fff")
+        if han and han / max(len(text.replace(" ", "")), 1) < 0.7:
+            return "zh-en"
+    if lang == "ja" and any("\u4e00" <= c <= "\u9fff" for c in (text or "")):
+        kana = sum(1 for c in text if "\u3040" <= c <= "\u30ff")
+        if kana / max(len([c for c in text if not c.isspace()]), 1) < 0.3:
+            return "zh-ja"
+    return lang
 
 
 # ── 路由推荐 ──────────────────────────────────────────────────────────────────

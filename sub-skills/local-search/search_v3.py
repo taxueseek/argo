@@ -125,10 +125,23 @@ def _build_url(spec: dict[str, Any], query: str, n: int) -> str:
     qp = spec.get("query_param", "q")
     extra = spec.get("extra_params", {})
     params = {qp: query}
+    # 语言参数动态化（v2.7）：根据查询主语言覆盖静态 setlang/hl/lang，
+    # 表在 lang_detect 单真源维护。
     for k, v in extra.items():
+        if k in ("setlang", "hl", "lang", "uselang"):
+            v = _lang_param(k, query) or v
         params[k] = _resolve(str(v), query, n)
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}{urllib.parse.urlencode(params)}"
+
+
+def _lang_param(param: str, query: str) -> str:
+    """按查询主语言返回引擎语言参数；表在 lang_detect 单真源维护。"""
+    try:
+        from lang_detect import engine_lang_param
+        return engine_lang_param(param, query)
+    except ImportError:
+        return ""
 
 
 # ── HTML 解析 ──────────────────────────────────────────────────────────────────

@@ -169,10 +169,24 @@ def pick_alternative_engines(tried: list[str], engines_fallback: list[str] | Non
     return picks
 
 
-# ── L4 中英互译启发式 ──────────────────────────────────────────────────────────
+# ── L4 跨语言回退（原中英互译启发式升级）───────────────────────────────────────
+
+# 非拉丁主语言零结果时，用通用源补搜（原文即可，无需真翻译）
+_CROSS_LANG_ENGINES = ["duckduckgo", "anysearch", "wikipedia"]
+
+_CROSS_LANG_SIGNAL = re.compile(
+    r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f"
+    r"\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff\u0900-\u097f]"
+)
+
+
+def _is_non_latin_script(query: str) -> bool:
+    """是否含非拉丁书写系统字符（日韩/西里尔/泰/阿/希伯来/希腊/天城体等）。"""
+    return bool(_CROSS_LANG_SIGNAL.search(query))
+
 
 def translate_heuristic(query: str) -> Optional[str]:
-    """L4：从中文查询抽英文 token 组新查询；或用同义表做中→英映射。
+    """L4：从中文/日韩查询抽英文 token 组新查询；或用同义表做中→英映射。
 
     非真翻译：仅提取已有英文 token + 同义表英文对照，供英文源二次检索。
     无可用英文信号时返回 None。
@@ -193,6 +207,31 @@ def translate_heuristic(query: str) -> Optional[str]:
     if not combined:
         return None
     return " ".join(combined)
+
+
+def cross_lang_query(query: str, primary_lang: str = "") -> tuple[Optional[str], str]:
+    """跨语言回退：构造补搜查询与引擎组合。
+
+    规则：
+      - 主语言为英文/拉丁且无非拉丁字符 → 无需跨语言回退，返回 (None, "")。
+      - 含非拉丁书写系统（或主语言为非拉丁）→ 返回 (query, 通用源组合)，
+        用原文在 duckduckgo/anysearch/wikipedia 补搜（无需真翻译）。
+
+    返回 (补搜查询, 引擎列表逗号串)；无需回退时返回 (None, "")。
+    """
+    if not query:
+        return None, ""
+    non_latin = _is_non_latin_script(query)
+    if primary_lang:
+        # 显式主语言：拉丁系且无非拉丁字符才跳过
+        if primary_lang in ("en", "latin") and not non_latin:
+            return None, ""
+        # mixed 纯拉丁也跳过；mixed 含汉字/假名等仍回退
+        if primary_lang == "mixed" and not non_latin:
+            return None, ""
+    elif not non_latin:
+        return None, ""
+    return query, ",".join(_CROSS_LANG_ENGINES)
 
 
 # ── 计划生成 ──────────────────────────────────────────────────────────────────
@@ -237,8 +276,17 @@ def build_recovery_plan(query: str, tried_engines: list[str],
             level="L3", strategy="switch_engine", query=relaxed or query,
             engines=alt, reason=f"切换未试引擎: {','.join(alt)}"))
 
-    # L4 中英互译（fast 禁止）
+    # L4 跨语言回退（fast 禁止）
     if mode != "fast":
+        # 非拉丁书写系统主语言 → 用英文通用源补搜（duckduckgo/anysearch/wikipedia）。
+        # 补搜用原 query 即可（通用源对多语言查询有覆盖），不需要真翻译。
+        cross_q, cross_engines = cross_lang_query(query)
+        if cross_engines:
+            steps.append(RecoveryStep(
+                level="L4", strategy="cross_lang",
+                query=cross_q or query, engines=cross_engines.split(","),
+                reason="跨语言回退：非英文主语言用通用源补搜"))
+        # 中英互译启发式（有英文 token / 同义表映射时）
         trans = translate_heuristic(query)
         if trans and trans.lower() != query.lower():
             trans_engines = pick_alternative_engines(

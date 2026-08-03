@@ -28,6 +28,15 @@ if not logger.handlers:
     logger.addHandler(logging.StreamHandler(sys.stderr))
 
 
+def _lang_param(param: str, query: str) -> str:
+    """按查询主语言返回引擎语言参数；表在 lang_detect 单真源维护。"""
+    try:
+        from lang_detect import engine_lang_param
+        return engine_lang_param(param, query)
+    except ImportError:
+        return ""
+
+
 def safe_search(fn: Callable) -> Callable:
     """统一错误处理装饰器。所有异常返回 []，细粒度异常先于通用 Exception 匹配。"""
     @functools.wraps(fn)
@@ -218,6 +227,9 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
             if fmt:
                 parts.append(f"format={up.quote(str(fmt))}")
             for k, v in extra_params.items():
+                # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang
+                if k in ("setlang", "hl", "lang", "uselang"):
+                    v = _lang_param(k, query) or v
                 parts.append(f"{k}={up.quote(_resolve(str(v), query, n))}")
             if parts:
                 separator = "&" if "?" in resolved_url else "?"
@@ -368,6 +380,10 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
         separator = "&" if "?" in resolved_url else "?"
         full_url = f"{resolved_url}{separator}{query_param}={up.quote(query)}"
         for k, v in extra_params.items():
+            # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang，
+            # 让 local_bing/local_google 等对非中文查询返回对应语言结果。
+            if k in ("setlang", "hl", "lang", "uselang"):
+                v = _lang_param(k, query) or v
             full_url += f"&{k}={up.quote(_resolve(str(v), query, n))}"
         try:
             req = urllib.request.Request(full_url, headers={k: _resolve(v, query, n) for k, v in headers.items()})

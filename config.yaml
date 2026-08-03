@@ -1681,6 +1681,8 @@ engines:
     cost_unit: free
     url: https://yandex.com/search/
     query_param: text
+    extra_params:
+      lang: ru  # 动态覆盖：engines_base 按查询主语言改写（ja/ko/en/...）
     timeout: 10
   local_startpage:
     type: html
