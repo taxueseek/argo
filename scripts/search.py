@@ -29,7 +29,7 @@ sys.path.insert(0, SCRIPT_DIR)
 from cache import SearchCache
 from route import route_query
 from engines import search as engine_search, available_engines
-from config import get_execution_config, get_cost_factor
+from config import get_execution_config, get_cost_factor, get_engines
 
 
 # ── 查询改写辅助 ────────────────────────────────────────────────────────────────
@@ -485,7 +485,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     exclude_terms: list[str] = []
     retrieval_query = query
     try:
-        from query_understanding import understand
+        from query_understanding import _understand_cached as understand
         qu = understand(query)
         exclude_terms = qu.exclude_terms
         # 仅当去否定片段后仍有实义内容时才替换检索词，避免空检索
@@ -549,18 +549,42 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     exec_cfg = get_execution_config()
     retry_count = exec_cfg.get("retry_count", 0)
 
-    def _exec_engine(eng: str, retries: int = retry_count) -> list[dict[str, Any]]:
+    # 慢源禁重试：timeout ≥ 8s 的引擎超时即放弃，避免「10s×3 次=30s」线性放大。
+    # 超时本质上是源端慢/网络抖，重试不改变结果，只放大尾延迟；快速失败
+    # （连接错/4xx）保留重试，重试成本低。
+    try:
+        _engine_specs = get_engines()
+    except Exception:
+        _engine_specs = {}
+
+    def _engine_retries(eng: str) -> int:
+        spec = (_engine_specs or {}).get(eng) or {}
+        eng_timeout = None
+        if isinstance(spec, dict):
+            t = spec.get("timeout")
+            if isinstance(t, (int, float)) and t > 0:
+                eng_timeout = float(t)
+        if eng_timeout is not None and eng_timeout >= 8.0:
+            return 0
+        return retry_count
+
+    def _exec_engine(eng: str, retries: int | None = None,
+                     eff_timeout: float | None = None) -> list[dict[str, Any]]:
         # P0-001：用 retrieval_query（clean_query）检索
+        if retries is None:
+            retries = _engine_retries(eng)
+        to = eff_timeout if eff_timeout is not None else timeout
         last_result: list[dict[str, Any]] = []
         for _attempt in range(retries + 1):
             last_result = engine_search(
-                retrieval_query, eng, n=max_results, timeout=timeout, depth=depth, mode=mode,
+                retrieval_query, eng, n=max_results, timeout=to, depth=depth, mode=mode,
             )
             if last_result and any("error" not in r for r in last_result):
                 return last_result
-        if depth != "balanced":
+        # 慢源（retries=0，超时即弃）不再用 balanced 补跑，避免超时场景双倍耗时
+        if retries > 0 and depth != "balanced":
             last_result = engine_search(
-                retrieval_query, eng, n=max_results, timeout=timeout, depth="balanced", mode=mode,
+                retrieval_query, eng, n=max_results, timeout=to, depth="balanced", mode=mode,
             )
         return last_result
 
@@ -601,8 +625,21 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 return eng, eng_hit, outcome, lat
 
         # 网络调用
+        # 答案型域（early_min 存在，1 条快照即可交付）的慢源收紧超时：
+        # FRED/Eurostat 这类 timeout=10s 的源一旦挂掉就阻塞整条串行路径，
+        # 而快源（worldbank 等 ~150ms）已能交付答案。慢源 5s 内没回就让位。
+        eff_to: float | None = None
+        if early_min is not None:
+            spec = (_engine_specs or {}).get(eng) or {}
+            eng_to = None
+            if isinstance(spec, dict):
+                t = spec.get("timeout")
+                if isinstance(t, (int, float)) and t > 0:
+                    eng_to = float(t)
+            if eng_to is not None and eng_to >= 8.0:
+                eff_to = min(float(timeout), 5.0)
         try:
-            res = _exec_engine(eng)
+            res = _exec_engine(eng, eff_timeout=eff_to)
         except Exception as e:
             res = [{"error": str(e), "source": eng}]
         lat = int((time.time() - t_eng) * 1000)

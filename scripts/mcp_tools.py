@@ -174,26 +174,6 @@ TOOLS = [
         }
     },
     {
-        "name": "argo_extract",
-        "description": "结构化数据提取：从页面 HTML 中抽取表格、<meta> 元数据、OpenGraph、JSON-LD 等结构化信息。适用于价格表抽取、SEO 元数据分析、富媒体结构化数据解析等场景。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "目标页面 URL"
-                },
-                "mode": {
-                    "type": "string",
-                    "enum": ["tables", "metadata", "jsonld", "all"],
-                    "description": "提取模式（默认 all）",
-                    "default": "all"
-                }
-            },
-            "required": ["url"]
-        }
-    },
-    {
         "name": "argo_fetch",
         "description": "智能页面抓取：HTTP 优先 + 反检测浏览器降级（Patchright/Cloudflare 绕过）。自动检测 CF 挑战/JS shell 并升级浏览器。支持 BM25 聚焦提取（focus 参数省 80%+ token）、页面交互（actions）、内容质量信号（content_ok/page_type/quality_score）。适用于反爬网站、JS 渲染页、Cloudflare 保护页。",
         "inputSchema": {
@@ -202,6 +182,18 @@ TOOLS = [
                 "url": {
                     "type": "string",
                     "description": "目标 URL"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["text", "extract"],
+                    "description": "抓取模式：text=正文/聚焦文本（默认），extract=结构化提取（表格/meta/JSON-LD）",
+                    "default": "text"
+                },
+                "extract_mode": {
+                    "type": "string",
+                    "enum": ["tables", "metadata", "jsonld", "all"],
+                    "description": "mode=extract 时的提取子模式（默认 all）",
+                    "default": "all"
                 },
                 "focus": {
                     "type": "string",
@@ -278,11 +270,17 @@ TOOLS = [
     # ── 社交平台工具 ─────────────────────────────────────────────────────────
     {
         "name": "argo_social_search",
-        "description": "社交平台搜索：跨平台搜索 Twitter/X、Reddit、小红书、B站、微博等社交媒体内容。返回 UGC 帖子、评论、互动数据（点赞/转发/收藏）。适用于舆情分析、热门话题、用户讨论等场景。",
+        "description": "社交平台搜索：跨平台搜索 Twitter/X、Reddit、小红书、B站、微博等 UGC 内容，返回帖子与互动数据。mode=sentiment 输出舆情聚合（互动汇总+平台分布+代表性帖子）。适用于舆情分析、热门话题、产品口碑、竞品用户反馈等场景。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词"},
+                "mode": {
+                    "type": "string",
+                    "enum": ["text", "sentiment"],
+                    "description": "text=帖子列表（默认），sentiment=舆情聚合分析",
+                    "default": "text"
+                },
                 "platforms": {
                     "type": "string",
                     "description": "平台列表，逗号分隔（默认 twitter,reddit,xiaohongshu）。可选：twitter,reddit,xiaohongshu,bilibili,weibo",
@@ -295,87 +293,6 @@ TOOLS = [
                     "minimum": 1,
                     "maximum": 20
                 }
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "argo_social_sentiment",
-        "description": "社交舆情分析：跨平台 UGC 情绪与讨论分析。聚合多平台帖子，输出互动数据汇总、高频话题、代表性内容。适用于产品口碑、事件舆情、竞品用户反馈等场景。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "研究查询"},
-                "platforms": {
-                    "type": "string",
-                    "description": "平台列表，逗号分隔（默认 twitter,reddit,xiaohongshu）",
-                    "default": "twitter,reddit,xiaohongshu"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "每个平台最大结果数（默认 5）",
-                    "default": 5
-                }
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "argo_twitter_search",
-        "description": "Twitter/X 搜索：搜索推文、话题、用户。支持 nitter 公开实例（零认证）和 twitter CLI。返回推文内容、互动数据（点赞/转发/回复）、作者信息。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "搜索查询词"},
-                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "argo_reddit_search",
-        "description": "Reddit 搜索：搜索帖子、subreddit、评论。使用 Reddit JSON API（无需认证）。返回帖子标题、内容、点赞数、评论数、subreddit 信息。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "搜索查询词"},
-                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "argo_xiaohongshu_search",
-        "description": "小红书搜索：搜索笔记、话题、用户。需先通过 xhs login 登录。返回笔记标题、描述、点赞/收藏/评论数、作者信息。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "搜索查询词"},
-                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "argo_bilibili_search",
-        "description": "B站搜索：搜索视频、UP主、弹幕。使用 B站公开搜索 API（无需认证）。返回视频标题、描述、播放量、弹幕数、点赞数、UP主信息。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "搜索查询词"},
-                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "argo_weibo_search",
-        "description": "微博搜索：搜索帖子、话题、热门内容。使用微博公开搜索 API（无需认证）。返回帖子内容、点赞/转发/评论数、作者信息。",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "搜索查询词"},
-                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5}
             },
             "required": ["query"]
         }

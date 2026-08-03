@@ -392,8 +392,110 @@ def identify_gaps(sub_results: list[dict[str, Any]], query: str) -> list[str]:
 
 # ── 综合报告 ──────────────────────────────────────────────────────────────────
 
+# 覆盖度阈值（COVERED/PARTIAL/NOT_COVERED 三态）
+_COVERAGE_OK_MIN = 3      # 子查询结果数 ≥3 → COVERED
+_COVERAGE_PARTIAL_MIN = 1 # 结果数 ≥1 → PARTIAL，否则 NOT_COVERED
+
+
+def _coverage_status(sr: dict[str, Any]) -> str:
+    """子查询覆盖状态：COVERED / PARTIAL / NOT_COVERED。
+
+      - 结果 ≥3 且来源引擎 ≥2 → COVERED
+      - 有结果但少 / 单来源 → PARTIAL
+      - 无结果 → NOT_COVERED
+    """
+    results = sr.get("results") or []
+    n = len(results)
+    if n >= _COVERAGE_OK_MIN:
+        return "COVERED"
+    if n >= _COVERAGE_PARTIAL_MIN:
+        return "PARTIAL"
+    return "NOT_COVERED"
+
+
+def _evidence_tier(source: str, source_grades: dict[str, Any] | None) -> str:
+    """按来源归属证据强度分层。
+
+    source_grades 各层的值可能是 list[str]（引擎名）或 list[str]（来源类型名），
+    匹配失败时按 source 关键词粗判，最终兜底 unknown。
+    """
+    if not source:
+        return "unknown"
+    grades = source_grades or {}
+    # 收集各层的关键词（引擎名 + 描述性来源类型）
+    for tier, items in (("primary", grades.get("primary") or grades.get("一手") or []),
+                        ("secondary", grades.get("secondary") or grades.get("权威") or []),
+                        ("tertiary", grades.get("tertiary") or grades.get("参考") or [])):
+        if not isinstance(items, list):
+            continue
+        for it in items:
+            if not isinstance(it, str):
+                continue
+            if source == it or source.startswith(it) or it in source:
+                return tier
+    # 关键词粗判（引擎名后缀匹配）
+    s = source.lower()
+    if any(k in s for k in ("arxiv", "openalex", "crossref", "semantic_scholar",
+                            "pubmed", "europepmc", "github", "cninfo", "fred",
+                            "worldbank", "nbs_stats", "sina_quote", "tencent_quote")):
+        return "primary"
+    if any(k in s for k in ("zhihu", "eastmoney", "byted", "bocha", "octen",
+                            "cls_telegraph", "em_global_news", "jin10")):
+        return "secondary"
+    if any(k in s for k in ("twitter", "reddit", "weibo", "bilibili", "xiaohongshu",
+                            "douban", "v2ex", "hackernews", "local_sogou", "local_baidu")):
+        return "tertiary"
+    return "unknown"
+
+
+def _build_verification_records(sub_results: list[dict[str, Any]],
+                                source_grades: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """验证记录表（Claim | 来源 | 核验方法 | 结果）。
+
+    对每个子查询 top1 结果生成一条核验记录：
+      - claim：子查询意图对应的主张（snippet 前 120 字）
+      - source / url：可追溯来源
+      - verification_method：证据强度 + 是否多源共识 + 是否含数字
+      - result：verifiable（有来源+可吸收内容） / unverifiable（无来源）
+    """
+    records = []
+    for sr in sub_results:
+        results = sr.get("results") or []
+        if not results:
+            records.append({
+                "claim": sr.get("intent", ""),
+                "evidence_tier": "unknown",
+                "verification_method": "no_results",
+                "result": "unverifiable",
+                "reason": "no_results",
+            })
+            continue
+        best = results[0]
+        url = best.get("url") or ""
+        source = best.get("source") or ""
+        snippet = (best.get("snippet") or best.get("title") or "")[:120]
+        tier = _evidence_tier(source, source_grades)
+        # 核验方法：证据强度 + 内容特征
+        method_parts = [f"evidence_tier={tier}"]
+        if len(results) >= 2:
+            method_parts.append("multi_source")
+        has_num = any(c.isdigit() for c in (snippet or ""))
+        if has_num:
+            method_parts.append("has_numbers")
+        records.append({
+            "claim": snippet or best.get("title") or sr.get("intent", ""),
+            "source": source,
+            "url": url,
+            "evidence_tier": tier,
+            "verification_method": "+".join(method_parts),
+            "result": "verifiable" if url else "unverifiable",
+        })
+    return records
+
+
 def synthesize_report(query: str, collection: dict[str, Any],
-                      gaps: list[str]) -> dict[str, Any]:
+                      gaps: list[str],
+                      source_grades: dict[str, Any] | None = None) -> dict[str, Any]:
     """生成综合研究报告。"""
     merged = collection["merged_results"]
     sub_results = collection["sub_results"]
@@ -466,6 +568,35 @@ def synthesize_report(query: str, collection: dict[str, Any],
         all_results.extend(sr["results"])
     cross_refs = detect_cross_references(all_results)
 
+    # 维度覆盖地图（COVERED/PARTIAL/NOT_COVERED）
+    coverage_map = []
+    for sr in sub_results:
+        results = sr.get("results") or []
+        engines = {r.get("source") for r in results if r.get("source")}
+        coverage_map.append({
+            "dimension": sr.get("intent", ""),
+            "sub_query": sr.get("sub_query", ""),
+            "status": _coverage_status(sr),
+            "result_count": len(results),
+            "engine_count": len(engines),
+        })
+
+    # 盲区（未覆盖维度 + 单源维度显式化）
+    blind_spots = [
+        {"dimension": cm["dimension"], "reason": "无结果"}
+        for cm in coverage_map if cm["status"] == "NOT_COVERED"
+    ]
+    blind_spots += [
+        {"dimension": cm["dimension"], "reason": "单来源覆盖"}
+        for cm in coverage_map
+        if cm["status"] == "PARTIAL" and cm["engine_count"] <= 1
+    ]
+    if not blind_spots and coverage_map:
+        blind_spots.append({"dimension": "全局", "reason": "无显式未覆盖维度"})
+
+    # 验证记录表（Claim | 来源 | 核验方法 | 结果）
+    verification_records = _build_verification_records(sub_results, source_grades)
+
     return {
         "query": query,
         "key_findings": key_findings,
@@ -475,6 +606,9 @@ def synthesize_report(query: str, collection: dict[str, Any],
         "citations": citations,
         "sources": sources,  # 与 search sources[] 对齐
         "cross_references": cross_refs,
+        "coverage_map": coverage_map,
+        "verification_records": verification_records,
+        "blind_spots": blind_spots,
         "gaps": gaps,
         "elapsed_ms": collection["elapsed_ms"],
         "sub_query_count": len(sub_results),
@@ -553,8 +687,9 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
     # 4. 知识缺口
     gaps = identify_gaps(collection["sub_results"], query)
 
-    # 5. 综合报告
-    report = synthesize_report(query, collection, gaps)
+    # 5. 综合报告（source_grades 供证据强度分层 / 验证记录表）
+    source_grades = (profile or {}).get("source_grades") if profile else None
+    report = synthesize_report(query, collection, gaps, source_grades=source_grades)
 
     report["execution_tier"] = "deep_research"
     report["requires_confirmation"] = False
@@ -628,15 +763,21 @@ def social_sentiment_research(query: str, platforms: list[str] | None = None,
     engines_used: set[str] = set()
     t0 = time.time()
 
-    for platform in platforms:
+    def _one(platform: str) -> tuple[str, list[dict], set[str]]:
         try:
             result = super_search(query, engine=platform, n=max_results, mode="fast")
-            results = result.get("results", [])
+            return platform, result.get("results", []), set(result.get("engines_used", []))
+        except Exception:
+            return platform, [], set()
+
+    # 并行抓取各平台（串行时 3 平台 × 秒级延迟累积；并行取最慢平台耗时）
+    with ThreadPoolExecutor(max_workers=min(len(platforms), 4)) as ex:
+        futures = {ex.submit(_one, p): p for p in platforms}
+        for fut in as_completed(futures, timeout=90):
+            platform, results, used = fut.result()
             platform_results[platform] = results
             all_results.extend(results)
-            engines_used.update(result.get("engines_used", []))
-        except Exception:
-            platform_results[platform] = []
+            engines_used.update(used)
 
     # 互动数据聚合
     engagement_totals = {"likes": 0, "comments": 0, "shares": 0, "views": 0}
@@ -678,6 +819,36 @@ def social_sentiment_research(query: str, platforms: list[str] | None = None,
         ],
         "engines_used": sorted(engines_used),
         "elapsed_ms": elapsed,
+    }
+
+
+def aggregate_social_sentiment(query: str, platforms: list[str],
+                               platform_results: dict[str, list]) -> dict[str, Any]:
+    """社交舆情聚合（MCP argo_social_search mode=sentiment 用）。
+
+    输入为按平台分组的已抓取帖子（social_engines 输出，含 social_meta），
+    聚合互动数据汇总与平台分布，限流返回代表性帖子。原为 MCP 分发层的
+    内联逻辑，下沉到本模块避免逻辑放错层。
+    """
+    all_posts: list = []
+    for p in platforms:
+        all_posts.extend(platform_results.get(p) or [])
+
+    engagement_totals = {"likes": 0, "comments": 0, "reposts": 0, "shares": 0}
+    for post in all_posts:
+        meta = post.get("social_meta", {}) if isinstance(post, dict) else {}
+        engagement_totals["likes"] += meta.get("likes", 0) or meta.get("like_count", 0) or 0
+        engagement_totals["comments"] += meta.get("comments", 0) or 0
+        engagement_totals["reposts"] += meta.get("reposts", 0) or 0
+        engagement_totals["shares"] += meta.get("shares", 0) or 0
+
+    return {
+        "query": query,
+        "platforms": platforms,
+        "platform_breakdown": {p: len(platform_results.get(p) or []) for p in platforms},
+        "total_posts": len(all_posts),
+        "engagement_totals": engagement_totals,
+        "posts": all_posts[:30],  # 限流
     }
 
 

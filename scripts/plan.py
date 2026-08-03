@@ -188,7 +188,7 @@ def build_plan(
                 "action": "fetch_or_archive",
                 "url": target,
                 "canonical_url": canonicalize_url(target),
-                "suggested_tools": ["argo_fetch", "argo_pdf", "argo_extract"],
+                "suggested_tools": ["argo_fetch", "argo_pdf"],
             },
             "route": None,
             "steps": [

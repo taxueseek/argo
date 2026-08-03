@@ -2,13 +2,8 @@
 """
 topic_research_profiles.py — 选题研究配置文件
 
-参照 zhihu-creator 的 ENTITY_DOMAIN_MAP 思路，为常见选题类型预配置
-引擎组合、查询模板、分析深度、证据权重、质量门禁与报告结构。
-
-专业域吸收（只内化方法，不外挂整 skill）：
-  - super-research：文献综述 / 假设检验等模式的问题框架与交付结构
-  - rw-research-router：阶段诊断、证据纪律、不编造 DOI/论文
-  - invest-analyst：来源级别、盲区、市场疑问、风险清单、免责
+为常见选题类型预配置引擎组合、查询模板、分析深度、证据权重、
+质量门禁与报告结构。
 
 用法：
     argo research "Claude Opus 5" --topic ai
@@ -163,7 +158,7 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
         ],
     },
 
-    # ── 金融深度（IC/事件/共识风格，吸收 invest-analyst）────────────────
+    # ── 金融深度（IC/事件/共识风格）─────────────────────────────────────
     "finance": {
         "name": "金融深度研究",
         "description": "IC 风格深度：市场疑问、证据层级、共识/分歧、风险清单（非投资建议）",
@@ -223,7 +218,7 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
         ],
     },
 
-    # ── 科研 / 学术（吸收 super-research + rw-research-router）────────────
+    # ── 科研 / 学术 ─────────────────────────────────────────────────────
     "academic": {
         "name": "科研 / 学术",
         "description": "文献发现、综述框架、证据纪律；不编造 DOI/论文",
@@ -275,7 +270,7 @@ TOPIC_PROFILES: dict[str, dict[str, Any]] = {
             "下一步（Next Steps）",
             "相关信源（References）",
         ],
-        # super-research 模式提示（Agent 写作时选用，不强制实验）
+        # 研究模式提示（Agent 写作时选用，不强制实验）
         "research_modes": {
             "literature": ["文献", "literature", "综述", "survey", "related work"],
             "hypothesis": ["假设", "hypothesis", "是否导致", "does x cause"],

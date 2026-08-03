@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """MCP 响应压缩与 research profile 解析（无网络）"""
 import sys
-sys.path.insert(0, "../scripts")
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from mcp_server import (
     _compact_search_result,

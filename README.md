@@ -373,23 +373,20 @@ python3 scripts/search.py "同一查询" --json | \
   python3 scripts/evidence.py "同一查询" --stdin --json
 ```
 
-### MCP 工具一览（16）
+### MCP 工具一览（10）
 
 | 工具 | 用途 |
 |------|------|
 | `argo_search` | 统一搜索 |
-| `argo_research` | 深度研究 |
+| `argo_local_search` | 本地文件搜索（非联网） |
+| `argo_research` | 深度研究（含 social-sentiment 模式） |
 | `argo_evidence` | 可信度评估 |
 | `argo_clarify` | 意图消歧 |
-| `argo_fetch` | 智能抓取 |
+| `argo_fetch` | 智能抓取（mode=extract 结构化提取） |
 | `argo_crawl` | 站点爬取 |
-| `argo_extract` | 结构化提取 |
 | `argo_screenshot` | 页面截图 |
 | `argo_pdf` | PDF 提取 |
-| `argo_social_search` | 多平台社交搜索 |
-| `argo_social_sentiment` | 社交舆情 |
-| `argo_twitter_search` / `argo_reddit_search` | X / Reddit |
-| `argo_xiaohongshu_search` / `argo_bilibili_search` / `argo_weibo_search` | 小红书 / B 站 / 微博 |
+| `argo_social_search` | 多平台社交搜索（mode=sentiment 舆情聚合） |
 
 ---
 

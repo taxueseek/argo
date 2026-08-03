@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """单元测试：topic_research_profiles — 专业域 + 触发词 + 自动推断"""
 import sys
-sys.path.insert(0, '../scripts')
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 from topic_research_profiles import (
     get_profile,

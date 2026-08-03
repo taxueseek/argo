@@ -107,10 +107,70 @@ if not logger.handlers:
     logger.setLevel(logging.WARNING)
     logger.addHandler(logging.StreamHandler(sys.stderr))
 
+
+def _build_local_search_engine(spec: dict[str, Any]) -> Any:
+    """进程内调用 local-search 子技能，避免 subprocess 冷启动（~300-500ms/次）。
+
+    直接 import search_v3.search_engines，复用其智能路由/健康过滤/批量并行，
+    输出与 unified-search 一致的 schema。安全降级：import 失败时回退
+    原 subprocess 调用，保证功能不丢。
+    """
+    import os as _os
+    import subprocess as _subprocess
+
+    cmd_template = spec.get("cmd", [])
+    search_args = spec.get("search_args", [])
+
+    @safe_search
+    def _engine(query: str, n: int = 5, timeout: float = 8, mode: str = "fast", **kwargs) -> list[dict[str, Any]]:
+        # 进程内优先（省 subprocess 冷启动）
+        try:
+            from engines_base import _resolve as _resolve_tpl
+            sub_dir = Path(__file__).resolve().parent.parent / "sub-skills" / "local-search"
+            if str(sub_dir) not in sys.path:
+                sys.path.insert(0, str(sub_dir))
+            import search_v3
+            res = search_v3.search_engines(
+                query, engines=None, n=n, timeout=float(timeout),
+                max_parallel=5, skip_cache=False, mode=mode,
+            )
+            results = res.get("results") or []
+            # 与子进程路径一致：每条带 _engine 标记，source 保持子引擎名
+            for r in results:
+                if isinstance(r, dict) and "error" not in r:
+                    r.setdefault("_engine", r.get("source") or "local_search")
+            if results:
+                return results
+        except Exception:
+            pass  # 进程内失败回退 subprocess
+        # 回退：subprocess 调用（原行为）
+        cmd = _resolve_tpl(cmd_template, query, n, mode=mode)
+        args = _resolve_tpl(search_args, query, n, mode=mode)
+        if not cmd:
+            return []
+        env = _os.environ.copy()
+        env.update(spec.get("env", {}) or {})
+        proc = _subprocess.run(cmd + args, capture_output=True, text=True,
+                               timeout=timeout, env=env)
+        if proc.returncode != 0:
+            return []
+        try:
+            data = json.loads(proc.stdout)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        results = data.get("results") or []
+        for r in results:
+            if isinstance(r, dict) and "error" not in r:
+                r.setdefault("_engine", r.get("source") or "local_search")
+        return results
+    return _engine
+
+
 _BUILDERS = {
     "cli": _build_cli_engine,
     "http": _build_http_engine,
     "html": _build_html_engine,
+    "local_search": _build_local_search_engine,
     "exa": _build_exa_engine,
     "em_miaoxiang": _build_em_miaoxiang_engine,
     "cninfo": _build_cninfo_engine,
@@ -177,6 +237,9 @@ def _load_registry():
     for name, spec in engines.items():
         spec = dict(spec)
         spec["_name"] = name
+        # local_search 走进程内 builder（config 里 type=cli，这里显式路由到专用实现）
+        if name == "local_search":
+            spec["type"] = "local_search"
         builder = _BUILDERS.get(spec.get("type", "cli"))
         if builder:
             registry[name] = builder(spec)

@@ -247,6 +247,28 @@ def understand(query: str) -> QueryUnderstanding:
     )
 
 
+# ── 进程内 memoize ────────────────────────────────────────────────────────────
+# 同一次搜索中 query_rewriter / route.extract_features / execute_search 会各调
+# 一次 understand()，同一查询重复计算纯属浪费。缓存 to_dict() 后再重建
+# dataclass，避免不可哈希对象的 lru_cache 限制。query 即 key，上限 256 条
+# 覆盖热查询复用，不设长 TTL（纯本地正则，成本 <1ms）。
+
+_cache_dict: dict[str, dict[str, Any]] = {}
+_CACHE_MAX = 256
+
+
+def _understand_cached(query: str) -> QueryUnderstanding:
+    """understand 的进程内缓存包装：同一查询只解析一次。"""
+    cached = _cache_dict.get(query)
+    if cached is not None:
+        return QueryUnderstanding(**cached)
+    if len(_cache_dict) >= _CACHE_MAX:
+        _cache_dict.clear()  # 简单清空，避免复杂淘汰逻辑
+    qu = understand(query)
+    _cache_dict[query] = qu.to_dict()
+    return qu
+
+
 # ── CLI 测试 ──────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -131,7 +131,7 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
     understanding = None
     disambig_source = query
     try:
-        from query_understanding import understand
+        from query_understanding import _understand_cached as understand
         understanding = understand(query)
         if understanding.clean_query:
             disambig_source = understanding.clean_query

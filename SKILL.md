@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、16 MCP 工具。入口：install.sh / npx github:taxueseek/argo / mcp_server.py（不依赖 npm 发版）。
+description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、10 MCP 工具（含本地文件搜索 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py（不依赖 npm 发版）。
 version: 2.5.1
 triggers:
   - 搜索
@@ -164,7 +164,7 @@ Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/
 | 能力 | 说明 |
 |------|------|
 | 约 110 搜索源 | `config.yaml` 真源：local_* / 金融行情 / 宏观 / 化学物种 / 社交 / 学术 / 开发者社区 |
-| 16 MCP 工具 | search / research / evidence / clarify / fetch / crawl / extract / screenshot / pdf / social* |
+| 10 MCP 工具 | search / research / evidence / clarify / fetch（含 extract 模式）/ crawl / screenshot / pdf / social_search（含 sentiment 模式）/ local_search（本地文件） |
 | 引擎分层 + combo 预算 | 日常精简、研究放宽（`engine_policy`） |
 | 垂直答案源 | 行情 / 宏观 / 化合物等优先可吸收事实 |
 | 查询改写 | 口语 → 检索友好；**不污染**路由域匹配 |
@@ -534,6 +534,12 @@ python3 scripts/research.py "查询" --json
 
 输出包含：`key_findings`（按子查询分组的关键发现）、`citations`（引用列表）、`gaps`（知识缺口）、`source_distribution`（来源统计）。
 
+**科研方法论增强**：
+- `coverage_map`：各子查询覆盖状态（COVERED / PARTIAL / NOT_COVERED），即维度覆盖地图
+- `verification_records`：claim-to-source 验证记录表（主张 / 来源 / 证据强度 / 核验方法 / 可核验性）
+- `blind_spots`：显式盲区（未覆盖维度 + 单来源维度），不把「没搜到」写成「不存在」
+- 证据强度分层：primary / secondary / tertiary / unknown（对照 topic profile 的 source_grades）
+
 #### evidence — 可信度评估（v2.2 Selection×Absorption）
 
 ```bash
@@ -576,7 +582,7 @@ python3 scripts/research.py "AI Agent 产品口碑" --mode social-sentiment --js
 
 ### MCP 服务
 
-十六个工具同时暴露为 MCP server（JSON-RPC over stdio），可被 Grok/Claude/Kimi 等客户端直接调用：
+十个工具同时暴露为 MCP server（JSON-RPC over stdio），可被 Grok/Claude/Kimi 等客户端直接调用：
 
 ```bash
 # 启动 MCP 服务
@@ -586,7 +592,7 @@ python3 scripts/mcp_server.py
 python3 scripts/mcp_server.py --test
 ```
 
-MCP 工具名：`argo_search`、`argo_research`（含 social-sentiment 模式）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_extract`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_social_sentiment`、`argo_twitter_search`、`argo_reddit_search`、`argo_xiaohongshu_search`、`argo_bilibili_search`、`argo_weibo_search`。
+MCP 工具名：`argo_search`、`argo_local_search`（本地文件/记录搜索，非联网）、`argo_research`（含 social-sentiment 模式）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`（mode=extract 结构化提取）、`argo_screenshot`、`argo_pdf`、`argo_social_search`（mode=sentiment 舆情聚合）。
 
 ### 成本感知路由公式
 
@@ -663,7 +669,7 @@ argo-v2/
 │   ├── content_signals.py # [v2.0] 内容质量信号系统
 │   ├── focus_extract.py   # [v2.0] BM25 聚焦提取
 │   ├── pdf_extract.py     # [v2.0] PDF 结构化提取
-│   ├── mcp_server.py      # MCP 服务层（14 工具）
+│   ├── mcp_server.py      # MCP 服务层（10 工具）
 │   └── social_engines/    # [v2.1] 社交平台引擎
 │       ├── twitter_engine.py
 │       ├── reddit_engine.py

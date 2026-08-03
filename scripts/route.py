@@ -106,7 +106,7 @@ def extract_features(query: str) -> dict[str, Any]:
         "intents": [],
     }
     try:
-        from query_understanding import understand
+        from query_understanding import _understand_cached as understand
         qu = understand(query)
         features["has_geo"] = bool(qu.geo)
         features["has_negation"] = bool(qu.exclude_terms)

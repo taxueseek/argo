@@ -565,8 +565,9 @@ domains:
   name: code_search
   parallel: true
   patterns:
-  - (?i)(github|source code|代码|源码|开源|函数|API|实现|用法|example|snippet)
-  - (?i)\b(repo|repository|library|package|npm|pip|cargo)\b
+  - (?i)(github|source code|代码|源码|开源|函数|实现|用法|snippet)
+  - (?i)\b(API|api)\b|\b(repo|repository|library|package|npm|pip|cargo)\b
+  - (?i)\b(example|examples|example\s+code)\b
   primary: github
 - desc: 网络梗/流行语/俚语/黑话
   engines_combo:
@@ -626,13 +627,15 @@ domains:
   name: english_tech
   parallel: true
   patterns:
-  - (?i)(async|performance|best practices|tutorial|guide|how to|internals|API|SDK|framework)
+  - (?i)(async|performance|best practices|tutorial|guide|how to|internals|SDK|framework)
+  - (?i)\b(API|api)\b
   - (?i)\b(Rust|Python|JavaScript|TypeScript|React|Vue|Node|Docker|Kubernetes|asyncio)\b
   primary: octen
 - desc: 中文通用搜索
   engines_combo:
   - bocha
   - byted
+  - zhihu_global
   - wechat_sogou
   - octen
   fallback: byted
