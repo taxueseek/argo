@@ -476,8 +476,7 @@ argo/
 │   ├── install.sh           # 一键安装
 │   ├── link_source.py       # Skill 符号链接
 │   ├── search.py / route.py / cache.py / evidence.py …
-│   ├── mcp_server.py / mcp_tools.py / mcp_payload.py
-│   └── engines*.py          # 引擎实现（按域拆分）
+│   ├── mcp_server.py / engines*.py   # MCP 服务层与引擎实现（按域拆分）
 ├── sub-skills/local-search/ # 本地零成本引擎
 ├── tests/
 └── docs/

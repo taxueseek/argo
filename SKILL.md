@@ -668,7 +668,6 @@ argo-v2/
 │   ├── crawl.py          # [新] 站点爬取工具
 │   ├── extract.py         # 结构化提取工具
 │   ├── fetch.py           # 页面抓取工具（urllib）
-│   ├── fetch_v2.py        # [v2.0] 智能抓取（HTTP + Hound 浏览器降级）
 │   ├── content_signals.py # [v2.0] 内容质量信号系统
 │   ├── focus_extract.py   # [v2.0] BM25 聚焦提取
 │   ├── pdf_extract.py     # [v2.0] PDF 结构化提取

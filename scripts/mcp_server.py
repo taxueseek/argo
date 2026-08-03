@@ -433,8 +433,14 @@ def _resolve_research_profile(arguments: dict[str, Any]) -> tuple[dict[str, Any]
     return None, None
 
 
-def _search_social_platforms(platforms: list[str], query: str, n: int) -> tuple[dict[str, list], list[str], list[str]]:
-    """并行抓取多社交平台（MCP 热路径）。"""
+def _search_social_platforms(
+    platforms: list[str], query: str, n: int, timeout: float = 20.0,
+) -> tuple[dict[str, list], list[str], list[str]]:
+    """并行抓取多社交平台（MCP 热路径）。
+
+    timeout 秒后放弃未完成平台、返回已完成部分（不抛错），
+    避免单平台卡死拖垮整次搜索；超时平台以空结果 + errors 提示可观测。
+    """
     platform_results: dict[str, list] = {}
     errors: list[str] = []
     engines_used: list[str] = []
@@ -451,15 +457,25 @@ def _search_social_platforms(platforms: list[str], query: str, n: int) -> tuple[
             return platform, [], f"{platform}: {str(e)[:100]}"
 
     workers = min(max(len(platforms), 1), 4)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(_one, p) for p in platforms]
-        for fut in concurrent.futures.as_completed(futs):
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+    futs = {ex.submit(_one, p): p for p in platforms}
+    try:
+        for fut in concurrent.futures.as_completed(futs, timeout=timeout):
             platform, results, err = fut.result()
             platform_results[platform] = results
             if err:
                 errors.append(err)
             elif results is not None:
                 engines_used.append(platform)
+    except concurrent.futures.TimeoutError:
+        for fut, platform in futs.items():
+            if not fut.done():
+                fut.cancel()
+                platform_results[platform] = []
+                errors.append(f"{platform}: timeout (>{timeout}s)")
+    finally:
+        # 不等待未完成平台，让卡住的线程自生自灭（各引擎内部有 10-15s 兜底超时）
+        ex.shutdown(wait=False, cancel_futures=True)
     return platform_results, engines_used, errors
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""P0/P1 回归测试：契约、正确性、缓存边界（全部无网络，mock 掉 IO）
+"""P0/P1/P2 回归测试：契约、正确性、缓存边界、结构（全部无网络，mock 掉 IO）
 
 覆盖：
   - 域名归一化（www 前缀只剥一次，不损坏域名）
@@ -10,6 +10,8 @@
   - pdf_extract 页码解析
   - MCP schema 契约：单真源、无死 actions 参数
   - argo_local_search 零结果契约（count=0 而非报错）
+  - P2：_understand_cached lru_cache 语义、死模块 fetch_v2/mcp_payload 已移除、
+    社交并行搜索超时返回已完成部分
 """
 import json
 import sys
@@ -174,3 +176,75 @@ def test_local_search_zero_results_contract(monkeypatch):
     assert payload["count"] == 0
     assert payload["results"] == []
     assert payload["errors"], "零结果应以 errors 提示，而非静默成功"
+
+
+# ── P2 结构：lru_cache / 死模块 / 社交超时 ───────────────────────────────────
+
+def test_understand_cached_lru_semantics():
+    """_understand_cached 改名 lru_cache 后行为不变：命中即重建、结果一致。"""
+    from query_understanding import _understand_cached, _understand_cached_dict
+    from query_understanding import understand as raw_understand
+
+    _understand_cached_dict.cache_clear()
+    q = "除了百度的搜索引擎"
+    a = _understand_cached(q)
+    b = _understand_cached(q)
+    assert a.exclude_terms == ["百度"]
+    assert a.to_dict() == b.to_dict() == raw_understand(q).to_dict()
+    info = _understand_cached_dict.cache_info()
+    assert info.hits >= 1, "重复查询应命中缓存"
+    assert info.misses == 1 and info.currsize == 1, info
+
+
+def test_dead_modules_fetch_v2_mcp_payload_removed():
+    """fetch_v2.py / mcp_payload.py 已删除，且全仓库无任何代码引用。"""
+    import re
+
+    scripts = Path(__file__).resolve().parent.parent / "scripts"
+    for dead in ("fetch_v2.py", "mcp_payload.py"):
+        assert not (scripts / dead).exists(), f"{dead} 应为死模块被移除"
+    # 只查代码引用（import / 引号字符串），不查 docstring 里的历史说明文字
+    code_ref = re.compile(
+        r"\b(?:from|import)\s+(?:fetch_v2|mcp_payload)\b"
+        r'|["\'](?:fetch_v2|mcp_payload)["\']',
+    )
+    for path in scripts.rglob("*.py"):
+        if "social_engines" in str(path):
+            continue
+        text = path.read_text(encoding="utf-8")
+        hit = code_ref.search(text)
+        assert hit is None, f"{path} 仍引用已删除模块: {hit.group(0)}"
+
+
+def test_social_search_timeout_returns_partial(monkeypatch):
+    """社交并行搜索超时：返回已完成平台 + 超时平台空结果 + errors，不抛错。"""
+    import time
+    import types
+
+    import mcp_server
+
+    def fast_search(query, n=None):
+        time.sleep(0.1)
+        return [{"title": "ok", "url": "http://x", "source": "fast"}]
+
+    def slow_search(query, n=None):
+        time.sleep(3)
+        return [{"title": "slow", "url": "http://y", "source": "slow"}]
+
+    fast_mod = types.ModuleType("social_engines.fast_engine")
+    fast_mod.search = fast_search
+    slow_mod = types.ModuleType("social_engines.slow_engine")
+    slow_mod.search = slow_search
+    monkeypatch.setitem(mcp_server._module_cache, "social_engines.fast_engine", fast_mod)
+    monkeypatch.setitem(mcp_server._module_cache, "social_engines.slow_engine", slow_mod)
+
+    t0 = time.monotonic()
+    results, used, errors = mcp_server._search_social_platforms(
+        ["fast", "slow"], "q", 5, timeout=1.0,
+    )
+    elapsed = time.monotonic() - t0
+    assert results["fast"], "已完成平台应返回结果"
+    assert results["slow"] == [], "超时平台应为空结果"
+    assert used == ["fast"], "超时平台不应计入 engines_used"
+    assert any("timeout" in e for e in errors), errors
+    assert elapsed < 2.0, f"应在超时后立即返回，实际 {elapsed:.2f}s"

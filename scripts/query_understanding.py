@@ -27,6 +27,7 @@ query_understanding.py — 查询理解中间层（P0-001）
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass, field, asdict
 from typing import Any
@@ -249,24 +250,19 @@ def understand(query: str) -> QueryUnderstanding:
 
 # ── 进程内 memoize ────────────────────────────────────────────────────────────
 # 同一次搜索中 query_rewriter / route.extract_features / execute_search 会各调
-# 一次 understand()，同一查询重复计算纯属浪费。缓存 to_dict() 后再重建
-# dataclass，避免不可哈希对象的 lru_cache 限制。query 即 key，上限 256 条
-# 覆盖热查询复用，不设长 TTL（纯本地正则，成本 <1ms）。
+# 一次 understand()，同一查询重复计算纯属浪费。query 即 key，用 lru_cache 做
+# LRU 淘汰（上限 256 条，热查询复用），比满则清空更平滑。缓存 to_dict() 后再
+# 重建 dataclass，避免不可哈希对象的 lru_cache 限制；纯本地正则，不设 TTL。
 
-_cache_dict: dict[str, dict[str, Any]] = {}
-_CACHE_MAX = 256
+@functools.lru_cache(maxsize=256)
+def _understand_cached_dict(query: str) -> dict[str, Any]:
+    """understand(query).to_dict() 的 lru_cache 包装（key 为原始查询词）。"""
+    return understand(query).to_dict()
 
 
 def _understand_cached(query: str) -> QueryUnderstanding:
     """understand 的进程内缓存包装：同一查询只解析一次。"""
-    cached = _cache_dict.get(query)
-    if cached is not None:
-        return QueryUnderstanding(**cached)
-    if len(_cache_dict) >= _CACHE_MAX:
-        _cache_dict.clear()  # 简单清空，避免复杂淘汰逻辑
-    qu = understand(query)
-    _cache_dict[query] = qu.to_dict()
-    return qu
+    return QueryUnderstanding(**_understand_cached_dict(query))
 
 
 # ── CLI 测试 ──────────────────────────────────────────────────────────────────
