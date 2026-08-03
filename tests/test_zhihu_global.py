@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tests/test_zhihu_global.py — 知乎全网搜索引擎接入测试 (v2.5.1)"""
+"""tests/test_zhihu_global.py — 知乎全网搜索引擎接入测试 (v2.6.0)"""
 
 import sys
 import os
@@ -75,20 +75,79 @@ def test_zhihu_global_authority():
     print("✅ zhihu 权威分已添加")
 
 def test_route_zhihu_global():
-    """验证中文通用查询的路由决策可用，且 zhihu_global 作为补充源在组合内。
+    """验证中文通用查询的路由决策可用，且 chinese_general combo 遵守族契约。
 
-    chinese_general 主源为 bocha；zhihu_global 在 combo 中（需密钥，本机已配置）。
-    查询可能被更具体的域（cn_encyclopedia/weather 等）截胡，这属正常分层。
+    chinese_general 配置了 5 个 web_general 源（bocha/byted/zhihu_global/
+    wechat_sogou/octen），family 去重裁到前 2 个（bocha/byted），
+    zhihu_global 作为第三个 web 源被裁掉属契约语义（同族至多 2 个），
+    但仍保留在 engines_fallback 可随时调用，且 site: 语法可精确站内搜索。
+    查询可能被更具体的域（chinese_tech_deep/weather 等）截胡，这属正常分层。
     """
     from route import route_query
     result = route_query('Python 最佳实践')
-    # 主源必须是可执行的（不能是空/未注册）
     assert result.get('engine'), f"路由主源为空: {result}"
     combo = result.get('engines_combo') or []
-    # 若命中 chinese_general 域，combo 应含 zhihu_global 补充源
+    assert combo, f"路由 combo 不应为空: {result}"
     if result.get('domain') == 'chinese_general':
-        assert 'zhihu_global' in combo, f"chinese_general combo 应含 zhihu_global: {combo}"
+        web_count = sum(1 for e in combo if e in
+                        ("bocha", "byted", "zhihu_global", "wechat_sogou", "octen"))
+        assert web_count <= 2, f"chinese_general combo 违反 web 族契约: {combo}"
+        assert 'zhihu_global' in (result.get('engines_fallback') or []), \
+            "zhihu_global 应保留在 engines_fallback 中可随时调用"
     print(f"✅ 中文技术查询路由到: {result.get('domain')} / {result.get('engine')}")
+
+
+def test_parse_site_filter_bare_host():
+    """site: 裸域名 → Filter host== 表达式。"""
+    from engines_builders_cn import _parse_site_filter
+    expr, q = _parse_site_filter("site:zhuanlan.zhihu.com 量子计算")
+    assert expr == 'host=="zhuanlan.zhihu.com"', expr
+    assert q == "量子计算", q
+    print(f"✅ 裸域名: {expr!r} / {q!r}")
+
+
+def test_parse_site_filter_full_url():
+    """site: 完整 URL → 剥离 scheme/路径为裸域名（修复 https 当 host 的边角）。"""
+    from engines_builders_cn import _parse_site_filter
+    expr, q = _parse_site_filter("site:https://blog.csdn.net/xxx/yyy 教程")
+    assert expr == 'host=="blog.csdn.net"', expr
+    assert q == "教程", q
+    print(f"✅ 完整 URL: {expr!r} / {q!r}")
+
+
+def test_parse_site_filter_host_with_port():
+    """host: 带端口写法 → 剥离端口。"""
+    from engines_builders_cn import _parse_site_filter
+    expr, q = _parse_site_filter("host:blog.csdn.net:8080 关键词")
+    assert expr == 'host=="blog.csdn.net"', expr
+    assert q == "关键词", q
+    print(f"✅ 带端口: {expr!r} / {q!r}")
+
+
+def test_parse_site_filter_no_site():
+    """无 site: 语法 → 原样返回。"""
+    from engines_builders_cn import _parse_site_filter
+    expr, q = _parse_site_filter("量子计算 最新进展")
+    assert expr == "" and q == "量子计算 最新进展", (expr, q)
+    print(f"✅ 无站点限定: {q!r}")
+
+
+def test_parse_site_filter_chinese_value_stripped():
+    """site: 后是中文（无效 host）→ 剥离词法片段但不出 Filter。"""
+    from engines_builders_cn import _parse_site_filter
+    expr, q = _parse_site_filter("site:量子计算 是什么")
+    assert expr == "", expr
+    assert q == "量子计算 是什么", q
+    print(f"✅ 中文值剥离: {q!r}")
+
+
+def test_parse_site_filter_first_occurrence_only():
+    """多处 site: → 只取第一处，第二处保留为查询词。"""
+    from engines_builders_cn import _parse_site_filter
+    expr, q = _parse_site_filter("site:a.com site:b.com 查询")
+    assert expr == 'host=="a.com"', expr
+    assert q == "site:b.com 查询", q
+    print(f"✅ 多处 site: {expr!r} / {q!r}")
 
 def test_engine_names():
     """验证 _ENGINE_NAMES 包含 zhihu_global"""
@@ -104,4 +163,10 @@ if __name__ == '__main__':
     test_zhihu_global_authority()
     test_route_zhihu_global()
     test_engine_names()
-    print("\n🎉 全部 zhihu_global 接入测试通过 (v2.5.1)")
+    test_parse_site_filter_bare_host()
+    test_parse_site_filter_full_url()
+    test_parse_site_filter_host_with_port()
+    test_parse_site_filter_no_site()
+    test_parse_site_filter_chinese_value_stripped()
+    test_parse_site_filter_first_occurrence_only()
+    print("\n🎉 全部 zhihu_global 接入测试通过 (v2.6.0)")

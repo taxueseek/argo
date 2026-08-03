@@ -29,6 +29,7 @@ engine_families.py — 搜索源能力族分类（第一性原理重构）
 
 用途：
   - route 层组合时按 family 去重（同族至多 N 个，避免同质源堆叠）
+  - 去重腾出的槽位用互补能力族引擎回填（complement_refill）
   - golden set 断言按 family 而非引擎名（源可替换不破坏测试）
   - engine_status / list-engines 展示按族分组
   - research profile 的 vertical_engines 可按 family 扩展
@@ -230,22 +231,89 @@ def group_by_family(engines: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
 
 
 def dedupe_by_family(engine_list: list[str], max_per_family: int = 2,
-                     spec_lookup: dict[str, dict[str, Any]] | None = None) -> list[str]:
+                     spec_lookup: dict[str, dict[str, Any]] | None = None,
+                     limit_families: frozenset[str] | None = None) -> list[str]:
     """按能力族去重：同族至多保留 max_per_family 个，避免同质源堆叠。
 
     用于 combo 组合后处理：web_general 族有 4 个源时，只留最靠前的 2 个，
     给其他族腾出预算位。保序去重。
+
+    limit_families：仅对这些族应用上限（route 层只收缩 web_general，
+    垂直族保留多源交叉验证）；None 时对所有族去重。
     """
     spec_lookup = spec_lookup or {}
     counts: dict[str, int] = {}
     out: list[str] = []
     for e in engine_list:
         f = family_of(e, spec_lookup.get(e))
+        if limit_families is not None and f not in limit_families:
+            out.append(e)
+            continue
         if counts.get(f, 0) >= max_per_family:
             continue
         counts[f] = counts.get(f, 0) + 1
         out.append(e)
     return out
+
+
+# 互补回填排除的族：产出非「查询相关」内容（热榜列表/策展/归档），
+# 回填通用 combo 只会引入噪声，不放行。
+_REFILL_EXCLUDED_FAMILIES = frozenset({
+    "misc_vertical",
+    "hot_trending",
+    "media_book",
+    "archive",
+})
+
+
+def complement_refill(
+    combo: list[str],
+    *,
+    enabled: set[str] | None = None,
+    spec_lookup: dict[str, dict[str, Any]] | None = None,
+    domain_primary: str | None = None,
+    max_slots: int = 2,
+) -> list[str]:
+    """能力互补回填：为「全 web_general」的 combo 追加互补能力族的启用引擎。
+
+    语义：family 去重的目的是消灭同质源堆叠，若去重后 combo 里已存在垂直族
+    成员，能力多样性已具备，不再追加（尊重域作者配置）。仅当 combo 全部是
+    web_general 时才回填，兑现「给其他族腾出预算位」。
+
+    候选规则（保守，宁缺毋滥）：
+      - 只取 enabled 且不在 combo 中的引擎
+      - 族未在 combo 中出现（能力互补，不重复检索方式）
+      - 排除 _REFILL_EXCLUDED_FAMILIES（热榜/策展/归档等噪声族）
+      - 与域主引擎 coverage 标签至少重叠 1 个（主题相关性的数据信号）；
+        主引擎无 coverage 标签时不回填（无主题信号，不猜测）
+      - 按 config priority 降序，最多 max_slots 个，保序追加
+
+    返回新列表，绝不重排或删减入参 combo。
+    """
+    if not combo:
+        return combo
+    if enabled is None or not spec_lookup:
+        return combo
+    # 已有垂直族成员 → 能力多样性已具备
+    if any(family_of(e, spec_lookup.get(e)) != "web_general" for e in combo):
+        return combo
+    primary_cov = set((spec_lookup.get(domain_primary or "") or {}).get("coverage") or [])
+    if not primary_cov:
+        return combo
+
+    represented = {family_of(e, spec_lookup.get(e)) for e in combo}
+    candidates: list[tuple[int, str]] = []
+    for name in enabled:
+        if name in combo:
+            continue
+        spec = spec_lookup.get(name) or {}
+        fam = family_of(name, spec)
+        if fam in represented or fam in _REFILL_EXCLUDED_FAMILIES:
+            continue
+        if set(spec.get("coverage") or []) & primary_cov:
+            candidates.append((spec.get("priority") or 0, name))
+    candidates.sort(key=lambda x: -x[0])
+    return combo + [name for _, name in candidates[:max_slots]]
 
 
 def describe_families() -> str:

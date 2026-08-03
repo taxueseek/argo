@@ -430,17 +430,32 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         if usable and unusable and filtered[0] in unusable:
             filtered = usable + unusable
 
-    # ── 能力族去重（标准化调用契约）──────────────────────────────
+    # ── 能力族去重 + 互补回填（标准化调用契约）────────────────────────
     # 全网搜索族同质化最高（byted/bocha/duckduckgo/octen 都是通用网页检索），
-    # 同族堆叠纯属浪费预算位。web_general 族至多保留 2 个，
-    # 垂直族（academic/code/finance 等）保留多源做交叉验证，不去重。
+    # 同族堆叠纯属浪费预算位：web_general 至多保留 2 个，垂直族保留多源。
+    # config.yaml 引擎声明的 family 字段是真源（spec_lookup 传入 family_of，
+    # 不再只看静态覆盖表）。去重腾出的槽位由 complement_refill 用互补能力族
+    # 引擎回填（与域主引擎 coverage 重叠的高优先级源），兑现「给其他族腾出
+    # 预算位」；已有垂直成员的域不再追加，尊重域作者配置。
     try:
-        from engine_families import dedupe_by_family, family_of
-        web = [e for e in filtered if family_of(e) == "web_general"]
-        if len(web) > 2:
-            non_web = [e for e in filtered if family_of(e) != "web_general"]
-            kept_web = web[:2]
-            filtered = kept_web + non_web
+        from engine_families import dedupe_by_family, complement_refill
+        specs = get_engines()
+        if isinstance(specs, dict):
+            # 只收缩 web_general：垂直族（academic/code/finance 等）保留多源
+            # 交叉验证，不去重（股票域 sina/eastmoney 双行情源必须共存）。
+            deduped = dedupe_by_family(
+                filtered, max_per_family=2, spec_lookup=specs,
+                limit_families=frozenset({"web_general"}),
+            )
+            removed = len(filtered) - len(deduped)
+            if removed > 0:
+                filtered = complement_refill(
+                    deduped, enabled=enabled, spec_lookup=specs,
+                    domain_primary=domain.get("primary"),
+                    max_slots=min(2, removed),
+                )
+            else:
+                filtered = deduped
     except ImportError:
         pass
 

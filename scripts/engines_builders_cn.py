@@ -992,6 +992,39 @@ def _build_bilibili_hot_engine(spec: dict[str, Any]) -> Any:
 
 # ── 知乎全网搜索（global_search，需 ZHIHU_ACCESS_SECRET）─────────────────────
 
+# site:/host: 站点限定语法 → Filter host=="..." 表达式。
+# 取值吸收到首个空白或中文字符（值只能是域名，纯中文值视为无效 host）。
+_SITE_FILTER_RE = re.compile(r"(?:site|host)\s*[:：]\s*([^\s\u4e00-\u9fff]+)")
+# 残留的 site:/host: 词法片段（无有效 host 值也剥离，避免把语法词当搜索词）
+_SITE_TOKEN_RE = re.compile(r"(?:site|host)\s*[:：]")
+
+
+def _parse_site_filter(query: str) -> tuple[str, str]:
+    """解析 site:/host: 站点限定语法 → (Filter 表达式, 剔除后的查询词)。
+
+    只取第一处匹配；host 兼容裸域名 / 完整 URL / 带端口三种写法，
+    统一剥离 scheme、路径、端口为裸域名（global_search 的 Filter host==
+    要求裸域名，`site:https://blog.csdn.net/x` 若整串传入会取到 https 当 host）。
+
+    Returns:
+        (filter_expr, cleaned_query)；无有效 host 时 filter_expr 为空串，
+        但残留的 site:/host: 词法片段仍会被剥离。
+    """
+    m = _SITE_FILTER_RE.search(query)
+    if not m:
+        t = _SITE_TOKEN_RE.search(query)
+        if not t:
+            return "", query.strip()
+        cleaned = (query[: t.start()] + query[t.end():]).strip()
+        return "", re.sub(r"\s{2,}", " ", cleaned)
+    raw = m.group(1).strip().rstrip(".,;:，。；")
+    host = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://", "", raw)  # 去 scheme
+    host = host.split("/", 1)[0].split(":", 1)[0].strip().lower()  # 去路径与端口
+    cleaned = (query[: m.start()] + query[m.end():]).strip()
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return (f'host=="{host}"' if host else ""), cleaned
+
+
 def _build_zhihu_global_engine(spec: dict[str, Any]) -> Any:
     """知乎开放平台全网搜索（developer.zhihu.com global_search）。
 
@@ -1016,14 +1049,7 @@ def _build_zhihu_global_engine(spec: dict[str, Any]) -> Any:
             return []
 
         # 解析 site:/host: 站点限定语法 → Filter: host=="..."
-        filter_expr = ""
-        search_query = query
-        site_match = re.search(r"(?:site|host)\s*[:：]\s*([a-zA-Z0-9.\-]+)", query)
-        if site_match:
-            host = site_match.group(1).strip()
-            if host:
-                filter_expr = f'host=="{host}"'
-                search_query = re.sub(r"(?:site|host)\s*[:：]\s*[a-zA-Z0-9.\-]+", "", query).strip()
+        filter_expr, search_query = _parse_site_filter(query)
 
         params: dict[str, Any] = {
             "Query": search_query or query,

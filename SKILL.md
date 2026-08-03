@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、10 MCP 工具（含本地文件搜索 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py（不依赖 npm 发版）。
-version: 2.5.1
+version: 2.6.0
 triggers:
   - 搜索
   - 查一下
@@ -164,7 +164,7 @@ Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/
 | 能力 | 说明 |
 |------|------|
 | 约 110 搜索源 | `config.yaml` 真源：local_* / 金融行情 / 宏观 / 化学物种 / 社交 / 学术 / 开发者社区 |
-| 能力族体系 | `engine_families.py`：16 个 MECE 能力族（web_general/academic/code/finance_market/finance_macro/news_flash/social/hot_trending/knowledge/science_*/legal/media_book/archive/misc），同族可互换、按族去重、golden set 按族断言 |
+| 能力族体系 | `engine_families.py`：16 个 MECE 能力族（web_general/academic/code/finance_market/finance_macro/news_flash/social/hot_trending/knowledge/science_*/legal/media_book/archive/misc），同族可互换、按族去重、golden set 按族断言；去重腾出的预算位按「与域主引擎 coverage 重叠 + 能力互补」回填（全 web 域补垂直源，垂直族已存在的域不追加） |
 | 知乎全网搜索 | `zhihu_global` 专用 builder：SearchDB=all 真全网 + `site:xxx` 语法 → Filter host== 站点限定；提取 AuthorityLevel/互动/时效信号 |
 | 10 MCP 工具 | search / research / evidence / clarify / fetch（含 extract 模式）/ crawl / screenshot / pdf / social_search（含 sentiment 模式）/ local_search（本地文件） |
 | 引擎分层 + combo 预算 | 日常精简、研究放宽（`engine_policy`） |

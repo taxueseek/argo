@@ -20,6 +20,7 @@ from engine_families import (
     family_of,
     group_by_family,
     dedupe_by_family,
+    complement_refill,
 )
 
 
@@ -100,6 +101,81 @@ def test_route_uses_family_dedup():
     print(f"  ✅ route combo={combo} web_general={web_count} (≤2)")
 
 
+# ── 互补回填（去重腾出预算位的兑现）────────────────────────────────────────
+
+def test_refill_all_web_combo():
+    """全 web combo 去重后回填互补能力族引擎，且不重排/删减原有 combo。"""
+    cfg = load_config()
+    eng = get_engines(cfg, routable_only=False)
+    combo = ["bocha", "byted", "duckduckgo"]  # 3 个 web_general
+    deduped = dedupe_by_family(combo, max_per_family=2, spec_lookup=eng)
+    assert len(deduped) == 2, f"应去重到 2: {deduped}"
+    filled = complement_refill(deduped, enabled=set(eng), spec_lookup=eng,
+                               domain_primary="bocha", max_slots=2)
+    assert filled[:2] == deduped, f"回填不得重排/删减原 combo: {filled}"
+    fams = {family_of(e, eng.get(e)) for e in filled}
+    assert len(fams) >= 2, f"回填后应含互补族: {filled} {fams}"
+    # 回填引擎必须与主引擎 coverage 重叠（主题相关信号）
+    prim_cov = set((eng.get("bocha") or {}).get("coverage") or [])
+    assert prim_cov, "bocha 应有 coverage 标签"
+    for e in filled[2:]:
+        cov = set((eng.get(e) or {}).get("coverage") or [])
+        assert cov & prim_cov, f"{e} 与主引擎 coverage 无重叠: {cov} vs {prim_cov}"
+    print(f"  ✅ 全 web combo {deduped} → 回填 {filled[2:]}，族={sorted(fams)}")
+
+
+def test_refill_skips_when_vertical_present():
+    """已有垂直族成员的 combo 不回填（尊重域作者配置）。"""
+    eng = {
+        "byted": {"priority": 20, "coverage": ["general", "news"]},
+        "duckduckgo": {"priority": 15, "coverage": ["general"]},
+        "wenshu": {"priority": 61, "coverage": ["legal"], "family": "legal"},
+        "arxiv": {"priority": 40, "coverage": ["academic"], "family": "academic"},
+    }
+    combo = ["byted", "duckduckgo", "wenshu"]  # web + legal
+    out = complement_refill(combo, enabled={"arxiv"}, spec_lookup=eng,
+                            domain_primary="byted", max_slots=2)
+    assert out == combo, "已有垂直成员时不应回填"
+    print("  ✅ 垂直族成员已存在时跳过回填")
+
+
+def test_refill_requires_primary_coverage():
+    """主引擎无 coverage 标签时不回填（无主题信号，不猜测）。"""
+    eng = {
+        "local_search": {"priority": 10},
+        "bocha": {"priority": 20, "coverage": ["chinese", "general"]},
+        "arxiv": {"priority": 30, "coverage": ["academic"]},
+    }
+    out = complement_refill(["local_search", "bocha"], enabled={"arxiv"},
+                            spec_lookup=eng, domain_primary="local_search")
+    assert out == ["local_search", "bocha"], f"不应回填: {out}"
+    print("  ✅ 主引擎无 coverage 时保守跳过")
+
+
+def test_refill_excludes_noise_families():
+    """回填排除热榜族（hot_trending 等非查询相关源）。"""
+    eng = {
+        "bocha": {"priority": 20, "coverage": ["chinese", "general"]},
+        "zhihu_hot": {"priority": 90, "coverage": ["chinese", "hot"]},
+        "baidu_baike": {"priority": 41, "coverage": ["chinese"]},
+    }
+    out = complement_refill(["bocha", "byted"], enabled=set(eng), spec_lookup=eng,
+                            domain_primary="bocha", max_slots=2)
+    assert "zhihu_hot" not in out, "hot_trending 族不应回填"
+    assert "baidu_baike" in out, "knowledge 族应回填"
+    print(f"  ✅ 噪声族排除，回填 {out[2:]}")
+
+
+def test_route_refill_deep_mode():
+    """deep 模式下全 web 域回填互补族（预算不截断，回填生效）。"""
+    from route import route_query
+    d = route_query("怎么评价现在的创业环境", mode="auto", depth="deep")
+    combo = d.get("engines_combo") or []
+    fams = {family_of(e) for e in combo}
+    assert len(fams) >= 2, f"deep 模式应含互补族: {combo}"
+    print(f"  ✅ deep 路由 {combo} 族={sorted(fams)} 含互补源")
+
+
 if __name__ == "__main__":
     for fn in (
         test_all_engines_have_family,
@@ -108,6 +184,11 @@ if __name__ == "__main__":
         test_dedupe_only_web_general,
         test_route_keeps_vertical_multi_source,
         test_route_uses_family_dedup,
+        test_refill_all_web_combo,
+        test_refill_skips_when_vertical_present,
+        test_refill_requires_primary_coverage,
+        test_refill_excludes_noise_families,
+        test_route_refill_deep_mode,
     ):
         fn()
     print("\n🎉 能力族测试全部通过")
