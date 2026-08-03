@@ -496,7 +496,14 @@ def compute_credibility(
         # Absorption：证据密度
         absorption = density["absorption_score"]
 
-        original_score = r.get("score", 0.5) or 0.5
+        original_score = r.get("score")
+        if original_score is None:
+            original_score = 0.5
+        else:
+            try:
+                original_score = float(original_score)
+            except (TypeError, ValueError):
+                original_score = 0.5
         # MECE 加权（量化）
         credibility = (
             selection * 0.40
