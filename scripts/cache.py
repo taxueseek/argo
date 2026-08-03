@@ -11,6 +11,7 @@ cache.py — Unified Search v2 双层缓存引擎
 
 from __future__ import annotations
 
+import copy
 import gzip
 import hashlib
 import json
@@ -417,11 +418,13 @@ class SearchCache:
         return ttl
 
     def _read(self, key: str) -> Optional[dict]:
+        # 返回深拷贝：缓存持有数据的所有权，下游对 results 的原地改写
+        # （如 search.py 的 _engine 标记、rerank/权威度字段）不得污染 store
         hit = self._l1.get(key)
         if hit is not None:
             ttl = hit.get("_ttl", 0)
             if ttl > 0 and time.time() - hit.get("_ts", 0) < ttl:
-                out = dict(hit)
+                out = copy.deepcopy(hit)
                 out["_cache_level"] = "L1"
                 return out
             self._l1.remove(key)
@@ -429,7 +432,7 @@ class SearchCache:
         hit = self._l2.get(key)
         if hit is not None:
             self._l1.set(key, hit)
-            out = dict(hit)
+            out = copy.deepcopy(hit)
             out["_cache_level"] = "L2"
             return out
         return None
