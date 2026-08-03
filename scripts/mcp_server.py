@@ -253,8 +253,7 @@ def _warm_core_async() -> None:
     threading.Thread(target=_run, name="argo-mcp-warm", daemon=True).start()
 
 
-# ── 工具定义（MCP schema） ────────────────────────────────────────────────────
-
+# ── 工具定义（MCP schema，唯一真源；改动只在这里）──────────────────────────
 TOOLS = [
     {
         "name": "argo_search",
@@ -262,57 +261,18 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "搜索查询词（支持中英文）"
-                },
-                "engine": {
-                    "type": "string",
-                    "description": "指定搜索引擎（默认 auto，可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/duckduckgo/byted/bocha/tavily/github/wikipedia/semantic_scholar/local_search 等）",
-                    "default": "auto"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "最大结果数（默认 5）",
-                    "default": 5,
-                    "minimum": 1,
-                    "maximum": 20
-                },
-                "depth": {
-                    "type": "string",
-                    "enum": ["fast", "balanced", "deep"],
-                    "description": "搜索深度（默认 fast）",
-                    "default": "fast"
-                },
-                "mode": {
-                    "type": "string",
-                    "enum": ["fast", "auto", "deep", "budget"],
-                    "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制（默认 auto）",
-                    "default": "auto"
-                },
-                "skip_cache": {
-                    "type": "boolean",
-                    "description": "跳过缓存（默认 false）",
-                    "default": False
-                },
-                "summary": {
-                    "type": "boolean",
-                    "description": "精简模式：截断 snippet + 去掉重字段（默认 true，省 token）",
-                    "default": True
-                },
-                "pretty": {
-                    "type": "boolean",
-                    "description": "美化 JSON（默认 false；调试用）",
-                    "default": False
-                },
-                "timeout": {
-                    "type": "integer",
-                    "description": "超时秒数（默认 10）",
-                    "default": 10
-                }
+                "query": {"type": "string", "description": "搜索查询词（支持中英文）"},
+                "engine": {"type": "string", "description": "指定搜索引擎（默认 auto，可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/duckduckgo/byted/bocha/tavily/github/wikipedia/semantic_scholar/local_search 等）", "default": "auto"},
+                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5, "minimum": 1, "maximum": 20},
+                "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度（默认 fast）", "default": "fast"},
+                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget"], "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制（默认 auto）", "default": "auto"},
+                "skip_cache": {"type": "boolean", "description": "跳过缓存（默认 false）", "default": False},
+                "summary": {"type": "boolean", "description": "精简模式：截断 snippet + 去掉重字段（默认 true，省 token）", "default": True},
+                "pretty": {"type": "boolean", "description": "美化 JSON（默认 false；调试用）", "default": False},
+                "timeout": {"type": "integer", "description": "超时秒数（默认 10）", "default": 10},
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     },
     {
         "name": "argo_local_search",
@@ -320,30 +280,13 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "搜索查询词（支持中英文，中文自动扩展召回）"
-                },
-                "path": {
-                    "type": "string",
-                    "description": "搜索目录（默认家目录；建议缩小到 ~/.agents/skills、~/notes、~/Documents 等，更快更准）",
-                    "default": "~"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "最大结果数（默认 5）",
-                    "default": 5,
-                    "minimum": 1,
-                    "maximum": 20
-                },
-                "exact": {
-                    "type": "boolean",
-                    "description": "关闭中文扩展，精确匹配（默认 false）",
-                    "default": False
-                }
+                "query": {"type": "string", "description": "搜索查询词（支持中英文，中文自动扩展召回）"},
+                "path": {"type": "string", "description": "搜索目录（默认家目录；建议缩小到 ~/.agents/skills、~/notes、~/Documents 等，更快更准）", "default": "~"},
+                "max_results": {"type": "integer", "description": "最大结果数（默认 5）", "default": 5, "minimum": 1, "maximum": 20},
+                "exact": {"type": "boolean", "description": "关闭中文扩展，精确匹配（默认 false）", "default": False},
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     },
     {
         "name": "argo_research",
@@ -351,58 +294,19 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "研究查询（可以是复杂的、多步骤的问题）"
-                },
-                "topic": {
-                    "type": "string",
-                    "description": "选题 profile：ai/investment/finance/academic/tech/tool/internet/social；省略则自动推断",
-                },
-                "auto_topic": {
-                    "type": "boolean",
-                    "description": "无 topic 时是否自动推断（默认 true）",
-                    "default": True,
-                },
-                "num_sub_queries": {
-                    "type": "integer",
-                    "description": "子查询数量（默认由 topic 决定，通常 4，最大 8）",
-                    "minimum": 2,
-                    "maximum": 8
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "每个子查询最大结果数（默认5）",
-                    "default": 5
-                },
-                "depth": {
-                    "type": "string",
-                    "enum": ["fast", "balanced", "deep"],
-                    "description": "搜索深度（默认由 topic 决定，通常 balanced）",
-                },
-                "mode": {
-                    "type": "string",
-                    "enum": ["fast", "auto", "deep", "budget", "social-sentiment"],
-                    "description": "预算/模式（默认 auto；社交舆情用 social-sentiment）",
-                    "default": "auto"
-                },
-                "platforms": {
-                    "type": "string",
-                    "description": "social-sentiment 平台列表，逗号分隔",
-                },
-                "summary": {
-                    "type": "boolean",
-                    "description": "精简研究包（默认 true，省 token）",
-                    "default": True,
-                },
-                "pretty": {
-                    "type": "boolean",
-                    "description": "美化 JSON（默认 false）",
-                    "default": False,
-                },
+                "query": {"type": "string", "description": "研究查询（可以是复杂的、多步骤的问题）"},
+                "topic": {"type": "string", "description": "选题 profile：ai/investment/finance/academic/tech/tool/internet/social；省略则自动推断"},
+                "auto_topic": {"type": "boolean", "description": "无 topic 时是否自动推断（默认 true）", "default": True},
+                "num_sub_queries": {"type": "integer", "description": "子查询数量（默认由 topic 决定，通常 4，最大 8）", "minimum": 2, "maximum": 8},
+                "max_results": {"type": "integer", "description": "每个子查询最大结果数（默认5）", "default": 5},
+                "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度（默认由 topic 决定，通常 balanced）"},
+                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget", "social-sentiment"], "description": "预算/模式（默认 auto；社交舆情用 social-sentiment）", "default": "auto"},
+                "platforms": {"type": "string", "description": "social-sentiment 平台列表，逗号分隔"},
+                "summary": {"type": "boolean", "description": "精简研究包（默认 true，省 token）", "default": True},
+                "pretty": {"type": "boolean", "description": "美化 JSON（默认 false）", "default": False},
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     },
     {
         "name": "argo_evidence",
@@ -410,22 +314,12 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "搜索查询词（用于交叉验证）"
-                },
-                "results_json": {
-                    "type": "string",
-                    "description": "搜索结果 JSON 字符串（可选；为空时自动调用 super_search 搜索）。格式：{\"results\": [{\"title\": \"...\", \"url\": \"...\", \"snippet\": \"...\", \"source\": \"...\", \"score\": 0.8}]}"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "自动搜索时的最大结果数（默认 10，仅在 results_json 为空时有效）",
-                    "default": 10
-                }
+                "query": {"type": "string", "description": "搜索查询词（用于交叉验证）"},
+                "results_json": {"type": "string", "description": "搜索结果 JSON 字符串（可选；为空时自动调用 super_search 搜索）。格式：{\"results\": [{\"title\": \"...\", \"url\": \"...\", \"snippet\": \"...\", \"source\": \"...\", \"score\": 0.8}]}"},
+                "max_results": {"type": "integer", "description": "自动搜索时的最大结果数（默认 10，仅在 results_json 为空时有效）", "default": 10},
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     },
     {
         "name": "argo_clarify",
@@ -433,13 +327,10 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "需要消歧的搜索查询"
-                }
+                "query": {"type": "string", "description": "需要消歧的搜索查询"},
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     },
     {
         "name": "argo_crawl",
@@ -447,40 +338,14 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "目标站点根 URL（如 https://docs.python.org/）"
-                },
-                "strategy": {
-                    "type": "string",
-                    "enum": ["sitemap", "bfs"],
-                    "description": "爬取策略（默认 bfs）",
-                    "default": "bfs"
-                },
-                "max_pages": {
-                    "type": "integer",
-                    "description": "最大抓取页面数（默认 10，sitemap 策略默认 20）",
-                    "default": 10,
-                    "minimum": 1,
-                    "maximum": 50
-                },
-                "max_depth": {
-                    "type": "integer",
-                    "description": "BFS 最大深度（默认 2）",
-                    "default": 2,
-                    "minimum": 1,
-                    "maximum": 5
-                },
-                "timeout": {
-                    "type": "integer",
-                    "description": "单页超时秒数（默认 8）",
-                    "default": 8,
-                    "minimum": 3,
-                    "maximum": 30
-                }
+                "url": {"type": "string", "description": "目标站点根 URL（如 https://docs.python.org/）"},
+                "strategy": {"type": "string", "enum": ["sitemap", "bfs"], "description": "爬取策略（默认 bfs）", "default": "bfs"},
+                "max_pages": {"type": "integer", "description": "最大抓取页面数（默认 10，sitemap 策略默认 20）", "default": 10, "minimum": 1, "maximum": 50},
+                "max_depth": {"type": "integer", "description": "BFS 最大深度（默认 2）", "default": 2, "minimum": 1, "maximum": 5},
+                "timeout": {"type": "integer", "description": "单页超时秒数（默认 8）", "default": 8, "minimum": 3, "maximum": 30},
             },
-            "required": ["url"]
-        }
+            "required": ["url"],
+        },
     },
     {
         "name": "argo_fetch",
@@ -488,48 +353,16 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "目标 URL"
-                },
-                "mode": {
-                    "type": "string",
-                    "enum": ["text", "extract"],
-                    "description": "抓取模式：text=正文/聚焦文本（默认），extract=结构化提取（表格/meta/JSON-LD）",
-                    "default": "text"
-                },
-                "extract_mode": {
-                    "type": "string",
-                    "enum": ["tables", "metadata", "jsonld", "all"],
-                    "description": "mode=extract 时的提取子模式（默认 all）",
-                    "default": "all"
-                },
-                "focus": {
-                    "type": "string",
-                    "description": "BM25 聚焦查询词（只返回相关段落，省 80%+ token；仅 mode=text）"
-                },
-                "max_chars": {
-                    "type": "integer",
-                    "description": "最大字符数（默认 8000）",
-                    "default": 8000,
-                    "minimum": 500,
-                    "maximum": 50000
-                },
-                "timeout": {
-                    "type": "integer",
-                    "description": "超时秒数（默认 15）",
-                    "default": 15,
-                    "minimum": 5,
-                    "maximum": 60
-                },
-                "use_browser": {
-                    "type": "boolean",
-                    "description": "强制使用反检测浏览器（默认 false，HTTP 失败时自动升级）",
-                    "default": False
-                }
+                "url": {"type": "string", "description": "目标 URL"},
+                "mode": {"type": "string", "enum": ["text", "extract"], "description": "抓取模式：text=正文/聚焦文本（默认），extract=结构化提取（表格/meta/JSON-LD）", "default": "text"},
+                "extract_mode": {"type": "string", "enum": ["tables", "metadata", "jsonld", "all"], "description": "mode=extract 时的提取子模式（默认 all）", "default": "all"},
+                "focus": {"type": "string", "description": "BM25 聚焦查询词（只返回相关段落，省 80%+ token；仅 mode=text）"},
+                "max_chars": {"type": "integer", "description": "最大字符数（默认 8000）", "default": 8000, "minimum": 500, "maximum": 50000},
+                "timeout": {"type": "integer", "description": "超时秒数（默认 15）", "default": 15, "minimum": 5, "maximum": 60},
+                "use_browser": {"type": "boolean", "description": "强制使用反检测浏览器（默认 false，HTTP 失败时自动升级）", "default": False},
             },
-            "required": ["url"]
-        }
+            "required": ["url"],
+        },
     },
     {
         "name": "argo_screenshot",
@@ -537,22 +370,12 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "目标 URL"
-                },
-                "full_page": {
-                    "type": "boolean",
-                    "description": "全页截图（默认 false，仅当前视口）",
-                    "default": False
-                },
-                "output_path": {
-                    "type": "string",
-                    "description": "输出路径（默认 /tmp/argo_screenshot_<timestamp>.png）"
-                }
+                "url": {"type": "string", "description": "目标 URL"},
+                "full_page": {"type": "boolean", "description": "全页截图（默认 false，仅当前视口）", "default": False},
+                "output_path": {"type": "string", "description": "输出路径（默认 /tmp/argo_screenshot_<timestamp>.png）"},
             },
-            "required": ["url"]
-        }
+            "required": ["url"],
+        },
     },
     {
         "name": "argo_pdf",
@@ -560,23 +383,13 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "PDF URL 或本地文件路径"
-                },
-                "pages": {
-                    "type": "string",
-                    "description": "页码范围（如 \"1-5\" 或 \"1,3,5\"，默认全部）"
-                },
-                "password": {
-                    "type": "string",
-                    "description": "加密 PDF 密码（可选）"
-                }
+                "url": {"type": "string", "description": "PDF URL 或本地文件路径"},
+                "pages": {"type": "string", "description": "页码范围（如 \"1-5\" 或 \"1,3,5\"，默认全部）"},
+                "password": {"type": "string", "description": "加密 PDF 密码（可选）"},
             },
-            "required": ["url"]
-        }
+            "required": ["url"],
+        },
     },
-    # ── 社交平台工具 ─────────────────────────────────────────────────────────
     {
         "name": "argo_social_search",
         "description": "社交平台搜索：跨平台搜索 Twitter/X、Reddit、小红书、B站、微博等 UGC 内容，返回帖子与互动数据。mode=sentiment 输出舆情聚合（互动汇总+平台分布+代表性帖子）。适用于舆情分析、热门话题、产品口碑、竞品用户反馈等场景。",
@@ -584,29 +397,15 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词"},
-                "mode": {
-                    "type": "string",
-                    "enum": ["text", "sentiment"],
-                    "description": "text=帖子列表（默认），sentiment=舆情聚合分析",
-                    "default": "text"
-                },
-                "platforms": {
-                    "type": "string",
-                    "description": "平台列表，逗号分隔（默认 twitter,reddit,xiaohongshu）。可选：twitter,reddit,xiaohongshu,bilibili,weibo",
-                    "default": "twitter,reddit,xiaohongshu"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "每个平台最大结果数（默认 5）",
-                    "default": 5,
-                    "minimum": 1,
-                    "maximum": 20
-                }
+                "mode": {"type": "string", "enum": ["text", "sentiment"], "description": "text=帖子列表（默认），sentiment=舆情聚合分析", "default": "text"},
+                "platforms": {"type": "string", "description": "平台列表，逗号分隔（默认 twitter,reddit,xiaohongshu）。可选：twitter,reddit,xiaohongshu,bilibili,weibo", "default": "twitter,reddit,xiaohongshu"},
+                "max_results": {"type": "integer", "description": "每个平台最大结果数（默认 5）", "default": 5, "minimum": 1, "maximum": 20},
             },
-            "required": ["query"]
-        }
+            "required": ["query"],
+        },
     },
 ]
+
 
 
 # ── 工具执行（延迟导入）──────────────────────────────────────────────────────
@@ -861,7 +660,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 extract_mod = _lazy_cached("extract")
                 fetch_mod = _lazy_cached("fetch")
                 emode = arguments.get("extract_mode", "all")
-                fetch_result = fetch_mod.fetch_page(arguments["url"], max_chars=50000, timeout=15, raw=True)
+                fetch_result = fetch_mod.fetch_page(arguments["url"], max_chars=50000,
+                                                     timeout=arguments.get("timeout", 15), raw=True)
                 if not fetch_result["success"]:
                     return {
                         "content": [{"type": "text", "text": _dumps({"error": fetch_result.get("error", "fetch failed")})}],
@@ -885,7 +685,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 timeout=arguments.get("timeout", 15),
                 use_browser_fallback=True,
                 force_browser=arguments.get("use_browser", False),
-                actions=json.loads(arguments["actions"]) if arguments.get("actions") else None,
             )
             focus_query = arguments.get("focus")
             if focus_query and result.get("success"):

@@ -124,7 +124,7 @@ def _extract_with_pymupdf(body: bytes, pages: str | None, password: str | None) 
             # PyMuPDF 表格提取（v1.24+）
             try:
                 for tbl in p.find_tables().tables:
-                    tables.append(tl.extract())
+                    tables.append(tbl.extract())
             except Exception:
                 pass
         content = "\n\n".join(page_texts)

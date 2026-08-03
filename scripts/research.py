@@ -48,7 +48,9 @@ def detect_cross_references(results: list[dict[str, Any]], min_sources: int = 2,
     ngram_sources: dict[str, set] = {}  # ngram -> set of (url, title)
     for r in results:
         url = r.get("url", "")
-        domain = urlparse(url).netloc.lower().strip("www.") if url else "unknown"
+        domain = urlparse(url).netloc.lower() if url else "unknown"
+        if domain.startswith("www."):
+            domain = domain[4:]
         text = f"{r.get('title', '')} {r.get('snippet', '')}"
         # 简单分词（中英文混合）
         # 英文按空格分

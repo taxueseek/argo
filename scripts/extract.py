@@ -8,23 +8,28 @@ class TableExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self.tables = []
-        self._in_table = False
+        self._table_depth = 0
         self._rows = []
         self._row = []
         self._cell = []
         self._in_cell = False
     def handle_starttag(self, tag, attrs):
-        if tag == 'table': self._in_table = True; self._rows = []
-        elif tag in ('td','th') and self._in_table: self._in_cell = True; self._cell = []
-        elif tag == 'tr' and self._in_table: self._row = []
+        if tag == 'table':
+            self._table_depth += 1
+            if self._table_depth == 1:
+                self._rows = []
+        elif self._table_depth == 1 and tag in ('td','th'):
+            self._in_cell = True; self._cell = []
+        elif self._table_depth == 1 and tag == 'tr':
+            self._row = []
     def handle_endtag(self, tag):
         if tag in ('td','th') and self._in_cell:
             self._in_cell = False; self._row.append(''.join(self._cell).strip())
-        elif tag == 'tr' and self._in_table and self._row:
+        elif tag == 'tr' and self._table_depth == 1 and self._row:
             self._rows.append(self._row)
-        elif tag == 'table' and self._in_table:
-            self._in_table = False
-            if self._rows:
+        elif tag == 'table' and self._table_depth:
+            self._table_depth -= 1
+            if self._table_depth == 0 and self._rows:
                 headers = self._rows[0]
                 table = [{headers[i]: row[i] if i < len(row) else '' for i in range(len(headers))} for row in self._rows[1:]]
                 self.tables.append(table)
@@ -59,9 +64,9 @@ if __name__ == '__main__':
     p.add_argument('--url', required=True)
     p.add_argument('--mode', default='all', choices=['tables','metadata','jsonld','all'])
     args = p.parse_args()
-    result = fetch_page(args.url, 50000)
+    result = fetch_page(args.url, 50000, raw=True)
     if not result['success']: print(json.dumps({'error': result.get('error')})); sys.exit(1)
-    html = result['content']
+    html = result.get('html') or result.get('content') or ''
     output = {}
     if args.mode in ('tables','all'): output['tables'] = extract_tables(html)
     if args.mode in ('metadata','all'): output['metadata'] = extract_metadata(html)

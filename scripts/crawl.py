@@ -7,6 +7,7 @@ from fetch import fetch_page
 
 def crawl_sitemap(url, max_pages=20, timeout=10):
     """从 sitemap.xml 爬取"""
+    t0 = time.monotonic()
     sitemap_url = urljoin(url, '/sitemap.xml')
     result = fetch_page(sitemap_url, max_chars=50000, timeout=timeout, raw=True)
     if not result['success']:
@@ -21,11 +22,8 @@ def crawl_sitemap(url, max_pages=20, timeout=10):
                 result = fetch_page(sitemap_url, max_chars=50000, timeout=timeout, raw=True)
     if not result.get('success') or not result.get('html'):
         return {'url': url, 'pages': [], 'total': 0, 'error': 'sitemap not found or empty'}
-    html = result.get('html', result.get('content', ''))
-    # 同时尝试从 raw content 提取（兼容 XML 被 ContentExtractor 过滤的情况）
+    html = result.get('html') or result.get('content') or ''
     urls = re.findall(r'<loc>\s*(.*?)\s*</loc>', html)
-    if not urls:
-        urls = re.findall(r'<loc>(.*?)</loc>', result.get('content', ''))
     urls = urls[:max_pages]
     pages = []
     with ThreadPoolExecutor(max_workers=5) as ex:
@@ -36,7 +34,7 @@ def crawl_sitemap(url, max_pages=20, timeout=10):
                 if r['success']:
                     pages.append({'url': r['url'], 'content': r['content'][:500], 'depth': 0})
             except: pass
-    return {'url': url, 'pages': pages, 'total': len(pages), 'elapsed_ms': int((time.time())*1000)}
+    return {'url': url, 'pages': pages, 'total': len(pages), 'elapsed_ms': int((time.monotonic() - t0) * 1000)}
 
 def crawl_bfs(url, max_pages=10, max_depth=2, timeout=8):
     """BFS 爬取"""
@@ -48,10 +46,11 @@ def crawl_bfs(url, max_pages=10, max_depth=2, timeout=8):
         if current_url in visited or depth > max_depth:
             continue
         visited.add(current_url)
-        result = fetch_page(current_url, 2000, timeout)
+        result = fetch_page(current_url, 2000, timeout, raw=True)
         if result['success']:
             pages.append({'url': current_url, 'content': result['content'][:500], 'depth': depth})
-            links = re.findall(r'href=["\']([^"\'#]+)', result['content'])
+            html = result.get('html') or result.get('content') or ''
+            links = re.findall(r'href=["\']([^"\'#]+)', html)
             for link in links[:5]:
                 full = urljoin(current_url, link)
                 if urlparse(full).netloc == urlparse(url).netloc and full not in visited:
