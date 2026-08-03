@@ -164,6 +164,8 @@ Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/
 | 能力 | 说明 |
 |------|------|
 | 约 110 搜索源 | `config.yaml` 真源：local_* / 金融行情 / 宏观 / 化学物种 / 社交 / 学术 / 开发者社区 |
+| 能力族体系 | `engine_families.py`：16 个 MECE 能力族（web_general/academic/code/finance_market/finance_macro/news_flash/social/hot_trending/knowledge/science_*/legal/media_book/archive/misc），同族可互换、按族去重、golden set 按族断言 |
+| 知乎全网搜索 | `zhihu_global` 专用 builder：SearchDB=all 真全网 + `site:xxx` 语法 → Filter host== 站点限定；提取 AuthorityLevel/互动/时效信号 |
 | 10 MCP 工具 | search / research / evidence / clarify / fetch（含 extract 模式）/ crawl / screenshot / pdf / social_search（含 sentiment 模式）/ local_search（本地文件） |
 | 引擎分层 + combo 预算 | 日常精简、研究放宽（`engine_policy`） |
 | 垂直答案源 | 行情 / 宏观 / 化合物等优先可吸收事实 |
@@ -653,6 +655,7 @@ argo-v2/
 │   ├── config.py         # 配置加载器
 │   ├── search.py         # CLI 入口 & 执行编排
 │   ├── route.py          # 三层路由决策
+│   ├── engine_families.py # 能力族分类（16 族，MECE）
 │   ├── engines.py        # 引擎适配层
 │   ├── cache.py          # 双层缓存
 │   ├── adaptive.py       # 自适应学习

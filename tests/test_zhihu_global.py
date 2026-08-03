@@ -15,14 +15,17 @@ def test_zhihu_global_in_config():
     print("✅ zhihu_global 引擎已注册并启用")
 
 def test_zhihu_global_url():
-    """验证端点是 global_search 而非 zhihu_search"""
+    """验证 zhihu_global 使用专用 builder（type=zhihu_global，非通用 http）。
+
+    专用 builder 内部固定调用 global_search 端点，config 无需再声明 url。
+    """
     from config import load_config, get_engines
     cfg = load_config()
     engines = get_engines(cfg)
-    url = engines['zhihu_global'].get('url', '')
-    assert 'global_search' in url, f"端点错误: {url}"
-    assert 'zhihu_search' not in url, "不应使用 zhihu_search 端点"
-    print(f"✅ 端点正确: {url}")
+    spec = engines['zhihu_global']
+    assert spec.get('type') == 'zhihu_global', f"type 应为 zhihu_global: {spec.get('type')}"
+    assert spec.get('family') == 'web_general', "family 应为 web_general（真全网搜索）"
+    print("✅ zhihu_global 专用 builder + family 正确")
 
 def test_chinese_general_primary():
     """验证 chinese_general 域：bocha 主源 + zhihu_global 补充源。

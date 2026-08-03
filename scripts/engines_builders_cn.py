@@ -990,3 +990,94 @@ def _build_bilibili_hot_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── 知乎全网搜索（global_search，需 ZHIHU_ACCESS_SECRET）─────────────────────
+
+def _build_zhihu_global_engine(spec: dict[str, Any]) -> Any:
+    """知乎开放平台全网搜索（developer.zhihu.com global_search）。
+
+    第一性：zhihu_global 是「真全网搜索」——默认 SearchDB=all 搜全网索引，
+    且支持 Filter host== 精确限定站点（byted/bocha 做不到的精确能力）。
+    响应含 AuthorityLevel（1-4 权威等级）、VoteUpCount、EditTime 等结构化信号，
+    全部提取进统一 schema，供 evidence 消费。
+
+    查询语法：
+      - `site:zhuanlan.zhihu.com 关键词` → Filter: host=="zhuanlan.zhihu.com"
+      - `host:blog.csdn.net 关键词`     → 同上（兼容写法）
+      - 普通查询 → SearchDB=all 全网
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        secret = os.environ.get("ZHIHU_ACCESS_SECRET") or os.environ.get("ARGO_ZHIHU_ACCESS_SECRET", "")
+        if not secret:
+            return []
+
+        # 解析 site:/host: 站点限定语法 → Filter: host=="..."
+        filter_expr = ""
+        search_query = query
+        site_match = re.search(r"(?:site|host)\s*[:：]\s*([a-zA-Z0-9.\-]+)", query)
+        if site_match:
+            host = site_match.group(1).strip()
+            if host:
+                filter_expr = f'host=="{host}"'
+                search_query = re.sub(r"(?:site|host)\s*[:：]\s*[a-zA-Z0-9.\-]+", "", query).strip()
+
+        params: dict[str, Any] = {
+            "Query": search_query or query,
+            "Count": str(min(n, 20)),
+            "SearchDB": "all",
+        }
+        if filter_expr:
+            params["Filter"] = filter_expr
+        url = "https://developer.zhihu.com/api/v1/content/global_search?" + up.urlencode(params)
+        headers = {
+            "Authorization": f"Bearer {secret}",
+            "X-Request-Timestamp": str(int(time.time())),
+            "Content-Type": "application/json",
+            "User-Agent": "argo-search/2.6 (unified-search@local)",
+        }
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"zhihu_global 失败: {e}")
+            return []
+        if data.get("Code") not in (0, None):
+            logger.warning(f"zhihu_global 返回码异常: {data.get('Code')} {data.get('Message')}")
+            return []
+        items = (data.get("Data") or {}).get("Items") or []
+        results = []
+        for item in items[:n]:
+            title = (item.get("Title") or "").strip()
+            url_ = item.get("Url") or ""
+            snippet = item.get("ContentText") or ""
+            # 去 <em> 高亮标签
+            snippet = re.sub(r"<[^>]+>", "", snippet).strip()
+            if not title and not url_:
+                continue
+            # 结构化信号：权威等级 / 互动 / 时效
+            social_meta = {
+                "author": item.get("AuthorName") or "",
+                "content_type": item.get("ContentType") or "",
+                "vote_up": item.get("VoteUpCount") or 0,
+                "comment_count": item.get("CommentCount") or 0,
+                "authority_level": item.get("AuthorityLevel") or "",
+                "edit_time": item.get("EditTime") or 0,
+            }
+            results.append({
+                "title": title[:200],
+                "url": url_,
+                "snippet": snippet[:300],
+                "source": "zhihu_global",
+                "score": 0.7,
+                "authority_level": social_meta["authority_level"],
+                "social_meta": social_meta,
+            })
+        return results
+    return _engine
+
+
+

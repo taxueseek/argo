@@ -23,6 +23,7 @@ from engines_builders_cn import (
     _build_baidu_hot_engine,
     _build_toutiao_hot_engine,
     _build_bilibili_hot_engine,
+    _build_zhihu_global_engine,
 )
 from engines_builders_data import (
     _build_open_library_engine,

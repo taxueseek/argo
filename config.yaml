@@ -3016,9 +3016,9 @@ engines:
     desc: 中国裁判文书网（反爬较强，尽力而为）
     timeout: 12
   zhihu_global:
-    type: http
+    type: zhihu_global
     enabled: true
-    label: 知乎全局搜索
+    label: 知乎全网搜索
     cost_tier: api
     qps: 2
     priority: 35
@@ -3026,26 +3026,12 @@ engines:
     cost_per_call: 0.0
     cost_unit: api
     coverage:
+    - general
     - chinese
-    - community
-    desc: 知乎开放平台全局搜索（需 ZHIHU_ACCESS_SECRET）
-    format: json
-    headers:
-      Authorization: Bearer {ZHIHU_ACCESS_SECRET}
-      Content-Type: application/json
-      X-Request-Timestamp: '{TIMESTAMP}'
-    method: GET
-    query_param: Query
-    extra_params:
-      Count: '{n}'
-    output_map:
-      items: Data.Items
-      item_title: Title
-      item_url: Url
-      item_summary: ContentText
-      item_source: AuthorName
+    - web
+    family: web_general
+    desc: 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET）
     timeout: 10
-    url: https://developer.zhihu.com/api/v1/content/global_search
   zhihu_hot:
     type: http
     enabled: true

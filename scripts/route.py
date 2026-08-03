@@ -430,6 +430,20 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         if usable and unusable and filtered[0] in unusable:
             filtered = usable + unusable
 
+    # ── 能力族去重（标准化调用契约）──────────────────────────────
+    # 全网搜索族同质化最高（byted/bocha/duckduckgo/octen 都是通用网页检索），
+    # 同族堆叠纯属浪费预算位。web_general 族至多保留 2 个，
+    # 垂直族（academic/code/finance 等）保留多源做交叉验证，不去重。
+    try:
+        from engine_families import dedupe_by_family, family_of
+        web = [e for e in filtered if family_of(e) == "web_general"]
+        if len(web) > 2:
+            non_web = [e for e in filtered if family_of(e) != "web_general"]
+            kept_web = web[:2]
+            filtered = kept_web + non_web
+    except ImportError:
+        pass
+
     return filtered
 
 
