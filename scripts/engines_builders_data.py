@@ -897,6 +897,24 @@ def _build_baidu_baike_engine(spec: dict[str, Any]) -> Any:
                         })
             except Exception:
                 pass
+        # 相关度门禁：英文实体问返回「我们选择登月」等零重叠词条时丢弃，触发 recovery
+        q_keys = set()
+        for t in re.findall(r"[A-Z]{2,}|[a-zA-Z]{3,}|[\u4e00-\u9fff]{2,}", q):
+            if t.isupper() and len(t) >= 2:
+                q_keys.add(t.lower())
+            elif t.lower() not in {
+                "the", "and", "for", "year", "founded", "founding", "headquarters",
+                "where", "what", "when", "which", "with", "from", "that", "this",
+                "年份", "时间", "成立", "创办", "创立", "总部", "职能", "简介",
+            }:
+                q_keys.add(t.lower())
+        if q_keys:
+            filtered = []
+            for r in results:
+                blob = f"{r.get('title','')} {r.get('snippet','')}".lower()
+                if any(k in blob for k in q_keys):
+                    filtered.append(r)
+            results = filtered
         return results[:n]
     return _engine
 
@@ -2506,4 +2524,458 @@ def _build_nasa_cmr_engine(spec: dict[str, Any]) -> Any:
                 "score": 0.8,
             })
         return results
+    return _engine
+
+
+# ── IMDb 影视 suggestion API（免认证） ────────────────────────────────────────
+
+_IMDB_SUGGEST = "https://v2.sg.media-imdb.com/suggestion/{first}/{q}.json"
+_IMDB_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+
+
+# 影视问句噪声词：整句进 suggestion 常 0 命中（如 "Interstellar film cast"）
+_IMDB_STOP = re.compile(
+    r"(?i)\b(movie|film|tv\s*show|tv\s*series|cinema|cast|starring|director|directed\s+by|"
+    r"screenwriter|written\s+by|actor|actress|producer|box\s*office|trailer|review|"
+    r"imdb|豆瓣|电影|电视剧|剧集|影视|影片|导演|主演|演员|编剧|制片|上映|首映|票房|"
+    r"影评|奥斯卡|金像奖|金马奖|网剧|美剧|韩剧|日剧|英剧)\b"
+)
+
+
+def _imdb_clean_query(query: str) -> str:
+    """去掉影视角色/事实词，保留片名/人名主体。"""
+    q = (query or "").strip()
+    if not q:
+        return ""
+    cleaned = _IMDB_STOP.sub(" ", q)
+    cleaned = re.sub(r"[?？!！,，.。:：;；]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    # 清洗后过短则回退原 query（避免只剩空）
+    if len(cleaned) < 2:
+        return q
+    return cleaned
+
+
+def _build_imdb_engine(spec: dict[str, Any]) -> Any:
+    """IMDb 自动补全 suggestion API（v2.sg.media-imdb.com，免认证）。
+
+    路径：/suggestion/{首字符}/{query}.json
+    返回电影/剧集/人物，带 tt/nm ID，可拼正式 IMDb URL。
+    """
+    timeout = spec.get("timeout", 8)
+    source_name = spec.get("_name", "imdb")
+
+    def _fetch_suggest(q: str, to: float) -> list[dict[str, Any]]:
+        if not q:
+            return []
+        first = q[0].lower()
+        if not (("a" <= first <= "z") or ("0" <= first <= "9")):
+            first = "_"
+        path_q = urllib.parse.quote(q[:80], safe="")
+        url = _IMDB_SUGGEST.format(first=first, q=path_q)
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": _IMDB_UA, "Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"IMDb 失败: {e}")
+            return []
+        return [x for x in (data.get("d") or []) if isinstance(x, dict)]
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        raw = (query or "").strip()
+        if not raw:
+            return []
+        to = _timeout or timeout
+        cleaned = _imdb_clean_query(raw)
+        # 先试清洗词，空则回退原句
+        items = _fetch_suggest(cleaned, to)
+        if not items and cleaned != raw:
+            items = _fetch_suggest(raw, to)
+
+        # 按标题与查询 token 重叠 + feature 优先排序
+        q_tokens = {t.lower() for t in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", cleaned or raw)}
+        ranked: list[tuple[float, dict[str, Any]]] = []
+        for item in items:
+            title = item.get("l") or ""
+            iid = item.get("id") or ""
+            if not title and not iid:
+                continue
+            t_low = title.lower()
+            t_tokens = {t.lower() for t in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", title)}
+            overlap = len(q_tokens & t_tokens) / max(len(q_tokens), 1)
+            # 精确/前缀加分；tt 影片优先于 nm 人名（片名查询时）
+            exact = 1.0 if t_low == (cleaned or raw).lower() else 0.0
+            prefix = 0.3 if t_low.startswith((cleaned or raw).lower()[: min(12, len(cleaned or raw))]) else 0.0
+            kind_bonus = 0.15 if str(iid).startswith("tt") else (0.05 if str(iid).startswith("nm") else 0.0)
+            year = item.get("y") or 0
+            try:
+                year_n = int(year) if year else 0
+            except (TypeError, ValueError):
+                year_n = 0
+            # 近年作品轻微加分（同名旧片靠后）
+            recency = min(max(year_n - 1980, 0), 50) / 500.0
+            score = 0.5 + overlap + exact + prefix + kind_bonus + recency
+            ranked.append((score, item))
+        ranked.sort(key=lambda x: -x[0])
+
+        results = []
+        for score, item in ranked[: max(n, 1)]:
+            title = item.get("l") or ""
+            iid = item.get("id") or ""
+            year = item.get("y")
+            kind = item.get("q") or item.get("qid") or ""
+            cast = item.get("s") or ""
+            parts = [p for p in (str(year) if year else "", kind, cast) if p]
+            if str(iid).startswith("tt"):
+                href = f"https://www.imdb.com/title/{iid}/"
+            elif str(iid).startswith("nm"):
+                href = f"https://www.imdb.com/name/{iid}/"
+            else:
+                href = f"https://www.imdb.com/find/?q={urllib.parse.quote(title)}"
+            results.append({
+                "title": title,
+                "url": href,
+                "snippet": " · ".join(parts)[:300],
+                "source": source_name,
+                "score": min(0.95, 0.7 + score * 0.15),
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+# ── iTunes 媒体库（中文需 country=cn；专辑问 entity=album）────────────────────
+
+def _build_itunes_engine(spec: dict[str, Any]) -> Any:
+    """iTunes Search API：按语言/意图调 country 与 entity，避免中文专辑落到脏曲目。"""
+    timeout = spec.get("timeout", 8)
+    source_name = spec.get("_name", "itunes")
+    base = spec.get("url") or "https://itunes.apple.com/search"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = (query or "").strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        want_album = bool(re.search(r"(?i)专辑|album|discography|唱片", q))
+        # 去掉意图词，保留艺人名
+        term = re.sub(
+            r"(?i)(专辑|新专辑|音乐|歌曲|单曲|album|music|song|songs|single|discography|podcast)\b",
+            " ", q,
+        )
+        term = re.sub(r"\s+", " ", term).strip() or q
+        has_zh = bool(re.search(r"[\u4e00-\u9fff]", term))
+        params: dict[str, str] = {
+            "term": term,
+            "media": "music",
+            "limit": str(min(max(n, 1), 25)),
+        }
+        if want_album:
+            params["entity"] = "album"
+        if has_zh:
+            params["country"] = "cn"
+            params["lang"] = "zh_cn"
+        url = f"{base}?{urllib.parse.urlencode(params)}"
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "argo-search/2.6 (itunes)", "Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"iTunes 失败: {e}")
+            return []
+        items = data.get("results") or []
+        # 相关度：艺人名/专辑名与 term 重叠
+        t_keys = {t.lower() for t in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", term)}
+        out: list[dict[str, Any]] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            if want_album:
+                title = it.get("collectionName") or it.get("trackName") or ""
+                href = it.get("collectionViewUrl") or it.get("trackViewUrl") or ""
+            else:
+                title = it.get("trackName") or it.get("collectionName") or ""
+                href = it.get("trackViewUrl") or it.get("collectionViewUrl") or ""
+            artist = it.get("artistName") or ""
+            if not title:
+                continue
+            blob = f"{title} {artist}".lower()
+            if t_keys and not any(k in blob for k in t_keys):
+                continue
+            out.append({
+                "title": title,
+                "url": href,
+                "snippet": artist[:300],
+                "source": source_name,
+                "score": 0.88 if want_album else 0.85,
+            })
+            if len(out) >= n:
+                break
+        return out
+    return _engine
+
+
+# ── TheSportsDB 体育（免认证 test key=3） ────────────────────────────────────
+
+_SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3"
+_SPORTSDB_UA = "argo-search/2.6 (unified-search@local)"
+
+# 高频中文球员/球队 → TheSportsDB 英文检索名（公开 API 基本只认拉丁文）
+_SPORTS_ZH_ALIASES: dict[str, str] = {
+    "梅西": "Messi",
+    "C罗": "Ronaldo",
+    "C羅": "Ronaldo",
+    "罗纳尔多": "Ronaldo",
+    "Cristiano": "Ronaldo",
+    "内马尔": "Neymar",
+    "姆巴佩": "Mbappe",
+    "哈兰德": "Haaland",
+    # 单姓 Curry 会命中 Eddy Curry；中文「库里」默认指 Stephen Curry
+    "库里": "Stephen Curry",
+    "斯蒂芬库里": "Stephen Curry",
+    "史蒂芬库里": "Stephen Curry",
+    "詹姆斯": "LeBron James",
+    "勒布朗": "LeBron",
+    "杜兰特": "Durant",
+    "科比": "Kobe",
+    "乔丹": "Jordan",
+    "姚明": "Yao Ming",
+    "易建联": "Yi Jianlian",
+    "皇马": "Real Madrid",
+    "巴萨": "Barcelona",
+    "曼联": "Manchester United",
+    "曼城": "Manchester City",
+    "湖人": "Lakers",
+    "勇士": "Warriors",
+    "凯尔特人": "Celtics",
+}
+
+
+def _sports_expand_aliases(query: str) -> list[str]:
+    """中文别名展开为英文检索变体。"""
+    out: list[str] = []
+    for zh, en in _SPORTS_ZH_ALIASES.items():
+        if zh in query:
+            if en not in out:
+                out.append(en)
+    return out
+
+
+def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
+    """TheSportsDB 球员/球队/赛事搜索（api key=3 公开测试钥，免认证）。
+
+    并行查 searchplayers / searchteams / searchevents，合并去重。
+    """
+    timeout = spec.get("timeout", 10)
+    source_name = spec.get("_name", "thesportsdb")
+
+    def _fetch(path: str, params: dict[str, str], to: float) -> Any:
+        url = f"{_SPORTSDB_BASE}/{path}?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(
+            url, headers={"User-Agent": _SPORTSDB_UA, "Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            return json.loads(resp.read().decode("utf-8", "replace"))
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = (query or "").strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        # 多词查询（如 "NBA finals MVP 2024"）整句常 0 命中 → 短语 + token 变体
+        stop = {
+            "finals", "final", "mvp", "vs", "the", "and", "of", "in", "for", "a", "an",
+            "winner", "winners", "who", "won", "what", "which", "year", "years",
+            "team", "club", "player", "coach", "manager", "roster", "squad",
+            "决赛", "半决赛", "总冠军", "联赛", "球员", "俱乐部", "进球", "冠军",
+            "球队", "球星", "效力", "夺冠", "卫冕", "助攻", "得分王",
+        }
+        tokens = re.findall(r"[A-Za-z\u4e00-\u9fff]{2,}", q)
+        # 纯数字年号单独收集，用于 event 年份对齐，不当主检索词
+        # 注意：必须整年捕获；r"(19|20)\d{2}" 的 findall 只会返回 "20"，
+        # 导致 "20" in "2016-11-24" 恒真、年份过滤失效。
+        years = re.findall(r"\b((?:19|20)\d{2})\b", q)
+        meaningful = [t for t in tokens if t.lower() not in stop and not re.fullmatch(r"\d{4}", t)]
+
+        variants: list[str] = []
+        # 中文别名优先（梅西→Messi）
+        for alias in _sports_expand_aliases(q):
+            if alias not in variants:
+                variants.append(alias)
+        # 双词短语优先（World Cup / LeBron James）
+        for i in range(len(meaningful) - 1):
+            phrase = f"{meaningful[i]} {meaningful[i + 1]}"
+            if phrase not in variants:
+                variants.append(phrase)
+        # 整句（短查询，非纯中文）
+        if len(q) <= 40 and q not in variants and re.search(r"[A-Za-z]", q):
+            variants.insert(0, q)
+        for t in meaningful:
+            # 纯中文 token 对英文 API 无效，跳过（已由别名覆盖）
+            if re.fullmatch(r"[\u4e00-\u9fff]+", t):
+                continue
+            if t not in variants:
+                variants.append(t)
+            if len(variants) >= 5:
+                break
+        if not variants:
+            variants = [q]
+
+        # 意图：club/team/球队 → 优先 team/player；event 词 → 保留 event
+        q_low = q.lower()
+        prefer_entity = bool(re.search(
+            r"(?i)(team|club|player|coach|球队|球星|俱乐部|效力|球员|roster|squad)", q,
+        ))
+        prefer_event = bool(re.search(
+            r"(?i)(finals?|mvp|cup|championship|winner|won|决赛|总冠军|世界杯|欧冠|季后赛)", q,
+        )) and not prefer_entity
+
+        bucket: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        endpoints = (
+            ("searchplayers.php", "p", "player", "strPlayer", "idPlayer",
+             lambda x: " · ".join(p for p in (
+                 x.get("strTeam") or "",
+                 x.get("strSport") or "",
+                 x.get("strPosition") or "",
+                 x.get("strNationality") or "",
+             ) if p)),
+            ("searchteams.php", "t", "team", "strTeam", "idTeam",
+             lambda x: " · ".join(p for p in (
+                 x.get("strSport") or "",
+                 x.get("strLeague") or "",
+                 x.get("strCountry") or "",
+             ) if p)),
+            ("searchevents.php", "e", "event", "strEvent", "idEvent",
+             lambda x: " · ".join(p for p in (
+                 x.get("strLeague") or "",
+                 x.get("strSport") or "",
+                 x.get("dateEvent") or x.get("strTimestamp") or "",
+             ) if p)),
+        )
+        list_keys = {
+            "searchplayers.php": "player",
+            "searchteams.php": "teams",
+            "searchevents.php": "event",
+        }
+        url_tpl = {
+            "player": "https://www.thesportsdb.com/player/{id}",
+            "team": "https://www.thesportsdb.com/team/{id}",
+            "event": "https://www.thesportsdb.com/event/{id}",
+        }
+        score_of = {"player": 0.86, "team": 0.84, "event": 0.82}
+        # 实体问优先 player/team；赛事问放宽 event
+        if prefer_entity:
+            endpoints = endpoints[:2] + endpoints[2:]  # 顺序已是 p,t,e
+        elif prefer_event:
+            endpoints = (endpoints[2], endpoints[0], endpoints[1])
+
+        q_token_set = {t.lower() for t in meaningful}
+
+        for v in variants:
+            for path, param_k, kind, title_k, id_k, snip_fn in endpoints:
+                try:
+                    data = _fetch(path, {param_k: v}, to)
+                except Exception as e:
+                    logger.warning(f"TheSportsDB {path} 失败: {e}")
+                    continue
+                items = data.get(list_keys[path]) if isinstance(data, dict) else None
+                if not items:
+                    continue
+                for x in items[: max(n, 5)]:
+                    if not isinstance(x, dict):
+                        continue
+                    title = x.get(title_k) or ""
+                    iid = str(x.get(id_k) or "")
+                    key = f"{kind}:{iid or title}"
+                    if not title or key in seen:
+                        continue
+                    # 相关度：标题/摘要 token 与查询重叠；event 尤其严格
+                    snip = snip_fn(x) or ""
+                    sport = str(x.get("strSport") or "")
+                    league = str(x.get("strLeague") or "")
+                    blob = f"{title} {snip} {sport} {league}".lower()
+                    t_tokens = set(re.findall(r"[a-z0-9\u4e00-\u9fff]{2,}", blob))
+                    overlap = len(q_token_set & t_tokens) if q_token_set else 1
+                    # 「世界杯/World Cup」默认足球；公开 API 常塞高尔夫/篮网等噪声 → 非足球一律丢
+                    world_cup_q = bool(re.search(r"(?i)world\s*cup|世界杯|fifa", q))
+                    if world_cup_q:
+                        if not re.search(r"(?i)soccer|football|fifa", f"{title} {sport} {league} {snip}"):
+                            continue
+                    if kind == "event":
+                        # 无实质重叠 → 丢弃噪声 event（如 World Cup → World Sand Greens）
+                        if q_token_set and overlap == 0:
+                            continue
+                        # 有年份且 API 给了日期：年份不对直接丢（避免 2022 问到 2016 Golf）
+                        date_s = str(x.get("dateEvent") or x.get("strTimestamp") or "")
+                        if years and date_s and not any(y in date_s for y in years):
+                            continue
+                        # 双词短语（如 World Cup）若在标题中，要求更高相关；单 token 过宽
+                        phrase_hit = any(
+                            len(p.split()) >= 2 and p.lower() in title.lower()
+                            for p in variants[:3]
+                        )
+                        if q_token_set and overlap < 2 and not phrase_hit:
+                            continue
+                        rel = 0.35 + 0.15 * overlap + (0.2 if phrase_hit else 0)
+                        if years and date_s and any(y in date_s for y in years):
+                            rel += 0.2
+                        if world_cup_q and re.search(r"(?i)soccer|football|fifa", blob):
+                            rel += 0.25
+                    else:
+                        # 赛事问勿用弱 token 沾上球员（Metta World Peace）
+                        if prefer_event and overlap < 2 and v.lower() not in title.lower():
+                            continue
+                        if world_cup_q and kind == "player" and not re.search(
+                            r"(?i)soccer|football", f"{sport} {snip}",
+                        ):
+                            continue
+                        # player/team：变体本身已是名，重叠可放宽
+                        rel = 0.35 + 0.25 * overlap
+                        if v.lower() in title.lower():
+                            rel += 0.25
+                        # 全名变体（Stephen Curry）精确命中加权
+                        if " " in v and v.lower() == title.lower():
+                            rel += 0.3
+                    seen.add(key)
+                    href = url_tpl[kind].format(id=iid) if iid else ""
+                    base = score_of.get(kind, 0.8)
+                    bucket.append({
+                        "title": f"[{kind}] {title}",
+                        "url": href,
+                        "snippet": (snip_fn(x) or kind)[:300],
+                        "source": source_name,
+                        "score": min(0.95, base * 0.5 + rel),
+                        "_kind": kind,
+                        "_rel": rel,
+                    })
+            # 已有高相关实体则早停
+            if sum(1 for r in bucket if r.get("_rel", 0) >= 0.5) >= n:
+                break
+
+        kind_rank = {"player": 0, "team": 1, "event": 2}
+        if prefer_entity:
+            kind_rank = {"player": 0, "team": 0, "event": 3}
+        elif prefer_event:
+            kind_rank = {"event": 0, "player": 1, "team": 2}
+
+        bucket.sort(key=lambda r: (
+            kind_rank.get(r.get("_kind", ""), 9),
+            -float(r.get("_rel", 0)),
+            -float(r.get("score", 0)),
+        ))
+        out = []
+        for r in bucket[:n]:
+            r.pop("_kind", None)
+            r.pop("_rel", None)
+            out.append(r)
+        return out
     return _engine

@@ -101,6 +101,9 @@ from engines_builders import (
     _build_wenshu_engine,
     _build_jin10_engine,
     _build_octen_engine,
+    _build_imdb_engine,
+    _build_thesportsdb_engine,
+    _build_itunes_engine,
 )
 
 logger = logging.getLogger("unified_search.engines")
@@ -223,6 +226,9 @@ _BUILDERS = {
     "wenshu": _build_wenshu_engine,
     "jin10": _build_jin10_engine,
     "octen": _build_octen_engine,
+    "imdb": _build_imdb_engine,
+    "thesportsdb": _build_thesportsdb_engine,
+    "itunes": _build_itunes_engine,
 }
 
 _engine_registry: dict[str, Any] = {}

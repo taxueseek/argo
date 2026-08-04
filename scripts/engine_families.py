@@ -23,7 +23,8 @@ engine_families.py — 搜索源能力族分类（第一性原理重构）
   science_bio      生物/蛋白                 uniprot / rcsb_pdb / gbif
   science_geo      地球/空间                 usgs / nasa_cmr
   legal            法律判例                  courtlistener / wenshu
-  media_book       媒体/图书                 itunes / open_library / weread / douban_book / gutenberg / musicbrainz / openverse
+  media_book       媒体/图书                 itunes / open_library / weread / douban_book / gutenberg / musicbrainz / openverse / imdb
+  sports           体育赛事/球员球队           thesportsdb
   archive          归档/历史                 wayback_cdx / archive_org
   misc_vertical    其他垂直（游戏/预测/天气/标准等） steam / polymarket / qweather / rfc_editor / models_dev / itotii / urban_dictionary / know_your_meme / coingecko / docker_hub / huggingface / stackoverflow 等
 
@@ -155,6 +156,7 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "usgs": "science_geo",
     "nasa_cmr": "science_geo",
     "local_openstreetmap": "science_geo",
+    "openstreetmap": "science_geo",
     # 法律
     "courtlistener": "legal",
     "wenshu": "legal",
@@ -166,6 +168,10 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "gutenberg": "media_book",
     "musicbrainz": "media_book",
     "openverse": "media_book",
+    "imdb": "media_book",
+    "local_imdb": "media_book",
+    # 体育
+    "thesportsdb": "sports",
     # 归档/历史
     "wayback_cdx": "archive",
     "archive_org": "archive",
@@ -199,6 +205,7 @@ FAMILY_LABELS: dict[str, str] = {
     "science_geo": "地球/空间",
     "legal": "法律判例",
     "media_book": "媒体/图书",
+    "sports": "体育",
     "archive": "归档/历史",
     "misc_vertical": "其他垂直",
 }

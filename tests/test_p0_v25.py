@@ -23,6 +23,7 @@ from query_understanding import (  # noqa: E402
 from recovery import (  # noqa: E402
     relax_query, synonym_expand, translate_heuristic, build_recovery_plan,
     pick_alternative_engines, run_recovery, RecoveryResult,
+    _result_has_query_signal,
 )
 from fact_align import align_facts, extract_facts  # noqa: E402
 from search import local_five_dim_rerank  # noqa: E402
@@ -148,6 +149,31 @@ class TestRecovery(unittest.TestCase):
         self.assertIn("duckduckgo", alt)
         self.assertNotIn("anysearch", alt)
 
+    def test_pick_alternative_blocks_vertical_pollution(self):
+        """垂直域空结果恢复不得拉 pypi/npm/jin10/crates 等无关源。"""
+        tried = ["thesportsdb", "wikipedia"]
+        enabled = {
+            "thesportsdb", "wikipedia", "pypi", "npm", "jin10", "crates",
+            "github", "anysearch", "duckduckgo", "local_bing", "wikidata", "imdb",
+        }
+        fallback = [e for e in sorted(enabled) if e not in tried]
+        alt = pick_alternative_engines(tried, fallback, enabled, max_n=4)
+        blocked = {"pypi", "npm", "jin10", "crates", "github", "imdb"}
+        self.assertTrue(set(alt).isdisjoint(blocked), f"polluted picks: {alt}")
+        # 通用源优先；同族 knowledge 可补 wikidata
+        self.assertTrue(any(e in alt for e in ("anysearch", "duckduckgo", "local_bing")))
+        self.assertIn("wikidata", alt)
+
+    def test_pick_alternative_allows_same_family_code(self):
+        """代码域已试 pypi 时，同族 npm 可作为恢复候选。"""
+        alt = pick_alternative_engines(
+            ["pypi"], ["npm", "jin10", "anysearch"],
+            {"pypi", "npm", "jin10", "anysearch"}, max_n=3,
+        )
+        self.assertIn("anysearch", alt)
+        self.assertIn("npm", alt)
+        self.assertNotIn("jin10", alt)
+
     def test_plan_fast_no_l4(self):
         plan = build_recovery_plan("英伟达 财报", ["anysearch"], ["duckduckgo"], mode="fast")
         levels = {s.level for s in plan}
@@ -163,8 +189,8 @@ class TestRecovery(unittest.TestCase):
 
     def test_run_recovery_success(self):
         def executor(q, engines):
-            if "earnings" in q or q == "英伟达 财报":
-                return [{"title": "hit", "url": "http://x", "source": "e"}]
+            if "earnings" in q or "英伟达" in q or q == "英伟达 财报":
+                return [{"title": "英伟达 earnings 财报", "url": "http://x", "source": "e"}]
             return []
         results, rec = run_recovery("英伟达 财报 请问", ["anysearch"], executor,
                                     engines_fallback=["duckduckgo"], mode="auto")
@@ -177,6 +203,26 @@ class TestRecovery(unittest.TestCase):
         results, rec = run_recovery("test", ["anysearch"], bad_executor, mode="auto")
         self.assertFalse(rec.recovered)
         self.assertTrue(any("executor-error" in s["outcome"] for s in rec.steps_tried))
+
+    def test_result_query_signal_gate(self):
+        self.assertTrue(_result_has_query_signal(
+            "WHO headquarters",
+            {"title": "WHO Headquarters", "snippet": "Geneva", "url": "who.int"},
+        ))
+        self.assertFalse(_result_has_query_signal(
+            "WHO headquarters",
+            {"title": "Chegg homework", "snippet": "study support", "url": "chegg.com"},
+        ))
+
+    def test_run_recovery_rejects_unrelated_hits(self):
+        def junk_executor(q, engines):
+            return [{"title": "Chegg homework help", "url": "https://chegg.com", "source": "x"}]
+        results, rec = run_recovery(
+            "WHO headquarters", ["wikidata"], junk_executor,
+            engines_fallback=["anysearch"], mode="auto",
+        )
+        self.assertFalse(rec.recovered)
+        self.assertEqual(results, [])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

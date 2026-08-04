@@ -702,9 +702,8 @@
   "itunes": {
     "label": "iTunes 媒体库",
     "documents": [
-      "音乐 歌曲 专辑 歌手 艺人 新歌 单曲 歌词 音乐人",
-      "电影 电视剧 纪录片 影视 影片 大片 影评 导演",
-      "播客 podcast 有声书 电台 节目 音频",
+      "音乐 歌曲 专辑 歌手 艺人 新歌 单曲 歌词 音乐人 演唱会 巡演",
+      "播客 podcast 有声书 电台 节目 音频 soundtrack",
       "APP 应用 软件 iPhone iOS 应用商店"
     ],
     "boost_keywords": {
@@ -712,13 +711,12 @@
       "歌曲": 2.0,
       "专辑": 2.0,
       "歌手": 1.8,
-      "电影": 2.0,
-      "电视剧": 1.8,
       "播客": 2.0,
       "新歌": 2.0,
       "歌词": 1.8,
       "music": 1.5,
       "song": 1.5,
+      "album": 1.5,
       "podcast": 1.5
     }
   },
@@ -1071,8 +1069,14 @@
   },
   "local_imdb": {
     "label": "IMDb本地",
-    "documents": [],
-    "boost_keywords": {},
+    "documents": [
+      "电影 电视剧 影视 IMDb movie film director cast"
+    ],
+    "boost_keywords": {
+      "电影": 1.5,
+      "IMDb": 2.0,
+      "movie": 1.5
+    },
     "boost_combos": {}
   },
   "local_goodreads": {
@@ -1083,9 +1087,32 @@
   },
   "local_openstreetmap": {
     "label": "OpenStreetMap本地",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
+    "documents": [
+      "地理 地点 地标 坐标 经纬度 海拔 地图 位置 在哪里 位于",
+      "山脉 河流 湖泊 岛屿 沙漠 高原 峡谷 海峡 首都 省会 发源地",
+      "openstreetmap nominatim geocoding latitude longitude capital of where is",
+      "埃菲尔铁塔 长城 珠穆朗玛 长江 黄河 亚马逊 尼罗河 Eiffel Tower"
+    ],
+    "boost_keywords": {
+      "地理": 2.0,
+      "地标": 2.0,
+      "坐标": 2.0,
+      "海拔": 1.8,
+      "位于": 1.8,
+      "在哪": 2.0,
+      "首都": 1.8,
+      "发源地": 2.0,
+      "山脉": 1.8,
+      "河流": 1.8,
+      "where is": 2.0,
+      "latitude": 1.8,
+      "longitude": 1.8,
+      "capital": 1.5
+    },
+    "boost_combos": {
+      "在哪 位于": 0.4,
+      "where is capital": 0.4
+    }
   },
   "zh_wikipedia": {
     "label": "中文维基百科",
@@ -1386,5 +1413,63 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "imdb": {
+    "label": "IMDb 影视",
+    "documents": [
+      "电影 电视剧 纪录片 影视 影片 大片 影评 导演 主演 演员 编剧 上映 票房",
+      "奥斯卡 金像奖 金马奖 戛纳 美剧 韩剧 日剧 网剧 连续剧 IMDb",
+      "movie film cinema director cast starring oscar emmy box office netflix",
+      "Inception Interstellar Shawshank 肖申克的救赎 星际穿越 盗梦空间"
+    ],
+    "boost_keywords": {
+      "电影": 2.2,
+      "电视剧": 2.0,
+      "导演": 2.0,
+      "主演": 2.0,
+      "演员": 1.8,
+      "编剧": 1.8,
+      "IMDb": 2.5,
+      "imdb": 2.5,
+      "movie": 2.0,
+      "film": 2.0,
+      "director": 1.8,
+      "cast": 1.8,
+      "oscar": 1.8
+    },
+    "boost_combos": {
+      "电影 导演": 0.5,
+      "movie director": 0.5,
+      "主演 演员": 0.4
+    }
+  },
+  "thesportsdb": {
+    "label": "TheSportsDB 体育",
+    "documents": [
+      "NBA CBA NFL NHL MLB 英超 西甲 德甲 意甲 中超 欧冠 世界杯 奥运会 联赛 决赛 MVP",
+      "足球 篮球 网球 排球 球员 俱乐部 进球 助攻 转会 总冠军 季后赛 守门员 前锋",
+      "soccer football basketball tennis world cup olympics championship finals playoffs",
+      "Messi Ronaldo LeBron 梅西 皇马 湖人 勇士 Arsenal"
+    ],
+    "boost_keywords": {
+      "NBA": 2.5,
+      "世界杯": 2.2,
+      "奥运会": 2.0,
+      "足球": 2.0,
+      "篮球": 2.0,
+      "联赛": 1.8,
+      "MVP": 2.0,
+      "俱乐部": 1.8,
+      "球员": 1.8,
+      "决赛": 1.5,
+      "soccer": 1.8,
+      "basketball": 1.8,
+      "finals": 1.8
+    },
+    "boost_combos": {
+      "NBA finals": 0.5,
+      "世界杯 冠军": 0.4,
+      "球员 俱乐部": 0.4
+    }
   }
 }

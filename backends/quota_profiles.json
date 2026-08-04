@@ -400,6 +400,16 @@
     "cost_tier": "free",
     "priority": 44
   },
+  "imdb": {
+    "label": "IMDb 影视",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 34
+  },
   "itotii": {
     "label": "itotii梗百科",
     "qps": 3,
@@ -562,7 +572,7 @@
   },
   "local_imdb": {
     "label": "IMDb本地",
-    "qps": 2,
+    "qps": 3,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
@@ -980,6 +990,16 @@
     "cost_tier": "free",
     "priority": 4
   },
+  "thesportsdb": {
+    "label": "TheSportsDB 体育",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 34
+  },
   "ths_hot": {
     "label": "同花顺热点",
     "qps": 2,
@@ -1181,7 +1201,7 @@
     "priority": 4
   },
   "zhihu_global": {
-    "label": "知乎全局搜索",
+    "label": "知乎全网搜索",
     "qps": 2,
     "limit": null,
     "period": "second",

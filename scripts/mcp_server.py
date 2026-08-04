@@ -172,6 +172,24 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         out["errors"] = result["errors"]
     if result.get("limitations"):
         out["limitations"] = result["limitations"]
+    # 语言偏好观测（精简：去掉 habit_counts 明细，保留决策用字段）
+    lp = result.get("lang_pref")
+    if isinstance(lp, dict):
+        out["lang_pref"] = {
+            "query_lang": lp.get("query_lang"),
+            "system_lang": lp.get("system_lang"),
+            "habit_lang": lp.get("habit_lang"),
+            "prefer_langs": lp.get("prefer_langs"),
+            "engine_lang": lp.get("engine_lang"),
+        }
+    rec = result.get("recovery")
+    if isinstance(rec, dict) and rec.get("triggered"):
+        out["recovery"] = {
+            "recovered": rec.get("recovered"),
+            "level_used": rec.get("level_used"),
+            "strategy_used": rec.get("strategy_used"),
+            "note": rec.get("note"),
+        }
     return out
 
 

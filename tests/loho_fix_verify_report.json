@@ -1,0 +1,456 @@
+{
+  "summary": {
+    "n": 12,
+    "domain_acc": 1.0,
+    "engine_acc": 1.0,
+    "selection_hit": 0.9166666666666666,
+    "domain_and_hit": 0.9166666666666666,
+    "pollute_n": 0
+  },
+  "rows": [
+    {
+      "id": "S4",
+      "q": "Cristiano Ronaldo club",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikipedia"
+      ],
+      "n": 1,
+      "ms": 13002,
+      "top1": "[player] Cristiano Ronaldo",
+      "sources": [
+        "thesportsdb"
+      ],
+      "pollute": [],
+      "recovery": null,
+      "tops": [
+        {
+          "title": "[player] Cristiano Ronaldo",
+          "source": "thesportsdb",
+          "url": "https://www.thesportsdb.com/player/34146304"
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "q": "库里 球队",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikipedia"
+      ],
+      "n": 1,
+      "ms": 6988,
+      "top1": "[player] Stephen Curry",
+      "sources": [
+        "thesportsdb"
+      ],
+      "pollute": [],
+      "recovery": null,
+      "tops": [
+        {
+          "title": "[player] Stephen Curry",
+          "source": "thesportsdb",
+          "url": "https://www.thesportsdb.com/player/34160611"
+        }
+      ]
+    },
+    {
+      "id": "S6",
+      "q": "World Cup 2022 winner",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikipedia"
+      ],
+      "n": 5,
+      "ms": 19900,
+      "top1": "Spain 1-0 Argentina | World Cup 2026 report and highlights",
+      "sources": [
+        "anysearch"
+      ],
+      "pollute": [],
+      "recovery": {
+        "triggered": true,
+        "recovered": true,
+        "level_used": "L3",
+        "strategy_used": "switch_engine",
+        "note": "经 L3/switch_engine 恢复成功"
+      },
+      "tops": [
+        {
+          "title": "Spain 1-0 Argentina | World Cup 2026 report and highlights",
+          "source": "anysearch",
+          "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/spain-argentina-final-report-highlights"
+        },
+        {
+          "title": "Spain edge Argentina after extra time to win 2nd World Cup title - ESPN",
+          "source": "anysearch",
+          "url": "https://www.espn.co.uk/football/story/_/id/49403084/2026-world-cup-final-spain-argentina-score-ferran-torres-champions-t"
+        },
+        {
+          "title": "World Cup 2026: Spain's 'victory for football' over 'embarrassing' Argentina - BBC Sport",
+          "source": "anysearch",
+          "url": "https://www.bbc.com/sport/football/articles/cdx8veqllw7o"
+        }
+      ]
+    },
+    {
+      "id": "G6",
+      "q": "黄河 流经省份",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "geo_places",
+      "engine": "local_openstreetmap",
+      "combo": [
+        "local_openstreetmap",
+        "wikipedia"
+      ],
+      "n": 5,
+      "ms": 7553,
+      "top1": "黄河流域综合规划（2012～2030年）概要",
+      "sources": [
+        "anysearch"
+      ],
+      "pollute": [],
+      "recovery": {
+        "triggered": true,
+        "recovered": true,
+        "level_used": "L3",
+        "strategy_used": "switch_engine",
+        "note": "经 L3/switch_engine 恢复成功"
+      },
+      "tops": [
+        {
+          "title": "黄河流域综合规划（2012～2030年）概要",
+          "source": "anysearch",
+          "url": "http://www.yrcc.gov.cn/zwzc/ghjh/202312/t20231220_365017.html"
+        },
+        {
+          "title": "黄河流域",
+          "source": "anysearch",
+          "url": "https://baike.baidu.com/item/%E9%BB%84%E6%B2%B3%E6%B5%81%E5%9F%9F/7576659"
+        },
+        {
+          "title": "黄河 - 维基百科，自由的百科全书",
+          "source": "anysearch",
+          "url": "https://zh.wikipedia.org/zh-cn/%E9%BB%84%E6%B2%B3"
+        }
+      ]
+    },
+    {
+      "id": "O2",
+      "q": "Apple Inc headquarters",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "org_entity",
+      "engine": "wikidata",
+      "combo": [
+        "wikidata",
+        "wikipedia"
+      ],
+      "n": 5,
+      "ms": 3236,
+      "top1": "Where is Apple's Headquarters? Main Office Location and Global ...",
+      "sources": [
+        "anysearch"
+      ],
+      "pollute": [],
+      "recovery": {
+        "triggered": true,
+        "recovered": true,
+        "level_used": "L3",
+        "strategy_used": "switch_engine",
+        "note": "经 L3/switch_engine 恢复成功"
+      },
+      "tops": [
+        {
+          "title": "Where is Apple's Headquarters? Main Office Location and Global ...",
+          "source": "anysearch",
+          "url": "https://www.clay.com/dossier/apple-headquarters-office-locations"
+        },
+        {
+          "title": "Apple Inc. - Wikipedia",
+          "source": "anysearch",
+          "url": "https://en.wikipedia.org/wiki/Apple_Inc."
+        },
+        {
+          "title": "Companies | Apple",
+          "source": "anysearch",
+          "url": "https://duncangrubbs.digitalscholar.rochester.edu/project04/apple.html"
+        }
+      ]
+    },
+    {
+      "id": "O4",
+      "q": "WHO headquarters",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "domain": "org_entity",
+      "engine": "wikidata",
+      "combo": [
+        "wikidata",
+        "wikipedia"
+      ],
+      "n": 0,
+      "ms": 8338,
+      "top1": "",
+      "sources": [],
+      "pollute": [],
+      "recovery": {
+        "triggered": true,
+        "recovered": false,
+        "level_used": null,
+        "strategy_used": null,
+        "note": "所有恢复策略均无结果"
+      },
+      "tops": []
+    },
+    {
+      "id": "O5",
+      "q": "清华大学 创办年份",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "org_entity",
+      "engine": "baidu_baike",
+      "combo": [
+        "baidu_baike",
+        "wikidata"
+      ],
+      "n": 1,
+      "ms": 571,
+      "top1": "清华大学自动化系",
+      "sources": [
+        "baidu_baike"
+      ],
+      "pollute": [],
+      "recovery": null,
+      "tops": [
+        {
+          "title": "清华大学自动化系",
+          "source": "baidu_baike",
+          "url": "https://baike.baidu.com/item/%E6%B8%85%E5%8D%8E%E5%A4%A7%E5%AD%A6%E8%87%AA%E5%8A%A8%E5%8C%96%E7%B3%BB/5075009"
+        }
+      ]
+    },
+    {
+      "id": "O6",
+      "q": "NASA founding year",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "org_entity",
+      "engine": "baidu_baike",
+      "combo": [
+        "baidu_baike",
+        "wikidata"
+      ],
+      "n": 5,
+      "ms": 2506,
+      "top1": "NASA History",
+      "sources": [
+        "anysearch"
+      ],
+      "pollute": [],
+      "recovery": {
+        "triggered": true,
+        "recovered": true,
+        "level_used": "L3",
+        "strategy_used": "switch_engine",
+        "note": "经 L3/switch_engine 恢复成功"
+      },
+      "tops": [
+        {
+          "title": "NASA History",
+          "source": "anysearch",
+          "url": "https://www.nasa.gov/history/"
+        },
+        {
+          "title": "President Eisenhower Signs NASA into Existence - NASA",
+          "source": "anysearch",
+          "url": "https://www.nasa.gov/history/president-eisenhower-signs-nasa-into-existence/"
+        },
+        {
+          "title": "National Aeronautics and Space Act of 1958 (Unamended) - NASA",
+          "source": "anysearch",
+          "url": "https://www.nasa.gov/history/national-aeronautics-and-space-act-of-1958-unamended/"
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "q": "LeBron James team",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikipedia"
+      ],
+      "n": 5,
+      "ms": 6970,
+      "top1": "LeBron James - Wikipedia",
+      "sources": [
+        "anysearch"
+      ],
+      "pollute": [],
+      "recovery": {
+        "triggered": true,
+        "recovered": true,
+        "level_used": "L3",
+        "strategy_used": "switch_engine",
+        "note": "经 L3/switch_engine 恢复成功"
+      },
+      "tops": [
+        {
+          "title": "LeBron James - Wikipedia",
+          "source": "anysearch",
+          "url": "https://en.wikipedia.org/wiki/LeBron_James"
+        },
+        {
+          "title": "LeBron James heads back East, signs deal with 76ers | NBA.com",
+          "source": "anysearch",
+          "url": "https://www.nba.com/news/lebron-james-free-agency-sixers-2026"
+        },
+        {
+          "title": "LeBron James - Philadelphia 76ers Forward - ESPN",
+          "source": "anysearch",
+          "url": "https://www.espn.com/nba/player/_/id/1966/lebron-james"
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "q": "Interstellar film cast",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 5,
+      "ms": 411,
+      "top1": "Interstellar",
+      "sources": [
+        "imdb"
+      ],
+      "pollute": [],
+      "recovery": null,
+      "tops": [
+        {
+          "title": "Interstellar",
+          "source": "imdb",
+          "url": "https://www.imdb.com/name/nm18200616/"
+        },
+        {
+          "title": "Interstellar Ella",
+          "source": "imdb",
+          "url": "https://www.imdb.com/title/tt26699362/"
+        },
+        {
+          "title": "Interstellar",
+          "source": "imdb",
+          "url": "https://www.imdb.com/title/tt0816692/"
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "q": "周杰伦 专辑",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "media_search",
+      "engine": "itunes",
+      "combo": [
+        "itunes",
+        "musicbrainz"
+      ],
+      "n": 5,
+      "ms": 342,
+      "top1": "太阳之子",
+      "sources": [
+        "itunes"
+      ],
+      "pollute": [],
+      "recovery": null,
+      "tops": [
+        {
+          "title": "太阳之子",
+          "source": "itunes",
+          "url": "https://music.apple.com/cn/album/%E5%A4%AA%E9%98%B3%E4%B9%8B%E5%AD%90/6771326786?uo=4"
+        },
+        {
+          "title": "范特西",
+          "source": "itunes",
+          "url": "https://music.apple.com/cn/album/%E8%8C%83%E7%89%B9%E8%A5%BF/535739206?uo=4"
+        },
+        {
+          "title": "七里香",
+          "source": "itunes",
+          "url": "https://music.apple.com/cn/album/%E4%B8%83%E9%87%8C%E9%A6%99/536114662?uo=4"
+        }
+      ]
+    },
+    {
+      "id": "F6",
+      "q": "Parasite film cast",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 5,
+      "ms": 424,
+      "top1": "Parasite",
+      "sources": [
+        "imdb"
+      ],
+      "pollute": [],
+      "recovery": null,
+      "tops": [
+        {
+          "title": "Parasite",
+          "source": "imdb",
+          "url": "https://www.imdb.com/title/tt32473992/"
+        },
+        {
+          "title": "Parasite",
+          "source": "imdb",
+          "url": "https://www.imdb.com/title/tt0084472/"
+        },
+        {
+          "title": "Parasite",
+          "source": "imdb",
+          "url": "https://www.imdb.com/title/tt11646872/"
+        }
+      ]
+    }
+  ]
+}

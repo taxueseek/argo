@@ -10,7 +10,7 @@ MECE 五级决策树（L1→L5，成本递增）：
   L1 放宽    : 去停用词 / 去引号 / 截断过长尾修饰
   L2 同义    : 小同义表替换（财报↔earnings，股价↔行情，教程↔guide）
   L3 换引擎  : 从 engines_fallback 或通用免费组合取未试引擎
-  L4 中英互译: 中文主 query 抽英文 token 再搜（启发式，非真翻译）
+  L4 跨语言  : 非拉丁→通用英源；英文+偏好zh→中文源；中英互译启发式
   L5 结构化  : 输出 recovery 字段告知 Agent 已降级及降级路径
 
 模式约束：
@@ -147,32 +147,70 @@ def synonym_expand(query: str) -> Optional[str]:
 
 _GENERAL_FREE_COMBO = ["anysearch", "duckduckgo", "local_bing", "local_baidu", "wikipedia"]
 
+# 空结果恢复只允许「通用检索 + 百科」；垂直污染源（pypi/npm/jin10 等）一律禁入。
+# 例外：已尝试引擎同族可保留（如 tried 含 thesportsdb → 可补 sports 族）。
+_RECOVERY_SAFE_FAMILIES = frozenset({"web_general", "knowledge"})
+
+
+def _engine_family(name: str) -> str:
+    try:
+        from engine_families import family_of
+        return family_of(name)
+    except Exception:
+        return "web_general"
+
+
+def _recovery_engine_allowed(eng: str, tried_families: set[str]) -> bool:
+    """L3/L4 备选是否安全：通用/百科，或与已试引擎同族。"""
+    fam = _engine_family(eng)
+    return fam in _RECOVERY_SAFE_FAMILIES or fam in tried_families
+
 
 def pick_alternative_engines(tried: list[str], engines_fallback: list[str] | None,
                              enabled: set[str] | None = None,
                              max_n: int = 2) -> list[str]:
     """L3：挑选未尝试过的备选引擎。
 
-    优先用路由给出的 engines_fallback，其次通用免费组合。
+    优先通用免费组合（anysearch/ddg/bing/wiki），再同族垂直，再路由 fallback。
+    禁止 code/行情/快讯等与查询域无关的垂直源污染结果。
     """
     tried_set = set(tried)
+    tried_families = {_engine_family(e) for e in tried}
     picks: list[str] = []
-    for src in (engines_fallback or []), _GENERAL_FREE_COMBO:
-        for eng in src:
-            if eng in tried_set or eng in picks:
-                continue
-            if enabled is not None and eng not in enabled:
-                continue
-            picks.append(eng)
-            if len(picks) >= max_n:
-                return picks
+
+    def _try_add(eng: str) -> bool:
+        if eng in tried_set or eng in picks:
+            return False
+        if enabled is not None and eng not in enabled:
+            return False
+        if not _recovery_engine_allowed(eng, tried_families):
+            return False
+        picks.append(eng)
+        return len(picks) >= max_n
+
+    # 1) 通用免费源优先（避免 fallback 全量 enabled 把 pypi/npm 排到前面）
+    for eng in _GENERAL_FREE_COMBO:
+        if _try_add(eng):
+            return picks
+
+    # 2) 同族垂直（如 knowledge 补 wikidata；sports 补其它体育源）
+    for eng in engines_fallback or []:
+        if _engine_family(eng) in tried_families and _try_add(eng):
+            return picks
+
+    # 3) 其余安全 fallback（仍过 family 门禁）
+    for eng in engines_fallback or []:
+        if _try_add(eng):
+            return picks
     return picks
 
 
 # ── L4 跨语言回退（原中英互译启发式升级）───────────────────────────────────────
 
-# 非拉丁主语言零结果时，用通用源补搜（原文即可，无需真翻译）
+# 非拉丁 / 中文主语言零结果时，用通用源补搜（原文即可，无需真翻译）
 _CROSS_LANG_ENGINES = ["duckduckgo", "anysearch", "wikipedia"]
+# 中英基线反向：英文主查询零结果且用户偏好含 zh 时，补中文源
+_CN_BASELINE_ENGINES = ["local_bing", "anysearch", "duckduckgo"]
 
 _CROSS_LANG_SIGNAL = re.compile(
     r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f"
@@ -234,6 +272,41 @@ def cross_lang_query(query: str, primary_lang: str = "") -> tuple[Optional[str],
     return query, ",".join(_CROSS_LANG_ENGINES)
 
 
+def baseline_cross_query(
+    query: str,
+    primary_lang: str = "",
+    prefer: list[str] | None = None,
+) -> tuple[Optional[str], str]:
+    """中英基线补搜：英文主查询零结果时，若偏好含 zh，用中文源再试原文。
+
+    对称于 cross_lang_query（非拉丁→通用英源）。仅在 prefer 含 zh 时触发，
+    避免纯英文市场用户被强塞中文源。
+    """
+    if not query:
+        return None, ""
+    lang = primary_lang
+    if not lang:
+        try:
+            from lang_detect import detect_language
+            lang = detect_language(query)
+        except ImportError:
+            lang = "en"
+    if lang not in ("en", "latin"):
+        return None, ""
+    if _is_non_latin_script(query):
+        return None, ""
+    prefs = prefer
+    if prefs is None:
+        try:
+            from lang_pref import prefer_langs
+            prefs = prefer_langs(query_lang=lang)
+        except ImportError:
+            prefs = ["zh", "en"]
+    if "zh" not in (prefs or []):
+        return None, ""
+    return query, ",".join(_CN_BASELINE_ENGINES)
+
+
 # ── 计划生成 ──────────────────────────────────────────────────────────────────
 
 def build_recovery_plan(query: str, tried_engines: list[str],
@@ -254,6 +327,21 @@ def build_recovery_plan(query: str, tried_engines: list[str],
     """
     steps: list[RecoveryStep] = []
     base_engines = list(tried_engines) or ["anysearch"]
+
+    # 本轮主语言：供 L4 跨语 / 中英基线判断
+    primary_lang = ""
+    try:
+        from lang_detect import detect_language
+        primary_lang = detect_language(query)
+    except ImportError:
+        pass
+
+    prefer: list[str] = []
+    try:
+        from lang_pref import prefer_langs
+        prefer = prefer_langs(query_lang=primary_lang)
+    except ImportError:
+        prefer = ["zh", "en"]
 
     # L1 放宽
     relaxed = relax_query(query)
@@ -278,14 +366,25 @@ def build_recovery_plan(query: str, tried_engines: list[str],
 
     # L4 跨语言回退（fast 禁止）
     if mode != "fast":
-        # 非拉丁书写系统主语言 → 用英文通用源补搜（duckduckgo/anysearch/wikipedia）。
-        # 补搜用原 query 即可（通用源对多语言查询有覆盖），不需要真翻译。
-        cross_q, cross_engines = cross_lang_query(query)
+        # 非拉丁 / 中文 → 通用英源补搜
+        cross_q, cross_engines = cross_lang_query(query, primary_lang=primary_lang)
         if cross_engines:
             steps.append(RecoveryStep(
                 level="L4", strategy="cross_lang",
                 query=cross_q or query, engines=cross_engines.split(","),
                 reason="跨语言回退：非英文主语言用通用源补搜"))
+        # 中英基线反向：英文查询 + 偏好含 zh → 中文源补搜
+        base_q, base_engines_s = baseline_cross_query(
+            query, primary_lang=primary_lang, prefer=prefer)
+        if base_engines_s:
+            eng_list = [e for e in base_engines_s.split(",")
+                        if enabled is None or e in enabled]
+            if not eng_list:
+                eng_list = base_engines_s.split(",")
+            steps.append(RecoveryStep(
+                level="L4", strategy="baseline_zh",
+                query=base_q or query, engines=eng_list,
+                reason="中英基线：英文主查询零结果，偏好含 zh 时补中文源"))
         # 中英互译启发式（有英文 token / 同义表映射时）
         trans = translate_heuristic(query)
         if trans and trans.lower() != query.lower():
@@ -304,6 +403,35 @@ def build_recovery_plan(query: str, tried_engines: list[str],
 
 
 # ── 执行编排（供 search.py 调用）───────────────────────────────────────────────
+
+# recovery 接受结果前的停用词（不含 WHO 等缩写；缩写靠 isupper 保留）
+_REC_SIGNAL_STOP = {
+    "the", "a", "an", "of", "for", "to", "in", "on", "at", "is", "are", "was", "were",
+    "how", "what", "which", "when", "where", "whom", "whose", "why", "who",
+    "and", "or", "with", "from", "that", "this", "year", "years", "founded", "founding",
+    "headquarters", "please", "latest", "about",
+    "请问", "怎么", "如何", "关于", "有关", "年份", "时间", "成立", "创办", "创立",
+    "总部", "职能", "简介", "最新", "详细",
+}
+
+
+def _result_has_query_signal(query: str, item: dict[str, Any]) -> bool:
+    """恢复结果须与查询有实质 token 重叠，避免 Chegg/无关广告被当成恢复成功。"""
+    if not query or not isinstance(item, dict):
+        return False
+    blob = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('url', '')}".lower()
+    if not blob.strip():
+        return False
+    keys: list[str] = []
+    for t in re.findall(r"[A-Z]{2,}|[a-zA-Z]{3,}|[\u4e00-\u9fff]{2,}", query):
+        if t.isupper() and len(t) >= 2:
+            keys.append(t.lower())
+        elif t.lower() not in _REC_SIGNAL_STOP:
+            keys.append(t.lower())
+    if not keys:
+        return True  # 无可用信号时不拦
+    return any(k in blob for k in keys)
+
 
 def run_recovery(query: str, tried_engines: list[str],
                  executor: Callable[[str, list[str]], list[dict[str, Any]]],
@@ -335,7 +463,8 @@ def run_recovery(query: str, tried_engines: list[str],
             })
             continue
         goods = [r for r in (hits or [])
-                 if isinstance(r, dict) and "error" not in r]
+                 if isinstance(r, dict) and "error" not in r
+                 and _result_has_query_signal(step.query, r)]
         result.steps_tried.append({
             "level": step.level, "strategy": step.strategy,
             "query": step.query, "engines": step.engines,

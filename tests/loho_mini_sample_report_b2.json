@@ -1,0 +1,250 @@
+{
+  "batch": 2,
+  "summary": {
+    "n": 14,
+    "domain_acc": 0.6428571428571429,
+    "engine_acc": 0.7142857142857143,
+    "selection_hit": 0.7142857142857143,
+    "domain_and_hit": 0.35714285714285715
+  },
+  "rows": [
+    {
+      "id": "F4",
+      "q": "The Dark Knight director",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "dark knight",
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 5,
+      "ms": 1606,
+      "top1": "Scott Muller"
+    },
+    {
+      "id": "F5",
+      "q": "阿凡达 导演",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "avatar",
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 3,
+      "ms": 1169,
+      "top1": "Avatar: Fire and Ash"
+    },
+    {
+      "id": "F6",
+      "q": "Parasite film cast",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "gold_matched": "",
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 3,
+      "ms": 1560,
+      "top1": "Garfield: The Movie"
+    },
+    {
+      "id": "S4",
+      "q": "Cristiano Ronaldo club",
+      "dom_ok": false,
+      "eng_ok": false,
+      "hit": true,
+      "gold_matched": "ronaldo",
+      "domain": "general_search",
+      "engine": "anysearch",
+      "combo": [
+        "anysearch",
+        "duckduckgo"
+      ],
+      "n": 5,
+      "ms": 2718,
+      "top1": "Cristiano Ronaldo - Player profile 26/27 | Trans"
+    },
+    {
+      "id": "S5",
+      "q": "库里 球队",
+      "dom_ok": false,
+      "eng_ok": false,
+      "hit": true,
+      "gold_matched": "curry",
+      "domain": "chinese_general",
+      "engine": "byted",
+      "combo": [
+        "byted",
+        "zhihu_global"
+      ],
+      "n": 5,
+      "ms": 1019,
+      "top1": "斯蒂芬 库里"
+    },
+    {
+      "id": "S6",
+      "q": "World Cup 2022 winner",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "gold_matched": "",
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikidata"
+      ],
+      "n": 5,
+      "ms": 5811,
+      "top1": "[event] World Sand Greens Championship"
+    },
+    {
+      "id": "G4",
+      "q": "富士山在哪",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "japan",
+      "domain": "geo_places",
+      "engine": "local_openstreetmap",
+      "combo": [
+        "local_openstreetmap",
+        "wikidata"
+      ],
+      "n": 5,
+      "ms": 5987,
+      "top1": ""
+    },
+    {
+      "id": "G5",
+      "q": "where is Statue of Liberty",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "liberty",
+      "domain": "geo_places",
+      "engine": "zh_wikipedia",
+      "combo": [
+        "zh_wikipedia",
+        "local_openstreetmap"
+      ],
+      "n": 5,
+      "ms": 1037,
+      "top1": "奥斯卡最佳纪录片奖"
+    },
+    {
+      "id": "G6",
+      "q": "黄河 流经省份",
+      "dom_ok": false,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "黄河",
+      "domain": "chinese_general",
+      "engine": "byted",
+      "combo": [
+        "byted",
+        "zhihu_global"
+      ],
+      "n": 5,
+      "ms": 1101,
+      "top1": "黄河的身世"
+    },
+    {
+      "id": "O4",
+      "q": "WHO headquarters",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "gold_matched": "",
+      "domain": "org_entity",
+      "engine": "baidu_baike",
+      "combo": [
+        "baidu_baike",
+        "wikidata"
+      ],
+      "n": 5,
+      "ms": 879,
+      "top1": "好莱坞星星女孩"
+    },
+    {
+      "id": "O5",
+      "q": "清华大学 创办年份",
+      "dom_ok": false,
+      "eng_ok": false,
+      "hit": true,
+      "gold_matched": "清华",
+      "domain": "chinese_general",
+      "engine": "byted",
+      "combo": [
+        "byted",
+        "zhihu_global"
+      ],
+      "n": 5,
+      "ms": 937,
+      "top1": "《清华大学章程》正式发布"
+    },
+    {
+      "id": "O6",
+      "q": "NASA founding year",
+      "dom_ok": false,
+      "eng_ok": false,
+      "hit": true,
+      "gold_matched": "1958",
+      "domain": "general_search",
+      "engine": "anysearch",
+      "combo": [
+        "anysearch",
+        "duckduckgo"
+      ],
+      "n": 5,
+      "ms": 2293,
+      "top1": "President Eisenhower Signs NASA into Existence -"
+    },
+    {
+      "id": "M2",
+      "q": "周杰伦 专辑",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "gold_matched": "",
+      "domain": "media_search",
+      "engine": "itunes",
+      "combo": [
+        "itunes",
+        "local_bing"
+      ],
+      "n": 3,
+      "ms": 632,
+      "top1": "周日映画室——粤语影评播客"
+    },
+    {
+      "id": "R2",
+      "q": "宁德时代股价",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "宁德",
+      "domain": "stock_query",
+      "engine": "sina_quote",
+      "combo": [
+        "sina_quote",
+        "local_openstreetmap"
+      ],
+      "n": 1,
+      "ms": 513,
+      "top1": "宁德时代 394.400 ↓-0.23%"
+    }
+  ]
+}

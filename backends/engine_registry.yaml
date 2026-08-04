@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。
 version: 2
-last_updated: '2026-08-02'
+last_updated: '2026-08-04'
 engines:
 - name: anysearch
   tier: T1
@@ -453,6 +453,19 @@ engines:
   status: ok
   recommended: true
   desc: Hugging Face 模型搜索（免认证）
+- name: imdb
+  tier: T1
+  type: imdb
+  coverage:
+  - film
+  - movie
+  - tv
+  - media
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: IMDb suggestion API（电影/剧集/人物，免认证）
 - name: itotii
   tier: T1
   type: itotii
@@ -626,14 +639,16 @@ engines:
   desc: Google News本地（http）
 - name: local_imdb
   tier: T2
-  type: html
+  type: imdb
   coverage:
-  - general
+  - film
+  - movie
+  - tv
   latency_ms: 2000
   cost: free
-  status: disabled
+  status: ok
   recommended: true
-  desc: IMDb本地（html）
+  desc: IMDb suggestion API（local-search 垂直别名，与 imdb 同源）
 - name: local_mojeek
   tier: T2
   type: html
@@ -658,12 +673,14 @@ engines:
   tier: T2
   type: http
   coverage:
-  - general
+  - geo
+  - places
+  - map
   latency_ms: 2000
   cost: free
   status: ok
   recommended: true
-  desc: OpenStreetMap本地（http）
+  desc: Nominatim 地理编码/地点搜索（OSM，免认证，须带 User-Agent）
 - name: local_pubmed
   tier: T2
   type: http
@@ -1078,6 +1095,19 @@ engines:
   status: ok
   recommended: true
   desc: 腾讯实时行情（qt.gtimg.cn 免认证，含换手率/市盈率/五档）
+- name: thesportsdb
+  tier: T1
+  type: thesportsdb
+  coverage:
+  - sports
+  - athlete
+  - team
+  - league
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: TheSportsDB 球员/球队/赛事（公开 test key，免认证）
 - name: ths_hot
   tier: T1
   type: ths_hot
@@ -1306,15 +1336,16 @@ engines:
   desc: 知乎搜索，中文观点/评测
 - name: zhihu_global
   tier: T1
-  type: http
+  type: zhihu_global
   coverage:
+  - general
   - chinese
-  - community
+  - web
   latency_ms: 2000
   cost: api
   status: ok
   recommended: true
-  desc: 知乎开放平台全局搜索（需 ZHIHU_ACCESS_SECRET）
+  desc: 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET）
 - name: zhihu_hot
   tier: T1
   type: http

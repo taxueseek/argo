@@ -458,7 +458,88 @@ domains:
   - (?i)(小说|书籍|图书|书单|好书|荐书|书荒|名著|畅销书|电子书|看书|出版社|ISBN|小说推荐|科幻小说|推理小说)
   - (?i)\b(book|novel|isbn|ebook|bestseller)\b
   primary: weread
-- desc: 音乐/影视/播客媒体搜索
+- desc: 影视/电影/剧集（IMDb 主，先于音乐媒体域，避免电影误走 iTunes 音乐）
+  engines_combo:
+  - imdb
+  - itunes
+  - wikipedia
+  - wikidata
+  fallback: imdb
+  name: film_search
+  parallel: true
+  patterns:
+  # 中文影视强信号；「主演/导演/编剧」覆盖 LoHo 类事实问
+  - (?i)(电影|电视剧|纪录片|影视|大片|影评|影片|院线|票房|奥斯卡|金像奖|金马奖|戛纳|威尼斯电影节|剧集|连续剧|网剧|美剧|韩剧|日剧|英剧)
+  - (?i)(导演|主演|演员|编剧|制片|出品|上映|首映|IMDb|imdb|豆瓣电影|影帝|影后|最佳影片)
+  - (?i)\b(movie|film|tv\s*show|tv\s*series|cinema|oscar|emmy|director|screenwriter|box\s*office|netflix|hbo)\b
+  - (?i)\b(cast|starring|directed\s+by|written\s+by|released\s+in)\b
+  primary: imdb
+- desc: 体育赛事/球员/球队（先于媒体域；修复 MVP 误匹配 MV）
+  engines_combo:
+  - thesportsdb
+  - wikipedia
+  - wikidata
+  - zh_wikipedia
+  fallback: thesportsdb
+  name: sports_search
+  parallel: true
+  patterns:
+  - (?i)(NBA|CBA|WNBA|NFL|NHL|MLB|MLS|英超|西甲|德甲|意甲|法甲|中超|欧冠|亚冠|世界杯|欧洲杯|美洲杯|奥运会|残奥会|世锦赛|大奖赛)
+  - (?i)(足球|篮球|网球|排球|乒乓球|羽毛球|棒球|橄榄球|高尔夫|F1|一级方程式|马拉松|田径|游泳|拳击|UFC|电竞战队)
+  - (?i)(决赛|半决赛|季后赛|总冠军|MVP|得分王|金靴|金球奖|转会|俱乐部|联赛|进球|助攻|夺冠|卫冕|球员|守门员|前锋|后卫)
+  # 中英球队/效力语境（修复「库里 球队」「LeBron James team」「Ronaldo club」漏召）
+  - (?i)(球队|球星|球会|球衣|队名|队史|效力于|效力|主教练|得分手)
+  - (?i)\b(team|club|player|coach|manager|roster|squad|jersey|striker|goalkeeper|midfielder|forward|defender)\b
+  - (?i)\b(world\s*cup|olympics?|championship|finals?|playoffs?|league|fixture|matchday|transfer|hat-?trick)\b
+  - (?i)\b(soccer|football|basketball|tennis|baseball|cricket|rugby|golf|formula\s*1|formula\s*one)\b
+  primary: thesportsdb
+- desc: 地理/地点/地标（OSM + 百科，先于中文 catch-all）
+  engines_combo:
+  - local_openstreetmap
+  - wikipedia
+  - wikidata
+  - zh_wikipedia
+  fallback: local_openstreetmap
+  name: geo_places
+  parallel: true
+  patterns:
+  - (?i)(在哪里|在哪儿|在哪|位于|坐落|坐标|经纬度|海拔|发源地|入海口|交汇|毗邻|接壤|边境|首都|省会|直辖市|地标|名胜|景点)
+  - (?i)(山脉|河流|湖泊|海洋|岛屿|半岛|沙漠|高原|盆地|峡谷|海峡|运河|瀑布|火山|冰川|赤道|经线|纬线|时区)
+  # 水系/行政区划事实（修复「黄河 流经省份」漏召）
+  - (?i)(流经|途经|贯穿|横跨|流域|水系|汇入|注入|源头|入海|几省|省份|省区|行政区划|发源于)
+  - (?i)(地理|地图|方位|东南西北|几公里|多远|距离.*多远|openstreetmap|nominatim|geonames)
+  - (?i)\b(where\s+is|located\s+in|capital\s+of|latitude|longitude|elevation|coordinates?|border(s|ing)?|tributary)\b
+  - (?i)\b(flows?\s+through|drainage|basin|source\s+of|passes\s+through)\b
+  - (?i)\b(mountain|river|lake|ocean|island|peninsula|desert|plateau|canyon|strait|volcano|glacier|timezone)\b
+  primary: local_openstreetmap
+- desc: 政府/组织/公司实体（百科+维基数据，覆盖 LoHo Politics/Business）
+  engines_combo:
+  - wikidata
+  - wikipedia
+  - baidu_baike
+  - zh_wikipedia
+  fallback: wikidata
+  name: org_entity
+  parallel: true
+  patterns:
+  # 政府/国际组织
+  - (?i)(国务院|中共中央|全国人大|政协|外交部|财政部|发改委|央行|人民银行|最高法院|最高检|省政府|市政府|区政府|县委|市委)
+  - (?i)(联合国|安理会|世贸组织|WTO|WHO|UNESCO|IMF|世界银行|欧盟|北约|NATO|东盟|上合组织|G20|G7|非盟|阿盟)
+  - (?i)(白宫|五角大楼|国会山|克里姆林宫|唐宁街|青瓦台|首相府|总统府|议会|参议院|众议院|内阁|部委|政府机关)
+  - (?i)\b(ministry|department\s+of|state\s+council|white\s+house|parliament|congress|senate|cabinet|government\s+of)\b
+  - (?i)\b(united\s+nations|world\s+bank|european\s+union|nato|who|unesco|imf)\b
+  # 知名机构缩写（与 founding/HQ 等事实问搭配；单独缩写也可进 org）
+  - (?i)\b(NASA|ESA|CERN|FBI|CIA|FDA|CDC|NSA|EPA|OECD|OPEC|ASEAN)\b
+  # 公司/组织实体 + 创办/成立年份（修复「创办年份」「founding year」漏召）
+  - (?i)(股份有限公司|有限公司|集团|控股|总部|成立于|创立于|创办于|创始人|CEO|董事长|市值|子公司|母公司)
+  - (?i)(创办年份|成立年份|创立年份|建校年份|成立时间|创办时间|创立时间|建校时间|何时成立|何时创办|何时创立)
+  - (?i)(大学|学院|研究所|科学院|研究院).{0,12}(创办|成立|创立|建校)
+  - (?i)\b([A-Z][A-Za-z0-9&.\- ]{1,40}\s+(Inc\.?|LLC|Ltd\.?|Corp\.?|Co\.|GmbH|S\.A\.|PLC))\b
+  - (?i)\b(headquarters|founded\s+in|founded\s+by|founding\s+year|year\s+founded|established\s+in|subsidiary|parent\s+company|NGO|nonprofit|foundation)\b
+  - (?i)\b(when\s+was\b.{0,40}\bfounded|when\s+founded)\b
+  - (?i)(非政府组织|非营利|基金会|商会|协会|联合会|红十字|慈善组织|职能|职责|组织机构)
+  primary: wikidata
+- desc: 音乐/播客媒体搜索（影视已拆 film_search；MV 用词界避免误伤 MVP）
   engines_combo:
   - itunes
   - musicbrainz
@@ -466,8 +547,8 @@ domains:
   name: media_search
   parallel: true
   patterns:
-  - (?i)(歌曲|音乐|专辑|新歌|单曲|MV|mp3|歌词|歌手|乐队|音乐人|主唱|好听的歌|好歌推荐|听歌|歌单|的歌|电影(?!梗概)|电视剧|纪录片|影视|大片|主题曲|片尾曲|插曲|播客|有声书)
-  - (?i)\b(music|song|album|movie|film|tv show|podcast|soundtrack|soundtrack|lyrics|singer|band)\b
+  - (?i)(歌曲|音乐|专辑|新歌|单曲|\bMV\b|mp3|歌词|歌手|乐队|音乐人|主唱|好听的歌|好歌推荐|听歌|歌单|的歌|主题曲|片尾曲|插曲|播客|有声书|演唱会|巡演)
+  - (?i)\b(music|song|album|podcast|soundtrack|lyrics|singer|band|single|discography|concert|tour)\b
   primary: itunes
 - desc: 图片/素材搜索（Openverse 开放版权图库）
   engines_combo:
@@ -490,6 +571,7 @@ domains:
   parallel: true
   patterns:
   - (?i)(维基数据|wikidata|知识实体|实体查询|词条实体|QID|SPARQL|知识图谱|百度百科)
+  - (?i)(是哪家公司|哪家机构|什么组织|属于哪个|隶属于|总部在哪)
   primary: wikidata
 - desc: 知乎/观点/经验/评测
   engines_combo:
@@ -2033,20 +2115,22 @@ engines:
     timeout: 8
     url: https://en.wikiquote.org/w/api.php
   local_imdb:
-    type: html
-    enabled: false
+    type: imdb
+    enabled: true
     label: IMDb本地
     cost_tier: free
-    qps: 2
+    family: media_book
+    qps: 3
     priority: 42
     period: second
     cost_per_call: 0.0
     cost_unit: free
-    url: https://www.imdb.com/find/
-    query_param: q
-    extra_params:
-      ref_: nv_sr_sm
-    timeout: 10
+    coverage:
+    - film
+    - movie
+    - tv
+    desc: IMDb suggestion API（local-search 垂直别名，与 imdb 同源）
+    timeout: 8
   local_goodreads:
     type: html
     enabled: false
@@ -2067,14 +2151,24 @@ engines:
     enabled: true
     label: OpenStreetMap本地
     cost_tier: free
+    family: science_geo
     qps: 1
     priority: 44
     period: second
     cost_per_call: 0.0
     cost_unit: free
+    coverage:
+    - geo
+    - places
+    - map
+    desc: Nominatim 地理编码/地点搜索（OSM，免认证，须带 User-Agent）
     format: json
     method: GET
     query_param: q
+    headers:
+      User-Agent: argo-search/2.6 (unified-search@local)
+      Accept: application/json
+      Accept-Language: zh-CN,zh;q=0.9,en;q=0.8
     extra_params:
       format: json
       limit: '{n}'
@@ -2084,7 +2178,7 @@ engines:
       item_url: osm_id
       item_summary: type
       url_template: https://www.openstreetmap.org/{osm_type}/{osm_id}
-    timeout: 8
+    timeout: 10
     url: https://nominatim.openstreetmap.org/search
   xiaohongshu:
     type: cli
@@ -2273,10 +2367,11 @@ engines:
     desc: B站热搜（search/square 热搜词，免认证）
     timeout: 10
   itunes:
-    type: http
+    type: itunes
     enabled: true
     label: iTunes 媒体库
     cost_tier: free
+    family: media_book
     qps: 3
     priority: 30
     period: second
@@ -2287,17 +2382,7 @@ engines:
     - music
     - movie
     - podcast
-    desc: iTunes Search API（音乐/影视/播客/应用，免认证）
-    format: json
-    method: GET
-    query_param: term
-    extra_params:
-      limit: '{n}'
-    output_map:
-      items: results
-      item_title: trackName
-      item_url: trackViewUrl
-      item_summary: artistName
+    desc: iTunes Search API（中文 country=cn；专辑问 entity=album，免认证）
     timeout: 8
     url: https://itunes.apple.com/search
   openverse:
@@ -2448,6 +2533,42 @@ engines:
       url_template: https://musicbrainz.org/artist/{id}
     timeout: 10
     url: https://musicbrainz.org/ws/2/artist
+  imdb:
+    type: imdb
+    enabled: true
+    label: IMDb 影视
+    cost_tier: free
+    family: media_book
+    qps: 3
+    priority: 34
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - film
+    - movie
+    - tv
+    - media
+    desc: IMDb suggestion API（电影/剧集/人物，免认证）
+    timeout: 8
+  thesportsdb:
+    type: thesportsdb
+    enabled: true
+    label: TheSportsDB 体育
+    cost_tier: free
+    family: sports
+    qps: 2
+    priority: 34
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - sports
+    - athlete
+    - team
+    - league
+    desc: TheSportsDB 球员/球队/赛事（公开 test key，免认证）
+    timeout: 10
   open_library:
     type: open_library
     enabled: true
@@ -3123,6 +3244,8 @@ cost_tiers:
     - local_imdb
     - local_goodreads
     - local_openstreetmap
+    - imdb
+    - thesportsdb
     - anysearch
     - zhihu
     - zhihu_global

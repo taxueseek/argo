@@ -1,0 +1,247 @@
+{
+  "summary": {
+    "n": 14,
+    "domain_acc": 0.9285714285714286,
+    "engine_acc": 0.9285714285714286,
+    "selection_hit": 0.8571428571428571,
+    "domain_and_hit": 0.7857142857142857
+  },
+  "rows": [
+    {
+      "id": "F1",
+      "q": "Inception movie director",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "nolan",
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 1,
+      "ms": 1553,
+      "top1": "Interstellar"
+    },
+    {
+      "id": "F2",
+      "q": "肖申克的救赎 主演",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "shawshank",
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 5,
+      "ms": 1520,
+      "top1": "The Shawshank Redemption"
+    },
+    {
+      "id": "F3",
+      "q": "Interstellar film cast",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "gold_matched": "",
+      "domain": "film_search",
+      "engine": "imdb",
+      "combo": [
+        "imdb",
+        "itunes"
+      ],
+      "n": 4,
+      "ms": 1617,
+      "top1": "The Super Mario Galaxy Movie"
+    },
+    {
+      "id": "S1",
+      "q": "梅西 俱乐部",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "messi",
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikipedia"
+      ],
+      "n": 5,
+      "ms": 17884,
+      "top1": "梅西现在哪个足球俱乐部 - 选秀先锋站"
+    },
+    {
+      "id": "S2",
+      "q": "LeBron James team",
+      "dom_ok": false,
+      "eng_ok": false,
+      "hit": true,
+      "gold_matched": "lebron",
+      "domain": "general_search",
+      "engine": "anysearch",
+      "combo": [
+        "anysearch",
+        "duckduckgo"
+      ],
+      "n": 5,
+      "ms": 2523,
+      "top1": "LeBron James - Wikipedia"
+    },
+    {
+      "id": "S3",
+      "q": "NBA finals MVP 2024",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "nba",
+      "domain": "sports_search",
+      "engine": "thesportsdb",
+      "combo": [
+        "thesportsdb",
+        "wikidata"
+      ],
+      "n": 2,
+      "ms": 4297,
+      "top1": "[team] NBA G League Ignite"
+    },
+    {
+      "id": "G1",
+      "q": "埃菲尔铁塔在哪",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "eiffel",
+      "domain": "geo_places",
+      "engine": "local_openstreetmap",
+      "combo": [
+        "local_openstreetmap",
+        "wikidata"
+      ],
+      "n": 5,
+      "ms": 14086,
+      "top1": "地图：如何前往埃菲尔铁塔？"
+    },
+    {
+      "id": "G2",
+      "q": "where is Eiffel Tower",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "eiffel",
+      "domain": "geo_places",
+      "engine": "local_openstreetmap",
+      "combo": [
+        "local_openstreetmap"
+      ],
+      "n": 5,
+      "ms": 6259,
+      "top1": "Analysis of the application of physics in the de"
+    },
+    {
+      "id": "G3",
+      "q": "长江 发源地",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "长江",
+      "domain": "geo_places",
+      "engine": "local_openstreetmap",
+      "combo": [
+        "local_openstreetmap",
+        "wikidata"
+      ],
+      "n": 4,
+      "ms": 14374,
+      "top1": "长江源_百度百科"
+    },
+    {
+      "id": "O1",
+      "q": "国务院职能",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "国务院",
+      "domain": "org_entity",
+      "engine": "wikidata",
+      "combo": [
+        "wikidata",
+        "baidu_baike"
+      ],
+      "n": 5,
+      "ms": 1932,
+      "top1": "国务院直属机构"
+    },
+    {
+      "id": "O2",
+      "q": "Apple Inc headquarters",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": false,
+      "gold_matched": "",
+      "domain": "org_entity",
+      "engine": "baidu_baike",
+      "combo": [
+        "baidu_baike",
+        "wikidata"
+      ],
+      "n": 4,
+      "ms": 925,
+      "top1": "每天读点世界文化：这里是美国"
+    },
+    {
+      "id": "O3",
+      "q": "联合国 成立年份",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "联合国",
+      "domain": "org_entity",
+      "engine": "baidu_baike",
+      "combo": [
+        "baidu_baike",
+        "wikidata"
+      ],
+      "n": 5,
+      "ms": 878,
+      "top1": "联合国教育、科学及文化组织"
+    },
+    {
+      "id": "M1",
+      "q": "Taylor Swift album",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "taylor",
+      "domain": "media_search",
+      "engine": "itunes",
+      "combo": [
+        "itunes"
+      ],
+      "n": 3,
+      "ms": 540,
+      "top1": "Taylor Swift: America's Sweetheart"
+    },
+    {
+      "id": "R1",
+      "q": "贵州茅台股价",
+      "dom_ok": true,
+      "eng_ok": true,
+      "hit": true,
+      "gold_matched": "茅台",
+      "domain": "stock_query",
+      "engine": "sina_quote",
+      "combo": [
+        "sina_quote",
+        "tencent_quote"
+      ],
+      "n": 1,
+      "ms": 544,
+      "top1": "贵州茅台 1358.980 ↑+0.62%"
+    }
+  ]
+}

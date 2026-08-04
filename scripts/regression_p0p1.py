@@ -107,6 +107,24 @@ def run_offline(c: Checker) -> None:
         ("中国 GDP", "macro_data", None),  # worldbank 可能前置
         ("US CPI", "macro_data", "fred"),
         ("RFC 9110", "rfc_search", "rfc_editor"),
+        # LoHo P0~P1：影视 / 体育 / 地理 / 政府组织 + 音乐不误伤
+        ("Inception movie director", "film_search", "imdb"),
+        ("肖申克的救赎 主演", "film_search", "imdb"),
+        ("Interstellar film cast", "film_search", "imdb"),
+        ("NBA finals MVP 2024", "sports_search", "thesportsdb"),
+        ("梅西 俱乐部", "sports_search", "thesportsdb"),
+        ("LeBron James team", "sports_search", "thesportsdb"),
+        ("Cristiano Ronaldo club", "sports_search", "thesportsdb"),
+        ("库里 球队", "sports_search", "thesportsdb"),
+        ("埃菲尔铁塔在哪", "geo_places", "local_openstreetmap"),
+        ("where is Eiffel Tower", "geo_places", "local_openstreetmap"),
+        ("黄河 流经省份", "geo_places", "local_openstreetmap"),
+        ("国务院职能", "org_entity", "wikidata"),
+        ("Apple Inc headquarters", "org_entity", "wikidata"),
+        ("清华大学 创办年份", "org_entity", "wikidata"),
+        ("NASA founding year", "org_entity", "wikidata"),
+        ("Taylor Swift album", "media_search", "itunes"),
+        ("周杰伦 专辑", "media_search", "itunes"),
     ]
     for q, domain, primary in cases:
         d = route_query(q, mode="auto", depth="fast", context="search")

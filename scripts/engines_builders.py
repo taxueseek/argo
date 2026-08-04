@@ -57,6 +57,9 @@ from engines_builders_data import (
     _build_wenshu_engine,
     _build_jin10_engine,
     _build_octen_engine,
+    _build_imdb_engine,
+    _build_thesportsdb_engine,
+    _build_itunes_engine,
 )
 
 __all__ = [
@@ -110,5 +113,8 @@ __all__ = [
     "_build_wenshu_engine",
     "_build_jin10_engine",
     "_build_octen_engine",
+    "_build_imdb_engine",
+    "_build_thesportsdb_engine",
+    "_build_itunes_engine",
 ]
 

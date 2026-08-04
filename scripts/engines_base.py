@@ -29,10 +29,20 @@ if not logger.handlers:
 
 
 def _lang_param(param: str, query: str) -> str:
-    """按查询主语言返回引擎语言参数；表在 lang_detect 单真源维护。"""
+    """按查询主语言返回引擎语言参数；表在 lang_detect 单真源维护。
+
+    弱信号查询（mixed/other）时注入 lang_pref 的 engine_lang（习惯/系统/中英基线），
+    强查询信号仍由 detect_language 主导，不因系统 locale 覆盖。
+    """
     try:
-        from lang_detect import engine_lang_param
-        return engine_lang_param(param, query)
+        from lang_detect import engine_lang_param, detect_language
+        preferred = ""
+        try:
+            from lang_pref import effective_engine_lang
+            preferred = effective_engine_lang(detect_language(query))
+        except ImportError:
+            pass
+        return engine_lang_param(param, query, preferred_lang=preferred)
     except ImportError:
         return ""
 

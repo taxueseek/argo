@@ -172,15 +172,22 @@ def is_non_latin_lang(lang: str) -> bool:
     return lang in NON_LATIN_LANGS
 
 
-def engine_lang_param(param: str, query: str) -> str:
+def engine_lang_param(param: str, query: str, preferred_lang: str = "") -> str:
     """按查询主语言返回引擎语言参数取值；无法判定或无映射时返回空串。
 
     调用方约定：`v = engine_lang_param(k, query) or v`，保留 config 静态默认。
+
+    preferred_lang：弱信号查询（mixed/other）时的回落语种，来自
+    lang_pref.effective_engine_lang（习惯/系统/中英基线）。强查询信号始终优先。
     """
     table = ENGINE_LANG_PARAM_VALUES.get(param)
     if not table:
         return ""
     lang = detect_language(query)
+    # 弱信号才采用偏好语；zh/ja/ko/非拉丁/en/latin 以查询为准
+    if preferred_lang and lang in ("mixed", "other"):
+        if preferred_lang in table:
+            return table[preferred_lang]
     return table.get(lang, "")
 
 

@@ -319,6 +319,23 @@ def _add_language_engines(engine_list: list[str], features: dict | None = None) 
     ):
         # 其他非拉丁语：local_bing 靠动态 setlang 吃多语言索引
         selected = [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+    elif primary_lang in ("mixed", "other", ""):
+        # 弱信号：按 lang_pref（习惯/系统/中英基线）选本地引擎
+        prefer: list[str] = []
+        try:
+            from lang_pref import prefer_langs
+            prefer = prefer_langs(query_lang=primary_lang)
+        except ImportError:
+            prefer = ["zh", "en"]
+        top = prefer[0] if prefer else "en"
+        if top == "ja":
+            selected = [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
+        elif top == "ko":
+            selected = [e for e in ["local_google", "local_bing"] if e in sub_engines]
+        elif top == "zh":
+            selected = [e for e in ["local_bing"] if e in sub_engines]
+        else:
+            selected = [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
     elif features.get("has_depth_word"):
         selected = [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
 
@@ -494,11 +511,21 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         from config import get_cost_factor
         filtered = [e for e in filtered if get_cost_factor(e) >= 0.85]
 
-    # 自适应学习过滤（保留主引擎不被过滤）
+    # 自适应学习过滤（保留主引擎 + 垂直域 combo 成员不被误杀）
+    # 实测：wikipedia 分数常 <0.3，org_entity 在 wikidata 熔断时会只剩 baidu，英文 HQ 题脏结果。
+    _VERTICAL_PROTECT = frozenset({
+        "film_search", "sports_search", "geo_places", "org_entity", "media_search",
+    })
     if _adaptive_learner is not None and len(filtered) > 1:
         original = filtered[:]
         primary = domain.get("primary")
-        filtered = [e for e in filtered if e == primary or _adaptive_learner.get_score(e) >= 0.3]
+        protect = set(original) if domain.get("name") in _VERTICAL_PROTECT else set()
+        if primary:
+            protect.add(primary)
+        filtered = [
+            e for e in filtered
+            if e in protect or e == primary or _adaptive_learner.get_score(e) >= 0.3
+        ]
         if not filtered:
             filtered = original
 
@@ -527,6 +554,7 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     # 正常路径（全部引擎可用）顺序不变 → 引擎集合不变 → 缓存键不变 → 零速度倒退。
     # 仅当主引擎配额耗尽或熔断打开时沉底，主引擎位置自动落到第一个可用的
     # 相近备选（同一域 combo 内的其他引擎，天然是同主题的备选源）。
+    # open 且 cooldown 已过 → half-open 探测资格，不沉底（与 allow() 一致）。
     if len(filtered) > 1:
         usable, unusable = [], []
         for e in filtered:
@@ -540,7 +568,7 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
                 try:
                     from circuit_breaker import get_breaker
                     st = get_breaker().status(e)
-                    if st.get("state") == "open":
+                    if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
                         ok = False
                 except ImportError:
                     pass
@@ -783,11 +811,35 @@ def route_query(query: str, engine_override: str = "auto",
         must_keep = []
         if features.get("has_geo") and "local_openstreetmap" in enabled:
             must_keep.append("local_openstreetmap")
+        # 垂直域主源保护：film/sports/geo/org 的 primary 不被 budget/意图裁掉
+        _VERTICAL_KEEP = frozenset({
+            "film_search", "sports_search", "geo_places", "org_entity", "media_search",
+        })
+        if domain.get("name") in _VERTICAL_KEEP:
+            p = domain.get("primary")
+            if p and p in enabled and p not in must_keep:
+                must_keep.append(p)
+            if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
+                if "local_openstreetmap" not in must_keep:
+                    must_keep.append("local_openstreetmap")
         must_keep.extend(_lang_must_keep(features, enabled))
         engines_combo = _apply_engine_policy(
             engines_combo, mode=mode, depth=depth, context=context,
             engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,
         )
+        # 域 primary 扶正：已在 combo 且未熔断时置首（不覆盖冷却中的熔断沉底）
+        # open 但 cooldown 已过 → 允许扶正，交给 half-open 探测。
+        p = domain.get("primary")
+        if p and p in engines_combo and engines_combo[0] != p:
+            try:
+                from circuit_breaker import get_breaker
+                st = get_breaker().status(p)
+                if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
+                    p = None
+            except Exception:
+                pass
+            if p and p in engines_combo:
+                engines_combo = [p] + [e for e in engines_combo if e != p]
         if not engines_combo:
             engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
         # budget 截断后对齐 parallel，避免短 combo 仍开多余并行

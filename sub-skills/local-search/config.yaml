@@ -288,6 +288,8 @@ engines:
       srlimit: "{n}"
 
   local_imdb:
+    # 与主仓 imdb 同源：suggestion API（由 argo 主引擎 type=imdb 实现；
+    # local-search 内 html 路径已弃用，保留条目供垂直分类与健康探测）
     type: html
     enabled: false
     categories: [vertical]

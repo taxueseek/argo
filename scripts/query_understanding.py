@@ -105,7 +105,17 @@ def parse_negation(query: str) -> tuple[list[str], str]:
 
 # ── 地域解析 ──────────────────────────────────────────────────────────────────
 
-_GEO_TRIGGERS = re.compile(r"(附近|本地|同城|周边)")
+# 本地生活 + 地理/地点实体（LoHo Geography & Places 对齐）
+_GEO_TRIGGERS = re.compile(
+    r"(附近|本地|同城|周边|"
+    r"在哪里|在哪儿|在哪|位于|坐落|坐标|经纬度|海拔|发源地|地标|名胜|景点|"
+    r"流经|途经|贯穿|横跨|流域|水系|汇入|注入|源头|入海|省份|省区|"
+    r"山脉|河流|湖泊|岛屿|沙漠|高原|峡谷|海峡|首都|省会|"
+    r"where\s+is|located\s+in|capital\s+of|latitude|longitude|coordinates?|"
+    r"flows?\s+through|passes\s+through|drainage|basin|"
+    r"openstreetmap|nominatim|geonames)",
+    re.I,
+)
 
 # 省级市 + 地级市（前 100，覆盖高频城市）
 _CITY_DICT: tuple[str, ...] = (

@@ -1,0 +1,1482 @@
+{
+  "summary": {
+    "ok": 114,
+    "fail": 0,
+    "warn": 8,
+    "by_status": {
+      "PASS": 114,
+      "FAIL": 0,
+      "WARN": 8
+    },
+    "by_section": {
+      "lang": {
+        "PASS": 17,
+        "FAIL": 0,
+        "WARN": 1
+      },
+      "script_align": {
+        "PASS": 5,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "lang_param": {
+        "PASS": 7,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "route": {
+        "PASS": 36,
+        "FAIL": 0,
+        "WARN": 7
+      },
+      "rec_l3_no_pollute_film": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_l3_no_pollute_sports": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_l3_same_family_ok": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_cross": {
+        "PASS": 6,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_plan_cross_lang": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_fast_no_cross": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_baseline_zh": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "rec_baseline_skip": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "family": {
+        "PASS": 20,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "family_not_general": {
+        "PASS": 6,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_sys_zh": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_sys_ja": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_sys_ko": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_sys_ru": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_query_first": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_baseline": {
+        "PASS": 2,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_effective_strong": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_effective_weak": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      },
+      "pref_habit": {
+        "PASS": 1,
+        "FAIL": 0,
+        "WARN": 0
+      }
+    },
+    "route_by_scenario": {
+      "finance": {
+        "ok": 3,
+        "n": 4
+      },
+      "macro": {
+        "ok": 2,
+        "n": 2
+      },
+      "film": {
+        "ok": 3,
+        "n": 5
+      },
+      "sports": {
+        "ok": 5,
+        "n": 7
+      },
+      "geo": {
+        "ok": 3,
+        "n": 4
+      },
+      "org": {
+        "ok": 4,
+        "n": 4
+      },
+      "media": {
+        "ok": 2,
+        "n": 2
+      },
+      "weather": {
+        "ok": 2,
+        "n": 3
+      },
+      "academic": {
+        "ok": 1,
+        "n": 1
+      },
+      "chem": {
+        "ok": 1,
+        "n": 1
+      },
+      "rfc": {
+        "ok": 1,
+        "n": 1
+      },
+      "tech": {
+        "ok": 1,
+        "n": 1
+      },
+      "code": {
+        "ok": 1,
+        "n": 1
+      },
+      "general": {
+        "ok": 7,
+        "n": 7
+      }
+    },
+    "route_by_lang": {
+      "zh": {
+        "ok": 13,
+        "n": 13
+      },
+      "en": {
+        "ok": 16,
+        "n": 16
+      },
+      "ja": {
+        "ok": 1,
+        "n": 6
+      },
+      "ko": {
+        "ok": 2,
+        "n": 4
+      },
+      "other": {
+        "ok": 1,
+        "n": 1
+      },
+      "cyrillic": {
+        "ok": 1,
+        "n": 1
+      },
+      "arabic": {
+        "ok": 1,
+        "n": 1
+      },
+      "thai": {
+        "ok": 1,
+        "n": 1
+      }
+    },
+    "live_summary": null,
+    "live_rows": []
+  },
+  "rows": [
+    {
+      "name": "lang:ld_zh",
+      "status": "PASS",
+      "detail": "got=zh expect=zh q='苹果股价最新行情'",
+      "meta": {
+        "query": "苹果股价最新行情",
+        "lang": "zh",
+        "expect": "zh"
+      }
+    },
+    {
+      "name": "lang:ld_zh_mix",
+      "status": "PASS",
+      "detail": "got=zh expect=zh q='Python 异步编程'",
+      "meta": {
+        "query": "Python 异步编程",
+        "lang": "zh",
+        "expect": "zh"
+      }
+    },
+    {
+      "name": "lang:ld_en",
+      "status": "PASS",
+      "detail": "got=en expect=en q='React hooks tutorial'",
+      "meta": {
+        "query": "React hooks tutorial",
+        "lang": "en",
+        "expect": "en"
+      }
+    },
+    {
+      "name": "lang:ld_en2",
+      "status": "PASS",
+      "detail": "got=en expect=en q='hello world'",
+      "meta": {
+        "query": "hello world",
+        "lang": "en",
+        "expect": "en"
+      }
+    },
+    {
+      "name": "lang:ld_ja_kana",
+      "status": "PASS",
+      "detail": "got=ja expect=ja q='アニメ おすすめ'",
+      "meta": {
+        "query": "アニメ おすすめ",
+        "lang": "ja",
+        "expect": "ja"
+      }
+    },
+    {
+      "name": "lang:ld_ja_mix",
+      "status": "PASS",
+      "detail": "got=ja expect=ja q='東京の天気予報'",
+      "meta": {
+        "query": "東京の天気予報",
+        "lang": "ja",
+        "expect": "ja"
+      }
+    },
+    {
+      "name": "lang:ld_ja_kata",
+      "status": "PASS",
+      "detail": "got=ja expect=ja q='トヨタ 株価'",
+      "meta": {
+        "query": "トヨタ 株価",
+        "lang": "ja",
+        "expect": "ja"
+      }
+    },
+    {
+      "name": "lang:ld_ko",
+      "status": "PASS",
+      "detail": "got=ko expect=ko q='한국 영화 추천'",
+      "meta": {
+        "query": "한국 영화 추천",
+        "lang": "ko",
+        "expect": "ko"
+      }
+    },
+    {
+      "name": "lang:ld_ko2",
+      "status": "PASS",
+      "detail": "got=ko expect=ko q='삼성전자 주가'",
+      "meta": {
+        "query": "삼성전자 주가",
+        "lang": "ko",
+        "expect": "ko"
+      }
+    },
+    {
+      "name": "lang:ld_latin",
+      "status": "PASS",
+      "detail": "got=latin expect=latin q='café français'",
+      "meta": {
+        "query": "café français",
+        "lang": "latin",
+        "expect": "latin"
+      }
+    },
+    {
+      "name": "lang:ld_cyr",
+      "status": "PASS",
+      "detail": "got=cyrillic expect=cyrillic q='Как написать скрипт'",
+      "meta": {
+        "query": "Как написать скрипт",
+        "lang": "cyrillic",
+        "expect": "cyrillic"
+      }
+    },
+    {
+      "name": "lang:ld_cyr_mix",
+      "status": "PASS",
+      "detail": "got=cyrillic expect=cyrillic q='Python курс'",
+      "meta": {
+        "query": "Python курс",
+        "lang": "cyrillic",
+        "expect": "cyrillic"
+      }
+    },
+    {
+      "name": "lang:ld_thai",
+      "status": "PASS",
+      "detail": "got=thai expect=thai q='สวัสดีครับ'",
+      "meta": {
+        "query": "สวัสดีครับ",
+        "lang": "thai",
+        "expect": "thai"
+      }
+    },
+    {
+      "name": "lang:ld_ar",
+      "status": "PASS",
+      "detail": "got=arabic expect=arabic q='مرحبا بالعالم'",
+      "meta": {
+        "query": "مرحبا بالعالم",
+        "lang": "arabic",
+        "expect": "arabic"
+      }
+    },
+    {
+      "name": "lang:ld_he",
+      "status": "PASS",
+      "detail": "got=hebrew expect=hebrew q='שלום עולם'",
+      "meta": {
+        "query": "שלום עולם",
+        "lang": "hebrew",
+        "expect": "hebrew"
+      }
+    },
+    {
+      "name": "lang:ld_el",
+      "status": "PASS",
+      "detail": "got=greek expect=greek q='Καλημέρα'",
+      "meta": {
+        "query": "Καλημέρα",
+        "lang": "greek",
+        "expect": "greek"
+      }
+    },
+    {
+      "name": "lang:ld_hi",
+      "status": "PASS",
+      "detail": "got=devanagari expect=devanagari q='नमस्ते दुनिया'",
+      "meta": {
+        "query": "नमस्ते दुनिया",
+        "lang": "devanagari",
+        "expect": "devanagari"
+      }
+    },
+    {
+      "name": "lang:ld_ja_kanji_only",
+      "status": "WARN",
+      "detail": "got=zh expect=ja q='宮崎駿'",
+      "meta": {
+        "query": "宮崎駿",
+        "lang": "zh",
+        "expect": "ja"
+      }
+    },
+    {
+      "name": "script_align:zh",
+      "status": "PASS",
+      "detail": "{'primary_lang': 'zh', 'script': 'cjk', 'is_latin': False, 'chinese_ratio': 1.0, 'english_ratio': 0.0, 'length': 4}"
+    },
+    {
+      "name": "script_align:ja",
+      "status": "PASS",
+      "detail": "{'primary_lang': 'ja', 'script': 'kana', 'is_latin': False, 'chinese_ratio': 0.0, 'english_ratio': 0.0, 'length': 3}"
+    },
+    {
+      "name": "script_align:ko",
+      "status": "PASS",
+      "detail": "{'primary_lang': 'ko', 'script': 'hangul', 'is_latin': False, 'chinese_ratio': 0.0, 'english_ratio': 0.0, 'length': 2}"
+    },
+    {
+      "name": "script_align:en",
+      "status": "PASS",
+      "detail": "{'primary_lang': 'en', 'script': 'latin', 'is_latin': True, 'chinese_ratio': 0.0, 'english_ratio': 1.0, 'length': 5}"
+    },
+    {
+      "name": "script_align:cyrillic",
+      "status": "PASS",
+      "detail": "{'primary_lang': 'cyrillic', 'script': 'cyrillic', 'is_latin': False, 'chinese_ratio': 0.0, 'english_ratio': 0.0, 'length': 3}"
+    },
+    {
+      "name": "lang_param:setlang:アニメ",
+      "status": "PASS",
+      "detail": "got=ja-JP"
+    },
+    {
+      "name": "lang_param:hl:한국",
+      "status": "PASS",
+      "detail": "got=ko"
+    },
+    {
+      "name": "lang_param:setlang:hello ",
+      "status": "PASS",
+      "detail": "got=en-US"
+    },
+    {
+      "name": "lang_param:setlang:苹果",
+      "status": "PASS",
+      "detail": "got=zh-Hans"
+    },
+    {
+      "name": "lang_param:setlang:Как де",
+      "status": "PASS",
+      "detail": "got=ru-RU"
+    },
+    {
+      "name": "lang_param:setlang:مرحبا",
+      "status": "PASS",
+      "detail": "got=ar"
+    },
+    {
+      "name": "lang_param:lang:שלום",
+      "status": "PASS",
+      "detail": "got=he"
+    },
+    {
+      "name": "route:R_zh_stock",
+      "status": "PASS",
+      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'tencent_quote'] lang=zh",
+      "meta": {
+        "id": "R_zh_stock",
+        "q": "贵州茅台股价",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "stock_query",
+        "engine": "sina_quote",
+        "combo": [
+          "sina_quote",
+          "tencent_quote"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_usstock",
+      "status": "PASS",
+      "detail": "domain=us_stock eng=finviz combo=['finviz', 'anysearch'] lang=en",
+      "meta": {
+        "id": "R_en_usstock",
+        "q": "AAPL stock price",
+        "scenario": "finance",
+        "lang": "en",
+        "domain": "us_stock",
+        "engine": "finviz",
+        "combo": [
+          "finviz",
+          "anysearch"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_macro",
+      "status": "PASS",
+      "detail": "domain=macro_data eng=fred combo=['fred', 'worldbank'] lang=zh",
+      "meta": {
+        "id": "R_zh_macro",
+        "q": "中国 GDP",
+        "scenario": "macro",
+        "lang": "zh",
+        "domain": "macro_data",
+        "engine": "fred",
+        "combo": [
+          "fred",
+          "worldbank"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_macro",
+      "status": "PASS",
+      "detail": "domain=macro_data eng=fred combo=['fred', 'worldbank'] lang=en",
+      "meta": {
+        "id": "R_en_macro",
+        "q": "US CPI",
+        "scenario": "macro",
+        "lang": "en",
+        "domain": "macro_data",
+        "engine": "fred",
+        "combo": [
+          "fred",
+          "worldbank"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_ja_stock",
+      "status": "WARN",
+      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | forbid=['juejin']",
+      "meta": {
+        "id": "R_ja_stock",
+        "q": "トヨタ 株価",
+        "scenario": "finance",
+        "lang": "ja",
+        "domain": "chinese_general",
+        "engine": "juejin",
+        "combo": [
+          "juejin",
+          "local_bing"
+        ],
+        "primary_lang": "ja"
+      }
+    },
+    {
+      "name": "route:R_ko_stock",
+      "status": "PASS",
+      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko",
+      "meta": {
+        "id": "R_ko_stock",
+        "q": "삼성전자 주가",
+        "scenario": "finance",
+        "lang": "ko",
+        "domain": "general_search",
+        "engine": "local_bing",
+        "combo": [
+          "local_bing",
+          "local_duckduckgo"
+        ],
+        "primary_lang": "ko"
+      }
+    },
+    {
+      "name": "route:R_en_film",
+      "status": "PASS",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'itunes'] lang=en",
+      "meta": {
+        "id": "R_en_film",
+        "q": "Inception movie director",
+        "scenario": "film",
+        "lang": "en",
+        "domain": "film_search",
+        "engine": "imdb",
+        "combo": [
+          "imdb",
+          "itunes"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_film",
+      "status": "PASS",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'itunes'] lang=zh",
+      "meta": {
+        "id": "R_zh_film",
+        "q": "肖申克的救赎 主演",
+        "scenario": "film",
+        "lang": "zh",
+        "domain": "film_search",
+        "engine": "imdb",
+        "combo": [
+          "imdb",
+          "itunes"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_film2",
+      "status": "PASS",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'itunes'] lang=en",
+      "meta": {
+        "id": "R_en_film2",
+        "q": "Interstellar film cast",
+        "scenario": "film",
+        "lang": "en",
+        "domain": "film_search",
+        "engine": "imdb",
+        "combo": [
+          "imdb",
+          "itunes"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_ja_film_kana",
+      "status": "WARN",
+      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | domain=chinese_general!=film_search; primary missing: eng=juejin combo=['juejin', 'local_bing']",
+      "meta": {
+        "id": "R_ja_film_kana",
+        "q": "宮崎駿 アニメ 映画",
+        "scenario": "film",
+        "lang": "ja",
+        "domain": "chinese_general",
+        "engine": "juejin",
+        "combo": [
+          "juejin",
+          "local_bing"
+        ],
+        "primary_lang": "ja"
+      }
+    },
+    {
+      "name": "route:R_ko_film",
+      "status": "WARN",
+      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko | domain=general_search!=film_search; primary missing: eng=local_bing combo=['local_bing', 'local_duckduckgo']",
+      "meta": {
+        "id": "R_ko_film",
+        "q": "기생충 영화 감독",
+        "scenario": "film",
+        "lang": "ko",
+        "domain": "general_search",
+        "engine": "local_bing",
+        "combo": [
+          "local_bing",
+          "local_duckduckgo"
+        ],
+        "primary_lang": "ko"
+      }
+    },
+    {
+      "name": "route:R_zh_sports",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_zh_sports",
+        "q": "梅西 俱乐部",
+        "scenario": "sports",
+        "lang": "zh",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "combo": [
+          "thesportsdb",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_sports",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=en",
+      "meta": {
+        "id": "R_en_sports",
+        "q": "LeBron James team",
+        "scenario": "sports",
+        "lang": "en",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "combo": [
+          "thesportsdb",
+          "wikipedia"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_en_sports2",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=en",
+      "meta": {
+        "id": "R_en_sports2",
+        "q": "Cristiano Ronaldo club",
+        "scenario": "sports",
+        "lang": "en",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "combo": [
+          "thesportsdb",
+          "wikipedia"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_sports2",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_zh_sports2",
+        "q": "库里 球队",
+        "scenario": "sports",
+        "lang": "zh",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "combo": [
+          "thesportsdb",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_wc",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=en",
+      "meta": {
+        "id": "R_en_wc",
+        "q": "World Cup 2022 winner",
+        "scenario": "sports",
+        "lang": "en",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "combo": [
+          "thesportsdb",
+          "wikipedia"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_ja_sports",
+      "status": "WARN",
+      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ja | domain=general_search!=sports_search; primary missing: eng=local_bing combo=['local_bing', 'local_duckduckgo']",
+      "meta": {
+        "id": "R_ja_sports",
+        "q": "メッシ クラブ",
+        "scenario": "sports",
+        "lang": "ja",
+        "domain": "general_search",
+        "engine": "local_bing",
+        "combo": [
+          "local_bing",
+          "local_duckduckgo"
+        ],
+        "primary_lang": "ja"
+      }
+    },
+    {
+      "name": "route:R_ko_sports",
+      "status": "WARN",
+      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko | domain=general_search!=sports_search; primary missing: eng=local_bing combo=['local_bing', 'local_duckduckgo']",
+      "meta": {
+        "id": "R_ko_sports",
+        "q": "손흥민 팀",
+        "scenario": "sports",
+        "lang": "ko",
+        "domain": "general_search",
+        "engine": "local_bing",
+        "combo": [
+          "local_bing",
+          "local_duckduckgo"
+        ],
+        "primary_lang": "ko"
+      }
+    },
+    {
+      "name": "route:R_zh_geo",
+      "status": "PASS",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_zh_geo",
+        "q": "埃菲尔铁塔在哪",
+        "scenario": "geo",
+        "lang": "zh",
+        "domain": "geo_places",
+        "engine": "local_openstreetmap",
+        "combo": [
+          "local_openstreetmap",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_geo",
+      "status": "PASS",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap'] lang=en",
+      "meta": {
+        "id": "R_en_geo",
+        "q": "where is Eiffel Tower",
+        "scenario": "geo",
+        "lang": "en",
+        "domain": "geo_places",
+        "engine": "local_openstreetmap",
+        "combo": [
+          "local_openstreetmap"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_geo2",
+      "status": "PASS",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_zh_geo2",
+        "q": "黄河 流经省份",
+        "scenario": "geo",
+        "lang": "zh",
+        "domain": "geo_places",
+        "engine": "local_openstreetmap",
+        "combo": [
+          "local_openstreetmap",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_ja_geo",
+      "status": "WARN",
+      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | domain=chinese_general!=geo_places; primary missing: eng=juejin combo=['juejin', 'local_bing']",
+      "meta": {
+        "id": "R_ja_geo",
+        "q": "エッフェル塔 どこ",
+        "scenario": "geo",
+        "lang": "ja",
+        "domain": "chinese_general",
+        "engine": "juejin",
+        "combo": [
+          "juejin",
+          "local_bing"
+        ],
+        "primary_lang": "ja"
+      }
+    },
+    {
+      "name": "route:R_zh_org",
+      "status": "PASS",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_zh_org",
+        "q": "国务院职能",
+        "scenario": "org",
+        "lang": "zh",
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "combo": [
+          "wikidata",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_org",
+      "status": "PASS",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=en",
+      "meta": {
+        "id": "R_en_org",
+        "q": "NASA founding year",
+        "scenario": "org",
+        "lang": "en",
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "combo": [
+          "wikidata",
+          "wikipedia"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_en_org2",
+      "status": "PASS",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=en",
+      "meta": {
+        "id": "R_en_org2",
+        "q": "Apple Inc headquarters",
+        "scenario": "org",
+        "lang": "en",
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "combo": [
+          "wikidata",
+          "wikipedia"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_org2",
+      "status": "PASS",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_zh_org2",
+        "q": "清华大学 创办年份",
+        "scenario": "org",
+        "lang": "zh",
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "combo": [
+          "wikidata",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_media",
+      "status": "PASS",
+      "detail": "domain=media_search eng=itunes combo=['itunes', 'musicbrainz'] lang=en",
+      "meta": {
+        "id": "R_en_media",
+        "q": "Taylor Swift album",
+        "scenario": "media",
+        "lang": "en",
+        "domain": "media_search",
+        "engine": "itunes",
+        "combo": [
+          "itunes",
+          "musicbrainz"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_media",
+      "status": "PASS",
+      "detail": "domain=media_search eng=itunes combo=['itunes', 'musicbrainz'] lang=zh",
+      "meta": {
+        "id": "R_zh_media",
+        "q": "周杰伦 专辑",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "media_search",
+        "engine": "itunes",
+        "combo": [
+          "itunes",
+          "musicbrainz"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_zh_weather",
+      "status": "PASS",
+      "detail": "domain=weather_query eng=duckduckgo combo=['duckduckgo', 'local_openstreetmap'] lang=zh",
+      "meta": {
+        "id": "R_zh_weather",
+        "q": "北京 天气",
+        "scenario": "weather",
+        "lang": "zh",
+        "domain": "weather_query",
+        "engine": "duckduckgo",
+        "combo": [
+          "duckduckgo",
+          "local_openstreetmap"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_weather",
+      "status": "PASS",
+      "detail": "domain=weather_query eng=duckduckgo combo=['duckduckgo'] lang=en",
+      "meta": {
+        "id": "R_en_weather",
+        "q": "weather Tokyo",
+        "scenario": "weather",
+        "lang": "en",
+        "domain": "weather_query",
+        "engine": "duckduckgo",
+        "combo": [
+          "duckduckgo"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_ja_weather",
+      "status": "WARN",
+      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | domain=chinese_general!=weather_query",
+      "meta": {
+        "id": "R_ja_weather",
+        "q": "東京の天気",
+        "scenario": "weather",
+        "lang": "ja",
+        "domain": "chinese_general",
+        "engine": "juejin",
+        "combo": [
+          "juejin",
+          "local_bing"
+        ],
+        "primary_lang": "ja"
+      }
+    },
+    {
+      "name": "route:R_en_academic",
+      "status": "PASS",
+      "detail": "domain=academic eng=arxiv combo=['arxiv', 'crossref'] lang=en",
+      "meta": {
+        "id": "R_en_academic",
+        "q": "transformer attention paper",
+        "scenario": "academic",
+        "lang": "en",
+        "domain": "academic",
+        "engine": "arxiv",
+        "combo": [
+          "arxiv",
+          "crossref"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_chem",
+      "status": "PASS",
+      "detail": "domain=chem_search eng=pubchem combo=['pubchem', 'local_bing'] lang=zh",
+      "meta": {
+        "id": "R_zh_chem",
+        "q": "阿司匹林 分子式",
+        "scenario": "chem",
+        "lang": "zh",
+        "domain": "chem_search",
+        "engine": "pubchem",
+        "combo": [
+          "pubchem",
+          "local_bing"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_en_rfc",
+      "status": "PASS",
+      "detail": "domain=rfc_search eng=rfc_editor combo=['rfc_editor', 'local_bing'] lang=other",
+      "meta": {
+        "id": "R_en_rfc",
+        "q": "RFC 9110",
+        "scenario": "rfc",
+        "lang": null,
+        "domain": "rfc_search",
+        "engine": "rfc_editor",
+        "combo": [
+          "rfc_editor",
+          "local_bing"
+        ],
+        "primary_lang": "other"
+      }
+    },
+    {
+      "name": "route:R_en_tech",
+      "status": "PASS",
+      "detail": "domain=english_tech eng=octen combo=['octen', 'anysearch'] lang=en",
+      "meta": {
+        "id": "R_en_tech",
+        "q": "React vs Vue",
+        "scenario": "tech",
+        "lang": "en",
+        "domain": "english_tech",
+        "engine": "octen",
+        "combo": [
+          "octen",
+          "anysearch"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_package",
+      "status": "PASS",
+      "detail": "domain=package_search eng=pypi combo=['pypi', 'npm'] lang=en",
+      "meta": {
+        "id": "R_zh_package",
+        "q": "requests pypi",
+        "scenario": "code",
+        "lang": "en",
+        "domain": "package_search",
+        "engine": "pypi",
+        "combo": [
+          "pypi",
+          "npm"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_ja_gen",
+      "status": "PASS",
+      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ja",
+      "meta": {
+        "id": "R_ja_gen",
+        "q": "アニメ おすすめ",
+        "scenario": "general",
+        "lang": "ja",
+        "domain": "general_search",
+        "engine": "local_bing",
+        "combo": [
+          "local_bing",
+          "local_duckduckgo"
+        ],
+        "primary_lang": "ja"
+      }
+    },
+    {
+      "name": "route:R_ko_gen",
+      "status": "PASS",
+      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko",
+      "meta": {
+        "id": "R_ko_gen",
+        "q": "한국 영화 추천",
+        "scenario": "general",
+        "lang": "ko",
+        "domain": "general_search",
+        "engine": "local_bing",
+        "combo": [
+          "local_bing",
+          "local_duckduckgo"
+        ],
+        "primary_lang": "ko"
+      }
+    },
+    {
+      "name": "route:R_cyr_gen",
+      "status": "PASS",
+      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'duckduckgo'] lang=cyrillic",
+      "meta": {
+        "id": "R_cyr_gen",
+        "q": "Как написать скрипт",
+        "scenario": "general",
+        "lang": "cyrillic",
+        "domain": "general_search",
+        "engine": "anysearch",
+        "combo": [
+          "anysearch",
+          "duckduckgo"
+        ],
+        "primary_lang": "cyrillic"
+      }
+    },
+    {
+      "name": "route:R_ar_gen",
+      "status": "PASS",
+      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'duckduckgo'] lang=arabic",
+      "meta": {
+        "id": "R_ar_gen",
+        "q": "أخبار التكنولوجيا",
+        "scenario": "general",
+        "lang": "arabic",
+        "domain": "general_search",
+        "engine": "anysearch",
+        "combo": [
+          "anysearch",
+          "duckduckgo"
+        ],
+        "primary_lang": "arabic"
+      }
+    },
+    {
+      "name": "route:R_th_gen",
+      "status": "PASS",
+      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'duckduckgo'] lang=thai",
+      "meta": {
+        "id": "R_th_gen",
+        "q": "อากาศ กรุงเทพ",
+        "scenario": "general",
+        "lang": "thai",
+        "domain": "general_search",
+        "engine": "anysearch",
+        "combo": [
+          "anysearch",
+          "duckduckgo"
+        ],
+        "primary_lang": "thai"
+      }
+    },
+    {
+      "name": "route:R_en_gen",
+      "status": "PASS",
+      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'duckduckgo'] lang=en",
+      "meta": {
+        "id": "R_en_gen",
+        "q": "hello world",
+        "scenario": "general",
+        "lang": "en",
+        "domain": "general_search",
+        "engine": "anysearch",
+        "combo": [
+          "anysearch",
+          "duckduckgo"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_zh_gen",
+      "status": "PASS",
+      "detail": "domain=chinese_tech_deep eng=byted combo=['byted', 'octen'] lang=zh",
+      "meta": {
+        "id": "R_zh_gen",
+        "q": "如何学习机器学习",
+        "scenario": "general",
+        "lang": "zh",
+        "domain": "chinese_tech_deep",
+        "engine": "byted",
+        "combo": [
+          "byted",
+          "octen"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "rec_l3_no_pollute_film",
+      "status": "PASS",
+      "detail": "['anysearch', 'duckduckgo']"
+    },
+    {
+      "name": "rec_l3_no_pollute_sports",
+      "status": "PASS",
+      "detail": "['anysearch', 'duckduckgo']"
+    },
+    {
+      "name": "rec_l3_same_family_ok",
+      "status": "PASS",
+      "detail": "['anysearch', 'duckduckgo']"
+    },
+    {
+      "name": "rec_cross:アニメ おすすめ",
+      "status": "PASS",
+      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+    },
+    {
+      "name": "rec_cross:한국 영화",
+      "status": "PASS",
+      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+    },
+    {
+      "name": "rec_cross:如何写爬虫",
+      "status": "PASS",
+      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+    },
+    {
+      "name": "rec_cross:Как дела",
+      "status": "PASS",
+      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+    },
+    {
+      "name": "rec_cross:hello world",
+      "status": "PASS",
+      "detail": "engines=''"
+    },
+    {
+      "name": "rec_cross:React vs Vue",
+      "status": "PASS",
+      "detail": "engines=''"
+    },
+    {
+      "name": "rec_plan_cross_lang",
+      "status": "PASS",
+      "detail": "['switch_engine', 'cross_lang']"
+    },
+    {
+      "name": "rec_fast_no_cross",
+      "status": "PASS",
+      "detail": "['switch_engine']"
+    },
+    {
+      "name": "rec_baseline_zh",
+      "status": "PASS",
+      "detail": "local_bing,anysearch,duckduckgo"
+    },
+    {
+      "name": "rec_baseline_skip",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "family:anysearch",
+      "status": "PASS",
+      "detail": "got=web_general"
+    },
+    {
+      "name": "family:duckduckgo",
+      "status": "PASS",
+      "detail": "got=web_general"
+    },
+    {
+      "name": "family:local_bing",
+      "status": "PASS",
+      "detail": "got=web_general"
+    },
+    {
+      "name": "family:arxiv",
+      "status": "PASS",
+      "detail": "got=academic"
+    },
+    {
+      "name": "family:github",
+      "status": "PASS",
+      "detail": "got=code"
+    },
+    {
+      "name": "family:pypi",
+      "status": "PASS",
+      "detail": "got=code"
+    },
+    {
+      "name": "family:sina_quote",
+      "status": "PASS",
+      "detail": "got=finance_market"
+    },
+    {
+      "name": "family:finviz",
+      "status": "PASS",
+      "detail": "got=finance_market"
+    },
+    {
+      "name": "family:fred",
+      "status": "PASS",
+      "detail": "got=finance_macro"
+    },
+    {
+      "name": "family:worldbank",
+      "status": "PASS",
+      "detail": "got=finance_macro"
+    },
+    {
+      "name": "family:jin10",
+      "status": "PASS",
+      "detail": "got=news_flash"
+    },
+    {
+      "name": "family:zhihu",
+      "status": "PASS",
+      "detail": "got=social"
+    },
+    {
+      "name": "family:wikipedia",
+      "status": "PASS",
+      "detail": "got=knowledge"
+    },
+    {
+      "name": "family:wikidata",
+      "status": "PASS",
+      "detail": "got=knowledge"
+    },
+    {
+      "name": "family:baidu_baike",
+      "status": "PASS",
+      "detail": "got=knowledge"
+    },
+    {
+      "name": "family:pubchem",
+      "status": "PASS",
+      "detail": "got=science_chem"
+    },
+    {
+      "name": "family:imdb",
+      "status": "PASS",
+      "detail": "got=media_book"
+    },
+    {
+      "name": "family:itunes",
+      "status": "PASS",
+      "detail": "got=media_book"
+    },
+    {
+      "name": "family:thesportsdb",
+      "status": "PASS",
+      "detail": "got=sports"
+    },
+    {
+      "name": "family:local_openstreetmap",
+      "status": "PASS",
+      "detail": "got=science_geo"
+    },
+    {
+      "name": "family_not_general:pypi",
+      "status": "PASS",
+      "detail": "got=code"
+    },
+    {
+      "name": "family_not_general:npm",
+      "status": "PASS",
+      "detail": "got=code"
+    },
+    {
+      "name": "family_not_general:jin10",
+      "status": "PASS",
+      "detail": "got=news_flash"
+    },
+    {
+      "name": "family_not_general:sina_quote",
+      "status": "PASS",
+      "detail": "got=finance_market"
+    },
+    {
+      "name": "family_not_general:imdb",
+      "status": "PASS",
+      "detail": "got=media_book"
+    },
+    {
+      "name": "family_not_general:thesportsdb",
+      "status": "PASS",
+      "detail": "got=sports"
+    },
+    {
+      "name": "pref_sys_zh",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "pref_sys_ja",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "pref_sys_ko",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "pref_sys_ru",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "pref_query_first",
+      "status": "PASS",
+      "detail": "['ko', 'ja', 'zh', 'en']"
+    },
+    {
+      "name": "pref_baseline:zh",
+      "status": "PASS",
+      "detail": "['ko', 'ja', 'zh', 'en']"
+    },
+    {
+      "name": "pref_baseline:en",
+      "status": "PASS",
+      "detail": "['ko', 'ja', 'zh', 'en']"
+    },
+    {
+      "name": "pref_effective_strong",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "pref_effective_weak",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "name": "pref_habit",
+      "status": "PASS",
+      "detail": ""
+    }
+  ]
+}

@@ -1004,6 +1004,28 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         import logging
         logging.getLogger("unified_search").debug(f"自适应学习记录跳过: {type(e).__name__}")
 
+    # 语言偏好：记录本轮查询语 + 输出观测快照（默认中英 + 系统 + 习惯）
+    lang_pref_info: dict[str, Any] | None = None
+    try:
+        from lang_pref import record_query_lang, lang_pref_snapshot
+        feats = decision.get("features") or {}
+        q_lang = feats.get("primary_lang") or ""
+        if not q_lang:
+            try:
+                from lang_detect import detect_language
+                q_lang = detect_language(query)
+            except ImportError:
+                q_lang = ""
+        if q_lang:
+            record_query_lang(q_lang)
+        lang_pref_info = lang_pref_snapshot(query_lang=q_lang)
+    except ImportError:
+        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"语言偏好记录跳过: {type(e).__name__}")
+
     if on_progress:
         on_progress(Stage.DONE, {"count": len(merged), "elapsed_ms": elapsed})
 
@@ -1011,7 +1033,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):
         tfidf_scores = []
 
-    return {
+    out: dict[str, Any] = {
         "query": query, "engine": engine_label, "engines": engines,
         "engines_combo": engines_combo, "cached": False,
         "domain": domain, "elapsed_ms": elapsed,
@@ -1029,6 +1051,9 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "excluded_count": excluded_count,
         "mode": mode, "depth": depth,
     }
+    if lang_pref_info is not None:
+        out["lang_pref"] = lang_pref_info
+    return out
 
 
 def _collect_errors(raw_results: dict[str, list[dict[str, Any]]]) -> list[str]:

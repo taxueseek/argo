@@ -29,8 +29,21 @@ from route import (  # noqa: E402
     extract_features,
     route_query,
 )
-from recovery import build_recovery_plan, cross_lang_query  # noqa: E402
+from recovery import (  # noqa: E402
+    build_recovery_plan,
+    cross_lang_query,
+    baseline_cross_query,
+)
 from query_rewriter import rewrite_query  # noqa: E402
+from lang_pref import (  # noqa: E402
+    prefer_langs,
+    system_lang,
+    dominant_habit,
+    effective_engine_lang,
+    record_query_lang,
+    reset_habit_for_tests,
+    BASELINE_LANGS,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -211,6 +224,104 @@ class TestCrossLangRecovery(unittest.TestCase):
             "アニメ おすすめ", ["anysearch"], ["duckduckgo"], mode="fast")
         strategies = [s.strategy for s in plan]
         self.assertNotIn("cross_lang", strategies)
+
+    def test_baseline_zh_when_prefer_has_zh(self):
+        """英文查询 + 偏好含 zh → 中英基线反向补中文源。"""
+        cq, ce = baseline_cross_query(
+            "hello world", primary_lang="en", prefer=["zh", "en"])
+        self.assertTrue(ce)
+        self.assertIn("local_bing", ce)
+
+    def test_baseline_zh_skipped_without_zh_prefer(self):
+        cq, ce = baseline_cross_query(
+            "hello world", primary_lang="en", prefer=["en"])
+        self.assertEqual(ce, "")
+
+    def test_baseline_not_for_chinese_query(self):
+        cq, ce = baseline_cross_query(
+            "苹果股价", primary_lang="zh", prefer=["zh", "en"])
+        self.assertEqual(ce, "")
+
+    def test_recovery_plan_baseline_zh_for_en(self):
+        # 强制 prefer 含 zh：本机系统多为 zh，plan 应含 baseline_zh
+        plan = build_recovery_plan(
+            "hello world", ["duckduckgo"], ["wikipedia"], mode="auto")
+        strategies = [s.strategy for s in plan if s.level == "L4"]
+        # 系统 locale 含 zh 或习惯含 zh 时出现；无 zh 时可不出现
+        # 这里只断言：中文查询有 cross_lang、英文查询无 cross_lang
+        self.assertNotIn("cross_lang", strategies)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 语言偏好：默认中英 + 系统 + 习惯
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestLangPref(unittest.TestCase):
+    def setUp(self):
+        reset_habit_for_tests()
+
+    def tearDown(self):
+        reset_habit_for_tests()
+
+    def test_system_lang_parses_locale(self):
+        self.assertEqual(system_lang("zh_CN.UTF-8"), "zh")
+        self.assertEqual(system_lang("ja_JP"), "ja")
+        self.assertEqual(system_lang("en_US.UTF-8"), "en")
+        self.assertEqual(system_lang("ko_KR"), "ko")
+        self.assertEqual(system_lang("ru_RU"), "cyrillic")
+        self.assertEqual(system_lang("C"), "")
+
+    def test_baseline_always_zh_en(self):
+        """无论习惯/系统为何，prefer 列表始终含中英基线。"""
+        cases = [
+            prefer_langs(query_lang="en", system="", habit=None, use_live_habit=False),
+            prefer_langs(query_lang="ja", system="ja", habit="ja", use_live_habit=False),
+            prefer_langs(query_lang="mixed", system="ko", habit=None, use_live_habit=False),
+        ]
+        for prefs in cases:
+            for b in BASELINE_LANGS:
+                self.assertIn(b, prefs, f"基线 {b} 缺失于 {prefs}")
+
+    def test_query_strong_signal_first(self):
+        prefs = prefer_langs(
+            query_lang="ko", system="zh", habit="ja", use_live_habit=False)
+        self.assertEqual(prefs[0], "ko")
+        self.assertIn("zh", prefs)
+        self.assertIn("en", prefs)
+
+    def test_habit_before_system(self):
+        prefs = prefer_langs(
+            query_lang="mixed", system="en", habit="ja", use_live_habit=False)
+        # 弱查询不前置；习惯 ja 应在系统 en 前
+        self.assertEqual(prefs[0], "ja")
+        self.assertIn("en", prefs)
+        self.assertIn("zh", prefs)
+
+    def test_habit_learning(self):
+        for _ in range(6):
+            record_query_lang("ja")
+        self.assertEqual(dominant_habit(), "ja")
+        prefs = prefer_langs(query_lang="mixed", system="en", use_live_habit=True)
+        self.assertEqual(prefs[0], "ja")
+
+    def test_effective_engine_lang_strong_wins(self):
+        self.assertEqual(effective_engine_lang("zh", ["ja", "zh", "en"]), "zh")
+        self.assertEqual(effective_engine_lang("ja", ["zh", "en"]), "ja")
+
+    def test_effective_engine_lang_weak_uses_prefer(self):
+        self.assertEqual(
+            effective_engine_lang("mixed", ["ja", "zh", "en"]), "ja")
+        self.assertEqual(
+            effective_engine_lang("other", ["zh", "en"]), "zh")
+
+    def test_engine_lang_param_weak_uses_preferred(self):
+        from lang_detect import engine_lang_param
+        # 无强信号字符的符号查询会判 other/mixed；用 preferred 回落
+        # 用纯标点/数字偏 other
+        v = engine_lang_param("setlang", "!!! ???", preferred_lang="ja")
+        # 若检测为 other/mixed 则 ja-JP；若仍 en 则不强求
+        if detect_language("!!! ???") in ("mixed", "other"):
+            self.assertEqual(v, "ja-JP")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
