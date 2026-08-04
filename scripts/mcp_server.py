@@ -275,7 +275,7 @@ def _warm_core_async() -> None:
 TOOLS = [
     {
         "name": "argo_search",
-        "description": "统一搜索：约 110 引擎 TF-IDF 语义路由 + RRF 融合 + Bocha 语义精排 + 双层缓存，默认紧凑 JSON。查资料、找答案、搜新闻、学术、代码、中文内容等通用场景。",
+        "description": "统一搜索：多语言路由 + 约 120+ 引擎 TF-IDF + RRF 融合 + 垂直域（金融/影视/体育等）+ 双层缓存，默认紧凑 JSON。查资料、找答案、搜新闻、学术、代码、多语言内容等通用场景。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -786,7 +786,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "argo",
-                "version": "2.5.1"
+                "version": "2.6.0"
             },
             # 短指令：降 tools 上下文；细节在 tool schema
             "instructions": (

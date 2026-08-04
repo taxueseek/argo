@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。约 110 引擎 TF-IDF 路由 + RRF 融合；金融/宏观/化学等垂直答案源；日常 combo 预算与深度研究 boost；查询改写（不污染域匹配）、Selection×Absorption、10 MCP 工具（含本地文件搜索 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py（不依赖 npm 发版）。
+description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
 version: 2.6.0
 triggers:
   - 搜索
@@ -124,18 +124,21 @@ engines:
   - zhihu_global
   - zhihu_hot
 ---
-## Argo v2.5.1
+## Argo v2.6.0
 
 ### 本版你多了什么（通俗）
 
-**问啥像啥，日常更快。** 金融行情、宏观数据、化学物种等垂直源进日常；长尾源留给深度研究；研究用 boost 抬优先级，不锁死单源。详见 `docs/RELEASE_NOTES_v2.5.1.md`。
+**按语言、按领域选路，查询越用越准。** 多语言检测与引擎参数；影视 / 体育 / 地理 / 组织 / 媒体与金融宏观化学等垂直源；空结果恢复防串味；日常 combo 预算、研究 boost 不锁死。详见 `docs/RELEASE_NOTES_v2.6.0.md`。
 
 | 你问的 | 大概走哪类 | 体感 |
 |--------|------------|------|
-| A 股行情 | 新浪 / 腾讯行情、资金流 | 快照 + early-stop |
-| 美股 | Finviz 等 | 与 A 股分流 |
-| CPI / GDP / 汇率 | FRED / 世行 / 国统局 / 欧统 / 汇率 | 数据感结果 |
-| 分子式 | PubChem | 化合物答案源 |
+| 日文 / 韩文 / 俄语提问 | 语言检测 + local_bing 等 | 少塞中文专用源 |
+| 电影导演 / 主演 | IMDb 等影视域 | 实体答案感 |
+| 球星 / 俱乐部 | TheSportsDB 等体育域 | 球员球队直达 |
+| 地标在哪 / 组织创办 | OSM / Wikidata | 地理与实体 |
+| 专辑 / 艺人 | iTunes 等媒体域 | 音乐条目 |
+| A 股 / 美股行情 | 新浪腾讯 / Finviz | 快照 + early-stop |
+| CPI / GDP / 分子式 | 宏观 / PubChem | 数据与化合物 |
 | 深度研报 / 综述 | research + vertical boost | 更全且不易整条空 |
 
 ### 安装与接入（摘要）
@@ -163,14 +166,17 @@ Skill 入口请用符号链接：`python3 scripts/link_source.py --to ~/.claude/
 
 | 能力 | 说明 |
 |------|------|
-| 约 110 搜索源 | `config.yaml` 真源：local_* / 金融行情 / 宏观 / 化学物种 / 社交 / 学术 / 开发者社区 |
-| 能力族体系 | `engine_families.py`：16 个 MECE 能力族（web_general/academic/code/finance_market/finance_macro/news_flash/social/hot_trending/knowledge/science_*/legal/media_book/archive/misc），同族可互换、按族去重、golden set 按族断言；去重腾出的预算位按「与域主引擎 coverage 重叠 + 能力互补」回填（全 web 域补垂直源，垂直族已存在的域不追加） |
-| 知乎全网搜索 | `zhihu_global` 专用 builder：SearchDB=all 真全网 + `site:xxx` 语法 → Filter host== 站点限定；提取 AuthorityLevel/互动/时效信号 |
-| 10 MCP 工具 | search / research / evidence / clarify / fetch（含 extract 模式）/ crawl / screenshot / pdf / social_search（含 sentiment 模式）/ local_search（本地文件） |
+| 约 120+ 搜索源 | `config.yaml` 真源：local_* / 金融 / 影视 / 体育 / 地理 / 组织 / 媒体 / 宏观 / 化学 / 社交 / 学术 / 代码 |
+| 多语言搜索 | 统一语言检测 + 引擎语言参数 + 语言补充源 + 跨语言回退 + 中英基线偏好 |
+| 垂直域补全 | film / sports / geo / org / media 与金融宏观化学等；recovery 防无关垂直污染 |
+| 能力族体系 | `engine_families.py`：MECE 能力族，同族可互换、按族去重与回填 |
+| 知乎全网搜索 | `zhihu_global`：SearchDB=all 真全网 + site 语法；AuthorityLevel/互动/时效信号 |
+| MCP 工具 | search / research / evidence / clarify / fetch / crawl / screenshot / pdf / social_search / local_search 等 |
 | 引擎分层 + combo 预算 | 日常精简、研究放宽（`engine_policy`） |
-| 垂直答案源 | 行情 / 宏观 / 化合物等优先可吸收事实 |
+| 垂直答案源 | 行情 / 影视 / 体育 / 宏观 / 化合物等优先可吸收事实 |
 | 查询改写 | 口语 → 检索友好；**不污染**路由域匹配 |
 | 路由热缓存 | 重复路由接近亚毫秒 |
+| 矩阵回归 | `matrix_search_eval.py` / `regression_p0p1.py` |
 | MCP 紧凑响应 | 控制 snippet 与内部字段，省 token |
 | 熔断 + 负缓存 + 柔性命中 | 失败可观测，热查询更快 |
 | 证据两阶段 | Selection × Absorption + 共识 / 时效 |
@@ -298,12 +304,17 @@ python3 scripts/clarify.py "Python 吞苹果 兼容吗" --explain
 python3 scripts/clarify.py "苹果股价" --json
 ```
 
-### 答案型垂直源（v2.5.1 加厚）
+### 答案型垂直源（v2.5.1–v2.6.0）
 
 | 引擎 | 方向 | 说明 |
 |------|------|------|
 | sina_quote / tencent_quote / em_flow | A 股行情 | 快照与资金流，日常优先 |
 | finviz | 美股 | 美股域专线 |
+| imdb | 影视 | 导演 / 主演 / 影片实体 |
+| thesportsdb | 体育 | 球员 / 球队 / 赛事 |
+| local_openstreetmap | 地理 | 地标与地点 |
+| wikidata | 组织 / 实体 | 机构与结构化实体 |
+| itunes / musicbrainz | 媒体音乐 | 专辑 / 艺人 |
 | fred / worldbank / nbs_stats / eurostat / fx_rate | 宏观与汇率 | 数据问句直达 |
 | pubchem | 化学 | 化合物 / 分子式 |
 | gbif / rfc_editor | 物种 / 标准 | 窄域直达 |
@@ -311,7 +322,7 @@ python3 scripts/clarify.py "苹果股价" --json
 
 日常 `depth=fast` 会收紧 combo；`research` / `deep` 再放开长尾（如 seeking_alpha、archive 等）。
 
-### 引擎全景（摘要；全量约 110，以 `config.yaml` / `--list-engines` 为准）
+### 引擎全景（摘要；全量约 120+，以 `config.yaml` / `--list-engines` 为准）
 
 | 引擎 | cost_tier | 特点 | 延迟 |
 |------|-----------|------|------|
