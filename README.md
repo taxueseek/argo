@@ -3,6 +3,14 @@
 </p>
 
 <p align="center">
+  <strong>中文</strong> ·
+  <a href="README.en.md">English</a> ·
+  <a href="README.ja.md">日本語</a> ·
+  <a href="README.ko.md">한국어</a> ·
+  <a href="README.es.md">Español</a>
+</p>
+
+<p align="center">
   <a href="#这是什么">介绍</a> ·
   <a href="#问啥像啥">证明</a> ·
   <a href="#它怎么工作">机制</a> ·
@@ -456,7 +464,11 @@ python3 scripts/search.py [选项] 查询词
 
 ```
 argo/
-├── README.md
+├── README.md                # 中文介绍（默认）
+├── README.en.md             # English
+├── README.ja.md             # 日本語
+├── README.ko.md             # 한국어
+├── README.es.md             # Español
 ├── SKILL.md
 ├── package.json             # npx 入口
 ├── bin/argo.js              # Node 启动 MCP
