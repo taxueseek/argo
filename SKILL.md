@@ -239,6 +239,9 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **RRF 融合**：多引擎 Reciprocal Rank Fusion 去重合并
 - **Bocha Reranker**：语义精排后处理
 - **Selection×Absorption**：SERP 降权 + 证据密度 + 中文信源表（v2.2）
+- **内容安全引擎**：抓取内容注入检测 + 编码归一化 + 语义意图分析 + 脱敏（70+ 中英模式）
+- **查询变体生成**：无 LLM 六策略（问句化/概念扩展/反方观点/范围调整/缩写互换），深度研究多路召回
+- **Wayback 快照回退**：HTTP 失败自动查 Wayback 最新快照兜底
 - **自适应学习**：success × latency × cost 三维评分，SQLite 持久化
 - **社交引擎**：Twitter/Reddit/小红书/B站/微博 5 大平台原生搜索
 
@@ -553,6 +556,32 @@ python3 scripts/research.py "查询" --json
 - `blind_spots`：显式盲区（未覆盖维度 + 单来源维度），不把「没搜到」写成「不存在」
 - 证据强度分层：primary / secondary / tertiary / unknown（对照 topic profile 的 source_grades）
 
+**Verify 阶段（cross_verification）**：研究报告内嵌 Selection×Absorption 可信度评分与多源交叉验证——
+- `corroboration_level`：佐证强度（strong / moderate / weak / minimal / insufficient）
+- `cross_score`：交叉验证分（0-1）
+- `top_sources`：按可信度 final 排序的前 5 来源
+- `conflicts`：同维度内低证据层级来源混入标记（blog/forum/social）
+- `unverified_count`：无结果可核实的维度数
+
+**事实对齐（fact_alignment）**：深度研究报告内嵌跨源事实交叉标记（v2.2 fact_align 现已接入 research 报告）——
+- 从 title+snippet 抽取结构化事实：版本号 / 百分比 / 金额 / 日期 / 法规号（MECE 正交类型）
+- `fact_conflicts`：同类型出现 ≥2 个不同值 → 标记冲突（如营收 1024.66 vs 1094），提示 Agent 谨慎，不盲目采信单源
+- `fact_corroborated`：同值出现在 ≥2 个域名 → 标记印证，提升可信度
+- `stats`：facts_extracted / conflicts / corroborated 计数
+- 仅 auto/deep 且结果 ≥3 时启用；fast 跳过（控制延迟）
+
+```bash
+# 固定工具预算：子查询上限，超出后停止派发并标记 budget_exhausted
+python3 scripts/research.py "查询" --budget 3
+
+# 决策树路由：先零成本本地源，结果不足 3 条自动升级通用/垂直源
+python3 scripts/research.py "查询" --route-strategy local_first
+python3 scripts/research.py "查询" --route-strategy cost_aware  # fast 模式自动本地优先（默认）
+python3 scripts/research.py "查询" --route-strategy full         # 全量（deep 研究）
+```
+
+**预算语义**：`--budget N` 限制实际执行的子查询数（每个子查询计 1 次工具调用），超限时报告标记 `budget.exhausted=true` 并输出基于已完成查询的最佳部分答案，未覆盖维度见 `blind_spots` / `gaps`。
+
 #### evidence — 可信度评估（v2.2 Selection×Absorption）
 
 ```bash
@@ -730,6 +759,22 @@ argo fetch "https://cloudflare-protected.com" --use-browser
 ```
 
 **降级触发条件**：HTTP 失败 / 内容 < 50 字符 / 检测到 CF 挑战 / 检测到 JS shell
+
+**Wayback 快照回退**：HTTP 失败或内容为空时，自动尝试 Wayback Machine 最新快照（CDX API 查 → 抓快照），命中后 `fetch_method=wayback` 并附 `snapshot_url` / `snapshot_ts`。尽力而为，失败不阻塞主流程。
+
+**内容安全引擎（content_security）**：任何抓取内容先过安全检测再交给 Agent——
+- **多语言感知**：复用 `lang_detect.detect_language` 判定内容主语言，按语系加载注入模式（英语通用 + 中/日/韩/俄/阿拉伯/希伯来/泰/希腊专有），对齐 argo 9 大语系能力，避免全语系扫描的低误报高性能
+- 注入检测：70+ 中英日韩俄阿希泰希模式（指令覆盖 / 角色操纵 / 系统提示泄露 / 越狱 / 数据外泄 / 身份冒充 / XSS）
+- 编码归一化：零宽字符、RTL 覆盖、Unicode 同形字（仅拉丁内容启用，避免西里尔/希腊正文误报）、base64 片段、URL 编码剥离
+- 语义意图分析：命中词数判意图（跨语种稳健，权威×覆盖 / 提取×秘密组合）
+- 风险评分（0-1）+ 目标脱敏（检测与脱敏共用模式表，不漂移）
+- 输出字段：`content_security.content_clean` / `risk_score` / `threat_count` / `threat_types` / `redactions` / `content_lang`
+
+```bash
+# 单独调用安全引擎
+python3 scripts/content_security.py "待检测文本" --json
+python3 scripts/content_security.py --stdin < content.txt
+```
 
 #### argo_screenshot — 页面截图
 
