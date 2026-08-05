@@ -529,6 +529,50 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         if not filtered:
             filtered = original
 
+    # 网络环境感知排序（独立于过滤，主引擎永远第一）。
+    # 只重排「非主引擎」，且只在同能力族内排序（避免跨族调整破坏
+    # combo 预算——垂直族必须保持在 web_general 之前）。
+    # 有显著分数差（≥0.15）时同族内快源前置；不足则顺序不变（缓存键稳定）。
+    if _adaptive_learner is not None and len(filtered) > 1:
+        primary = domain.get("primary")
+        try:
+            from engine_families import family_of
+        except ImportError:
+            family_of = None
+
+        def _fam(e: str) -> str:
+            try:
+                return family_of(e) if family_of else "?"
+            except Exception:
+                return "?"
+
+        if primary and primary in filtered:
+            primary_eng, rest = primary, [e for e in filtered if e != primary]
+        else:
+            primary_eng, rest = None, list(filtered)
+        if len(rest) > 1 and family_of is not None:
+            # 按原始顺序分组（同族相邻），族内按分数稳定排序
+            grouped: list[str] = []
+            seen_fam: set[str] = set()
+            for e in rest:
+                f = _fam(e)
+                if f not in seen_fam:
+                    seen_fam.add(f)
+                    members = [x for x in rest if _fam(x) == f]
+                    if len(members) > 1:
+                        scored = [(x, _adaptive_learner.get_score(x)) for x in members]
+                        top_score = max(s for _, s in scored)
+                        laggards = [x for x, s in scored if top_score - s >= 0.15]
+                        if laggards and len(laggards) < len(scored):
+                            fast = [x for x, s in scored if top_score - s < 0.15]
+                            grouped.extend(fast + laggards)
+                        else:
+                            grouped.extend(members)
+                    else:
+                        grouped.extend(members)
+            rest = grouped
+        filtered = ([primary_eng] if primary_eng else []) + rest
+
     # 健康检查过滤
     try:
         from health_check import is_available as _hc_available

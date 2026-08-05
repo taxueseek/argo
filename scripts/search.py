@@ -538,6 +538,20 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if on_progress:
         on_progress(Stage.START, {"query": query})
 
+    # 网络环境感知：慢网放大超时预算（避免误杀），快网收紧（更快响应）
+    _eff_timeout = timeout
+    try:
+        from network_aware import adjusted_timeout, network_profile
+        _eff_timeout = adjusted_timeout(timeout, engines)
+        if _eff_timeout != timeout:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"网络感知超时: {timeout}s → {_eff_timeout}s "
+                f"({network_profile(engines).get('network')})",
+            )
+    except ImportError:
+        pass
+
     cache_engine_key = "+".join(sorted(engines)) if len(engines) > 1 else engines[0]
 
     if on_progress:
@@ -747,7 +761,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             with ThreadPoolExecutor(max_workers=min(len(rest), 3)) as ex:
                 futures = {ex.submit(_run_one, eng): eng for eng in rest}
                 try:
-                    for fut in as_completed(futures, timeout=timeout + 2):
+                    for fut in as_completed(futures, timeout=_eff_timeout + 2):
                         eng = futures[fut]
                         try:
                             e2, res2, outcome2, lat2 = fut.result()
@@ -773,7 +787,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         with ThreadPoolExecutor(max_workers=min(len(to_run), 3)) as ex:
             futures = {ex.submit(_run_one, eng): eng for eng in to_run}
             try:
-                for fut in as_completed(futures, timeout=timeout + 2):
+                for fut in as_completed(futures, timeout=_eff_timeout + 2):
                     eng = futures[fut]
                     try:
                         e, res, outcome, lat = fut.result()

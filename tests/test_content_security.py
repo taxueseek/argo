@@ -310,3 +310,46 @@ class TestSearchQualityAlgorithms(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNetworkAware(unittest.TestCase):
+    """网络环境感知：慢网/快网自适应超时与本地偏好。"""
+
+    def setUp(self):
+        import network_aware
+        network_aware._cache.clear()
+
+    def _mock_latency(self, lat_fn):
+        import network_aware
+        network_aware._latency_from_db = lat_fn
+
+    def test_slow_network_scales_timeout_up(self):
+        import network_aware
+        self._mock_latency(lambda e: 5000.0)  # 5s = 慢网
+        self.assertEqual(network_aware.adjusted_timeout(10, ["wikipedia"]), 18)
+        self.assertTrue(network_aware.should_prefer_local(["wikipedia"]))
+        network_aware._cache.clear()
+
+    def test_fast_network_scales_timeout_down(self):
+        import network_aware
+        self._mock_latency(lambda e: 100.0)  # 100ms = 快网
+        self.assertEqual(network_aware.adjusted_timeout(10, ["wikipedia"]), 8)
+        self.assertFalse(network_aware.should_prefer_local(["wikipedia"]))
+        network_aware._cache.clear()
+
+    def test_no_data_is_neutral(self):
+        import network_aware
+        self._mock_latency(lambda e: None)  # 无数据
+        self.assertEqual(network_aware.adjusted_timeout(10, ["wikipedia"]), 10)
+        self.assertFalse(network_aware.should_prefer_local(["wikipedia"]))
+        network_aware._cache.clear()
+
+    def test_timeout_floor(self):
+        import network_aware
+        self._mock_latency(lambda e: 100.0)
+        self.assertGreaterEqual(network_aware.adjusted_timeout(1, ["wikipedia"]), 1)
+        network_aware._cache.clear()
+
+
+if __name__ == "__main__":
+    unittest.main()
