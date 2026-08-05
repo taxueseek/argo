@@ -240,8 +240,8 @@ domains:
 - desc: 天气查询（和风天气）
   engines_combo:
   - qweather
-  - duckduckgo
-  fallback: duckduckgo
+  - byted
+  fallback: qweather
   name: weather_query
   parallel: false
   patterns:
@@ -373,7 +373,6 @@ domains:
   engines_combo:
   - anysearch
   - byted
-  - duckduckgo
   - wenshu
   fallback: byted
   name: legal
@@ -700,16 +699,15 @@ domains:
   primary: itotii
 - desc: 事实查询/快速问答
   engines_combo:
-  - duckduckgo
   - wikipedia
-  - wolframalpha
-  fallback: duckduckgo
+  - byted
+  fallback: wikipedia
   name: fact_check
   parallel: true
   patterns:
   - (?i)(what is|who is|when did|where is|how many|how much)
   - (?i)(是什么|是谁|什么时候|在哪里|多少|多少钱)
-  primary: duckduckgo
+  primary: wikipedia
 - desc: 全球事件/舆情（GDELT 事件数据库）
   engines_combo:
   - gdelt
@@ -726,9 +724,8 @@ domains:
 - desc: 实时新闻/事件
   engines_combo:
   - byted
-  - duckduckgo
   - octen
-  fallback: duckduckgo
+  fallback: byted
   name: news_realtime
   parallel: true
   patterns:
@@ -832,8 +829,7 @@ domains:
   engines_combo:
   - local_search
   - wikipedia
-  - duckduckgo
-  fallback: duckduckgo
+  fallback: wikipedia
   name: local_reference
   parallel: true
   patterns:
