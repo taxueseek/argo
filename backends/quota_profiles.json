@@ -350,6 +350,16 @@
     "cost_tier": "free",
     "priority": 12
   },
+  "gdelt": {
+    "label": "GDELT 全球事件",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 55
+  },
   "github": {
     "label": "GitHub",
     "qps": 5,
@@ -359,6 +369,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 11
+  },
+  "google_patents": {
+    "label": "Google Patents 专利",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 57
   },
   "google_scholar": {
     "label": "GoogleScholar",
@@ -819,6 +839,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 39
+  },
+  "opencorporates": {
+    "label": "OpenCorporates 公司注册",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 56
   },
   "openfda": {
     "label": "openFDA",

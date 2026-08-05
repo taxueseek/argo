@@ -1471,5 +1471,23 @@
       "世界杯 冠军": 0.4,
       "球员 俱乐部": 0.4
     }
+  },
+  "gdelt": {
+    "label": "GDELT 全球事件",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "opencorporates": {
+    "label": "OpenCorporates 公司注册",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "google_patents": {
+    "label": "Google Patents 专利",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

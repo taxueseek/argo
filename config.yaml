@@ -4,6 +4,12 @@ cache:
   max_size_mb: 200
   ttl: 3600
 domains:
+
+
+
+
+
+
 - desc: 微信公众号文章搜索
   engines_combo:
   - wechat_sogou
@@ -276,6 +282,19 @@ domains:
   patterns:
   - (?i)(热搜|热榜|热搜榜|实时热搜|今日热搜|今天热搜|微博热搜|百度热搜|B站热搜|bilibili热搜|头条热榜|抖音热榜|热门话题|trending now|hot search|top trends)
   primary: baidu_hot
+- desc: 专利搜索（技术尽调/竞品分析/IP 资产）
+  engines_combo:
+  - google_patents
+  - semantic_scholar
+  - local_arxiv
+  fallback: google_patents
+  name: patent_search
+  parallel: false
+  patterns:
+  - (?i)(专利|patent|发明|实用新型|外观设计|权利要求|IPC分类|技术方案|优先权)
+  - (?i)\b(patents?|invention|prior\s*art|claims|specification|assignee|filed\s+by)\b
+  - (?i)(特許|意匠|実用新案|출원|특허)
+  primary: google_patents
 - desc: 加密货币/币种查询
   engines_combo:
   - coingecko
@@ -649,7 +668,7 @@ domains:
   parallel: false
   patterns:
   - (?i)(find me|discover|explore|landscape|ecosystem|what are the best|top.*tools|emerging|trending.*202[56])
-  - (?i)(有哪些值得关注|最新进展|行业格局|赛道分析|盘点一下|梳理一下)
+  - (?i)(有哪些值得关注|行业格局|赛道分析|盘点一下|梳理一下)
   primary: exa
   cost_tier: api
 - desc: 代码搜索/开源项目
@@ -691,6 +710,19 @@ domains:
   - (?i)(what is|who is|when did|where is|how many|how much)
   - (?i)(是什么|是谁|什么时候|在哪里|多少|多少钱)
   primary: duckduckgo
+- desc: 全球事件/舆情（GDELT 事件数据库）
+  engines_combo:
+  - gdelt
+  - em_global_news
+  - cls_telegraph
+  fallback: gdelt
+  name: global_event
+  parallel: false
+  patterns:
+  - (?i)(全球事件|国际事件|地缘政治|地缘|局势|冲突|抗议|政变|选举结果|公投|恐怖袭击|军事行动|制裁|外交|停火|谈判|全球舆情|全球动态|worldwide|global\s*event)
+  - (?i)\b(geopolitical|conflict|protest|coup|election\s*result|referendum|terror\s*attack|military\s*action|sanctions?|ceasefire|diplomatic|global\s*unrest)\b
+  primary: gdelt
+
 - desc: 实时新闻/事件
   engines_combo:
   - byted
@@ -728,6 +760,19 @@ domains:
   - (?i)\b(API|api)\b
   - (?i)\b(Rust|Python|JavaScript|TypeScript|React|Vue|Node|Docker|Kubernetes|asyncio)\b
   primary: octen
+- desc: 公司注册/尽调（OpenCorporates 全球公司注册）
+  engines_combo:
+  - opencorporates
+  - cninfo
+  - baidu_baike
+  fallback: opencorporates
+  name: company_search
+  parallel: false
+  patterns:
+  - (?i)(公司注册|注册号|统一社会信用代码|工商信息|股东|法人|注册资本|经营范围|尽调|工商登记|企业信息)
+  - (?i)\b(company\s*registration|incorporation|registered\s+number|business\s+registry|company\s+search|corporate\s+records)\b
+  - (?i)(会社|法人|登記|기업|법인|등록)
+  primary: opencorporates
 - desc: 中文通用搜索
   engines_combo:
   - bocha
@@ -819,7 +864,58 @@ domains:
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   primary: twitter
   quote: false
+
+
+
 engines:
+  gdelt:
+    type: gdelt
+    enabled: true
+    label: GDELT 全球事件
+    cost_tier: free
+    qps: 2
+    priority: 55
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - event
+    - news
+    - geo
+    desc: GDELT 全球新闻事件数据库（事件/舆情/地理维度，免认证）
+    timeout: 10
+  opencorporates:
+    type: opencorporates
+    enabled: true
+    label: OpenCorporates 公司注册
+    cost_tier: free
+    qps: 2
+    priority: 56
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - company
+    - business
+    - legal
+    desc: OpenCorporates 全球公司注册（尽调/反欺诈，免认证）
+    timeout: 10
+  google_patents:
+    type: google_patents
+    enabled: true
+    label: Google Patents 专利
+    cost_tier: free
+    qps: 2
+    priority: 57
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - patent
+    - tech
+    - ip
+    desc: Google Patents 专利搜索（技术尽调/竞品分析，免认证）
+    timeout: 10
   local_search:
     type: cli
     enabled: true
