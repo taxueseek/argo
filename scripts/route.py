@@ -612,7 +612,11 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
                 try:
                     from circuit_breaker import get_breaker
                     st = get_breaker().status(e)
-                    if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
+                    st_state = st.get("state")
+                    # 自适应禁用：disabled 引擎直接不可用（持久跳过）
+                    if st_state == "disabled":
+                        ok = False
+                    elif st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
                         ok = False
                 except ImportError:
                     pass

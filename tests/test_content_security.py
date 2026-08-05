@@ -353,3 +353,70 @@ class TestNetworkAware(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAdaptiveDisable(unittest.TestCase):
+    """自适应引擎禁用：连续失败自动关停，成功恢复。"""
+
+    def setUp(self):
+        import tempfile
+        from circuit_breaker import CircuitBreaker, DISABLE_AFTER_OPENS
+        self.tmp = tempfile.mkdtemp()
+        self.cb = CircuitBreaker(state_path=__import__("os").path.join(self.tmp, "breaker.json"))
+        self.DISABLE_AFTER_OPENS = DISABLE_AFTER_OPENS
+
+    def _simulate_failures(self, n):
+        """模拟 n 轮 open 失败（每轮：fail 到 open → 冷却后 half-open 探测再 fail）。"""
+        import time
+        from circuit_breaker import OPEN_SECONDS
+        for _ in range(n):
+            # 制造 open
+            self.cb.record_failure("test_eng", kind="timeout")
+            self.cb.record_failure("test_eng", kind="timeout")
+            # 冷却后 half-open 探测失败
+            self.cb._engines["test_eng"]["opened_at"] = time.time() - OPEN_SECONDS - 1
+            self.cb.record_failure("test_eng", kind="timeout")
+
+    def test_continuous_failures_disable_engine(self):
+        import time
+        from circuit_breaker import OPEN_SECONDS, DISABLE_COOLDOWN_SECONDS
+        self._simulate_failures(self.DISABLE_AFTER_OPENS)
+        # 冷却期后 allow 应返回 auto_disabled
+        self.cb._engines["test_eng"]["opened_at"] = time.time() - OPEN_SECONDS - 1
+        allowed, reason = self.cb.allow("test_eng")
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "auto_disabled")
+        st = self.cb.status("test_eng")
+        self.assertEqual(st["state"], "disabled")
+
+    def test_success_reenables(self):
+        import time
+        from circuit_breaker import OPEN_SECONDS
+        self._simulate_failures(self.DISABLE_AFTER_OPENS)
+        self.cb._engines["test_eng"]["opened_at"] = time.time() - OPEN_SECONDS - 1
+        self.cb.allow("test_eng")  # 触发 disabled
+        # 外部成功信号恢复
+        self.cb.record_success("test_eng")
+        allowed, _ = self.cb.allow("test_eng")
+        self.assertTrue(allowed)
+
+    def test_auto_disabled_list(self):
+        import time
+        from circuit_breaker import OPEN_SECONDS
+        self._simulate_failures(self.DISABLE_AFTER_OPENS)
+        self.cb._engines["test_eng"]["opened_at"] = time.time() - OPEN_SECONDS - 1
+        self.cb.allow("test_eng")
+        self.assertIn("test_eng", self.cb.auto_disabled())
+
+    def test_few_failures_not_disabled(self):
+        import time
+        from circuit_breaker import OPEN_SECONDS
+        # 只失败 1 轮（open 1 次）→ 不应禁用
+        self._simulate_failures(1)
+        self.cb._engines["test_eng"]["opened_at"] = time.time() - OPEN_SECONDS - 1
+        allowed, reason = self.cb.allow("test_eng")
+        self.assertTrue(allowed)  # half-open 探测
+
+
+if __name__ == "__main__":
+    unittest.main()

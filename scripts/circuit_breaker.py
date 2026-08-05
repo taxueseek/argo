@@ -26,6 +26,10 @@ EMPTY_NEGATIVE_TTL = 45        # 空结果负缓存（秒）
 ERROR_NEGATIVE_TTL = 30        # 错误负缓存（秒）
 HALF_OPEN_PROBE = True         # 冷却后允许一次探测
 
+# 自适应禁用（v2.7）
+DISABLE_AFTER_OPENS = 3        # 连续 open 达此次数 → 自动禁用（持久跳过）
+DISABLE_COOLDOWN_SECONDS = 3600  # 禁用后 1h 内不自动恢复（避免频繁探测）
+
 
 class CircuitBreaker:
     """进程内 + 磁盘共享的引擎熔断器。"""
@@ -83,8 +87,26 @@ class CircuitBreaker:
             st = self._engines.get(engine) or {}
             state = st.get("state", "closed")
             opened_at = float(st.get("opened_at") or 0)
+
+            # 自适应禁用：disabled 引擎直接拒绝（不再 half-open 探测，省超时）
+            if state == "disabled":
+                return False, "auto_disabled"
+
             if state == "open":
+                # 冷却期已过 → half-open 探测（除非已连续多次 open 触发自动禁用）
                 if time.time() - opened_at >= OPEN_SECONDS:
+                    opens = int(st.get("opens") or 0)
+                    disabled_at = float(st.get("disabled_at") or 0)
+                    # 禁用条件：连续 open 达阈值，且距离上次禁用已超冷却（首次 disabled_at=0 视为可禁用）
+                    can_disable = opens >= DISABLE_AFTER_OPENS and \
+                        (disabled_at == 0 or
+                         (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS)
+                    if can_disable:
+                        st["state"] = "disabled"
+                        st["disabled_at"] = time.time()
+                        self._engines[engine] = st
+                        self._save()
+                        return False, "auto_disabled"
                     # half-open：允许一次探测
                     st["state"] = "half_open"
                     self._engines[engine] = st
@@ -99,6 +121,7 @@ class CircuitBreaker:
             self._engines[engine] = {
                 "state": "closed",
                 "failures": 0,
+                "opens": 0,          # 重置连续 open 计数
                 "last_ok": time.time(),
             }
             self._save()
@@ -121,8 +144,25 @@ class CircuitBreaker:
             if st["failures"] >= FAILURE_THRESHOLD or st.get("state") == "half_open":
                 st["state"] = "open"
                 st["opened_at"] = time.time()
+                # 连续 open 计数：每次进入 open 视为一次「失败循环」
+                st["opens"] = int(st.get("opens") or 0) + 1
             self._engines[engine] = st
             self._save()
+
+    def reenable(self, engine: str) -> None:
+        """外部主动恢复（用户测试通过 / 新环境确认）。"""
+        with self._lock:
+            self._engines[engine] = {
+                "state": "closed", "failures": 0, "opens": 0,
+                "last_ok": time.time(), "reenabled_at": time.time(),
+            }
+            self._save()
+
+    def auto_disabled(self) -> list[str]:
+        """返回所有处于自动禁用状态的引擎。"""
+        with self._lock:
+            return [e for e, st in self._engines.items()
+                    if st.get("state") == "disabled"]
 
     # ── 查询级负缓存 ────────────────────────────────────────────────────────
 
