@@ -31,6 +31,18 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from search import super_search, rrf_merge, deduplicate_by_url
 
+try:
+    from evidence import compute_credibility
+except ImportError:  # pragma: no cover
+    compute_credibility = None  # type: ignore
+
+try:
+    from fact_align import align_facts
+except ImportError:  # pragma: no cover
+    align_facts = None  # type: ignore
+
+from research_strategy import resolve_route_strategy, should_use_local_first
+
 
 # ── 交叉引用检测 ──────────────────────────────────────────────────────────────
 
@@ -222,7 +234,9 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
                     timeout: int = 15, depth: str = "balanced",
                     mode: str = "auto",
                     engines_priority: list[str] | None = None,
-                    profile: dict[str, Any] | None = None) -> dict[str, Any]:
+                    profile: dict[str, Any] | None = None,
+                    budget: int | None = None,
+                    route_strategy: str | None = None) -> dict[str, Any]:
     """对每个子查询并行执行搜索，返回聚合结果。
 
     共享同一 SearchCache 实例，使子查询间 L1/per-engine 可复用，减少重复联网。
@@ -231,6 +245,16 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
       - 始终 engine=auto，由路由 + 域规则决定主源
       - engines_boost 前置 vertical/priority（research_engine_hints）
       - preferred_engine 仅作 boost 首位，不再锁死单引擎（避免冷门源失败整条空）
+
+    budget（固定工具预算）：限制实际执行的子查询数（每个子查询计 1 次
+    工具调用）。达到上限后停止派发新任务，标记 budget_exhausted，并把
+    已完成的子查询合并出「最佳部分答案」。
+
+    route_strategy（决策树路由）：三级递进，先轻后重——
+      - "local_first"：先试零成本本地聚合；某子查询结果 <3 条才升级到
+        通用/垂直源（复用本地脚本 → 升级的决策树）
+      - "cost_aware"（默认）：mode=fast 自动走 local_first；其余按 mode
+      - "full"：直接全量（deep 研究用）
     """
     all_results = []
     engines_used = set()
@@ -269,15 +293,31 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
     def _search_one(sq: dict[str, str], idx: int = 0) -> dict[str, Any]:
         # context=research：放行 research_only + 全 combo；boost 抬垂直源
         boosts = _boost_for(idx, sq)
-        result = super_search(
-            sq["query"], n=max_results, timeout=timeout,
-            depth=depth, mode=mode, skip_cache=False,
-            cache=shared_cache,
-            engine="auto",
-            context="research",
-            engines_boost=boosts or None,
-            envelope=False,  # 研究合成自管结构，减子查询噪音
-        )
+        # 决策树路由：策略解析收敛到纯函数（local_first / cost_aware / full）
+        strategy = resolve_route_strategy(route_strategy, mode)
+        use_local_first = should_use_local_first(strategy)
+
+        def _run(engine_override: str | None, boost_override: list[str] | None) -> dict:
+            return super_search(
+                sq["query"], n=max_results, timeout=timeout,
+                depth=depth, mode=mode, skip_cache=False,
+                cache=shared_cache,
+                engine=engine_override or "auto",
+                context="research",
+                local_first=engine_override == "local_search",
+                engines_boost=boost_override or boosts,
+                envelope=False,  # 研究合成自管结构，减子查询噪音
+            )
+
+        result = _run(None, None)
+        upgraded = False
+        if use_local_first:
+            # 一级：只走本地聚合；结果不足 3 条 → 二级升级通用/垂直源
+            result = _run("local_search", None)
+            if len(result.get("results", [])) < min(3, max_results):
+                full = _run(None, None)
+                upgraded = True
+                result = full
         return {
             "sub_query": sq["query"],
             "intent": sq["intent"],
@@ -288,12 +328,21 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
             "engines_used": result.get("engines_used", []),
             "elapsed_ms": result.get("elapsed_ms", 0),
             "cached": result.get("cached", False),
+            "upgraded_to_full": upgraded,
+            "route_strategy": strategy,
         }
 
-    with ThreadPoolExecutor(max_workers=min(len(sub_queries), 4)) as ex:
+    # 固定工具预算：超出上限的子查询不再派发（每个子查询计 1 次工具调用）
+    active_queries = sub_queries
+    budget_exhausted = False
+    if budget is not None and budget > 0 and len(sub_queries) > budget:
+        active_queries = sub_queries[:budget]
+        budget_exhausted = True
+
+    with ThreadPoolExecutor(max_workers=min(len(active_queries), 4)) as ex:
         futures = {
             ex.submit(_search_one, sq, i): sq
-            for i, sq in enumerate(sub_queries)
+            for i, sq in enumerate(active_queries)
         }
         all_futures = list(futures.keys())
         try:
@@ -344,6 +393,8 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
         "engines_used": sorted(engines_used),
         "total_results": len(merged),
         "elapsed_ms": elapsed,
+        "budget_exhausted": budget_exhausted,
+        "budget_limit": budget,
     }
 
 
@@ -495,9 +546,80 @@ def _build_verification_records(sub_results: list[dict[str, Any]],
     return records
 
 
+def _build_cross_verification(merged: list[dict[str, Any]], query: str,
+                              sub_results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Verify 阶段：Selection×Absorption 可信度 + 多源交叉验证。
+
+    输出结构化：
+      - credibility：compute_credibility 综合评分（含 cross_validate）
+      - corroboration：佐证强度 + 可吸收域名数
+      - conflicts：同一子查询内证据强度冲突（低层级 vs 高层级）标记
+      - unverified：无法核实的主张计数
+    任何一步失败都降级返回，不阻断报告合成。
+    """
+    base = {
+        "credibility_available": False,
+        "corroboration_level": "unknown",
+        "cross_score": 0.0,
+        "conflicts": [],
+        "unverified_count": 0,
+    }
+    try:
+        if compute_credibility is None:
+            return base
+        scored = compute_credibility(merged, query)
+        cross = scored.get("cross_validation") or {}
+        scored_results = scored.get("results") or []
+        if scored_results:
+            # 冲突标记：同子查询内证据层级断层（高层级 vs 低层级）
+            conflicts: list[dict[str, Any]] = []
+            unverified = 0
+            for sr in sub_results:
+                results = sr.get("results") or []
+                tiers = [
+                    r.get("credibility", {}).get("authority", {}).get("source_type")
+                    for r in results[:5]
+                    if r.get("credibility")
+                ]
+                tiers = [t for t in tiers if t]
+                if len(tiers) >= 2 and any(t in ("blog", "forum", "social") for t in tiers):
+                    conflicts.append({
+                        "dimension": sr.get("intent", ""),
+                        "sub_query": sr.get("sub_query", ""),
+                        "detail": "同一维度内混入低证据层级来源，需人工复核",
+                    })
+            for sr in sub_results:
+                if not (sr.get("results") or []):
+                    unverified += 1
+            return {
+                "credibility_available": True,
+                "corroboration_level": cross.get("corroboration_level", "unknown"),
+                "cross_score": float(cross.get("score", 0.0)),
+                "agreement_count": cross.get("agreement_count", 0),
+                "unique_domains": cross.get("unique_domains", 0),
+                "content_domains": cross.get("content_domains", 0),
+                "detail": cross.get("detail", ""),
+                "top_sources": [
+                    {
+                        "url": r.get("url", ""),
+                        "source": r.get("source", ""),
+                        "final": r.get("credibility", {}).get("final", 0.0),
+                    }
+                    for r in scored_results[:5]
+                    if r.get("url")
+                ],
+                "conflicts": conflicts,
+                "unverified_count": unverified,
+            }
+        return base
+    except Exception:
+        return base
+
+
 def synthesize_report(query: str, collection: dict[str, Any],
                       gaps: list[str],
-                      source_grades: dict[str, Any] | None = None) -> dict[str, Any]:
+                      source_grades: dict[str, Any] | None = None,
+                      mode: str = "auto", depth: str = "balanced") -> dict[str, Any]:
     """生成综合研究报告。"""
     merged = collection["merged_results"]
     sub_results = collection["sub_results"]
@@ -599,6 +721,21 @@ def synthesize_report(query: str, collection: dict[str, Any],
     # 验证记录表（Claim | 来源 | 核验方法 | 结果）
     verification_records = _build_verification_records(sub_results, source_grades)
 
+    # Verify 阶段：Selection×Absorption 可信度评分 + 多源交叉验证
+    # （先读源、再断言，交叉核对关键事实，区分权威来源与闲谈，
+    #   标记冲突与缺失）
+    cross_verification = _build_cross_verification(merged, query, sub_results)
+
+    # 事实对齐：跨源抽取结构化事实（版本/百分比/金额/日期/法规号），
+    # 检测同主题冲突值（fact_conflicts）与多源印证（fact_corroborated）
+    fact_alignment = None
+    if align_facts is not None:
+        try:
+            fact_alignment = align_facts(merged, min_results=3,
+                                         mode=mode, depth=depth)
+        except Exception:
+            fact_alignment = None
+
     return {
         "query": query,
         "key_findings": key_findings,
@@ -610,6 +747,8 @@ def synthesize_report(query: str, collection: dict[str, Any],
         "cross_references": cross_refs,
         "coverage_map": coverage_map,
         "verification_records": verification_records,
+        "cross_verification": cross_verification,
+        "fact_alignment": fact_alignment,
         "blind_spots": blind_spots,
         "gaps": gaps,
         "elapsed_ms": collection["elapsed_ms"],
@@ -622,7 +761,9 @@ def synthesize_report(query: str, collection: dict[str, Any],
 def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
                   timeout: int = 15, depth: str = "balanced",
                   mode: str = "auto",
-                  profile: dict[str, Any] | None = None) -> dict[str, Any]:
+                  profile: dict[str, Any] | None = None,
+                  budget: int | None = None,
+                  route_strategy: str | None = None) -> dict[str, Any]:
     """执行深度研究。
 
     流程（单次，无 plan↔search 死循环）：
@@ -677,6 +818,22 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
             seen_q.add(sq["query"])
     if not sub_queries:
         sub_queries = heuristic
+    # 查询变体补充：无 LLM 多变体（问句化/概念扩展/反方观点/范围调整），
+    # 覆盖启发式分解的盲区（如反方视角、概念别名）
+    try:
+        from query_variants import generate_query_variations
+        for v in generate_query_variations(query):
+            if len(sub_queries) >= num_sub_queries:
+                break
+            if v not in seen_q:
+                sub_queries.append({
+                    "query": v,
+                    "intent": "变体召回",
+                    "strategy": "query_variant",
+                })
+                seen_q.add(v)
+    except Exception:
+        pass
     sub_queries = _deduplicate_sub_queries(sub_queries[:num_sub_queries])
 
     # 3. 多源采集：auto + engines_boost（vertical/priority），不锁死单引擎
@@ -684,6 +841,8 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
         sub_queries, max_results, timeout, depth, mode,
         engines_priority=engines_priority or None,
         profile=profile,
+        budget=budget,
+        route_strategy=route_strategy,
     )
 
     # 4. 知识缺口
@@ -691,7 +850,9 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
 
     # 5. 综合报告（source_grades 供证据强度分层 / 验证记录表）
     source_grades = (profile or {}).get("source_grades") if profile else None
-    report = synthesize_report(query, collection, gaps, source_grades=source_grades)
+    report = synthesize_report(query, collection, gaps,
+                               source_grades=source_grades,
+                               mode=mode, depth=depth)
 
     report["execution_tier"] = "deep_research"
     report["requires_confirmation"] = False
@@ -700,6 +861,22 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
         {"query": sq["query"], "intent": sq["intent"], "strategy": sq["strategy"]}
         for sq in sub_queries
     ]
+    # 固定工具预算：超限时明确标记，报告为「最佳部分答案」
+    if collection.get("budget_exhausted"):
+        report["budget"] = {
+            "limit": collection.get("budget_limit"),
+            "exhausted": True,
+            "note": (
+                f"工具预算 {collection.get('budget_limit')} 已用尽，"
+                "仅覆盖部分子查询，以下为基于已完成查询的最佳部分答案，"
+                "剩余维度见 blind_spots / gaps"
+            ),
+        }
+    elif budget is not None:
+        report["budget"] = {"limit": budget, "exhausted": False}
+    # 决策树路由策略（报告记录实际生效值）
+    if route_strategy:
+        report["route_strategy"] = route_strategy
     if profile:
         try:
             from topic_research_profiles import profile_meta
@@ -750,108 +927,14 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
     return report
 
 
-# ── 社交舆情研究 ─────────────────────────────────────────────────────────────
+# ── 社交舆情研究（拆分到 social_research.py）─────────────────────────────────
 
-def social_sentiment_research(query: str, platforms: list[str] | None = None,
-                              max_results: int = 5) -> dict[str, Any]:
-    """社交舆情研究：跨平台 UGC 情绪与讨论分析"""
-    if platforms is None:
-        platforms = ["twitter", "reddit", "xiaohongshu"]
-
-    from search import super_search
-
-    platform_results: dict[str, list] = {}
-    all_results: list[dict] = []
-    engines_used: set[str] = set()
-    t0 = time.time()
-
-    def _one(platform: str) -> tuple[str, list[dict], set[str]]:
-        try:
-            result = super_search(query, engine=platform, n=max_results, mode="fast")
-            return platform, result.get("results", []), set(result.get("engines_used", []))
-        except Exception:
-            return platform, [], set()
-
-    # 并行抓取各平台（串行时 3 平台 × 秒级延迟累积；并行取最慢平台耗时）
-    with ThreadPoolExecutor(max_workers=min(len(platforms), 4)) as ex:
-        futures = {ex.submit(_one, p): p for p in platforms}
-        for fut in as_completed(futures, timeout=90):
-            platform, results, used = fut.result()
-            platform_results[platform] = results
-            all_results.extend(results)
-            engines_used.update(used)
-
-    # 互动数据聚合
-    engagement_totals = {"likes": 0, "comments": 0, "shares": 0, "views": 0}
-    titles: list[str] = []
-
-    for r in all_results:
-        meta = r.get("social_meta", {})
-        if isinstance(meta, dict):
-            engagement_totals["likes"] += meta.get("likes", meta.get("upvotes", meta.get("attitudes_count", 0)))
-            engagement_totals["comments"] += meta.get("comments", meta.get("num_comments", 0))
-            engagement_totals["shares"] += meta.get("shares", meta.get("retweets", meta.get("reposts_count", 0)))
-            engagement_totals["views"] += meta.get("views", meta.get("play_count", 0))
-        # 收集标题用于话题提取
-        title = r.get("title", "")
-        if title:
-            titles.append(title)
-
-    # 中英文兼容的话题提取
-    top_topics_list = _extract_topics(titles, top_k=10)
-    elapsed = int((time.time() - t0) * 1000)
-
-    return {
-        "query": query,
-        "mode": "social-sentiment",
-        "platforms": platforms,
-        "total_posts": len(all_results),
-        "platform_breakdown": {p: len(r) for p, r in platform_results.items()},
-        "engagement_totals": engagement_totals,
-        "top_topics": top_topics_list,
-        "cross_platform_posts": [
-            {
-                "platform": r.get("source", ""),
-                "title": r.get("title", "")[:100],
-                "url": r.get("url", ""),
-                "snippet": r.get("snippet", "")[:200],
-                "social_meta": r.get("social_meta", {}),
-            }
-            for r in all_results[:15]
-        ],
-        "engines_used": sorted(engines_used),
-        "elapsed_ms": elapsed,
-    }
-
-
-def aggregate_social_sentiment(query: str, platforms: list[str],
-                               platform_results: dict[str, list]) -> dict[str, Any]:
-    """社交舆情聚合（MCP argo_social_search mode=sentiment 用）。
-
-    输入为按平台分组的已抓取帖子（social_engines 输出，含 social_meta），
-    聚合互动数据汇总与平台分布，限流返回代表性帖子。原为 MCP 分发层的
-    内联逻辑，下沉到本模块避免逻辑放错层。
-    """
-    all_posts: list = []
-    for p in platforms:
-        all_posts.extend(platform_results.get(p) or [])
-
-    engagement_totals = {"likes": 0, "comments": 0, "reposts": 0, "shares": 0}
-    for post in all_posts:
-        meta = post.get("social_meta", {}) if isinstance(post, dict) else {}
-        engagement_totals["likes"] += meta.get("likes", 0) or meta.get("like_count", 0) or 0
-        engagement_totals["comments"] += meta.get("comments", 0) or 0
-        engagement_totals["reposts"] += meta.get("reposts", 0) or 0
-        engagement_totals["shares"] += meta.get("shares", 0) or 0
-
-    return {
-        "query": query,
-        "platforms": platforms,
-        "platform_breakdown": {p: len(platform_results.get(p) or []) for p in platforms},
-        "total_posts": len(all_posts),
-        "engagement_totals": engagement_totals,
-        "posts": all_posts[:30],  # 限流
-    }
+from social_research import (  # noqa: E402
+    social_sentiment_research,
+    aggregate_social_sentiment,
+    _extract_topics,
+    _print_social_report,
+)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -865,6 +948,10 @@ def main():
     parser.add_argument("--depth", choices=["fast", "balanced", "deep"], default=None)
     parser.add_argument("--mode", choices=["fast", "auto", "deep", "budget", "social-sentiment"], default="auto",
                         help="研究模式：fast/auto/deep/budget/social-sentiment")
+    parser.add_argument("--budget", type=int, default=None,
+                        help="固定工具预算：子查询工具调用上限（超出后停止派发，报告标记 budget_exhausted）")
+    parser.add_argument("--route-strategy", choices=["local_first", "cost_aware", "full"], default=None,
+                        help="决策树路由：local_first（先零成本本地源，不足升级）/ cost_aware（fast 模式自动本地优先）/ full（全量）")
     parser.add_argument("--platforms", type=str, default=None,
                         help="社交平台列表（仅 social-sentiment 模式），逗号分隔")
     parser.add_argument("--topic", type=str, default=None,
@@ -969,6 +1056,8 @@ def main():
             args.query, args.sub_queries, args.max_results,
             args.timeout, args.depth, args.mode,
             profile=profile_obj,
+            budget=args.budget,
+            route_strategy=args.route_strategy,
         )
 
     if profile_applied:
@@ -1048,216 +1137,8 @@ def main():
         if report.get("mode") == "social-sentiment":
             _print_social_report(report)
         else:
-            _print_deep_report(report)
-
-
-def _print_social_report(report: dict):
-    """打印社交舆情报告"""
-    print(f"\n{'='*60}")
-    print(f"社交舆情分析：{report['query']}")
-    print(f"{'='*60}")
-    print(f"平台：{', '.join(report['platforms'])} | 引擎：{', '.join(report['engines_used'])}")
-    print(f"抓取帖子：{report['total_posts']} | 耗时：{report['elapsed_ms']}ms")
-    print()
-    print("── 平台分布 ──")
-    for platform, count in report["platform_breakdown"].items():
-        print(f"  {platform}: {count} 条")
-    print()
-    print("── 互动数据汇总 ──")
-    eng = report["engagement_totals"]
-    print(f"  点赞/投票：{eng['likes']:,} | 评论：{eng['comments']:,} | 转发：{eng['shares']:,} | 观看：{eng['views']:,}")
-    print()
-    print("── 高频讨论话题 ──")
-    for topic in report["top_topics"]:
-        print(f"  「{topic['topic']}」 ({topic['mentions']} 次)")
-    print()
-    print("── 代表性内容 ──")
-    for post in report["cross_platform_posts"][:5]:
-        meta = post.get("social_meta", {})
-        engagement = ""
-        if isinstance(meta, dict):
-            likes = meta.get("likes", meta.get("upvotes", meta.get("attitudes_count", 0)))
-            comments = meta.get("comments", meta.get("num_comments", 0))
-            engagement = f" | 👍{likes} 💬{comments}"
-        print(f"  [{post['platform']}] {post['title'][:60]}{engagement}")
-        print(f"    {post['url']}")
-        print()
-
-
-def _print_deep_report(report: dict):
-    """打印深度研究报告：正文用 [n] 标注，链接统一沉底「相关信源」。"""
-    elapsed_s = report.get("elapsed_ms", 0) / 1000
-    sub_count = report.get("sub_query_count", len(report.get("sub_findings", [])))
-    total_sources = report.get("total_sources", 0)
-    citations = report.get("citations") or []
-    sources = report.get("sources") or []
-    if not sources and citations:
-        sources = [
-            {
-                "ref": c.get("ref") or i + 1,
-                "title": c.get("title"),
-                "url": c.get("url"),
-                "engine": c.get("source"),
-            }
-            for i, c in enumerate(citations)
-            if isinstance(c, dict) and c.get("url")
-        ]
-    citations_count = len(citations) or len(sources)
-
-    print(f"\n{'='*60}")
-    print("=== 深度研究报告 ===")
-    print(f"{'='*60}")
-    print(f"查询：{report.get('query', '')}")
-    if report.get("rewritten_query"):
-        rq = report["rewritten_query"]
-        print(f"改写：{rq.get('original', '')} → {rq.get('rewritten', '')}（置信度 {rq.get('confidence', 0):.2f}）")
-    print(f"子查询：{sub_count} 个 | 来源：{total_sources} 个 | 引用：{citations_count} 个 | 耗时：{elapsed_s:.1f}s")
-    if report.get("archive"):
-        print(f"归档：{report['archive'].get('run_dir', '')}")
-    print()
-
-    # 关键发现（链接用 [n]，不在正文刷 URL）
-    print("## 关键发现")
-    print()
-    for i, kf in enumerate(report.get("key_findings", []), 1):
-        aspect = kf.get("aspect", kf.get("sub_query", ""))
-        refs = kf.get("citation_refs") or []
-        ref_s = "".join(f"[{r}]" for r in refs) if refs else ""
-        print(f"### {i}. {aspect} {ref_s}".rstrip())
-        top = kf.get("top_result", {}) or {}
-        if top:
-            tref = top.get("ref")
-            tmark = f"[{tref}] " if tref else ""
-            print(f"  {tmark}{top.get('title', '')}")
-            snippet = top.get("snippet", "")
-            if snippet:
-                print(f"  {snippet[:200]}")
-        findings = kf.get("findings", [])
-        if findings:
-            for f in findings:
-                title = f.get("title", "")
-                print(f"  - {title}")
-        print(f"  （本方面 {kf.get('result_count', 0)} 条结果）")
-        print()
-
-    # 知识缺口
-    gaps = report.get("gaps", [])
-    if gaps:
-        print("## 知识缺口")
-        for g in gaps:
-            print(f"  - {g}")
-        print()
-
-    # 交叉引用
-    cross_refs = report.get("cross_references", [])
-    if cross_refs:
-        print("## 交叉验证")
-        for cr in cross_refs[:5]:
-            print(f"  - 「{cr.get('ngram', '')}」被 {cr.get('source_count', 0)} 个来源佐证：{', '.join(cr.get('domains', [])[:5])}")
-        print()
-
-    # 知识缺口
-    gaps = report.get("gaps") or []
-    if gaps:
-        print("## 知识缺口 / 盲区")
-        for g in gaps[:8]:
-            print(f"  - {g}")
-        print()
-
-    # 专业质量门禁（选题 profile）
-    gates = report.get("quality_gates") or []
-    if gates:
-        print("## 质量门禁（交付前自检）")
-        for g in gates:
-            print(f"  - [ ] {g}")
-        print()
-
-    sections = report.get("report_sections") or []
-    if sections:
-        print("## 建议报告结构")
-        print("  → " + " / ".join(sections))
-        print()
-
-    grades = report.get("source_grades") or {}
-    if grades:
-        print("## 信源级别参考")
-        for level, items in grades.items():
-            if isinstance(items, list):
-                print(f"  - {level}：{', '.join(str(x) for x in items[:6])}")
-            else:
-                print(f"  - {level}：{items}")
-        print()
-
-    if report.get("disclaimer"):
-        print(f"⚠ {report['disclaimer']}")
-        print()
-
-    # 来源分布
-    source_dist = report.get("source_distribution", {})
-    if source_dist:
-        print("## 引擎分布")
-        for src, cnt in sorted(source_dist.items(), key=lambda x: x[1], reverse=True):
-            print(f"  - {src}: {cnt}")
-        print()
-
-    engines = report.get("engines_used", [])
-    if engines:
-        print(f"使用引擎：{', '.join(engines)}")
-        print()
-
-    # 底部相关信源（传统搜索引擎形态；引用与 sources 统一）
-    if sources or citations:
-        print(f"── 相关信源（{len(sources) or len(citations)}）──")
-        rows = sources if sources else citations
-        for c in rows:
-            if not isinstance(c, dict):
-                continue
-            ref = c.get("ref") or (c.get("id") or "").strip("[]") or "?"
-            title = (c.get("title") or "")[:70]
-            eng = c.get("engine") or c.get("source") or ""
-            url = c.get("url") or ""
-            eng_s = f" · {eng}" if eng else ""
-            if title:
-                print(f"  [{ref}] {title}{eng_s}")
-            if url:
-                print(f"      {url}")
-        print()
-
-
-def _extract_topics(titles: list[str], top_k: int = 10) -> list[dict]:
-    """从标题列表提取话题（中英文兼容）。
-
-    英文用 split() 分词，中文用字符级 bigram。
-    过滤单字停用词，返回 top_k 个话题。
-    """
-    import re
-    from collections import Counter
-
-    chinese_stopwords = set(
-        '的了是在和我你她他它这就也不很但而或如果因为所以而且或者虽然但是可以应该需要已经正在'
-        '之前之后时候地方问题工作生活东西事情时间今天昨天明天今年去年明年个些吗呢啊吧哦嗯哈'
-        '呀嘛哪谁什么怎么多少几样种类下上里中后前时来回过开给让把被对从向比跟和与及当比'
-        '如例包括相关关于根据通过进行使用作为成为具有属于位于来自获得达到实现完成产生形成'
-        '存在发生发展提供包含涉及适用于'
-    )
-
-    topic_counter = Counter()
-
-    for title in titles:
-        # 英文分词（仅保留长度 >= 3 的词）
-        en_words = re.findall(r'[a-zA-Z]{2,}', title.lower())
-        for w in en_words:
-            if len(w) >= 3:
-                topic_counter[w] += 1
-
-        # 中文 bigram（连续 2 个中文字符）
-        chinese_chars = re.findall(r'[一-鿿]', title)
-        for i in range(len(chinese_chars) - 1):
-            bigram = chinese_chars[i] + chinese_chars[i + 1]
-            if bigram[0] not in chinese_stopwords and bigram[1] not in chinese_stopwords:
-                topic_counter[bigram] += 1
-
-    return [{"topic": t, "mentions": c} for t, c in topic_counter.most_common(top_k)]
+            from research_report import print_deep_report
+            print_deep_report(report)
 
 
 if __name__ == "__main__":

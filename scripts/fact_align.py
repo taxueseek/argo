@@ -32,8 +32,30 @@ from urllib.parse import urlparse
 
 # ── 事实抽取正则（每类捕获归一化 value）──────────────────────────────────────
 
+# 版本号：避免把裸小数（94.9 营收）误判为版本号。
+# 版本语义特征 = v 前缀 / 三段式 / 版本上下文词（version/ver/v/版本/版号）。
+# 裸 "94.9" 无这些特征 → 不当版本号。
+# 注意：\b 在 CJK 字符间不成立（「件版本」无单词边界），中文版本词单独处理。
 _FACT_PATTERNS: dict[str, re.Pattern] = {
-    "version": re.compile(r"(?<![\d.])v?(\d+\.\d+(?:\.\d+)?)(?![\d.])", re.I),
+    "version": re.compile(
+        r"(?i)(?:"
+        # 1) 英文版本词 + 数字（version 3.12 / v3.12）
+        r"\b(?:version|ver|release|rel)\b[\s.]*(\d+(?:\.\d+){1,3})"
+        r"|"
+        # 2) 中文版本词 + 数字（版本3.12 / 版号3.12，前导非数字避免串扰）
+        r"(?<![\d.])(?:版本|版号)[\s.]*(\d+(?:\.\d+){1,3})"
+        r"|"
+        # 3) 单字符 v 前缀（v3.12，独立 token）
+        r"(?<![a-zA-Z\d.])v[\s.]*(\d+(?:\.\d+){1,3})(?![\d.])"
+        r"|"
+        # 4) 三段式版本号（3.12.4，无需上下文词）
+        r"(?<![\d.])(\d+\.\d+\.\d+)(?![\d.])"
+        r"|"
+        # 5) 明确软件语义词后的双段（Python 3.12 / react 18.2）
+        r"\b(?:python|node|java|kubernetes|k8s|docker|react|vue|angular|"
+        r"tensorflow|pytorch|django|flask|ubuntu|windows|macos|ios|android)"
+        r"[\s.]*(\d+(?:\.\d+){1,2})"
+        r")", re.I),
     "percent": re.compile(r"(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*percent", re.I),
     "money": re.compile(
         r"(?:[￥$€]|人民币|美元)\s*(\d+(?:\.\d+)?(?:\s*(?:亿|万|千|百万))?)"

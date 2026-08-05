@@ -1,12 +1,12 @@
 {
   "summary": {
-    "ok": 127,
+    "ok": 119,
     "fail": 0,
-    "warn": 8,
+    "warn": 3,
     "by_status": {
-      "PASS": 127,
+      "PASS": 119,
       "FAIL": 0,
-      "WARN": 8
+      "WARN": 3
     },
     "by_section": {
       "lang": {
@@ -25,9 +25,9 @@
         "WARN": 0
       },
       "route": {
-        "PASS": 36,
+        "PASS": 41,
         "FAIL": 0,
-        "WARN": 7
+        "WARN": 2
       },
       "rec_l3_no_pollute_film": {
         "PASS": 1,
@@ -123,16 +123,11 @@
         "PASS": 1,
         "FAIL": 0,
         "WARN": 0
-      },
-      "live": {
-        "PASS": 13,
-        "FAIL": 0,
-        "WARN": 0
       }
     },
     "route_by_scenario": {
       "finance": {
-        "ok": 3,
+        "ok": 2,
         "n": 4
       },
       "macro": {
@@ -140,15 +135,15 @@
         "n": 2
       },
       "film": {
-        "ok": 3,
+        "ok": 5,
         "n": 5
       },
       "sports": {
-        "ok": 5,
+        "ok": 7,
         "n": 7
       },
       "geo": {
-        "ok": 3,
+        "ok": 4,
         "n": 4
       },
       "org": {
@@ -160,7 +155,7 @@
         "n": 2
       },
       "weather": {
-        "ok": 2,
+        "ok": 3,
         "n": 3
       },
       "academic": {
@@ -198,11 +193,11 @@
         "n": 16
       },
       "ja": {
-        "ok": 1,
+        "ok": 5,
         "n": 6
       },
       "ko": {
-        "ok": 2,
+        "ok": 3,
         "n": 4
       },
       "other": {
@@ -222,260 +217,8 @@
         "n": 1
       }
     },
-    "live_summary": {
-      "n": 13,
-      "domain_acc": 1.0,
-      "engine_acc": 1.0,
-      "selection_hit": 1.0,
-      "domain_and_hit": 1.0,
-      "pollute_n": 0
-    },
-    "live_rows": [
-      {
-        "id": "L_en_film",
-        "q": "Inception movie director",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "film_search",
-        "engine": "imdb",
-        "n": 5,
-        "ms": 436,
-        "gold_matched": "inception",
-        "top1": "Inception - Seeing is Believing?",
-        "recovery": null
-      },
-      {
-        "id": "L_zh_film",
-        "q": "肖申克的救赎 主演",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "film_search",
-        "engine": "imdb",
-        "n": 1,
-        "ms": 552,
-        "gold_matched": "shawshank",
-        "top1": "The Shawshank Redemption",
-        "recovery": null
-      },
-      {
-        "id": "L_en_sports",
-        "q": "Cristiano Ronaldo club",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "sports_search",
-        "engine": "thesportsdb",
-        "n": 1,
-        "ms": 6165,
-        "gold_matched": "ronaldo",
-        "top1": "[player] Cristiano Ronaldo",
-        "recovery": null
-      },
-      {
-        "id": "L_zh_sports",
-        "q": "库里 球队",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "sports_search",
-        "engine": "thesportsdb",
-        "n": 1,
-        "ms": 1457,
-        "gold_matched": "curry",
-        "top1": "[player] Stephen Curry",
-        "recovery": null
-      },
-      {
-        "id": "L_zh_media",
-        "q": "周杰伦 专辑",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "media_search",
-        "engine": "itunes",
-        "n": 5,
-        "ms": 521,
-        "gold_matched": "周杰伦",
-        "top1": "太阳之子",
-        "recovery": null
-      },
-      {
-        "id": "L_en_media",
-        "q": "Taylor Swift album",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "media_search",
-        "engine": "itunes",
-        "n": 5,
-        "ms": 485,
-        "gold_matched": "taylor",
-        "top1": "Taylor Swift (Bonus Track Version)",
-        "recovery": null
-      },
-      {
-        "id": "L_en_org",
-        "q": "NASA founding year",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "org_entity",
-        "engine": "wikidata",
-        "n": 5,
-        "ms": 3351,
-        "gold_matched": "nasa",
-        "top1": "NASA History - NASA",
-        "recovery": {
-          "triggered": true,
-          "recovered": true,
-          "level_used": "L3",
-          "strategy_used": "switch_engine",
-          "steps_tried": [
-            {
-              "level": "L3",
-              "strategy": "switch_engine",
-              "query": "NASA founding year",
-              "engines": [
-                "anysearch",
-                "duckduckgo"
-              ],
-              "outcome": "5 results"
-            }
-          ],
-          "final_query": "NASA founding year",
-          "note": "经 L3/switch_engine 恢复成功"
-        }
-      },
-      {
-        "id": "L_en_geo",
-        "q": "where is Eiffel Tower",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "geo_places",
-        "engine": "local_openstreetmap",
-        "n": 5,
-        "ms": 12330,
-        "gold_matched": "eiffel",
-        "top1": "The OFFICIAL Eiffel Tower website: tickets, news, info...",
-        "recovery": {
-          "triggered": true,
-          "recovered": true,
-          "level_used": "L4",
-          "strategy_used": "baseline_zh",
-          "steps_tried": [
-            {
-              "level": "L3",
-              "strategy": "switch_engine",
-              "query": "where is Eiffel Tower",
-              "engines": [
-                "anysearch",
-                "duckduckgo"
-              ],
-              "outcome": "0 results"
-            },
-            {
-              "level": "L4",
-              "strategy": "baseline_zh",
-              "query": "where is Eiffel Tower",
-              "engines": [
-                "local_bing",
-                "anysearch",
-                "duckduckgo"
-              ],
-              "outcome": "5 results"
-            }
-          ],
-          "final_query": "where is Eiffel Tower",
-          "note": "经 L4/baseline_zh 恢复成功"
-        }
-      },
-      {
-        "id": "L_zh_stock",
-        "q": "贵州茅台股价",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "stock_query",
-        "engine": "sina_quote",
-        "n": 1,
-        "ms": 244,
-        "gold_matched": "茅台",
-        "top1": "贵州茅台 0.000 ↓-100.00%",
-        "recovery": null
-      },
-      {
-        "id": "L_zh_chem",
-        "q": "阿司匹林 分子式",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "chem_search",
-        "engine": "pubchem",
-        "n": 1,
-        "ms": 2741,
-        "gold_matched": "aspirin",
-        "top1": "阿司匹林 / aspirin (PubChem CID 2244) 分子式 C9H8O4 分子量 180.16",
-        "recovery": null
-      },
-      {
-        "id": "L_ja_gen",
-        "q": "アニメ おすすめ",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "general_search",
-        "engine": "local_bing",
-        "n": 5,
-        "ms": 645,
-        "gold_matched": "アニメ",
-        "top1": "爱奇艺-动漫频道-日本动漫在线观看-国产动画番剧大全",
-        "recovery": null
-      },
-      {
-        "id": "L_ko_gen",
-        "q": "한국 영화 추천",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "general_search",
-        "engine": "local_bing",
-        "n": 5,
-        "ms": 658,
-        "gold_matched": "korea",
-        "top1": "한국 - Wikiwand",
-        "recovery": null
-      },
-      {
-        "id": "L_cyr_gen",
-        "q": "Как написать скрипт python",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "english_tech",
-        "engine": "octen",
-        "n": 5,
-        "ms": 868,
-        "gold_matched": "python",
-        "top1": "6 способов запустить скрипт на Python",
-        "recovery": null
-      }
-    ]
+    "live_summary": null,
+    "live_rows": []
   },
   "rows": [
     {
@@ -739,7 +482,7 @@
     {
       "name": "route:R_en_usstock",
       "status": "PASS",
-      "detail": "domain=us_stock eng=finviz combo=['finviz', 'anysearch'] lang=en",
+      "detail": "domain=us_stock eng=finviz combo=['finviz', 'exa'] lang=en",
       "meta": {
         "id": "R_en_usstock",
         "q": "AAPL stock price",
@@ -749,7 +492,7 @@
         "engine": "finviz",
         "combo": [
           "finviz",
-          "anysearch"
+          "exa"
         ],
         "primary_lang": "en"
       }
@@ -793,16 +536,16 @@
     {
       "name": "route:R_ja_stock",
       "status": "WARN",
-      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | forbid=['juejin']",
+      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'local_bing'] lang=ja | forbid=['sina_quote']",
       "meta": {
         "id": "R_ja_stock",
         "q": "トヨタ 株価",
         "scenario": "finance",
         "lang": "ja",
-        "domain": "chinese_general",
-        "engine": "juejin",
+        "domain": "stock_query",
+        "engine": "sina_quote",
         "combo": [
-          "juejin",
+          "sina_quote",
           "local_bing"
         ],
         "primary_lang": "ja"
@@ -810,18 +553,18 @@
     },
     {
       "name": "route:R_ko_stock",
-      "status": "PASS",
-      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko",
+      "status": "WARN",
+      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'local_bing'] lang=ko | forbid=['sina_quote']",
       "meta": {
         "id": "R_ko_stock",
         "q": "삼성전자 주가",
         "scenario": "finance",
         "lang": "ko",
-        "domain": "general_search",
-        "engine": "local_bing",
+        "domain": "stock_query",
+        "engine": "sina_quote",
         "combo": [
-          "local_bing",
-          "local_duckduckgo"
+          "sina_quote",
+          "local_bing"
         ],
         "primary_lang": "ko"
       }
@@ -882,17 +625,17 @@
     },
     {
       "name": "route:R_ja_film_kana",
-      "status": "WARN",
-      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | domain=chinese_general!=film_search; primary missing: eng=juejin combo=['juejin', 'local_bing']",
+      "status": "PASS",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'local_bing'] lang=ja",
       "meta": {
         "id": "R_ja_film_kana",
         "q": "宮崎駿 アニメ 映画",
         "scenario": "film",
         "lang": "ja",
-        "domain": "chinese_general",
-        "engine": "juejin",
+        "domain": "film_search",
+        "engine": "imdb",
         "combo": [
-          "juejin",
+          "imdb",
           "local_bing"
         ],
         "primary_lang": "ja"
@@ -900,18 +643,18 @@
     },
     {
       "name": "route:R_ko_film",
-      "status": "WARN",
-      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko | domain=general_search!=film_search; primary missing: eng=local_bing combo=['local_bing', 'local_duckduckgo']",
+      "status": "PASS",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'local_bing'] lang=ko",
       "meta": {
         "id": "R_ko_film",
         "q": "기생충 영화 감독",
         "scenario": "film",
         "lang": "ko",
-        "domain": "general_search",
-        "engine": "local_bing",
+        "domain": "film_search",
+        "engine": "imdb",
         "combo": [
-          "local_bing",
-          "local_duckduckgo"
+          "imdb",
+          "local_bing"
         ],
         "primary_lang": "ko"
       }
@@ -1008,36 +751,36 @@
     },
     {
       "name": "route:R_ja_sports",
-      "status": "WARN",
-      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ja | domain=general_search!=sports_search; primary missing: eng=local_bing combo=['local_bing', 'local_duckduckgo']",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'local_bing'] lang=ja",
       "meta": {
         "id": "R_ja_sports",
         "q": "メッシ クラブ",
         "scenario": "sports",
         "lang": "ja",
-        "domain": "general_search",
-        "engine": "local_bing",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
         "combo": [
-          "local_bing",
-          "local_duckduckgo"
+          "thesportsdb",
+          "local_bing"
         ],
         "primary_lang": "ja"
       }
     },
     {
       "name": "route:R_ko_sports",
-      "status": "WARN",
-      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko | domain=general_search!=sports_search; primary missing: eng=local_bing combo=['local_bing', 'local_duckduckgo']",
+      "status": "PASS",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'local_bing'] lang=ko",
       "meta": {
         "id": "R_ko_sports",
         "q": "손흥민 팀",
         "scenario": "sports",
         "lang": "ko",
-        "domain": "general_search",
-        "engine": "local_bing",
+        "domain": "sports_search",
+        "engine": "thesportsdb",
         "combo": [
-          "local_bing",
-          "local_duckduckgo"
+          "thesportsdb",
+          "local_bing"
         ],
         "primary_lang": "ko"
       }
@@ -1097,17 +840,17 @@
     },
     {
       "name": "route:R_ja_geo",
-      "status": "WARN",
-      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | domain=chinese_general!=geo_places; primary missing: eng=juejin combo=['juejin', 'local_bing']",
+      "status": "PASS",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'local_bing'] lang=ja",
       "meta": {
         "id": "R_ja_geo",
         "q": "エッフェル塔 どこ",
         "scenario": "geo",
         "lang": "ja",
-        "domain": "chinese_general",
-        "engine": "juejin",
+        "domain": "geo_places",
+        "engine": "local_openstreetmap",
         "combo": [
-          "juejin",
+          "local_openstreetmap",
           "local_bing"
         ],
         "primary_lang": "ja"
@@ -1258,17 +1001,17 @@
     },
     {
       "name": "route:R_ja_weather",
-      "status": "WARN",
-      "detail": "domain=chinese_general eng=juejin combo=['juejin', 'local_bing'] lang=ja | domain=chinese_general!=weather_query",
+      "status": "PASS",
+      "detail": "domain=weather_query eng=duckduckgo combo=['duckduckgo', 'local_bing'] lang=ja",
       "meta": {
         "id": "R_ja_weather",
         "q": "東京の天気",
         "scenario": "weather",
         "lang": "ja",
-        "domain": "chinese_general",
-        "engine": "juejin",
+        "domain": "weather_query",
+        "engine": "duckduckgo",
         "combo": [
-          "juejin",
+          "duckduckgo",
           "local_bing"
         ],
         "primary_lang": "ja"
@@ -1277,7 +1020,7 @@
     {
       "name": "route:R_en_academic",
       "status": "PASS",
-      "detail": "domain=academic eng=arxiv combo=['arxiv', 'crossref'] lang=en",
+      "detail": "domain=academic eng=arxiv combo=['arxiv', 'openalex'] lang=en",
       "meta": {
         "id": "R_en_academic",
         "q": "transformer attention paper",
@@ -1287,7 +1030,7 @@
         "engine": "arxiv",
         "combo": [
           "arxiv",
-          "crossref"
+          "openalex"
         ],
         "primary_lang": "en"
       }
@@ -1331,7 +1074,7 @@
     {
       "name": "route:R_en_tech",
       "status": "PASS",
-      "detail": "domain=english_tech eng=octen combo=['octen', 'anysearch'] lang=en",
+      "detail": "domain=english_tech eng=octen combo=['octen', 'exa'] lang=en",
       "meta": {
         "id": "R_en_tech",
         "q": "React vs Vue",
@@ -1341,7 +1084,7 @@
         "engine": "octen",
         "combo": [
           "octen",
-          "anysearch"
+          "exa"
         ],
         "primary_lang": "en"
       }
@@ -1367,17 +1110,17 @@
     {
       "name": "route:R_ja_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ja",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'local_bing'] lang=ja",
       "meta": {
         "id": "R_ja_gen",
         "q": "アニメ おすすめ",
         "scenario": "general",
         "lang": "ja",
-        "domain": "general_search",
-        "engine": "local_bing",
+        "domain": "film_search",
+        "engine": "imdb",
         "combo": [
-          "local_bing",
-          "local_duckduckgo"
+          "imdb",
+          "local_bing"
         ],
         "primary_lang": "ja"
       }
@@ -1385,17 +1128,17 @@
     {
       "name": "route:R_ko_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ko",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'local_bing'] lang=ko",
       "meta": {
         "id": "R_ko_gen",
         "q": "한국 영화 추천",
         "scenario": "general",
         "lang": "ko",
-        "domain": "general_search",
-        "engine": "local_bing",
+        "domain": "film_search",
+        "engine": "imdb",
         "combo": [
-          "local_bing",
-          "local_duckduckgo"
+          "imdb",
+          "local_bing"
         ],
         "primary_lang": "ko"
       }
@@ -1734,412 +1477,6 @@
       "name": "pref_habit",
       "status": "PASS",
       "detail": ""
-    },
-    {
-      "name": "live:L_en_film",
-      "status": "PASS",
-      "detail": "dom=film_search eng=imdb n=5 ms=436 hit=True gold='inception' pollute=[] used=['imdb'] rec=None",
-      "meta": {
-        "id": "L_en_film",
-        "q": "Inception movie director",
-        "scenario": "film",
-        "lang": "en",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "film_search",
-        "engine": "imdb",
-        "n": 5,
-        "ms": 436,
-        "gold_matched": "inception",
-        "top1": "Inception - Seeing is Believing?",
-        "sources": [
-          "imdb",
-          "imdb",
-          "imdb",
-          "imdb",
-          "imdb"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_zh_film",
-      "status": "PASS",
-      "detail": "dom=film_search eng=imdb n=1 ms=552 hit=True gold='shawshank' pollute=[] used=['imdb', 'itunes'] rec=None",
-      "meta": {
-        "id": "L_zh_film",
-        "q": "肖申克的救赎 主演",
-        "scenario": "film",
-        "lang": "zh",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "film_search",
-        "engine": "imdb",
-        "n": 1,
-        "ms": 552,
-        "gold_matched": "shawshank",
-        "top1": "The Shawshank Redemption",
-        "sources": [
-          "imdb"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_en_sports",
-      "status": "PASS",
-      "detail": "dom=sports_search eng=thesportsdb n=1 ms=6165 hit=True gold='ronaldo' pollute=[] used=['thesportsdb', 'wikipedia'] rec=None",
-      "meta": {
-        "id": "L_en_sports",
-        "q": "Cristiano Ronaldo club",
-        "scenario": "sports",
-        "lang": "en",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "sports_search",
-        "engine": "thesportsdb",
-        "n": 1,
-        "ms": 6165,
-        "gold_matched": "ronaldo",
-        "top1": "[player] Cristiano Ronaldo",
-        "sources": [
-          "thesportsdb"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_zh_sports",
-      "status": "PASS",
-      "detail": "dom=sports_search eng=thesportsdb n=1 ms=1457 hit=True gold='curry' pollute=[] used=['thesportsdb', 'wikipedia'] rec=None",
-      "meta": {
-        "id": "L_zh_sports",
-        "q": "库里 球队",
-        "scenario": "sports",
-        "lang": "zh",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "sports_search",
-        "engine": "thesportsdb",
-        "n": 1,
-        "ms": 1457,
-        "gold_matched": "curry",
-        "top1": "[player] Stephen Curry",
-        "sources": [
-          "thesportsdb"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_zh_media",
-      "status": "PASS",
-      "detail": "dom=media_search eng=itunes n=5 ms=521 hit=True gold='周杰伦' pollute=[] used=['itunes'] rec=None",
-      "meta": {
-        "id": "L_zh_media",
-        "q": "周杰伦 专辑",
-        "scenario": "media",
-        "lang": "zh",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "media_search",
-        "engine": "itunes",
-        "n": 5,
-        "ms": 521,
-        "gold_matched": "周杰伦",
-        "top1": "太阳之子",
-        "sources": [
-          "itunes",
-          "itunes",
-          "itunes",
-          "itunes",
-          "itunes"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_en_media",
-      "status": "PASS",
-      "detail": "dom=media_search eng=itunes n=5 ms=485 hit=True gold='taylor' pollute=[] used=['itunes'] rec=None",
-      "meta": {
-        "id": "L_en_media",
-        "q": "Taylor Swift album",
-        "scenario": "media",
-        "lang": "en",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "media_search",
-        "engine": "itunes",
-        "n": 5,
-        "ms": 485,
-        "gold_matched": "taylor",
-        "top1": "Taylor Swift (Bonus Track Version)",
-        "sources": [
-          "itunes",
-          "itunes",
-          "itunes",
-          "itunes",
-          "itunes"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_en_org",
-      "status": "PASS",
-      "detail": "dom=org_entity eng=wikidata n=5 ms=3351 hit=True gold='nasa' pollute=[] used=['wikidata', 'wikipedia'] rec={'triggered': True, 'recovered': True, 'level_used': 'L3', 'strategy_used': 'switch_engine', 'steps_tried': [{'level': 'L3', 'strategy': 'switch_engine', 'query': 'NASA founding year', 'engines': ['anysearch', 'duckduckgo'], 'outcome': '5 results'}], 'final_query': 'NASA founding year', 'note': '经 L3/switch_engine 恢复成功'}",
-      "meta": {
-        "id": "L_en_org",
-        "q": "NASA founding year",
-        "scenario": "org",
-        "lang": "en",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "org_entity",
-        "engine": "wikidata",
-        "n": 5,
-        "ms": 3351,
-        "gold_matched": "nasa",
-        "top1": "NASA History - NASA",
-        "sources": [
-          "anysearch",
-          "anysearch",
-          "anysearch",
-          "anysearch",
-          "anysearch"
-        ],
-        "recovery": {
-          "triggered": true,
-          "recovered": true,
-          "level_used": "L3",
-          "strategy_used": "switch_engine",
-          "steps_tried": [
-            {
-              "level": "L3",
-              "strategy": "switch_engine",
-              "query": "NASA founding year",
-              "engines": [
-                "anysearch",
-                "duckduckgo"
-              ],
-              "outcome": "5 results"
-            }
-          ],
-          "final_query": "NASA founding year",
-          "note": "经 L3/switch_engine 恢复成功"
-        }
-      }
-    },
-    {
-      "name": "live:L_en_geo",
-      "status": "PASS",
-      "detail": "dom=geo_places eng=local_openstreetmap n=5 ms=12330 hit=True gold='eiffel' pollute=[] used=['local_openstreetmap'] rec={'triggered': True, 'recovered': True, 'level_used': 'L4', 'strategy_used': 'baseline_zh', 'steps_tried': [{'level': 'L3', 'strategy': 'switch_engine', 'query': 'where is Eiffel Tower', 'engines': ['anysearch', 'duckduckgo'], 'outcome': '0 results'}, {'level': 'L4', 'strategy': 'baseline_zh', 'query': 'where is Eiffel Tower', 'engines': ['local_bing', 'anysearch', 'duckduckgo'], 'outcome': '5 results'}], 'final_query': 'where is Eiffel Tower', 'note': '经 L4/baseline_zh 恢复成功'}",
-      "meta": {
-        "id": "L_en_geo",
-        "q": "where is Eiffel Tower",
-        "scenario": "geo",
-        "lang": "en",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "geo_places",
-        "engine": "local_openstreetmap",
-        "n": 5,
-        "ms": 12330,
-        "gold_matched": "eiffel",
-        "top1": "The OFFICIAL Eiffel Tower website: tickets, news, info...",
-        "sources": [
-          "local_bing",
-          "local_bing",
-          "local_bing",
-          "local_bing",
-          "local_bing"
-        ],
-        "recovery": {
-          "triggered": true,
-          "recovered": true,
-          "level_used": "L4",
-          "strategy_used": "baseline_zh",
-          "steps_tried": [
-            {
-              "level": "L3",
-              "strategy": "switch_engine",
-              "query": "where is Eiffel Tower",
-              "engines": [
-                "anysearch",
-                "duckduckgo"
-              ],
-              "outcome": "0 results"
-            },
-            {
-              "level": "L4",
-              "strategy": "baseline_zh",
-              "query": "where is Eiffel Tower",
-              "engines": [
-                "local_bing",
-                "anysearch",
-                "duckduckgo"
-              ],
-              "outcome": "5 results"
-            }
-          ],
-          "final_query": "where is Eiffel Tower",
-          "note": "经 L4/baseline_zh 恢复成功"
-        }
-      }
-    },
-    {
-      "name": "live:L_zh_stock",
-      "status": "PASS",
-      "detail": "dom=stock_query eng=sina_quote n=1 ms=244 hit=True gold='茅台' pollute=[] used=['sina_quote'] rec=None",
-      "meta": {
-        "id": "L_zh_stock",
-        "q": "贵州茅台股价",
-        "scenario": "finance",
-        "lang": "zh",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "stock_query",
-        "engine": "sina_quote",
-        "n": 1,
-        "ms": 244,
-        "gold_matched": "茅台",
-        "top1": "贵州茅台 0.000 ↓-100.00%",
-        "sources": [
-          "sina_quote"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_zh_chem",
-      "status": "PASS",
-      "detail": "dom=chem_search eng=pubchem n=1 ms=2741 hit=True gold='aspirin' pollute=[] used=['pubchem'] rec=None",
-      "meta": {
-        "id": "L_zh_chem",
-        "q": "阿司匹林 分子式",
-        "scenario": "chem",
-        "lang": "zh",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "chem_search",
-        "engine": "pubchem",
-        "n": 1,
-        "ms": 2741,
-        "gold_matched": "aspirin",
-        "top1": "阿司匹林 / aspirin (PubChem CID 2244) 分子式 C9H8O4 分子量 180.16",
-        "sources": [
-          "pubchem"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_ja_gen",
-      "status": "PASS",
-      "detail": "dom=general_search eng=local_bing n=5 ms=645 hit=True gold='アニメ' pollute=[] used=['local_bing'] rec=None",
-      "meta": {
-        "id": "L_ja_gen",
-        "q": "アニメ おすすめ",
-        "scenario": "general",
-        "lang": "ja",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "general_search",
-        "engine": "local_bing",
-        "n": 5,
-        "ms": 645,
-        "gold_matched": "アニメ",
-        "top1": "爱奇艺-动漫频道-日本动漫在线观看-国产动画番剧大全",
-        "sources": [
-          "local_bing",
-          "local_bing",
-          "local_bing",
-          "local_bing",
-          "local_bing"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_ko_gen",
-      "status": "PASS",
-      "detail": "dom=general_search eng=local_bing n=5 ms=658 hit=True gold='korea' pollute=[] used=['local_bing'] rec=None",
-      "meta": {
-        "id": "L_ko_gen",
-        "q": "한국 영화 추천",
-        "scenario": "general",
-        "lang": "ko",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "general_search",
-        "engine": "local_bing",
-        "n": 5,
-        "ms": 658,
-        "gold_matched": "korea",
-        "top1": "한국 - Wikiwand",
-        "sources": [
-          "local_bing",
-          "local_bing",
-          "local_bing",
-          "local_bing",
-          "local_bing"
-        ],
-        "recovery": null
-      }
-    },
-    {
-      "name": "live:L_cyr_gen",
-      "status": "PASS",
-      "detail": "dom=english_tech eng=octen n=5 ms=868 hit=True gold='python' pollute=[] used=['octen'] rec=None",
-      "meta": {
-        "id": "L_cyr_gen",
-        "q": "Как написать скрипт python",
-        "scenario": "general",
-        "lang": "cyrillic",
-        "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
-        "pollute": [],
-        "domain": "english_tech",
-        "engine": "octen",
-        "n": 5,
-        "ms": 868,
-        "gold_matched": "python",
-        "top1": "6 способов запустить скрипт на Python",
-        "sources": [
-          "octen",
-          "octen",
-          "octen",
-          "octen",
-          "octen"
-        ],
-        "recovery": null
-      }
     }
   ]
 }
