@@ -261,3 +261,52 @@ class TestFactAlignmentInResearch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSearchQualityAlgorithms(unittest.TestCase):
+    """体验改进算法：加权 RRF / minhash 语义缓存 / 新引擎注册。"""
+
+    def test_rrf_weighted_authority_boost(self):
+        from search import rrf_merge, _engine_weight
+        # 权威源权重高于社交源
+        self.assertGreater(_engine_weight("wikipedia"), _engine_weight("twitter"))
+        # 合并源取最高权重
+        self.assertEqual(_engine_weight("local_bing/sina_quote"), 1.2)
+
+    def test_rrf_weighted_ranking(self):
+        from search import rrf_merge
+        # wikipedia 在 rank2，twitter 在 rank1 → 加权后 wikipedia 应上升
+        l1 = [
+            {"url": "https://a.com/tweet", "title": "X", "source": "twitter"},
+            {"url": "https://b.com/wiki", "title": "Y", "source": "wikipedia"},
+        ]
+        l2 = [{"url": "https://b.com/wiki", "title": "Y", "source": "wikipedia"}]
+        out = rrf_merge([l1, l2])
+        self.assertEqual(out[0]["url"], "https://b.com/wiki")
+
+    def test_query_similarity_near_duplicate(self):
+        from cache import query_similarity
+        self.assertGreater(query_similarity("苹果 2025 营收", "苹果 2025 年营收"), 0.5)
+        self.assertLess(query_similarity("苹果 2025 营收", "量子计算原理"), 0.3)
+
+    def test_new_engines_registered(self):
+        from engines import get_registry
+        reg = get_registry()
+        for e in ("gdelt", "opencorporates", "google_patents"):
+            self.assertIn(e, reg, f"{e} 应已注册")
+
+    def test_new_domain_routing(self):
+        from route import route_query
+        cases = [
+            ("比特币 专利", "patent_search"),
+            ("公司注册信息", "company_search"),
+            ("全球地缘局势", "global_event"),
+        ]
+        for q, expect in cases:
+            with self.subTest(q=q):
+                d = route_query(q)
+                self.assertEqual(d.get("domain"), expect, f"{q} 应路由到 {expect}")
+
+
+if __name__ == "__main__":
+    unittest.main()

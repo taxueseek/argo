@@ -136,12 +136,49 @@ def _canonical_url(url: str) -> str:
         return url
 
 
-def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60) -> list[dict[str, Any]]:
+# 引擎融合权重（WG-RRF：按来源质量加权，权威源提权、社交/低质源降权）
+_ENGINE_FUSION_WEIGHTS: dict[str, float] = {
+    # 权威百科/学术/官方
+    "wikipedia": 1.4, "wikidata": 1.4, "zh_wikipedia": 1.4, "baidu_baike": 1.3,
+    "arxiv": 1.3, "openalex": 1.3, "crossref": 1.3, "semantic_scholar": 1.3,
+    "dblp": 1.3, "europepmc": 1.3, "pubmed": 1.3, "google_scholar": 1.3,
+    "pubchem": 1.3, "uniprot": 1.3, "rcsb_pdb": 1.3,
+    "github": 1.2, "pypi": 1.2, "npm": 1.2, "crates": 1.2, "mdn": 1.2,
+    "stackoverflow": 1.1, "imdb": 1.2, "thesportsdb": 1.2, "itunes": 1.2,
+    "finviz": 1.2, "sina_quote": 1.2, "tencent_quote": 1.2, "eastmoney": 1.2,
+    "fred": 1.3, "worldbank": 1.3, "nbs_stats": 1.3, "eurostat": 1.3,
+    # 通用引擎（基线）
+    "duckduckgo": 1.0, "local_bing": 1.0, "local_duckduckgo": 1.0,
+    "local_google": 1.0, "anysearch": 1.0, "byted": 1.0, "bocha": 1.0,
+    "brave": 1.0, "uapi": 1.0, "local_search": 1.0, "octen": 1.0,
+    "gdelt": 1.0, "opencorporates": 1.2, "google_patents": 1.2,
+    # 社交/低质（降权）
+    "twitter": 0.7, "reddit": 0.7, "xiaohongshu": 0.7, "bilibili": 0.7,
+    "weibo": 0.7, "v2ex": 0.8, "zhihu": 0.8, "zhihu_hot": 0.8,
+    "baidu_hot": 0.8, "toutiao_hot": 0.8, "bilibili_hot": 0.8,
+}
+
+
+def _engine_weight(source: str) -> float:
+    """按引擎来源返回融合权重（source 可能含 'local_bing/sina_quote' 合并形式）。"""
+    if not source:
+        return 1.0
+    # 合并来源按最高权重源算
+    parts = str(source).split("/")
+    weights = [_ENGINE_FUSION_WEIGHTS.get(p.strip(), 1.0) for p in parts if p.strip()]
+    return max(weights) if weights else 1.0
+
+
+def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
+              weighted: bool = True) -> list[dict[str, Any]]:
     """Reciprocal Rank Fusion 合并多引擎结果，保留 consensus_engines。
 
     键用归一化 URL（http/https、www、utm 变体合并）；RRF 分单独存 _rrf_score，
     首次遇到的结果保留完整字段，后续同 URL 只累加共识、择优补充 snippet，
     避免「score 字段赢家通吃」覆盖共识内容。
+
+    weighted（WG-RRF）：按引擎来源加权（权威源提权、社交源降权），
+    默认开启；传 False 回到经典 RRF 行为。
     """
     scores: dict[str, float] = {}
     items: dict[str, dict[str, Any]] = {}
@@ -149,7 +186,8 @@ def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60) -> list[dic
     for results in ranked_lists:
         for i, r in enumerate(results):
             key = _canonical_url(r.get("url", "")) or f"__title__:{r.get('title', '')}"
-            scores[key] = scores.get(key, 0.0) + 1.0 / (k + i + 1)
+            w = _engine_weight(r.get("_engine") or r.get("source") or "") if weighted else 1.0
+            scores[key] = scores.get(key, 0.0) + w / (k + i + 1)
             eng = r.get("_engine") or r.get("source", "") or ""
             if key not in items:
                 item = dict(r)
