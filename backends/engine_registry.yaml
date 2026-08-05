@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。
 version: 2
-last_updated: '2026-08-04'
+last_updated: '2026-08-05'
 engines:
 - name: anysearch
   tier: T1
@@ -481,7 +481,7 @@ engines:
   desc: itotii 梗百科（中文流行语/网络梗溯源，WordPress REST，免认证）
 - name: itunes
   tier: T1
-  type: http
+  type: itunes
   coverage:
   - media
   - music
@@ -491,7 +491,7 @@ engines:
   cost: free
   status: ok
   recommended: true
-  desc: iTunes Search API（音乐/影视/播客/应用，免认证）
+  desc: iTunes Search API（中文 country=cn；专辑问 entity=album，免认证）
 - name: jin10
   tier: T1
   type: jin10

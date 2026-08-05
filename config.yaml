@@ -126,6 +126,9 @@ domains:
   - (?i)(stock|quote|price|market\s+cap)
   - A股|港股|股票|ETF|板块
   - (资金流|主力资金|北向|龙虎榜|大宗交易|换手率)
+  # 日韩股票触发词（修复「トヨタ 株価」「삼성전자 주가」漏召）
+  - (?i)(株価|株式|株|相場|値動き|高値|安値|終値|時価総額|騰落)
+  - (?i)(주가|주식|증시|시가총액|종가|시세|등락|상한가|하한가)
   primary: sina_quote
   quote: true
   early_stop_min_results: 1
@@ -237,6 +240,9 @@ domains:
   parallel: false
   patterns:
   - (?i)(天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)
+  # 日韩天气触发词（修复「東京の天気」「서울 날씨」漏召）
+  - (?i)(天気|気温|温度|予報|雨|雪|何度)
+  - (?i)(날씨|기온|온도|예보|비|눈|몇\s*도)
   primary: qweather
 - desc: 财经快讯（金十数据）
   engines_combo:
@@ -473,6 +479,9 @@ domains:
   - (?i)(导演|主演|演员|编剧|制片|出品|上映|首映|IMDb|imdb|豆瓣电影|影帝|影后|最佳影片)
   - (?i)\b(movie|film|tv\s*show|tv\s*series|cinema|oscar|emmy|director|screenwriter|box\s*office|netflix|hbo)\b
   - (?i)\b(cast|starring|directed\s+by|written\s+by|released\s+in)\b
+  # 日韩影视触发词（修复日韩电影查询漏召）
+  - (?i)(映画|アニメ|ドラマ|主演|監督|脚本|上映|配給|アカデミー|スタジオジブリ)
+  - (?i)(영화|감독|주연|출연|개봉|애니메이션|드라마|수상|칸|아카데미|시사회)
   primary: imdb
 - desc: 体育赛事/球员/球队（先于媒体域；修复 MVP 误匹配 MV）
   engines_combo:
@@ -492,6 +501,9 @@ domains:
   - (?i)\b(team|club|player|coach|manager|roster|squad|jersey|striker|goalkeeper|midfielder|forward|defender)\b
   - (?i)\b(world\s*cup|olympics?|championship|finals?|playoffs?|league|fixture|matchday|transfer|hat-?trick)\b
   - (?i)\b(soccer|football|basketball|tennis|baseball|cricket|rugby|golf|formula\s*1|formula\s*one)\b
+  # 日韩体育触发词（修复「メッシ クラブ」「손흥민 팀」漏召）
+  - (?i)(サッカー|野球|バスケ|テニス|サッカー選手|リーグ|ワールドカップ|オリンピック|クラブ|チーム|監督|選手)
+  - (?i)(축구|야구|농구|테니스|월드컵|올림픽|리그|클럽|팀|감독|선수)
   primary: thesportsdb
 - desc: 地理/地点/地标（OSM + 百科，先于中文 catch-all）
   engines_combo:
@@ -511,6 +523,9 @@ domains:
   - (?i)\b(where\s+is|located\s+in|capital\s+of|latitude|longitude|elevation|coordinates?|border(s|ing)?|tributary)\b
   - (?i)\b(flows?\s+through|drainage|basin|source\s+of|passes\s+through)\b
   - (?i)\b(mountain|river|lake|ocean|island|peninsula|desert|plateau|canyon|strait|volcano|glacier|timezone)\b
+  # 日韩地理触发词（修复「エッフェル塔 どこ」「에펠탑 어디」漏召）
+  - (?i)(どこ|どこにある|位置|標高|首都|山|川|湖|島|半島|砂漠|高原|国境|塔|観光地|緯度|経度)
+  - (?i)(어디|위치|수도|산|강|호수|섬|반도|사막|고원|국경|타워|관광지|위도|경도)
   primary: local_openstreetmap
 - desc: 政府/组织/公司实体（百科+维基数据，覆盖 LoHo Politics/Business）
   engines_combo:
