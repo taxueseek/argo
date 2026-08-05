@@ -23,7 +23,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.6.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-16%20tools-purple">
 </p>
@@ -56,7 +56,7 @@
 | 只给链接 | 附带 selection / absorption / 引擎状态等字段 |
 | Agent 上下文被长 JSON 撑爆 | MCP 响应可紧凑裁剪，snippet 可控 |
 
-### 当前大致能力（v2.6.0）
+### 当前大致能力（v2.6.1）
 
 - **约 120+ 个搜索源、60+ 业务域**：通用网页 + 金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等，配置真源在 `config.yaml`
 - **16 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索等一站挂上
@@ -127,7 +127,7 @@
 
 ## 快速开始
 
-任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.6.0**。npm registry 上的旧包可能滞后，可不走）。
+任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.6.1**。npm registry 上的旧包可能滞后，可不走）。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -195,11 +195,11 @@ Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口�
 
 ### 方式三：Release 源码包（离线 / 固定版本）
 
-打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.6.0.tar.gz`** 或 zip：
+打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.6.1.tar.gz`** 或 zip：
 
 ```bash
-tar -xzf argo-2.6.0.tar.gz
-cd argo-2.6.0
+tar -xzf argo-2.6.1.tar.gz
+cd argo-2.6.1
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py   # 启动 MCP
@@ -548,6 +548,7 @@ python3 scripts/search.py [选项] 查询词
 
 | 版本 | 说明 |
 |------|------|
+| **v2.6.1** | v2.6.0 修复版：路由误伤修复（`capital of` 不再抢 fact_check）；版本同步。详见 [发布说明](docs/RELEASE_NOTES_v2.6.1.md) |
 | **v2.6.0** | **多语言搜索**（检测 / 引擎参数 / 跨语言回退）；影视·体育·地理·组织·媒体等垂直补全；recovery 防污染；能力族与矩阵回归；约 120+ 源。详见 [发布说明](docs/RELEASE_NOTES_v2.6.0.md) |
 | **v2.5.1** | 金融/宏观/化学等垂直答案源加厚；引擎分层 + combo 预算；研究 boost 不锁死；[v2.5.1 说明](docs/RELEASE_NOTES_v2.5.1.md) |
 | **v2.5.0** | 安装脚本 + npx；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应；介绍页重写 |
@@ -556,7 +557,7 @@ python3 scripts/search.py [选项] 查询词
 | **v2.1** | 社交引擎层（多平台 UGC） |
 | **v1.x** | 统一命名为 Argo，多引擎路由与双层缓存成型 |
 
-更细说明见 `docs/RELEASE_NOTES_v2.6.0.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
+更细说明见 `docs/RELEASE_NOTES_v2.6.1.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
 
 ---
 

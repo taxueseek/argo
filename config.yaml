@@ -508,7 +508,7 @@ domains:
   # 水系/行政区划事实（修复「黄河 流经省份」漏召）
   - (?i)(流经|途经|贯穿|横跨|流域|水系|汇入|注入|源头|入海|几省|省份|省区|行政区划|发源于)
   - (?i)(地理|地图|方位|东南西北|几公里|多远|距离.*多远|openstreetmap|nominatim|geonames)
-  - (?i)\b(where\s+is|located\s+in|capital\s+of|latitude|longitude|elevation|coordinates?|border(s|ing)?|tributary)\b
+  - (?i)\b(where\s+is|located\s+in|latitude|longitude|elevation|coordinates?|border(s|ing)?|tributary)\b
   - (?i)\b(flows?\s+through|drainage|basin|source\s+of|passes\s+through)\b
   - (?i)\b(mountain|river|lake|ocean|island|peninsula|desert|plateau|canyon|strait|volcano|glacier|timezone)\b
   primary: local_openstreetmap

@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.6.0
+version: 2.6.1
 triggers:
   - 搜索
   - 查一下
@@ -124,11 +124,11 @@ engines:
   - zhihu_global
   - zhihu_hot
 ---
-## Argo v2.6.0
+## Argo v2.6.1
 
 ### 本版你多了什么（通俗）
 
-**按语言、按领域选路，查询越用越准。** 多语言检测与引擎参数；影视 / 体育 / 地理 / 组织 / 媒体与金融宏观化学等垂直源；空结果恢复防串味；日常 combo 预算、研究 boost 不锁死。详见 `docs/RELEASE_NOTES_v2.6.0.md`。
+**按语言、按领域选路，查询越用越准。** 多语言检测与引擎参数；影视 / 体育 / 地理 / 组织 / 媒体与金融宏观化学等垂直源；空结果恢复防串味；日常 combo 预算、研究 boost 不锁死。详见 `docs/RELEASE_NOTES_v2.6.1.md`。
 
 | 你问的 | 大概走哪类 | 体感 |
 |--------|------------|------|
