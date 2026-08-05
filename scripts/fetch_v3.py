@@ -161,6 +161,43 @@ def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
     return _make_result(url, resp["text"], max_chars, "http")
 
 
+def _wayback_fetch(url: str, max_chars: int = 8000, timeout: float = 12.0) -> dict:
+    """Wayback Machine 快照回退：CDX API 查最新快照 → 抓取。
+
+    用于 HTTP 失败 / 空内容 / 疑似被删页面的兜底，返回统一输出格式。
+    """
+    try:
+        from http_client import HttpClient
+        client = HttpClient(timeout=timeout, max_retries=1, jitter=False)
+        # CDX 查询最新快照
+        cdx_url = (
+            "https://web.archive.org/cdx/search/cdx"
+            f"?url={urllib.parse.quote(url, safe='')}"
+            "&output=json&limit=1&sort=reverse"
+        )
+        resp = client.get(cdx_url)
+        if not resp.get("text"):
+            return _make_result(url, "", 0, "wayback", ok=False,
+                                error="wayback cdx empty")
+        data = json.loads(resp["text"])
+        if not data or len(data) < 2:
+            return _make_result(url, "", 0, "wayback", ok=False,
+                                error="wayback no snapshot")
+        timestamp = data[1][1]
+        snapshot_url = f"https://web.archive.org/web/{timestamp}/{url}"
+        snap = client.get(snapshot_url)
+        if not snap.get("text"):
+            return _make_result(url, "", 0, "wayback", ok=False,
+                                error="wayback snapshot empty")
+        result = _make_result(url, snap["text"], max_chars, "wayback")
+        result["snapshot_url"] = snapshot_url
+        result["snapshot_ts"] = timestamp
+        return result
+    except Exception as e:
+        return _make_result(url, "", 0, "wayback", ok=False,
+                            error=f"wayback error: {str(e)[:100]}")
+
+
 def _make_result(url: str, html: str, max_chars: int,
                  method: str, ok: bool = True, error: str | None = None,
                  title: str = "") -> dict:
@@ -254,6 +291,15 @@ def _assess_quality(result: dict) -> dict:
     is_stale = False
     content_age_days = -1
 
+    # 内容安全：注入检测 + 清洗（任何抓取内容先过安全引擎）
+    security = {}
+    if content:
+        try:
+            from content_security import scrub_to_dict
+            security = scrub_to_dict(content)
+        except Exception:
+            security = {}
+
     result.update({
         "content_ok": content_ok,
         "page_type": page_type,
@@ -262,6 +308,7 @@ def _assess_quality(result: dict) -> dict:
         "is_stale": is_stale,
         "content_age_days": content_age_days,
         "quality_score": quality_score,
+        "content_security": security,
     })
     return result
 
@@ -419,7 +466,14 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
         # 第一级：HTTP
         result = _http_fetch(url, max_chars, timeout)
 
-        # 第二级：浏览器降级
+        # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
+        if not result.get("success"):
+            wb = _wayback_fetch(url, max_chars, timeout=min(timeout * 1.5, 12.0))
+            if wb.get("success"):
+                wb["http_fallback"] = True
+                result = wb
+
+        # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）
         if use_browser_fallback and _needs_browser(result):
             browser_result = _browser_fetch(url, max_chars, timeout=15.0)
             if browser_result.get("success") or not result.get("success"):

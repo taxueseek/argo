@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。
 version: 2
-last_updated: '2026-08-04'
+last_updated: '2026-08-05'
 engines:
 - name: anysearch
   tier: T1
@@ -394,6 +394,18 @@ engines:
   status: ok
   recommended: true
   desc: 全球生物多样性物种检索（学名/俗名，api.gbif.org 免认证）
+- name: gdelt
+  tier: T1
+  type: gdelt
+  coverage:
+  - event
+  - news
+  - geo
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: GDELT 全球新闻事件数据库（事件/舆情/地理维度，免认证）
 - name: github
   tier: T1
   type: http
@@ -404,6 +416,18 @@ engines:
   status: ok
   recommended: true
   desc: GitHub 代码搜索 API
+- name: google_patents
+  tier: T1
+  type: google_patents
+  coverage:
+  - patent
+  - tech
+  - ip
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Google Patents 专利搜索（技术尽调/竞品分析，免认证）
 - name: google_scholar
   tier: T1
   type: google_scholar
@@ -481,7 +505,7 @@ engines:
   desc: itotii 梗百科（中文流行语/网络梗溯源，WordPress REST，免认证）
 - name: itunes
   tier: T1
-  type: http
+  type: itunes
   coverage:
   - media
   - music
@@ -491,7 +515,7 @@ engines:
   cost: free
   status: ok
   recommended: true
-  desc: iTunes Search API（音乐/影视/播客/应用，免认证）
+  desc: iTunes Search API（中文 country=cn；专辑问 entity=album，免认证）
 - name: jin10
   tier: T1
   type: jin10
@@ -910,6 +934,18 @@ engines:
   status: ok
   recommended: true
   desc: OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto）
+- name: opencorporates
+  tier: T1
+  type: opencorporates
+  coverage:
+  - company
+  - business
+  - legal
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: OpenCorporates 全球公司注册（尽调/反欺诈，免认证）
 - name: openfda
   tier: T1
   type: openfda

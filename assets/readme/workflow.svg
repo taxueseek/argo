@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Argo 工作流</title>
+  <desc id="desc">从查询到统一 JSON：语言检测、路由、多引擎召回、RRF 融合、证据快评</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#070B14"/>
+      <stop offset="100%" stop-color="#0B1220"/>
+    </linearGradient>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+
+  <text x="56" y="44" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8" letter-spacing="2">HOW IT WORKS</text>
+  <text x="56" y="76" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="24" font-weight="650" fill="#E8EEF7">一条查询的完整路径</text>
+
+  <!-- stage boxes row -->
+  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
+    <!-- 1 -->
+    <rect x="56" y="120" width="150" height="96" rx="14" fill="#0D1526" stroke="#1E2A3F"/>
+    <text x="131" y="152" text-anchor="middle" font-size="11" fill="#64748B" font-family="ui-monospace, Menlo, monospace">01</text>
+    <text x="131" y="178" text-anchor="middle" font-size="15" font-weight="600" fill="#E8EEF7">查询</text>
+    <text x="131" y="200" text-anchor="middle" font-size="11" fill="#64748B">改写可选</text>
+
+    <!-- 2 -->
+    <rect x="246" y="120" width="150" height="96" rx="14" fill="#0D1526" stroke="#1E3A5F"/>
+    <text x="321" y="152" text-anchor="middle" font-size="11" fill="#38BDF8" font-family="ui-monospace, Menlo, monospace">02</text>
+    <text x="321" y="178" text-anchor="middle" font-size="15" font-weight="600" fill="#E8EEF7">语言 + 域</text>
+    <text x="321" y="200" text-anchor="middle" font-size="11" fill="#64748B">检测 · 规则 · TF-IDF</text>
+
+    <!-- 3 -->
+    <rect x="436" y="120" width="150" height="96" rx="14" fill="#0D1526" stroke="#1E3A5F"/>
+    <text x="511" y="152" text-anchor="middle" font-size="11" fill="#38BDF8" font-family="ui-monospace, Menlo, monospace">03</text>
+    <text x="511" y="178" text-anchor="middle" font-size="15" font-weight="600" fill="#E8EEF7">多引擎召回</text>
+    <text x="511" y="200" text-anchor="middle" font-size="11" fill="#64748B">熔断 · 负缓存</text>
+
+    <!-- 4 -->
+    <rect x="626" y="120" width="150" height="96" rx="14" fill="#0D1526" stroke="#3B2F6B"/>
+    <text x="701" y="152" text-anchor="middle" font-size="11" fill="#A78BFA" font-family="ui-monospace, Menlo, monospace">04</text>
+    <text x="701" y="178" text-anchor="middle" font-size="15" font-weight="600" fill="#E8EEF7">RRF 融合</text>
+    <text x="701" y="200" text-anchor="middle" font-size="11" fill="#64748B">分阶恢复</text>
+
+    <!-- 5 -->
+    <rect x="816" y="120" width="150" height="96" rx="14" fill="#0D1526" stroke="#166534"/>
+    <text x="891" y="152" text-anchor="middle" font-size="11" fill="#34D399" font-family="ui-monospace, Menlo, monospace">05</text>
+    <text x="891" y="178" text-anchor="middle" font-size="15" font-weight="600" fill="#E8EEF7">证据快评</text>
+    <text x="891" y="200" text-anchor="middle" font-size="11" fill="#64748B">权威 · 密度 · 时效</text>
+
+    <!-- 6 -->
+    <rect x="1006" y="120" width="138" height="96" rx="14" fill="#122033" stroke="#38BDF8" stroke-opacity="0.5"/>
+    <text x="1075" y="152" text-anchor="middle" font-size="11" fill="#38BDF8" font-family="ui-monospace, Menlo, monospace">06</text>
+    <text x="1075" y="178" text-anchor="middle" font-size="15" font-weight="600" fill="#E8EEF7">统一 JSON</text>
+    <text x="1075" y="200" text-anchor="middle" font-size="11" fill="#64748B">Agent 可吸收</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#475569" stroke-width="1.5" fill="none" marker-end="url(#arr)">
+    <path d="M210 168 H240"/>
+    <path d="M400 168 H430"/>
+    <path d="M590 168 H620"/>
+    <path d="M780 168 H810"/>
+    <path d="M970 168 H1000"/>
+  </g>
+
+  <!-- bottom notes -->
+  <g transform="translate(56 260)">
+    <rect width="1088" height="64" rx="12" fill="#0D1526" stroke="#1E2A3F"/>
+    <text x="24" y="28" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#64748B">budget</text>
+    <text x="24" y="48" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#CBD5E1">fast · auto · deep · budget</text>
+
+    <text x="280" y="28" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#64748B">cache</text>
+    <text x="280" y="48" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#CBD5E1">内存 + SQLite · 热查询约 10ms</text>
+
+    <text x="580" y="28" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#64748B">recovery gate</text>
+    <text x="580" y="48" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#CBD5E1">空结果可恢复 · 禁无关垂直源串味</text>
+
+    <text x="900" y="28" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#64748B">local + web</text>
+    <text x="900" y="48" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#CBD5E1">联网 + 本机文件一体</text>
+  </g>
+</svg>

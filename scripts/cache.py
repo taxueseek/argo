@@ -111,6 +111,44 @@ def normalize_query(query: str) -> str:
     return q.casefold()
 
 
+# ── 近重复查询检测（minhash 字符 n-gram）────────────────────────────────────
+
+_NGRAM_N = 3
+_MINHASH_PERM = 8  # 置换数（越多越准，越少越快；8 对查询级足够）
+
+
+def _ngrams(s: str, n: int = _NGRAM_N) -> set[str]:
+    """字符级 n-gram（中文按字，英文按字符，无需分词）。"""
+    s = re.sub(r"\s+", "", s)
+    return {s[i:i + n] for i in range(max(len(s) - n + 1, 1))}
+
+
+def _hash_token(t: str, seed: int) -> int:
+    """带种子的简单哈希（minhash 置换模拟）。"""
+    h = seed * 1315423911
+    for c in t:
+        h = (h ^ ord(c)) * 1099511628211 & 0xFFFFFFFFFFFFFFFF
+    return h
+
+
+def query_similarity(q1: str, q2: str) -> float:
+    """两查询的字符 n-gram minhash 近似 Jaccard 相似度（0-1）。
+
+    中文「苹果 2025 营收」vs「苹果 2025 年营收」这类近重复查询
+    会得到高相似度（>0.7），用于语义缓存软命中。
+    """
+    a = _ngrams(q1)
+    b = _ngrams(q2)
+    if not a or not b:
+        return 0.0
+    # minhash 估计 Jaccard：各置换下两集合最小哈希相等的比例
+    hits = 0
+    for seed in range(_MINHASH_PERM):
+        if min(_hash_token(t, seed) for t in a) == min(_hash_token(t, seed) for t in b):
+            hits += 1
+    return hits / _MINHASH_PERM
+
+
 def is_freshness_sensitive_query(query: str) -> bool:
     """检测查询是否时效敏感（今日/实时/盘中/快讯等）。"""
     global FRESHNESS_QUERY_RE
@@ -314,6 +352,46 @@ class SQLiteCache:
                 conn.execute("DELETE FROM search_cache WHERE created_at < ?", (cutoff,))
                 conn.commit()
 
+    def find_similar(self, query: str, engine: str = "auto",
+                     domain: str = "general", limit: int = 50,
+                     threshold: float = 0.7) -> list[dict]:
+        """近重复查询软命中：扫描最近缓存，minhash 相似度 ≥ threshold 的条目。
+
+        返回 [{key, query, similarity}]，按相似度降序。用于语义缓存——
+        「苹果 2025 营收」可软命中「苹果 2025 年营收」的缓存。
+        扫描限制 limit 条最近查询，控制成本。
+
+        阈值 0.7：中文字符级 n-gram 下，「营收」vs「年营收」这类
+        单字差异相似度约 0.75，0.7 可捕捉近重复且排除无关查询（≈0）。
+        """
+        nq = normalize_query(query)
+        base_len = len(nq)
+        with self._lock:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    "SELECT key, query, domain, ttl, created_at "
+                    "FROM search_cache WHERE domain = ? "
+                    "ORDER BY accessed_at DESC LIMIT ?",
+                    (domain, limit),
+                ).fetchall()
+        candidates = []
+        for key, cached_q, cached_dom, ttl, created_at in rows:
+            if not cached_q or cached_q == nq:
+                continue
+            if self._is_expired(created_at, ttl):
+                continue
+            clen = len(normalize_query(cached_q))
+            # 长度约束：差异过大（>50%）不可能是近重复
+            if base_len > 0 and abs(clen - base_len) / max(base_len, 1) > 0.5:
+                continue
+            sim = query_similarity(nq, normalize_query(cached_q))
+            if sim >= threshold:
+                candidates.append({
+                    "key": key, "query": cached_q, "similarity": round(sim, 3),
+                })
+        candidates.sort(key=lambda x: -x["similarity"])
+        return candidates
+
     @property
     def stats(self) -> dict:
         with self._lock:
@@ -467,6 +545,25 @@ class SearchCache:
         key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         hit = self._read(key)
         if hit is None:
+            # 语义软命中：精确 miss 时，minhash 找近重复查询的缓存
+            if domain != "general" or mode == "auto":
+                try:
+                    similar = self._l2.find_similar(query, engine, domain)
+                    for cand in similar:
+                        s_hit = self._l2.get(cand["key"])
+                        if s_hit is None:
+                            continue
+                        sliced = self._soft_slice(s_hit, max_results)
+                        if sliced is not None:
+                            out = dict(sliced)
+                            out["_cache_level"] = "L2"
+                            out["_semantic_hit"] = True
+                            out["_semantic_similarity"] = cand["similarity"]
+                            out["_semantic_query"] = cand["query"]
+                            self._l1.set(key, s_hit)
+                            return out
+                except Exception:
+                    pass
             return None
         sliced = self._soft_slice(hit, max_results)
         return sliced
@@ -474,15 +571,52 @@ class SearchCache:
     def set(self, query: str, engine: str, max_results: int, results: dict,
             domain: str = "general", ttl: int | None = None, mode: str = "auto",
             depth: str = "fast"):
-        """写入双层缓存。空结果强制短 TTL；时效 query 强制 cap。"""
+        """写入双层缓存。空结果强制短 TTL；时效 query 强制 cap。
+
+        自适应 TTL：内容稳定的查询自动延长 TTL（上限为域 TTL），
+        内容频繁变化则保持短 TTL，兼顾命中率与新鲜度。
+        """
         result_list = results.get("results") if isinstance(results, dict) else None
         is_empty = isinstance(result_list, list) and len(result_list) == 0
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
+            effective_ttl = self._adaptive_ttl(query, engine, domain, effective_ttl, result_list)
         key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         self._write(key, query, engine, max_results, results, domain, effective_ttl)
+
+    def _adaptive_ttl(self, query: str, engine: str, domain: str,
+                      base_ttl: int, result_list: list) -> int:
+        """自适应 TTL：对比同查询旧缓存内容哈希，稳定则延长 TTL。
+
+        内容稳定（哈希一致）→ TTL 延长到 base_ttl * 2（上限域 TTL）；
+        内容变化 → 保持 base_ttl。仅对非时效查询生效，避免影响新鲜度。
+        """
+        if not query or is_freshness_sensitive_query(query):
+            return base_ttl
+        if not result_list:
+            return base_ttl
+        try:
+            key = self._key(query, engine, 0, domain, "auto", "fast", kind="combo")
+            old = self._l2.get(key)
+            if old is None:
+                return base_ttl
+            old_results = old.get("results") if isinstance(old, dict) else None
+            if not isinstance(old_results, list) or not old_results:
+                return base_ttl
+            # 内容指纹：title+url 前 N 条
+            def _fp(rs: list) -> tuple:
+                return tuple(
+                    (r.get("url", ""), (r.get("title", "") or "")[:50])
+                    for r in rs[:5]
+                )
+            if _fp(old_results) == _fp(result_list):
+                # 稳定 → 延长（上限为 base 的 2 倍，不超域上限）
+                return min(base_ttl * 2, self.resolve_ttl(domain, query=query) * 2)
+            return base_ttl
+        except Exception:
+            return base_ttl
 
     # ── per-engine 结果缓存 ──────────────────────────────────────────────────
 

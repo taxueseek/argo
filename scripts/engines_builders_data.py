@@ -2979,3 +2979,179 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
             out.append(r)
         return out
     return _engine
+
+
+# ── GDELT 全球事件数据库 ─────────────────────────────────────────────────────
+
+def _build_gdelt_engine(spec: dict[str, Any]) -> Any:
+    """GDELT 全球新闻事件数据库（api.gdeltproject.org/api/v2/doc/doc，免认证）。
+
+    全球事件/舆情查询：返回事件描述、来源、时间、国家标签。中文查询走
+    GEO JSON 全词搜索，英文走 phrase 搜索。独特价值：全球事件图谱，
+    覆盖 argo 现有新闻引擎（财联社/东财/Google News）的地理与事件维度。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        has_cjk = bool(re.search(r"[\u4e00-\u9fff]", query))
+        mode = "geojson" if has_cjk else "phraselist"
+        url = (
+            "https://api.gdeltproject.org/api/v2/doc/doc"
+            f"?query={urllib.parse.quote(query)}&mode={mode}"
+            "&format=json&maxrecords=25&sort=hybridrel"
+            "&timespan=30d"
+        )
+        headers = {"User-Agent": "argo-search/2.6 (unified-search@local)"}
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception:
+            return []
+        articles = data.get("articles") or []
+        results: list[dict[str, Any]] = []
+        for a in articles[:n]:
+            title = a.get("title") or ""
+            if not title:
+                continue
+            src = a.get("sourcecountry") or a.get("domain") or "gdelt"
+            url_a = a.get("url") or ""
+            seendate = a.get("seendate") or ""
+            date_s = f"{seendate[:4]}-{seendate[4:6]}-{seendate[6:8]}" if len(seendate) >= 8 else ""
+            results.append({
+                "title": title[:200],
+                "url": url_a,
+                "snippet": (a.get("seentext") or "")[:300],
+                "source": "gdelt",
+                "score": 0.8,
+                "published": date_s,
+                "country": src,
+                "language": a.get("lang") or "",
+                "domain_label": "事件",
+            })
+        return results
+    return _engine
+
+
+# ── OpenCorporates 全球公司注册 ──────────────────────────────────────────────
+
+def _build_opencorporates_engine(spec: dict[str, Any]) -> Any:
+    """OpenCorporates 全球公司注册（api.opencorporates.com/v0.4/companies/search，免认证）。
+
+    公司尽调/反欺诈：公司名、注册号、司法辖区、成立日期、状态。
+    argo 现有引擎无公司注册数据源，这是尽调类查询的核心空白。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = query.strip()
+        # 去常见修饰语，取核心公司名
+        q2 = re.sub(r"(?i)\b(company|corporation|inc|limited|ltd|llc|公司|集团|有限|注册|查一下|查询)\b", " ", q)
+        q2 = re.sub(r"\s+", " ", q2).strip() or q
+        url = (
+            "https://api.opencorporates.com/v0.4/companies/search"
+            f"?q={urllib.parse.quote(q2)}&per_page={min(n, 10)}"
+        )
+        headers = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception:
+            return []
+        companies = ((data.get("results") or {}).get("companies")) or []
+        results: list[dict[str, Any]] = []
+        for c in companies[:n]:
+            comp = c.get("company") or {}
+            name = comp.get("name") or ""
+            if not name:
+                continue
+            num = comp.get("company_number") or ""
+            juris = comp.get("jurisdiction_code") or ""
+            inc_date = (comp.get("incorporation_date") or "")[:10]
+            status = comp.get("current_status") or ""
+            cc = (comp.get("registered_address") or {}).get("country") or ""
+            results.append({
+                "title": name[:200],
+                "url": comp.get("opencorporates_url") or f"https://opencorporates.com/companies/{juris}/{num}",
+                "snippet": (
+                    f"{juris}{'/'+num if num else ''}"
+                    f"{' · 成立 '+inc_date if inc_date else ''}"
+                    f"{' · 状态 '+status if status else ''}"
+                    f"{' · '+cc if cc else ''}"
+                )[:300],
+                "source": "opencorporates",
+                "score": 0.8,
+                "company_number": num,
+                "jurisdiction": juris,
+                "incorporation_date": inc_date,
+                "status": status,
+            })
+        return results
+    return _engine
+
+
+# ── Google Patents 专利搜索 ──────────────────────────────────────────────────
+
+def _build_google_patents_engine(spec: dict[str, Any]) -> Any:
+    """Google Patents 专利搜索（patents.google.com/xhr/query，免认证）。
+
+    技术尽调/竞品分析：专利标题、公开号、公开日期、申请人。
+    用 patents.google.com 的公开 XHR 接口，免 key、返回 JSON。
+    argo 现有引擎无专利数据源，这是技术尽调的核心空白。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = query.strip()
+        # 去常见修饰语
+        q2 = re.sub(r"(?i)\b(patent|专利|查询|搜索|检索)\b", " ", q)
+        q2 = re.sub(r"\s+", " ", q2).strip() or q
+        url = "https://patents.google.com/xhr/query"
+        params = {
+            "url": f"q={urllib.parse.quote(q2)}",
+            "exp": "",
+        }
+        full_url = url + "?" + urllib.parse.urlencode(params)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            "Accept": "application/json",
+        }
+        try:
+            with urllib.request.urlopen(urllib.request.Request(full_url, headers=headers), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception:
+            return []
+        results: list[dict[str, Any]] = []
+        try:
+            cluster = (data.get("results") or {}).get("cluster") or []
+            for c in cluster:
+                for r in (c.get("result") or []):
+                    if len(results) >= n:
+                        break
+                    pat = r.get("patent") or {}
+                    title = pat.get("title") or ""
+                    if not title:
+                        continue
+                    pub_date = pat.get("publication_date") or ""
+                    pub_num = pat.get("publication_number") or ""
+                    assignee = (pat.get("assignee") or [{}])[0].get("name") if isinstance(pat.get("assignee"), list) else ""
+                    pub_id = pat.get("publication_number") or pub_num or ""
+                    results.append({
+                        "title": title[:200],
+                        "url": f"https://patents.google.com/patent/{pub_id}" if pub_id else "",
+                        "snippet": (r.get("snippet") or "")[:300],
+                        "source": "google_patents",
+                        "score": 0.8,
+                        "publication_date": pub_date,
+                        "publication_number": pub_num,
+                        "assignee": assignee,
+                    })
+        except Exception:
+            pass
+        return results
+    return _engine

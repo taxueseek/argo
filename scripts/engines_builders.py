@@ -60,6 +60,9 @@ from engines_builders_data import (
     _build_imdb_engine,
     _build_thesportsdb_engine,
     _build_itunes_engine,
+    _build_gdelt_engine,
+    _build_opencorporates_engine,
+    _build_google_patents_engine,
 )
 
 __all__ = [
@@ -116,5 +119,8 @@ __all__ = [
     "_build_imdb_engine",
     "_build_thesportsdb_engine",
     "_build_itunes_engine",
+    "_build_gdelt_engine",
+    "_build_opencorporates_engine",
+    "_build_google_patents_engine",
 ]
 

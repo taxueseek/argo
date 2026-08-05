@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="docs/assets/hero.svg" width="600" alt="Argo 阿尔戈">
+  <img src="assets/readme/hero.svg" width="100%" alt="Argo 阿尔戈：给 Agent 用的统一搜索与证据核验">
 </p>
 
-<h3 align="center">Argo · 阿尔戈</h3>
-
 <p align="center">
-  给 Agent 用的统一搜索与证据核验。<br>
-  不只返回链接，而是尽量给出<strong>能核验、能吸收</strong>的材料。
+  <strong>中文</strong> ·
+  <a href="README.en.md">English</a> ·
+  <a href="README.ja.md">日本語</a> ·
+  <a href="README.ko.md">한국어</a> ·
+  <a href="README.es.md">Español</a>
 </p>
 
 <p align="center">
   <a href="#这是什么">介绍</a> ·
+  <a href="#问啥像啥">证明</a> ·
+  <a href="#它怎么工作">机制</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="#适用平台">适用平台</a> ·
   <a href="#能做什么">能力</a> ·
-  <a href="#引擎与路由">引擎</a> ·
-  <a href="#使用示例">示例</a> ·
   <a href="#安装与配置">配置</a> ·
   <a href="#版本记录">更新</a>
 </p>
@@ -23,24 +23,20 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.6.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-16%20tools-purple">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
 </p>
 
 ---
 
 ## 这是什么
 
-**Argo 是一套给 AI Agent 用的搜索基础设施。**
+**Argo 是给 AI Agent 用的多语言搜索基础设施。**
 
-真实世界的检索从来不是「一种语言 + 一个搜索框」：有人问 A 股行情，有人问 World Cup，有人用日文找动画推荐，有人要 IMDb 上的导演信息。Argo 的出发点很朴素——**按领域、按语言、按需求选路**，尽量把问题送到合适的源，而不是一律扫网页标题。
+真实检索从来不是「一种语言 + 一个搜索框」：有人问 A 股行情，有人问 World Cup，有人用日文找动画，有人要 IMDb 上的导演信息。Argo 的出发点很朴素——**按领域、按语言、按需求选路**，把问题送到合适的源，而不是一律扫网页标题。联网搜索与本机文件搜索一体可用。
 
-举例：你问「贵州茅台股价」，会优先走 **A 股行情快照**（新浪 / 腾讯等）；问「AAPL 美股」，走美股专线；问「肖申克的救赎 主演」或 “Inception movie director”，走影视源；问「梅西 俱乐部」走体育库；问「埃菲尔铁塔在哪」走地理实体；用日文 / 韩文 / 俄文提问时，会先识别语言，再选引擎参数与补充源，并避免把中文专用站硬塞进非中文查询。更重要的是：它会尽量判断**哪些结果值得当真**——是不是搜索结果页壳、有没有数字和披露、多个域名是否说同一件事。
-
-一句话：
-
-> 产出不是「链接清单」，而是「证据候选 + 可信度分解」；路选对了，证据才站得住。
+> 产出不是「链接清单」，而是「证据候选 + 可信度分解」。路选对了，证据才站得住。
 
 ### 和「再包一层搜索 API」的差别
 
@@ -50,32 +46,18 @@
 | 啥问题都泛搜网页 | **垂直源优先**：行情、影视、体育、宏观、化学等先给答案型结果 |
 | 默认只按中英优化 | **多语言识别 + 引擎语言参数 + 跨语言回退** |
 | 搜完直接拼摘要 | 选择门槛 × 证据密度 × 时效 × 多源共识 |
-| 引擎挂了整条链路挂 | 熔断、负缓存、分阶恢复（且防垂直源串味） |
+| 引擎挂了整条链路挂 | 熔断、负缓存、分阶恢复（防垂直源串味） |
 | 每次查询都重新打网 | 双层缓存（内存 + SQLite），热查询约 10ms 级 |
-| 日常和研究一个慢 | **日常少开引擎、研究再放宽**（引擎分层 + combo 预算） |
-| 只给链接 | 附带 selection / absorption / 引擎状态等字段 |
+| 日常和研究一个慢 | **日常少开引擎、研究再放宽** |
 | Agent 上下文被长 JSON 撑爆 | MCP 响应可紧凑裁剪，snippet 可控 |
 
-### 当前大致能力（v2.6.1）
+---
 
-- **约 120+ 个搜索源、60+ 业务域**：通用网页 + 金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等，配置真源在 `config.yaml`
-- **16 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索等一站挂上
-- **多语言搜索（本版重点之一）**：
-  - 统一语言检测：中、英、日、韩、西里尔、泰、阿、希伯来、希腊、天城体等
-  - 路由与引擎参数跟着语言走（如 Bing `setlang`、Google `hl`）
-  - 非中文查询避免误入知乎 / 搜狗微信 / A 股快照等中文专用源
-  - 空结果时可跨语言 / 按用户语言偏好回退（`mode=fast` 可关掉以控延迟）
-- **垂直领域继续补全（本版重点之二）**：
-  - **影视 / 体育 / 地理 / 组织 / 音乐媒体**：IMDb、TheSportsDB、OpenStreetMap、Wikidata、iTunes 等
-  - **日常金融与宏观**：A 股快照、美股、FRED / 世界银行等（v2.5.1 能力保留并加固）
-  - **化学 / 物种 / 标准文档**：PubChem、GBIF、RFC 等窄域直达
-  - **空结果恢复有门禁**：换引擎时不把 pypi / npm / 快讯等无关源「串」进影视、体育查询
-- **日常更快、研究更全**：`engine_policy` 统一分层——日常 combo 收紧，deep / research 再放开长尾源
-- **能力族（family）**：同族源可互换、可统一测试；路由组合时减少同质堆叠
-- **语义路由 + 规则域**：TF-IDF 与正则域配合；低分回退通用引擎
-- **查询改写 / 热路径缓存 / 证据两阶段**：口语改写不污染域匹配；Selection × Absorption 仍在
+## 问啥像啥
 
-### 举几个「问啥像啥」的例子
+<p align="center">
+  <img src="assets/readme/proof-routes.svg" width="100%" alt="四类真实路由：金融、影视、多语言、地理">
+</p>
 
 | 你这样问 | 大致会怎样 |
 |----------|------------|
@@ -86,52 +68,60 @@
 | 埃菲尔铁塔在哪 / where is Eiffel Tower | 地理实体 → OpenStreetMap 等 |
 | NASA founding year / 国务院职能 | 组织实体 → Wikidata 等 |
 | 周杰伦 专辑 / Taylor Swift album | 媒体域 → iTunes 等 |
-| アニメ おすすめ / 한국 영화 추천 | 识别日/韩语 → 语言友好本地源，少塞中文专用站 |
+| アニメ おすすめ / 한국 영화 추천 | 识别日/韩语 → 语言友好源，少塞中文专用站 |
 | 美国 CPI、中国 GDP | 宏观数据域；国别分流 |
 | 阿司匹林 分子式 | 化学域 → PubChem 类答案 |
-| 台积电估值分歧（深度研究） | 拆子问题 + 多源并行，垂直源被 boost 进来 |
-
-```
-查询
-  │
-  ├─ 意图消歧（可选）
-  ├─ 查询改写（可选；路由仍看原始意图特征）
-  ├─ 语言检测 + 语言偏好（系统 / 习惯 / 中英基线）
-  ├─ 路由（域规则 + TF-IDF + 预算 + 语言补充源 + 热路径缓存）
-  ├─ 多引擎召回（熔断 / 负缓存 / 并行）
-  ├─ 空结果分阶恢复（放宽 → 换同族/通用引擎 → 跨语言；防污染）
-  ├─ RRF 融合 + 可选精排
-  ├─ 证据快评（权威 · 证据密度 · 时效 · 共识）
-  └─ 统一 JSON（含 engine_outcomes / recovery，方便判断空结果原因）
-```
+| 台积电估值分歧（深度研究） | 拆子问题 + 多源并行，垂直源被 boost |
 
 ---
 
-## 为什么需要它
+## 它怎么工作
 
-| 痛点 | Argo 的做法 |
-|------|------------|
-| 领域多、语言多，换引擎换 Key 很烦 | 按域 + 按语言自动选路；中英日韩等有统一检测 |
-| 非中文查询却出现中文社区源 | 语言门禁，中文专用源不硬塞 |
-| 问电影 / 球星 / 地标却只得到泛网页 | 影视 / 体育 / 地理 / 组织 / 媒体等垂直专线 |
-| 问股价却只得到新闻标题 | 答案型垂直源 + early-stop，优先可吸收事实 |
-| 兜底恢复时结果「串味」 | recovery 只允许通用 / 百科 / 同族，禁无关垂直污染 |
-| 摘要里有数，正文对不上 | 高后果场景建议再 `fetch` + `evidence`，不只信 snippet |
-| 搜索结果页、跳转链被当成信源 | SERP / 跳转壳识别并降权 |
-| 付费额度紧张 / 日常太慢 | 四档预算 + **日常 combo 条数限制**；研究再全开 |
-| 重复问题反复等几秒 | 分级 TTL + 柔性命中（条数够可截断复用） |
-| 引擎空转白等 | 熔断 + 短 TTL 负缓存 |
-| 「苹果股价」却路由到购物站 | 查询改写与域匹配解耦，减少购物类误吸 |
+<p align="center">
+  <img src="assets/readme/workflow.svg" width="100%" alt="查询 → 语言与域 → 多引擎召回 → RRF → 证据快评 → 统一 JSON">
+</p>
+
+```
+查询
+  ├─ 意图消歧（可选）
+  ├─ 查询改写（可选；路由仍看原始意图）
+  ├─ 语言检测 + 语言偏好
+  ├─ 路由（域规则 + TF-IDF + 预算 + 语言补充源 + 热路径缓存）
+  ├─ 多引擎召回（熔断 / 负缓存 / 并行）
+  ├─ 空结果分阶恢复（放宽 → 换同族/通用 → 跨语言；防污染）
+  ├─ RRF 融合 + 可选精排
+  ├─ 证据快评（权威 · 证据密度 · 时效 · 共识）
+  └─ 统一 JSON（含 engine_outcomes / recovery）
+```
+
+### 证据评分（简版）
+
+```
+selection  ≈ 域名权威，SERP/跳转链压到很低
+absorption ≈ 数字 / 定义 / 对比 / 披露等证据密度
+freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年）
+综合       ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·引擎分
+```
+
+结果字段含 `selection`、`absorption`、`credibility_fast`、`evidence_flags` 等，方便 Agent 直接排序。
+
+### Agent 使用纪律（建议）
+
+1. **高后果问题**（持仓、安全、是否属实）：search → 看快评分 → 对 top 结果 `fetch` → 再下结论  
+2. **数字**：写清口径，冲突时并列，不要硬合并  
+3. **搜索结果页 / 跳转链**：不要当正文信源  
+4. **社交帖**：当舆情与叙事，不当事实真值  
+5. **事实核查**：宁可多一两条分层查询（来源 / 对比 / 主体）
 
 ---
 
 ## 快速开始
 
-任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.6.1**。npm registry 上的旧包可能滞后，可不走）。
+任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.6.2**。npm registry 上的旧包可能滞后，可不走）。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
-### 方式一：一键脚本（推荐本机长期用，只要 git + Python）
+### 方式一：一键脚本（推荐本机长期用）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
@@ -159,8 +149,6 @@ python3 ~/.local/share/argo/scripts/search.py --list-engines
 pip3 install pyyaml
 ```
 
-**启动 MCP（从 GitHub 拉最新，不走 npm 版本号）：**
-
 ```bash
 npx -y github:taxueseek/argo
 ```
@@ -185,7 +173,7 @@ npx -y github:taxueseek/argo
   "mcpServers": {
     "argo": {
       "command": "python3",
-      "args": ["/Users/你的用户名/.local/share/argo/scripts/mcp_server.py"]
+      "args": ["/path/to/argo/scripts/mcp_server.py"]
     }
   }
 }
@@ -193,16 +181,16 @@ npx -y github:taxueseek/argo
 
 Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口会读）。
 
-### 方式三：Release 源码包（离线 / 固定版本）
+### 方式三：Release 源码包
 
-打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.6.1.tar.gz`** 或 zip：
+打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.6.2.tar.gz`** 或 zip：
 
 ```bash
-tar -xzf argo-2.6.1.tar.gz
-cd argo-2.6.1
+tar -xzf argo-2.6.2.tar.gz
+cd argo-2.6.2
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
-python3 scripts/mcp_server.py   # 启动 MCP
+python3 scripts/mcp_server.py
 ```
 
 ### 方式四：git clone（开发 / 改源码）
@@ -215,39 +203,29 @@ bash scripts/install.sh --link ~/.claude/skills/argo   # 可选
 python3 scripts/search.py --list-engines
 ```
 
-配置完成后，Agent 会自动调用 `argo_search`、`argo_research`、`argo_evidence` 等工具。
-
 ### 方式五：挂到 Skill 目录（符号链接，单一真源）
 
-磁盘上只保留一份 Argo 代码。需要出现在 Claude / 其他 Agent 约定目录时，用链接而不是复制：
-
 ```bash
-# 单次指定（仓库根目录下执行）
 python3 scripts/link_source.py --to ~/.claude/skills/argo
 python3 scripts/link_source.py --to ~/.agents/skills/argo
 
-# 或复制示例后编辑本机声明（installs.local.yaml 已 gitignore，不会进仓库）
+# 或复制示例后编辑本机声明（installs.local.yaml 已 gitignore）
 cp installs.local.yaml.example installs.local.yaml
-# 编辑 link_targets 后：
 python3 scripts/link_source.py
 python3 scripts/link_source.py --check
 ```
 
-### 方式六：作为 Python 库调用
+### 方式六：作为 Python 库
 
 ```python
 import sys
-sys.path.insert(0, "/path/to/argo/scripts")  # 换成你的安装路径
+sys.path.insert(0, "/path/to/argo/scripts")
 from search import super_search
 
 result = super_search("Python asyncio", n=5, mode="fast")
 for item in result["results"]:
     print(item["title"], item.get("credibility_fast"), item["url"])
-
-result = super_search("黄金价格", engine="eastmoney", n=3, skip_cache=True)
 ```
-
-也可以用内置 CLI 包装：
 
 ```bash
 # 若已把 bin/argo 放进 PATH
@@ -262,11 +240,9 @@ argo evidence "某条待核实的说法"
 
 | 平台 | 接入方式 | 说明 |
 |------|---------|------|
-| **Claude Code** | MCP / Skill 链接 | `npx argo-search` 或 `mcp_server.py`；也可用 `link_source.py` 挂 Skill |
-| **Kimi** | MCP Server | 同上 |
-| **Grok Build** | MCP Server | 同上 |
-| **Cursor** | MCP | 在 MCP 设置里加 command |
-| **Cline / Continue** | MCP | 支持 MCP 的 IDE 插件均可 |
+| **Claude Code** | MCP / Skill 链接 | `npx` 或 `mcp_server.py`；也可用 `link_source.py` |
+| **Kimi / Grok Build** | MCP Server | 同上 |
+| **Cursor / Cline / Continue** | MCP | 支持 MCP 的 IDE 插件均可 |
 | **命令行** | `search.py` / `bin/argo` | 脚本、定时任务、人工排查 |
 | **Python 项目** | `from search import super_search` | 库调用 |
 
@@ -286,14 +262,14 @@ python3 scripts/search.py --list-engines
 | 能力 | 说明 | 入口 |
 |------|------|------|
 | 统一搜索 | 路由 → 召回 → 融合 → 快评 | `search.py` / `argo_search` |
+| 本地文件搜索 | 本机代码/笔记/记忆（非联网） | `argo_local_search` |
 | 深度研究 | 拆子问题、多源采集、缺口提示 | `research.py` / `argo_research` |
 | 可信度评估 | 权威 / 证据密度 / 时效 / 交叉验证 | `evidence.py` / `argo_evidence` |
 | 意图消歧 | 多义词、品牌碰撞、策略建议 | `clarify.py` / `argo_clarify` |
-| 页面抓取 | HTTP 优先，必要时浏览器降级 | `fetch_v3` / `argo_fetch` |
+| 页面抓取 | HTTP 优先，必要时浏览器降级 | `argo_fetch`（`mode=extract` 可结构化） |
 | 截图 / PDF | 页面截图、PDF 结构化提取 | `argo_screenshot` / `argo_pdf` |
-| 站点爬取 / 提取 | 列表页、表格、元数据等 | `crawl` / `extract` |
-| 社交与舆情 | 微博 / 小红书 / B 站 / Reddit / X 等 | 社交引擎 + `argo_social_*` |
-| 健康与配额 | 引擎可用性、成本档位 | `health_check` / `quota` |
+| 站点爬取 | 列表页批量抓取 | `argo_crawl` |
+| 社交与舆情 | 微博 / 小红书 / B 站 / Reddit / X 等 | `argo_social_search` |
 
 ### 预算模式
 
@@ -304,30 +280,19 @@ python3 scripts/search.py --list-engines
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 证据评分（简版）
+### 当前大致能力（v2.6.0）
 
-```
-selection  ≈ 域名权威，SERP/跳转链压到很低
-absorption ≈ 数字 / 定义 / 对比 / 披露等证据密度
-freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年）
-综合       ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·引擎分
-```
-
-搜索结果里会带 `selection`、`absorption`、`credibility_fast`、`evidence_flags` 等字段，方便 Agent 直接排序。
-
-### Agent 使用纪律（建议）
-
-1. **高后果问题**（持仓、安全、是否属实）：search → 看快评分 → 对 top 结果 `fetch` → 再下结论
-2. **数字**：写清口径，冲突时并列，不要硬合并
-3. **搜索结果页 / 跳转链**：不要当正文信源
-4. **社交帖**：当舆情与叙事，不当事实真值
-5. **事实核查**：宁可多一两条分层查询（来源 / 对比 / 主体）
+- **约 120+ 个搜索源、60+ 业务域**：通用网页 + 金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等（真源：`config.yaml`）
+- **10 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取
+- **多语言搜索**：中、英、日、韩、西里尔、泰、阿、希伯来、希腊、天城体等；路由与引擎参数跟着语言走；非中文查询避免误入知乎 / 搜狗微信 / A 股快照等中文专用源
+- **垂直域门禁**：空结果恢复时不把 pypi / npm / 快讯等无关源「串」进影视、体育查询
+- **日常更快、研究更全**：`engine_policy` 分层——日常 combo 收紧，deep / research 再放开长尾源
 
 ---
 
 ## 引擎与路由
 
-当前配置里大约 **120+** 个源、**60+** 业务域（以 `config.yaml` 与 `--list-engines` 为准，会随版本增减）。
+当前配置大约 **120+** 个源、**60+** 业务域（以 `config.yaml` 与 `--list-engines` 为准）。
 
 ### 直连与垂类（节选）
 
@@ -342,29 +307,13 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 | pubchem / gbif / rfc_editor | 化学 / 物种 / 标准 | 免费 |
 | github / stackoverflow / pypi / npm | 代码与包 | 视配置 |
 | byted / bocha / metaso / octen | 中文网页 / AI 搜索 | API / 低成本 |
-| zhihu / zhihu_global / wechat_sogou | 中文观点 / 公众号 | API / 免费 |
+| zhihu / wechat_sogou | 中文观点 / 公众号 | API / 免费 |
 | tavily / felo / exa | 国际 / 语义 | 付费或额度 |
-| cls_telegraph / ths_hot / jin10 | 财经快讯 | 免费为主 |
 | twitter / reddit / xiaohongshu / bilibili / weibo | 社交 UGC | 免费（部分需登录） |
-| huggingface / mdn / models_dev | 模型与开发文档 | 免费为主 |
 
 ### 本地零成本层（`local_*`）
 
 不依赖独立的 SearXNG 服务。主路径用进程内 HTML / RSS / JSON 解析（如 `local_bing`、`local_sogou`、`local_google`、`local_arxiv` 等）。**多语言查询**时，路由会按语种动态改写引擎语言参数（例如 Bing `setlang`），并参与 RRF 融合。
-
-### 路由怎么选
-
-```
-查询
-  → 语言检测（主语言 / 书写系统）+ 语言偏好
-  → 特征（是否对比、是否技术词、意图…）
-  → 正则域（股价 / 影视 / 体育 / 学术 / 代码…）
-  → TF-IDF 语义分（过低则回退通用引擎）
-  → 预算过滤 + 语言补充源 + 能力族去重
-  → engines_combo（结果可缓存，重复路由极快）
-```
-
-金融示例仍走行情专线；开发文档类不会再因为「零分第一名」误进行情站。查询改写只影响**检索用词**，不拿改写结果去重新贴域标签。非中文查询默认不进中文专用源。
 
 ---
 
@@ -373,14 +322,14 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 ### 金融
 
 ```bash
-$ python3 scripts/search.py "贵州茅台股价" --explain
-# 典型：命中 stock_query → 东方财富为主
+python3 scripts/search.py "贵州茅台股价" --explain
+# 典型：命中 stock_query → 行情快照源
 ```
 
 ### 学术
 
 ```bash
-$ python3 scripts/search.py "transformer attention mechanism paper" --json
+python3 scripts/search.py "transformer attention mechanism paper" --json
 # domain 常为 academic，引擎组合含 arxiv 等
 ```
 
@@ -402,11 +351,11 @@ python3 scripts/search.py "同一查询" --json | \
 | `argo_research` | 深度研究（含 social-sentiment 模式） |
 | `argo_evidence` | 可信度评估 |
 | `argo_clarify` | 意图消歧 |
-| `argo_fetch` | 智能抓取（mode=extract 结构化提取） |
+| `argo_fetch` | 智能抓取（`mode=extract` 结构化提取） |
 | `argo_crawl` | 站点爬取 |
 | `argo_screenshot` | 页面截图 |
 | `argo_pdf` | PDF 提取 |
-| `argo_social_search` | 多平台社交搜索（mode=sentiment 舆情聚合） |
+| `argo_social_search` | 多平台社交搜索（`mode=sentiment` 舆情聚合） |
 
 ---
 
@@ -418,7 +367,7 @@ python3 scripts/search.py "同一查询" --json | \
 |------|------|
 | Python | 3.10+（命令行与 MCP 核心） |
 | 依赖 | `pip install pyyaml`（仅此一个硬依赖） |
-| Node.js | **仅**在使用 `npx argo-search` 时需要 18+ |
+| Node.js | **仅**在使用 `npx` 入口时需要 18+ |
 | SearXNG | 不需要（内置本地引擎替代） |
 
 ### API Key（全部可选）
@@ -443,75 +392,31 @@ export OCTEN_API_KEY="你的密钥"
 
 `config.yaml` 里只写 `{ENV_NAME}` 占位，不会提交明文密钥。
 
-### 缓存配置
+### 缓存
 
-默认写在用户目录下的 SQLite（见 `config.yaml` 的 `cache.db_path`，一般为 `~/.cache/unified-search/cache.db`）。
+默认 SQLite 路径见 `config.yaml` 的 `cache.db_path`（一般为 `~/.cache/unified-search/cache.db`）。
 
-| 类型 | 大致 TTL | 说明 |
-|------|----------|------|
-| 金融 | 约 5 分钟 | 股价等实时数据 |
-| 新闻 / 实时 | 约 10–15 分钟 | 快讯类 |
-| 通用 | 约 1 小时 | 非时效域可拉长 |
-| 研究 / 常青 | 约 2–24 小时 | 学术类 |
-| 空结果 | 很短 | 避免把失败固化成「没结果」 |
-
-缓存键会区分预算模式与搜索深度；请求条数更少时，可用已有更多结果做柔性命中。
+| 类型 | 大致 TTL |
+|------|----------|
+| 金融 | 约 5 分钟 |
+| 新闻 / 实时 | 约 10–15 分钟 |
+| 通用 | 约 1 小时 |
+| 研究 / 常青 | 约 2–24 小时 |
+| 空结果 | 很短（避免把失败固化） |
 
 ### 常见问题
 
-**Q：不配 API Key 能用吗？**
+**不配 API Key 能用吗？**  
+能。内置大量本地零成本引擎和免费 API 源，不配 Key 时自动走免费路径。
 
-A：能。内置大量本地零成本引擎和多个免费 API 源，不配 Key 时自动走免费路径。
+**安装脚本和 npx 有什么区别？**  
+安装脚本适合固定装在本机、改配置、挂 Skill；npx 适合快速把 MCP 挂进 Agent。两者底层同一套 Python 代码。
 
-**Q：安装脚本和 npx 有什么区别？**
+**如何确认引擎是否正常？**  
+`python3 scripts/search.py --list-engines`，或加 `--explain`。
 
-A：安装脚本适合固定装在本机、改配置、挂 Skill；npx 适合快速把 MCP 挂进 Agent，少动文件系统。两者底层都是同一套 Python 代码。
-
-**Q：如何确认引擎是否正常？**
-
-A：`python3 scripts/search.py --list-engines`，或 `python3 scripts/search.py "测试" --explain`。
-
-**Q：MCP 和命令行有什么区别？**
-
-A：底层能力相同。MCP 适合 Agent 自动调用；命令行适合脚本和人工排查。
-
-**Q：会不会在仓库里复制多份代码？**
-
-A：不会。推荐「一份真源 + 符号链接」。旧的 `sync_installs.py` 多副本同步已废弃，请用 `link_source.py`。
-
----
-
-## 目录结构（简）
-
-```
-argo/
-├── README.md
-├── SKILL.md                 # Agent 技能说明
-├── package.json             # npx / npm 入口（argo-search）
-├── bin/argo.js              # Node 启动 MCP
-├── bin/argo                 # Python 子命令 CLI
-├── config.yaml              # 引擎与域配置（真源）
-├── backends/                # 注册表、配额、中文信源表（可由脚本派生）
-├── scripts/
-│   ├── install.sh           # 一键安装
-│   ├── link_source.py       # Skill 符号链接
-│   ├── search.py / route.py / cache.py / evidence.py …
-│   ├── mcp_server.py / engines*.py   # MCP 服务层与引擎实现（按域拆分）
-├── sub-skills/local-search/ # 本地零成本引擎
-├── tests/
-└── docs/
-```
-
----
-
-## 设计取舍
-
-1. **先服务 Agent 吸收，再谈链接数量。**
-2. **免费与本地优先，付费可选增强。**
-3. **失败要可观测**：空结果、超时、熔断分开标，不静默吞掉。
-4. **配置驱动扩引擎**，`config.yaml` 为单一真源。
-5. **单一真源安装**：链接入口、不 rsync 多副本。
-6. **不把社交当真理库**；平台内高级排序以原生能力为准时，Argo 做扩维与核验更合适。
+**会不会在仓库里复制多份代码？**  
+不会。推荐「一份真源 + 符号链接」。用 `link_source.py`，不要 rsync 多副本。
 
 ---
 
@@ -533,6 +438,17 @@ python3 scripts/search.py [选项] 查询词
 
 ---
 
+## 设计取舍
+
+1. **先服务 Agent 吸收，再谈链接数量。**
+2. **免费与本地优先，付费可选增强。**
+3. **失败要可观测**：空结果、超时、熔断分开标，不静默吞掉。
+4. **配置驱动扩引擎**，`config.yaml` 为单一真源。
+5. **单一真源安装**：链接入口、不 rsync 多副本。
+6. **不把社交当真理库**；社交内容适合扩维与舆情，不适合单独当真值。
+
+---
+
 ## 适用场景
 
 - Claude Code / Grok Build / Codex / Kimi 等 **Agent 的搜索后端**
@@ -540,7 +456,31 @@ python3 scripts/search.py [选项] 查询词
 - 脚本与流水线里需要 **可复现、可缓存** 的检索
 - 事实核查、金融公开信息、实体与公开资料的 **多源对照**
 
-不太适合单独承担：平台内 X 的高级互动定榜、需要长期养服务的最大召回聚合器（已用内嵌本地引擎替代外挂 SearXNG 主路径）。
+不太适合单独承担：平台内高级互动定榜、需要长期养服务的最大召回聚合器（已用内嵌本地引擎替代外挂 SearXNG 主路径）。
+
+---
+
+## 目录结构（简）
+
+```
+argo/
+├── README.md                # 中文介绍（默认）
+├── README.en.md             # English
+├── README.ja.md             # 日本語
+├── README.ko.md             # 한국어
+├── README.es.md             # Español
+├── SKILL.md
+├── package.json             # npx 入口
+├── bin/argo.js              # Node 启动 MCP
+├── bin/argo                 # Python CLI
+├── config.yaml              # 引擎与域配置（真源）
+├── assets/readme/           # README 视觉资源
+├── backends/
+├── scripts/                 # search / research / mcp / install …
+├── sub-skills/local-search/
+├── tests/
+└── docs/
+```
 
 ---
 
@@ -548,35 +488,40 @@ python3 scripts/search.py [选项] 查询词
 
 | 版本 | 说明 |
 |------|------|
+| **v2.6.2** | 合并独立改进线：网络环境感知 / 加权 RRF + 语义缓存 / 自适应引擎禁用 / 内容安全 + 查询变体 / 三大垂直引擎 / 日韩域路由补全；含 v2.6.1 路由修复。详见 [发布说明](docs/RELEASE_NOTES_v2.6.2.md) |
 | **v2.6.1** | v2.6.0 修复版：路由误伤修复（`capital of` 不再抢 fact_check）；版本同步。详见 [发布说明](docs/RELEASE_NOTES_v2.6.1.md) |
 | **v2.6.0** | **多语言搜索**（检测 / 引擎参数 / 跨语言回退）；影视·体育·地理·组织·媒体等垂直补全；recovery 防污染；能力族与矩阵回归；约 120+ 源。详见 [发布说明](docs/RELEASE_NOTES_v2.6.0.md) |
-| **v2.5.1** | 金融/宏观/化学等垂直答案源加厚；引擎分层 + combo 预算；研究 boost 不锁死；[v2.5.1 说明](docs/RELEASE_NOTES_v2.5.1.md) |
-| **v2.5.0** | 安装脚本 + npx；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应；介绍页重写 |
-| **v2.4.0** | 路由低分回退与社交误吸过滤；缓存 depth / 柔性命中；熔断与负缓存；`engine_outcomes`；RRF 共识源 |
+| **v2.5.1** | 金融/宏观/化学等垂直答案源加厚；引擎分层 + combo 预算；[v2.5.1 说明](docs/RELEASE_NOTES_v2.5.1.md) |
+| **v2.5.0** | 安装脚本 + npx；查询改写与路由解耦；路由热路径缓存；MCP 紧凑响应 |
+| **v2.4.0** | 路由低分回退与社交误吸过滤；缓存 depth / 柔性命中；熔断与负缓存；`engine_outcomes` |
 | **v2.2–v2.3** | 证据两阶段、中文信源表、content_signals、fetch 栈、引擎扩充 |
 | **v2.1** | 社交引擎层（多平台 UGC） |
 | **v1.x** | 统一命名为 Argo，多引擎路由与双层缓存成型 |
 
-更细说明见 `docs/RELEASE_NOTES_v2.6.1.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
+更细说明见 `docs/RELEASE_NOTES_v2.6.2.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
 
 ---
 
 ## 贡献
 
-欢迎提 Issue 与 Pull Request。改路由或证据逻辑时，请尽量补对应测试（`tests/`）或跑一遍：
+欢迎提 Issue 与 Pull Request。改路由或证据逻辑时，请尽量补对应测试：
 
 ```bash
 python3 -m pytest tests/test_unit.py tests/test_multilingual.py -q
 python3 scripts/regression_p0p1.py --offline
-python3 scripts/matrix_search_eval.py --offline   # 多语言 × 场景矩阵
+python3 scripts/matrix_search_eval.py --offline
 python3 scripts/ab_eval_p0p1.py   # 可选，含在线实测
 ```
 
-提交前请确认：不含真实 API Key、本机绝对路径、账号 cookie 等敏感信息。本机 Skill 路径请写在 `installs.local.yaml`（已忽略），示例见 `installs.local.yaml.example`。
+提交前请确认：不含真实 API Key、本机绝对路径、账号 cookie 等敏感信息。本机 Skill 路径请写在 `installs.local.yaml`（已忽略）。
 
 ## License
 
 MIT License © 2026 [taxueseek](https://github.com/taxueseek)
+
+<p align="center">
+  <a href="https://github.com/oil-oil/beautify-github-readme"><img src="assets/readme/made-with-beautify.svg" width="300" alt="README made with beautify-github-readme"></a>
+</p>
 
 ---
 

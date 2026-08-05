@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">Argo 阿尔戈</title>
+  <desc id="desc">给 Agent 用的统一搜索与证据核验：按域按语言选路，返回能核验、能吸收的材料</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#070B14"/>
+      <stop offset="55%" stop-color="#0B1220"/>
+      <stop offset="100%" stop-color="#0E1730"/>
+    </linearGradient>
+    <linearGradient id="route" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.15"/>
+      <stop offset="50%" stop-color="#38BDF8" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0.7"/>
+    </linearGradient>
+    <linearGradient id="barA" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="barB" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
+    </linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="0.8" fill="#38BDF8" opacity="0.12"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="380" rx="28" fill="url(#bg)"/>
+  <rect width="1200" height="380" rx="28" fill="url(#dots)"/>
+
+  <!-- left accent rail -->
+  <rect x="0" y="48" width="4" height="284" fill="#38BDF8" opacity="0.9"/>
+
+  <!-- Title block -->
+  <g id="title-block" transform="translate(56 52)">
+    <text x="0" y="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" fill="#38BDF8" letter-spacing="2.5">AGENT SEARCH · EVIDENCE ROUTER</text>
+    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="56" font-weight="700" fill="#E8EEF7">Argo</text>
+    <text x="168" y="78" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="34" font-weight="500" fill="#94A3B8">阿尔戈</text>
+    <text x="0" y="122" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="18" fill="#CBD5E1">给 Agent 用的统一搜索与证据核验</text>
+    <text x="0" y="152" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="16" fill="#64748B">不只返回链接 · 按域按语言选路 · 输出可吸收证据</text>
+
+    <!-- meta chips -->
+    <g transform="translate(0 188)">
+      <rect width="118" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
+      <text x="59" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#94A3B8">v2.6.0</text>
+
+      <rect x="130" width="132" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
+      <text x="196" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8">120+ engines</text>
+
+      <rect x="274" width="118" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
+      <text x="333" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#A78BFA">10 MCP</text>
+
+      <rect x="404" width="100" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
+      <text x="454" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#34D399">Python</text>
+    </g>
+
+    <!-- pipeline cue -->
+    <g transform="translate(0 248)" font-family="ui-monospace, Menlo, monospace" font-size="12">
+      <text x="0" y="0" fill="#475569">query</text>
+      <text x="58" y="0" fill="#334155">→</text>
+      <text x="78" y="0" fill="#38BDF8">lang</text>
+      <text x="118" y="0" fill="#334155">→</text>
+      <text x="138" y="0" fill="#38BDF8">route</text>
+      <text x="186" y="0" fill="#334155">→</text>
+      <text x="206" y="0" fill="#A78BFA">RRF</text>
+      <text x="244" y="0" fill="#334155">→</text>
+      <text x="264" y="0" fill="#34D399">evidence</text>
+    </g>
+  </g>
+
+  <!-- Right: live route proof card -->
+  <g id="project-proof" transform="translate(620 42)">
+    <rect width="528" height="296" rx="18" fill="#0D1526" stroke="#1E2A3F" stroke-width="1.5"/>
+    <!-- title bar -->
+    <rect width="528" height="40" rx="18" fill="#121A2B"/>
+    <rect y="22" width="528" height="18" fill="#121A2B"/>
+    <circle cx="22" cy="20" r="5" fill="#F87171" opacity="0.8"/>
+    <circle cx="40" cy="20" r="5" fill="#FBBF24" opacity="0.8"/>
+    <circle cx="58" cy="20" r="5" fill="#34D399" opacity="0.8"/>
+    <text x="86" y="24" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#64748B">argo search --json</text>
+
+    <!-- query line -->
+    <text x="24" y="68" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#475569">$</text>
+    <text x="42" y="68" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#E2E8F0">贵州茅台股价</text>
+    <rect x="360" y="52" width="144" height="24" rx="6" fill="#0B3B2E" stroke="#166534"/>
+    <text x="432" y="68" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#34D399">domain: stock</text>
+
+    <!-- route nodes -->
+    <g transform="translate(24 92)">
+      <text x="0" y="0" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#64748B">ROUTE</text>
+      <rect x="0" y="12" width="110" height="28" rx="7" fill="#122033" stroke="#1E3A5F"/>
+      <text x="55" y="30" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#38BDF8">sina_quote</text>
+      <rect x="122" y="12" width="128" height="28" rx="7" fill="#122033" stroke="#1E3A5F"/>
+      <text x="186" y="30" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#38BDF8">tencent_quote</text>
+      <rect x="262" y="12" width="100" height="28" rx="7" fill="#1A1430" stroke="#3B2F6B"/>
+      <text x="312" y="30" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#A78BFA">early-stop</text>
+      <path d="M 110 26 L 122 26" stroke="url(#route)" stroke-width="2"/>
+      <path d="M 250 26 L 262 26" stroke="url(#route)" stroke-width="2"/>
+    </g>
+
+    <!-- result card -->
+    <g transform="translate(24 156)">
+      <rect width="480" height="118" rx="12" fill="#101826" stroke="#243044"/>
+      <text x="16" y="28" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="15" font-weight="600" fill="#E8EEF7">贵州茅台 1337.74  ↓ -1.56%</text>
+      <text x="16" y="52" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#64748B">source · sina_quote · 553ms · fact-ready</text>
+
+      <!-- score bars -->
+      <text x="16" y="82" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#64748B">selection</text>
+      <rect x="92" y="72" width="160" height="8" rx="4" fill="#1E2A3F"/>
+      <rect x="92" y="72" width="144" height="8" rx="4" fill="url(#barA)"/>
+
+      <text x="16" y="104" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#64748B">absorption</text>
+      <rect x="92" y="94" width="160" height="8" rx="4" fill="#1E2A3F"/>
+      <rect x="92" y="94" width="132" height="8" rx="4" fill="url(#barB)"/>
+
+      <text x="280" y="88" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#34D399">not a SERP shell</text>
+      <text x="280" y="106" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#94A3B8">digits + quote snapshot</text>
+    </g>
+  </g>
+</svg>
