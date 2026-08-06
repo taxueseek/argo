@@ -514,9 +514,10 @@ domains:
   - (?i)(导演|主演|演员|编剧|制片|出品|上映|首映|IMDb|imdb|豆瓣电影|影帝|影后|最佳影片)
   - (?i)\b(movie|film|tv\s*show|tv\s*series|cinema|oscar|emmy|director|screenwriter|box\s*office|netflix|hbo)\b
   - (?i)\b(cast|starring|directed\s+by|written\s+by|released\s+in)\b
-  # 日韩影视触发词（修复日韩电影查询漏召）
-  - (?i)(映画|アニメ|ドラマ|主演|監督|脚本|上映|配給|アカデミー|スタジオジブリ)
-  - (?i)(영화|감독|주연|출연|개봉|애니메이션|드라마|수상|칸|아카데미|시사회)
+  # 日韩影视触发词（修复日韩电影查询漏召；纯题材词「アニメ/애니메이션」
+  # 不在此列——动漫推荐类查询 imdb 无召回，交由 general 多语回退）
+  - (?i)(映画|ドラマ|主演|監督|脚本|上映|配給|アカデミー|スタジオジブリ)
+  - (?i)(영화|감독|주연|출연|개봉|드라마|수상|칸|아카데미|시사회)
   primary: imdb
 - desc: 体育赛事/球员/球队（先于媒体域；修复 MVP 误匹配 MV）
   engines_combo:

@@ -151,5 +151,28 @@ class TestMacroDataWorldbankPriority(unittest.TestCase):
         self.assertEqual(d["engines_combo"][0], "fred")
 
 
+class TestAnimeVsFilmRouting(unittest.TestCase):
+    """动漫推荐类查询不再被 film_search 误捕（imdb 无召回），
+    动画电影仍走 film_search。由 live 矩阵 L_ja_gen 发现。"""
+
+    def test_anime_recommendation_goes_general(self):
+        from route import route_query
+        for q in ("アニメ おすすめ", "애니메이션 추천"):
+            d = route_query(q)
+            self.assertNotEqual(d["domain"], "film_search")
+            self.assertEqual(d["domain"], "general_search")
+
+    def test_animated_movie_still_film_search(self):
+        from route import route_query
+        d = route_query("アニメ映画 おすすめ")
+        self.assertEqual(d["domain"], "film_search")
+        self.assertIn("imdb", d["engines_combo"])
+
+    def test_korean_movie_keeps_film_search(self):
+        from route import route_query
+        d = route_query("한국 영화 추천")
+        self.assertEqual(d["domain"], "film_search")
+
+
 if __name__ == "__main__":
     unittest.main()

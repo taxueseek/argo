@@ -91,4 +91,23 @@ python3 -c "import sys; sys.path.insert(0,'scripts'); from route import route_qu
 # ['worldbank', 'fred']
 ```
 
+### 真实查询矩阵（live E2E，14 组多语 × 场景金标）
+
+`python3 scripts/matrix_search_eval.py --live`（修复前 v2.7.0 与修复后对比）：
+
+| 指标 | 修复前 | 修复后 |
+|------|:-----:|:-----:|
+| live PASS | 12/13 | **13/13** |
+| domain_acc（域命中） | 100% | 100% |
+| engine_acc（主引擎命中） | 100% | 100% |
+| selection_hit（金标命中） | 92.3% | **100%** |
+| pollute（垂直污染） | 0 | 0 |
+
+唯一失败项 `L_ja_gen`（「アニメ おすすめ」）由 film_search 日文触发词误捕
+（imdb 对动漫推荐无召回）导致。修复：从 film_search 日韩触发词移除纯题材词
+「アニメ」「애니메이션」，保留「映画」「영화」等明确影视词。「アニメ おすすめ」
+现路由至 general_search/local_bing（日文参数），金标「アニメ」命中。
+
+离线矩阵同步：`--offline` 119 PASS / 0 FAIL。
+
 **遗留项**（非阻塞）：`engines_builders_data.py`（2458 行）仍可继续按域拆分；`search.py`（1686 行）编排层可进一步提取；`decompose_query` 的「和/与/及」对比拆分存在语义误伤（拆出子查询质量有限但原始查询不丢，成本低，暂不调整）。

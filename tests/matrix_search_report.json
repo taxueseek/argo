@@ -464,7 +464,7 @@
     {
       "name": "route:R_zh_stock",
       "status": "PASS",
-      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'tencent_quote'] lang=zh",
+      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'eastmoney'] lang=zh",
       "meta": {
         "id": "R_zh_stock",
         "q": "贵州茅台股价",
@@ -474,7 +474,7 @@
         "engine": "sina_quote",
         "combo": [
           "sina_quote",
-          "tencent_quote"
+          "eastmoney"
         ],
         "primary_lang": "zh"
       }
@@ -500,17 +500,17 @@
     {
       "name": "route:R_zh_macro",
       "status": "PASS",
-      "detail": "domain=macro_data eng=fred combo=['fred', 'worldbank'] lang=zh",
+      "detail": "domain=macro_data eng=worldbank combo=['worldbank', 'fred'] lang=zh",
       "meta": {
         "id": "R_zh_macro",
         "q": "中国 GDP",
         "scenario": "macro",
         "lang": "zh",
         "domain": "macro_data",
-        "engine": "fred",
+        "engine": "worldbank",
         "combo": [
-          "fred",
-          "worldbank"
+          "worldbank",
+          "fred"
         ],
         "primary_lang": "zh"
       }
@@ -859,7 +859,7 @@
     {
       "name": "route:R_zh_org",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike'] lang=zh",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_org",
         "q": "国务院职能",
@@ -869,7 +869,7 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "baidu_baike"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -877,7 +877,7 @@
     {
       "name": "route:R_en_org",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike'] lang=en",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=en",
       "meta": {
         "id": "R_en_org",
         "q": "NASA founding year",
@@ -887,7 +887,7 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "baidu_baike"
+          "wikipedia"
         ],
         "primary_lang": "en"
       }
@@ -895,7 +895,7 @@
     {
       "name": "route:R_en_org2",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike'] lang=en",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=en",
       "meta": {
         "id": "R_en_org2",
         "q": "Apple Inc headquarters",
@@ -905,7 +905,7 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "baidu_baike"
+          "wikipedia"
         ],
         "primary_lang": "en"
       }
@@ -913,7 +913,7 @@
     {
       "name": "route:R_zh_org2",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike'] lang=zh",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_org2",
         "q": "清华大学 创办年份",
@@ -923,7 +923,7 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "baidu_baike"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -1074,7 +1074,7 @@
     {
       "name": "route:R_en_tech",
       "status": "PASS",
-      "detail": "domain=english_tech eng=octen combo=['octen', 'anysearch'] lang=en",
+      "detail": "domain=english_tech eng=octen combo=['octen', 'exa'] lang=en",
       "meta": {
         "id": "R_en_tech",
         "q": "React vs Vue",
@@ -1084,7 +1084,7 @@
         "engine": "octen",
         "combo": [
           "octen",
-          "anysearch"
+          "exa"
         ],
         "primary_lang": "en"
       }
