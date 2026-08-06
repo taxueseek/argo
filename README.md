@@ -23,7 +23,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.7.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.7.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
 </p>
@@ -117,7 +117,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.7.0**。npm registry 上的旧包可能滞后，可不走）。
+任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.7.1**。npm registry 上的旧包可能滞后，可不走）。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -183,11 +183,11 @@ Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口�
 
 ### 方式三：Release 源码包
 
-打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.7.0.tar.gz`** 或 zip：
+打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.7.1.tar.gz`** 或 zip：
 
 ```bash
-tar -xzf argo-2.7.0.tar.gz
-cd argo-2.7.0
+tar -xzf argo-2.7.1.tar.gz
+cd argo-2.7.1
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
