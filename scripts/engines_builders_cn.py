@@ -1106,4 +1106,172 @@ def _build_zhihu_global_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── 博查 Web Search 引擎（专用解析 + 动态时效）──────────────────────────────────
+
+_BOCHA_FRESH_RE = re.compile(
+    r"(本周|本月|最近一周|近一周|近一个月|recent|past\s*(week|month)|last\s*(week|month))",
+    re.I,
+)
+
+
+def _bocha_freshness(query: str) -> str:
+    """按查询时效敏感度动态选择 freshness 参数。
+
+    周/月级窗口词（本周/本月/近一周等）→ oneWeek；
+    日/时级时效词（今日/实时/最新/盘中/快讯等，复用缓存层的敏感检测）→ oneDay；
+    其余放宽为 noLimit（全量）。
+    """
+    if re.search(r"(本周|本月|近一周|近一个月|recent|past\s*(week|month)|last\s*(week|month)|this\s*week)", query or "", re.I):
+        return "oneWeek"
+    try:
+        from cache import is_freshness_sensitive_query
+        if is_freshness_sensitive_query(query or ""):
+            return "oneDay"
+    except Exception:
+        pass
+    return "noLimit"
+
+
+def _bocha_key() -> str:
+    return os.environ.get("ARGO_BOCHA_API_KEY") or os.environ.get("BOCHA_API_KEY", "")
+
+
+def _bocha_web_item(item: dict[str, Any]) -> dict[str, Any]:
+    """webPages.value 单条 → 统一结果项（name/summary/datePublished/siteName 语义映射）。"""
+    return {
+        "title": str(item.get("name") or item.get("title") or "")[:200],
+        "url": str(item.get("url") or ""),
+        "snippet": str(item.get("summary") or item.get("snippet") or item.get("description") or "")[:300],
+        "source": "bocha",
+        "score": 0.7,
+        "date": item.get("datePublished") or "",
+        "site_name": item.get("siteName") or "",
+    }
+
+
+def _build_bocha_engine(spec: dict[str, Any]) -> Any:
+    """博查 Web Search（中文全网搜索，AI 友好摘要）。
+
+    专用解析修复通用 parser 对 `data.webPages.value` 嵌套路径的漏检；
+    freshness 按查询时效敏感度动态化（替代静态 oneYear）。
+    """
+    timeout = spec.get("timeout", 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        key = _bocha_key()
+        if not key:
+            return [{"error": "BOCHA_API_KEY 未设置", "source": "bocha"}]
+        body = {
+            "query": query or "",
+            "summary": True,
+            "freshness": _bocha_freshness(query),
+            "count": max(1, min(int(n or 5), 50)),
+        }
+        req = urllib.request.Request(
+            "https://api.bochaai.com/v1/web-search",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        pages = (data.get("data") or {}).get("webPages") or {}
+        return [_bocha_web_item(i) for i in (pages.get("value") or [])]
+    return _engine
+
+
+# ── 博查 AI Search 引擎（垂直结构化模态卡）──────────────────────────────────────
+
+_BOCHA_CARD_NAMES: dict[str, str] = {
+    "weather": "天气", "baike": "百科", "medical": "医疗", "almanac": "万年历",
+    "train": "火车票", "constellation": "星座运势", "precious_metal": "贵金属",
+    "exchange_rate": "汇率", "oil_price": "油价", "phone": "手机", "stock": "股票",
+    "auto": "汽车", "calendar": "日历", "movie": "电影", "hotel": "酒店",
+    "restaurant": "餐厅", "scenic": "景点", "company": "企业", "news": "新闻",
+    "knowledge": "百科", "image": "图片",
+}
+
+
+def _flatten_card(data: Any, depth: int = 0) -> str:
+    """模态卡结构化数据 → 可读单行（嵌套最多两层，长内容截断）。"""
+    if not isinstance(data, dict):
+        return str(data)
+    if depth > 2:
+        return json.dumps(data, ensure_ascii=False)[:500]
+    parts = []
+    for k, v in data.items():
+        if isinstance(v, dict):
+            parts.append(_flatten_card(v, depth + 1))
+        elif isinstance(v, list):
+            sub = [_flatten_card(x, depth + 1) if isinstance(x, dict) else str(x) for x in v[:3]]
+            parts.append(f"{k}: {'; '.join(sub)}")
+        elif v is not None and str(v) != "":
+            parts.append(f"{k}: {v}")
+    return " | ".join(parts)[:500]
+
+
+def _build_bocha_ai_engine(spec: dict[str, Any]) -> Any:
+    """博查 AI Search：统一语义识别 + 垂直结构化模态卡。
+
+    在网页结果基础上，额外返回天气/股票/汇率/油价/火车/万年历/医疗等
+    几十种垂直领域的结构化模态卡。card_type 标注模态类型，
+    card_data 保留原始结构化 JSON（供精确消费），snippet 为可读扁平化摘要。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        key = _bocha_key()
+        if not key:
+            return [{"error": "BOCHA_API_KEY 未设置", "source": "bocha_ai"}]
+        body = {
+            "query": query or "",
+            "freshness": _bocha_freshness(query),
+            "count": max(1, min(int(n or 5), 50)),
+            "answer": False,
+            "stream": False,
+        }
+        req = urllib.request.Request(
+            "https://api.bochaai.com/v1/ai-search",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=to) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        results: list[dict[str, Any]] = []
+        for message in data.get("messages") or []:
+            ct = message.get("content_type") or ""
+            raw = message.get("content") or "{}"
+            try:
+                parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
+            except (json.JSONDecodeError, ValueError):
+                parsed = {}
+            if ct == "webpage":
+                for item in parsed.get("value") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    it = _bocha_web_item(item)
+                    it["source"] = "bocha_ai"
+                    results.append(it)
+            elif ct == "image" or not parsed:
+                continue
+            else:
+                card_name = _BOCHA_CARD_NAMES.get(ct, ct)
+                flat = _flatten_card(parsed)
+                results.append({
+                    "title": f"{card_name}（结构化数据卡）" if _BOCHA_CARD_NAMES.get(ct) else f"[{ct}]",
+                    "url": "",
+                    "snippet": flat[:300],
+                    "source": "bocha_ai",
+                    "score": 1.0,
+                    "card_type": ct,
+                    "card_data": parsed,
+                })
+        return results
+    return _engine
+
+
 

@@ -506,22 +506,36 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         others = [e for e in filtered if not e.startswith("local_")]
         filtered = free_locals + others
 
-    # fast 模式：只保留免费引擎（条数预算交给 engine_policy）
-    if mode == "fast":
-        from config import get_cost_factor
-        filtered = [e for e in filtered if get_cost_factor(e) >= 0.85]
-
-    # 自适应学习过滤（保留主引擎 + 垂直域 combo 成员不被误杀）
+    # 垂直域主源保护
     # 实测：wikipedia 分数常 <0.3，org_entity 在 wikidata 熔断时会只剩 baidu，英文 HQ 题脏结果。
+    # modal_card 的 bocha_ai/bocha 为 cost_tier=low（0.7），fast 的 0.85 阈值会误杀整 combo。
     _VERTICAL_PROTECT = frozenset({
         "film_search", "sports_search", "geo_places", "org_entity", "media_search",
+        "modal_card",
     })
+    primary = domain.get("primary")
+    domain_name = domain.get("name")
+    protect: set[str] = set()
+    if primary:
+        protect.add(primary)
+    # 仅 modal_card 整 combo 免 cost 裁剪（结构化路径不可被 anysearch 顶替）
+    if domain_name == "modal_card":
+        protect.update(filtered)
+        protect.update(domain.get("engines_combo") or [])
+
+    # fast 模式：只保留免费引擎；modal_card / primary 保护成员例外
+    if mode == "fast":
+        from config import get_cost_factor
+        filtered = [
+            e for e in filtered
+            if e in protect or get_cost_factor(e) >= 0.85
+        ]
+
+    # 自适应学习过滤（保留主引擎 + 垂直域 combo 成员不被误杀）
     if _adaptive_learner is not None and len(filtered) > 1:
         original = filtered[:]
-        primary = domain.get("primary")
-        protect = set(original) if domain.get("name") in _VERTICAL_PROTECT else set()
-        if primary:
-            protect.add(primary)
+        if domain_name in _VERTICAL_PROTECT:
+            protect = set(original) | protect
         filtered = [
             e for e in filtered
             if e in protect or e == primary or _adaptive_learner.get_score(e) >= 0.3
@@ -687,8 +701,8 @@ def _apply_engine_policy(
         for e in must_keep:
             if not e or e in out:
                 continue
-            if enabled is not None and e not in enabled:
-                continue
+            # must_keep 强制保留，不因 enabled 缺失丢弃
+            # （modal_card 缺 key 时仍保留 bocha_ai/bocha，由执行层返回 error item）
             if budget is not None and len(out) >= budget:
                 # 保留首位主源，替换末位
                 if len(out) <= 1:
@@ -766,7 +780,10 @@ def route_query(query: str, engine_override: str = "auto",
     hard_domain = bool(domain and domain.get("patterns"))
 
     TFIDF_MIN_SCORE = 0.12
-    SOCIAL_ENGINES = {"twitter", "reddit", "xiaohongshu", "bilibili", "weibo"}
+    SOCIAL_ENGINES = {
+        "twitter", "reddit", "xiaohongshu", "bilibili", "weibo",
+        "zhihu", "hackernews", "v2ex",
+    }
     tfidf_best = None
     tfidf_best_score = 0.0
     tfidf_scores: list = []
@@ -816,14 +833,31 @@ def route_query(query: str, engine_override: str = "auto",
                 and "worldbank" in engines_combo):
             engines_combo = ["worldbank"] + [e for e in engines_combo if e != "worldbank"]
         # 🔑 为中文/学术查询追加本地引擎
-        engines_combo = _add_language_engines(engines_combo, features)
+        # modal_card 保持纯结构化路径：只走 bocha_ai → bocha，不混 web/geo 补充源
+        _pure_combo = domain.get("name") == "modal_card"
+        if not _pure_combo:
+            engines_combo = _add_language_engines(engines_combo, features)
         if not engines_combo:
-            # 域内引擎全被过滤，回退
-            engines_combo = [e for e in ["local_search", "anysearch", "duckduckgo"] if e in enabled]
+            if _pure_combo:
+                # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
+                # 执行层返回 error item，避免静默改走 anysearch 污染结构化语义
+                declared = list(domain.get("engines_combo") or [])
+                if not declared and domain.get("primary"):
+                    declared = [domain["primary"]]
+                try:
+                    from engine_env import is_engine_allowed_by_env
+                    engines_combo = [
+                        e for e in declared if is_engine_allowed_by_env(e)
+                    ] or declared
+                except ImportError:
+                    engines_combo = declared
             if not engines_combo:
-                engines_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
-            # 扩展 local_search → 子引擎
-            engines_combo = _expand_local_search(engines_combo, features)
+                # 域内引擎全被过滤，回退
+                engines_combo = [e for e in ["local_search", "anysearch", "duckduckgo"] if e in enabled]
+                if not engines_combo:
+                    engines_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
+                # 扩展 local_search → 子引擎
+                engines_combo = _expand_local_search(engines_combo, features)
 
         # TF-IDF 验证 + catch-all 修复（仅高分才覆写）
         is_catch_all = not domain.get("patterns", [])  # 无模式 = 兜底域
@@ -843,8 +877,9 @@ def route_query(query: str, engine_override: str = "auto",
                 engines_combo.insert(0, tfidf_best)
                 confidence = 0.8
 
-        # P0-001：geo 查询追加 OpenStreetMap
-        engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
+        # P0-001：geo 查询追加 OpenStreetMap（模态卡域跳过，避免稀释结构化路径）
+        if not _pure_combo:
+            engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
 
         parallel = bool(domain.get("parallel", False)) or len(engines_combo) > 2
         # fast 模式强制串行，先 local_search 成功即避免额外 HTTP 开销
@@ -857,20 +892,30 @@ def route_query(query: str, engine_override: str = "auto",
 
         # P0：boost + tier/budget（depth/context）— 放在意图裁剪之后统一截断
         must_keep = []
-        if features.get("has_geo") and "local_openstreetmap" in enabled:
+        if features.get("has_geo") and "local_openstreetmap" in enabled and not _pure_combo:
             must_keep.append("local_openstreetmap")
-        # 垂直域主源保护：film/sports/geo/org 的 primary 不被 budget/意图裁掉
+        # 垂直域主源保护：film/sports/geo/org/modal_card 的 primary（及 combo）不被 budget 裁掉
         _VERTICAL_KEEP = frozenset({
             "film_search", "sports_search", "geo_places", "org_entity", "media_search",
+            "modal_card",
         })
         if domain.get("name") in _VERTICAL_KEEP:
             p = domain.get("primary")
-            if p and p in enabled and p not in must_keep:
+            # modal_card 可在缺 key（不在 enabled）时仍 must_keep，避免 budget 再裁
+            if p and p not in must_keep and (p in enabled or _pure_combo):
+                must_keep.append(p)
+            # modal_card 整 combo 保底（bocha_ai 无配额时 bocha 必须在位）
+            if domain.get("name") == "modal_card":
+                for e in domain.get("engines_combo") or []:
+                    if e not in must_keep and (e in enabled or _pure_combo):
+                        must_keep.append(e)
+            elif p and p in enabled and p not in must_keep:
                 must_keep.append(p)
             if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
                 if "local_openstreetmap" not in must_keep:
                     must_keep.append("local_openstreetmap")
-        must_keep.extend(_lang_must_keep(features, enabled))
+        if not _pure_combo:
+            must_keep.extend(_lang_must_keep(features, enabled))
         engines_combo = _apply_engine_policy(
             engines_combo, mode=mode, depth=depth, context=context,
             engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,

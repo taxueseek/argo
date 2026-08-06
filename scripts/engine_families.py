@@ -27,6 +27,7 @@ engine_families.py — 搜索源能力族分类（第一性原理重构）
   sports           体育赛事/球员球队           thesportsdb
   archive          归档/历史                 wayback_cdx / archive_org
   misc_vertical    其他垂直（游戏/预测/天气/标准等） steam / polymarket / qweather / rfc_editor / models_dev / itotii / urban_dictionary / know_your_meme / coingecko / docker_hub / huggingface / stackoverflow 等
+  structured_card  垂直结构化模态卡（统一语义识别，跨域） bocha_ai
 
 用途：
   - route 层组合时按 family 去重（同族至多 N 个，避免同质源堆叠）
@@ -185,6 +186,8 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "urban_dictionary": "misc_vertical",
     "know_your_meme": "misc_vertical",
     "coingecko": "misc_vertical",
+    # 垂直结构化模态卡（统一语义识别，跨垂直域）
+    "bocha_ai": "structured_card",
     # 本地聚合
     "local_search": "web_general",
 }
@@ -207,6 +210,7 @@ FAMILY_LABELS: dict[str, str] = {
     "media_book": "媒体/图书",
     "sports": "体育",
     "archive": "归档/历史",
+    "structured_card": "垂直结构化模态卡",
     "misc_vertical": "其他垂直",
 }
 

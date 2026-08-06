@@ -1,0 +1,25 @@
+# DataCite 科研数据集搜索（免 Key）
+# 文档: https://support.datacite.org/docs/api-getting-started
+# 验证:
+#   python3 scripts/engine_validate.py --engine datacite --stage all --admit
+#   python3 scripts/search.py "genome" --engine datacite --json
+
+engine_id: datacite
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://api.datacite.org/dois
+timeout: 15
+query_param: query
+canary_query: "genome"
+desc: "DataCite 科研数据集搜索（Dryad/Figshare/Dataverse/OSF 等仓储，免认证）"
+
+extra_params:
+  page[size]: "{n}"
+
+output_map:
+  items: data
+  item_title: attributes.titles.0.title
+  item_url: attributes.url
+  item_summary: attributes.descriptions.0.description

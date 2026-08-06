@@ -80,6 +80,16 @@
     "cost_tier": "low",
     "priority": 9
   },
+  "bocha_ai": {
+    "label": "博查AI搜索（模态卡）",
+    "qps": 5,
+    "limit": 10000,
+    "period": "month",
+    "cost_per_call": 0.001,
+    "cost_unit": "credit",
+    "cost_tier": "low",
+    "priority": 9
+  },
   "brave": {
     "label": "Brave",
     "qps": 2,

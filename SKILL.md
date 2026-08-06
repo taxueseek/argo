@@ -1,7 +1,7 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.6.2
+description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
+version: 2.7.0
 triggers:
   - 搜索
   - 查一下
@@ -124,11 +124,11 @@ engines:
   - zhihu_global
   - zhihu_hot
 ---
-## Argo v2.6.2
+## Argo v2.7.0
 
 ### 本版你多了什么（通俗）
 
-**按语言、按领域选路，查询越用越准。** 多语言检测与引擎参数；影视 / 体育 / 地理 / 组织 / 媒体与金融宏观化学等垂直源；空结果恢复防串味；日常 combo 预算、研究 boost 不锁死。详见 `docs/RELEASE_NOTES_v2.6.2.md`。
+**按语言、按领域选路，查询越用越准。** 多语言检测与引擎参数；影视 / 体育 / 地理 / 组织 / 媒体与金融宏观化学等垂直源；**垂直结构化模态卡**（火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机 / 汽车 / 挂号——单一语义识别自动路由到模态卡引擎，其余引擎 0 参与）；空结果恢复防串味；日常 combo 预算、研究 boost 不锁死。详见 `docs/RELEASE_NOTES_v2.7.0.md`。
 
 | 你问的 | 大概走哪类 | 体感 |
 |--------|------------|------|
@@ -328,8 +328,24 @@ python3 scripts/clarify.py "苹果股价" --json
 | pubchem | 化学 | 化合物 / 分子式 |
 | gbif / rfc_editor | 物种 / 标准 | 窄域直达 |
 | weread / douban_book / cninfo | 图书与公告 | 按域启用 |
+| bocha_ai | 垂直结构化模态卡 | 火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机参数 / 汽车 / 医疗挂号等结构化卡片（见下方「垂直结构化模态卡」） |
 
 日常 `depth=fast` 会收紧 combo；`research` / `deep` 再放开长尾（如 seeking_alpha、archive 等）。
+
+### 垂直结构化模态卡（modal_card，v2.7 新增）
+
+一类查询需要**实时结构化卡片**（而非网页列表），统一由 `modal_card` 域识别并路由到 `bocha_ai` 引擎（失败自动回落 `bocha` web 搜索）：
+
+- 火车票 / 高铁：`火车票`、`高铁票价`、`车次`、`高铁时刻`
+- 油价：`今日油价`、`成品油`、`汽油/柴油价格`
+- 贵金属：`今日金价`、`银价`、`铂金`、`钯金`
+- 黄历万年历：`黄历`、`万年历`、`宜忌`、`农历查询`、`黄道吉日`
+- 星座生肖：`今日运势`、`星座运势`、`生肖运程`、`属相运势`
+- 手机参数：`手机参数`、`手机配置`、`手机对比`、`手机报价`
+- 汽车：`汽车报价`、`车型价格`、`落地价`、`汽车行情`
+- 医疗挂号：`挂号`、`医院预约`、`三甲医院`、`门诊时间`
+
+未命中的普通查询不受影响（如「北京天气」仍走 `weather_query`、「今日A股」仍走 `stock_query`）。卡片结果为结构化值，标题无法提取时用 `card_type` 兜底参与 RRF 去重。
 
 ### 引擎全景（摘要；全量约 120+，以 `config.yaml` / `--list-engines` 为准）
 
@@ -350,6 +366,7 @@ python3 scripts/clarify.py "苹果股价" --json
 | searxng | free | 聚合搜索 | ~1s |
 | wolframalpha | free | 计算知识 | ~2s |
 | bocha | low | 中文网页(AI友好) | ~1s |
+| bocha_ai | low | 垂直结构化模态卡(实时值) | ~12s |
 | metaso | low | 中文AI搜索 | ~2s |
 | byted | low | 字节搜索 | ~1s |
 | brave | low | 隐私搜索 | ~1s |
@@ -685,6 +702,19 @@ SearXNG 实例。强制使用本地聚合：
 python3 scripts/search.py "查询词" --local-first
 ```
 
+### local-seek 子技能（本机文件搜索，2026-08-05 收编）
+
+local-seek 是原创的本机文件搜索技能（2026-08-03 设计落地，独立演进至今），2026-08-05 收编为 argo 子技能，物理位于 `sub-skills/local-seek/`：
+
+- **三层渐进式**：L1 定位（`--count`/`--filename`）→ L2 上下文（`--context`）→ L3 精读（`--lines`），工具输出即答案，零探索成本。
+- **路由**：rg（正文）→ fd（文件名）→ mdfind（Spotlight 全盘兜底）；中文查询「精确优先、2-gram 扩展兜底」（`--exact` 关闭）。
+- **扩展能力**：`--structural` 结构搜索（裸 except/空 catch/装饰函数等）、`--git-log`/`--git-blame`、`--outline`、`--domains`。
+- **MCP 接入**：`argo_local_search` 工具探测 `sub-skills/local-seek/scripts/seek.py` 后 subprocess 调用，结果包装为 argo 风格（`file://` URL + `source=local_files`），与 `argo_search`（网络）互补。
+
+```bash
+python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --count
+```
+
 ### 文件结构
 
 ```
@@ -725,7 +755,8 @@ argo-v2/
 │       ├── bilibili_engine.py
 │       └── weibo_engine.py
 ├── sub-skills/
-│   └── local-search/     # 本地引擎子技能
+│   ├── local-search/     # 本地引擎子技能（聚合 local_bing/local_baidu 等私有搜索 API）
+│   └── local-seek/       # 本机文件搜索子技能（原生原创；MCP argo_local_search 封装 seek.py）
 └── tests/
 ```
 

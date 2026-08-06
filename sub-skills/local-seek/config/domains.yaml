@@ -1,0 +1,20 @@
+# local-seek 搜索配置
+# 修改后即时生效，无需重启。
+
+# 附加排除规则（追加到内置默认排除之后）
+# 内置默认排除：node_modules .git __pycache__ .venv dist build target 等
+exclude:
+  - "*.min.js"
+  - "*.map"
+  - "*.lock"
+  - ".turbo"
+  - ".nyc_output"
+  - "*.egg-info"
+
+# 知识域：经常要搜的目录，填在这里可被 --domains 查询
+# 示例：- ~/Documents/notes
+knowledge_domains: []
+
+# 输出控制
+max_results: 30        # 默认最大结果数
+snippet_chars: 120     # 命中行截断长度

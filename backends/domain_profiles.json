@@ -1489,5 +1489,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "bocha_ai": {
+    "label": "博查AI搜索（模态卡）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

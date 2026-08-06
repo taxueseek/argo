@@ -25,6 +25,7 @@ from typing import Any
 KNOWN_ENV_ALIASES: dict[str, list[str]] = {
     "tavily": ["ARGO_TAVILY_API_KEY", "TAVILY_API_KEY"],
     "bocha": ["ARGO_BOCHA_API_KEY", "BOCHA_API_KEY"],
+    "bocha_ai": ["ARGO_BOCHA_API_KEY", "BOCHA_API_KEY"],
     "brave": ["ARGO_BRAVE_API_KEY", "BRAVE_API_KEY"],
     "byted": ["ARGO_BYTED_API_KEY", "ARGO_WEB_SEARCH_API_KEY", "WEB_SEARCH_API_KEY"],
     "exa": ["ARGO_EXA_API_KEY", "EXA_API_KEY"],

@@ -158,6 +158,76 @@ def _select_first_with_bs4(soup: Any, selector: str) -> Any:
     return items[0] if items else None
 
 
+def _fallback_extract(html: str, engine_name: str, base: str,
+                         default_score: float = 0.45, max_items: int = 8) -> list[dict[str, Any]]:
+    """通用解析兜底：选择器 0 命中时，用链接 + 锚文本启发式回退。
+
+    零依赖：只用 BeautifulSoup 已有能力，抽页面内最像「结果卡片」的链接块，
+    避免页面改版导致整引擎 0 结果。命中者 score 保守（0.45 起），不与主映射抢位。
+    """
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        return []
+    for sel in ("nav", "header", "footer", "script", "style", "noscript"):
+        try:
+            for tag in soup.select(sel):
+                tag.decompose()
+        except Exception:
+            pass
+    candidates: list[tuple[str, str, str]] = []
+    for a in soup.find_all("a", href=True):
+        try:
+            href = str(a.get("href") or "").strip()
+            title = a.get_text(strip=True)
+        except Exception:
+            continue
+        if not title or len(title) < 6:
+            continue
+        if href.startswith("#") or href.startswith("javascript:"):
+            continue
+        low = href.lower()
+        if any(x in low for x in ("login", "signin", "signup", "cookie", "privacy", "terms")):
+            continue
+        parent = a.parent
+        snippet = ""
+        try:
+            if parent is not None:
+                snippet = parent.get_text(" ", strip=True)[:300]
+                if snippet == title:
+                    gp = parent.parent
+                    snippet = gp.get_text(" ", strip=True)[:300] if gp is not None else ""
+        except Exception:
+            snippet = ""
+        if href.startswith("/"):
+            try:
+                href = urllib.parse.urljoin(base, href)
+            except Exception:
+                pass
+        candidates.append((title[:200], href[:500], snippet))
+        if len(candidates) >= max_items * 3:
+            break
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for title, url, snippet in candidates:
+        key = url or title
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "title": title,
+            "url": url,
+            "snippet": snippet,
+            "score": round(max(default_score - len(out) * 0.05, 0.1), 3),
+            "source": engine_name,
+            "_fallback": True,
+        })
+        if len(out) >= max_items:
+            break
+    return out
+
+
 def _parse_html(engine_name: str, html: str, spec: dict[str, Any],
                 maps: dict[str, Any]) -> list[dict[str, Any]]:
     html_maps = maps.get("html", {})
@@ -209,6 +279,13 @@ def _parse_html(engine_name: str, html: str, spec: dict[str, Any],
             })
         except Exception:
             continue
+    if not results:
+        try:
+            fb = _fallback_extract(html, engine_name, base, default_score=0.45, max_items=8)
+            if fb:
+                return fb
+        except Exception:
+            pass
     return results
 
 

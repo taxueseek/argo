@@ -85,7 +85,7 @@ engines:
   desc: B站热搜（search/square 热搜词，免认证）
 - name: bocha
   tier: T1
-  type: http
+  type: bocha
   coverage:
   - chinese
   - general
@@ -93,7 +93,19 @@ engines:
   cost: api
   status: ok
   recommended: true
-  desc: 博查搜索 API（中文）
+  desc: 博查搜索 API（中文，freshness 按查询时效动态化）
+- name: bocha_ai
+  tier: T1
+  type: bocha_ai
+  coverage:
+  - chinese
+  - general
+  - vertical
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  desc: 博查 AI 搜索（统一语义识别 + 垂直结构化模态卡：天气/股票/汇率/油价/火车/万年历/贵金属/星座/医疗等）
 - name: brave
   tier: T1
   type: http

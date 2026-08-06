@@ -250,6 +250,23 @@ domains:
   - (?i)(天気|気温|温度|予報|雨|雪|何度)
   - (?i)(날씨|기온|온도|예보|비|눈|몇\s*도)
   primary: qweather
+- desc: 垂直结构化模态卡（统一语义识别：火车票/油价/贵金属/万年历/星座/手机/汽车/挂号等）
+  engines_combo:
+  - bocha_ai
+  - bocha
+  fallback: bocha_ai
+  name: modal_card
+  parallel: false
+  patterns:
+  - (?i)(火车票|高铁|动车|车次|火车时刻|高铁票价|高铁时刻)
+  - (?i)(油价|今日油价|加油价格|成品油|柴油价格|汽油价格)
+  - (?i)(金价|银价|黄金价格|铂金|钯金|贵金属行情|今日金价|今日银价)
+  - (?i)(黄历|万年历|宜忌|农历查询|老黄历|吉日|黄道吉日)
+  - (?i)(今日运势|星座运势|生肖运程|属相运势|运势查询|每日运势)
+  - (?i)(手机参数|手机配置|手机对比|手机报价|新款手机|手机型号)
+  - (?i)(汽车报价|车型价格|落地价|汽车行情|新车价格|汽车参数)
+  - (?i)(挂号|医院查询|医院预约|看病|急诊|医生出诊|门诊时间|三甲医院)
+  primary: bocha_ai
 - desc: 财经快讯（金十数据）
   engines_combo:
   - jin10
@@ -847,18 +864,21 @@ domains:
   primary: local_search
 - desc: 社交平台/UGC/舆论
   engines_combo:
+  - zhihu
+  - hackernews
+  - bilibili
+  - v2ex
   - twitter
   - reddit
   - xiaohongshu
-  - bilibili
   - weibo
-  fallback: reddit
+  fallback: zhihu
   name: social
   parallel: true
   patterns:
   - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|v2ex|评论|帖子|热门|trending|viral|opinion|sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
-  primary: twitter
+  primary: zhihu
   quote: false
 
 
@@ -992,14 +1012,42 @@ engines:
     coverage:
     - chinese
     - general
-    desc: 博查搜索 API（中文）
+    desc: 博查搜索 API（中文，freshness 按查询时效动态化）
     headers:
       Authorization: Bearer {BOCHA_API_KEY}
       Content-Type: application/json
     method: POST
     timeout: 8
-    type: http
+    type: bocha
     url: https://api.bochaai.com/v1/web-search
+  bocha_ai:
+    body:
+      answer: false
+      count: '{n}'
+      freshness: noLimit
+      query: '{query}'
+      stream: false
+    enabled: true
+    label: 博查AI搜索（模态卡）
+    cost_tier: low
+    qps: 5
+    priority: 9
+    limit: 10000
+    period: month
+    cost_per_call: 0.001
+    cost_unit: credit
+    coverage:
+    - chinese
+    - general
+    - vertical
+    desc: 博查 AI 搜索（统一语义识别 + 垂直结构化模态卡：天气/股票/汇率/油价/火车/万年历/贵金属/星座/医疗等）
+    headers:
+      Authorization: Bearer {BOCHA_API_KEY}
+      Content-Type: application/json
+    method: POST
+    timeout: 12
+    type: bocha_ai
+    url: https://api.bochaai.com/v1/ai-search
   brave:
     enabled: false
     label: Brave

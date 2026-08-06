@@ -27,6 +27,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
 from cache import SearchCache
+try:
+    from cache import query_similarity as _query_similarity
+except ImportError:
+    _query_similarity = None  # type: ignore
 from route import route_query
 from engines import search as engine_search, available_engines
 from config import get_execution_config, get_cost_factor, get_engines
@@ -150,11 +154,12 @@ _ENGINE_FUSION_WEIGHTS: dict[str, float] = {
     # 通用引擎（基线）
     "duckduckgo": 1.0, "local_bing": 1.0, "local_duckduckgo": 1.0,
     "local_google": 1.0, "anysearch": 1.0, "byted": 1.0, "bocha": 1.0,
+    "bocha_ai": 1.3,  # 垂直结构化模态卡（实时值）
     "brave": 1.0, "uapi": 1.0, "local_search": 1.0, "octen": 1.0,
     "gdelt": 1.0, "opencorporates": 1.2, "google_patents": 1.2,
     # 社交/低质（降权）
     "twitter": 0.7, "reddit": 0.7, "xiaohongshu": 0.7, "bilibili": 0.7,
-    "weibo": 0.7, "v2ex": 0.8, "zhihu": 0.8, "zhihu_hot": 0.8,
+    "weibo": 0.7, "v2ex": 0.8, "zhihu": 0.8, "hackernews": 0.8, "zhihu_hot": 0.8,
     "baidu_hot": 0.8, "toutiao_hot": 0.8, "bilibili_hot": 0.8,
 }
 
@@ -185,7 +190,13 @@ def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
 
     for results in ranked_lists:
         for i, r in enumerate(results):
-            key = _canonical_url(r.get("url", "")) or f"__title__:{r.get('title', '')}"
+            # 无 URL 时用 title 兜底；模态卡再退到 card_type（避免空 title 互撞）
+            key = (
+                _canonical_url(r.get("url", ""))
+                or (f"__title__:{r.get('title', '')}" if r.get("title") else "")
+                or (f"__card__:{r.get('card_type', '')}" if r.get("card_type") else "")
+                or f"__idx__:{i}"
+            )
             w = _engine_weight(r.get("_engine") or r.get("source") or "") if weighted else 1.0
             scores[key] = scores.get(key, 0.0) + w / (k + i + 1)
             eng = r.get("_engine") or r.get("source", "") or ""
@@ -221,12 +232,79 @@ def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
     return out
 
 
+def _content_similarity(a: str, b: str) -> float:
+    """标题+片段的 minhash 相似度（复用 cache.query_similarity，失败回退 Jaccard）。"""
+    if not a or not b:
+        return 0.0
+    if _query_similarity is not None:
+        try:
+            return float(_query_similarity(a, b))
+        except Exception:
+            pass
+    import re as _re
+    sa, sb = set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", a.lower())), set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", b.lower()))
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / len(sa | sb) if sa | sb else 0.0
+
+
+def _content_sig(r: dict[str, Any]) -> str:
+    return f"{r.get('title', '') or ''} {r.get('snippet', '') or ''}".strip()
+
+
+def minhash_dedupe(
+    results: list[dict[str, Any]], threshold: float = 0.85, enabled: bool | None = None,
+) -> tuple[list[dict[str, Any]], int]:
+    """结果级近重复去重（MMR 前置）：同一事件多引擎同质网页堆叠时去重。
+
+    流程：URL 归一键已去重 → 剩余按(score, selection)降序贪心，content_similarity ≥ threshold 视为近重复，仅留首条。
+    开关：ARGO_MINHASH_DEDUPE=0 时关闭；默认开启（阈值可由 ARGO_MINHASH_THRESHOLD 覆盖，默认 0.85）。
+    返回 (deduped, removed_count)，每条被移除的结果记 _near_dup_of 指向保留条 ref。
+    """
+    if enabled is None:
+        enabled = os.environ.get("ARGO_MINHASH_DEDUPE", "1").strip() not in ("0", "false", "False", "no")
+    if not enabled or not results or len(results) <= 1:
+        return results, 0
+    try:
+        thr = float(os.environ.get("ARGO_MINHASH_THRESHOLD", str(threshold)))
+        threshold = max(0.5, min(0.98, thr))
+    except Exception:
+        pass
+    pool = sorted(
+        results,
+        key=lambda r: (float(r.get("score", 0) or 0), float(r.get("selection", 0) or 0)),
+        reverse=True,
+    )
+    kept: list[dict[str, Any]] = []
+    kept_sigs: list[str] = []
+    removed = 0
+    for r in pool:
+        sig = _content_sig(r)
+        is_dup = False
+        for ks in kept_sigs:
+            if _content_similarity(sig, ks) >= threshold:
+                is_dup = True
+                break
+        if not is_dup:
+            kept.append(r)
+            kept_sigs.append(sig)
+        else:
+            removed += 1
+            r["_near_dup"] = True
+    return kept, removed
+
+
 def deduplicate_by_url(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """URL 去重（归一化键）。"""
     seen: set[str] = set()
     out = []
     for r in results:
-        key = _canonical_url(r.get("url", "")) or f"title:{r.get('title', '')}"
+        key = (
+            _canonical_url(r.get("url", ""))
+            or (f"title:{r.get('title', '')}" if r.get("title") else "")
+            or (f"card:{r.get('card_type', '')}" if r.get("card_type") else "")
+            or f"anon:{len(out)}"
+        )
         if key not in seen:
             seen.add(key)
             out.append(r)
@@ -861,6 +939,16 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         except ImportError:
             pass  # evidence 不可用时跳过（本地五维 rerank 已对 SERP 降权）
 
+    # ── minhash 近重复去重（结果级，RRF 后 / SERP 后）─────────────────────
+    minhash_removed = 0
+    if merged and len(merged) > 1:
+        try:
+            deduped, minhash_removed = minhash_dedupe(merged)
+            merged = deduped
+        except Exception as _e:
+            import logging
+            logging.getLogger("unified_search").debug(f"minhash 去重跳过: {type(_e).__name__}")
+
     # 放宽截断：rerank 阶段看到 max_results*3 条，最终输出再截断
     merged = merged[:max(max_results * 3, 15)]
 
@@ -925,7 +1013,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             logging.getLogger("unified_search").debug(
                 f"错误恢复跳过: {type(e).__name__}")
 
-    # Reranker：fast 模式跳过
+    # Reranker：ARGO_LOCAL_RERANK 开关（0 关闭本地五维兜底；默认 1 开启）
+    local_rerank_on = os.environ.get("ARGO_LOCAL_RERANK", "1").strip() not in ("0", "false", "False", "no")
     reranker_status = "skipped_short"
     rank_method = "none"
     if mode == "fast" or depth == "fast":
@@ -936,8 +1025,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if reranker_status == "ok":
             rank_method = "bocha"
 
-    # P0-003：无 Bocha Key / fallback / fast 跳过时，启用本地五维 rerank 兜底
-    if merged and len(merged) > 1 and reranker_status in (
+    # 本地五维 rerank 兜底：受 ARGO_LOCAL_RERANK 开关控制（可观测 rank_method）
+    if local_rerank_on and merged and len(merged) > 1 and reranker_status in (
             "skipped_no_key", "fallback", "skipped_fast", "skipped_short"):
         try:
             merged = local_five_dim_rerank(query, merged, domain=domain,
@@ -947,6 +1036,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             import logging
             logging.getLogger("unified_search").debug(
                 f"本地五维 rerank 跳过: {type(e).__name__}")
+    elif not local_rerank_on and reranker_status in ("skipped_no_key", "fallback", "skipped_fast", "skipped_short"):
+        rank_method = "none"
 
     if merged:
         # 共识加权后再按 score 排
@@ -1097,6 +1188,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "early_stopped": early_stopped,
         "reranker": reranker_status,
         "rank_method": rank_method,
+        "minhash_removed": minhash_removed,
+        "local_rerank_on": local_rerank_on,
         "recovery": recovery_info,
         "fact_alignment": fact_alignment,
         "exclude_terms": exclude_terms,

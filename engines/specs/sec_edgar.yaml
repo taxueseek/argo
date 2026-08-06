@@ -1,0 +1,27 @@
+# SEC EDGAR 美国证监会全文检索（免 Key，官方数据）
+# 文档: https://www.sec.gov/search-filings/edgar-search-assistance
+# 注意: SEC 强制要求 User-Agent，q 支持 efts 语法（如 q=apple AND form_type:"10-K"）
+# 验证:
+#   python3 scripts/engine_validate.py --engine sec_edgar --stage all --admit
+#   python3 scripts/search.py "apple 10-K" --engine sec_edgar --json
+
+engine_id: sec_edgar
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://efts.sec.gov/LATEST/search-index
+timeout: 15
+query_param: q
+canary_query: "apple"
+desc: "SEC EDGAR 美国证监会官方全文检索（公司/财报/申报，免认证）"
+
+headers:
+  User-Agent: argo-search/1.0 (research contact@example.com)
+  Accept: application/json
+
+output_map:
+  items: hits.hits
+  item_title: _source.display_names.0
+  url_template: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={_source.ciks.0}
+  item_summary: _source.file_description

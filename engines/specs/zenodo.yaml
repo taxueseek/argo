@@ -1,0 +1,25 @@
+# Zenodo 科研数据集搜索（免 Key）
+# 文档: https://developers.zenodo.org/
+# 验证:
+#   python3 scripts/engine_validate.py --engine zenodo --stage all --admit
+#   python3 scripts/search.py "climate" --engine zenodo --json
+
+engine_id: zenodo
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://zenodo.org/api/records
+timeout: 15
+query_param: q
+canary_query: "climate change"
+desc: "Zenodo 科研数据集搜索（CERN 托管，免认证，DOI 可引用）"
+
+extra_params:
+  size: "{n}"
+
+output_map:
+  items: hits.hits
+  item_title: metadata.title
+  item_url: links.self_html
+  item_summary: metadata.description

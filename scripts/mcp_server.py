@@ -38,18 +38,17 @@ os.chdir(ARGO_DIR)
 
 @functools.lru_cache(maxsize=1)
 def _seek_py() -> str:
-    """定位 local-seek 的 seek.py。
+    """定位 local-seek 的 seek.py（argo 子技能，位于 sub-skills/ 下）。
 
-    argo 目录本身是符号链接（~/.agents/skills/argo -> ~/argo），
-    物理 cwd 与逻辑路径不一致，不能靠 dirname(ARGO_DIR) 推导 skills 根目录，
-    按候选根目录逐个探测。结果进程内不变，lru_cache 避免每次调用重复探测。"""
-    for root in (os.path.dirname(ARGO_DIR),
-                 os.path.expanduser("~/.agents/skills"),
-                 os.path.expanduser("~/.claude/skills")):
-        cand = os.path.join(root, "local-seek", "scripts", "seek.py")
+    local-seek 已于 2026-08-05 收编为 argo 子技能，标准位置是
+    SUB_SKILLS_DIR/local-seek；旧位置（skills 根目录平级）保留为回退，
+    兼容尚未迁移的旧部署。结果进程内不变，lru_cache 避免重复探测。"""
+    for cand in (os.path.join(SUB_SKILLS_DIR, "local-seek", "scripts", "seek.py"),
+                 os.path.expanduser("~/.agents/skills/local-seek/scripts/seek.py"),
+                 os.path.expanduser("~/.claude/skills/local-seek/scripts/seek.py")):
         if os.path.exists(cand):
             return cand
-    return os.path.expanduser("~/.agents/skills/local-seek/scripts/seek.py")
+    return os.path.join(SUB_SKILLS_DIR, "local-seek", "scripts", "seek.py")
 
 # 启动日志（写入 stderr，不影响 stdio 通信）
 sys.stderr.write("[argo-mcp] starting (lazy imports enabled)\n")
@@ -155,6 +154,12 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
             out["wasted_engine_ms"] = wasted
     if result.get("early_stopped"):
         out["early_stopped"] = True
+    if result.get("minhash_removed"):
+        out["minhash_removed"] = result.get("minhash_removed")
+    if result.get("rank_method"):
+        out["rank_method"] = result.get("rank_method")
+    if result.get("reranker"):
+        out["reranker"] = result.get("reranker")
     # sources 沉底同构（若已有）
     sources = result.get("sources")
     if sources:
@@ -410,13 +415,13 @@ TOOLS = [
     },
     {
         "name": "argo_social_search",
-        "description": "社交平台搜索：跨平台搜索 Twitter/X、Reddit、小红书、B站、微博等 UGC 内容，返回帖子与互动数据。mode=sentiment 输出舆情聚合（互动汇总+平台分布+代表性帖子）。适用于舆情分析、热门话题、产品口碑、竞品用户反馈等场景。",
+        "description": "社交平台搜索：跨平台搜索知乎、Hacker News、B站、V2EX、Twitter/X、Reddit、小红书、微博等 UGC 内容，返回帖子与互动数据。mode=sentiment 输出舆情聚合（互动汇总+平台分布+代表性帖子）。适用于舆情分析、热门话题、产品口碑、竞品用户反馈等场景。注：hackernews/v2ex/zhihu/bilibili 零密钥直连；twitter/reddit/weibo/xiaohongshu 依赖外部登录态或第三方 API，可能返回空。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词"},
                 "mode": {"type": "string", "enum": ["text", "sentiment"], "description": "text=帖子列表（默认），sentiment=舆情聚合分析", "default": "text"},
-                "platforms": {"type": "string", "description": "平台列表，逗号分隔（默认 twitter,reddit,xiaohongshu）。可选：twitter,reddit,xiaohongshu,bilibili,weibo", "default": "twitter,reddit,xiaohongshu"},
+                "platforms": {"type": "string", "description": "平台列表，逗号分隔（默认 hackernews,zhihu,bilibili，均为零密钥可用）。可选：hackernews,v2ex,zhihu,bilibili,twitter,reddit,xiaohongshu,weibo", "default": "hackernews,zhihu,bilibili"},
                 "max_results": {"type": "integer", "description": "每个平台最大结果数（默认 5）", "default": 5, "minimum": 1, "maximum": 20},
             },
             "required": ["query"],
@@ -584,7 +589,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             research_mod = _lazy_cached("research")
             mode = arguments.get("mode", "auto")
             if mode == "social-sentiment":
-                platforms_str = arguments.get("platforms", "twitter,reddit,xiaohongshu")
+                platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
                 platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
                 result = research_mod.social_sentiment_research(
                     query=arguments["query"],
@@ -624,7 +629,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return _ok(payload, pretty=pretty)
 
         elif name == "argo_social_search":
-            platforms_str = arguments.get("platforms", "twitter,reddit,xiaohongshu")
+            platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
             platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
             query = arguments["query"]
             n = arguments.get("max_results", 5)
@@ -786,7 +791,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "argo",
-                "version": "2.6.2"
+                "version": "2.7.0"
             },
             # 短指令：降 tools 上下文；细节在 tool schema
             "instructions": (

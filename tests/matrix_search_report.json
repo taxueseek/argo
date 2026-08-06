@@ -464,7 +464,7 @@
     {
       "name": "route:R_zh_stock",
       "status": "PASS",
-      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'eastmoney'] lang=zh",
+      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'tencent_quote'] lang=zh",
       "meta": {
         "id": "R_zh_stock",
         "q": "贵州茅台股价",
@@ -474,7 +474,7 @@
         "engine": "sina_quote",
         "combo": [
           "sina_quote",
-          "eastmoney"
+          "tencent_quote"
         ],
         "primary_lang": "zh"
       }
@@ -662,7 +662,7 @@
     {
       "name": "route:R_zh_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_sports",
         "q": "梅西 俱乐部",
@@ -672,7 +672,7 @@
         "engine": "thesportsdb",
         "combo": [
           "thesportsdb",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -680,7 +680,7 @@
     {
       "name": "route:R_en_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'zh_wikipedia'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=en",
       "meta": {
         "id": "R_en_sports",
         "q": "LeBron James team",
@@ -690,7 +690,7 @@
         "engine": "thesportsdb",
         "combo": [
           "thesportsdb",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "en"
       }
@@ -698,7 +698,7 @@
     {
       "name": "route:R_en_sports2",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'zh_wikipedia'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=en",
       "meta": {
         "id": "R_en_sports2",
         "q": "Cristiano Ronaldo club",
@@ -708,7 +708,7 @@
         "engine": "thesportsdb",
         "combo": [
           "thesportsdb",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "en"
       }
@@ -716,7 +716,7 @@
     {
       "name": "route:R_zh_sports2",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_sports2",
         "q": "库里 球队",
@@ -726,7 +726,7 @@
         "engine": "thesportsdb",
         "combo": [
           "thesportsdb",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -734,7 +734,7 @@
     {
       "name": "route:R_en_wc",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'zh_wikipedia'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'wikipedia'] lang=en",
       "meta": {
         "id": "R_en_wc",
         "q": "World Cup 2022 winner",
@@ -744,7 +744,7 @@
         "engine": "thesportsdb",
         "combo": [
           "thesportsdb",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "en"
       }
@@ -788,7 +788,7 @@
     {
       "name": "route:R_zh_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_geo",
         "q": "埃菲尔铁塔在哪",
@@ -798,7 +798,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -823,7 +823,7 @@
     {
       "name": "route:R_zh_geo2",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_geo2",
         "q": "黄河 流经省份",
@@ -833,7 +833,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "zh_wikipedia"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -967,16 +967,16 @@
     {
       "name": "route:R_zh_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=duckduckgo combo=['duckduckgo', 'local_openstreetmap'] lang=zh",
+      "detail": "domain=weather_query eng=byted combo=['byted', 'local_openstreetmap'] lang=zh",
       "meta": {
         "id": "R_zh_weather",
         "q": "北京 天气",
         "scenario": "weather",
         "lang": "zh",
         "domain": "weather_query",
-        "engine": "duckduckgo",
+        "engine": "byted",
         "combo": [
-          "duckduckgo",
+          "byted",
           "local_openstreetmap"
         ],
         "primary_lang": "zh"
@@ -985,16 +985,16 @@
     {
       "name": "route:R_en_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=duckduckgo combo=['duckduckgo'] lang=en",
+      "detail": "domain=weather_query eng=byted combo=['byted'] lang=en",
       "meta": {
         "id": "R_en_weather",
         "q": "weather Tokyo",
         "scenario": "weather",
         "lang": "en",
         "domain": "weather_query",
-        "engine": "duckduckgo",
+        "engine": "byted",
         "combo": [
-          "duckduckgo"
+          "byted"
         ],
         "primary_lang": "en"
       }
@@ -1002,17 +1002,17 @@
     {
       "name": "route:R_ja_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=duckduckgo combo=['duckduckgo', 'local_bing'] lang=ja",
+      "detail": "domain=weather_query eng=local_bing combo=['local_bing', 'local_duckduckgo'] lang=ja",
       "meta": {
         "id": "R_ja_weather",
         "q": "東京の天気",
         "scenario": "weather",
         "lang": "ja",
         "domain": "weather_query",
-        "engine": "duckduckgo",
+        "engine": "local_bing",
         "combo": [
-          "duckduckgo",
-          "local_bing"
+          "local_bing",
+          "local_duckduckgo"
         ],
         "primary_lang": "ja"
       }
@@ -1020,7 +1020,7 @@
     {
       "name": "route:R_en_academic",
       "status": "PASS",
-      "detail": "domain=academic eng=arxiv combo=['arxiv', 'crossref'] lang=en",
+      "detail": "domain=academic eng=arxiv combo=['arxiv', 'openalex'] lang=en",
       "meta": {
         "id": "R_en_academic",
         "q": "transformer attention paper",
@@ -1030,7 +1030,7 @@
         "engine": "arxiv",
         "combo": [
           "arxiv",
-          "crossref"
+          "openalex"
         ],
         "primary_lang": "en"
       }

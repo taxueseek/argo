@@ -533,46 +533,75 @@ def _parse_xml(text: str, engine_name: str) -> list[dict[str, Any]]:
 
 
 def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[str, Any]]:
-    """通用 JSON 解析：自动探测常见字段。"""
-    items = None
-    for key in ["results", "items", "data", "works", "search"]:
-        if "." in key:
-            parts = key.split(".")
-            obj = data
-            for p in parts:
-                obj = obj.get(p, {}) if isinstance(obj, dict) else {}
-            if isinstance(obj, list):
-                items = obj
-                break
-        elif isinstance(data, dict) and key in data and isinstance(data[key], list):
-            items = data[key]
-            break
+    """通用 JSON 解析：自动探测常见列表路径与字段别名。
 
-    if items is None and isinstance(data, dict):
-        for v in data.values():
-            if isinstance(v, dict):
-                for key in ["results", "items", "value", "search"]:
-                    if key in v and isinstance(v[key], list):
-                        items = v[key]
-                        break
-            if items:
-                break
+    列表探测（最多 3 层，只走已知键）：
+      - 顶层 results/items/data/works/search 等
+      - 一层嵌套（data.results / data.value）
+      - 二层嵌套（data.webPages.value —— 博查等 AI 搜索 API）
 
+    字段别名：title|name|heading；url|URL|html_url|link|href；
+    snippet|summary|content|description|abstract。
+    """
+    list_keys = (
+        "results", "items", "value", "works", "search", "data",
+        "organic", "webPages", "hits", "documents", "entries",
+    )
+
+    def _find_items(obj: Any, depth: int = 0) -> list | None:
+        if depth > 3 or obj is None:
+            return None
+        if isinstance(obj, list):
+            # 空列表或 dict 元素列表视为结果集；纯标量列表跳过
+            if not obj or isinstance(obj[0], dict):
+                return obj
+            return None
+        if not isinstance(obj, dict):
+            return None
+        for key in list_keys:
+            if key not in obj:
+                continue
+            found = _find_items(obj[key], depth + 1)
+            if found is not None:
+                return found
+        # 浅层扫描嵌套 dict（避免深扫整棵树误抓无关数组）
+        if depth < 2:
+            for v in obj.values():
+                if isinstance(v, dict):
+                    found = _find_items(v, depth + 1)
+                    if found is not None:
+                        return found
+        return None
+
+    items = _find_items(data) if isinstance(data, (dict, list)) else None
     if not items or not isinstance(items, list):
         return []
 
-    results = []
+    results: list[dict[str, Any]] = []
     for i in items:
         if not isinstance(i, dict):
             continue
-        title = i.get("title", "")
+        title = i.get("title") or i.get("name") or i.get("heading") or i.get("Title") or ""
         if isinstance(title, list):
             title = title[0] if title else ""
-        url = i.get("url", i.get("URL", i.get("html_url", "")))
-        snippet = (i.get("snippet", i.get("content", i.get("summary", i.get("description", "")))))[:300]
+        url = (
+            i.get("url") or i.get("URL") or i.get("html_url")
+            or i.get("link") or i.get("href") or ""
+        )
+        snippet = (
+            i.get("snippet") or i.get("summary") or i.get("content")
+            or i.get("description") or i.get("abstract") or ""
+        )
+        if isinstance(snippet, list):
+            snippet = snippet[0] if snippet else ""
         score = i.get("score", i.get("relevance_score", 0.5))
-        results.append({"title": str(title)[:200], "url": str(url),
-                        "snippet": str(snippet), "score": score, "source": engine_name})
+        results.append({
+            "title": str(title)[:200],
+            "url": str(url),
+            "snippet": str(snippet)[:300],
+            "score": score,
+            "source": engine_name,
+        })
     return results[:10]
 
 

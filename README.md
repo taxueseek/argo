@@ -23,7 +23,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.7.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
 </p>
@@ -117,7 +117,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.6.2**。npm registry 上的旧包可能滞后，可不走）。
+任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.7.0**。npm registry 上的旧包可能滞后，可不走）。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -183,11 +183,11 @@ Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口�
 
 ### 方式三：Release 源码包
 
-打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.6.2.tar.gz`** 或 zip：
+打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.7.0.tar.gz`** 或 zip：
 
 ```bash
-tar -xzf argo-2.6.2.tar.gz
-cd argo-2.6.2
+tar -xzf argo-2.7.0.tar.gz
+cd argo-2.7.0
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -283,6 +283,7 @@ python3 scripts/search.py --list-engines
 ### 当前大致能力（v2.6.0）
 
 - **约 120+ 个搜索源、60+ 业务域**：通用网页 + 金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等（真源：`config.yaml`）
+- **垂直结构化模态卡**：火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机参数 / 汽车 / 医疗挂号等查询返回实时结构化卡片（`modal_card` 域 → `bocha_ai` 原生引擎，失败自动回落 web 搜索）
 - **10 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取
 - **多语言搜索**：中、英、日、韩、西里尔、泰、阿、希伯来、希腊、天城体等；路由与引擎参数跟着语言走；非中文查询避免误入知乎 / 搜狗微信 / A 股快照等中文专用源
 - **垂直域门禁**：空结果恢复时不把 pypi / npm / 快讯等无关源「串」进影视、体育查询
@@ -488,6 +489,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.7.0** | **垂直结构化模态卡**：内建 `bocha` / `bocha_ai` 原生引擎，`modal_card` 域统一识别火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机 / 汽车 / 挂号等实时卡片；`bocha` web 解析缺陷修复。详见 [发布说明](docs/RELEASE_NOTES_v2.7.0.md) |
 | **v2.6.2** | 合并独立改进线：网络环境感知 / 加权 RRF + 语义缓存 / 自适应引擎禁用 / 内容安全 + 查询变体 / 三大垂直引擎 / 日韩域路由补全；含 v2.6.1 路由修复。详见 [发布说明](docs/RELEASE_NOTES_v2.6.2.md) |
 | **v2.6.1** | v2.6.0 修复版：路由误伤修复（`capital of` 不再抢 fact_check）；版本同步。详见 [发布说明](docs/RELEASE_NOTES_v2.6.1.md) |
 | **v2.6.0** | **多语言搜索**（检测 / 引擎参数 / 跨语言回退）；影视·体育·地理·组织·媒体等垂直补全；recovery 防污染；能力族与矩阵回归；约 120+ 源。详见 [发布说明](docs/RELEASE_NOTES_v2.6.0.md) |
@@ -498,7 +500,7 @@ argo/
 | **v2.1** | 社交引擎层（多平台 UGC） |
 | **v1.x** | 统一命名为 Argo，多引擎路由与双层缓存成型 |
 
-更细说明见 `docs/RELEASE_NOTES_v2.6.2.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
+更细说明见 `docs/RELEASE_NOTES_v2.7.0.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
 
 ---
 
