@@ -43,7 +43,7 @@ except ImportError:
     SearchCache = None  # type: ignore
 
 from engine_registry import EngineRegistry, get_registry
-from health_check import get_available_engines
+from local_health_check import get_available_engines
 from smart_router import route_query
 
 logger = logging.getLogger("local_search.search_v3")

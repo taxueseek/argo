@@ -31,12 +31,7 @@ from engines_builders_data import (
     _build_open_library_engine,
     _build_weread_engine,
     _build_douban_book_engine,
-    _build_fred_engine,
-    _build_fx_rate_engine,
-    _build_worldbank_engine,
-    _build_nbs_stats_engine,
     _build_pubchem_engine,
-    _build_eurostat_engine,
     _build_gbif_engine,
     _build_rfc_editor_engine,
     _build_uniprot_engine,
@@ -65,6 +60,13 @@ from engines_builders_data import (
     _build_gdelt_engine,
     _build_opencorporates_engine,
     _build_google_patents_engine,
+)
+from engines_builders_data_macro import (
+    _build_fred_engine,
+    _build_fx_rate_engine,
+    _build_worldbank_engine,
+    _build_nbs_stats_engine,
+    _build_eurostat_engine,
 )
 
 __all__ = [
@@ -125,4 +127,3 @@ __all__ = [
     "_build_opencorporates_engine",
     "_build_google_patents_engine",
 ]
-

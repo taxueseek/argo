@@ -25,13 +25,15 @@ from typing import Any
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ARGO_DIR = os.path.dirname(SCRIPT_DIR)  # argo 根目录
 sys.path.insert(0, SCRIPT_DIR)
-# 子技能目录，供 sub-skills/local-search/ 等模块本地导入
+# 子技能目录，供 sub-skills/local-search/ 等模块本地导入。
+# append 而非 insert(0)：sub-skills 下的顶层模块（health_check 等）不得
+# 劫持 scripts/ 下同名模块的解析（否则 route 的健康检查分支会静默漂移）。
 SUB_SKILLS_DIR = os.path.join(ARGO_DIR, "sub-skills")
 if os.path.isdir(SUB_SKILLS_DIR):
     for sub in os.listdir(SUB_SKILLS_DIR):
         sub_path = os.path.join(SUB_SKILLS_DIR, sub)
         if os.path.isdir(sub_path) and sub_path not in sys.path:
-            sys.path.insert(0, sub_path)
+            sys.path.append(sub_path)
 # 切换 CWD 到 argo 根目录，确保相对路径和子进程 work
 os.chdir(ARGO_DIR)
 

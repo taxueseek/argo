@@ -56,6 +56,14 @@ def fetch_page(url: str, max_chars: int = 3000, timeout: int = 8,
         raw: True 时返回原始 HTML（用于 extract/crawl_sitemap 等需要 HTML 的场景）
     """
     try:
+        from url_safety import check_url
+        ok, reason = check_url(url)
+        if not ok:
+            return {"url": url, "content": "", "html": "", "length": 0,
+                    "success": False, "error": f"URL 被 SSRF 防护拦截: {reason}"}
+    except ImportError:
+        pass
+    try:
         req = urllib.request.Request(url, headers={
             "User-Agent": "unified-search/2.5 (+local-research)",
             "Accept": "text/html,application/xhtml+xml,application/xml",

@@ -25,7 +25,7 @@ from quota import QuotaManager
 from adaptive import AdaptiveLearner
 
 from engine_registry import EngineRegistry, get_engine, list_engines, list_categories, update_availability
-from health_check import apply_threshold, _detect_anti_bot
+from local_health_check import apply_threshold, _detect_anti_bot
 from smart_router import extract_features as local_extract_features, route_query as local_route_query
 
 

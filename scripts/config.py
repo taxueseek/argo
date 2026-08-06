@@ -135,10 +135,10 @@ def _validate_engine_paths(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_external_engine_specs() -> dict[str, dict[str, Any]]:
-    """加载 engines/*.yaml 外置声明，合并进主配置 engines。
+    """加载 engines/*.yaml 与 engines/specs/*.yaml 外置声明。
 
     文件名（去后缀）默认为 engine_id；文件内 engine_id / name 可覆盖。
-    跳过：_ 前缀、templates/、plugins/ 子目录文件。
+    跳过：_ 前缀文件。
     """
     result: dict[str, dict[str, Any]] = {}
     if not ENGINES_DIR.is_dir():
@@ -148,33 +148,10 @@ def _load_external_engine_specs() -> dict[str, dict[str, Any]]:
     except ImportError:
         return result
 
-    for path in sorted(ENGINES_DIR.glob("*.yaml")):
-        if path.name.startswith("_"):
-            continue
-        try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            continue
-        if not isinstance(data, dict):
-            continue
-        # 允许 {engine_id, ...} 或直接是 engine spec
-        engine_id = data.get("engine_id") or data.get("name") or path.stem
-        if not isinstance(engine_id, str) or not engine_id:
-            continue
-        spec = dict(data)
-        spec.pop("engine_id", None)
-        # name 字段若是展示名且与 id 不同，保留；type 必须有
-        if "type" not in spec and "url" in spec:
-            spec["type"] = "http"
-        if "enabled" not in spec:
-            spec["enabled"] = True
-        spec["_external_spec"] = str(path)
-        result[engine_id] = spec
-
-    # engines/specs/*.yaml 也支持
-    specs_dir = ENGINES_DIR / "specs"
-    if specs_dir.is_dir():
-        for path in sorted(specs_dir.glob("*.yaml")):
+    def _load_dir(directory: Path) -> None:
+        if not directory.is_dir():
+            return
+        for path in sorted(directory.glob("*.yaml")):
             if path.name.startswith("_"):
                 continue
             try:
@@ -183,17 +160,22 @@ def _load_external_engine_specs() -> dict[str, dict[str, Any]]:
                 continue
             if not isinstance(data, dict):
                 continue
+            # 允许 {engine_id, ...} 或直接是 engine spec
             engine_id = data.get("engine_id") or data.get("name") or path.stem
-            if not isinstance(engine_id, str):
+            if not isinstance(engine_id, str) or not engine_id:
                 continue
             spec = dict(data)
             spec.pop("engine_id", None)
+            # name 字段若是展示名且与 id 不同，保留；type 必须有
             if "type" not in spec and "url" in spec:
                 spec["type"] = "http"
             if "enabled" not in spec:
                 spec["enabled"] = True
             spec["_external_spec"] = str(path)
             result[engine_id] = spec
+
+    _load_dir(ENGINES_DIR)
+    _load_dir(ENGINES_DIR / "specs")
     return result
 
 

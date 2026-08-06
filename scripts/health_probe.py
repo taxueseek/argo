@@ -94,13 +94,20 @@ def _probe_cli(cmd: list[str], timeout: float = 2) -> tuple[bool, float, str]:
 
 
 def probe_all_engines():
-    """探测所有已启用的引擎。"""
+    """探测 local_* 子引擎（route 健康过滤的唯一消费面）。
+
+    非 local 引擎不做 HEAD 探测：1.5s 超时对慢源误报严重（wikipedia 曾因
+    9 次探测失败被标 unavailable），且探测结果无人消费。网络延迟估计
+    以 adaptive 数据为主，health_probe 仅兜底。
+    """
     _init_db()
     cfg = load_config()
     engines = get_engines(cfg)
     results = {}
 
     for name, spec in engines.items():
+        if not name.startswith("local_"):
+            continue
         engine_type = spec.get("type", "")
         url = spec.get("url", "")
         cmd = spec.get("cmd", [])

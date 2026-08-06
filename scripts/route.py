@@ -33,7 +33,7 @@ except ImportError:
 # 世界银行国家表：macro_data 域按国家词分流（非美国国家查询让 worldbank 优先，
 # 避免 FRED 美国序列冒充「中国GDP」这类答案）
 try:
-    from engines_builders_data import is_foreign_macro_query
+    from engines_builders_data_macro import is_foreign_macro_query
 except Exception:
     def is_foreign_macro_query(query: str) -> bool:
         return False
@@ -587,7 +587,10 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
             rest = grouped
         filtered = ([primary_eng] if primary_eng else []) + rest
 
-    # 健康检查过滤
+    # 健康检查过滤：只对本地子引擎（local_*）做健康判定，非本地引擎
+    # 无条件保留。两条路径（scripts health_check / health_probe fallback）
+    # 必须保持同一语义，否则被劫持/缺模块时行为会静默漂移（曾导致
+    # wikipedia 被 health.db 的旧探测失败记录误过滤）。
     try:
         from health_check import is_available as _hc_available
         healthy = []
@@ -602,7 +605,13 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     except ImportError:
         try:
             from health_probe import get_engine_status
-            healthy = [e for e in filtered if get_engine_status(e).get("available", True)]
+            healthy = []
+            for e in filtered:
+                if e.startswith("local_"):
+                    if get_engine_status(e).get("available", True):
+                        healthy.append(e)
+                else:
+                    healthy.append(e)
             if healthy:
                 filtered = healthy
         except ImportError:
@@ -923,7 +932,13 @@ def route_query(query: str, engine_override: str = "auto",
         # 域 primary 扶正：已在 combo 且未熔断时置首（不覆盖冷却中的熔断沉底）
         # open 但 cooldown 已过 → 允许扶正，交给 half-open 探测。
         p = domain.get("primary")
-        if p and p in engines_combo and engines_combo[0] != p:
+        # macro_data 非美国查询：worldbank 前置是领域语义（FRED 无该国数据，
+        # 先跑 fred + early-stop 会拿美国数据冒充），primary 扶正不得覆盖。
+        _foreign_macro = (
+            domain.get("name") == "macro_data" and is_foreign_macro_query(query)
+        )
+        if (p and p in engines_combo and engines_combo[0] != p
+                and not _foreign_macro):
             try:
                 from circuit_breaker import get_breaker
                 st = get_breaker().status(p)

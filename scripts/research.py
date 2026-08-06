@@ -309,15 +309,16 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
                 envelope=False,  # 研究合成自管结构，减子查询噪音
             )
 
-        result = _run(None, None)
+        result = None
         upgraded = False
         if use_local_first:
             # 一级：只走本地聚合；结果不足 3 条 → 二级升级通用/垂直源
             result = _run("local_search", None)
             if len(result.get("results", [])) < min(3, max_results):
-                full = _run(None, None)
+                result = _run(None, None)
                 upgraded = True
-                result = full
+        if result is None:
+            result = _run(None, None)
         return {
             "sub_query": sq["query"],
             "intent": sq["intent"],

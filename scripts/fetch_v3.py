@@ -136,6 +136,14 @@ def _needs_browser(result: dict) -> bool:
 def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
     """使用 http_client（UA 轮换 + Cookie 积累）抓取。"""
     try:
+        from url_safety import check_url
+        ok, reason = check_url(url)
+        if not ok:
+            return _make_result(url, "", 0, "http", ok=False,
+                                error=f"URL 被 SSRF 防护拦截: {reason}")
+    except ImportError:
+        pass
+    try:
         from http_client import HttpClient
         client = HttpClient(timeout=timeout, max_retries=1, jitter=False)
         resp = client.get(url)
@@ -433,6 +441,17 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
 
     URL 级缓存：无 actions 的成功结果写入 SearchCache（L1+L2）。
     """
+    try:
+        from url_safety import check_url
+        ok, reason = check_url(url)
+        if not ok:
+            return {"url": url, "title": "", "content": "",
+                    "html": "", "length": 0, "success": False,
+                    "error": f"URL 被 SSRF 防护拦截: {reason}",
+                    "fetch_method": "blocked"}
+    except ImportError:
+        pass
+
     # URL 优化（Reddit 重写、追踪参数清理）
     url = _optimize_url(url)
 

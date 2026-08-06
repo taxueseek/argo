@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.0
+version: 2.7.1
 triggers:
   - 搜索
   - 查一下
@@ -250,6 +250,10 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **新垂直引擎**：GDELT 全球事件（事件/舆情/地理维度）、OpenCorporates 公司注册（尽调/反欺诈）、Google Patents 专利搜索（技术尽调/IP）
 - **自适应学习**：success × latency × cost 三维评分，SQLite 持久化
 - **社交引擎**：Twitter/Reddit/小红书/B站/微博 5 大平台原生搜索
+- **SSRF 防护（v2.7.1）**：fetch/crawl/http_client 统一拦截内网/私有地址（scheme 白名单 + 主机名黑名单 + DNS 解析 IP 段 + 重定向逐跳校验）；`ARGO_ALLOW_PRIVATE_URLS=1` 显式放行
+- **路由健康语义修复（v2.7.1）**：健康过滤只作用于 local_* 子引擎；sub-skills 与 scripts 顶层模块名隔离（health_check 不再被劫持）；health_probe 只探测 local_*，消除慢源误报
+- **macro_data 国家分流（v2.7.1）**：非美国宏观查询（中国GDP/日本通胀）worldbank 前置不再被 primary 扶正覆盖，避免 FRED 美国数据冒充
+- **深度研究 local_first（v2.7.1）**：决策树先本地聚合，结果不足才升级全量；修复「先全量再本地」的浪费顺序
 
 ### 用法
 
@@ -688,7 +692,7 @@ local-search 是 argo 内置的「零成本聚合后端」，不依赖独立的 
   统一通过 HTML/RSS/JSON/XML 解析公开页面。
 - **引擎注册表**（`sub-skills/local-search/engine_registry.py`）：唯一真源，加载
   `config.yaml` + `parse_maps.yaml`；新增引擎只需改 YAML。
-- **健康探针**（`sub-skills/local-search/health_check.py`）：canary 查询 + 反爬/拦截检测，
+- **健康探针**（`sub-skills/local-search/local_health_check.py`）：canary 查询 + 反爬/拦截检测，
   状态缓存 5 分钟；连续 2 次失败或单次 >8s 标记 unavailable，成功 1 次恢复。
   fast/budget 模式下只检查实际要用的引擎，避免全量探针拖慢响应。
 - **智能路由**（`sub-skills/local-search/smart_router.py`）：根据查询特征自动选择最优本地引擎组合。

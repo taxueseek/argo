@@ -73,7 +73,7 @@ sub-skills/local-search/
 ├── config.yaml              # 引擎基础配置（URL/超时/类型/开关）
 ├── parse_maps.yaml          # HTML/RSS/JSON 抽取映射
 ├── engine_registry.py       # 引擎注册中心（唯一真源）
-├── health_check.py          # 轻量健康探针
+├── local_health_check.py    # 轻量健康探针（local_ 前缀避免与 scripts/health_check 同名冲突）
 ├── smart_router.py          # 查询特征路由
 ├── search_v3.py             # local-search 主入口
 └── local_search_adapter.py  # 兼容入口

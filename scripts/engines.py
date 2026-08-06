@@ -137,7 +137,9 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
             from engines_base import _resolve as _resolve_tpl
             sub_dir = Path(__file__).resolve().parent.parent / "sub-skills" / "local-search"
             if str(sub_dir) not in sys.path:
-                sys.path.insert(0, str(sub_dir))
+                # append 而非 insert(0)：避免 sub-skills 顶层模块名
+                # （health_check 等）劫持 scripts 下同名模块的解析。
+                sys.path.append(str(sub_dir))
             import search_v3
             res = search_v3.search_engines(
                 query, engines=None, n=n, timeout=float(timeout),

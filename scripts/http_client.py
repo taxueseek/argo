@@ -34,6 +34,12 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+try:
+    from url_safety import check_url
+except ImportError:  # pragma: no cover
+    def check_url(url: str) -> tuple[bool, str]:
+        return True, ""
+
 
 # ─── User-Agent 轮换池 ───────────────────────────────────────────────────────
 
@@ -184,6 +190,9 @@ class HttpClient:
             follow_redirects: bool = True) -> dict:
         """发送 GET 请求，返回统一响应格式。
 
+        SSRF 防护：默认拒绝内网 / 私有地址目标（ARGO_ALLOW_PRIVATE_URLS=1
+        显式放行）。校验失败返回 status=0 + error，不发起请求。
+
         返回：{
             "status": int,
             "headers": dict,
@@ -193,6 +202,11 @@ class HttpClient:
             "from_cache": bool,
         }
         """
+        ok, reason = check_url(url)
+        if not ok:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": 0, "error": f"URL 被 SSRF 防护拦截: {reason}"}
+
         self._apply_jitter()
 
         last_error = None
@@ -303,15 +317,28 @@ class HttpClient:
         """curl subprocess fallback（更强的反检测能力）。
 
         curl 的 TLS 指纹与 Python urllib 不同，某些网站对 curl 更友好。
+        重定向由 Python 侧安全跟随（每跳校验），curl 自身不跟随。
         """
+        ok, reason = check_url(url)
+        if not ok:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": 0, "error": f"URL 被 SSRF 防护拦截: {reason}"}
+
         start = time.time()
         headers = _random_headers(extra_headers)
 
-        cmd = ["curl", "-s", "-L", "--max-time", str(int(self.timeout)),
+        final_url = self._safe_follow_redirects(url, headers)
+        if final_url is None:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": int((time.time() - start) * 1000),
+                    "error": "重定向目标被 SSRF 防护拦截"}
+
+        cmd = ["curl", "-s", "--max-redirs", "0", "--max-time",
+               str(int(self.timeout)),
                "-w", "\\n%{http_code}\\n%{url_effective}"]
         for k, v in headers.items():
             cmd.extend(["-H", f"{k}: {v}"])
-        cmd.append(url)
+        cmd.append(final_url)
 
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout + 5)
@@ -332,6 +359,41 @@ class HttpClient:
         except Exception as e:
             return {"status": 0, "headers": {}, "text": "", "url": url,
                     "elapsed_ms": 0, "error": str(e)[:200]}
+
+    def _safe_follow_redirects(self, url: str, headers: dict,
+                               max_redirects: int = 5) -> str | None:
+        """逐跳安全跟随重定向：每跳目标都过 SSRF 校验。
+
+        返回最终 URL；任一跳被拦截或超过跳数返回 None。
+        """
+        current = url
+        for _ in range(max_redirects):
+            ok, _reason = check_url(current)
+            if not ok:
+                return None
+            parsed = urllib.parse.urlparse(current)
+            if parsed.scheme not in ("http", "https"):
+                return None
+            conn_cls = (http.client.HTTPSConnection if parsed.scheme == "https"
+                        else http.client.HTTPConnection)
+            try:
+                conn = conn_cls(parsed.hostname,
+                                parsed.port or (443 if parsed.scheme == "https" else 80),
+                                timeout=self.timeout)
+                path = parsed.path or "/"
+                if parsed.query:
+                    path += "?" + parsed.query
+                conn.request("HEAD", path, headers=headers)
+                resp = conn.getresponse()
+                status = resp.status
+                location = resp.getheader("Location")
+                conn.close()
+            except Exception:
+                return None
+            if status not in (301, 302, 303, 307, 308) or not location:
+                return current
+            current = urllib.parse.urljoin(current, location)
+        return None
 
 
 # ─── 便捷函数 ────────────────────────────────────────────────────────────────
