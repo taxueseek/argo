@@ -117,7 +117,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **You do not need the npm registry package** for the latest build (since v2.5.1 **GitHub** is the install source of truth; current recommendation **v2.6.0**).
+Pick any path. **You do not need the npm registry package** for the latest build (since v2.5.1 **GitHub** is the install source of truth; current recommendation **v2.7.2**).
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -181,19 +181,7 @@ More stable, no Node: install via Option 1, point at local Python:
 
 Unusual Python path: `export ARGO_PYTHON=/path/to/python3` (read by the npx entry only).
 
-### Option 3: Release tarball
-
-Open [Releases](https://github.com/taxueseek/argo/releases), download **`argo-2.6.0.tar.gz`**:
-
-```bash
-tar -xzf argo-2.6.0.tar.gz
-cd argo-2.6.0
-pip3 install pyyaml
-python3 scripts/search.py "Python asyncio" --json
-python3 scripts/mcp_server.py
-```
-
-### Option 4: git clone (dev / patch source)
+### Option 3: git clone (dev / patch source)
 
 ```bash
 git clone https://github.com/taxueseek/argo.git
@@ -201,36 +189,6 @@ cd argo
 pip3 install pyyaml
 bash scripts/install.sh --link ~/.claude/skills/argo   # optional
 python3 scripts/search.py --list-engines
-```
-
-### Option 5: Skill directory (symlink, single source of truth)
-
-```bash
-python3 scripts/link_source.py --to ~/.claude/skills/argo
-python3 scripts/link_source.py --to ~/.agents/skills/argo
-
-cp installs.local.yaml.example installs.local.yaml
-python3 scripts/link_source.py
-python3 scripts/link_source.py --check
-```
-
-### Option 6: Python library
-
-```python
-import sys
-sys.path.insert(0, "/path/to/argo/scripts")
-from search import super_search
-
-result = super_search("Python asyncio", n=5, mode="fast")
-for item in result["results"]:
-    print(item["title"], item.get("credibility_fast"), item["url"])
-```
-
-```bash
-# if bin/argo is on PATH
-argo search "Python asyncio"
-argo research "2026 mutual fund holdings structure"
-argo evidence "a claim to verify"
 ```
 
 ---

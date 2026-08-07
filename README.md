@@ -181,19 +181,7 @@ npx -y github:taxueseek/argo
 
 Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口会读）。
 
-### 方式三：Release 源码包
-
-打开 [Releases](https://github.com/taxueseek/argo/releases)，下载 **`argo-2.7.2.tar.gz`** 或 zip：
-
-```bash
-tar -xzf argo-2.7.2.tar.gz
-cd argo-2.7.2
-pip3 install pyyaml
-python3 scripts/search.py "Python asyncio" --json
-python3 scripts/mcp_server.py
-```
-
-### 方式四：git clone（开发 / 改源码）
+### 方式三：git clone（开发 / 改源码）
 
 ```bash
 git clone https://github.com/taxueseek/argo.git
@@ -201,37 +189,6 @@ cd argo
 pip3 install pyyaml
 bash scripts/install.sh --link ~/.claude/skills/argo   # 可选
 python3 scripts/search.py --list-engines
-```
-
-### 方式五：挂到 Skill 目录（符号链接，单一真源）
-
-```bash
-python3 scripts/link_source.py --to ~/.claude/skills/argo
-python3 scripts/link_source.py --to ~/.agents/skills/argo
-
-# 或复制示例后编辑本机声明（installs.local.yaml 已 gitignore）
-cp installs.local.yaml.example installs.local.yaml
-python3 scripts/link_source.py
-python3 scripts/link_source.py --check
-```
-
-### 方式六：作为 Python 库
-
-```python
-import sys
-sys.path.insert(0, "/path/to/argo/scripts")
-from search import super_search
-
-result = super_search("Python asyncio", n=5, mode="fast")
-for item in result["results"]:
-    print(item["title"], item.get("credibility_fast"), item["url"])
-```
-
-```bash
-# 若已把 bin/argo 放进 PATH
-argo search "Python asyncio"
-argo research "2026 公募基金持仓结构变化"
-argo evidence "某条待核实的说法"
 ```
 
 ---
