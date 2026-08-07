@@ -1,100 +1,79 @@
 # Argo v2.7.2 发布说明
 
 **版本**：2.7.2
-**定位**：以「重新定义问题 → MECE → 量化」为纲的检索能力扩展版。在 v2.7.1（安全加固）基础上，新增登录态专业搜索子技能（ego-search），并完成 P0/P1/P2 三轮路由与编排系统性优化：备用源无缝切换、多意图路由、语言引擎单一入口、MCP 服务层拆分与观测遥测。
+**定位**：在 2.7.1 基础上，新增「登录态专业搜索」子技能，并系统改进了搜索路由和服务层。
 
 ---
 
-## 一句话
+## 这次更新有什么
 
-v2.7.2 = 登录态专业搜索（ego-search 子技能）+ 检索路由四层优化（备用源/多意图/语言体系/遥测）+ 服务层结构重构。497 测试全绿，10 个 MCP 工具契约不变。
+### 1. 新增 ego-search：登录态专业搜索（默认关闭）
 
----
+**以前**：知乎、小红书、微博、公众号这类需要登录才能看的内容，普通搜索拿不到正文；靠浏览器渲染的页面（JS 页面、反爬页、SPA）也经常抓不回来。
 
-## 新增能力：ego-search 登录态专业搜索子技能
+**现在**：新增 ego-search 子技能，用真实浏览器去搜这些内容。它能继承你的登录状态，抓到登录墙后面的正文；对渲染页、反爬页也能正常抓取；还能在已登录的站点里直接调它的接口拿数据（比如知乎搜索接口），比翻页面更干净。
 
-**问题**：主系统 120+ API/HTML 引擎覆盖不到登录墙内容（知乎/小红书/微博/X/公众号）、JS 渲染与 SPA 页面、反爬与 Cloudflare 保护页、需要交互的动态搜索、同源接口数据。
+**注意：这个子技能默认是关闭的**，因为要动真实浏览器和你的登录态。需要你明确要求开启后，运行下面这条命令（在 argo 目录下）：
 
-**新增**：`sub-skills/ego-search/` 子技能（约 2900 行），基于真实 Chromium 浏览器运行时的登录态专业搜索：
+```
+python3 sub-skills/ego-search/scripts/ego_search.py enable
+```
 
-- **双运行时**：ego lite（`ego-browser`）与 WebBridge（用户 Chrome/Edge 扩展桥）互补，任一可用即可执行 `search` / `fetch` / `act` / `api` 四模式
-- **登录态继承**：真实浏览器会话继承登录态，抓登录墙正文；同源 API 数据直取（如知乎 `search_v3`）
-- **专业模式闸门**：默认关闭，需用户明确要求后 `enable`，状态持久化
-- **缓存硬隔离**：登录态结果 `cache_eligible=false`，`SearchCache` 在 set/set_engine/set_fetch 入口硬拒绝（`is_login_partition_payload` / `assert_cacheable`）
-- **分析层融合**：`merge` 命令把 public + login 两路结果按 canonical URL 去重、冲突并列，可一起喂 evidence 与 RRF
-- **安全**：URL 守卫（SSRF 防护，默认禁私网/本机）、登录墙质量信号（`auth_wall_suspected` / `login_likely_ok`）
+开启之后，常用操作：
 
-测试：`test_cache_login_isolation.py` / `test_ego_search_*.py` / `test_envelope_login_state.py`（8 个文件，全量新增）。
+```
+# 用浏览器去搜索（bing/baidu/google 三个搜索引擎可选）
+python3 sub-skills/ego-search/scripts/ego_search.py search "AI agent 浏览器自动化" --engine bing --n 8
 
----
+# 抓一个页面正文（登录墙、JS 渲染页都行）
+python3 sub-skills/ego-search/scripts/ego_search.py fetch "https://example.com/article" --focus 关键词
 
-## 检索优化 P0：备用源无缝切换 + 登录态意图标注
+# 调登录站点自己的接口拿数据
+python3 sub-skills/ego-search/scripts/ego_search.py api "https://www.zhihu.com/api/v4/search_v3?t=general&q=AI代理&limit=5" --origin "https://www.zhihu.com"
+```
 
-**问题**：16 个垂直域（微信公众号/财联社/同花顺/HN/StackOverflow/V2EX 等）主引擎故障时只能失败重试，整个查询静默降级。
+查看状态：`... ego_search.py status`；关闭：`... ego_search.py disable`。
 
-**修复**：各垂直域 fallback 统一为 anysearch 免费通用源；主源故障时无缝切换，不再整查询失败。`route.py` 增加登录态意图标注，登录墙站点查询可被识别并引导至浏览器态路径。测试：`test_route_fallback_breaker.py`（+241 行，覆盖备用源切换与意图标注）。
+**它依赖两个东西**（装好其中一个就能用，两个都装更好）：
 
----
+| 依赖 | 是什么 | 什么时候用 |
+|------|--------|-----------|
+| **ego lite** | 一个专门给 Agent 用的浏览器应用（仅 macOS），装好并完成一次初始化后会提供 `ego-browser` 命令 | 默认首选。它的优势是每个任务用独立空间，不抢你正在用的浏览器标签页 |
+| **WebBridge** | 一个浏览器扩展桥，可以复用你 Chrome/Edge 里已经登录的会话 | ego lite 没装，或想直接沿用你日常浏览器的登录态时用 |
 
-## 检索优化 P1：多意图路由 + 统一健康度视图 + 免费源单一真源
+本机两台都装好了：ego lite 的 `ego-browser`（版本 0.4.5.9）和 WebBridge 都处于在线状态，当前专业搜索模式是关闭的。
 
-- **多意图路由**：definition / fact / news / compare / social 意图并存，各意图独立并行度与引擎预算（`_INTENT_PARALLELISM`）
-- **统一健康度视图**：`engine_status.py` 提供全引擎统一健康度视角，health_probe 语义修正
-- **免费源单一真源**：`engine_policy.py` 免费源作为单一真源治理，`recovery.py` 跨层恢复增强
+一个使用提醒：登录态搜到的结果**不会**写入公共搜索缓存（防止污染大家共享的缓存），需要时用专门的合并命令把常规结果和登录态结果放在一起分析。
 
-测试：`test_p1_absorb.py`（+97 行）。
+### 2. 搜索兜底更稳了
 
----
+**以前**：微信公众号、财联社、同花顺、知乎热榜、Stack Overflow、V2EX 等 16 个垂直源，主引擎故障时整次搜索跟着失败。
 
-## 检索优化 P2：语言体系 + MCP 拆分 + 观测遥测
+**现在**：主引擎出问题时，会自动切到通用的免费搜索源顶上，单个源故障不再拖垮整个查询。
 
-### P2-1 语言引擎单一入口
+### 3. 路由更聪明
 
-**问题**：语言引擎追加逻辑散落三处（主路径 / TF-IDF 回退 / 兜底回退），行为不一致；日韩查询会混入中文域噪声引擎（bocha/byted/wechat_sogou 等）。
+- **多意图识别**：一次查询可以同时判断是查定义、查事实、查新闻、做对比，还是看社交舆情，不同意图用不同的引擎数量和并发方式。
+- **统一健康视图**：所有引擎的健康状态汇总成一张统一视图；免费源作为单一真源统一管理；故障后的恢复手段分层次、更完整。
 
-**修复**：`route.py` 新增 `_select_language_engines`（单一入口）→ `_merge_language_engines`（幂等合并）→ `_add_language_engines`（兼容包装）三层结构，三处合并点统一调用。日/韩查询自动剔除中文噪声引擎。测试：`TestLanguageEngineUnified`（8 例）。
+### 4. 多语言搜索更准
 
-### P2-2 URL 语言参数断言
+- **日文/韩文查询不再被中文引擎干扰**：以前搜日文内容会混进博查、字节、搜狗等中文引擎，噪声很大；现在会自动剔除。
+- **显式指定语言生效**：说「用日文搜」「in English」这类话，会真的按那个语言去搜，而不是按默认语言处理。
+- **语言参数有测试锁定**：Bing 的 setlang、Google 的 hl 等 URL 语言参数全部有自动化测试守着，不会悄悄失效。
 
-**问题**：多语言索引依赖引擎 URL 语言参数（Bing setlang / Google hl / Yandex lang / Wikipedia uselang），但无测试锁定，`_lang_param` 注入点行为漂移不可见。
+### 5. 服务层拆得更清爽
 
-**修复**：重写 `TestEngineLangParamWiring`，用真实 URL 捕获断言 setlang=ja-JP/ko-KR/en-US/zh-Hans/cyrillic、hl=zh-CN/iw、lang、uselang 全参数矩阵。测试：+5 例。
+- MCP 服务文件从 970 行拆成「工具定义 / 执行逻辑 / 网络传输」三个模块，10 个工具一个不少、行为不变，只是结构更好维护。
+- 启动预热覆盖到了本地文件搜索模块，首次调用更快。
 
-### P2-3 显式语言覆盖
+### 6. 加了观测数据
 
-**问题**：「用日文搜」等显式语言意图此前被忽略，查询落入默认语言路由。
-
-**修复**：`_LANG_OVERRIDE_MAP` + `_detect_lang_override`，支持 en/ja/ko/zh/cyrillic 五语显式覆盖（中文简体、日文平假名、英文、韩文、俄文等写法）；override 分支进入语言引擎选择单一入口，与主语言同等参与噪声剔除与 must_keep。测试：`TestLangOverride`（9 例）。
-
-### P2-4 MCP 服务层拆分
-
-**问题**：`mcp_server.py` 970 行逼近 1k 红线，传输 / 工具 schema / 执行逻辑混在一个文件。
-
-**修复**：拆分为四模块——`mcp_tools.py`（10 工具 schema 唯一真源，161 行）、`mcp_handlers.py`（执行逻辑，643 行）、`mcp_transport.py`（JSON-RPC 传输，138 行）、`mcp_server.py`（薄入口，115 行）。10 工具 schema 快照一致；后台预热扩展：新增 local-seek 模块导入预热（为本地搜索进程内化铺路）。
-
-### P2-6 观测遥测
-
-**新增**：`telemetry.py`（append-only JSONL，失败静默，`ARGO_TELEMETRY` 可关）。merge 持久化 `dual_sourced_count` / `conflicts`；recovery 记录跨语言回退触发与命中率。测试：`test_telemetry.py`（+152 行）。
-
-**遗留项**（非阻塞，中风险批次）：P2-5「合一本地搜索路」（seek.py 暴露 import 接口 + 进程内调用 + 共享缓存）未实施，`argo_local_search` 仍走 subprocess；待 P2-6 遥测数据支撑后单独实施。
+- 新增轻量遥测：记录「常规+登录态两路结果融合时的冲突次数」和「跨语言回退情况」，为后续优化提供数据依据。可以整体开关，出了异常也只记日志、不影响搜索本身。
 
 ---
 
 ## 验证
 
-```bash
-python3 -m pytest tests/ -q
-# 497 passed, 12 skipped, 19 subtests passed
-```
-
-- MCP 契约：10 工具 schema 与 2.7.1 逐名一致（`argo_search` / `argo_local_search` / `argo_research` / `argo_evidence` / `argo_clarify` / `argo_crawl` / `argo_fetch` / `argo_screenshot` / `argo_pdf` / `argo_social_search`）
-- 语言路由：`pytest tests/test_multilingual.py` 60 passed（含 P2-1/P2-2/P2-3 全量）
-- 遥测：`pytest tests/test_telemetry.py` 全绿
-- 相对 2.7.1：35 文件变更，+5115/−1020，纯超集，无功能回退
-
-### ego-search 运行时状态（本机）
-
-```bash
-python3 sub-skills/ego-search/scripts/ego_search.py status
-# pro_mode: false（默认关闭）；ego-browser 0.4.5.9 与 WebBridge 均在线
-```
+- 全量测试：**497 passed**，无失败。
+- 10 个 MCP 工具与 2.7.1 完全一致，没有回退。
