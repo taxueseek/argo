@@ -95,6 +95,33 @@ def _items_from_payload(payload: dict[str, Any], *, partition: str) -> list[dict
     return out
 
 
+def _emit_merge_telemetry(out: dict[str, Any]) -> None:
+    """P2-6：融合结果遥测（计数 + conflicts 概览）。失败静默，不拖累融合主路径。
+
+    telemetry 位于 argo 根 scripts/，与本文件不在同一目录，故按相对路径注入。
+    """
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _scripts = _Path(__file__).resolve().parents[3] / "scripts"
+        if str(_scripts) not in _sys.path:
+            _sys.path.insert(0, str(_scripts))
+        from telemetry import emit
+        sources = out.get("sources") or {}
+        emit("merge", {
+            "query": (out.get("query") or "")[:60],
+            "public_count": out.get("public_count", 0),
+            "login_count": out.get("login_count", 0),
+            "merged_count": out.get("merged_count", 0),
+            "dual_sourced_count": out.get("dual_sourced_count", 0),
+            "conflicts": len(out.get("conflicts") or []),
+            "public_engine": (sources.get("public") or {}).get("engine"),
+            "login_engine": (sources.get("login") or {}).get("engine"),
+        })
+    except Exception:
+        pass
+
+
 def merge_payloads(
     public: dict[str, Any] | None,
     login: dict[str, Any] | None,
@@ -153,7 +180,7 @@ def merge_payloads(
                 "login_state_used": g.get("login_state_used"),
             })
 
-    return {
+    out = {
         "schema": "ego_search_merge_v1",
         "query": q,
         "public_count": len(public_items),
@@ -181,6 +208,8 @@ def merge_payloads(
             },
         },
     }
+    _emit_merge_telemetry(out)
+    return out
 
 
 def load_json_file(path: str) -> dict[str, Any]:

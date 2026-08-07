@@ -34,6 +34,10 @@ except ImportError:
 from route import route_query
 from engines import search as engine_search, available_engines
 from config import get_execution_config, get_cost_factor, get_engines
+try:
+    from telemetry import emit as _emit_telemetry
+except ImportError:
+    _emit_telemetry = None  # type: ignore
 
 
 # ── 查询改写辅助 ────────────────────────────────────────────────────────────────
@@ -1001,6 +1005,21 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 query, tried, _recovery_executor,
                 engines_fallback=fallback_engines, enabled=enabled_set, mode=mode)
             recovery_info = rec_result.to_dict()
+            # P2-6：恢复遥测——query 截断脱敏，只记概览不记明细
+            if _emit_telemetry is not None:
+                try:
+                    _emit_telemetry("recovery", {
+                        "query": (query[:60] if query else query),
+                        "triggered": recovery_info.get("triggered"),
+                        "recovered": recovery_info.get("recovered"),
+                        "level_used": recovery_info.get("level_used"),
+                        "strategy_used": recovery_info.get("strategy_used"),
+                        "steps_tried": len(recovery_info.get("steps_tried") or []),
+                        "final_query": (recovery_info.get("final_query") or "")[:60],
+                        "note": recovery_info.get("note", ""),
+                    })
+                except Exception:
+                    pass
             if rec_results:
                 merged = deduplicate_by_url(rec_results)[:max_results]
                 for r in merged:

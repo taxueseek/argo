@@ -25,7 +25,11 @@ from lang_detect import (  # noqa: E402
     language_features,
 )
 from route import (  # noqa: E402
+    _add_language_engines,
+    _detect_lang_override,
     _lang_must_keep,
+    _merge_language_engines,
+    _select_language_engines,
     extract_features,
     route_query,
 )
@@ -188,6 +192,154 @@ class TestRoutingLanguage(unittest.TestCase):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# P2-1 语言引擎选择 / 合并单一入口
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestLanguageEngineUnified(unittest.TestCase):
+    """P2-1：选择（_select_language_engines）与合并（_merge_language_engines）分离后，
+    route_query 主路径与两条回退路径共用同一预计算 lang_engines。本类验证：
+      - 选择按语言返回正确的本地引擎候选；
+      - 合并幂等（同一组合并两次结果不变）；
+      - 兼容入口 _add_language_engines == 选择 + 合并组合；
+      - 日/韩噪声剔除不依赖 lang_engines 是否为空；
+      - 非日/韩「combo 已有 local_」时不重复追加。
+    """
+
+    def setUp(self):
+        self.sub_engines = [
+            "local_bing", "local_duckduckgo", "local_google",
+            "local_yandex", "local_mojeek",
+        ]
+        p = patch("route._enabled_local_engines", return_value=self.sub_engines)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_select_zh(self):
+        self.assertEqual(
+            _select_language_engines({"primary_lang": "zh", "chinese_ratio": 0.9}),
+            ["local_bing"],
+        )
+
+    def test_select_ja(self):
+        self.assertEqual(
+            _select_language_engines({"primary_lang": "ja"}),
+            ["local_yandex", "local_bing"],
+        )
+
+    def test_select_ko(self):
+        self.assertEqual(
+            _select_language_engines({"primary_lang": "ko"}),
+            ["local_google", "local_bing"],
+        )
+
+    def test_select_no_features_returns_empty(self):
+        self.assertEqual(_select_language_engines(None), [])
+        self.assertEqual(_select_language_engines({}), [])
+
+    def test_merge_idempotent(self):
+        combo = ["anysearch", "duckduckgo"]
+        feats = {"primary_lang": "zh", "chinese_ratio": 0.9}
+        lang = _select_language_engines(feats)
+        once = _merge_language_engines(combo, feats, lang)
+        twice = _merge_language_engines(once, feats, lang)
+        self.assertEqual(once, twice)
+        self.assertEqual(once, ["anysearch", "duckduckgo", "local_bing"])
+
+    def test_compat_wrapper_equals_split(self):
+        combo = ["anysearch", "duckduckgo"]
+        feats = {"primary_lang": "zh", "chinese_ratio": 0.9}
+        split = _merge_language_engines(combo, feats, _select_language_engines(feats))
+        self.assertEqual(_add_language_engines(combo, feats), split)
+
+    def test_ja_removes_cn_noise_even_when_lang_empty(self):
+        combo = ["bocha", "byted", "anysearch"]
+        feats = {"primary_lang": "ja"}
+        merged = _merge_language_engines(combo, feats, [])
+        self.assertNotIn("bocha", merged)
+        self.assertNotIn("byted", merged)
+        self.assertIn("anysearch", merged)
+
+    def test_non_lang_local_skip(self):
+        combo = ["local_bing", "anysearch"]
+        feats = {"primary_lang": "zh", "chinese_ratio": 0.9}
+        merged = _merge_language_engines(combo, feats, ["local_bing"])
+        self.assertEqual(merged, combo)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# P2-3 显式语言覆盖
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestLangOverride(unittest.TestCase):
+    """P2-3：显式语言意图（「用英文搜」「in English」等）覆盖弱信号偏好。
+
+    - extract_features 识别 lang_override；
+    - _select_language_engines 中 override 优先于 primary_lang/chinese_ratio；
+    - 合并与 must_keep 对 override=ja/ko 与主语言 ja/ko 同等对待（噪声剔除）。
+    """
+
+    def setUp(self):
+        self.sub_engines = [
+            "local_bing", "local_duckduckgo", "local_google",
+            "local_yandex", "local_mojeek",
+        ]
+        p = patch("route._enabled_local_engines", return_value=self.sub_engines)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_detect_override_en(self):
+        self.assertEqual(_detect_lang_override("用英文搜 苹果手机"), "en")
+        self.assertEqual(_detect_lang_override("in English: react tutorial"), "en")
+
+    def test_detect_override_ja_ko_zh(self):
+        self.assertEqual(_detect_lang_override("用日文搜 动漫"), "ja")
+        self.assertEqual(_detect_lang_override("한국어로 검색"), "ko")
+        self.assertEqual(_detect_lang_override("in chinese news"), "zh")
+
+    def test_no_override(self):
+        self.assertIsNone(_detect_lang_override("苹果手机"))
+        self.assertIsNone(_detect_lang_override(""))
+
+    def test_features_carries_override(self):
+        f = extract_features("用英文搜 苹果手机")
+        self.assertEqual(f.get("lang_override"), "en")
+        self.assertEqual(f.get("primary_lang"), "zh")  # 主语言仍是 zh
+
+    def test_select_override_ja_wins_over_zh_ratio(self):
+        f = extract_features("用日文搜 苹果手机")
+        # chinese_ratio 高，但 override=ja → 选日文引擎
+        sel = _select_language_engines(f)
+        self.assertEqual(sel[0], "local_yandex")
+
+    def test_select_override_en(self):
+        f = {"lang_override": "en", "primary_lang": "zh", "chinese_ratio": 0.5}
+        self.assertEqual(
+            _select_language_engines(f), ["local_bing", "local_duckduckgo"])
+
+    def test_merge_override_ja_removes_cn_noise(self):
+        f = {"primary_lang": "zh", "lang_override": "ja", "chinese_ratio": 0.9}
+        merged = _merge_language_engines(
+            ["bocha", "anysearch"], f, ["local_bing"])
+        self.assertNotIn("bocha", merged)
+        self.assertIn("local_bing", merged)
+
+    def test_must_keep_override_ja(self):
+        f = {"primary_lang": "zh", "lang_override": "ja"}
+        self.assertEqual(
+            _lang_must_keep(f, {"local_bing", "local_duckduckgo"}), ["local_bing"])
+
+    def test_route_query_override_ja_no_cn_noise(self):
+        d = route_query("用日文搜 苹果手机", mode="auto")
+        combo = d.get("engines_combo", [])
+        for cn in ("bocha", "byted", "wechat_sogou", "zhihu"):
+            self.assertNotIn(cn, combo, f"日文覆盖查询误含中文引擎 {cn}")
+        self.assertTrue(
+            any(e in combo for e in ("local_bing", "local_yandex", "local_duckduckgo")),
+            f"日文覆盖查询缺语言引擎: {combo}",
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 跨语言回退
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -329,19 +481,18 @@ class TestLangPref(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestEngineLangParamWiring(unittest.TestCase):
-    def test_html_builder_overrides_setlang(self):
-        """local_bing 构建 URL 时 setlang 随查询语言变化。"""
-        from engines_base import _build_html_engine
+    """P2-2：URL 级语言参数注入断言。
 
-        spec = {
-            "name": "local_bing",
-            "url": "https://www.bing.com/search",
-            "query_param": "q",
-            "extra_params": {"setlang": "zh-Hans"},
-            "timeout": 5,
-            "selectors": {"item": "li", "title": "a", "url": "a"},
-        }
-        # 不真正发 HTTP：拦截 urlopen，只检查 Request 的 full url
+    覆盖 engines_base 两处 `_lang_param` 注入点：
+      - _build_html_engine（~393 行，HTML 抓取引擎）
+      - _build_http_engine（~240 行，JSON HTTP 引擎）
+    与四种参数：setlang（Bing）/ hl（Google）/ lang（Yandex）/ uselang（Wikipedia）。
+    """
+
+    def _capture_urls(self, builder, spec, queries):
+        """构建引擎并拦截 urlopen，返回每个查询实际发出的 URL。"""
+        from engines_base import _build_html_engine, _build_http_engine
+
         captured: list[str] = []
 
         class _FakeResp:
@@ -358,16 +509,96 @@ class TestEngineLangParamWiring(unittest.TestCase):
             captured.append(req.full_url if hasattr(req, "full_url") else str(req))
             return _FakeResp()
 
-        eng = _build_html_engine(spec)
+        if builder == "html":
+            eng = _build_html_engine(spec)
+        else:
+            eng = _build_http_engine(spec)
         with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
-            eng("アニメ おすすめ", 3)
-            eng("hello world", 3)
-            eng("苹果股价", 3)
+            for q in queries:
+                eng(q, 3)
+        self.assertEqual(len(captured), len(queries))
+        return captured
 
-        self.assertEqual(len(captured), 3)
+    def test_html_builder_overrides_setlang(self):
+        """local_bing 构建 URL 时 setlang 随查询语言变化。"""
+        spec = {
+            "name": "local_bing",
+            "url": "https://www.bing.com/search",
+            "query_param": "q",
+            "extra_params": {"setlang": "zh-Hans"},
+            "timeout": 5,
+            "selectors": {"item": "li", "title": "a", "url": "a"},
+        }
+        queries = ["アニメ おすすめ", "hello world", "苹果股价"]
+        captured = self._capture_urls("html", spec, queries)
         self.assertIn("setlang=ja-JP", captured[0])
         self.assertIn("setlang=en-US", captured[1])
         self.assertIn("setlang=zh-Hans", captured[2])
+
+    def test_html_builder_hl_google(self):
+        """local_google 的 hl 参数随查询语言覆盖。"""
+        spec = {
+            "name": "local_google",
+            "url": "https://www.google.com/search",
+            "query_param": "q",
+            "extra_params": {"hl": "en"},
+            "timeout": 5,
+            "selectors": {"item": "li", "title": "a", "url": "a"},
+        }
+        queries = ["한국 영화 추천", "アニメ おすすめ", "Как дела"]
+        captured = self._capture_urls("html", spec, queries)
+        self.assertIn("hl=ko", captured[0])
+        self.assertIn("hl=ja", captured[1])
+        self.assertIn("hl=ru", captured[2])
+
+    def test_html_builder_lang_yandex(self):
+        """local_yandex 的 lang 参数随查询语言覆盖。"""
+        spec = {
+            "name": "local_yandex",
+            "url": "https://yandex.com/search/",
+            "query_param": "text",
+            "extra_params": {"lang": "en"},
+            "timeout": 5,
+            "selectors": {"item": "li", "title": "a", "url": "a"},
+        }
+        queries = ["Привет мир", "한국 영화"]
+        captured = self._capture_urls("html", spec, queries)
+        self.assertIn("lang=ru", captured[0])
+        self.assertIn("lang=ko", captured[1])
+
+    def test_html_builder_uselang_wikipedia(self):
+        """wikipedia 的 uselang 参数随查询语言覆盖。"""
+        spec = {
+            "name": "wikipedia",
+            "url": "https://en.wikipedia.org/w/index.php",
+            "query_param": "search",
+            "extra_params": {"uselang": "en"},
+            "timeout": 5,
+            "selectors": {"item": "li", "title": "a", "url": "a"},
+        }
+        queries = ["苹果", "Как дела", "مرحبا"]
+        captured = self._capture_urls("html", spec, queries)
+        self.assertIn("uselang=zh", captured[0])
+        self.assertIn("uselang=ru", captured[1])
+        self.assertIn("uselang=ar", captured[2])
+
+    def test_http_builder_setlang(self):
+        """_build_http_engine（JSON API 引擎）同样注入语言参数。"""
+        spec = {
+            "name": "test_api",
+            "url": "https://api.example.com/search",
+            "query_param": "q",
+            "format": "json",
+            "method": "GET",
+            "extra_params": {"setlang": "en-US"},
+            "output_map": {"items": "results", "item_title": "title"},
+            "timeout": 5,
+        }
+        queries = ["アニメ おすすめ", "苹果股价", "hello world"]
+        captured = self._capture_urls("http", spec, queries)
+        self.assertIn("setlang=ja-JP", captured[0])
+        self.assertIn("setlang=zh-Hans", captured[1])
+        self.assertIn("setlang=en-US", captured[2])
 
 
 # ═══════════════════════════════════════════════════════════════════════════

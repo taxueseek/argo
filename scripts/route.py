@@ -14,6 +14,7 @@ route.py — Unified Search v2 三层路由决策
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Any
@@ -69,6 +70,28 @@ _RE_QUESTION = re.compile(
 _RE_DEPTH = re.compile(
     r"\b(deep|comprehensive|review|survey|research|paper|thesis)\b|"
     r"(对比分析|深度|全面|详细|深入|系统|完整|综述|研究|探究|详解|论文)", re.I)
+
+# P2-3：显式语言意图 → 覆盖语言（「用英文搜」「in English」「日本語で」等）。
+# 命中后 lang_override 直接决定语言引擎选择与 must_keep，不被习惯/系统 locale 淹没。
+_LANG_OVERRIDE_MAP: dict[str, tuple[str, ...]] = {
+    "en": ("用英文", "用英语", "in english", "english version", "english only", "英語で"),
+    "ja": ("用日文", "用日语", "in japanese", "日本語で", "日本语"),
+    "ko": ("用韩文", "用韩语", "in korean", "한국어로"),
+    "zh": ("用中文", "用汉语", "in chinese", "中文版"),
+    "cyrillic": ("用俄语", "用俄文", "in russian", "по-русски"),
+}
+
+
+def _detect_lang_override(query: str) -> str | None:
+    """检测显式语言覆盖意图，返回目标语言（无则 None）。"""
+    if not query:
+        return None
+    ql = query.lower()
+    for lang, keys in _LANG_OVERRIDE_MAP.items():
+        for key in keys:
+            if key in ql:
+                return lang
+    return None
 
 def _build_engine_names() -> dict[str, str]:
     """从 config.yaml 引擎声明的 label 构建显示名映射（唯一真源）。
@@ -138,6 +161,8 @@ def extract_features(query: str) -> dict[str, Any]:
         "primary_lang": primary_lang,
         "script": script,
         "is_latin": is_latin,
+        # P2-3：显式语言覆盖（「用英文搜」→ en）；无覆盖意图时为 None
+        "lang_override": _detect_lang_override(query),
         "has_compare": bool(_RE_COMPARE.search(query)),
         "has_technical": bool(_RE_TECH.search(query)),
         "has_question": bool(_RE_QUESTION.search(query)),
@@ -331,60 +356,57 @@ def _general_fallback(enabled: set[str]) -> list[str]:
     return ["local_search"] + [e for e in GENERAL_FREE_FALLBACK if e in enabled]
 
 
-def _add_language_engines(engine_list: list[str], features: dict | None = None) -> list[str]:
-    """为已路由的查询添加语言相关的本地引擎（补充源）。
-
-    当 TF-IDF 已选中主引擎后，根据查询语言特征追加本地子引擎，
-    实现多源融合（网页引擎 + 本地零成本引擎）。
+def _select_language_engines(features: dict | None = None) -> list[str]:
+    """按查询语言选择应追加的语言本地引擎（P2-1 单一入口，与组合无关）。
 
     多语种（v2.7）：按 primary_lang 追加对应语言的本地引擎——
       中文 → local_bing；日文 → local_yandex（日文索引更好）或 local_bing；
       韩文 → local_google（韩国站点覆盖好）或 local_bing。
+    只做选择（已按 enabled 过滤、最多 2 个），不碰既有 combo；
+    route_query 内一次计算、三处合并共用，杜绝各路径逻辑漂移。
     """
-    if _get_registry is None:
-        return engine_list
-    if not features:
-        return engine_list
+    if _get_registry is None or not features:
+        return []
 
     primary_lang = features.get("primary_lang", "")
     chinese_ratio = features.get("chinese_ratio", 0)
     sub_engines = _enabled_local_engines()
-
-    # 日/韩主查询：中文域引擎（byted/bocha 等）是噪声源，追加日韩本地引擎
-    # 时不因「combo 已有 local_ 引擎」而跳过——中文引擎对日韩查询无用。
-    # 注：local_yandex / local_google 默认 enabled:false，实际常落到 local_bing，
-    # 由 engines_base 按 query 动态改 setlang/hl，不依赖禁用引擎空跑。
-    if primary_lang in ("ja", "ko"):
-        if primary_lang == "ja":
-            preferred = ["local_yandex", "local_bing", "local_duckduckgo"]
-        else:
-            preferred = ["local_google", "local_bing", "local_duckduckgo"]
-        selected = [e for e in preferred if e in sub_engines]
-        cn_noise = {"bocha", "byted", "wechat_sogou", "zhihu", "zhihu_global", "baidu_baike"}
-        result = [e for e in engine_list if e not in cn_noise]
-        for eng in selected[:2]:
-            if eng not in result:
-                result.append(eng)
-        return result
-
-    # 已包含 local_ 引擎则跳过
-    if any(e.startswith("local_") for e in engine_list):
-        return engine_list
-
     if not sub_engines:
-        return engine_list
+        return []
 
-    selected: list[str] = []
+    # P2-3：显式语言覆盖优先——「用英文搜 苹果」即使含中文也按 en 选引擎
+    lang_override = features.get("lang_override")
+    if lang_override:
+        if lang_override == "ja":
+            return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
+                    if e in sub_engines][:2]
+        if lang_override == "ko":
+            return [e for e in ["local_google", "local_bing", "local_duckduckgo"]
+                    if e in sub_engines][:2]
+        if lang_override == "zh":
+            return [e for e in ["local_bing"] if e in sub_engines]
+        # en / cyrillic / 其他：中英基线本地引擎（动态 setlang 兜底多语言索引）
+        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+
+    # 日/韩：优先对应语言本地引擎。注：local_yandex / local_google 默认
+    # enabled:false，实际常落到 local_bing，由 engines_base 动态 setlang。
+    if primary_lang == "ja":
+        return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
+                if e in sub_engines][:2]
+    if primary_lang == "ko":
+        return [e for e in ["local_google", "local_bing", "local_duckduckgo"]
+                if e in sub_engines][:2]
+
     if chinese_ratio > 0.1:
         # 只要含中文字符就追加中文引擎（阈值 0.1 覆盖中英混合查询）
         # 百度/搜狗质量低，仅作印证；自动追加只用 local_bing
-        selected = [e for e in ["local_bing"] if e in sub_engines]
-    elif primary_lang in (
+        return [e for e in ["local_bing"] if e in sub_engines]
+    if primary_lang in (
         "cyrillic", "thai", "arabic", "hebrew", "greek", "devanagari",
     ):
         # 其他非拉丁语：local_bing 靠动态 setlang 吃多语言索引
-        selected = [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
-    elif primary_lang in ("mixed", "other", ""):
+        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+    if primary_lang in ("mixed", "other", ""):
         # 弱信号：按 lang_pref（习惯/系统/中英基线）选本地引擎
         prefer: list[str] = []
         try:
@@ -394,21 +416,53 @@ def _add_language_engines(engine_list: list[str], features: dict | None = None) 
             prefer = ["zh", "en"]
         top = prefer[0] if prefer else "en"
         if top == "ja":
-            selected = [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
-        elif top == "ko":
-            selected = [e for e in ["local_google", "local_bing"] if e in sub_engines]
-        elif top == "zh":
-            selected = [e for e in ["local_bing"] if e in sub_engines]
-        else:
-            selected = [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
-    elif features.get("has_depth_word"):
-        selected = [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
+            return [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
+        if top == "ko":
+            return [e for e in ["local_google", "local_bing"] if e in sub_engines]
+        if top == "zh":
+            return [e for e in ["local_bing"] if e in sub_engines]
+        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+    if features.get("has_depth_word"):
+        return [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
+    return []
 
+
+def _merge_language_engines(engine_list: list[str], features: dict | None,
+                            lang_engines: list[str]) -> list[str]:
+    """把预选语言引擎合并进当前 combo（P2-1，三处共用、幂等）。
+
+    日/韩：中文域引擎（byted/bocha 等）是噪声源需剔除，且不因「combo 已有
+      local_ 引擎」而跳过——中文引擎对日韩查询无用；
+    其他语种：combo 已含 local_ 引擎则跳过（避免与 _expand_local_search 重复追加）。
+    """
+    if not features:
+        return engine_list
     result = list(engine_list)
-    for eng in selected[:2]:  # 最多追加 2 个
+    # P2-3：显式语言覆盖 ja/ko 与主语言 ja/ko 同等对待（噪声剔除同一套规则）
+    if (features.get("lang_override") or features.get("primary_lang")) in ("ja", "ko"):
+        cn_noise = {"bocha", "byted", "wechat_sogou", "zhihu", "zhihu_global", "baidu_baike"}
+        result = [e for e in result if e not in cn_noise]
+        for eng in lang_engines[:2]:
+            if eng not in result:
+                result.append(eng)
+        return result
+    # 已包含 local_ 引擎则跳过
+    if any(e.startswith("local_") for e in result):
+        return result
+    for eng in lang_engines[:2]:
         if eng not in result:
             result.append(eng)
     return result
+
+
+def _add_language_engines(engine_list: list[str], features: dict | None = None) -> list[str]:
+    """为已路由的查询添加语言相关的本地引擎（补充源，兼容入口）。
+
+    route_query 内已改为「先 _select_language_engines 一次、再
+    _merge_language_engines 三处共用」；本函数保留独立调用能力（幂等），
+    供外部或未来调用方使用。
+    """
+    return _merge_language_engines(engine_list, features, _select_language_engines(features))
 
 
 def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
@@ -424,7 +478,7 @@ def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
 
 
 # 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
-# 中文 / 其它语种：_add_language_engines 软追加即可，must_keep 会与垂直域抢预算
+# 中文 / 其它语种：_merge_language_engines 软追加即可，must_keep 会与垂直域抢预算
 # （实测：zh must_keep local_bing 会把 finance_macro 多源压成单源、挤掉 openstreetmap）。
 _LANG_PREFERRED_ENGINES: dict[str, list[str]] = {
     "ja": ["local_yandex", "local_bing"],
@@ -440,7 +494,8 @@ def _lang_must_keep(features: dict | None, enabled: set[str]) -> list[str]:
     """
     if not features or not enabled:
         return []
-    lang = features.get("primary_lang", "")
+    # P2-3：显式语言覆盖（用日文搜/用韩语搜）与主语言同等进入 must_keep
+    lang = features.get("lang_override", "") or features.get("primary_lang", "")
     preferred = _LANG_PREFERRED_ENGINES.get(lang, [])
     for eng in preferred:
         if eng in enabled:
@@ -811,6 +866,41 @@ def _apply_engine_policy(
 
 # ── 路由主函数 ─────────────────────────────────────────────────────────────────
 
+# P2-6：语言路由采样——按采样率记录决策结果（features 齐全的决策点）。
+# 默认 1/20，ARGO_ROUTE_SAMPLE_RATE 可调；采样本身失败静默。
+_ROUTE_SAMPLE_RATE = max(1, int(os.environ.get("ARGO_ROUTE_SAMPLE_RATE", "20")))
+_route_sample_counter = 0
+
+
+def _sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
+    """P2-6：按采样率把路由决策落一条遥测记录。"""
+    global _route_sample_counter
+    if "features" not in kw:
+        return  # engine_override 直通等无语义分支不采样
+    _route_sample_counter += 1
+    if _route_sample_counter % _ROUTE_SAMPLE_RATE != 0:
+        return
+    f = kw.get("features") or {}
+    try:
+        from telemetry import emit
+        emit("route", {
+            "domain": kw.get("domain"),
+            "engine": kw.get("engine"),
+            "engines": kw.get("engines"),
+            "confidence": kw.get("confidence"),
+            "mode": kw.get("mode"),
+            "lang_override": f.get("lang_override"),
+            "primary_lang": f.get("primary_lang"),
+            "script": f.get("script"),
+            "has_compare": f.get("has_compare"),
+            "has_technical": f.get("has_technical"),
+            "chinese_ratio": f.get("chinese_ratio"),
+            "intents": f.get("intents"),
+        })
+    except Exception:
+        pass
+
+
 def route_query(query: str, engine_override: str = "auto",
                 mode: str = "auto",
                 depth: str = "fast",
@@ -834,6 +924,7 @@ def route_query(query: str, engine_override: str = "auto",
     def _done(**kw: Any) -> dict[str, Any]:
         base = {"elapsed_ms": round((time.perf_counter() - start) * 1000, 3)}
         base.update(kw)
+        _sample_route(base, kw)
         return base
 
     if engine_override != "auto":
@@ -847,6 +938,9 @@ def route_query(query: str, engine_override: str = "auto",
         )
 
     features = extract_features(query)
+    # P2-1：语言引擎选择单一入口——route_query 内只计算一次，
+    # 主路径与两条回退路径共用同一结果，杜绝各路径逻辑漂移
+    lang_engines = _select_language_engines(features)
     cfg = load_config()
     # 自动路由：仅启用且 env 就绪、未 blocked 的引擎
     try:
@@ -927,7 +1021,7 @@ def route_query(query: str, engine_override: str = "auto",
         # modal_card 保持纯结构化路径：只走 bocha_ai → bocha，不混 web/geo 补充源
         _pure_combo = domain.get("name") == "modal_card"
         if not _pure_combo:
-            engines_combo = _add_language_engines(engines_combo, features)
+            engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
         if not engines_combo:
             if _pure_combo:
                 # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
@@ -1095,7 +1189,7 @@ def route_query(query: str, engine_override: str = "auto",
         # 🔑 展开 local_search → 子引擎
         engines_combo = _expand_local_search(engines_combo, features)
         # 🔑 为中文/学术查询追加本地引擎
-        engines_combo = _add_language_engines(engines_combo, features)
+        engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
         # P0-001：geo 查询追加 OpenStreetMap
         engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
         if mode == "fast":
@@ -1149,7 +1243,7 @@ def route_query(query: str, engine_override: str = "auto",
         fallback_combo = (lang_combo[:2] + non_local) if lang_combo else fallback_combo
     else:
         fallback_combo = _expand_local_search(fallback_combo, features)
-    fallback_combo = _add_language_engines(fallback_combo, features)
+    fallback_combo = _merge_language_engines(fallback_combo, features, lang_engines)
     # P0-001：geo 查询追加 OpenStreetMap
     fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
     must_keep_fb = []
