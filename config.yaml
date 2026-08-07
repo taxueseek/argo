@@ -13,7 +13,8 @@ domains:
 - desc: 微信公众号文章搜索
   engines_combo:
   - wechat_sogou
-  fallback: wechat_sogou
+  - anysearch
+  fallback: anysearch
   name: wechat_search
   parallel: false
   patterns:
@@ -23,7 +24,8 @@ domains:
 - desc: Hacker News 搜索
   engines_combo:
   - hackernews
-  fallback: hackernews
+  - anysearch
+  fallback: anysearch
   name: hackernews_search
   parallel: false
   patterns:
@@ -33,7 +35,8 @@ domains:
 - desc: Stack Overflow 搜索
   engines_combo:
   - stackoverflow
-  fallback: stackoverflow
+  - anysearch
+  fallback: anysearch
   name: stackoverflow_search
   parallel: false
   patterns:
@@ -54,7 +57,8 @@ domains:
 - desc: V2EX 社区搜索
   engines_combo:
   - v2ex
-  fallback: v2ex
+  - anysearch
+  fallback: anysearch
   name: v2ex_search
   parallel: false
   patterns:
@@ -64,7 +68,8 @@ domains:
 - desc: 同花顺热点/强势股
   engines_combo:
   - ths_hot
-  fallback: ths_hot
+  - anysearch
+  fallback: anysearch
   name: ths_hot_search
   parallel: false
   patterns:
@@ -74,7 +79,8 @@ domains:
 - desc: 财联社电报
   engines_combo:
   - cls_telegraph
-  fallback: cls_telegraph
+  - jin10
+  fallback: jin10
   name: cls_telegraph_search
   parallel: false
   patterns:
@@ -83,7 +89,8 @@ domains:
 - desc: 东财全球资讯
   engines_combo:
   - em_global_news
-  fallback: em_global_news
+  - cls_telegraph
+  fallback: cls_telegraph
   name: em_news_search
   parallel: false
   patterns:
@@ -160,7 +167,8 @@ domains:
 - desc: 化学/药学化合物检索
   engines_combo:
   - pubchem
-  fallback: pubchem
+  - openalex
+  fallback: openalex
   name: chem_search
   parallel: false
   patterns:
@@ -171,7 +179,8 @@ domains:
 - desc: 生物物种检索
   engines_combo:
   - gbif
-  fallback: gbif
+  - wikipedia
+  fallback: wikipedia
   name: species_search
   parallel: false
   patterns:
@@ -181,7 +190,8 @@ domains:
 - desc: RFC/互联网标准文档
   engines_combo:
   - rfc_editor
-  fallback: rfc_editor
+  - anysearch
+  fallback: anysearch
   name: rfc_search
   parallel: false
   patterns:
@@ -280,7 +290,8 @@ domains:
 - desc: 知乎热榜（官方 hot_list，日配额约 100 次）
   engines_combo:
   - zhihu_hot
-  fallback: zhihu_hot
+  - zhihu
+  fallback: zhihu
   name: zhihu_hot_list
   parallel: false
   patterns:
@@ -315,7 +326,8 @@ domains:
 - desc: 加密货币/币种查询
   engines_combo:
   - coingecko
-  fallback: coingecko
+  - anysearch
+  fallback: anysearch
   name: crypto_search
   parallel: false
   patterns:
@@ -425,7 +437,8 @@ domains:
 - desc: 游戏商店（Steam）
   engines_combo:
   - steam
-  fallback: steam
+  - anysearch
+  fallback: anysearch
   name: game_search
   parallel: false
   patterns:
@@ -435,7 +448,8 @@ domains:
 - desc: 预测市场（Polymarket，叙事源非事实真值）
   engines_combo:
   - polymarket
-  fallback: polymarket
+  - anysearch
+  fallback: anysearch
   name: prediction_market
   parallel: false
   patterns:
@@ -467,7 +481,8 @@ domains:
 - desc: 英文单词/词典查询
   engines_combo:
   - free_dictionary
-  fallback: free_dictionary
+  - wikipedia
+  fallback: wikipedia
   name: dictionary_search
   parallel: false
   patterns:
@@ -604,7 +619,8 @@ domains:
 - desc: 图片/素材搜索（Openverse 开放版权图库）
   engines_combo:
   - openverse
-  fallback: openverse
+  - anysearch
+  fallback: anysearch
   name: image_search
   parallel: false
   patterns:

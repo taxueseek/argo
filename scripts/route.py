@@ -175,6 +175,41 @@ def _feature_labels(features: dict[str, Any]) -> str:
     return " + ".join(labels) if labels else "通用查询"
 
 
+# ── 登录态意图检测（P0-4：五路协同的种子）────────────────────────────────
+# 公开引擎拿不到登录态内容（收藏/关注/持仓/私密等）。route 只做标注不阻塞执行，
+# 上层（CLI/MCP 调用方）看到 login_hint 后可引导登录态搜索补充。
+# 判定分级：强信号词任意域触发；弱信号词仅登录敏感域触发（避免「如何注册账号」
+# 这类公开查询误报）。
+
+_LOGIN_STRONG_SIGNALS = (
+    "我的关注", "我的收藏", "我的基金", "我的持仓", "我的订阅",
+    "我的订单", "我的消息", "私密", "私有", "会员专享", "需要登录",
+    "登录后", "关注列表", "收藏夹", "订阅列表",
+)
+_LOGIN_WEAK_SIGNALS = (
+    "账号", "账户", "授权", "登录", "我的", "account", "login",
+    "sign in", "members only", "subscription", "following", "favorites",
+    "my ", "saved", "bookmarked", "private",
+)
+_LOGIN_SENSITIVE_DOMAINS = frozenset({
+    "zhihu_content", "wechat_search", "social_search", "community",
+    "user_profile",
+})
+
+
+def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
+    """识别「可能需要登录态内容」的查询，返回 {needs_login, reason}。"""
+    ql = query.lower()
+    if any(s in query for s in _LOGIN_STRONG_SIGNALS):
+        return {"needs_login": True,
+                "reason": "含登录态强信号词（收藏/关注/持仓/私密等）"}
+    if any(w in ql for w in _LOGIN_WEAK_SIGNALS):
+        if domain_name in _LOGIN_SENSITIVE_DOMAINS:
+            return {"needs_login": True,
+                    "reason": f"登录敏感域[{domain_name}] + 弱信号"}
+    return {"needs_login": False, "reason": ""}
+
+
 # ── 域匹配（预编译 + mtime 缓存，避免每次 route 重新 compile 全部正则） ────────
 
 _compiled_domains: list[dict[str, Any]] | None = None
@@ -481,15 +516,22 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     统一走 engine_policy.filter_combo_by_policy，本函数只做可用性/成本/健康过滤。
     """
     combo = domain.get("engines_combo", [])
+    primary = domain.get("primary", "anysearch")
+    fallback = domain.get("fallback")
     if combo:
         filtered = [e for e in combo if e in enabled]
     else:
-        primary = domain.get("primary", "anysearch")
-        fallback = domain.get("fallback")
         engines = [primary]
         if fallback and fallback != primary:
             engines.append(fallback)
         filtered = [e for e in engines if e in enabled]
+    # P0-1：fallback 语义修复——combo 非空时也并入 fallback 候选。
+    # 旧逻辑只在 combo 为空时读 fallback，而 69 个域全部配置了 engines_combo，
+    # 导致 22 个真备用 fallback 全部失效（备用源形同虚设）。
+    # 追加到尾部 + 串行执行：正常路径 primary 先跑，early-stop 命中即不触碰
+    # fallback（零额外开销）；仅当 primary 无结果/故障时才轮到 fallback 兜底。
+    if fallback and fallback != primary and fallback in enabled and fallback not in filtered:
+        filtered.append(fallback)
 
     # 🔑 关键改动：将 local_search 扩展为子引擎
     if "local_search" in filtered:
@@ -617,38 +659,44 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         except ImportError:
             pass
 
-    # ── 配额/熔断感知沉底：主引擎不可用时自动切换相近备选 ──────────────
+    # ── 配额/熔断感知：确定不可用源剔除 + 候选滚动（无缝切换）──────────
     # 正常路径（全部引擎可用）顺序不变 → 引擎集合不变 → 缓存键不变 → 零速度倒退。
-    # 仅当主引擎配额耗尽或熔断打开时沉底，主引擎位置自动落到第一个可用的
-    # 相近备选（同一域 combo 内的其他引擎，天然是同主题的备选源）。
-    # open 且 cooldown 已过 → half-open 探测资格，不沉底（与 allow() 一致）。
-    if len(filtered) > 1:
-        usable, unusable = [], []
-        for e in filtered:
-            ok = True
+    # P0-3：disabled / open+cooldown 的引擎是「确定不可用」——不再沉底保留
+    # （沉底后仍会被执行，白耗一次注定失败的超时），而是直接剔除，让域内
+    # 候选（fallback / combo 其他成员，天然同主题）自动顶位；域内无候选时
+    # 集合收缩，交由 route_query 尾部通用兜底 / recovery 按 family 门禁补源。
+    # open 但 cooldown 已过 → half-open 探测资格，保留（与 allow() 一致）。
+    # 缓存键基于 sorted(engines) 集合：剔除改变集合→键变，但 open+cooldown
+    # 时负缓存已生效，键变化无损失；且故障源不再被调用。
+    usable, unusable = [], []
+    for e in filtered:
+        ok = True
+        try:
+            if not get_quota_manager().is_available(e, mode=mode):
+                ok = False
+        except Exception:
+            pass
+        if ok:
             try:
-                if not get_quota_manager().is_available(e, mode=mode):
+                from circuit_breaker import get_breaker
+                st = get_breaker().status(e)
+                st_state = st.get("state")
+                # 自适应禁用：disabled 引擎直接不可用（持久跳过）
+                if st_state == "disabled":
                     ok = False
+                elif st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
+                    ok = False
+            except ImportError:
+                pass
             except Exception:
                 pass
-            if ok:
-                try:
-                    from circuit_breaker import get_breaker
-                    st = get_breaker().status(e)
-                    st_state = st.get("state")
-                    # 自适应禁用：disabled 引擎直接不可用（持久跳过）
-                    if st_state == "disabled":
-                        ok = False
-                    elif st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
-                        ok = False
-                except ImportError:
-                    pass
-                except Exception:
-                    pass
-            (usable if ok else unusable).append(e)
-        # 首位不可用才重排（避免无谓的顺序扰动）；重排保持集合不变
-        if usable and unusable and filtered[0] in unusable:
-            filtered = usable + unusable
+        (usable if ok else unusable).append(e)
+    if unusable and usable:
+        filtered = usable
+    elif unusable and not usable:
+        # 域内全部不可用：返回空集，由 route_query 尾部兜底（通用免费源 /
+        # modal_card 保留声明引擎供执行层返回 error item）
+        filtered = []
 
     # ── 能力族去重 + 互补回填（标准化调用契约）────────────────────────
     # 全网搜索族同质化最高（byted/bocha/duckduckgo/octen 都是通用网页检索），
@@ -765,6 +813,7 @@ def route_query(query: str, engine_override: str = "auto",
             reason=f"用户指定: {engine_override}", confidence=1.0,
             features={}, domain=None, parallel=False, mode=mode,
             depth=depth, context=context,
+            login_hint=_detect_login_intent(query, None),
         )
 
     features = extract_features(query)
@@ -975,6 +1024,7 @@ def route_query(query: str, engine_override: str = "auto",
             early_stop_min_results=domain.get("early_stop_min_results"),
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
             mode=mode, depth=depth, context=context,
+            login_hint=_detect_login_intent(query, domain.get("name")),
         )
 
     # 正则未命中，用 TF-IDF 结果（已过滤低分）
@@ -1026,6 +1076,7 @@ def route_query(query: str, engine_override: str = "auto",
             parallel=parallel,
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
             mode=mode, depth=depth, context=context,
+            login_hint=_detect_login_intent(query, None),
         )
 
     # 兜底：免费通用引擎（零分 TF-IDF 也走这里）
@@ -1071,6 +1122,7 @@ def route_query(query: str, engine_override: str = "auto",
         parallel=False if mode == "fast" else len(fallback_combo) > 1,
         tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
         mode=mode, depth=depth, context=context,
+        login_hint=_detect_login_intent(query, None),
     )
 
 

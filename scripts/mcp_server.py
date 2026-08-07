@@ -119,6 +119,7 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         "depth": result.get("depth"),
         "execution_tier": result.get("execution_tier"),
         "input_kind": result.get("input_kind"),
+        "login_hint": result.get("login_hint"),
     }
     results = []
     for r in result.get("results") or []:

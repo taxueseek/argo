@@ -653,6 +653,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 "cache_level": hit.get("_cache_level", "L?"),
                 "domain": domain, "elapsed_ms": cache_elapsed,
                 "tfidf_scores": tfidf_scores,
+                "login_hint": decision.get("login_hint"),
                 "results": hit.get("results", []),
                 "count": len(hit.get("results", [])),
                 "engines_used": hit.get("engines_used") or engines,
@@ -1195,6 +1196,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "exclude_terms": exclude_terms,
         "excluded_count": excluded_count,
         "mode": mode, "depth": depth,
+        "login_hint": decision.get("login_hint"),
     }
     if lang_pref_info is not None:
         out["lang_pref"] = lang_pref_info
