@@ -270,6 +270,7 @@ python3 scripts/search.py --list-engines
 | 截图 / PDF | 页面截图、PDF 结构化提取 | `argo_screenshot` / `argo_pdf` |
 | 站点爬取 | 列表页批量抓取 | `argo_crawl` |
 | 社交与舆情 | 微博 / 小红书 / B 站 / Reddit / X 等 | `argo_social_search` |
+| 登录态专业搜索 | 知乎 / 小红书等登录墙正文、JS 渲染页、登录站点接口直取 | `sub-skills/ego-search/scripts/ego_search.py`（默认关闭，见下） |
 
 ### 预算模式
 
@@ -315,6 +316,27 @@ python3 scripts/search.py --list-engines
 ### 本地零成本层（`local_*`）
 
 不依赖独立的 SearXNG 服务。主路径用进程内 HTML / RSS / JSON 解析（如 `local_bing`、`local_sogou`、`local_google`、`local_arxiv` 等）。**多语言查询**时，路由会按语种动态改写引擎语言参数（例如 Bing `setlang`），并参与 RRF 融合。
+
+### 登录态专业搜索（ego-search，默认关闭）
+
+普通搜索拿不到知乎、小红书、微博、公众号等**需要登录**的内容，也常抓不回来 JS 渲染页 / 反爬页。ego-search 用**真实浏览器**去做这类搜索：继承登录态、抓登录墙后的正文、在已登录站点直接调接口取数据（如知乎搜索接口）。
+
+**默认关闭**，需要时开启（在 argo 目录下运行）：
+
+```bash
+python3 sub-skills/ego-search/scripts/ego_search.py enable
+```
+
+常用命令：`... ego_search.py status`（查看状态）、`... ego_search.py disable`（关闭）、`search` / `fetch` / `api`（分别对应浏览器搜索、抓正文、调站点接口）。
+
+**依赖**（装好其中一个就能用，两个都装更好）：
+
+| 依赖 | 是什么 | 什么时候用 |
+|------|--------|-----------|
+| **ego lite** | 专门给 Agent 用的浏览器应用（仅 macOS），初始化后提供 `ego-browser` 命令 | 默认首选：独立空间，不抢你正在用的浏览器标签 |
+| **WebBridge** | 浏览器扩展桥，复用 Chrome / Edge 里已登录的会话 | ego lite 没装，或想直接沿用日常登录态时 |
+
+登录态搜到的结果**不写**公共搜索缓存（避免污染共享缓存），需要融合时用 `merge` 命令把常规结果和登录态结果放一起分析。
 
 ---
 
@@ -479,6 +501,7 @@ argo/
 ├── backends/
 ├── scripts/                 # search / research / mcp / install …
 ├── sub-skills/local-search/
+├── sub-skills/ego-search/      # 登录态专业搜索（默认关闭，开启命令见正文）
 ├── tests/
 └── docs/
 ```
@@ -489,6 +512,8 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.7.2** | **登录态专业搜索**：新增 ego-search 子技能（默认关闭，开启方法与依赖见上「登录态专业搜索」节）；搜索兜底 / 多意图路由 / 统一健康视图；日韩文查询不再混入中文引擎、显式语言指定生效；MCP 服务拆三模块；轻量遥测。详见 [发布说明](docs/RELEASE_NOTES_v2.7.2.md) |
+| **v2.7.1** | **安全加固 + 路由修复**：SSRF 防护（URL 白名单 + IP 段检查）；路由健康状态语义漂移根因修复（只对 `local_*` 做健康判定）；深度研究 local_first 浪费修复；配置清理（单一真源）。详见 [发布说明](docs/RELEASE_NOTES_v2.7.1.md) |
 | **v2.7.0** | **垂直结构化模态卡**：内建 `bocha` / `bocha_ai` 原生引擎，`modal_card` 域统一识别火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机 / 汽车 / 挂号等实时卡片；`bocha` web 解析缺陷修复。详见 [发布说明](docs/RELEASE_NOTES_v2.7.0.md) |
 | **v2.6.2** | 合并独立改进线：网络环境感知 / 加权 RRF + 语义缓存 / 自适应引擎禁用 / 内容安全 + 查询变体 / 三大垂直引擎 / 日韩域路由补全；含 v2.6.1 路由修复。详见 [发布说明](docs/RELEASE_NOTES_v2.6.2.md) |
 | **v2.6.1** | v2.6.0 修复版：路由误伤修复（`capital of` 不再抢 fact_check）；版本同步。详见 [发布说明](docs/RELEASE_NOTES_v2.6.1.md) |
