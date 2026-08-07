@@ -5,6 +5,30 @@
 
 ---
 
+## 现在具备的几种搜索能力
+
+**1. 通用搜索 + 垂直搜索，双管齐下**
+
+日常问题走通用网页搜索；一问到行情、影视、体育、宏观这类「有标准答案」的问题，自动切到垂直源直接给答案，而不是扔给你一堆链接。目前约 120+ 个源、60+ 业务域。
+
+**2. 缓存：不重复花冤枉钱**
+
+时效性没那么强的内容（百科类、历史数据这类），第一次查完会进缓存，之后同样的查询直接命中，不再每次都走一遍 API。双层缓存（内存 + SQLite），热查询约 10ms 级返回。
+
+**3. 专为 Agent 设计，更省 Token**
+
+产出是「证据候选 + 可信度分解」的精简 JSON，不是长篇网页；MCP 响应可以按需裁剪，snippet 可控，不会撑爆 Agent 的上下文。比常规模型自带的搜索能力更专业、更省 Token。
+
+**4. 深度研究**
+
+把一个笼统的问题拆成多个子问题，多源并行采集，最后给出「还差什么证据」的缺口提示。适合综述、调研这类要全面、要扎实的场景。
+
+**5. 登录态专业搜索（专业模式，默认关闭）**
+
+知乎、小红书、公众号这类要登录才能看的内容，以及 JS 渲染页、反爬页，用真实浏览器配合登录态去搜。默认关闭，需要时开启，依赖 ego lite 和 WebBridge 两个东西，详见下文第 1 节。
+
+---
+
 ## 这次更新有什么
 
 ### 1. 新增 ego-search：登录态专业搜索（默认关闭）
@@ -32,7 +56,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py fetch "https://example.com/a
 python3 sub-skills/ego-search/scripts/ego_search.py api "https://www.zhihu.com/api/v4/search_v3?t=general&q=AI代理&limit=5" --origin "https://www.zhihu.com"
 ```
 
-查看状态：`... ego_search.py status`；关闭：`... ego_search.py disable`。
+查看状态：`python3 sub-skills/ego-search/scripts/ego_search.py status`；关闭：`python3 sub-skills/ego-search/scripts/ego_search.py disable`。
 
 **它依赖两个东西**（装好其中一个就能用，两个都装更好）：
 
@@ -41,7 +65,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py api "https://www.zhihu.com/a
 | **ego lite** | 一个专门给 Agent 用的浏览器应用（仅 macOS），装好并完成一次初始化后会提供 `ego-browser` 命令 | 默认首选。它的优势是每个任务用独立空间，不抢你正在用的浏览器标签页 |
 | **WebBridge** | 一个浏览器扩展桥，可以复用你 Chrome/Edge 里已经登录的会话 | ego lite 没装，或想直接沿用你日常浏览器的登录态时用 |
 
-本机两台都装好了：ego lite 的 `ego-browser`（版本 0.4.5.9）和 WebBridge 都处于在线状态，当前专业搜索模式是关闭的。
+本机两个依赖都已装好：ego lite 的 `ego-browser`（版本 0.4.5.9）和 WebBridge 均在线，专业搜索模式默认关闭。
 
 一个使用提醒：登录态搜到的结果**不会**写入公共搜索缓存（防止污染大家共享的缓存），需要时用专门的合并命令把常规结果和登录态结果放在一起分析。
 
