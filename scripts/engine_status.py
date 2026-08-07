@@ -35,8 +35,50 @@ def _all_engine_specs(cfg: dict[str, Any] | None = None) -> dict[str, dict[str, 
     return {k: v for k, v in engines.items() if isinstance(v, dict)}
 
 
+def _adaptive_scores_snapshot() -> dict[str, float]:
+    """一次取全部引擎学习分（get_ranking 单查询），避免 120+ 引擎逐个开 sqlite。"""
+    try:
+        from adaptive import get_learner
+        return dict(get_learner().get_ranking())
+    except Exception:
+        return {}
+
+
+def _runtime_status(engine_id: str,
+                    adaptive_scores: dict[str, float] | None = None) -> dict[str, Any]:
+    """运行时状态聚合（统一健康度视图）：熔断 + 学习分。
+
+    被动读取、无网络副作用：breaker 状态读进程内存（构造时已 load 磁盘态）；
+    adaptive 分数用调用方传入的全表快照，缺失时按中性分 0.5。
+    与主动探针（health_check.check_engine）互补：本函数是「当前可用性」快照，
+    探针是「立即连通性」验证，二者口径不同、各自保留。
+    """
+    out: dict[str, Any] = {"breaker": None, "adaptive_score": None}
+    try:
+        from circuit_breaker import get_breaker
+        st = get_breaker().status(engine_id)
+        out["breaker"] = {
+            "state": st.get("state", "closed"),
+            "failures": st.get("failures", 0),
+            "cooldown_remain": st.get("cooldown_remain", 0),
+        }
+    except Exception:
+        pass
+    if adaptive_scores is not None:
+        out["adaptive_score"] = adaptive_scores.get(engine_id, 0.5)
+    elif adaptive_scores is None:
+        # 单引擎查询：只查一次 sqlite（批量场景必须传快照避免 N 次连接）
+        try:
+            from adaptive import get_learner
+            out["adaptive_score"] = get_learner().get_score(engine_id)
+        except Exception:
+            pass
+    return out
+
+
 def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
-                  tiers: dict[str, list[str]] | None = None) -> dict[str, Any]:
+                  tiers: dict[str, list[str]] | None = None,
+                  adaptive_scores: dict[str, float] | None = None) -> dict[str, Any]:
     if spec is None:
         specs = _all_engine_specs()
         spec = specs.get(engine_id) or {}
@@ -89,6 +131,8 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
             "avg_latency_ms": (adm or {}).get("avg_latency_ms"),
             "reason": (adm or {}).get("reason") or "",
         } if adm else None,
+        # 统一健康度视图：熔断状态 + 学习分（被动快照，见 _runtime_status）
+        "runtime": _runtime_status(engine_id, adaptive_scores),
     }
 
 
@@ -100,9 +144,10 @@ def list_engines_detail(
     cfg = load_config()
     tiers = get_cost_tiers(cfg)
     specs = _all_engine_specs(cfg)
+    adaptive_scores = _adaptive_scores_snapshot()
     rows = []
     for name in sorted(specs.keys()):
-        row = engine_detail(name, specs[name], tiers)
+        row = engine_detail(name, specs[name], tiers, adaptive_scores)
         if not include_disabled and not row["enabled"]:
             continue
         if routable_only and not row["routable"]:

@@ -145,7 +145,12 @@ def synonym_expand(query: str) -> Optional[str]:
 
 # ── L3 换引擎 ──────────────────────────────────────────────────────────────────
 
-_GENERAL_FREE_COMBO = ["anysearch", "duckduckgo", "local_bing", "local_baidu", "wikipedia"]
+# 通用免费源清单：单一真源 engine_policy.GENERAL_FREE_FALLBACK（与 route 兜底共用，
+# 避免两处清单漂移）。顺序 = 通用检索优先，百科殿后。
+try:
+    from engine_policy import GENERAL_FREE_FALLBACK as _GENERAL_FREE_COMBO  # noqa: E402
+except ImportError:
+    _GENERAL_FREE_COMBO = ["anysearch", "duckduckgo", "local_bing", "local_baidu", "wikipedia"]
 
 # 空结果恢复只允许「通用检索 + 百科」；垂直污染源（pypi/npm/jin10 等）一律禁入。
 # 例外：已尝试引擎同族可保留（如 tried 含 thesportsdb → 可补 sports 族）。

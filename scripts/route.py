@@ -243,11 +243,19 @@ def _get_compiled_domains(domains: list[dict[str, Any]]) -> list[dict[str, Any]]
     return _compiled_domains
 
 
-def match_domain(query: str, domains: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
-    """按 config.yaml domains 顺序匹配；无命中返回 catch-all。"""
+def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
+                  max_n: int = 3) -> list[dict[str, Any]]:
+    """按 config.yaml domains 顺序返回全部命中域（多意图，主域 1 + 次域 max_n-1）。
+
+    旧 match_domain 单射只取首个命中域，多意图查询（如「北京 AI 公司融资」同时
+    命中 geo/finance/tech）只走一个域。本函数返回命中列表供 route 主域执行 +
+    次域按预算补充。catch-all（无 patterns）只做垫底：有命中时不掺入。
+    max_n 限制命中数，防止正则宽泛的域批量命中稀释主域。
+    """
     if domains is None:
         domains = get_domains()
     compiled = _get_compiled_domains(domains)
+    hits: list[dict[str, Any]] = []
     catch_all: dict[str, Any] | None = None
     for domain in compiled:
         if not domain.get("patterns", []):
@@ -255,8 +263,17 @@ def match_domain(query: str, domains: list[dict[str, Any]] | None = None) -> dic
             continue
         for regex in domain["_compiled"]:
             if regex.search(query):
-                return domain
-    return catch_all
+                hits.append(domain)
+                break
+        if len(hits) >= max_n:
+            break
+    return hits if hits else ([catch_all] if catch_all else [])
+
+
+def match_domain(query: str, domains: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    """兼容旧接口：返回首个命中域（或 catch-all）。"""
+    hits = match_domains(query, domains, max_n=1)
+    return hits[0] if hits else None
 
 
 def _enabled_local_engines() -> list[str]:
@@ -299,6 +316,19 @@ def _expand_local_search(engine_list: list[str], features: dict | None = None) -
         if eng not in result:
             result.append(eng)
     return result[:4]
+
+
+def _general_fallback(enabled: set[str]) -> list[str]:
+    """本地优先 + 通用免费源兜底（清单单一真源 engine_policy.GENERAL_FREE_FALLBACK）。
+
+    域内引擎全被过滤 / 无匹配域时的回退组合：先 local_search（展开成本地子引擎），
+    再通用免费源。清单与 recovery L3 共用同一常量，避免两处清单漂移。
+    """
+    try:
+        from engine_policy import GENERAL_FREE_FALLBACK
+    except ImportError:
+        GENERAL_FREE_FALLBACK = ("anysearch", "duckduckgo", "local_bing")
+    return ["local_search"] + [e for e in GENERAL_FREE_FALLBACK if e in enabled]
 
 
 def _add_language_engines(engine_list: list[str], features: dict | None = None) -> list[str]:
@@ -834,7 +864,10 @@ def route_query(query: str, engine_override: str = "auto",
 
     # 正则硬规则优先（cheap）；fast + 实域命中时跳过 TF-IDF，省掉语义路由开销
     domains_cfg = get_domains(cfg)
-    domain = match_domain(query, domains_cfg)
+    # P1-1：多意图路由——主域执行 + 次域按预算补充（仅域命中分支消费 secondary）
+    _domain_hits = match_domains(query, domains_cfg)
+    domain = _domain_hits[0] if _domain_hits else None
+    secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))
 
     TFIDF_MIN_SCORE = 0.12
@@ -910,8 +943,8 @@ def route_query(query: str, engine_override: str = "auto",
                 except ImportError:
                     engines_combo = declared
             if not engines_combo:
-                # 域内引擎全被过滤，回退
-                engines_combo = [e for e in ["local_search", "anysearch", "duckduckgo"] if e in enabled]
+                # 域内引擎全被过滤，回退（本地优先 + 通用免费源单一真源）
+                engines_combo = _general_fallback(enabled)
                 if not engines_combo:
                     engines_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
                 # 扩展 local_search → 子引擎
@@ -938,6 +971,32 @@ def route_query(query: str, engine_override: str = "auto",
         # P0-001：geo 查询追加 OpenStreetMap（模态卡域跳过，避免稀释结构化路径）
         if not _pure_combo:
             engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
+
+        # P1-1：多意图补充——次域 primary 在预算内补充（追加尾部，不占主位）。
+        # 预算截断由 _apply_engine_policy 完成；web_general 族计数门禁防同质堆叠
+        # （与 _get_engines_combo 的能力族去重语义一致）。modal_card 纯结构化路径
+        # 不混入次域源。次域引擎不受 must_keep 保护，预算紧张时自然被裁。
+        if secondary and not _pure_combo:
+            try:
+                from engine_families import family_of
+                fam_count: dict[str, int] = {}
+                for _e in engines_combo:
+                    _f = family_of(_e)
+                    fam_count[_f] = fam_count.get(_f, 0) + 1
+            except Exception:
+                fam_count = None
+            for _sec in secondary:
+                _sp = _sec.get("primary")
+                if not _sp or _sp not in enabled or _sp in engines_combo:
+                    continue
+                if fam_count is not None:
+                    _f = family_of(_sp)
+                    if _f == "web_general" and fam_count.get(_f, 0) >= 2:
+                        continue
+                    fam_count[_f] = fam_count.get(_f, 0) + 1
+                engines_combo.append(_sp)
+                if len(engines_combo) >= 4:
+                    break
 
         parallel = bool(domain.get("parallel", False)) or len(engines_combo) > 2
         # fast 模式强制串行，先 local_search 成功即避免额外 HTTP 开销
@@ -1079,8 +1138,8 @@ def route_query(query: str, engine_override: str = "auto",
             login_hint=_detect_login_intent(query, None),
         )
 
-    # 兜底：免费通用引擎（零分 TF-IDF 也走这里）
-    fallback_combo = [e for e in ["local_search", "anysearch", "duckduckgo", "local_bing"] if e in enabled]
+    # 兜底：免费通用引擎（零分 TF-IDF 也走这里）——本地优先 + 通用免费源单一真源
+    fallback_combo = _general_fallback(enabled)
     if not fallback_combo:
         fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
     # 日/韩主查询：直接用语言专用本地引擎组合，避免默认 local_bing（zh 参数）兜底

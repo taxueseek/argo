@@ -40,6 +40,14 @@ FORCE_DAILY_CORE: frozenset[str] = frozenset({
     "zhihu", "zhihu_hot",
 })
 
+# 通用免费兜底源（单一真源）：route 兜底 / 域内引擎全过滤 / recovery L3 共用。
+# 顺序 = 通用检索优先（anysearch/ddg），本地零成本引擎居中（供语言引擎展开），
+# 百科殿后（knowledge 族，最后兜底）。route 侧本地优先时以 ["local_search"] 前缀
+# 再引用本清单；recovery 直接按本顺序遍历。预算截断由调用方完成。
+GENERAL_FREE_FALLBACK: tuple[str, ...] = (
+    "anysearch", "duckduckgo", "local_bing", "local_baidu", "wikipedia",
+)
+
 
 def is_research_context(
     *,
