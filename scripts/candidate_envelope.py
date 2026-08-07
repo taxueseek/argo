@@ -73,6 +73,29 @@ def _platform_of(url: str, source: str) -> str:
     return "web"
 
 
+def _login_state_of(item: dict[str, Any], source: str = "") -> bool:
+    """结果是否使用了登录态（ego-browser / 显式 provenance）。"""
+    if item.get("login_state_used") is True:
+        return True
+    if item.get("cache_eligible") is False:
+        return True
+    auth = item.get("auth_partition")
+    if isinstance(auth, str) and auth.lower().startswith("login"):
+        return True
+    blob = " ".join(
+        str(x) for x in (
+            source,
+            item.get("source"),
+            item.get("_engine"),
+            item.get("engine"),
+            item.get("backend"),
+            item.get("fetch_method"),
+        )
+        if x
+    ).lower()
+    return "ego-browser" in blob or "ego_browser" in blob or "browser_api" in blob
+
+
 def result_to_candidate(
     item: dict[str, Any],
     query: str,
@@ -100,6 +123,10 @@ def result_to_candidate(
             metrics[k] = None
 
     retrieved = retrieved_at or datetime.now(_TZ_CN).isoformat()
+    login_used = _login_state_of(item, source)
+    limitations = ["snippet is a discovery clue, not verified body text"]
+    if login_used:
+        limitations.append("login_state_used: not eligible for public SearchCache")
     return {
         "candidate_id": _candidate_id(platform, url),
         "query": query,
@@ -116,8 +143,8 @@ def result_to_candidate(
         "language": None,
         "metrics": metrics,
         "access": {
-            "visibility": "public",
-            "login_state_used": False,
+            "visibility": "authenticated" if login_used else "public",
+            "login_state_used": login_used,
         },
         "verification": {
             "status": "candidate",  # snippet 线索，未打开原文
@@ -134,9 +161,7 @@ def result_to_candidate(
             "absorption": item.get("absorption"),
             "consensus_engines": item.get("consensus_engines"),
         },
-        "limitations": [
-            "snippet is a discovery clue, not verified body text",
-        ],
+        "limitations": limitations,
     }
 
 
@@ -145,13 +170,17 @@ def build_coverage(engine_outcomes: list[dict[str, Any]] | None, max_results: in
     for o in engine_outcomes or []:
         status = o.get("status") or "unknown"
         n = int(o.get("results_count") or 0)
+        eng = o.get("engine") or ""
+        login_used = bool(o.get("login_state_used")) or _login_state_of(
+            o if isinstance(o, dict) else {}, str(eng)
+        )
         out.append({
             "backend": o.get("engine"),
             "status": status,
             "returned": n,
             "truncated": n >= max_results if n else False,
             "latency_ms": o.get("latency_ms"),
-            "login_state_used": False,
+            "login_state_used": login_used,
             "detail": o.get("detail"),
             "limitations": (
                 ["empty or failed backend"]
@@ -195,6 +224,15 @@ def attach_envelope(
     if search_result.get("cached"):
         limitations.append(f"served from cache level={search_result.get('cache_level')}")
 
+    route_login = (
+        search_result.get("login_state_used") is True
+        or search_result.get("cache_eligible") is False
+        or _login_state_of(search_result, str(search_result.get("engine") or ""))
+        or any(c.get("access", {}).get("login_state_used") for c in candidates)
+    )
+    if route_login:
+        limitations.append("login_state_used: do not write to public SearchCache")
+
     # 去重：canonical_url
     seen: set[str] = set()
     deduped: list[dict[str, Any]] = []
@@ -216,7 +254,7 @@ def attach_envelope(
         "backend": search_result.get("engine"),
         "engines": search_result.get("engines_combo") or search_result.get("engines"),
         "mode": search_result.get("mode"),
-        "login_state_used": False,
+        "login_state_used": bool(route_login),
         "status": "completed" if not search_result.get("errors") else "partial",
         "limitations": limitations[:3],
     }])

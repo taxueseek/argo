@@ -420,6 +420,50 @@ EMPTY_RESULT_TTL = 45
 FETCH_DEFAULT_TTL = 3600
 
 
+class LoginCacheRejected(ValueError):
+    """登录态 / 不可缓存载荷禁止写入公共 SearchCache。"""
+
+
+def is_login_partition_payload(payload: object) -> bool:
+    """是否为登录态分区载荷（不得进入公共 unified-search 缓存）。
+
+    判定（任一命中）：
+      - login_state_used is True
+      - cache_eligible is False
+      - auth_partition 以 login 开头（如 login / login:zhihu.com）
+      - source / engine 含 ego-browser / ego_browser（浏览器登录态检索）
+    """
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("login_state_used") is True:
+        return True
+    if payload.get("cache_eligible") is False:
+        return True
+    auth = payload.get("auth_partition")
+    if isinstance(auth, str) and auth.lower().startswith("login"):
+        return True
+    for key in ("source", "engine", "backend"):
+        val = payload.get(key)
+        if isinstance(val, str):
+            low = val.lower()
+            if "ego-browser" in low or "ego_browser" in low:
+                return True
+    return False
+
+
+def assert_cacheable(payload: object, *, context: str = "cache") -> None:
+    """公共 SearchCache 写入守卫：登录态结果硬拒绝。
+
+    登录态检索（ego-search 等）必须走独立分区或默认不缓存 body；
+    禁止污染 ~/.cache/unified-search/cache.db。
+    """
+    if is_login_partition_payload(payload):
+        raise LoginCacheRejected(
+            f"{context}: login-partition / cache_eligible=false payload "
+            "must not enter public SearchCache"
+        )
+
+
 class SearchCache:
     """
     双层缓存引擎：L1 LRU + L2 SQLite
@@ -429,6 +473,8 @@ class SearchCache:
       - 不含 max_results：支持柔性命中（cached_n >= requested_n 可截断返回）
       - depth / mode 隔离，防 fast/deep、budget 污染
       - 时效敏感 query 强制 TTL ≤ REALTIME_TTL_CAP
+      - 登录态载荷（login_state_used / cache_eligible=false / ego-browser）
+        在 set / set_engine / set_fetch 入口硬拒绝，与公共缓存隔离
 
     分层：
       combo 结果 / per-engine 结果 / fetch URL（前缀区分）
@@ -575,7 +621,11 @@ class SearchCache:
 
         自适应 TTL：内容稳定的查询自动延长 TTL（上限为域 TTL），
         内容频繁变化则保持短 TTL，兼顾命中率与新鲜度。
+        登录态 / cache_eligible=false 载荷硬拒绝（LoginCacheRejected）。
         """
+        assert_cacheable(results, context="SearchCache.set")
+        # engine 名本身也可能标记登录态源
+        assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set")
         result_list = results.get("results") if isinstance(results, dict) else None
         is_empty = isinstance(result_list, list) and len(result_list) == 0
         if is_empty:
@@ -635,6 +685,11 @@ class SearchCache:
     def set_engine(self, query: str, engine: str, max_results: int,
                    results: list, domain: str = "general", mode: str = "auto",
                    depth: str = "fast", ttl: int | None = None):
+        assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set_engine")
+        if isinstance(results, list):
+            for item in results[:3]:
+                if isinstance(item, dict):
+                    assert_cacheable(item, context="SearchCache.set_engine")
         is_empty = not results
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
@@ -650,6 +705,8 @@ class SearchCache:
         return self._read(key)
 
     def set_fetch(self, url: str, payload: dict, ttl: int = FETCH_DEFAULT_TTL):
+        """写入 fetch 缓存。登录态正文硬拒绝，防止同 URL 登录页污染公共库。"""
+        assert_cacheable(payload, context="SearchCache.set_fetch")
         key = self._key(url, "fetch", 0, "fetch", "auto", "any", kind="fetch")
         self._write(key, url, "fetch", 0, payload, "fetch", ttl)
 

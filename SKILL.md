@@ -719,6 +719,24 @@ local-seek 是原创的本机文件搜索技能（2026-08-03 设计落地，独�
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --count
 ```
 
+### ego-search 子技能（登录态专业搜索，完全态 dual runtime / 1.6.0）
+
+ego-search 是 argo 的**登录态专业搜索**子技能，物理位于 `sub-skills/ego-search/`：
+
+- **双运行时（都保留）**：ego lite + WebBridge；**任一可用**即可；`--runtime auto|ego|webbridge`。
+- **与常规检索隔离**：`search_partition=login`、`cache_eligible=false`，禁止写公共 SearchCache。
+- **汇总融合**：`merge --public a.json --login b.json`（分析层；不去污染缓存）。
+- **登录稳定**：`--site host` 粘性空间 + 默认 keep；fetch 挂 `quality.login_likely_ok`。
+- **安全**：URL 守卫、专业模式闸门、任务空间默认收尾。
+- **专业模式默认关**：`enable` / `disable` / `status`。
+
+```bash
+python3 sub-skills/ego-search/scripts/ego_search.py status
+python3 sub-skills/ego-search/scripts/ego_search.py search "AI 搜索" --runtime auto
+python3 sub-skills/ego-search/scripts/ego_search.py fetch "https://www.zhihu.com/..." --site zhihu.com
+python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json --login /tmp/l.json
+```
+
 ### 文件结构
 
 ```
@@ -760,7 +778,8 @@ argo-v2/
 │       └── weibo_engine.py
 ├── sub-skills/
 │   ├── local-search/     # 本地引擎子技能（聚合 local_bing/local_baidu 等私有搜索 API）
-│   └── local-seek/       # 本机文件搜索子技能（原生原创；MCP argo_local_search 封装 seek.py）
+│   ├── local-seek/       # 本机文件搜索子技能（原生原创；MCP argo_local_search 封装 seek.py）
+│   └── ego-search/       # 浏览器态搜索增强子技能（真实 Chromium + 同源接口数据直取）
 └── tests/
 ```
 
