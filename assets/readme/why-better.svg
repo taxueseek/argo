@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
+  <title id="title">Argo 与其他搜索方式的差别</title>
+  <desc id="desc">左侧：模型自带搜索、AI 搜索、聚合搜索引擎给人看的总结页或链接清单；右侧：Argo 给 Agent 的证据 JSON 与可信度评分</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#070B14"/>
+      <stop offset="55%" stop-color="#0B1220"/>
+      <stop offset="100%" stop-color="#0E1730"/>
+    </linearGradient>
+    <linearGradient id="route" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.15"/>
+      <stop offset="50%" stop-color="#38BDF8" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#A78BFA" stop-opacity="0.7"/>
+    </linearGradient>
+    <linearGradient id="barA" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="0.8" fill="#38BDF8" opacity="0.12"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="400" rx="28" fill="url(#bg)"/>
+  <rect width="1200" height="400" rx="28" fill="url(#dots)"/>
+
+  <!-- column headers -->
+  <text x="48" y="44" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#64748B" letter-spacing="2.5">HUMAN-FACING · 给人看</text>
+  <text x="720" y="44" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#38BDF8" letter-spacing="2.5">AGENT-FACING · 给 Agent 吸收</text>
+
+  <!-- left: three default alternatives -->
+  <g id="default-1" transform="translate(48 68)">
+    <rect width="480" height="76" rx="10" fill="#0D1526" stroke="#1E2A3F"/>
+    <rect width="3" height="76" fill="#334155"/>
+    <text x="20" y="28" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#94A3B8">模型自带搜索</text>
+    <text x="20" y="54" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#64748B">泛搜网页 → 拼一段长文本，塞回 Agent 上下文</text>
+  </g>
+  <g id="default-2" transform="translate(48 156)">
+    <rect width="480" height="76" rx="10" fill="#0D1526" stroke="#1E2A3F"/>
+    <rect width="3" height="76" fill="#334155"/>
+    <text x="20" y="28" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#94A3B8">AI 搜索（总结型）</text>
+    <text x="20" y="54" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#64748B">总结页给人看；Agent 拿不到结构化证据</text>
+  </g>
+  <g id="default-3" transform="translate(48 244)">
+    <rect width="480" height="76" rx="10" fill="#0D1526" stroke="#1E2A3F"/>
+    <rect width="3" height="76" fill="#334155"/>
+    <text x="20" y="28" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#94A3B8">聚合搜索 / 搜索引擎</text>
+    <text x="20" y="54" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="13" fill="#64748B">SERP 链接清单；无评分、无垂直门禁</text>
+  </g>
+
+  <text x="48" y="356" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#475569">default search answers people · argo answers agents</text>
+
+  <!-- vs badge -->
+  <circle cx="624" cy="196" r="26" fill="#0D1526" stroke="#38BDF8" stroke-width="2"/>
+  <text x="624" y="202" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="15" fill="#38BDF8">vs</text>
+
+  <!-- right: argo proof card -->
+  <g id="argo-card" transform="translate(720 68)">
+    <rect width="432" height="288" rx="16" fill="#0D1526" stroke="#1E3A5F" stroke-width="1.5"/>
+    <!-- title bar -->
+    <rect width="432" height="36" rx="16" fill="#121A2B"/>
+    <rect y="20" width="432" height="16" fill="#121A2B"/>
+    <circle cx="20" cy="18" r="4.5" fill="#F87171" opacity="0.8"/>
+    <circle cx="36" cy="18" r="4.5" fill="#FBBF24" opacity="0.8"/>
+    <circle cx="52" cy="18" r="4.5" fill="#34D399" opacity="0.8"/>
+    <text x="70" y="23" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#64748B">argo search --json</text>
+
+    <!-- query line -->
+    <text x="20" y="66" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#475569">$</text>
+    <text x="36" y="66" font-family="ui-monospace, Menlo, monospace" font-size="13" fill="#E2E8F0">贵州茅台股价</text>
+    <rect x="296" y="52" width="116" height="22" rx="6" fill="#0B3B2E" stroke="#166534"/>
+    <text x="354" y="67" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="#34D399">domain: stock</text>
+
+    <!-- route nodes -->
+    <g transform="translate(20 84)">
+      <text x="0" y="0" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#64748B">ROUTE</text>
+      <rect x="0" y="10" width="92" height="26" rx="6" fill="#122033" stroke="#1E3A5F"/>
+      <text x="46" y="28" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#38BDF8">sina_quote</text>
+      <rect x="104" y="10" width="104" height="26" rx="6" fill="#122033" stroke="#1E3A5F"/>
+      <text x="156" y="28" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#38BDF8">tencent_quote</text>
+      <rect x="220" y="10" width="84" height="26" rx="6" fill="#1A1430" stroke="#3B2F6B"/>
+      <text x="262" y="28" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#A78BFA">early-stop</text>
+      <path d="M 92 23 L 104 23" stroke="url(#route)" stroke-width="2"/>
+      <path d="M 208 23 L 220 23" stroke="url(#route)" stroke-width="2"/>
+    </g>
+
+    <!-- result card -->
+    <g transform="translate(20 136)">
+      <rect width="392" height="112" rx="10" fill="#101826" stroke="#243044"/>
+      <text x="14" y="22" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="14" font-weight="600" fill="#E8EEF7">贵州茅台 1337.74  ↓ -1.56%</text>
+      <text x="14" y="42" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#64748B">source · sina_quote · 553ms · fact-ready</text>
+      <text x="14" y="62" font-family="ui-monospace, Menlo, monospace" font-size="9.5" fill="#94A3B8">{ "price": "1337.74", "credibility_fast": 0.86 }</text>
+      <text x="14" y="78" font-family="ui-monospace, Menlo, monospace" font-size="9.5" fill="#94A3B8">  "engine_outcomes": { "sina_quote": "ok" } }</text>
+      <text x="14" y="98" font-family="ui-monospace, Menlo, monospace" font-size="9.5" fill="#64748B">selection</text>
+      <rect x="86" y="90" width="120" height="6" rx="3" fill="#1E2A3F"/>
+      <rect x="86" y="90" width="108" height="6" rx="3" fill="url(#barA)"/>
+      <text x="230" y="98" font-family="ui-monospace, Menlo, monospace" font-size="10" fill="#34D399">not a SERP shell</text>
+    </g>
+
+    <!-- bottom cue -->
+    <text x="20" y="272" font-family="ui-monospace, Menlo, monospace" font-size="10.5" fill="#64748B">free-first · ~10ms cache · fast/auto/deep/budget</text>
+  </g>
+</svg>

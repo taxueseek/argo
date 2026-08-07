@@ -43,7 +43,7 @@
     <!-- meta chips -->
     <g transform="translate(0 188)">
       <rect width="118" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
-      <text x="59" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#94A3B8">v2.6.0</text>
+      <text x="59" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#94A3B8">v2.7.2</text>
 
       <rect x="130" width="132" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
       <text x="196" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8">120+ engines</text>
