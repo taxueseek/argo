@@ -593,6 +593,7 @@ def _classify_engine_outcome(eng: str, res: list[dict[str, Any]],
 def execute_search(query: str, decision: dict[str, Any], max_results: int,
                    timeout: int, depth: str, cache: SearchCache, skip_cache: bool,
                    mode: str = "auto",
+                   since: str | None = None, until: str | None = None,
                    on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None) -> dict[str, Any]:
     """执行搜索：缓存 → 熔断/负缓存 → 引擎 → 融合 → 精排 → 过滤 → 写缓存。"""
     domain = decision.get("domain") or "general"
@@ -635,6 +636,11 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         pass
 
     cache_engine_key = "+".join(sorted(engines)) if len(engines) > 1 else engines[0]
+    # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存
+    if since:
+        cache_engine_key += f"|since={since}"
+    if until:
+        cache_engine_key += f"|until={until}"
 
     if on_progress:
         on_progress(Stage.ROUTING, {"domain": domain, "engine": engine_label, "engines": engines})
@@ -713,6 +719,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         for _attempt in range(retries + 1):
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=to, depth=depth, mode=mode,
+                since=since, until=until,
             )
             if last_result and any("error" not in r for r in last_result):
                 return last_result
@@ -720,6 +727,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if retries > 0 and depth != "balanced":
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=to, depth="balanced", mode=mode,
+                since=since, until=until,
             )
         return last_result
 
@@ -748,6 +756,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if not skip_cache:
             eng_hit = cache.get_engine(
                 query, eng, max_results, domain=domain, mode=mode, depth=depth,
+                since=since, until=until,
             )
             if eng_hit is not None:
                 lat = int((time.time() - t_eng) * 1000)
@@ -805,12 +814,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             cache.set_engine(
                 query, eng, max_results, goods,
                 domain=domain, mode=mode, depth=depth,
+                since=since, until=until,
             )
         elif not skip_cache and not goods:
             # 空结果短 TTL 写入 per-engine，配合负缓存
             cache.set_engine(
                 query, eng, max_results, [],
                 domain=domain, mode=mode, depth=depth,
+                since=since, until=until,
             )
 
         return eng, (goods if goods else res), outcome, lat
@@ -1243,7 +1254,9 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  force_search: bool = False,
                  envelope: bool = True,
                  context: str = "search",
-                 engines_boost: list[str] | None = None) -> dict[str, Any]:
+                 engines_boost: list[str] | None = None,
+                 since: str | None = None,
+                 until: str | None = None) -> dict[str, Any]:
     """统一搜索便捷入口。
 
     执行分层（不阻塞日常）：
@@ -1270,6 +1283,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         envelope: 附加 candidates/coverage/limitations
         context: search | research
         engines_boost: 垂直引擎前置列表（研究路径 boost，不锁死单引擎）
+        since/until: 发布时间时间窗（如 7d / 2026-08-01），下推到支持时间窗的引擎
 
     注意：路由永远基于原始 query。改写词只用于引擎检索，避免
     「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
@@ -1372,9 +1386,14 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         query=search_query, decision=decision, max_results=n,
         timeout=timeout, depth=depth, cache=cache,
         skip_cache=skip_cache, mode=mode, on_progress=on_progress,
+        since=since, until=until,
     )
     # 对外仍报告用户原始 query
     result["query"] = original_query
+    if since:
+        result["since"] = since
+    if until:
+        result["until"] = until
     if rewrite_result and rewrite_result.get("rewritten"):
         result["rewritten_query"] = {
             "original": rewrite_result["original"],
@@ -1599,6 +1618,10 @@ def main():
     parser.add_argument("--mode", default="auto",
                         choices=["fast", "auto", "deep", "budget"],
                         help="预算模式: fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制")
+    parser.add_argument("--since", default=None,
+                        help="发布时间下限（7d / 2026-08-01），下推到支持时间窗的引擎")
+    parser.add_argument("--until", default=None,
+                        help="发布时间上限（7d / 2026-08-01），下推到支持时间窗的引擎")
     parser.add_argument("--local-first", action="store_true",
                         help="强制优先使用 local_search 零成本聚合引擎")
     parser.add_argument("--domain", default="", help="AnySearch 垂直域")
@@ -1669,6 +1692,8 @@ def main():
         plan_only=args.plan_only,
         force_search=args.force_search,
         envelope=use_envelope,
+        since=args.since,
+        until=args.until,
     )
     results["query"] = args.query
 

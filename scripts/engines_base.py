@@ -198,17 +198,22 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
     cmd_template = spec.get("cmd", [])
     search_args = spec.get("search_args", [])
     env_overrides = spec.get("env", {})
+    output_format = spec.get("output_format", "")   # "yaml" | ""（JSON/文本自动）
+    filter_args = spec.get("filter_args", {})       # {kwarg: [参数模板...]}，kwargs 携带时追加
 
     @safe_search
     def _engine(query: str, n: int = 5, timeout: float = 8, mode: str = "fast", **kwargs) -> list[dict[str, Any]]:
-        cmd = _resolve(cmd_template, query, n, mode=mode)
-        args = _resolve(search_args, query, n, mode=mode)
+        cmd = _resolve(cmd_template, query, n, mode=mode, **kwargs)
+        args = _resolve(search_args, query, n, mode=mode, **kwargs)
         if not cmd:
             return []
+        for key, tmpl in filter_args.items():
+            if kwargs.get(key) not in (None, ""):
+                args += _resolve(tmpl, query, n, mode=mode, **kwargs)
         env = os.environ.copy()
         env.update(env_overrides)
         return _parse_text_output(_run(cmd + args, timeout=timeout, engine_name=spec.get("_name", "cli")),
-                                  spec.get("_name", "cli"))
+                                  spec.get("_name", "cli"), output_format=output_format)
     return _engine
 
 
@@ -230,7 +235,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
         import urllib.parse as up
 
         if is_get:
-            resolved_url = _resolve(url_template, query, n)
+            resolved_url = _resolve(url_template, query, n, **kwargs)
             parts: list[str] = []
             if query_param:  # 空字符串表示该 API 不用查询参数名（仅 extra_params）
                 parts.append(f"{query_param}={up.quote(query)}")
@@ -240,17 +245,17 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang
                 if k in ("setlang", "hl", "lang", "uselang"):
                     v = _lang_param(k, query) or v
-                parts.append(f"{k}={up.quote(_resolve(str(v), query, n))}")
+                parts.append(f"{k}={up.quote(_resolve(str(v), query, n, **kwargs))}")
             if parts:
                 separator = "&" if "?" in resolved_url else "?"
                 full_url = resolved_url + separator + "&".join(parts)
             else:
                 full_url = resolved_url
-            req = urllib.request.Request(full_url, headers={k: _resolve(v, query, n) for k, v in headers.items()})
+            req = urllib.request.Request(full_url, headers={k: _resolve(v, query, n, **kwargs) for k, v in headers.items()})
         else:
             body: dict[str, Any] = {}
             for k, v in body_template.items():
-                resolved = _resolve(str(v), query, n)
+                resolved = _resolve(str(v), query, n, **kwargs)
                 if k == "search_depth":
                     body[k] = depth
                 elif resolved.lower() == "true":
@@ -266,7 +271,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                         except ValueError:
                             body[k] = resolved
             req = urllib.request.Request(url_template, data=json.dumps(body).encode("utf-8"),
-                                         headers={k: _resolve(v, query, n) for k, v in headers.items()})
+                                         headers={k: _resolve(v, query, n, **kwargs) for k, v in headers.items()})
 
         try:
             with urllib.request.urlopen(req, timeout=to) as resp:
@@ -290,12 +295,16 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                         "url": output_map.get("item_url", "url"),
                         "snippet": output_map.get("item_summary", "snippet"),
                         "source": output_map.get("item_source", "source"),
+                        "published_at": output_map.get("item_published_at", "published_at"),
                     }, url_template=output_map.get("url_template"))(data)
                     for r in parsed:
                         r.setdefault("source", eng)
                         if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
                             r["snippet"] = r["snippet"][:300]
-                    return _ensure_engine_source(parsed, eng)[:limit]
+                    # preserve_source（声明式 spec）：保留 API 返回的真实来源标注
+                    return _ensure_engine_source(
+                        parsed, eng, preserve=bool(spec.get("preserve_source"))
+                    )[:limit]
                 if isinstance(data, list):
                     return _ensure_engine_source(
                         _parse_generic({"results": data}, eng), eng
@@ -467,11 +476,13 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
 
 # ── 通用解析器 ─────────────────────────────────────────────────────────────────
 
-def _parse_text_output(text: str, engine_name: str) -> list[dict[str, Any]]:
-    """通用 CLI 文本解析：优先 JSON，其次结构化文本。"""
+def _parse_text_output(text: str, engine_name: str, output_format: str = "") -> list[dict[str, Any]]:
+    """通用 CLI 文本解析：YAML（声明式）/ JSON / 结构化文本。"""
     if not text or not text.strip():
         return []
     text = text.strip()
+    if output_format == "yaml":
+        return _parse_yaml_output(text, engine_name)
     try:
         data = json.loads(text)
         if isinstance(data, list):
@@ -505,6 +516,47 @@ def _parse_text_output(text: str, engine_name: str) -> list[dict[str, Any]]:
             seen_url = False
     if cur:
         results.append(cur)
+    return results[:10]
+
+
+def _parse_yaml_output(text: str, engine_name: str) -> list[dict[str, Any]]:
+    """解析 YAML 输出（结构化 CLI 数据源的默认格式）。
+
+    支持顶层 list，或 dict 携带 results/items/data 列表；
+    字段别名：snippet|description；保留 published_at 时间维度。
+    """
+    try:
+        import yaml
+        data = yaml.safe_load(text)
+    except Exception:
+        return []
+    if isinstance(data, dict):
+        items = data.get("results", data.get("items", data.get("data", [])))
+    elif isinstance(data, list):
+        items = data
+    else:
+        return []
+    if not isinstance(items, list):
+        return []
+    results = []
+    for i in items:
+        if not isinstance(i, dict):
+            continue
+        title = i.get("title") or i.get("name") or ""
+        url = i.get("url") or i.get("link") or ""
+        snippet = i.get("snippet") or i.get("description") or i.get("content") or ""
+        if not title and not url:
+            continue
+        r = {
+            "title": str(title)[:200],
+            "url": str(url),
+            "snippet": str(snippet)[:300],
+            "source": engine_name,
+        }
+        published = i.get("published_at")
+        if published:
+            r["published_at"] = str(published)[:64]
+        results.append(r)
     return results[:10]
 
 
@@ -606,7 +658,7 @@ def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[st
 
 
 def _ensure_engine_source(
-    results: list[dict[str, Any]] | Any, engine_name: str
+    results: list[dict[str, Any]] | Any, engine_name: str, preserve: bool = False
 ) -> list[dict[str, Any]]:
     """纠正结果 source，避免 HTTP 解析器错标（如 uapi→stackoverflow）。
 
@@ -614,6 +666,8 @@ def _ensure_engine_source(
       - 空 / generic → 设为引擎名
       - source 既不等于引擎名、也不以「引擎名/」开头 → 纠正为引擎名
       - wigolo_npx 允许保留 wigolo/... 子源标注
+      - preserve=True（声明式 spec 的 preserve_source）时保留 API 返回的
+        真实来源标注（如聚合资讯引擎的上游发布方），只对空/generic 兜底
     """
     if not isinstance(results, list) or not engine_name:
         return results if isinstance(results, list) else []
@@ -625,7 +679,7 @@ def _ensure_engine_source(
             continue
         if not src or src == "generic":
             r["source"] = engine_name
-        elif src != engine_name and not src.startswith(engine_name + "/"):
+        elif not preserve and src != engine_name and not src.startswith(engine_name + "/"):
             r["source"] = engine_name
     return results
 

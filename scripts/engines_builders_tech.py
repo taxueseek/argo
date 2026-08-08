@@ -11,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from typing import Any
 
 from engines_base import safe_search, _run, _resolve, _get_path, _coerce_field
@@ -115,13 +116,27 @@ def _build_wechat_sogou_engine(spec: dict[str, Any]) -> Any:
                 )
                 account = re.sub(r"<[^>]+>", "", account_match.group(1)).strip() if account_match else ""
 
-                results.append({
+                # 发布时间：结果条内嵌 script 写入 document.write(timeConvert('10位unix秒'))
+                time_match = re.search(r"timeConvert\('?(\d{10})'?\)", li)
+                published_at = ""
+                if time_match:
+                    try:
+                        published_at = datetime.fromtimestamp(
+                            int(time_match.group(1))
+                        ).astimezone().isoformat(timespec="seconds")
+                    except (ValueError, OSError):
+                        published_at = ""
+
+                result = {
                     "title": title[:80],
                     "url": "https://weixin.sogou.com" + href if href.startswith("/") else href,
                     "snippet": summary[:200],
                     "account": account,
                     "source": "wechat_sogou",
-                })
+                }
+                if published_at:
+                    result["published_at"] = published_at
+                results.append(result)
             return results
         except Exception as e:
             logger.warning(f"搜狗微信搜索失败: {e}")

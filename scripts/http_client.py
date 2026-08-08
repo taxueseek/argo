@@ -96,6 +96,36 @@ def _random_headers(extra: dict | None = None) -> dict:
     return profile
 
 
+# ─── Retry-After 尊重（合规限速信号）────────────────────────────────────────
+
+_RETRY_AFTER_MAX_WAIT = 10.0  # 服务器要求等待超过此秒数 → 放弃不重试
+
+
+def retry_after_seconds(status: int, headers: dict | None,
+                        max_wait: float = _RETRY_AFTER_MAX_WAIT) -> float | None:
+    """解析响应的 Retry-After 头，返回应等待的秒数。
+
+    仅 429（速率限制）与 503（服务过载）携带的 Retry-After 是明确的
+    「请等待后再请求」信号，其他状态码忽略该头。返回 None 表示不等待：
+      - 状态码非 429/503
+      - 无 Retry-After 头
+      - 头为 HTTP-date 形式或非数字（无法量化等待时间，保守放弃）
+      - 等待时间超过 max_wait（超出可接受阈值，直接放弃重试）
+    """
+    if status not in (429, 503) or not headers:
+        return None
+    ra = headers.get("Retry-After") or headers.get("retry-after")
+    if ra is None:
+        return None
+    try:
+        wait = float(str(ra).strip())
+    except ValueError:
+        return None
+    if wait > max_wait:
+        return None
+    return max(0.0, wait)
+
+
 # ─── Cookie 管理 ─────────────────────────────────────────────────────────────
 
 class _CookieManager:
@@ -212,7 +242,15 @@ class HttpClient:
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
-                return self._do_get(url, extra_headers, follow_redirects)
+                resp = self._do_get(url, extra_headers, follow_redirects)
+                # 429/503 + Retry-After：服务器明确要求等待 → 按其指示等待后重试
+                # （等待服务器说的时间，而非盲退避；无头/超阈值则直接返回不重试）
+                wait = retry_after_seconds(resp.get("status", 0),
+                                           resp.get("headers", {}))
+                if wait is not None and attempt < self.max_retries:
+                    time.sleep(wait)
+                    continue
+                return resp
             except (socket.timeout, ConnectionError, OSError) as e:
                 last_error = e
                 if attempt < self.max_retries:
@@ -359,6 +397,100 @@ class HttpClient:
         except Exception as e:
             return {"status": 0, "headers": {}, "text": "", "url": url,
                     "elapsed_ms": 0, "error": str(e)[:200]}
+
+    def get_impersonated(self, url: str, extra_headers: dict | None = None,
+                         timeout: float | None = None,
+                         profiles: list[str] | None = None) -> dict:
+        """TLS 指纹伪造请求（curl_cffi impersonate）。
+
+        原理：urllib/curl 的 TLS ClientHello 指纹与真实浏览器不同，
+        反爬站点（Cloudflare 等）凭指纹即可判定机器人并直接 403。
+        curl_cffi 可逐字节模拟 Chrome/Safari/Firefox 的 TLS 指纹，
+        在不启动浏览器的情况下通过指纹检测。
+
+        - 指纹轮换：按 profiles 顺序尝试，直到成功
+        - SSRF 防护：重定向逐跳校验（与 get_with_curl 一致）
+        - 失败返回 status=0 + error，不抛异常
+
+        返回格式与 get() 一致，另附 `impersonate`（成功所用指纹）。
+        """
+        ok, reason = check_url(url)
+        if not ok:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": 0, "error": f"URL 被 SSRF 防护拦截: {reason}"}
+
+        try:
+            from curl_cffi import requests as cr
+        except ImportError:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": 0, "error": "curl_cffi not installed"}
+
+        start = time.time()
+        _timeout = timeout if timeout is not None else self.timeout
+        headers = _random_headers(extra_headers)
+        profiles = profiles or ["chrome", "safari", "firefox"]
+        current = url
+
+        for _ in range(5):  # 最多 5 跳重定向
+            ok, _reason = check_url(current)
+            if not ok:
+                return {"status": 0, "headers": {}, "text": "", "url": current,
+                        "elapsed_ms": int((time.time() - start) * 1000),
+                        "error": f"重定向目标被 SSRF 防护拦截: {_reason}"}
+
+            last_err = None
+            last_resp = None  # 最后一次非重定向响应（用于全指纹被拒时上报）
+            for fp in profiles:
+                try:
+                    resp = cr.get(current, impersonate=fp, headers=headers,
+                                  timeout=_timeout, allow_redirects=False)
+                    status = resp.status_code
+                    if status in (301, 302, 303, 307, 308):
+                        location = resp.headers.get("Location", "")
+                        if not location:
+                            return {"status": status, "headers": dict(resp.headers),
+                                    "text": resp.text, "url": current,
+                                    "elapsed_ms": int((time.time() - start) * 1000),
+                                    "from_cache": False, "impersonate": fp}
+                        current = urllib.parse.urljoin(current, location)
+                        break  # 进入下一跳
+                    last_resp = (status, dict(resp.headers), resp.text)
+                    if status in (429, 503):
+                        # 明确停止信号（速率限制/服务过载）→ 与 TLS 指纹无关，
+                        # 轮换指纹是徒劳的 bot 行为。立即返回并标记 stop_signal，
+                        # 交由上层（fetch_v3 主链）停止升级重链。
+                        return {"status": status, "headers": last_resp[1],
+                                "text": last_resp[2], "url": current,
+                                "elapsed_ms": int((time.time() - start) * 1000),
+                                "from_cache": False, "impersonate": fp,
+                                "stop_signal": True}
+                    if status >= 400:
+                        # 该指纹被反爬拒绝（403 等），轮换下一个指纹
+                        continue
+                    return {"status": status, "headers": last_resp[1],
+                            "text": last_resp[2], "url": current,
+                            "elapsed_ms": int((time.time() - start) * 1000),
+                            "from_cache": False, "impersonate": fp}
+                except Exception as e:
+                    last_err = e
+                    continue
+            else:
+                if last_resp is not None:
+                    # 全部指纹均被拒 → 返回最后一次响应，交由上层降级
+                    status, hdrs, text = last_resp
+                    return {"status": status, "headers": hdrs, "text": text,
+                            "url": current,
+                            "elapsed_ms": int((time.time() - start) * 1000),
+                            "from_cache": False,
+                            "impersonate": profiles[-1]}
+                # 全部指纹请求异常
+                return {"status": 0, "headers": {}, "text": "", "url": current,
+                        "elapsed_ms": int((time.time() - start) * 1000),
+                        "error": f"TLS 指纹请求失败: {str(last_err)[:150]}"}
+
+        return {"status": 0, "headers": {}, "text": "", "url": current,
+                "elapsed_ms": int((time.time() - start) * 1000),
+                "error": "重定向超过 5 跳"}
 
     def _safe_follow_redirects(self, url: str, headers: dict,
                                max_redirects: int = 5) -> str | None:

@@ -71,6 +71,22 @@ html:
     url_attr: href
     score: 0.65
 
+  local_360:
+    container: "li.res-list"
+    title: "h3.res-title a"
+    url: "h3.res-title a"
+    snippet: "p.res-desc"
+    url_attr: data-mdurl
+    score: 0.7
+
+  local_jisilu:
+    container: ".aw-question-list .aw-item"
+    title: "h4 a"
+    url: "h4 a"
+    snippet: ".aw-text-color-999"
+    url_attr: href
+    score: 0.6
+
   local_stackoverflow:
     container: ".question-summary"
     title: "a.question-hyperlink"
@@ -116,6 +132,7 @@ xml:
     title: "atom:title"
     url: "atom:id"
     snippet: "atom:summary"
+    published_at: "atom:published"
     namespaces:
       atom: "http://www.w3.org/2005/Atom"
 
@@ -153,36 +170,42 @@ json:
     title: "full_name"
     url: "html_url"
     snippet: "description"
+    published_at: "created_at"
 
   local_npm:
     items: "objects"
     title: "package.name"
     url: "package.links.npm"
     snippet: "package.description"
+    published_at: "package.date"
 
   local_gitlab:
     items: "."
     title: "name_with_namespace"
     url: "web_url"
     snippet: "description"
+    published_at: "created_at"
 
   local_stackoverflow:
     items: "items"
     title: "title"
     url: "link"
     snippet: null
+    published_at: "creation_date"
 
   local_crossref:
     items: "message.items"
     title: "title"
     url: "URL"
     snippet: "abstract"
+    published_at: "message.published-print.date-parts.0"
 
   local_semantic_scholar:
     items: "data"
     title: "title"
     url: "url"
     snippet: "abstract"
+    published_at: "publicationDate"
 
   local_pubmed:
     items: "esearchresult.idlist"

@@ -62,9 +62,40 @@ class TestUrlSafety(unittest.TestCase):
                            socket.IPPROTO_TCP, "", ("93.184.215.14", 0))],
         )
 
+    def _fake_dns(self, ip_strs):
+        """mock 域名解析为指定 IP 列表（v4/v6 混排）。"""
+        infos = []
+        for ip in ip_strs:
+            family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+            infos.append((family, socket.SOCK_STREAM,
+                          socket.IPPROTO_TCP, "", (ip, 0)))
+        return patch("url_safety.socket.getaddrinfo", return_value=infos)
+
     def test_public_domain_allowed_with_public_dns(self):
         with self._fake_public_dns():
             self.assertTrue(is_safe_fetch_url("https://example.com/a?b=c"))
+
+    def test_fake_ip_env_domain_allowed(self):
+        """fake-ip/TUN 代理环境：域名全解析到占位段 → 放行。"""
+        with self._fake_dns(["198.18.0.46", "198.18.0.47"]):
+            self.assertTrue(is_safe_fetch_url("https://medium.com/"))
+        with self._fake_dns(["fdfe:dcba:9876::2f"]):
+            self.assertTrue(is_safe_fetch_url("https://www.quora.com/"))
+
+    def test_fake_ip_mixed_public_allowed(self):
+        """占位段 + 公网混排 → 放行（域名仍可路由到公网）。"""
+        with self._fake_dns(["198.18.0.46", "93.184.215.14"]):
+            self.assertTrue(is_safe_fetch_url("https://medium.com/"))
+
+    def test_fake_ip_mixed_private_blocked(self):
+        """占位段 + 真实私网混排 → 拦截（存在内网可达目标）。"""
+        with self._fake_dns(["198.18.0.46", "10.0.0.5"]):
+            self.assertFalse(is_safe_fetch_url("https://medium.com/"))
+
+    def test_private_domain_dns_blocked(self):
+        """域名解析到真实私有 IP → 拦截（回归保护）。"""
+        with self._fake_dns(["192.168.1.1"]):
+            self.assertFalse(is_safe_fetch_url("https://intranet.example/"))
 
     def test_private_urls_blocked(self):
         for url in (

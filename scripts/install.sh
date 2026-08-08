@@ -83,6 +83,10 @@ if [[ "$SKIP_PIP" != "1" ]]; then
   python3 -m pip install --user -q pyyaml 2>/dev/null \
     || python3 -m pip install -q pyyaml 2>/dev/null \
     || echo "[warn] pip 安装 PyYAML 失败，可手动: pip install pyyaml"
+  echo "==> 安装可选增强 (curl_cffi: TLS 指纹伪造，缺失不影响核心功能)…"
+  python3 -m pip install --user -q curl_cffi 2>/dev/null \
+    || python3 -m pip install -q curl_cffi 2>/dev/null \
+    || echo "[warn] pip 安装 curl_cffi 失败（可选依赖）。需要反爬 TLS 指纹伪造时手动: pip install curl_cffi"
 fi
 
 if [[ ${#LINK_ARGS[@]} -gt 0 ]] || [[ -n "${ARGO_LINK_TARGETS:-}" ]] || [[ -f "$INSTALL_DIR/installs.local.yaml" ]]; then

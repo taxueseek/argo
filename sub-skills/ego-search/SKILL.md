@@ -140,6 +140,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py status
 
 ## 依赖与环境
 
+- **官方项目**：ego lite → <https://lite.ego.app/>（官网）；WebBridge → <https://www.kimi.com/zh-cn/help/kimi-webbridge/kimi-webbridge-introduction>（Kimi WebBridge 官方帮助中心）。
 - **浏览器运行时**（macOS 应用）与 **运行时命令 `ego-browser`**（`~/.local/bin`）。
 - 首次使用前确认：`command -v ego-browser`。未安装时按 `references/install.md` 完成安装。
 - 运行时依赖由安装包自管理，本子技能不重复携带安装脚本。

@@ -25,6 +25,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +96,121 @@ def _resolve(template: str | list[str], query: str, n: int, **extra: Any) -> str
     return s
 
 
+# ── 时间窗工具 ─────────────────────────────────────────────────────────────────
+
+def _parse_time(s: str | None) -> str | None:
+    """解析时间窗为 ISO 日期：7d/30d/12h/1w/1y（相对）或 2026-08-01 / ISO 8601（绝对）。
+
+    相对时间按当前时刻向前偏移；绝对日期归一化为 YYYY-MM-DD。
+    解析失败返回 None（调用方按未设置处理）。
+    """
+    if not s:
+        return None
+    s = str(s).strip()
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt.date().isoformat()
+    except ValueError:
+        pass
+    m = re.fullmatch(r"(\d+)([hdwmy])", s.lower())
+    if not m:
+        return None
+    n = int(m.group(1))
+    unit = m.group(2)
+    now = datetime.now()
+    if unit == "h":
+        delta = timedelta(hours=n)
+    elif unit == "d":
+        delta = timedelta(days=n)
+    elif unit == "w":
+        delta = timedelta(weeks=n)
+    elif unit == "m":
+        delta = timedelta(days=30 * n)
+    else:  # y
+        delta = timedelta(days=365 * n)
+    return (now - delta).date().isoformat()
+
+
+def _to_epoch(s: str | None) -> str | None:
+    """ISO 日期 → unix 时间戳（字符串），供 API 引擎（如 StackExchange）使用。"""
+    iso = _parse_time(s)
+    if not iso:
+        return None
+    try:
+        return str(int(datetime.fromisoformat(iso).timestamp()))
+    except ValueError:
+        return None
+
+
+def _normalize_date(v: Any) -> str | None:
+    """把各形态日期归一为 YYYY-MM-DD：2026-08-01 / 2026-08 / 2026 /
+    [2026, 8, 1] / ISO 8601 / RFC 822（RSS pubDate）。失败返回 None。"""
+    if v is None:
+        return None
+    if isinstance(v, (list, tuple)):
+        v = "-".join(str(x) for x in v if x is not None)
+    s = str(v).strip()
+    if not s:
+        return None
+    m = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    m = re.match(r"^(\d{4})-(\d{1,2})$", s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}"
+    m = re.match(r"^(\d{4})$", s)
+    if m:
+        return m.group(1)
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt.date().isoformat()
+    except ValueError:
+        pass
+    # unix 秒级时间戳（StackExchange creation_date 等）
+    if re.fullmatch(r"\d{9,11}", s):
+        try:
+            return datetime.fromtimestamp(int(s)).date().isoformat()
+        except (ValueError, OSError):
+            pass
+    try:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(s).date().isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def _date_key(s: str) -> tuple[int, ...]:
+    """日期 → 可比较元组（YYYY-MM 与 YYYY-MM-DD 可混合比较）。"""
+    return tuple(int(x) for x in str(s).split("-"))
+
+
+def _apply_time_window(results: list[dict[str, Any]],
+                       since: str | None, until: str | None) -> list[dict[str, Any]]:
+    """解析后时间窗过滤：仅保留 published_at 落在 [since, until] 内的结果。
+
+    无日期字段的条目在时间窗模式下剔除（时间窗查询必须保证结果新鲜，
+    无法验证时间的条目不纳入，与主技能实时索引行为一致）。
+    """
+    since_iso = _parse_time(since)
+    until_iso = _parse_time(until)
+    if not since_iso and not until_iso:
+        return results
+    kept: list[dict[str, Any]] = []
+    for r in results:
+        pa = r.get("published_at")
+        if not pa:
+            continue
+        if since_iso and _date_key(pa) < _date_key(since_iso):
+            continue
+        if until_iso and _date_key(pa) > _date_key(until_iso):
+            continue
+        kept.append(r)
+    return kept
+
+
 def _fetch(url: str, method: str = "GET", data: bytes | None = None,
            headers: dict[str, str] | None = None, timeout: float = 8,
            user_agent: str = "") -> str:
@@ -120,7 +236,8 @@ def _fetch(url: str, method: str = "GET", data: bytes | None = None,
     return ""
 
 
-def _build_url(spec: dict[str, Any], query: str, n: int) -> str:
+def _build_url(spec: dict[str, Any], query: str, n: int,
+               since: str | None = None, until: str | None = None) -> str:
     url = _resolve(spec["url"], query, n)
     qp = spec.get("query_param", "q")
     extra = spec.get("extra_params", {})
@@ -131,6 +248,34 @@ def _build_url(spec: dict[str, Any], query: str, n: int) -> str:
         if k in ("setlang", "hl", "lang", "uselang"):
             v = _lang_param(k, query) or v
         params[k] = _resolve(str(v), query, n)
+
+    # 时间窗参数下推（声明式 filter_args，仿主技能形态）：
+    #   filter_args:
+    #     since: [[param, "{since_iso}"]]
+    #     until: [[param, "{until_iso}"]]
+    # 占位符：{since}/{until} 原样；{since_iso}/{until_iso} 归一化日期；
+    #         {since_epoch}/{until_epoch} unix 时间戳。
+    # 参数名等于 query_param 时视为 query 追加（如 GitHub created:...）。
+    filter_args = spec.get("filter_args", {})
+    time_vals = {
+        "since": since, "until": until,
+        "since_iso": _parse_time(since), "until_iso": _parse_time(until),
+        "since_epoch": _to_epoch(since), "until_epoch": _to_epoch(until),
+    }
+    for key, tmpls in filter_args.items():
+        raw = time_vals.get(key)
+        if raw in (None, ""):
+            continue
+        for pair in tmpls if isinstance(tmpls, list) else [tmpls]:
+            if not (isinstance(pair, (list, tuple)) and len(pair) == 2):
+                continue
+            pname, pvalue = pair
+            pvalue = _resolve(str(pvalue), query, n, **time_vals)
+            if pname == qp:
+                base = params.get(pname, "")
+                params[pname] = f"{base} {pvalue}".strip()
+            else:
+                params[pname] = pvalue
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}{urllib.parse.urlencode(params)}"
 
@@ -302,7 +447,18 @@ def _parse_xml(engine_name: str, text: str, maps: dict[str, Any],
     title_tag = mapping.get("title", "title")
     url_tag = mapping.get("url", "link")
     snippet_tag = mapping.get("snippet", "description")
+    pub_tag = mapping.get("published_at", "pubDate")
     namespaces = mapping.get("namespaces", {})
+
+    def _find_tag(entry: Any, tag: str) -> str:
+        """按标签取值，兼容 atom:xxx 命名空间前缀。"""
+        if tag.startswith("atom:"):
+            tag_name = tag.split(":")[1]
+            ns = namespaces.get("atom")
+            node = entry.find(f"{{{ns}}}{tag_name}") if ns else None
+            return (node.text or "").strip() if node is not None else ""
+        node = entry.findtext(tag, default="")
+        return (node or "").strip()
 
     results: list[dict[str, Any]] = []
     try:
@@ -317,30 +473,10 @@ def _parse_xml(engine_name: str, text: str, maps: dict[str, Any],
 
     for idx, entry in enumerate(entries):
         try:
-            title = url = snippet = ""
-            if title_tag.startswith("atom:"):
-                tag = title_tag.split(":")[1]
-                ns = namespaces.get("atom")
-                node = entry.find(f"{{{ns}}}{tag}") if ns else None
-                title = (node.text or "").strip() if node is not None else ""
-            else:
-                title = (entry.findtext(title_tag, default="")).strip()
-
-            if url_tag.startswith("atom:"):
-                tag = url_tag.split(":")[1]
-                ns = namespaces.get("atom")
-                node = entry.find(f"{{{ns}}}{tag}") if ns else None
-                url = (node.text or "").strip() if node is not None else ""
-            else:
-                url = (entry.findtext(url_tag, default="")).strip()
-
-            if snippet_tag.startswith("atom:"):
-                tag = snippet_tag.split(":")[1]
-                ns = namespaces.get("atom")
-                node = entry.find(f"{{{ns}}}{tag}") if ns else None
-                snippet = (node.text or "").strip() if node is not None else ""
-            else:
-                snippet = (entry.findtext(snippet_tag, default="")).strip()
+            title = _find_tag(entry, title_tag)
+            url = _find_tag(entry, url_tag)
+            snippet = _find_tag(entry, snippet_tag)
+            raw_pub = _find_tag(entry, pub_tag) if pub_tag else ""
 
             title = re.sub(r"\s+", " ", title)[:200]
             snippet = re.sub(r"\s+", " ", snippet)[:300]
@@ -351,6 +487,7 @@ def _parse_xml(engine_name: str, text: str, maps: dict[str, Any],
                 "snippet": snippet,
                 "score": round(score, 3),
                 "source": engine_name,
+                "published_at": _normalize_date(raw_pub),
             })
         except Exception:
             continue
@@ -364,7 +501,10 @@ def _get_path(data: Any, path: str) -> Any:
         return data
     obj = data
     for part in path.split("."):
-        if isinstance(obj, dict):
+        if part.isdigit() and isinstance(obj, (list, tuple)):
+            idx = int(part)
+            obj = obj[idx] if idx < len(obj) else None
+        elif isinstance(obj, dict):
             obj = obj.get(part)
         else:
             return None
@@ -387,6 +527,7 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
     url_key = mapping.get("url")
     snippet_key = mapping.get("snippet")
     url_template = mapping.get("url_template")
+    published_key = mapping.get("published_at")
 
     results: list[dict[str, Any]] = []
     try:
@@ -419,6 +560,7 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
         if snippet_key:
             raw = _get_path(item, snippet_key)
             snippet = str(raw or "")[:300]
+        published_at = _normalize_date(_get_path(item, published_key)) if published_key else None
 
         title = re.sub(r"<[^>]+>", " ", title)
         title = re.sub(r"\s+", " ", title).strip()
@@ -432,6 +574,7 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
             "snippet": snippet,
             "score": round(score, 3),
             "source": engine_name,
+            "published_at": published_at,
         })
     return results
 
@@ -439,7 +582,8 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
 # ── 单个引擎执行 ─────────────────────────────────────────────────────────────────
 
 def _search_one(engine_name: str, query: str, n: int = 5,
-                timeout: float | None = None) -> tuple[list[dict[str, Any]], str]:
+                timeout: float | None = None,
+                since: str | None = None, until: str | None = None) -> tuple[list[dict[str, Any]], str]:
     cfg = _load_config()
     maps = _load_parse_maps()
     settings = cfg.get("settings", {})
@@ -456,7 +600,7 @@ def _search_one(engine_name: str, query: str, n: int = 5,
     method = spec.get("method", "GET")
     headers = spec.get("headers", {})
 
-    url = _build_url(spec, query, n)
+    url = _build_url(spec, query, n, since=since, until=until)
     spec["_base"] = spec.get("url", "")
 
     t0 = time.time()
@@ -479,6 +623,11 @@ def _search_one(engine_name: str, query: str, n: int = 5,
         results = _parse_json(engine_name, text, maps)
     else:
         results = []
+
+    # 时间窗过滤（通用兜底）：URL 参数下推之外的引擎同样受益，
+    # 仅保留 published_at 落在 [since, until] 内的结果。
+    if since or until:
+        results = _apply_time_window(results, since, until)
 
     for r in results:
         r["_engine"] = engine_name
@@ -507,8 +656,14 @@ def search_engines(
     skip_cache: bool = False,
     registry: EngineRegistry | None = None,
     mode: str = "fast",
+    since: str | None = None,
+    until: str | None = None,
 ) -> dict[str, Any]:
-    """local-search 主入口：批量调用本地引擎，返回 unified-search schema。"""
+    """local-search 主入口：批量调用本地引擎，返回 unified-search schema。
+
+    since/until: 发布时间时间窗（如 7d / 2026-08-01），下推到支持时间参数的引擎
+    （filter_args），并在解析后按 published_at 通用过滤。
+    """
     reg = registry or get_registry()
     cfg = _load_config()
     settings = cfg.get("settings", {})
@@ -534,9 +689,14 @@ def search_engines(
         # 全部不可用，回退到启用的引擎
         engines = reg.list_engines(enabled_only=True)[:3]
 
-    # 缓存读取
+    # 缓存读取：时间窗并入缓存键（与主技能 combo 层同一模式），
+    # 同一 query 不同 since/until 不串缓存；不扩展 SearchCache.get/set 签名。
     cache = SearchCache() if SearchCache is not None else None
     cache_key = _cache_key(engines)
+    if since:
+        cache_key += f"|since={since}"
+    if until:
+        cache_key += f"|until={until}"
     cache_domain = _cache_domain(domain)
     if not skip_cache and cache is not None:
         hit = cache.get(query, cache_key, n, domain=cache_domain)
@@ -564,7 +724,8 @@ def search_engines(
     errors: list[str] = []
 
     def _task(name: str) -> tuple[str, list[dict[str, Any]], str]:
-        res, err = _search_one(name, query, n=n, timeout=timeout)
+        res, err = _search_one(name, query, n=n, timeout=timeout,
+                               since=since, until=until)
         return name, res, err
 
     with ThreadPoolExecutor(max_workers=min(len(engines), max_parallel)) as ex:
@@ -628,6 +789,10 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="跳过缓存")
     parser.add_argument("--mode", default="fast", choices=["fast", "auto", "deep", "budget"],
                         help="unified-search 模式透传")
+    parser.add_argument("--since", default=None,
+                        help="发布时间下限（7d / 2026-08-01），下推到支持时间参数的引擎")
+    parser.add_argument("--until", default=None,
+                        help="发布时间上限（7d / 2026-08-01），下推到支持时间参数的引擎")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     args = parser.parse_args()
 
@@ -643,6 +808,8 @@ def main():
         max_parallel=args.max_parallel,
         skip_cache=args.no_cache,
         mode=args.mode,
+        since=args.since,
+        until=args.until,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

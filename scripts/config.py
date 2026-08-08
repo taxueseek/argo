@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -129,7 +130,10 @@ def _validate_engine_paths(config: dict[str, Any]) -> dict[str, Any]:
         if cmd_path_str.startswith("--"):
             continue
         cmd_path = Path(cmd_path_str).expanduser()
-        if not cmd_path.exists():
+        if cmd_path.exists():
+            continue
+        # 裸命令（如 PATH 中的可执行文件）：用 shutil.which 查 PATH，查不到才禁用
+        if not shutil.which(cmd_path_str):
             spec["enabled"] = False
     return config
 

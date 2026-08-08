@@ -102,6 +102,30 @@ engines:
     timeout: 8
     format: html
 
+  local_360:
+    type: html
+    enabled: true
+    categories: [chinese]
+    family: web_general
+    url: "https://www.so.com/s"
+    query_param: q
+    method: GET
+    timeout: 8
+    format: html
+    extra_params:
+      ie: utf-8
+
+  local_jisilu:
+    type: html
+    enabled: true
+    categories: [finance, chinese]
+    family: social
+    url: "https://www.jisilu.cn/explore/"
+    query_param: keyword
+    method: GET
+    timeout: 8
+    format: html
+
   local_arxiv:
     type: xml
     enabled: true
@@ -128,6 +152,11 @@ engines:
       db: pubmed
       retmode: json
       retmax: "{n}"
+      datetype: pdat
+    # 时间窗下推：mindate/maxdate + datetype=pdat（出版日期）
+    filter_args:
+      since: [[mindate, "{since_iso}"]]
+      until: [[maxdate, "{until_iso}"]]
 
   local_crossref:
     type: json
@@ -201,6 +230,10 @@ engines:
     headers:
       Accept: application/vnd.github.v3+json
       User-Agent: unified-search-local/1.0.1
+    # 时间窗下推：created 限定符追加进 q（参数名与 query_param 相同时自动追加，不重复 query）
+    filter_args:
+      since: [[q, "created:>={since_iso}"]]
+      until: [[q, "created:<={until_iso}"]]
 
   local_stackoverflow:
     type: json
@@ -216,6 +249,10 @@ engines:
       pagesize: "{n}"
       order: desc
       sort: relevance
+    # 时间窗下推：fromdate/todate（unix 时间戳）
+    filter_args:
+      since: [[fromdate, "{since_epoch}"]]
+      until: [[todate, "{until_epoch}"]]
 
   local_gitlab:
     type: json
@@ -229,6 +266,10 @@ engines:
     extra_params:
       per_page: "{n}"
       scope: projects
+    # 时间窗下推：created_after/created_before（ISO 日期）
+    filter_args:
+      since: [[created_after, "{since_iso}"]]
+      until: [[created_before, "{until_iso}"]]
 
   local_npm:
     type: json

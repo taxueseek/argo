@@ -33,6 +33,10 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="跳过缓存")
     parser.add_argument("--mode", default="fast", choices=["fast", "auto", "deep", "budget"],
                         help="unified-search 模式透传")
+    parser.add_argument("--since", default=None,
+                        help="发布时间下限（7d / 2026-08-01），下推到支持时间参数的引擎")
+    parser.add_argument("--until", default=None,
+                        help="发布时间上限（7d / 2026-08-01），下推到支持时间参数的引擎")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     args = parser.parse_args()
 
@@ -48,6 +52,8 @@ def main():
         max_parallel=args.max_parallel,
         skip_cache=args.no_cache,
         mode=args.mode,
+        since=args.since,
+        until=args.until,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

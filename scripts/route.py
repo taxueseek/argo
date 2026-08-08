@@ -840,17 +840,25 @@ def _apply_engine_policy(
     out = filter_combo_by_policy(out, mode=mode, depth=depth, context=context)
     if must_keep:
         budget = combo_budget(mode=mode, depth=depth, context=context)
+        keep_set = set(must_keep)
         for e in must_keep:
             if not e or e in out:
                 continue
             # must_keep 强制保留，不因 enabled 缺失丢弃
             # （modal_card 缺 key 时仍保留 bocha_ai/bocha，由执行层返回 error item）
             if budget is not None and len(out) >= budget:
-                # 保留首位主源，替换末位
-                if len(out) <= 1:
-                    out.append(e)
+                # 替换末位「非保底」成员，腾出槽位；保底成员之间不互踩
+                # （modal_card 整 combo 保底：bocha/train 依次补位时不得顶掉彼此）
+                replace_idx = next(
+                    (i for i in range(len(out) - 1, -1, -1)
+                     if out[i] not in keep_set),
+                    None,
+                )
+                if replace_idx is not None:
+                    out = out[:replace_idx] + out[replace_idx + 1:] + [e]
                 else:
-                    out = out[:-1] + [e]
+                    # 尾部全是保底成员：直接追加（保底优先于预算）
+                    out.append(e)
             else:
                 out.append(e)
         # 去重保序

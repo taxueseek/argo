@@ -144,6 +144,7 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
             res = search_v3.search_engines(
                 query, engines=None, n=n, timeout=float(timeout),
                 max_parallel=5, skip_cache=False, mode=mode,
+                since=kwargs.get("since"), until=kwargs.get("until"),
             )
             results = res.get("results") or []
             # 与子进程路径一致：每条带 _engine 标记，source 保持子引擎名
@@ -278,8 +279,8 @@ def available_engines() -> list[str]:
     return sorted(get_registry().keys())
 
 
-def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str = "fast", mode: str = "fast") -> list[dict[str, Any]]:
-    """统一引擎调用入口；失败返回空 list，不抛异常。"""
+def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str = "fast", mode: str = "fast", **kwargs) -> list[dict[str, Any]]:
+    """统一引擎调用入口；失败返回空 list，不抛异常。kwargs 透传到引擎 builder（如 since/until 时间窗）。"""
     registry = get_registry()
     fn = registry.get(engine)
     if not fn:
@@ -287,7 +288,7 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
         return []
     t0 = time.time()
     try:
-        results = fn(query, n, timeout, depth=depth, mode=mode)
+        results = fn(query, n, timeout, depth=depth, mode=mode, **kwargs)
     except TypeError:
         try:
             results = fn(query, n, timeout)

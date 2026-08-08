@@ -62,7 +62,7 @@ CATEGORY_PRIORITY = {
     "academic": ["local_arxiv", "local_semantic_scholar", "local_crossref", "local_pubmed"],
     "code": ["local_github", "local_stackoverflow", "local_gitlab", "local_npm"],
     "news": ["local_bing_news", "local_google_news", "local_duckduckgo_news"],
-    "chinese": ["local_baidu", "local_sogou", "local_bing", "local_duckduckgo"],
+    "chinese": ["local_baidu", "local_sogou", "local_360", "local_bing", "local_duckduckgo"],
     "japanese": ["local_yandex", "local_bing", "local_duckduckgo"],
     "korean": ["local_google", "local_bing", "local_duckduckgo"],
     "reference": ["local_wikipedia", "local_wiktionary", "local_wikiquote"],

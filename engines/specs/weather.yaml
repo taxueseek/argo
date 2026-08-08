@@ -1,0 +1,25 @@
+# 天气查询（免 Key）
+# 数据源: wttr.in（主用，免费公开）+ Open-Meteo（兜底，需要坐标）
+# 能力: 按地点名（城市/机场码/邮编）或坐标查询当前天气与未来预报
+# 实现: scripts/wx.py（纯标准库，输出结构化 YAML 结果列表）
+# 验证:
+#   python3 scripts/engine_validate.py --engine weather --stage all --admit
+#   python3 scripts/search.py "上海天气" --engine weather --json
+
+engine_id: weather
+type: cli
+enabled: true
+cost_tier: free
+cmd:
+- python3
+- scripts/wx.py
+search_args:
+- '{query}'
+- --n
+- '{n}'
+output_format: yaml
+timeout: 15
+canary_query: "Shanghai"
+desc: "天气查询（免 Key：wttr.in 主用 + Open-Meteo 兜底，当前+未来预报）"
+
+family: misc_vertical

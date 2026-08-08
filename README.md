@@ -260,6 +260,10 @@ python3 scripts/search.py --list-engines
 
 知乎、小红书、公众号这类要登录才能看的内容，以及 JS 渲染页、反爬页，用真实浏览器配合登录态去搜。默认关闭，需要时开启，依赖 ego lite 和 WebBridge 两个东西，详见下节「登录态专业搜索」。
 
+**6. 实时索引 + 时间窗**
+
+要搜「最近几天刚发布的内容」，用 `--engine realtime_index` 直达免 Key 实时索引源，结果自带发布时间；再配 `--since 7d` / `--until 2026-08-01` 这类时间窗，能精确框住发布时间范围，判断新旧不再靠猜。
+
 ### 能力入口速查
 
 | 能力 | 说明 | 入口 |
@@ -273,6 +277,8 @@ python3 scripts/search.py --list-engines
 | 截图 / PDF | 页面截图、PDF 结构化提取 | `argo_screenshot` / `argo_pdf` |
 | 站点爬取 | 列表页批量抓取 | `argo_crawl` |
 | 社交与舆情 | 微博 / 小红书 / B 站 / Reddit / X 等 | `argo_social_search` |
+| 实时索引搜索 | 免 Key 实时索引源，结果带发布时间，适合「最近几天有什么新东西」 | `--engine realtime_index` |
+| 时间窗过滤 | `--since` / `--until`（`7d` 或 `2026-08-01`）限定发布时间范围，CLI 与 MCP 均支持 | `--since 7d` |
 | 登录态专业搜索 | 知乎 / 小红书等登录墙正文、JS 渲染页、登录站点接口直取 | `sub-skills/ego-search/scripts/ego_search.py`（默认关闭，见下） |
 
 ### 预算模式
@@ -337,10 +343,10 @@ python3 sub-skills/ego-search/scripts/ego_search.py enable
 
 **依赖**（装好其中一个就能用，两个都装更好）：
 
-| 依赖 | 是什么 | 什么时候用 |
-|------|--------|-----------|
-| **ego lite** | 专门给 Agent 用的浏览器应用（仅 macOS），初始化后提供 `ego-browser` 命令 | 默认首选：独立空间，不抢你正在用的浏览器标签 |
-| **WebBridge** | 浏览器扩展桥，复用 Chrome / Edge 里已登录的会话 | ego lite 没装，或想直接沿用日常登录态时 |
+| 依赖 | 官方项目 | 是什么 | 什么时候用 |
+|------|----------|--------|-----------|
+| **ego lite** | [lite.ego.app](https://lite.ego.app/) | 专门给 Agent 用的浏览器应用（仅 macOS），初始化后提供 `ego-browser` 命令 | 默认首选：独立空间，不抢你正在用的浏览器标签 |
+| **WebBridge** | [Kimi WebBridge 官方帮助中心](https://www.kimi.com/zh-cn/help/kimi-webbridge/kimi-webbridge-introduction) | 浏览器扩展桥，复用 Chrome / Edge 里已登录的会话 | ego lite 没装，或想直接沿用日常登录态时 |
 
 登录态搜到的结果**不写**公共搜索缓存（避免污染共享缓存），需要融合时用 `merge` 命令把常规结果和登录态结果放一起分析。
 
@@ -396,6 +402,7 @@ python3 scripts/search.py "同一查询" --json | \
 |------|------|
 | Python | 3.10+（命令行与 MCP 核心） |
 | 依赖 | `pip install pyyaml`（仅此一个硬依赖） |
+| 可选增强 | `pip install curl_cffi`（TLS 指纹伪造，MIT 许可）。装上后对指纹检测型反爬站（Cloudflare 等）免起浏览器即可抓取；缺失时自动降级，核心功能不受影响 |
 | Node.js | **仅**在使用 `npx` 入口时需要 18+ |
 | SearXNG | 不需要（内置本地引擎替代） |
 

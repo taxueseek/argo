@@ -1,0 +1,37 @@
+# 航空气象 METAR 查询（免 Key）
+# 数据源: https://aviationweather.gov/api/data/metar — 美国 FAA 官方公开数据
+# 能力: 按 ICAO 机场代码（逗号分隔可多机场）查询实时航空例行天气报告（METAR）
+# 端点: GET /api/data/metar?ids=<ICAO...>&format=json&hours=2
+#   返回 METAR 对象数组：icaoId/rawOb/temp/dewp/wspd/visib/altim/fltCat/name/reportTime
+# 验证:
+#   python3 scripts/engine_validate.py --engine aviation_weather --stage all --admit
+#   python3 scripts/search.py "KLAX" --engine aviation_weather --json
+
+engine_id: aviation_weather
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://aviationweather.gov/api/data/metar
+timeout: 10
+query_param: ids
+format: json
+canary_query: "KLAX"
+desc: "航空气象（METAR 实时例行天气报告，按 ICAO 机场代码查询）"
+
+family: misc_vertical
+
+extra_params:
+  hours: "2"
+
+# 机场名（name 字段，如「Los Angeles Intl, CA, US」）是真实标注，
+# 保留而非改写为引擎名
+preserve_source: true
+
+output_map:
+  items: "."
+  item_title: icaoId
+  url_template: "https://aviationweather.gov/metar?ids={icaoId}"
+  item_summary: rawOb
+  item_source: name
+  item_published_at: reportTime

@@ -1,0 +1,30 @@
+# 实时索引数据源（免 Key CLI 桥接）
+# 结构化 YAML 输出，结果带 published_at（发布时间）维度，支持时间窗过滤。
+# 工程侧形态与 hackernews/local_search 一致：声明式 spec + 通用 cli builder，
+# 不新增 Python 特例分支。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine realtime_index --stage all --admit
+#   python3 scripts/search.py "rust async" --engine realtime_index --since 7d --json
+
+engine_id: realtime_index
+type: cli
+enabled: true
+cost_tier: free
+label: 实时索引搜索
+desc: 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤）
+canary_query: "climate change"
+cmd:
+- keenable
+search_args:
+- search
+- '{query}'
+output_format: yaml
+filter_args:
+  since:
+  - --published-after
+  - '{since}'
+  until:
+  - --published-before
+  - '{until}'
+timeout: 15

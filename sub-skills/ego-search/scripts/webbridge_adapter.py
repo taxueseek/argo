@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -45,25 +47,117 @@ SERP_JS = r"""
   };
   const cfg = configs[engine] || configs.bing;
   const items = [];
+  const extractDate = (t) => {
+    const m = t.match(/(20\d{2})[年\/\-\.](\d{1,2})[月\/\-\.](\d{1,2})/);
+    if (m) return m[1] + '-' + String(m[2]).padStart(2,'0') + '-' + String(m[3]).padStart(2,'0');
+    const m2 = t.match(/(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{4})/i);
+    if (m2) { const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return m2[3] + '-' + mo[m2[2].toLowerCase().slice(0,3)] + '-' + String(m2[1]).padStart(2,'0'); }
+    return '';
+  };
   document.querySelectorAll(cfg.item).forEach(el => {
     const a = el.querySelector(cfg.link);
     if (!a) return;
     const p = el.querySelector(cfg.snippet);
+    const text = (el.innerText || '') + ' ' + (a.href || '');
     items.push({
       title: (a.innerText || '').trim(),
       url: a.href || '',
       snippet: (p ? p.innerText : '').trim().slice(0, 300),
+      published_at: extractDate(text),
     });
   });
   if (!items.length) {
     document.querySelectorAll('h2 a, h3 a').forEach(a => {
       if (items.length >= n) return;
-      items.push({ title: (a.innerText || '').trim(), url: a.href || '', snippet: '' });
+      items.push({ title: (a.innerText || '').trim(), url: a.href || '', snippet: '', published_at: extractDate((a.innerText || '') + ' ' + (a.href || '')) });
     });
   }
   return JSON.stringify(items.slice(0, n));
 })()
 """
+
+# ── 时间窗工具（ego/webbridge 双路径共用）──────────────────────────────
+def _parse_time(s: str | None) -> str | None:
+    """相对（7d/30d/12h/1w/1y）或绝对（2026-08-01/ISO）→ ISO 日期。"""
+    if not s:
+        return None
+    s = str(s).strip()
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date().isoformat()
+    except ValueError:
+        pass
+    m = re.fullmatch(r"(\d+)([hdwmy])", s.lower())
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2)
+    now = datetime.now()
+    delta = {
+        "h": timedelta(hours=n), "d": timedelta(days=n), "w": timedelta(weeks=n),
+        "m": timedelta(days=30 * n), "y": timedelta(days=365 * n),
+    }[unit]
+    return (now - delta).date().isoformat()
+
+
+def _to_epoch_ms(s: str | None) -> str:
+    iso = _parse_time(s)
+    if not iso:
+        return ""
+    try:
+        return str(int(datetime.fromisoformat(iso).timestamp() * 1000))
+    except ValueError:
+        return ""
+
+
+def time_url_params(engine: str, since: str | None, until: str | None) -> dict[str, str]:
+    """各引擎 URL 时间筛选参数（尽力而为；引擎改版失效时由解析后过滤兜底）。"""
+    since_iso, until_iso = _parse_time(since), _parse_time(until)
+    if engine == "google":
+        if since_iso or until_iso:
+            parts = ["cdr:1"]
+            if since_iso:
+                parts.append(f"cd_min:{since_iso}")
+            if until_iso:
+                parts.append(f"cd_max:{until_iso}")
+            return {"tbs": ",".join(parts)}
+    elif engine == "bing":
+        if since_iso:
+            try:
+                days = max((datetime.now() - datetime.fromisoformat(since_iso)).days, 1)
+                return {"qft": f"+filterui:age-lt{days * 86400}"}
+            except ValueError:
+                pass
+    elif engine == "baidu":
+        if since_iso or until_iso:
+            return {"gpc": f"stf%3D{_to_epoch_ms(since_iso)}%2C{_to_epoch_ms(until_iso)}%7Cstftype%3D2"}
+    return {}
+
+
+def filter_window(results: list, since: str | None, until: str | None) -> list:
+    """解析后时间窗过滤：仅保留 published_at 落在 [since, until] 内的结果。
+
+    时间窗查询必须保证结果新鲜，无日期字段的条目剔除（与 local-search 行为一致）。
+    """
+    since_iso, until_iso = _parse_time(since), _parse_time(until)
+    if not since_iso and not until_iso:
+        return results
+
+    def _key(d: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in str(d).split("-"))
+
+    out = []
+    for r in results:
+        pa = r.get("published_at") if isinstance(r, dict) else None
+        if not pa:
+            continue
+        if since_iso and _key(pa) < _key(since_iso):
+            continue
+        if until_iso and _key(pa) > _key(until_iso):
+            continue
+        out.append(r)
+    return out
 
 BODY_JS = r"""
 (() => {
@@ -163,10 +257,16 @@ def search(
     n: int = 8,
     session: str = "ego-search",
     timeout: int = DEFAULT_TIMEOUT,
+    since: str | None = None,
+    until: str | None = None,
 ) -> dict[str, Any]:
     if engine not in SEARCH_URLS:
         return {"ok": False, "error": f"unsupported_engine: {engine}"}
     url = SEARCH_URLS[engine].format(q=urllib.parse.quote(query))
+    tparams = time_url_params(engine, since, until)
+    if tparams:
+        sep = "&" if "?" in url else "?"
+        url += sep + urllib.parse.urlencode(tparams)
     nav = navigate(url, session, group_title=f"search:{query[:40]}")
     if not nav.get("ok"):
         return nav
@@ -182,6 +282,9 @@ def search(
         results = _parse_jsonish(results)
     if not isinstance(results, list):
         results = []
+    # 解析后时间窗过滤（URL 参数之外的通用兜底）
+    if since or until:
+        results = filter_window(results, since, until)
     return {
         "ok": True,
         "payload": {
@@ -193,6 +296,8 @@ def search(
             "results": results,
             "count": len(results),
             "fetch_method": "browser",
+            "since": since,
+            "until": until,
         },
     }
 

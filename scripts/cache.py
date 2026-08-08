@@ -493,10 +493,16 @@ class SearchCache:
 
     @staticmethod
     def _key(query: str, engine: str, max_results: int = 0, domain: str = "general",
-             mode: str = "auto", depth: str = "fast", kind: str = "combo") -> str:
+             mode: str = "auto", depth: str = "fast", kind: str = "combo",
+             since: str | None = None, until: str | None = None) -> str:
         """生成缓存键。max_results 不参与 key（柔性命中）；kind 区分 combo/engine/fetch。"""
         nq = normalize_query(query)
         raw = f"{kind}|{nq}|{engine}|{domain}|{mode}|{depth}"
+        # 时间窗并入 key：同一 query 不同 since/until 不串缓存
+        if since:
+            raw += f"|since={since}"
+        if until:
+            raw += f"|until={until}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
     @staticmethod
@@ -672,8 +678,10 @@ class SearchCache:
 
     def get_engine(self, query: str, engine: str, max_results: int,
                    domain: str = "general", mode: str = "auto",
-                   depth: str = "fast") -> Optional[list]:
-        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine")
+                   depth: str = "fast", since: str | None = None,
+                   until: str | None = None) -> Optional[list]:
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
+                        since=since, until=until)
         hit = self._read(key)
         if hit is None:
             return None
@@ -684,7 +692,8 @@ class SearchCache:
 
     def set_engine(self, query: str, engine: str, max_results: int,
                    results: list, domain: str = "general", mode: str = "auto",
-                   depth: str = "fast", ttl: int | None = None):
+                   depth: str = "fast", ttl: int | None = None,
+                   since: str | None = None, until: str | None = None):
         assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set_engine")
         if isinstance(results, list):
             for item in results[:3]:
@@ -695,7 +704,8 @@ class SearchCache:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
-        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine")
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
+                        since=since, until=until)
         self._write(key, query, engine, max_results, {"results": results}, domain, effective_ttl)
 
     # ── fetch URL 缓存 ───────────────────────────────────────────────────────

@@ -190,20 +190,29 @@ SERP_EXTRACT_IIFE = r"""(() => {
   };
   const cfg = configs['%%ENGINE%%'] || configs.bing;
   const items = [];
+  const extractDate = (t) => {
+    const m = t.match(/(20\d{2})[年\/\-\.](\d{1,2})[月\/\-\.](\d{1,2})/);
+    if (m) return m[1] + '-' + String(m[2]).padStart(2,'0') + '-' + String(m[3]).padStart(2,'0');
+    const m2 = t.match(/(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{4})/i);
+    if (m2) { const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return m2[3] + '-' + mo[m2[2].toLowerCase().slice(0,3)] + '-' + String(m2[1]).padStart(2,'0'); }
+    return '';
+  };
   document.querySelectorAll(cfg.item).forEach(el => {
     const a = el.querySelector(cfg.link);
     if (!a) return;
     const p = el.querySelector(cfg.snippet);
+    const text = (el.innerText || '') + ' ' + (a.href || '');
     items.push({
       title: (a.innerText || '').trim(),
       url: a.href || '',
       snippet: (p ? p.innerText : '').trim().slice(0, 300),
+      published_at: extractDate(text),
     });
   });
   if (!items.length) {
     document.querySelectorAll('h2 a, h3 a').forEach(a => {
       if (items.length >= %%N%%) return;
-      items.push({ title: (a.innerText || '').trim(), url: a.href || '', snippet: '' });
+      items.push({ title: (a.innerText || '').trim(), url: a.href || '', snippet: '', published_at: extractDate((a.innerText || '') + ' ' + (a.href || '')) });
     });
   }
   return JSON.stringify(items.slice(0, %%N%%));
@@ -375,6 +384,11 @@ def run_with_fallback(
 def _search_ego(args: argparse.Namespace) -> dict[str, Any]:
     q = urllib.parse.quote(args.query)
     url = SEARCH_URLS[args.engine].format(q=q)
+    # 时间窗：URL 参数下推（google cdr / bing age-lt / baidu gpc）+ 解析后过滤兜底
+    tparams = wb.time_url_params(args.engine, getattr(args, "since", None), getattr(args, "until", None))
+    if tparams:
+        sep = "&" if "?" in url else "?"
+        url += sep + urllib.parse.urlencode(tparams)
     js = build_js(
         JS_SEARCH,
         TASK_SPACE=args.task_space,
@@ -386,6 +400,11 @@ def _search_ego(args: argparse.Namespace) -> dict[str, Any]:
     if not r["ok"]:
         return r
     p = r["payload"]
+    results = p.get("results", [])
+    since = getattr(args, "since", None)
+    until = getattr(args, "until", None)
+    if since or until:
+        results = wb.filter_window(results, since, until)
     return {
         "ok": True,
         "payload": {
@@ -395,8 +414,8 @@ def _search_ego(args: argparse.Namespace) -> dict[str, Any]:
             "runtime": "ego",
             "url": p.get("url"),
             "page_title": p.get("title"),
-            "results": p.get("results", []),
-            "count": len(p.get("results", [])),
+            "results": results,
+            "count": len(results),
             "fetch_method": "browser",
             "task_space": p.get("task_space") or args.task_space,
             "task_id": p.get("task_id"),
@@ -412,6 +431,7 @@ def cmd_search(args: argparse.Namespace) -> None:
         return wb.search(
             args.query, engine=args.engine, n=args.n,
             session=args.task_space, timeout=args.timeout,
+            since=getattr(args, "since", None), until=getattr(args, "until", None),
         )
 
     r, runtime = run_with_fallback(args, ego_fn=lambda: _search_ego(args), wb_fn=wb_fn, label="search")
@@ -463,6 +483,11 @@ def cmd_act(args: argparse.Namespace) -> None:
     def ego_fn():
         q = urllib.parse.quote(args.query)
         url = SEARCH_URLS[args.engine].format(q=q)
+        # 时间窗：URL 参数下推 + 解析后过滤（与 search 一致）
+        tparams = wb.time_url_params(args.engine, getattr(args, "since", None), getattr(args, "until", None))
+        if tparams:
+            sep = "&" if "?" in url else "?"
+            url += sep + urllib.parse.urlencode(tparams)
         js = build_js(
             JS_ACT,
             TASK_SPACE=args.task_space,
@@ -476,6 +501,17 @@ def cmd_act(args: argparse.Namespace) -> None:
         if not r.get("ok"):
             return r
         p = r["payload"]
+        since = getattr(args, "since", None)
+        until = getattr(args, "until", None)
+        if since or until:
+            results = wb.filter_window(p.get("results") or [], since, until)
+            # detail 若对应被过滤掉的首条则丢弃，避免结果与详情不一致
+            detail = p.get("detail")
+            if detail:
+                d_url = (detail.get("url") or "") if isinstance(detail, dict) else ""
+                if not results or not d_url or d_url != results[0].get("url"):
+                    p["detail"] = None
+            p["results"] = results
         p.setdefault("engine", f"ego_browser_{args.engine}")
         p.setdefault("runtime", "ego")
         p["space_kept"] = bool(getattr(args, "keep_space", False))
@@ -485,6 +521,7 @@ def cmd_act(args: argparse.Namespace) -> None:
         sr = wb.search(
             args.query, engine=args.engine, n=1,
             session=args.task_space, timeout=args.timeout,
+            since=getattr(args, "since", None), until=getattr(args, "until", None),
         )
         if not sr.get("ok"):
             return sr
@@ -695,6 +732,10 @@ def main() -> None:
         help="搜索引擎（默认 bing；baidu 中文，google 可能弹验证）",
     )
     p_search.add_argument("--n", type=int, default=8, help="结果条数（默认 8）")
+    p_search.add_argument("--since", default=None,
+                          help="发布时间下限（7d / 2026-08-01）：SERP URL 时间筛选 + 解析后过滤")
+    p_search.add_argument("--until", default=None,
+                          help="发布时间上限（7d / 2026-08-01）：SERP URL 时间筛选 + 解析后过滤")
     p_search.set_defaults(fn=cmd_search)
 
     p_fetch = sub.add_parser("fetch", help="浏览器态正文提取（JS 渲染/反爬/登录墙页面）")
@@ -708,6 +749,10 @@ def main() -> None:
         "--engine", choices=list(SEARCH_URLS), default="bing",
         help="搜索引擎（默认 bing；与 search 共用）",
     )
+    p_act.add_argument("--since", default=None,
+                       help="发布时间下限（7d / 2026-08-01）：SERP URL 时间筛选 + 解析后过滤")
+    p_act.add_argument("--until", default=None,
+                       help="发布时间上限（7d / 2026-08-01）：SERP URL 时间筛选 + 解析后过滤")
     p_act.set_defaults(fn=cmd_act)
 
     p_api = sub.add_parser("api", help="浏览器上下文数据直取（同源 API，继承登录态）")

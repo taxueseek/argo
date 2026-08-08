@@ -8,12 +8,20 @@
 |----|--------|--------------|-------------|
 | **L1 声明式 HTTP** | 标准 REST JSON 搜索 | `engines/specs/<id>.yaml` + 环境变量 | 否 |
 | **L2 增强声明式** | 特殊 header/body/output_map | 同上，补全 `output_map` / `required_env` | 通常否 |
+| **CLI 桥接** | 本机已装 CLI 输出 YAML/JSON（结构化） | `engines/specs/<id>.yaml`，`type: cli` + `cmd`/`search_args`/`output_format`/`filter_args` | 否 |
 | **L3 插件** | 多端点、HTML、会话、非标协议 | `engines/plugins/<id>.py` + spec `type` | 是 |
 
 模板：
 
 - L1/L2：`engines/_template_http.yaml`
+- CLI 桥接：`engines/_template_cli.yaml`（参考实现 `engines/specs/realtime_index.yaml`）
 - L3：`engines/plugins/_template_plugin.py`
+
+CLI 桥接关键字段：
+
+- `cmd` / `search_args`：命令与参数模板，支持 `{query}` / `{n}` 占位符；裸命令（PATH 中）与绝对路径均可。
+- `output_format: yaml`：走通用 YAML 解析，支持 `results`/`items`/`data` 或顶层 list，字段别名 `title|name`、`url|link`、`snippet|description|content`，并保留 `published_at` 发布时间维度。
+- `filter_args`：条件参数表。查询带 `--since`/`--until`（如 `7d` / `2026-08-01`）时自动追加对应 CLI 参数；未携带则不追加。缓存按时间窗隔离，不会串结果。
 
 ## 环境变量规范
 

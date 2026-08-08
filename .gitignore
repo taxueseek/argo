@@ -9,3 +9,4 @@ cache/
 installs.local.yaml
 *.bak-before-link
 dist/
+scripts/data/

@@ -254,6 +254,10 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **路由健康语义修复（v2.7.1）**：健康过滤只作用于 local_* 子引擎；sub-skills 与 scripts 顶层模块名隔离（health_check 不再被劫持）；health_probe 只探测 local_*，消除慢源误报
 - **macro_data 国家分流（v2.7.1）**：非美国宏观查询（中国GDP/日本通胀）worldbank 前置不再被 primary 扶正覆盖，避免 FRED 美国数据冒充
 - **深度研究 local_first（v2.7.1）**：决策树先本地聚合，结果不足才升级全量；修复「先全量再本地」的浪费顺序
+- **实时索引引擎（v2.7.3）**：`realtime_index` 免 Key 实时索引源，结构化 YAML 输出，结果带 `published_at` 发布时间维度；不参与日常 combo，显式 `--engine realtime_index` 指定
+- **时间窗过滤（v2.7.3）**：`--since`/`--until`（`7d` 或 `2026-08-01`）下推到支持时间窗的引擎，CLI 与 MCP 均支持；per-engine 缓存按时间窗隔离
+- **CLI 引擎声明式接入（v2.7.3）**：`output_format: yaml` 通用 YAML 解析 + `filter_args` 条件参数，新增 CLI 桥接引擎零 Python；模板 `engines/_template_cli.yaml`
+- **裸命令引擎路径校验修复（v2.7.3）**：PATH 中的裸命令 CLI 引擎不再被配置校验误判为不存在而禁用（`shutil.which` 兜底）
 
 ### 用法
 
@@ -281,6 +285,7 @@ python3 scripts/search.py "查询词" --engine hackernews
 python3 scripts/search.py "查询词" --engine stackoverflow
 python3 scripts/search.py "查询词" --engine google_scholar
 python3 scripts/search.py "查询词" --engine v2ex
+python3 scripts/search.py "查询词" --engine realtime_index   # 实时索引源，结构化输出带发布时间
 
 # 本地零成本优先（local_search 聚合）
 python3 scripts/search.py "查询词" --local-first
@@ -297,6 +302,11 @@ python3 scripts/search.py "查询词" --no-cache
 python3 scripts/search.py "查询词" --depth fast|balanced|deep
 python3 scripts/search.py --list-engines
 python3 scripts/quota.py stats
+
+# 时间窗过滤（支持该能力的引擎；7d 相对值或 YYYY-MM-DD 绝对日期）
+python3 scripts/search.py "rust async" --engine realtime_index --since 7d
+python3 scripts/search.py "rust async" --engine realtime_index --since 2026-08-01 --until 2026-08-05
+# MCP argo_search 同样支持 since/until 参数
 
 # AnySearch 垂直域搜索
 python3 scripts/search.py "AAPL" --domain finance --sub_domain finance.us_stock
@@ -723,7 +733,7 @@ python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --count
 
 ego-search 是 argo 的**登录态专业搜索**子技能，物理位于 `sub-skills/ego-search/`：
 
-- **双运行时（都保留）**：ego lite + WebBridge；**任一可用**即可；`--runtime auto|ego|webbridge`。
+- **双运行时（都保留）**：ego lite（[lite.ego.app](https://lite.ego.app/)）+ WebBridge（[Kimi WebBridge 官方帮助中心](https://www.kimi.com/zh-cn/help/kimi-webbridge/kimi-webbridge-introduction)）；**任一可用**即可；`--runtime auto|ego|webbridge`。
 - **与常规检索隔离**：`search_partition=login`、`cache_eligible=false`，禁止写公共 SearchCache。
 - **汇总融合**：`merge --public a.json --login b.json`（分析层；不去污染缓存）。
 - **登录稳定**：`--site host` 粘性空间 + 默认 keep；fetch 挂 `quality.login_likely_ok`。

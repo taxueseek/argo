@@ -1,0 +1,39 @@
+# 复制本文件到 engines/specs/<engine_id>.yaml 后修改
+# 文件名或 engine_id 字段即为引擎 ID
+# CLI 桥接：本机已装的命令行工具输出 YAML/JSON，声明式接入，无需改 Python
+# 参考实现：engines/specs/realtime_index.yaml
+#
+# 接入后验证：
+#   python3 scripts/engine_validate.py --engine <engine_id> --stage health --admit
+#   python3 scripts/search.py --list-engines --detail
+
+engine_id: my_cli_engine
+type: cli
+enabled: true
+cost_tier: free          # free | low | api | paid
+label: 我的 CLI 搜索
+desc: CLI 桥接搜索（结构化输出）
+# 探测查询：health 检测用，选覆盖广的词
+canary_query: "climate change"
+
+# 命令模板：裸命令（PATH 中）或绝对路径均可；{query} 会被替换
+cmd:
+- mycli
+search_args:
+- search
+- '{query}'
+
+# 输出格式：yaml 走通用 YAML 解析（results/items/data 或顶层 list，
+# 字段别名 title|name、url|link、snippet|description|content，保留 published_at）
+output_format: yaml
+
+# 时间窗过滤：arg 携带 since/until（如 7d / 2026-08-01）时追加对应参数
+# filter_args:
+#   since:
+#   - --published-after
+#   - '{since}'
+#   until:
+#   - --published-before
+#   - '{until}'
+
+timeout: 15

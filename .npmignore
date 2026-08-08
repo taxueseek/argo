@@ -1,0 +1,32 @@
+# Python 编译缓存
+**/__pycache__/
+**/__pycache__/**
+**/*.pyc
+**/*.pyo
+
+# 版本控制
+.git/
+.gitignore
+.gitattributes
+
+# 本地与发布产物
+dist/
+node_modules/
+
+# 测试与内部文档
+tests/
+docs/
+*.md.tmp
+
+# 本地数据与临时文件
+*.db
+*.sqlite
+*.jsonl
+*.log
+*.tmp
+*.swp
+.DS_Store
+
+# 隐私与状态
+.private/
+.secrets/

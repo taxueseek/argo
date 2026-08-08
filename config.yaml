@@ -247,10 +247,19 @@ domains:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings|report|announcement)
   primary: em_miaoxiang
-- desc: 天气查询（和风天气）
+- desc: 航空气象（METAR 机场实时天气，按 ICAO 代码查询）
+  engines_combo:
+  - aviation_weather
+  fallback: aviation_weather
+  name: aviation_weather
+  parallel: false
+  patterns:
+  - (?i)(metar|taf|aviation\s*weather|airport\s*weather|aviationweather\.gov|航空气象|机场天气|机场气象|飞行气象|通航气象)
+- desc: 天气查询（和风天气 + 免 Key 天气引擎）
   engines_combo:
   - qweather
   - byted
+  - weather
   fallback: qweather
   name: weather_query
   parallel: false
@@ -264,6 +273,7 @@ domains:
   engines_combo:
   - bocha_ai
   - bocha
+  - train
   fallback: bocha_ai
   name: modal_card
   parallel: false
@@ -771,6 +781,7 @@ domains:
   - byted
   - octen
   - juejin
+  - cn_ai_news
   fallback: byted
   name: chinese_tech_deep
   parallel: true

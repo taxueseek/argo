@@ -126,6 +126,9 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
             "source": r.get("source"),
             "score": r.get("score"),
         }
+        # 保留发布时间维度（仅引擎输出该字段时，避免空字段噪音）
+        if r.get("published_at"):
+            item["published_at"] = r["published_at"]
         # 保留快评，丢掉大块 meta
         for k in ("selection", "absorption", "credibility_fast", "evidence_flags"):
             if k in r:
@@ -380,6 +383,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 timeout=arguments.get("timeout", 10),
                 depth=arguments.get("depth", "fast"),
                 mode=arguments.get("mode", "auto"),
+                since=arguments.get("since"),
+                until=arguments.get("until"),
                 cache=_get_cache(),
                 envelope=False,
                 context="search",

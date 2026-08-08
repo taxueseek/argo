@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-fetch_v3.py — 三级抓取架构（零外部依赖，纯 stdlib + 系统 Chrome）
+fetch_v3.py — 四级抓取架构（零外部依赖，纯 stdlib + 系统 Chrome）
 
 吸收 Hound 的页面交互能力，但不引入 Playwright/Patchright 依赖：
   第一级：增强 HTTP（UA 轮换 + Cookie 积累 + 重试弹性）
+  第一级B：TLS 指纹伪造（curl_cffi impersonate，多指纹轮换，免起浏览器）
   第二级：Chrome CDP 驱动（页面交互/JS 渲染/CF 绕过）
   第三级：内容质量评估（content_ok/page_type/quality_score）
 
 对比 fetch_v2：
 - fetch_v2: urllib + Hound subprocess（需要 master_fetch 包）
-- fetch_v3: http_client(stdlib) + chrome_cdp(stdlib+系统Chrome) → 完全自主
+- fetch_v3: http_client(stdlib) + curl_cffi(可选) + chrome_cdp(stdlib+系统Chrome) → 完全自主
+
+TLS 指纹伪造层（第一级B）：
+  指纹检测型反爬（Cloudflare 等）凭 TLS ClientHello 判 bot，urllib 直接 403。
+  curl_cffi 可逐字节模拟 Chrome/Safari/Firefox 指纹，免起浏览器即可通过。
+  开关：ARGO_FETCH_IMPERSONATE=0 关闭，默认开启。
 
 用法：
     from fetch_v3 import fetch_v3, fetch_page_v3
@@ -131,6 +137,26 @@ def _needs_browser(result: dict) -> bool:
     return False
 
 
+def _impersonate_enabled() -> bool:
+    """TLS 指纹伪造层开关：ARGO_FETCH_IMPERSONATE=0 关闭，默认开启。"""
+    return os.environ.get("ARGO_FETCH_IMPERSONATE", "1").strip() not in (
+        "0", "false", "False", "no")
+
+
+def _mark_stop_signal(result: dict, resp: dict) -> dict:
+    """把 429/503 明确停止信号记录到结果，供主链门禁使用。
+
+    429（速率限制）与 503（服务过载）是服务器明确的「请停止」信号，
+    与请求方式（UA/TLS 指纹/浏览器）无关。收到后不应升级重链，
+    否则等于无视服务器指示、持续放大目标站点负载。
+    """
+    status = resp.get("status", 0)
+    result["status"] = status
+    if status in (429, 503):
+        result["stop_signal"] = True
+    return result
+
+
 # ─── 第一级：增强 HTTP ───────────────────────────────────────────────────────
 
 def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
@@ -161,12 +187,54 @@ def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
             return _make_result(url, "", 0, "http", ok=False, error=str(e)[:100])
 
     if resp.get("status", 0) >= 400:
-        return _make_result(url, "", 0, "http", ok=False,
-                            error=f"HTTP {resp.get('status')}")
+        result = _make_result(url, "", 0, "http", ok=False,
+                              error=f"HTTP {resp.get('status')}")
+        _mark_stop_signal(result, resp)
+        return result
     if not resp.get("text"):
         return _make_result(url, "", 0, "http", ok=False, error="empty response")
 
     return _make_result(url, resp["text"], max_chars, "http")
+
+
+def _tls_spoof_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
+    """TLS 指纹伪造层：curl_cffi impersonate 多指纹轮换抓取。
+
+    针对指纹检测型反爬（Cloudflare 等直接按 TLS ClientHello 判 bot），
+    urllib/curl 原生指纹与真实浏览器不同会被 403。本层用 curl_cffi
+    逐字节模拟 Chrome/Safari/Firefox 指纹，免起浏览器即可通过。
+
+    指纹轮换顺序：chrome → safari → firefox（safari 对部分站点更友好）。
+    """
+    try:
+        from url_safety import check_url
+        ok, reason = check_url(url)
+        if not ok:
+            return _make_result(url, "", 0, "tls_spoof", ok=False,
+                                error=f"URL 被 SSRF 防护拦截: {reason}")
+    except ImportError:
+        pass
+
+    try:
+        from http_client import HttpClient
+        client = HttpClient(timeout=timeout, max_retries=1, jitter=False)
+        resp = client.get_impersonated(url, timeout=timeout)
+    except ImportError:
+        return _make_result(url, "", 0, "tls_spoof", ok=False,
+                            error="http_client not available")
+
+    if resp.get("status", 0) >= 400:
+        result = _make_result(url, "", 0, "tls_spoof", ok=False,
+                              error=f"HTTP {resp.get('status')}")
+        _mark_stop_signal(result, resp)
+        return result
+    if not resp.get("text"):
+        return _make_result(url, "", 0, "tls_spoof", ok=False,
+                            error=resp.get("error", "empty response"))
+
+    result = _make_result(url, resp["text"], max_chars, "tls_spoof")
+    result["impersonate"] = resp.get("impersonate", "")
+    return result
 
 
 def _wayback_fetch(url: str, max_chars: int = 8000, timeout: float = 12.0) -> dict:
@@ -433,10 +501,11 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
              actions: list[dict] | None = None,
              force_browser: bool = False,
              skip_cache: bool = False) -> dict:
-    """三级抓取主函数。
+    """四级抓取主函数。
 
     第一级：增强 HTTP（UA 轮换 + Cookie 积累）
-    第二级：Chrome CDP 浏览器（自动降级或 actions 触发）
+    第一级B：TLS 指纹伪造（curl_cffi impersonate，指纹检测型反爬）
+    第二级：Wayback 快照 + Chrome CDP 浏览器（自动降级或 actions 触发）
     第三级：质量评估（content_ok/page_type/quality_score）
 
     URL 级缓存：无 actions 的成功结果写入 SearchCache（L1+L2）。
@@ -454,6 +523,18 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
 
     # URL 优化（Reddit 重写、追踪参数清理）
     url = _optimize_url(url)
+
+    # robots.txt 尊重（合规门禁）：被禁路径直接拒绝，抓取失败放行
+    try:
+        from robots_guard import robots_blocked
+        if robots_blocked(url, timeout=min(timeout, 5.0)):
+            result = _make_result(url, "", 0, "robots_blocked", ok=False,
+                                  error="robots.txt 禁止抓取")
+            result = _assess_quality(result)
+            result["cached"] = False
+            return result
+    except ImportError:
+        pass
 
     # 有 actions → 强制浏览器模式，且不读缓存
     if actions:
@@ -485,19 +566,35 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
         # 第一级：HTTP
         result = _http_fetch(url, max_chars, timeout)
 
-        # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
-        if not result.get("success"):
-            wb = _wayback_fetch(url, max_chars, timeout=min(timeout * 1.5, 12.0))
-            if wb.get("success"):
-                wb["http_fallback"] = True
-                result = wb
+        # 明确停止信号（429/503）→ 不再升级 TLS/wayback/CDP。
+        # 限速/过载与请求方式无关，继续升级重链 = 无视服务器指示放大负载。
+        if not result.get("stop_signal"):
+            # 第一级B：TLS 指纹伪造（HTTP 失败或疑似指纹拦截时）
+            # 指纹检测型反爬对 urllib 直接 403，TLS 层免起浏览器即可通过，
+            # 避免不必要的 CDP 冷启动。
+            if _impersonate_enabled() and (not result.get("success")
+                                           or _needs_browser(result)):
+                spoof = _tls_spoof_fetch(url, max_chars, timeout)
+                if spoof.get("stop_signal"):
+                    result = spoof
+                elif spoof.get("success"):
+                    spoof["http_fallback"] = True
+                    result = spoof
 
-        # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）
-        if use_browser_fallback and _needs_browser(result):
-            browser_result = _browser_fetch(url, max_chars, timeout=15.0)
-            if browser_result.get("success") or not result.get("success"):
-                browser_result["http_fallback"] = True
-                result = browser_result
+        if not result.get("stop_signal"):
+            # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
+            if not result.get("success"):
+                wb = _wayback_fetch(url, max_chars, timeout=min(timeout * 1.5, 12.0))
+                if wb.get("success"):
+                    wb["http_fallback"] = True
+                    result = wb
+
+            # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）
+            if use_browser_fallback and _needs_browser(result):
+                browser_result = _browser_fetch(url, max_chars, timeout=15.0)
+                if browser_result.get("success") or not result.get("success"):
+                    browser_result["http_fallback"] = True
+                    result = browser_result
 
     # 第三级：质量评估
     result = _assess_quality(result)
@@ -545,7 +642,7 @@ def fetch_page_v3(url: str, max_chars: int = 3000,
 
 if __name__ == "__main__":
     import argparse
-    p = argparse.ArgumentParser(description="Argo fetch v3 — 三级抓取（零依赖）")
+    p = argparse.ArgumentParser(description="Argo fetch v3 — 四级抓取（零依赖）")
     p.add_argument("url", help="目标 URL")
     p.add_argument("--max-chars", type=int, default=8000)
     p.add_argument("--timeout", type=float, default=8.0)

@@ -1,0 +1,41 @@
+# 中文 AI 垂直资讯检索（免 Key）
+# 数据源: https://aihot.virxact.com 公开 REST API（浏览器 UA 必需，否则 403）
+# 能力: 精选中文 AI 资讯（模型/产品/行业/论文），带发布时间 publishedAt 与上游来源
+# 端点: GET /api/public/items?mode=selected&q=<关键词>&take=<n>
+#   模式: selected=精选 / all=全量；since 需 ISO 且服务端上限 7 天（spec 不透传）
+# 验证:
+#   python3 scripts/engine_validate.py --engine cn_ai_news --stage all --admit
+#   python3 scripts/search.py "大模型" --engine cn_ai_news --json
+
+engine_id: cn_ai_news
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://aihot.virxact.com/api/public/items
+timeout: 10
+query_param: q
+canary_query: "人工智能"
+desc: "中文 AI 垂直资讯检索（模型/产品/行业/论文，含发布时间与上游来源）"
+
+family: news_flash
+
+headers:
+  User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  Accept: application/json
+
+extra_params:
+  mode: selected
+  take: "{n}"
+
+# 上游来源（如「字节 Seed：Research Feed（网页内嵌数据）」）是真实发布方标注，
+# 保留而非改写为引擎名
+preserve_source: true
+
+output_map:
+  items: items
+  item_title: title
+  item_url: url
+  item_summary: summary
+  item_source: source
+  item_published_at: publishedAt

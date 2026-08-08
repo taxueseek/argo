@@ -65,6 +65,8 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "local_bing": "web_general",
     "local_baidu": "web_general",
     "local_sogou": "web_general",
+    "local_360": "web_general",
+    "local_jisilu": "social",
     "local_duckduckgo": "web_general",
     "local_mojeek": "web_general",
     "local_startpage": "web_general",
@@ -186,6 +188,8 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "urban_dictionary": "misc_vertical",
     "know_your_meme": "misc_vertical",
     "coingecko": "misc_vertical",
+    # 火车票（官方接口，结构化行数据）
+    "train": "misc_vertical",
     # 垂直结构化模态卡（统一语义识别，跨垂直域）
     "bocha_ai": "structured_card",
     # 本地聚合
