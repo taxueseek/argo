@@ -213,7 +213,7 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
         env = os.environ.copy()
         env.update(env_overrides)
         return _parse_text_output(_run(cmd + args, timeout=timeout, engine_name=spec.get("_name", "cli")),
-                                  spec.get("_name", "cli"), output_format=output_format)
+                                  spec.get("_name", "cli"), output_format=output_format, n=n)
     return _engine
 
 
@@ -476,25 +476,42 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
 
 # ── 通用解析器 ─────────────────────────────────────────────────────────────────
 
-def _parse_text_output(text: str, engine_name: str, output_format: str = "") -> list[dict[str, Any]]:
-    """通用 CLI 文本解析：YAML（声明式）/ JSON / 结构化文本。"""
+def _parse_text_output(text: str, engine_name: str, output_format: str = "", n: int = 10) -> list[dict[str, Any]]:
+    """通用 CLI 文本解析：YAML（声明式）/ JSON / 结构化文本。n 限制返回条数。"""
     if not text or not text.strip():
         return []
     text = text.strip()
     if output_format == "yaml":
-        return _parse_yaml_output(text, engine_name)
+        return _parse_yaml_output(text, engine_name, n=n)
     try:
         data = json.loads(text)
+        limit = max(1, n)
         if isinstance(data, list):
-            return [{"title": i.get("title", ""), "url": i.get("url", ""),
+            out = []
+            for i in data[:limit]:
+                if not isinstance(i, dict):
+                    continue
+                r = {"title": i.get("title", ""), "url": i.get("url", ""),
                      "snippet": i.get("snippet", i.get("content", ""))[:300],
-                     "source": engine_name} for i in data if isinstance(i, dict)]
+                     "source": engine_name}
+                if i.get("published_at"):
+                    r["published_at"] = str(i["published_at"])[:64]
+                out.append(r)
+            return out
         if isinstance(data, dict):
             items = data.get("results", data.get("items", data.get("data", [])))
             if isinstance(items, list):
-                return [{"title": i.get("title", ""), "url": i.get("url", ""),
+                out = []
+                for i in items[:limit]:
+                    if not isinstance(i, dict):
+                        continue
+                    r = {"title": i.get("title", ""), "url": i.get("url", ""),
                          "snippet": i.get("snippet", i.get("content", ""))[:300],
-                         "source": engine_name} for i in items if isinstance(i, dict)]
+                         "source": engine_name}
+                    if i.get("published_at"):
+                        r["published_at"] = str(i["published_at"])[:64]
+                    out.append(r)
+                return out
     except (json.JSONDecodeError, ValueError):
         pass
 
@@ -516,10 +533,10 @@ def _parse_text_output(text: str, engine_name: str, output_format: str = "") -> 
             seen_url = False
     if cur:
         results.append(cur)
-    return results[:10]
+    return results[:max(1, n)]
 
 
-def _parse_yaml_output(text: str, engine_name: str) -> list[dict[str, Any]]:
+def _parse_yaml_output(text: str, engine_name: str, n: int = 10) -> list[dict[str, Any]]:
     """解析 YAML 输出（结构化 CLI 数据源的默认格式）。
 
     支持顶层 list，或 dict 携带 results/items/data 列表；
@@ -557,7 +574,7 @@ def _parse_yaml_output(text: str, engine_name: str) -> list[dict[str, Any]]:
         if published:
             r["published_at"] = str(published)[:64]
         results.append(r)
-    return results[:10]
+    return results[:max(1, n)]
 
 
 def _parse_xml(text: str, engine_name: str) -> list[dict[str, Any]]:

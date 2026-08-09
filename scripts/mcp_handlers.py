@@ -385,6 +385,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 mode=arguments.get("mode", "auto"),
                 since=arguments.get("since"),
                 until=arguments.get("until"),
+                sort=arguments.get("sort", "relevance"),
                 cache=_get_cache(),
                 envelope=False,
                 context="search",

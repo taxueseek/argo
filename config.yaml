@@ -2147,6 +2147,7 @@ engines:
       item_title: full_name
       item_url: html_url
       item_summary: description
+      item_published_at: created_at
     timeout: 10
     url: https://api.github.com/search/repositories
   local_stackoverflow:
@@ -2172,6 +2173,7 @@ engines:
       item_title: title
       item_url: link
       item_summary: excerpt
+      item_published_at: creation_date
     timeout: 10
     url: https://api.stackexchange.com/2.3/search/advanced
   local_gitlab:

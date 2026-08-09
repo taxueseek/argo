@@ -21,6 +21,9 @@
   seek.py "查询词" --json              # JSON 输出
   seek.py "查询词" --max 10            # 限制结果数
   seek.py "查询词" --exact             # 关闭中文扩展（精确匹配）
+  seek.py "查询词" --since 7d          # 只看最近 7 天修改过的文件命中
+  seek.py "查询词" --until 2026-07-01  # 只看 2026-07-01 之前修改的命中
+  seek.py "查询词" --json --since 7d   # JSON 输出带 mtime 字段
   seek.py "查询词" --exclude 某文件     # 额外排除 glob（可重复，如排除评估脚本自身）
   seek.py --outline 文件路径            # 输出文件结构（def/class/标题/顶层key）
   seek.py --lines 10-50 文件路径        # 按行读取文件（替代 read_file 全文）
@@ -37,6 +40,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime
 from itertools import islice
 from pathlib import Path
 
@@ -265,7 +269,7 @@ def format_output(results, engine, mode, path, elapsed_ms, query, total):
     return "\n".join(lines)
 
 
-def to_json(results, engine, mode, scope, path, elapsed_ms, query):
+def to_json(results, engine, mode, scope, path, elapsed_ms, query, since=None, until=None):
     return json.dumps({
         "query": query,
         "engine": engine,
@@ -274,11 +278,69 @@ def to_json(results, engine, mode, scope, path, elapsed_ms, query):
         "path": str(path),
         "elapsed_ms": elapsed_ms,
         "count": len(results),
+        "since": since,
+        "until": until,
         "results": [
-            {"path": fp, "line": ln, "snippet": txt}
+            {"path": fp, "line": ln, "snippet": txt, "mtime": _file_mtime(fp)}
             for fp, ln, txt in results
         ],
     }, ensure_ascii=False, indent=2)
+
+
+# ── 时间窗（文件修改时间过滤；统一出口，不涉公共缓存）────────────────
+def parse_time(s: str | None) -> float | None:
+    """相对（7d/12h/1w/1m/1y）或绝对（2026-08-01/ISO）→ unix 秒时间戳。"""
+    if not s:
+        return None
+    s = str(s).strip()
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        try:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3))).timestamp()
+        except ValueError:
+            return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        pass
+    m = re.fullmatch(r"(\d+)([hdwmy])", s.lower())
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2)
+    now = time.time()
+    delta = {"h": 3600, "d": 86400, "w": 7 * 86400,
+             "m": 30 * 86400, "y": 365 * 86400}[unit]
+    return now - n * delta
+
+
+def _file_mtime(fp: str) -> str | None:
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(fp)).strftime("%Y-%m-%d %H:%M:%S")
+    except OSError:
+        return None
+
+
+def filter_by_mtime(results, since: str | None, until: str | None):
+    """时间窗过滤：仅保留文件 mtime 落在 [since, until] 内的命中。
+
+    rg / fd / mdfind / structural 全部经此统一出口；时间窗查询下
+    文件已消失等 IO 异常条目剔除（与 local-search 无日期剔除同理）。
+    """
+    since_ts, until_ts = parse_time(since), parse_time(until)
+    if not since_ts and not until_ts:
+        return results
+    out = []
+    for fp, ln, txt in results:
+        try:
+            mt = os.path.getmtime(fp)
+        except OSError:
+            continue
+        if since_ts and mt < since_ts:
+            continue
+        if until_ts and mt > until_ts:
+            continue
+        out.append((fp, ln, txt))
+    return out
 
 
 _OUTLINE_RULES = {
@@ -486,6 +548,10 @@ def main():
     ap.add_argument("--exact", action="store_true", help="关闭中文扩展（精确匹配）")
     ap.add_argument("--exclude", action="append", default=[], metavar="GLOB",
                     help="额外排除 glob（可重复指定，如 --exclude eval_seek.py）")
+    ap.add_argument("--since", default=None,
+                    help="文件修改时间下限（7d / 2026-08-01），过滤命中文件的 mtime")
+    ap.add_argument("--until", default=None,
+                    help="文件修改时间上限（7d / 2026-08-01），过滤命中文件的 mtime")
     ap.add_argument("--outline", action="store_true", help="输出文件结构（文件路径为位置参数）")
     ap.add_argument("--lines", default="", metavar="N-M",
                     help="按行读取文件（文件路径为位置参数）")
@@ -536,6 +602,7 @@ def main():
                                          load_excludes() + args.exclude,
                                          args.max or 30)
         elapsed = int((time.time() - start) * 1000)
+        results = filter_by_mtime(results, args.since, args.until)
         if err:
             print(f"local-seek: {err}")
             return 1
@@ -544,7 +611,8 @@ def main():
             return 1
         if args.json:
             print(to_json(results, "rg-structural", "structural", args.scope,
-                          args.path, elapsed, args.query))
+                          args.path, elapsed, args.query,
+                          since=args.since, until=args.until))
         else:
             print(format_output(results, "rg-structural", "structural",
                                 args.path, elapsed, args.query, len(results)))
@@ -606,6 +674,8 @@ def main():
                                      fixed, args.query)
 
     elapsed = int((time.time() - start) * 1000)
+    # 时间窗：统一出口按文件 mtime 过滤（rg/fd/mdfind 共用）
+    results = filter_by_mtime(results, args.since, args.until)
 
     if err:
         print(f"local-seek: {err}")
@@ -615,7 +685,8 @@ def main():
         return 1
 
     if args.json:
-        print(to_json(results, engine, mode, scope, path, elapsed, args.query))
+        print(to_json(results, engine, mode, scope, path, elapsed, args.query,
+                      since=args.since, until=args.until))
     else:
         print(format_output(results, engine, mode, path, elapsed, args.query,
                             len(results)))

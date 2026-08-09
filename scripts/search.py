@@ -17,9 +17,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -38,6 +40,175 @@ try:
     from telemetry import emit as _emit_telemetry
 except ImportError:
     _emit_telemetry = None  # type: ignore
+
+
+# ── 时间辅助（时间窗归一化 / published_at 解析 / 后过滤 / 排序）──────────────
+#
+# 时间窗三层语义：
+#   1. 下推（since/until → 引擎）：入口统一归一化为绝对 ISO，引擎收到确定值
+#   2. 后过滤（结果层兜底）：引擎不带时间窗能力时，按 published_at 剔除超窗
+#   3. 排序（--sort）：仅展示顺序，不影响召回
+#
+# 归一化规则：相对量（Nd/Nh/Nw）→ 绝对日期；绝对时间无时区按本地时区解释
+# （与 _published_ts 一致）；非法输入保持原样下推、不参与后过滤，不阻断搜索。
+
+# published_at 常见形态：YYYY-MM-DD、YYYY-MM-DD HH:MM[:SS]、ISO(YYYY-MM-DDTHH:MM:SS)
+_DATE_RE = re.compile(
+    r"^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?"
+)
+# 相对时间：Nd / Nh / Nw（不区分大小写）
+_REL_TIME_RE = re.compile(r"^(\d+)\s*([dhw])$", re.IGNORECASE)
+# 纯日期 YYYY-MM-DD（until 边界含当天；下推保留日期形态）
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{1,2}-\d{1,2}$")
+
+
+def _published_ts(r: dict[str, Any]) -> float | None:
+    """解析结果的 published_at → epoch 秒；无法解析返回 None（恒排最后）。
+
+    ISO 优先（fromisoformat 支持 T/空格分隔、Z、±HH:MM 时区），
+    带时区正确换算 epoch，无时区按本地时区解释；回退 YYYY-MM-DD 手工解析。
+    """
+    raw = r.get("published_at")
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if text.isdigit():  # 部分引擎给 epoch 秒时间戳
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        # aware datetime 正确换算 UTC epoch；naive 按本地时区解释
+        return dt.timestamp()
+    except ValueError:
+        pass
+    m = _DATE_RE.match(text)
+    if not m:
+        return None
+    try:
+        return datetime(
+            int(m.group(1)), int(m.group(2)), int(m.group(3)),
+            int(m.group(4) or 0), int(m.group(5) or 0), int(m.group(6) or 0),
+        ).timestamp()
+    except ValueError:
+        return None
+
+
+def _parse_time_value(value: Any) -> tuple[str | None, float | None]:
+    """解析单边时间窗 → (归一化 ISO 字符串, epoch 秒)。
+
+    支持：相对量（Nd/Nh/Nw）、YYYY-MM-DD、YYYY-MM-DD HH:MM[:SS]、
+    ISO 8601（含 Z / ±HH:MM）、纯数字 epoch 秒。
+    相对量归一化为绝对日期（YYYY-MM-DD），语义确定、可入缓存键；
+    无法解析返回 (None, None)，调用方保持原样下推、不参与后过滤。
+    """
+    if value in (None, ""):
+        return None, None
+    text = str(value).strip()
+    # epoch 秒
+    if text.isdigit():
+        try:
+            ts = float(text)
+            dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+            return dt.isoformat(timespec="seconds"), ts
+        except (ValueError, OSError):
+            return None, None
+    # 相对量：Nd / Nh / Nw → 绝对日期（本地时区零点）
+    m = _REL_TIME_RE.match(text)
+    if m:
+        amount = int(m.group(1))
+        unit = m.group(2).lower()
+        now = datetime.now()
+        if unit == "h":
+            dt = now - timedelta(hours=amount)
+        elif unit == "w":
+            dt = now - timedelta(weeks=amount)
+        else:
+            dt = now - timedelta(days=amount)
+        d = dt.date()
+        return d.isoformat(), datetime(d.year, d.month, d.day).timestamp()
+    # 绝对时间：fromisoformat 优先（T/空格分隔、Z、±HH:MM）
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None, None
+    if dt.tzinfo is not None:
+        return dt.isoformat(timespec="seconds"), dt.timestamp()
+    # 无时区：按本地时区（与 _published_ts 无时区行为一致）；
+    # 纯日期（时间为零点）保留 YYYY-MM-DD 形态下推，兼容引擎既有解析
+    if (dt.hour, dt.minute, dt.second, dt.microsecond) == (0, 0, 0, 0):
+        return dt.date().isoformat(), dt.timestamp()
+    return dt.isoformat(timespec="seconds"), dt.timestamp()
+
+
+def _normalize_time_window(
+    since: str | None, until: str | None
+) -> tuple[str | None, str | None, float | None, float | None]:
+    """归一化时间窗 → (since_iso, until_iso, since_ts, until_ts)。
+
+    下推与缓存键使用归一化 ISO（相对值转绝对日期，消除 7d 与绝对日期的
+    缓存碎片）；后过滤使用 epoch 秒。非法输入 iso 保留原始字符串、
+    ts 为 None：仍会下推原值、缓存键仍区分，但不参与后过滤，不阻断搜索。
+    """
+    s_iso, s_ts = _parse_time_value(since)
+    u_iso, u_ts = _parse_time_value(until)
+    # 纯日期 until 语义为「含当天」：边界取当天最后一刻，
+    # 使次日零点及之后的结果被剔除、当天 23:59:59 保留
+    if u_iso and _DATE_ONLY_RE.fullmatch(u_iso):
+        try:
+            d = datetime.fromisoformat(u_iso).date()
+            u_ts = datetime(d.year, d.month, d.day, 23, 59, 59, 999999).timestamp()
+        except ValueError:
+            pass
+    s_raw = str(since).strip() if since not in (None, "") else None
+    u_raw = str(until).strip() if until not in (None, "") else None
+    return (s_iso or s_raw, u_iso or u_raw, s_ts, u_ts)
+
+
+def _apply_time_window(
+    results: list[dict[str, Any]], since_ts: float | None, until_ts: float | None
+) -> tuple[list[dict[str, Any]], int]:
+    """结果后过滤兜底：剔除「有 published_at 且明确超窗」的条目。
+
+    宽松策略：无时间字段的结果无法判断、予以保留（避免大多数引擎清空）；
+    只有时间明确落在窗口外的才剔除。返回 (保留列表, 剔除数) 供 envelope 上报。
+    """
+    if since_ts is None and until_ts is None:
+        return results, 0
+    kept: list[dict[str, Any]] = []
+    dropped = 0
+    for r in results:
+        ts = _published_ts(r)
+        if ts is not None:
+            if since_ts is not None and ts < since_ts:
+                dropped += 1
+                continue
+            if until_ts is not None and ts > until_ts:
+                dropped += 1
+                continue
+        kept.append(r)
+    return kept, dropped
+
+
+def _sort_results(results: list[dict[str, Any]], sort: str) -> list[dict[str, Any]]:
+    """按时间重排结果集：oldest 升序 / newest 降序 / relevance 原序。
+
+    排序是纯本地展示顺序：不改变结果集、不进入缓存键、不影响缓存内容；
+    无日期条目恒排最后；同时间保持原相对顺序（稳定排序，结果可复现）。
+    """
+    if sort not in ("oldest", "newest"):
+        return results
+    if len(results) <= 1:
+        return results
+
+    def _key(r: dict[str, Any]) -> tuple[int, float]:
+        ts = _published_ts(r)
+        if ts is None:
+            return (1, 0.0)  # 无日期恒排最后
+        return (0, ts if sort == "oldest" else -ts)
+
+    return sorted(results, key=_key)
 
 
 # ── 查询改写辅助 ────────────────────────────────────────────────────────────────
@@ -594,6 +765,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                    timeout: int, depth: str, cache: SearchCache, skip_cache: bool,
                    mode: str = "auto",
                    since: str | None = None, until: str | None = None,
+                   sort: str = "relevance",
                    on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None) -> dict[str, Any]:
     """执行搜索：缓存 → 熔断/负缓存 → 引擎 → 融合 → 精排 → 过滤 → 写缓存。"""
     domain = decision.get("domain") or "general"
@@ -635,12 +807,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     except ImportError:
         pass
 
+    # 时间窗归一化：下推/缓存键用归一化 ISO（相对值转绝对日期），
+    # 后过滤用 epoch 秒；非法输入保持原样下推、不参与后过滤。
+    since_iso, until_iso, since_ts, until_ts = _normalize_time_window(since, until)
+
     cache_engine_key = "+".join(sorted(engines)) if len(engines) > 1 else engines[0]
-    # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存
-    if since:
-        cache_engine_key += f"|since={since}"
-    if until:
-        cache_engine_key += f"|until={until}"
+    # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存；
+    # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）
+    if since_iso:
+        cache_engine_key += f"|since={since_iso}"
+    if until_iso:
+        cache_engine_key += f"|until={until_iso}"
 
     if on_progress:
         on_progress(Stage.ROUTING, {"domain": domain, "engine": engine_label, "engines": engines})
@@ -657,6 +834,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             tfidf_scores = decision.get("tfidf_scores", [])
             if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):
                 tfidf_scores = []
+            # 排序在缓存读出后、返回前：缓存内容保持 score 序，sort 只改展示顺序
+            hit_results = _sort_results(hit.get("results", []), sort)
             return {
                 "query": query, "engine": engine_label, "engines": engines,
                 "engines_combo": engines_combo, "cached": True,
@@ -664,12 +843,13 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 "domain": domain, "elapsed_ms": cache_elapsed,
                 "tfidf_scores": tfidf_scores,
                 "login_hint": decision.get("login_hint"),
-                "results": hit.get("results", []),
-                "count": len(hit.get("results", [])),
+                "results": hit_results,
+                "count": len(hit_results),
                 "engines_used": hit.get("engines_used") or engines,
                 "mode": mode, "depth": depth,
                 "reranker": "skipped_cache",
                 "engine_outcomes": hit.get("engine_outcomes") or [],
+                "time_filtered": 0,
             }
 
     if on_progress:
@@ -719,7 +899,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         for _attempt in range(retries + 1):
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=to, depth=depth, mode=mode,
-                since=since, until=until,
+                since=since_iso, until=until_iso,
             )
             if last_result and any("error" not in r for r in last_result):
                 return last_result
@@ -727,7 +907,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if retries > 0 and depth != "balanced":
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=to, depth="balanced", mode=mode,
-                since=since, until=until,
+                since=since_iso, until=until_iso,
             )
         return last_result
 
@@ -756,7 +936,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if not skip_cache:
             eng_hit = cache.get_engine(
                 query, eng, max_results, domain=domain, mode=mode, depth=depth,
-                since=since, until=until,
+                since=since_iso, until=until_iso,
             )
             if eng_hit is not None:
                 lat = int((time.time() - t_eng) * 1000)
@@ -814,14 +994,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             cache.set_engine(
                 query, eng, max_results, goods,
                 domain=domain, mode=mode, depth=depth,
-                since=since, until=until,
+                since=since_iso, until=until_iso,
             )
         elif not skip_cache and not goods:
             # 空结果短 TTL 写入 per-engine，配合负缓存
             cache.set_engine(
                 query, eng, max_results, [],
                 domain=domain, mode=mode, depth=depth,
-                since=since, until=until,
+                since=since_iso, until=until_iso,
             )
 
         return eng, (goods if goods else res), outcome, lat
@@ -981,6 +1161,18 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             kept.append(r)
         merged = kept
 
+    # ── 时间窗结果后过滤兜底 ──
+    # 引擎不带时间窗能力时，按 published_at 剔除明确超窗条目（宽松策略：
+    # 无时间字段保留）。与引擎下推互补，保证用户指定的 since/until 在
+    # 默认路由上同样生效。
+    time_filtered = 0
+    if (since_ts is not None or until_ts is not None) and merged:
+        merged, time_filtered = _apply_time_window(merged, since_ts, until_ts)
+        if time_filtered:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"时间窗后过滤剔除 {time_filtered} 条（since={since_iso}, until={until_iso}）")
+
     # ── P0-002：空结果错误恢复决策树 ──
     recovery_info: dict[str, Any] | None = None
     if not merged:
@@ -998,8 +1190,10 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 out: list[dict[str, Any]] = []
                 for eng in rengines:
                     try:
+                        # 恢复路径同样携带时间窗，避免恢复时丢弃用户约束
                         res = engine_search(rq, eng, n=max_results,
-                                            timeout=timeout, depth=depth, mode=mode)
+                                            timeout=timeout, depth=depth, mode=mode,
+                                            since=since_iso, until=until_iso)
                     except Exception:
                         res = []
                     goods = [r for r in (res or [])
@@ -1145,6 +1339,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "engines_used": list(raw_results.keys()),
         "domain": domain,
         "engine_outcomes": engine_outcomes,
+        "time_filtered": time_filtered,
     }
 
     # 写 combo 缓存：空结果短 TTL / 时效 cap 由 cache.set 处理
@@ -1207,12 +1402,16 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):
         tfidf_scores = []
 
+    # 排序在返回前、写缓存后：缓存内容保持 score 序（缓存键/内容不受 sort 影响），
+    # sort 只改变本次展示顺序；缓存命中路径在 return 前同样处理，两路径行为一致。
+    out_results = _sort_results(merged, sort)
+
     out: dict[str, Any] = {
         "query": query, "engine": engine_label, "engines": engines,
         "engines_combo": engines_combo, "cached": False,
         "domain": domain, "elapsed_ms": elapsed,
-        "tfidf_scores": tfidf_scores, "results": merged,
-        "count": len(merged), "engines_used": list(raw_results.keys()),
+        "tfidf_scores": tfidf_scores, "results": out_results,
+        "count": len(out_results), "engines_used": list(raw_results.keys()),
         "errors": _collect_errors(raw_results),
         "engine_outcomes": engine_outcomes,
         "wasted_engine_ms": wasted_ms,
@@ -1225,6 +1424,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "fact_alignment": fact_alignment,
         "exclude_terms": exclude_terms,
         "excluded_count": excluded_count,
+        "time_filtered": time_filtered,
         "mode": mode, "depth": depth,
         "login_hint": decision.get("login_hint"),
     }
@@ -1256,7 +1456,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  context: str = "search",
                  engines_boost: list[str] | None = None,
                  since: str | None = None,
-                 until: str | None = None) -> dict[str, Any]:
+                 until: str | None = None,
+                 sort: str = "relevance") -> dict[str, Any]:
     """统一搜索便捷入口。
 
     执行分层（不阻塞日常）：
@@ -1386,7 +1587,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         query=search_query, decision=decision, max_results=n,
         timeout=timeout, depth=depth, cache=cache,
         skip_cache=skip_cache, mode=mode, on_progress=on_progress,
-        since=since, until=until,
+        since=since, until=until, sort=sort,
     )
     # 对外仍报告用户原始 query
     result["query"] = original_query
@@ -1394,6 +1595,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         result["since"] = since
     if until:
         result["until"] = until
+    if sort and sort != "relevance":
+        result["sort"] = sort
     if rewrite_result and rewrite_result.get("rewritten"):
         result["rewritten_query"] = {
             "original": rewrite_result["original"],
@@ -1622,6 +1825,9 @@ def main():
                         help="发布时间下限（7d / 2026-08-01），下推到支持时间窗的引擎")
     parser.add_argument("--until", default=None,
                         help="发布时间上限（7d / 2026-08-01），下推到支持时间窗的引擎")
+    parser.add_argument("--sort", default="relevance",
+                        choices=["relevance", "oldest", "newest"],
+                        help="时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前")
     parser.add_argument("--local-first", action="store_true",
                         help="强制优先使用 local_search 零成本聚合引擎")
     parser.add_argument("--domain", default="", help="AnySearch 垂直域")
@@ -1694,6 +1900,7 @@ def main():
         envelope=use_envelope,
         since=args.since,
         until=args.until,
+        sort=args.sort,
     )
     results["query"] = args.query
 

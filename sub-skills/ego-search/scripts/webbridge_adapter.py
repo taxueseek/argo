@@ -52,6 +52,8 @@ SERP_JS = r"""
     if (m) return m[1] + '-' + String(m[2]).padStart(2,'0') + '-' + String(m[3]).padStart(2,'0');
     const m2 = t.match(/(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{4})/i);
     if (m2) { const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return m2[3] + '-' + mo[m2[2].toLowerCase().slice(0,3)] + '-' + String(m2[1]).padStart(2,'0'); }
+    const m3 = t.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{1,2}),? (\d{4})/i);
+    if (m3) { const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return m3[3] + '-' + mo[m3[1].toLowerCase().slice(0,3)] + '-' + String(m3[2]).padStart(2,'0'); }
     return '';
   };
   document.querySelectorAll(cfg.item).forEach(el => {
@@ -131,7 +133,9 @@ def time_url_params(engine: str, since: str | None, until: str | None) -> dict[s
                 pass
     elif engine == "baidu":
         if since_iso or until_iso:
-            return {"gpc": f"stf%3D{_to_epoch_ms(since_iso)}%2C{_to_epoch_ms(until_iso)}%7Cstftype%3D2"}
+            # 未编码原值交给 urlencode；until 缺省用当前时间（百度 stf 需起止两个时间戳）
+            end_ms = _to_epoch_ms(until_iso) or str(int(datetime.now().timestamp() * 1000))
+            return {"gpc": f"stf={_to_epoch_ms(since_iso)},{end_ms}|stftype=2"}
     return {}
 
 

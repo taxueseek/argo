@@ -3,6 +3,9 @@
 # 工程侧形态与 hackernews/local_search 一致：声明式 spec + 通用 cli builder，
 # 不新增 Python 特例分支。
 #
+# 部署：将实际索引 CLI 安装/软链为 realtime-index（或把 cmd 改为其绝对路径）；
+#       cmd 不可用时引擎自动禁用（与其他 CLI 引擎同形态）。
+#
 # 验证:
 #   python3 scripts/engine_validate.py --engine realtime_index --stage all --admit
 #   python3 scripts/search.py "rust async" --engine realtime_index --since 7d --json
@@ -15,7 +18,7 @@ label: 实时索引搜索
 desc: 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤）
 canary_query: "climate change"
 cmd:
-- keenable
+- realtime-index
 search_args:
 - search
 - '{query}'

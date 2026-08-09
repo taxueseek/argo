@@ -260,9 +260,9 @@ python3 scripts/search.py --list-engines
 
 知乎、小红书、公众号这类要登录才能看的内容，以及 JS 渲染页、反爬页，用真实浏览器配合登录态去搜。默认关闭，需要时开启，依赖 ego lite 和 WebBridge 两个东西，详见下节「登录态专业搜索」。
 
-**6. 实时索引 + 时间窗**
+**6. 时间能力（时间窗 + 方向排序）**
 
-要搜「最近几天刚发布的内容」，用 `--engine realtime_index` 直达免 Key 实时索引源，结果自带发布时间；再配 `--since 7d` / `--until 2026-08-01` 这类时间窗，能精确框住发布时间范围，判断新旧不再靠猜。
+要搜「最近几天刚发布的内容」，用 `--since 7d` 这类时间窗框住发布时间范围，判断新旧不再靠猜。支持引擎（如 `realtime_index`，免 Key 实时索引源，结果自带发布时间）把窗口下推给数据源；其余引擎的融合结果会按 `published_at` 兜底剔除明确超窗的条目（宽松策略，无时间字段的保留），返回包带 `time_filtered` 统计，CLI 与 MCP 均支持。`--since 7d` 与「7 天前的绝对日期」等价、共享缓存；`--until 2026-08-01` 含当天。配合 `--sort newest|oldest` 按发布时间重排——找最新动态用 `newest`，找最早出处用 `oldest`。
 
 ### 能力入口速查
 
@@ -278,7 +278,8 @@ python3 scripts/search.py --list-engines
 | 站点爬取 | 列表页批量抓取 | `argo_crawl` |
 | 社交与舆情 | 微博 / 小红书 / B 站 / Reddit / X 等 | `argo_social_search` |
 | 实时索引搜索 | 免 Key 实时索引源，结果带发布时间，适合「最近几天有什么新东西」 | `--engine realtime_index` |
-| 时间窗过滤 | `--since` / `--until`（`7d` 或 `2026-08-01`）限定发布时间范围，CLI 与 MCP 均支持 | `--since 7d` |
+| 时间窗过滤 | `--since` / `--until`（`7d` 或 `2026-08-01`）限定发布时间范围；支持引擎下推 + 融合后兜底过滤（`time_filtered`），CLI 与 MCP 均支持 | `--since 7d` |
+| 时间方向排序 | `--sort newest\|oldest` 按发布时间重排（最新动态 / 最早出处） | `--sort oldest` |
 | 登录态专业搜索 | 知乎 / 小红书等登录墙正文、JS 渲染页、登录站点接口直取 | `sub-skills/ego-search/scripts/ego_search.py`（默认关闭，见下） |
 
 ### 预算模式

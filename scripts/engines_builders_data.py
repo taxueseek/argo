@@ -11,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from typing import Any
 
 from engines_base import (
@@ -1684,13 +1685,22 @@ def _build_wayback_cdx_engine(spec: dict[str, Any]) -> Any:
             if len(r) < 3:
                 continue
             ts, orig, status = r[0], r[1], r[2]
-            results.append({
+            # CDX 时间戳 YYYYMMDDHHMMSS → 标准 published_at（最早快照语义）
+            published_at = ""
+            try:
+                published_at = datetime.strptime(ts, "%Y%m%d%H%M%S").isoformat(timespec="seconds")
+            except ValueError:
+                pass
+            item = {
                 "title": f"快照 {orig}（{ts[:8]}）",
                 "url": f"https://web.archive.org/web/{ts}/{orig}",
                 "snippet": f"Wayback 快照 {ts} · HTTP {status}"[:300],
                 "source": "wayback_cdx",
                 "score": 0.8,
-            })
+            }
+            if published_at:
+                item["published_at"] = published_at
+            results.append(item)
         return results
     return _engine
 

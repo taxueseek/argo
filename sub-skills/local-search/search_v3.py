@@ -211,6 +211,30 @@ def _apply_time_window(results: list[dict[str, Any]],
     return kept
 
 
+def _sort_results(results: list[dict[str, Any]], sort: str) -> list[dict[str, Any]]:
+    """时间排序：oldest 升序 / newest 降序 / relevance 原序。
+
+    与主技能同语义：排序是本地展示顺序，不改变结果集、不进入缓存键；
+    无日期条目恒排最后；同时间保持原相对顺序（稳定排序，结果可复现）。
+    """
+    if sort not in ("oldest", "newest"):
+        return results
+    if len(results) <= 1:
+        return results
+
+    def _key(r: dict[str, Any]) -> tuple[int, tuple[int, ...]]:
+        pa = r.get("published_at")
+        if not pa:
+            return (1, ())  # 无日期恒排最后
+        try:
+            dk = _date_key(str(pa)[:10])
+        except ValueError:
+            return (1, ())
+        return (0, dk if sort == "oldest" else tuple(-x for x in dk))
+
+    return sorted(results, key=_key)
+
+
 def _fetch(url: str, method: str = "GET", data: bytes | None = None,
            headers: dict[str, str] | None = None, timeout: float = 8,
            user_agent: str = "") -> str:
@@ -658,11 +682,13 @@ def search_engines(
     mode: str = "fast",
     since: str | None = None,
     until: str | None = None,
+    sort: str = "relevance",
 ) -> dict[str, Any]:
     """local-search 主入口：批量调用本地引擎，返回 unified-search schema。
 
     since/until: 发布时间时间窗（如 7d / 2026-08-01），下推到支持时间参数的引擎
     （filter_args），并在解析后按 published_at 通用过滤。
+    sort: 时间排序 relevance/oldest/newest，仅改变返回顺序，不进入缓存键。
     """
     reg = registry or get_registry()
     cfg = _load_config()
@@ -701,6 +727,8 @@ def search_engines(
     if not skip_cache and cache is not None:
         hit = cache.get(query, cache_key, n, domain=cache_domain)
         if hit:
+            # 排序在缓存读出后：缓存内容保持 score 序，sort 只改本次展示顺序
+            hit_results = _sort_results(hit.get("results", []), sort)
             return {
                 "query": query,
                 "engine": engines[0] if engines else "local_search",
@@ -711,8 +739,8 @@ def search_engines(
                 "domain": cache_domain,
                 "elapsed_ms": 0,
                 "tfidf_scores": [],
-                "results": hit.get("results", []),
-                "count": len(hit.get("results", [])),
+                "results": hit_results,
+                "count": len(hit_results),
                 "engines_used": engines,
                 "errors": [],
                 "mode": mode,
@@ -751,9 +779,12 @@ def search_engines(
         "engines_used": engines_used,
     }
 
-    # 写缓存
+    # 写缓存：保持 score 序（缓存键/内容不受 sort 影响）
     if not skip_cache and cache is not None:
         cache.set(query, cache_key, n, payload, domain=cache_domain)
+
+    # 排序在返回前：sort 只改变本次展示顺序，缓存命中路径同样处理
+    out_results = _sort_results(final_results, sort)
 
     return {
         "query": query,
@@ -765,8 +796,8 @@ def search_engines(
         "domain": cache_domain,
         "elapsed_ms": elapsed,
         "tfidf_scores": [],
-        "results": final_results,
-        "count": len(final_results),
+        "results": out_results,
+        "count": len(out_results),
         "engines_used": engines_used,
         "errors": errors,
         "mode": mode,
@@ -793,6 +824,9 @@ def main():
                         help="发布时间下限（7d / 2026-08-01），下推到支持时间参数的引擎")
     parser.add_argument("--until", default=None,
                         help="发布时间上限（7d / 2026-08-01），下推到支持时间参数的引擎")
+    parser.add_argument("--sort", default="relevance",
+                        choices=["relevance", "oldest", "newest"],
+                        help="时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     args = parser.parse_args()
 
@@ -810,6 +844,7 @@ def main():
         mode=args.mode,
         since=args.since,
         until=args.until,
+        sort=args.sort,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

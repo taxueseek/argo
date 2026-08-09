@@ -22,6 +22,7 @@ TOOLS = [
                 "skip_cache": {"type": "boolean", "description": "跳过缓存（默认 false）", "default": False},
                 "since": {"type": "string", "description": "发布时间下限（如 7d / 2026-08-01），下推到支持时间窗的引擎"},
                 "until": {"type": "string", "description": "发布时间上限（如 7d / 2026-08-01），下推到支持时间窗的引擎"},
+                "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前", "default": "relevance"},
                 "summary": {"type": "boolean", "description": "精简模式：截断 snippet + 去掉重字段（默认 true，省 token）", "default": True},
                 "pretty": {"type": "boolean", "description": "美化 JSON（默认 false；调试用）", "default": False},
                 "timeout": {"type": "integer", "description": "超时秒数（默认 10）", "default": 10},

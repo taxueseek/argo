@@ -37,6 +37,9 @@ def main():
                         help="发布时间下限（7d / 2026-08-01），下推到支持时间参数的引擎")
     parser.add_argument("--until", default=None,
                         help="发布时间上限（7d / 2026-08-01），下推到支持时间参数的引擎")
+    parser.add_argument("--sort", default="relevance",
+                        choices=["relevance", "oldest", "newest"],
+                        help="时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前")
     parser.add_argument("--json", action="store_true", help="输出 JSON")
     args = parser.parse_args()
 
@@ -54,6 +57,7 @@ def main():
         mode=args.mode,
         since=args.since,
         until=args.until,
+        sort=args.sort,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

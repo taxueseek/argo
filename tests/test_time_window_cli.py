@@ -101,7 +101,7 @@ results:
 class TestCliFilterArgs(unittest.TestCase):
     SPEC = {
         "_name": "realtime_index",
-        "cmd": ["keenable"],
+        "cmd": ["realtime-index"],
         "search_args": ["search", "{query}"],
         "output_format": "yaml",
         "filter_args": {
@@ -119,7 +119,7 @@ class TestCliFilterArgs(unittest.TestCase):
         with patch("engines_base._run", return_value=self.YAML) as mock_run:
             fn("rust async", 5, 8, mode="fast", since="2026-08-01", until="2026-08-05")
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd[:3], ["keenable", "search", "rust async"])
+        self.assertEqual(cmd[:3], ["realtime-index", "search", "rust async"])
         self.assertEqual(cmd[3:], ["--published-after", "2026-08-01", "--published-before", "2026-08-05"])
 
     def test_no_window_no_filter_args(self):
@@ -127,21 +127,21 @@ class TestCliFilterArgs(unittest.TestCase):
         with patch("engines_base._run", return_value=self.YAML) as mock_run:
             fn("rust async", 5, 8, mode="fast")
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd, ["keenable", "search", "rust async"])
+        self.assertEqual(cmd, ["realtime-index", "search", "rust async"])
 
     def test_only_since(self):
         fn = self._build()
         with patch("engines_base._run", return_value=self.YAML) as mock_run:
             fn("rust async", 5, 8, mode="fast", since="7d")
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd, ["keenable", "search", "rust async", "--published-after", "7d"])
+        self.assertEqual(cmd, ["realtime-index", "search", "rust async", "--published-after", "7d"])
 
     def test_empty_since_not_appended(self):
         fn = self._build()
         with patch("engines_base._run", return_value=self.YAML) as mock_run:
             fn("rust async", 5, 8, mode="fast", since="", until="")
         cmd = mock_run.call_args[0][0]
-        self.assertEqual(cmd, ["keenable", "search", "rust async"])
+        self.assertEqual(cmd, ["realtime-index", "search", "rust async"])
 
 
 # ── 3. 裸命令路径校验 ─────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ class TestValidateEnginePaths(unittest.TestCase):
     def _specs(self):
         return {
             "realtime_index": {
-                "enabled": True, "type": "cli", "cmd": ["keenable"],
+                "enabled": True, "type": "cli", "cmd": ["realtime-index"],
             },
             "missing_path": {
                 "enabled": True, "type": "cli",
@@ -161,7 +161,7 @@ class TestValidateEnginePaths(unittest.TestCase):
 
     def test_bare_command_in_path_stays_enabled(self):
         cfg = {"engines": self._specs()}
-        with patch.object(config_mod.shutil, "which", return_value="/opt/homebrew/bin/keenable"):
+        with patch.object(config_mod.shutil, "which", return_value="/opt/homebrew/bin/realtime-index"):
             config_mod._validate_engine_paths(cfg)
         self.assertTrue(cfg["engines"]["realtime_index"]["enabled"])
 

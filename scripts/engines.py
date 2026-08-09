@@ -145,6 +145,7 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
                 query, engines=None, n=n, timeout=float(timeout),
                 max_parallel=5, skip_cache=False, mode=mode,
                 since=kwargs.get("since"), until=kwargs.get("until"),
+                sort=kwargs.get("sort"),
             )
             results = res.get("results") or []
             # 与子进程路径一致：每条带 _engine 标记，source 保持子引擎名

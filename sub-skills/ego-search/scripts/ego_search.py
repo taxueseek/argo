@@ -195,6 +195,8 @@ SERP_EXTRACT_IIFE = r"""(() => {
     if (m) return m[1] + '-' + String(m[2]).padStart(2,'0') + '-' + String(m[3]).padStart(2,'0');
     const m2 = t.match(/(\d{1,2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{4})/i);
     if (m2) { const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return m2[3] + '-' + mo[m2[2].toLowerCase().slice(0,3)] + '-' + String(m2[1]).padStart(2,'0'); }
+    const m3 = t.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* (\d{1,2}),? (\d{4})/i);
+    if (m3) { const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return m3[3] + '-' + mo[m3[1].toLowerCase().slice(0,3)] + '-' + String(m3[2]).padStart(2,'0'); }
     return '';
   };
   document.querySelectorAll(cfg.item).forEach(el => {
@@ -264,7 +266,7 @@ JS_SEARCH = r"""
 const task = await useOrCreateTaskSpace('%%TASK_SPACE%%')
 await openOrReuseTab('%%URL%%', { wait: true, timeout: 25 })
 const info = await pageInfo()
-const serp = await js(`%%SERP_IIFE%%`)
+const serp = await js(String.raw`%%SERP_IIFE%%`)
 const parsed = JSON.parse(serp)
 cliLog('EGO_RESULT|' + JSON.stringify({
   url: info.url, title: info.title, results: parsed,
@@ -293,7 +295,7 @@ JS_ACT = r"""
 const task = await useOrCreateTaskSpace('%%TASK_SPACE%%')
 await openOrReuseTab('%%URL%%', { wait: true, timeout: 25 })
 const info = await pageInfo()
-const serp = await js(`%%SERP_IIFE%%`)
+const serp = await js(String.raw`%%SERP_IIFE%%`)
 const parsed = JSON.parse(serp)
 let detail = null
 if (parsed.length && parsed[0].url) {
@@ -493,7 +495,8 @@ def cmd_act(args: argparse.Namespace) -> None:
             TASK_SPACE=args.task_space,
             URL=url,
             QUERY=args.query,
-            SERP_IIFE=_serp_iife(args.engine, 1),
+            # 时间窗时多取候选（首条可能无日期/窗口外），过滤后取第一条打开
+            SERP_IIFE=_serp_iife(args.engine, 5 if (getattr(args, "since", None) or getattr(args, "until", None)) else 1),
             BODY_IIFE=_body_iife(30_000),
             KEEP_SPACE=_keep_js(args),
         )

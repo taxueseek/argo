@@ -256,6 +256,7 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **深度研究 local_first（v2.7.1）**：决策树先本地聚合，结果不足才升级全量；修复「先全量再本地」的浪费顺序
 - **实时索引引擎（v2.7.3）**：`realtime_index` 免 Key 实时索引源，结构化 YAML 输出，结果带 `published_at` 发布时间维度；不参与日常 combo，显式 `--engine realtime_index` 指定
 - **时间窗过滤（v2.7.3）**：`--since`/`--until`（`7d` 或 `2026-08-01`）下推到支持时间窗的引擎，CLI 与 MCP 均支持；per-engine 缓存按时间窗隔离
+- **时间能力补强（v2.7.4）**：时间窗从「下推支持引擎」扩展到「融合后兜底过滤」——任意引擎组合按 `published_at` 剔除明确超窗条目（宽松策略，无时间字段保留），返回包带 `time_filtered: N`；相对值归一化为绝对日期（`7d` 与等价日期共享缓存键，相对窗跨天不串旧数据）；`--until 2026-08-01` 含当天；`--sort newest|oldest` 按发布时间重排（最早出处用 `oldest`）；recovery 恢复路径保留时间窗不丢约束；`wayback_cdx` 输出标准 `published_at`（CDX 最早快照时间戳，最早出处召回前置）
 - **CLI 引擎声明式接入（v2.7.3）**：`output_format: yaml` 通用 YAML 解析 + `filter_args` 条件参数，新增 CLI 桥接引擎零 Python；模板 `engines/_template_cli.yaml`
 - **裸命令引擎路径校验修复（v2.7.3）**：PATH 中的裸命令 CLI 引擎不再被配置校验误判为不存在而禁用（`shutil.which` 兜底）
 
@@ -303,10 +304,12 @@ python3 scripts/search.py "查询词" --depth fast|balanced|deep
 python3 scripts/search.py --list-engines
 python3 scripts/quota.py stats
 
-# 时间窗过滤（支持该能力的引擎；7d 相对值或 YYYY-MM-DD 绝对日期）
+# 时间窗过滤（7d 相对值或 YYYY-MM-DD 绝对日期；支持引擎下推 + 融合后兜底过滤）
 python3 scripts/search.py "rust async" --engine realtime_index --since 7d
-python3 scripts/search.py "rust async" --engine realtime_index --since 2026-08-01 --until 2026-08-05
-# MCP argo_search 同样支持 since/until 参数
+python3 scripts/search.py "rust async" --since 2026-08-01 --until 2026-08-05
+# 时间方向排序：newest 找最新动态，oldest 找最早出处
+python3 scripts/search.py "rust async" --sort oldest --json
+# MCP argo_search 同样支持 since/until/sort 参数
 
 # AnySearch 垂直域搜索
 python3 scripts/search.py "AAPL" --domain finance --sub_domain finance.us_stock
