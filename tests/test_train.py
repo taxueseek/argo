@@ -22,6 +22,7 @@ import sys
 import tempfile
 import unittest
 import urllib.parse as up
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -37,6 +38,12 @@ from engine_families import family_of  # noqa: E402
 from config import load_config, get_engines  # noqa: E402
 
 LIVE = os.environ.get("ARGO_LIVE", "").strip() in {"1", "true", "yes"}
+
+
+def _cn_today(days: int = 0) -> str:
+    """与 scripts/train.py `_today_cn` 同基准：UTC+8 当日日期字符串。"""
+    base = datetime.now(timezone(timedelta(hours=8)))
+    return (base + timedelta(days=days)).strftime("%Y-%m-%d")
 
 # ── 真实数据样例 ─────────────────────────────────────────────────────────────
 
@@ -161,11 +168,11 @@ class TestParseQuery(unittest.TestCase):
 
     def test_date_words(self) -> None:
         q = train._parse_query("北京→上海 明天")
-        self.assertEqual(q["date"], "2026-08-09")  # 今天 2026-08-08
+        self.assertEqual(q["date"], _cn_today(1))
         q = train._parse_query("北京→上海 后天")
-        self.assertEqual(q["date"], "2026-08-10")
+        self.assertEqual(q["date"], _cn_today(2))
         q = train._parse_query("北京到上海 今天")
-        self.assertEqual(q["date"], "2026-08-08")
+        self.assertEqual(q["date"], _cn_today(0))
 
     def test_explicit_date(self) -> None:
         q = train._parse_query("2026-08-10 北京 上海")
@@ -180,7 +187,7 @@ class TestParseQuery(unittest.TestCase):
 
     def test_default_date_is_tomorrow(self) -> None:
         q = train._parse_query("上海到北京")
-        self.assertEqual(q["date"], "2026-08-09")  # 默认查明天（当天接口常无数据）
+        self.assertEqual(q["date"], _cn_today(1))  # 默认查明天（当天接口常无数据）
 
     def test_unparseable_returns_none(self) -> None:
         self.assertIsNone(train._parse_query(""))
