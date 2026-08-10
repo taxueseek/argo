@@ -111,6 +111,16 @@ from engines_builders import (
     _build_google_patents_engine,
     _build_marginalia_engine,
     _build_wiby_engine,
+    _build_cnii_engine,
+    _build_ndl_engine,
+    _build_kor_law_engine,
+    _build_hatena_bookmark_engine,
+    _build_dnb_engine,
+    _build_doaj_engine,
+    _build_europeana_engine,
+    _build_hal_engine,
+    _build_eu_opendata_engine,
+    _build_open_meteo_engine,
 )
 
 logger = logging.getLogger("unified_search.engines")
@@ -248,6 +258,16 @@ _BUILDERS = {
     "google_patents": _build_google_patents_engine,
     "marginalia": _build_marginalia_engine,
     "wiby": _build_wiby_engine,
+    "cnii": _build_cnii_engine,
+    "ndl": _build_ndl_engine,
+    "kor_law": _build_kor_law_engine,
+    "hatena_bookmark": _build_hatena_bookmark_engine,
+    "dnb": _build_dnb_engine,
+    "doaj": _build_doaj_engine,
+    "europeana": _build_europeana_engine,
+    "hal": _build_hal_engine,
+    "eu_opendata": _build_eu_opendata_engine,
+    "open_meteo": _build_open_meteo_engine,
 }
 
 _engine_registry: dict[str, Any] = {}

@@ -70,6 +70,18 @@ from engines_builders_data_macro import (
     _build_nbs_stats_engine,
     _build_eurostat_engine,
 )
+from engines_builders_intl import (
+    _build_cnii_engine,
+    _build_ndl_engine,
+    _build_kor_law_engine,
+    _build_hatena_bookmark_engine,
+    _build_dnb_engine,
+    _build_doaj_engine,
+    _build_europeana_engine,
+    _build_hal_engine,
+    _build_eu_opendata_engine,
+    _build_open_meteo_engine,
+)
 
 __all__ = [
     "_build_em_miaoxiang_engine",
@@ -130,4 +142,14 @@ __all__ = [
     "_build_google_patents_engine",
     "_build_marginalia_engine",
     "_build_wiby_engine",
+    "_build_cnii_engine",
+    "_build_ndl_engine",
+    "_build_kor_law_engine",
+    "_build_hatena_bookmark_engine",
+    "_build_dnb_engine",
+    "_build_doaj_engine",
+    "_build_europeana_engine",
+    "_build_hal_engine",
+    "_build_eu_opendata_engine",
+    "_build_open_meteo_engine",
 ]

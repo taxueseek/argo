@@ -1573,6 +1573,262 @@ engines:
     desc: Wiby 老式手工网页索引（专收非商业化页面，JSON 免认证）
     timeout: 10
     type: wiby
+
+  gov_policy:
+    type: http
+    enabled: true
+    label: 中国政府网政策库
+    cost_tier: free
+    family: legal
+    qps: 2
+    priority: 42
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - policy
+    - gov
+    - chinese
+    desc: 中国政府网政策文件库（国务院文件，带发布日期）
+    format: json
+    method: GET
+    query_param: q
+    url: https://sousuo.www.gov.cn/search-gov/data
+    extra_params:
+      t: zhengcelibrary_gw
+      p: '1'
+      n: '{n}'
+    timeout: 10
+    output_map:
+      items: searchVO.listVO
+      item_title: title
+      item_url: url
+      item_summary: summary
+      item_published_at: pubtimeStr
+  qiita:
+    type: http
+    enabled: true
+    label: Qiita 日本技术社区
+    cost_tier: free
+    family: social
+    qps: 2
+    priority: 43
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - tech
+    - japanese
+    - community
+    desc: Qiita 日本最大技术社区（匿名 60 req/h）
+    format: json
+    method: GET
+    query_param: query
+    url: https://qiita.com/api/v2/items
+    extra_params:
+      per_page: '{n}'
+    timeout: 10
+    output_map:
+      items: .
+      item_title: title
+      item_url: url
+      item_summary: body
+  fr_opendata:
+    type: http
+    enabled: true
+    label: 法国政府开放数据
+    cost_tier: free
+    family: misc_vertical
+    qps: 2
+    priority: 44
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - opendata
+    - french
+    desc: 法国政府开放数据目录（data.gouv.fr）
+    format: json
+    method: GET
+    query_param: q
+    url: https://www.data.gouv.fr/api/1/datasets
+    extra_params:
+      page_size: '{n}'
+    timeout: 10
+    output_map:
+      items: data
+      item_title: title
+      item_url: url
+      item_summary: description
+      url_template: https://www.data.gouv.fr/fr/datasets/{id}/
+  cnii:
+    enabled: true
+    label: CiNii Research 日文学术
+    cost_tier: free
+    family: academic
+    qps: 2
+    priority: 45
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - japanese
+    desc: 日本国立情报学研究所学术总库（论文/博士论文/科研项目，JSON-LD）
+    timeout: 12
+    type: cnii
+  ndl:
+    enabled: true
+    label: NDL 日本国立国会图书馆
+    cost_tier: free
+    family: knowledge
+    qps: 2
+    priority: 46
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - books
+    - japanese
+    - bibliography
+    desc: 全日本出版物书目总汇（OpenSearch RSS）
+    timeout: 12
+    type: ndl
+  kor_law:
+    enabled: true
+    label: 韩国判例库
+    cost_tier: free
+    family: legal
+    qps: 2
+    priority: 47
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - legal
+    - korean
+    - case
+    desc: 韩国国家法令信息中心判例全文检索（官方公开 demo 账号，韩文 XML）
+    timeout: 12
+    type: kor_law
+  hatena_bookmark:
+    enabled: true
+    label: Hatena Bookmark 日本书签
+    cost_tier: free
+    family: social
+    qps: 2
+    priority: 48
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - tech
+    - japanese
+    - bookmark
+    - trending
+    desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
+    timeout: 12
+    type: hatena_bookmark
+  dnb:
+    enabled: true
+    label: DNB 德国国家图书馆
+    cost_tier: free
+    family: knowledge
+    qps: 2
+    priority: 49
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - books
+    - german
+    - bibliography
+    desc: 德语出版物最全书目（SRU/RDF XML）
+    timeout: 12
+    type: dnb
+  doaj:
+    enabled: true
+    label: DOAJ 开放获取期刊
+    cost_tier: free
+    family: academic
+    qps: 2
+    priority: 50
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - open_access
+    - global
+    desc: 开放获取期刊全球总库（80+ 语种，元数据统一英文）
+    timeout: 12
+    type: doaj
+  europeana:
+    enabled: true
+    label: Europeana 欧洲文化遗产
+    cost_tier: free
+    family: knowledge
+    qps: 2
+    priority: 51
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - culture
+    - europe
+    - heritage
+    desc: 欧洲 27 国文化遗产聚合（官方公开 demo key）
+    timeout: 12
+    type: europeana
+  hal:
+    enabled: true
+    label: HAL 法国学术仓储
+    cost_tier: free
+    family: academic
+    qps: 2
+    priority: 52
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - french
+    desc: 法国全国科研机构开放仓储（Solr JSON）
+    timeout: 12
+    type: hal
+  eu_opendata:
+    enabled: true
+    label: EU Open Data Portal
+    cost_tier: free
+    family: misc_vertical
+    qps: 2
+    priority: 53
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - opendata
+    - europe
+    desc: 欧盟开放数据目录（24 语言元数据）
+    timeout: 12
+    type: eu_opendata
+  open_meteo:
+    enabled: true
+    label: Open-Meteo 全球天气
+    cost_tier: free
+    family: structured_card
+    qps: 2
+    priority: 54
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - weather
+    - global
+    - forecast
+    desc: 全球天气（城市/地名 → 坐标 → 当前天气，免认证）
+    timeout: 12
+    type: open_meteo
   stackoverflow:
     enabled: true
     label: StackOverflow

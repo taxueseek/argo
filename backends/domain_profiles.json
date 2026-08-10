@@ -1630,5 +1630,219 @@
       "retro": 1.6,
       "personal homepage": 1.5
     }
+  },
+  "gov_policy": {
+    "label": "中国政府网政策库",
+    "documents": [
+      "国务院 政策 文件 通知 规划 意见 办法 条例",
+      "政策解读 政府公报 部委 发文 法规 行政",
+      "国发 国办发 政策库 公报 政府工作报告",
+      "policy regulation state council gazette china"
+    ],
+    "boost_keywords": {
+      "政策": 2.2,
+      "国务院": 2.2,
+      "通知": 1.6,
+      "规划": 1.8,
+      "文件": 1.5,
+      "policy": 1.5
+    }
+  },
+  "qiita": {
+    "label": "Qiita 日本技术社区",
+    "documents": [
+      "Qiita 技術記事 プログラミング エンジニア 開発",
+      "Python JavaScript 入門 実装 チュートリアル 解説",
+      "qiita tech article japanese programming tutorial",
+      "zenn 技術ブログ 開発ノウハウ コード"
+    ],
+    "boost_keywords": {
+      "qiita": 2.2,
+      "技術": 1.8,
+      "プログラミング": 1.8,
+      "エンジニア": 1.6,
+      "tutorial": 1.4
+    }
+  },
+  "fr_opendata": {
+    "label": "法国政府开放数据",
+    "documents": [
+      "法国 开放数据 数据集 政府数据",
+      "data gouv fr dataset open data france",
+      "jeu de données ouvert gouvernement français",
+      "行政 公开 数据目录 下载"
+    ],
+    "boost_keywords": {
+      "法国": 2.0,
+      "开放数据": 2.0,
+      "数据集": 1.8,
+      "france": 1.6,
+      "opendata": 1.6
+    }
+  },
+  "cnii": {
+    "label": "CiNii Research 日文学术",
+    "documents": [
+      "日本 学术论文 博士论文 科研项目 研究数据",
+      "CiNii 国立情報学研究所 論文 研究 学術",
+      "japanese academic paper research nii cir",
+      "学術情報 検索 文献 図書 雑誌"
+    ],
+    "boost_keywords": {
+      "论文": 1.8,
+      "日本学术": 2.0,
+      "CiNii": 2.2,
+      "学術": 1.8,
+      "研究": 1.5,
+      "japanese paper": 1.6
+    }
+  },
+  "ndl": {
+    "label": "NDL 日本国立国会图书馆",
+    "documents": [
+      "日本 图书 书目 出版物 国会图书馆",
+      "NDL 国立国会図書館 書誌 図書 雑誌",
+      "japanese bibliography book catalog ndl",
+      "書籍 検索 出版 全出版物 資料"
+    ],
+    "boost_keywords": {
+      "日本书目": 2.0,
+      "国会图书馆": 2.2,
+      "図書": 1.8,
+      "書誌": 1.8,
+      "bibliography": 1.6
+    }
+  },
+  "kor_law": {
+    "label": "韩国判例库",
+    "documents": [
+      "韩国 判例 判决 法院 法令 法律 诉讼",
+      "대법원 판례 법원 판결 사건 判例",
+      "korean court case precedent law judgment",
+      "행정소송 민사 형사 헌법 재판"
+    ],
+    "boost_keywords": {
+      "韩国": 2.0,
+      "判例": 2.2,
+      "判决": 2.0,
+      "법원": 2.0,
+      "판례": 2.2,
+      "korean law": 2.0
+    }
+  },
+  "hatena_bookmark": {
+    "label": "Hatena Bookmark 日本书签",
+    "documents": [
+      "日本 书签 收藏 热门 技术圈 舆情",
+      "はてなブックマーク ブクマ 話題 注目",
+      "hatena bookmark japanese trending saved",
+      "ソーシャル ブックマーク 人気 エントリ"
+    ],
+    "boost_keywords": {
+      "日本书签": 2.0,
+      "はてな": 2.2,
+      "ブックマーク": 2.0,
+      "hatena": 2.2,
+      "bookmark": 1.6
+    }
+  },
+  "dnb": {
+    "label": "DNB 德国国家图书馆",
+    "documents": [
+      "德国 图书 书目 出版物 德语 国家图书馆",
+      "Deutsche Nationalbibliothek Buch Katalog",
+      "german book bibliography national library",
+      "文献 資料 検索 出版 ドイツ"
+    ],
+    "boost_keywords": {
+      "德国": 2.0,
+      "德语书目": 2.0,
+      "国家图书馆": 1.8,
+      "deutsche": 1.8,
+      "german book": 1.6
+    }
+  },
+  "doaj": {
+    "label": "DOAJ 开放获取期刊",
+    "documents": [
+      "开放获取 期刊 论文 学术 OA 全文",
+      "open access journal article full text",
+      "DOI 期刊论文 免费全文 学术期刊",
+      "openaccess paper scholarly journal"
+    ],
+    "boost_keywords": {
+      "开放获取": 2.2,
+      "OA": 2.0,
+      "期刊": 1.8,
+      "open access": 2.2,
+      "journal": 1.5,
+      "full text": 1.6
+    }
+  },
+  "europeana": {
+    "label": "Europeana 欧洲文化遗产",
+    "documents": [
+      "欧洲 文化遗产 博物馆 藏品 艺术 历史",
+      "europeana cultural heritage museum artifact",
+      "藏品 文物 美术馆 图书馆 档案 欧洲历史",
+      "culture heritage europe museum collection"
+    ],
+    "boost_keywords": {
+      "欧洲": 1.8,
+      "文化遗产": 2.2,
+      "博物馆": 1.8,
+      "藏品": 2.0,
+      "heritage": 2.0,
+      "museum": 1.6
+    }
+  },
+  "hal": {
+    "label": "HAL 法国学术仓储",
+    "documents": [
+      "法国 学术 论文 科研 开放仓储",
+      "HAL archives ouvertes recherche scientifique",
+      "french academic research repository paper",
+      "preprint 预印本 法语学术"
+    ],
+    "boost_keywords": {
+      "法国学术": 2.0,
+      "HAL": 2.2,
+      "recherche": 1.6,
+      "french paper": 1.6,
+      "预印本": 1.6
+    }
+  },
+  "eu_opendata": {
+    "label": "EU Open Data Portal",
+    "documents": [
+      "欧盟 开放数据 数据集 欧洲数据",
+      "EU open data european datasets portal",
+      "european union data catalogue open data",
+      "欧州 データ 公開 欧盟数据"
+    ],
+    "boost_keywords": {
+      "欧盟": 2.0,
+      "欧盟数据": 2.0,
+      "open data": 1.8,
+      "eu": 1.6,
+      "european data": 1.6
+    }
+  },
+  "open_meteo": {
+    "label": "Open-Meteo 全球天气",
+    "documents": [
+      "天气 气温 预报 降雨 风力 全球",
+      "weather forecast temperature global",
+      "天気 気温 予報 降水 風 天気予報",
+      "天气预报 当前温度 湿度 气象"
+    ],
+    "boost_keywords": {
+      "天气": 2.2,
+      "气温": 2.0,
+      "预报": 2.0,
+      "weather": 2.0,
+      "forecast": 1.8,
+      "天気": 2.0
+    }
   }
 }
