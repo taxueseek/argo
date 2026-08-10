@@ -1594,5 +1594,41 @@
     ],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "marginalia": {
+    "label": "Marginalia 独立索引",
+    "documents": [
+      "独立博客 个人网站 长尾页面 非商业 复古网页 手工收录",
+      "老派网页 小众网站 独立开发者 技术博客 原创内容 非主流",
+      "indie web personal blog long tail non commercial old school",
+      "small web personal homepage hand curated independent site"
+    ],
+    "boost_keywords": {
+      "独立博客": 2.0,
+      "个人网站": 1.8,
+      "长尾": 1.8,
+      "独立开发": 1.5,
+      "indie": 1.6,
+      "personal blog": 1.6,
+      "long tail": 1.5
+    }
+  },
+  "wiby": {
+    "label": "Wiby 手工网页索引",
+    "documents": [
+      "经典网页 老式网站 个人主页 复古互联网 手工收录 非商业化",
+      "旧式网络 极简页面 个人收藏 独立站点 怀旧 小众内容",
+      "classic web old school personal homepage retro internet",
+      "hand curated vintage site simple html personal collection"
+    ],
+    "boost_keywords": {
+      "经典": 1.8,
+      "复古": 1.8,
+      "个人主页": 1.6,
+      "怀旧": 1.5,
+      "classic web": 1.5,
+      "retro": 1.6,
+      "personal homepage": 1.5
+    }
   }
 }

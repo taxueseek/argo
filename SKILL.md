@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.6
+version: 2.7.7
 triggers:
   - 搜索
   - 查一下
@@ -56,6 +56,7 @@ engines:
   - jin10
   - juejin
   - know_your_meme
+  - marginalia
   - local_arxiv
   - local_baidu
   - local_bing
@@ -122,6 +123,7 @@ engines:
   - weibo
   - wenshu
   - weread
+  - wiby
   - wikidata
   - wikipedia
   - worldbank
@@ -270,6 +272,7 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **TF-IDF profile 补全（v2.7.5）**：`aviation_weather` / `cn_ai_news` / `datacite` / `firecrawl` / `fxtwitter` / `sec_edgar` / `train` / `weather` / `zenodo` 9 个引擎补齐代表文档，语义路由不再永久选不中；韩文路由不再引用已禁用的 `local_google`（落 local_bing + local_duckduckgo）
 - **ddgs CLI 失败识别与重试（v2.7.6）**：ddgs 9.14.4 起失败信号（`DDGSException`/`No results`/`ConnectError` 等）在 rc=0 时打到 stdout、输出文件 0 字节，旧逻辑只在 rc≠0 分支检查导致静默吞错（实测 yahoo 间歇丢结果）；现在无论 rc 先识别错误信号，失败/超时自动重试 1 次（yahoo 成功率 ~60%→84%、images ~80%→96%），持续失败返回明确错误而非误导消息
 - **Anna's Archive 电子书引擎（v2.7.6）**：新增 `local_ddgs_books`（ddgs books 子命令），author/publisher/info 拼入 snippet，vertical 类别路由；默认关闭，需用时在 `sub-skills/local-search/config.yaml` 置 `enabled: true`
+- **独立索引补充引擎（v2.7.7）**：新增 `marginalia`（非大厂代理的独立爬虫索引，专挖长尾非商业页面）与 `wiby`（老式手工网页索引）两个免 key JSON 引擎，与主流引擎结果互补；语义路由 profile 已配（长尾/独立/复古类查询命中）
 - **CLI 引擎声明式接入（v2.7.3）**：`output_format: yaml` 通用 YAML 解析 + `filter_args` 条件参数，新增 CLI 桥接引擎零 Python；模板 `engines/_template_cli.yaml`
 - **裸命令引擎路径校验修复（v2.7.3）**：PATH 中的裸命令 CLI 引擎不再被配置校验误判为不存在而禁用（`shutil.which` 兜底）
 
@@ -402,6 +405,8 @@ python3 scripts/clarify.py "苹果股价" --json
 | exa | api | 语义搜索(embedding+内容摘要) | ~6s |
 | wechat_sogou | free | 搜狗微信搜索(公众号文章) | ~2s |
 | hackernews | free | Hacker News(科技新闻+讨论) | ~2s |
+| marginalia | free | Marginalia 独立索引(长尾非商业页面) | ~1s |
+| wiby | free | Wiby 手工网页索引(复古非商业化站点) | ~1s |
 | stackoverflow | free | Stack Overflow(编程问答) | ~2s |
 | google_scholar | free | Google Scholar(学术论文) | ~3s |
 | v2ex | free | V2EX(中文技术社区) | ~2s |

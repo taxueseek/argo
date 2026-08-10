@@ -60,6 +60,8 @@ from engines_builders_data import (
     _build_gdelt_engine,
     _build_opencorporates_engine,
     _build_google_patents_engine,
+    _build_marginalia_engine,
+    _build_wiby_engine,
 )
 from engines_builders_data_macro import (
     _build_fred_engine,
@@ -126,4 +128,6 @@ __all__ = [
     "_build_gdelt_engine",
     "_build_opencorporates_engine",
     "_build_google_patents_engine",
+    "_build_marginalia_engine",
+    "_build_wiby_engine",
 ]

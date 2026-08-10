@@ -2466,3 +2466,81 @@ def _build_google_patents_engine(spec: dict[str, Any]) -> Any:
             pass
         return results
     return _engine
+
+
+# ── Marginalia 独立索引引擎 ──────────────────────────────────────────────────
+
+def _build_marginalia_engine(spec: dict[str, Any]) -> Any:
+    """Marginalia 独立爬虫索引搜索（api.marginalia.nu，免认证 JSON）。
+
+    非大厂代理的独立索引，专挖长尾非商业页面；JSON 直出。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = f"https://api.marginalia.nu/public/search/{up.quote(query)}?count={min(n, 10)}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"Marginalia 失败: {e}")
+            return []
+        results = []
+        for r in (data.get("results") or [])[:n]:
+            title = r.get("title", "")
+            url_ = r.get("url", "")
+            if not title and not url_:
+                continue
+            results.append({
+                "title": title,
+                "url": url_,
+                "snippet": r.get("description", "")[:300],
+                "source": "marginalia",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── Wiby 手工网页索引引擎 ────────────────────────────────────────────────────
+
+def _build_wiby_engine(spec: dict[str, Any]) -> Any:
+    """Wiby 老式手工网页索引搜索（wiby.me/json，免认证，注意大写键）。
+
+    专收非商业化内容的老式索引，与主流引擎互补。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = f"https://wiby.me/json/?q={up.quote(query)}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"Wiby 失败: {e}")
+            return []
+        results = []
+        for r in (data if isinstance(data, list) else [])[:n]:
+            if not isinstance(r, dict):
+                continue
+            title = r.get("Title", r.get("title", ""))
+            url_ = r.get("URL", r.get("url", ""))
+            if not title and not url_:
+                continue
+            results.append({
+                "title": title,
+                "url": url_,
+                "snippet": r.get("Snippet", r.get("Description", ""))[:300],
+                "source": "wiby",
+                "score": 0.7,
+            })
+        return results
+    return _engine
