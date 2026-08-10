@@ -194,6 +194,28 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "bocha_ai": "structured_card",
     # 本地聚合
     "local_search": "web_general",
+    "tencent_kline": "finance_market",
+    "qq_music": "media_book",
+    "usda": "science_bio",
+    "opensky": "structured_card",
+    "electricity_maps": "misc_vertical",
+    "tatoeba": "knowledge",
+    "figshare": "academic",
+    "searchmysite": "web_general",
+    "lieu": "web_general",
+    "cnii": "academic",
+    "ndl": "knowledge",
+    "kor_law": "legal",
+    "hatena_bookmark": "social",
+    "dnb": "knowledge",
+    "doaj": "academic",
+    "europeana": "knowledge",
+    "hal": "academic",
+    "eu_opendata": "misc_vertical",
+    "open_meteo": "structured_card",
+    "gov_policy": "legal",
+    "qiita": "social",
+    "fr_opendata": "misc_vertical",
 }
 
 # 族 → 展示名

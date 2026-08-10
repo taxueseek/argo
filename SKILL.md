@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.8
+version: 2.7.9
 triggers:
   - 搜索
   - 查一下
@@ -57,6 +57,15 @@ engines:
   - juejin
   - know_your_meme
   - marginalia
+  - searchmysite
+  - lieu
+  - opensky
+  - electricity_maps
+  - usda
+  - tatoeba
+  - figshare
+  - tencent_kline
+  - qq_music
   - cnii
   - dnb
   - doaj
@@ -286,7 +295,8 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **ddgs CLI 失败识别与重试（v2.7.6）**：ddgs 9.14.4 起失败信号（`DDGSException`/`No results`/`ConnectError` 等）在 rc=0 时打到 stdout、输出文件 0 字节，旧逻辑只在 rc≠0 分支检查导致静默吞错（实测 yahoo 间歇丢结果）；现在无论 rc 先识别错误信号，失败/超时自动重试 1 次（yahoo 成功率 ~60%→84%、images ~80%→96%），持续失败返回明确错误而非误导消息
 - **Anna's Archive 电子书引擎（v2.7.6）**：新增 `local_ddgs_books`（ddgs books 子命令），author/publisher/info 拼入 snippet，vertical 类别路由；默认关闭，需用时在 `sub-skills/local-search/config.yaml` 置 `enabled: true`
 - **独立索引补充引擎（v2.7.7）**
-- **多语言与开放数据引擎（v2.7.8）**：新增 13 个免 key 引擎——中文政策库（国务院文件带发布日期）、日文三源（CiNii Research 学术/NDL 书目/Hatena 书签）、日文技术社区（Qiita）、韩国判例库（官方公开 demo 账号）、欧陆开放数据（data.gouv/EU ODP）、多语学术（DOAJ 开放获取期刊/HAL 法国仓储/DNB 德语书目）、Europeana 文化遗产、Open-Meteo 全球天气（地名→坐标→当前天气）：新增 `marginalia`（非大厂代理的独立爬虫索引，专挖长尾非商业页面）与 `wiby`（老式手工网页索引）两个免 key JSON 引擎，与主流引擎结果互补；语义路由 profile 已配（长尾/独立/复古类查询命中）
+- **多语言与开放数据引擎（v2.7.8）**
+- **小型网络与垂直数据源（v2.7.9）**：新增 9 个免 key 引擎——小型网络域补全 `searchmysite`（人工审核个人站索引）与 `lieu`（webring 专用搜索），与 marginalia/wiby 构成「去商业化探索」四件套（how to/自己搭/原理类查询命中）；实时航班 `opensky`（主要都会区 ADS-B）、电网碳强度 `electricity_maps`、营养成分 `usda`（官方 DEMO_KEY）、双语例句 `tatoeba`（400+ 语言对）、科研数据集 `figshare`、腾讯 K 线 `tencent_kline`（前复权日 K）、`qq_music` 曲库搜索：新增 13 个免 key 引擎——中文政策库（国务院文件带发布日期）、日文三源（CiNii Research 学术/NDL 书目/Hatena 书签）、日文技术社区（Qiita）、韩国判例库（官方公开 demo 账号）、欧陆开放数据（data.gouv/EU ODP）、多语学术（DOAJ 开放获取期刊/HAL 法国仓储/DNB 德语书目）、Europeana 文化遗产、Open-Meteo 全球天气（地名→坐标→当前天气）：新增 `marginalia`（非大厂代理的独立爬虫索引，专挖长尾非商业页面）与 `wiby`（老式手工网页索引）两个免 key JSON 引擎，与主流引擎结果互补；语义路由 profile 已配（长尾/独立/复古类查询命中）
 - **CLI 引擎声明式接入（v2.7.3）**：`output_format: yaml` 通用 YAML 解析 + `filter_args` 条件参数，新增 CLI 桥接引擎零 Python；模板 `engines/_template_cli.yaml`
 - **裸命令引擎路径校验修复（v2.7.3）**：PATH 中的裸命令 CLI 引擎不再被配置校验误判为不存在而禁用（`shutil.which` 兜底）
 
@@ -434,6 +444,15 @@ python3 scripts/clarify.py "苹果股价" --json
 | eu_opendata | free | EU Open Data Portal(24语言) | ~0.6s |
 | open_meteo | free | Open-Meteo 全球天气(地名→天气) | ~1s |
 | fr_opendata | free | 法国政府开放数据目录 | ~2.9s |
+| searchmysite | free | SearchMySite 个人站索引(独立博客) | ~0.8s |
+| lieu | free | Lieu webring 搜索(小众站点) | ~1.6s |
+| opensky | free | OpenSky 实时航班(都会区 ADS-B) | ~0.8s |
+| electricity_maps | free | Electricity Maps 电网碳强度 | ~0.7s |
+| usda | free | USDA 营养成分库(官方 DEMO_KEY) | ~1.5s |
+| tatoeba | free | Tatoeba 双语例句(400+语言对) | ~1.6s |
+| figshare | free | Figshare 科研数据集 | ~1.1s |
+| tencent_kline | free | 腾讯 K 线(前复权日K) | ~0.5s |
+| qq_music | free | QQ 音乐曲库搜索 | ~0.9s |
 | stackoverflow | free | Stack Overflow(编程问答) | ~2s |
 | google_scholar | free | Google Scholar(学术论文) | ~3s |
 | v2ex | free | V2EX(中文技术社区) | ~2s |

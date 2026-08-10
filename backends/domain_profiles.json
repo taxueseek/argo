@@ -1844,5 +1844,156 @@
       "forecast": 1.8,
       "天気": 2.0
     }
+  },
+  "searchmysite": {
+    "label": "SearchMySite 个人站索引",
+    "documents": [
+      "how to self hosted 自己搭 手写 原理 教程 独立博客",
+      "email server home lab self hosted guide 自建",
+      "indie web personal website non commercial blog",
+      "自建服务 邮件服务器 独立部署 折腾 教程"
+    ],
+    "boost_keywords": {
+      "how to": 2.0,
+      "self hosted": 2.2,
+      "自建": 2.0,
+      "自己搭": 2.0,
+      "教程": 1.6,
+      "indie web": 2.0
+    }
+  },
+  "lieu": {
+    "label": "Lieu webring 搜索",
+    "documents": [
+      "webring small web 小众站点 个人主页 独立站",
+      "手工收录 webring 成员站 复古网页 极简",
+      "personal site webring member small web indie",
+      "怀旧 个人站 手工 非商业 独立网络"
+    ],
+    "boost_keywords": {
+      "webring": 2.2,
+      "small web": 2.0,
+      "小众": 1.8,
+      "个人主页": 1.8,
+      "独立站": 1.6
+    }
+  },
+  "opensky": {
+    "label": "OpenSky 实时航班",
+    "documents": [
+      "航班 飞机 实时 空中 航线 起飞 降落",
+      "flight realtime aircraft air traffic ads-b",
+      "東京上空 航班动态 机场 空中交通 雷达",
+      "东京 上海 北京 纽约 伦敦 航班 实时位置"
+    ],
+    "boost_keywords": {
+      "航班": 2.2,
+      "飞机": 2.0,
+      "实时": 1.8,
+      "flight": 2.0,
+      "aircraft": 1.8,
+      "空中": 1.6
+    }
+  },
+  "electricity_maps": {
+    "label": "Electricity Maps 电网碳强度",
+    "documents": [
+      "电网 碳强度 电力 碳排放 能源结构 分区",
+      "electricity carbon intensity grid zone",
+      "电网分区 清洁能源 火力 风电 光伏 碳",
+      "energy grid carbon emission zone power"
+    ],
+    "boost_keywords": {
+      "碳强度": 2.2,
+      "电网": 2.0,
+      "碳排放": 2.0,
+      "carbon": 2.0,
+      "electricity": 1.8,
+      "能源": 1.5
+    }
+  },
+  "usda": {
+    "label": "USDA 营养成分库",
+    "documents": [
+      "营养成分 热量 蛋白质 脂肪 维生素 食物",
+      "nutrition calories protein fat vitamin food",
+      "食品成分 卡路里 膳食 营养数据 健康饮食",
+      "usda food data nutrient composition"
+    ],
+    "boost_keywords": {
+      "营养": 2.2,
+      "热量": 2.0,
+      "卡路里": 2.0,
+      "成分": 1.8,
+      "nutrition": 2.0,
+      "calorie": 1.8
+    }
+  },
+  "tatoeba": {
+    "label": "Tatoeba 双语例句",
+    "documents": [
+      "例句 双语 翻译 语言学习 用法 句子",
+      "example sentence translation language pair",
+      "双语例句 地道表达 口语 搭配 語例",
+      "sentence pair parallel corpus language"
+    ],
+    "boost_keywords": {
+      "例句": 2.2,
+      "双语": 2.0,
+      "翻译": 1.8,
+      "句子": 1.8,
+      "example sentence": 2.0,
+      "translation": 1.5
+    }
+  },
+  "figshare": {
+    "label": "Figshare 科研数据集",
+    "documents": [
+      "科研数据集 数据 论文附件 实验数据 图表",
+      "research dataset data article supplementary",
+      "数据集 下载 科学数据 原始数据 开源数据",
+      "figshare dataset research data paper"
+    ],
+    "boost_keywords": {
+      "数据集": 2.2,
+      "科研数据": 2.0,
+      "实验数据": 2.0,
+      "dataset": 2.0,
+      "data": 1.5
+    }
+  },
+  "tencent_kline": {
+    "label": "腾讯 K 线",
+    "documents": [
+      "K线 k线 走势 日K 股票图表 前复权",
+      "股价走势 技术分析 均线 支撑 压力",
+      "stock kline chart trend technical",
+      "行情走势 历史价格 OHLCV 蜡烛图"
+    ],
+    "boost_keywords": {
+      "K线": 2.2,
+      "走势": 2.0,
+      "日K": 2.0,
+      "kline": 2.2,
+      "chart": 1.6,
+      "技术分析": 1.8
+    }
+  },
+  "qq_music": {
+    "label": "QQ 音乐搜索",
+    "documents": [
+      "音乐 歌曲 歌手 专辑 歌词 曲库",
+      "music song singer album lyrics",
+      "周杰伦 歌 听歌 播放 单曲 新歌",
+      "歌单 热门歌曲 华语 音乐平台"
+    ],
+    "boost_keywords": {
+      "歌曲": 2.2,
+      "歌手": 2.0,
+      "专辑": 2.0,
+      "音乐": 1.8,
+      "song": 2.0,
+      "music": 1.8
+    }
   }
 }

@@ -121,6 +121,15 @@ from engines_builders import (
     _build_hal_engine,
     _build_eu_opendata_engine,
     _build_open_meteo_engine,
+    _build_searchmysite_engine,
+    _build_lieu_engine,
+    _build_opensky_engine,
+    _build_electricity_maps_engine,
+    _build_usda_engine,
+    _build_tatoeba_engine,
+    _build_figshare_engine,
+    _build_tencent_kline_engine,
+    _build_qq_music_engine,
 )
 
 logger = logging.getLogger("unified_search.engines")
@@ -268,6 +277,15 @@ _BUILDERS = {
     "hal": _build_hal_engine,
     "eu_opendata": _build_eu_opendata_engine,
     "open_meteo": _build_open_meteo_engine,
+    "searchmysite": _build_searchmysite_engine,
+    "lieu": _build_lieu_engine,
+    "opensky": _build_opensky_engine,
+    "electricity_maps": _build_electricity_maps_engine,
+    "usda": _build_usda_engine,
+    "tatoeba": _build_tatoeba_engine,
+    "figshare": _build_figshare_engine,
+    "tencent_kline": _build_tencent_kline_engine,
+    "qq_music": _build_qq_music_engine,
 }
 
 _engine_registry: dict[str, Any] = {}

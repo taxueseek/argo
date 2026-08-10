@@ -506,3 +506,420 @@ def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
             })
         return results
     return _engine
+
+
+# ── SearchMySite 小型个人站索引（HTML）───────────────────────────────────────
+
+def _build_searchmysite_engine(spec: dict[str, Any]) -> Any:
+    """SearchMySite 人工审核个人站索引（searchmysite.net，HTML 解析）。
+
+    只收非商业独立博客，与 marginalia/wiby 同类；结果含标题与正文摘要。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = f"https://searchmysite.net/search/?q={urllib.parse.quote(query)}"
+        try:
+            raw = _http_text(url, to)
+        except Exception as e:
+            logger.warning(f"SearchMySite 失败: {e}")
+            return []
+        results = []
+        # 结果容器 class="search-result"，按容器切段后取标题与链接
+        # （容器内 href 先于 class="result-link"，正则需兼容两种顺序）
+        for m in re.finditer(r'<div class="search-result[^"]*">(.*?)(?=<div class="search-result|$)', raw, re.S):
+            seg = m.group(1)
+            tm = re.search(r'result-title-txt[^>]*>(.*?)</span>', seg, re.S)
+            lm = re.search(r'href="(https?://[^"]+)"[^>]*class="result-link"', seg) or \
+                 re.search(r'class="result-link"[^>]*href="(https?://[^"]+)"', seg)
+            title = re.sub(r"<[^>]+>", "", tm.group(1)).strip() if tm else ""
+            link = lm.group(1) if lm else ""
+            if not title and not link:
+                continue
+            results.append({
+                "title": title[:200] or link[:200],
+                "url": link,
+                "snippet": "",
+                "source": "searchmysite",
+                "score": 0.7,
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+# ── Lieu webring 搜索引擎（HTML）──────────────────────────────────────────────
+
+def _build_lieu_engine(spec: dict[str, Any]) -> Any:
+    """Lieu webring 专用搜索（lieu.cblgh.org，HTML）。
+
+    只索引加入 webring 的站点，比 wiby 更小众；结果即站点内链接。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = f"https://lieu.cblgh.org/?q={urllib.parse.quote(query)}"
+        try:
+            raw = _http_text(url, to)
+        except Exception as e:
+            logger.warning(f"Lieu 失败: {e}")
+            return []
+        results = []
+        # 结果项 <li class="result|entry">，内含 <a href="https://...">文本</a>
+        for m in re.finditer(
+                r'<li class="(?:result|entry)[^"]*">.*?<a[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+                raw, re.S):
+            link = m.group(1)
+            title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+            if not title and not link:
+                continue
+            results.append({
+                "title": title[:200] or link[:200],
+                "url": link,
+                "snippet": "",
+                "source": "lieu",
+                "score": 0.7,
+            })
+            if len(results) >= n:
+                break
+        return results
+    return _engine
+
+
+# ── OpenSky 实时航班 ──────────────────────────────────────────────────────────
+
+def _build_opensky_engine(spec: dict[str, Any]) -> Any:
+    """OpenSky Network 全球实时航班（ADS-B，免 key）。
+
+    查询词含城市/地区名时按 bounding box 返回该区域当前航班。
+    """
+    timeout = spec.get("timeout", 12)
+    # 常见都会区 bbox（lamin,lomin,lamax,lomax）
+    _BBOX = {
+        "北京": ("39.4", "115.4", "41.1", "117.5"), "上海": ("30.6", "120.8", "31.9", "122.1"),
+        "东京": ("35.4", "139.4", "36.1", "140.2"), "纽约": ("40.4", "-74.3", "41.0", "-73.7"),
+        "伦敦": ("51.2", "-0.7", "51.7", "0.4"), "巴黎": ("48.6", "2.1", "49.1", "2.6"),
+        "新加坡": ("1.1", "103.6", "1.5", "104.1"), "香港": ("22.1", "113.8", "22.6", "114.4"),
+    }
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        box = None
+        for name, b in _BBOX.items():
+            if name in query:
+                box = b
+                break
+        if box is None:
+            return []
+        lamin, lomin, lamax, lomax = box
+        url = (f"https://opensky-network.org/api/states/all?lamin={lamin}&lomin={lomin}"
+               f"&lamax={lamax}&lomax={lomax}")
+        try:
+            data = _http_json(url, to)
+        except Exception as e:
+            logger.warning(f"OpenSky 失败: {e}")
+            return []
+        results = []
+        for st in (data.get("states") or [])[:n]:
+            if not isinstance(st, list) or len(st) < 8:
+                continue
+            callsign = (st[1] or "").strip()
+            country = st[2] or ""
+            lat, lon = st[6], st[5]
+            alt, vel = st[7], st[9]
+            if not callsign and not lat:
+                continue
+            results.append({
+                "title": f"{callsign or '未知航班'} · {country}",
+                "url": f"https://globe.adsbexchange.com/?lat={lat}&lon={lon}&zoom=9",
+                "snippet": (f"高度 {alt}m · 地速 {vel}m/s · 位置 {lat:.2f},{lon:.2f}"
+                            if alt else f"位置 {lat:.2f},{lon:.2f}")[:300],
+                "source": "opensky",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── Electricity Maps 电网碳强度 ───────────────────────────────────────────────
+
+def _build_electricity_maps_engine(spec: dict[str, Any]) -> Any:
+    """Electricity Maps 全球电网分区（api.electricitymap.org/v3/zones，免 key）。
+
+    zones 列表为静态目录；查询词匹配国家/区域名时返回分区信息。
+    """
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = "https://api.electricitymap.org/v3/zones"
+        try:
+            data = _http_json(url, to)
+        except Exception as e:
+            logger.warning(f"Electricity Maps 失败: {e}")
+            return []
+        if not isinstance(data, dict):
+            return []
+        q = query.lower()
+        results = []
+        for key, zone in data.items():
+            name = zone.get("zoneName", "")
+            if q in key.lower() or q in name.lower() or q in (zone.get("countryCode") or "").lower():
+                results.append({
+                    "title": f"{name} 电网分区",
+                    "url": f"https://app.electricitymaps.com/zone/{key}",
+                    "snippet": (f"分区键 {key} · 商业可用: {zone.get('isCommerciallyAvailable')}"
+                                f" · 层级 {zone.get('tier')}")[:300],
+                    "source": "electricity_maps",
+                    "score": 0.7,
+                })
+                if len(results) >= n:
+                    break
+        return results
+    return _engine
+
+
+# ── USDA FoodData Central 营养成分 ────────────────────────────────────────────
+
+def _build_usda_engine(spec: dict[str, Any]) -> Any:
+    """USDA FoodData Central 营养成分（api.nal.usda.gov，官方 DEMO_KEY）。"""
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = (f"https://api.nal.usda.gov/fdc/v1/foods/search?api_key=DEMO_KEY"
+               f"&query={urllib.parse.quote(query)}&pageSize={min(n, 10)}")
+        try:
+            data = _http_json(url, to)
+        except Exception as e:
+            logger.warning(f"USDA 失败: {e}")
+            return []
+        results = []
+        for food in (data.get("foods") or [])[:n]:
+            if not isinstance(food, dict):
+                continue
+            desc = food.get("description", "")
+            fdc = food.get("fdcId", "")
+            brand = food.get("brandOwner") or ""
+            parts = [p for p in (food.get("foodCategory", ""), brand) if p]
+            if not desc:
+                continue
+            results.append({
+                "title": desc[:200],
+                "url": f"https://fdc.nal.usda.gov/food-details/{fdc}/nutrients" if fdc else "",
+                "snippet": (" · ".join(parts) + f" · FDC {fdc}")[:300] if fdc else " · ".join(parts)[:300],
+                "source": "usda",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── Tatoeba 双语例句 ──────────────────────────────────────────────────────────
+
+def _build_tatoeba_engine(spec: dict[str, Any]) -> Any:
+    """Tatoeba 多语言例句库（tatoeba.org/api_v0，400+ 语言对）。"""
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = (f"https://tatoeba.org/en/api_v0/search?query={urllib.parse.quote(query)}"
+               f"&limit={min(n, 10)}")
+        try:
+            data = _http_json(url, to)
+        except Exception as e:
+            logger.warning(f"Tatoeba 失败: {e}")
+            return []
+        results = []
+        sentences = data.get("results")
+        if isinstance(sentences, dict):
+            sentences = sentences.get("Sentences") or []
+        for s in (sentences or [])[:n]:
+            if not isinstance(s, dict):
+                continue
+            text = s.get("text", "")
+            lang = s.get("lang", "")
+            trans = s.get("translations") or []
+            t_texts = []
+            # translations 是 list of lists（每层一个目标语言数组）
+            for t in trans[:3]:
+                arr = t if isinstance(t, list) else []
+                t_texts.extend(str(x.get("text", "")) for x in arr[:2] if isinstance(x, dict))
+            snippet = " ⇄ ".join(t for t in t_texts if t)[:200] or f"({lang})"
+            if not text:
+                continue
+            results.append({
+                "title": text[:200],
+                "url": f"https://tatoeba.org/en/sentences/show/{s.get('id', '')}" if s.get("id") else "",
+                "snippet": snippet,
+                "source": "tatoeba",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── Figshare 科研数据集 ───────────────────────────────────────────────────────
+
+def _build_figshare_engine(spec: dict[str, Any]) -> Any:
+    """Figshare 科研数据集检索（api.figshare.com/v2/articles）。"""
+    timeout = spec.get("timeout", 12)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = (f"https://api.figshare.com/v2/articles?search_for={urllib.parse.quote(query)}"
+               f"&page_size={min(n, 10)}")
+        try:
+            data = _http_json(url, to)
+        except Exception as e:
+            logger.warning(f"Figshare 失败: {e}")
+            return []
+        results = []
+        for art in (data if isinstance(data, list) else [])[:n]:
+            if not isinstance(art, dict):
+                continue
+            title = art.get("title", "")
+            if not title:
+                continue
+            results.append({
+                "title": str(title)[:200],
+                "url": art.get("url_public_api") or art.get("url_public_html") or "",
+                "snippet": f"DOI: {art.get('doi', '')}"[:300] if art.get("doi") else "",
+                "source": "figshare",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── 腾讯 K 线（前复权日 K）────────────────────────────────────────────────────
+
+def _resolve_tencent_symbol(q: str, to: float, headers: dict) -> str:
+    """腾讯代码解析（与行情引擎同源逻辑：smartbox 建议接口）。"""
+    _STOP = ("股价", "行情", "股票", "价格", "走势", "最新", "今日", "报价", "查询",
+             "怎么样", "多少", "怎么", "了", "吗", "的", "a股", "港股", "美股",
+             "K线", "k线", "走势图")
+    cands = [q]
+    for token in re.split(r"[\s,，、/]+", q):
+        t = token.strip()
+        if not t:
+            continue
+        for stop in _STOP:
+            t = t.replace(stop, "")
+        t = t.strip()
+        if 2 <= len(t) <= 8 and t not in cands:
+            cands.append(t)
+    for c in cands:
+        try:
+            req = urllib.request.Request(
+                f"https://smartbox.gtimg.cn/s3/?v=2&t=all&q={urllib.parse.quote(c)}",
+                headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                text = resp.read().decode("gbk", "replace")
+        except Exception as e:
+            logger.warning(f"腾讯代码解析失败: {e}")
+            continue
+        for m in re.finditer(r'v_hint="([^"]+)"', text):
+            parts = m.group(1).split("~")
+            if len(parts) >= 3 and parts[2]:
+                return parts[0] + parts[1]
+    return ""
+
+
+def _build_tencent_kline_engine(spec: dict[str, Any]) -> Any:
+    """腾讯财经前复权日 K 线（web.ifzq.gtimg.cn，免认证 JSON）。
+
+    查询「茅台 K线」类意图：代码解析 + 最近 N 日 OHLCV。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                   "Referer": "https://gu.qq.com/"}
+        symbol = _resolve_tencent_symbol(query, to, headers)
+        if not symbol:
+            return []
+        days = min(max(n * 20, 20), 120)
+        url = (f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+               f"?param={symbol},day,,,{days},qfq")
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"腾讯 K 线失败: {e}")
+            return []
+        node = ((data.get("data") or {}).get(symbol) or {})
+        klines = node.get("qfqday") or node.get("day") or []
+        if not klines:
+            return []
+        results = []
+        # 最近 n 根：每根一行
+        for row in klines[-n:]:
+            if len(row) < 6:
+                continue
+            date, opn, close, high, low, vol = row[0], row[1], row[2], row[3], row[4], row[5]
+            results.append({
+                "title": f"{symbol} {date} K线",
+                "url": f"https://gu.qq.com/{symbol}/kline",
+                "snippet": (f"开 {opn} · 收 {close} · 高 {high} · 低 {low} · 量 {vol}")[:300],
+                "source": "tencent_kline",
+                "score": 0.7,
+            })
+        return results
+    return _engine
+
+
+# ── QQ 音乐搜索 ───────────────────────────────────────────────────────────────
+
+def _build_qq_music_engine(spec: dict[str, Any]) -> Any:
+    """QQ 音乐搜索（c.y.qq.com，需 Referer，免认证 JSON）。"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        url = (f"https://c.y.qq.com/soso/fcgi-bin/client_search_cp?w={urllib.parse.quote(query)}"
+               f"&format=json&n={min(n, 10)}&p=1")
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                              "Referer": "https://y.qq.com/"})
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+        except Exception as e:
+            logger.warning(f"QQ 音乐失败: {e}")
+            return []
+        songs = ((data.get("data") or {}).get("song") or {}).get("list") or []
+        results = []
+        for s in songs[:n]:
+            if not isinstance(s, dict):
+                continue
+            title = s.get("songname", "")
+            singer = " / ".join(str(a.get("name", "")) for a in (s.get("singer") or []) if isinstance(a, dict))
+            album = s.get("albumname", "")
+            mid = s.get("songmid", "")
+            if not title:
+                continue
+            parts = [p for p in (singer, album) if p]
+            results.append({
+                "title": f"{title} · {singer}"[:200] if singer else title[:200],
+                "url": f"https://y.qq.com/n/ryqq/songDetail/{mid}" if mid else "",
+                "snippet": (" · ".join(parts))[:300],
+                "source": "qq_music",
+                "score": 0.7,
+            })
+        return results
+    return _engine

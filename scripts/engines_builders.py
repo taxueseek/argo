@@ -81,6 +81,15 @@ from engines_builders_intl import (
     _build_hal_engine,
     _build_eu_opendata_engine,
     _build_open_meteo_engine,
+    _build_searchmysite_engine,
+    _build_lieu_engine,
+    _build_opensky_engine,
+    _build_electricity_maps_engine,
+    _build_usda_engine,
+    _build_tatoeba_engine,
+    _build_figshare_engine,
+    _build_tencent_kline_engine,
+    _build_qq_music_engine,
 )
 
 __all__ = [
@@ -152,4 +161,13 @@ __all__ = [
     "_build_hal_engine",
     "_build_eu_opendata_engine",
     "_build_open_meteo_engine",
+    "_build_searchmysite_engine",
+    "_build_lieu_engine",
+    "_build_opensky_engine",
+    "_build_electricity_maps_engine",
+    "_build_usda_engine",
+    "_build_tatoeba_engine",
+    "_build_figshare_engine",
+    "_build_tencent_kline_engine",
+    "_build_qq_music_engine",
 ]

@@ -1574,6 +1574,163 @@ engines:
     timeout: 10
     type: wiby
 
+
+  searchmysite:
+    enabled: true
+    label: SearchMySite 个人站索引
+    cost_tier: free
+    family: web_general
+    qps: 2
+    priority: 55
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - web
+    - indie
+    - blog
+    - english
+    desc: 人工审核准入的个人独立站索引（非商业博客，HTML 解析）
+    timeout: 12
+    type: searchmysite
+  lieu:
+    enabled: true
+    label: Lieu webring 搜索
+    cost_tier: free
+    family: web_general
+    qps: 2
+    priority: 56
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - web
+    - indie
+    - webring
+    - english
+    desc: webring 专用搜索（只索引加入 webring 的小众站点，HTML 解析）
+    timeout: 12
+    type: lieu
+  opensky:
+    enabled: true
+    label: OpenSky 实时航班
+    cost_tier: free
+    family: structured_card
+    qps: 2
+    priority: 57
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - flight
+    - realtime
+    - aviation
+    desc: 全球 ADS-B 实时航班（主要都会区 bbox，免 key）
+    timeout: 12
+    type: opensky
+  electricity_maps:
+    enabled: true
+    label: Electricity Maps 电网碳强度
+    cost_tier: free
+    family: misc_vertical
+    qps: 2
+    priority: 58
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - energy
+    - carbon
+    - environment
+    desc: 全球电网分区目录（zones 免 key）
+    timeout: 12
+    type: electricity_maps
+  usda:
+    enabled: true
+    label: USDA 营养成分库
+    cost_tier: free
+    family: science_bio
+    qps: 2
+    priority: 59
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - food
+    - nutrition
+    - health
+    desc: 美国农业部食品营养成分（官方 DEMO_KEY）
+    timeout: 12
+    type: usda
+  tatoeba:
+    enabled: true
+    label: Tatoeba 双语例句
+    cost_tier: free
+    family: knowledge
+    qps: 2
+    priority: 60
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - language
+    - translation
+    - sentence
+    desc: 400+ 语言对真实句子语料（翻译/语言学习）
+    timeout: 12
+    type: tatoeba
+  figshare:
+    enabled: true
+    label: Figshare 科研数据集
+    cost_tier: free
+    family: academic
+    qps: 2
+    priority: 61
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - dataset
+    - research
+    desc: 科研数据集检索（论文/数据/图表）
+    timeout: 12
+    type: figshare
+  tencent_kline:
+    enabled: true
+    label: 腾讯 K 线
+    cost_tier: free
+    family: finance_market
+    qps: 2
+    priority: 62
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - stock
+    - kline
+    - chinese
+    - chart
+    desc: 腾讯财经前复权日 K 线（A股+港股+美股）
+    timeout: 10
+    type: tencent_kline
+  qq_music:
+    enabled: true
+    label: QQ 音乐搜索
+    cost_tier: free
+    family: media_book
+    qps: 2
+    priority: 63
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - music
+    - song
+    - chinese
+    desc: QQ 音乐曲库搜索（歌手/歌曲/专辑）
+    timeout: 10
+    type: qq_music
   gov_policy:
     type: http
     enabled: true

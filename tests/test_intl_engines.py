@@ -271,3 +271,175 @@ class TestConfigDrivenEngines(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSearchMySite(_BuilderCase):
+    HTML = """<html><body>
+<div class="search-result sms-b-72">
+<h2 class="sms-result-title"><a href="https://blog.example.com/post/1" class="result-title">
+<span class="result-title-txt">My Self Hosted Email Setup</span></a></h2>
+<p><a href="https://blog.example.com/post/1" class="result-link">https://blog.example.com/post/1</a></p>
+</div>
+</body></html>"""
+
+    def test_parse(self):
+        res = self.run_case(intl._build_searchmysite_engine, self.HTML)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["title"], "My Self Hosted Email Setup")
+        self.assertEqual(res[0]["url"], "https://blog.example.com/post/1")
+
+    def test_empty(self):
+        res = self.run_case(intl._build_searchmysite_engine, "<html></html>")
+        self.assertEqual(res, [])
+
+
+class TestLieu(_BuilderCase):
+    HTML = """<html><body>
+<ul><li class="result"><a href="https://q.pfiffer.org/resume">q.pfiffer.org/resume</a></li>
+<li class="entry"><a href="https://flower.codes/category/web">flower.codes</a></li></ul>
+</body></html>"""
+
+    def test_parse(self):
+        res = self.run_case(intl._build_lieu_engine, self.HTML)
+        self.assertEqual(len(res), 2)
+        self.assertEqual(res[0]["url"], "https://q.pfiffer.org/resume")
+
+
+class TestOpenSky(_BuilderCase):
+    def test_parse(self):
+        payload = {"states": [
+            ["87455c", "ANA270 ", "Japan", 1786365374, 1786365374, 139.78, 35.56,
+             None, True, 7.72, 67.5, None, None, None, "4653", False, 0],
+        ]}
+        res = self.run_case(intl._build_opensky_engine, payload, query="东京航班")
+        self.assertEqual(len(res), 1)
+        self.assertIn("ANA270", res[0]["title"])
+        self.assertIn("Japan", res[0]["title"])
+
+    def test_no_known_city(self):
+        res = self.run_case(intl._build_opensky_engine, {"states": []}, query="xyzabc")
+        self.assertEqual(res, [])
+
+
+class TestElectricityMaps(_BuilderCase):
+    def test_parse(self):
+        payload = {"FR": {"zoneName": "France", "countryCode": "FR",
+                          "isCommerciallyAvailable": True, "tier": "TIER_A"},
+                   "JP": {"zoneName": "Japan", "countryCode": "JP"}}
+        res = self.run_case(intl._build_electricity_maps_engine, payload, query="france")
+        self.assertEqual(len(res), 1)
+        self.assertIn("France", res[0]["title"])
+
+    def test_no_match(self):
+        res = self.run_case(intl._build_electricity_maps_engine, {"FR": {"zoneName": "France"}},
+                            query="zzzz")
+        self.assertEqual(res, [])
+
+
+class TestUsda(_BuilderCase):
+    def test_parse(self):
+        payload = {"totalHits": 25685, "foods": [
+            {"description": "APPLE, RAW", "fdcId": 45400,
+             "foodCategory": "Fruits", "brandOwner": "Generic"},
+        ]}
+        res = self.run_case(intl._build_usda_engine, payload)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["title"], "APPLE, RAW")
+        self.assertIn("45400", res[0]["url"])
+
+
+class TestTatoeba(_BuilderCase):
+    def test_parse_list_results(self):
+        payload = {"paging": {}, "results": [
+            {"id": 14006447, "text": "Hello world!", "lang": "eng",
+             "translations": [[{"id": 1, "text": "你好，世界！", "lang": "cmn"}]]},
+        ]}
+        res = self.run_case(intl._build_tatoeba_engine, payload)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["title"], "Hello world!")
+        self.assertIn("你好", res[0]["snippet"])
+
+
+class TestFigshare(_BuilderCase):
+    def test_parse(self):
+        payload = [{"id": 33197788, "title": "Sinefungin synthesis",
+                    "doi": "10.1021/jacs.6c10565.s001",
+                    "url_public_api": "https://api.figshare.com/v2/articles/33197788"}]
+        res = self.run_case(intl._build_figshare_engine, payload)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["title"], "Sinefungin synthesis")
+        self.assertIn("figshare", res[0]["url"])
+
+
+class TestTencentKline(_BuilderCase):
+    def test_parse(self):
+        def fake_json(url, timeout):
+            if "smartbox" in url:
+                return None  # 走 _resolve 的 urlopen 路径（下面 mock）
+            return {"code": 0, "data": {"sh600519": {"qfqday": [
+                ["2026-08-06", "1310.000", "1308.550", "1314.400", "1300.010", "25463"],
+                ["2026-08-07", "1308.660", "1309.220", "1315.280", "1301.000", "24976"],
+            ]}}}
+        engine = intl._build_tencent_kline_engine({"timeout": 8})
+        import urllib.request as _ur
+
+        class R:
+            def __init__(self, b): self._b = b
+            def read(self): return self._b
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def fake_open(req, timeout=8):
+            u = req.full_url if hasattr(req, 'full_url') else str(req)
+            if "smartbox" in u:
+                return R('v_hint="sh~600519~贵州茅台~600519~gp~A股~贵州茅台~GP-A"'.encode("gbk"))
+            return R(json.dumps(fake_json(u, timeout)).encode())
+
+        real_open = _ur.urlopen
+        _ur.urlopen = fake_open
+        try:
+            with patch.object(intl, "_http_json", side_effect=lambda u, t: fake_json(u, t)):
+                res = engine("贵州茅台 k线", 2)
+        finally:
+            _ur.urlopen = real_open
+        self.assertEqual(len(res), 2)
+        self.assertIn("1310.000", res[0]["snippet"])
+
+
+class TestQqMusic(_BuilderCase):
+    def test_parse(self):
+        payload = {"code": 0, "data": {"song": {"list": [
+            {"songname": "搁浅", "songmid": "003X", "albumname": "七里香",
+             "singer": [{"name": "周杰伦"}]},
+        ]}}}
+        engine = intl._build_qq_music_engine({"timeout": 8})
+        import urllib.request as _ur
+
+        class R:
+            def __init__(self, b): self._b = b
+            def read(self): return self._b
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def fake_open(req, timeout=8):
+            return R(json.dumps(payload).encode())
+
+        real_open = _ur.urlopen
+        _ur.urlopen = fake_open
+        try:
+            res = engine("周杰伦", 3)
+        finally:
+            _ur.urlopen = real_open
+        self.assertEqual(len(res), 1)
+        self.assertIn("搁浅", res[0]["title"])
+        self.assertIn("周杰伦", res[0]["title"])
+        self.assertIn("003X", res[0]["url"])
+
+
+class TestNewEnginesRegistered(unittest.TestCase):
+    def test_all_registered(self):
+        import engines
+        reg = engines.get_registry()
+        for name in ("searchmysite", "lieu", "opensky", "electricity_maps",
+                     "usda", "tatoeba", "figshare", "tencent_kline", "qq_music"):
+            self.assertIn(name, reg, f"{name} 未注册")
