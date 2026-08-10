@@ -129,6 +129,9 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         # 保留发布时间维度（仅引擎输出该字段时，避免空字段噪音）
         if r.get("published_at"):
             item["published_at"] = r["published_at"]
+        # 顶包标记：recovery 替换了引擎原结果时透传，供上层识别结果已被代答
+        if r.get("_recovered"):
+            item["recovered"] = r["_recovered"]
         # 保留快评，丢掉大块 meta
         for k in ("selection", "absorption", "credibility_fast", "evidence_flags"):
             if k in r:

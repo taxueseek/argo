@@ -8,5 +8,7 @@ __pycache__/
 cache/
 installs.local.yaml
 *.bak-before-link
+*.bak
+*.before-*
 dist/
 scripts/data/

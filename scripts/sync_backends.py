@@ -222,10 +222,31 @@ def main() -> int:
         tiers: dict[str, list[str]] = {}
         for n, s in engines.items():
             tiers.setdefault(s.get("cost_tier", "free"), []).append(n)
+        # D7：对账四数字——config 原始 / 合并外部 specs / env 就绪启用 / 禁用。
+        # 此前 136/124/126 口径反复数错，统一在此收敛：registry_merged 与
+        # enabled_ready 的差即 disabled（enabled:false + env gating 禁用的），
+        # 三方（config / specs / env）对账一次给出，杜绝再次数错。
+        registry_merged = dict(engines)
+        ready_names = set(enabled)
+        try:
+            from config import load_config, get_engines
+            merged_cfg = load_config()
+            registry_merged = {
+                k: v for k, v in merged_cfg.get("engines", {}).items()
+                if isinstance(v, dict)
+            }
+            ready = get_engines(merged_cfg) or {}
+            ready_names = set(ready.keys())
+        except Exception:
+            pass  # config 模块不可用时回退到 config.yaml 单源口径
         print(json.dumps({
-            "total": len(engines),
-            "enabled": len(enabled),
-            "disabled": sorted(set(engines) - set(enabled)),
+            "config_raw": len(engines),
+            "registry_merged": len(registry_merged),
+            "enabled_ready": len(ready_names),
+            "disabled": len(registry_merged) - len(ready_names),
+            # 兼容旧字段
+            "total": len(registry_merged),
+            "enabled": len(ready_names),
             "by_cost_tier": {k: len(v) for k, v in tiers.items()},
             "engines": sorted(engines),
         }, ensure_ascii=False, indent=2))

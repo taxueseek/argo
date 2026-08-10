@@ -356,6 +356,35 @@ def _general_fallback(enabled: set[str]) -> list[str]:
     return ["local_search"] + [e for e in GENERAL_FREE_FALLBACK if e in enabled]
 
 
+def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:
+    """剔除确定熔断态引擎（disabled / open 且冷却未过），与 _get_engines_combo
+    内的熔断感知过滤同一语义（half_open 保留探测资格）。
+
+    D4：语言引擎追加、通用兜底、TF-IDF 注入等路径在 _get_engines_combo 之外，
+    追加的引擎可能处于熔断态仍进 combo，白占并行槽位。统一收口到最终组装后。
+    """
+    if not engine_list:
+        return engine_list
+    try:
+        from circuit_breaker import get_breaker
+        breaker = get_breaker()
+    except Exception:
+        return engine_list
+    out = []
+    for e in engine_list:
+        try:
+            st = breaker.status(e)
+            st_state = st.get("state")
+            if st_state == "disabled":
+                continue
+            if st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
+                continue
+        except Exception:
+            pass
+        out.append(e)
+    return out
+
+
 def _select_language_engines(features: dict | None = None) -> list[str]:
     """按查询语言选择应追加的语言本地引擎（P2-1 单一入口，与组合无关）。
 
@@ -381,20 +410,21 @@ def _select_language_engines(features: dict | None = None) -> list[str]:
             return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
                     if e in sub_engines][:2]
         if lang_override == "ko":
-            return [e for e in ["local_google", "local_bing", "local_duckduckgo"]
+            # local_google 已禁用（反爬强），不再引用死引擎
+            return [e for e in ["local_bing", "local_duckduckgo"]
                     if e in sub_engines][:2]
         if lang_override == "zh":
             return [e for e in ["local_bing"] if e in sub_engines]
         # en / cyrillic / 其他：中英基线本地引擎（动态 setlang 兜底多语言索引）
         return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
 
-    # 日/韩：优先对应语言本地引擎。注：local_yandex / local_google 默认
-    # enabled:false，实际常落到 local_bing，由 engines_base 动态 setlang。
+    # 日/韩：优先对应语言本地引擎。注：local_yandex 走 ddgs yandex 后端
+    # （实测 ~2s 可用）；local_google 默认 enabled:false，不引用死引擎。
     if primary_lang == "ja":
         return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
                 if e in sub_engines][:2]
     if primary_lang == "ko":
-        return [e for e in ["local_google", "local_bing", "local_duckduckgo"]
+        return [e for e in ["local_bing", "local_duckduckgo"]
                 if e in sub_engines][:2]
 
     if chinese_ratio > 0.1:
@@ -570,7 +600,9 @@ def _apply_intent_parallelism(engine_list: list[str], features: dict | None,
 def _select_sub_engines(sub_engines: list[str], features: dict | None = None) -> list[str]:
     """根据查询特征选择子引擎。"""
     if not features:
-        return [e for e in ["local_bing", "local_duckduckgo", "local_mojeek"] if e in sub_engines]
+        # 默认兜底：快源优先（brave/yahoo 实测 ~1.1s），ddgs 默认后端慢不主动纳入
+        return [e for e in ["local_bing", "local_brave", "local_yahoo", "local_duckduckgo"]
+                if e in sub_engines]
 
     primary_lang = features.get("primary_lang", "")
     chinese_ratio = features.get("chinese_ratio", 0)
@@ -1158,6 +1190,8 @@ def route_query(query: str, engine_override: str = "auto",
                 pass
             if p and p in engines_combo:
                 engines_combo = [p] + [e for e in engines_combo if e != p]
+        # D4：统一熔断收口——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
+        engines_combo = _filter_breaker_blocked(engines_combo)
         if not engines_combo:
             engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
         # budget 截断后对齐 parallel，避免短 combo 仍开多余并行
@@ -1217,6 +1251,8 @@ def route_query(query: str, engine_override: str = "auto",
             engines_combo, mode=mode, depth=depth, context=context,
             engines_boost=engines_boost, enabled=enabled, must_keep=must_keep,
         )
+        # D4：统一熔断收口（TF-IDF 注入/语言追加可能绕过 _get_engines_combo）
+        engines_combo = _filter_breaker_blocked(engines_combo)
         if not engines_combo:
             engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
         if mode == "fast":
@@ -1262,6 +1298,8 @@ def route_query(query: str, engine_override: str = "auto",
         fallback_combo, mode=mode, depth=depth, context=context,
         engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,
     )
+    # D4：统一熔断收口（兜底组合可能含熔断引擎）
+    fallback_combo = _filter_breaker_blocked(fallback_combo)
     if not fallback_combo:
         fallback_combo = ["anysearch"]
 

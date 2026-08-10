@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。
 version: 2
-last_updated: '2026-08-05'
+last_updated: '2026-08-10'
 engines:
 - name: anysearch
   tier: T1

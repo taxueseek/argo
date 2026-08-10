@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.2
+version: 2.7.5
 triggers:
   - 搜索
   - 查一下
@@ -60,7 +60,11 @@ engines:
   - local_baidu
   - local_bing
   - local_bing_news
+  - local_brave
   - local_crossref
+  - local_ddgs_images
+  - local_ddgs_news
+  - local_ddgs_videos
   - local_duckduckgo
   - local_github
   - local_gitlab
@@ -77,6 +81,8 @@ engines:
   - local_wikipedia
   - local_wikiquote
   - local_wiktionary
+  - local_yahoo
+  - local_yandex
   - mdn
   - models_dev
   - moegirl
@@ -254,9 +260,13 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **路由健康语义修复（v2.7.1）**：健康过滤只作用于 local_* 子引擎；sub-skills 与 scripts 顶层模块名隔离（health_check 不再被劫持）；health_probe 只探测 local_*，消除慢源误报
 - **macro_data 国家分流（v2.7.1）**：非美国宏观查询（中国GDP/日本通胀）worldbank 前置不再被 primary 扶正覆盖，避免 FRED 美国数据冒充
 - **深度研究 local_first（v2.7.1）**：决策树先本地聚合，结果不足才升级全量；修复「先全量再本地」的浪费顺序
-- **实时索引引擎（v2.7.3）**：`realtime_index` 免 Key 实时索引源，结构化 YAML 输出，结果带 `published_at` 发布时间维度；不参与日常 combo，显式 `--engine realtime_index` 指定
+- **实时索引引擎（v2.7.3）**：`realtime_index` 免 Key 实时索引源，结构化 YAML 输出，结果带 `published_at` 发布时间维度；不参与日常 combo，显式 `--engine realtime_index` 指定。**部署要求**：需本机安装 `realtime-index` CLI（或把 spec 的 cmd 改为其绝对路径），未安装时引擎自动禁用、强制指定会回退通用引擎
 - **时间窗过滤（v2.7.3）**：`--since`/`--until`（`7d` 或 `2026-08-01`）下推到支持时间窗的引擎，CLI 与 MCP 均支持；per-engine 缓存按时间窗隔离
 - **时间能力补强（v2.7.4）**：时间窗从「下推支持引擎」扩展到「融合后兜底过滤」——任意引擎组合按 `published_at` 剔除明确超窗条目（宽松策略，无时间字段保留），返回包带 `time_filtered: N`；相对值归一化为绝对日期（`7d` 与等价日期共享缓存键，相对窗跨天不串旧数据）；`--until 2026-08-01` 含当天；`--sort newest|oldest` 按发布时间重排（最早出处用 `oldest`）；recovery 恢复路径保留时间窗不丢约束；`wayback_cdx` 输出标准 `published_at`（CDX 最早快照时间戳，最早出处召回前置）
+- **时间窗按引擎能力生效（v2.7.5）**：时间窗的缓存键隔离与后过滤只对**带发布时间能力**的引擎组合生效（`realtime_index` / `wayback_cdx` / `local_search` 聚合 / news 类子引擎）；不带时间字段的引擎（octen/anysearch/bocha 等）忽略时间窗且结果相同，不再隔离缓存键——`--since 7d` 与 `--since 30d` 命中同一缓存，命中率提升；组合内无时间能力引擎时不重复告警「未实际过滤」（已知常态）
+- **ddgs CLI 增强（v2.7.5）**：local-search 的 ddgs 引擎全部改 `-o json` 结构化输出（淘汰脆弱文本行解析，news 的 date 归一化为 `published_at`）；`use_lang_region` 按查询主语言下推 `-r region`（zh→cn-zh）；新增 `local_brave` / `local_yahoo` 两个免 key 快源（实测 ~1s）；ddgs 引擎 timeout 15→8s 与外层并行超时对齐
+- **local-search 超时健壮性（v2.7.5）**：`as_completed` 超时不再整链崩溃——未完成引擎标记 timeout 记入 errors，已完成引擎结果保留（此前 ddgs 慢后端超时会拖垮整个 local_search 聚合）；`_check_cli_available` 结果缓存 60s（`ddgs --help` 冷启动 ~190ms/次不再重复付费）
+- **TF-IDF profile 补全（v2.7.5）**：`aviation_weather` / `cn_ai_news` / `datacite` / `firecrawl` / `fxtwitter` / `sec_edgar` / `train` / `weather` / `zenodo` 9 个引擎补齐代表文档，语义路由不再永久选不中；韩文路由不再引用已禁用的 `local_google`（落 local_bing + local_duckduckgo）
 - **CLI 引擎声明式接入（v2.7.3）**：`output_format: yaml` 通用 YAML 解析 + `filter_args` 条件参数，新增 CLI 桥接引擎零 Python；模板 `engines/_template_cli.yaml`
 - **裸命令引擎路径校验修复（v2.7.3）**：PATH 中的裸命令 CLI 引擎不再被配置校验误判为不存在而禁用（`shutil.which` 兜底）
 
@@ -374,21 +384,18 @@ python3 scripts/clarify.py "苹果股价" --json
 | eastmoney | free | 金融数据 | ~400ms |
 | arxiv | free | 学术论文 | ~1s |
 | duckduckgo | free | 快速事实 | ~500ms |
-| uapi | free | 中文网页 | ~800ms |
+| octen | free | 中文网页 | ~800ms |
 | semantic_scholar | free | 学术+引用 | ~1s |
 | openalex | free | 2.5亿+论文 | ~2s |
 | crossref | free | DOI/引用元数据 | ~2s |
 | github | free | 代码搜索 | ~1s |
 | wikipedia | free | 百科事实 | ~500ms |
-| searxng | free | 聚合搜索 | ~1s |
-| wolframalpha | free | 计算知识 | ~2s |
+| imdb | free | 影视实体（导演/主演） | ~1s |
+| thesportsdb | free | 体育实体（球员/球队） | ~1s |
 | bocha | low | 中文网页(AI友好) | ~1s |
 | bocha_ai | low | 垂直结构化模态卡(实时值) | ~12s |
-| metaso | low | 中文AI搜索 | ~2s |
 | byted | low | 字节搜索 | ~1s |
-| brave | low | 隐私搜索 | ~1s |
 | tavily | paid | 国际搜索 | ~2s |
-| felo | paid | AI综合答案 | ~3s |
 | exa | api | 语义搜索(embedding+内容摘要) | ~6s |
 | wechat_sogou | free | 搜狗微信搜索(公众号文章) | ~2s |
 | hackernews | free | Hacker News(科技新闻+讨论) | ~2s |
@@ -398,6 +405,8 @@ python3 scripts/clarify.py "苹果股价" --json
 | ths_hot | free | 同花顺热点(强势股+题材归因) | ~2s |
 | cls_telegraph | free | 财联社电报(实时财经快讯) | ~2s |
 | em_global_news | free | 东财全球资讯(7×24快讯) | ~2s |
+| realtime_index | free | 实时索引源（需本机安装 realtime-index CLI，未安装自动禁用） | ~1s |
+| local_brave / local_yahoo | free | ddgs brave/yahoo 后端（免 key 快源） | ~1s |
 | **Bocha Reranker** | low | 语义精排（后处理） | ~500ms |
 
 ### Exa 语义搜索引擎（v2.3 新增）
@@ -682,10 +691,10 @@ MCP 工具名：`argo_search`、`argo_local_search`（本地文件/记录搜索�
 score = quality × cost_factor
 
 cost_factor:
-  free  = 1.0   (anysearch/zhihu/eastmoney/arxiv/duckduckgo/uapi/...)
-  low   = 0.7   (bocha/metaso/byted/brave)
+  free  = 1.0   (anysearch/zhihu/eastmoney/arxiv/duckduckgo/octen/local_*...)
+  low   = 0.7   (bocha/bocha_ai/byted)
   api   = 0.5   (exa — 有限额度的免费引擎)
-  paid  = 0.3   (tavily/felo)
+  paid  = 0.3   (tavily)
 ```
 
 ### 预算模式
@@ -701,8 +710,9 @@ cost_factor:
 
 local-search 是 argo 内置的「零成本聚合后端」，不依赖独立的 SearXNG 服务：
 
-- **25 个本地引擎，20 个默认启用**：覆盖 web_general、chinese、academic、news、code、reference、vertical 七大类，
-  统一通过 HTML/RSS/JSON/XML 解析公开页面。
+- **30 个本地引擎，27 个默认启用**：覆盖 web_general、chinese、academic、news、code、reference、vertical 七大类，
+  统一通过 HTML/RSS/JSON/XML 解析公开页面；其中 8 个走 ddgs CLI（text 四后端 bing/yandex/brave/yahoo + 默认 + news/images/videos），
+  结构化 JSON 输出、按查询语言自动下推 region 参数。
 - **引擎注册表**（`sub-skills/local-search/engine_registry.py`）：唯一真源，加载
   `config.yaml` + `parse_maps.yaml`；新增引擎只需改 YAML。
 - **健康探针**（`sub-skills/local-search/local_health_check.py`）：canary 查询 + 反爬/拦截检测，

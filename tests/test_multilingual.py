@@ -227,9 +227,11 @@ class TestLanguageEngineUnified(unittest.TestCase):
         )
 
     def test_select_ko(self):
+        # local_google 默认禁用（反爬强），韩文不再引用死引擎，
+        # 落 local_bing + local_duckduckgo（ddgs 后端）
         self.assertEqual(
             _select_language_engines({"primary_lang": "ko"}),
-            ["local_google", "local_bing"],
+            ["local_bing", "local_duckduckgo"],
         )
 
     def test_select_no_features_returns_empty(self):

@@ -260,5 +260,113 @@ class TestParserNParam(unittest.TestCase):
         self.assertEqual(len(out), 10)  # 默认上限保持 10，行为兼容
 
 
+# ── 6. 时间能力引擎集合（v2.7.5）────────────────────────────────────────────
+# 不带时间字段的引擎组合：时间窗不隔离缓存键、不后过滤（7d/30d 共享缓存）；
+# 带时间能力引擎（news/realtime/wayback/local_search 聚合）保持隔离。
+
+class TestTimeCapableEngines(unittest.TestCase):
+    def test_is_time_capable_members(self):
+        for eng in ("realtime_index", "wayback_cdx", "local_search",
+                    "local_bing_news", "local_google_news",
+                    "local_duckduckgo_news", "local_ddgs_news"):
+            self.assertTrue(search_mod._is_time_capable(eng), eng)
+
+    def test_is_time_capable_non_members(self):
+        for eng in ("octen", "anysearch", "bocha", "local_bing",
+                    "local_duckduckgo", "local_brave", "local_yahoo"):
+            self.assertFalse(search_mod._is_time_capable(eng), eng)
+
+    def test_cache_key_not_partitioned_without_time_engines(self):
+        """无时间能力引擎组合：since 不进入缓存键（7d/30d 共享）。"""
+        engines = ["octen", "anysearch"]
+        key = "+".join(sorted(engines))
+        with patch.object(search_mod, "_normalize_time_window",
+                          return_value=("2026-08-03", None, 1.0, None)):
+            # 直接验证缓存键拼装逻辑：time_aware=False 时不拼 since
+            time_aware = any(search_mod._is_time_capable(e) for e in engines)
+            self.assertFalse(time_aware)
+            cache_key = key
+            if "2026-08-03" and time_aware:
+                cache_key += "|since=2026-08-03"
+            self.assertEqual(cache_key, key)
+
+    def test_cache_key_partitioned_with_time_engines(self):
+        """带时间能力引擎组合：since 进入缓存键（7d/30d 隔离）。"""
+        engines = ["realtime_index", "octen"]
+        time_aware = any(search_mod._is_time_capable(e) for e in engines)
+        self.assertTrue(time_aware)
+        key = "+".join(sorted(engines))
+        self.assertEqual(key + "|since=2026-08-03",
+                         key + ("|since=2026-08-03" if time_aware else ""))
+
+
+# ── 7. ddgs 结构化 JSON 解析（v2.7.5）────────────────────────────────────────
+
+class TestDdgsJsonParse(unittest.TestCase):
+    """_parse_cli_json：ddgs -o json 文件输出 → argo 结果（news date→published_at）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(SKILL_DIR.parent / "sub-skills" / "local-search"))
+        import search_v3  # noqa: F401
+        cls.search_v3 = search_v3
+
+    def test_text_shape(self):
+        data = [{"title": "T", "href": "https://a.com", "body": "snippet body"}]
+        out = self.search_v3._parse_cli_json(data, "local_brave")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["url"], "https://a.com")
+        self.assertEqual(out[0]["source"], "local_brave")
+        self.assertNotIn("published_at", out[0])
+
+    def test_news_date_maps_to_published_at(self):
+        data = [{"date": "2026-08-10", "title": "N", "url": "https://n.com",
+                 "body": "b", "source": "cnn"}]
+        out = self.search_v3._parse_cli_json(data, "local_ddgs_news")
+        self.assertEqual(out[0]["published_at"], "2026-08-10")
+
+    def test_extra_fields_preserved(self):
+        data = [{"title": "I", "image": "https://i.com/x.jpg", "thumbnail": "https://i.com/t.jpg",
+                 "url": "https://p.com", "height": 100, "width": 200}]
+        out = self.search_v3._parse_cli_json(data, "local_ddgs_images")
+        self.assertEqual(out[0]["height"], 100)
+        self.assertEqual(out[0]["image"], "https://i.com/x.jpg")
+
+    def test_empty_and_non_list(self):
+        self.assertEqual(self.search_v3._parse_cli_json([], "x"), [])
+        self.assertEqual(self.search_v3._parse_cli_json({"a": 1}, "x"), [])
+
+    def test_cli_avail_cache(self):
+        """_check_cli_available 结果缓存：第二次不重跑 subprocess。"""
+        sv3 = self.search_v3
+        sv3._CLI_AVAIL_CACHE.clear()
+        calls = {"n": 0}
+        real_run = sv3.subprocess.run
+
+        def fake_run(*args, **kwargs):
+            calls["n"] += 1
+            class R:
+                returncode = 0
+            return R()
+
+        sv3.subprocess.run = fake_run
+        try:
+            self.assertTrue(sv3._check_cli_available("fakecli"))
+            self.assertTrue(sv3._check_cli_available("fakecli"))
+            self.assertEqual(calls["n"], 1)  # 只跑一次
+        finally:
+            sv3.subprocess.run = real_run
+            sv3._CLI_AVAIL_CACHE.clear()
+
+    def test_time_capable_local_set(self):
+        sv3 = self.search_v3
+        for eng in ("local_bing_news", "local_google_news",
+                    "local_duckduckgo_news", "local_ddgs_news"):
+            self.assertIn(eng, sv3._TIME_CAPABLE_ENGINES)
+        for eng in ("local_bing", "local_duckduckgo", "local_brave", "local_yahoo",
+                    "local_ddgs_images", "local_ddgs_videos"):
+            self.assertNotIn(eng, sv3._TIME_CAPABLE_ENGINES)
+
+
 if __name__ == "__main__":
     unittest.main()

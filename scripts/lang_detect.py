@@ -99,9 +99,30 @@ ENGINE_LANG_PARAM_VALUES: dict[str, dict[str, str]] = {
         "arabic": "ar", "hebrew": "he", "greek": "el", "devanagari": "hi",
         "mixed": "en", "other": "en",
     },
+    "region": {  # ddgs -r region（{country}-{lang} 形态）
+        "ja": "jp-ja", "ko": "kr-ko", "en": "us-en", "latin": "us-en",
+        "zh": "cn-zh", "cyrillic": "ru-ru", "thai": "th-th",
+        "arabic": "sa-ar", "hebrew": "il-he", "greek": "gr-el", "devanagari": "in-hi",
+        "mixed": "us-en", "other": "us-en",
+    },
 }
 
 _LANG_PARAM_KEYS = frozenset(ENGINE_LANG_PARAM_VALUES.keys())
+
+# 纯汉字日文特征词：简体/繁体中文查询中均不出现（或极罕见）的日语词汇。
+# 用于区分「无假名日文查询」与「中文查询」，避免被 han/total 分支误判为 zh。
+_JA_KANJI_ONLY_SIGNALS = (
+    "非同期", "処理", "予報", "検索", "天気", "株式", "映画", "配信",
+    "報道", "速報", "転職", "面接", "給料", "応募", "卒業", "受験",
+    "大学院", "授業", "講義", "宿題", "就活", "新卒", "口座", "振込",
+    "残高", "通帳", "介護", "処方", "発熱", "予定", "営業", "退職",
+    "支払", "申告", "円高", "円安", "株価", "参議院", "衆議院", "住民票",
+    "印鑑", "免許", "交番", "弁護士", "捜査", "容疑者", "津波", "断水",
+    "変電", "給湯", "残業", "有給", "退院", "受診", "処方箋", "薬局",
+    "予約", "出張", "帰省", "新幹線", "改札", "切符", "乗車", "納期",
+    "発注", "受注", "出荷", "納品", "売上", "仕入", "原価", "在庫",
+    "領収書", "請求書", "見積",
+)
 
 
 def detect_language(query: str) -> str:
@@ -143,6 +164,9 @@ def detect_language(query: str) -> str:
         return "devanagari"
     if cyrillic / total_chars >= 0.2:
         return "cyrillic"
+    # 纯汉字日文预检：无假名但命中日语特征词 → ja（防误判 zh）
+    if han and any(w in query for w in _JA_KANJI_ONLY_SIGNALS):
+        return "ja"
     # 汉字为主判 zh
     if han / total_chars >= 0.3:
         return "zh"

@@ -1,0 +1,51 @@
+# Firecrawl 搜索引擎（官方云 API，需 FIRECRAWL_API_KEY）
+# 文档: https://docs.firecrawl.dev/api-reference/endpoint/search
+# 额度: 免费层 1000 credits/月（按结果数计费，约 1 credit/条）；Billing Period 月重置
+# 特点: search+scrape 一体化、JS 渲染、categories(github/research/pdf)、tbs 时间窗、
+#       site:/inurl:/filetype: 高级算符
+# 定位: T2 补充引擎 —— deep/research 场景给全文，日常 fast 预算少用
+# 验证:
+#   python3 scripts/engine_validate.py --engine firecrawl --stage all --admit
+#   python3 scripts/search.py "climate change" --engine firecrawl --json
+
+engine_id: firecrawl
+type: http
+enabled: true
+cost_tier: paid
+# 分层：research_only —— 仅 context=research / depth=deep / mode=deep 时进 combo，
+# 日常 fast/auto 不消耗 1000 credits/月 额度（engine_policy.get_engine_tier 读 spec.tier）
+tier: research_only
+method: POST
+url: https://api.firecrawl.dev/v2/search
+timeout: 20
+canary_query: "climate change"
+desc: "Firecrawl 云搜索（search+全文markdown，JS渲染/学术/PDF垂直，月1000 credits 免费层）"
+label: Firecrawl
+family: web_general
+# 预算感知：priority 低 + research_only，日常 fast/auto 少用，deep/research 才启用
+priority: 50
+qps: 1
+period: month
+limit: 1000
+cost_per_call: 0.001
+cost_unit: credit
+required_env:
+  - FIRECRAWL_API_KEY
+
+headers:
+  Authorization: Bearer {FIRECRAWL_API_KEY}
+  Content-Type: application/json
+
+# POST body；{query} 查询词，{n} 结果数
+# 注意：argo HTTP builder 仅支持标量值（嵌套数组/对象会失效），故只用 query/limit；
+#       description 字段已含 markdown 全文（API 默认 scrapeOptions.formats=[markdown]）
+body:
+  query: "{query}"
+  limit: "{n}"
+
+# firecrawl 返回 {success, data:{web:[{title,description,url,markdown,...}]}}
+output_map:
+  items: data.web
+  item_title: title
+  item_url: url
+  item_summary: description

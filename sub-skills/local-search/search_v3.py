@@ -18,6 +18,8 @@ import json
 import logging
 import os
 import re
+import shlex
+import subprocess
 import sys
 import time
 import urllib.error
@@ -54,6 +56,19 @@ if not logger.handlers:
 
 CONFIG_PATH = SKILL_DIR / "config.yaml"
 PARSE_MAPS_PATH = SKILL_DIR / "parse_maps.yaml"
+
+# 带发布时间能力（published_at）的本地子引擎集合。时间窗的缓存键隔离与
+# 后过滤只对含这些引擎的组合生效：text/images/videos 类子引擎不返回日期，
+# 隔离缓存键只会降低命中率（7d/30d 查同一子引擎本可共享缓存）。
+_TIME_CAPABLE_ENGINES: frozenset[str] = frozenset({
+    "local_bing_news", "local_google_news", "local_duckduckgo_news",
+    "local_ddgs_news",
+})
+
+# ddgs CLI 可用性检查缓存：`ddgs --help` 每次 ~190ms 冷启动，
+# 对同一命令在 TTL 内只检查一次，避免多 ddgs 引擎并行搜索重复付费。
+_CLI_AVAIL_CACHE: dict[str, tuple[float, bool]] = {}
+_CLI_AVAIL_TTL = 60.0
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -605,6 +620,312 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
 
 # ── 单个引擎执行 ─────────────────────────────────────────────────────────────────
 
+# ddgs 各子命令支持的 timelimit 取值：videos 仅 d/w/m（无 y）。
+# 传 y 会直接 crash（Invalid value for '-t'），必须按下推子命令过滤。
+_DDGS_TIMELIMITS: dict[str, set[str]] = {
+    "text": {"d", "w", "m", "y"},
+    "news": {"d", "w", "m", "y"},
+    "images": {"d", "w", "m", "y"},
+    "videos": {"d", "w", "m"},
+}
+
+
+def _since_to_ddgs_timelimit(since: str | None, until: str | None) -> str | None:
+    """Convert since/until to ddgs timelimit argument.
+    
+    ddgs supports: d (day), w (week), m (month), y (year)
+    """
+    if not since:
+        return None
+    
+    # Parse relative time like 7d, 1m, 3w
+    match = re.match(r'^(\d+)([dwmy])$', since.lower())
+    if match:
+        num, unit = match.groups()
+        num = int(num)
+        # Map to ddgs timelimit
+        if unit == 'y':
+            return 'y'
+        elif unit == 'm':
+            return 'm'
+        elif unit == 'w':
+            return 'w'
+        elif unit == 'd':
+            if num >= 365:
+                return 'y'
+            elif num >= 30:
+                return 'm'
+            elif num >= 7:
+                return 'w'
+            else:
+                return 'd'
+    
+    return None
+
+
+def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
+                     since: str | None = None, until: str | None = None) -> tuple[list[dict[str, Any]], str]:
+    """Run a CLI-based search engine (e.g., ddgs).
+    
+    Args:
+        since: Time window start (7d, 1m, etc.)
+        until: Time window end
+    """
+    cli_cmd = spec.get("cli_command", "")
+    cli_args_template = spec.get("cli_args", [])
+    key = spec.get("key", cli_cmd)
+    
+    if not cli_cmd:
+        return [], "CLI engine missing cli_command"
+    
+    # Check if CLI is available
+    if not _check_cli_available(cli_cmd):
+        return [], f"{cli_cmd} not available"
+    
+    # Add time limit if since/until provided
+    time_limit = _since_to_ddgs_timelimit(since, until)
+    
+    # Build command with query and result count substitution
+    cli_args = []
+    for arg in cli_args_template:
+        formatted = arg.format(query=query, n=n)
+        cli_args.append(formatted)
+    
+    # Insert time limit if supported and needed
+    # 按子命令限定取值：videos 不支持 y，直接追加 -t y 会让 ddgs 报错退出。
+    if time_limit and "-t" not in cli_args and "--timelimit" not in cli_args:
+        sub = next((a for a in cli_args_template if not str(a).startswith("-")), None)
+        allowed = _DDGS_TIMELIMITS.get(str(sub), _DDGS_TIMELIMITS["text"])
+        if time_limit in allowed:
+            cli_args.extend(["-t", time_limit])
+    
+    # 区域参数（ddgs -r region）：按查询主语言映射（zh→cn-zh 等），
+    # 引擎声明 use_lang_region: true 时启用；显式 -r 不覆盖。
+    if spec.get("use_lang_region") and not any(a in ("-r", "--region") for a in cli_args):
+        region = _lang_param("region", query)
+        if region:
+            cli_args.extend(["-r", region])
+    
+    # 结构化 JSON 输出：ddgs -o <file> 把结果写入文件（stdout 无输出），
+    # 避免脆弱的文本行解析；失败回退文本解析。引擎声明 output_format: json。
+    output_format = spec.get("output_format", "")
+    tmp_path: str | None = None
+    if output_format == "json" and not any(
+        a in ("-o", "--output") for a in cli_args
+    ):
+        import tempfile
+        fd, tmp_path = tempfile.mkstemp(suffix=".json", prefix="ddgs_")
+        os.close(fd)
+        cli_args.extend(["-o", tmp_path])
+    
+    cmd = [cli_cmd] + cli_args
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        
+        # ddgs returns non-zero exit code when no results found
+        if result.returncode != 0:
+            combined_output = result.stdout + result.stderr
+            if "No results" in combined_output or "DDGSException" in combined_output:
+                return [], f"{cli_cmd}: no results"
+            return [], f"{cli_cmd} exit {result.returncode}: {combined_output[:200]}"
+        
+        # 结构化 JSON 优先（ddgs -o json 输出到临时文件）
+        if tmp_path is not None:
+            try:
+                with open(tmp_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                parsed = _parse_cli_json(data, key)
+                if parsed:
+                    return parsed, ""
+                # 空解析不视为失败：继续走文本路径兜底（理论上不会发生）
+            except (OSError, ValueError):
+                pass
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+        
+        # Parse output from CLI (handles text, news, images, videos formats)
+        return _parse_cli_output(result.stdout, key)
+    except subprocess.TimeoutExpired:
+        return [], f"{cli_cmd} timed out after {timeout}s"
+    except FileNotFoundError:
+        return [], f"{cli_cmd} not found"
+    except Exception as e:
+        return [], f"{cli_cmd} error: {e}"
+
+
+def _parse_cli_json(data: Any, engine_name: str) -> list[dict[str, Any]]:
+    """解析 ddgs 结构化 JSON 输出（-o json 写入文件）。
+
+    ddgs 各子命令的 JSON item 形态：
+      text:   {title, href, body}
+      news:   {date, title, body, url, image, source}
+      images: {title, image, thumbnail, url, height, width, source}
+      videos: {title, content, duration, provider}
+    统一映射为 argo 结果字段；news 的 date 归一化为 published_at。
+    """
+    if not isinstance(data, list):
+        return []
+    results: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title", "")
+        url = item.get("href", item.get("url", item.get("link", "")))
+        snippet = item.get("body", item.get("snippet",
+                                            item.get("description", item.get("content", ""))))
+        if not title and not url:
+            continue
+        r: dict[str, Any] = {
+            "title": str(title),
+            "url": str(url),
+            "snippet": str(snippet),
+            "source": engine_name,
+        }
+        for key in ("image", "thumbnail", "source", "duration", "provider",
+                    "height", "width"):
+            if key in item and item[key] not in (None, ""):
+                r[key] = item[key]
+        date = item.get("date")
+        if date:
+            r["published_at"] = str(date)[:64]
+        results.append(r)
+    return results
+
+
+def _check_cli_available(cmd: str) -> bool:
+    """Check if a CLI command is available（结果缓存 TTL=_CLI_AVAIL_TTL）。
+
+    `ddgs --help` 冷启动 ~190ms/次；多 ddgs 引擎并行搜索时若每次都检查，
+    单次搜索白付 N×190ms 纯检查开销。缓存按命令名 + 60s TTL。
+    """
+    now = time.time()
+    hit = _CLI_AVAIL_CACHE.get(cmd)
+    if hit is not None and now - hit[0] < _CLI_AVAIL_TTL:
+        return hit[1]
+    try:
+        result = subprocess.run(
+            [cmd, "--help"],
+            capture_output=True,
+            timeout=5,
+        )
+        ok = result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        ok = False
+    _CLI_AVAIL_CACHE[cmd] = (time.time(), ok)
+    return ok
+
+
+def _parse_cli_output(stdout: str, engine_name: str) -> tuple[list[dict[str, Any]], str]:
+    """Parse output from CLI search tools like ddgs.
+    
+    Handles multiple output formats:
+    - text: title/href/body
+    - news: date/title/body/url/image/source
+    - images: title/image/thumbnail/url/height/width/source
+    - videos: title/content/duration/provider
+    """
+    results = []
+    
+    # Try JSON parse first
+    try:
+        data = json.loads(stdout)
+        if isinstance(data, list):
+            for item in data:
+                result = {
+                    "title": item.get("title", ""),
+                    "url": item.get("href", item.get("url", item.get("link", ""))),
+                    "snippet": item.get("body", item.get("snippet", item.get("description", item.get("content", "")))),
+                    "source": engine_name,
+                }
+                for key in ["date", "image", "thumbnail", "source"]:
+                    if key in item:
+                        result[key] = item[key]
+                results.append(result)
+            return results, ""
+    except json.JSONDecodeError:
+        pass
+    
+    # Parse text format with flexible field detection
+    current_result = {}
+    current_field = None
+    
+    for line in stdout.split("\n"):
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+        
+        # Detect numbered entry start: "1.", "2.", etc.
+        # （此前 len<=4 的任意数字行都被当分隔符，正文数字会被误切；
+        #   仅识别「数字+句点」形式的序号）
+        if re.fullmatch(r"\d+\.\s*", line_stripped):
+            if current_result:
+                results.append(current_result)
+                current_result = {}
+                current_field = None
+            continue
+        
+        # Detect field lines with flexible matching
+        field_matched = False
+        for field, target_key in [
+            ("title", "title"),
+            ("href", "url"),
+            ("url", "url"),
+            ("body", "snippet"),
+            ("snippet", "snippet"),
+            ("description", "snippet"),
+            ("content", "snippet"),
+            ("date", "date"),
+            ("image", "image"),
+            ("thumbnail", "thumbnail"),
+            ("source", "source"),
+            ("duration", "duration"),
+            ("provider", "provider"),
+            ("height", "height"),
+            ("width", "width"),
+        ]:
+            if line_stripped.startswith(field) and len(line_stripped) > len(field):
+                value = line_stripped[len(field):].strip()
+                if value:
+                    current_result[target_key] = value
+                    current_field = field
+                    field_matched = True
+                    break
+        
+        if not field_matched and current_field:
+            # Continuation of multi-line field value
+            if current_field in ("body", "snippet", "description", "content"):
+                current_result.setdefault("snippet", "")
+                current_result["snippet"] += " " + line_stripped
+    
+    if current_result:
+        results.append(current_result)
+    
+    # Ensure all results have required fields, score, and published_at
+    for i, r in enumerate(results):
+        r.setdefault("source", engine_name)
+        r.setdefault("title", "")
+        r.setdefault("url", "")
+        r.setdefault("snippet", "")
+        # Add score based on result position (higher = better)
+        r.setdefault("score", round(0.9 - (i * 0.05), 2))
+        # Add published_at for time-window filtering
+        if "date" in r:
+            r["published_at"] = r["date"]
+        else:
+            r.setdefault("published_at", "")
+    
+    return results, ""
+
+
 def _search_one(engine_name: str, query: str, n: int = 5,
                 timeout: float | None = None,
                 since: str | None = None, until: str | None = None) -> tuple[list[dict[str, Any]], str]:
@@ -624,6 +945,50 @@ def _search_one(engine_name: str, query: str, n: int = 5,
     method = spec.get("method", "GET")
     headers = spec.get("headers", {})
 
+    # 时间窗后过滤只对带时间能力引擎执行：text/images/videos 子引擎
+    # 不返回日期，过滤是空操作（与缓存键隔离同语义）。
+    time_aware = engine_name in _TIME_CAPABLE_ENGINES
+
+    # ── CLI engine path ───────────────────────────────────────────
+    if spec.get("type") == "cli":
+        results, err = _run_cli_engine(spec, query, n, to, since=since, until=until)
+        # Fallback to HTML/JSON/RSS if CLI fails
+        if not results and spec.get("fallback_type"):
+            fmt = spec["fallback_type"]
+            fb_url = spec.get("fallback_url", "")
+            if fb_url:
+                # 复用 _build_url 构造回退 URL：fallback_param 作为查询参数名
+                # 拼入 query（此前未读取，fallback_url 无 {query} 占位符时会
+                # 请求首页而非搜索结果）；fallback_params 并入 extra_params。
+                fb_spec = dict(spec)
+                fb_spec["url"] = fb_url
+                if spec.get("fallback_param"):
+                    fb_spec["query_param"] = spec["fallback_param"]
+                fb_spec["extra_params"] = dict(spec.get("fallback_params", {}))
+                url = _build_url(fb_spec, query, n, since=since, until=until)
+                spec["_base"] = url
+                try:
+                    text = _fetch(url, method="GET", headers=headers, timeout=to, user_agent=user_agent)
+                    if text:
+                        if fmt == "html":
+                            results = _parse_html(engine_name, text, spec, maps)
+                        elif fmt == "json":
+                            results = _parse_json(engine_name, text, maps)
+                        elif fmt in ("rss", "xml"):
+                            results = _parse_xml(engine_name, text, maps, is_rss=(fmt=="rss"))
+                except Exception:
+                    pass
+                # 时间窗兜底过滤（与 HTTP 路径同语义；仅带时间能力引擎）
+                if time_aware and (since or until) and results:
+                    results = _apply_time_window(results, since, until)
+        if not results:
+            return results, err if err else f"{engine_name} CLI and fallback both failed"
+        for r in results:
+            r["_engine"] = engine_name
+            r["_elapsed"] = 0
+        return results[:n], ""
+
+    # ── Standard HTTP path ─────────────────────────────────────────
     url = _build_url(spec, query, n, since=since, until=until)
     spec["_base"] = spec.get("url", "")
 
@@ -649,8 +1014,9 @@ def _search_one(engine_name: str, query: str, n: int = 5,
         results = []
 
     # 时间窗过滤（通用兜底）：URL 参数下推之外的引擎同样受益，
-    # 仅保留 published_at 落在 [since, until] 内的结果。
-    if since or until:
+    # 仅保留 published_at 落在 [since, until] 内的结果；
+    # 仅带时间能力引擎执行（其余引擎无 published_at 可滤）。
+    if time_aware and (since or until):
         results = _apply_time_window(results, since, until)
 
     for r in results:
@@ -715,19 +1081,24 @@ def search_engines(
         # 全部不可用，回退到启用的引擎
         engines = reg.list_engines(enabled_only=True)[:3]
 
-    # 缓存读取：时间窗并入缓存键（与主技能 combo 层同一模式），
-    # 同一 query 不同 since/until 不串缓存；不扩展 SearchCache.get/set 签名。
+    # 缓存读取：使用 SearchCache 标准接口。
+    # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存
+    # （与主技能 combo 层同模式；SearchCache.get/set 不透传时间窗，
+    #  必须在 engine 段拼入，否则 7d/1y/无时间窗会命中同一缓存条目）。
+    # 仅当组合内含带时间能力引擎时隔离：text/images/videos 子引擎忽略
+    # 时间窗、结果相同，隔离只会降低命中率。
+    time_aware = any(e in _TIME_CAPABLE_ENGINES for e in engines)
     cache = SearchCache() if SearchCache is not None else None
     cache_key = _cache_key(engines)
-    if since:
+    if since and time_aware:
         cache_key += f"|since={since}"
-    if until:
+    if until and time_aware:
         cache_key += f"|until={until}"
     cache_domain = _cache_domain(domain)
     if not skip_cache and cache is not None:
-        hit = cache.get(query, cache_key, n, domain=cache_domain)
+        hit = cache.get(query, engine=cache_key, max_results=n, domain=cache_domain,
+                       mode=mode, depth="fast")
         if hit:
-            # 排序在缓存读出后：缓存内容保持 score 序，sort 只改本次展示顺序
             hit_results = _sort_results(hit.get("results", []), sort)
             return {
                 "query": query,
@@ -758,17 +1129,35 @@ def search_engines(
 
     with ThreadPoolExecutor(max_workers=min(len(engines), max_parallel)) as ex:
         futures = {ex.submit(_task, name): name for name in engines}
-        for fut in as_completed(futures, timeout=timeout or 30):
-            name = futures[fut]
-            try:
-                _, res, err = fut.result()
-                if res:
-                    all_results.extend(res)
-                    engines_used.append(name)
-                if err:
-                    errors.append(err)
-            except Exception as e:
-                errors.append(f"{name}: {e}")
+        try:
+            for fut in as_completed(futures, timeout=timeout or 30):
+                name = futures[fut]
+                try:
+                    _, res, err = fut.result()
+                    if res:
+                        all_results.extend(res)
+                        engines_used.append(name)
+                    if err:
+                        errors.append(err)
+                except Exception as e:
+                    errors.append(f"{name}: {e}")
+        except TimeoutError:
+            # 整体超时（如 ddgs 慢后端 > timeout）：保留已完成引擎的结果，
+            # 未完成的标记 timeout 记入 errors，不整链崩溃（与主技能同构）。
+            for fut, name in futures.items():
+                if not fut.done():
+                    fut.cancel()
+                    errors.append(f"{name}: timeout")
+                    continue
+                try:
+                    _, res, err = fut.result()
+                    if res:
+                        all_results.extend(res)
+                        engines_used.append(name)
+                    if err:
+                        errors.append(err)
+                except Exception as e:
+                    errors.append(f"{name}: {e}")
 
     all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
     elapsed = int((time.time() - t0_all) * 1000)
@@ -779,9 +1168,10 @@ def search_engines(
         "engines_used": engines_used,
     }
 
-    # 写缓存：保持 score 序（缓存键/内容不受 sort 影响）
+    # 写缓存：使用 SearchCache 标准接口
     if not skip_cache and cache is not None:
-        cache.set(query, cache_key, n, payload, domain=cache_domain)
+        cache.set(query, engine=cache_key, max_results=n, results=payload,
+                   domain=cache_domain, mode=mode, depth="fast")
 
     # 排序在返回前：sort 只改变本次展示顺序，缓存命中路径同样处理
     out_results = _sort_results(final_results, sort)

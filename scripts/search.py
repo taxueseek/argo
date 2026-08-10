@@ -191,6 +191,22 @@ def _apply_time_window(
     return kept, dropped
 
 
+# 带发布时间能力（published_at）的引擎集合。时间窗的缓存键隔离与后过滤
+# 只对含这些引擎的组合生效：不带时间字段的引擎会忽略时间窗、结果相同，
+# 隔离缓存键只会白白降低命中率（7d/30d 查同一引擎本可共享缓存）。
+# local_search 聚合内部可能选中 news 类子引擎（带日期），保守纳入。
+_TIME_CAPABLE_ENGINES: frozenset[str] = frozenset({
+    "realtime_index", "wayback_cdx", "local_search",
+    "local_bing_news", "local_google_news", "local_duckduckgo_news",
+    "local_ddgs_news",
+})
+
+
+def _is_time_capable(eng: str) -> bool:
+    """引擎是否可能返回 published_at（决定时间窗是否参与缓存键/后过滤）。"""
+    return eng in _TIME_CAPABLE_ENGINES
+
+
 def _sort_results(results: list[dict[str, Any]], sort: str) -> list[dict[str, Any]]:
     """按时间重排结果集：oldest 升序 / newest 降序 / relevance 原序。
 
@@ -813,10 +829,13 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
     cache_engine_key = "+".join(sorted(engines)) if len(engines) > 1 else engines[0]
     # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存；
-    # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）
-    if since_iso:
+    # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）。
+    # 仅当组合内含带时间能力引擎时隔离：无时间字段引擎忽略时间窗、结果相同，
+    # 隔离只会降低命中率（7d/30d 查 octen/anysearch 命中同一缓存）。
+    time_aware = any(_is_time_capable(e) for e in engines)
+    if since_iso and time_aware:
         cache_engine_key += f"|since={since_iso}"
-    if until_iso:
+    if until_iso and time_aware:
         cache_engine_key += f"|until={until_iso}"
 
     if on_progress:
@@ -899,7 +918,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         for _attempt in range(retries + 1):
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=to, depth=depth, mode=mode,
-                since=since_iso, until=until_iso,
+                since=since_iso, until=until_iso, skip_cache=skip_cache,
             )
             if last_result and any("error" not in r for r in last_result):
                 return last_result
@@ -907,13 +926,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if retries > 0 and depth != "balanced":
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=to, depth="balanced", mode=mode,
-                since=since_iso, until=until_iso,
+                since=since_iso, until=until_iso, skip_cache=skip_cache,
             )
         return last_result
 
     def _run_one(eng: str) -> tuple[str, list[dict[str, Any]], dict[str, Any], int]:
         """单引擎：负缓存 → 熔断 → per-engine 缓存 → 网络。"""
         t_eng = time.time()
+
+        # 时间窗只隔离带时间能力引擎的 per-engine 缓存（与 combo 键同语义）
+        eng_since = since_iso if _is_time_capable(eng) else None
+        eng_until = until_iso if _is_time_capable(eng) else None
 
         # 熔断
         if breaker is not None:
@@ -936,7 +959,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         if not skip_cache:
             eng_hit = cache.get_engine(
                 query, eng, max_results, domain=domain, mode=mode, depth=depth,
-                since=since_iso, until=until_iso,
+                since=eng_since, until=eng_until,
             )
             if eng_hit is not None:
                 lat = int((time.time() - t_eng) * 1000)
@@ -994,14 +1017,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             cache.set_engine(
                 query, eng, max_results, goods,
                 domain=domain, mode=mode, depth=depth,
-                since=since_iso, until=until_iso,
+                since=eng_since, until=eng_until,
             )
         elif not skip_cache and not goods:
             # 空结果短 TTL 写入 per-engine，配合负缓存
             cache.set_engine(
                 query, eng, max_results, [],
                 domain=domain, mode=mode, depth=depth,
-                since=since_iso, until=until_iso,
+                since=eng_since, until=eng_until,
             )
 
         return eng, (goods if goods else res), outcome, lat
@@ -1127,6 +1150,29 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     else:
         merged = []
 
+    # ── D6：macro_data 域证据下限（事实核查防单源）─────────────────────
+    # deep 研究场景下结果 <2 条说明结构化源未覆盖该查询：追加通用兜底引擎
+    # 补证据，避免「单引擎单结果」被事实核查 / 融合阶段当作答案；补搜结果
+    # 一并进 RRF，consensus 维度天然加权。
+    if (domain == "macro_data" and merged and len(merged) < 2
+            and depth in ("deep", "research")):
+        _done = set(raw_results.keys())
+        _cands = [
+            e for e in ("anysearch", "duckduckgo", "local_bing")
+            if e not in _done
+            and e in set(available_engines())
+            and (breaker is None or breaker.allow(e)[0])
+        ]
+        _extra_lists = []
+        for _eng in _cands[:2]:
+            _e, _res, _out, _lat = _run_one(_eng)
+            _ingest(_e, _res, _out, _lat)
+            _goods = [r for r in _res if isinstance(r, dict) and "error" not in r]
+            if _goods:
+                _extra_lists.append(_goods)
+        if _extra_lists:
+            merged = rrf_merge([merged] + _extra_lists)
+
     # ── P0：过滤 SERP/跳转 URL（搜索结果页、baidu.com/link 等不可当信源正文）──
     if merged:
         try:
@@ -1162,16 +1208,28 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         merged = kept
 
     # ── 时间窗结果后过滤兜底 ──
-    # 引擎不带时间窗能力时，按 published_at 剔除明确超窗条目（宽松策略：
-    # 无时间字段保留）。与引擎下推互补，保证用户指定的 since/until 在
-    # 默认路由上同样生效。
+    # 仅当组合内含带时间能力引擎时执行：无时间字段引擎的结果没有可滤对象，
+    # 跳过遍历省开销；语义上与缓存键隔离保持一致（7d/30d 共享同一缓存内容）。
     time_filtered = 0
-    if (since_ts is not None or until_ts is not None) and merged:
+    if time_aware and (since_ts is not None or until_ts is not None) and merged:
         merged, time_filtered = _apply_time_window(merged, since_ts, until_ts)
         if time_filtered:
             import logging
             logging.getLogger("unified_search").debug(
                 f"时间窗后过滤剔除 {time_filtered} 条（since={since_iso}, until={until_iso}）")
+
+    # D5：时间窗空操作告警——用户指定了时间窗，组合内含时间能力引擎，
+    # 但结果没有任何 published_at（下推缺失/源端未返回）：
+    # `--since/--until` 实际未生效（宽松策略保留无时间字段条目，
+    # time_filtered 恒 0）。透传 warning 而非静默降级。
+    # 组合内不含时间能力引擎时是已知常态，不重复告警。
+    time_filter_warning: str | None = None
+    if time_aware and (since_ts is not None or until_ts is not None) and merged:
+        if not any(r.get("published_at") for r in merged):
+            time_filter_warning = (
+                f"引擎未返回 published_at，时间窗 {since_iso or '任意'} ~ "
+                f"{until_iso or '任意'} 未实际过滤"
+            )
 
     # ── P0-002：空结果错误恢复决策树 ──
     recovery_info: dict[str, Any] | None = None
@@ -1340,6 +1398,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "domain": domain,
         "engine_outcomes": engine_outcomes,
         "time_filtered": time_filtered,
+        "time_filter_warning": time_filter_warning,
     }
 
     # 写 combo 缓存：空结果短 TTL / 时效 cap 由 cache.set 处理
@@ -1425,6 +1484,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         "exclude_terms": exclude_terms,
         "excluded_count": excluded_count,
         "time_filtered": time_filtered,
+        "time_filter_warning": time_filter_warning,
         "mode": mode, "depth": depth,
         "login_hint": decision.get("login_hint"),
     }

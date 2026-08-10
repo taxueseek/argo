@@ -88,8 +88,18 @@ class CircuitBreaker:
             state = st.get("state", "closed")
             opened_at = float(st.get("opened_at") or 0)
 
-            # 自适应禁用：disabled 引擎直接拒绝（不再 half-open 探测，省超时）
+            # 自适应禁用：disabled 引擎直接拒绝（不再 half-open 探测，省超时）。
+            # 但冷却期（DISABLE_COOLDOWN_SECONDS）过后自动转 half_open 探测，
+            # 避免引擎恢复后永久无入口（B4）。disabled_at=0 视为旧数据，直接放行探测。
             if state == "disabled":
+                disabled_at = float(st.get("disabled_at") or 0)
+                if disabled_at == 0 or \
+                        (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS:
+                    st["state"] = "half_open"
+                    st["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
+                    self._engines[engine] = st
+                    self._save()
+                    return True, "half_open_reenable"
                 return False, "auto_disabled"
 
             if state == "open":

@@ -17,15 +17,19 @@ settings:
 
 engines:
   local_bing:
-    type: html
+    type: cli
     enabled: true
     categories: [web_general]
-    url: "https://www.bing.com/search"
-    query_param: q
-    method: GET
+    cli_command: ddgs
+    cli_args: ["text", "-q", "{query}", "-m", "{n}", "-b", "bing"]
+    key: local_bing
     timeout: 8
-    format: html
-    extra_params:
+    output_format: json
+    use_lang_region: true
+    fallback_type: html
+    fallback_url: "https://www.bing.com/search"
+    fallback_param: q
+    fallback_params:
       setlang: zh-Hans
 
   local_google:
@@ -39,6 +43,7 @@ engines:
     format: html
     extra_params:
       hl: zh-CN
+    note: ddgs google backend unreliable, use HTML directly when enabled
 
   local_mojeek:
     type: html
@@ -49,16 +54,21 @@ engines:
     method: GET
     timeout: 10
     format: html
+    note: ddgs mojeek backend returns nav links, use HTML directly
 
   local_yandex:
-    type: html
-    enabled: false
-    categories: [web_general]
-    url: "https://yandex.com/search/"
-    query_param: text
-    method: GET
-    timeout: 10
-    format: html
+    type: cli
+    enabled: true
+    categories: [web_general, japanese]
+    cli_command: ddgs
+    cli_args: ["text", "-q", "{query}", "-m", "{n}", "-b", "yandex"]
+    key: local_yandex
+    timeout: 8
+    output_format: json
+    use_lang_region: true
+    fallback_type: html
+    fallback_url: "https://yandex.com/search/"
+    fallback_param: text
 
   local_startpage:
     type: html
@@ -69,16 +79,79 @@ engines:
     method: GET
     timeout: 10
     format: html
+    note: ddgs startpage backend unreliable, use HTML directly
 
   local_duckduckgo:
-    type: html
+    type: cli
     enabled: true
     categories: [web_general]
-    url: "https://html.duckduckgo.com/html/"
-    query_param: q
-    method: GET
+    cli_command: ddgs
+    cli_args: ["text", "-q", "{query}", "-m", "{n}"]
+    key: local_duckduckgo
     timeout: 8
-    format: html
+    output_format: json
+    use_lang_region: true
+    fallback_type: html
+    fallback_url: "https://html.duckduckgo.com/html/"
+    fallback_param: q
+
+  # ddgs brave backend（实测 ~1.1s 稳定可用）
+  local_brave:
+    type: cli
+    enabled: true
+    categories: [web_general]
+    cli_command: ddgs
+    cli_args: ["text", "-q", "{query}", "-m", "{n}", "-b", "brave"]
+    key: local_brave
+    timeout: 8
+    output_format: json
+    use_lang_region: true
+
+  # ddgs yahoo backend（实测 ~1.1s 稳定可用）
+  local_yahoo:
+    type: cli
+    enabled: true
+    categories: [web_general]
+    cli_command: ddgs
+    cli_args: ["text", "-q", "{query}", "-m", "{n}", "-b", "yahoo"]
+    key: local_yahoo
+    timeout: 8
+    output_format: json
+    use_lang_region: true
+
+  # ddgs CLI 增强版引擎（支持 news/images/videos）
+  local_ddgs_news:
+    type: cli
+    enabled: true
+    categories: [news]
+    cli_command: ddgs
+    cli_args: ["news", "-q", "{query}", "-m", "{n}"]
+    key: local_ddgs_news
+    timeout: 8
+    output_format: json
+    use_lang_region: true
+
+  local_ddgs_images:
+    type: cli
+    enabled: true
+    categories: [images]
+    cli_command: ddgs
+    cli_args: ["images", "-q", "{query}", "-m", "{n}"]
+    key: local_ddgs_images
+    timeout: 8
+    output_format: json
+    use_lang_region: true
+
+  local_ddgs_videos:
+    type: cli
+    enabled: true
+    categories: [videos]
+    cli_command: ddgs
+    cli_args: ["videos", "-q", "{query}", "-m", "{n}"]
+    key: local_ddgs_videos
+    timeout: 8
+    output_format: json
+    use_lang_region: true
 
   local_baidu:
     type: html
@@ -195,6 +268,7 @@ engines:
     format: rss
     extra_params:
       format: rss
+    note: ddgs bing news backend unreliable, use RSS directly
 
   local_google_news:
     type: rss
@@ -205,16 +279,19 @@ engines:
     method: GET
     timeout: 8
     format: rss
+    note: ddgs google news backend unreliable, use RSS directly
 
   local_duckduckgo_news:
-    type: rss
-    enabled: false
+    type: cli
+    enabled: true
     categories: [news]
-    url: "https://duckduckgo.com/html/"
-    query_param: q
-    method: GET
-    timeout: 8
-    format: html
+    cli_command: ddgs
+    cli_args: ["news", "-q", "{query}", "-m", "{n}"]
+    key: local_duckduckgo_news
+    timeout: 15
+    fallback_type: html
+    fallback_url: "https://duckduckgo.com/html/"
+    fallback_param: q
 
   local_github:
     type: json
@@ -297,6 +374,7 @@ engines:
       list: search
       format: json
       srlimit: "{n}"
+    note: ddgs wikipedia backend unreliable, use MediaWiki API directly
 
   local_wiktionary:
     type: json

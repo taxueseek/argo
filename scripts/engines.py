@@ -143,7 +143,8 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
             import search_v3
             res = search_v3.search_engines(
                 query, engines=None, n=n, timeout=float(timeout),
-                max_parallel=5, skip_cache=False, mode=mode,
+                max_parallel=5, skip_cache=bool(kwargs.get("skip_cache", False)),
+                mode=mode,
                 since=kwargs.get("since"), until=kwargs.get("until"),
                 sort=kwargs.get("sort"),
             )

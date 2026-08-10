@@ -149,6 +149,41 @@ def _parse_success(engine_name: str, text: str, fmt: str, registry: EngineRegist
     return len(text) > 200
 
 
+def _check_cli_engine(engine_name: str, spec: dict[str, Any],
+                      timeout: float = 8) -> dict[str, Any]:
+    """CLI 引擎健康探针：校验可执行文件存在且能启动（--help）。
+
+    cli 引擎 spec 无 url，走 HTTP 探针必然判 unavailable；此处改为探测
+    cli_command 本身。搜索失败由执行层的熔断器记录，健康探针只保证
+    「可执行文件可用」这一前置条件。
+    """
+    cli_cmd = spec.get("cli_command", "")
+    if not cli_cmd:
+        return {"name": engine_name, "url": "", "status": None,
+                "latency_ms": 0, "parse_ok": False, "text_sample": "",
+                "fail_reason": "missing_cli_command", "available": False}
+    import subprocess
+    t0 = time.time()
+    fail_reason = None
+    try:
+        result = subprocess.run(
+            [cli_cmd, "--help"],
+            capture_output=True, text=True, timeout=min(timeout, 5),
+        )
+        ok = result.returncode == 0
+        if not ok:
+            fail_reason = f"cli_exit_{result.returncode}"
+    except subprocess.TimeoutExpired:
+        ok, fail_reason = False, "cli_timeout"
+    except FileNotFoundError:
+        ok, fail_reason = False, "cli_not_found"
+    return {
+        "name": engine_name, "url": "", "status": 0 if ok else None,
+        "latency_ms": round((time.time() - t0) * 1000, 2), "parse_ok": True,
+        "text_sample": "", "fail_reason": fail_reason, "available": ok,
+    }
+
+
 def check_engine(
     engine_name: str,
     registry: EngineRegistry | None = None,
@@ -163,6 +198,10 @@ def check_engine(
         return {"name": engine_name, "available": False, "fail_reason": "not_configured"}
     if not spec.get("enabled", True):
         return {"name": engine_name, "available": False, "fail_reason": "disabled"}
+
+    # cli 引擎无 HTTP 端点，走 CLI 探针而非 URL 探针
+    if spec.get("type") == "cli":
+        return _check_cli_engine(engine_name, spec, timeout=timeout)
 
     url, headers = _build_canary_url(spec, canary_query, n)
     method = spec.get("method", "GET")
@@ -254,13 +293,18 @@ def run_health_check(
     enabled = engine_names if engine_names is not None else reg.list_engines(enabled_only=True)
 
     now = _now()
-    # TTL 检查：在有效期内直接复用缓存
+    # TTL 检查：在有效期内直接复用缓存。
+    # 按引擎名逐一比对（此前 cached.values() 里的 dict 与 enabled 的 str 比较
+    # 恒 False → all(空) 恒 True → 健康状态永不刷新），任一引擎记录缺失或
+    # 过期即重新探针。
     cached = reg._health
-    all_recent = all(
-        (now - h.get("last_checked", 0)) < ttl_minutes * 60
-        for h in cached.values() if engine_names is None or h in enabled
-    )
-    if cached and all_recent:
+
+    def _recent(name: str) -> bool:
+        rec = cached.get(name)
+        return bool(rec) and (now - rec.get("last_checked", 0)) < ttl_minutes * 60
+
+    all_recent = bool(enabled) and all(_recent(n) for n in enabled)
+    if all_recent:
         return {name: dict(h) for name, h in cached.items() if name in enabled}
 
     reports: dict[str, dict[str, Any]] = {}
@@ -278,8 +322,9 @@ def run_health_check(
     for name, report in reports.items():
         previous = reg.get_health(name)
         final_available = apply_threshold(report, previous)
+        # available 以位置参数传入，勿再放进 kwargs（此前重复键触发
+        # TypeError，被 #⑨ 缓存恒命中掩盖，健康检查从未真正执行）
         update_data = {
-            "available": final_available,
             "latency_ms": report.get("latency_ms"),
             "status": report.get("status"),
             "parse_ok": report.get("parse_ok"),
@@ -310,7 +355,14 @@ def get_available_engines(
         now = _now()
         ttl = reg.settings.get("health_check", {}).get("ttl_minutes", 5) * 60
         cached = reg._health
-        if cached and all((now - h.get("last_checked", 0)) < ttl for h in cached.values() if h in engine_names):
+
+        def _recent(name: str) -> bool:
+            rec = cached.get(name)
+            return bool(rec) and (now - rec.get("last_checked", 0)) < ttl
+
+        # 逐引擎名比对新鲜度（此前 dict in list[str] 恒 False → 恒命中，
+        # 健康状态永不刷新）；任一缺失/过期即触发检查。
+        if engine_names and all(_recent(n) for n in engine_names):
             return [n for n in engine_names if reg.is_available(n)]
     run_health_check(registry=reg, engine_names=engine_names)
     return [n for n in engine_names if reg.is_available(n)]
