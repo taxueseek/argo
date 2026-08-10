@@ -915,7 +915,7 @@ _route_sample_counter = 0
 def _sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
     """P2-6：按采样率把路由决策落一条遥测记录。"""
     global _route_sample_counter
-    if "features" not in kw:
+    if "features" not in kw or not kw.get("features"):
         return  # engine_override 直通等无语义分支不采样
     _route_sample_counter += 1
     if _route_sample_counter % _ROUTE_SAMPLE_RATE != 0:
@@ -967,7 +967,9 @@ def route_query(query: str, engine_override: str = "auto",
         _sample_route(base, kw)
         return base
 
-    if engine_override != "auto":
+    if engine_override and engine_override != "auto":
+        # 空串等同 auto：防止空引擎名混入 combo（registry 查无 → 空结果
+        # → 熔断器空键 ''），MCP/外部调用可能传入空 engine 参数
         return _done(
             engine=engine_override, engines=[engine_override],
             engines_combo=[engine_override],

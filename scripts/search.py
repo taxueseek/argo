@@ -252,7 +252,33 @@ def _results_sufficient(
     mode: str = "auto",
     min_results: int | None = None,
 ) -> bool:
-    """渐进检索 early-stop：首引擎结果是否已够用。
+    return _sufficient_internal(results, mode, min_results)
+
+
+def _cumulative_sufficient(raw_results: dict[str, list[dict[str, Any]]],
+                           mode: str = "auto",
+                           min_results: int | None = None) -> bool:
+    """跨引擎累计结果是否已够（wave-2 提前终止判定）。
+
+    与 _results_sufficient 同阈值，但把 raw_results 里所有已完成的
+    引擎结果合并成一条列表再判，避免单一引擎不足时重复等待慢源。
+    """
+    merged: list[dict[str, Any]] = []
+    for res in raw_results.values():
+        if not res:
+            continue
+        merged.extend(
+            r for r in res if isinstance(r, dict) and "error" not in r
+        )
+    return _sufficient_internal(merged, mode, min_results)
+
+
+def _sufficient_internal(
+    results: list[dict[str, Any]],
+    mode: str,
+    min_results: int | None,
+) -> bool:
+    """渐进检索 early-stop：结果是否已够用。
 
     轻量启发式（不依赖网络/LLM）：
       - 默认 auto：至少 3 条非错误 + 2 条有 snippet
@@ -787,7 +813,10 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     domain = decision.get("domain") or "general"
     engine_label = decision.get("engine", "auto")
     engines_combo = decision.get("engines_combo", decision.get("engines", [engine_label]))
-    engines = list(engines_combo)
+    # 防御：过滤空引擎名（空串会在 registry 查无 → 空结果 → 熔断空键 ''）。
+    # 全空时兜底 anysearch，防止下方 engines[0] IndexError（route 层已保证
+    # combo 非空，此处仅防畸形 decision 直接调用 execute_search）。
+    engines = [e for e in engines_combo if e] or ["anysearch"]
     parallel = decision.get("parallel", False) and len(engines) > 1
 
     # P0-001：查询理解 — clean_query 用于检索，exclude_terms 用于融合后过滤
@@ -975,16 +1004,23 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         # 答案型域（early_min 存在，1 条快照即可交付）的慢源收紧超时：
         # FRED/Eurostat 这类 timeout=10s 的源一旦挂掉就阻塞整条串行路径，
         # 而快源（worldbank 等 ~150ms）已能交付答案。慢源 5s 内没回就让位。
+        # 非答案域（fast/auto/budget 且非 deep）：timeout≥10s 的引擎同样收紧
+        # 到 6s——多数正常引擎 <2s，10-15s 的超时只为极端慢源兜底，
+        # 串行/并行组合里一个慢源就会拖垮整个响应尾部。
         eff_to: float | None = None
-        if early_min is not None:
+        _tighten = (early_min is not None) or (
+            mode in ("fast", "auto", "budget") and depth != "deep"
+        )
+        if _tighten:
             spec = (_engine_specs or {}).get(eng) or {}
             eng_to = None
             if isinstance(spec, dict):
                 t = spec.get("timeout")
                 if isinstance(t, (int, float)) and t > 0:
                     eng_to = float(t)
+            cap = 5.0 if early_min is not None else 6.0
             if eng_to is not None and eng_to >= 8.0:
-                eff_to = min(float(timeout), 5.0)
+                eff_to = min(float(timeout), cap)
         try:
             res = _exec_engine(eng, eff_timeout=eff_to)
         except Exception as e:
@@ -1068,6 +1104,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                             engine_outcomes.append(_classify_engine_outcome(
                                 eng, raw_results[eng], 0,
                             ))
+                        # 累计结果已足够 → 提前终止剩余 wave-2（不白等慢源拖尾）
+                        if not no_early and _cumulative_sufficient(
+                                raw_results, mode=mode, min_results=early_min):
+                            for fut2 in futures:
+                                if not fut2.done():
+                                    fut2.cancel()
+                            early_stopped = True
+                            break
                 except TimeoutError:
                     for fut, eng in futures.items():
                         if not fut.done():
@@ -1616,9 +1660,12 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         logging.getLogger("unified_search").debug(f"plan 分流跳过: {type(e).__name__}")
 
     # 查询改写：追加领域关键词提升搜索质量
+    # local_first 路径跳过改写：改写词面向 web 引擎召回设计，套到本地
+    # 聚合（search_v3 智能路由）上会稀释查询、收窄引擎选择、扩大失败面
+    #（实测改写词把「Python 异步编程」扩为 5 词长句后本地聚合返回空）。
     rewrite_result = None
     original_query = query
-    if rewrite:
+    if rewrite and not local_first:
         rewritten, rewrite_result = _apply_query_rewrite(original_query)
         if rewrite_result and rewrite_result.get("rewritten"):
             search_query = rewritten

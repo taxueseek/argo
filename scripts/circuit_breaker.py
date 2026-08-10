@@ -137,9 +137,16 @@ class CircuitBreaker:
             self._save()
 
     def record_failure(self, engine: str, kind: str = "error") -> None:
-        """kind: error | timeout | empty"""
+        """kind: error | timeout | empty
+
+        empty 语义是「该查询无结果」——查询级信号，不是引擎级故障。
+        它仍可触发 60s 短冷却（防止重复打无效源），但不累计 opens，
+        因此永远不会驱动 auto-disable（否则聚合引擎/local 源等易空
+        引擎会被误判为持续故障而静默禁用）。
+        """
         with self._lock:
             st = self._engines.get(engine) or {"failures": 0, "state": "closed"}
+            drives_opens = kind != "empty"
             # empty 权重低：两次 empty 才算一次 failure 贡献
             if kind == "empty":
                 st["empty_streak"] = int(st.get("empty_streak") or 0) + 1
@@ -154,8 +161,10 @@ class CircuitBreaker:
             if st["failures"] >= FAILURE_THRESHOLD or st.get("state") == "half_open":
                 st["state"] = "open"
                 st["opened_at"] = time.time()
-                # 连续 open 计数：每次进入 open 视为一次「失败循环」
-                st["opens"] = int(st.get("opens") or 0) + 1
+                # 连续 open 计数：仅 error/timeout 计入（引擎级故障），
+                # empty 不计入，避免「查询无结果」被误判为引擎持续故障
+                if drives_opens:
+                    st["opens"] = int(st.get("opens") or 0) + 1
             self._engines[engine] = st
             self._save()
 

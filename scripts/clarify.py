@@ -32,9 +32,11 @@ AMBIGUOUS_TERMS = {
             {"text": "Apple 公司（科技/股票）", "domain": "tech", "weight": 0.6},
             {"text": "苹果（水果/食品）", "domain": "general", "weight": 0.3},
             {"text": "苹果（操作系统/macOS）", "domain": "tech", "weight": 0.1},
+            {"text": "苹果公司（金融/行情）", "domain": "finance", "weight": 0.5},
         ],
         "disambiguation_keywords": {
-            "tech": ["股价", "股票", "iPhone", "Mac", "iOS", "WWDC", "市值", "AAPL", "库克", "蒂姆"],
+            "tech": ["iPhone", "Mac", "iOS", "WWDC", "库克", "蒂姆", "发布会", "系统", "手机", "平板"],
+            "finance": ["股价", "股票", "市值", "AAPL", "财报", "营收", "利润", "行情", "涨跌", "美股", "纳指"],
             "food": ["吃", "水果", "营养", "减肥", "种植", "产地", "品种"],
         },
     },

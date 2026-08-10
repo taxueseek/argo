@@ -638,23 +638,30 @@ class SearchCache:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
-            effective_ttl = self._adaptive_ttl(query, engine, domain, effective_ttl, result_list)
+            effective_ttl = self._adaptive_ttl(
+                query, engine, domain, effective_ttl, result_list,
+                mode=mode, depth=depth,
+            )
         key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         self._write(key, query, engine, max_results, results, domain, effective_ttl)
 
     def _adaptive_ttl(self, query: str, engine: str, domain: str,
-                      base_ttl: int, result_list: list) -> int:
+                      base_ttl: int, result_list: list,
+                      mode: str = "auto", depth: str = "fast") -> int:
         """自适应 TTL：对比同查询旧缓存内容哈希，稳定则延长 TTL。
 
         内容稳定（哈希一致）→ TTL 延长到 base_ttl * 2（上限域 TTL）；
         内容变化 → 保持 base_ttl。仅对非时效查询生效，避免影响新鲜度。
+
+        旧键必须与实际写入键同 mode/depth，否则 fast/budget 等模式下
+        永远查不到上一轮缓存，自适应延长静默失效。
         """
         if not query or is_freshness_sensitive_query(query):
             return base_ttl
         if not result_list:
             return base_ttl
         try:
-            key = self._key(query, engine, 0, domain, "auto", "fast", kind="combo")
+            key = self._key(query, engine, 0, domain, mode, depth, kind="combo")
             old = self._l2.get(key)
             if old is None:
                 return base_ttl

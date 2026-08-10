@@ -846,12 +846,13 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
         route_strategy=route_strategy,
     )
 
-    # 4. 知识缺口
-    gaps = identify_gaps(collection["sub_results"], query)
+    # 4. 知识缺口（用原始查询判定覆盖度，改写词会引入假缺口）
+    gaps = identify_gaps(collection["sub_results"], original_query)
 
-    # 5. 综合报告（source_grades 供证据强度分层 / 验证记录表）
+    # 5. 综合报告（顶层 query 用原始查询——改写串只存在于 rewritten_query
+    #    与子查询里；Agent 消费报告时 query 字段必须是用户原话）
     source_grades = (profile or {}).get("source_grades") if profile else None
-    report = synthesize_report(query, collection, gaps,
+    report = synthesize_report(original_query, collection, gaps,
                                source_grades=source_grades,
                                mode=mode, depth=depth)
 

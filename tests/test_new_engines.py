@@ -418,6 +418,25 @@ class TestMultiEngineAndFallback(unittest.TestCase):
         self.assertEqual(out.get("engines_combo"), combo)
         self.assertEqual(set(out.get("engines_used", [])), set(combo))
 
+    def test_empty_engines_combo_falls_back_to_anysearch(self) -> None:
+        """畸形 decision（engines_combo 全空串）不抛 IndexError，兜底 anysearch。"""
+        calls: list[str] = []
+
+        def fake(query: str, eng: str, n: int = 5, timeout: float = 8,
+                 depth: str = "fast", **_kwargs: Any):
+            calls.append(eng)
+            return [{"title": "ok", "url": "https://e.com", "source": eng}]
+
+        decision = {
+            "domain": "general",
+            "engine": "",
+            "engines": [""],
+            "engines_combo": [""],
+        }
+        out = self._run(decision, fake)
+        self.assertIn("anysearch", calls)
+        self.assertEqual(out.get("count"), 1)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 5. 场景路由（离线）

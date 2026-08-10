@@ -624,8 +624,14 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
 
 def fetch_page_v3(url: str, max_chars: int = 3000,
                   timeout: int = 8, raw: bool = False) -> dict:
-    """兼容 fetch.py 的 fetch_page() 签名，支持透明替换。"""
-    result = fetch_v3(url, max_chars=max_chars, timeout=float(timeout))
+    """兼容 fetch.py 的 fetch_page() 签名，支持透明替换。
+
+    raw=True 时跳过 URL 缓存：缓存写入时有意丢弃 html 大字段（省空间），
+    缓存命中只会返回空 html，结构化提取（tables/meta/jsonld）会全空。
+    需要原始 HTML 的场景必须重新抓取，才能拿到完整页面。
+    """
+    result = fetch_v3(url, max_chars=max_chars, timeout=float(timeout),
+                      skip_cache=raw)
     out = {
         "url": result["url"],
         "content": result["content"],

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+"""search_types.py — 统一类型系统（已废弃，勿接入）
+
+早期设计声明的统一 schema 层，从未被任何模块 import（grep 全仓库无引用）：
+  - 引擎输出直接透传 dict，运行时防御在 engines_base/safe_search 与
+    search.py 的 execute_search 里完成
+  - 保留本文件仅避免旧版外部脚本 import 断裂；新代码禁止使用
 """
-search_types.py — 统一类型系统
-
-定义 SearchResult 数据类和 normalize_result 统一转换，
-将所有引擎的原始输出统一为结构化格式。
-
-字段规范：
   - title: 结果标题（必填，截断到 200 字符）
   - url: 结果链接（可选）
   - snippet: 摘要/片段（截断到 300 字符）

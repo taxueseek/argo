@@ -12,3 +12,4 @@ installs.local.yaml
 *.before-*
 dist/
 scripts/data/
+.trash/

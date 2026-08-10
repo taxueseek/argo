@@ -237,5 +237,18 @@ class TestConfigCandidates(unittest.TestCase):
             self.assertEqual(d.get("fallback"), fb, f"{name}: fallback 应为 {fb}")
 
 
+class TestEmptyEngineOverride(unittest.TestCase):
+    """空 engine_override 应等同 auto，不产生空引擎名（熔断器空键 '' 的根因）。"""
+
+    def test_empty_override_falls_through_to_auto(self):
+        from route import route_query
+        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+             patch("circuit_breaker.get_breaker", return_value=_FakeBreaker()):
+            d = route_query("Python 异步编程", engine_override="", mode="fast", depth="fast")
+        self.assertNotEqual(d.get("engine"), "")
+        self.assertTrue(d.get("engines_combo"))
+        self.assertTrue(all(e for e in d.get("engines_combo", [])))
+
+
 if __name__ == "__main__":
     unittest.main()

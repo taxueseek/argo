@@ -265,7 +265,16 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
         }
 
     avg_confidence = round(total_confidence / match_count, 2)
-    rewritten = query + " " + " ".join(rewritten_parts)
+    # 追加词与原查询词级去重：消歧/拆分追加只补「新增信息」。
+    # 此前 "Python async" + "Python 编程语言 异步 开发" 直接拼接成
+    # "Python async Python 编程语言 异步 开发"，重复词污染检索串，
+    # 且混入子查询分解后产生 "Python async Python" 半改写残留。
+    append_str = _dedupe_append_words(query, rewritten_parts)
+    if not append_str:
+        # 去重后全空：混合语言拆分场景（日文查询 + 原文已有的英文术语）
+        # 仍保留追加，旧行为不改写会丢失语言补充信号
+        append_str = " ".join(rewritten_parts)
+    rewritten = query + " " + append_str
 
     return {
         "original": query,
@@ -275,6 +284,32 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
         "type": "disambiguate",
         "understanding": understanding_dict,
     }
+
+
+def _dedupe_append_words(original: str, parts: list[str]) -> str:
+    """追加词与原查询词级去重：已出现在原文里的词不再追加。
+
+    例：original="Python async"，parts=["Python 编程语言 异步 开发"]
+      → Python 已在原文 → 保留 "编程语言 异步 开发"。
+    以词块为单位（空格分词），中文词块与英文词均按字面比较。
+    """
+    import re as _re
+    if not parts:
+        return ""
+    q_tokens = set(
+        t.lower()
+        for t in _re.findall(r"[\u4e00-\u9fff]+|[a-zA-Z0-9]+", original)
+    )
+    kept: list[str] = []
+    for part in parts:
+        fresh = [
+            w for w in part.split()
+            if _re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]", "", w).lower()
+            not in q_tokens
+        ]
+        if fresh:
+            kept.append(" ".join(fresh))
+    return " ".join(kept)
 
 
 # ── CLI 测试 ──────────────────────────────────────────────────────────────────

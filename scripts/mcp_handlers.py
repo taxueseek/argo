@@ -568,10 +568,10 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             if arguments.get("mode", "text") == "extract":
                 # 结构化提取（原 argo_extract）：raw fetch + tables/meta/jsonld
                 extract_mod = _lazy_cached("extract")
-                fetch_mod = _lazy_cached("fetch")
+                fetch_mod = _lazy_cached("fetch_v3")
                 emode = arguments.get("extract_mode", "all")
-                fetch_result = fetch_mod.fetch_page(arguments["url"], max_chars=50000,
-                                                     timeout=arguments.get("timeout", 15), raw=True)
+                fetch_result = fetch_mod.fetch_page_v3(arguments["url"], max_chars=50000,
+                                                       timeout=arguments.get("timeout", 15), raw=True)
                 if not fetch_result["success"]:
                     return {
                         "content": [{"type": "text", "text": _dumps({"error": fetch_result.get("error", "fetch failed")})}],

@@ -325,6 +325,31 @@ class TestCircuitBreaker(unittest.TestCase):
         cb.set_negative("q", eng, status="no-results", ttl=30)
         self.assertIsNotNone(cb.get_negative("q", eng))
 
+    def test_empty_never_auto_disables(self):
+        """empty（查询无结果）是查询级信号，不累计 opens → 永不 auto-disable。
+
+        回归：local_search 聚合器曾因子源瞬态错误被扁平化为 empty，opens 累计
+        到阈值后被静默禁用，导致零成本本地路径被 anysearch 兜底顶替。
+        """
+        from circuit_breaker import CircuitBreaker, OPEN_SECONDS, DISABLE_AFTER_OPENS
+        cb = CircuitBreaker(state_path=os.path.join(tempfile.mkdtemp(), "cb.json"))
+        eng = "test_empty_eng"
+        for _ in range(DISABLE_AFTER_OPENS * 3):
+            # 4 次 empty = 2 failure → open（empty 不累计 opens）
+            for _ in range(4):
+                cb.record_failure(eng, kind="empty")
+            cb._engines[eng]["opened_at"] = time.time() - OPEN_SECONDS - 1
+            cb.allow(eng)  # half-open 探测
+            for _ in range(4):
+                cb.record_failure(eng, kind="empty")
+        st = cb._engines[eng]
+        self.assertLess(st.get("opens", 0), DISABLE_AFTER_OPENS)
+        self.assertNotIn(eng, cb.auto_disabled())
+        # 冷却期过后仍可探测，未被永久禁用
+        cb._engines[eng]["opened_at"] = time.time() - OPEN_SECONDS - 1
+        allowed, _ = cb.allow(eng)
+        self.assertTrue(allowed)  # 仍可探测，未被永久禁用
+
 
 class TestRrfConsensus(unittest.TestCase):
     def test_consensus_engines(self):
@@ -458,6 +483,111 @@ class TestLocalSearchConfigIntegration(unittest.TestCase):
         engines = get_engines()
         self.assertIn("local_search", engines)
         self.assertEqual(engines["local_search"].get("type"), "cli")
+
+
+class TestAdaptiveTTLModeMatch(unittest.TestCase):
+    """自适应 TTL 必须按实际 mode/depth 查旧键，否则 fast/budget 下永不生效。"""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.cache = SearchCache(db_path=os.path.join(self.tmpdir.name, "ttl.db"))
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_fast_mode_stable_content_extends_ttl(self):
+        results = {"results": [{"url": "http://a", "title": "title-a"}] * 4}
+        self.cache.set("稳定查询", "byted", 5, dict(results),
+                       domain="general", mode="fast", depth="fast")
+        self.cache.set("稳定查询", "byted", 5, dict(results),
+                       domain="general", mode="fast", depth="fast")
+        key = self.cache._key("稳定查询", "byted", 5, "general", "fast", "fast", kind="combo")
+        hit = self.cache._l2.get(key)
+        self.assertIsNotNone(hit)
+        # 内容稳定 → TTL 延长到 base*2（7200）；修复前 fast 模式查 auto/fast 键恒 miss，恒 3600
+        self.assertEqual(hit.get("_ttl"), 7200)
+
+    def test_fast_mode_changed_content_keeps_base(self):
+        self.cache.set("变化查询", "byted", 5,
+                       {"results": [{"url": "http://a", "title": "v1"}] * 4},
+                       domain="general", mode="fast", depth="fast")
+        self.cache.set("变化查询", "byted", 5,
+                       {"results": [{"url": "http://b", "title": "v2-different"}] * 4},
+                       domain="general", mode="fast", depth="fast")
+        key = self.cache._key("变化查询", "byted", 5, "general", "fast", "fast", kind="combo")
+        hit = self.cache._l2.get(key)
+        self.assertIsNotNone(hit)
+        self.assertEqual(hit.get("_ttl"), 3600)
+
+    def test_balanced_depth_isolated_key(self):
+        """balanced 深度与 fast 深度键隔离，互不串 TTL。"""
+        self.cache.set("深度隔离", "byted", 5,
+                       {"results": [{"url": "http://a", "title": "t"}] * 4},
+                       domain="general", mode="auto", depth="balanced")
+        key_b = self.cache._key("深度隔离", "byted", 5, "general", "auto", "balanced", kind="combo")
+        key_f = self.cache._key("深度隔离", "byted", 5, "general", "auto", "fast", kind="combo")
+        self.assertNotEqual(key_b, key_f)
+        self.assertIsNotNone(self.cache._l2.get(key_b))
+        self.assertIsNone(self.cache._l2.get(key_f))
+
+
+class TestCumulativeSufficient(unittest.TestCase):
+    """wave-2 提前终止：跨引擎累计结果判定（修复 search.py 并行拖尾）。"""
+
+    @staticmethod
+    def _mod():
+        import importlib
+        import search
+        return importlib.reload(search)
+
+    def test_single_engine_insufficient_multi_engine_sufficient(self):
+        mod = self._mod()
+        raw = {
+            "eng_a": [{"title": "a1", "snippet": "s"}],  # 1 条 < 2
+            "eng_b": [{"title": "b1", "snippet": "s"}],  # 累计 2 条够 fast
+        }
+        self.assertTrue(mod._cumulative_sufficient(raw, mode="fast", min_results=None))
+        self.assertFalse(mod._cumulative_sufficient(
+            {"eng_a": raw["eng_a"]}, mode="fast", min_results=None))
+
+    def test_min_results_override(self):
+        mod = self._mod()
+        raw = {"eng": [{"title": "a", "snippet": "s"}]}
+        # 答案域 min_results=1：1 条即够
+        self.assertTrue(mod._cumulative_sufficient(raw, mode="auto", min_results=1))
+        # 普通域 auto：3 条才够
+        self.assertFalse(mod._cumulative_sufficient(raw, mode="auto", min_results=None))
+
+    def test_errors_excluded(self):
+        mod = self._mod()
+        raw = {
+            "eng_a": [{"error": "boom"}],
+            "eng_b": [{"error": "timeout"}],
+        }
+        self.assertFalse(mod._cumulative_sufficient(raw, mode="fast"))
+
+
+class TestRouteSamplingGuard(unittest.TestCase):
+    """engine_override 直通分支无有效 features，不得消耗遥测采样槽。"""
+
+    def test_override_branch_does_not_sample(self):
+        from route import _sample_route
+        calls = []
+        orig_emit = None
+        try:
+            import telemetry
+            orig_emit = telemetry.emit
+            telemetry.emit = lambda *a, **kw: calls.append(a)
+        except ImportError:
+            pass
+        try:
+            _sample_route({}, {"engine": "x", "features": {}})
+            _sample_route({}, {"engine": "x"})
+        finally:
+            if orig_emit is not None:
+                import telemetry
+                telemetry.emit = orig_emit
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

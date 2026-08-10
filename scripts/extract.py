@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
-"""extract.py — 结构化数据提取"""
+"""extract.py — 结构化数据提取（抓取走 fetch_v3 降级链）"""
 import json, re, sys
 from html.parser import HTMLParser
-from fetch import fetch_page
+# fetch_v3：UA 轮换 + TLS 指纹 + Wayback/浏览器降级，反爬站可抓。
+# 单页场景保留浏览器降级（use_browser_fallback=True 默认）。
+from fetch_v3 import fetch_v3 as _fetch3
+
+
+def _extract_fetch(url: str, max_chars: int, timeout: int, raw: bool = True) -> dict:
+    """兼容旧 fetch_page 签名：返回 {success, html, content, url, error}。"""
+    r = _fetch3(url, max_chars=max_chars, timeout=float(timeout))
+    out = {"url": r["url"], "content": r.get("content", ""),
+           "success": r["success"], "error": r.get("error", "")}
+    if raw:
+        out["html"] = r.get("html", "")
+    return out
 
 class TableExtractor(HTMLParser):
     def __init__(self):
@@ -64,7 +76,7 @@ if __name__ == '__main__':
     p.add_argument('--url', required=True)
     p.add_argument('--mode', default='all', choices=['tables','metadata','jsonld','all'])
     args = p.parse_args()
-    result = fetch_page(args.url, 50000, raw=True)
+    result = _extract_fetch(args.url, 50000, 15)
     if not result['success']: print(json.dumps({'error': result.get('error')})); sys.exit(1)
     html = result.get('html') or result.get('content') or ''
     output = {}
