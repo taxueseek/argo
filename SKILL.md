@@ -281,6 +281,7 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **新垂直引擎**：GDELT 全球事件（事件/舆情/地理维度）、OpenCorporates 公司注册（尽调/反欺诈）、Google Patents 专利搜索（技术尽调/IP）
 - **自适应学习**：success × latency × cost 三维评分，SQLite 持久化
 - **社交引擎**：Twitter/Reddit/小红书/B站/微博 5 大平台原生搜索
+- **引擎层 HttpClient 接入（v2.7.10）**：HTTP/HTML 类引擎 GET 请求统一走 `http_client`（UA 轮换 + Cookie 积累 + 429/503 Retry-After 尊重 + 指数退避重试 + 重定向跟随），修复了 `follow_redirects` 无效死参数（301/302 跟随到最终页）；实测 arxiv 类 UA 敏感引擎从 urllib 超时空返回（5s/0 结果）变为 2s 内 10 条有效结果；POST 引擎保留 urllib；`ARGO_ENGINE_HTTP_CLIENT=0` 可整体回退（灰度/诊断），测试默认走回退路径
 - **SSRF 防护（v2.7.1）**：fetch/crawl/http_client 统一拦截内网/私有地址（scheme 白名单 + 主机名黑名单 + DNS 解析 IP 段 + 重定向逐跳校验）；`ARGO_ALLOW_PRIVATE_URLS=1` 显式放行
 - **路由健康语义修复（v2.7.1）**：健康过滤只作用于 local_* 子引擎；sub-skills 与 scripts 顶层模块名隔离（health_check 不再被劫持）；health_probe 只探测 local_*，消除慢源误报
 - **macro_data 国家分流（v2.7.1）**：非美国宏观查询（中国GDP/日本通胀）worldbank 前置不再被 primary 扶正覆盖，避免 FRED 美国数据冒充

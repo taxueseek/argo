@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -565,6 +566,121 @@ class TestCumulativeSufficient(unittest.TestCase):
             "eng_b": [{"error": "timeout"}],
         }
         self.assertFalse(mod._cumulative_sufficient(raw, mode="fast"))
+
+
+class TestHttpClientEngineIntegration(unittest.TestCase):
+    """引擎层 HttpClient 接入：GET 走渐进增强层，env=0 回退 urllib。"""
+
+    def test_http_get_raw_uses_http_client_by_default(self):
+        """ARGO_ENGINE_HTTP_CLIENT 默认开启 → GET 走 HttpClient。"""
+        from engines_base import _http_get_raw
+        calls = []
+
+        class _FakeClient:
+            def __init__(self, *a, **kw):
+                calls.append(("init", kw.get("jitter"), kw.get("max_retries")))
+
+            def get(self, url, extra_headers=None, follow_redirects=False):
+                calls.append(("get", url, bool(follow_redirects)))
+                return {"status": 200, "text": '{"ok": 1}', "error": ""}
+
+        with patch("engines_base.os.environ.get", return_value="1"), \
+             patch("http_client.HttpClient", _FakeClient):
+            raw = _http_get_raw("https://x.example/q", {"Accept": "*/*"}, 8)
+        self.assertEqual(raw, '{"ok": 1}')
+        self.assertEqual(calls[0], ("init", False, 1))  # 搜索热路径禁 jitter
+        self.assertTrue(calls[1][2])  # follow_redirects 开启
+
+    def test_http_get_raw_env_off_falls_back_urllib(self):
+        """ARGO_ENGINE_HTTP_CLIENT=0 → 回退 urllib（存量 mock 兼容）。"""
+        from engines_base import _http_get_raw
+        captured = []
+
+        class _FakeResp:
+            def read(self):
+                return b'{"ok": 1}'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def _fake_urlopen(req, timeout=0):
+            captured.append(req.full_url)
+            return _FakeResp()
+
+        with patch("engines_base.os.environ.get", return_value="0"), \
+             patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+            raw = _http_get_raw("https://y.example/q", {}, 8)
+        self.assertEqual(raw, '{"ok": 1}')
+        self.assertEqual(captured, ["https://y.example/q"])
+
+    def test_http_get_raw_non_200_returns_none(self):
+        """HttpClient 非 200/空 body → 返回 None（调用方按无结果处理）。"""
+        from engines_base import _http_get_raw
+
+        class _FakeClient:
+            def __init__(self, *a, **kw):
+                pass
+
+            def get(self, url, extra_headers=None, follow_redirects=False):
+                return {"status": 403, "text": "forbidden", "error": ""}
+
+        with patch("engines_base.os.environ.get", return_value="1"), \
+             patch("http_client.HttpClient", _FakeClient):
+            self.assertIsNone(_http_get_raw("https://x.example/q", {}, 8))
+
+    def test_redirect_following_in_http_client(self):
+        """follow_redirects 死参数修复：301/302 跟随到最终页。"""
+        from http_client import HttpClient
+        import http.client as hc
+        seen = []
+
+        class _FakeResp:
+            def __init__(self, status, headers):
+                self.status = status
+                self._headers = list(headers.items())
+
+            def getheader(self, name, default=None):
+                for k, v in self._headers:
+                    if k.lower() == name.lower():
+                        return v
+                return default
+
+            def getheaders(self):
+                return list(self._headers)
+
+            def read(self):
+                return b""
+
+        class _FakeConn:
+            def __init__(self, host, port, timeout=None):
+                seen.append(host)
+
+            def request(self, method, path, headers=None):
+                pass
+
+            def getresponse(self):
+                if len(seen) == 1:
+                    return _FakeResp(302, {"Location": "https://final.example/page"})
+                return _FakeResp(200, {})
+
+            def close(self):
+                pass
+
+        with patch("http.client.HTTPSConnection", _FakeConn), \
+             patch("http.client.HTTPConnection", _FakeConn), \
+             patch.object(HttpClient, "_apply_jitter"):
+            c = HttpClient(timeout=5, max_retries=0)
+            c._cookies = type("NoopCookies", (), {
+                "get_cookie_header": lambda self, u: None,
+                "extract_from_response": lambda self, u, h: None,
+            })()
+            r = c.get("https://first.example/", follow_redirects=True)
+        # 跟随 302 后请求了最终 host
+        self.assertIn("final.example", seen)
+        self.assertEqual(r.get("status"), 200)
 
 
 class TestRouteSamplingGuard(unittest.TestCase):

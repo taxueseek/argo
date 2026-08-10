@@ -267,72 +267,85 @@ class HttpClient:
                 follow_redirects: bool) -> dict:
         """实际执行 GET 请求（使用 http.client，不自动解压）。"""
         start = time.time()
+        current_url = url
+        redirects_left = 5 if follow_redirects else 0
 
-        # 构建请求头
-        headers = _random_headers(extra_headers)
-        cookie_str = self._cookies.get_cookie_header(url)
-        if cookie_str:
-            headers["Cookie"] = cookie_str
+        while True:
+            # 构建请求头
+            headers = _random_headers(extra_headers)
+            cookie_str = self._cookies.get_cookie_header(current_url)
+            if cookie_str:
+                headers["Cookie"] = cookie_str
 
-        # 解析 URL
-        parsed = urllib.parse.urlparse(url)
-        if not parsed.scheme:
-            url = "https://" + url
-            parsed = urllib.parse.urlparse(url)
+            # 解析 URL
+            parsed = urllib.parse.urlparse(current_url)
+            if not parsed.scheme:
+                current_url = "https://" + current_url
+                parsed = urllib.parse.urlparse(current_url)
 
-        # 使用 http.client（不自动解压，我们可以手动处理）
-        connection_class = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
-        conn = connection_class(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80),
-                               timeout=self.timeout)
+            # 使用 http.client（不自动解压，我们可以手动处理）
+            connection_class = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+            conn = connection_class(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80),
+                                   timeout=self.timeout)
 
-        path = parsed.path or "/"
-        if parsed.query:
-            path += "?" + parsed.query
+            path = parsed.path or "/"
+            if parsed.query:
+                path += "?" + parsed.query
 
-        conn.request("GET", path, headers=headers)
-        resp = conn.getresponse()
-        status = resp.status
-        resp_headers = dict(resp.getheaders())
+            conn.request("GET", path, headers=headers)
+            resp = conn.getresponse()
+            status = resp.status
+            resp_headers = dict(resp.getheaders())
 
-        # 提取 Cookie
-        self._cookies.extract_from_response(url, resp.getheaders())
+            # 提取 Cookie
+            self._cookies.extract_from_response(current_url, resp.getheaders())
 
-        # 读取 body
-        raw_body = resp.read()
-        conn.close()
+            # 跟随重定向（301/302/303/307/308）：Location 相对/绝对都解析
+            if status in (301, 302, 303, 307, 308) and redirects_left > 0:
+                loc = resp.getheader("Location")
+                conn.close()
+                if not loc:
+                    break
+                current_url = urllib.parse.urljoin(current_url, loc)
+                redirects_left -= 1
+                continue
 
-        # 手动解压
-        encoding = resp.getheader("Content-Encoding", "")
-        if "gzip" in encoding:
-            import gzip
-            import io
-            raw_body = gzip.GzipFile(fileobj=io.BytesIO(raw_body)).read()
-        elif "br" in encoding:
-            try:
-                import brotli
-                raw_body = brotli.decompress(raw_body)
-            except ImportError:
-                # brotli 不可用 → curl fallback
-                return self.get_with_curl(url, extra_headers)
+            # 读取 body
+            raw_body = resp.read()
+            conn.close()
 
-        # 解码
-        content_type = resp.getheader("Content-Type", "")
-        charset = "utf-8"
-        if "charset=" in content_type:
-            charset = content_type.split("charset=")[-1].strip().split(";")[0]
+            # 手动解压
+            encoding = resp.getheader("Content-Encoding", "")
+            if "gzip" in encoding:
+                import gzip
+                import io
+                raw_body = gzip.GzipFile(fileobj=io.BytesIO(raw_body)).read()
+            elif "br" in encoding:
+                try:
+                    import brotli
+                    raw_body = brotli.decompress(raw_body)
+                except ImportError:
+                    # brotli 不可用 → curl fallback
+                    return self.get_with_curl(url, extra_headers)
 
-        text = raw_body.decode(charset, errors="replace")
+            # 解码
+            content_type = resp.getheader("Content-Type", "")
+            charset = "utf-8"
+            if "charset=" in content_type:
+                charset = content_type.split("charset=")[-1].strip().split(";")[0]
 
-        elapsed = int((time.time() - start) * 1000)
+            text = raw_body.decode(charset, errors="replace")
 
-        return {
-            "status": status,
-            "headers": resp_headers,
-            "text": text,
-            "url": url,
-            "elapsed_ms": elapsed,
-            "from_cache": False,
-        }
+            elapsed = int((time.time() - start) * 1000)
+
+            return {
+                "status": status,
+                "headers": resp_headers,
+                "text": text,
+                "url": current_url,
+                "elapsed_ms": elapsed,
+                "from_cache": False,
+            }
 
     def _apply_jitter(self) -> None:
         """请求间随机抖动延迟。"""

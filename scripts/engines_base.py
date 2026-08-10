@@ -218,7 +218,12 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
 
 
 def _build_http_engine(spec: dict[str, Any]) -> Any:
-    """统一 HTTP 引擎构造（GET/POST）。"""
+    """统一 HTTP 引擎构造（GET/POST）。
+
+    GET 请求走 HttpClient（UA 轮换 + Cookie 积累 + 429/503 Retry-After 尊重 +
+    指数退避重试 + 重定向跟随）；POST 保留 urllib（HttpClient 无 POST）。
+    开关 ARGO_ENGINE_HTTP_CLIENT=0 可整体回退 urllib（灰度/诊断用）。
+    """
     url_template = spec.get("url", "")
     headers = spec.get("headers", {"Content-Type": "application/json"})
     query_param = spec.get("query_param", "q")
@@ -228,6 +233,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
     output_map = spec.get("output_map", {})
     is_get = spec.get("method", "GET") == "GET"
     body_template = spec.get("body", {})
+    eng = spec.get("_name", "")
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, depth: str = "fast", **kwargs) -> list[dict[str, Any]]:
@@ -251,7 +257,13 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 full_url = resolved_url + separator + "&".join(parts)
             else:
                 full_url = resolved_url
-            req = urllib.request.Request(full_url, headers={k: _resolve(v, query, n, **kwargs) for k, v in headers.items()})
+            resolved_headers = {k: _resolve(v, query, n, **kwargs) for k, v in headers.items()}
+            # GET：HttpClient 渐进增强（UA 轮换/重试/重定向跟随）；
+            # 失败返回空（与 urllib 失败行为一致，不抛异常）
+            raw = _http_get_raw(full_url, resolved_headers, to)
+            if raw is None:
+                return []
+            return _parse_http_payload(raw, fmt, eng, n, output_map, spec)
         else:
             body: dict[str, Any] = {}
             for k, v in body_template.items():
@@ -270,50 +282,99 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                             body[k] = float(resolved)
                         except ValueError:
                             body[k] = resolved
-            req = urllib.request.Request(url_template, data=json.dumps(body).encode("utf-8"),
-                                         headers={k: _resolve(v, query, n, **kwargs) for k, v in headers.items()})
-
-        try:
-            with urllib.request.urlopen(req, timeout=to) as resp:
-                raw = resp.read().decode("utf-8")
-                if fmt == "xml":
-                    return _parse_xml(raw, spec.get("_name", ""))
-                data = json.loads(raw)
-                eng = spec.get("_name", "")
-                limit = max(1, int(n or 5))
-                # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）
-                custom = _CUSTOM_JSON_PARSERS.get(eng)
-                if custom:
-                    return _ensure_engine_source(custom(data), eng)[:limit]
-                if output_map:
-                    items_path = output_map.get("items", "")
-                    # 根节点即为数组时（HF / dev.to / polymarket），items 用 "."
-                    if isinstance(data, list) and not items_path:
-                        items_path = "."
-                    parsed = _make_field_parser(items_path, {
-                        "title": output_map.get("item_title", "title"),
-                        "url": output_map.get("item_url", "url"),
-                        "snippet": output_map.get("item_summary", "snippet"),
-                        "source": output_map.get("item_source", "source"),
-                        "published_at": output_map.get("item_published_at", "published_at"),
-                    }, url_template=output_map.get("url_template"))(data)
-                    for r in parsed:
-                        r.setdefault("source", eng)
-                        if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
-                            r["snippet"] = r["snippet"][:300]
-                    # preserve_source（声明式 spec）：保留 API 返回的真实来源标注
-                    return _ensure_engine_source(
-                        parsed, eng, preserve=bool(spec.get("preserve_source"))
-                    )[:limit]
-                if isinstance(data, list):
-                    return _ensure_engine_source(
-                        _parse_generic({"results": data}, eng), eng
-                    )[:limit]
-                return _ensure_engine_source(_parse_generic(data, eng), eng)[:limit]
-        except Exception as e:
-            logger.warning(f"HTTP 引擎失败: {e}")
-            return []
+            req = urllib.request.Request(
+                url_template,
+                data=json.dumps(body).encode("utf-8"),
+                headers={k: _resolve(v, query, n, **kwargs) for k, v in headers.items()},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=to) as resp:
+                    raw = resp.read().decode("utf-8")
+            except Exception as e:
+                logger.warning(f"HTTP 引擎失败: {e}")
+                return []
+            return _parse_http_payload(raw, fmt, eng, n, output_map, spec)
     return _engine
+
+
+def _http_get_raw(url: str, headers: dict, timeout: float) -> str | None:
+    """GET 原始响应体（HttpClient 渐进增强；ARGO_ENGINE_HTTP_CLIENT=0 回退 urllib）。
+
+    返回响应文本；任何失败返回 None（调用方按「无结果」处理）。
+    """
+    use_client = os.environ.get("ARGO_ENGINE_HTTP_CLIENT", "1").strip() not in (
+        "0", "false", "False", "no"
+    )
+    if use_client:
+        try:
+            from http_client import HttpClient
+            resp = HttpClient(timeout=timeout, max_retries=1, jitter=False).get(
+                url, extra_headers=headers, follow_redirects=True,
+            )
+            status = resp.get("status") or 0
+            text = resp.get("text") or ""
+            if status == 200 and text:
+                return text
+            if status >= 400 or status == 0:
+                logger.warning(
+                    f"HTTP 引擎失败: status={status} {resp.get('error', '')[:120]}"
+                )
+                return None
+            # 2xx/3xx 无 body：视为失败
+            return None
+        except Exception as e:
+            logger.warning(f"HTTP 引擎失败(HttpClient): {type(e).__name__} {e}")
+            return None
+    # 回退 urllib（原行为）
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8")
+    except Exception as e:
+        logger.warning(f"HTTP 引擎失败: {e}")
+        return None
+
+
+def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
+                        output_map: dict, spec: dict) -> list[dict[str, Any]]:
+    """HTTP 引擎响应体解析（GET/POST 共用）。"""
+    if fmt == "xml":
+        return _parse_xml(raw, eng)
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning(f"HTTP 引擎解析失败: {eng} 非 JSON/XML 响应")
+        return []
+    limit = max(1, int(n or 5))
+    # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）
+    custom = _CUSTOM_JSON_PARSERS.get(eng)
+    if custom:
+        return _ensure_engine_source(custom(data), eng)[:limit]
+    if output_map:
+        items_path = output_map.get("items", "")
+        # 根节点即为数组时（HF / dev.to / polymarket），items 用 "."
+        if isinstance(data, list) and not items_path:
+            items_path = "."
+        parsed = _make_field_parser(items_path, {
+            "title": output_map.get("item_title", "title"),
+            "url": output_map.get("item_url", "url"),
+            "snippet": output_map.get("item_summary", "snippet"),
+            "source": output_map.get("item_source", "source"),
+            "published_at": output_map.get("item_published_at", "published_at"),
+        }, url_template=output_map.get("url_template"))(data)
+        for r in parsed:
+            r.setdefault("source", eng)
+            if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
+                r["snippet"] = r["snippet"][:300]
+        # preserve_source（声明式 spec）：保留 API 返回的真实来源标注
+        return _ensure_engine_source(
+            parsed, eng, preserve=bool(spec.get("preserve_source"))
+        )[:limit]
+    if isinstance(data, list):
+        return _ensure_engine_source(
+            _parse_generic({"results": data}, eng), eng
+        )[:limit]
+    return _ensure_engine_source(_parse_generic(data, eng), eng)[:limit]
 
 
 # ── HTML 网页解析引擎 ─────────────────────────────────────────────────────────
@@ -404,11 +465,10 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             if k in ("setlang", "hl", "lang", "uselang"):
                 v = _lang_param(k, query) or v
             full_url += f"&{k}={up.quote(_resolve(str(v), query, n))}"
-        try:
-            req = urllib.request.Request(full_url, headers={k: _resolve(v, query, n) for k, v in headers.items()})
-            with urllib.request.urlopen(req, timeout=to) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-        except Exception:
+        resolved_headers = {k: _resolve(v, query, n) for k, v in headers.items()}
+        # HTML 引擎同样走 HttpClient 渐进增强（UA 轮换/重定向跟随/重试）
+        html = _http_get_raw(full_url, resolved_headers, to)
+        if html is None:
             return []
         if _detect_anti_bot(html):
             return []
