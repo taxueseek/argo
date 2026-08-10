@@ -153,6 +153,18 @@ engines:
     output_format: json
     use_lang_region: true
 
+  # ddgs books backend（Anna's Archive 电子书镜像搜索；默认关闭按需启用）
+  local_ddgs_books:
+    type: cli
+    enabled: false
+    categories: [vertical]
+    cli_command: ddgs
+    cli_args: ["books", "-q", "{query}", "-m", "{n}"]
+    key: local_ddgs_books
+    timeout: 10
+    output_format: json
+    note: "Anna's Archive 电子书搜索；默认关闭，需用时置 enabled: true"
+
   local_baidu:
     type: html
     enabled: true
@@ -289,6 +301,7 @@ engines:
     cli_args: ["news", "-q", "{query}", "-m", "{n}"]
     key: local_duckduckgo_news
     timeout: 15
+    output_format: json
     fallback_type: html
     fallback_url: "https://duckduckgo.com/html/"
     fallback_param: q

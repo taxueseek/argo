@@ -1,8 +1,8 @@
 ---
 name: local-search
 parent: unified-search
-description: unified-search 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON 的 24 个本地搜索引擎，不单独响应触发词，仅由 unified-search 通过 --sub-skill local-search 或 --local-first 调用。
-version: 1.0.1
+description: unified-search 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 33 个本地搜索引擎，不单独响应触发词，仅由 unified-search 通过 --sub-skill local-search 或 --local-first 调用。
+version: 1.1.0
 ---
 
 ## Local Search 子技能
@@ -20,35 +20,46 @@ Local Search 是 unified-search 的「零成本兜底适配器」，用于：
 - **声明式解析**：HTML 结构变化时只需修改 `parse_maps.yaml`。
 - **命名空间隔离**：本地引擎统一使用 `local_` 前缀（如 `local_bing`、`local_google`），避免与 unified-search 已有的 HTTP 引擎（`duckduckgo`、`wikipedia` 等）重名。
 
-### 本地引擎列表（25 个，20 个默认启用）
+### 本地引擎列表（33 个，29 个默认启用）
 
-| unified 名称 | 类型 | 默认启用 | 说明 |
-|--------------|------|----------|------|
-| local_bing | html | ✅ | Bing 网页结果 |
-| local_google | html | ❌ | Google 网页结果（反爬强） |
-| local_mojeek | html | ✅ | Mojeek 独立索引 |
-| local_yandex | html | ❌ | Yandex 搜索（反爬强） |
-| local_startpage | html | ✅ | Startpage 隐私搜索 |
-| local_duckduckgo | html | ✅ | DuckDuckGo HTML |
-| local_baidu | html | ✅ | 百度搜索 |
-| local_sogou | html | ✅ | 搜狗搜索 |
-| local_arxiv | xml | ✅ | arXiv API |
-| local_pubmed | json | ✅ | PubMed/EUtils |
-| local_crossref | json | ✅ | Crossref API |
-| local_semantic_scholar | json | ✅ | Semantic Scholar API |
-| local_bing_news | rss/html | ✅ | Bing 新闻 |
-| local_google_news | rss | ✅ | Google News RSS |
-| local_duckduckgo_news | rss/html | ❌ | DuckDuckGo 新闻 |
-| local_github | json | ✅ | GitHub Search API |
-| local_stackoverflow | html/json | ✅ | StackOverflow 问题 |
-| local_gitlab | json | ✅ | GitLab API |
-| local_npm | json | ✅ | NPM Registry |
-| local_wikipedia | json | ✅ | MediaWiki API |
-| local_wiktionary | json | ✅ | Wiktionary API |
-| local_wikiquote | json | ✅ | Wikiquote API |
-| local_imdb | html | ❌ | IMDb 搜索 |
-| local_goodreads | html | ❌ | Goodreads 搜索 |
-| local_openstreetmap | json | ✅ | Nominatim API |
+| unified 名称 | 类型 | 默认启用 | 类别 | 说明 |
+|--------------|------|----------|------|------|
+| local_bing | cli(ddgs) | ✅ | web_general | Bing 网页结果（ddgs -b bing + JSON） |
+| local_google | html | ❌ | web_general | Google 网页结果（反爬强；ddgs google backend 不可用） |
+| local_mojeek | html | ✅ | web_general | Mojeek 独立索引（ddgs backend 返回导航链接） |
+| local_yandex | cli(ddgs) | ✅ | web_general/japanese | Yandex 搜索（ddgs -b yandex） |
+| local_startpage | html | ✅ | web_general | Startpage 隐私搜索（ddgs backend 不可用） |
+| local_duckduckgo | cli(ddgs) | ✅ | web_general | DuckDuckGo（ddgs 默认） |
+| local_brave | cli(ddgs) | ✅ | web_general | Brave 搜索（ddgs -b brave，实测稳定） |
+| local_yahoo | cli(ddgs) | ✅ | web_general | Yahoo 搜索（ddgs -b yahoo，实测稳定） |
+| local_baidu | html | ✅ | chinese | 百度搜索 |
+| local_sogou | html | ✅ | chinese | 搜狗搜索 |
+| local_360 | html | ✅ | chinese | 360 搜索 |
+| local_jisilu | html | ✅ | finance/chinese | 集思录 |
+| local_ddgs_news | cli(ddgs) | ✅ | news | ddgs news 默认后端（带日期） |
+| local_bing_news | rss | ✅ | news | Bing 新闻 RSS |
+| local_google_news | rss | ✅ | news | Google News RSS |
+| local_duckduckgo_news | cli(ddgs) | ✅ | news | ddgs news 备用后端 |
+| local_ddgs_images | cli(ddgs) | ✅ | images | ddgs images（bing TLS 偶发，已自动重试） |
+| local_ddgs_videos | cli(ddgs) | ✅ | videos | ddgs videos |
+| local_ddgs_books | cli(ddgs) | ❌ | vertical | Anna's Archive 电子书搜索；默认关闭，需用时置 enabled: true |
+| local_arxiv | xml | ✅ | academic | arXiv API |
+| local_pubmed | json | ✅ | academic | PubMed/EUtils |
+| local_crossref | json | ✅ | academic | Crossref API |
+| local_semantic_scholar | json | ✅ | academic | Semantic Scholar API |
+| local_github | json | ✅ | code | GitHub Search API |
+| local_stackoverflow | json | ✅ | code | StackOverflow 问题 |
+| local_gitlab | json | ✅ | code | GitLab API |
+| local_npm | json | ✅ | code | NPM Registry |
+| local_wikipedia | json | ✅ | reference | MediaWiki API（ddgs wikipedia backend 结果过少） |
+| local_wiktionary | json | ✅ | reference | Wiktionary API |
+| local_wikiquote | json | ✅ | reference | Wikiquote API |
+| local_imdb | html | ❌ | vertical | IMDb 搜索 |
+| local_goodreads | html | ❌ | vertical | Goodreads 搜索 |
+| local_openstreetmap | json | ✅ | vertical | Nominatim API |
+
+> CLI 引擎（ddgs 9.14.4）统一走 `-o json` 结构化输出 + 失败自动重试 1 次；
+> 错误信号（DDGSException/ConnectError 等）在 rc=0 时也会被识别并上报，不静默吞错。
 
 ### 调用方式
 

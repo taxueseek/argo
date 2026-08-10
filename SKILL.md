@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.5
+version: 2.7.6
 triggers:
   - 搜索
   - 查一下
@@ -64,6 +64,7 @@ engines:
   - local_crossref
   - local_ddgs_images
   - local_ddgs_news
+  - local_ddgs_books
   - local_ddgs_videos
   - local_duckduckgo
   - local_github
@@ -267,6 +268,8 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **ddgs CLI 增强（v2.7.5）**：local-search 的 ddgs 引擎全部改 `-o json` 结构化输出（淘汰脆弱文本行解析，news 的 date 归一化为 `published_at`）；`use_lang_region` 按查询主语言下推 `-r region`（zh→cn-zh）；新增 `local_brave` / `local_yahoo` 两个免 key 快源（实测 ~1s）；ddgs 引擎 timeout 15→8s 与外层并行超时对齐
 - **local-search 超时健壮性（v2.7.5）**：`as_completed` 超时不再整链崩溃——未完成引擎标记 timeout 记入 errors，已完成引擎结果保留（此前 ddgs 慢后端超时会拖垮整个 local_search 聚合）；`_check_cli_available` 结果缓存 60s（`ddgs --help` 冷启动 ~190ms/次不再重复付费）
 - **TF-IDF profile 补全（v2.7.5）**：`aviation_weather` / `cn_ai_news` / `datacite` / `firecrawl` / `fxtwitter` / `sec_edgar` / `train` / `weather` / `zenodo` 9 个引擎补齐代表文档，语义路由不再永久选不中；韩文路由不再引用已禁用的 `local_google`（落 local_bing + local_duckduckgo）
+- **ddgs CLI 失败识别与重试（v2.7.6）**：ddgs 9.14.4 起失败信号（`DDGSException`/`No results`/`ConnectError` 等）在 rc=0 时打到 stdout、输出文件 0 字节，旧逻辑只在 rc≠0 分支检查导致静默吞错（实测 yahoo 间歇丢结果）；现在无论 rc 先识别错误信号，失败/超时自动重试 1 次（yahoo 成功率 ~60%→84%、images ~80%→96%），持续失败返回明确错误而非误导消息
+- **Anna's Archive 电子书引擎（v2.7.6）**：新增 `local_ddgs_books`（ddgs books 子命令），author/publisher/info 拼入 snippet，vertical 类别路由；默认关闭，需用时在 `sub-skills/local-search/config.yaml` 置 `enabled: true`
 - **CLI 引擎声明式接入（v2.7.3）**：`output_format: yaml` 通用 YAML 解析 + `filter_args` 条件参数，新增 CLI 桥接引擎零 Python；模板 `engines/_template_cli.yaml`
 - **裸命令引擎路径校验修复（v2.7.3）**：PATH 中的裸命令 CLI 引擎不再被配置校验误判为不存在而禁用（`shutil.which` 兜底）
 
@@ -710,9 +713,9 @@ cost_factor:
 
 local-search 是 argo 内置的「零成本聚合后端」，不依赖独立的 SearXNG 服务：
 
-- **30 个本地引擎，27 个默认启用**：覆盖 web_general、chinese、academic、news、code、reference、vertical 七大类，
-  统一通过 HTML/RSS/JSON/XML 解析公开页面；其中 8 个走 ddgs CLI（text 四后端 bing/yandex/brave/yahoo + 默认 + news/images/videos），
-  结构化 JSON 输出、按查询语言自动下推 region 参数。
+- **33 个本地引擎，29 个默认启用**：覆盖 web_general、chinese、academic、news、code、reference、vertical 七大类，
+  统一通过 HTML/RSS/JSON/XML/CLI 解析公开页面；其中 10 个走 ddgs CLI（text 五后端 bing/yandex/brave/yahoo/duckduckgo + news/images/videos/books），
+  结构化 JSON 输出、按查询语言自动下推 region 参数、失败自动重试 1 次。
 - **引擎注册表**（`sub-skills/local-search/engine_registry.py`）：唯一真源，加载
   `config.yaml` + `parse_maps.yaml`；新增引擎只需改 YAML。
 - **健康探针**（`sub-skills/local-search/local_health_check.py`）：canary 查询 + 反爬/拦截检测，

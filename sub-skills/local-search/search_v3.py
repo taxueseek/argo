@@ -620,14 +620,24 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
 
 # ── 单个引擎执行 ─────────────────────────────────────────────────────────────────
 
-# ddgs 各子命令支持的 timelimit 取值：videos 仅 d/w/m（无 y）。
+# ddgs 各子命令支持的 timelimit 取值：videos 仅 d/w/m（无 y），books 无 -t。
 # 传 y 会直接 crash（Invalid value for '-t'），必须按下推子命令过滤。
 _DDGS_TIMELIMITS: dict[str, set[str]] = {
     "text": {"d", "w", "m", "y"},
     "news": {"d", "w", "m", "y"},
     "images": {"d", "w", "m", "y"},
     "videos": {"d", "w", "m"},
+    "books": set(),
 }
+
+# ddgs 失败信号标记：9.14.4 起这些错误在 rc=0 时打到 stdout（吞错根源，
+# 实测 yahoo 间歇 "No results"、bing TLS "ConnectError" 均 rc=0），
+# 必须在任何解析前统一识别；命中后重试 1 次（后端间歇失败实测 20-50%）。
+_CLI_ERROR_MARKERS: tuple[str, ...] = (
+    "DDGSException", "No results", "ConnectError", "ConnectTimeout",
+    "ReadTimeout", "Timeout", "backends do not exist",
+)
+_CLI_RETRIES = 1
 
 
 def _since_to_ddgs_timelimit(since: str | None, until: str | None) -> str | None:
@@ -719,47 +729,85 @@ def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
         cli_args.extend(["-o", tmp_path])
     
     cmd = [cli_cmd] + cli_args
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        
-        # ddgs returns non-zero exit code when no results found
-        if result.returncode != 0:
-            combined_output = result.stdout + result.stderr
-            if "No results" in combined_output or "DDGSException" in combined_output:
-                return [], f"{cli_cmd}: no results"
-            return [], f"{cli_cmd} exit {result.returncode}: {combined_output[:200]}"
-        
-        # 结构化 JSON 优先（ddgs -o json 输出到临时文件）
+
+    # 失败重试：ddgs 各 backend 间歇性失败（yahoo "No results"、bing TLS
+    # ConnectError 均实测存在），且 9.14.4 起这些错误在 rc=0 时打到 stdout，
+    # 输出文件为 0 字节。逐次尝试：识别错误信号 → 重试 1 次 → 明确错误。
+    last_err = ""
+    for attempt in range(_CLI_RETRIES + 1):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            last_err = f"{cli_cmd} timed out after {timeout}s"
+            if attempt < _CLI_RETRIES:
+                time.sleep(0.3)
+                continue
+            return [], last_err
+        except FileNotFoundError:
+            return [], f"{cli_cmd} not found"
+        except Exception as e:
+            return [], f"{cli_cmd} error: {e}"
+
+        combined_output = result.stdout + result.stderr
+
+        # 结构化 JSON 优先（ddgs -o json 输出到临时文件）：有结果直接返回，
+        # stdout 的 warning（如 bing "backends do not exist" 但结果正常）不干扰。
         if tmp_path is not None:
+            json_ok = False
             try:
                 with open(tmp_path, encoding="utf-8") as f:
                     data = json.load(f)
                 parsed = _parse_cli_json(data, key)
                 if parsed:
                     return parsed, ""
-                # 空解析不视为失败：继续走文本路径兜底（理论上不会发生）
+                json_ok = True  # 合法空列表：真无结果，不重试
             except (OSError, ValueError):
-                pass
+                json_ok = False
             finally:
                 try:
                     os.unlink(tmp_path)
                 except OSError:
                     pass
-        
-        # Parse output from CLI (handles text, news, images, videos formats)
-        return _parse_cli_output(result.stdout, key)
-    except subprocess.TimeoutExpired:
-        return [], f"{cli_cmd} timed out after {timeout}s"
-    except FileNotFoundError:
-        return [], f"{cli_cmd} not found"
-    except Exception as e:
-        return [], f"{cli_cmd} error: {e}"
+            if json_ok:
+                return [], ""
+        else:
+            json_ok = False
+
+        # 无 JSON 结果：识别错误信号（无论 rc）→ 重试。
+        # 9.14.4 常见 rc=0 + stdout 错误 + 空输出文件，
+        # 旧逻辑只在 rc!=0 分支检查，导致静默吞错返回 0 结果。
+        err_marker = next(
+            (m for m in _CLI_ERROR_MARKERS if m in combined_output), None
+        )
+        if err_marker:
+            detail = combined_output.strip().replace("\n", " ")[:120]
+            last_err = f"{cli_cmd}: {err_marker}: {detail}"
+            if attempt < _CLI_RETRIES:
+                time.sleep(0.3)
+                continue
+            return [], last_err
+        if result.returncode != 0:
+            last_err = f"{cli_cmd} exit {result.returncode}: {combined_output[:200]}"
+            if attempt < _CLI_RETRIES:
+                time.sleep(0.3)
+                continue
+            return [], last_err
+
+        # 0 字节/解析失败或无 -o 引擎：文本解析兜底（handles text/news/images/videos）
+        parsed, parse_err = _parse_cli_output(result.stdout, key)
+        if parsed:
+            return parsed, parse_err
+        last_err = f"{cli_cmd}: empty output"
+        if attempt < _CLI_RETRIES:
+            time.sleep(0.3)
+            continue
+        return [], last_err
+    return [], last_err
 
 
 def _parse_cli_json(data: Any, engine_name: str) -> list[dict[str, Any]]:
@@ -797,6 +845,14 @@ def _parse_cli_json(data: Any, engine_name: str) -> list[dict[str, Any]]:
         date = item.get("date")
         if date:
             r["published_at"] = str(date)[:64]
+        # books（Anna's Archive）：author/publisher/info 拼入 snippet，
+        # 否则这些字段会被通用映射丢弃。
+        meta = " · ".join(
+            str(item[k]) for k in ("author", "publisher", "info")
+            if item.get(k)
+        )
+        if meta:
+            r["snippet"] = (str(snippet) + " · " + meta)[:400] if snippet else meta[:400]
         results.append(r)
     return results
 
