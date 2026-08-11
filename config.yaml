@@ -139,9 +139,6 @@ domains:
   - (?i)(stock|quote|price|market\s+cap)
   - A股|港股|股票|ETF|板块
   - (资金流|主力资金|北向|龙虎榜|大宗交易|换手率)
-  # 日韩股票触发词（修复「トヨタ 株価」「삼성전자 주가」漏召）
-  - (?i)(株価|株式|株|相場|値動き|高値|安値|終値|時価総額|騰落)
-  - (?i)(주가|주식|증시|시가총액|종가|시세|등락|상한가|하한가)
   primary: sina_quote
   quote: true
   early_stop_min_results: 1

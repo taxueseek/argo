@@ -133,7 +133,7 @@ def check_all() -> dict[str, dict]:
             continue
         result = check_http_engine(name, url, spec)
         results[name] = result
-        registry.update_health(name, result["available"], **result)
+        registry.update_health(name, result.pop("available"), **result)
     return results
 
 
