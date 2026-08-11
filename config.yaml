@@ -910,19 +910,6 @@ domains:
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   primary: zhihu
   quote: false
-- desc: 海外职位搜索（Adzuna 聚合，16 国在招岗位；国内岗位请用 `argo job`）
-  engines_combo:
-  - adzuna
-  - anysearch
-  fallback: anysearch
-  name: job_search
-  parallel: false
-  patterns:
-  - (?i)(海外工作|出国工作|国外工作|海外求职|海外招聘|去国外工作)
-  - (?i)(job opening|job posting|hiring|vacancy|vacancies|careers?|join our team)
-  - (?i)(we are hiring|position available|apply now)
-  - (?i)(remote job|work from home|wfh job|freelance.*project|freelance.*work)
-  primary: adzuna
 
 engines:
   gdelt:

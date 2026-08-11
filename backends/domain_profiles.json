@@ -2006,44 +2006,5 @@
       "song": 2.0,
       "music": 1.8
     }
-  },
-  "adzuna": {
-    "label": "Adzuna 职位搜索",
-    "documents": [
-      "招聘 找工作 求职 在招 诚聘 诚招 急聘 高薪 职位 岗位 就业机会",
-      "job opening hiring vacancy careers position available apply now",
-      "remote job work from home freelance wfh 远程工作 远程岗位",
-      "software engineer developer designer manager analyst consultant",
-      "薪资 工资 薪酬 薪水 月薪 年薪 salary pay wage compensation",
-      "英国 美国 加拿大 澳大利亚 德国 法国 海外工作 国际岗位"
-    ],
-    "boost_keywords": {
-      "招聘": 2.0,
-      "求职": 2.0,
-      "找工作": 2.0,
-      "职位": 2.0,
-      "岗位": 2.0,
-      "在招": 1.8,
-      "诚聘": 1.8,
-      "hiring": 2.0,
-      "vacancy": 2.0,
-      "vacancies": 2.0,
-      "job": 1.8,
-      "opening": 1.5,
-      "careers": 1.8,
-      "position": 1.5,
-      "apply": 1.5,
-      "remote": 1.8,
-      "wfh": 1.8,
-      "freelance": 1.5,
-      "薪资": 2.0,
-      "工资": 2.0,
-      "薪酬": 2.0,
-      "salary": 2.0,
-      "pay": 1.5,
-      "英国": 1.3,
-      "美国": 1.3,
-      "海外": 1.3
-    }
   }
 }
