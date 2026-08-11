@@ -14,3 +14,4 @@ dist/
 scripts/data/
 .trash/
 *.tgz
+data/jobs/
