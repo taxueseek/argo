@@ -1921,12 +1921,13 @@ engines:
     timeout: 12
     type: doaj
   europeana:
-    enabled: true
+    enabled: false
     label: Europeana 欧洲文化遗产
     cost_tier: free
     family: knowledge
     qps: 2
     priority: 51
+    note: 官方 demo key (api2demo) 已失效 401；上游提供新 key 前禁用，避免路由选中空转
     period: second
     cost_per_call: 0.0
     cost_unit: free

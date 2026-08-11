@@ -263,9 +263,10 @@ class TestConfigDrivenEngines(unittest.TestCase):
         self.assertIn("67e1", res[0]["url"])
 
     def test_all_registered(self):
+        # europeana 已禁用（官方 demo key api2demo 失效 401，见 config.yaml note）
         for name in ("gov_policy", "qiita", "fr_opendata", "cnii", "ndl",
                      "kor_law", "hatena_bookmark", "dnb", "doaj",
-                     "europeana", "hal", "eu_opendata", "open_meteo"):
+                     "hal", "eu_opendata", "open_meteo"):
             self.assertIn(name, self.reg, f"{name} 未注册")
 
 

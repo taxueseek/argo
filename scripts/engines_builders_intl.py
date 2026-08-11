@@ -30,9 +30,18 @@ logger = logging.getLogger("unified_search.engines")
 
 _UA = "argo-search/2.4 (unified-search@local)"
 
+# 结构字符保留集：既有 %XX 编码、协议/路径/参数分隔符不重复转义
+_URL_SAFE = "/:?&=%,._~#+-"
+
+
+def _encode_url(url: str) -> str:
+    """URL 非 ASCII 安全编码：中文查询（如 open_meteo geocode name=北京）
+    直接拼接会让 urllib 报 ascii 编码错误；已有 %XX 与结构字符不动。"""
+    return urllib.parse.quote(url, safe=_URL_SAFE)
+
 
 def _http_json(url: str, timeout: float) -> Any:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept-Encoding": "gzip"})
+    req = urllib.request.Request(_encode_url(url), headers={"User-Agent": _UA, "Accept-Encoding": "gzip"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read()
         if resp.headers.get("Content-Encoding") == "gzip":
@@ -42,7 +51,7 @@ def _http_json(url: str, timeout: float) -> Any:
 
 
 def _http_text(url: str, timeout: float) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    req = urllib.request.Request(_encode_url(url), headers={"User-Agent": _UA})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", "replace")
 
@@ -471,7 +480,7 @@ def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         try:
             geo = _http_json(
-                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=3",
+                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=3&language=zh",
                 to)
         except Exception as e:
             logger.warning(f"Open-Meteo geocode 失败: {e}")
