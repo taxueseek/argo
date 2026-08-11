@@ -42,7 +42,6 @@ Local Search 是 unified-search 的「零成本兜底适配器」，用于：
 | local_duckduckgo_news | cli(ddgs) | ✅ | news | ddgs news 备用后端 |
 | local_ddgs_images | cli(ddgs) | ✅ | images | ddgs images（bing TLS 偶发，已自动重试） |
 | local_ddgs_videos | cli(ddgs) | ✅ | videos | ddgs videos |
-| local_ddgs_books | cli(ddgs) | ❌ | vertical | Anna's Archive 电子书搜索；默认关闭，需用时置 enabled: true |
 | local_arxiv | xml | ✅ | academic | arXiv API |
 | local_pubmed | json | ✅ | academic | PubMed/EUtils |
 | local_crossref | json | ✅ | academic | Crossref API |

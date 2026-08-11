@@ -71,6 +71,7 @@ OM_SAMPLE = {
         "time": ["2026-08-08", "2026-08-09"],
         "temperature_2m_max": [30.1, 29.0],
         "temperature_2m_min": [24.2, 23.5],
+        "precipitation_probability_max": [40, 70],
     },
 }
 
@@ -149,8 +150,8 @@ class TestWxPy(unittest.TestCase):
             rows = wx._wttr("Shanghai")
         self.assertGreaterEqual(len(rows), 3, "应输出当前 1 条 + 预报 2 条")
         cur = rows[0]
-        self.assertIn("28", cur["title"])
-        self.assertIn("Patchy rain nearby", cur["title"])
+        self.assertIn("Shanghai 当前", cur["title"], "标题应使用查询词而非 nearest_area 区域名")
+        self.assertIn("局部阵雨", cur["title"], "英文 desc 应中文化")
         self.assertIn("体感 32", cur["snippet"])
         self.assertIn("湿度 85", cur["snippet"])
         self.assertTrue(cur["url"].startswith("https://wttr.in/"))
@@ -163,6 +164,7 @@ class TestWxPy(unittest.TestCase):
         self.assertGreaterEqual(len(rows), 2)
         self.assertIn("阴", rows[0]["title"], "WMO code 3 应映射为阴")
         self.assertIn("26.3", rows[0]["title"])
+        self.assertIn("降雨概率 40%", rows[1]["title"], "预报行应含降水概率")
 
     def test_wttr_failure_falls_back_to_open_meteo(self) -> None:
         """wttr.in 主路径异常时，main() 应整体回退 Open-Meteo。"""
@@ -181,6 +183,97 @@ class TestWxPy(unittest.TestCase):
         out = buf.getvalue()
         self.assertIn("open-meteo.com", out)
         self.assertIn("当前 26°C 阴", out)
+
+
+class TestGeocodeAqiMerge(unittest.TestCase):
+    """v2.8 新增能力：地理编码 / AQI / 英中映射 / 双源融合（mock 网络层）。"""
+
+    GEO_SAMPLE = {
+        "results": [{"name": "上海", "latitude": 31.22222,
+                     "longitude": 121.45806, "country": "中国"}],
+    }
+
+    def test_geocode_chinese_city(self) -> None:
+        with patch("urllib.request.urlopen",
+                   return_value=_FakeResp(json.dumps(self.GEO_SAMPLE).encode("utf-8"))):
+            r = wx._geocode("上海")
+        self.assertEqual(r["lat"], 31.22222)
+        self.assertEqual(r["name"], "上海")
+        self.assertEqual(r["country"], "中国")
+
+    def test_geocode_no_result_returns_none(self) -> None:
+        with patch("urllib.request.urlopen",
+                   return_value=_FakeResp(json.dumps({"results": []}).encode("utf-8"))):
+            self.assertIsNone(wx._geocode("不存在的城市xyz"))
+
+    def test_zh_mapping(self) -> None:
+        self.assertEqual(wx._zh("Patchy rain nearby"), "局部阵雨")
+        self.assertEqual(wx._zh("Light Rain"), "小雨", "大小写不敏感")
+        self.assertEqual(wx._zh("Sunny"), "晴")
+        self.assertEqual(wx._zh("Unknown desc"), "Unknown desc", "未命中保留原文")
+
+    def test_open_meteo_with_geocoding_label(self) -> None:
+        """地名输入：geocode 后走 Open-Meteo，标题用城市名而非坐标。"""
+        def fake_urlopen(req, timeout=8):
+            if "geocoding-api" in req.full_url:
+                body = json.dumps(self.GEO_SAMPLE).encode("utf-8")
+            else:
+                body = json.dumps(OM_SAMPLE).encode("utf-8")
+            return _FakeResp(body)
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            rows = wx._open_meteo("上海")
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertIn("上海", rows[0]["title"])
+        self.assertNotIn("31.22", rows[0]["title"], "标题不应暴露坐标")
+
+    def test_aqi_snippet(self) -> None:
+        """AQI 字段拼入当前行 snippet（含等级）。"""
+        aqi = {"current": {"pm10": 15.6, "pm2_5": 13.5}}
+
+        def fake_urlopen(req, timeout=8):
+            if "air-quality" in req.full_url:
+                body = json.dumps(aqi).encode("utf-8")
+            else:
+                body = json.dumps(OM_SAMPLE).encode("utf-8")
+            return _FakeResp(body)
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            rows = wx._open_meteo("31.23,121.47")
+        self.assertIn("PM2.5 13.5", rows[0]["snippet"])
+        self.assertIn("优", rows[0]["snippet"], "13.5µg/m³ 应评优")
+
+    def test_aqi_level(self) -> None:
+        self.assertEqual(wx._aqi_level(20), "优")
+        self.assertEqual(wx._aqi_level(50), "良")
+        self.assertEqual(wx._aqi_level(100), "轻度污染")
+        self.assertEqual(wx._aqi_level(200), "重度污染")
+        self.assertEqual(wx._aqi_level(None), "")
+
+    def test_merge_wttr_current_om_forecast(self) -> None:
+        """融合：当前取 wttr（信息全），同日预报取 OM（含降水概率），去重。"""
+        w = [
+            {"title": "上海 当前 26°C 小雨", "url": "https://wttr.in/",
+             "snippet": "体感 29°C", "published_at": "2026-08-08"},
+            {"title": "上海 2026-08-08 24°C~28°C", "url": "https://wttr.in/",
+             "snippet": "小雨", "published_at": "2026-08-08"},
+        ]
+        o = [
+            {"title": "上海 当前 26.3°C 小雨", "url": "https://open-meteo.com/",
+             "snippet": "风速 13km/h", "published_at": "2026-08-08"},
+            {"title": "上海 2026-08-08 24.2°C~30.1°C · 降雨概率 40%",
+             "url": "https://open-meteo.com/", "snippet": "Open-Meteo 预报",
+             "published_at": "2026-08-08"},
+            {"title": "上海 2026-08-09 23.5°C~29°C · 降雨概率 70%",
+             "url": "https://open-meteo.com/", "snippet": "Open-Meteo 预报",
+             "published_at": "2026-08-09"},
+        ]
+        rows = wx._merge(w, o)
+        self.assertEqual(len(rows), 3, "同日预报应去重")
+        self.assertIn("体感", rows[0]["snippet"], "当前天气 wttr 优先")
+        self.assertIn("降雨概率", rows[1]["title"], "预报 OM 优先（含降水概率）")
+        self.assertEqual(rows[1]["published_at"], "2026-08-08")
+        self.assertEqual(rows[2]["published_at"], "2026-08-09")
 
 
 class TestCliEngine(unittest.TestCase):

@@ -66,7 +66,7 @@ CATEGORY_PRIORITY = {
     "japanese": ["local_yandex", "local_bing", "local_duckduckgo"],
     "korean": ["local_bing", "local_duckduckgo"],  # local_google 禁用（反爬强），不引用死引擎
     "reference": ["local_wikipedia", "local_wiktionary", "local_wikiquote"],
-    "vertical": ["local_openstreetmap", "local_imdb", "local_goodreads", "local_ddgs_books"],
+    "vertical": ["local_openstreetmap", "local_imdb", "local_goodreads"],
     "web_general": ["local_bing", "local_brave", "local_yahoo", "local_duckduckgo",
                     "local_mojeek", "local_startpage"],
 }

@@ -87,7 +87,6 @@ engines:
   - local_crossref
   - local_ddgs_images
   - local_ddgs_news
-  - local_ddgs_books
   - local_ddgs_videos
   - local_duckduckgo
   - local_github
@@ -296,7 +295,6 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 - **local-search 超时健壮性（v2.7.5）**：`as_completed` 超时不再整链崩溃——未完成引擎标记 timeout 记入 errors，已完成引擎结果保留（此前 ddgs 慢后端超时会拖垮整个 local_search 聚合）；`_check_cli_available` 结果缓存 60s（`ddgs --help` 冷启动 ~190ms/次不再重复付费）
 - **TF-IDF profile 补全（v2.7.5）**：`aviation_weather` / `cn_ai_news` / `datacite` / `firecrawl` / `fxtwitter` / `sec_edgar` / `train` / `weather` / `zenodo` 9 个引擎补齐代表文档，语义路由不再永久选不中；韩文路由不再引用已禁用的 `local_google`（落 local_bing + local_duckduckgo）
 - **ddgs CLI 失败识别与重试（v2.7.6）**：ddgs 9.14.4 起失败信号（`DDGSException`/`No results`/`ConnectError` 等）在 rc=0 时打到 stdout、输出文件 0 字节，旧逻辑只在 rc≠0 分支检查导致静默吞错（实测 yahoo 间歇丢结果）；现在无论 rc 先识别错误信号，失败/超时自动重试 1 次（yahoo 成功率 ~60%→84%、images ~80%→96%），持续失败返回明确错误而非误导消息
-- **Anna's Archive 电子书引擎（v2.7.6）**：新增 `local_ddgs_books`（ddgs books 子命令），author/publisher/info 拼入 snippet，vertical 类别路由；默认关闭，需用时在 `sub-skills/local-search/config.yaml` 置 `enabled: true`
 - **独立索引补充引擎（v2.7.7）**
 - **多语言与开放数据引擎（v2.7.8）**
 - **小型网络与垂直数据源（v2.7.9）**：新增 9 个免 key 引擎——小型网络域补全 `searchmysite`（人工审核个人站索引）与 `lieu`（webring 专用搜索），与 marginalia/wiby 构成「去商业化探索」四件套（how to/自己搭/原理类查询命中）；实时航班 `opensky`（主要都会区 ADS-B）、电网碳强度 `electricity_maps`、营养成分 `usda`（官方 DEMO_KEY）、双语例句 `tatoeba`（400+ 语言对）、科研数据集 `figshare`、腾讯 K 线 `tencent_kline`（前复权日 K）、`qq_music` 曲库搜索：新增 13 个免 key 引擎——中文政策库（国务院文件带发布日期）、日文三源（CiNii Research 学术/NDL 书目/Hatena 书签）、日文技术社区（Qiita）、韩国判例库（官方公开 demo 账号）、欧陆开放数据（data.gouv/EU ODP）、多语学术（DOAJ 开放获取期刊/HAL 法国仓储/DNB 德语书目）、Europeana 文化遗产、Open-Meteo 全球天气（地名→坐标→当前天气）：新增 `marginalia`（非大厂代理的独立爬虫索引，专挖长尾非商业页面）与 `wiby`（老式手工网页索引）两个免 key JSON 引擎，与主流引擎结果互补；语义路由 profile 已配（长尾/独立/复古类查询命中）

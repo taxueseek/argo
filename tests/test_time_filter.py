@@ -368,38 +368,7 @@ class TestDdgsJsonParse(unittest.TestCase):
             self.assertNotIn(eng, sv3._TIME_CAPABLE_ENGINES)
 
 
-# ── 8. ddgs books 解析 + CLI 失败重试（v2.7.6）────────────────────────────────
-
-class TestDdgsBooksParse(unittest.TestCase):
-    """books（Anna's Archive）JSON：author/publisher/info 拼入 snippet。"""
-
-    @classmethod
-    def setUpClass(cls):
-        sys.path.insert(0, str(SKILL_DIR / "sub-skills" / "local-search"))
-        import search_v3  # noqa: F401
-        cls.search_v3 = search_v3
-
-    def test_books_meta_into_snippet(self):
-        data = [{"title": "Book", "author": "AMZ", "publisher": "2021",
-                 "info": "English [en] · EPUB", "url": "https://a/md5/1",
-                 "thumbnail": "https://c/1.jpg"}]
-        out = self.search_v3._parse_cli_json(data, "local_ddgs_books")
-        self.assertEqual(len(out), 1)
-        self.assertIn("AMZ", out[0]["snippet"])
-        self.assertIn("EPUB", out[0]["snippet"])
-        self.assertEqual(out[0]["thumbnail"], "https://c/1.jpg")
-        self.assertNotIn("published_at", out[0])
-
-    def test_books_no_meta_keeps_plain_snippet(self):
-        data = [{"title": "B2", "url": "https://a/md5/2", "body": "desc"}]
-        out = self.search_v3._parse_cli_json(data, "local_ddgs_books")
-        self.assertEqual(out[0]["snippet"], "desc")
-
-    def test_books_timelimit_empty(self):
-        """books 子命令无 -t 选项：时间窗不追加 -t（防止 crash）。"""
-        sv3 = self.search_v3
-        self.assertEqual(sv3._DDGS_TIMELIMITS["books"], set())
-
+# ── 8. ddgs CLI 失败重试（v2.7.6）─────────────────────────────────────────────
 
 class TestCliEngineRetry(unittest.TestCase):
     """_run_cli_engine：rc=0 吞错识别 + 失败重试 1 次（9.14.4 行为）。"""
@@ -494,14 +463,6 @@ class TestCliEngineRetry(unittest.TestCase):
         self.assertEqual(state["n"], 2)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "AfterTimeout")
-
-    def test_books_engine_declared_disabled_by_default(self):
-        """books 引擎默认关闭（enabled: false），启用后 health 可探测。"""
-        sv3 = self.search_v3
-        spec = sv3.get_registry().get_engine("local_ddgs_books")
-        self.assertIsNotNone(spec)
-        self.assertFalse(spec.get("enabled"))
-        self.assertEqual(spec["cli_args"][0], "books")
 
     def test_text_parse_path_returns_flat_list(self):
         """无 -o 文本解析路径：返回扁平 list，不嵌套元组（回归：重试版曾

@@ -620,14 +620,13 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any]) -> list[dict[
 
 # ── 单个引擎执行 ─────────────────────────────────────────────────────────────────
 
-# ddgs 各子命令支持的 timelimit 取值：videos 仅 d/w/m（无 y），books 无 -t。
+# ddgs 各子命令支持的 timelimit 取值：videos 仅 d/w/m（无 y）。
 # 传 y 会直接 crash（Invalid value for '-t'），必须按下推子命令过滤。
 _DDGS_TIMELIMITS: dict[str, set[str]] = {
     "text": {"d", "w", "m", "y"},
     "news": {"d", "w", "m", "y"},
     "images": {"d", "w", "m", "y"},
     "videos": {"d", "w", "m"},
-    "books": set(),
 }
 
 # ddgs 失败信号标记：9.14.4 起这些错误在 rc=0 时打到 stdout（吞错根源，
@@ -845,7 +844,7 @@ def _parse_cli_json(data: Any, engine_name: str) -> list[dict[str, Any]]:
         date = item.get("date")
         if date:
             r["published_at"] = str(date)[:64]
-        # books（Anna's Archive）：author/publisher/info 拼入 snippet，
+        # 元数据增强：author/publisher/info 拼入 snippet，
         # 否则这些字段会被通用映射丢弃。
         meta = " · ".join(
             str(item[k]) for k in ("author", "publisher", "info")
