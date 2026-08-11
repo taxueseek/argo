@@ -3,6 +3,61 @@
 **版本**：2.7.3
 **定位**：在 2.7.2 基础上，新增「实时索引」数据源引擎，并把「发布时间维度 + 时间窗过滤」做成 argo 通用能力；同时收编外部索引 CLI 的工程侧形态（结构化输出、声明式接入）。
 
+> **后续更新（2026-08-10）**：本版本号下追加发布「引擎激活 + 体验修复」批次——引擎层 HttpClient 接入、TF-IDF 强语义注入激活 25 个垂直引擎、70 域 TTL 全覆盖、垂直源中英双语覆盖、快讯触发词修复、百科条目页兜底等，详见文末「本轮追加」。
+
+---
+
+## 本轮追加（2026-08-10：引擎激活 + 体验修复）
+
+### A1. 引擎层 HttpClient 接入：UA 敏感引擎不再超时空转
+
+**以前**：引擎请求走裸 urllib，UA 固定。arxiv 这类对 UA 敏感的源间歇性 SSL 失败，实测 5s 超时后 0 条结果。
+
+**现在**：HTTP/HTML 引擎 GET 请求统一走 `http_client` 层——UA 轮换 + Cookie 积累 + 429/503 Retry-After 尊重 + 指数退避重试 + 重定向跟随（修复了 `follow_redirects` 无效死参数）。实测 arxiv 从「5s 超时空返回」变为「2s 内 10 条有效结果」；devto 等间歇慢源稳定在 1.3-1.6s。
+
+**回退开关**：`ARGO_ENGINE_HTTP_CLIENT=0` 整体回退 urllib（灰度/诊断用）。
+
+### A2. TF-IDF 强语义注入：25 个垂直引擎真正用起来了
+
+**以前**：marginalia / wiby / searchmysite / open_meteo / usda / gov_policy / cnii / ndl / qiita 等 25 个垂直引擎有 TF-IDF 文档但正则域命中后永远选不中（注入只对 catch-all 域生效），只能 `--engine` 强制指定。
+
+**现在**：TF-IDF 高分推荐（≥0.6）放宽到所有域，注入位置在 primary 扶正之后（串行 early-stop 下真正执行）。实测「独立博客 长尾」→ marginalia（3.7s 4 条）、「营养成分 热量」→ usda、「国务院 政策」→ gov_policy、「日本 学术论文」→ cnii、「天气 气温 预报」→ open_meteo。通用引擎（byted/bocha/octen 等）黑名单跳过，域主源保留备位。
+
+### A3. env 占位缺失过滤：github 引擎从 401 恢复
+
+**以前**：未配置 `{GITHUB_TOKEN}` 时把字面量 `Authorization: token {GITHUB_TOKEN}` 发给 GitHub → 401，github 引擎永久不可用。
+
+**现在**：env 缺失替换为空 + 过滤空/认证前缀残留头（`token ` / `Bearer ` 后无凭据）。实测 github 无 token 时匿名 API 0.55s 返回 3 条结果；bocha/byted/tavily/zhihu 等 10 个用 env key 的引擎同样受益。
+
+### A4. 70 域 TTL 全覆盖：实时数据不再缓存 1 小时
+
+**以前**：48/70 个域没有 TTL 映射，全部落到默认 3600s。「今日金价」卡片缓存 1 小时后过期 55 分钟，财联社电报 / 同花顺热点同样。
+
+**现在**：全部域按时效归类——modal_card（油价/金价/车票）/ 快讯 / 天气 900s，行情/宏观 300s，学术稳定型 7200s，百科/法律/地理 86400s。
+
+### A5. 垂直源中英双语覆盖：worldbank / eurostat 英文查询命中
+
+**以前**：国家映射和指标关键词纯中文。实测「China GDP」「US inflation」「Japan population」全部 0 条。
+
+**现在**：国家映射补英文别名 + 缩写（含 us/uk 等短别名词边界匹配防误伤），指标词补英文（population / unemployment / inflation / gdp growth 等）。实测 China GDP 19.5 万亿美元、Japan population 1.23 亿人、US inflation +2.95% 全部命中。
+
+### A6. 快讯类引擎触发词放行 + 百科条目页兜底
+
+**以前**：「快讯」「美股」查询被当关键词过滤，快讯标题里没有这两个字 → 全量榜单被滤空返回 0 条；萌娘百科等搜索直接跳转条目页时列表选择器不命中 → 恒空。
+
+**现在**：纯触发词（快讯/美股/资讯等白名单）放行全量榜单，具体主题（美联储/AI）才过滤且拉取量放大 3×；HTML 引擎容器未命中时兜底提取 `<title>` + 正文首段 + canonical URL 返回单条。实测「快讯」3 条、「融资」1 条过滤命中、moegirl 初音未来 / 东方Project 各 1 条。
+
+### A7. 其余修复
+
+- 熔断 empty 语义：查询无结果不再累计 opens，易空引擎不会被误判为持续故障而静默禁用
+- 国际引擎中文查询 URL 编码修复（18 处专用 builder，cnii/ndl/qq_music 等中文查询全部恢复）
+- open_meteo geocode 加 language=zh：中文地名「北京」从恒空恢复为 2 条
+- europeana 禁用（官方 demo key api2demo 已失效 401，路由不再选中空转）
+- 查询改写去重（「Python async Python 编程语言」残留修复）、research 顶层 query 保持原查询
+- 慢源超时收紧（fast/auto 非 deep 6s）、wave-2 并行累计足够即提前终止、自适应 TTL 键匹配修复
+- 抓取链升级（crawl/extract 走 fetch_v3 降级链）、fetch_page_v3 raw 模式绕过缓存取完整 HTML
+- 版本号统一 2.7.3、单一真源文档修正（engines/specs/ 外置目录说明）
+
 ---
 
 ## 这次更新有什么

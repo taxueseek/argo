@@ -302,6 +302,10 @@ python3 scripts/search.py --list-engines
 - **登录态专业搜索**：ego-search 子技能，登录墙正文 / JS 渲染页 / 登录站点接口直取（默认关闭，见上节）
 - **垂直域门禁**：空结果恢复时不把 pypi / npm / 快讯等无关源「串」进影视、体育查询
 - **日常更快、研究更全**：`engine_policy` 分层——日常 combo 收紧，deep / research 再放开长尾源
+- **引擎层 HttpClient 接入（v2.7.3 追加）**：HTTP/HTML 引擎 GET 统一走 UA 轮换 + 重试 + 重定向跟随层，arxiv 类 UA 敏感引擎从 5s 超时空返回变为 2s 内 10 条有效结果；`ARGO_ENGINE_HTTP_CLIENT=0` 回退 urllib
+- **TF-IDF 强语义注入（v2.7.3 追加）**：marginalia / open_meteo / usda / gov_policy / cnii 等 25 个垂直引擎不再被正则域压制——「独立博客 长尾」路由到 marginalia、「营养成分 热量」路由到 usda、「国务院 政策」路由到 gov_policy
+- **70 域 TTL 全覆盖（v2.7.3 追加）**：实时卡片/快讯/行情缓存 5-15 分钟（此前 1 小时），学术稳定型放宽到 2 小时
+- **垂直源中英双语（v2.7.3 追加）**：worldbank / eurostat 英文国家与指标名（China GDP / US inflation / Japan population 实测命中）；快讯类引擎触发词放行全量榜单；百科条目页直接命中兜底
 
 ---
 
@@ -526,6 +530,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.7.3** | **本轮修复 + 引擎激活**：引擎层 HttpClient 接入（UA 轮换 / 重试 / 重定向跟随，arxiv 从 5s 超时空返回变为 2s 内 10 条有效结果）；TF-IDF 强语义注入激活 25 个垂直引擎（marginalia / open_meteo / usda / gov_policy / cnii 等，此前有 profile 但永远选不中）；env 占位缺失过滤（github 无 token 从 401 恢复匿名 API）；70 域 TTL 全覆盖（金价/快讯/行情缓存从 1 小时缩短到 5-15 分钟）；垂直源中英双语覆盖（worldbank / eurostat 英文国家与指标名，实测 China GDP / US inflation / Japan population 全部命中）；快讯类引擎触发词放行（「快讯」不再被当关键词滤空）；百科条目页直接命中兜底（moegirl 等搜索跳转条目页不再空结果）；熔断 empty 语义修复（查询无结果不误判引擎故障）；国际引擎中文查询 URL 编码修复（18 处）；单一真源文档修正（engines/specs/ 外置目录）。详见 [发布说明](docs/RELEASE_NOTES_v2.7.3.md) |
 | **v2.7.2** | **登录态专业搜索**：新增 ego-search 子技能（默认关闭，开启方法与依赖见上「登录态专业搜索」节）；搜索兜底 / 多意图路由 / 统一健康视图；日韩文查询不再混入中文引擎、显式语言指定生效；MCP 服务拆三模块；具备安全防护（登录态结果与公共缓存隔离、URL 安全检查）。详见 [发布说明](docs/RELEASE_NOTES_v2.7.2.md) |
 | **v2.7.1** | **安全加固 + 路由修复**：SSRF 防护（URL 白名单 + IP 段检查）；路由健康状态语义漂移根因修复（只对 `local_*` 做健康判定）；深度研究 local_first 浪费修复；配置清理（单一真源）。详见 [发布说明](docs/RELEASE_NOTES_v2.7.1.md) |
 | **v2.7.0** | **垂直结构化模态卡**：内建 `bocha` / `bocha_ai` 原生引擎，`modal_card` 域统一识别火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机 / 汽车 / 挂号等实时卡片；`bocha` web 解析缺陷修复。详见 [发布说明](docs/RELEASE_NOTES_v2.7.0.md) |
