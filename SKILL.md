@@ -480,6 +480,88 @@ Exa 是基于向量 embedding 的语义搜索引擎，核心能力：
 通过搜狗微信搜索（weixin.sogou.com）直接抓取公众号文章，无需登录、无需 API key。
 返回字段：`title`、`url`、`snippet`、`account`（公众号名）
 
+> 注意：搜狗微信搜索受验证码限制（`weixin.sogou.com/link` 跳转常被拦截），此引擎
+> 只能拿到标题列表；需要公众号全文时用下面的 `argo article`。
+
+### 微信公众号文章全文抓取（`argo article`，v2.7.3+）
+
+按 URL 抓取微信公众号文章全文，弥补 `wechat_sogou` 只能搜标题、且跳转被验证码拦截的缺口。
+
+```bash
+# 纯文本输出（标题/作者/正文/图片列表）
+argo article "https://mp.weixin.qq.com/s/XXXX"
+
+# JSON 输出（供 Agent 消费：title/author/publish_time/char_count/image_count/images/content）
+argo article "https://mp.weixin.qq.com/s/XXXX" --json
+```
+
+实现原理：公众号 robots.txt 禁爬，但文章页对真实浏览器开放。`scripts/article.py`
+用手机 UA 直连（urllib 不遵守 robots），解析 `js_content` 节点提取正文纯文本与
+`mmbiz.qpic.cn` 图片 URL 列表。实测同一文章页连续抓取 3/3 成功，单篇约 2-3 秒。
+
+失败处理：返回 `{"ok": false, "error": ...}`；遇到微信「环境异常」反爬页会明确报错，
+稍后重试即可（触发频率低）。
+
+与 `wechat_sogou` 的分工：搜狗引擎负责「按关键词发现公众号文章标题」，
+`argo article` 负责「按 URL 取全文」，两者组合覆盖公众号检索全链路。
+
+### 招聘岗位多平台聚合搜索（`argo job`，v2.7.3+，v2 于 2026-08-11 升级）
+
+求职搜索 = 检索（招聘平台）+ 判定（地区）+ 呈现（去重排序），脚本只做这三件事。
+猎聘/智联/BOSS 直聘等平台反爬强，免费 HTML 引擎抓不动；用 AI 搜索 API 检索
+（均走环境变量 key）：
+
+```bash
+argo job "工艺工程师" --city 成都                  # 严格：只留成都岗位
+argo job "工艺工程师" --city 昆山 --engine exa     # 县级地区
+argo job "会计" --city 新加坡                     # 海外：自动启用免 key 国际源
+argo job "电工" --city 苏州 --loose                # 宽松：异地保留但命中置顶
+argo job "焊工" --city 上海 --platforms zhipin,liepin
+argo job "remote engineer" --engine free          # 仅免 key 国际源（远程岗位）
+```
+
+地区识别**完全数据驱动，零硬编码**（技能可安全分享）：
+- `data/regions_cn.json`：全国 31 省 / 342 地市 / 3056 区县（民政部公开区划数据）
+- `data/countries.json`：主要国家与城市词表（中英文）
+- 任意省/市/县/海外国家/城市直接作 `--city`：省级展开全省地市+区县，
+  地市级展开该市+区县，区县级关联所属市和省；海外国家展开主要城市
+
+默认行为（严格模式）三级判定：标题/URL 命中（L1）→ 摘要头部命中（L2）→ 剔除；
+政府人社局源（hrss/rsj/rlsbj 域名）信任不误剔；`--loose` 切换宽松（全部保留，命中置顶）。
+v2 修复 v1 假阳性：摘要尾部（公司简介/福利文本）含地区词不再误判命中，
+非白名单 URL 一律剔除，资讯/攻略页（工资待遇/就业前景）与「职位已关闭」岗位剔除，
+距今超 365 天标记 `[过期]` 垫底。实测 2026-08-11 五城市严格模式全部结果
+L1/L2 命中（昆山 54 条 / 上海 49 条 / 深圳 57 条 / 北京 56 条 / 成都 50 条）。
+
+后端（v2 全量启用，国内 5 API 后端 + 海外免 key 源）：
+
+| 后端 | 域名过滤 | 特点 |
+|------|---------|------|
+| exa（EXA_API_KEY） | includeDomains 严格 | 单请求覆盖全部白名单，语义准 |
+| tavily（TAVILY_API_KEY） | include_domains 严格 + days=90 | 时效过滤实测生效 |
+| byted（WEB_SEARCH_API_KEY） | site: 逐平台 + URL 后置校验 | 混入非白名单域名由校验剔除 |
+| bocha（BOCHA_API_KEY） | 宽查询 + 白名单校验 | 中文站点发现强（鱼泡/人社局/卓博） |
+| octen（OCTEN_API_KEY） | 宽查询 + 白名单校验 | 高速语义搜索 |
+| remotive / himalayas / jobicy / arbeitnow / greenhouse | 免 key 公开 JSON | 远程/海外岗位，海外城市自动启用 |
+
+平台白名单：核心 6 平台（BOSS/猎聘/智联/前程无忧/597/今日招聘）+ 扩展域
+（卓博 jobcn、鱼泡 yupao、中华英才 chinahr、智通 job5156、58 同城、国聘 iguopin、
+新职业 24365 ncss、校园就业联盟 91job、JobsDB、JobStreet、苏州人社局 hrss.suzhou.gov.cn），
+政府人社局域名（hrss/rsj/rlsbj 开头）通用识别。
+
+常用参数：`--engine {all,free,exa,tavily,byted,bocha,octen,remotive,...}`
+（默认 all = 五个 API 后端并行，海外城市自动加 free 免 key 源）、
+`-n` 每后端条数（默认 5）、`--platforms zhipin,liepin,zhaopin,51job,597,jrzp`、
+`--loose`、`--json`（默认文本输出）。地区索引一次性构建，查表 O(1)。
+测试：`tests/test_job.py`（29 项，含三城市 live 精确率回归）。
+
+### Python 解释器选择（v2.7.3+）
+
+macOS 默认 `python3` 指向系统 3.9（`/usr/bin/python3` 在 PATH 靠前），
+而 argo 脚本使用 3.10+ 语法（`X | None` 联合类型）。`bin/argo` 启动时自动探测：
+`ARGO_PYTHON` 环境变量优先 → `python3.14/3.13/3.12/3.11/3.10` 依次验证
+yaml/requests 依赖 → 兜底当前解释器。如需强制指定：`ARGO_PYTHON=/opt/homebrew/bin/python3.14 argo ...`
+
 ### Hacker News 搜索（v2.3 新增）
 
 通过 Algolia API 搜索 Hacker News，覆盖科技新闻和讨论。

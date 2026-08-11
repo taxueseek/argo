@@ -1,9 +1,39 @@
 #!/usr/bin/env python3
 """argo — unified search CLI. Usage: argo <subcommand> [args...]"""
-import sys, os, json, subprocess
+import sys, os, json, subprocess, shutil
 
-ARGO_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ARGO_HOME = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 SCRIPTS = os.path.join(ARGO_HOME, "scripts")
+
+
+def _pick_python() -> str:
+    """选择可用解释器：ARGO_PYTHON 优先，其次高版本 python3.x，兜底当前解释器。
+
+    背景：macOS 默认 /usr/bin/python3 是 3.9，而 argo 脚本用了 3.10+ 语法
+    （如 `X | None` 联合类型），3.9 会报 TypeError。逐个探测版本并验证
+    yaml/requests 依赖后选第一个可用的。
+    """
+    cands = []
+    env_py = os.environ.get("ARGO_PYTHON", "").strip()
+    if env_py:
+        cands.append(env_py)
+    cands += ["python3.14", "python3.13", "python3.12",
+              "python3.11", "python3.10", sys.executable]
+    for cand in cands:
+        if not cand:
+            continue
+        p = shutil.which(cand) if not os.path.isabs(cand) else cand
+        if not p:
+            continue
+        try:
+            r = subprocess.run(
+                [p, "-c", "import yaml, requests"], capture_output=True,
+                timeout=10)
+            if r.returncode == 0:
+                return p
+        except Exception:
+            pass
+    return sys.executable
 
 
 def _engine_count() -> int:
@@ -27,6 +57,8 @@ Usage:
   argo clarify   "query"          意图消歧（歧义检测+意图分类+路由建议）
   argo crawl     "url"            站点爬取（sitemap/BFS，多页抓取）
   argo extract   "url"            结构化提取（表格/Meta/JSON-LD）
+  argo article   "url"            微信公众号文章全文抓取（标题/正文/图片）
+  argo job       "query"          招聘岗位多平台聚合（BOSS/猎聘/智联/前程无忧/597/今日招聘）
 
 Common flags: --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
 """
@@ -38,6 +70,7 @@ def main():
 
     sub = sys.argv[1]
     rest = sys.argv[2:]
+    py = _pick_python()
 
     scripts = {
         "search":   ("search.py",   ["--json"]),
@@ -46,6 +79,8 @@ def main():
         "clarify":  ("clarify.py",  ["--json"]),
         "crawl":    ("crawl.py",    []),
         "extract":  ("extract.py",  []),
+        "article":  ("article.py",  ["--json"]),
+        "job":      ("job.py",      []),
     }
 
     if sub not in scripts:
@@ -64,14 +99,14 @@ def main():
         if not stdin_has_data and query:
             # 自动搜索 → 管道 → evidence
             search_path = os.path.join(SCRIPTS, "search.py")
-            search_cmd = [sys.executable, search_path, query, "--json",
+            search_cmd = [py, search_path, query, "--json",
                           "--mode", "fast", "--max-results", "10"]
             result = subprocess.run(search_cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 print(result.stderr, file=sys.stderr)
                 sys.exit(result.returncode)
 
-            evidence_cmd = [sys.executable, path, query, "--stdin", "--json"]
+            evidence_cmd = [py, path, query, "--stdin", "--json"]
             proc = subprocess.run(evidence_cmd, input=result.stdout,
                                   capture_output=True, text=True, timeout=60)
             print(proc.stdout, end="")
@@ -81,10 +116,9 @@ def main():
 
         elif stdin_has_data:
             # 管道模式：stdin → evidence
-            # 提取 query
             evidence_args = defaults + rest
-            cmd = [sys.executable, path] + evidence_args
-            os.execv(sys.executable, cmd)
+            cmd = [py, path] + evidence_args
+            os.execv(py, cmd)
         else:
             print("evidence 需要查询词。用法：argo evidence \"query\"", file=sys.stderr)
             sys.exit(1)
@@ -93,8 +127,8 @@ def main():
     if "--explain" in rest and "--json" in defaults:
         defaults.remove("--json")
 
-    cmd = [sys.executable, path] + defaults + rest
-    os.execv(sys.executable, cmd)
+    cmd = [py, path] + defaults + rest
+    os.execv(py, cmd)
 
 if __name__ == "__main__":
     main()
