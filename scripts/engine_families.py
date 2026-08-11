@@ -237,6 +237,7 @@ FAMILY_LABELS: dict[str, str] = {
     "sports": "体育",
     "archive": "归档/历史",
     "structured_card": "垂直结构化模态卡",
+    "job_career": "求职招聘",
     "misc_vertical": "其他垂直",
 }
 

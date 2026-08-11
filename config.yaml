@@ -269,7 +269,7 @@ domains:
   - (?i)(天気|気温|温度|予報|雨|雪|何度)
   - (?i)(날씨|기온|온도|예보|비|눈|몇\s*도)
   primary: qweather
-- desc: 垂直结构化模态卡（统一语义识别：火车票/油价/贵金属/万年历/星座/手机/汽车/挂号等）
+- desc: 垂直结构化模态卡（统一语义识别：火车票/油价/贵金属/万年历/星座/手机/汽车/挂号/薪资等）
   engines_combo:
   - bocha_ai
   - bocha
@@ -286,6 +286,8 @@ domains:
   - (?i)(手机参数|手机配置|手机对比|手机报价|新款手机|手机型号)
   - (?i)(汽车报价|车型价格|落地价|汽车行情|新车价格|汽车参数)
   - (?i)(挂号|医院查询|医院预约|看病|急诊|医生出诊|门诊时间|三甲医院)
+  - (?i)(薪资|工资|薪酬|薪水|月薪|年薪|日薪|时薪|salary|pay|wage|income|compensation|remuneration)
+  - (?i)(多少钱一个月|收入水平|行业薪资|平均工资|median salary|average pay|薪资水平|薪资范围|薪资行情)
   primary: bocha_ai
 - desc: 财经快讯（金十数据）
   engines_combo:
@@ -908,8 +910,19 @@ domains:
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   primary: zhihu
   quote: false
-
-
+- desc: 海外职位搜索（Adzuna 聚合，16 国在招岗位；国内岗位请用 `argo job`）
+  engines_combo:
+  - adzuna
+  - anysearch
+  fallback: anysearch
+  name: job_search
+  parallel: false
+  patterns:
+  - (?i)(海外工作|出国工作|国外工作|海外求职|海外招聘|去国外工作)
+  - (?i)(job opening|job posting|hiring|vacancy|vacancies|careers?|join our team)
+  - (?i)(we are hiring|position available|apply now)
+  - (?i)(remote job|work from home|wfh job|freelance.*project|freelance.*work)
+  primary: adzuna
 
 engines:
   gdelt:

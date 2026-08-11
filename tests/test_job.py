@@ -6,6 +6,7 @@
 """
 import os
 import sys
+from datetime import date, timedelta
 
 import pytest
 
@@ -141,6 +142,26 @@ class TestNorm:
         assert job._norm({"title": "t", "url": "https://m.qcc.com/jobdetail/1", "snippet": ""}) is None
         assert job._norm({"title": "t", "url": "https://jy.scu.edu.cn/job/1", "snippet": ""}) is None
 
+    def test_remoteok_uppercase_domain(self):
+        """remoteOK.com 大写域名（实测）大小写不敏感匹配。"""
+        r = job._norm({"title": "t", "url": "https://remoteOK.com/remote-jobs/x", "snippet": ""})
+        assert r is not None and r["platform"] == "RemoteOK"
+
+    def test_trusted_skips_whitelist(self):
+        """trusted 直连源（SimplifyJobs/JobSpy/mcp-jobs）跳过白名单校验。"""
+        r = job._norm({"title": "t", "url": "https://job-boards.greenhouse.io/captivation/jobs/1",
+                       "snippet": "", "trusted": True, "_platform": "SimplifyJobs"})
+        assert r is not None and r["platform"] == "SimplifyJobs"
+
+    def test_new_domains_2026(self):
+        """v4 新白名单：军队人才网/教育部公招/人社部（实测可达）。"""
+        for url, label in [
+                ("https://81rc.81.cn/job/1", "军队人才网"),
+                ("https://jybzp.chsi.com.cn/zp/1", "教育部直属单位公招"),
+                ("https://www.mohrss.gov.cn/x/1", "人社部事业单位招聘")]:
+            r = job._norm({"title": "t", "url": url, "snippet": ""})
+            assert r is not None and r["platform"] == label
+
     def test_date_extracted(self):
         r = job._norm({"title": "t", "url": "https://www.zhipin.com/job_detail/x",
                        "snippet": "发布时间：2026-08-01 岗位职责"})
@@ -160,10 +181,37 @@ class TestFreshness:
     def test_no_date(self):
         assert job.extract_date({"snippet": "无日期"}) == ""
 
+    def test_ts2date(self):
+        """unix 时间戳 → 日期；非时间戳原样截断。"""
+        assert job._ts2date("1750000000") == "2025-06-15"
+        assert job._ts2date("not-a-ts") == "not-a-ts"
+
     def test_stale(self):
         assert job.is_stale("2020-01-01") is True
         assert job.is_stale("2026-08-01") is False
         assert job.is_stale("") is False
+
+
+# ── SimplifyJobs 解析（v4 聚合源）───────────────────────────────────────
+
+class TestSimplify:
+    ROW = ('<tr><td>Company A</td><td><a href="https://x.com/job/1">Engineer Role</a></td>'
+           '<td>Remote</td><td><a href="https://x.com/job/1">Apply</a></td><td>Sep 01, 2025</td></tr>')
+
+    def test_row_parse(self):
+        row = job._simplify_row(job._SIMPLIFY_TD.findall(self.ROW))
+        assert row is not None
+        assert row["company"] == "Company A"
+        assert row["url"] == "https://x.com/job/1"
+        assert row["date"] == "2025-09-01"
+
+    def test_relative_date(self):
+        assert job._simplify_date("0d") == date.today().isoformat()
+        assert job._simplify_date("30d") == (date.today() - timedelta(days=30)).isoformat()
+
+    def test_empty_row_skipped(self):
+        assert job._simplify_row([]) is None
+        assert job._simplify_row(["-", "-", "-", "-", "-"]) is None
 
 
 # ── 结构化字段 ─────────────────────────────────────────────────────────

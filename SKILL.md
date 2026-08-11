@@ -560,6 +560,30 @@ Ashby ATS（notion/openai 等）免 key 返回结构化岗位。
 结构化字段（薪资/学历/经验/公司）从标题+摘要提取，多平台同岗位按
 「标题+公司」指纹去重。测试：`tests/test_job.py`（40 项，含三城市 live 回归）。
 
+### 招聘意图路由与 Adzuna 引擎（v2.7.3+）
+
+通用搜索层面新增招聘垂直能力，与 `argo job` 互补：`argo job` 主攻国内平台
+（BOSS/猎聘/智联等），Adzuna 引擎覆盖海外 16 国聚合职位。
+
+**触发方式**：查询含招聘关键词（招聘/找工作/求职/在招/诚聘/hiring/vacancy/careers/
+remote job 等）自动路由到 `job_search` 域，调用 Adzuna + anysearch；
+查询含薪资关键词（薪资/工资/薪酬/salary/pay/wage 等）自动路由到 `modal_card` 域，
+Adzuna 作为模态卡后端参与。
+
+**Adzuna 引擎**（`engines/specs/adzuna.yaml`，`scripts/adzuna.py`）：
+- 数据源：Adzuna REST API（16 国：GB/US/CA/AU/DE/FR/NL/BE/IE/AT/CH/ZA/BR/IN/RU/PL）
+- 能力：按关键词+国家搜索在招岗位，返回标题/公司/薪资/地点/描述/URL
+- 注册：https://developer.adzuna.com/signup（免费，获取 app_id + app_key）
+- 环境变量：`ARGO_ADZUNA_APP_ID` + `ARGO_ADZUNA_APP_KEY`
+- 未设置环境变量时自动禁用，不影响其他引擎
+
+```bash
+export ARGO_ADZUNA_APP_ID=xxx ARGO_ADZUNA_APP_KEY=yyy
+argo search "software engineer" --engine adzuna --json  # 直接调用
+argo search "hiring designer"                           # 自动路由到 adzuna
+argo search "前端工程师 薪资"                             # 模态卡路由含 adzuna
+```
+
 ### Python 解释器选择（v2.7.3+）
 
 macOS 默认 `python3` 指向系统 3.9（`/usr/bin/python3` 在 PATH 靠前），

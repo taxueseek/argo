@@ -27,9 +27,24 @@ v3（2026-08-11）：
   8. 增量监控：--watch 存快照至 data/jobs/，二次运行对比输出新上线/已下架
   9. 指纹去重：标题+公司指纹替代纯 URL 去重（多平台同岗位合并）
  10. 白名单加北京高校毕业生就业信息网（bysjy.com.cn，实测 200）
+
+v4（2026-08-11）：数据源扩容（一/二/四类，全部实测可用）
+ 11. 免 key ATS 直连源：Lever / Recruitee / RemoteOK（实测 200 可用）。
+     SmartRecruiters、WorkingNomads 匿名接口 2026-08 实测已失效
+     （返回空 content / 403 需鉴权），归入付费档不接入
+ 12. 聚合源：SimplifyJobs（GitHub 每日更新 HTML 表格，SWE/PM/DS 岗）；
+     JobSpy 可选后端（LinkedIn/Indeed/ZipRecruiter，Python 3.10+，
+     pip install 'git+https://github.com/speedyapply/JobSpy.git'，PyPI 同名是假包）；
+     mcp-jobs 可选后端（猎聘/BOSS/智联，首次自动 npm install 到
+     ~/.cache/argo-mcpjobs 并 node dist/mcp.js 启动，MCP stdio 协议；
+     npm 包无 bin 入口，README 的 npx 方式不可用）
+ 13. 白名单扩展：军队人才网（81rc.81.cn）、高校人才网（gaoxiaojob.com）、
+     教育部直属单位公招（jybzp.chsi.com.cn）、人社部事业单位（mohrss.gov.cn）
+ 14. trusted 机制：直连源 URL 跳过白名单后置校验（LinkedIn/Simplify 等
+     域名不放行全局白名单，仅放行直连结果）
 """
-import argparse, json, os, re, sys, threading, urllib.request
-from datetime import date, timedelta
+import argparse, json, os, re, subprocess, sys, threading, time, urllib.request
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote
 from typing import Optional
 
@@ -44,7 +59,9 @@ EXTRA = [("jobcn.com", "卓博人才网"), ("yupao.com", "鱼泡直聘"), ("chin
          ("ncss.cn", "新职业24365"), ("91job.org.cn", "校园就业联盟"),
          ("yingjiesheng.com", "应届生求职网"), ("bysjy.com.cn", "北京高校毕业生就业信息网"),
          ("jobsdb.com", "JobsDB"), ("jobstreet.com", "JobStreet"),
-         ("hrss.suzhou.gov.cn", "苏州人社局")]
+         ("hrss.suzhou.gov.cn", "苏州人社局"),
+         ("81rc.81.cn", "军队人才网"), ("gaoxiaojob.com", "高校人才网"),
+         ("jybzp.chsi.com.cn", "教育部直属单位公招"), ("mohrss.gov.cn", "人社部事业单位招聘")]
 DOMAINS = [d for d, _ in PLATFORMS] + [d for d, _ in EXTRA]
 ALL_LABELS = dict(PLATFORMS + EXTRA)
 # 免 key 国际源域名（自返回 URL，天然可信）
@@ -53,7 +70,9 @@ FREE_DOMAINS = [("remotive.com", "Remotive"), ("remote.co", "Remote.co"),
                 ("arbeitnow.com", "Arbeitnow"),
                 ("boards-api.greenhouse.io", "Greenhouse"),
                 ("boards.greenhouse.io", "Greenhouse"),
-                ("jobs.ashbyhq.com", "Ashby")]
+                ("jobs.ashbyhq.com", "Ashby"),
+                ("jobs.lever.co", "Lever"), ("api.lever.co", "Lever"),
+                ("remoteok.com", "RemoteOK")]
 # 政府人社局域名（地区判定强信任：政府站岗位无异地混淆问题）
 GOV_RE = re.compile(r"(hrss|rsj|rlsbj|srs)\.[\w-]+\.gov\.cn")
 GOV_LABEL = "人社局/政府"
@@ -158,8 +177,9 @@ def judge(item: dict, words: list) -> tuple:
     if not words:
         return 1, "无地区约束"
     url = item.get("url", "")
-    title = item.get("title", "")
-    snippet = item.get("snippet", "")
+    title = (item.get("title", "") or "").lower()
+    snippet = (item.get("snippet", "") or "").lower()
+    words = [w.lower() for w in words]
     is_gov = bool(GOV_RE.search(url))
     tl = any(w in title for w in words)
     sh = any(w in snippet[:120] for w in words)
@@ -303,19 +323,28 @@ def _get(url: str, timeout: int = 20) -> dict:
 
 
 def _norm(item: dict) -> dict:
-    """统一结果项字段，并做白名单后置校验（platform 空 → 剔除）。"""
+    """统一结果项字段，并做白名单后置校验（platform 空 → 剔除）。
+
+    trusted=True：直连源（JobSpy/SimplifyJobs/mcp-jobs）自返回 URL，
+    跳过白名单校验，platform 用后端自带 _platform 标签。
+    """
     url = item.get("url", "")
+    if item.get("trusted"):
+        item["platform"] = item.get("_platform") or "直连源"
+        item["date"] = extract_date(item)
+        return item
     platform = ""
+    url_l = url.lower()  # 域名大小写不敏感（remoteOK.com 实测）
     for d, label in ALL_LABELS.items():
-        if d in url:
+        if d in url_l:
             platform = label
             break
     if not platform:
         for d, label in FREE_DOMAINS:
-            if d in url:
+            if d in url_l:
                 platform = label
                 break
-    if not platform and not GOV_RE.search(url):
+    if not platform and not GOV_RE.search(url_l):
         return None  # 非白名单 URL：剔除
     if not platform:
         platform = GOV_LABEL
@@ -440,16 +469,18 @@ def _search_arbeitnow(q: str, n: int) -> list:
 
 
 def _search_greenhouse(q: str, n: int) -> list:
-    """Greenhouse ATS 公司直招：遍历内置 boards，标题命中即收。"""
-    out = []
+    """Greenhouse ATS 公司直招：boards 并行请求，标题命中即收。"""
+    out, lock = [], threading.Lock()
     ql = q.lower()
-    for board in GREENHOUSE_BOARDS:
+    qw = [w.lower() for w in ql.split()]
+
+    def _one(board: str):
         try:
             d = _get(
                 f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs?per_page=30&content=true",
-                timeout=10)
+                timeout=8)
         except Exception:
-            continue
+            return
         for j in d.get("jobs", []):
             loc = ""
             lo = j.get("location") or {}
@@ -458,34 +489,327 @@ def _search_greenhouse(q: str, n: int) -> list:
             elif isinstance(lo, str):
                 loc = lo
             hay = (j.get("title", "") + " " + loc).lower()
-            if ql in hay or any(w.lower() in hay for w in ql.split()):
-                out.append({"title": j.get("title", ""), "url": j.get("absolute_url", ""),
-                            "snippet": loc[:200], "location": loc, "date": ""})
+            if ql in hay or any(w in hay for w in qw):
+                with lock:
+                    out.append({"title": j.get("title", ""), "url": j.get("absolute_url", ""),
+                                "snippet": loc[:200], "location": loc, "date": ""})
+
+    threads = [threading.Thread(target=_one, args=(b,)) for b in GREENHOUSE_BOARDS]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return out[: n * 3]
+
+
+def _search_ashby(q: str, n: int) -> list:
+    """Ashby ATS 公司直招（免 key，岗位含 compensation 字段）：boards 并行请求。"""
+    out, lock = [], threading.Lock()
+    ql = q.lower()
+    qw = [w.lower() for w in ql.split()]
+
+    def _one(board: str):
+        try:
+            d = _get(
+                f"https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true",
+                timeout=8)
+        except Exception:
+            return
+        for j in d.get("jobs", []) or []:
+            loc = j.get("location") or ""
+            hay = (j.get("title", "") + " " + str(loc)).lower()
+            if ql in hay or any(w in hay for w in qw):
+                with lock:
+                    out.append({"title": j.get("title", ""), "url": j.get("jobUrl", "") or j.get("applyUrl", ""),
+                                "snippet": f"{loc} | {'远程' if j.get('isRemote') else '坐班'} | {j.get('employmentType', '')}"[:200],
+                                "location": str(loc), "date": (j.get("publishedAt") or "")[:10]})
+
+    threads = [threading.Thread(target=_one, args=(b,)) for b in ASHBY_BOARDS]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return out[: n * 3]
+
+
+# ── v4 免 key ATS 直连源（2026-08-11 实测）────────────────────────────
+
+# v4 免 key ATS 直连源（2026-08-11 实测：recruitee 全线无数据已移除）
+LEVER_BOARDS = ["kraken", "outreach"]
+
+
+def _ts2date(v) -> str:
+    """unix 秒时间戳 → YYYY-MM-DD；非时间戳原样截断。"""
+    try:
+        return datetime.fromtimestamp(int(v), timezone.utc).date().isoformat()
+    except Exception:
+        return str(v or "")[:10]
+
+
+def _search_lever(q: str, n: int) -> list:
+    """Lever ATS：api.lever.co 免 key，boards 并行，标题命中即收。"""
+    out, lock = [], threading.Lock()
+    ql = q.lower()
+    qw = [w.lower() for w in ql.split()]
+
+    def _one(board: str):
+        try:
+            d = _get(f"https://api.lever.co/v0/postings/{board}?mode=json", timeout=6)
+        except Exception:
+            return
+        for j in d:
+            cats = j.get("categories") or {}
+            loc = cats.get("location", "") if isinstance(cats, dict) else ""
+            hay = ((j.get("text") or "") + " " + str(loc)).lower()
+            if ql in hay or any(w in hay for w in qw):
+                with lock:
+                    out.append({"title": j.get("text", ""),
+                                "url": j.get("hostedUrl", ""),
+                                "snippet": str(loc)[:200], "location": str(loc),
+                                "date": _ts2date(j.get("createdAt"))})
+
+    threads = [threading.Thread(target=_one, args=(b,)) for b in LEVER_BOARDS]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return out[: n * 3]
+
+
+def _search_remoteok(q: str, n: int) -> list:
+    """RemoteOK：全量远程岗 JSON，本地过滤。"""
+    d = _get("https://remoteok.com/api", timeout=15)
+    out = []
+    ql = q.lower()
+    qw = [w.lower() for w in ql.split()]
+    for j in d[1:]:  # 首元素为公告信息
+        loc = j.get("location") or ""
+        hay = ((j.get("position") or "") + " " + j.get("company", "") + " " + str(loc)).lower()
+        if ql in hay or any(w in hay for w in qw):
+            out.append({"title": f"{j.get('position', '')} @ {j.get('company', '')}"[:120],
+                        "url": j.get("url") or j.get("apply_url") or "",
+                        "snippet": f"{loc} | {j.get('tags', '')}"[:200],
+                        "location": str(loc), "date": (j.get("date") or "")[:10]})
         if len(out) >= n * 3:
             break
     return out
 
 
-def _search_ashby(q: str, n: int) -> list:
-    """Ashby ATS 公司直招（免 key，岗位含 compensation 字段）：遍历内置 boards。"""
+# ── v4 聚合源（SimplifyJobs / JobSpy / mcp-jobs）───────────────────────
+
+_SIMPLIFY_MONTH = re.compile(
+    r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s*(\d{4})")
+_SIMPLIFY_REL = re.compile(r"^(\d+)d$")
+
+
+def _simplify_date(s: str) -> str:
+    """SimplifyJobs 日期列：绝对日期（Sep 01, 2025）或相对（0d/1d/30d）。"""
+    s = (s or "").strip()
+    m = _SIMPLIFY_MONTH.search(s)
+    if m:
+        months = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                  "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+        return f"{m.group(3)}-{months[m.group(1)[:3]]:02d}-{int(m.group(2)):02d}"
+    m = _SIMPLIFY_REL.match(s)
+    if m:
+        return (date.today() - timedelta(days=int(m.group(1)))).isoformat()
+    return ""
+
+
+# SimplifyJobs README 现为 HTML <table>（2026-08 实测：约 2000+ 行岗位）
+_SIMPLIFY_TR = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S)
+_SIMPLIFY_TD = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
+_SIMPLIFY_TAG = re.compile(r"<[^>]+>")
+_SIMPLIFY_HREF = re.compile(r'<a[^>]+href="(https?://[^"]+)"')
+
+
+def _simplify_row(tds: list) -> Optional[dict]:
+    if len(tds) < 5:
+        return None
+    cells = []
+    for td in tds:
+        txt = _SIMPLIFY_TAG.sub(" ", td)
+        import html as _html
+        cells.append(_html.unescape(txt).strip())
+    if not any(cells) or all(set(c) <= set("-: ") for c in cells):
+        return None
+    company, role, loc = cells[0], cells[1], cells[2]
+    if not company or not role:
+        return None
+    a = _SIMPLIFY_HREF.search(tds[3]) or _SIMPLIFY_HREF.search(tds[1])
+    return {"company": company, "role": role, "loc": loc,
+            "url": a.group(1) if a else "", "date": _simplify_date(cells[4])}
+
+
+def _search_simplify(q: str, n: int) -> list:
+    """SimplifyJobs：GitHub 每日更新岗位表（HTML table，SWE/PM/DS 为主）。"""
+    req = urllib.request.Request(
+        "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md",
+        headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        chunks, total = [], 0
+        while total < 4_000_000:  # 分块读，防服务器断流（IncompleteRead）
+            try:
+                b = r.read(262144)
+            except Exception:
+                break
+            if not b:
+                break
+            chunks.append(b)
+            total += len(b)
+        text = b"".join(chunks).decode("utf-8", "ignore")
     out = []
     ql = q.lower()
-    for board in ASHBY_BOARDS:
-        try:
-            d = _get(
-                f"https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true",
-                timeout=10)
-        except Exception:
+    qw = [w.lower() for w in ql.split()]
+    for tr in _SIMPLIFY_TR.findall(text):
+        row = _simplify_row(_SIMPLIFY_TD.findall(tr))
+        if not row:
             continue
-        for j in d.get("jobs", []) or []:
-            loc = j.get("location") or ""
-            hay = (j.get("title", "") + " " + str(loc)).lower()
-            if ql in hay or any(w.lower() in hay for w in ql.split()):
-                out.append({"title": j.get("title", ""), "url": j.get("jobUrl", "") or j.get("applyUrl", ""),
-                            "snippet": f"{loc} | {'远程' if j.get('isRemote') else '坐班'} | {j.get('employmentType', '')}"[:200],
-                            "location": str(loc), "date": (j.get("publishedAt") or "")[:10]})
+        hay = (row["company"] + " " + row["role"] + " " + row["loc"]).lower()
+        if ql not in hay and not any(w in hay for w in qw):
+            continue
+        out.append({"title": f"{row['role']} @ {row['company']}"[:120],
+                    "url": row["url"], "snippet": row["loc"][:200],
+                    "location": row["loc"], "date": row["date"],
+                    "trusted": True, "_platform": "SimplifyJobs"})
         if len(out) >= n * 3:
             break
+    return out
+
+
+def _search_jobspy(q: str, n: int) -> list:
+    """JobSpy 聚合爬虫（可选依赖）：LinkedIn/Indeed/ZipRecruiter。
+
+    注意：PyPI 上的 jobspy 是同名假包（redis 工具），真包须从 GitHub 安装，
+    且要求 Python 3.10+（本机 3.9 无法安装时会给出此提示）。
+    """
+    try:
+        from jobspy import scrape_jobs
+    except ImportError:
+        raise RuntimeError(
+            "jobspy 未安装或不可用。真包需 Python 3.10+ 且从 GitHub 安装：\n"
+            "  pip3 install --user 'git+https://github.com/speedyapply/JobSpy.git'\n"
+            "警告：PyPI 的 jobspy（redis 工具）是假包，勿装。")
+    out = []
+    for site in ("linkedin", "indeed", "ziprecruiter"):
+        try:
+            kw = dict(search_term=q, results_wanted=max(n, 5), hours_old=168)
+            try:
+                df = scrape_jobs(site_name=[site], **kw)
+            except TypeError:
+                df = scrape_jobs(site=[site], **kw)
+        except Exception:
+            continue
+        for _, r in df.iterrows():
+            out.append({"title": str(r.get("title") or "")[:120],
+                        "url": str(r.get("job_url") or ""),
+                        "snippet": str(r.get("description") or "")[:200],
+                        "location": str(r.get("location") or ""),
+                        "date": str(r.get("date_posted") or "")[:10],
+                        "trusted": True, "_platform": f"JobSpy-{site}"})
+    if not out:
+        raise RuntimeError("jobspy 抓取失败（反爬或网络），可重试或换 --engine free")
+    return out
+
+
+# ── mcp-jobs（猎聘/BOSS/智联，MCP stdio 协议）─────────────────────────
+# npm 包 mcp-jobs 无 bin 入口（README 的 npx 启动方式不可用），
+# 固定安装到 ~/.cache/argo-mcpjobs 后直接 node dist/mcp.js 启动。
+
+_MCPJ = {"proc": None, "id": 0}
+MCPJOBS_DIR = os.path.join(os.path.expanduser("~"), ".cache", "argo-mcpjobs")
+MCPJOBS_ENTRY = os.path.join(MCPJOBS_DIR, "node_modules", "mcp-jobs", "dist", "mcp.js")
+
+
+def _mcpjobs_send(method: str, params: dict, timeout: int = 60) -> dict:
+    p = _MCPJ["proc"]
+    _MCPJ["id"] += 1
+    req_id = _MCPJ["id"]
+    p.stdin.write(json.dumps(
+        {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}) + "\n")
+    p.stdin.flush()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        line = p.stdout.readline()
+        if not line:
+            raise RuntimeError("mcp-jobs 进程已退出")
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and d.get("id") == req_id:
+            return d
+    raise RuntimeError(f"mcp-jobs 响应超时（{method}）")
+
+
+def _mcpjobs_ensure() -> bool:
+    if _MCPJ["proc"] and _MCPJ["proc"].poll() is None:
+        return True
+    try:
+        if not os.path.exists(MCPJOBS_ENTRY):
+            r = subprocess.run(
+                ["npm", "install", "--prefix", MCPJOBS_DIR, "--no-audit", "--no-fund",
+                 "mcp-jobs"], capture_output=True, text=True, timeout=240)
+            if r.returncode != 0:
+                raise RuntimeError(f"npm install mcp-jobs 失败：{(r.stderr or r.stdout)[:120]}")
+        p = subprocess.Popen(["node", MCPJOBS_ENTRY],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        _MCPJ["proc"] = p
+        _mcpjobs_send("initialize", {
+            "protocolVersion": "2024-11-05", "capabilities": {},
+            "clientInfo": {"name": "argo", "version": "2.7.3"}}, timeout=30)
+        _mcpjobs_send("notifications/initialized", {}, timeout=10)
+        return True
+    except Exception as e:
+        _MCPJ["proc"] = None
+        raise RuntimeError(f"mcp-jobs 启动失败（需 node/npm）：{e}")
+
+
+def _search_mcpjobs(q: str, n: int) -> list:
+    """mcp-jobs：猎聘/BOSS/智联零配置 MCP 服务。慢源，仅显式 --engine mcpjobs。"""
+    if not _mcpjobs_ensure():
+        raise RuntimeError("mcp-jobs 不可用")
+    parts = q.split()
+    if len(parts) > 1:
+        city, q = parts[-1], " ".join(parts[:-1])
+    d = _mcpjobs_send("tools/call", {
+        "name": "mcp_search_job",
+        "arguments": {"keyword": q, "city": city}}, timeout=60)
+    texts = []
+    for c in (d.get("result") or {}).get("content") or []:
+        if c.get("type") == "text":
+            texts.append(c.get("text", ""))
+    out = []
+    for t in texts:
+        try:
+            data = json.loads(t)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            items = data.get("jobs") or data.get("results") or []
+            if isinstance(items, dict):
+                items = [items]
+        elif isinstance(data, list):
+            items = data
+        else:
+            continue
+        for it in items if isinstance(items, list) else []:
+            if not isinstance(it, dict):
+                continue
+            url = (it.get("url") or it.get("link") or it.get("职位链接")
+                   or it.get("job_url") or "")
+            title = (it.get("title") or it.get("职位名称") or it.get("name") or "")[:120]
+            if not title:
+                continue
+            loc = (it.get("location") or it.get("工作地点") or it.get("city") or "")
+            sal = (it.get("salary") or it.get("薪资") or "")
+            out.append({"title": title, "url": url,
+                        "snippet": f"{loc} {sal}".strip()[:200],
+                        "location": str(loc), "date": "",
+                        "trusted": True, "_platform": "mcp-jobs"})
+    if not out:
+        raise RuntimeError("mcp-jobs 无结果（爬虫源可能被反爬拦截）")
     return out
 
 
@@ -493,8 +817,12 @@ BACKENDS = {"exa": _search_exa, "tavily": _search_tavily, "byted": _search_byted
             "bocha": _search_bocha, "octen": _search_octen}
 FREE_BACKENDS = {"remotive": _search_remotive, "himalayas": _search_himalayas,
                  "jobicy": _search_jobicy, "arbeitnow": _search_arbeitnow,
-                 "greenhouse": _search_greenhouse, "ashby": _search_ashby}
-ALL_BACKENDS = dict(BACKENDS, **FREE_BACKENDS)
+                 "greenhouse": _search_greenhouse, "ashby": _search_ashby,
+                 "lever": _search_lever, "remoteok": _search_remoteok}
+# 慢源/聚合源：仅显式 --engine 调用，不自动启用（simplify 下载 4MB 表格）
+SLOW_BACKENDS = {"simplify": _search_simplify,
+                 "jobspy": _search_jobspy, "mcpjobs": _search_mcpjobs}
+ALL_BACKENDS = dict(BACKENDS, **FREE_BACKENDS, **SLOW_BACKENDS)
 DEFAULT_ENGINES = ["exa", "tavily", "byted", "bocha", "octen"]
 
 
