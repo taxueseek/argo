@@ -13,3 +13,4 @@ installs.local.yaml
 dist/
 scripts/data/
 .trash/
+*.tgz
