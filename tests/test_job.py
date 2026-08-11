@@ -166,6 +166,63 @@ class TestFreshness:
         assert job.is_stale("") is False
 
 
+# ── 结构化字段 ─────────────────────────────────────────────────────────
+
+class TestParseFields:
+    def test_salary_edu_exp_from_snippet(self):
+        item = {"title": "电子工程师招聘_深圳某公司招聘",
+                "snippet": "20-25K 电子工程师 深圳 5-10年 本科 电路设计"}
+        f = job.parse_fields(item)
+        assert f["salary"] == "20-25K"
+        assert f["education"] == "本科"
+        assert f["experience"] == "5-10年"
+
+    def test_company_from_title(self):
+        f = job.parse_fields({"title": "工艺工程师招聘_立臻科技(昆山)有限公司招聘"})
+        assert "立臻科技" in f.get("company", "")
+
+    def test_year_not_experience(self):
+        """20xx 年份不误判为经验。"""
+        f = job.parse_fields({"title": "x", "snippet": "发布时间 2004 年 岗位职责"})
+        assert "experience" not in f
+
+    def test_empty(self):
+        assert job.parse_fields({"title": "普通标题", "snippet": ""}) == {}
+
+
+# ── 指纹去重 ────────────────────────────────────────────────────────────
+
+class TestFingerprint:
+    def test_salary_normalized(self):
+        a = {"title": "工艺工程师9000-14000元/月", "fields": {}, "url": "x"}
+        b = {"title": "工艺工程师", "fields": {}, "url": "y"}
+        assert job.fingerprint(a) == job.fingerprint(b)
+
+    def test_cross_url_same_job(self):
+        a = {"title": "工艺工程师- 昆山沪光汽车电器招聘", "url": "https://www.zhipin.com/a",
+             "fields": {"company": "昆山沪光汽车电器"}}
+        b = {"title": "工艺工程师- 昆山沪光汽车电器招聘", "url": "https://m.zhipin.com/b",
+             "fields": {"company": "昆山沪光汽车电器"}}
+        assert job.fingerprint(a) == job.fingerprint(b)
+
+
+# ── 快照（watch 增量）───────────────────────────────────────────────────
+
+class TestSnapshot:
+    def test_roundtrip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(job, "JOBS_DIR", str(tmp_path))
+        p = job.snapshot_path("工艺工程师", "昆山")
+        job.save_snapshot(p, {"query": "q", "jobs": [{"fingerprint": "f1"}]})
+        d = job.load_snapshot(p)
+        assert d["jobs"][0]["fingerprint"] == "f1"
+
+    def test_snapshot_path_stable(self):
+        assert job.snapshot_path("a", "b") == job.snapshot_path("a", "b")
+
+    def test_load_missing(self):
+        assert job.load_snapshot("/nonexistent/x.json") is None
+
+
 # ── live 集成（有 key 时执行，回归精确率声明）──────────────────────────
 
 def _has_keys():

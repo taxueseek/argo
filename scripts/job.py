@@ -15,14 +15,18 @@ v2 相对 v1 的修复与扩展（2026-08-11，全部经实测验证）：
   1. 判定升级：三级判定（标题/URL 强命中 → 摘要头部 → 摘要尾部），
      —— 修复 v1「snippet 任意位置含地区词即命中」被公司简介/福利文本污染的假阳性
      （实测 byted 昆山查询 dropped=0 但混入四川大学/南通大学/企查查异地岗位）
-  2. 白名单扩展：核心 6 平台 + 10 扩展域（卓博/宇聘/中华英才/智通/58/国聘/24365/
-     校园就业联盟/JobsDB/JobStreet）+ 政府人社局源（hrss.suzhou.gov.cn 实测可查）
+  2. 白名单扩展：核心 6 平台 + 扩展域（卓博/鱼泡/中华英才/智通/58/国聘/24365/
+     校园就业联盟/应届生求职网/北京高校毕业生/JobsDB/JobStreet）+ 人社局源
   3. URL 后置校验：非白名单 URL 一律剔除（修复 byted site: 混入非白名单域名）
-  4. 时效补强：tavily days=90（实测生效）、日期字段提取（datePublished/发布时间）、
-     距今 >365 天标记过期且排序垫底
-  5. 免 key 国际源：remotive / himalayas / jobicy / arbeitnow / greenhouse
-     （海外城市查询自动启用，--engine free 可强制）
-  6. 新增国内后端 bocha / octen（site: 与宽查询均实测严格），五个 API 后端全量可用
+  4. 时效补强：tavily days=90（实测生效）、日期字段提取、>365 天标记过期
+  5. 免 key 国际源：remotive / himalayas / jobicy / arbeitnow / greenhouse / ashby
+  6. 国内后端 bocha / octen 全量启用
+
+v3（2026-08-11）：
+  7. 结构化字段：snippet 提取薪资/学历/经验/公司（零成本），--fetch N 可选详情页补全
+  8. 增量监控：--watch 存快照至 data/jobs/，二次运行对比输出新上线/已下架
+  9. 指纹去重：标题+公司指纹替代纯 URL 去重（多平台同岗位合并）
+ 10. 白名单加北京高校毕业生就业信息网（bysjy.com.cn，实测 200）
 """
 import argparse, json, os, re, sys, threading, urllib.request
 from datetime import date, timedelta
@@ -38,7 +42,7 @@ PLATFORMS = [("zhipin.com", "BOSS直聘"), ("liepin.com", "猎聘"),
 EXTRA = [("jobcn.com", "卓博人才网"), ("yupao.com", "鱼泡直聘"), ("chinahr.com", "中华英才网"),
          ("job5156.com", "智通人才网"), ("58.com", "58同城"), ("iguopin.com", "国聘"),
          ("ncss.cn", "新职业24365"), ("91job.org.cn", "校园就业联盟"),
-         ("yingjiesheng.com", "应届生求职网"),
+         ("yingjiesheng.com", "应届生求职网"), ("bysjy.com.cn", "北京高校毕业生就业信息网"),
          ("jobsdb.com", "JobsDB"), ("jobstreet.com", "JobStreet"),
          ("hrss.suzhou.gov.cn", "苏州人社局")]
 DOMAINS = [d for d, _ in PLATFORMS] + [d for d, _ in EXTRA]
@@ -200,6 +204,84 @@ def is_stale(dstr: str) -> bool:
         return False
 
 
+# ── 结构化字段：薪资/学历/经验/公司（snippet 提取，零成本）──────────────
+
+_SALARY_RE = re.compile(
+    r"\d+(?:\.\d+)?\s*[-~至到]\s*\d+(?:\.\d+)?\s*(?:[kK万]|元)"  # 区间优先
+    r"|\d+(?:\.\d+)?\s*[kK万]"
+    r"|\d{4,6}\s*元"
+    r"|\d+\s*[-~至到]\s*\d+\s*元")
+_EDU_RE = re.compile(r"(硕士|博士|本科|大专|中专|高中|初中|学历不限)")
+_EXP_RE = re.compile(r"(经验不限|应届生|\d+\s*[-~至到]\s*\d+\s*年|\d+\s*年(?:以上|及)?经验|\d+\s*年经验)")
+_COMPANY_RE = re.compile(
+    r"([\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:股份有限公司|有限责任公司|有限公司|集团|股份|科技|电子|"
+    r"精密|机械|实业|咨询|事务所|工作室|医院|学校|大学|研究院|中心|厂|科技股份|半导体))")
+
+
+def parse_fields(item: dict) -> dict:
+    """从 title + snippet 提取结构化字段（详情页不可达时的零成本方案）。"""
+    hay = (item.get("title") or "") + " " + (item.get("snippet") or "")[:300]
+    fields = {}
+    m = _SALARY_RE.search(hay)
+    if m:
+        fields["salary"] = m.group(0).strip()
+    m = _EDU_RE.search(hay)
+    if m:
+        fields["education"] = m.group(1)
+    m = _EXP_RE.search(hay)
+    if m:
+        fields["experience"] = m.group(1).strip()
+    m = _COMPANY_RE.search(item.get("title") or "")
+    if m:
+        fields["company"] = m.group(1).strip()
+    return fields
+
+
+# ── 指纹去重：标题+公司（多平台同岗位合并）─────────────────────────────
+
+_FP_SALARY = re.compile(
+    r"\d+(?:\.\d+)?\s*[kK万元¥￥]|\d{4,6}\s*元|\d+\s*[-~至到]\s*\d+\s*(?:[kK万元¥￥]|元)")
+_FP_SPACE = re.compile(r"\s+")
+
+
+def fingerprint(item: dict) -> str:
+    """规范化标题（去薪资/空白/平台标注）+ 公司名 → 指纹。"""
+    t = item.get("title") or ""
+    t = _FP_SALARY.sub("", t)
+    t = _FP_SPACE.sub("", t)
+    t = re.sub(r"[/／]月", "", t)  # 去「9000-14000元/月」残留
+    t = re.sub(r"【[^】]*】|「[^」]*」", "", t)  # 去平台标注
+    company = item.get("company") or item.get("fields", {}).get("company", "") or ""
+    return f"{t}|{company}"
+
+
+# ── 增量监控快照（data/jobs/）───────────────────────────────────────────
+
+JOBS_DIR = os.path.join(DATA_DIR, "jobs")
+
+
+def snapshot_path(query: str, city: str) -> str:
+    import hashlib
+    h = hashlib.md5(f"{query}|{city}".encode()).hexdigest()[:12]
+    return os.path.join(JOBS_DIR, f"{h}.json")
+
+
+def load_snapshot(path: str) -> Optional[dict]:
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def save_snapshot(path: str, payload: dict) -> None:
+    os.makedirs(JOBS_DIR, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=1)
+
+
 # ── HTTP 基础 ───────────────────────────────────────────────────────────
 
 
@@ -269,10 +351,15 @@ def _search_tavily(q: str, n: int) -> list:
 def _search_byted(q: str, n: int) -> list:
     out = []
     for domain, label in PLATFORMS:
-        d = _post("https://open.feedcoopapi.com/search_api/web_search",
-                  {"Query": f"site:{domain} {q}", "Count": n, "SearchType": "web"},
-                  {"Authorization": f"Bearer {os.environ['WEB_SEARCH_API_KEY']}"})
-        for r in d.get("Result", {}).get("WebResults", [])[:n]:
+        try:
+            d = _post("https://open.feedcoopapi.com/search_api/web_search",
+                      {"Query": f"site:{domain} {q}", "Count": n, "SearchType": "web"},
+                      {"Authorization": f"Bearer {os.environ['WEB_SEARCH_API_KEY']}"})
+        except Exception:
+            continue  # 单平台失败不拖累整体
+        if not d or not isinstance(d, dict):
+            continue  # 上游结构异常（实测 None）防御
+        for r in (d.get("Result") or {}).get("WebResults", [])[:n] or []:
             out.append({"title": r.get("Title", ""), "url": r.get("Url", ""),
                         "snippet": r.get("Snippet", ""), "date": ""})
     return out
@@ -411,6 +498,35 @@ ALL_BACKENDS = dict(BACKENDS, **FREE_BACKENDS)
 DEFAULT_ENGINES = ["exa", "tavily", "byted", "bocha", "octen"]
 
 
+# ── 详情页结构化补全（--fetch N，走 argo fetch_v3 降级链）──────────────
+
+
+def _fetch_detail(url: str, timeout: int = 10) -> Optional[dict]:
+    """抓详情页提取结构化字段；失败返回 None（静默降级 snippet 字段）。"""
+    try:
+        from fetch_v3 import fetch_v3
+        r = fetch_v3(url, max_chars=3000, timeout=timeout, use_browser_fallback=False)
+        if not r or not r.get("success"):
+            return None
+        content = (r.get("content") or "")[:3000]
+        fields = {}
+        m = _SALARY_RE.search(content)
+        if m:
+            fields["salary"] = m.group(0).strip()
+        m = _EDU_RE.search(content)
+        if m:
+            fields["education"] = m.group(1)
+        m = _EXP_RE.search(content)
+        if m:
+            fields["experience"] = m.group(1).strip()
+        m = _COMPANY_RE.search((r.get("title") or "") + content[:500])
+        if m:
+            fields["company"] = m.group(1).strip()
+        return fields if fields else None
+    except Exception:
+        return None
+
+
 # ── 主流程 ─────────────────────────────────────────────────────────────
 
 
@@ -430,6 +546,11 @@ def main():
     ap.add_argument("--loose", action="store_true",
                     help="宽松：异地岗位也保留（命中置顶）；默认严格过滤")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
+    ap.add_argument("--fetch", type=int, default=0, metavar="N",
+                    help="对前 N 条 L1 结果抓详情页补全结构化字段（默认 0 不抓，"
+                         "仅用 snippet 提取）")
+    ap.add_argument("--watch", action="store_true",
+                    help="增量监控：存快照至 data/jobs/，二次运行对比输出新上线/已下架")
     args = ap.parse_args()
 
     platforms = PLATFORMS
@@ -469,7 +590,7 @@ def main():
     for t in threads:
         t.join()
 
-    # 统一字段 + 白名单后置校验 + 三级判定 + 时效
+    # 统一字段 + 白名单后置校验 + 三级判定 + 时效 + 结构化字段
     kept, dropped_url, dropped_region = [], 0, 0
     for r in results:
         nr = _norm(r)
@@ -480,6 +601,8 @@ def main():
         nr["hit_level"] = level
         nr["hit_reason"] = reason
         nr["stale"] = is_stale(nr["date"])
+        nr["fields"] = parse_fields(nr)  # snippet 级结构化（零成本）
+        nr["fingerprint"] = fingerprint(nr)
         if level == 0:
             dropped_region += 1
         kept.append(nr)
@@ -492,25 +615,74 @@ def main():
         # 平台标注「职位已关闭/已下线」的岗位，剔除
         kept = [r for r in kept if not CLOSED_RE.search(r.get("snippet", ""))]
 
+    # 详情页结构化补全（--fetch N，前 N 条 L1）
+    if args.fetch > 0:
+        fetched = 0
+        for r in sorted(kept, key=lambda x: (x["hit_level"], x.get("date", "")), reverse=True):
+            if fetched >= args.fetch:
+                break
+            if r["hit_level"] != 1:
+                continue
+            detail = _fetch_detail(r["url"])
+            if detail:
+                r["fields"].update(detail)
+            fetched += 1
+
+    # 指纹去重：多平台同岗位合并（保留级别更高、有日期的）
+    seen_fp = {}
+    for r in kept:
+        fp = r.get("fingerprint") or r["url"]
+        prev = seen_fp.get(fp)
+        if prev is None:
+            seen_fp[fp] = r
+            continue
+        # 保留 hit_level 高者；同级保留有日期者；再同级保留先到者（后端顺序靠前）
+        if (r["hit_level"], r.get("date", "")) > (prev["hit_level"], prev.get("date", "")):
+            seen_fp[fp] = r
+    unique = list(seen_fp.values())
+
+    # watch 增量对比（对比用快照需在指纹去重前、含全部保留项）
+    new_jobs, gone_jobs = [], []
+    if args.watch:
+        path = snapshot_path(args.query, args.city)
+        old = load_snapshot(path)
+        old_keys = {j["fingerprint"]: j for j in (old or {}).get("jobs", [])}
+        new_keys = {j["fingerprint"]: j for j in unique}
+        new_jobs = [j for fp, j in new_keys.items() if fp not in old_keys]
+        gone_jobs = [j for fp, j in old_keys.items() if fp not in new_keys]
+        save_snapshot(path, {"query": args.query, "city": args.city,
+                             "saved_at": date.today().isoformat(),
+                             "jobs": [{"fingerprint": j["fingerprint"],
+                                        "title": j["title"], "url": j["url"],
+                                        "platform": j["platform"],
+                                        "date": j.get("date", "")} for j in unique]})
+        print(f"\n── 增量对比（{path}）──")
+        if old is None:
+            print(f"基线建立：{len(unique)} 条岗位已存快照，下次运行输出变化")
+        else:
+            print(f"新上线 {len(new_jobs)} 条 / 已下架 {len(gone_jobs)} 条（共 {len(unique)} 条在架）")
+            for j in new_jobs[:10]:
+                print(f"  ＋[{j['platform']}] {j['title'][:48]}")
+            for j in gone_jobs[:10]:
+                print(f"  －[{j['platform']}] {j['title'][:48]}")
+            if len(new_jobs) > 10 or len(gone_jobs) > 10:
+                print(f"  … 其余变化请查看快照 {path}")
+
     # 排序：级别 L1 > L2 > L3 > 0 为主键（稳定排序先按日期降序，级别内日期新→旧），
     # 过期垫底。空日期排最后（byted/tavily 无日期字段）。
-    kept.sort(key=lambda r: r.get("date", ""), reverse=True)
-    kept.sort(key=lambda r: (r.get("hit_level", 0), r.get("stale", False)))
-
-    seen, unique = set(), []
-    for r in kept:
-        if r["url"] and r["url"] not in seen:
-            seen.add(r["url"])
-            unique.append(r)
+    unique.sort(key=lambda r: r.get("date", ""), reverse=True)
+    unique.sort(key=lambda r: (r.get("hit_level", 0), r.get("stale", False)))
 
     if args.json:
-        print(json.dumps({"query": query, "backends": engines,
-                          "total": len(unique),
-                          "dropped_url": dropped_url,
-                          "dropped_region": dropped_region,
-                          "strict": strict,
-                          "errors": errors, "results": unique},
-                         ensure_ascii=False, indent=2))
+        out = {"query": query, "backends": engines,
+               "total": len(unique),
+               "dropped_url": dropped_url,
+               "dropped_region": dropped_region,
+               "strict": strict,
+               "errors": errors, "results": unique}
+        if args.watch:
+            out["watch"] = {"new": len(new_jobs), "gone": len(gone_jobs)}
+        print(json.dumps(out, ensure_ascii=False, indent=2))
     else:
         mode = "严格" if strict else "宽松" if args.loose else "全部"
         print(f"查询: {query} | 后端: {','.join(engines)} | {mode} | {len(unique)} 条")
@@ -518,7 +690,11 @@ def main():
         for r in unique:
             stale = " [过期]" if r.get("stale") else ""
             mark = marks.get(r.get("hit_level", 0), "○")
-            print(f"{mark}[{r['platform']}]{stale} {r['title'][:52]}")
+            f = r.get("fields", {})
+            extra = " | ".join(x for x in (f.get("salary"), f.get("education"),
+                                           f.get("experience")) if x)
+            print(f"{mark}[{r['platform']}]{stale} {r['title'][:48]}"
+                  + (f" {extra}" if extra else ""))
             print(f"  {r['url'][:88]}")
 
 

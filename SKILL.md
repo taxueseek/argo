@@ -554,8 +554,11 @@ Ashby ATS（notion/openai 等）免 key 返回结构化岗位。
 
 常用参数：`--engine {all,free,exa,tavily,byted,bocha,octen,remotive,...}`（默认 all = 五个 API 后端并行，海外城市自动加 free 免 key 源）、
 `-n` 每后端条数（默认 5）、`--platforms zhipin,liepin,zhaopin,51job,597,jrzp`、
-`--loose`、`--json`（默认文本输出）。地区索引一次性构建，查表 O(1)。
-测试：`tests/test_job.py`（29 项，含三城市 live 精确率回归）。
+`--loose`、`--json`（默认文本输出）、`--fetch N`（对前 N 条 L1 结果抓详情页
+补全结构化字段，默认 0 仅用 snippet 提取）、`--watch`（增量监控：存快照至
+`data/jobs/`，二次运行对比输出新上线/已下架）。地区索引一次性构建，查表 O(1)。
+结构化字段（薪资/学历/经验/公司）从标题+摘要提取，多平台同岗位按
+「标题+公司」指纹去重。测试：`tests/test_job.py`（40 项，含三城市 live 回归）。
 
 ### Python 解释器选择（v2.7.3+）
 
