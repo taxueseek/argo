@@ -113,6 +113,11 @@ class TestNorm:
         r = job._norm({"title": "t", "url": "https://www.jobcn.com/job/1", "snippet": ""})
         assert r is not None and r["platform"] == "卓博人才网"
 
+    def test_yingjiesheng_domain(self):
+        """应届生求职网（校园招聘）白名单。"""
+        r = job._norm({"title": "t", "url": "https://m.yingjiesheng.com/jobdetail/170536434", "snippet": ""})
+        assert r is not None and r["platform"] == "应届生求职网"
+
     def test_gov_domain_in_whitelist(self):
         """白名单内政府域 → 具体标签优先。"""
         r = job._norm({"title": "t", "url": "https://hrss.suzhou.gov.cn/job/1", "snippet": ""})
@@ -126,6 +131,10 @@ class TestNorm:
     def test_free_domain(self):
         r = job._norm({"title": "t", "url": "https://remotive.com/remote-jobs/sales/1", "snippet": ""})
         assert r is not None and r["platform"] == "Remotive"
+
+    def test_ashby_domain(self):
+        r = job._norm({"title": "t", "url": "https://jobs.ashbyhq.com/notion/abc123", "snippet": ""})
+        assert r is not None and r["platform"] == "Ashby"
 
     def test_unknown_domain_dropped(self):
         """非白名单 URL（v1 byted site: 混入场景）→ 剔除。"""

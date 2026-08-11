@@ -542,15 +542,17 @@ L1/L2 命中（昆山 54 条 / 上海 49 条 / 深圳 57 条 / 北京 56 条 / �
 | byted（WEB_SEARCH_API_KEY） | site: 逐平台 + URL 后置校验 | 混入非白名单域名由校验剔除 |
 | bocha（BOCHA_API_KEY） | 宽查询 + 白名单校验 | 中文站点发现强（鱼泡/人社局/卓博） |
 | octen（OCTEN_API_KEY） | 宽查询 + 白名单校验 | 高速语义搜索 |
-| remotive / himalayas / jobicy / arbeitnow / greenhouse | 免 key 公开 JSON | 远程/海外岗位，海外城市自动启用 |
+| remotive / himalayas / jobicy / arbeitnow / greenhouse / ashby | 免 key 公开 JSON | 远程/海外岗位，海外城市自动启用 |
 
 平台白名单：核心 6 平台（BOSS/猎聘/智联/前程无忧/597/今日招聘）+ 扩展域
 （卓博 jobcn、鱼泡 yupao、中华英才 chinahr、智通 job5156、58 同城、国聘 iguopin、
-新职业 24365 ncss、校园就业联盟 91job、JobsDB、JobStreet、苏州人社局 hrss.suzhou.gov.cn），
+新职业 24365 ncss、校园就业联盟 91job、应届生求职网 yingjiesheng、JobsDB、JobStreet、
+苏州人社局 hrss.suzhou.gov.cn），
 政府人社局域名（hrss/rsj/rlsbj 开头）通用识别。
+实测 2026-08-11：应届生求职网 site: 5/5 命中校园岗位（含工作地:昆山）、
+Ashby ATS（notion/openai 等）免 key 返回结构化岗位。
 
-常用参数：`--engine {all,free,exa,tavily,byted,bocha,octen,remotive,...}`
-（默认 all = 五个 API 后端并行，海外城市自动加 free 免 key 源）、
+常用参数：`--engine {all,free,exa,tavily,byted,bocha,octen,remotive,...}`（默认 all = 五个 API 后端并行，海外城市自动加 free 免 key 源）、
 `-n` 每后端条数（默认 5）、`--platforms zhipin,liepin,zhaopin,51job,597,jrzp`、
 `--loose`、`--json`（默认文本输出）。地区索引一次性构建，查表 O(1)。
 测试：`tests/test_job.py`（29 项，含三城市 live 精确率回归）。

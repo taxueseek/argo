@@ -38,6 +38,7 @@ PLATFORMS = [("zhipin.com", "BOSS直聘"), ("liepin.com", "猎聘"),
 EXTRA = [("jobcn.com", "卓博人才网"), ("yupao.com", "鱼泡直聘"), ("chinahr.com", "中华英才网"),
          ("job5156.com", "智通人才网"), ("58.com", "58同城"), ("iguopin.com", "国聘"),
          ("ncss.cn", "新职业24365"), ("91job.org.cn", "校园就业联盟"),
+         ("yingjiesheng.com", "应届生求职网"),
          ("jobsdb.com", "JobsDB"), ("jobstreet.com", "JobStreet"),
          ("hrss.suzhou.gov.cn", "苏州人社局")]
 DOMAINS = [d for d, _ in PLATFORMS] + [d for d, _ in EXTRA]
@@ -47,7 +48,8 @@ FREE_DOMAINS = [("remotive.com", "Remotive"), ("remote.co", "Remote.co"),
                 ("himalayas.app", "Himalayas"), ("jobicy.com", "Jobicy"),
                 ("arbeitnow.com", "Arbeitnow"),
                 ("boards-api.greenhouse.io", "Greenhouse"),
-                ("boards.greenhouse.io", "Greenhouse")]
+                ("boards.greenhouse.io", "Greenhouse"),
+                ("jobs.ashbyhq.com", "Ashby")]
 # 政府人社局域名（地区判定强信任：政府站岗位无异地混淆问题）
 GOV_RE = re.compile(r"(hrss|rsj|rlsbj|srs)\.[\w-]+\.gov\.cn")
 GOV_LABEL = "人社局/政府"
@@ -311,6 +313,9 @@ GREENHOUSE_BOARDS = ["asana", "stripe", "airbnb", "reddit", "shopify", "duolingo
                      "instacart", "pinterest", "doordash", "pagerduty", "box",
                      "adobe", "godaddy", "docusign", "dropbox"]
 
+ASHBY_BOARDS = ["notion", "openai", "figma", "linear", "vercel", "airtable",
+                "plaid", "ramp", "rippling", "paddle", "perplexity", "midjourney"]
+
 
 def _search_remotive(q: str, n: int) -> list:
     d = _get(f"https://remotive.com/api/remote-jobs?limit={n * 3}&search={quote(q)}")
@@ -374,11 +379,34 @@ def _search_greenhouse(q: str, n: int) -> list:
     return out
 
 
+def _search_ashby(q: str, n: int) -> list:
+    """Ashby ATS 公司直招（免 key，岗位含 compensation 字段）：遍历内置 boards。"""
+    out = []
+    ql = q.lower()
+    for board in ASHBY_BOARDS:
+        try:
+            d = _get(
+                f"https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true",
+                timeout=10)
+        except Exception:
+            continue
+        for j in d.get("jobs", []) or []:
+            loc = j.get("location") or ""
+            hay = (j.get("title", "") + " " + str(loc)).lower()
+            if ql in hay or any(w.lower() in hay for w in ql.split()):
+                out.append({"title": j.get("title", ""), "url": j.get("jobUrl", "") or j.get("applyUrl", ""),
+                            "snippet": f"{loc} | {'远程' if j.get('isRemote') else '坐班'} | {j.get('employmentType', '')}"[:200],
+                            "location": str(loc), "date": (j.get("publishedAt") or "")[:10]})
+        if len(out) >= n * 3:
+            break
+    return out
+
+
 BACKENDS = {"exa": _search_exa, "tavily": _search_tavily, "byted": _search_byted,
             "bocha": _search_bocha, "octen": _search_octen}
 FREE_BACKENDS = {"remotive": _search_remotive, "himalayas": _search_himalayas,
                  "jobicy": _search_jobicy, "arbeitnow": _search_arbeitnow,
-                 "greenhouse": _search_greenhouse}
+                 "greenhouse": _search_greenhouse, "ashby": _search_ashby}
 ALL_BACKENDS = dict(BACKENDS, **FREE_BACKENDS)
 DEFAULT_ENGINES = ["exa", "tavily", "byted", "bocha", "octen"]
 
