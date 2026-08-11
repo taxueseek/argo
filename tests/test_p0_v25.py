@@ -359,7 +359,9 @@ class TestNewDomains(unittest.TestCase):
         if "qweather" in enabled:
             self.assertEqual(d["engine"], "qweather")
         else:
-            self.assertIn(d["engine"], ("duckduckgo", "anysearch", "byted", "local_bing"))
+            # 无 key 时回退通用源；v2.7.10 起 TF-IDF 强语义注入可选中
+            # open_meteo（免 key 全球天气），比通用源更对口
+            self.assertIn(d["engine"], ("duckduckgo", "anysearch", "byted", "local_bing", "open_meteo"))
 
     def test_medical_domain(self):
         d = route_query("高血压 症状 用药 临床指南")

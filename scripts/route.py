@@ -1089,6 +1089,13 @@ def route_query(query: str, engine_override: str = "auto",
         # TF-IDF 验证 + catch-all 修复（仅高分才覆写）
         is_catch_all = not domain.get("patterns", [])  # 无模式 = 兜底域
 
+        # 强语义注入的通用引擎黑名单：这些引擎已被域 combo 覆盖，注入会喧宾夺主
+        _GENERAL_ENGINES = {
+            "anysearch", "byted", "bocha", "octen", "duckduckgo",
+            "local_search", "zhihu", "wechat_sogou", "uapi", "tavily",
+            "brave", "bocha_ai", "google_scholar", "arxiv", "wikipedia",
+        }
+
         if tfidf_best and tfidf_best in engines_combo:
             confidence = 0.95
         elif tfidf_best and tfidf_best != engines_combo[0]:
@@ -1192,6 +1199,20 @@ def route_query(query: str, engine_override: str = "auto",
                 pass
             if p and p in engines_combo:
                 engines_combo = [p] + [e for e in engines_combo if e != p]
+
+        # 强语义注入（v2.7.10）：TF-IDF 高分推荐放宽到所有域，位置在 primary
+        # 扶正之后（否则被扶正压到第二位，串行 early-stop 下永远不执行）。
+        # marginalia/open_meteo/usda/gov_policy/cnii 等 25 个垂直新引擎有
+        # profile 文档，但正则域（chinese_general 等）命中后旧逻辑只对
+        # catch-all 域注入，这些引擎永远选不中。分数≥0.6（远高于最低阈值
+        # 0.12）表示查询与引擎文档强匹配，前置注入不锁死（域主源仍在尾部
+        # 备位，注入引擎失败时自然补位）。
+        if tfidf_best and tfidf_best_score >= 0.6 and not is_catch_all \
+                and tfidf_best not in engines_combo \
+                and tfidf_best not in _GENERAL_ENGINES \
+                and tfidf_best in enabled:
+            engines_combo = [tfidf_best] + [e for e in engines_combo if e != tfidf_best]
+            confidence = 0.9
         # D4：统一熔断收口——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
         engines_combo = _filter_breaker_blocked(engines_combo)
         if not engines_combo:

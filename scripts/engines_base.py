@@ -96,7 +96,33 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
         s = s.replace(f"{{{key}}}", str(val))
     if s.startswith("~"):
         s = str(Path.home() / s[1:])
-    return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), m.group(0)), s)
+    # env 占位符：缺失时替换为空串而非保留字面量。
+    # 保留字面量会把 `Authorization: token {GITHUB_TOKEN}` 原样发出 → 401；
+    # 空串 + 调用方过滤空头 = 未配置 key 的引擎自动退化为匿名请求。
+    return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), ""), s)
+
+
+_AUTH_PREFIXES = ("Bearer", "token", "Basic", "Key", "Api-Key", "X-Key", "Secret", "Appid")
+
+
+def _header_meaningful(v: Any) -> bool:
+    """头值是否有意义：空值、纯空白、或认证前缀残留（'Bearer '/ 'token ' 后无凭据）都过滤。
+
+    '{GITHUB_TOKEN}' 未配置时 _resolve 得到 'token '（前缀残留非空），
+    仅靠非空判断过滤不掉；必须按「认证前缀 + 空格 + 无凭据」精确识别，
+    且不能用 strip 预处理（会丢掉区分用的尾随空格）。
+    """
+    if not v:
+        return False
+    raw = str(v)
+    if not raw.strip():
+        return False
+    for prefix in _AUTH_PREFIXES:
+        marker = prefix + " "
+        if raw.lower().startswith(marker.lower()):
+            if not raw[len(prefix):].strip():
+                return False
+    return True
 
 
 def _get_path(obj: Any, path: str) -> Any:
@@ -257,7 +283,12 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 full_url = resolved_url + separator + "&".join(parts)
             else:
                 full_url = resolved_url
-            resolved_headers = {k: _resolve(v, query, n, **kwargs) for k, v in headers.items()}
+            resolved_headers = {
+                k: v for k, v in (
+                    (k, _resolve(v, query, n, **kwargs))
+                    for k, v in headers.items()
+                ) if _header_meaningful(v)  # 过滤空/认证前缀残留头（未配置的 {ENV} 不发送）
+            }
             # GET：HttpClient 渐进增强（UA 轮换/重试/重定向跟随）；
             # 失败返回空（与 urllib 失败行为一致，不抛异常）
             raw = _http_get_raw(full_url, resolved_headers, to)
@@ -465,7 +496,12 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             if k in ("setlang", "hl", "lang", "uselang"):
                 v = _lang_param(k, query) or v
             full_url += f"&{k}={up.quote(_resolve(str(v), query, n))}"
-        resolved_headers = {k: _resolve(v, query, n) for k, v in headers.items()}
+        resolved_headers = {
+            k: v for k, v in (
+                (k, _resolve(v, query, n))
+                for k, v in headers.items()
+            ) if _header_meaningful(v)  # 过滤空/认证前缀残留头（未配置的 {ENV} 不发送）
+        }
         # HTML 引擎同样走 HttpClient 渐进增强（UA 轮换/重定向跟随/重试）
         html = _http_get_raw(full_url, resolved_headers, to)
         if html is None:
