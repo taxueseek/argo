@@ -544,6 +544,39 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
                     stack = node.contents + stack
             return "".join(parts)
 
+        # 条目页直接命中：MediaWiki/百科类搜索常直接跳转到条目页（如萌娘百科
+        # 「初音未来」→ /初音未来(消歧义)），列表选择器必然不命中。
+        # 提取主标题 + 正文首段作为单条结果，避免空结果。
+        if not containers:
+            try:
+                heading = (soup.select_one("h1#firstHeading") or soup.select_one("h1"))
+                title = ""
+                if heading:
+                    title = _el_text(heading).strip()[:200]
+                if not title and soup.title:
+                    # 萌娘百科等页面无 h1（bs4 4.13 下模板文本壳），标题在 <title>
+                    title = soup.title.get_text().split(" - ")[0].strip()[:200]
+                if title:
+                    snippet = ""
+                    # 正文首段：mw-parser-output 下第一个有文本的 p
+                    for p in soup.select("div.mw-parser-output p")[:5]:
+                        t = _el_text(p).strip()
+                        if t:
+                            snippet = t[:300]
+                            break
+                    canonical = soup.find("link", rel="canonical")
+                    page_url = canonical["href"] if canonical and canonical.get("href") else resolved_url
+                    results = [{
+                        "title": title,
+                        "url": page_url,
+                        "snippet": snippet,
+                        "score": default_score,
+                        "source": engine_name,
+                    }]
+                    return results
+            except Exception:
+                pass
+
         results = []
         for idx, item in enumerate(containers[:n * 2]):
             try:

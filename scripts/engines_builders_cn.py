@@ -66,6 +66,26 @@ def _build_ths_hot_engine(spec: dict[str, Any]) -> Any:
 
 # ── 财联社电报引擎 ─────────────────────────────────────────────────────────────
 
+# 低信息量触发词：快讯/热榜类引擎的查询词仅作路由触发，不参与内容过滤。
+# 「快讯」「美股」这类查询若当关键词过滤会把全量榜单滤空。
+_TRIGGER_WORDS = frozenset({
+    "快讯", "电报", "资讯", "新闻", "热点", "实时", "美股", "行情",
+    "财经", "股市", "港股", "A股", "盘面", "速递", "播报", "latest",
+    "news", "flash", "market", "stock", "finance",
+})
+
+
+def _should_filter(query: str) -> bool:
+    """查询是否值得做内容关键词过滤（含具体主题才过滤，纯触发词放行全量榜单）。"""
+    q = (query or "").strip()
+    if not q:
+        return False
+    tokens = [t for t in re.split(r"[\s,，。、]+|美股|港股|A股", q) if t]
+    if not tokens:
+        return False
+    return not all(t in _TRIGGER_WORDS for t in tokens)
+
+
 def _build_cls_telegraph_engine(spec: dict[str, Any]) -> Any:
     """财联社电报（全市场实时快讯，v1 API + 本地签名，零 key）"""
     timeout = spec.get("timeout", 10)
@@ -75,8 +95,10 @@ def _build_cls_telegraph_engine(spec: dict[str, Any]) -> Any:
         import hashlib
         from datetime import datetime
         to = _timeout or timeout
+        # 关键词过滤时放大拉取量（3×），避免小样本过滤后 0 条
+        fetch_n = max(int(n) * 3, 10)
         params = {"appName": "CailianpressWeb", "os": "web", "sv": "7.7.5",
-                  "last_time": "", "refresh_type": "1", "rn": str(n)}
+                  "last_time": "", "refresh_type": "1", "rn": str(fetch_n)}
         qs = "&".join(f"{k}={params[k]}" for k in sorted(params))
         sign = hashlib.md5(hashlib.sha1(qs.encode()).hexdigest().encode()).hexdigest()
         url = f"https://www.cls.cn/v1/roll/get_roll_list?{qs}&sign={sign}"
@@ -90,8 +112,8 @@ def _build_cls_telegraph_engine(spec: dict[str, Any]) -> Any:
                 ts = item.get("ctime")
                 t = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else ""
                 title = item.get("title", "") or item.get("brief", "")
-                # 关键词过滤
-                if query and query.strip():
+                # 关键词过滤：纯触发词（快讯/美股等）放行全量榜单
+                if _should_filter(query):
                     keywords = query.strip().split()
                     if not any(kw.lower() in (title + item.get("content", "")).lower() for kw in keywords):
                         continue
@@ -122,7 +144,7 @@ def _build_em_global_news_engine(spec: dict[str, Any]) -> Any:
         params = {
             "client": "web", "biz": "web_724",
             "fastColumn": "102", "sortEnd": "",
-            "pageSize": str(n * 2),  # 多拉一些用于过滤
+            "pageSize": str(max(int(n) * 3, 10)),  # 放大拉取供关键词过滤
             "req_trace": str(uuid.uuid4()),
         }
         headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://kuaixun.eastmoney.com/"}
@@ -133,8 +155,8 @@ def _build_em_global_news_engine(spec: dict[str, Any]) -> Any:
             results = []
             for item in d.get("data", {}).get("fastNewsList", []):
                 title = item.get("title", "")
-                # 关键词过滤
-                if query and query.strip():
+                # 关键词过滤：纯触发词（快讯/美股等）放行全量榜单
+                if _should_filter(query):
                     keywords = query.strip().split()
                     if not any(kw.lower() in (title + item.get("summary", "")).lower() for kw in keywords):
                         continue

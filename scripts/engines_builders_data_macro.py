@@ -240,11 +240,39 @@ def _build_fx_rate_engine(spec: dict[str, Any]) -> Any:
 
 # 模块级国家表：worldbank 引擎解析国家、fred 引擎国家词守卫、route 层分流共用
 WORLDBANK_COUNTRIES: dict[str, str] = {
-    "中国": "CHN", "美国": "USA", "日本": "JPN", "德国": "DEU", "英国": "GBR",
-    "法国": "FRA", "印度": "IND", "巴西": "BRA", "俄罗斯": "RUS", "韩国": "KOR",
-    "加拿大": "CAN", "澳大利亚": "AUS", "意大利": "ITA", "西班牙": "ESP",
-    "世界": "WLD", "欧元区": "EMU", "香港": "HKG", "台湾": "TWN", "新加坡": "SGP",
+    "中国": "CHN", "china": "CHN", "美国": "USA", "usa": "USA", "us": "USA",
+    "united states": "USA", "america": "USA", "日本": "JPN", "japan": "JPN",
+    "德国": "DEU", "germany": "DEU", "英国": "GBR", "uk": "GBR",
+    "united kingdom": "GBR", "britain": "GBR", "法国": "FRA", "france": "FRA",
+    "印度": "IND", "india": "IND", "巴西": "BRA", "brazil": "BRA",
+    "俄罗斯": "RUS", "russia": "RUS", "韩国": "KOR", "korea": "KOR",
+    "south korea": "KOR", "加拿大": "CAN", "canada": "CAN",
+    "澳大利亚": "AUS", "australia": "AUS", "意大利": "ITA", "italy": "ITA",
+    "西班牙": "ESP", "spain": "ESP", "世界": "WLD", "world": "WLD",
+    "global": "WLD", "欧元区": "EMU", "eurozone": "EMU", "香港": "HKG",
+    "hong kong": "HKG", "台湾": "TWN", "taiwan": "TWN", "新加坡": "SGP",
+    "singapore": "SGP",
 }
+
+
+def _match_country(query: str, mapping: dict[str, str]) -> str:
+    """大小写不敏感国家匹配（中文原名 + 英文别名）。
+
+    短别名（us/uk/eu 等 ≤3 字符）用词边界匹配，避免 'focus'/'consensus'
+    之类包含子串的普通词误判为国家。
+    """
+    low = query.lower()
+    for name, code in mapping.items():
+        # 中文/长英文名直接子串匹配；短别名（≤3 字符）必须走词边界分支
+        if name in query and (not name.isascii() or len(name) > 3):
+            return code
+        if name.isascii():
+            if len(name) <= 3:
+                if re.search(rf"(?<![a-z]){re.escape(name)}(?![a-z])", low):
+                    return code
+            elif name in low:
+                return code
+    return ""
 
 
 def is_foreign_macro_query(query: str) -> bool:
@@ -273,14 +301,14 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
 
     _INDICATORS: list[tuple[tuple[str, ...], str, str]] = [
         (("gdp", "国内生产总值", "生产总值", "经济总量"), "NY.GDP.MKTP.CD", "GDP（现价美元）"),
-        (("人均gdp", "人均国内生产总值"), "NY.GDP.PCAP.CD", "人均GDP（现价美元）"),
-        (("gdp增速", "gdp增长", "经济增长率"), "NY.GDP.MKTP.KD.ZG", "GDP年增长率"),
-        (("cpi", "通胀", "通货膨胀", "物价"), "FP.CPI.TOTL.ZG", "CPI通胀率"),
-        (("失业", "失业率"), "SL.UEM.TOTL.ZS", "失业率"),
-        (("人口",), "SP.POP.TOTL", "总人口"),
-        (("贸易", "进出口", "对外贸易"), "NE.TRD.GNFS.ZS", "贸易占GDP比重"),
-        (("利率", "贷款利率"), "FR.INR.LEND", "贷款利率"),
-        (("经常账户", "经常项目"), "BN.CAB.XOKA.GD.ZS", "经常账户占GDP比重"),
+        (("人均gdp", "人均国内生产总值", "gdp per capita"), "NY.GDP.PCAP.CD", "人均GDP（现价美元）"),
+        (("gdp增速", "gdp增长", "经济增长率", "gdp growth"), "NY.GDP.MKTP.KD.ZG", "GDP年增长率"),
+        (("cpi", "通胀", "通货膨胀", "物价", "inflation"), "FP.CPI.TOTL.ZG", "CPI通胀率"),
+        (("失业", "失业率", "unemployment"), "SL.UEM.TOTL.ZS", "失业率"),
+        (("人口", "population"), "SP.POP.TOTL", "总人口"),
+        (("贸易", "进出口", "对外贸易", "trade"), "NE.TRD.GNFS.ZS", "贸易占GDP比重"),
+        (("利率", "贷款利率", "interest rate"), "FR.INR.LEND", "贷款利率"),
+        (("经常账户", "经常项目", "current account"), "BN.CAB.XOKA.GD.ZS", "经常账户占GDP比重"),
     ]
 
     @safe_search
@@ -333,11 +361,7 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
 
     def _parse(q: str) -> tuple[str, str, str]:
         low = q.lower()
-        cc = ""
-        for name, code in WORLDBANK_COUNTRIES.items():
-            if name in q:
-                cc = code
-                break
+        cc = _match_country(q, WORLDBANK_COUNTRIES)
         if not cc:
             return "", "", ""
         ind, ind_label = "", ""
@@ -615,20 +639,31 @@ def _build_nbs_stats_engine(spec: dict[str, Any]) -> Any:
 # ── Eurostat 欧盟统计引擎（macro_data 域） ───────────────────────────────────
 
 _EUROSTAT_GEO: dict[str, str] = {
-    "德国": "DE", "法国": "FR", "英国": "UK", "意大利": "IT", "西班牙": "ES",
-    "荷兰": "NL", "比利时": "BE", "奥地利": "AT", "爱尔兰": "IE", "葡萄牙": "PT",
-    "希腊": "EL", "芬兰": "FI", "瑞典": "SE", "丹麦": "DK", "波兰": "PL",
-    "捷克": "CZ", "匈牙利": "HU", "罗马尼亚": "RO", "保加利亚": "BG", "斯洛伐克": "SK",
-    "斯洛文尼亚": "SI", "克罗地亚": "HR", "立陶宛": "LT", "拉脱维亚": "LV",
-    "爱沙尼亚": "EE", "塞浦路斯": "CY", "卢森堡": "LU", "马耳他": "MT",
-    "欧盟": "EU27_2020", "欧元区": "EA20",
+    "德国": "DE", "germany": "DE", "法国": "FR", "france": "FR",
+    "英国": "UK", "uk": "UK", "united kingdom": "UK", "意大利": "IT",
+    "italy": "IT", "西班牙": "ES", "spain": "ES", "荷兰": "NL",
+    "netherlands": "NL", "比利时": "BE", "belgium": "BE", "奥地利": "AT",
+    "austria": "AT", "爱尔兰": "IE", "ireland": "IE", "葡萄牙": "PT",
+    "portugal": "PT", "希腊": "EL", "greece": "EL", "芬兰": "FI",
+    "finland": "FI", "瑞典": "SE", "sweden": "SE", "丹麦": "DK",
+    "denmark": "DK", "波兰": "PL", "poland": "PL", "捷克": "CZ",
+    "czech": "CZ", "匈牙利": "HU", "hungary": "HU", "罗马尼亚": "RO",
+    "romania": "RO", "保加利亚": "BG", "bulgaria": "BG",
+    "斯洛伐克": "SK", "slovakia": "SK", "斯洛文尼亚": "SI",
+    "slovenia": "SI", "克罗地亚": "HR", "croatia": "HR",
+    "立陶宛": "LT", "lithuania": "LT", "拉脱维亚": "LV", "latvia": "LV",
+    "爱沙尼亚": "EE", "estonia": "EE", "塞浦路斯": "CY", "cyprus": "CY",
+    "卢森堡": "LU", "luxembourg": "LU", "马耳他": "MT", "malta": "MT",
+    "欧盟": "EU27_2020", "eu": "EU27_2020", "european union": "EU27_2020",
+    "欧元区": "EA20", "eurozone": "EA20", "euro area": "EA20",
 }
 # 指标关键词 → (数据集, 维度参数, 指标名)。维度均已实测验证
 _EUROSTAT_INDICATORS: list[tuple[tuple[str, ...], str, str, str]] = [
-    (("人均gdp", "人均生产总值", "人均国内生产总值"), "nama_10_pc", "na_item=B1GQ&unit=CP_EUR_HAB", "人均GDP"),
+    (("人均gdp", "人均生产总值", "人均国内生产总值", "gdp per capita", "gdp/person"),
+     "nama_10_pc", "na_item=B1GQ&unit=CP_EUR_HAB", "人均GDP"),
     (("gdp", "生产总值", "国内生产总值", "经济总量"), "nama_10_gdp", "na_item=B1GQ&unit=CP_MEUR", "GDP"),
-    (("失业",), "une_rt_a", "age=Y15-74&sex=T&unit=PC_ACT", "失业率"),
-    (("人口",), "demo_pjan", "age=TOTAL&sex=T", "人口"),
+    (("失业", "失业率", "unemployment", "jobless"), "une_rt_a", "age=Y15-74&sex=T&unit=PC_ACT", "失业率"),
+    (("人口", "population", "inhabitants"), "demo_pjan", "age=TOTAL&sex=T", "人口"),
 ]
 # unit 编码 → 简短单位标签（未命中时回退 API 原文）
 _EUROSTAT_UNIT: dict[str, str] = {
@@ -658,11 +693,7 @@ def _build_eurostat_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         low = q.lower()
 
-        country = ""
-        for name, code in _EUROSTAT_GEO.items():
-            if name in q:
-                country = code
-                break
+        country = _match_country(q, _EUROSTAT_GEO)
         if not country:
             return []
 
