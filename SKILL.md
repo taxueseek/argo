@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.9
+version: 2.7.3
 triggers:
   - 搜索
   - 查一下
@@ -603,9 +603,11 @@ python3 scripts/quota.py stats
 `python3 scripts/search.py "Fetch API" --engine mdn`、
 `python3 scripts/search.py "bert" --engine huggingface`。
 
-### 标准化：单一真源（v2.6）
+### 标准化：单一真源（v2.6，v2.7.3 修正）
 
 磁盘上只保留**一份** argo 代码（本仓库）。引擎注册在仓库内派生；宿主入口用符号链接指回真源。**禁止** rsync/多副本；**禁止**在产品代码里写死主机 skill 路径。
+
+**引擎声明的第二真源（外置 specs）**：`engines/specs/*.yaml` 是合法的外置引擎声明目录（`config.py._merge_external_engines` 启动时合并，外置**优先覆盖**同名引擎）。当前 10 个引擎声明在外置目录：`aviation_weather` / `cn_ai_news` / `train` / `weather` / `datacite` / `firecrawl` / `fxtwitter` / `realtime_index` / `sec_edgar` / `zenodo`。新增引擎可任选 config.yaml 或 engines/specs/（外置适合需独立版本管理的试验性引擎）；`sync_backends.py --check` 会校验两源合并后的注册表一致性。
 
 | 层 | 真源 / 工具 | 说明 |
 |----|-------------|------|
