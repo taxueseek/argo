@@ -243,6 +243,14 @@ def verify_results(results: list[dict[str, Any]],
             return {"error": f"fetch_v3 不可用: {e}", "verified": [],
                     "revision_summary": {}, "pending": [], "skipped_cached": 0}
 
+    # 守卫：top_k 非正数（0 / 负数）按默认 3 处理，避免反向切片（results[:-1]）
+    try:
+        top_k = int(top_k)
+    except (TypeError, ValueError):
+        top_k = 3
+    if top_k <= 0:
+        top_k = 3
+
     verified: list[dict[str, Any]] = []
     pending: list[str] = []
     skipped_cached = 0

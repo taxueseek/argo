@@ -389,5 +389,31 @@ def test_mcp_compact_preserves_evidence_fields(cache):
     assert "fetched_evidence" not in by_url["https://v.com/verified"]
 
 
+def test_verify_top_k_non_positive_guard(cache):
+    """top_k=0 / 负数 / 非数值 → 按默认 3 处理，不反向切片不崩。"""
+    results = [{"url": f"https://v.com/r{i}", "title": f"R{i}", "absorption": 0.2}
+               for i in range(5)]
+    fn = _fake_fetch_factory("https://v.com/r0")
+    for bad in (0, -1, -99, "x", None):
+        v = evidence_loop.verify_results(
+            results, "q", cache=cache, fetch_fn=fn, top_k=bad,
+        )
+        # 守卫后最多核验 3 条（不反向切片核验 4-5 条）；已核验的走 skipped_cached
+        assert v["revision_summary"]["n"] + v["skipped_cached"] <= 3, \
+            f"top_k={bad} 越界（n={v['revision_summary']['n']}, skipped={v['skipped_cached']}）"
+
+
+def test_evidence_ttl_expiry(cache):
+    """证据分短 TTL 过期后 lookup 返回 None（复用 cache TTL 机制，不残留陈旧证据分）。"""
+    import time
+    evidence_loop.store_fetch_evidence(
+        "https://v.com/expire", {"url": "https://v.com/expire", "absorption": 0.5}, cache,
+        ttl=0,  # 立即过期
+    )
+    # L1 短 TTL=0：写入后同秒内可能仍在 L1 缓存窗口 → 用 sleep 保证过期
+    time.sleep(0.05)
+    assert evidence_loop.lookup_fetch_evidence("https://v.com/expire", cache) is None
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
