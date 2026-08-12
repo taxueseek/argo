@@ -51,6 +51,8 @@ __all__ = [
 ]
 from engines_builders import (
     _build_exa_engine,
+    _build_parallel_engine,
+    _build_you_engine,
     _build_em_miaoxiang_engine,
     _build_cninfo_engine,
     _build_sina_quote_engine,
@@ -258,6 +260,8 @@ _BUILDERS = {
     "jin10": _build_jin10_engine,
     "octen": _build_octen_engine,
     "bocha": _build_bocha_engine,
+    "parallel": _build_parallel_engine,
+    "you": _build_you_engine,
     "bocha_ai": _build_bocha_ai_engine,
     "imdb": _build_imdb_engine,
     "thesportsdb": _build_thesportsdb_engine,

@@ -199,6 +199,8 @@ _TIME_CAPABLE_ENGINES: frozenset[str] = frozenset({
     "realtime_index", "wayback_cdx", "local_search",
     "local_bing_news", "local_google_news", "local_duckduckgo_news",
     "local_ddgs_news",
+    # parallel（after_date 下推）/ you（freshness 动态化 + page_age）
+    "parallel", "you",
 })
 
 

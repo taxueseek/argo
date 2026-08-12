@@ -768,6 +768,7 @@ domains:
   engines_combo:
   - byted
   - octen
+  - you
   fallback: byted
   name: news_realtime
   parallel: true
@@ -781,6 +782,7 @@ domains:
   - octen
   - juejin
   - cn_ai_news
+  - parallel
   fallback: byted
   name: chinese_tech_deep
   parallel: true
@@ -1188,6 +1190,41 @@ engines:
     desc: Exa 语义搜索（embedding 匹配 + 内容摘要，1000次/月免费）
     timeout: 15
     type: exa
+  parallel:
+    enabled: true
+    label: Parallel搜索
+    cost_tier: api
+    qps: 5
+    priority: 11
+    period: month
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - general
+    - chinese
+    - english
+    desc: Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch）
+    timeout: 15
+    canary_query: rust async
+    type: parallel
+  you:
+    enabled: true
+    label: You.com搜索
+    cost_tier: api
+    qps: 3
+    priority: 12
+    period: month
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - general
+    - news
+    - english
+    - chinese
+    desc: You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并）
+    timeout: 12
+    canary_query: OpenAI latest news
+    type: you
   eastmoney:
     enabled: true
     label: 东财金融

@@ -145,6 +145,32 @@ class TestNewEngineRegistration(unittest.TestCase):
         self.assertEqual(raw["uapi"].get("method", "POST").upper(), "POST")
         self.assertEqual(raw["duckduckgo"].get("method", "GET").upper(), "GET")
 
+    # ── parallel / you.com 通用引擎（v2.8.0）──────────────────────────────
+
+    def test_parallel_you_registered(self) -> None:
+        avail = set(available_engines())
+        self.assertIn("parallel", avail, "registry 缺少 parallel")
+        self.assertIn("you", avail, "registry 缺少 you")
+        raw = load_config(force=True).get("engines", {})
+        self.assertEqual(raw["parallel"].get("type"), "parallel")
+        self.assertEqual(raw["you"].get("type"), "you")
+
+    def test_parallel_you_no_key_graceful(self) -> None:
+        """无 API key 时返回空列表不崩（免费/降级路径）。"""
+        from engines import search as engine_search
+        old_p = os.environ.pop("PARALLEL_API_KEY", None)
+        old_y = os.environ.pop("YDC_API_KEY", None)
+        try:
+            for name in ("parallel", "you"):
+                res = engine_search(name, "rust async", n=2)
+                self.assertIsInstance(res, list)
+                self.assertEqual(res, [], f"{name} 无 key 应空返回")
+        finally:
+            if old_p is not None:
+                os.environ["PARALLEL_API_KEY"] = old_p
+            if old_y is not None:
+                os.environ["YDC_API_KEY"] = old_y
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. 解析器（离线）

@@ -70,6 +70,10 @@ from engines_builders_data_macro import (
     _build_nbs_stats_engine,
     _build_eurostat_engine,
 )
+from engines_builders_search import (
+    _build_parallel_engine,
+    _build_you_engine,
+)
 from engines_builders_intl import (
     _build_cnii_engine,
     _build_ndl_engine,
@@ -170,4 +174,6 @@ __all__ = [
     "_build_figshare_engine",
     "_build_tencent_kline_engine",
     "_build_qq_music_engine",
+    "_build_parallel_engine",
+    "_build_you_engine",
 ]
