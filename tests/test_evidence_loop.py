@@ -415,5 +415,42 @@ def test_evidence_ttl_expiry(cache):
     assert evidence_loop.lookup_fetch_evidence("https://v.com/expire", cache) is None
 
 
+def test_mcp_compact_research_preserves_evidence_fields():
+    """MCP 研究包紧凑输出保留 fetch_required / evidence_loop.pending_fetch / verify。"""
+    import mcp_handlers
+
+    report = {
+        "query": "q", "query_original": "q", "execution_tier": "deep_research",
+        "mode": "auto", "sub_queries": [], "gaps": [], "key_findings": [],
+        "sources": [], "fetch_required": True,
+        "evidence_loop": {
+            "high_consequence_domain": "stock_query",
+            "pending_fetch": [
+                {"sub_query": "sq", "title": "T", "url": "https://v.com/p", "snippet": "s"},
+            ] * 7,  # 7 条 → 截断到 5
+            "verified_count": 0,
+            "pending_count": 7,
+        },
+        "verify": {
+            "revision_summary": {"n": 1, "improved": 1, "mean_delta": 0.42},
+            "pending": ["https://v.com/x"],
+        },
+    }
+    compact = mcp_handlers._compact_research_result(report, summary=True)
+    assert compact["fetch_required"] is True
+    el = compact["evidence_loop"]
+    assert el["high_consequence_domain"] == "stock_query"
+    assert len(el["pending_fetch"]) == 5  # 截断
+    assert el["verified_count"] == 0
+    assert el["pending_count"] == 7
+    v = compact["verify"]
+    assert v["revision_summary"]["mean_delta"] == 0.42
+    assert v["pending"] == ["https://v.com/x"]
+    # fetch_required=False 也应保留（False 不是 None）
+    compact2 = mcp_handlers._compact_research_result(
+        {**report, "fetch_required": False}, summary=True)
+    assert compact2["fetch_required"] is False
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))

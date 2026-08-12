@@ -223,9 +223,25 @@ def _compact_research_result(report: dict[str, Any], summary: bool = False) -> d
         "discipline", "quality_gates", "report_sections", "source_grades", "disclaimer",
         "academic_discipline", "engines_used", "source_distribution", "elapsed_ms",
         "sub_query_count", "total_sources", "gaps", "mode", "sub_queries",
-        "engines_priority", "vertical_engines",
+        "engines_priority", "vertical_engines", "fetch_required",
     )
     out: dict[str, Any] = {k: report[k] for k in keys if k in report and report[k] is not None}
+
+    # 证据闭环 P0：研究包门控（pending_fetch 截断到 5 条，保留可编程核验信号）
+    el = report.get("evidence_loop")
+    if isinstance(el, dict):
+        out["evidence_loop"] = {
+            "high_consequence_domain": el.get("high_consequence_domain"),
+            "pending_fetch": (el.get("pending_fetch") or [])[:5],
+            "verified_count": el.get("verified_count") or 0,
+            "pending_count": el.get("pending_count") or 0,
+        }
+    if isinstance(report.get("verify"), dict):
+        v = report["verify"]
+        out["verify"] = {
+            "revision_summary": v.get("revision_summary") or {},
+            "pending": (v.get("pending") or [])[:5],
+        }
 
     findings = []
     for kf in report.get("key_findings") or []:
