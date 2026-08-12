@@ -779,6 +779,21 @@ class SearchCache:
         key = self._key(url, "fetch", 0, "fetch", "auto", "any", kind="fetch")
         self._write(key, url, "fetch", 0, payload, "fetch", ttl)
 
+    # ── URL 证据分缓存（证据闭环 P0）──────────────────────────────────────
+    # 与 fetch 正文缓存隔离（kind 不同），只存轻量证据分，不存正文/HTML。
+    # 生命周期：由 fetch_v3 写入（随正文抓取），TTL 与正文缓存策略对齐。
+
+    def get_evidence(self, url: str) -> Optional[dict]:
+        """读 URL → 正文级证据分缓存。未命中返回 None。"""
+        key = self._key(url, "evidence", 0, "evidence", "auto", "any", kind="evidence")
+        return self._read(key)
+
+    def set_evidence(self, url: str, evidence: dict, ttl: int = 3600):
+        """写 URL → 正文级证据分缓存。只接受轻量可序列化 dict。"""
+        assert_cacheable(evidence, context="SearchCache.set_evidence")
+        key = self._key(url, "evidence", 0, "evidence", "auto", "any", kind="evidence")
+        self._write(key, url, "evidence", 0, evidence, "evidence", ttl)
+
     def clear(self, older_than_hours: int = 24):
         self._l2.clear(older_than_hours=older_than_hours)
 

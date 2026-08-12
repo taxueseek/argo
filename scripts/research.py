@@ -926,6 +926,50 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
             "reason": rewrite_result["reason"],
         }
 
+    # 证据闭环 P0：研究包门控——标记高后果 + 列出待核验 top 结果
+    # 不自动 fetch（发现 ≠ 吸收，热路径不阻塞）；Agent 可对 pending_fetch 逐个核验。
+    try:
+        from evidence_loop import gate_results, is_high_consequence_domain
+        all_results: list[dict[str, Any]] = []
+        sub_results = collection.get("sub_results") or []
+        # 推断研究域：取子查询结果中出现最多的 domain（super_search 返回）
+        domain_counts: dict[str, int] = {}
+        for sr in sub_results:
+            for r in (sr.get("results") or [])[:1]:
+                if isinstance(r, dict):
+                    all_results.append(r)
+                    d = r.get("domain") or ""
+                    if d:
+                        domain_counts[d] = domain_counts.get(d, 0) + 1
+        domain = max(domain_counts, key=domain_counts.get) if domain_counts else ""
+        gate = gate_results(all_results, domain or None)
+        report["fetch_required"] = gate["fetch_required"]
+        pending = []
+        for sr in sub_results:
+            for r in (sr.get("results") or [])[:1]:
+                if isinstance(r, dict) and r.get("fetch_suggested"):
+                    pending.append({
+                        "sub_query": sr.get("query") or sr.get("intent") or "",
+                        "title": (r.get("title") or "")[:120],
+                        "url": r.get("url"),
+                        "snippet": (r.get("snippet") or "")[:160],
+                    })
+        report["evidence_loop"] = {
+            "high_consequence_domain": gate["high_consequence_domain"],
+            "pending_fetch": pending,
+            "verified_count": gate["verified_count"],
+            "pending_count": gate["pending_count"],
+            "note": (
+                "高后果研究建议先核验 pending_fetch 中的信源再下结论；"
+                "可用 --verify 对本报告 top 结果执行 fetch 回填。"
+                if gate["fetch_required"] and pending else
+                "日常研究：结果已含证据分，关键主张仍建议回源核对。"
+            ),
+        }
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(f"研究证据门控跳过: {type(e).__name__}")
+
     return report
 
 
@@ -970,6 +1014,15 @@ def main():
     parser.add_argument("--archive-dir", type=str, default=None, help="归档根目录")
     parser.add_argument("--archive-tag", default=None, help="归档标签")
     parser.add_argument("--archive-note", default=None, help="归档备注")
+    parser.add_argument(
+        "--verify",
+        nargs="?",
+        const=3,
+        type=int,
+        default=None,
+        metavar="TOP_K",
+        help="证据核验：对 top-k 未核验引用 fetch 正文、回填证据分、输出 evidence_revision 分布（默认 3）",
+    )
     args = parser.parse_args()
     # 研究层默认归档；--no-archive 退出
     do_archive = not args.no_archive
@@ -1066,6 +1119,42 @@ def main():
         report["topic_profile"] = profile_applied
         if profile_key:
             report["topic_profile_key"] = profile_key
+
+    # 证据闭环 P0：--verify 显式核验（fetch top 未核验引用 + 回填证据分）
+    if args.verify:
+        try:
+            from evidence_loop import verify_results
+            targets = []
+            for c in report.get("citations") or report.get("sources") or []:
+                if isinstance(c, dict) and c.get("url"):
+                    targets.append({
+                        "url": c.get("url"),
+                        "title": c.get("title") or "",
+                        "snippet": c.get("snippet") or "",
+                    })
+            if not targets:
+                for block in report.get("key_findings") or []:
+                    if not isinstance(block, dict):
+                        continue
+                    top = block.get("top_result") or {}
+                    if top.get("url"):
+                        targets.append({
+                            "url": top.get("url"),
+                            "title": top.get("title") or "",
+                            "snippet": top.get("snippet") or "",
+                        })
+            v = verify_results(targets[:args.verify], args.query, top_k=args.verify)
+            report["verify"] = v
+            if not args.json:
+                rs = v.get("revision_summary") or {}
+                print(
+                    f"  [verify] 核验 {rs.get('n', 0)} 条，"
+                    f"improved={rs.get('improved', 0)} unchanged={rs.get('unchanged', 0)} "
+                    f"degraded={rs.get('degraded', 0)} mean_delta={rs.get('mean_delta', 0)}",
+                    file=sys.stderr,
+                )
+        except Exception as e:
+            print(f"  [verify error] {type(e).__name__}: {e}", file=sys.stderr)
 
     if do_archive:
         try:

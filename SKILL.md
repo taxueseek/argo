@@ -256,6 +256,25 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 4. **社交帖**：叙事/舆情，不进事实真值  
 5. **分层查询**：事实类 deep 至少 2–3 条子查询（来源 / 对比数据 / 关键主体）
 
+### 证据闭环（v2.7.3+，P0）
+
+搜索输出已带证据门控，Agent 可编程判断「现在能不能下结论」：
+
+- `fetch_required`：bool。查询命中高后果域（finance/health/legal/事实核查）时为 true，下结论前必须核验正文
+- `evidence_loop.suggested`：建议核验的 URL 列表（未核验且非 SERP）
+- `evidence_loop.verified_count / pending_count`：已核验 / 待核验条数
+- 每条结果：`fetch_suggested`（是否建议核验）、`has_fetched_evidence`（是否已核验）、`post_fetch_absorption`（正文级吸收分，核验后回填）
+
+**核验命令**（显式 fetch + 回填 + revision 分布）：
+
+```bash
+python3 scripts/search.py "贵州茅台股价" --verify 3
+# [verify] 核验 3 条，improved=2 unchanged=1 degraded=0 mean_delta=0.18
+python3 scripts/research.py "台积电估值分歧" --verify 3
+```
+
+`--verify` 对 top-k 未核验结果 fetch 正文，写 URL→证据分缓存，输出 `verify.revision_summary`（improved/unchanged/degraded/mean_delta）。**同一 URL 二次搜索自动回填**，不再建议核验，verified_count 递增，形成闭环。已核验结果不重复打网（`skipped_cached` 计数）。
+
 ### 能力清单
 
 - **TF-IDF 语义路由**：二元组 + boost_keywords + boost_combos，< 5ms 延迟

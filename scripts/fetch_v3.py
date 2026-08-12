@@ -617,6 +617,16 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             SearchCache().set_fetch(url, to_store, ttl=ttl)
         except Exception:
             pass
+        # 证据闭环 P0：同步写 URL → 正文级证据分缓存（独立 kind，轻量）
+        try:
+            from evidence_loop import (
+                extract_fetch_evidence, store_fetch_evidence, ttl_for_fetch_result,
+            )
+            ev = extract_fetch_evidence(result)
+            if ev:
+                store_fetch_evidence(url, ev, ttl=ttl_for_fetch_result(result))
+        except Exception:
+            pass
 
     result["cached"] = False
     return result

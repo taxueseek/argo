@@ -1764,6 +1764,23 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             result.setdefault("schema_version", "1.0")
             result.setdefault("limitations", [])
 
+    # 证据闭环 P0：回填已核验证据分 + 高后果门控（finance/health/legal）
+    # 输出 fetch_required / evidence_loop 汇总，每条结果带 fetch_suggested
+    # 与 has_fetched_evidence / post_fetch_absorption（若此前 fetch 过）。
+    try:
+        from evidence_loop import gate_results
+        gate = gate_results(result.get("results") or [], result.get("domain"))
+        result["fetch_required"] = gate["fetch_required"]
+        result["evidence_loop"] = {
+            "high_consequence_domain": gate["high_consequence_domain"],
+            "suggested": gate["suggested"],
+            "verified_count": gate["verified_count"],
+            "pending_count": gate["pending_count"],
+        }
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(f"证据门控跳过: {type(e).__name__}")
+
     # 相关信源标准化（日常搜索底部引用列表；与 results 顺序一致）
     result["sources"] = build_sources(result.get("results") or [])
 
@@ -1964,6 +1981,15 @@ def main():
     )
     parser.add_argument("--archive-tag", default=None, help="归档标签，便于 list 过滤")
     parser.add_argument("--archive-note", default=None, help="归档备注")
+    parser.add_argument(
+        "--verify",
+        nargs="?",
+        const=3,
+        type=int,
+        default=None,
+        metavar="TOP_K",
+        help="证据核验：对 top-k 未核验结果 fetch 正文、回填证据分、输出 evidence_revision 分布（默认 3）",
+    )
 
     args = parser.parse_args()
 
@@ -2031,6 +2057,36 @@ def main():
                 )
         except Exception as e:
             print(f"  [archive error] {type(e).__name__}: {e}", file=sys.stderr)
+
+    # 证据闭环 P0：--verify 显式核验 top-k 未核验结果（fetch + 回填 + revision 分布）
+    if args.verify:
+        try:
+            from evidence_loop import verify_results
+            v = verify_results(results.get("results") or [], args.query, top_k=args.verify)
+            results["verify"] = v
+            results["fetch_required"] = bool(results.get("fetch_required"))
+            # verify 已回填/核验结果 → 刷新门控汇总，避免 suggested 含已核验 URL
+            try:
+                from evidence_loop import gate_results
+                gate = gate_results(results.get("results") or [], results.get("domain"))
+                results["evidence_loop"] = {
+                    "high_consequence_domain": gate["high_consequence_domain"],
+                    "suggested": gate["suggested"],
+                    "verified_count": gate["verified_count"],
+                    "pending_count": gate["pending_count"],
+                }
+            except Exception:
+                pass
+            if not args.json_output:
+                rs = v.get("revision_summary") or {}
+                print(
+                    f"  [verify] 核验 {rs.get('n', 0)} 条，"
+                    f"improved={rs.get('improved', 0)} unchanged={rs.get('unchanged', 0)} "
+                    f"degraded={rs.get('degraded', 0)} mean_delta={rs.get('mean_delta', 0)}",
+                    file=sys.stderr,
+                )
+        except Exception as e:
+            print(f"  [verify error] {type(e).__name__}: {e}", file=sys.stderr)
 
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}

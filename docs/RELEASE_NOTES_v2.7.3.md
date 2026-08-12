@@ -58,6 +58,21 @@
 - 抓取链升级（crawl/extract 走 fetch_v3 降级链）、fetch_page_v3 raw 模式绕过缓存取完整 HTML
 - 版本号统一 2.7.3、单一真源文档修正（engines/specs/ 外置目录说明）
 
+### A8. 证据闭环 P0（2026-08-12）
+
+**以前**：搜索给「证据候选 + snippet 级快评分」，但 fetch 正文后不回填、无 URL→证据分缓存、无「该核验哪些」的可编程信号。Agent 高后果下结论只能靠纪律，系统不帮它证明，也不度量证明成本。**证据闭环是开环。**
+
+**现在**：证据闭环闭环化（新模块 `scripts/evidence_loop.py`）：
+
+1. **fetch 证据回填**：`fetch_v3` 成功抓取后同步提取正文级证据分（absorption / quality / word_count / evidence_flags），写 URL→证据分独立缓存（`SearchCache.get/set_evidence`，与 fetch 正文缓存 kind 隔离，互不污染）。
+2. **高后果门控**：查询命中高后果域（finance：stock_query/fund_query/macro_data/crypto_search 等；health：medical/chem_search；legal：legal/us_legal/wenshu_query；事实核查与航空气象）时输出 `fetch_required=true`。
+3. **可编程核验信号**：每条结果带 `fetch_suggested` / `has_fetched_evidence` / `post_fetch_absorption`；顶层 `evidence_loop` 汇总 `suggested / verified_count / pending_count`。深度研究包输出 `evidence_loop.pending_fetch`（子查询 top1 待核验列表）。
+4. **`--verify` 核验模式**（CLI 与 research）：对 top-k 未核验结果显式 fetch，回填证据分，输出 `verify.revision_summary`（improved/unchanged/degraded/mean_delta），已核验结果不重复打网（`skipped_cached`）。
+
+**实测闭环**（本机真实搜索「贵州茅台股价」）：搜索 → `fetch_required=true`、`suggested=[新浪财经]`；`--verify 1` → fetch 成功（http、content_ok），absorption 0.0→0.42（delta +0.42）；二次搜索 → 自动回填 `post_fetch_absorption=0.42`、`verified_count=1`、`pending_count=0`、不再建议核验。**snippet 级分 0 vs 正文级分 0.42 的实测差异，实证了「snippet 评分不可靠、高后果必须 fetch」的假设。**
+
+**验证**：新增 `tests/test_evidence_loop.py` 14 项全过（证据提取 / 缓存隔离 / 回填 / 高后果门控 / verify 模式 / fetch_v3 自动写证据缓存）；全量回归 790 passed、18 skipped。
+
 ---
 
 ## 这次更新有什么
