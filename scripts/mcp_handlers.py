@@ -136,8 +136,22 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         for k in ("selection", "absorption", "credibility_fast", "evidence_flags"):
             if k in r:
                 item[k] = r[k]
+        # 证据闭环 P0：保留核验信号（仅存在时，避免空字段噪音）
+        for k in ("fetch_suggested", "has_fetched_evidence", "post_fetch_absorption"):
+            if r.get(k) is not None:
+                item[k] = r[k]
         results.append(item)
     out["results"] = results
+    # 证据闭环 P0：顶层门控信号（轻量 4 字段，供 Agent 判断「能否下结论」）
+    if result.get("fetch_required") is not None:
+        out["fetch_required"] = result["fetch_required"]
+    el = result.get("evidence_loop")
+    if isinstance(el, dict):
+        out["evidence_loop"] = {
+            "suggested": el.get("suggested") or [],
+            "verified_count": el.get("verified_count") or 0,
+            "pending_count": el.get("pending_count") or 0,
+        }
     # 引擎可观测性：精简版 engine_outcomes（engine/status/latency，去掉 detail）
     # 让 Agent 能看到「哪个引擎失败、为什么类别」，不占大体积
     outcomes = result.get("engine_outcomes") or []

@@ -319,5 +319,75 @@ def test_fetch_v3_writes_evidence_cache(monkeypatch, tmp_path):
     assert ev["url"] == "https://v.com/fake"
 
 
+def test_gate_results_empty_and_mixed(cache):
+    """空结果 / 非 dict / 无 URL 结果不崩，suggested 为空。"""
+    g1 = evidence_loop.gate_results([], "stock_query", cache)
+    assert g1["fetch_required"] is True
+    assert g1["suggested"] == []
+    assert g1["pending_count"] == 0
+
+    g2 = evidence_loop.gate_results([None, "x", {"title": "no url"}], "general", cache)
+    assert g2["fetch_required"] is False
+    assert g2["suggested"] == []
+    assert g2["verified_count"] == 0
+    assert g2["pending_count"] == 0
+
+
+def test_verify_fetch_returns_non_dict(cache):
+    """fetch_fn 返回非 dict（异常形态）→ 进 pending，不崩。"""
+    results = [{"url": "https://v.com/weird", "title": "W", "absorption": 0.2}]
+
+    def _bad_fetch(u, max_chars=8000, timeout=8.0):
+        return None  # 模拟上游异常
+
+    v = evidence_loop.verify_results(
+        results, "q", cache=cache, fetch_fn=_bad_fetch, top_k=1,
+    )
+    assert v["verified"] == []
+    assert "https://v.com/weird" in v["pending"]
+    assert v["revision_summary"]["n"] == 0
+
+
+def test_mcp_compact_preserves_evidence_fields(cache):
+    """MCP 紧凑输出保留证据门控字段（集成边界：Agent 主入口必须能读到核验信号）。"""
+    import mcp_handlers
+
+    cache.set_evidence("https://v.com/verified", {
+        "url": "https://v.com/verified", "absorption": 0.66,
+        "quality_score": 0.8, "word_count": 150, "content_ok": True,
+        "evidence_flags": {"has_numbers": True}, "fetch_method": "http",
+    })
+    results = [
+        {"url": "https://v.com/verified", "title": "V", "score": 0.9},
+        {"url": "https://v.com/pending", "title": "P", "score": 0.8},
+    ]
+    full = {
+        "query": "q", "engine": "e", "engines_used": ["e"],
+        "count": 2, "elapsed_ms": 10, "cached": False,
+        "mode": "auto", "depth": "balanced", "execution_tier": "daily",
+        "input_kind": "keyword", "results": results,
+    }
+    evidence_loop.gate_results(results, "stock_query", cache)
+    full["fetch_required"] = True
+    full["evidence_loop"] = {
+        "high_consequence_domain": "stock_query",
+        "suggested": ["https://v.com/pending"],
+        "verified_count": 1, "pending_count": 1,
+    }
+    compact = mcp_handlers._compact_search_result(full, summary=True)
+    assert compact["fetch_required"] is True
+    el = compact["evidence_loop"]
+    assert el["suggested"] == ["https://v.com/pending"]
+    assert el["verified_count"] == 1
+    assert el["pending_count"] == 1
+    # 每条结果：已核验带 post_fetch_absorption；待核验带 fetch_suggested
+    by_url = {r["url"]: r for r in compact["results"]}
+    assert by_url["https://v.com/verified"]["has_fetched_evidence"] is True
+    assert by_url["https://v.com/verified"]["post_fetch_absorption"] == 0.66
+    assert by_url["https://v.com/pending"]["fetch_suggested"] is True
+    # 不存在的字段不产生噪音
+    assert "fetched_evidence" not in by_url["https://v.com/verified"]
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
