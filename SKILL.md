@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：install.sh / npx github:taxueseek/argo / mcp_server.py。
-version: 2.7.3
+version: 2.8.0
 triggers:
   - 搜索
   - 查一下
@@ -256,7 +256,7 @@ final      = 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engine
 4. **社交帖**：叙事/舆情，不进事实真值  
 5. **分层查询**：事实类 deep 至少 2–3 条子查询（来源 / 对比数据 / 关键主体）
 
-### 证据闭环（v2.7.3+，P0）
+### 证据闭环（v2.8.0）
 
 搜索输出已带证据门控，Agent 可编程判断「现在能不能下结论」：
 

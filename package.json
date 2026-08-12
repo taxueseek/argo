@@ -1,6 +1,6 @@
 {
   "name": "argo-search",
-  "version": "2.7.3",
+  "version": "2.8.0",
   "description": "Argo 阿尔戈 — 统一搜索与证据核验。推荐 npx -y github:taxueseek/argo 或 install.sh 安装（不依赖 npm 发版）。多语言路由、120+ 引擎、影视/体育/金融等垂直源、垂直结构化模态卡、16 MCP 工具。",
   "keywords": [
     "mcp",
