@@ -823,6 +823,7 @@ domains:
   - zhihu_global
   - wechat_sogou
   - octen
+  - local_search
   fallback: byted
   name: chinese_general
   parallel: true
@@ -3882,7 +3883,6 @@ output:
   format: auto
   include_routing_decision: true
   include_scores: true
-version: 1.0.1
 
 # 成本分级（用于成本感知路由）
 cost_tiers:

@@ -188,6 +188,16 @@ npx -y github:taxueseek/argo
 }
 ```
 
+### DeepSeek Harness 一键插件（.dsh-plugin bundle）
+
+在 DeepSeek Harness 里一行安装，模型直接获得 10 个 `mcp__argo__*` 工具：
+
+```bash
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+```
+
+重启 `dsh web` 后生效。包结构见 `packages/dsh-plugin/`；同 id `mcp-argo` 可在用户层 `cordis.patch.yml` 覆盖（如改用本地源码路径）。
+
 ### 依赖清单（通俗版）
 
 | 依赖 | 必需？ | 干什么用 | 不装会怎样 |

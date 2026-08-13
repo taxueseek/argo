@@ -1,0 +1,20 @@
+{
+  "name": "@taxueseek/argo-dsh",
+  "version": "2.8.0",
+  "description": "Argo 阿尔戈 — DSH profile bundle：一键挂载 argo 搜索 MCP（120+ 引擎、10 个 MCP 工具、证据闭环）。安装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"",
+  "license": "MIT",
+  "type": "module",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "README.md"
+  ]
+}

@@ -6,13 +6,6 @@
     search.py 的 execute_search 里完成
   - 保留本文件仅避免旧版外部脚本 import 断裂；新代码禁止使用
 """
-  - title: 结果标题（必填，截断到 200 字符）
-  - url: 结果链接（可选）
-  - snippet: 摘要/片段（截断到 300 字符）
-  - score: 相关性评分（默认 0.5）
-  - source: 引擎来源
-  - metadata: 元数据字典
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict

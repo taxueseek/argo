@@ -154,11 +154,11 @@ engines:
   - zhihu_global
   - zhihu_hot
 ---
-## Argo v2.7.0
+## Argo v2.8.0
 
 ### 本版你多了什么（通俗）
 
-**按语言、按领域选路，查询越用越准。** 多语言检测与引擎参数；影视 / 体育 / 地理 / 组织 / 媒体与金融宏观化学等垂直源；**垂直结构化模态卡**（火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机 / 汽车 / 挂号——单一语义识别自动路由到模态卡引擎，其余引擎 0 参与）；空结果恢复防串味；日常 combo 预算、研究 boost 不锁死。详见 `docs/RELEASE_NOTES_v2.7.0.md`。
+**从「帮你搜到」升级为「帮你核到」。** 搜索输出自带**证据闭环**——金融 / 医疗 / 法律等「说错会出事」的问题标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记住，下次搜到直接显示已核实。另有求职搜索 v3（结构化字段 + 增量监控 + 指纹去重，新增 Ashby ATS 免 Key 后端）、天气双源并行（wttr.in + Open-Meteo，地理编码 + 空气质量）、通用搜索增强（Parallel / You.com 免 Key 可选引擎）。详见 `docs/RELEASE_NOTES_v2.8.0.md`。
 
 | 你问的 | 大概走哪类 | 体感 |
 |--------|------------|------|
@@ -847,6 +847,14 @@ python3 scripts/mcp_server.py --test
 ```
 
 MCP 工具名：`argo_search`、`argo_local_search`（本地文件/记录搜索，非联网）、`argo_research`（含 social-sentiment 模式）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`（mode=extract 结构化提取）、`argo_screenshot`、`argo_pdf`、`argo_social_search`（mode=sentiment 舆情聚合）。
+
+**DeepSeek Harness 插件（bundle）**：一行安装即得上述全部工具：
+
+```bash
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+```
+
+重启 `dsh web` 生效；包结构与自定义覆盖见 `packages/dsh-plugin/`。
 
 ### 成本感知路由公式
 

@@ -1,0 +1,20 @@
+# argo-dsh bundle patch：把 argo 搜索 MCP server 挂进 DSH。
+#
+# 依赖：Node.js ≥ 18（npx）+ Python 3.10+（pip install pyyaml）。
+# 工具经 @deepseek-ai/dsh-mcp-client 注册，模型可见 mcp__argo__* 系列。
+# 安装后重启 dsh web 生效。
+#
+# 提示：同 id（mcp-argo）可在用户层 cordis.patch.yml 覆盖本配置，
+# 例如改用本地源码路径（python3 /path/to/argo/scripts/mcp_server.py），
+# 用户层同 id 最后写入者胜。
+
+- insert:
+    - id: mcp-argo
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: argo
+        transport: stdio
+        command: npx
+        args:
+          - '-y'
+          - 'github:taxueseek/argo'
