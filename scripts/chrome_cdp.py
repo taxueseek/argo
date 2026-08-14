@@ -103,24 +103,26 @@ def _http_request(host: str, port: int, path: str,
     """发送 HTTP/1.1 请求并读取完整响应。"""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
-    sock.connect((host, port))
+    try:
+        sock.connect((host, port))
 
-    hdrs = {"Host": host, "Connection": "close"}
-    if headers:
-        hdrs.update(headers)
-    if body:
-        hdrs["Content-Length"] = str(len(body.encode()))
+        hdrs = {"Host": host, "Connection": "close"}
+        if headers:
+            hdrs.update(headers)
+        if body:
+            hdrs["Content-Length"] = str(len(body.encode()))
 
-    request_line = f"{method} {path} HTTP/1.1\r\n"
-    header_block = "".join(f"{k}: {v}\r\n" for k, v in hdrs.items())
-    raw = request_line + header_block + "\r\n"
-    if body:
-        raw += body
+        request_line = f"{method} {path} HTTP/1.1\r\n"
+        header_block = "".join(f"{k}: {v}\r\n" for k, v in hdrs.items())
+        raw = request_line + header_block + "\r\n"
+        if body:
+            raw += body
 
-    sock.sendall(raw.encode())
-    resp = _http_read_response(sock, timeout)
-    sock.close()
-    return resp
+        sock.sendall(raw.encode())
+        return _http_read_response(sock, timeout)
+    finally:
+        # 异常路径（超时/连接拒绝）也必须关闭 fd
+        sock.close()
 
 
 # ─── WebSocket 握手（CDP 必须用 WS 双向通信）────────────────────────────────
@@ -344,16 +346,25 @@ class _ChromeProcess:
             "about:blank",
         ]
         self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # 等待 CDP ready
-        for _ in range(30):
-            time.sleep(0.3)
+        try:
+            # 等待 CDP ready
+            for _ in range(30):
+                time.sleep(0.3)
+                try:
+                    resp = _http_request("localhost", self.port, "/json/version", timeout=2)
+                    if resp["status"] == 200 and resp["body"]:
+                        return
+                except Exception:
+                    pass
+            raise RuntimeError(f"Chrome CDP failed to start on port {self.port}")
+        except BaseException:
+            # CDP 启动失败：杀掉已拉起的孤儿 Chrome，避免进程泄漏
             try:
-                resp = _http_request("localhost", self.port, "/json/version", timeout=2)
-                if resp["status"] == 200 and resp["body"]:
-                    return
+                self._proc.kill()
             except Exception:
                 pass
-        raise RuntimeError(f"Chrome CDP failed to start on port {self.port}")
+            self._proc = None
+            raise
 
     def stop(self) -> None:
         if self._proc:
@@ -400,7 +411,16 @@ class ChromeCDP:
         self._session: _CDPSession | None = None
         self._target_id: str | None = None
         if auto_start:
-            self.start()
+            try:
+                self.start()
+            except BaseException:
+                # 启动失败（如 target 获取/WS 建连异常）：__exit__ 不会执行，
+                # 必须在此清理已拉起的 Chrome，避免进程泄漏
+                try:
+                    self._chrome.stop()
+                except Exception:
+                    pass
+                raise
 
     def start(self) -> None:
         """启动 Chrome 并建立 CDP 会话。"""

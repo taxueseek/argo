@@ -564,7 +564,10 @@ class ContentScrubber:
         cleaned = text
         redactions = 0
 
-        for pattern in (INJECTION_PATTERNS + EXFILTRATION_PATTERNS +
+        # 与检测共用同一语系模式表（_lang_patterns），避免中文/日文等
+        # 注入「被标记却不脱敏」的漂移
+        lang = getattr(self, "_detect_content_lang", lambda t: "other")(text)
+        for pattern in (list(self._lang_patterns(lang)) + EXFILTRATION_PATTERNS +
                         IMPERSONATION_PATTERNS):
             if pattern in _NO_REDACT_PATTERNS:
                 continue

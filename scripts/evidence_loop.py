@@ -256,6 +256,32 @@ def verify_results(results: list[dict[str, Any]],
     skipped_cached = 0
     revisions: list[float] = []
 
+
+    def _record_verify(r: dict, ev: dict, verified: list, revisions: list) -> None:
+        """并行/串行共用的核验回填逻辑。"""
+        pre = float(r.get("post_fetch_absorption")
+                    if r.get("post_fetch_absorption") is not None
+                    else r.get("absorption") or 0.0)
+        post = float(ev["absorption"] or 0.0)
+        delta = round(post - pre, 3)
+        revisions.append(delta)
+        verified.append({
+            "url": r.get("url") or "",
+            "title": (r.get("title") or "")[:120],
+            "pre_absorption": round(pre, 3),
+            "post_absorption": round(post, 3),
+            "delta": delta,
+            "content_ok": ev.get("content_ok"),
+            "fetch_method": ev.get("fetch_method"),
+            "word_count": ev.get("word_count"),
+        })
+        r["has_fetched_evidence"] = True
+        r["post_fetch_absorption"] = round(post, 3)
+        r["fetch_suggested"] = False
+
+    # 并行 fetch：URL 独立，串行最坏 top_k×timeout
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    targets = []
     for r in results[:top_k]:
         if not isinstance(r, dict):
             continue
@@ -266,37 +292,37 @@ def verify_results(results: list[dict[str, Any]],
         if lookup_fetch_evidence(url, cache) is not None:
             skipped_cached += 1
             continue
-        pre = float(r.get("post_fetch_absorption")
-                    if r.get("post_fetch_absorption") is not None
-                    else r.get("absorption") or 0.0)
+        targets.append(r)
+
+    def _fetch_one(r: dict) -> tuple[dict, dict | None]:
+        url = r.get("url") or ""
         try:
             fr = fetch_fn(url, max_chars=max_chars, timeout=timeout)
         except Exception as e:  # pragma: no cover
             logger.debug(f"verify fetch 异常 {url}: {type(e).__name__}")
-            pending.append(url)
-            continue
-        ev = extract_fetch_evidence(fr)
-        if ev is None:
-            pending.append(url)
-            continue
-        store_fetch_evidence(url, ev, cache, ttl=ttl_for_fetch_result(fr))
-        post = float(ev["absorption"] or 0.0)
-        delta = round(post - pre, 3)
-        revisions.append(delta)
-        verified.append({
-            "url": url,
-            "title": (r.get("title") or "")[:120],
-            "pre_absorption": round(pre, 3),
-            "post_absorption": round(post, 3),
-            "delta": delta,
-            "content_ok": ev.get("content_ok"),
-            "fetch_method": ev.get("fetch_method"),
-            "word_count": ev.get("word_count"),
-        })
-        # 回填当前结果（内存内即时生效，便于调用方直接使用）
-        r["has_fetched_evidence"] = True
-        r["post_fetch_absorption"] = round(post, 3)
-        r["fetch_suggested"] = False
+            return r, None
+        return r, extract_fetch_evidence(fr)
+
+    if len(targets) > 1:
+        with ThreadPoolExecutor(max_workers=min(len(targets), 3)) as ex:
+            futures = [ex.submit(_fetch_one, r) for r in targets]
+            for fut in as_completed(futures):
+                r, ev = fut.result()
+                if ev is None:
+                    pending.append(r.get("url") or "")
+                    continue
+                store_fetch_evidence(r.get("url") or "", ev, cache,
+                                     ttl=ttl_for_fetch_result({"success": True}))
+                _record_verify(r, ev, verified, revisions)
+    else:
+        for r in targets:
+            r2, ev = _fetch_one(r)
+            if ev is None:
+                pending.append(r2.get("url") or "")
+                continue
+            store_fetch_evidence(r2.get("url") or "", ev, cache,
+                                 ttl=ttl_for_fetch_result({"success": True}))
+            _record_verify(r2, ev, verified, revisions)
 
     summary: dict[str, Any] = {"n": len(revisions)}
     if revisions:

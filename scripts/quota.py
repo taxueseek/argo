@@ -50,13 +50,17 @@ class QuotaManager:
             try:
                 self._state = json.loads(QUOTA_STATE_PATH.read_text())
             except (json.JSONDecodeError, OSError):
-                self._state = {}
+                # 损坏不清空：保留旧状态（配额/限频记忆），仅告警
+                import sys
+                print(f"[quota] 状态文件损坏，保留旧状态: {QUOTA_STATE_PATH}",
+                      file=sys.stderr)
 
     def _save_state(self) -> None:
         QUOTA_STATE_DIR.mkdir(parents=True, exist_ok=True)
-        QUOTA_STATE_PATH.write_text(
-            json.dumps(self._state, ensure_ascii=False, indent=2)
-        )
+        # 原子写：tmp + replace，避免并发 torn write 损坏配额状态
+        tmp = QUOTA_STATE_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(self._state, ensure_ascii=False, indent=2))
+        tmp.replace(QUOTA_STATE_PATH)
 
     def record(self, engine: str, success: bool = True, credits: int = 1) -> None:
         """记录一次 API 调用。"""
@@ -82,29 +86,33 @@ class QuotaManager:
             self._save_state()
 
     def get_remaining_ratio(self, engine: str) -> float:
-        """获取配额剩余比例。无限配额返回 1.0。"""
-        profile = self._profiles.get(engine, {})
-        state = self._state.get(engine, {})
-        limit = profile.get("limit")
-        if limit is None:
-            return 1.0
-        used = state.get("used", 0)
-        period = profile.get("period", "day")
-        last_reset = state.get("last_reset", 0)
-        now = time.time()
+        """获取配额剩余比例。无限配额返回 1.0。
 
-        # 按周期重置
-        if period == "month" and now - last_reset > 30 * 86400:
-            state["used"] = 0
-            state["last_reset"] = now
-            self._save_state()
-            used = 0
-        elif period == "day" and now - last_reset > 86400:
-            state["used"] = 0
-            state["last_reset"] = now
-            self._save_state()
-            used = 0
-        return max(0.0, (limit - used) / limit)
+        整体持锁：周期重置的写 + _save_state 与 record() 并发安全。
+        """
+        with self._lock:
+            profile = self._profiles.get(engine, {})
+            state = self._state.get(engine, {})
+            limit = profile.get("limit")
+            if limit is None:
+                return 1.0
+            used = state.get("used", 0)
+            period = profile.get("period", "day")
+            last_reset = state.get("last_reset", 0)
+            now = time.time()
+
+            # 按周期重置
+            if period == "month" and now - last_reset > 30 * 86400:
+                state["used"] = 0
+                state["last_reset"] = now
+                self._save_state()
+                used = 0
+            elif period == "day" and now - last_reset > 86400:
+                state["used"] = 0
+                state["last_reset"] = now
+                self._save_state()
+                used = 0
+            return max(0.0, (limit - used) / limit)
 
     def get_current_rpm(self, engine: str) -> float:
         """获取最近 1 分钟的调用速率。"""

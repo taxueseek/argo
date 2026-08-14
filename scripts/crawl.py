@@ -54,26 +54,44 @@ def crawl_sitemap(url, max_pages=20, timeout=10):
     return {'url': url, 'pages': pages, 'total': len(pages), 'elapsed_ms': int((time.monotonic() - t0) * 1000)}
 
 def crawl_bfs(url, max_pages=10, max_depth=2, timeout=8):
-    """BFS 爬取"""
+    """BFS 爬取（按层并行 frontier，去重后入队）"""
+    from collections import deque
     visited = set()
     pages = []
-    queue = [(url, 0)]
+    queue = deque([(url, 0)])
     while queue and len(pages) < max_pages:
-        current_url, depth = queue.pop(0)
-        if current_url in visited or depth > max_depth:
-            continue
-        visited.add(current_url)
-        result = _crawl_fetch(current_url, 2000, timeout)
-        if result['success']:
-            pages.append({'url': current_url, 'content': result['content'][:500], 'depth': depth})
-            html = result.get('html') or result.get('content') or ''
-            links = re.findall(r'href=["\']([^"\'#]+)', html)
-            for link in links[:5]:
-                full = urljoin(current_url, link)
-                if urlparse(full).netloc == urlparse(url).netloc and full not in visited:
-                    queue.append((full, depth+1))
+        # 取一层（最多 5 个）并行抓取
+        frontier = []
+        while queue and len(frontier) < 5:
+            u, d = queue.popleft()
+            if u in visited or d > max_depth:
+                continue
+            visited.add(u)
+            frontier.append((u, d))
+        if not frontier:
+            break
+        with ThreadPoolExecutor(max_workers=min(len(frontier), 5)) as ex:
+            futs = {ex.submit(_crawl_fetch, u, 2000, timeout): (u, d)
+                    for u, d in frontier}
+            for fut in as_completed(futs, timeout=timeout * 2):
+                u, d = futs[fut]
+                try:
+                    result = fut.result()
+                except Exception:
+                    continue
+                if not result.get('success'):
+                    continue
+                pages.append({'url': u, 'content': result['content'][:500], 'depth': d})
+                if len(pages) >= max_pages:
+                    break
+                html = result.get('html') or result.get('content') or ''
+                links = re.findall(r'href=["\']([^"\'#]+)', html)
+                for link in links[:5]:
+                    full = urljoin(u, link)
+                    if (urlparse(full).netloc == urlparse(url).netloc
+                            and full not in visited):
+                        queue.append((full, d + 1))
     return {'url': url, 'pages': pages, 'total': len(pages)}
-
 if __name__ == '__main__':
     import argparse
     p = argparse.ArgumentParser()

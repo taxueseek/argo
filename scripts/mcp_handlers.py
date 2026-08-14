@@ -646,16 +646,17 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             full_page = arguments.get("full_page", False)
             try:
                 cdp_mod = _lazy_cached("chrome_cdp")
-                cdp = cdp_mod.ChromeCDP(auto_start=True)
-                cdp.navigate(arguments["url"])
-                path = cdp.screenshot(output, full_page=full_page)
-                cdp.stop()
-                if path and os.path.exists(path):
-                    return _ok({"success": True, "screenshot": path, "url": arguments["url"]}, pretty=pretty)
-                return {
-                    "content": [{"type": "text", "text": _dumps({"success": False, "error": "screenshot failed"})}],
-                    "isError": True,
-                }
+                # with 上下文：无论 navigate/screenshot 成功或抛异常，
+                # __exit__ 都会 stop() 回收 Chrome 进程与临时目录
+                with cdp_mod.ChromeCDP(auto_start=True) as cdp:
+                    cdp.navigate(arguments["url"])
+                    path = cdp.screenshot(output, full_page=full_page)
+                    if path and os.path.exists(path):
+                        return _ok({"success": True, "screenshot": path, "url": arguments["url"]}, pretty=pretty)
+                    return {
+                        "content": [{"type": "text", "text": _dumps({"success": False, "error": "screenshot failed"})}],
+                        "isError": True,
+                    }
             except Exception as e:
                 return {
                     "content": [{"type": "text", "text": _dumps({"success": False, "error": str(e)[:200]})}],

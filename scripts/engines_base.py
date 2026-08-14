@@ -184,7 +184,8 @@ def _extract_items(data: Any, path: str) -> list:
     return []
 
 
-def _make_field_parser(path: str, fields: dict[str, str], url_template: str | None = None) -> Callable:
+def _make_field_parser(path: str, fields: dict[str, str], url_template: str | None = None,
+                   max_items: int = 10) -> Callable:
     """构造声明式 parser。支持点分路径字段与 url_template（含嵌套占位）。"""
     def parser(data: Any) -> list[dict[str, Any]]:
         if isinstance(data, list) and path in ("", ".", "$", "[]"):
@@ -216,7 +217,7 @@ def _make_field_parser(path: str, fields: dict[str, str], url_template: str | No
                 r["url"] = "https:" + r["url"]
             if r.get("title") or r.get("url"):
                 results.append(r)
-        return results[:10]
+        return results[:max_items]
     return parser
 
 
@@ -403,9 +404,9 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
         )[:limit]
     if isinstance(data, list):
         return _ensure_engine_source(
-            _parse_generic({"results": data}, eng), eng
+            _parse_generic({"results": data}, eng, limit), eng
         )[:limit]
-    return _ensure_engine_source(_parse_generic(data, eng), eng)[:limit]
+    return _ensure_engine_source(_parse_generic(data, eng, limit), eng)[:limit]
 
 
 # ── HTML 网页解析引擎 ─────────────────────────────────────────────────────────
@@ -730,7 +731,8 @@ def _parse_xml(text: str, engine_name: str) -> list[dict[str, Any]]:
     return results
 
 
-def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[str, Any]]:
+def _parse_generic(data: dict[str, Any], engine_name: str = "?",
+                    limit: int = 10) -> list[dict[str, Any]]:
     """通用 JSON 解析：自动探测常见列表路径与字段别名。
 
     列表探测（最多 3 层，只走已知键）：
@@ -800,7 +802,7 @@ def _parse_generic(data: dict[str, Any], engine_name: str = "?") -> list[dict[st
             "score": score,
             "source": engine_name,
         })
-    return results[:10]
+    return results[:limit]
 
 
 def _ensure_engine_source(
