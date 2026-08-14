@@ -117,6 +117,45 @@ class TestUrlSafety(unittest.TestCase):
             ok, _ = us.check_url("http://127.0.0.1:8000/")
             self.assertTrue(ok)
 
+    def test_ipv4_mapped_ipv6_blocked(self):
+        """IPv4-mapped IPv6（::ffff:a.b.c.d）落回 IPv4 私有段 → 拦截（ARGO-SEC-01 回归）。"""
+        for url, ip in (
+            ("http://[::ffff:127.0.0.1]/", "::ffff:127.0.0.1"),
+            ("http://[::ffff:10.0.0.1]/", "::ffff:10.0.0.1"),
+            ("http://[::ffff:192.168.1.1]/", "::ffff:192.168.1.1"),
+            ("http://[::ffff:169.254.169.254]/", "::ffff:169.254.169.254"),
+        ):
+            with self._fake_dns([ip]):
+                self.assertFalse(
+                    is_safe_fetch_url(url), f"{url} 应被拦截（IPv4-mapped 绕过）"
+                )
+
+    def test_ipv4_mapped_public_allowed(self):
+        """IPv4-mapped 公网地址 → 放行，不误伤正常流量。"""
+        with self._fake_dns(["::ffff:8.8.8.8"]):
+            self.assertTrue(is_safe_fetch_url("http://[::ffff:8.8.8.8]/"))
+
+    def test_numeric_ip_literal_variants_blocked(self):
+        """八进制 / 十六进制 / 单段整数 IP 字面量 → 规范化后拦截（ARGO-SEC-02 回归）。"""
+        for url in (
+            "http://0177.0.0.1/",     # 八进制 = 127.0.0.1
+            "http://0x7f.0.0.1/",     # 十六进制 = 127.0.0.1
+            "http://0x7f000001/",     # 单段十六进制 = 127.0.0.1
+            "http://2130706433/",     # 单段十进制 = 127.0.0.1
+            "http://0x0a000001/",     # = 10.0.0.1
+            "http://0300.0.0.1/",     # 八进制 = 192.0.0.1（IETF 保留段）
+        ):
+            self.assertFalse(
+                is_safe_fetch_url(url), f"{url} 应被拦截（数字字面量绕过）"
+            )
+
+    def test_normal_hostnames_unaffected(self):
+        """常规域名不受字面量规范化影响。"""
+        with self._fake_public_dns():
+            self.assertTrue(is_safe_fetch_url("https://example.com/a?b=c"))
+        with self._fake_dns(["192.168.1.1"]):
+            self.assertFalse(is_safe_fetch_url("https://intranet.example/"))
+
 
 class TestHttpClientGuard(unittest.TestCase):
     """HttpClient 入口拦截。"""

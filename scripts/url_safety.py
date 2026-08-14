@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import socket
 from urllib.parse import urlparse
 
@@ -81,11 +82,18 @@ def allow_private() -> bool:
 
 
 def is_private_ip(ip_str: str) -> bool:
-    """判断 IP 是否属于私有 / 特殊用途段。"""
+    """判断 IP 是否属于私有 / 特殊用途段。
+
+    IPv4-mapped IPv6（::ffff:a.b.c.d）实际连接落在 IPv4 网段，
+    必须转回 IPv4 再查表，否则 http://[::ffff:127.0.0.1]/ 可绕过
+    私有段检查（SSRF）。
+    """
     try:
         ip = ipaddress.ip_address(ip_str.strip())
     except ValueError:
         return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
     return any(ip in net for net in _PRIVATE_NETWORKS)
 
 
@@ -101,6 +109,8 @@ def is_fake_ip_address(ip_str: str) -> bool:
         ip = ipaddress.ip_address(ip_str.strip())
     except ValueError:
         return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
     return any(ip in net for net in _FAKE_IP_NETWORKS)
 
 
@@ -116,14 +126,61 @@ def host_is_private_name(host: str) -> bool:
     return h.endswith(_PRIVATE_HOST_SUFFIXES)
 
 
+# 数字 IP 字面量字符集：十进制 / 十六进制（0x）/ 前导零八进制 / 点分组合
+_NUMERIC_HOST_RE = re.compile(r"^[0-9a-fA-FxX.]+$")
+
+
+def _normalize_numeric_host(host: str) -> str | None:
+    """数字 IP 字面量规范化：八进制 / 十六进制 / 单段整数 → 标准点分 IPv4。
+
+    各系统解析器对 0177.0.0.1（八进制）、0x7f.0.0.1（十六进制）、
+    2130706433（单段整数）的行为不一致，校验层不能依赖连接层的「自觉」：
+    统一 int() 规范化后再查私有表，堵住绕过（SSRF）。
+    非数字字面量返回 None。
+    """
+    if not host or not _NUMERIC_HOST_RE.match(host) or ":" in host:
+        return None  # IPv6 字面量交给 ipaddress / getaddrinfo 处理
+
+    def _to_int(seg: str) -> int | None:
+        try:
+            if seg.lower().startswith("0x"):
+                return int(seg, 16)
+            if len(seg) > 1 and seg.startswith("0"):
+                return int(seg, 8)
+            return int(seg, 10)
+        except ValueError:
+            return None
+
+    if "." in host:
+        segs = host.split(".")
+        if len(segs) != 4:
+            return None
+        parts: list[int] = []
+        for s in segs:
+            v = _to_int(s)
+            if v is None or v > 255:
+                return None
+            parts.append(v)
+        return ".".join(str(p) for p in parts)
+    v = _to_int(host)
+    if v is None or v > 0xFFFFFFFF:
+        return None
+    return ".".join(str((v >> s) & 0xFF) for s in (24, 16, 8, 0))
+
+
 def host_is_private(host: str) -> bool:
-    """综合判断主机是否私有：先主机名，再 DNS 解析后的所有 IP。
+    """综合判断主机是否私有：先主机名，再数字字面量，最后 DNS 解析。
 
     fake-ip 占位段例外：若解析出的地址全部是占位段（域名被代理接管，
     流量走 TUN 直达公网），则不视为私网；只要含任一真实私有 IP 即拦截。
     """
     if host_is_private_name(host):
         return True
+    norm = _normalize_numeric_host(host)
+    if norm is not None and norm != host:
+        # 数字字面量变体：直接按规范化结果查表，不依赖各系统对
+        # 八进制/十六进制/单段整数解析行为的一致性
+        return is_private_ip(norm)
     try:
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except OSError:
