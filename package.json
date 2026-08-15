@@ -40,7 +40,8 @@
   },
   "os": [
     "darwin",
-    "linux"
+    "linux",
+    "win32"
   ],
   "dependencies": {},
   "devDependencies": {}
