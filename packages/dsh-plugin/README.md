@@ -19,21 +19,27 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 
 ## 自定义（可选）
 
-本插件的配置行 id 为 `mcp-argo`。如需改用本地 argo 源码（更快、离线可用），在 profile 的 `cordis.patch.yml` 用户层覆盖：
+本插件的配置行 id 为 `mcp-argo`。如需改用本地 argo 源码（更快、离线可用），在 profile 的 `cordis.patch.yml` 用户层用**非 insert 的 id 定向覆盖**：
 
 ```yaml
-- insert:
-    - id: mcp-argo
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: argo
-        transport: stdio
-        command: /usr/bin/python3
-        args:
-          - /path/to/argo/scripts/mcp_server.py
+- id: mcp-argo
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: argo
+    transport: stdio
+    command: python
+    args:
+      - C:/path/to/argo/scripts/mcp_server.py
+    toolCallTimeoutMs: 180000
+    failOnStartupError: true
 ```
 
-Cordis patch 语义：用户层同 id 最后写入者胜，覆盖插件默认配置。
+注意：
+- 覆盖 patch 必须写成上面的顶层 `id` 形式，不能再用 `- insert: - id: mcp-argo`。`insert` 只会追加或向 group 追加，不会替换同 id 行；追加第二条 `mcp-argo` 会在 DSH loader 中触发 `duplicate loader entry id` 并导致 profile 启动失败。
+- `name` 必须与 bundle 行完全一致，否则覆盖会被跳过。
+- `config` 是整体替换，必须写全 `serverName`、`transport`、`command`、`args`。
+- Windows 使用 `command: python`；macOS/Linux 可替换为 `/usr/bin/python3`。
+- 如果不想安装 bundle，也可以直接用唯一 id（如 `mcp-argo-local`）通过 `insert` 创建这行，不要与 bundle 的 `mcp-argo` 混用同一个 `serverName`。
 
 ## 卸载
 

@@ -4,9 +4,20 @@
 # 工具经 @deepseek-ai/dsh-mcp-client 注册，模型可见 mcp__argo__* 系列。
 # 安装后重启 dsh web 生效。
 #
-# 提示：同 id（mcp-argo）可在用户层 cordis.patch.yml 覆盖本配置，
-# 例如改用本地源码路径（python3 /path/to/argo/scripts/mcp_server.py），
-# 用户层同 id 最后写入者胜。
+# 提示：如需在用户层 cordis.patch.yml 覆盖本配置（例如改用本地源码路径），
+# 必须使用非 insert 的 id 定向覆盖，不能再用 insert 追加同 id 行：
+#
+#   - id: mcp-argo
+#     name: '@deepseek-ai/dsh-mcp-client'
+#     config:
+#       serverName: argo
+#       transport: stdio
+#       command: python
+#       args:
+#         - C:/path/to/argo/scripts/mcp_server.py
+#
+# 再写 `- insert: - id: mcp-argo` 会追加第二条 mcp-argo，DSH loader 检测到
+# 重复 id 会抛 `duplicate loader entry id` 并导致 profile 启动失败。
 
 - insert:
     - id: mcp-argo

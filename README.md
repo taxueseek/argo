@@ -196,7 +196,7 @@ npx -y github:taxueseek/argo
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
 ```
 
-重启 `dsh web` 后生效。包结构见 `packages/dsh-plugin/`；同 id `mcp-argo` 可在用户层 `cordis.patch.yml` 覆盖（如改用本地源码路径）。
+重启 `dsh web` 后生效。包结构见 `packages/dsh-plugin/`；如需改用本地源码路径，在用户层 `cordis.patch.yml` 使用非 insert 的 id 定向覆盖（不要再用 `insert` 追加同 id 行），完整示例见 `packages/dsh-plugin/README.md`。
 
 ### 依赖清单（通俗版）
 
