@@ -28,6 +28,8 @@
   "files": [
     "bin/",
     "scripts/",
+    "engines/",
+    "data/",
     "config.yaml",
     "backends/",
     "sub-skills/",
