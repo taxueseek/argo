@@ -112,6 +112,8 @@ def run_stdio():
 
         except json.JSONDecodeError:
             _send_error(None, -32700, "Parse error")
+        except KeyboardInterrupt:
+            break
         except Exception as e:
             _send_error(None, -32000, f"Internal error: {e}")
 
