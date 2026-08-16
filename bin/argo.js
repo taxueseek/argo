@@ -24,7 +24,7 @@ if (!fs.existsSync(SCRIPT)) {
 
 const proc = spawn(PYTHON, [SCRIPT], {
   stdio: ['pipe', 'pipe', 'inherit'],
-  env: { ...process.env },
+  env: { ...process.env, PYTHONUTF8: '1' },
 });
 
 process.stdin.pipe(proc.stdin);

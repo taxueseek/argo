@@ -72,7 +72,7 @@ class EngineRegistry:
     def _load_health(self):
         if HEALTH_STATE_PATH.exists():
             try:
-                self._health = json.loads(HEALTH_STATE_PATH.read_text())
+                self._health = json.loads(HEALTH_STATE_PATH.read_bytes())
             except Exception:
                 self._health = {}
 

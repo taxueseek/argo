@@ -120,7 +120,7 @@ def _load_quota_state() -> dict:
     if _quota_state_cache is not None and mtime == _quota_state_mtime:
         return _quota_state_cache
     try:
-        data = json.loads(quota_path.read_text())
+        data = json.loads(quota_path.read_bytes())
     except (json.JSONDecodeError, OSError):
         data = {}
     _quota_state_cache = data if isinstance(data, dict) else {}
@@ -151,7 +151,7 @@ def _load_cost_profiles() -> dict:
     if _cost_profiles_cache is not None and mtime == _cost_profiles_mtime:
         return _cost_profiles_cache
     try:
-        data = json.loads(tiers_path.read_text())
+        data = json.loads(tiers_path.read_bytes())
     except (json.JSONDecodeError, OSError):
         data = {}
     _cost_profiles_cache = data if isinstance(data, dict) else {}
@@ -191,7 +191,7 @@ class SemanticRouter:
             self._loaded = True
             return
         try:
-            profiles = json.loads(DOMAIN_PROFILES_PATH.read_text())
+            profiles = json.loads(DOMAIN_PROFILES_PATH.read_bytes())
         except (json.JSONDecodeError, OSError):
             self._loaded = True
             return

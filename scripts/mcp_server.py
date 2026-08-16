@@ -109,6 +109,10 @@ def test_mode():
 # ── 入口 ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    if os.name == "nt" and not sys.flags.utf8_mode:
+        os.execv(sys.executable,
+                 [sys.executable, "-X", "utf8", os.path.abspath(__file__)]
+                 + sys.argv[1:])
     if "--test" in sys.argv:
         test_mode()
     else:

@@ -71,7 +71,8 @@ def safe_search(fn: Callable) -> Callable:
 def _run(cmd: list[str], timeout: float = 8, engine_name: str = "?") -> str:
     """执行命令，超时/异常不抛。"""
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout)
         if r.returncode == 0:
             return r.stdout
         tail = (r.stderr or "").strip()[:200]
