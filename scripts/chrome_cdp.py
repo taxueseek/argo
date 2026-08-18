@@ -307,16 +307,41 @@ class _ChromeProcess:
 
     @staticmethod
     def _find_chrome() -> str:
+        # 环境变量优先（用户/宿主显式指定）
+        env_path = os.environ.get("CHROME_PATH") or os.environ.get("chrome_path")
+        if env_path and os.path.isfile(env_path):
+            return env_path
+
         candidates = [
+            # macOS
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
             "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            # Linux
             "/usr/bin/google-chrome",
             "/usr/bin/chromium",
+            "/usr/bin/google-chrome-stable",
+            "/snap/bin/chromium",
+            # Windows (x64)
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            # Windows (x86)
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            # Windows user-local
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "Application", "chrome.exe"),
+            # Edge (Chromium-based, 作为 Windows 默认浏览器回退)
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
         ]
         for c in candidates:
-            if os.path.isfile(c):
+            if c and os.path.isfile(c):
                 return c
-        raise FileNotFoundError("Chrome not found. Install Chrome or set chrome_path.")
+
+        # Windows: 尝试从 PATH 查找
+        import shutil
+        for name in ("chrome.exe", "chromium.exe", "msedge.exe"):
+            found = shutil.which(name)
+            if found:
+                return found
+
+        raise FileNotFoundError("Chrome not found. Install Chrome or set CHROME_PATH env var.")
 
     def start(self) -> None:
         """启动 headless Chrome with remote debugging。"""
