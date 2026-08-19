@@ -38,10 +38,6 @@
   "engines": {
     "node": ">=18"
   },
-  "os": [
-    "darwin",
-    "linux"
-  ],
   "dependencies": {},
   "devDependencies": {}
 }
