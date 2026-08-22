@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
 </p>
@@ -139,7 +139,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.8.0**。npm registry 上的旧包可能滞后，可不走）。
+任选一种即可。**不依赖 npm 官方包**也能用最新版（v2.5.1 起以 **GitHub** 为安装真源；当前推荐 **v2.8.2**。npm registry 上的旧包可能滞后，可不走）。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -319,8 +319,12 @@ python3 scripts/search.py --list-engines
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.8.0）
+### 当前大致能力（v2.8.2）
 
+- **Windows 全平台可用（v2.8.2 新增）**：移除 npm `os` 限制；全链路 UTF-8 防线（`PYTHONUTF8` + `-X utf8` + 6 处 JSON `read_bytes`）根治 GBK 崩溃；工具探测改 `shutil.which`；Chrome/Edge 自动发现；Ctrl+C 干净退出
+- **DSH 插件两种装法（v2.8.2 新增）**：主包自带 `dsh.bundle`，`dsh plugin add github:taxueseek/argo` 即得 10 个 MCP 工具；子包再加 `wide_research` 并行研究编排
+- **wide_research 证据门禁（v2.8.2 新增）**：输出自带 `quality_gate_results`（`conclusion_cap` low/medium/high），与 dossier 同一套语义；`depends_on` 依赖分阶段；仅 http(s) 入证据账本；worker 不可调 `argo_research`（防研究套研究）
+- **取证协议化（v2.8.2）**：深度研究只产 dossier（来源/覆盖/缺口/门禁），判断稿归 Agent；`--work-packages` 按 `depends_on` 分阶段
 - **证据闭环（v2.8.0 新增）**：搜索输出自带证据门控——高后果问题（金融/医疗/法律）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记住，下次搜索直接显示已核实
 - **求职搜索 v3（v2.8.0 升级）**：`argo job` 结构化字段 + 增量监控 + 指纹去重，新增 Ashby ATS 免 Key 后端与北京高校就业源
 - **天气双源并行（v2.8.0 升级）**：wttr.in + Open-Meteo 双源，地理编码 + 空气质量，问天气不落空
@@ -562,6 +566,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.8.2** | **Windows 全平台 + 证据语义统一**：移除 npm `os` 限制；全链路 UTF-8 防线（`PYTHONUTF8` + `-X utf8` + JSON `read_bytes`）根治 GBK 崩溃；工具探测改 `shutil.which`；Chrome/Edge 自动发现；Ctrl+C 干净退出。主包新增 `dsh.bundle` 声明（`dsh plugin add github:taxueseek/argo` 即得 MCP 工具）；npm 包补 `engines/`、`data/`。`wide_research` 输出新增 `quality_gate_results` 门禁 + `depends_on` 分阶段 + SSRF 防线 + 研究递归硬保护；深度研究协议化（机器产 dossier、Agent 写判断稿，`--work-packages` 分阶段取证）。详见 [发布说明](docs/RELEASE_NOTES_v2.8.2.md) |
 | **v2.8.0** | **证据闭环 + 求职 v3 + 天气双源**：搜索输出自带证据门控（高后果问题标 `fetch_required`、每条结果标 `fetch_suggested`、`--verify` 一键核验回填「核实后证据分」、核实过的链接自动记住下次搜索直接显示已核实）；`argo job` 求职搜索 v3（结构化字段 + 增量监控 + 指纹去重 + Ashby ATS / 北京高校源）；天气双源并行（wttr.in + Open-Meteo，地理编码 + 空气质量）；新增 Parallel / You.com 通用引擎；health_check 崩溃修复 + 日韩股票查询错配修复。详见 [发布说明](docs/RELEASE_NOTES_v2.8.0.md) |
 | **v2.7.3** | **本轮修复 + 引擎激活**：引擎层 HttpClient 接入（UA 轮换 / 重试 / 重定向跟随，arxiv 从 5s 超时空返回变为 2s 内 10 条有效结果）；TF-IDF 强语义注入激活 25 个垂直引擎（marginalia / open_meteo / usda / gov_policy / cnii 等，此前有 profile 但永远选不中）；env 占位缺失过滤（github 无 token 从 401 恢复匿名 API）；70 域 TTL 全覆盖（金价/快讯/行情缓存从 1 小时缩短到 5-15 分钟）；垂直源中英双语覆盖（worldbank / eurostat 英文国家与指标名，实测 China GDP / US inflation / Japan population 全部命中）；快讯类引擎触发词放行（「快讯」不再被当关键词滤空）；百科条目页直接命中兜底（moegirl 等搜索跳转条目页不再空结果）；熔断 empty 语义修复（查询无结果不误判引擎故障）；国际引擎中文查询 URL 编码修复（18 处）；单一真源文档修正（engines/specs/ 外置目录）。详见 [发布说明](docs/RELEASE_NOTES_v2.7.3.md) |
 | **v2.7.2** | **登录态专业搜索**：新增 ego-search 子技能（默认关闭，开启方法与依赖见上「登录态专业搜索」节）；搜索兜底 / 多意图路由 / 统一健康视图；日韩文查询不再混入中文引擎、显式语言指定生效；MCP 服务拆三模块；具备安全防护（登录态结果与公共缓存隔离、URL 安全检查）。详见 [发布说明](docs/RELEASE_NOTES_v2.7.2.md) |
