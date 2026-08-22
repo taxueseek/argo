@@ -11,11 +11,13 @@
 #   ARGO_BRANCH   分支，默认 main
 #   ARGO_SKIP_PIP 设为 1 则跳过 pip 安装
 #   ARGO_LINK_TARGETS  冒号分隔的 Skill 入口路径（可选）
+#   ARGO_PIN      固定 commit（供应链加固：克隆后校验 HEAD，推荐生产使用）
 
 set -euo pipefail
 
 REPO="${ARGO_REPO:-https://github.com/taxueseek/argo.git}"
 BRANCH="${ARGO_BRANCH:-main}"
+PIN="${ARGO_PIN:-}"
 HOME_DIR="${HOME:-$(eval echo ~)}"
 INSTALL_DIR="${ARGO_HOME:-$HOME_DIR/.local/share/argo}"
 SKIP_PIP="${ARGO_SKIP_PIP:-0}"
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_PIP=1
       shift
       ;;
+    --pin)
+      PIN="$2"
+      shift 2
+      ;;
     -h|--help)
       sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -47,6 +53,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "==> Argo 安装目录: $INSTALL_DIR"
+echo "==> 仓库来源: $REPO (分支 $BRANCH)"
+echo "    提示: 若以 curl|bash 方式执行，请确认来源为 trusted 仓库；生产环境建议 ARGO_PIN 固定 commit。"
 
 if ! command -v git >/dev/null 2>&1; then
   echo "需要 git，请先安装后再试。" >&2
@@ -76,6 +84,17 @@ else
   echo "==> 克隆仓库…"
   mkdir -p "$(dirname "$INSTALL_DIR")"
   git clone --depth 1 --branch "$BRANCH" "$REPO" "$INSTALL_DIR"
+fi
+
+# 供应链加固：校验 HEAD 与预期 commit 一致（ARGO_PIN 固定）
+if [[ -n "$PIN" ]]; then
+  ACTUAL_HEAD=$(git -C "$INSTALL_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
+  if [[ "$ACTUAL_HEAD" != "$PIN" ]]; then
+    echo "!! 供应链校验失败：固定 commit 为 $PIN，实际 HEAD 为 $ACTUAL_HEAD" >&2
+    echo "!! 仓库内容与预期不一致，拒绝继续。请人工核查仓库来源。" >&2
+    exit 1
+  fi
+  echo "==> 供应链校验通过: HEAD=$PIN"
 fi
 
 if [[ "$SKIP_PIP" != "1" ]]; then

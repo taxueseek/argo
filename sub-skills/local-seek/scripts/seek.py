@@ -157,8 +157,9 @@ def run(cmd, cwd=None, timeout=30):
 
 
 def tool_exists(name: str) -> bool:
-    proc = run(["command", "-v", name])
-    return proc is not None and proc.returncode == 0
+    # shutil.which 跨平台（Windows 下 command -v 不存在）
+    import shutil
+    return shutil.which(name) is not None
 
 
 def truncate(text: str, n: int = 120) -> str:

@@ -310,15 +310,22 @@ class _ChromeProcess:
     @staticmethod
     def _find_chrome() -> str:
         candidates = [
+            os.environ.get("CHROME_PATH", ""),
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
             "/Applications/Chromium.app/Contents/MacOS/Chromium",
             "/usr/bin/google-chrome",
             "/usr/bin/chromium",
+            # Windows：Chrome / Edge 常见安装路径
+            os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+            os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
         ]
         for c in candidates:
-            if os.path.isfile(c):
+            if c and os.path.isfile(c):
                 return c
-        raise FileNotFoundError("Chrome not found. Install Chrome or set chrome_path.")
+        raise FileNotFoundError("Chrome not found. Install Chrome/Edge or set CHROME_PATH / chrome_path.")
 
     def start(self) -> None:
         """启动 headless Chrome with remote debugging。"""

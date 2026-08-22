@@ -109,6 +109,15 @@ def test_mode():
 # ── 入口 ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    # Windows GBK 防线（PEP 540）：非 UTF-8 模式直接跑本文件时，重新以
+    # -X utf8 启动自己，保证中文 JSON 读取与 stderr 输出不因控制台编码崩。
+    if not sys.flags.utf8_mode and os.name == "nt":
+        import subprocess as _sp
+        _sp.run(
+            [sys.executable, "-X", "utf8", __file__, *sys.argv[1:]],
+            env={**os.environ, "PYTHONUTF8": "1"},
+        )
+        sys.exit(0)
     if "--test" in sys.argv:
         test_mode()
     else:

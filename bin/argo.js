@@ -22,9 +22,12 @@ if (!fs.existsSync(SCRIPT)) {
   process.exit(1);
 }
 
+// PEP 540 UTF-8 模式：Windows 默认 GBK 控制台/文件编码会打崩含中文的
+// JSON 读取与 stderr 输出，显式打开 UTF-8 模式（Python 3.7+ 支持）。
+const env = { ...process.env, PYTHONUTF8: process.env.PYTHONUTF8 || '1' };
 const proc = spawn(PYTHON, [SCRIPT], {
   stdio: ['pipe', 'pipe', 'inherit'],
-  env: { ...process.env },
+  env,
 });
 
 process.stdin.pipe(proc.stdin);

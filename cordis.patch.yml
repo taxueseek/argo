@@ -1,0 +1,21 @@
+# argo-search 主包 bundle patch（精简面）：只挂 argo MCP 服务器。
+#
+# 装法 A（仅 MCP 10 工具）：
+#   dsh plugin --profile web add "github:taxueseek/argo"
+#
+# 装法 B（MCP + wide_research 并行研究编排）：
+#   dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+#
+# wide_research 的模块 @taxueseek/argo-dsh 只在装法 B 的依赖树里存在，
+# 主包 patch 不放该 entry，避免装法 A 时 Cordis 解析失败导致启动崩溃。
+
+- insert:
+    - id: mcp-argo
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: argo
+        transport: stdio
+        command: npx
+        args:
+          - '-y'
+          - 'github:taxueseek/argo'

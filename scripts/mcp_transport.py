@@ -14,6 +14,9 @@ import sys
 from mcp_handlers import _warm_core_async, execute_tool
 from mcp_tools import TOOLS
 
+# 版本真源：与 package.json / SKILL.md 保持一致（发布时统一升版）
+ARGO_MCP_VERSION = "2.8.2"
+
 _response_format = "content-length"  # 根据客户端请求自动切换
 
 
@@ -26,7 +29,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {
                 "name": "argo",
-                "version": "2.7.2"
+                "version": ARGO_MCP_VERSION
             },
             # 短指令：降 tools 上下文；细节在 tool schema
             "instructions": (
@@ -112,6 +115,13 @@ def run_stdio():
 
         except json.JSONDecodeError:
             _send_error(None, -32700, "Parse error")
+        except KeyboardInterrupt:
+            # Windows 控制台 Ctrl+C 会广播到同控制台 python 子进程，
+            # readline 被打断抛 KeyboardInterrupt（继承 BaseException，上面
+            # except Exception 接不住）。视同 EOF 干净退出，避免裸 traceback。
+            sys.stderr.write("[argo-mcp] interrupted, exiting\n")
+            sys.stderr.flush()
+            break
         except Exception as e:
             _send_error(None, -32000, f"Internal error: {e}")
 

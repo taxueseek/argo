@@ -41,14 +41,14 @@ class QuotaManager:
     def _load_profiles(self) -> None:
         if QUOTA_PROFILES_PATH.exists():
             try:
-                self._profiles = json.loads(QUOTA_PROFILES_PATH.read_text())
+                self._profiles = json.loads(QUOTA_PROFILES_PATH.read_bytes())
             except (json.JSONDecodeError, OSError):
                 self._profiles = {}
 
     def _load_state(self) -> None:
         if QUOTA_STATE_PATH.exists():
             try:
-                self._state = json.loads(QUOTA_STATE_PATH.read_text())
+                self._state = json.loads(QUOTA_STATE_PATH.read_bytes())
             except (json.JSONDecodeError, OSError):
                 # 损坏不清空：保留旧状态（配额/限频记忆），仅告警
                 import sys
