@@ -32,9 +32,15 @@ def print_deep_report(report: dict):
     citations_count = len(citations) or len(sources)
 
     print(f"\n{'='*60}")
-    print("=== 深度研究报告 ===")
+    print("=== 深度研究取证包 ===")
     print(f"{'='*60}")
     print(f"查询：{report.get('query', '')}")
+    if report.get("kind"):
+        cap = report.get("conclusion_cap") or ""
+        print(f"产物：{report.get('kind')} | 结论上限：{cap or '—'}")
+    stages = report.get("work_package_stages") or []
+    if stages:
+        print("工作包阶段：" + " → ".join("+".join(s) for s in stages))
     if report.get("rewritten_query"):
         rq = report["rewritten_query"]
         print(f"改写：{rq.get('original', '')} → {rq.get('rewritten', '')}（置信度 {rq.get('confidence', 0):.2f}）")
@@ -132,12 +138,23 @@ def print_deep_report(report: dict):
             print(f"  - {g}")
         print()
 
-    # 专业质量门禁（选题 profile）
+    qgr = report.get("quality_gate_results") or {}
+    if qgr:
+        print("## 取证门禁")
+        status = "通过" if qgr.get("passed") else "未通过"
+        print(f"  {status} | 结论上限：{qgr.get('conclusion_cap', '')}")
+        for item in (qgr.get("failures") or []):
+            print(f"  ✗ {item.get('id')}: {item.get('detail', '')}")
+        for item in (qgr.get("warnings") or []):
+            print(f"  ⚠ {item.get('id')}: {item.get('detail', '')}")
+        print()
+
+    # topic profile 字符串清单：给 Agent 写判断稿，不是机器谓词
     gates = report.get("quality_gates") or []
     if gates:
-        print("## 质量门禁（交付前自检）")
+        print("## 判断稿自检（Agent）")
         for g in gates:
-            print(f"  - [ ] {g}")
+            print(f"  - {g}")
         print()
 
     sections = report.get("report_sections") or []

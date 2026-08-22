@@ -21,7 +21,9 @@ argo/
 │   ├── adaptive.py       # 自适应学习（success×latency×cost）
 │   ├── quota.py          # 配额管理
 │   ├── search_types.py   # 统一类型系统
-│   ├── research.py       # 深度研究工具
+│   ├── research.py       # 深度研究取证编排（dossier）
+│   ├── research_expand.py / research_work_packages.py
+│   ├── research_dossier.py / research_gates.py / research_cli.py
 │   ├── evidence.py       # 可信度评估工具
 │   ├── clarify.py        # 意图消歧工具
 │   ├── crawl.py          # 站点爬取工具
@@ -116,7 +118,7 @@ v2.8 新增证据门控字段：`fetch_required`、`evidence_loop.suggested/veri
 |------|---------|
 | argo_search | query + 可选 engine/mode/since/until/sort |
 | argo_local_search | 本机文件搜索（非联网），query + path |
-| argo_research | 深度研究，含 social-sentiment 模式 |
+| argo_research | 取证包（扩词或 work_packages），含 social-sentiment |
 | argo_evidence | query + results_json + max_results |
 | argo_clarify | 歧义查询消歧 |
 | argo_crawl | 站点级爬取（sitemap/BFS） |

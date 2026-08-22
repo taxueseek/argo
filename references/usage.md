@@ -27,18 +27,24 @@ python3 scripts/search.py "查询词" \
 
 ## research 输出字段
 
+取证包（`kind=dossier`），不是判断稿。协议：`references/research-protocol.md`。
+
 ```bash
 python3 scripts/research.py "查询" [--sub-queries N] [--depth deep] [--budget N] [--json] [--verify N] [--route-strategy local_first|cost_aware|full]
+python3 scripts/research.py "查询" --work-packages '[{"id":"d","question":"定义"},{"id":"r","question":"风险","depends_on":["d"]}]' --json
 ```
 
-- `key_findings`（按子查询分组）、`citations`、`gaps`、`source_distribution`
-- `coverage_map`：各子查询覆盖状态 COVERED/PARTIAL/NOT_COVERED
-- `verification_records`：claim-to-source 验证记录表（主张/来源/证据强度/核验方法/可核验性）
-- `blind_spots`：显式盲区（未覆盖维度+单来源维度），不把「没搜到」写成「不存在」
-- 证据强度分层：primary/secondary/tertiary/unknown
-- Verify 阶段：`corroboration_level`（strong/moderate/weak/minimal/insufficient）、`cross_score`（0-1）、`top_sources`、`conflicts`（低证据层级混入标记）、`unverified_count`
-- `fact_alignment`（auto/deep 且结果 ≥3 时启用）：抽取结构化事实（版本号/百分比/金额/日期/法规号），`fact_conflicts` 冲突标记、`fact_corroborated` 印证标记、`stats`
-- `--budget N`：子查询上限，超限标记 `budget.exhausted=true` 并输出部分最佳答案
+- `kind=dossier`、`conclusion_cap`（high/medium/low）、`quality_gate_results`（可判定谓词，不是空勾选）
+- 有 `--work-packages`：按 `depends_on` 分阶段，写入 `work_packages` / `work_package_stages`
+- 无工作包：`query_expansion`（扩词，不是问题树）
+- `key_findings`：各维度检索头条，不是结论
+- `citations` / `sources`：按 canonical URL 去跟踪参数去重
+- `coverage_map`：COVERED/PARTIAL/NOT_COVERED
+- `source_leads`（兼 `verification_records`）：SERP snippet 一律 `unverified_snippet`，有 URL 也不算核实
+- `blind_spots`：未覆盖或单来源维度
+- Verify：`corroboration_level`、`cross_score`、`conflicts`、`unverified_count`
+- `fact_alignment`（auto/deep 且结果 ≥3）：`fact_conflicts` / `fact_corroborated`
+- `--budget N`：超限标记 `budget.exhausted=true`
 
 **社交舆情**：`--mode social-sentiment --platforms xiaohongshu,reddit,twitter` → `platform_breakdown` / `engagement_totals` / `top_topics` / `cross_platform_posts`。
 

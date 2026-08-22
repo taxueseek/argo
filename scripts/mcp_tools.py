@@ -46,17 +46,18 @@ TOOLS = [
     },
     {
         "name": "argo_research",
-        "description": "深度研究（argo 内建子技能，不调用外部 skill）：问题分解+多源并行+质量门禁+底部信源。学术/金融用 topic=academic|finance。日常快问请用 argo_search。",
+        "description": "深度研究取证（argo 内建，不调用外部 skill）。有 work_packages 则按 depends_on 分阶段取证；无则扩词检索。返回 dossier（来源/覆盖/缺口/quality_gate_results），不是判断稿。学术/金融用 topic=academic|finance。日常快问用 argo_search。协议见 references/research-protocol.md。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "研究查询（可以是复杂的、多步骤的问题）"},
                 "topic": {"type": "string", "description": "选题 profile：ai/investment/finance/academic/tech/tool/internet/social；省略则自动推断"},
                 "auto_topic": {"type": "boolean", "description": "无 topic 时是否自动推断（默认 true）", "default": True},
-                "num_sub_queries": {"type": "integer", "description": "子查询数量（默认由 topic 决定，通常 4，最大 8）", "minimum": 2, "maximum": 8},
+                "num_sub_queries": {"type": "integer", "description": "扩词数量（有 work_packages 时忽略；默认由 topic 决定，通常 4，最大 8）", "minimum": 2, "maximum": 8},
                 "max_results": {"type": "integer", "description": "每个子查询最大结果数（默认5）", "default": 5},
                 "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度（默认由 topic 决定，通常 balanced）"},
                 "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget", "social-sentiment"], "description": "预算/模式（默认 auto；社交舆情用 social-sentiment）", "default": "auto"},
+                "work_packages": {"type": "string", "description": "工作包 JSON 数组。字段：id, question, query?, depends_on?。有则跳过扩词，按依赖分阶段取证。"},
                 "platforms": {"type": "string", "description": "social-sentiment 平台列表，逗号分隔"},
                 "summary": {"type": "boolean", "description": "精简研究包（默认 true，省 token）", "default": True},
                 "pretty": {"type": "boolean", "description": "美化 JSON（默认 false）", "default": False},

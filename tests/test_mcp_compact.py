@@ -84,8 +84,9 @@ def test_resolve_topic_academic():
 
 
 def test_initialize_short_instructions_and_warm():
+    from mcp_transport import ARGO_MCP_VERSION
     r = handle_rpc("initialize", {})
-    assert r["serverInfo"]["version"] == "2.7.2"
+    assert r["serverInfo"]["version"] == ARGO_MCP_VERSION
     assert len(r["instructions"]) < 500
     assert "argo_research" in r["instructions"]
     assert "外部 skill" in r["instructions"] or "内建" in r["instructions"]
