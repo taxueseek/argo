@@ -1,13 +1,13 @@
 ---
 name: local-search
-parent: unified-search
-description: unified-search 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 33 个本地搜索引擎，不单独响应触发词，仅由 unified-search 通过 --sub-skill local-search 或 --local-first 调用。
+parent: argo
+description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 33 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --sub-skill local-search 或 --local-first 调用。
 version: 1.1.0
 ---
 
 ## Local Search 子技能
 
-Local Search 是 unified-search 的「零成本兜底适配器」，用于：
+Local Search 是 argo 的「零成本兜底适配器」，用于：
 
 - 在 `--mode fast` / `--mode budget` 下优先使用本地抓取引擎，避免消耗付费 API 配额。
 - 当 SearXNG 不可用时，回退到本地 HTML/JSON 解析。
@@ -15,10 +15,10 @@ Local Search 是 unified-search 的「零成本兜底适配器」，用于：
 
 ### 设计原则
 
-- **不单独响应触发词**：没有独立的 skill trigger，仅作为 unified-search 的子能力。
-- **统一 schema**：输出与 unified-search 主 skill 完全一致，包含 `results[]`、`engines_used`、`errors`、`elapsed_ms` 等字段。
+- **不单独响应触发词**：没有独立的 skill trigger，仅作为 argo 的子能力。
+- **统一 schema**：输出与 argo 主 skill 完全一致，包含 `results[]`、`engines_used`、`errors`、`elapsed_ms` 等字段。
 - **声明式解析**：HTML 结构变化时只需修改 `parse_maps.yaml`。
-- **命名空间隔离**：本地引擎统一使用 `local_` 前缀（如 `local_bing`、`local_google`），避免与 unified-search 已有的 HTTP 引擎（`duckduckgo`、`wikipedia` 等）重名。
+- **命名空间隔离**：本地引擎统一使用 `local_` 前缀（如 `local_bing`、`local_google`），避免与 argo 已有的 HTTP 引擎（`duckduckgo`、`wikipedia` 等）重名。
 
 ### 本地引擎列表（33 个，29 个默认启用）
 
@@ -70,7 +70,7 @@ python3 sub-skills/local-search/local_search_adapter.py "query" --engine local_b
 python3 sub-skills/local-search/local_search_adapter.py "query" \
   --engine local_bing,local_baidu,local_duckduckgo
 
-# 由 unified-search 调用
+# 由 argo 调用
 python3 scripts/search.py "query" --sub-skill local-search
 python3 scripts/search.py "query" --local-first --mode fast
 ```
@@ -91,7 +91,7 @@ sub-skills/local-search/
 
 ### 输出 schema
 
-与 unified-search 主 skill 一致：
+与 argo 主 skill 一致：
 
 ```json
 {

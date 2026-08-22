@@ -1,5 +1,5 @@
 # local-search 子技能专属配置
-# 与 unified-search/config.yaml 解耦，local_search_adapter.py / search_v3.py 直接读取本文件。
+# 与 argo/config.yaml 解耦，local_search_adapter.py / search_v3.py 直接读取本文件。
 
 settings:
   default_timeout: 8

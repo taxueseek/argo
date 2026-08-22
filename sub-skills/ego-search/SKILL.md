@@ -15,7 +15,7 @@ metadata:
   upstream: ego lite（ego-browser）+ WebBridge 扩展桥（双运行时）
   parent: argo
   pro_mode: 默认关闭，手动开启（enable/disable）
-  cache: 登录态结果 cache_eligible=false，禁止写入公共 unified-search 缓存
+  cache: 登录态结果 cache_eligible=false，禁止写入 argo 公共缓存
   architecture: dual_runtime_complete
   security: URL 守卫 + 任务空间收尾 + 专业模式闸门 + 登录墙质量信号
 triggers:
@@ -46,7 +46,7 @@ ego-search 是 argo 的**登录态专业搜索**子技能（v1.4 完全态）：
 
 ```text
 常规检索（argo public）          登录态专业搜索（本技能）
-  cache: unified-search            partition: login
+  cache: argo public                 partition: login
   cache_eligible: 可写             cache_eligible: false
          \                              /
           \                            /
@@ -191,7 +191,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py search "竞品分析" --task
 | 阶段 | 规则 |
 |------|------|
 | **检索** | public（argo）与 login（本技能）分开跑、分 cache、分 partition |
-| **缓存** | login 永不进 unified-search；两路互不 soft-hit |
+| **缓存** | login 永不进 argo 公共缓存；两路互不 soft-hit |
 | **汇总** | Agent 可将两路 `results` / 正文一并交给 `evidence` 或报告生成；用 `source` / `runtime` / `search_partition` 区分权重与可信语境 |
 
 ### 安全与登录态长期可用
