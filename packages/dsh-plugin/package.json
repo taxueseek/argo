@@ -1,20 +1,31 @@
 {
   "name": "@taxueseek/argo-dsh",
-  "version": "2.8.0",
-  "description": "Argo 阿尔戈 — DSH profile bundle：一键挂载 argo 搜索 MCP（120+ 引擎、10 个 MCP 工具、证据闭环）。安装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"",
+  "version": "2.8.2",
+  "description": "Argo 阿尔戈 — DSH plugin：挂载 argo 搜索 MCP（10 个工具）并注册 wide_research 并行研究编排。安装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"",
   "license": "MIT",
   "type": "module",
+  "main": "./dsh/index.js",
+  "exports": {
+    ".": "./dsh/index.js",
+    "./dsh": "./dsh/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dsh",
+    "cordis.patch.yml",
+    "README.md"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
   },
-  "exports": {
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+  "engines": {
+    "node": ">=18"
   },
-  "files": [
-    "cordis.patch.yml",
-    "README.md"
-  ]
+  "scripts": {
+    "check": "node --check dsh/index.js",
+    "test": "node --test test/index.test.js"
+  }
 }

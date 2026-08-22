@@ -1,12 +1,12 @@
-# argo-dsh bundle patch：把 argo 搜索 MCP server 挂进 DSH。
+# argo-dsh bundle：同一插件两行 —
+#   mcp-argo：挂 argo MCP（模型见 mcp__argo__*）
+#   wide-research：本包 apply() 注册 wide_research 编排
 #
 # 依赖：Node.js ≥ 18（npx）+ Python 3.10+（pip install pyyaml）。
-# 工具经 @deepseek-ai/dsh-mcp-client 注册，模型可见 mcp__argo__* 系列。
 # 安装后重启 dsh web 生效。
 #
-# 提示：同 id（mcp-argo）可在用户层 cordis.patch.yml 覆盖本配置，
-# 例如改用本地源码路径（python3 /path/to/argo/scripts/mcp_server.py），
-# 用户层同 id 最后写入者胜。
+# 同 id 可在用户层 cordis.patch.yml 覆盖（同 id + name 才是替换）。
+# worker 默认只用 argo 取证工具，不含 argo_research，避免研究套研究。
 
 - insert:
     - id: mcp-argo
@@ -18,3 +18,21 @@
         args:
           - '-y'
           - 'github:taxueseek/argo'
+    - id: wide-research
+      name: '@taxueseek/argo-dsh'
+      config:
+        toolName: wide_research
+        provider: spawn
+        defaultWorkers: 6
+        maxWorkers: 9
+        maxTracks: 9
+        maxSourcesPerTrack: 5
+        workerMaxTokens: 5000
+        synthesisMaxTokens: 7000
+        childToolAllow:
+          - mcp__argo__argo_search
+          - mcp__argo__argo_evidence
+          - mcp__argo__argo_fetch
+          - mcp__argo__argo_crawl
+          - mcp__argo__argo_local_search
+          - mcp__argo__argo_social_search
