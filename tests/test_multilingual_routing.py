@@ -98,5 +98,21 @@ class TestLanguagePreferRerank(unittest.TestCase):
         self.assertIs(_lang_prefer_rerank(results, None), results)
 
 
+class TestJaKoMacroRouting(unittest.TestCase):
+    """ja/ko 宏观查询：TF-IDF 中文引擎过滤 + anysearch 前置（多语言源）。"""
+
+    def test_ja_macro_not_gov_policy(self):
+        # 日文「政策金利」不再因 TF-IDF 命中 gov_policy（中文政策域）
+        from route import route_query
+        d = route_query("FRB 政策金利 見通し 2026")
+        self.assertNotIn("gov_policy", d["engines_combo"])
+
+    def test_ko_macro_prefers_anysearch(self):
+        # 韩文宏观兜底优先 anysearch（多语言源），不再只锁 local_bing
+        from route import route_query
+        d = route_query("미국 연준 금리 인하 전망")
+        self.assertEqual(d["engines_combo"][0], "anysearch")
+
+
 if __name__ == "__main__":
     unittest.main()

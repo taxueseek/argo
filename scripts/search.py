@@ -372,7 +372,7 @@ _ENGINE_FUSION_WEIGHTS: dict[str, float] = {
     "fred": 1.3, "worldbank": 1.3, "nbs_stats": 1.3, "eurostat": 1.3,
     # 通用引擎（基线）
     "duckduckgo": 1.0, "local_bing": 1.0, "local_duckduckgo": 1.0,
-    "local_google": 1.0, "anysearch": 1.0, "byted": 1.0, "bocha": 1.0,
+    "local_google": 1.0, "anysearch": 1.05, "byted": 1.1, "bocha": 1.0,
     "bocha_ai": 1.3,  # 垂直结构化模态卡（实时值）
     "brave": 1.0, "uapi": 1.0, "local_search": 1.0, "octen": 1.0,
     "gdelt": 1.0, "opencorporates": 1.2, "google_patents": 1.2,
@@ -383,14 +383,52 @@ _ENGINE_FUSION_WEIGHTS: dict[str, float] = {
 }
 
 
+# 动态可靠性因子（weakest-link，论文 arxiv 2508.01405）：熔断/高错误引擎降权，
+# 避免「弱检索路径」在融合时拖垮整体精度。带 30s TTL 缓存，避免热路径重复查询。
+_rel_factor_cache: dict[str, tuple[float, float]] = {}
+_REL_FACTOR_TTL = 30.0
+
+
+def _single_reliability(engine: str) -> float:
+    now = time.time()
+    cached = _rel_factor_cache.get(engine)
+    if cached and cached[1] > now:
+        return cached[0]
+    factor = 1.0
+    try:
+        from circuit_breaker import get_breaker
+        st = get_breaker().status(engine)
+        state = st.get("state")
+        if state == "disabled":
+            factor = 0.5
+        elif state == "open":
+            factor = 0.7
+        elif state == "half_open":
+            factor = 0.85
+        failures = int(st.get("failures") or 0)
+        if failures >= 5:
+            factor = min(factor, 0.8)
+    except Exception:
+        factor = 1.0
+    _rel_factor_cache[engine] = (factor, now + _REL_FACTOR_TTL)
+    return factor
+
+
 def _engine_weight(source: str) -> float:
-    """按引擎来源返回融合权重（source 可能含 'local_bing/sina_quote' 合并形式）。"""
+    """按引擎来源返回融合权重（source 可能含 'local_bing/sina_quote' 合并形式）。
+
+    静态基础权重（权威/学术提权、社交降权）× 动态可靠性因子（weakest-link）：
+    熔断/高错误源降权，健康权威源维持提权。论文 2508.01405 的路径质量评估落地。
+    """
     if not source:
         return 1.0
-    # 合并来源按最高权重源算
-    parts = str(source).split("/")
-    weights = [_ENGINE_FUSION_WEIGHTS.get(p.strip(), 1.0) for p in parts if p.strip()]
-    return max(weights) if weights else 1.0
+    # 合并来源：静态权重取最高源，可靠性取最低源（weakest-link：任一路径弱即降权）
+    parts = [p.strip() for p in str(source).split("/") if p.strip()]
+    if not parts:
+        return 1.0
+    static = max([_ENGINE_FUSION_WEIGHTS.get(p, 1.0) for p in parts])
+    rel = min([_single_reliability(p) for p in parts])
+    return round(static * rel, 3)
 
 
 def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,

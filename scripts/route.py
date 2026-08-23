@@ -277,6 +277,26 @@ _ZH_LANG_GATED_DOMAINS = frozenset({
     "cn_tech_community", "zhihu_content", "zhihu_hot_list",
     "wechat_search", "cn_encyclopedia", "cn_ai_news",
     "moegirl", "juejin", "bilibili", "weibo",
+    # 中文政策/百科/医疗域：日韩查询不应进（如日文「政策金利」命中 gov_policy）
+    "gov_policy", "baidu_baike", "medical",
+})
+
+# TF-IDF 分支的 ja/ko 过滤：中文内容/政策引擎候选对日/韩查询无关（返回中文站），
+# 丢弃让通用 anysearch（多语言源）主导。match_domains 门控不覆盖 TF-IDF 注入路径。
+_ZH_CONTENT_ENGINES = frozenset({
+    "gov_policy", "baidu_baike", "cn_encyclopedia", "moegirl",
+    "weibo", "cn_ai_news", "zhihu", "zhihu_hot", "juejin",
+    "cnblogs", "baidu_hot", "toutiao_hot", "bilibili_hot",
+})
+
+# ja/ko 查询应剔出的中文内容/新闻/金融/技术引擎（对日/韩用户无关或错配）。
+# 域命中路径（_get_engines_combo 产物）也过滤，补齐 TF-IDF 层过滤缺口。
+# 含 test_multilingual 契约定义的中文噪声（bocha/byted/wechat_sogou/zhihu）。
+_JA_KO_CN_ENGINES = _ZH_CONTENT_ENGINES | frozenset({
+    "bocha", "byted", "wechat_sogou", "zhihu",
+    "octen", "cn_ai_news", "juejin", "cnblogs",
+    "tencent_kline", "eastmoney", "sina_quote", "em_flow",
+    "em_global_news", "jin10", "ths_hot", "cls_telegraph",
 })
 
 
@@ -1051,8 +1071,15 @@ def route_query(query: str, engine_override: str = "auto",
                     )
                     social_ok = any(s in ql for s in social_signals)
                 if score >= TFIDF_MIN_SCORE and social_ok:
-                    tfidf_best = cand
-                    tfidf_best_score = score
+                    # ja/ko 查询：TF-IDF 候选若是中文内容/政策引擎（gov_policy/百科等），
+                    # 对日/韩用户无关（返回中文站），丢弃让通用 anysearch 主导。2026-08 修复。
+                    _non_zh = features.get("primary_lang") in ("ja", "ko")
+                    if _non_zh and cand in _ZH_CONTENT_ENGINES:
+                        tfidf_best = None
+                        tfidf_best_score = score
+                    else:
+                        tfidf_best = cand
+                        tfidf_best_score = score
                 else:
                     tfidf_best = None
                     tfidf_best_score = score
@@ -1066,6 +1093,11 @@ def route_query(query: str, engine_override: str = "auto",
 
     if domain:
         engines_combo = _get_engines_combo(domain, enabled, mode, features)
+        # 🔑 ja/ko 查询：域命中路径也剔除中文内容/金融/新闻引擎（补齐 TF-IDF 层过滤缺口，
+        # 否则 ja 技术查询落 english_tech 用 octen 返回中文 CSDN）。2026-08 修复。
+        if features.get("primary_lang") in ("ja", "ko") and engines_combo:
+            _filtered = [e for e in engines_combo if e not in _JA_KO_CN_ENGINES]
+            engines_combo = _filtered or [e for e in ["anysearch"] if e in enabled] or engines_combo
         # 🔑 中文查询 + 学术类域 → 剔除英文论文源（openalex/europepmc 对中文查询噪声大）
         if (domain.get("name") in ("tech_deep", "academic")
                 and any("\u4e00" <= ch <= "\u9fff" for ch in query)):
@@ -1324,11 +1356,19 @@ def route_query(query: str, engine_override: str = "auto",
     fallback_combo = _general_fallback(enabled)
     if not fallback_combo:
         fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
-    # 日/韩主查询：直接用语言专用本地引擎组合，避免默认 local_bing（zh 参数）兜底
+    # 日/韩主查询：优先 anysearch（多语言源对日/韩结果语言匹配更好），
+    # 再并语言专用本地引擎；避免旧逻辑只锁 local_bing（zh 参数）返回中文站。
+    # 注：byted 经实测对 ja/ko 也可，但其被 test_multilingual 定义为中文引擎，
+    # 强制优先会破坏 ja/ko 路由契约；byted 通过融合权重提权即可。2026-08。
     if features.get("primary_lang") in ("ja", "ko") and _get_registry is not None:
         lang_combo = _select_sub_engines(_enabled_local_engines(), features)
         non_local = [e for e in fallback_combo if not e.startswith("local_")]
-        fallback_combo = (lang_combo[:2] + non_local) if lang_combo else fallback_combo
+        if "anysearch" in non_local:
+            non_local = ["anysearch"] + [e for e in non_local if e != "anysearch"]
+        if lang_combo:
+            fallback_combo = (non_local + lang_combo) if non_local else lang_combo
+        else:
+            fallback_combo = non_local or fallback_combo
     else:
         fallback_combo = _expand_local_search(fallback_combo, features)
     fallback_combo = _merge_language_engines(fallback_combo, features, lang_engines)

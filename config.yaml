@@ -2390,6 +2390,7 @@ engines:
     query_param: q
     extra_params:
       setlang: zh-Hans
+      mkt: zh-CN
     timeout: 8
   local_google:
     type: html

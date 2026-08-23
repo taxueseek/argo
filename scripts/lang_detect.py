@@ -81,6 +81,12 @@ ENGINE_LANG_PARAM_VALUES: dict[str, dict[str, str]] = {
         "arabic": "ar", "hebrew": "he", "greek": "el", "devanagari": "hi",
         "mixed": "en-US", "other": "en-US",
     },
+    "mkt": {  # Bing 市场码（比 setlang 更强制结果区域，修复 ja/ko 返回中文站问题）
+        "ja": "ja-JP", "ko": "ko-KR", "en": "en-US", "latin": "en-US",
+        "zh": "zh-CN", "cyrillic": "ru-RU", "thai": "th-TH",
+        "arabic": "ar-SA", "hebrew": "he-IL", "greek": "el-GR", "devanagari": "hi-IN",
+        "mixed": "en-US", "other": "en-US",
+    },
     "hl": {  # Google
         "ja": "ja", "ko": "ko", "en": "en", "latin": "en",
         "zh": "zh-CN", "cyrillic": "ru", "thai": "th",

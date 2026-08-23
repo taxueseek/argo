@@ -275,8 +275,8 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
             if fmt:
                 parts.append(f"format={up.quote(str(fmt))}")
             for k, v in extra_params.items():
-                # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang
-                if k in ("setlang", "hl", "lang", "uselang"):
+                # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang/mkt
+                if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                     v = _lang_param(k, query) or v
                 parts.append(f"{k}={up.quote(_resolve(str(v), query, n, **kwargs))}")
             if parts:
