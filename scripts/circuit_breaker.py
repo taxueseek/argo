@@ -158,13 +158,16 @@ class CircuitBreaker:
             st["failures"] = int(st.get("failures") or 0) + 1
             st["last_fail"] = time.time()
             st["last_kind"] = kind
-            if st["failures"] >= FAILURE_THRESHOLD or st.get("state") == "half_open":
+            # empty（无结果）是查询级信号，不驱动 open 熔断：否则「空结果→open 60s→
+            # half_open→再 open」无效 churn，还占主位阻塞 6s。仅 error/timeout 驱动
+            # 稳定 state 切换（空结果由负缓存短 TTL 兜底）。2026-08 修复。
+            if drives_opens and (st["failures"] >= FAILURE_THRESHOLD
+                                 or st.get("state") == "half_open"):
                 st["state"] = "open"
                 st["opened_at"] = time.time()
                 # 连续 open 计数：仅 error/timeout 计入（引擎级故障），
                 # empty 不计入，避免「查询无结果」被误判为引擎持续故障
-                if drives_opens:
-                    st["opens"] = int(st.get("opens") or 0) + 1
+                st["opens"] = int(st.get("opens") or 0) + 1
             self._engines[engine] = st
             self._save()
 

@@ -268,23 +268,43 @@ def _get_compiled_domains(domains: list[dict[str, Any]]) -> list[dict[str, Any]]
     return _compiled_domains
 
 
+# 语言门控白名单：这些域以中文内容为主，明确的非中文查询（ja/ko/en/latin 等主
+# 语言）不应命中。日文/韩文查询常含汉字或谚文字符，易被中文泛内容域的 `[一-\u9fff]`
+# 或单音节子串正则误爆（如韩语「비교」命中天气的「비」、日语汉字命中 chinese_general），
+# 在 match_domains 层按主语言跳过即可修正。2026-08 修复。
+_ZH_LANG_GATED_DOMAINS = frozenset({
+    "chinese_general", "local_chinese", "chinese_tech_deep",
+    "cn_tech_community", "zhihu_content", "zhihu_hot_list",
+    "wechat_search", "cn_encyclopedia", "cn_ai_news",
+    "moegirl", "juejin", "bilibili", "weibo",
+})
+
+
 def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
-                  max_n: int = 3) -> list[dict[str, Any]]:
+                  max_n: int = 3,
+                  primary_lang: str | None = None) -> list[dict[str, Any]]:
     """按 config.yaml domains 顺序返回全部命中域（多意图，主域 1 + 次域 max_n-1）。
 
     旧 match_domain 单射只取首个命中域，多意图查询（如「北京 AI 公司融资」同时
     命中 geo/finance/tech）只走一个域。本函数返回命中列表供 route 主域执行 +
     次域按预算补充。catch-all（无 patterns）只做垫底：有命中时不掺入。
     max_n 限制命中数，防止正则宽泛的域批量命中稀释主域。
+
+    primary_lang：查询主语言（来自 extract_features）。当为明确的非中文语言
+    （ja/ko/en/latin/cyrillic/thai 等）时，跳过中文内容域白名单，避免韩/日查询
+    被中文泛内容域误捕获。传 None 时不做门控（兼容旧调用方）。
     """
     if domains is None:
         domains = get_domains()
     compiled = _get_compiled_domains(domains)
     hits: list[dict[str, Any]] = []
     catch_all: dict[str, Any] | None = None
+    non_zh = bool(primary_lang and primary_lang not in ("zh", "mixed", "other"))
     for domain in compiled:
         if not domain.get("patterns", []):
             catch_all = domain
+            continue
+        if non_zh and domain.get("name") in _ZH_LANG_GATED_DOMAINS:
             continue
         for regex in domain["_compiled"]:
             if regex.search(query):
@@ -1001,7 +1021,8 @@ def route_query(query: str, engine_override: str = "auto",
     # 正则硬规则优先（cheap）；fast + 实域命中时跳过 TF-IDF，省掉语义路由开销
     domains_cfg = get_domains(cfg)
     # P1-1：多意图路由——主域执行 + 次域按预算补充（仅域命中分支消费 secondary）
-    _domain_hits = match_domains(query, domains_cfg)
+    _domain_hits = match_domains(query, domains_cfg,
+                                 primary_lang=features.get("primary_lang"))
     domain = _domain_hits[0] if _domain_hits else None
     secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))
@@ -1292,7 +1313,7 @@ def route_query(query: str, engine_override: str = "auto",
                 f" (score={tfidf_best_score:.3f}, 正则未命中)"
                 + (f" [boost={engines_boost}]" if engines_boost else "")
             ),
-            confidence=0.85, features=features, domain=None,
+            confidence=0.85, features=features, domain="general_search",
             parallel=parallel,
             tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
             mode=mode, depth=depth, context=context,

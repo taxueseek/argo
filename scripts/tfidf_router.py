@@ -33,18 +33,25 @@ DOMAIN_PROFILES_PATH = BACKENDS_DIR / "domain_profiles.json"
 
 # ── 分词 ──────────────────────────────────────────────────────────────────────
 
-_TOKEN_PATTERN = re.compile(r"[一-鿿]|[a-zA-Z0-9]+")
+_TOKEN_PATTERN = re.compile(r"[一-鿿\u3040-\u30ff\uac00-\ud7af]|[a-zA-Z0-9]+")
 
 
 def tokenize(text: str) -> list[str]:
-    """简单分词：中文单字 + 英文单词，统一小写。"""
+    """简单分词：中文/日文/韩文单字 + 英文单词，统一小写。
+
+    扩展 v2.8：并入假名（\\u3040-\\u30ff）与谚文（\\uac00-\\ud7af），否则韩/日
+    查询 tokenize 恒空、TF-IDF 语义路由对多语言整体失明。单字拉丁仍丢弃（词袋无关）。
+    """
     tokens = []
     for match in _TOKEN_PATTERN.finditer(text.lower()):
         token = match.group()
-        if len(token) == 1 and '一' <= token <= '鿿':
+        if len(token) > 1:
             tokens.append(token)
-        elif len(token) > 1:
-            tokens.append(token)
+        elif len(token) == 1:
+            ch = token[0]
+            if ('一' <= ch <= '鿿' or '\u3040' <= ch <= '\u30ff'
+                    or '\uac00' <= ch <= '\ud7af'):
+                tokens.append(ch)
     return tokens
 
 

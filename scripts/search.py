@@ -530,6 +530,26 @@ def deduplicate_by_url(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+# ── 多语言结果语言偏好软排序（P2-覆盖，2026-08 新增）────────────────────────
+# ja/ko 明确主语言查询：把含目标语言字符（假名/谚文）的结果前移，纯相反语言
+# 结果后移。**软排序不删除**（避免误删混合/技术结果），其余语言零开销返回。
+def _lang_prefer_rerank(results: list[dict[str, Any]],
+                        primary_lang: str | None) -> list[dict[str, Any]]:
+    if not results or primary_lang not in ("ja", "ko"):
+        return results
+    if primary_lang == "ja":
+        _pat = re.compile(r"[\u3040-\u30ff]")
+    else:
+        _pat = re.compile(r"[\uac00-\ud7af]")
+
+    def _key(r: dict[str, Any]) -> int:
+        hay = f"{r.get('title', '')} {r.get('snippet', '')}"
+        return 0 if _pat.search(hay) else 1
+
+    # stable sort：含目标语言字符在前，其余保持原 RRF 顺序
+    return sorted(results, key=_key)
+
+
 # ── Bocha Reranker ──────────────────────────────────────────────────────────────
 
 def rerank_results(query: str, results: list[dict[str, Any]],
@@ -1021,6 +1041,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 if isinstance(t, (int, float)) and t > 0:
                     eng_to = float(t)
             cap = 5.0 if early_min is not None else 6.0
+            # half_open 半开探测收紧到 2s：熔断器允许半开探测恢复，但探测应短促，
+            # 避免 6s 探测阻塞串行/并行主路径（慢源拖尾主因）。2026-08 修复。
+            if breaker is not None:
+                try:
+                    if breaker.status(eng).get("state") == "half_open":
+                        cap = min(cap, 2.0)
+                except Exception:
+                    pass
             if eng_to is not None and eng_to >= 8.0:
                 eff_to = min(float(timeout), cap)
         try:
@@ -1236,6 +1264,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         except Exception as _e:
             import logging
             logging.getLogger("unified_search").debug(f"minhash 去重跳过: {type(_e).__name__}")
+
+    # ── P2：多语言语言偏好软排序（ja/ko 前置含目标语言字符结果，软排不删除）──
+    try:
+        _p_lang = (decision or {}).get("features", {}).get("primary_lang")
+        if _p_lang in ("ja", "ko"):
+            merged = _lang_prefer_rerank(merged, _p_lang)
+    except Exception:
+        pass
 
     # 放宽截断：rerank 阶段看到 max_results*3 条，最终输出再截断
     merged = merged[:max(max_results * 3, 15)]
