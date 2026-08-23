@@ -67,6 +67,84 @@ def _build_exa_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── anysearch 通用搜索（JSON-RPC / MCP，进程内 builder 替代 subprocess）───────
+
+def _build_anysearch_engine(spec: dict[str, Any]) -> Any:
+    """anysearch 通用搜索主力：POST JSON-RPC 到 api.anysearch.com/mcp。
+
+    替换原 `type: cli` 的 subprocess 调用（每次启动 python3 解释器 ~200-300ms），
+    改为进程内 builder + HttpClient（UA 轮换/重试/退避/Retry-After）：
+    省启动开销 + 降低 errors（限流/网络）导致的高失败。2026-08 优化。
+    """
+    timeout = spec.get("timeout", 8)
+    url = "https://api.anysearch.com/mcp"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None,
+                domain: str = "", sub_domain: str = "", **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        args: dict[str, Any] = {"query": query, "max_results": min(n, 10)}
+        if domain:
+            args["domain"] = domain
+        if sub_domain:
+            args["sub_domain"] = sub_domain
+        body = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": {"name": "search", "arguments": args}}
+        headers = {"Content-Type": "application/json"}
+        api_key = os.environ.get("ANYSEARCH_API_KEY", "")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        try:
+            from http_client import HttpClient
+            client = HttpClient(timeout=to, max_retries=1, jitter=False)
+            resp = client.post(url, body=body, extra_headers=headers)
+        except ImportError:
+            return []
+        if resp.get("status", 0) >= 400 or not resp.get("text"):
+            return []
+        try:
+            data = json.loads(resp["text"])
+        except (ValueError, TypeError):
+            return []
+        content = data.get("result", {}).get("content", []) or []
+        records = [
+            (i.get("text", "") if isinstance(i, dict) else str(i)) for i in content
+        ]
+        joined = "".join(records).lower()
+        # 配额/限流：仅当无任何结果块（### N.）且文本含配额信号时判定，避免
+        # 正常结果正文里出现 'quota/429/rate limit' 等词被误判为配额耗尽。
+        has_result_blocks = any("### " in t for t in records)
+        if (not has_result_blocks) and any(
+                k in joined for k in ("quota", "exhausted", "recharge",
+                                      "rate limit", "429", "daily_free_quota")):
+            return []
+        results = []
+        for item in content:
+            text = item.get("text", "") if isinstance(item, dict) else str(item)
+            blocks = re.split(r"\n### \d+\.\s", text)
+            for block in blocks[1:]:
+                lines = block.strip().split("\n")
+                title = lines[0].strip() if lines else ""
+                item_url = ""
+                snippet_lines = []
+                for line in lines[1:]:
+                    ls = line.strip()
+                    if ls.startswith("- **URL**: "):
+                        item_url = ls.replace("- **URL**: ", "")
+                    elif ls.startswith("**URL**: "):
+                        item_url = ls.replace("**URL**: ", "")
+                    else:
+                        snippet_lines.append(line)
+                snippet = "\n".join(snippet_lines).strip()[:500]
+                if title:
+                    results.append({
+                        "title": title[:200], "url": item_url, "snippet": snippet,
+                        "source": "anysearch", "score": 0.7,
+                    })
+        return results
+    return _engine
+
+
 # ── 搜狗微信搜索引擎 ─────────────────────────────────────────────────────────
 
 def _build_wechat_sogou_engine(spec: dict[str, Any]) -> Any:

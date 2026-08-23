@@ -51,6 +51,7 @@ __all__ = [
 ]
 from engines_builders import (
     _build_exa_engine,
+    _build_anysearch_engine,
     _build_parallel_engine,
     _build_you_engine,
     _build_em_miaoxiang_engine,
@@ -209,6 +210,7 @@ _BUILDERS = {
     "html": _build_html_engine,
     "local_search": _build_local_search_engine,
     "exa": _build_exa_engine,
+    "anysearch": _build_anysearch_engine,
     "em_miaoxiang": _build_em_miaoxiang_engine,
     "cninfo": _build_cninfo_engine,
     "sina_quote": _build_sina_quote_engine,
@@ -309,6 +311,9 @@ def _load_registry():
         # local_search 走进程内 builder（config 里 type=cli，这里显式路由到专用实现）
         if name == "local_search":
             spec["type"] = "local_search"
+        # anysearch 走进程内 builder（原 type=cli subprocess，改为进程内 + HttpClient）
+        if name == "anysearch":
+            spec["type"] = "anysearch"
         builder = _BUILDERS.get(spec.get("type", "cli"))
         if builder:
             registry[name] = builder(spec)

@@ -3,6 +3,7 @@
 
 from engines_builders_tech import (
     _build_exa_engine,
+    _build_anysearch_engine,
     _build_wechat_sogou_engine,
     _build_hackernews_engine,
     _build_stackoverflow_engine,

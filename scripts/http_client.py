@@ -505,6 +505,133 @@ class HttpClient:
                 "elapsed_ms": int((time.time() - start) * 1000),
                 "error": "重定向超过 5 跳"}
 
+    def post(self, url: str, body: dict | None = None,
+             extra_headers: dict | None = None,
+             follow_redirects: bool = True,
+             json_body: bool = True) -> dict:
+        """发送 POST 请求（anysearch 等 JSON-RPC/JSON API 用）。
+
+        复用 get() 的 UA 轮换、Cookie 积累、重试退避、Retry-After 尊重与 SSRF 防护。
+        返回格式与 get() 一致。body：dict → json.dumps（json_body=True）或
+        urlencode（json_body=False）；None 则不发送 body。
+        """
+        ok, reason = check_url(url)
+        if not ok:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": 0, "error": f"URL 被 SSRF 防护拦截: {reason}"}
+        self._apply_jitter()
+        last_error = None
+        payload = None
+        if body is not None:
+            if json_body:
+                payload = json.dumps(body).encode("utf-8")
+            else:
+                payload = urllib.parse.urlencode(body).encode("utf-8")
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self._do_post(url, payload, extra_headers, follow_redirects)
+                wait = retry_after_seconds(resp.get("status", 0),
+                                           resp.get("headers", {}))
+                if wait is not None and attempt < self.max_retries:
+                    time.sleep(wait)
+                    continue
+                return resp
+            except (socket.timeout, ConnectionError, OSError) as e:
+                last_error = e
+                if attempt < self.max_retries:
+                    time.sleep(self._backoff_delay(attempt))
+            except Exception as e:
+                last_error = e
+                break
+        return {"status": 0, "headers": {}, "text": "", "url": url,
+                "elapsed_ms": 0, "error": str(last_error)[:200]}
+
+    def _do_post(self, url: str, payload: bytes | None,
+                 extra_headers: dict | None, follow_redirects: bool) -> dict:
+        """实际执行 POST（使用 http.client，逻辑与 _do_get 对齐但不改 GET 路径）。"""
+        start = time.time()
+        current_url = url
+        redirects_left = 5 if follow_redirects else 0
+        while True:
+            headers = _random_headers(extra_headers)
+            cookie_str = self._cookies.get_cookie_header(current_url)
+            if cookie_str:
+                headers["Cookie"] = cookie_str
+            parsed = urllib.parse.urlparse(current_url)
+            if not parsed.scheme:
+                current_url = "https://" + current_url
+                parsed = urllib.parse.urlparse(current_url)
+            connection_class = (http.client.HTTPSConnection
+                                if parsed.scheme == "https" else http.client.HTTPConnection)
+            conn = connection_class(parsed.hostname,
+                                    parsed.port or (443 if parsed.scheme == "https" else 80),
+                                    timeout=self.timeout)
+            path = parsed.path or "/"
+            if parsed.query:
+                path += "?" + parsed.query
+            conn.request("POST", path, body=payload, headers=headers)
+            resp = conn.getresponse()
+            status = resp.status
+            resp_headers = dict(resp.getheaders())
+            self._cookies.extract_from_response(current_url, resp.getheaders())
+            if status in (301, 302, 303, 307, 308) and redirects_left > 0:
+                loc = resp.getheader("Location")
+                conn.close()
+                if not loc:
+                    break
+                current_url = urllib.parse.urljoin(current_url, loc)
+                redirects_left -= 1
+                continue
+            raw_body = resp.read()
+            conn.close()
+            encoding = resp.getheader("Content-Encoding", "")
+            if "gzip" in encoding:
+                import gzip, io
+                raw_body = gzip.GzipFile(fileobj=io.BytesIO(raw_body)).read()
+            elif "br" in encoding:
+                try:
+                    import brotli
+                    raw_body = brotli.decompress(raw_body)
+                except ImportError:
+                    return self._do_post_fallback(url, payload, extra_headers)
+            content_type = resp.getheader("Content-Type", "")
+            charset = "utf-8"
+            if "charset=" in content_type:
+                charset = content_type.split("charset=")[-1].strip().split(";")[0]
+            text = raw_body.decode(charset, errors="replace")
+            return {"status": status, "headers": resp_headers, "text": text,
+                    "url": current_url,
+                    "elapsed_ms": int((time.time() - start) * 1000),
+                    "from_cache": False}
+
+    def _do_post_fallback(self, url: str, payload: bytes | None,
+                          extra_headers: dict | None) -> dict:
+        """POST 的 curl fallback（brotli 不可用时）。"""
+        headers = _random_headers(extra_headers)
+        cmd = ["curl", "-s", "--max-time", str(int(self.timeout)), "-X", "POST",
+               "-w", "\\n%{http_code}\\n%{url_effective}"]
+        for k, v in headers.items():
+            cmd.extend(["-H", f"{k}: {v}"])
+        if payload is not None:
+            cmd.extend(["--data-binary", "@-"])
+        cmd.append(url)
+        try:
+            import subprocess
+            r = subprocess.run(cmd, input=payload, capture_output=True, text=True,
+                               timeout=self.timeout + 5)
+            output = r.stdout.strip()
+            lines = output.rsplit("\n", 2)
+            if len(lines) >= 2:
+                text = lines[0] if len(lines) == 2 else "\n".join(lines[:-2])
+                status = int(lines[-2]) if lines[-2].isdigit() else 0
+            else:
+                text, status = output, 0
+            return {"status": status, "headers": {}, "text": text, "url": url,
+                    "elapsed_ms": 0, "from_cache": False}
+        except Exception as e:
+            return {"status": 0, "headers": {}, "text": "", "url": url,
+                    "elapsed_ms": 0, "error": str(e)[:200]}
+
     def _safe_follow_redirects(self, url: str, headers: dict,
                                max_redirects: int = 5) -> str | None:
         """逐跳安全跟随重定向：每跳目标都过 SSRF 校验。
