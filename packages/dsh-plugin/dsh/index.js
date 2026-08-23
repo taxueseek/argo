@@ -1,13 +1,26 @@
 /*
- * @taxueseek/argo-dsh — wide_research
+ * @taxueseek/argo-dsh — wide_research + native web_search provider
  *
  * Same bundle that mounts the argo MCP also registers this orchestrator.
  * Workers collect evidence through mcp__argo__* (search / fetch / evidence);
  * they do not call argo_research, to avoid nested research fan-out.
- * No @deepseek-ai/* imports: public ctx.tools / ctx.subagents only.
+ * No @deepseek-ai/* imports: public ctx.tools / ctx.subagents / ctx.web only.
+ *
+ * Native web seam: when the web service exposes registerSearchProvider, this
+ * bundle registers an "argo" provider so the built-in web_search tool routes
+ * through the argo engine chain (same stdio MCP server the profile mounts).
+ * Off by default via searchProviderEnabled: false; the profile patch flips
+ * it on and selects "argo" as searchProvider.
  */
 
+import { spawn } from 'node:child_process'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
 export const name = 'wide-research'
+// 'web' 是可选增强（headless 无 web 服务）：官方约定可选依赖不入 inject，
+// 在 apply 内用 ctx.get('web') 查询；若声明为必需，headless 环境会阻塞加载。
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
 const DEFAULT_CHILD_TOOLS = Object.freeze([
@@ -30,6 +43,22 @@ const DEFAULTS = Object.freeze({
   synthesisMaxTokens: 7_000,
   childToolDeny: [],
   childToolAllow: [...DEFAULT_CHILD_TOOLS],
+  /** 原生 web_search 是否走 argo provider；false 时 provider 注册但不可选。 */
+  searchProviderEnabled: false,
+  /** provider id；改它需同步 web 行的 searchProvider 配置。 */
+  searchProviderId: 'argo',
+  /** 入口：公开仓默认 npx（不泄露本机路径）；本机部署在用户层 patch 覆盖为
+   *  python3 + mcp_server.py 绝对路径，或设 ARGO_SEARCH_PYTHON / ARGO_SEARCH_MCP_SERVER。 */
+  searchCommand: process.env.ARGO_SEARCH_PYTHON || 'npx',
+  searchArgs: process.env.ARGO_SEARCH_MCP_SERVER
+    ? [process.env.ARGO_SEARCH_MCP_SERVER]
+    : ['-y', 'github:taxueseek/argo'],
+  /** 单次搜索进程超时（ms）。 */
+  searchTimeoutMs: 30_000,
+  /** 常驻 MCP 连接空闲回收时间（ms）；0 表示不自动回收。 */
+  searchIdleMs: 60_000,
+  /** 研究报告落盘目录（render 只回摘要+路径，控制上下文占用）。 */
+  reportDir: join(homedir(), '.dsh-research'),
 })
 
 const text = (value) => [{ type: 'text', text: value }]
@@ -42,6 +71,236 @@ const clamp = (value, fallback, minimum, maximum) => Number.isFinite(value)
 const asStringArray = (value, maximum) => Array.isArray(value)
   ? value.filter(entry => typeof entry === 'string').map(entry => entry.trim()).filter(Boolean).slice(0, maximum)
   : []
+
+// --- 原生 web_search provider：经 stdio MCP 调 argo_search ---
+// 与 mcp-argo 同一条 MCP 入口（command + args），NDJSON 帧协议（该入口
+// 首帧为 NDJSON 时自动切 NDJSON 响应）。入口不再硬编码本机路径：
+// 优先环境变量 ARGO_SEARCH_PYTHON / ARGO_SEARCH_MCP_SERVER，其次
+// 从本文件位置向上解析到仓库 scripts/mcp_server.py，最后回退 npx。
+// 每次搜索 spawn 一个进程，搜索本身是网络请求，进程启动成本可忽略；
+// 超时与 abort 都会杀进程。
+
+function argoAborted() {
+  const err = new Error('argo search aborted')
+  err.code = 'WEB_ABORTED'
+  return err
+}
+
+/**
+ * Map the argo_search compact payload to the web seam's result shape.
+ * `payload` is `_compact_search_result` output: top-level meta plus
+ * `results[]` with title/url/snippet/source/score.
+ */
+export function mapArgoToWebResult(payload, query) {
+  const results = Array.isArray(payload?.results)
+    ? payload.results.filter(r => r && typeof r.url === 'string' && r.url !== '')
+    : []
+  const sources = results.map(r => {
+    const source = { url: r.url }
+    if (typeof r.title === 'string' && r.title !== '') source.title = r.title
+    if (typeof r.snippet === 'string' && r.snippet !== '') source.snippet = r.snippet
+    return source
+  })
+  return { content: undefined, sources, truncated: false, engine: payload?.engine ?? 'argo' }
+}
+
+/**
+ * 常驻 argo MCP 连接（模块级单例）：web_search provider 与未来的诊断
+ * 端点共用一条 stdio 连接，避免每次搜索 spawn 进程 + 重复预热。
+ * MCP server 顺序处理请求（单线程 JSON-RPC），客户端用 promise 链串行。
+ * 空闲自动关闭回收；进程意外退出后下次调用自动重建。
+ * 连接生命周期由创建它的插件实例通过 ctx.effect 持有，插件卸载即关闭。
+ */
+let sharedMcp = null
+
+function createMcpConnection(options) {
+  const { command, args, idleMs } = options
+  let proc = null
+  let buffer = ''
+  let nextId = 1
+  let chain = Promise.resolve()
+  let idleTimer = null
+  let disposed = false
+  const pending = new Map()
+
+  const touchIdle = () => {
+    if (idleTimer !== null) clearTimeout(idleTimer)
+    if (idleMs > 0) {
+      idleTimer = setTimeout(() => { close() }, idleMs)
+      if (idleTimer.unref) idleTimer.unref()
+    }
+  }
+
+  const close = () => {
+    if (disposed) return
+    disposed = true
+    if (idleTimer !== null) clearTimeout(idleTimer)
+    if (proc !== null) {
+      try { proc.kill() } catch { /* already gone */ }
+      proc = null
+    }
+    const err = new Error('argo MCP connection closed')
+    for (const entry of pending.values()) entry.rej(err)
+    pending.clear()
+    if (sharedMcp === conn) sharedMcp = null
+  }
+
+  const conn = {
+    initialize: async () => {
+      if (proc !== null) return
+      proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      proc.on('error', () => close())
+      proc.on('exit', () => close())
+      proc.stderr.on('data', () => { /* 预热日志忽略 */ })
+      proc.stdout.setEncoding('utf8')
+      proc.stdout.on('data', (chunk) => {
+        buffer += chunk
+        let nl
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, nl).trim()
+          buffer = buffer.slice(nl + 1)
+          if (line === '') continue
+          let msg
+          try {
+            msg = JSON.parse(line)
+          } catch {
+            continue
+          }
+          const entry = pending.get(msg.id)
+          if (entry === undefined) continue
+          pending.delete(msg.id)
+          if (msg.error !== undefined) entry.rej(new Error(msg.error.message ?? 'argo MCP error'))
+          else entry.res(msg.result)
+        }
+      })
+      await new Promise((res, rej) => {
+        proc.once('spawn', res)
+        proc.once('error', rej)
+      })
+      const init = await conn.request('initialize', {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'argo-dsh', version: '2.8.2' }
+      })
+      conn.notify('notifications/initialized', {})
+      return init
+    },
+    request: (method, params) => {
+      touchIdle()
+      const run = () => new Promise((res, rej) => {
+        if (proc === null || proc.stdin.destroyed) {
+          rej(new Error('argo MCP process not running'))
+          return
+        }
+        const id = nextId
+        nextId += 1
+        pending.set(id, { res, rej })
+        try {
+          proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
+        } catch (err) {
+          pending.delete(id)
+          rej(err)
+        }
+      })
+      const result = chain.then(run)
+      chain = result.catch(() => { /* 失败不中断后续请求 */ })
+      return result
+    },
+    notify: (method, params) => {
+      if (proc !== null && !proc.stdin.destroyed) {
+        try {
+          proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n')
+        } catch { /* ignore */ }
+      }
+    },
+    close
+  }
+  return conn
+}
+
+async function getSharedMcp(options) {
+  if (sharedMcp !== null && sharedMcp !== undefined) {
+    try {
+      await sharedMcp.initialize()
+      return sharedMcp
+    } catch {
+      sharedMcp = null
+    }
+  }
+  const conn = createMcpConnection(options)
+  await conn.initialize()
+  sharedMcp = conn
+  return conn
+}
+
+/** 插件卸载时关闭共享连接（HMR/停用不泄漏子进程）。 */
+export function disposeSharedMcp() {
+  if (sharedMcp !== null && sharedMcp !== undefined) {
+    sharedMcp.close()
+    sharedMcp = null
+  }
+}
+
+/** 报告落盘：<reportDir>/<ts>-<slug>.md，返回绝对路径。 */
+export async function persistReport(dir, question, text) {
+  await mkdir(dir, { recursive: true })
+  const slug = String(question || 'research').slice(0, 40).replace(/[^\w\u4e00-\u9fa5-]+/g, '_').replace(/^_+|_+$/g, '') || 'research'
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const file = join(dir, `${ts}-${slug}.md`)
+  await writeFile(file, text, 'utf8')
+  return file
+}
+
+/**
+ * Run one argo_search through the shared argo stdio MCP connection.
+ * Serialized through the connection's request chain; honors `signal`
+ * by abandoning the local wait (the in-flight search completes on the
+ * server but its result is dropped — the shared connection stays alive).
+ */
+export async function searchViaArgoMCP(query, maxResults = 5, signal, options = {}) {
+  const command = options.command ?? DEFAULTS.searchCommand
+  const args = options.args ?? DEFAULTS.searchArgs
+  const timeoutMs = options.timeoutMs ?? DEFAULTS.searchTimeoutMs
+  const count = clamp(maxResults ?? 5, 5, 1, 20)
+
+  const conn = await getSharedMcp({ command, args, idleMs: options.idleMs ?? DEFAULTS.searchIdleMs })
+  const result = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('argo search timed out')), timeoutMs)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(argoAborted())
+    }
+    if (signal !== undefined) {
+      if (signal.aborted) {
+        clearTimeout(timer)
+        reject(argoAborted())
+        return
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+    conn.request('tools/call', {
+      name: 'argo_search',
+      arguments: { query, max_results: count, summary: true }
+    }).then((value) => {
+      clearTimeout(timer)
+      if (signal !== undefined) signal.removeEventListener('abort', onAbort)
+      resolve(value)
+    }, (err) => {
+      clearTimeout(timer)
+      if (signal !== undefined) signal.removeEventListener('abort', onAbort)
+      reject(err)
+    })
+  })
+
+  let payload
+  try {
+    const raw = result?.content?.[0]?.text
+    payload = typeof raw === 'string' ? JSON.parse(raw) : {}
+  } catch (err) {
+    throw new Error(`argo search returned an unprocessable response: ${String(err)}`)
+  }
+  return mapArgoToWebResult(payload, query)
+}
 
 const trackSchema = {
   type: 'object',
@@ -118,6 +377,8 @@ const outputSchema = {
     question: { type: 'string' },
     executiveSummary: { type: 'string' },
     report: { type: 'string' },
+    /** 报告完整文本落盘路径（render 只回摘要，控制上下文占用）。 */
+    reportPath: { type: 'string' },
     tracks: {
       type: 'array',
       items: {
@@ -414,6 +675,40 @@ export function apply(ctx, providedConfig = {}) {
   const config = { ...DEFAULTS, ...(isObject(providedConfig) ? providedConfig : {}) }
   const toolName = asString(config.toolName, DEFAULTS.toolName)
   const providerName = asString(config.provider, DEFAULTS.provider)
+
+  // 配置 loud fail：启用搜索 provider 时入口必须可用（官方「配置错误要响亮」）。
+  if (config.searchProviderEnabled !== false) {
+    if (typeof config.searchCommand !== 'string' || config.searchCommand === '') {
+      throw new Error('argo-dsh: searchCommand must be a non-empty string when searchProviderEnabled')
+    }
+    if (!Array.isArray(config.searchArgs) || config.searchArgs.length === 0) {
+      throw new Error('argo-dsh: searchArgs must be a non-empty array when searchProviderEnabled')
+    }
+    if (!Number.isFinite(config.searchTimeoutMs) || config.searchTimeoutMs <= 0) {
+      throw new Error('argo-dsh: searchTimeoutMs must be a positive number')
+    }
+  }
+
+  // 共享 MCP 连接随本插件实例生命周期回收（官方 ctx.effect 清理约定；
+  // 不写则 HMR/卸载时子进程泄漏）。
+  ctx.effect(() => () => disposeSharedMcp())
+
+  // 原生 web_search seam：'web' 是可选服务，不入 inject；headless 无 web
+  // 服务时此处跳过注册，wide_research 核心功能不受影响。
+  const web = ctx.get?.('web') ?? ctx.web
+  if (web && typeof web.registerSearchProvider === 'function') {
+    web.registerSearchProvider({
+      id: asString(config.searchProviderId, DEFAULTS.searchProviderId),
+      available: () => config.searchProviderEnabled !== false,
+      search: (request, signal) =>
+        searchViaArgoMCP(request.query, request.maxResults, signal, {
+          command: config.searchCommand,
+          args: config.searchArgs,
+          timeoutMs: config.searchTimeoutMs,
+          idleMs: config.searchIdleMs,
+        }),
+    })
+  }
   const defaultWorkers = clamp(config.defaultWorkers, DEFAULTS.defaultWorkers, 1, 9)
   const maxWorkers = clamp(config.maxWorkers, DEFAULTS.maxWorkers, 1, 9)
   const maxTracks = clamp(config.maxTracks, DEFAULTS.maxTracks, 2, 9)
@@ -440,7 +735,24 @@ export function apply(ctx, providedConfig = {}) {
     },
     output: {
       schema: outputSchema,
-      render: (_args, value) => [{ type: 'text', text: value.report }],
+      render: (_args, value) => {
+        // 完整报告已落盘，render 只回摘要 + 证据清单 + 路径：
+        // 模型获得可作答的骨架，细节按需用 read 工具读文件，
+        // 避免整份研究（数千 token）常驻上下文。
+        // 落盘失败（reportPath 缺失）时回退为完整报告文本。
+        if (value.reportPath === undefined || value.reportPath === '') {
+          return [{ type: 'text', text: value.report }]
+        }
+        const sourceCount = value.sources?.length ?? 0
+        const stats = value.stats ?? {}
+        const gate = value.quality_gate_results ?? {}
+        const summary = [
+          `研究完成：${value.executiveSummary}`,
+          `— ${stats.completedTracks ?? 0}/${stats.plannedTracks ?? 0} 条轨道完成，${sourceCount} 个信源；质量门禁 passed=${gate.passed}`,
+          `— 完整报告已写入 ${value.reportPath}（约 ${Math.round((value.report ?? '').length / 4)} tokens），需要细节时用 read 工具读取该文件`,
+        ].join('\n')
+        return [{ type: 'text', text: summary }]
+      },
     },
     isConcurrencySafe: () => true,
     async execute(args, exec) {
@@ -599,6 +911,13 @@ export function apply(ctx, providedConfig = {}) {
         }),
       }
       output.report = renderReport(output.executiveSummary, synthesis.answer, sources, warnings)
+      // 报告落盘：render 只回摘要，完整文本供按需读取。
+      try {
+        output.reportPath = await persistReport(config.reportDir, question, output.report)
+      } catch (err) {
+        // 落盘失败不阻断返回：render 回退为完整报告文本。
+        output.reportPath = undefined
+      }
       return output
     },
   })

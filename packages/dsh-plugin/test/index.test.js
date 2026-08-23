@@ -1,6 +1,33 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracks, stageTracks, evaluateGates, normalizeSource } from '../dsh/index.js'
+import { normalizeTracks, stageTracks, evaluateGates, normalizeSource, mapArgoToWebResult } from '../dsh/index.js'
+
+test('mapArgoToWebResult maps compact argo payload to web sources', () => {
+  const mapped = mapArgoToWebResult({
+    query: 'q',
+    engine: 'octen',
+    results: [
+      { title: '甲', url: 'https://a.com/1', snippet: 's1', source: 'octen', score: 0.9 },
+      { title: '', url: 'https://b.com/2', snippet: null },
+      { url: 'https://c.com/3' },
+      { title: '无url', snippet: 'no' }
+    ]
+  })
+  assert.equal(mapped.sources.length, 3)
+  assert.deepEqual(mapped.sources[0], { url: 'https://a.com/1', title: '甲', snippet: 's1' })
+  assert.deepEqual(mapped.sources[1], { url: 'https://b.com/2' })
+  assert.equal(mapped.truncated, false)
+  assert.equal(mapped.engine, 'octen')
+})
+
+test('mapArgoToWebResult tolerates empty and malformed payloads', () => {
+  const empty = mapArgoToWebResult({}, 'q')
+  assert.deepEqual(empty.sources, [])
+  const junk = mapArgoToWebResult({ results: 'nope' }, 'q')
+  assert.deepEqual(junk.sources, [])
+  const nonArray = mapArgoToWebResult({ results: [42, { url: 7 }] }, 'q')
+  assert.deepEqual(nonArray.sources, [])
+})
 
 test('normalizeTracks keeps depends_on and dedupes ids', () => {
   const tracks = normalizeTracks({
@@ -142,4 +169,20 @@ test('normalizeSource: confidence defaults to low, limits high to high/medium', 
   assert.equal(high.confidence, 'high')
   const bogus = normalizeSource({ title: 't', url: 'https://a.com', claim: 'c', confidence: 'certain' })
   assert.equal(bogus.confidence, 'low')
+})
+
+test('persistReport writes to <dir>/<ts>-<slug>.md and returns absolute path', async () => {
+  const { mkdtemp, readFile } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { persistReport } = await import('../dsh/index.js')
+  const dir = await mkdtemp(join(tmpdir(), 'argo-report-'))
+  const file = await persistReport(dir, '测试 报告？问题', '# Report\ncontent')
+  assert.ok(file.startsWith(dir))
+  assert.ok(file.endsWith('.md'))
+  const body = await readFile(file, 'utf8')
+  assert.equal(body, '# Report\ncontent')
+  // 目录自动创建
+  const nested = await persistReport(join(dir, 'a', 'b'), 'q', 'x')
+  assert.ok(nested.startsWith(join(dir, 'a', 'b')))
 })

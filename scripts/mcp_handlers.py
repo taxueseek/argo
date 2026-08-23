@@ -402,9 +402,34 @@ def _search_social_platforms(
     return platform_results, engines_used, errors
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """读布尔环境变量；空/非法回退默认。"""
+    raw = os.environ.get(name, "")
+    if raw == "":
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int) -> int:
+    """读整数环境变量；空/非法回退默认。"""
+    raw = os.environ.get(name, "")
+    if raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    """执行 MCP 工具，按需导入模块。"""
-    pretty = bool(arguments.get("pretty", False))
+    """执行 MCP 工具，按需导入模块。
+
+    调试/运行配置（pretty / skip_cache / timeout）已从模型可见 schema 移出，
+    改为 server 层环境变量：ARGO_MCP_PRETTY / ARGO_MCP_SKIP_CACHE /
+    ARGO_MCP_TIMEOUT。arguments 里的旧字段仍兼容（低版本客户端可传）。
+    模型上下文不再为这些非决策参数付费，功能与调试能力不丢。
+    """
+    pretty = _env_bool("ARGO_MCP_PRETTY", bool(arguments.get("pretty", False)))
     try:
         if name == "argo_search":
             search_mod = _lazy_cached("search")
@@ -414,8 +439,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 query=arguments["query"],
                 engine=arguments.get("engine", "auto"),
                 n=arguments.get("max_results", 5),
-                skip_cache=arguments.get("skip_cache", False),
-                timeout=arguments.get("timeout", 10),
+                skip_cache=_env_bool("ARGO_MCP_SKIP_CACHE", bool(arguments.get("skip_cache", False))),
+                timeout=_env_int("ARGO_MCP_TIMEOUT", int(arguments.get("timeout", 10))),
                 depth=arguments.get("depth", "fast"),
                 mode=arguments.get("mode", "auto"),
                 since=arguments.get("since"),
@@ -590,7 +615,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             strategy = arguments.get("strategy", "bfs")
             max_pages = arguments.get("max_pages", 10)
             max_depth = arguments.get("max_depth", 2)
-            timeout = arguments.get("timeout", 8)
+            timeout = _env_int("ARGO_MCP_TIMEOUT_CRAWL", int(arguments.get("timeout", 8)))
             if strategy == "sitemap":
                 result = crawl_mod.crawl_sitemap(arguments["url"], max_pages=max_pages, timeout=timeout)
             else:
@@ -604,7 +629,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 fetch_mod = _lazy_cached("fetch_v3")
                 emode = arguments.get("extract_mode", "all")
                 fetch_result = fetch_mod.fetch_page_v3(arguments["url"], max_chars=50000,
-                                                       timeout=arguments.get("timeout", 15), raw=True)
+                                                       timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", int(arguments.get("timeout", 15))), raw=True)
                 if not fetch_result["success"]:
                     return {
                         "content": [{"type": "text", "text": _dumps({"error": fetch_result.get("error", "fetch failed")})}],
@@ -625,7 +650,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             result = fetch_v3_mod.fetch_v3(
                 url=arguments["url"],
                 max_chars=arguments.get("max_chars", 8000),
-                timeout=arguments.get("timeout", 15),
+                timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", int(arguments.get("timeout", 15))),
                 use_browser_fallback=True,
                 force_browser=arguments.get("use_browser", False),
             )

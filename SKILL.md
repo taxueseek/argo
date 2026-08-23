@@ -68,7 +68,7 @@ python3 scripts/clarify.py "有歧义的查询" --explain --json
 
 ```bash
 argo fetch "https://example.com" [--focus "关键词"] [--use-browser]
-# HTTP→反检测浏览器自动降级 + BM25 聚焦提取 + 质量信号 + Wayback 快照回退 + 内容安全引擎
+# {url}.md 直出探测 → HTTP（桌面/移动 UA，抖音等分流站移动优先）→ TLS 指纹 → Wayback/浏览器 自动降级 + BM25 聚焦提取 + 质量信号 + 内容安全引擎
 argo screenshot "https://example.com" [--full-page] [--output /tmp/page.png]
 argo pdf "https://example.com/paper.pdf" [--pages "1-5"] [--password "secret"]
 ```

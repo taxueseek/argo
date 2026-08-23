@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-fetch_v3.py — 四级抓取架构（零外部依赖，纯 stdlib + 系统 Chrome）
+fetch_v3.py — 抓取降级链（零外部依赖，纯 stdlib + 系统 Chrome）
 
 吸收 Hound 的页面交互能力，但不引入 Playwright/Patchright 依赖：
+  第零级：AI 友好变体探测（{url}.md 直出，诚实身份；ARGO_FETCH_MD_VARIANT=0 关闭）
   第一级：增强 HTTP（UA 轮换 + Cookie 积累 + 重试弹性）
+  第一级A2：移动端 UA 分支（客户端形态分流型反爬；门控站单次直连 +
+            per-host 身份记忆；ARGO_FETCH_MOBILE=0 关闭）
   第一级B：TLS 指纹伪造（curl_cffi impersonate，多指纹轮换，免起浏览器）
   第二级：Chrome CDP 驱动（页面交互/JS 渲染/CF 绕过）
   第三级：内容质量评估（content_ok/page_type/quality_score）
@@ -85,7 +88,19 @@ class ContentExtractor(HTMLParser):
 
 
 def extract_content(html: str, max_chars: int = 8000) -> tuple[str, str]:
-    """从 HTML 提取正文和标题。"""
+    """从 HTML 提取正文和标题。
+
+    P0 增强：readability 密度法为主（链接密度惩罚 + 标签权重 + 容器归并，
+    保持文档顺序）；返回空时回退旧密度排序实现（链接列表页等无正文场景
+    不至于丢掉旧行为兜底的结果）。
+    """
+    try:
+        from readability_extract import extract_readability
+        content, title = extract_readability(html, max_chars=max_chars)
+        if content.strip():
+            return content[:max_chars], title.strip()
+    except Exception:
+        pass
     ext = ContentExtractor()
     try:
         ext.feed(html)
@@ -141,6 +156,221 @@ def _impersonate_enabled() -> bool:
     """TLS 指纹伪造层开关：ARGO_FETCH_IMPERSONATE=0 关闭，默认开启。"""
     return os.environ.get("ARGO_FETCH_IMPERSONATE", "1").strip() not in (
         "0", "false", "False", "no")
+
+
+# ─── 第零级：AI 友好变体探测（{url}.md 直出）────────────────────────────────
+
+_MD_SKIP_EXTS = {".html", ".htm", ".php", ".jsp", ".asp", ".aspx", ".shtml",
+                 ".pdf", ".xml", ".json", ".png", ".jpg", ".jpeg", ".gif",
+                 ".webp", ".svg", ".css", ".js", ".zip", ".gz", ".mp4", ".mp3"}
+
+_MD_SNIFF_HTML = re.compile(r"<\s*(!doctype|html|head|body|div|script)\b",
+                            re.IGNORECASE)
+
+
+def _md_variant_enabled() -> bool:
+    """.md 变体探测开关：ARGO_FETCH_MD_VARIANT=0 关闭，默认开启。"""
+    return os.environ.get("ARGO_FETCH_MD_VARIANT", "1").strip() not in (
+        "0", "false", "False", "no")
+
+
+def _md_variant_url(url: str) -> str | None:
+    """返回可探测的 .md 变体 URL；不适合探测时返回 None。
+
+    只对无扩展名路径（文档站页面形态）追加 .md；已带扩展名或带查询串的
+    动态地址跳过，避免无意义请求。
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    if parsed.scheme not in ("http", "https"):
+        return None
+    path = parsed.path or "/"
+    ext = os.path.splitext(path)[1].lower()
+    if ext or parsed.query:
+        return None
+    return url.rstrip("/") + ".md"
+
+
+def _looks_like_markdown(text: str) -> bool:
+    """嗅探响应体是否为可用 Markdown 正文（排除伪装成 .md 的 HTML 壳）。"""
+    if not text or len(text.strip()) < 120:
+        return False
+    if _MD_SNIFF_HTML.search(text[:2048]):
+        return False
+    return True
+
+
+def _md_variant_fetch(url: str, max_chars: int = 8000,
+                      timeout: float = 8.0) -> dict | None:
+    """探测 AI 友好 Markdown 变体（{url}.md）。命中返回结果，未命中返回 None。
+
+    背景：头部开发者文档站自发提供 .md 直出与 llms.txt，对 Agent 返回干净
+    正文（诚实身份即可获取）。探测只多一个 GET，命中即跳过整个反爬降级链；
+    未命中静默放弃，走原有链路。
+    """
+    md_url = _md_variant_url(url)
+    if not md_url:
+        return None
+    try:
+        from http_client import HttpClient
+        client = HttpClient(timeout=min(timeout, 5.0), max_retries=0,
+                            jitter=False)
+        resp = client.get(md_url, extra_headers={
+            "User-Agent": "argo-fetch-v3/1.0 (+local-research; md-variant)",
+            "Accept": "text/markdown, text/plain;q=0.9, */*;q=0.8",
+        })
+    except Exception:
+        return None
+    if resp.get("status", 0) != 200 or not resp.get("text"):
+        return None
+    headers = resp.get("headers") or {}
+    ctype = ""
+    for k, v in headers.items():
+        if str(k).lower() == "content-type":
+            ctype = str(v).lower()
+            break
+    if "html" in ctype:
+        return None
+    if not _looks_like_markdown(resp["text"]):
+        return None
+    result = _make_result(url, "", max_chars, "md_variant")
+    result["content"] = resp["text"][:max_chars]
+    result["length"] = len(result["content"])
+    result["title"] = ""
+    m = re.match(r"^#\s+(.+)$", result["content"].lstrip(), re.MULTILINE)
+    if m:
+        result["title"] = m.group(1).strip()[:200]
+    return result
+
+
+# ─── 第一级A2：移动端 UA 分支（客户端形态分流）──────────────────────────────
+
+_MOBILE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+              "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
+              "Mobile/15E148 Safari/604.1")
+
+
+def _mobile_branch_enabled() -> bool:
+    """移动端 UA 分支开关：ARGO_FETCH_MOBILE=0 关闭，默认开启。"""
+    return os.environ.get("ARGO_FETCH_MOBILE", "1").strip() not in (
+        "0", "false", "False", "no")
+
+
+# 客户端形态分流已知站点：这些站对真机 UA 直接返回 SSR 数据，而桌面 UA 首发
+# 会触发风控、连坐紧随其后的移动端请求（2026-08 实测冷却 ≥8s），因此必须
+# 移动优先而非失败后重试。可用 ARGO_MOBILE_FIRST_HOSTS 追加（逗号分隔）。
+_MOBILE_FIRST_HOSTS = ("douyin.com", "iesdouyin.com")
+
+
+def _mobile_first_host(url: str) -> bool:
+    """URL 是否命中「移动优先」主机清单。"""
+    extra = [h.strip().lower() for h in os.environ.get(
+        "ARGO_MOBILE_FIRST_HOSTS", "").split(",") if h.strip()]
+    host = (urlparse(url).hostname or "").lower()
+    for marker in list(_MOBILE_FIRST_HOSTS) + extra:
+        if host == marker or host.endswith("." + marker):
+            return True
+    return False
+
+
+# ─── 身份记忆（per-host 成功档位，跨进程小文件）─────────────────────────────
+#
+# 首次访问未知分流站：桌面失败 → 移动成功（2 次触碰）；记忆生效后（TTL 24h）
+# 直接移动首发（1 次触碰）。实测依据：抖音类站点按 IP 递进限速，请求节奏比
+# 身份选择重要一个数量级，省掉的每次试错都是真实的封禁风险。
+_IDENTITY_TTL = 86400
+_IDENTITY_PATH = os.environ.get(
+    "ARGO_IDENTITY_MEMORY",
+    os.path.expanduser("~/.cache/unified-search/fetch-identity.json"))
+_identity_mem: dict[str, float] = {}
+_identity_loaded = False
+
+
+def _identity_load() -> None:
+    global _identity_loaded, _identity_mem
+    if _identity_loaded:
+        return
+    _identity_loaded = True
+    try:
+        with open(_IDENTITY_PATH) as f:
+            raw = json.load(f)
+        now = time.time()
+        _identity_mem = {str(h): float(t) for h, t in raw.items()
+                         if float(t) > now}
+    except Exception:
+        _identity_mem = {}
+
+
+def _identity_remember_mobile(host: str) -> None:
+    """记录「该 host 移动端身份成功过」，原子写小文件。失败静默（纯增益层）。"""
+    if not host:
+        return
+    _identity_load()
+    _identity_mem[host] = time.time() + _IDENTITY_TTL
+    try:
+        parent = os.path.dirname(_IDENTITY_PATH)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        tmp = _IDENTITY_PATH + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(_identity_mem, f)
+        os.replace(tmp, _IDENTITY_PATH)
+    except Exception:
+        pass
+
+
+def _identity_is_mobile(host: str) -> bool:
+    """该 host 近 24h 内移动身份是否成功过。"""
+    if not host:
+        return False
+    _identity_load()
+    return _identity_mem.get(host, 0) > time.time()
+
+
+def _mobile_http_fetch(url: str, max_chars: int = 8000,
+                       timeout: float = 8.0) -> dict:
+    """移动端 UA 抓取：客户端形态分流型站点对真机 UA 返回 SSR 数据。
+
+    实测（2026-08）：抖音 iesdouyin 分享页对 iPhone UA 返回含 _ROUTER_DATA
+    的服务端渲染数据页；桌面/AI bot UA 一律收到 acrawler 风控 JS 壳。
+    该类分流与 TLS 指纹无关，stdlib 即可通过，放在 TLS 伪造层之前。
+    """
+    try:
+        from url_safety import check_url
+        ok, reason = check_url(url)
+        if not ok:
+            return _make_result(url, "", 0, "http_mobile", ok=False,
+                                error=f"URL 被 SSRF 防护拦截: {reason}")
+    except ImportError:
+        pass
+    try:
+        from http_client import HttpClient
+        client = HttpClient(timeout=min(timeout, 5.0), max_retries=1,
+                            jitter=False)
+        resp = client.get(url, extra_headers={"User-Agent": _MOBILE_UA})
+    except ImportError:
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": _MOBILE_UA})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                text = r.read().decode("utf-8", errors="replace")
+                return _make_result(url, text, max_chars, "http_mobile")
+        except Exception as e:
+            return _make_result(url, "", 0, "http_mobile", ok=False,
+                                error=str(e)[:100])
+    if resp.get("status", 0) >= 400:
+        result = _make_result(url, "", 0, "http_mobile", ok=False,
+                              error=f"HTTP {resp.get('status')}")
+        _mark_stop_signal(result, resp)
+        return result
+    if not resp.get("text"):
+        return _make_result(url, "", 0, "http_mobile", ok=False,
+                            error="empty response")
+    result = _make_result(url, resp["text"], max_chars, "http_mobile")
+    _mark_stop_signal(result, resp)
+    return result
 
 
 def _mark_stop_signal(result: dict, resp: dict) -> dict:
@@ -563,38 +793,79 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
     if force_browser:
         result = _browser_fetch(url, max_chars, timeout=15.0, actions=actions)
     else:
-        # 第一级：HTTP
-        result = _http_fetch(url, max_chars, timeout)
+        host = (urlparse(url).hostname or "").lower()
+        gated = (_mobile_branch_enabled()
+                 and (_mobile_first_host(url) or _identity_is_mobile(host)))
+        result = None
+        # 第零级：AI 友好变体探测（{url}.md 直出）——命中即跳过整个反爬降级链。
+        # 门控站跳过：少一次主机触碰，保住单次直连窗口（实测 .md 探测会触发
+        # 抖音连坐限速）。
+        if not gated and _md_variant_enabled():
+            md = _md_variant_fetch(url, max_chars, timeout)
+            if md is not None:
+                md["md_variant"] = True
+                result = md
+        if result is None:
+            # 第一级：客户端形态分流型站点（如抖音）直接以移动端 UA 首发——
+            # 桌面 UA 首发会触发风控并连坐后续移动请求，顺序不可颠倒。
+            if gated:
+                result = _mobile_http_fetch(url, max_chars, timeout)
+                if result.get("success") and not _needs_browser(result):
+                    result["ua_profile"] = "mobile"
+                    _identity_remember_mobile(host)
+            else:
+                # 第一级：HTTP
+                result = _http_fetch(url, max_chars, timeout)
 
-        # 明确停止信号（429/503）→ 不再升级 TLS/wayback/CDP。
-        # 限速/过载与请求方式无关，继续升级重链 = 无视服务器指示放大负载。
-        if not result.get("stop_signal"):
-            # 第一级B：TLS 指纹伪造（HTTP 失败或疑似指纹拦截时）
-            # 指纹检测型反爬对 urllib 直接 403，TLS 层免起浏览器即可通过，
-            # 避免不必要的 CDP 冷启动。
-            if _impersonate_enabled() and (not result.get("success")
-                                           or _needs_browser(result)):
-                spoof = _tls_spoof_fetch(url, max_chars, timeout)
-                if spoof.get("stop_signal"):
-                    result = spoof
-                elif spoof.get("success"):
-                    spoof["http_fallback"] = True
-                    result = spoof
+            # 明确停止信号（429/503）→ 不再升级 TLS/wayback/CDP。
+            # 限速/过载与请求方式无关，继续升级重链 = 无视服务器指示放大负载。
+            if not result.get("stop_signal"):
+                # 第一级A2：移动端 UA 分支（客户端形态分流型反爬）。实测抖音
+                # iesdouyin 对真机 UA 返回 SSR 数据、对桌面/AI UA 一律风控壳；
+                # 该类分流与 TLS 指纹无关，stdlib 免费尝试即可，命中则免去
+                # TLS 伪造与浏览器冷启动。ARGO_FETCH_MOBILE=0 关闭。
+                if (_mobile_branch_enabled() and not gated
+                        and result.get("fetch_method") != "http_mobile"
+                        and (not result.get("success")
+                             or _needs_browser(result))):
+                    mob = _mobile_http_fetch(url, max_chars, timeout)
+                    if (mob.get("success") and not mob.get("stop_signal")
+                            and not _needs_browser(mob)):
+                        mob["ua_profile"] = "mobile"
+                        mob["http_fallback"] = True
+                        result = mob
+                        _identity_remember_mobile(host)
 
-        if not result.get("stop_signal"):
-            # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
-            if not result.get("success"):
-                wb = _wayback_fetch(url, max_chars, timeout=min(timeout * 1.5, 12.0))
-                if wb.get("success"):
-                    wb["http_fallback"] = True
-                    result = wb
+            if not result.get("stop_signal"):
+                # 第一级B：TLS 指纹伪造（HTTP 失败或疑似指纹拦截时）
+                # 指纹检测型反爬对 urllib 直接 403，TLS 层免起浏览器即可通过，
+                # 避免不必要的 CDP 冷启动。门控站跳过：单次直连原则，
+                # 连击直连只会加重按 IP 的递进限速，失败直接交 Wayback/浏览器。
+                if (not gated and _impersonate_enabled()
+                        and (not result.get("success")
+                             or _needs_browser(result))):
+                    spoof = _tls_spoof_fetch(url, max_chars, timeout)
+                    if spoof.get("stop_signal"):
+                        result = spoof
+                    elif spoof.get("success"):
+                        spoof["http_fallback"] = True
+                        result = spoof
 
-            # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）
-            if use_browser_fallback and _needs_browser(result):
-                browser_result = _browser_fetch(url, max_chars, timeout=15.0)
-                if browser_result.get("success") or not result.get("success"):
-                    browser_result["http_fallback"] = True
-                    result = browser_result
+            if not result.get("stop_signal"):
+                # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
+                if not result.get("success"):
+                    wb = _wayback_fetch(url, max_chars,
+                                        timeout=min(timeout * 1.5, 12.0))
+                    if wb.get("success"):
+                        wb["http_fallback"] = True
+                        result = wb
+
+                # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）
+                if use_browser_fallback and _needs_browser(result):
+                    browser_result = _browser_fetch(url, max_chars, timeout=15.0)
+                    if browser_result.get("success") or not result.get("success"):
+                        browser_result["http_fallback"] = True
+                        result = browser_result
 
     # 第三级：质量评估
     result = _assess_quality(result)

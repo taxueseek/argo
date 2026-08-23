@@ -157,7 +157,10 @@ def test_mcp_fetch_schema_has_no_dead_actions():
     fetch = next(t for t in TOOLS if t["name"] == "argo_fetch")
     props = fetch["inputSchema"]["properties"]
     assert "actions" not in props
-    assert "timeout" in props
+    # 调试/运行配置（timeout/pretty/skip_cache）不进模型可见 schema：
+    # 由 server 层环境变量接管（ARGO_MCP_TIMEOUT_FETCH 等），功能参数全保留。
+    assert "timeout" not in props
+    assert "url" in props and "mode" in props and "focus" in props
 
 
 # ── argo_local_search 零结果契约（count=0 而非错误）──────────────────────────
@@ -248,3 +251,23 @@ def test_social_search_timeout_returns_partial(monkeypatch):
     assert used == ["fast"], "超时平台不应计入 engines_used"
     assert any("timeout" in e for e in errors), errors
     assert elapsed < 2.0, f"应在超时后立即返回，实际 {elapsed:.2f}s"
+
+
+# ── 调试参数环境变量接管（schema 瘦身后兼容）──────────────────────────
+
+def test_mcp_debug_params_read_from_env(monkeypatch):
+    """pretty/skip_cache/timeout 从 schema 移出后，仍可由环境变量控制。"""
+    from mcp_handlers import _env_bool, _env_int
+
+    assert _env_bool("ARGO_MCP_PRETTY") is False          # 未设 -> 默认
+    monkeypatch.setenv("ARGO_MCP_PRETTY", "true")
+    assert _env_bool("ARGO_MCP_PRETTY") is True
+    monkeypatch.setenv("ARGO_MCP_PRETTY", "0")
+    assert _env_bool("ARGO_MCP_PRETTY") is False
+    monkeypatch.setenv("ARGO_MCP_SKIP_CACHE", "yes")
+    assert _env_bool("ARGO_MCP_SKIP_CACHE") is True
+    assert _env_int("ARGO_MCP_TIMEOUT", 10) == 10          # 未设 -> 默认
+    monkeypatch.setenv("ARGO_MCP_TIMEOUT", "25")
+    assert _env_int("ARGO_MCP_TIMEOUT", 10) == 25
+    monkeypatch.setenv("ARGO_MCP_TIMEOUT", "abc")
+    assert _env_int("ARGO_MCP_TIMEOUT", 10) == 10          # 非法 -> 默认
