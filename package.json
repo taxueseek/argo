@@ -28,6 +28,10 @@
   "files": [
     "bin/",
     "scripts/",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!sub-skills/**/__pycache__/**",
+    "!sub-skills/**/*.pyc",
     "config.yaml",
     "engines/",
     "backends/",
