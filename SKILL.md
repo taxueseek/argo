@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：npx github:taxueseek/argo / mcp_server.py。
-version: 2.8.2
+version: 2.8.3
 triggers:
   - 搜索
   - 查一下
@@ -14,9 +14,11 @@ triggers:
   - fact check
 ---
 
-# Argo v2.8.2 — 统一搜索与证据核验
+# Argo v2.8.3 — 统一搜索与证据核验
 
 > 从「帮你搜到」升级为「帮你核到」。搜索输出自带**证据闭环**：高后果问题（金融/医疗/法律/事实核查）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记忆，二次搜索直接显示已核实。本版详见 `docs/RELEASE_NOTES_v2.8.0.md`。
+>
+> v2.8.3 增量：anysearch 改为进程内 builder（消除 subprocess 启动开销 + `HttpClient.post` UA 轮换/重试/退避）；weighted RRF 动态可靠性因子（weakest-link 弱源降权，论文 2508.01405）；多语言路由修复（ja/ko 返回目标语言 + 德法西意走 anysearch + 中文内容/金融/技术引擎双层过滤 + Bing `mkt` 市场码 + 语言偏好软排序）。
 >
 > v2.8.2 增量：Windows 全平台支持（移除 npm `os` 限制；GBK 编码防线 `PYTHONUTF8` + `-X utf8` + JSON `read_bytes`；工具探测改 `shutil.which`；Ctrl+C 干净退出；Chrome/Edge 自动发现）；主包 `dsh.bundle` 声明（`dsh plugin add github:taxueseek/argo` 即得 MCP 工具）；npm 包补 `engines/`、`data/`。
 
