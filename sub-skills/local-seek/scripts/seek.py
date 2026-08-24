@@ -37,6 +37,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -81,7 +82,7 @@ def pcre2_supported() -> bool:
     """本机 rg 是否编译了 pcre2 特性（模块级缓存，只测一次）。"""
     global _pcre2_ok
     if _pcre2_ok is None:
-        proc = run(["rg", "--pcre2", "-e", "x", "/dev/null"])
+        proc = run(["rg", "--pcre2", "-e", "x", os.devnull])
         _pcre2_ok = proc is not None and proc.returncode == 0
     return _pcre2_ok
 
@@ -149,6 +150,7 @@ def load_excludes() -> list:
 def run(cmd, cwd=None, timeout=30):
     try:
         return subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace",
                               cwd=cwd, timeout=timeout)
     except subprocess.TimeoutExpired:
         return None
@@ -158,7 +160,6 @@ def run(cmd, cwd=None, timeout=30):
 
 def tool_exists(name: str) -> bool:
     # shutil.which 跨平台（Windows 下 command -v 不存在）
-    import shutil
     return shutil.which(name) is not None
 
 
@@ -238,6 +239,75 @@ def fd_search(query, path, exts, max_results):
     if proc is None or proc.returncode not in (0, 1):
         return [], "fd 执行失败"
     out = [(p, 0, "") for p in proc.stdout.splitlines()[:max_results]]
+    return out, None
+
+
+def resolve_grep():
+    p = shutil.which("grep")
+    if p:
+        return p
+    if os.name == "nt":
+        git = shutil.which("git")
+        if git:
+            cand = Path(git).resolve().parent.parent / "usr" / "bin" / "grep.exe"
+            if cand.exists():
+                return str(cand)
+    return None
+
+
+def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
+                max_results, fixed, raw_query=""):
+    def build(fixed):
+        cmd = [grep_exe, "-r", "-n", "-i", "-I", "--color=never"]
+        if fixed:
+            cmd.append("-F")
+        elif needs_pcre2(raw_query):
+            return None, ("grep 不支持 look-around/反向引用语法，"
+                          "请简化查询（如去掉 (?=、(?! 等结构）或安装 ripgrep")
+        if count:
+            cmd.append("-c")
+        elif context > 0:
+            cmd += ["-C", str(context)]
+        for ex in excludes:
+            if any(c in ex for c in "*?["):
+                cmd += ["--exclude", ex]
+            else:
+                cmd += ["--exclude-dir", ex]
+        if exts:
+            for e in exts:
+                cmd += ["--include", f"*.{e}"]
+        for p in patterns:
+            cmd += ["-e", p]
+        cmd.append(str(path))
+        return cmd, None
+
+    cmd, err = build(fixed)
+    if err:
+        return [], err
+    proc = run(cmd)
+    if (proc is not None and proc.returncode == 2 and not fixed
+            and "grep:" in (proc.stderr or "")):
+        cmd2, _ = build(True)
+        proc = run(cmd2)
+    if proc is None or proc.returncode not in (0, 1, 2):
+        return [], "grep 执行失败"
+    if proc.returncode == 1:
+        return [], None
+    out = []
+    for line in proc.stdout.splitlines():
+        if count:
+            if ":" in line:
+                fp, _, n = line.rpartition(":")
+                out.append((fp, int(n) if n.isdigit() else 0, ""))
+            if len(out) >= max_results:
+                break
+        else:
+            m = re.match(r"^(.*?):(\d+):(.*)$", line)
+            if m:
+                fp, ln, txt = m.group(1), int(m.group(2)), m.group(3)
+                out.append((fp, ln, truncate(txt)))
+            if len(out) >= max_results:
+                break
     return out, None
 
 
@@ -650,12 +720,38 @@ def main():
     patterns, fixed = build_patterns(args.query, args.exact)
 
     if scope == "all" or not tool_exists("rg"):
-        engine, mode = "mdfind", "deep"
-        results, err = mdfind_search(args.query, None if args.spotlight else path,
-                                     max_results)
+        if tool_exists("mdfind"):
+            engine, mode = "mdfind", "deep"
+            results, err = mdfind_search(args.query, None if args.spotlight else path,
+                                         max_results)
+        else:
+            grep_exe = resolve_grep()
+            if grep_exe:
+                engine, mode = "grep", "fast"
+                if not args.exact and len(patterns) > 1:
+                    results, err = grep_search(grep_exe, [args.query], path,
+                                               excludes, exts, args.context,
+                                               args.count, max_results,
+                                               is_literal(args.query))
+                    if not results and not err:
+                        results, err = grep_search(grep_exe, patterns, path,
+                                                   excludes, exts, args.context,
+                                                   args.count, max_results, fixed)
+                        if results:
+                            mode += "+扩展"
+                else:
+                    results, err = grep_search(grep_exe, patterns, path,
+                                               excludes, exts, args.context,
+                                               args.count, max_results, fixed)
+            else:
+                engine, mode = "none", "fast"
+                err = "本机无 rg/mdfind/grep 可用，请安装 ripgrep"
     elif args.filename:
         engine, mode = "fd", "fast"
-        results, err = fd_search(args.query, path, exts, max_results)
+        if tool_exists("fd"):
+            results, err = fd_search(args.query, path, exts, max_results)
+        else:
+            err = "fd 未安装：按文件名搜索需要 fd（内容搜索走 rg/grep）"
     else:
         mode = "deep" if (args.context > 0 or args.count) else "fast"
         if not args.exact and len(patterns) > 1:
@@ -695,4 +791,10 @@ def main():
 
 
 if __name__ == "__main__":
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            if _s.encoding and _s.encoding.lower().replace("-", "") != "utf8":
+                _s.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     sys.exit(main())

@@ -85,8 +85,8 @@ def _probe_cli(cmd: list[str], timeout: float = 2) -> tuple[bool, float, str]:
     if isinstance(exe, str) and exe.startswith("~"):
         exe = str(Path(exe).expanduser())
     try:
-        result = subprocess.run(["which", exe], capture_output=True, text=True, timeout=timeout)
-        if result.returncode == 0:
+        import shutil
+        if shutil.which(exe):
             return True, 0, ""
         return False, 0, f"command not found: {exe}"
     except Exception as e:
