@@ -16,6 +16,7 @@
     "argo",
     "npx"
   ],
+  "private": true,
   "license": "MIT",
   "author": "Argo Search",
   "repository": {
