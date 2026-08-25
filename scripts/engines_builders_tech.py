@@ -121,7 +121,10 @@ def _build_anysearch_engine(spec: dict[str, Any]) -> Any:
         results = []
         for item in content:
             text = item.get("text", "") if isinstance(item, dict) else str(item)
-            blocks = re.split(r"\n### \d+\.\s", text)
+            # 结果块以行首「### N.」分隔。用 (?m)^ 锚定行首而非 \n 前缀：
+            # 首个结果块顶格开头（无前导换行）时，\n 前缀版本会把第一块
+            # 并进 blocks[0] 而整块丢失（首个结果静默消失）。
+            blocks = re.split(r"(?m)^### \d+\.\s", text)
             for block in blocks[1:]:
                 lines = block.strip().split("\n")
                 title = lines[0].strip() if lines else ""

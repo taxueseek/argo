@@ -882,6 +882,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     # P0-001：查询理解 — clean_query 用于检索，exclude_terms 用于融合后过滤
     exclude_terms: list[str] = []
     retrieval_query = query
+    qu = None
     try:
         from query_understanding import _understand_cached as understand
         qu = understand(query)
@@ -1365,10 +1366,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     _max_rec_level: str | None = None
     try:
         from query_enhance import complexity_gate
-        if complexity_gate(query, qu) == "low":
+        if qu is not None and complexity_gate(query, qu) == "low":
             _max_rec_level = "L2"
-    except NameError:
-        pass
     except Exception:
         pass
     if not merged:
@@ -2010,6 +2009,55 @@ def format_text_output(results: dict[str, Any]) -> str:
 
 # ── CLI 主入口 ─────────────────────────────────────────────────────────────────
 
+def _run_local_seek(query: str, max_n: int = 5) -> list[dict[str, Any]]:
+    """本机文件命中（--include-local 用）：调 local-seek 子技能，JSON 并入。
+
+    仅在显式开启时调用（默认零开销）；结果不参与融合评分，
+    仅作尾部来源（source=local_files）。
+    """
+    import subprocess as _sp
+
+    seek_py = ""
+    for cand in (
+        os.path.join(SCRIPT_DIR, "..", "sub-skills", "local-seek", "scripts", "seek.py"),
+        os.path.expanduser("~/.agents/skills/local-seek/scripts/seek.py"),
+        os.path.expanduser("~/.claude/skills/local-seek/scripts/seek.py"),
+    ):
+        p = os.path.realpath(cand)
+        if os.path.exists(p):
+            seek_py = p
+            break
+    if not seek_py:
+        return []
+    r = _sp.run(
+        [sys.executable, seek_py, query, "--json", "--max", str(max(max_n, 1))],
+        capture_output=True, text=True, timeout=20,
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        return []
+    try:
+        payload = json.loads(r.stdout)
+    except ValueError:
+        return []
+    hits = payload.get("results") or payload.get("files") or []
+    out = []
+    for h in hits[:max_n]:
+        if not isinstance(h, dict):
+            continue
+        path = h.get("path") or h.get("file") or ""
+        line = h.get("line") or h.get("lineno") or 1
+        url = f"file://{path}" + (f"#{line}" if str(line).isdigit() else "")
+        out.append({
+            "title": path,
+            "url": url,
+            "snippet": (h.get("snippet") or h.get("text") or h.get("line_text") or "")[:160],
+            "source": "local_files",
+            "score": 0.0,
+            "kind": "local",
+        })
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Unified Search v2 — 统一搜索 CLI",
@@ -2049,6 +2097,10 @@ def main():
                         help="时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前")
     parser.add_argument("--local-first", action="store_true",
                         help="强制优先使用 local_search 零成本聚合引擎")
+    parser.add_argument(
+        "--include-local", action="store_true",
+        help="并入本机文件命中（seek 结果尾部，source=local_files；默认关）",
+    )
     parser.add_argument("--domain", default="", help="AnySearch 垂直域")
     parser.add_argument("--sub_domain", default="", help="AnySearch 子域")
     parser.add_argument("--progress", action="store_true")
@@ -2131,6 +2183,18 @@ def main():
         sort=args.sort,
     )
     results["query"] = args.query
+
+    # 本地命中并入（默认关）：seek 结果尾部拼入，来源 local_files，不参与融合评分
+    if args.include_local:
+        try:
+            local_hits = _run_local_seek(args.query, args.max_results)
+        except Exception as e:
+            local_hits = []
+            sys.stderr.write(f"  [include-local] {type(e).__name__}: {e}\n")
+        if local_hits:
+            results.setdefault("results", []).extend(local_hits)
+            results["local_results"] = local_hits
+        results["include_local"] = True
 
     if args.archive and results.get("status") != "handoff_required":
         try:

@@ -983,6 +983,9 @@ engines:
     - --json
     env: {}
   anysearch:
+    type: anysearch
+    # 历史 CLI 直连脚本已归档 .trash/2026-08-25_anysearch_http.py；
+    # cmd/args 仅作记录保留，进程内 builder 不消费。
     cmd:
     - python3
     - scripts/anysearch_http.py
@@ -997,14 +1000,13 @@ engines:
     coverage:
     - general
     - tech
-    desc: 通用搜索主力，本地 CLI，零 token
+    desc: 通用搜索主力，进程内 JSON-RPC（HttpClient），零 token
     env: {}
     search_args:
     - search
     - '{query}'
     - -n
     - '{n}'
-    type: cli
   arxiv:
     enabled: true
     label: arXiv学术论文

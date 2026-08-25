@@ -297,8 +297,15 @@ def _identity_load() -> None:
         with open(_IDENTITY_PATH) as f:
             raw = json.load(f)
         now = time.time()
-        _identity_mem = {str(h): float(t) for h, t in raw.items()
-                         if float(t) > now}
+        mem: dict[str, float] = {}
+        for h, t in raw.items():
+            try:
+                exp = float(t)
+                if exp > now:
+                    mem[str(h)] = exp
+            except (TypeError, ValueError):
+                continue  # 单条脏数据不拖垮整表（旧版本/手改字段）
+        _identity_mem = mem
     except Exception:
         _identity_mem = {}
 

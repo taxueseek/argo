@@ -14,6 +14,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = SKILL_DIR / "scripts"
@@ -111,6 +112,42 @@ class TestJaKoMacroRouting(unittest.TestCase):
         # 韩文宏观兜底优先 anysearch（多语言源），不再只锁 local_bing
         from route import route_query
         d = route_query("미국 연준 금리 인하 전망")
+        self.assertEqual(d["engines_combo"][0], "anysearch")
+
+
+class TestJaKoTfidfSkip(unittest.TestCase):
+    """TF-IDF 候选链：ja/ko 查询跳过中文内容引擎后，必须看后续候选（2026-08 修复）。
+
+    旧逻辑只看 top-1：候选是 gov_policy（中文政策域）时置 None 即放弃，
+    不检查 top-2（anysearch 等合格多语言候选），导致 ja/ko 查询丢失语义路由。
+    """
+
+    def _scores(self):
+        # top-1 0.65（达强注入线 0.6），top-2 0.40；中文对照可触发注入，
+        # ja 场景验证「跳 top-1、取 top-2」
+        return [("gov_policy", 0.65, ""), ("anysearch", 0.40, "")]
+
+    def test_ja_skips_zh_engine_then_takes_anysearch(self):
+        from route import route_query
+        with patch("route.semantic_route", return_value=self._scores()):
+            d = route_query("新しいトレンド分析ツール")
+        self.assertEqual(d["engine"], "anysearch", d["reason"])
+        self.assertNotIn("gov_policy", d["engines_combo"])
+
+    def test_zh_does_not_skip_gov_policy(self):
+        # 中文查询不触发过滤：top-1 gov_policy 正常当选（对照）
+        from route import route_query
+        with patch("route.semantic_route", return_value=self._scores()):
+            d = route_query("政策金利 最新动向 分析")
+        self.assertEqual(d["engine"], "gov_policy", d["reason"])
+
+    def test_all_zh_candidates_skipped_falls_back_general(self):
+        # 候选全为中文引擎 → TF-IDF 分支作废，走通用兜底（anysearch 前置）
+        from route import route_query
+        scores = [("gov_policy", 0.50, ""), ("baidu_baike", 0.30, "")]
+        with patch("route.semantic_route", return_value=scores):
+            d = route_query("新しいトレンド分析ツール")
+        self.assertEqual(d["domain"], "general_search", d["reason"])
         self.assertEqual(d["engines_combo"][0], "anysearch")
 
 

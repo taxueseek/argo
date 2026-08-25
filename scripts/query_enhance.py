@@ -28,14 +28,22 @@ _FULL_TO_HALF = str.maketrans(
     "，。！？：；（）【】《》“”‘’％＋－",
     ",.!?:;()[]<>\"\"''%+-",
 )
+# 全角字母数字/符号 → 半角：ＡＢＣ１２３ 常见于粘贴文本，与标点同批处理
+_FULL_ALNUM = str.maketrans(
+    "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ"
+    "ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ￥～",
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz¥~",
+)
 _FULL_SPACE = str.maketrans("\u3000", " ")
 
 
 def normalize_query(query: str) -> str:
-    """词形规范化：全角→半角、拆斜杠、压缩多余空格。保留连字符（避免 GPT-5 拆散）。"""
+    """词形规范化：全角→半角（标点+字母数字）、拆斜杠、压缩多余空格。
+    保留连字符（避免 GPT-5 拆散）。"""
     if not query or not isinstance(query, str):
         return query
-    q = query.translate(_FULL_TO_HALF).translate(_FULL_SPACE)
+    q = query.translate(_FULL_TO_HALF).translate(_FULL_ALNUM).translate(_FULL_SPACE)
     q = re.sub(r"/", " ", q)          # LongCat-2.0/1.6 万亿 → LongCat-2.0 1.6 万亿
     q = re.sub(r"\s+", " ", q).strip()
     return q
@@ -99,7 +107,7 @@ def _concept_variant(base: str) -> str | None:
 
 # 多跳 / 对比 / 归因信号：这类问题往往需要多轮或全变体位
 _MULTI_HOP = re.compile(
-    r"对比|比较|区别|差异|差异|为什么|导致|原因|vs|versus|between|compared|"
+    r"对比|比较|区别|差异|为什么|导致|原因|vs|versus|between|compared|"
     r"impact\s+of|effect\s+of|influence|relationship|影响|关系|关联|如何影响|"
     r"列举|有哪些|总结|回顾|evolution|timeline|历程|归因|走势|趋势",
     re.I,

@@ -41,7 +41,9 @@ import safety as safety  # noqa: E402
 import webbridge_adapter as wb  # noqa: E402
 
 # argo 核心 scripts：query_enhance 归一化（词形规范化，保留平台语法）；核心不可用时降级
-_CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+# 注意：parents[0]=scripts、parents[1]=ego-search、parents[2]=sub-skills、
+# parents[3]=argo 根。勿用 parents[2]（会指向 sub-skills/scripts，不存在 → 静默失效）。
+_CORE_SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
 if str(_CORE_SCRIPTS) not in sys.path and _CORE_SCRIPTS.exists():
     sys.path.insert(0, str(_CORE_SCRIPTS))
 try:

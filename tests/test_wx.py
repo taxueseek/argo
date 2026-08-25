@@ -299,7 +299,8 @@ class TestCliEngine(unittest.TestCase):
             stdout = yaml_out
             stderr = ""
 
-        def fake_run(cmd, capture_output, text, timeout):
+        def fake_run(cmd, capture_output, text, timeout, encoding=None,
+                     errors=None):
             captured["cmd"] = cmd
             return _R()
 

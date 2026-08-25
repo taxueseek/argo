@@ -300,25 +300,20 @@ _JA_KO_CN_ENGINES = _ZH_CONTENT_ENGINES | frozenset({
 })
 
 
-_STRUCTURED_PLATFORM_RE = re.compile(
-    r"(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|"
-    r"min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)",
-    re.I,
-)
+# ── 结构化平台语法（单一真源：config.yaml 的 social 域 patterns）─────────────
+# 查询含平台搜索语法（from:/subreddit:/lang:/filter: 等）时把 social 域提前为
+# 主域，避免查询里的实体词（GPT/Llama/api）把 model/_tech 域排前面。
+# 语法判定不再在 Python 侧复制正则（此前与 config.yaml social patterns 第三
+# 条字面重复，两处改动必须同步）；social 域 patterns 命中即判定，route 只做
+# 顺序调整。repo:/site: 另勘。
 
 
-def _structured_platform_domain(query: str) -> str | None:
-    """查询含平台搜索语法 → 返回应提升为主域的领域名（None 表示不提升）。
-
-    平台语法（from:/subreddit:/lang:/filter: 等）是 X/Reddit 等站内检索操作符，
-    应路由到对应社交/社区域，而不是被查询里的实体词（GPT/Llama/api）误带到
-    模型库/技术域。只做「把对应平台域提前」的轻量修正；repo:/site: 另勘。
-    """
-    if not query or not isinstance(query, str):
-        return None
-    if _STRUCTURED_PLATFORM_RE.search(query):
-        return "social"
-    return None
+def _social_domain_first(_hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """命中列表里有 social 域 → 提到首位（无则原样）。"""
+    social = [h for h in _hits if h.get("name") == "social"]
+    if not social:
+        return _hits
+    return social + [h for h in _hits if h.get("name") != "social"]
 
 
 def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
@@ -1064,12 +1059,9 @@ def route_query(query: str, engine_override: str = "auto",
     # P1-1：多意图路由——主域执行 + 次域按预算补充（仅域命中分支消费 secondary）
     _domain_hits = match_domains(query, domains_cfg,
                                  primary_lang=features.get("primary_lang"))
-    # 结构化域优先：查询含平台搜索语法时，把对应平台域提升为主域，
+    # 结构化域优先：social 域 patterns（config.yaml 单一真源）命中即提前，
     # 避免被 query 里的实体词（GPT/Llama/api）误抢到模型库/技术域。
-    _boost_domain = _structured_platform_domain(query)
-    if _boost_domain:
-        _domain_hits = ([h for h in _domain_hits if h.get("name") == _boost_domain]
-                        + [h for h in _domain_hits if h.get("name") != _boost_domain])
+    _domain_hits = _social_domain_first(_domain_hits)
     domain = _domain_hits[0] if _domain_hits else None
     secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))
@@ -1087,8 +1079,8 @@ def route_query(query: str, engine_override: str = "auto",
     if not skip_tfidf:
         try:
             tfidf_scores = semantic_route(query, top_k=3)
-            if tfidf_scores:
-                cand, score, _ = tfidf_scores[0]
+            _non_zh = features.get("primary_lang") in ("ja", "ko")
+            for cand, score, _ in tfidf_scores:
                 social_ok = True
                 if cand in SOCIAL_ENGINES:
                     ql = query.lower()
@@ -1097,19 +1089,18 @@ def route_query(query: str, engine_override: str = "auto",
                         "讨论", "网友", "评论", "b站", "bilibili", "抖音",
                     )
                     social_ok = any(s in ql for s in social_signals)
-                if score >= TFIDF_MIN_SCORE and social_ok:
-                    # ja/ko 查询：TF-IDF 候选若是中文内容/政策引擎（gov_policy/百科等），
-                    # 对日/韩用户无关（返回中文站），丢弃让通用 anysearch 主导。2026-08 修复。
-                    _non_zh = features.get("primary_lang") in ("ja", "ko")
-                    if _non_zh and cand in _ZH_CONTENT_ENGINES:
-                        tfidf_best = None
-                        tfidf_best_score = score
-                    else:
-                        tfidf_best = cand
-                        tfidf_best_score = score
-                else:
-                    tfidf_best = None
-                    tfidf_best_score = score
+                if score < TFIDF_MIN_SCORE or not social_ok:
+                    # 分数降序：后续候选分更低，整条 TF-IDF 分支作废
+                    break
+                # ja/ko 查询：候选若是中文内容/政策引擎（gov_policy/百科等），
+                # 对日/韩用户无关（返回中文站），丢弃让通用 anysearch 主导。
+                # 丢弃当前候选后继续看下一个（2026-08 修复：旧逻辑只看 top-1，
+                # 丢弃后不检查 top-2/3，可能错失 anysearch 等合格候选）。
+                if _non_zh and cand in _ZH_CONTENT_ENGINES:
+                    continue
+                tfidf_best = cand
+                tfidf_best_score = score
+                break
         except ImportError:
             pass
         except Exception as e:

@@ -59,7 +59,9 @@ SCENARIOS: list[dict[str, Any]] = [
         "id": "zh_fact_weather",
         "query": "北京今天天气",
         "expect_domain_any": {"fact_check", "weather_query", "chinese_general", "general_search"},
-        "expect_combo_has_any": {"duckduckgo", "uapi", "anysearch", "qweather", "byted", "bocha"},
+        # 天气双源（v2.8+）：open_meteo/weather 是当前气象域主力；qweather 需 key
+        "expect_combo_has_any": {"duckduckgo", "uapi", "anysearch", "qweather", "byted", "bocha",
+                                 "open_meteo", "weather"},
     },
     {
         "id": "en_fact_capital",

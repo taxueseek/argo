@@ -46,6 +46,49 @@
 
 独立工作包可以并行；共享定义、口径或基线的包必须分阶段。不要用「至少五个维度」当并行门槛。
 
+### file_inputs：本地一手数据入账（v2.8.4 起）
+
+研究涉用户本地数据（CSV/XLSX/PDF/文献）时，把它作为一手证据入账，与网络来源并列：
+
+```json
+{
+  "id": "wp-rev",
+  "question": "公司 2025 年度营收同比增速是多少",
+  "file_inputs": [
+    {"path": "~/data/company_2025.xlsx", "role": "原始年报数据"}
+  ]
+}
+```
+
+规则（fail-closed）：
+- `path` 必填；文件必须存在、普通文件、可读；类型白名单 csv/tsv/xlsx/xls/parquet/json/md/txt/pdf（kind 未给时按扩展名推断）
+- 文件内容不入库：dossier `local_sources` 只登记路径、sha256、大小、mtime、kind、role（引用时标注路径与行号）
+- `no_primary_sources` 门禁把已入账的本地文件计为一手命中
+- 本地结论仍需与网络证据交叉验证：本地文件不是「免检来源」，只是「一手材料」
+
+### recompute：可复算契约（v2.8.4 起）
+
+工作包声明 `recompute` 后，深研究执行器在授权时对本地数据跑计算脚本，
+数值入账 `recomputed_values`（[R1] 引用），与检索数字对照：
+
+```json
+{
+  "id": "wp-rev",
+  "question": "公司 2025 年度营收同比增速是多少",
+  "file_inputs": [{"path": "~/data/company_2025.xlsx", "role": "原始年报数据"}],
+  "recompute": {
+    "script": "rows = open(_ALLOWED[0], encoding='utf-8').read()  # 或 csv 模块解析",
+    "expect": "0.23 左右",
+    "budget": {"timeout_s": 30, "max_mem_mb": 512}
+  }
+}
+```
+
+- **授权门 fail-closed**：默认拒绝执行；`--allow-recompute`（CLI）/ `ARGO_ALLOW_RECOMPUTE=1` 显式放行；未执行时门禁 `recompute_skipped`（结论上限 medium）
+- 执行防护：Python 层断网（socket/getaddrinfo 拦截）、文件白名单强制（open/io.open 包装，越权即 PermissionError）、超时硬杀进程组、内存软限
+- 数值契约：`extract_values` 从 stdout 提取数值；与检索来源数字无交集时门禁 `recompute_conflict`（以重算为准，人工核对）
+- 脚本里读输入用 `open(_ALLOWED[0], ...)`（白名单在 `_ALLOWED` 列表中，按 file_inputs 顺序）
+
 ## 结论标签
 
 | 标签 | 含义 |

@@ -459,7 +459,8 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
                   profile: dict[str, Any] | None = None,
                   budget: int | None = None,
                   route_strategy: str | None = None,
-                  work_packages: Any = None) -> dict[str, Any]:
+                  work_packages: Any = None,
+                  allow_recompute: bool = False) -> dict[str, Any]:
     """执行取证。有工作包则按依赖分阶段；否则扩词检索。产出 dossier。"""
     original_query = query
     engines_priority = list((profile or {}).get("engines_priority") or [])
@@ -508,10 +509,35 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
 
     gaps = identify_gaps(collection["sub_results"], original_query)
     source_grades = (profile or {}).get("source_grades") if profile else None
+    all_file_inputs: list[dict[str, Any]] = []
+    recompute_results: list[dict[str, Any]] = []
+    recompute_expected = False
+    if packages:
+        for p in packages:
+            all_file_inputs.extend(p.get("file_inputs") or [])
+            rec = p.get("recompute")
+            if rec:
+                recompute_expected = True
+                try:
+                    from recompute import run_recompute
+                    res = run_recompute(
+                        rec["script"],
+                        p.get("file_inputs") or [],
+                        timeout_s=rec["budget"]["timeout_s"],
+                        max_mem_mb=rec["budget"]["max_mem_mb"],
+                        allow_exec=allow_recompute,
+                    )
+                except Exception as e:  # 执行器自身异常不入账为失败
+                    res = {"ok": False, "skipped_reason": f"执行器异常: {e}"}
+                res["package_id"] = p.get("id") or ""
+                recompute_results.append(res)
     report = build_dossier(
         original_query, collection, gaps,
         source_grades=source_grades, mode=mode, depth=depth,
+        file_inputs=all_file_inputs or None,
+        recompute_results=recompute_results or None,
     )
+    report["recompute_expected"] = recompute_expected
 
     report["execution_tier"] = "deep_research"
     report["requires_confirmation"] = False

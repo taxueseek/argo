@@ -144,17 +144,28 @@ class TestSemanticRouting(unittest.TestCase):
 
 
 class TestStructuredPlatformDomain(unittest.TestCase):
-    def test_social_syntax(self):
-        from route import _structured_platform_domain
-        self.assertEqual(_structured_platform_domain("from:OpenAI GPT-5"), "social")
-        self.assertEqual(_structured_platform_domain("subreddit:LocalLLaMA open source"), "social")
-        self.assertEqual(_structured_platform_domain("to:someone"), "social")
+    """social 域提前：语法判定真源在 config.yaml social patterns（单一真源），
+    route 侧只做命中顺序调整（_social_domain_first）。"""
 
-    def test_non_social_syntax_returns_none(self):
-        from route import _structured_platform_domain
-        self.assertIsNone(_structured_platform_domain("repo:langchain-ai/langchain is:issue memory"))
-        self.assertIsNone(_structured_platform_domain("openai api"))
-        self.assertIsNone(_structured_platform_domain(""))
+    def test_social_syntax(self):
+        from route import _social_domain_first, match_domains, get_domains
+        hits = match_domains("from:OpenAI GPT-5", get_domains())
+        ordered = _social_domain_first(hits)
+        self.assertEqual(ordered[0]["name"], "social")  # 提前为主域
+        # 无 social 命中时原样返回
+        self.assertEqual(_social_domain_first([]), [])
+
+    def test_non_social_syntax_no_boost(self):
+        from route import _social_domain_first, match_domains, get_domains
+        hits = match_domains("repo:langchain-ai/langchain is:issue memory", get_domains())
+        self.assertNotEqual(hits[0]["name"], "social")  # repo: 归 GitHub/code 语义
+        before = [h["name"] for h in hits]
+        self.assertEqual([h["name"] for h in _social_domain_first(hits)], before)
+
+    def test_plain_query_unchanged(self):
+        from route import _social_domain_first, match_domains, get_domains
+        hits = match_domains("openai api", get_domains())
+        self.assertEqual(_social_domain_first(hits), hits)
 
 
 if __name__ == "__main__":

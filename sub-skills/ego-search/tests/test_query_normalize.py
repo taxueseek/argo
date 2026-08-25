@@ -43,6 +43,13 @@ class TestQueryNormalize(unittest.TestCase):
         # normalize_query 缺失时应回退原 query（模拟核心不可用）
         self.assertEqual(es._normalized_query("a/b c"), "a b c")
 
+    def test_core_scripts_path_is_argo_root(self):
+        # 回归锚：相对路径必须指向 argo 根/scripts（parents[3]）。
+        # 曾用 parents[2] 指向 sub-skills/scripts（不存在）→ normalize_query
+        # 静默降级为 None，子技能归一化整条失效。
+        self.assertTrue(es._CORE_SCRIPTS.exists(), es._CORE_SCRIPTS)
+        self.assertEqual(es._CORE_SCRIPTS.name, "scripts")
+
 
 if __name__ == "__main__":
     unittest.main()

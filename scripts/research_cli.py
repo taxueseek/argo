@@ -58,8 +58,43 @@ def main() -> None:
     parser.add_argument(
         "--verify", nargs="?", const=3, type=int, default=None, metavar="TOP_K",
     )
+    parser.add_argument(
+        "--allow-recompute", action="store_true",
+        help="授权执行工作包 recompute 计算脚本（fail-closed，默认拒绝）",
+    )
+    parser.add_argument(
+        "--search-archive", metavar="主题词",
+        help="检索已有研究/搜索归档（成果复用）：按主题词列出历史 run",
+    )
+    parser.add_argument("--archive-since", default=None, help="归档检索起始日期")
+    parser.add_argument("--archive-until", default=None, help="归档检索截止日期")
     args = parser.parse_args()
     do_archive = not args.no_archive
+
+    if args.search_archive:
+        try:
+            from archive_run import search_archive
+            hits = search_archive(
+                args.search_archive,
+                since=args.archive_since, until=args.archive_until,
+            )
+        except Exception as e:
+            print(f"[search-archive] {type(e).__name__}: {e}")
+            return
+        if not hits:
+            print(
+                f"未找到归档命中：{args.search_archive}"
+                f"（根目录见 archive_run.resolve_archive_root；"
+                "先跑带 --archive 的研究/搜索生成索引）"
+            )
+            return
+        print(f"归档命中 {len(hits)} 条（主题：{args.search_archive}）\n")
+        for h in hits:
+            print(f"[{h['run_id']}] {h['packed_at']}_{h['query']}")
+            print(f"    tag={h['tag']} source={h['source']} "
+                  f"counts={h['counts']}")
+            print(f"    → {h['run_dir']}")
+        return
 
     from research import (
         deep_research,
@@ -153,6 +188,7 @@ def main() -> None:
             budget=args.budget,
             route_strategy=args.route_strategy,
             work_packages=work_packages,
+            allow_recompute=args.allow_recompute,
         )
 
     if profile_applied:

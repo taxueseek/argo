@@ -26,9 +26,10 @@ SKIP_TAGS = {
     "iframe", "form", "button", "dialog",
 }
 # 容器级标签：块归并的候选父级（出现在 starttag 时开启一个新容器层）
-CONTAINER_TAGS = {"div", "article", "main", "section", "td", "blockquote"}
-# 段落级标签：正文块的边界
-BLOCK_TAGS = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "pre"}
+CONTAINER_TAGS = {"div", "article", "main", "section", "blockquote"}
+# 段落级标签：正文块的边界（td 列其中：单元格是块级单元，结束即 flush，
+# 否则纯文本表格（无 p/li）的数据会随容器清空逻辑整块丢失）
+BLOCK_TAGS = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "tr", "pre", "td"}
 
 # 标签权重：正文候选得分乘数
 TAG_WEIGHT = {
@@ -86,7 +87,7 @@ class ReadabilityExtractor(HTMLParser):
 
     def __init__(self):
         super().__init__()
-        self._skip_depth = 0
+        self._in_skip = 0
         self._link_depth = 0
         self._current: list[str] = []
         self._current_link: list[str] = []
@@ -95,7 +96,6 @@ class ReadabilityExtractor(HTMLParser):
         self._container_stack: list[int] = []  # 当前容器层级的块索引起点
         self.title = ""
         self._in_title = False
-        self._in_skip = 0
 
     # ── HTMLParser 回调 ──────────────────────────────────────────────
 
@@ -125,12 +125,14 @@ class ReadabilityExtractor(HTMLParser):
         if tag == "a":
             self._link_depth = max(0, self._link_depth - 1)
         if tag in CONTAINER_TAGS:
-            if self._container_stack:
-                self._container_stack.pop()
-            # 容器内没有正文块时（如纯链接侧栏），丢弃累积的文本与链接，
+            start = self._container_stack.pop() if self._container_stack else None
+            # 仅当容器内**没有产出任何正文块**时（纯链接侧栏/导航），丢弃累积文本，
             # 避免污染后续同深度块的 link_chars（负数 score 会拖垮正文组）。
-            self._current = []
-            self._current_link = []
+            # 容器内已有正文块（如表格 td 数据）必须保留累积，否则 td/p 之外的
+            # 剩余文本（残句、表格数据）被整个丢掉。
+            if start is not None and len(self._blocks) == start:
+                self._current = []
+                self._current_link = []
         if tag in BLOCK_TAGS:
             self._flush_block(tag)
         if tag in CONTAINER_TAGS | BLOCK_TAGS:
@@ -156,8 +158,10 @@ class ReadabilityExtractor(HTMLParser):
         self._current_link = []
         # 标题类标签（h1-h6）放宽短块阈值：文章标题/小节标题信息密度高，
         # 30 字符下限会把「第一段正文标题内容」这类短标题丢掉。
+        # td 单元格同理：表格是原子数据单元（「型号」「15999 元」），
+        # 30 字符下限会把整张表格的数据全部丢光；2 字符下限只丢单字噪声。
         is_heading = tag.startswith("h") and len(tag) == 2 and tag[1].isdigit()
-        min_chars = 6 if is_heading else MIN_BLOCK_CHARS
+        min_chars = 2 if tag == "td" else (6 if is_heading else MIN_BLOCK_CHARS)
         if len(text) < min_chars:
             return
         weight = TAG_WEIGHT.get(tag, 1.0)

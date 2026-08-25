@@ -23,6 +23,15 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from config import load_config, get_engines
 
+try:
+    from single_flight import engine_coalescer
+except ImportError:  # pragma: no cover
+    def engine_coalescer():  # type: ignore
+        class _Noop:
+            def run(self, key, fn, **kw):
+                return fn()
+        return _Noop()
+
 from engines_base import (
     safe_search,
     _build_cli_engine,
@@ -300,9 +309,10 @@ _BUILDERS = {
 # 语义型引擎：把 query 当自然语言语义检索，不识别平台原生结构化语法
 # （from:/repo:/site:/until: 等）。对其剥掉字段只留核心词，避免污染相关性。
 # 透传型/垂直源（local_*、social/academic/code、github 等）保持原 query，让平台语法生效。
+# local_search 是聚合器（子引擎 local_bing 等透传平台语法），不在语义集内。
 _SEMANTIC_ENGINES = frozenset({
     "byted", "bocha", "anysearch", "tavily", "exa", "octen",
-    "uapi", "searxng", "parallel", "you", "bocha_ai", "local_search",
+    "uapi", "searxng", "parallel", "you", "bocha_ai",
 })
 
 _engine_registry: dict[str, Any] = {}
@@ -322,8 +332,9 @@ def _load_registry():
         # local_search 走进程内 builder（config 里 type=cli，这里显式路由到专用实现）
         if name == "local_search":
             spec["type"] = "local_search"
-        # anysearch 走进程内 builder（原 type=cli subprocess，改为进程内 + HttpClient）
-        if name == "anysearch":
+        # anysearch：type 已在 config.yaml 显式声明（引擎声明真源），
+        # 不再运行时硬覆盖；若旧配置缺 type 字段，兜底路由到进程内 builder。
+        if name == "anysearch" and spec.get("type", "cli") not in _BUILDERS:
             spec["type"] = "anysearch"
         builder = _BUILDERS.get(spec.get("type", "cli"))
         if builder:
@@ -343,8 +354,52 @@ def available_engines() -> list[str]:
     return sorted(get_registry().keys())
 
 
+# ── 单飞合并 + 免费引擎结果数桶化 ──
+# 场景：MCP 并发请求 / 多轨道同查询 → 同一引擎调用重复打上游。
+# 桶化只对免费引擎（cost_factor >= 0.85，与 route 免费判定一致）：n 向上
+# snap 到 10/20/50/100，让同查询不同请求数共享一次执行与缓存；付费引擎
+# 保持精确 n（按结果计费不得放大）。
+_NUM_BUCKETS = (10, 20, 50, 100)
+
+
+def _free_engine(engine: str) -> bool:
+    try:
+        from config import get_cost_factor
+        return get_cost_factor(engine) >= 0.85
+    except Exception:
+        return False
+
+
+def bucket_n(engine: str, n: int) -> int:
+    """免费引擎：n 向上 snap 到缓存友好桶（≤100）；付费引擎原样。"""
+    n = max(1, min(int(n), 100))
+    if not _free_engine(engine):
+        return n
+    for b in _NUM_BUCKETS:
+        if n <= b:
+            return b
+    return 100
+
+
+def _call_key(query: str, engine: str, n: int, kwargs: dict[str, Any]) -> str:
+    """单飞 key：同 query+engine+参数指纹才合并（时间窗/域等影响结果参数
+    必须进 key，否则不同检索被错误合并）。"""
+    import json as _json
+    try:
+        params = _json.dumps(kwargs, sort_keys=True, ensure_ascii=False,
+                             default=str)
+    except Exception:
+        params = str(sorted(kwargs.items()))
+    return f"{engine}|{n}|{query}|{params}"
+
+
 def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str = "fast", mode: str = "fast", **kwargs) -> list[dict[str, Any]]:
-    """统一引擎调用入口；失败返回空 list，不抛异常。kwargs 透传到引擎 builder（如 since/until 时间窗）。"""
+    """统一引擎调用入口；失败返回空 list，不抛异常。kwargs 透传到引擎 builder（如 since/until 时间窗）。
+
+    并发同调用（同 query+engine+参数）经进程内单飞合并为一次上游执行；
+    免费引擎 n 桶化（见 bucket_n），leader 按桶内最大 n 执行，调用方输出
+    层截断到请求数。
+    """
     registry = get_registry()
     fn = registry.get(engine)
     if not fn:
@@ -353,26 +408,38 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
     # 语义型引擎不识别平台结构化语法，剥掉字段只留核心词；透传型保持原 query。
     if engine in _SEMANTIC_ENGINES:
         query = strip_structured(query)
-    t0 = time.time()
-    try:
-        results = fn(query, n, timeout, depth=depth, mode=mode, **kwargs)
-    except TypeError:
+    eff_n = bucket_n(engine, n)
+    key = _call_key(query, engine, eff_n, kwargs)
+
+    def _execute() -> list[dict[str, Any]]:
+        t0 = time.time()
         try:
-            results = fn(query, n, timeout)
+            results = fn(query, eff_n, timeout, depth=depth, mode=mode, **kwargs)
+        except TypeError:
+            try:
+                results = fn(query, eff_n, timeout)
+            except Exception as e:
+                logger.error(f"引擎 {engine} 异常: {type(e).__name__}: {e}")
+                results = []
         except Exception as e:
             logger.error(f"引擎 {engine} 异常: {type(e).__name__}: {e}")
             results = []
-    except Exception as e:
-        logger.error(f"引擎 {engine} 异常: {type(e).__name__}: {e}")
-        results = []
-    elapsed = time.time() - t0
-    if results and isinstance(results, list):
-        for r in results:
-            if isinstance(r, dict) and "error" not in r:
-                r["_engine"] = engine
-                r["_elapsed"] = round(elapsed, 3)
-    return results if isinstance(results, list) else []
+        elapsed = time.time() - t0
+        if results and isinstance(results, list):
+            for r in results:
+                if isinstance(r, dict) and "error" not in r:
+                    r["_engine"] = engine
+                    r["_elapsed"] = round(elapsed, 3)
+        return results if isinstance(results, list) else []
 
+    try:
+        results = engine_coalescer().run(key, _execute)
+    except Exception:
+        results = []
+    results = results or []
+    # 桶化后可能多于请求数：调用方按请求 n 截断语义由 execute_search 融合层负责；
+    # 此处保留全量（缓存键按 eff_n 存，命中时同样可截）。
+    return results
 
 def _cli():
     import argparse

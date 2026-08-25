@@ -30,6 +30,11 @@ class TestNormalize(unittest.TestCase):
     def test_full_half_width(self):
         self.assertEqual(normalize_query('“GPT-5”，价格'), '"GPT-5",价格')
 
+    def test_full_width_alnum(self):
+        # 全角字母数字/符号 → 半角（2026-08 补齐；粘贴文本常见）
+        self.assertEqual(normalize_query("ＡＰＩ　１２３"), "API 123")
+        self.assertEqual(normalize_query("ｇｐｔ５￥"), "gpt5¥")
+
     def test_slash_split(self):
         self.assertEqual(normalize_query("LongCat-2.0/1.6 万亿"), "LongCat-2.0 1.6 万亿")
 

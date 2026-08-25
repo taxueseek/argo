@@ -4,7 +4,7 @@ last_updated: '2026-08-25'
 engines:
 - name: anysearch
   tier: T1
-  type: cli
+  type: anysearch
   coverage:
   - general
   - tech
@@ -12,7 +12,7 @@ engines:
   cost: free
   status: ok
   recommended: true
-  desc: 通用搜索主力，本地 CLI，零 token
+  desc: 通用搜索主力，进程内 JSON-RPC（HttpClient），零 token
 - name: archive_org
   tier: T1
   type: http

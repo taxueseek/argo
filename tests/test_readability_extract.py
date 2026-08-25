@@ -103,6 +103,34 @@ class TestReadabilityExtract(unittest.TestCase):
         self.assertNotIn("首页", content)
         self.assertNotIn("产品", content)
 
+    def test_table_data_without_blocks_survives(self):
+        """纯文本表格（td 内无 p/li）不得随容器结束被清空丢失。"""
+        html = """<html><body>
+        <article>
+        <h2>报价对照</h2>
+        <table>
+        <tr><td>型号</td><td>价格</td></tr>
+        <tr><td>GTX-4090</td><td>15999 元</td></tr>
+        </table>
+        <p>以上为电商公开报价，时效以页面为准。</p>
+        </article>
+        </body></html>"""
+        content, _ = extract_readability(html)
+        self.assertIn("GTX-4090", content)
+        self.assertIn("15999 元", content)
+        # 单元格按块归并（相邻同深度），表格数据仍在正文里
+        self.assertIn("型号", content)
+
+    def test_plain_container_without_block_discarded(self):
+        """纯链接/无正文容器（无块产出）的累积文本仍被丢弃（防污染）。"""
+        html = """<html><body>
+        <div class="sidebar"><a href="/a">甲项</a><a href="/b">乙项</a></div>
+        <div class="body"><p>真正的正文段落，长度足够长，用来验证纯链接容器不会污染正文组。</p></div>
+        </body></html>"""
+        content, _ = extract_readability(html)
+        self.assertIn("真正的正文段落", content)
+        self.assertNotIn("甲项", content)
+
     def test_score_blocks_placeholder_keeps_order(self):
         """P1 占位：无 query 精排时保持原顺序。"""
         parts = ["第一段", "第二段", "第三段"]

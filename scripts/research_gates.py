@@ -59,6 +59,41 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
             "count": len(conflicts),
         })
 
+    # ── recompute 门禁（P0-2）：可复算闭环 ──
+    rec = dossier.get("recomputed_values") or []
+    # 1) 声明可复算但未执行（授权门 fail-closed 拦截）→ 结论上限 medium
+    if dossier.get("recompute_expected") and not rec:
+        warnings.append({
+            "id": "recompute_skipped",
+            "detail": "工作包声明 recompute 但未运行（未授权或执行失败）",
+        })
+    # 2) 重算值与检索数字无交集 → 提示冲突（以重算为准，需人工核对）
+    elif rec:
+        snippet_nums: set[float] = set()
+        try:
+            from recompute import extract_values as _extract
+        except ImportError:
+            _extract = None
+        for s in (dossier.get("sources") or []):
+            if not isinstance(s, dict):
+                continue
+            text = f"{s.get('title') or ''} {s.get('snippet') or ''}"
+            if _extract is not None:
+                snippet_nums.update(_extract(text))
+        for rv in rec:
+            if not rv.get("ok") or not rv.get("values"):
+                continue
+            if snippet_nums and not (
+                set(rv["values"]) & snippet_nums
+            ):
+                warnings.append({
+                    "id": "recompute_conflict",
+                    "detail": (
+                        f"重算值 {rv['values']} 与检索来源数字无交集"
+                        f"（包 {rv.get('package_id') or '?'}），以重算为准"
+                    ),
+                })
+
     grades = dossier.get("source_grades") or {}
     if grades:
         leads = dossier.get("source_leads") or dossier.get("verification_records") or []
@@ -66,7 +101,10 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
             isinstance(r, dict) and r.get("evidence_tier") == "primary"
             for r in leads
         )
-        if not has_primary:
+        # 本地一手数据文件（file_inputs 入账）计为一手命中：用户提供原始
+        # 数据时，「零一手来源」不成立（原始数据即一手），避免假阴性。
+        local_primary = bool(dossier.get("local_sources"))
+        if not has_primary and not local_primary:
             warnings.append({
                 "id": "no_primary_sources",
                 "detail": "有 source_grades 但零一手命中",

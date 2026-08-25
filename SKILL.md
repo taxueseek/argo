@@ -41,6 +41,7 @@ python3 scripts/research.py "复杂问题" --json # 取证包（扩词或多工�
 |------|------|
 | `--engine <name>` | 强制引擎（anysearch/byted/bocha/exa/tavily/eastmoney/zhihu/arxiv/pypi/mdn/hackernews/v2ex…，全量见 `--list-engines`） |
 | `--local-first` | 本地零成本聚合优先（local_search 33 引擎） |
+| `--include-local` | 并入本机文件命中（seek 结果尾部，source=local_files；默认关） |
 | `--mode fast|auto|deep|budget` | fast 免费优先 / auto 成本感知（默认）/ deep 质量优先 / budget 配额控制 |
 | `--explain` | 解释路由决策（含 TF-IDF 分数） |
 | `--no-cache` / `--depth fast|balanced|deep` | 跳过缓存 / 搜索深度 |
@@ -54,7 +55,11 @@ python3 scripts/research.py "复杂问题" --json # 取证包（扩词或多工�
 # research — 取证（扩词或 --work-packages → dossier + citations + 可判定门禁）
 python3 scripts/research.py "查询" [--sub-queries N] [--depth deep] [--budget N] \
     [--route-strategy local_first|cost_aware|full] [--work-packages PATH|JSON] \
-    [--json] [--verify N]
+    [--json] [--verify N] [--allow-recompute]
+
+# 工作包可带 file_inputs（本地一手数据入账）+ recompute（可复算脚本，fail-closed 授权）
+#   [{"id":"wp-rev","question":"…","file_inputs":[{"path":"~/data/company.xlsx","role":"原始数据"}],
+#     "recompute":{"script":"…","budget":{"timeout_s":30}}}]
 
 # 社交舆情模式
 python3 scripts/research.py "iPhone 16 用户评价" --mode social-sentiment --platforms xiaohongshu,reddit,twitter
@@ -81,7 +86,7 @@ argo pdf "https://example.com/paper.pdf" [--pages "1-5"] [--password "secret"]
 python3 scripts/mcp_server.py [--test]
 ```
 
-工具名：`argo_search`、`argo_local_search`（本机文件/记录搜索，非联网）、`argo_research`（含 social-sentiment）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`（mode=extract 结构化提取）、`argo_screenshot`、`argo_pdf`、`argo_social_search`（mode=sentiment 舆情聚合）。
+工具名：`argo_search`、`argo_local_search`（本机文件/记录搜索，非联网）、`argo_local_read`（白名单本地文本预览，`ARGO_LOCAL_READ_DIRS` 配置目录，fail-closed）、`argo_research`（含 social-sentiment）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`（mode=extract 结构化提取）、`argo_screenshot`、`argo_pdf`、`argo_social_search`（mode=sentiment 舆情聚合）。
 
 DeepSeek Harness 插件一行安装（MCP 搜索 + `wide_research` 编排）：
 
@@ -126,6 +131,12 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 |--------|------|------|
 | local-search（本地零成本聚合） | `sub-skills/local-search/` | `python3 scripts/search.py "查询" --local-first` |
 | local-seek（本机文件搜索） | `sub-skills/local-seek/` | `python3 sub-skills/local-seek/scripts/seek.py "查询" --path ~/notes --count`（MCP: `argo_local_search`） |
+
+## 本地打通（三通道）
+
+- **搜索体验**：`python3 scripts/search.py "查询" --include-local` —— 联网结果尾部并入本机文件命中（file:// 带行号，source=local_files，不参与融合评分）
+- **本地分析**：MCP `argo_local_read`（白名单预览，`ARGO_LOCAL_READ_DIRS=~/data,~/notes` 配置；worker 侧在 wide_research 默认工具白名单）；数据计算走工作包 `recompute`（fail-closed 授权）
+- **成果复用**：`python3 scripts/research.py --search-archive "主题词" [--archive-since 日期]` —— 检索历史研究/搜索归档（`数据/argo-search-archive/runs/`），按主题词 + 时间窗列出历史 run 与来源统计
 | ego-search（登录态专业搜索） | `sub-skills/ego-search/` | `python3 sub-skills/ego-search/scripts/ego_search.py search "AI 搜索" --runtime auto` |
 
 ## 工程纪律（单一真源）

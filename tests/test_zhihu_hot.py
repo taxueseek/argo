@@ -26,8 +26,14 @@ def test_zhihu_hot_in_config():
 
 def test_route_zhihu_hot_list():
     from route import route_query
+    from unittest.mock import patch
 
-    r = route_query("知乎热榜", depth="fast", mode="fast")
+    # 路由契约测试不依赖真实密钥：注入 fake 使其通过 env_ready 门禁
+    with patch.dict(
+        os.environ, {"ARGO_ZHIHU_ACCESS_SECRET": "test-key-for-routing"},
+        clear=False,
+    ):
+        r = route_query("知乎热榜", depth="fast", mode="fast")
     assert r.get("domain") == "zhihu_hot_list", r
     combo = r.get("engines_combo") or []
     assert "zhihu_hot" in combo

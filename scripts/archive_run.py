@@ -97,6 +97,61 @@ def make_run_id(query: str, when: datetime | None = None) -> str:
     return f"{stamp}_{_slug(query)}_{qh}"
 
 
+def search_archive(query: str, root: Path | None = None,
+                   since: str | None = None, until: str | None = None,
+                   limit: int = 10) -> list[dict[str, Any]]:
+    """检索归档索引（成果复用）：主题词命中的历史研究/搜索 run。
+
+    - 数据源：{root}/index.jsonl（无索引时返回空）
+    - 过滤：query/tag/note 子串命中（query 必需）；packed_at 日期窗可选
+    - 返回：run_id / packed_at / query / tag / source / counts / run_dir
+    """
+    archive_root = (root or resolve_archive_root()).expanduser().resolve()
+    index_path = archive_root / "index.jsonl"
+    if not index_path.exists():
+        return []
+    kw = (query or "").strip().lower()
+    out: list[dict[str, Any]] = []
+    try:
+        with index_path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                hay = " ".join([
+                    str(row.get("query") or ""),
+                    str(row.get("tag") or ""),
+                    str(row.get("note") or ""),
+                ]).lower()
+                if kw and kw not in hay:
+                    continue
+                packed = str(row.get("packed_at") or "")
+                day = packed[:10]
+                if since and day and day < since:
+                    continue
+                if until and day and day > until:
+                    continue
+                out.append({
+                    "run_id": row.get("run_id"),
+                    "packed_at": packed,
+                    "query": row.get("query"),
+                    "tag": row.get("tag"),
+                    "source": row.get("source"),
+                    "status": row.get("status"),
+                    "counts": row.get("counts") or {},
+                    "run_dir": row.get("run_dir"),
+                })
+                if len(out) >= limit:
+                    break
+    except OSError:
+        return []
+    return out
+
+
 def write_search_archive(
     result: dict[str, Any],
     *,

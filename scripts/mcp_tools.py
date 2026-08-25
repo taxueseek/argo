@@ -52,6 +52,20 @@ TOOLS = [
         },
     },
     {
+        "name": "argo_local_read",
+        "description": "读取白名单内的本地文本文件（预览，非全文）：用于分析本地数据/笔记/研究成果。白名单目录由 ARGO_LOCAL_READ_DIRS 配置（逗号分隔），未配置或路径越权时拒绝（fail-closed）。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "文件路径（必须位于白名单目录内）"},
+                "max_chars": {"type": "integer", "description": "预览字符数上限", "default": 4000, "minimum": 200, "maximum": 20000},
+                "line_start": {"type": "integer", "description": "起始行号（1 基，可选）", "minimum": 1},
+                "line_end": {"type": "integer", "description": "结束行号（可选）"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "argo_research",
         "description": "深度研究取证：多子查询并行检索，返回带来源/覆盖/缺口/质量门禁的 dossier。适合复杂、多步骤、需要交叉验证的研究问题；简单快问用 argo_search。",
         "inputSchema": {

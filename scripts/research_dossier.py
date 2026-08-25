@@ -7,6 +7,7 @@ SERP snippet 不得标成 verifiable。
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 from urllib.parse import urlparse, parse_qsl, urlunparse
@@ -137,6 +138,80 @@ def canonical_url(url: str) -> str:
     ), ""))
 
 
+def build_local_sources(file_inputs: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """本地一手数据文件入账（血缘登记，内容不入账）。
+
+    每条：ref（[L1] 前缀与 URLs 的 [1] 区分）、规范 path、sha256、size、
+    mtime、kind、role。读取失败的文件跳过（不入账、不中断取证）。
+    """
+    if not file_inputs:
+        return []
+    out: list[dict[str, Any]] = []
+    for i, fi in enumerate(file_inputs, 1):
+        path = str(fi.get("path") or "")
+        try:
+            digest = _sha256_file(path)
+            mtime = int(os.path.getmtime(path))
+        except OSError:
+            continue
+        out.append({
+            "ref": f"[L{i}]",
+            "type": "file",
+            "path": path,
+            "sha256": digest,
+            "size": int(fi.get("size") or os.path.getsize(path)),
+            "mtime": mtime,
+            "kind": fi.get("kind") or "",
+            "role": fi.get("role") or "data",
+            "note": "本地一手文件：已登记哈希与血缘，内容未入库；"
+                    "引用时标注文件路径与行号",
+        })
+    return out
+
+
+def _sha256_file(path: str, chunk: int = 256 * 1024) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            block = f.read(chunk)
+            if not block:
+                break
+            h.update(block)
+    return h.hexdigest()
+
+
+def build_recomputed_values(
+    recompute_results: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """recompute 产物入账：运行记录（含脚本摘要、输出尾部、提取值）。
+
+    数值提取失败/空输出的条目仍入账（ok=False 时是审计痕迹）。
+    """
+    if not recompute_results:
+        return []
+    out = []
+    for i, r in enumerate(recompute_results, 1):
+        try:
+            from recompute import extract_values
+            values = extract_values(str(r.get("stdout") or ""))
+        except Exception:
+            values = []
+        out.append({
+            "ref": f"[R{i}]",
+            "package_id": r.get("package_id") or "",
+            "ok": bool(r.get("ok")),
+            "skipped_reason": r.get("skipped_reason"),
+            "timed_out": bool(r.get("timed_out")),
+            "values": values,
+            "stdout_tail": str(r.get("stdout") or "")[-300:],
+            "stderr_tail": str(r.get("stderr") or "")[-200:],
+            "elapsed_ms": r.get("elapsed_ms"),
+            "note": "数值由本地数据重算得出；与检索数字冲突时以重算为准并标注",
+        })
+    return out
+
+
 def _build_source_leads(
     sub_results: list[dict[str, Any]],
     source_grades: dict[str, Any] | None,
@@ -246,6 +321,8 @@ def build_dossier(
     source_grades: dict[str, Any] | None = None,
     mode: str = "auto",
     depth: str = "balanced",
+    file_inputs: list[dict[str, Any]] | None = None,
+    recompute_results: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """合成取证包。兼容旧名 synthesize_report。"""
     merged = collection["merged_results"]
@@ -370,6 +447,8 @@ def build_dossier(
         "source_distribution": source_counts,
         "citations": citations,
         "sources": sources,
+        "local_sources": build_local_sources(file_inputs),
+        "recomputed_values": build_recomputed_values(recompute_results),
         "cross_references": cross_refs,
         "coverage_map": coverage_map,
         "source_leads": source_leads,

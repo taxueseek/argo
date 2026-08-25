@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""工作包交接、可判定门禁、dossier 契约。"""
+"""工作包交接、可判定门禁、dossier 契约、本地文件入账。"""
 
 from __future__ import annotations
 
+import hashlib
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -167,6 +170,141 @@ class TestDossierContract(unittest.TestCase):
         self.assertIs(decompose_query, expand_query)
         out = expand_query("CRISPR 论文", 3)
         self.assertGreaterEqual(len(out), 1)
+
+
+class TestLocalFileInputs(unittest.TestCase):
+    """file_inputs 白名单校验（fail-closed）。"""
+
+    def _write(self, tmp_dir: str, name: str, text: str) -> str:
+        p = Path(tmp_dir) / name
+        p.write_text(text, encoding="utf-8")
+        return str(p)
+
+    def test_parse_with_file_inputs(self):
+        from research_work_packages import parse_work_packages
+        with tempfile.TemporaryDirectory() as tmp:
+            f = self._write(tmp, "data.csv", "a,b\n1,2\n")
+            pkgs = parse_work_packages([{
+                "id": "wp1", "question": "营收是多少",
+                "file_inputs": [{"path": f, "role": "原始数据"}],
+            }])
+            fi = pkgs[0]["file_inputs"][0]
+            self.assertEqual(fi["kind"], "csv")  # 扩展名推断
+            self.assertEqual(fi["role"], "原始数据")
+            self.assertTrue(fi["path"].endswith("data.csv"))
+            self.assertEqual(fi["size"], 8)
+
+    def test_missing_path_raises(self):
+        from research_work_packages import parse_work_packages
+        with self.assertRaises(ValueError) as cm:
+            parse_work_packages([{"id": "x", "question": "q",
+                                  "file_inputs": [{"role": "data"}]}])
+        self.assertIn("缺少 path", str(cm.exception))
+
+    def test_nonexistent_file_raises(self):
+        from research_work_packages import parse_work_packages
+        with self.assertRaises(ValueError) as cm:
+            parse_work_packages([{"id": "x", "question": "q",
+                                  "file_inputs": [{"path": "/no/such/file.csv"}]}])
+        self.assertIn("不存在", str(cm.exception))
+
+    def test_directory_rejected(self):
+        from research_work_packages import parse_work_packages
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as cm:
+                parse_work_packages([{"id": "x", "question": "q",
+                                      "file_inputs": [{"path": tmp}]}])
+            self.assertIn("不是普通文件", str(cm.exception))
+
+    def test_unsupported_kind_rejected(self):
+        from research_work_packages import parse_work_packages
+        with tempfile.TemporaryDirectory() as tmp:
+            f = self._write(tmp, "data.bin", "x")
+            with self.assertRaises(ValueError) as cm:
+                parse_work_packages([{"id": "x", "question": "q",
+                                      "file_inputs": [{"path": f}]}])
+            self.assertIn("不受支持", str(cm.exception))
+
+    def test_no_file_inputs_default_empty(self):
+        from research_work_packages import parse_work_packages
+        pkgs = parse_work_packages([{"id": "x", "question": "q"}])
+        self.assertEqual(pkgs[0]["file_inputs"], [])
+
+
+class TestLocalSourcesDossier(unittest.TestCase):
+    """file_inputs 入账：哈希/血缘，内容不入账。"""
+
+    def _collection(self):
+        return {
+            "merged_results": [],
+            "sub_results": [],
+            "engines_used": [],
+            "total_results": 0,
+            "elapsed_ms": 1,
+        }
+
+    def test_local_sources_with_hashes_no_content(self):
+        from research_dossier import build_dossier
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "raw.csv"
+            f.write_text("营收,2025\n94.9\n", encoding="utf-8")
+            expect_hash = hashlib.sha256(f.read_bytes()).hexdigest()
+            dossier = build_dossier(
+                "q", self._collection(), [],
+                file_inputs=[{"path": str(f), "kind": "csv", "role": "数据"}],
+            )
+        ls = dossier["local_sources"]
+        self.assertEqual(len(ls), 1)
+        rec = ls[0]
+        self.assertEqual(rec["ref"], "[L1]")
+        self.assertEqual(rec["type"], "file")
+        self.assertEqual(rec["kind"], "csv")
+        self.assertEqual(rec["role"], "数据")
+        self.assertEqual(rec["sha256"], expect_hash)
+        self.assertNotIn("content", rec)  # 内容不入账
+        self.assertIn("路径与行号", rec["note"])
+
+    def test_empty_file_inputs_gives_empty_list(self):
+        from research_dossier import build_dossier
+        dossier = build_dossier("q", self._collection(), [])
+        self.assertEqual(dossier["local_sources"], [])
+
+    def test_unreadable_file_skipped_not_fatal(self):
+        from research_dossier import build_dossier
+        dossier = build_dossier(
+            "q", self._collection(), [],
+            file_inputs=[{"path": "/no/such/file.csv", "kind": "csv"}],
+        )
+        self.assertEqual(dossier["local_sources"], [])
+
+
+class TestLocalPrimaryGate(unittest.TestCase):
+    """本地一手文件计入 no_primary_sources 判定。"""
+
+    def test_local_sources_satisfy_primary(self):
+        from research_gates import evaluate_dossier_gates
+        dossier = {
+            "sources": [{"url": "https://a.com/1"}],
+            "coverage_map": [],
+            "source_grades": {"primary": [], "secondary": ["权威"]},
+            "source_leads": [{"evidence_tier": "secondary"}],
+            "local_sources": [{"ref": "[L1]"}],
+        }
+        out = evaluate_dossier_gates(dossier)
+        ids = [w["id"] for w in out["warnings"]]
+        self.assertNotIn("no_primary_sources", ids)
+
+    def test_no_local_sources_still_warns(self):
+        from research_gates import evaluate_dossier_gates
+        dossier = {
+            "sources": [{"url": "https://a.com/1"}],
+            "coverage_map": [],
+            "source_grades": {"primary": [], "secondary": ["权威"]},
+            "source_leads": [{"evidence_tier": "secondary"}],
+        }
+        out = evaluate_dossier_gates(dossier)
+        ids = [w["id"] for w in out["warnings"]]
+        self.assertIn("no_primary_sources", ids)
 
 
 class TestWorkPackageCollection(unittest.TestCase):

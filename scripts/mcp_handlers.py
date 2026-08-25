@@ -45,6 +45,69 @@ _module_cache: dict[str, Any] = {}
 
 
 
+_LOCAL_READ_ALLOWED_EXTS = {
+    ".md", ".txt", ".csv", ".tsv", ".json", ".yaml", ".yml", ".log",
+    ".py", ".js", ".ts", ".html", ".xml", ".rst", ".ipynb",
+}
+
+
+def _local_read_whitelist() -> list[str]:
+    """白名单目录：ARGO_LOCAL_READ_DIRS（逗号分隔）；未配置返回空（fail-closed）。"""
+    raw = (os.environ.get("ARGO_LOCAL_READ_DIRS") or "").strip()
+    if not raw:
+        return []
+    return [os.path.realpath(os.path.expanduser(d))
+            for d in raw.split(",") if d.strip()]
+
+
+def _local_read_preview(
+    path: str,
+    max_chars: int = 4000,
+    line_start: int | None = None,
+    line_end: int | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """白名单内文本文件预览（行窗口或字符截断）；越权/二进制拒绝。"""
+    root = os.path.realpath(os.path.expanduser(path))
+    allowed = _local_read_whitelist()
+    if not allowed:
+        raise PermissionError(
+            "本地读取未配置白名单：设 ARGO_LOCAL_READ_DIRS=目录1,目录2（fail-closed）"
+        )
+    if not any(root == d or root.startswith(d + os.sep) for d in allowed):
+        raise PermissionError(f"路径不在白名单目录内: {path}")
+    if not os.path.isfile(root):
+        raise FileNotFoundError(f"文件不存在: {path}")
+    ext = os.path.splitext(root)[1].lower()
+    if ext not in _LOCAL_READ_ALLOWED_EXTS:
+        raise PermissionError(f"仅支持文本类文件预览（{ext} 不支持；pdf 走其他路径）")
+    size = os.path.getsize(root)
+    if size > 4 * 1024 * 1024:
+        raise PermissionError("文件超过 4MB，拒绝预览（请缩小范围或改用搜索）")
+
+    with open(root, encoding="utf-8", errors="replace") as f:
+        if line_start is not None or line_end is not None:
+            start = max(1, int(line_start or 1))
+            end = int(line_end) if line_end else start + 200
+            lines = f.readlines()[(start - 1): end]
+            content = "".join(lines)
+            lines_slice = (start, start + len(lines) - 1)
+        else:
+            content = f.read()
+            lines_slice = None
+
+    truncated = len(content) > max_chars
+    if truncated:
+        content = content[:max_chars]
+    total_lines = content.count("\n") + 1
+    return content, {
+        "path": root,
+        "chars": len(content),
+        "lines": (lines_slice[1] - lines_slice[0] + 1) if lines_slice else None,
+        "total_lines": total_lines,
+        "is_preview": truncated or lines_slice is not None,
+    }
+
+
 def _seek_py() -> str:
     """定位 local-seek 的 seek.py（argo 子技能，位于 sub-skills/ 下）。
 
@@ -510,6 +573,32 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 "mode": mode,
                 "depth": None,
                 "results": results,
+                "errors": [],
+            }, pretty=pretty)
+
+        elif name == "argo_local_read":
+            # 白名单本地文本预览（非联网）：分析本地数据/研究成果用；fail-closed
+            raw_path = str(arguments.get("path", "")).strip()
+            max_chars = max(200, min(int(arguments.get("max_chars", 4000) or 4000), 20000))
+            line_start = arguments.get("line_start")
+            line_end = arguments.get("line_end")
+            if not raw_path:
+                return _ok({"path": "", "content": "", "errors": ["path 不能为空"]}, pretty=pretty)
+            try:
+                content, meta = _local_read_preview(
+                    raw_path, max_chars=max_chars,
+                    line_start=line_start, line_end=line_end,
+                )
+            except Exception as e:
+                return _ok({"path": raw_path, "content": "",
+                            "errors": [str(e)]}, pretty=pretty)
+            return _ok({
+                "path": meta["path"],
+                "content": content,
+                "chars": meta["chars"],
+                "lines": meta["lines"],
+                "total_lines": meta["total_lines"],
+                "is_preview": meta["is_preview"],
                 "errors": [],
             }, pretty=pretty)
 
