@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracks, stageTracks, evaluateGates, normalizeSource, mapArgoToWebResult } from '../dsh/index.js'
+import { normalizeTracks, stageTracks, evaluateGates, normalizeSource, mapArgoToWebResult, buildLocalSources, parseJsonArray, parseJsonObject, extractValues } from '../dsh/index.js'
 
 test('mapArgoToWebResult maps compact argo payload to web sources', () => {
   const mapped = mapArgoToWebResult({
@@ -185,4 +185,82 @@ test('persistReport writes to <dir>/<ts>-<slug>.md and returns absolute path', a
   // 目录自动创建
   const nested = await persistReport(join(dir, 'a', 'b'), 'q', 'x')
   assert.ok(nested.startsWith(join(dir, 'a', 'b')))
+})
+
+test('buildLocalSources registers lineage without content', () => {
+  const out = buildLocalSources([
+    { path: '~/data/company.xlsx', role: '原始数据', sha256: 'abc', size: 100, mtime: 123 },
+    { path: '', role: 'x' },
+    { path: '~/notes/a.md' },
+  ])
+  assert.equal(out.length, 2)
+  assert.equal(out[0].ref, '[L1]')
+  assert.equal(out[0].type, 'file')
+  assert.equal(out[0].role, '原始数据')
+  assert.equal(out[0].note.includes('内容未入库'), true)
+  assert.equal(out[1].kind, '')
+  assert.equal(out[1].role, 'data')
+})
+
+test('parseJsonArray tolerates empty & malformed', () => {
+  assert.deepEqual(parseJsonArray(undefined, 'fi'), [])
+  assert.deepEqual(parseJsonArray('', 'fi'), [])
+  const good = parseJsonArray('[{"path":"a"}]', 'fi')
+  assert.equal(good.length, 1)
+  assert.deepEqual(parseJsonArray('nope', 'fi'), [])
+  assert.deepEqual(parseJsonArray([1, 2], 'fi'), [])
+})
+
+test('parseJsonObject tolerates empty & malformed', () => {
+  assert.deepEqual(parseJsonObject(undefined, 'rc'), {})
+  assert.deepEqual(parseJsonObject('', 'rc'), {})
+  const good = parseJsonObject('{"script":"1+1","budget":{"timeout_s":30}}', 'rc')
+  assert.equal(good.script, '1+1')
+  assert.equal(good.budget.timeout_s, 30)
+  assert.deepEqual(parseJsonObject('oops', 'rc'), {})
+})
+
+test('extractValues pulls numbers and percentages', () => {
+  assert.deepEqual(extractValues('营收 1,234.5 万，同比 23%'), [1234.5, 0.23])
+  assert.deepEqual(extractValues(''), [])
+  assert.deepEqual(extractValues('无数字文本'), [])
+})
+
+test('evaluateGates: recompute_skipped caps at medium', () => {
+  const gates = evaluateGates({
+    stats: { completedTracks: 2, failedTracks: 0, sourceCount: 3 },
+    sources: [
+      { confidence: 'high', url: 'https://a.com' },
+      { confidence: 'high', url: 'https://b.com' },
+    ],
+    caveats: [], unansweredQuestions: [],
+    recomputeExpected: true, recomputedValues: [], localSources: [],
+  })
+  assert.equal(gates.conclusion_cap, 'medium')
+  assert.ok(gates.warnings.some(w => w.id === 'recompute_skipped'))
+})
+
+test('evaluateGates: recompute_conflict when no numeric overlap', () => {
+  const gates = evaluateGates({
+    stats: { completedTracks: 2, failedTracks: 0, sourceCount: 3 },
+    sources: [
+      { confidence: 'high', url: 'https://a.com', title: '甲', claim: '营收 100 万元' },
+      { confidence: 'high', url: 'https://b.com', title: '乙', claim: '利润 5 万元' },
+    ],
+    caveats: [], unansweredQuestions: [],
+    recomputeExpected: true,
+    recomputedValues: [{ ok: true, values: [42], stdout_tail: '', stderr_tail: '' }],
+    localSources: [],
+  })
+  assert.ok(gates.warnings.some(w => w.id === 'recompute_conflict'))
+})
+
+test('evaluateGates: local first-hand source counts as evidence', () => {
+  // 无网络源但含本地一手文件时，不应触发 no_sources 假阴性
+  const gates = evaluateGates({
+    stats: { completedTracks: 1, failedTracks: 0, sourceCount: 0 },
+    sources: [], caveats: [], unansweredQuestions: [],
+    localSources: [{ path: '~/company.xlsx', ref: '[L1]' }],
+  })
+  assert.ok(!gates.failures.some(f => f.id === 'no_sources'), '本地一手存在时不应判 no_sources')
 })

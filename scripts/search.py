@@ -1655,7 +1655,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  engines_boost: list[str] | None = None,
                  since: str | None = None,
                  until: str | None = None,
-                 sort: str = "relevance") -> dict[str, Any]:
+                 sort: str = "relevance",
+                 include_local: bool = False) -> dict[str, Any]:
     """统一搜索便捷入口。
 
     执行分层（不阻塞日常）：
@@ -1877,6 +1878,20 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
 
     # 相关信源标准化（日常搜索底部引用列表；与 results 顺序一致）
     result["sources"] = build_sources(result.get("results") or [])
+
+    # 本地命中并入（默认关）：seek 结果尾部拼入，来源 local_files，
+    # 不参与融合评分。仅显式开启（--include-local / MCP include_local）才触发。
+    if include_local:
+        try:
+            local_hits = _run_local_seek(query, n)
+        except Exception as e:
+            local_hits = []
+            logging.getLogger("unified_search").debug(
+                f"[include-local] {type(e).__name__}: {e}")
+        if local_hits:
+            result.setdefault("results", []).extend(local_hits)
+            result["local_results"] = local_hits
+        result["include_local"] = True
 
     return result
 

@@ -145,9 +145,10 @@ def test_parse_pages_specs():
 
 def test_mcp_tools_ten_tools_single_source():
     names = [t["name"] for t in TOOLS]
-    assert len(TOOLS) == 11
+    assert len(TOOLS) == 12
     assert names == [
-        "argo_search", "argo_local_search", "argo_local_read", "argo_research",
+        "argo_search", "argo_local_search", "argo_local_read", "argo_recompute",
+        "argo_research",
         "argo_evidence", "argo_clarify", "argo_crawl", "argo_fetch",
         "argo_screenshot", "argo_pdf", "argo_social_search",
     ]

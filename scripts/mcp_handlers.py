@@ -509,6 +509,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 since=arguments.get("since"),
                 until=arguments.get("until"),
                 sort=arguments.get("sort", "relevance"),
+                include_local=bool(arguments.get("include_local", False)),
                 cache=_get_cache(),
                 envelope=False,
                 context="search",
@@ -602,6 +603,40 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 "errors": [],
             }, pretty=pretty)
 
+        elif name == "argo_recompute":
+            # fail-closed 可复算执行器：受限子进程运行计算脚本，验证数值。
+            # 默认拒绝（allow_exec=false / ARGO_ALLOW_RECOMPUTE 未设），返回 skipped_reason。
+            script = str(arguments.get("script", "")).strip()
+            inputs_raw = arguments.get("file_inputs")
+            inputs = []
+            if isinstance(inputs_raw, str) and inputs_raw.strip():
+                try:
+                    inputs = json.loads(inputs_raw)
+                except ValueError:
+                    inputs = []
+            elif isinstance(inputs_raw, list):
+                inputs = inputs_raw
+            elif inputs_raw:
+                try:
+                    inputs = json.loads(inputs_raw)
+                except (ValueError, TypeError):
+                    inputs = []
+            timeout_s = max(1, min(int(arguments.get("timeout_s", 30) or 30), 120))
+            max_mem_mb = max(64, min(int(arguments.get("max_mem_mb", 512) or 512), 4096))
+            allow_exec = bool(arguments.get("allow_exec", False))
+            if not script:
+                return _ok({"ok": False, "skipped_reason": "script 为空"}, pretty=pretty)
+            try:
+                from recompute import run_recompute
+                result = run_recompute(
+                    script, inputs or None,
+                    timeout_s=timeout_s, max_mem_mb=max_mem_mb,
+                    allow_exec=allow_exec,
+                )
+            except Exception as e:
+                result = {"ok": False, "skipped_reason": f"执行器异常: {e}"}
+            return _ok(result, pretty=pretty)
+
         elif name == "argo_research":
             research_mod = _lazy_cached("research")
             mode = arguments.get("mode", "auto")
@@ -633,6 +668,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     mode=mode,
                     profile=profile,
                     work_packages=arguments.get("work_packages"),
+                    allow_recompute=bool(arguments.get("allow_recompute", False)),
                 )
                 if profile and profile_key:
                     result["topic_profile"] = profile.get("name")

@@ -32,6 +32,7 @@ TOOLS = [
                 "since": {"type": "string", "description": "发布时间下限，如 7d / 2026-08-01"},
                 "until": {"type": "string", "description": "发布时间上限，如 7d / 2026-08-01"},
                 "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前", "default": "relevance"},
+                "include_local": {"type": "boolean", "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认关）", "default": False},
                 "summary": {"type": "boolean", "description": "精简输出：截断摘要、去掉重字段，省 token", "default": True},
             },
             "required": ["query"],
@@ -66,6 +67,21 @@ TOOLS = [
         },
     },
     {
+        "name": "argo_recompute",
+        "description": "fail-closed 可复算执行器：在受限子进程中运行计算脚本（只读白名单输入、断网、超时硬杀、内存软限），验证本地数据重算出的数值。用于结论承重要重算数字时；默认拒绝，需显式授权。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "script": {"type": "string", "description": "要运行的计算代码（Python）"},
+                "file_inputs": {"type": "string", "description": "白名单输入文件 JSON 数组：[{\"path\":\"...\",\"role\":\"原始数据\"}]"},
+                "timeout_s": {"type": "integer", "description": "超时秒数", "default": 30, "minimum": 1, "maximum": 120},
+                "max_mem_mb": {"type": "integer", "description": "内存上限 MB（尽力而为）", "default": 512},
+                "allow_exec": {"type": "boolean", "description": "是否授权运行（fail-closed，默认拒绝；未授权时返回 skipped_reason）", "default": False},
+            },
+            "required": ["script"],
+        },
+    },
+    {
         "name": "argo_research",
         "description": "深度研究取证：多子查询并行检索，返回带来源/覆盖/缺口/质量门禁的 dossier。适合复杂、多步骤、需要交叉验证的研究问题；简单快问用 argo_search。",
         "inputSchema": {
@@ -78,7 +94,8 @@ TOOLS = [
                 "max_results": {"type": "integer", "description": "每个子查询的结果条数", "default": 5},
                 "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度", "default": "balanced"},
                 "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget", "social-sentiment"], "description": "预算/模式；社交舆情用 social-sentiment", "default": "auto"},
-                "work_packages": {"type": "string", "description": "工作包 JSON 数组：id, question, query?, depends_on?。有则跳过扩词，按依赖分阶段取证"},
+                "work_packages": {"type": "string", "description": "工作包 JSON 数组：id, question, query?, file_inputs?(本地一手数据, 白名单制), recompute?({script,budget{timeout_s,max_mem_mb}}), depends_on?。有则跳过扩词，按依赖分阶段取证"},
+                "allow_recompute": {"type": "boolean", "description": "授权执行工作包 recompute 计算脚本（fail-closed，默认拒绝；未授权时 recompute 跳过并触发 recompute_skipped 门禁）", "default": False},
                 "platforms": {"type": "string", "description": "social-sentiment 平台列表，逗号分隔"},
                 "summary": {"type": "boolean", "description": "精简研究包，省 token", "default": True},
             },
