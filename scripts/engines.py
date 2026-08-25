@@ -37,6 +37,7 @@ from engines_base import (
     _ensure_engine_source,
     _CUSTOM_JSON_PARSERS,
 )
+from recovery import strip_structured
 
 # 对外/测试兼容：专用解析器与 source 纠正
 __all__ = [
@@ -133,6 +134,7 @@ from engines_builders import (
     _build_figshare_engine,
     _build_tencent_kline_engine,
     _build_qq_music_engine,
+    _build_github_engine,
 )
 
 logger = logging.getLogger("unified_search.engines")
@@ -219,6 +221,7 @@ _BUILDERS = {
     "wechat_sogou": _build_wechat_sogou_engine,
     "hackernews": _build_hackernews_engine,
     "stackoverflow": _build_stackoverflow_engine,
+    "github": _build_github_engine,
     "google_scholar": _build_google_scholar_engine,
     "v2ex": _build_v2ex_engine,
     "ths_hot": _build_ths_hot_engine,
@@ -294,6 +297,14 @@ _BUILDERS = {
     "qq_music": _build_qq_music_engine,
 }
 
+# 语义型引擎：把 query 当自然语言语义检索，不识别平台原生结构化语法
+# （from:/repo:/site:/until: 等）。对其剥掉字段只留核心词，避免污染相关性。
+# 透传型/垂直源（local_*、social/academic/code、github 等）保持原 query，让平台语法生效。
+_SEMANTIC_ENGINES = frozenset({
+    "byted", "bocha", "anysearch", "tavily", "exa", "octen",
+    "uapi", "searxng", "parallel", "you", "bocha_ai", "local_search",
+})
+
 _engine_registry: dict[str, Any] = {}
 _engine_registry_loaded = False
 
@@ -339,6 +350,9 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
     if not fn:
         logger.warning(f"未知引擎: {engine}")
         return []
+    # 语义型引擎不识别平台结构化语法，剥掉字段只留核心词；透传型保持原 query。
+    if engine in _SEMANTIC_ENGINES:
+        query = strip_structured(query)
     t0 = time.time()
     try:
         results = fn(query, n, timeout, depth=depth, mode=mode, **kwargs)

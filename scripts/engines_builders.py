@@ -9,6 +9,7 @@ from engines_builders_tech import (
     _build_stackoverflow_engine,
     _build_google_scholar_engine,
     _build_v2ex_engine,
+    _build_github_engine,
 )
 from engines_builders_cn import (
     _build_em_miaoxiang_engine,
@@ -109,6 +110,7 @@ __all__ = [
     "_build_stackoverflow_engine",
     "_build_google_scholar_engine",
     "_build_v2ex_engine",
+    "_build_github_engine",
     "_build_ths_hot_engine",
     "_build_cls_telegraph_engine",
     "_build_em_global_news_engine",

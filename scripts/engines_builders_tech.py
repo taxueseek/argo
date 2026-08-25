@@ -290,6 +290,152 @@ def _build_stackoverflow_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── GitHub 搜索引擎（按结构化语法切端点）──────────────────────────────────────
+
+# GitHub 搜索与 X 一样支持结构化字段，但不同字段属于不同端点（失配会拿到空结果或噪音）：
+#   - 仓库搜索: user:/org:/lang:/in:name/in:description/stars:/topic:  → /search/repositories
+#   - issue/PR: repo:/is:issue/is:pr/label:/author:/assignee:/comments:/created:/in:title/in:body
+#                                                                       → /search/issues
+#   - 代码搜索: in:file/filename:/extension:/path:（需认证）                → /search/code
+_GH_REPO_SYNTAX = ("user:", "org:", "lang:", "in:name", "in:description", "stars:", "topic:", "size:", "pushed:")
+_GH_ISSUE_SYNTAX = ("repo:", "is:issue", "is:pr", "is:open", "is:closed", "label:", "milestone:",
+                    "author:", "assignee:", "comments:", "created:", "updated:", "in:title", "in:body")
+_GH_CODE_SYNTAX = ("in:file", "filename:", "extension:", "path:", "in:readme", "in:path")
+
+
+def _github_endpoint(query: str, has_token: bool) -> str:
+    """按查询中的结构化语法选 GitHub 搜索端点。"""
+    if any(s in query for s in _GH_CODE_SYNTAX):
+        return "code" if has_token else "issues"  # code 需认证；无 token 尽力退到 issues
+    if any(s in query for s in _GH_ISSUE_SYNTAX):
+        return "issues"
+    return "repositories"
+
+
+def _github_url(endpoint: str, query: str, n: int) -> str:
+    q = urllib.parse.quote(query)
+    per = min(n, 30)
+    base = {
+        "repositories": "https://api.github.com/search/repositories",
+        "issues": "https://api.github.com/search/issues",
+        "code": "https://api.github.com/search/code",
+    }[endpoint]
+    return f"{base}?q={q}&per_page={per}"
+
+
+def _gh_repo_result(item: dict) -> dict[str, Any] | None:
+    name = item.get("full_name") or item.get("name") or ""
+    url = item.get("html_url") or ""
+    desc = (item.get("description") or "").strip()
+    if not name and not url:
+        return None
+    stars = item.get("stargazers_count")
+    snippet = desc or f"stars: {stars} | language: {item.get('language')}"
+    return {
+        "title": name or url,
+        "url": url,
+        "snippet": snippet[:300],
+        "source": "github",
+        "score": 0.7,
+        "published_at": item.get("updated_at"),
+        "metadata": {"stars": stars, "language": item.get("language"), "forks": item.get("forks_count")},
+    }
+
+
+def _gh_issue_result(item: dict) -> dict[str, Any] | None:
+    title = item.get("title") or ""
+    url = item.get("html_url") or ""
+    repo_full = (item.get("repository_url") or "").replace("https://api.github.com/repos/", "")
+    if not title and not url:
+        return None
+    state = item.get("state") or ""
+    comments = item.get("comments")
+    user = (item.get("user") or {}).get("login") or ""
+    snippet = f"[{repo_full}] {state} | comments: {comments} | by @{user}" if repo_full else f"{state} | by @{user}"
+    return {
+        "title": title or url,
+        "url": url,
+        "snippet": snippet[:300],
+        "source": "github",
+        "score": 0.7,
+        "published_at": item.get("created_at"),
+        "metadata": {"repo": repo_full, "state": state, "comments": comments},
+    }
+
+
+def _gh_code_result(item: dict) -> dict[str, Any] | None:
+    name = item.get("name") or ""
+    url = item.get("html_url") or ""
+    repo = (item.get("repository") or {}).get("full_name") or ""
+    path = item.get("path") or ""
+    if not name and not url:
+        return None
+    snippets = [(tm.get("fragment") or "").strip() for tm in (item.get("text_matches") or []) if tm.get("fragment")]
+    snippet = " / ".join(snippets)[:300] or path
+    return {
+        "title": f"{repo}:{path or name}",
+        "url": url,
+        "snippet": snippet,
+        "source": "github",
+        "score": 0.7,
+        "metadata": {"repo": repo, "path": path},
+    }
+
+
+def _build_github_engine(spec: dict[str, Any]) -> Any:
+    """GitHub 搜索：按查询结构化语法自动切 repositories / issues / code 端点。
+
+    未认证（无 GITHUB_TOKEN）时可用 repositories / issues；code 端点需认证。
+    失配端点会拿到空结果或大段噪音，这里是按语法选对端点的关键修复。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        token = os.environ.get("GITHUB_TOKEN", "").strip()
+        endpoint = _github_endpoint(query, bool(token))
+        url = _github_url(endpoint, query, n)
+        headers = {
+            "User-Agent": "argo-search/1.0 (+github)",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        if token:
+            headers["Authorization"] = f"token {token}"
+        if endpoint == "code":
+            headers["Accept"] = "application/vnd.github.v3.text-match+json"
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=to) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            logger.warning(f"GitHub {endpoint} 失败 HTTP {e.code}: {e.reason}")
+            return []
+        except Exception as e:
+            logger.warning(f"GitHub {endpoint} 失败: {e}")
+            return []
+
+        results = []
+        if endpoint == "repositories":
+            for item in data.get("items", [])[:n]:
+                r = _gh_repo_result(item)
+                if r:
+                    results.append(r)
+        elif endpoint == "issues":
+            for item in data.get("items", [])[:n]:
+                r = _gh_issue_result(item)
+                if r:
+                    results.append(r)
+        else:
+            for item in data.get("items", [])[:n]:
+                r = _gh_code_result(item)
+                if r:
+                    results.append(r)
+        return results
+    return _engine
+
+
 # ── Google Scholar 搜索引擎 ───────────────────────────────────────────────────
 
 def _build_google_scholar_engine(spec: dict[str, Any]) -> Any:

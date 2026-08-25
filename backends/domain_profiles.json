@@ -1507,105 +1507,6 @@
     "boost_keywords": {},
     "boost_combos": {}
   },
-  "aviation_weather": {
-    "label": "航空天气",
-    "documents": [
-      "aviation weather METAR TAF airport conditions",
-      "机场 天气 航空 气象 能见度 云高 风",
-      "flight weather report visibility wind aviation forecast",
-      "航班 起降 天气 适航 气象报文"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "cn_ai_news": {
-    "label": "中国AI新闻",
-    "documents": [
-      "中国 人工智能 新闻 大模型 发布",
-      "China AI news artificial intelligence model release",
-      "国产大模型 AI 政策 产业 动态",
-      "AI 融资 芯片 算力 智能体 新闻"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "datacite": {
-    "label": "DataCite 数据引用",
-    "documents": [
-      "DOI data citation research dataset",
-      "数据 引用 DOI 科研 数据集 注册",
-      "research data repository citation persistent identifier",
-      "数据论文 元数据 引用规范"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "firecrawl": {
-    "label": "Firecrawl 爬虫",
-    "documents": [
-      "firecrawl web scraping crawl website extraction",
-      "爬虫 网页抓取 站点爬取 内容提取",
-      "web scraping API crawl pages extract markdown",
-      "批量抓取 反爬 网页采集"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "fxtwitter": {
-    "label": "推特链接预览",
-    "documents": [
-      "twitter tweet preview embed fixer",
-      "推特 推文 链接 预览 展开",
-      "x.com twitter status embed card unfurl",
-      "推文 卡片 分享 链接展开"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "sec_edgar": {
-    "label": "SEC EDGAR 财报",
-    "documents": [
-      "SEC EDGAR filing 10-K 10-Q annual report",
-      "美国 证监会 财报 年报 申报文件",
-      "company filing financial statement SEC disclosure",
-      "美股 财报 申报 披露"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "train": {
-    "label": "火车票/列车",
-    "documents": [
-      "train ticket schedule railway china",
-      "火车票 列车 高铁 时刻表 车次 票价",
-      "railway departure arrival station seat",
-      "12306 购票 余票 运行图"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "weather": {
-    "label": "天气",
-    "documents": [
-      "weather temperature forecast rain condition",
-      "天气 气温 预报 降雨 阴晴",
-      "weather today tomorrow degree celsius",
-      "空气质量 湿度 风力 气象"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "zenodo": {
-    "label": "Zenodo 科研数据仓库",
-    "documents": [
-      "zenodo research data repository deposit",
-      "zenodo 科研 数据 仓库 数据集 存档",
-      "open science dataset archive cern",
-      "学术 数据共享 长期保存"
-    ],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
   "marginalia": {
     "label": "Marginalia 独立索引",
     "documents": [
@@ -2006,5 +1907,17 @@
       "song": 2.0,
       "music": 1.8
     }
+  },
+  "parallel": {
+    "label": "Parallel搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "you": {
+    "label": "You.com搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

@@ -132,6 +132,69 @@ def relax_query(query: str) -> str:
     return relaxed or re.sub(r"\s+", " ", q).strip() or query
 
 
+# ── L1.5 结构化语法放宽（结果归零时逆序撤条件）─────────────────────────────────
+
+# 平台原生结构化语法：精准检索结果归零时，按「宽松代价从小到大」逐层剥离，
+# 每一步只撤一类、保留核心词。顺序＝帖子给的逆序（排除→热度→媒体→语言→日期→
+# 账号→短语）。跨平台通用：X from:/until:/min_faves:、GitHub repo:/is:、
+# Web site:、Reddit subreddit: 等。
+_STRUCTURED_RELAX_ORDER: list[tuple[str, re.Pattern]] = [
+    ("exclude", re.compile(r"(?<![A-Za-z0-9])\-\S+")),
+    ("heat",    re.compile(r"(?:min_faves|min_retweets|min_replies|min_rt|min_followers):\d+")),
+    ("media",   re.compile(r"filter:[A-Za-z]+")),
+    ("lang",    re.compile(r"lang:[A-Za-z\-]+")),
+    ("date",    re.compile(r"(?:since|until):\S+")),
+    ("account", re.compile(r"(?:from|to|via|list|repo|site|subreddit|user|org|is|label|author|assignee|milestone|comments|in|points|file|extension|path|filename):\S+")),
+    ("phrase",  re.compile(r'"[^"]+"')),
+]
+
+
+def structured_relax_steps(query: str, max_steps: int = 6) -> list[str]:
+    """按结构化语法逐层放宽，返回「从最保留到最宽」的候选查询序列。
+
+    只处理含平台语法的查询（高后果/精准检索）；无语法时返回 []。
+    每步剥掉一类条件，保留其余，符合「归零时一次撤一个、从去排除到去短语」。
+    """
+    if not query or not isinstance(query, str):
+        return []
+    steps: list[str] = []
+    cur = query
+    for _name, pat in _STRUCTURED_RELAX_ORDER:
+        if not pat.search(cur):
+            continue
+        if _name == "phrase":
+            relaxed = pat.sub(lambda m: m.group(0)[1:-1], cur)  # 去引号保留词
+        else:
+            relaxed = pat.sub(" ", cur)
+        relaxed = re.sub(r"\s+", " ", relaxed).strip()
+        if relaxed and relaxed != cur and relaxed != query:
+            steps.append(relaxed)
+            cur = relaxed
+        if len(steps) >= max_steps:
+            break
+    return steps
+
+
+def strip_structured(query: str) -> str:
+    """剥掉平台结构化字段，只保留核心关键词（供语义/通用引擎使用）。
+
+    语义型引擎（byted/bocha/anysearch 等）不理解 from:/repo:/site:/until: 这类
+    平台原生语法，把字段当普通词传进去反而污染相关性。此函数去掉「明确前缀字段」
+    与引号，保留核心词；无语法查询原样返回。`-排除` 不在此剥离（易误伤，交给 recovery）。
+    """
+    if not query or not isinstance(query, str):
+        return query
+    cur = query
+    for _name, pat in _STRUCTURED_RELAX_ORDER:
+        if _name in ("exclude", "phrase"):
+            continue
+        if pat.search(cur):
+            cur = pat.sub(" ", cur)
+    cur = _QUOTE_CHARS.sub(" ", cur)  # 去引号保留词
+    cur = re.sub(r"\s+", " ", cur).strip()
+    return cur or query
+
+
 # ── L2 同义 ────────────────────────────────────────────────────────────────────
 
 def synonym_expand(query: str) -> Optional[str]:
@@ -317,7 +380,8 @@ def baseline_cross_query(
 def build_recovery_plan(query: str, tried_engines: list[str],
                         engines_fallback: list[str] | None = None,
                         enabled: set[str] | None = None,
-                        mode: str = "auto") -> list[RecoveryStep]:
+                        mode: str = "auto",
+                        max_level: str | None = None) -> list[RecoveryStep]:
     """构造有序恢复步骤（L1→L5）。
 
     Args:
@@ -354,6 +418,14 @@ def build_recovery_plan(query: str, tried_engines: list[str],
         steps.append(RecoveryStep(
             level="L1", strategy="relax", query=relaxed, engines=base_engines,
             reason="去停用词/引号/尾修饰后重试"))
+
+    # L1.5 结构化语法放宽（结果归零时逆序撤条件，每步只撤一类）
+    for _i, rq in enumerate(structured_relax_steps(query, max_steps=4)):
+        if rq == query:
+            continue
+        steps.append(RecoveryStep(
+            level="L1", strategy="drop_syntax", query=rq, engines=base_engines,
+            reason="结构化语法放宽（按「排除→热度→媒体→语言→日期→账号→短语」撤一类条件）"))
 
     # L2 同义（fast 也允许，成本低）
     syn = synonym_expand(query)
@@ -404,6 +476,12 @@ def build_recovery_plan(query: str, tried_engines: list[str],
     if mode == "fast":
         steps = [s for s in steps if s.level in ("L1", "L3")]
 
+    # 复杂度门控：low 查询只保留低成本放宽（L1/L2），禁高价多源/跨语言（L3/L4）
+    if max_level:
+        _TIER = {"L1": 0, "L2": 1, "L3": 2, "L4": 3}
+        cut = _TIER.get(max_level, 3)
+        steps = [s for s in steps if _TIER.get(s.level, 3) <= cut]
+
     return steps
 
 
@@ -442,7 +520,8 @@ def run_recovery(query: str, tried_engines: list[str],
                  executor: Callable[[str, list[str]], list[dict[str, Any]]],
                  engines_fallback: list[str] | None = None,
                  enabled: set[str] | None = None,
-                 mode: str = "auto") -> tuple[list[dict[str, Any]], RecoveryResult]:
+                 mode: str = "auto",
+                 max_level: str | None = None) -> tuple[list[dict[str, Any]], RecoveryResult]:
     """执行恢复决策树，返回 (结果列表, 结构化 RecoveryResult)。
 
     executor(query, engines) 必须返回结果 list（可空），不得抛异常。
@@ -451,7 +530,8 @@ def run_recovery(query: str, tried_engines: list[str],
         (results, recovery_result)：results 为首个非空恢复结果（否则空列表）。
     """
     result = RecoveryResult(triggered=True, final_query=query)
-    plan = build_recovery_plan(query, tried_engines, engines_fallback, enabled, mode)
+    plan = build_recovery_plan(
+        query, tried_engines, engines_fallback, enabled, mode, max_level=max_level)
 
     if not plan:
         result.note = "无可用恢复策略"

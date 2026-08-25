@@ -63,7 +63,7 @@ CODE_EXTS = {"py", "js", "ts", "tsx", "jsx", "go", "rs", "java", "c", "h",
 
 REGEX_META = re.compile(r'[.*+?\[\](){}^$|\\]')
 LOOKAROUND = re.compile(r'\(\?[=!<]|\\[1-9]')
-CJK_RE = re.compile(r'[\u4e00-\u9fff]+')
+CJK_RE = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+')  # 汉字扩展A/汉字/日假名/韩谚文（多语言 2-gram 扩展）
 
 _pcre2_ok = None
 
@@ -225,6 +225,135 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
         if len(out) >= max_results:
             break
     return out, None
+
+
+# ── 文件名相关性评分 + 拼音首字母（fzf 式；pypinyin 优先，GB2312 表兜底）──────────
+
+# GB2312 首字母区间表（常用汉字全覆盖；生僻字回退原字）
+_GB2312_SECTIONS = (
+    (0xB0A1, 0xB0C4, "a"), (0xB0C5, 0xB2C0, "b"), (0xB2C1, 0xB4ED, "c"),
+    (0xB4EE, 0xB6E9, "d"), (0xB6EA, 0xB7A1, "e"), (0xB7A2, 0xB8C0, "f"),
+    (0xB8C1, 0xB9FD, "g"), (0xB9FE, 0xBBF6, "h"), (0xBBF7, 0xBFA5, "j"),
+    (0xBFA6, 0xC0AB, "k"), (0xC0AC, 0xC2E7, "l"), (0xC2E8, 0xC4C2, "m"),
+    (0xC4C3, 0xC5B5, "n"), (0xC5B6, 0xC5BD, "o"), (0xC5BE, 0xC6D9, "p"),
+    (0xC6DA, 0xC8BA, "q"), (0xC8BB, 0xC8F5, "r"), (0xC8F6, 0xCBF9, "s"),
+    (0xCBFA, 0xCDD9, "t"), (0xCDDA, 0xCEF3, "w"), (0xCEF4, 0xD1B8, "x"),
+    (0xD1B9, 0xD4D0, "y"), (0xD4D1, 0xD7F9, "z"),
+)
+
+
+def _gb2312_initial(b1: int, b2: int) -> str:
+    code = (b1 << 8) | b2
+    for lo, hi, letter in _GB2312_SECTIONS:
+        if lo <= code <= hi:
+            return letter
+    return "?"
+
+
+def pinyin_initials(text: str) -> str:
+    """文本的拼音首字母（中文→首字母，非中文保留原字符），用于「xjj→新建夹」。
+    pypinyin 可用则用；否则 GB2312 区间表兜底；两者都不可用时返回原文本。"""
+    if not text:
+        return text
+    try:
+        from pypinyin import lazy_pinyin, Style  # type: ignore
+        parts = lazy_pinyin(text, style=Style.FIRST_LETTER, errors="default")
+        return "".join(parts)
+    except Exception:
+        pass
+    out = []
+    for ch in text:
+        if "\u4e00" <= ch <= "\u9fff":
+            try:
+                b = ch.encode("gb2312")
+                out.append(_gb2312_initial(b[0], b[1]))
+            except (UnicodeEncodeError, IndexError):
+                out.append(ch)
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _fzf_score(name: str, pattern: str) -> int:
+    """fzf 式文件名匹配评分：smart case + 连续匹配/段边界加分。0 表示不匹配。
+    借鉴 fzf 的常见场景优化：连续命中、路径段/词边界、全等大加分。"""
+    if not pattern or not name:
+        return 0
+    p, n = pattern, name
+    if not any(c.isupper() for c in p):  # smart case：无大写则忽略大小写
+        p, n = p.lower(), n.lower()
+    score, prev, i = 0, -2, 0
+    for ch in p:
+        idx = n.find(ch, i)
+        if idx < 0:
+            return 0
+        if prev >= 0 and idx == prev + 1:
+            score += 3        # 连续命中
+        elif idx == 0 or n[idx - 1] in "/._- " or not n[idx - 1].isalnum():
+            score += 4        # 路径段/词边界命中
+        else:
+            score += 1
+        prev, i = idx, idx + 1
+    if len(p) == len(n):
+        score += 5            # 全等
+    return score
+
+
+def _looks_like_pinyin_abbrev(q: str) -> bool:
+    """疑似中文拼音缩写（如 xjj）：纯 ASCII 字母、2-4 位。"""
+    q = (q or "").strip()
+    return bool(q and q.isascii() and q.isalpha() and 2 <= len(q) <= 4)
+
+
+def _file_pinyin_bonus(path: str, query: str) -> int:
+    """文件名拼音首字母与查询呼应 → 加分（「新建夹」↔ xjj）。
+    正向（中文查询 → 拼音缩写）50；反向（拼音缩写查询 → 中文文件名）8，
+    反向低于字面命中，避免把真名 xjj.docx 挤下去。"""
+    q = query.strip().lower()
+    if not q:
+        return 0
+    base = Path(path).name
+    initials = pinyin_initials(base).lower()
+    if not initials:
+        return 0
+    has_cjk_query = any("\u4e00" <= c <= "\u9fff" for c in query)
+    if has_cjk_query:
+        qs = pinyin_initials(query).strip().lower()
+        return 50 if qs and qs in initials else 0
+    if (q.isascii() and q.isalpha() and 2 <= len(q) <= 4
+            and any("\u4e00" <= c <= "\u9fff" for c in base)):
+        # 拼音缩写查询（xjj）→ 中文文件名（新建夹.pdf）
+        return 8 if q in initials else 0
+    return 0
+
+
+def _rank_path_results(results, query: str):
+    """按文件名相关性排序：fzf 评分 + 拼音加分 + mtime 新优先。
+    仅用于「按文件定位」场景（--filename / --spotlight）；内容搜索保持原序。"""
+    def key(it):
+        fp = it[0] if isinstance(it, (list, tuple)) else str(it)
+        sc = _fzf_score(Path(fp).name, query)
+        sc += _file_pinyin_bonus(fp, query)
+        sc += max(0, _fzf_score(fp, query.lower())) // 4  # 全路径段匹配也加分
+        try:
+            mt = os.path.getmtime(fp)
+        except OSError:
+            mt = 0.0
+        return (-sc, -mt, fp)
+    return sorted(results, key=key)
+
+
+def _merge_dedup(a: list, b: list, limit: int) -> list:
+    """按路径去重合并两组结果（fd 中文 + 拼音双查）。"""
+    seen, out = set(), []
+    for it in list(a) + list(b):
+        fp = it[0] if isinstance(it, (list, tuple)) else str(it)
+        if fp not in seen:
+            seen.add(fp)
+            out.append(it)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def fd_search(query, path, exts, max_results):
@@ -750,6 +879,22 @@ def main():
         engine, mode = "fd", "fast"
         if tool_exists("fd"):
             results, err = fd_search(args.query, path, exts, max_results)
+            # 拼音首字母补充：中文查询 → 双查拼音缩写（「新建夹」↔ xjj）。
+            # 先窄后宽：仅原结果 <3 且中文 ≥2 字时做（单字「新」→'x' 太宽泛，会引入噪音）
+            if not err and len(results or []) < 3:
+                _cjk_len = sum(1 for c in args.query if "\u4e00" <= c <= "\u9fff")
+                q_py = pinyin_initials(args.query)
+                if _cjk_len >= 2 and q_py and q_py.lower() != args.query.strip().lower():
+                    py_res, py_err = fd_search(q_py, path, exts, max_results)
+                    if not py_err and py_res:
+                        results = _merge_dedup(results or [], py_res, max_results)
+            # 拼音缩写反推：结果少且疑似缩写（xjj）→ 枚举候选按拼音首字母过滤
+            if not err and (not results or len(results) < 3) and _looks_like_pinyin_abbrev(args.query):
+                all_res, all_err = fd_search("", path, exts, 3000)
+                if not all_err and all_res:
+                    py_hits = [it for it in all_res if _file_pinyin_bonus(it[0], args.query) > 0]
+                    if py_hits:
+                        results = _merge_dedup(results or [], py_hits, max_results)
         else:
             err = "fd 未安装：按文件名搜索需要 fd（内容搜索走 rg/grep）"
     else:
@@ -773,6 +918,9 @@ def main():
     elapsed = int((time.time() - start) * 1000)
     # 时间窗：统一出口按文件 mtime 过滤（rg/fd/mdfind 共用）
     results = filter_by_mtime(results, args.since, args.until)
+    # 按文件定位场景（fd/spotlight）：fzf 相关性评分 + 拼音加分 + mtime 新优先排序
+    if (args.filename or args.spotlight) and results:
+        results = _rank_path_results(results, args.query)
 
     if err:
         print(f"local-seek: {err}")

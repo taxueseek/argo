@@ -40,6 +40,25 @@ import runtime as rt  # noqa: E402
 import safety as safety  # noqa: E402
 import webbridge_adapter as wb  # noqa: E402
 
+# argo 核心 scripts：query_enhance 归一化（词形规范化，保留平台语法）；核心不可用时降级
+_CORE_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+if str(_CORE_SCRIPTS) not in sys.path and _CORE_SCRIPTS.exists():
+    sys.path.insert(0, str(_CORE_SCRIPTS))
+try:
+    from query_enhance import normalize_query  # noqa: E402
+except Exception:  # 核心包缺失时保持原 query
+    normalize_query = None
+
+
+def _normalized_query(q: str) -> str:
+    """词形规范化（全角→半角、拆斜杠、压空格）；保留 from:/site: 等平台语法；失败回退原 query。"""
+    if normalize_query is None or not isinstance(q, str):
+        return q
+    try:
+        return normalize_query(q)
+    except Exception:
+        return q
+
 # ── 常量 ──────────────────────────────────────────────────────────────
 EGO_BIN = rt.EGO_BIN
 RESULT_MARKER = "EGO_RESULT|"
@@ -384,7 +403,7 @@ def run_with_fallback(
 
 
 def _search_ego(args: argparse.Namespace) -> dict[str, Any]:
-    q = urllib.parse.quote(args.query)
+    q = urllib.parse.quote(_normalized_query(args.query))
     url = SEARCH_URLS[args.engine].format(q=q)
     # 时间窗：URL 参数下推（google cdr / bing age-lt / baidu gpc）+ 解析后过滤兜底
     tparams = wb.time_url_params(args.engine, getattr(args, "since", None), getattr(args, "until", None))
@@ -431,7 +450,7 @@ def cmd_search(args: argparse.Namespace) -> None:
 
     def wb_fn():
         return wb.search(
-            args.query, engine=args.engine, n=args.n,
+            _normalized_query(args.query), engine=args.engine, n=args.n,
             session=args.task_space, timeout=args.timeout,
             since=getattr(args, "since", None), until=getattr(args, "until", None),
         )
@@ -483,7 +502,7 @@ def cmd_act(args: argparse.Namespace) -> None:
     apply_site_space(args)
 
     def ego_fn():
-        q = urllib.parse.quote(args.query)
+        q = urllib.parse.quote(_normalized_query(args.query))
         url = SEARCH_URLS[args.engine].format(q=q)
         # 时间窗：URL 参数下推 + 解析后过滤（与 search 一致）
         tparams = wb.time_url_params(args.engine, getattr(args, "since", None), getattr(args, "until", None))
@@ -522,7 +541,7 @@ def cmd_act(args: argparse.Namespace) -> None:
 
     def wb_fn():
         sr = wb.search(
-            args.query, engine=args.engine, n=1,
+            _normalized_query(args.query), engine=args.engine, n=1,
             session=args.task_space, timeout=args.timeout,
             since=getattr(args, "since", None), until=getattr(args, "until", None),
         )

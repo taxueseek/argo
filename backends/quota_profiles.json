@@ -130,6 +130,16 @@
     "cost_tier": "free",
     "priority": 21
   },
+  "cnii": {
+    "label": "CiNii Research 日文学术",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 45
+  },
   "cninfo": {
     "label": "巨潮资讯",
     "qps": 2,
@@ -200,6 +210,26 @@
     "cost_tier": "free",
     "priority": 52
   },
+  "dnb": {
+    "label": "DNB 德国国家图书馆",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 49
+  },
+  "doaj": {
+    "label": "DOAJ 开放获取期刊",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "docker_hub": {
     "label": "Docker Hub",
     "qps": 2,
@@ -240,6 +270,16 @@
     "cost_tier": "free",
     "priority": 3
   },
+  "electricity_maps": {
+    "label": "Electricity Maps 电网碳强度",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 58
+  },
   "em_flow": {
     "label": "东财资金流",
     "qps": 2,
@@ -269,6 +309,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 2
+  },
+  "eu_opendata": {
+    "label": "EU Open Data Portal",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 53
+  },
+  "europeana": {
+    "label": "Europeana 欧洲文化遗产",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 51
   },
   "europepmc": {
     "label": "Europe PMC",
@@ -310,6 +370,16 @@
     "cost_tier": "paid",
     "priority": 8
   },
+  "figshare": {
+    "label": "Figshare 科研数据集",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 61
+  },
   "finviz": {
     "label": "Finviz",
     "qps": 2,
@@ -319,6 +389,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 56
+  },
+  "fr_opendata": {
+    "label": "法国政府开放数据",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 44
   },
   "fred": {
     "label": "FRED 宏观数据",
@@ -400,6 +480,16 @@
     "cost_tier": "free",
     "priority": 18
   },
+  "gov_policy": {
+    "label": "中国政府网政策库",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 42
+  },
   "gutenberg": {
     "label": "Project Gutenberg",
     "qps": 2,
@@ -419,6 +509,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 16
+  },
+  "hal": {
+    "label": "HAL 法国学术仓储",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 52
+  },
+  "hatena_bookmark": {
+    "label": "Hatena Bookmark 日本书签",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 48
   },
   "huggingface": {
     "label": "Hugging Face",
@@ -489,6 +599,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 25
+  },
+  "kor_law": {
+    "label": "韩国判例库",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 47
+  },
+  "lieu": {
+    "label": "Lieu webring 搜索",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 56
   },
   "local_arxiv": {
     "label": "arXiv本地",
@@ -740,6 +870,16 @@
     "cost_tier": "free",
     "priority": 23
   },
+  "marginalia": {
+    "label": "Marginalia 独立索引",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 40
+  },
   "mdn": {
     "label": "MDN Web Docs",
     "qps": 3,
@@ -810,6 +950,16 @@
     "cost_tier": "free",
     "priority": 6
   },
+  "ndl": {
+    "label": "NDL 日本国立国会图书馆",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 46
+  },
   "npm": {
     "label": "npm",
     "qps": 3,
@@ -839,6 +989,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 36
+  },
+  "open_meteo": {
+    "label": "Open-Meteo 全球天气",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 54
   },
   "openalex": {
     "label": "OpenAlex",
@@ -870,6 +1030,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "opensky": {
+    "label": "OpenSky 实时航班",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 57
+  },
   "openverse": {
     "label": "Openverse 图库",
     "qps": 3,
@@ -879,6 +1049,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 31
+  },
+  "parallel": {
+    "label": "Parallel搜索",
+    "qps": 5,
+    "limit": null,
+    "period": "month",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "api",
+    "priority": 11
   },
   "polymarket": {
     "label": "Polymarket",
@@ -909,6 +1089,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 42
+  },
+  "qiita": {
+    "label": "Qiita 日本技术社区",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 43
+  },
+  "qq_music": {
+    "label": "QQ 音乐搜索",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 63
   },
   "qweather": {
     "label": "和风天气",
@@ -949,6 +1149,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 12
+  },
+  "searchmysite": {
+    "label": "SearchMySite 个人站索引",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 55
   },
   "searxng": {
     "label": "SearXNG",
@@ -1010,6 +1220,16 @@
     "cost_tier": "free",
     "priority": 54
   },
+  "tatoeba": {
+    "label": "Tatoeba 双语例句",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 60
+  },
   "tavily": {
     "label": "Tavily",
     "qps": 1.67,
@@ -1019,6 +1239,16 @@
     "cost_unit": "credit",
     "cost_tier": "paid",
     "priority": 5
+  },
+  "tencent_kline": {
+    "label": "腾讯 K 线",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 62
   },
   "tencent_quote": {
     "label": "腾讯行情",
@@ -1100,6 +1330,16 @@
     "cost_tier": "free",
     "priority": 24
   },
+  "usda": {
+    "label": "USDA 营养成分库",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 59
+  },
   "usgs": {
     "label": "USGS 地震",
     "qps": 2,
@@ -1170,6 +1410,16 @@
     "cost_tier": "free",
     "priority": 35
   },
+  "wiby": {
+    "label": "Wiby 手工网页索引",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 41
+  },
   "wikidata": {
     "label": "维基数据实体",
     "qps": 2,
@@ -1219,6 +1469,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "you": {
+    "label": "You.com搜索",
+    "qps": 3,
+    "limit": null,
+    "period": "month",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "api",
+    "priority": 12
   },
   "zh_wikipedia": {
     "label": "中文维基百科",

@@ -895,6 +895,13 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         import logging
         logging.getLogger("unified_search").debug(f"查询理解跳过: {type(e).__name__}")
 
+    # 词形规范化：全角→半角、拆斜杠、压多余空格（提升精确源命中，治型号/日期分隔符）
+    try:
+        from query_enhance import normalize_query
+        retrieval_query = normalize_query(retrieval_query)
+    except ImportError:
+        pass
+
     if on_progress:
         on_progress(Stage.START, {"query": query})
 
@@ -1353,6 +1360,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
     # ── P0-002：空结果错误恢复决策树 ──
     recovery_info: dict[str, Any] | None = None
+    # 复杂度门控：低复杂度查询只允许低成本放宽（L1/L2），
+    # 禁用高价多源/跨语言（L3/L4）——简单问题不搞多轮，省 token。
+    _max_rec_level: str | None = None
+    try:
+        from query_enhance import complexity_gate
+        if complexity_gate(query, qu) == "low":
+            _max_rec_level = "L2"
+    except NameError:
+        pass
+    except Exception:
+        pass
     if not merged:
         try:
             from recovery import run_recovery
@@ -1386,7 +1404,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
             rec_results, rec_result = run_recovery(
                 query, tried, _recovery_executor,
-                engines_fallback=fallback_engines, enabled=enabled_set, mode=mode)
+                engines_fallback=fallback_engines, enabled=enabled_set, mode=mode,
+                max_level=_max_rec_level)
             recovery_info = rec_result.to_dict()
             # P2-6：恢复遥测——query 截断脱敏，只记概览不记明细
             if _emit_telemetry is not None:

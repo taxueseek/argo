@@ -908,6 +908,7 @@ domains:
   patterns:
   - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|v2ex|评论|帖子|热门|trending|viral|opinion|sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
+  - (?i)(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)
   primary: zhihu
   quote: false
 
@@ -2138,7 +2139,7 @@ engines:
     method: GET
     query_param: q
     timeout: 10
-    type: http
+    type: github
     url: https://api.github.com/search/repositories
   metaso:
     body:

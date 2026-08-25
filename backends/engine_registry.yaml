@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。
 version: 2
-last_updated: '2026-08-10'
+last_updated: '2026-08-25'
 engines:
 - name: anysearch
   tier: T1
@@ -152,6 +152,17 @@ engines:
   status: ok
   recommended: true
   desc: 财联社电报（全市场实时快讯，v1 API+本地签名零key）
+- name: cnii
+  tier: T1
+  type: cnii
+  coverage:
+  - academic
+  - japanese
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 日本国立情报学研究所学术总库（论文/博士论文/科研项目，JSON-LD）
 - name: cninfo
   tier: T1
   type: cninfo
@@ -229,6 +240,30 @@ engines:
   status: ok
   recommended: true
   desc: DEV.to 技术文章搜索（免认证）
+- name: dnb
+  tier: T1
+  type: dnb
+  coverage:
+  - books
+  - german
+  - bibliography
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 德语出版物最全书目（SRU/RDF XML）
+- name: doaj
+  tier: T1
+  type: doaj
+  coverage:
+  - academic
+  - open_access
+  - global
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 开放获取期刊全球总库（80+ 语种，元数据统一英文）
 - name: docker_hub
   tier: T1
   type: http
@@ -273,6 +308,18 @@ engines:
   status: ok
   recommended: true
   desc: 东方财富，金融数据首选
+- name: electricity_maps
+  tier: T1
+  type: electricity_maps
+  coverage:
+  - energy
+  - carbon
+  - environment
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 全球电网分区目录（zones 免 key）
 - name: em_flow
   tier: T1
   type: em_flow
@@ -306,6 +353,29 @@ engines:
   status: ok
   recommended: true
   desc: 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY）
+- name: eu_opendata
+  tier: T1
+  type: eu_opendata
+  coverage:
+  - opendata
+  - europe
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 欧盟开放数据目录（24 语言元数据）
+- name: europeana
+  tier: T1
+  type: europeana
+  coverage:
+  - culture
+  - europe
+  - heritage
+  latency_ms: 2000
+  cost: free
+  status: disabled
+  recommended: true
+  desc: 欧洲 27 国文化遗产聚合（官方公开 demo key）
 - name: europepmc
   tier: T1
   type: http
@@ -351,6 +421,18 @@ engines:
   status: disabled
   recommended: true
   desc: Felo AI 搜索 API
+- name: figshare
+  tier: T1
+  type: figshare
+  coverage:
+  - academic
+  - dataset
+  - research
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 科研数据集检索（论文/数据/图表）
 - name: finviz
   tier: T1
   type: finviz
@@ -362,6 +444,17 @@ engines:
   status: ok
   recommended: true
   desc: Finviz 美股快照（HTML，免认证）
+- name: fr_opendata
+  tier: T1
+  type: http
+  coverage:
+  - opendata
+  - french
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 法国政府开放数据目录（data.gouv.fr）
 - name: fred
   tier: T1
   type: fred
@@ -420,7 +513,7 @@ engines:
   desc: GDELT 全球新闻事件数据库（事件/舆情/地理维度，免认证）
 - name: github
   tier: T1
-  type: http
+  type: github
   coverage:
   - code
   latency_ms: 2000
@@ -452,6 +545,18 @@ engines:
   status: ok
   recommended: true
   desc: Google Scholar（学术论文搜索，HTTP 页面解析）
+- name: gov_policy
+  tier: T1
+  type: http
+  coverage:
+  - policy
+  - gov
+  - chinese
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 中国政府网政策文件库（国务院文件，带发布日期）
 - name: gutenberg
   tier: T1
   type: gutenberg
@@ -476,6 +581,30 @@ engines:
   status: ok
   recommended: true
   desc: Hacker News（Algolia API，科技新闻+讨论）
+- name: hal
+  tier: T1
+  type: hal
+  coverage:
+  - academic
+  - french
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 法国全国科研机构开放仓储（Solr JSON）
+- name: hatena_bookmark
+  tier: T1
+  type: hatena_bookmark
+  coverage:
+  - tech
+  - japanese
+  - bookmark
+  - trending
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
 - name: huggingface
   tier: T1
   type: http
@@ -563,6 +692,31 @@ engines:
   status: ok
   recommended: true
   desc: Know Your Meme（英文 meme 词条溯源，HTML 解析）
+- name: kor_law
+  tier: T1
+  type: kor_law
+  coverage:
+  - legal
+  - korean
+  - case
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 韩国国家法令信息中心判例全文检索（官方公开 demo 账号，韩文 XML）
+- name: lieu
+  tier: T1
+  type: lieu
+  coverage:
+  - web
+  - indie
+  - webring
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: webring 专用搜索（只索引加入 webring 的小众站点，HTML 解析）
 - name: local_arxiv
   tier: T2
   type: http
@@ -817,6 +971,19 @@ engines:
   status: disabled
   recommended: true
   desc: Yandex本地（html）
+- name: marginalia
+  tier: T1
+  type: marginalia
+  coverage:
+  - web
+  - longtail
+  - indie
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面，JSON 免认证）
 - name: mdn
   tier: T1
   type: http
@@ -901,6 +1068,18 @@ engines:
   status: ok
   recommended: true
   desc: 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证）
+- name: ndl
+  tier: T1
+  type: ndl
+  coverage:
+  - books
+  - japanese
+  - bibliography
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 全日本出版物书目总汇（OpenSearch RSS）
 - name: npm
   tier: T1
   type: http
@@ -936,6 +1115,18 @@ engines:
   status: ok
   recommended: true
   desc: Open Library 图书搜索（免认证）
+- name: open_meteo
+  tier: T1
+  type: open_meteo
+  coverage:
+  - weather
+  - global
+  - forecast
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 全球天气（城市/地名 → 坐标 → 当前天气，免认证）
 - name: openalex
   tier: T1
   type: http
@@ -969,6 +1160,18 @@ engines:
   status: ok
   recommended: true
   desc: openFDA 药品标签（免认证）
+- name: opensky
+  tier: T1
+  type: opensky
+  coverage:
+  - flight
+  - realtime
+  - aviation
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 全球 ADS-B 实时航班（主要都会区 bbox，免 key）
 - name: openverse
   tier: T1
   type: http
@@ -981,6 +1184,18 @@ engines:
   status: ok
   recommended: true
   desc: Openverse 开放版权图库（免认证，CC 素材）
+- name: parallel
+  tier: T1
+  type: parallel
+  coverage:
+  - general
+  - chinese
+  - english
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  desc: Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch）
 - name: polymarket
   tier: T1
   type: http
@@ -1015,6 +1230,30 @@ engines:
   status: ok
   recommended: true
   desc: PyPI 包查询（/pypi/{name}/json 精确解析，免认证）
+- name: qiita
+  tier: T1
+  type: http
+  coverage:
+  - tech
+  - japanese
+  - community
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Qiita 日本最大技术社区（匿名 60 req/h）
+- name: qq_music
+  tier: T1
+  type: qq_music
+  coverage:
+  - music
+  - song
+  - chinese
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: QQ 音乐曲库搜索（歌手/歌曲/专辑）
 - name: qweather
   tier: T1
   type: qweather
@@ -1057,6 +1296,19 @@ engines:
   status: ok
   recommended: true
   desc: RFC/互联网标准文档检索（datatracker.ietf.org 免认证）
+- name: searchmysite
+  tier: T1
+  type: searchmysite
+  coverage:
+  - web
+  - indie
+  - blog
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 人工审核准入的个人独立站索引（非商业博客，HTML 解析）
 - name: searxng
   tier: T1
   type: http
@@ -1123,6 +1375,18 @@ engines:
   status: ok
   recommended: true
   desc: Steam 商店搜索（免认证）
+- name: tatoeba
+  tier: T1
+  type: tatoeba
+  coverage:
+  - language
+  - translation
+  - sentence
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 400+ 语言对真实句子语料（翻译/语言学习）
 - name: tavily
   tier: T1
   type: http
@@ -1133,6 +1397,19 @@ engines:
   status: ok
   recommended: true
   desc: Tavily AI 搜索 API
+- name: tencent_kline
+  tier: T1
+  type: tencent_kline
+  coverage:
+  - stock
+  - kline
+  - chinese
+  - chart
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 腾讯财经前复权日 K 线（A股+港股+美股）
 - name: tencent_quote
   tier: T1
   type: tencent_quote
@@ -1226,6 +1503,18 @@ engines:
   status: ok
   recommended: true
   desc: Urban Dictionary（英文俚语定义与例句，官方 API）
+- name: usda
+  tier: T1
+  type: usda
+  coverage:
+  - food
+  - nutrition
+  - health
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: 美国农业部食品营养成分（官方 DEMO_KEY）
 - name: usgs
   tier: T1
   type: usgs
@@ -1303,6 +1592,19 @@ engines:
   status: ok
   recommended: true
   desc: 微信读书图书搜索（中文书目/评分/在读，需 WEREAD_API_KEY）
+- name: wiby
+  tier: T1
+  type: wiby
+  coverage:
+  - web
+  - longtail
+  - classic
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: Wiby 老式手工网页索引（专收非商业化页面，JSON 免认证）
 - name: wikidata
   tier: T1
   type: http
@@ -1358,6 +1660,19 @@ engines:
   status: ok
   recommended: true
   desc: 小红书
+- name: you
+  tier: T1
+  type: you
+  coverage:
+  - general
+  - news
+  - english
+  - chinese
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  desc: You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并）
 - name: zh_wikipedia
   tier: T1
   type: http
