@@ -88,6 +88,18 @@ python3 scripts/mcp_server.py [--test]
 
 工具名：`argo_search`、`argo_local_search`（本机文件/记录搜索，非联网）、`argo_local_read`（白名单本地文本预览，`ARGO_LOCAL_READ_DIRS` 配置目录，fail-closed）、`argo_recompute`（fail-closed 可复算执行器，受限子进程重算数值）、`argo_research`（含 social-sentiment）、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`（mode=extract 结构化提取）、`argo_screenshot`、`argo_pdf`、`argo_social_search`（mode=sentiment 舆情聚合）。
 
+多客户端 MCP 一键接入（自研，注入/诊断/还原；客户端描述真源 `mcp/clients.yaml`）：
+
+```bash
+argo mcp status                 # 诊断各客户端（已安装/已配置）
+argo mcp inject --all           # 注入所有已安装客户端（原子写 + 备份）
+argo mcp inject --cursor        # 注入指定客户端（支持逗号分隔）
+argo mcp undo --all             # 还原（精确移除 entry 或从备份回滚）
+argo mcp inject --all --dry-run # 只预览不写
+```
+
+安全可逆：写入前备份到 `~/.argo/mcp-backup/`（带时间戳），atomic_write（同目录 temp+rename），含密钥配置 0600 权限；TOML 走行级 append section 不破坏手写注释。支持 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline。
+
 DeepSeek Harness 插件一行安装（MCP 搜索 + `wide_research` 编排）：
 
 ```bash

@@ -1,0 +1,79 @@
+# mcp/clients.yaml — 多客户端 MCP 注入的声明式真源（自研，零第三方依赖）
+#
+# 设计：加/改客户端只需编辑本文件（对齐 config.yaml / engines/specs/*.yaml 的
+# "配置真源"哲学），无需改代码。mcp_setup.py 读取本文件做 探测/注入/诊断/还原。
+#
+# 字段说明：
+#   id           客户端标识（CLI --client 用）
+#   name         展示名
+#   config_path  配置文件路径（相对 home；用 {home} 占位可指绝对路径）
+#   servers_key  MCP 服务器所在顶层键（mcpServers / servers / mcp_servers / mcp）
+#   format       json | toml（toml 走"行级 append section"，注释零破坏）
+#   url_key      HTTP entry 的 URL 键（url / serverUrl）
+#   transport    MCP 传输类型，写入 entry.type（无则省略）
+#   detect       探测目录/文件（相对 home，逗号分隔；存在即"已安装"）
+#   standard_tools  该客户端内置的、与 argo 搜索重叠的工具（还原时恢复）
+#
+# 运行：
+#   python3 scripts/mcp_setup.py status             # 诊断各客户端
+#   python3 scripts/mcp_setup.py inject --all       # 注入所有已安装客户端
+#   python3 scripts/mcp_setup.py inject --cursor    # 注入指定客户端
+#   python3 scripts/mcp_setup.py undo --all         # 还原所有（含备份历史）
+#   python3 scripts/mcp_setup.py inject --all --dry-run
+
+clients:
+  - id: claude-code
+    name: Claude Code
+    config_path: .claude.json
+    servers_key: mcpServers
+    format: json
+    url_key: url
+    transport: http
+    detect: [.claude]
+    standard_tools: [WebSearch, WebFetch]
+
+  - id: cursor
+    name: Cursor
+    config_path: .cursor/mcp.json
+    servers_key: mcpServers
+    format: json
+    url_key: url
+    transport: streamable-http
+    detect: [.cursor/mcp.json, .cursor]
+
+  - id: windsurf
+    name: Windsurf
+    config_path: .codeium/windsurf/mcp_config.json
+    servers_key: mcpServers
+    format: json
+    url_key: serverUrl
+    transport: null
+    detect: [.codeium]
+
+  - id: codex
+    name: Codex
+    config_path: .codex/config.toml
+    servers_key: mcp_servers
+    format: toml
+    url_key: url
+    transport: null
+    detect: [.codex]
+
+  - id: opencode
+    name: OpenCode
+    config_path: .config/opencode/opencode.json
+    servers_key: mcp
+    format: json
+    url_key: url
+    transport: remote
+    detect: [.config/opencode]
+    standard_tools: [websearch]
+
+  - id: cline
+    name: Cline
+    config_path: .cline/mcp_settings.json
+    servers_key: mcpServers
+    format: json
+    url_key: url
+    transport: null
+    detect: [.cline, .cursor/mcp.json]

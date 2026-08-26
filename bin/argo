@@ -59,6 +59,7 @@ Usage:
   argo extract   "url"            结构化提取（表格/Meta/JSON-LD）
   argo article   "url"            微信公众号文章全文抓取（标题/正文/图片）
   argo job       "query"          招聘岗位多平台聚合（BOSS/猎聘/智联/前程无忧/597/今日招聘）
+  argo mcp       {status|inject|undo}   多客户端 MCP 一键注入/诊断/还原
 
 Common flags: --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
 """
@@ -81,6 +82,7 @@ def main():
         "extract":  ("extract.py",  []),
         "article":  ("article.py",  ["--json"]),
         "job":      ("job.py",      []),
+        "mcp":      ("mcp_setup.py", []),
     }
 
     if sub not in scripts:
