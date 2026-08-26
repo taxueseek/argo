@@ -1,0 +1,43 @@
+# Keenable 搜索引擎（需 ARGO_KEENABLE_API_KEY）
+# 文档: https://docs.keenable.ai/api-reference/search
+# 认证: X-API-Key: keen_<key>（POST /v1/search）；keyless 走 /public（公共池限流，此处不用）
+# 额度: 按组织限流 + 消费 credits；响应带 X-RateLimit-* 头，429 带 Retry-After
+# 定位: 通用网络搜索（ranked results：URL/title/description/snippet/published_at）
+# 验证:
+#   export ARGO_KEENABLE_API_KEY=<key>
+#   python3 scripts/engine_validate.py --engine keenable --stage all --admit --write-doc
+#   python3 scripts/search.py "OpenAI" --engine keenable --json
+
+engine_id: keenable
+type: http
+enabled: true
+# 临时：2026-09 底前免费，按 free 源对待（auto/fast 均可用）。
+# 免费期结束后改回 cost_tier: api（按 credits 计费，受 budget 模式成本感知过滤）。
+cost_tier: free
+method: POST
+url: https://api.keenable.ai/v1/search
+timeout: 12
+canary_query: "OpenAI"
+label: Keenable
+family: web_general
+desc: "Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费）"
+required_env:
+  - ARGO_KEENABLE_API_KEY
+
+headers:
+  X-API-Key: "{ARGO_KEENABLE_API_KEY}"
+  Content-Type: application/json
+
+# POST body; {query} 查询词，{n} 结果数（Keenable max_results 1-50，int 化）
+body:
+  query: "{query}"
+  max_results: "{n}"
+
+# Keenable 返回 {query, results:[{title,url,description,snippet,published_at,acquired_at}]}
+output_map:
+  items: results
+  item_title: title
+  item_url: url
+  item_summary: snippet
+  item_source: keenable
+  item_published_at: published_at

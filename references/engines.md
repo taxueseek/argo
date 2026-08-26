@@ -14,6 +14,7 @@
 | octen | low | 高速语义搜索（OCTEN_API_KEY） |
 | felo / metaso | low | AI 搜索（FELO/METASO_API_KEY） |
 | duckduckgo | free | 通用搜索 |
+| keenable | free | 通用网页搜索（ranked results，含 published_at；ARGO_KEENABLE_API_KEY；现免费至 2026-09 底） |
 | wechat_sogou | free | 微信公众号文章搜索（v2.3） |
 | zhihu / zhihu_global / zhihu_hot | free | 知乎站内/全网/热榜（ZHIHU_ACCESS_SECRET） |
 

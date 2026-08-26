@@ -794,6 +794,7 @@ domains:
   engines_combo:
   - octen
   - exa
+  - keenable
   - anysearch
   fallback: exa
   name: english_tech
