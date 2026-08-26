@@ -64,11 +64,13 @@ def test_mode():
     print(result["content"][0]["text"][:500])
     print()
 
-    # 测试 local search（本地文件）
+    # 测试 local search（本地文件）——路径用安装锚点（argo 根目录），
+    # 不写死 ~/.agents/skills 等主机路径（SKILL.md 禁止）。
+    argo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     print("--- argo_local_search 测试 ---")
     result = execute_tool("argo_local_search", {
         "query": "数据抓取",
-        "path": os.path.expanduser("~/.agents/skills"),
+        "path": argo_root,
         "max_results": 3,
     })
     print(result["content"][0]["text"][:500])

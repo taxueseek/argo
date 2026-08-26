@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索与证据核验。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption；MCP（含 argo_local_search）。入口：npx github:taxueseek/argo / mcp_server.py。
-version: 2.8.3
+version: 2.8.4
 triggers:
   - 搜索
   - 查一下
@@ -14,9 +14,11 @@ triggers:
   - fact check
 ---
 
-# Argo v2.8.3 — 统一搜索与证据核验
+# Argo v2.8.4 — 统一搜索与证据核验
 
-> 从「帮你搜到」升级为「帮你核到」。搜索输出自带**证据闭环**：高后果问题（金融/医疗/法律/事实核查）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记忆，二次搜索直接显示已核实。本版详见 `docs/RELEASE_NOTES_v2.8.0.md`。
+> 从「帮你搜到」升级为「帮你核到」。搜索输出自带**证据闭环**：高后果问题（金融/医疗/法律/事实核查）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记忆，二次搜索直接显示已核实。本版详见 `docs/RELEASE_NOTES_v2.8.4.md` 与 `docs/RELEASE_NOTES_v2.8.0.md`。
+>
+> v2.8.4 增量：接入 Keenable（L1 声明式 HTTP，免费体验期）；多客户端 MCP 一键注入/诊断/还原（`argo mcp inject`，客户端真源 `mcp/clients.yaml`，原子写 + 备份 + 可逆）；深度研究本地数据融合 L1（`file_inputs` 白名单入账 + `recompute` 可复算执行器 + `local_sources`，`no_primary_sources` 计入本地一手）；结构化搜索增强（查询归一化 + 检索变体 + 复杂度门控，避免简单问题被拖成多轮）；social 域优先 + TF-IDF 检索修复；`--include-local` 本机命中并入。本版详见 `docs/RELEASE_NOTES_v2.8.4.md`。
 >
 > v2.8.3 增量：anysearch 改为进程内 builder（消除 subprocess 启动开销 + `HttpClient.post` UA 轮换/重试/退避）；weighted RRF 动态可靠性因子（weakest-link 弱源降权，论文 2508.01405）；多语言路由修复（ja/ko 返回目标语言 + 德法西意走 anysearch + 中文内容/金融/技术引擎双层过滤 + Bing `mkt` 市场码 + 语言偏好软排序）。
 >
@@ -167,5 +169,10 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 | `references/research-templates.md` | 契约 / 工作包 / 判断稿骨架 |
 | `references/usage.md` | 详细用法：参数大全、三大工具输出字段、子技能细节 |
 | `references/architecture.md` | 架构：文件结构、证据流水线、量化公式、输出 JSON Schema、内容质量信号 |
-| `docs/RELEASE_NOTES_v2.8.0.md` | 本版发布说明 |
+| `docs/RELEASE_NOTES_v2.8.4.md` | 本版（2.8.4）发布说明 |
+| `docs/RELEASE_NOTES_v2.8.0.md` | v2.8.0 证据闭环发布说明 |
+| `docs/MCP_SETUP.md` | 多客户端 MCP 一键接入：注入 / 诊断 / 还原 |
+| `docs/DESIGN_LOCAL_DATA_FUSION.md` | 本地数据与网络数据分层融合设计（深度研究 L1） |
+| `docs/ARGO_INTRO.md` | 面向用户的介绍、安装方式、能力边界 |
+| `docs/engines/keenable.md` | Keenable 引擎说明 |
 | `docs/ADDING_NEW_ENGINE.md` | 新增引擎指南 |

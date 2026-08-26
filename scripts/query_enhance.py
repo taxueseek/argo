@@ -37,14 +37,21 @@ _FULL_ALNUM = str.maketrans(
 )
 _FULL_SPACE = str.maketrans("\u3000", " ")
 
+# 只拆「版本/模型号」的斜杠（如 LongCat-2.0/1.6 万亿 → LongCat-2.0 1.6 万亿）。
+# 斜杠前必须是「点号分隔的数字」形态（2.0/），据此精准命中版本号，
+# 不碰日期(2023/2024)、分数(1/2)、URL(https://…)、路径、比例、颜色选项等保留
+# 斜杠语义的查询——全量拆斜杠会把 `https://example.com/a/b` 毁成
+# `https: example.com a b`、把「1/2 怎么算」毁成「1 2 怎么算」。
+_MODEL_SLASH = re.compile(r"(?<=[0-9A-Za-z]\.[0-9])\/")
+
 
 def normalize_query(query: str) -> str:
-    """词形规范化：全角→半角（标点+字母数字）、拆斜杠、压缩多余空格。
-    保留连字符（避免 GPT-5 拆散）。"""
+    """词形规范化：全角→半角（标点+字母数字）、按「点号版本」拆斜杠、压缩多余空格。
+    保留连字符（避免 GPT-5 拆散）；仅拆点号版本斜杠，不破坏日期/分数/URL/路径。"""
     if not query or not isinstance(query, str):
         return query
     q = query.translate(_FULL_TO_HALF).translate(_FULL_ALNUM).translate(_FULL_SPACE)
-    q = re.sub(r"/", " ", q)          # LongCat-2.0/1.6 万亿 → LongCat-2.0 1.6 万亿
+    q = _MODEL_SLASH.sub(" ", q)
     q = re.sub(r"\s+", " ", q).strip()
     return q
 

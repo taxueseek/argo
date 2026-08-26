@@ -127,7 +127,7 @@ echo "启动 MCP（给 Claude / Kimi / Cursor 等用）:"
 echo "  python3 $INSTALL_DIR/scripts/mcp_server.py"
 echo ""
 echo "或用 npx（需 Node.js 18+）:"
-echo "  npx -y argo-search"
+echo "  npx -y github:taxueseek/argo"
 echo ""
 echo "客户端 MCP 配置示例（路径请按本机替换）:"
 cat <<EOF

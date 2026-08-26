@@ -36,7 +36,20 @@ class TestNormalize(unittest.TestCase):
         self.assertEqual(normalize_query("ｇｐｔ５￥"), "gpt5¥")
 
     def test_slash_split(self):
+        # 仅拆「点号版本」斜杠，保留斜杠语义的查询不拆（2026-08 修复误伤）。
         self.assertEqual(normalize_query("LongCat-2.0/1.6 万亿"), "LongCat-2.0 1.6 万亿")
+
+    def test_slash_not_split_when_semantic(self):
+        # 全量拆斜杠会把 URL/分数/年份/日期毁掉 → 现在只拆点号版本，其余不动。
+        cases = [
+            "2026/08/01 的新闻",
+            "1/2 怎么算",
+            "https://example.com/a/b",
+            "2023/2024 营收对比",
+            "红色/蓝色 区别",
+        ]
+        for q in cases:
+            self.assertEqual(normalize_query(q), q, f"应保留斜杠语义: {q}")
 
     def test_compress_space(self):
         self.assertEqual(normalize_query("a  b   c"), "a b c")

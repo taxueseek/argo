@@ -11,8 +11,9 @@
 engine_id: keenable
 type: http
 enabled: true
-# 临时：2026-09 底前免费，按 free 源对待（auto/fast 均可用）。
-# 免费期结束后改回 cost_tier: api（按 credits 计费，受 budget 模式成本感知过滤）。
+# 免费体验期：量较大，按 free 源对待（auto/fast 均可用），不参与 budget 成本过滤。
+# 不预设「到期后改回 api」——免费期结束或冒问题（额度/报错/变慢）时，
+# 直接置 enabled: false 停用即可（灵活，别为它写自动切换的脆弱逻辑）。
 cost_tier: free
 method: POST
 url: https://api.keenable.ai/v1/search

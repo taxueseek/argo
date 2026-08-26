@@ -15,7 +15,7 @@ from mcp_handlers import _warm_core_async, execute_tool
 from mcp_tools import TOOLS
 
 # 版本真源：与 package.json / SKILL.md 保持一致（发布时统一升版）
-ARGO_MCP_VERSION = "2.8.3"
+ARGO_MCP_VERSION = "2.8.4"
 
 _response_format = "content-length"  # 根据客户端请求自动切换
 

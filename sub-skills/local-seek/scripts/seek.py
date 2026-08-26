@@ -33,6 +33,10 @@
   seek.py --domains                    # 列出知识域配置
 """
 
+# PEP 604 联合注解（str | None）在 3.10+ 才可运行时求值；此处开启延迟注解，
+# 使脚本在 Python 3.9（本机默认 python3）下也能正常导入/执行，而不只在 3.10+ 可用。
+from __future__ import annotations
+
 import argparse
 import json
 import os

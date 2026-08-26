@@ -24,10 +24,24 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.3-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
 </p>
+
+---
+
+## v2.8.4 更新亮点（在 v2.8.3 基础上再进一步）
+
+> 一句话：这版把「帮你搜到」再往前推进——**本地一手数据能进研究**、**给各种 Agent 挂 MCP 一条命令搞定**、**简单问题不再被多轮拖慢**、**多接了一个免费搜索源**，顺手加固了几处安全细节。
+
+- **深度研究能吃你本地的数据了**：以前 `argo research` 只吃网页，现在工作包能带 `file_inputs`（你的一手 CSV / XLSX / 文献，登记哈希、内容不入账）+ `recompute`（可复算执行器，安全地重算数字并和检索对账，对不上就提示）
+- **挂 MCP 不再手改配置**：`argo mcp inject` 一条命令把 argo 注入 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline（原子写 + 自动备份 + 可还原）
+- **简单问题不被拖成多轮**：查询归一化（全角→半角、版本号拆斜杠）+ 复杂度门控（低复杂度查询不放行高价多源）+ 社交/平台检索语法优先 + 丢了一个中文引擎会继续看备选
+- **多接一个免费搜索源 Keenable**（免费体验期、量较大，到期出问题直接停用即可）
+- **安全加固**：recompute 封死外部进程出网、主机路径全部改为安装感知（不再写死 `~/.agents` 这类）、修了一处会把用户引向陈旧 npm 包的安装提示
+
+> 完整变更见文末 [版本记录](#版本记录) 与 [发布说明](docs/RELEASE_NOTES_v2.8.4.md)。
 
 ---
 
@@ -139,7 +153,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**以 GitHub 为唯一安装真源**（`npx github:taxueseek/argo` 或 `install.sh`），当前推荐 **v2.8.3**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
+任选一种即可。**以 GitHub 为唯一安装真源**（`npx github:taxueseek/argo` 或 `install.sh`），当前推荐 **v2.8.4**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -319,7 +333,12 @@ python3 scripts/search.py --list-engines
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.8.3）
+### 当前大致能力（v2.8.4）
+
+- **本地数据融合（v2.8.4 新增，深度研究 L1）**：工作包可带 `file_inputs`（本地一手数据白名单入账，登记 sha256/血缘）与 `recompute`（可复算执行器，受限子进程安全重算，重算值与检索数字冲突触发 `recompute_conflict`）；dossier 输出 `local_sources`，本地一手计入一手命中（防 `no_sources` 假阴性）
+- **多客户端 MCP 一键接入（v2.8.4 新增）**：`argo mcp inject` 一键给 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline 注入 argo MCP（原子写 + 备份 + 可逆，客户端真源 `mcp/clients.yaml`）
+- **结构化搜索增强（v2.8.4 新增）**：查询归一化（全角→半角、点号版本拆斜杠）+ 检索变体 + 复杂度门控（低复杂度查询不放行高价多轮）；social 域语法优先（from:/subreddit:/lang: 命中提前）+ TF-IDF 检索修复（丢弃中文引擎后继续看 top-2/3）；`--include-local` 本机命中并入（默认关）
+- **Keenable（v2.8.4 新增）**：接入通用网页搜索引擎（L1 声明式 HTTP，免费体验期，`ARGO_KEENABLE_API_KEY`）
 
 - **多语言路由修复（v2.8.3 新增）**：ja/ko 查询返回目标语言（不再被中文引擎污染）；德法西意等多语言走 anysearch 返回对应语言；weighted RRF 弱源降权（weakest-link，论文 2508.01405）；anysearch 进程内 builder（更快更稳）
 
@@ -568,6 +587,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.8.4** | **本地数据融合 + 多客户端 MCP 接入 + 结构化搜索增强 + Keenable**：深度研究 L1 本地一手数据入账（`file_inputs` 白名单 + `recompute` 可复算执行器 + `local_sources`，`no_primary_sources` 计入本地一手）；`argo mcp inject` 多客户端 MCP 一键注入/诊断/还原（`mcp/clients.yaml` 声明式真源）；结构化搜索增强（查询归一化 + 检索变体 + 复杂度门控 + social 域优先 + TF-IDF 检索修复 + `--include-local`）；接入 Keenable 通用网页搜索（L1 声明式 HTTP，免费体验期）；安全加固（recompute 封死 `subprocess`/`os.system` 出网通道 + 主机路径单真源化）。详见 [发布说明](docs/RELEASE_NOTES_v2.8.4.md) |
 | **v2.8.3** | **多语言路由修复 + anysearch 进程化 + weighted RRF**：anysearch 从 subprocess 改为进程内 builder（省 python 启动开销 + `HttpClient.post` UA 轮换/重试/退避）；weighted RRF 新增动态可靠性因子（weakest-link 弱源降权，论文 2508.01405）；多语言路由修复——ja/ko 查询返回目标语言（韩语/日语），欧语言（德法西意）走 anysearch 返回目标语言，中文内容/金融/技术引擎双层过滤（域命中 + TF-IDF），Bing `mkt` 市场码 + 语言偏好软排序。详见 [发布说明](docs/RELEASE_NOTES_v2.8.3.md) |
 | **v2.8.2** | **Windows 全平台 + 证据语义统一**：移除 npm `os` 限制；全链路 UTF-8 防线（`PYTHONUTF8` + `-X utf8` + JSON `read_bytes`）根治 GBK 崩溃；工具探测改 `shutil.which`；Chrome/Edge 自动发现；Ctrl+C 干净退出。主包新增 `dsh.bundle` 声明（`dsh plugin add github:taxueseek/argo` 即得 MCP 工具）；npm 包补 `engines/`、`data/`。`wide_research` 输出新增 `quality_gate_results` 门禁 + `depends_on` 分阶段 + SSRF 防线 + 研究递归硬保护；深度研究协议化（机器产 dossier、Agent 写判断稿，`--work-packages` 分阶段取证）。详见 [发布说明](docs/RELEASE_NOTES_v2.8.2.md) |
 | **v2.8.0** | **证据闭环 + 求职 v3 + 天气双源**：搜索输出自带证据门控（高后果问题标 `fetch_required`、每条结果标 `fetch_suggested`、`--verify` 一键核验回填「核实后证据分」、核实过的链接自动记住下次搜索直接显示已核实）；`argo job` 求职搜索 v3（结构化字段 + 增量监控 + 指纹去重 + Ashby ATS / 北京高校源）；天气双源并行（wttr.in + Open-Meteo，地理编码 + 空气质量）；新增 Parallel / You.com 通用引擎；health_check 崩溃修复 + 日韩股票查询错配修复。详见 [发布说明](docs/RELEASE_NOTES_v2.8.0.md) |

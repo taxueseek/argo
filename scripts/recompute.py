@@ -33,7 +33,7 @@ from typing import Any
 _TAIL_STDOUT = 3000  # 超时/被杀时保留尾部输出（大任务不至于白跑全丢）
 _TAIL_STDERR = 2000
 
-# 注入到用户代码执行前的防护段：Python 层断网 + 强制文件白名单
+# 注入到用户代码执行前的防护段：Python 层断网 + 强制文件白名单 + 禁外部进程
 _NET_DISABLE_PRELUDE = """
 import socket as _socket
 import sys as _s2
@@ -49,8 +49,34 @@ _socket.getaddrinfo = _no_dns
 _socket.create_connection = _no_dns
 for _m in ("requests", "urllib3", "httpx"):
     _s2.modules.pop(_m, None)
-# 保留 _NetworkDisabled：_no_dns / _BlockedSocket.__init__ 的函数体还要 raise 它，
-# 若一并 del 则 getaddrinfo 被触发时全局名已被删，抛 NameError 而非预期错误。
+
+# ── 断网加固（2026-08）：纯 Python socket 层断网挡不住
+#    `subprocess.run(['curl',…])` / `os.system(...)` 等「出网通道」。
+#    这里 1) meta_path 拦截危险模块导入 2) 覆盖 os 的进程/执行入口，
+#    封死外部进程投退，让「recompute 断网」承诺真正成立。 ──
+import importlib.abc as _abc
+import importlib.machinery as _mach
+import os as _os_mod
+_BLOCKED_MODS = {"subprocess", "multiprocessing", "ctypes", "pty", "pexpect"}
+class _BlockImporter(_abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in _BLOCKED_MODS or fullname.split(".")[0] in _BLOCKED_MODS:
+            raise _NetworkDisabled("recompute 禁止导入 %s" % fullname)
+        return None
+_s2.meta_path.insert(0, _BlockImporter())
+def _no_exec(*a, **k):
+    raise _NetworkDisabled("recompute 禁止外部进程/系统调用")
+for _f in ("system", "popen", "popen2", "popen3", "popen4", "spawnl", "spawnle",
+           "spawnlp", "spawnlpe", "spawnv", "spawnve", "spawnvp", "spawnvpe",
+           "fork", "forkpty", "posix_spawn", "posix_spawnp", "execv", "execve",
+           "execl", "execle", "execlp", "execlpe", "execvp", "execvpe", "startfile"):
+    if hasattr(_os_mod, _f):
+        setattr(_os_mod, _f, _no_exec)
+del _abc, _mach, _os_mod
+
+# 保留 _NetworkDisabled：_no_dns / _BlockedSocket.__init__ / _no_exec /
+# _BlockImporter.find_spec 的函数体还要 raise 它，若一并 del 则被触发时
+# 全局名已被删，抛 NameError 而非预期错误。
 del _socket, _s2, _BlockedSocket, _no_dns
 """
 

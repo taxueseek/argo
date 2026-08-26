@@ -31,8 +31,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "version": 2,
     "engines": {
         "anysearch": {
-            "enabled": True, "type": "cli",
-            "cmd": ["python3", "~/.agents/skills/anysearch-skill/scripts/anysearch_cli.py"],
+            "enabled": True, "type": "anysearch",
+            # 进程内 JSON-RPC builder（对齐 config.yaml 真源）；不调用主机上的
+            # anysearch-skill CLI，避免写死 ~/.agents/skills 主机路径（纪律：禁止）。
+            "label": "AnySearch", "cost_tier": "free",
             "search_args": ["search", "{query}", "--max_results", "{n}"],
             "env": {},
         },

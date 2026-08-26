@@ -109,17 +109,14 @@ def _local_read_preview(
 
 
 def _seek_py() -> str:
-    """定位 local-seek 的 seek.py（argo 子技能，位于 sub-skills/ 下）。
+    """定位 local-seek 的 seek.py（安装感知、单一真源，见 seek_locator）。
 
-    local-seek 已于 2026-08-05 收编为 argo 子技能，标准位置是
-    SUB_SKILLS_DIR/local-seek；旧位置（skills 根目录平级）保留为回退，
-    兼容尚未迁移的旧部署。结果进程内不变，lru_cache 避免重复探测。"""
-    for cand in (os.path.join(SUB_SKILLS_DIR, "local-seek", "scripts", "seek.py"),
-                 os.path.expanduser("~/.agents/skills/local-seek/scripts/seek.py"),
-                 os.path.expanduser("~/.claude/skills/local-seek/scripts/seek.py")):
-        if os.path.exists(cand):
-            return cand
-    return os.path.join(SUB_SKILLS_DIR, "local-seek", "scripts", "seek.py")
+    local-seek 已于 2026-08-05 收编为 argo 子技能，标准位置是打包的
+    SUB_SKILLS_DIR/local-seek；自定义/遗留位置由 ARGO_LOCAL_SEEK_PATH 或
+    ARGO_LOCAL_SEEK_ROOTS 承载（不再硬编码 ~/.agents/skills 等主机路径）。
+    委托 seek_locator，避免与 search.py 各自维护一套发现逻辑而漂移。"""
+    from seek_locator import resolve_seek_py  # 延迟导入：mcp_handlers 常被早拉入
+    return resolve_seek_py()
 
 
 def _lazy_import(module_name: str):

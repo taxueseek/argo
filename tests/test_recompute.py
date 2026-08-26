@@ -57,6 +57,20 @@ class TestRunRecompute(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertIn("禁止网络", r["stderr"])
 
+    def test_external_process_blocked(self):
+        # 2026-08 加固：socket 层断网挡不住 subprocess/os.system 出网，
+        # 现在 meta_path 拦截 subprocess 导入 + 覆盖 os 进程入口。
+        code = "import subprocess\nsubprocess.run(['curl', 'https://x.com'])"
+        r = run_recompute(code, [{"path": self.f}], allow_exec=True)
+        self.assertFalse(r["ok"])
+        self.assertIn("禁止", r["stderr"])
+
+    def test_os_system_blocked(self):
+        code = "import os\nos.system('curl https://x.com')"
+        r = run_recompute(code, [{"path": self.f}], allow_exec=True)
+        self.assertFalse(r["ok"])
+        self.assertIn("禁止外部进程", r["stderr"])
+
     def test_timeout_kills(self):
         r = run_recompute("import time\ntime.sleep(60)",
                           [{"path": self.f}], allow_exec=True, timeout_s=1)

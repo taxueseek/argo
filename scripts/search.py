@@ -2032,17 +2032,12 @@ def _run_local_seek(query: str, max_n: int = 5) -> list[dict[str, Any]]:
     """
     import subprocess as _sp
 
-    seek_py = ""
-    for cand in (
-        os.path.join(SCRIPT_DIR, "..", "sub-skills", "local-seek", "scripts", "seek.py"),
-        os.path.expanduser("~/.agents/skills/local-seek/scripts/seek.py"),
-        os.path.expanduser("~/.claude/skills/local-seek/scripts/seek.py"),
-    ):
-        p = os.path.realpath(cand)
-        if os.path.exists(p):
-            seek_py = p
-            break
-    if not seek_py:
+    # 安装感知 + 单一真源：委托 seek_locator 统一发现 local-seek/scripts/seek.py
+    # （打包子技能优先，ARGO_LOCAL_SEEK_PATH / ARGO_LOCAL_SEEK_ROOTS 承载自定义/遗留）。
+    # 不硬编码 ~/.agents/skills|~/.claude/skills 主机路径（SKILL.md 明令禁止）。
+    from seek_locator import resolve_seek_py
+    seek_py = resolve_seek_py()
+    if not seek_py or not os.path.isfile(seek_py):
         return []
     r = _sp.run(
         [sys.executable, seek_py, query, "--json", "--max", str(max(max_n, 1))],
