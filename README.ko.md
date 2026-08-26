@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#무엇인가">소개</a> ·
+  <a href="#모델-내장-검색--ai-검색--메타검색보다-강한-점">비교</a> ·
   <a href="#질문-형태에-맞는-라우팅">증명</a> ·
   <a href="#동작-방식">메커니즘</a> ·
   <a href="#빠른-시작">빠른 시작</a> ·
@@ -23,10 +24,45 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.0-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
+
+---
+
+## v2.8.4 하이라이트 (v2.8.3 위에)
+
+> 한 줄: 이번 버전은 「찾아 주기」를 한 걸음 더 밉니다 — **로컬 1차 데이터가 연구에 들어갈 수 있고**, **여러 Agent에 MCP를 명령 한 줄로 붙이고**, **간단한 질문은 다라운드로 끌려가지 않으며**, **무료 검색 소스를 하나 더 달고**, 보안도 몇 곳 보강했습니다.
+
+- **심층 연구가 로컬 데이터를 먹을 수 있음**: 작업 패키지에 `file_inputs`(1차 CSV / XLSX / 문헌; 해시는 등기, 내용은 넣지 않음) + `recompute`(샌드박스 재계산; 불일치는 플래그)
+- **MCP 연결을 더 이상 손으로 안 고침**: `argo mcp inject`가 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline에 기록(원자 쓰기 + 백업 + 되돌리기)
+- **간단한 쿼리는 싸게 유지**: 정규화(전각→반각, 버전 슬래시) + 복잡도 게이트(저복잡도 쿼리는 고가 다소스로 안 감) + 소셜/플랫폼 문법 우선 + 중국어 엔진을 버려도 후보를 계속 봄
+- **Keenable** 을 무료 체험 웹 검색 소스로 추가(체험이 끝나면 끄면 됨)
+- **보안**: recompute가 외부 프로세스 출망을 차단; 호스트 경로는 설치 인지(하드코딩 `~/.agents` 없음); 설치 안내가 낡은 npm 패키지를 가리키지 않음
+
+> 자세한 내용은 끝의 [변경 이력](#변경-이력)과 [릴리스 노트](docs/RELEASE_NOTES_v2.8.4.md).
+
+---
+
+## 모델 내장 검색 / AI 검색 / 메타검색보다 강한 점
+
+> 간단히: 앞의 세 가지는 **사람**이 정보를 찾게 돕습니다. Argo는 **에이전트**가 검색과 검증을 한 파이프라인에서 하게 합니다. 차이는 UI가 아니라 산출물 — 사람용 요약 페이지·링크 목록 대, 에이전트가 정렬하고 `fetch`로 재확인하고 컨텍스트를 안 터뜨리는 증거.
+
+<p align="center">
+  <img src="assets/readme/why-better.svg" width="100%" alt="왼쪽: 사람용 기본 검색 세 가지. 오른쪽: 에이전트가 흡수할 Argo 증거 JSON">
+</p>
+
+| 차원 | 모델 내장 검색 | AI 검색(요약형) | 메타검색 / 검색 엔진 | **Argo** |
+|------|----------------|-----------------|----------------------|----------|
+| 결과 형태 | 이어 붙인 장문 | 사람용 요약 페이지 | SERP 링크 목록 | **압축 JSON: 증거 후보 + 신뢰도 분해** |
+| 수직 질문(시세 / 화학식) | 일반 웹 | 일반 웹 후 요약 | 일반 웹 | **수직 소스 직결, 답형 결과** |
+| 증거 신뢰도 | 점수 없음 | 구조화 점수 없음 | 점수 없음 | **selection · absorption · freshness · 합의** |
+| 반복 질의 | 매번 네트워크 | 매번 네트워크 | 페이지 캐시 | **이중 캐시(메모리 + SQLite), 핫 쿼리 약 10ms** |
+| 비용 제어 | 제어 불가 | 호출당 비쌈 | 무료지만 수고 | **예산 모드, 무료 우선, 키는 모두 선택** |
+| 다국어 | 모델을 따름 | 모델을 따름 | 엔진을 따름 | **언어 감지 + 엔진 로케일 파라미터 + 다국어 라우팅** |
+
+> 메커니즘상 Argo는 검색을 **증거 파이프라인**으로 다룹니다: 언어 감지 → 도메인 라우트 → 다중 엔진 회수 → RRF 융합 → 증거 속평. 에이전트가 정렬하고, `fetch`로 확인하고, 컨텍스트 안에 넣을 재료를 줍니다.
 
 ---
 
@@ -117,7 +153,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. 최신 빌드는 **npm 레지스트리 패키지가 필요 없습니다**(v2.5.1부터 **GitHub**가 설치 진원; 현재 권장 **v2.6.0**).
+경로를 고르면 됩니다. **설치 진원은 GitHub뿐입니다**(`npx github:taxueseek/argo` 또는 `install.sh`); 현재 권장 **v2.8.4**. **`npm install argo-search`는 쓰지 마세요** — npm 레지스트리 사본은 **비공식 낡은 v1.0.1**(이 저장소가 아님, 기능 부족, 갱신 안 됨). 이 패키지는 `private: true`로 npm 오배포를 막습니다.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -181,13 +217,27 @@ npx -y github:taxueseek/argo
 
 비표준 Python 경로: `export ARGO_PYTHON=/path/to/python3` (npx 진입점만 읽음).
 
-### 옵션 3: 릴리스 tarball
+### DeepSeek Harness 한 줄 플러그인
 
-[Releases](https://github.com/taxueseek/argo/releases)에서 **`argo-2.6.0.tar.gz`** 다운로드:
+DeepSeek Harness에는 두 가지 설치:
 
 ```bash
-tar -xzf argo-2.6.0.tar.gz
-cd argo-2.6.0
+# A: mcp__argo__* 도구 12개 (메인 패키지 bundle, MCP 전량과 동일)
+dsh plugin --profile web add "github:taxueseek/argo"
+
+# B: 검색 도구 + wide_research 병렬 연구 오케스트레이션 (서브패키지)
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+```
+
+설치 후 `dsh web`을 재시작. 자세한 내용은 `packages/dsh-plugin/`.
+
+### 옵션 3: 릴리스 tarball
+
+[Releases](https://github.com/taxueseek/argo/releases)에서 **`argo-2.8.4.tar.gz`** 다운로드:
+
+```bash
+tar -xzf argo-2.8.4.tar.gz
+cd argo-2.8.4
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -262,6 +312,8 @@ python3 scripts/search.py --list-engines
 |------------|--------------|-------|
 | 통합 검색 | route → recall → fuse → skim score | `search.py` / `argo_search` |
 | 로컬 파일 검색 | 디스크 코드/노트/메모리 (오프라인) | `argo_local_search` |
+| 로컬 텍스트 미리보기 | 화이트리스트 디렉터리 미리보기 (fail-closed) | `argo_local_read` |
+| 재계산 | 제한 서브프로세스 수치 재계산 (기본 거부) | `argo_recompute` |
 | 심층 연구 | 하위 질문, 다중 소스, 갭 힌트 | `research.py` / `argo_research` |
 | 신뢰도 | 권위 / 밀도 / 시의성 / 교차 검증 | `evidence.py` / `argo_evidence` |
 | 의도 명확화 | 다의어, 브랜드 충돌, 전략 힌트 | `clarify.py` / `argo_clarify` |
@@ -279,10 +331,14 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.6.0)
+### 대략적인 능력 세트 (v2.8.4)
 
-- **약 120+ 소스, 60+ 도메인**: 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
-- **MCP 도구 10개**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl
+- **로컬 데이터 융합 (v2.8.4 신규)**: 연구 작업 패키지에 `file_inputs`(로컬 1차 데이터, sha256/혈통 등기) + `recompute`(샌드박스 재계산); dossier가 `local_sources` 출력
+- **MCP 한 줄 주입 (v2.8.4 신규)**: `argo mcp inject`로 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (원자 쓰기 + 백업 + 가역; 진원 `mcp/clients.yaml`)
+- **구조화 검색 강화 (v2.8.4 신규)**: 쿼리 정규화 + 변체 + 복잡도 게이트; 소셜 문법 우선; TF-IDF는 중국어 엔진을 버린 뒤에도 후보를 봄; `--include-local`
+- **Keenable (v2.8.4 신규)**: 일반 웹 검색 엔진 추가 (L1 선언적 HTTP, 무료 체험, `ARGO_KEENABLE_API_KEY`)
+- **약 150+ 소스, 70+ 도메인**: 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
+- **MCP 도구 12개**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute
 - **다국어 검색**: 중국어, 영어, 일본어, 한국어, 키릴, 태국어, 아랍어, 히브리어, 그리스어, 데바나가리, …; 라우팅과 엔진 파라미터가 언어를 따름; 비중국어 쿼리는 중국어 전용 소스 회피 (Zhihu / Sogou WeChat / A주 스냅샷 등)
 - **수직 복구 게이트**: 빈 결과 복구 시 영화·스포츠에 pypi / npm / 속보 등이 「새지」 않음
 - **일상은 빠르게, 연구는 넓게**: `engine_policy` 티어—일상 콤보는 타이트, deep / research는 롱테일 개방
@@ -291,7 +347,7 @@ python3 scripts/search.py --list-engines
 
 ## 엔진과 라우팅
 
-설정에는 현재 약 **120+** 소스와 **60+** 도메인이 있습니다 (`config.yaml`, `--list-engines` 참고).
+설정에는 현재 약 **150+** 소스와 **70+** 도메인이 있습니다 (`config.yaml`, `--list-engines` 참고).
 
 ### 직접·수직 (발췌)
 
@@ -341,12 +397,14 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### MCP 도구 (10)
+### MCP 도구 (12)
 
 | 도구 | 용도 |
 |------|---------|
 | `argo_search` | 통합 검색 |
 | `argo_local_search` | 로컬 파일 (오프라인) |
+| `argo_local_read` | 화이트리스트 로컬 텍스트 미리보기 (fail-closed) |
+| `argo_recompute` | 제한 서브프로세스 재계산 (기본 거부, 인가 필요) |
 | `argo_research` | 심층 연구 (소셜 감성 모드 포함) |
 | `argo_evidence` | 신뢰도 점수 |
 | `argo_clarify` | 의도 명확화 |
@@ -387,6 +445,7 @@ export GITHUB_TOKEN="your_key"
 export WEB_SEARCH_API_KEY="your_key"
 export ANYSEARCH_API_KEY="your_key"
 export OCTEN_API_KEY="your_key"
+export ARGO_KEENABLE_API_KEY="your_key"   # 선택; Keenable 무료 체험
 ```
 
 `config.yaml`에는 `{ENV_NAME}` 플레이스홀더만—git에 평문 시크릿 없음.
@@ -475,8 +534,10 @@ argo/
 ├── config.yaml              # engines & domains (source of truth)
 ├── assets/readme/           # README visuals
 ├── backends/
+├── mcp/                     # 다중 클라이언트 MCP 주입 진원 (clients.yaml)
 ├── scripts/                 # search / research / mcp / install …
 ├── sub-skills/local-search/
+├── sub-skills/ego-search/      # 로그인 상태 전문 검색 (기본 꺼짐)
 ├── tests/
 └── docs/
 ```
@@ -487,6 +548,13 @@ argo/
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.8.4** | **로컬 데이터 융합 + 다중 클라이언트 MCP 주입 + 구조화 검색 + Keenable**: 연구 L1 로컬 1차 데이터(`file_inputs` + `recompute` + `local_sources`); `argo mcp inject`(선언적 `mcp/clients.yaml`); 쿼리 정규화 / 변체 / 복잡도 게이트 / 소셜 문법 우선 / TF-IDF 수정 / `--include-local`; Keenable(무료 체험); 보안 강화. [릴리스 노트](docs/RELEASE_NOTES_v2.8.4.md) |
+| **v2.8.3** | **다국어 라우팅 수정 + 프로세스 내 anysearch + weighted RRF**: ja/ko가 대상 언어를 반환; 독/불/서/이 anysearch; weakest-link 다운웨이트(논문 2508.01405). [릴리스 노트](docs/RELEASE_NOTES_v2.8.3.md) |
+| **v2.8.2** | **Windows + 증거 의미 통일**: npm `os` 제한 제거; GBK 크래시 대비 UTF-8; 메인 패키지 `dsh.bundle`; `wide_research` 품질 게이트. [릴리스 노트](docs/RELEASE_NOTES_v2.8.2.md) |
+| **v2.8.0** | **증거 루프 + 구직 v3 + 날씨 쌍소스**: `fetch_required` / `--verify`; `argo job`; wttr.in + Open-Meteo; Parallel / You.com. [릴리스 노트](docs/RELEASE_NOTES_v2.8.0.md) |
+| **v2.7.3** | 엔진 층 HttpClient; TF-IDF로 수직 25개 활성화; 70 도메인 TTL; 수직 중영. [릴리스 노트](docs/RELEASE_NOTES_v2.7.3.md) |
+| **v2.7.2** | 로그인 상태 전문 검색(ego-search, 기본 꺼짐); 한일 쿼리가 중국어 엔진에 섞이지 않음. [릴리스 노트](docs/RELEASE_NOTES_v2.7.2.md) |
+| **v2.7.1** | SSRF 강화 + 라우팅 헬스 의미 수정. [릴리스 노트](docs/RELEASE_NOTES_v2.7.1.md) |
 | **v2.6.0** | **다국어 검색** (detect / engine params / cross-lang fallback); film·sports·geo·org·media 수직; recovery 오염 방지; 능력 패밀리 + 매트릭스 회귀; ~120+ 소스. [릴리스 노트](docs/RELEASE_NOTES_v2.6.0.md) |
 | **v2.5.1** | 금융/매크로/화학 답형 소스 강화; 엔진 티어 + combo 예산; [v2.5.1 notes](docs/RELEASE_NOTES_v2.5.1.md) |
 | **v2.5.0** | 설치 스크립트 + npx; rewrite와 라우팅 분리; hot-path 캐시; compact MCP |

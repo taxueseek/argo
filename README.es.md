@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#qué-es">Intro</a> ·
+  <a href="#por-qué-supera-a-la-búsqueda-del-modelo-la-búsqueda-ia-y-el-metasearch">Comparar</a> ·
   <a href="#enrutamiento-según-la-consulta">Prueba</a> ·
   <a href="#cómo-funciona">Mecanismo</a> ·
   <a href="#inicio-rápido">Inicio rápido</a> ·
@@ -23,10 +24,45 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.0-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
+
+---
+
+## Destacados de v2.8.4 (sobre v2.8.3)
+
+> En una frase: esta versión lleva más lejos el «encontrártelo» — **los datos locales de primera mano entran en la investigación**, **enganchar MCP en varios agentes es un comando**, **las preguntas simples ya no se arrastran a rondas extra**, **una fuente de búsqueda gratis más**, y algunos endurecimientos de seguridad.
+
+- **La investigación profunda puede comer tus datos locales**: los work packages admiten `file_inputs` (CSV / XLSX / literatura de primera mano; se registra el hash, no el contenido) + `recompute` (recalc en sandbox; los desajustes se marcan)
+- **El MCP ya no se edita a mano**: `argo mcp inject` escribe Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (escritura atómica + backup + deshacer)
+- **Las consultas simples se quedan baratas**: normalización (ancho completo→medio, barras de versión) + puerta de complejidad (lo simple no pasa a multi-fuente cara) + sintaxis social/plataforma primero + si se descarta un motor chino, se siguen mirando candidatos
+- **Keenable** como fuente web en prueba gratis (desactívala si termina la prueba)
+- **Seguridad**: recompute bloquea subprocesos de salida a red; las rutas de host son conscientes de la instalación (sin `~/.agents` hardcodeado); la pista de instalación ya no apunta al paquete npm obsoleto
+
+> Detalle al final: [historial](#historial-de-cambios) y [notas de release](docs/RELEASE_NOTES_v2.8.4.md).
+
+---
+
+## Por qué supera a la búsqueda del modelo, la búsqueda IA y el metasearch
+
+> En corto: las tres primeras ayudan a **personas** a encontrar información. Argo ayuda a **agentes** a buscar y verificar en un mismo pipeline. La diferencia no es la interfaz, es el entregable: página de resumen o lista de enlaces para humanos frente a evidencia ordenable, re-verificable y que no hincha el contexto.
+
+<p align="center">
+  <img src="assets/readme/why-better.svg" width="100%" alt="Izquierda: tres búsquedas por defecto hechas para humanos; derecha: JSON de evidencia absorbible de Argo para agentes">
+</p>
+
+| Dimensión | Búsqueda del modelo | Búsqueda IA (resúmenes) | Metasearch / motores | **Argo** |
+|-----------|---------------------|-------------------------|----------------------|----------|
+| Forma del resultado | Texto largo cosido | Página de resumen humana | Lista de enlaces SERP | **JSON compacto: candidatos de evidencia + desglose de credibilidad** |
+| Preguntas verticales (cotizaciones / fórmulas) | Web genérica | Web genérica y luego resumen | Web genérica | **Fuentes verticales directas, en forma de respuesta** |
+| Credibilidad de evidencia | Sin puntuación | Sin puntuación estructurada | Sin puntuación | **selection · absorption · freshness · consenso** |
+| Consultas repetidas | Red cada vez | Red cada vez | Caché de página | **Caché de dos capas (memoria + SQLite); consultas calientes ~10 ms** |
+| Control de coste | Incontrolable | Caro por llamada | Gratis pero trabajoso | **Modos de presupuesto; gratis primero; claves todas opcionales** |
+| Multilingüe | Sigue al modelo | Sigue al modelo | Sigue al motor | **Detección de idioma + params de locale + enrutamiento multilingüe** |
+
+> Mecánicamente, Argo trata la búsqueda como un **pipeline de evidencia**: detectar idioma → enrutar dominio → recall multi-motor → fusionar RRF → ojeada de evidencia. El agente puede ordenar, `fetch` para verificar y mantener el material dentro del contexto.
 
 ---
 
@@ -117,7 +153,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **No necesitas el paquete del registro npm** para la build más reciente (desde v2.5.1 **GitHub** es la fuente de verdad de instalación; recomendación actual **v2.6.0**).
+Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.8.4**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -181,13 +217,27 @@ Más estable, sin Node: instala con la opción 1 y apunta a Python local:
 
 Ruta de Python inusual: `export ARGO_PYTHON=/path/to/python3` (solo lo lee la entrada npx).
 
-### Opción 3: Tarball de release
+### Plugin de una línea para DeepSeek Harness
 
-Abre [Releases](https://github.com/taxueseek/argo/releases), descarga **`argo-2.6.0.tar.gz`**:
+Dos caminos dentro de DeepSeek Harness:
 
 ```bash
-tar -xzf argo-2.6.0.tar.gz
-cd argo-2.6.0
+# A: 12 herramientas mcp__argo__* (bundle del paquete principal, igual que el MCP completo)
+dsh plugin --profile web add "github:taxueseek/argo"
+
+# B: herramientas de búsqueda + orquestación wide_research (subpaquete)
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+```
+
+Reinicia `dsh web` tras instalar. Ver `packages/dsh-plugin/`.
+
+### Opción 3: Tarball de release
+
+Abre [Releases](https://github.com/taxueseek/argo/releases), descarga **`argo-2.8.4.tar.gz`**:
+
+```bash
+tar -xzf argo-2.8.4.tar.gz
+cd argo-2.8.4
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -262,6 +312,8 @@ python3 scripts/search.py --list-engines
 |------------|--------------|-------|
 | Búsqueda unificada | route → recall → fuse → skim score | `search.py` / `argo_search` |
 | Búsqueda de archivos locales | código/notas/memoria en disco (offline) | `argo_local_search` |
+| Vista previa de texto local | preview en dirs en whitelist (fail-closed) | `argo_local_read` |
+| Recompute | recálculo numérico en sandbox (niega por defecto) | `argo_recompute` |
 | Investigación profunda | subpreguntas, multi-fuente, pistas de huecos | `research.py` / `argo_research` |
 | Credibilidad | autoridad / densidad / frescura / cruce | `evidence.py` / `argo_evidence` |
 | Aclarar intención | polisemia, colisiones de marca, pistas de estrategia | `clarify.py` / `argo_clarify` |
@@ -279,10 +331,14 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.6.0)
+### Conjunto aproximado de capacidades (v2.8.4)
 
-- **~120+ fuentes, 60+ dominios**: web general + finanzas / macro / cine / deportes / geo / orgs / media / química / academia / código (fuente de verdad: `config.yaml`)
-- **10 herramientas MCP**: search, research, evidence, clarify, fetch, screenshot, PDF, social, archivos locales, crawl
+- **Fusión de datos locales (nuevo en v2.8.4)**: work packages de investigación con `file_inputs` (datos locales de primera mano; se registra sha256/linaje) + `recompute` (recálculo en sandbox); el dossier emite `local_sources`
+- **Inyección MCP de un comando (nuevo en v2.8.4)**: `argo mcp inject` para Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (escritura atómica + backup + deshacer; fuente `mcp/clients.yaml`)
+- **Mejoras de búsqueda estructurada (nuevo en v2.8.4)**: normalización + variantes + puerta de complejidad; sintaxis social primero; TF-IDF sigue mirando tras descartar un motor chino; `--include-local`
+- **Keenable (nuevo en v2.8.4)**: motor web general extra (HTTP declarativo L1, prueba gratis, `ARGO_KEENABLE_API_KEY`)
+- **~150+ fuentes, 70+ dominios**: web general + finanzas / macro / cine / deportes / geo / orgs / media / química / academia / código (fuente de verdad: `config.yaml`)
+- **12 herramientas MCP**: search, research, evidence, clarify, fetch, screenshot, PDF, social, archivos locales, crawl, preview local, recompute
 - **Búsqueda multilingüe**: chino, inglés, japonés, coreano, cirílico, tailandés, árabe, hebreo, griego, devanagari, …; el enrutamiento y los params de motor siguen el idioma; consultas no chinas evitan fuentes solo en chino (Zhihu / Sogou WeChat / snapshots A-share, etc.)
 - **Compuertas de recuperación vertical**: la recuperación de vacío no «filtra» pypi / npm / flash news a cine o deportes
 - **Más rápido en el día a día, más completo en investigación**: tiers `engine_policy`—combo diario apretado, long-tail abierto para deep / research
@@ -291,7 +347,7 @@ python3 scripts/search.py --list-engines
 
 ## Motores y enrutamiento
 
-La config tiene ahora unos **120+** fuentes y **60+** dominios (ver `config.yaml` y `--list-engines`).
+La config tiene ahora unos **150+** fuentes y **70+** dominios (ver `config.yaml` y `--list-engines`).
 
 ### Directos y verticales (extracto)
 
@@ -341,12 +397,14 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### Herramientas MCP (10)
+### Herramientas MCP (12)
 
 | Herramienta | Propósito |
 |------|---------|
 | `argo_search` | búsqueda unificada |
 | `argo_local_search` | archivos locales (offline) |
+| `argo_local_read` | preview de texto local en whitelist (fail-closed) |
+| `argo_recompute` | recálculo en sandbox (niega por defecto; hace falta auth) |
 | `argo_research` | investigación profunda (incl. modo sentimiento social) |
 | `argo_evidence` | puntuación de credibilidad |
 | `argo_clarify` | desambiguación de intención |
@@ -387,6 +445,7 @@ export GITHUB_TOKEN="your_key"
 export WEB_SEARCH_API_KEY="your_key"
 export ANYSEARCH_API_KEY="your_key"
 export OCTEN_API_KEY="your_key"
+export ARGO_KEENABLE_API_KEY="your_key"   # opcional; prueba gratis de Keenable
 ```
 
 `config.yaml` solo guarda placeholders `{ENV_NAME}`—sin secretos en claro en git.
@@ -475,8 +534,10 @@ argo/
 ├── config.yaml              # engines & domains (source of truth)
 ├── assets/readme/           # README visuals
 ├── backends/
+├── mcp/                     # fuente de inyección MCP multi-cliente (clients.yaml)
 ├── scripts/                 # search / research / mcp / install …
 ├── sub-skills/local-search/
+├── sub-skills/ego-search/      # búsqueda profesional con sesión (off por defecto)
 ├── tests/
 └── docs/
 ```
@@ -487,6 +548,13 @@ argo/
 
 | Versión | Notas |
 |---------|-------|
+| **v2.8.4** | **Fusión de datos locales + inyección MCP multi-cliente + búsqueda estructurada + Keenable**: investigación L1 con datos locales de primera mano (`file_inputs` + `recompute` + `local_sources`); `argo mcp inject` (`mcp/clients.yaml` declarativo); normalización / variantes / puerta de complejidad / sintaxis social primero / arreglo TF-IDF / `--include-local`; motor Keenable (prueba gratis); endurecimiento de seguridad. Ver [notas de release](docs/RELEASE_NOTES_v2.8.4.md) |
+| **v2.8.3** | **Arreglo de enrutamiento multilingüe + anysearch in-process + RRF ponderado**: ja/ko devuelven el idioma objetivo; DE/FR/ES/IT vía anysearch; downweight weakest-link (paper 2508.01405). Ver [notas de release](docs/RELEASE_NOTES_v2.8.3.md) |
+| **v2.8.2** | **Windows + semántica de evidencia unificada**: se quita el límite npm `os`; UTF-8 contra cuelgues GBK; `dsh.bundle` en el paquete principal; puerta de calidad de `wide_research`. Ver [notas de release](docs/RELEASE_NOTES_v2.8.2.md) |
+| **v2.8.0** | **Bucle de evidencia + empleos v3 + clima dual**: `fetch_required` / `--verify`; `argo job`; wttr.in + Open-Meteo; Parallel / You.com. Ver [notas de release](docs/RELEASE_NOTES_v2.8.0.md) |
+| **v2.7.3** | HttpClient en capa de motor; TF-IDF activa 25 verticales; TTL de 70 dominios; verticales bilingües. Ver [notas de release](docs/RELEASE_NOTES_v2.7.3.md) |
+| **v2.7.2** | Búsqueda profesional con sesión (ego-search, off por defecto); JA/KO ya no mezclan motores chinos. Ver [notas de release](docs/RELEASE_NOTES_v2.7.2.md) |
+| **v2.7.1** | Endurecimiento SSRF + arreglo del estado de salud del routing. Ver [notas de release](docs/RELEASE_NOTES_v2.7.1.md) |
 | **v2.6.0** | **Búsqueda multilingüe** (detect / engine params / cross-lang fallback); verticales film·sports·geo·org·media; recovery anti-contaminación; familias de capacidad + regresión matrix; ~120+ fuentes. Ver [notas de release](docs/RELEASE_NOTES_v2.6.0.md) |
 | **v2.5.1** | Fuentes de respuesta finanzas/macro/química más densas; tiers de motor + presupuesto combo; [notas v2.5.1](docs/RELEASE_NOTES_v2.5.1.md) |
 | **v2.5.0** | Script de instalación + npx; rewrite desacoplado del routing; caché hot-path; MCP compacto |

@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#これは何か">紹介</a> ·
+  <a href="#モデル内蔵検索--ai-検索--横断検索より強い点">比較</a> ·
   <a href="#聞き方に合わせたルーティング">証明</a> ·
   <a href="#仕組み">仕組み</a> ·
   <a href="#クイックスタート">導入</a> ·
@@ -23,10 +24,45 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.0-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
+
+---
+
+## v2.8.4 のハイライト（v2.8.3 の上に）
+
+> 一言：今回は「見つけてあげる」をさらに進めた——**手元の一次データが研究に入れる**、**各 Agent への MCP 接続がコマンド 1 本**、**簡単な問いは多ラウンドに引き込まれない**、**無料検索源を 1 つ追加**、あわせてセキュリティを固めた。
+
+- **深掘り研究が手元データを食べられる**：作業パッケージに `file_inputs`（手元の CSV / XLSX / 文献。ハッシュだけ登記、中身は入れない）+ `recompute`（サンドボックス再計算。食い違いはフラグ）
+- **MCP 接続は手で設定をいじらない**：`argo mcp inject` が Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline に書く（アトミック書き込み + バックアップ + 復元）
+- **簡単なクエリは安いまま**：正規化（全角→半角、バージョンのスラッシュ）+ 複雑さゲート（低複雑度は高コスト多源に進まない）+ SNS/プラットフォーム構文優先 + 中国語エンジンを捨てても候補を見続ける
+- **Keenable** を無料体験のウェブ検索源として追加（体験終了時は無効化すればよい）
+- **セキュリティ**：recompute は外部プロセスの出網を遮断；ホストパスはインストール感知（`~/.agents` の直書きなし）；インストール案内が古い npm パッケージを指さない
+
+> 詳細は文末の [更新履歴](#更新履歴) と [リリースノート](docs/RELEASE_NOTES_v2.8.4.md)。
+
+---
+
+## モデル内蔵検索 / AI 検索 / 横断検索より強い点
+
+> 要するに：前三者は **人** が情報を探すためのもの。Argo は **Agent** が検索と検証を一本でやるためのもの。差は UI ではなく成果物——人向けの要約ページやリンク一覧対、Agent が並べ替え・再検証でき、文脈を膨らませない証拠。
+
+<p align="center">
+  <img src="assets/readme/why-better.svg" width="100%" alt="左：人向けの 3 種の既定検索。右：Agent が吸収できる Argo の証拠 JSON">
+</p>
+
+| 次元 | モデル内蔵検索 | AI 検索（要約型） | 横断検索 / 検索エンジン | **Argo** |
+|------|----------------|-------------------|-------------------------|----------|
+| 結果の形 | つなぎ合わせた長文 | 人向け要約ページ | SERP リンク一覧 | **コンパクト JSON：証拠候補 + 信頼度分解** |
+| 垂直の問い（相場 / 化学式） | 汎用ウェブ | 汎用ウェブして要約 | 汎用ウェブ | **垂直ソース直結、答え型** |
+| 証拠の信頼度 | スコアなし | 構造化スコアなし | スコアなし | **selection · absorption · freshness · 合意** |
+| 同じクエリ | 毎回ネットワーク | 毎回ネットワーク | ページキャッシュ | **二層キャッシュ（メモリ + SQLite）、ホットクエリ約 10ms** |
+| コスト制御 | 制御不能 | 1 回が高い | 無料だが手間 | **予算モード、無料優先、Key はすべて任意** |
+| 多言語 | モデル任せ | モデル任せ | エンジン任せ | **言語検出 + エンジン言語パラメータ + 多言語ルーティング** |
+
+> 仕組みとして Argo は検索を **証拠パイプライン** として扱う：言語検出 → ドメイン経路 → 多エンジン召回 → RRF 融合 → 証拠速評。Agent が並べ替え、`fetch` で核验し、文脈に収まる材料を返す。
 
 ---
 
@@ -117,7 +153,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**npm 公式パッケージに依存しなくても**最新版を使えます（v2.5.1 以降インストールの真源は **GitHub**、現在推奨 **v2.6.0**）。
+どれか 1 つで十分です。**インストールの真源は GitHub のみ**（`npx github:taxueseek/argo` または `install.sh`）、現在推奨 **v2.8.4**。**`npm install argo-search` は使わないでください**——npm registry 上のそれは**非公式の古い v1.0.1**（本リポジトリ外、機能不足、更新されない）。本パッケージは `private: true` で npm 誤公開を防ぎます。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -181,13 +217,27 @@ npx -y github:taxueseek/argo
 
 Python が特殊なパスのとき：`export ARGO_PYTHON=/path/to/python3`（npx 入口のみ参照）。
 
-### 方法三：Release ソースパッケージ
+### DeepSeek Harness 一行プラグイン
 
-[Releases](https://github.com/taxueseek/argo/releases) から **`argo-2.6.0.tar.gz`** を入手：
+DeepSeek Harness では 2 通り：
 
 ```bash
-tar -xzf argo-2.6.0.tar.gz
-cd argo-2.6.0
+# A：mcp__argo__* ツール 12 個（メインパッケージ bundle、MCP 全量と同じ）
+dsh plugin --profile web add "github:taxueseek/argo"
+
+# B：検索ツール + wide_research 並列研究オーケストレーション（サブパッケージ）
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+```
+
+インストール後に `dsh web` を再起動。詳細は `packages/dsh-plugin/`。
+
+### 方法三：Release ソースパッケージ
+
+[Releases](https://github.com/taxueseek/argo/releases) から **`argo-2.8.4.tar.gz`** を入手：
+
+```bash
+tar -xzf argo-2.8.4.tar.gz
+cd argo-2.8.4
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -262,6 +312,8 @@ python3 scripts/search.py --list-engines
 |------|------|------|
 | 統合検索 | ルート → 召回 → 融合 → 速評 | `search.py` / `argo_search` |
 | ローカルファイル検索 | 本機のコード/ノート/記憶（非ネット） | `argo_local_search` |
+| ローカルテキストプレビュー | ホワイトリスト内プレビュー（fail-closed） | `argo_local_read` |
+| 再計算 | 制限付きサブプロセスで数値再計算（既定拒否） | `argo_recompute` |
 | 深掘り調査 | サブ問題、多ソース、ギャップ提示 | `research.py` / `argo_research` |
 | 信頼度評価 | 権威 / 密度 / 鮮度 / 交差検証 | `evidence.py` / `argo_evidence` |
 | 意図の曖昧さ解消 | 多義語、ブランド衝突、戦略提案 | `clarify.py` / `argo_clarify` |
@@ -279,10 +331,14 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.6.0）
+### 現時点の能力概要（v2.8.4）
 
-- **約 120+ ソース、60+ ドメイン**：一般ウェブ + 金融 / マクロ / 映像 / スポーツ / 地理 / 組織 / メディア / 化学 / 学術 / コード（真源：`config.yaml`）
-- **10 の MCP ツール**：検索、研究、証拠、曖昧さ解消、取得、スクショ、PDF、SNS、ローカル、クロール
+- **ローカルデータ融合（v2.8.4 新）**：研究作業パッケージに `file_inputs`（手元一次データ、sha256/血統を登記）+ `recompute`（サンドボックス再計算）；dossier は `local_sources` を出す
+- **MCP 一発注入（v2.8.4 新）**：`argo mcp inject` で Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline（アトミック書き込み + バックアップ + 可逆。真源 `mcp/clients.yaml`）
+- **構造化検索の強化（v2.8.4 新）**：クエリ正規化 + 変体 + 複雑さゲート；SNS 構文優先；TF-IDF は中国語エンジンを捨てた後も候補を見る；`--include-local`
+- **Keenable（v2.8.4 新）**：汎用ウェブ検索エンジン追加（L1 宣言的 HTTP、無料体験、`ARGO_KEENABLE_API_KEY`）
+- **約 150+ ソース、70+ ドメイン**：一般ウェブ + 金融 / マクロ / 映像 / スポーツ / 地理 / 組織 / メディア / 化学 / 学術 / コード（真源：`config.yaml`）
+- **12 の MCP ツール**：検索、研究、証拠、曖昧さ解消、取得、スクショ、PDF、SNS、ローカル、クロール、ローカルプレビュー、再計算
 - **多言語検索**：中・英・日・韓・キリル・タイ・アラビア・ヘブライ・ギリシャ・デーヴァナーガリーなど。ルーティングとエンジンパラメータが言語に追従。非中国語クエリは知乎 / 搜狗微信 / A 株スナップショットなど中国語専用源を避ける
 - **垂直復旧の門禁**：空結果復旧で pypi / npm / 速報などを映像・スポーツへ「混ぜない」
 - **日常は速く、研究は厚く**：`engine_policy` で日常 combo を締め、deep / research で長尾を開放
@@ -291,7 +347,7 @@ python3 scripts/search.py --list-engines
 
 ## エンジンとルーティング
 
-設定上およそ **120+** ソース、**60+** ドメイン（`config.yaml` と `--list-engines` が基準）。
+設定上およそ **150+** ソース、**70+** ドメイン（`config.yaml` と `--list-engines` が基準）。
 
 ### 直結・垂直（抜粋）
 
@@ -341,12 +397,14 @@ python3 scripts/search.py "同一クエリ" --json | \
   python3 scripts/evidence.py "同一クエリ" --stdin --json
 ```
 
-### MCP ツール一覧（10）
+### MCP ツール一覧（12）
 
 | ツール | 用途 |
 |--------|------|
 | `argo_search` | 統合検索 |
 | `argo_local_search` | ローカルファイル（非ネット） |
+| `argo_local_read` | ホワイトリスト内テキストプレビュー（fail-closed） |
+| `argo_recompute` | 制限付きサブプロセス再計算（既定拒否、要認可） |
 | `argo_research` | 深掘り研究（social-sentiment モード含む） |
 | `argo_evidence` | 信頼度評価 |
 | `argo_clarify` | 意図の曖昧さ解消 |
@@ -387,6 +445,7 @@ export GITHUB_TOKEN="your_key"
 export WEB_SEARCH_API_KEY="your_key"
 export ANYSEARCH_API_KEY="your_key"
 export OCTEN_API_KEY="your_key"
+export ARGO_KEENABLE_API_KEY="your_key"   # 任意；Keenable 無料体験
 ```
 
 `config.yaml` には `{ENV_NAME}` プレースホルダのみ。平文の秘密はコミットしません。
@@ -475,8 +534,10 @@ argo/
 ├── config.yaml              # エンジンとドメイン（真源）
 ├── assets/readme/           # README ビジュアル
 ├── backends/
+├── mcp/                     # 多クライアント MCP 注入の真源（clients.yaml）
 ├── scripts/                 # search / research / mcp / install …
 ├── sub-skills/local-search/
+├── sub-skills/ego-search/      # ログイン態の専門検索（既定オフ）
 ├── tests/
 └── docs/
 ```
@@ -487,6 +548,13 @@ argo/
 
 | 版 | 内容 |
 |----|------|
+| **v2.8.4** | **ローカルデータ融合 + 多クライアント MCP 注入 + 構造化検索 + Keenable**：研究 L1 の手元一次データ（`file_inputs` + `recompute` + `local_sources`）；`argo mcp inject`（宣言的 `mcp/clients.yaml`）；クエリ正規化 / 変体 / 複雑さゲート / SNS 構文優先 / TF-IDF 修正 / `--include-local`；Keenable（無料体験）；セキュリティ強化。[リリースノート](docs/RELEASE_NOTES_v2.8.4.md) |
+| **v2.8.3** | **多言語ルーティング修正 + プロセス内 anysearch + weighted RRF**：ja/ko が対象言語を返す；独仏西伊は anysearch；weakest-link 降権（論文 2508.01405）。[リリースノート](docs/RELEASE_NOTES_v2.8.3.md) |
+| **v2.8.2** | **Windows + 証拠セマンティクス統一**：npm `os` 制限撤去；GBK クラッシュ対策の UTF-8；メインパッケージ `dsh.bundle`；`wide_research` 品質門禁。[リリースノート](docs/RELEASE_NOTES_v2.8.2.md) |
+| **v2.8.0** | **証拠クローズドループ + 求人 v3 + 天気双源**：`fetch_required` / `--verify`；`argo job`；wttr.in + Open-Meteo；Parallel / You.com。[リリースノート](docs/RELEASE_NOTES_v2.8.0.md) |
+| **v2.7.3** | エンジン層 HttpClient；TF-IDF で 25 垂直を活性化；70 ドメイン TTL；垂直の中英。[リリースノート](docs/RELEASE_NOTES_v2.7.3.md) |
+| **v2.7.2** | ログイン態の専門検索（ego-search、既定オフ）；日韓クエリが中国語エンジンに混ざらない。[リリースノート](docs/RELEASE_NOTES_v2.7.2.md) |
+| **v2.7.1** | SSRF 強化 + ルーティング健全性の意味修復。[リリースノート](docs/RELEASE_NOTES_v2.7.1.md) |
 | **v2.6.0** | **多言語検索**（検出 / エンジンパラメータ / 言語横断フォールバック）；映像・スポーツ・地理・組織・メディア垂直；recovery 汚染防止；能力族と行列回帰；約 120+ 源。[リリースノート](docs/RELEASE_NOTES_v2.6.0.md) |
 | **v2.5.1** | 金融/マクロ/化学の答え源を厚く；エンジン階層 + combo 予算；[v2.5.1](docs/RELEASE_NOTES_v2.5.1.md) |
 | **v2.5.0** | インストールスクリプト + npx；書き換えとルーティング分離；ホットパスキャッシュ；MCP コンパクト |

@@ -43,13 +43,13 @@
     <!-- meta chips -->
     <g transform="translate(0 188)">
       <rect width="118" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
-      <text x="59" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#94A3B8">v2.7.2</text>
+      <text x="59" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#94A3B8">v2.8.4</text>
 
       <rect x="130" width="132" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
-      <text x="196" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8">120+ engines</text>
+      <text x="196" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8">150+ engines</text>
 
       <rect x="274" width="118" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
-      <text x="333" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#A78BFA">10 MCP</text>
+      <text x="333" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#A78BFA">12 MCP</text>
 
       <rect x="404" width="100" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
       <text x="454" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#34D399">Python</text>

@@ -35,4 +35,6 @@
           - mcp__argo__argo_fetch
           - mcp__argo__argo_crawl
           - mcp__argo__argo_local_search
+          - mcp__argo__argo_local_read
+          - mcp__argo__argo_recompute
           - mcp__argo__argo_social_search

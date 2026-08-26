@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#what-it-is">Intro</a> ·
+  <a href="#why-its-stronger-than-built-in-search--ai-search--metasearch">Compare</a> ·
   <a href="#query-shaped-routing">Proof</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#quick-start">Quick start</a> ·
@@ -23,10 +24,45 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.6.0-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-120+-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-10%20tools-purple">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
+
+---
+
+## v2.8.4 highlights (on top of v2.8.3)
+
+> One line: this release pushes “finding it for you” further — **local first-hand data can enter research**, **MCP attach across agents is one command**, **simple questions are no longer dragged into extra rounds**, **one more free search source**, plus a few security hardenings.
+
+- **Deep research can eat your local data**: work packages can take `file_inputs` (first-hand CSV / XLSX / literature; hash registered, content not stored) + `recompute` (sandboxed recalculation; mismatches are flagged)
+- **MCP attach is no longer hand-edited config**: `argo mcp inject` writes Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo)
+- **Simple queries stay cheap**: query normalize (fullwidth→halfwidth, version slashes) + complexity gate (low-complexity queries don't get expensive multi-source) + social/platform syntax first + if a Chinese engine is dropped, keep looking at backups
+- **Keenable** added as a free-trial web search source (disable it if the trial ends)
+- **Security**: recompute blocks outbound subprocesses; host paths are install-aware (no hardcoded `~/.agents`); install hint no longer points at the stale npm package
+
+> Full notes: [changelog](#changelog) and [release notes](docs/RELEASE_NOTES_v2.8.4.md).
+
+---
+
+## Why it's stronger than built-in search / AI search / metasearch
+
+> In short: the first three help **people** find information. Argo helps **agents** search and verify in one pipeline. The difference is the deliverable: a summary page or link list for humans vs ranked, reviewable, context-safe evidence for agents.
+
+<p align="center">
+  <img src="assets/readme/why-better.svg" width="100%" alt="Left: three default searches made for humans; right: Argo's absorbable evidence JSON for agents">
+</p>
+
+| Dimension | Model built-in search | AI search (summaries) | Metasearch / engines | **Argo** |
+|-----------|----------------------|------------------------|----------------------|----------|
+| Result shape | Stitched long text | Human summary page | SERP link list | **Compact JSON: evidence candidates + credibility breakdown** |
+| Vertical questions (quotes / formulas) | Generic web | Generic web then summarize | Generic web | **Direct vertical sources, answer-shaped** |
+| Evidence credibility | No score | No structured score | No score | **selection · absorption · freshness · consensus** |
+| Repeat queries | Hit the network every time | Hit the network every time | Page cache | **Two-layer cache (memory + SQLite); hot queries ~10ms** |
+| Cost control | Uncontrollable | Expensive per call | Free but laborious | **Budget modes; free first; keys all optional** |
+| Multilingual | Follows the model | Follows the model | Follows the engine | **Language detect + engine locale params + multilingual routing** |
+
+> Mechanically, Argo treats search as an **evidence pipeline**: language detect → domain route → multi-engine recall → RRF fuse → evidence skim. The output is material an agent can rank, `fetch` to verify, and keep inside context.
 
 ---
 
@@ -117,7 +153,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **You do not need the npm registry package** for the latest build (since v2.5.1 **GitHub** is the install source of truth; current recommendation **v2.7.2**).
+Pick any path. **GitHub is the only install source of truth** (`npx github:taxueseek/argo` or `install.sh`); current recommendation **v2.8.4**. **Do not `npm install argo-search`** — the npm registry copy is an **unofficial stale v1.0.1** (not this repo, incomplete, not updated). This package sets `private: true` so it is not published to npm by mistake.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -181,6 +217,20 @@ More stable, no Node: install via Option 1, point at local Python:
 
 Unusual Python path: `export ARGO_PYTHON=/path/to/python3` (read by the npx entry only).
 
+### DeepSeek Harness one-line plugin
+
+Two install paths inside DeepSeek Harness:
+
+```bash
+# A: 12 mcp__argo__* tools (main-package bundle, same as full MCP)
+dsh plugin --profile web add "github:taxueseek/argo"
+
+# B: search tools + wide_research parallel research orchestration (subpackage)
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
+```
+
+Restart `dsh web` after install. See `packages/dsh-plugin/`.
+
 ### Option 3: git clone (dev / patch source)
 
 ```bash
@@ -220,6 +270,8 @@ python3 scripts/search.py --list-engines
 |------------|--------------|-------|
 | Unified search | route → recall → fuse → skim score | `search.py` / `argo_search` |
 | Local file search | on-disk code/notes/memory (offline) | `argo_local_search` |
+| Local text preview | whitelist-dir preview (fail-closed) | `argo_local_read` |
+| Recompute | sandboxed numeric recalc (deny by default) | `argo_recompute` |
 | Deep research | sub-questions, multi-source, gap hints | `research.py` / `argo_research` |
 | Credibility | authority / density / freshness / cross-check | `evidence.py` / `argo_evidence` |
 | Intent clarify | polysemy, brand collisions, strategy hints | `clarify.py` / `argo_clarify` |
@@ -237,10 +289,14 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.6.0)
+### Rough capability set (v2.8.4)
 
-- **~120+ sources, 60+ domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml`)
-- **10 MCP tools**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl
+- **Local data fusion (new in v2.8.4)**: research work packages take `file_inputs` (first-hand local data; sha256/lineage registered) + `recompute` (sandboxed recalc); dossier emits `local_sources`
+- **One-command MCP inject (new in v2.8.4)**: `argo mcp inject` for Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo; source `mcp/clients.yaml`)
+- **Structured search upgrades (new in v2.8.4)**: query normalize + variants + complexity gate; social-syntax first; TF-IDF keeps looking after dropping a Chinese engine; `--include-local`
+- **Keenable (new in v2.8.4)**: extra general web engine (L1 declarative HTTP, free trial, `ARGO_KEENABLE_API_KEY`)
+- **~150+ sources, 70+ domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml`)
+- **12 MCP tools**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute
 - **Multilingual search**: Chinese, English, Japanese, Korean, Cyrillic, Thai, Arabic, Hebrew, Greek, Devanagari, …; routing and engine params follow language; non-Chinese queries avoid Chinese-only sources (Zhihu / Sogou WeChat / A-share snapshots, etc.)
 - **Vertical recovery gates**: empty-result recovery will not “leak” pypi / npm / flash news into film or sports
 - **Faster daily, fuller research**: `engine_policy` tiers—tight daily combo, open long-tail for deep / research
@@ -249,7 +305,7 @@ python3 scripts/search.py --list-engines
 
 ## Engines & routing
 
-Config currently has about **120+** sources and **60+** domains (see `config.yaml` and `--list-engines`).
+Config currently has about **150+** sources and **70+** domains (see `config.yaml` and `--list-engines`).
 
 ### Direct & vertical (excerpt)
 
@@ -299,12 +355,14 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### MCP tools (10)
+### MCP tools (12)
 
 | Tool | Purpose |
 |------|---------|
 | `argo_search` | unified search |
 | `argo_local_search` | local files (offline) |
+| `argo_local_read` | whitelist local text preview (fail-closed) |
+| `argo_recompute` | sandboxed recalc (deny by default; needs auth) |
 | `argo_research` | deep research (incl. social-sentiment mode) |
 | `argo_evidence` | credibility scoring |
 | `argo_clarify` | intent disambiguation |
@@ -345,6 +403,7 @@ export GITHUB_TOKEN="your_key"
 export WEB_SEARCH_API_KEY="your_key"
 export ANYSEARCH_API_KEY="your_key"
 export OCTEN_API_KEY="your_key"
+export ARGO_KEENABLE_API_KEY="your_key"   # optional; Keenable free trial
 ```
 
 `config.yaml` only stores `{ENV_NAME}` placeholders—no plaintext secrets in git.
@@ -433,8 +492,10 @@ argo/
 ├── config.yaml              # engines & domains (source of truth)
 ├── assets/readme/           # README visuals
 ├── backends/
+├── mcp/                     # MCP client inject source (clients.yaml)
 ├── scripts/                 # search / research / mcp / install …
 ├── sub-skills/local-search/
+├── sub-skills/ego-search/      # logged-in professional search (off by default)
 ├── tests/
 └── docs/
 ```
@@ -445,6 +506,13 @@ argo/
 
 | Version | Notes |
 |---------|-------|
+| **v2.8.4** | **Local data fusion + multi-client MCP inject + structured search + Keenable**: research L1 first-hand local data (`file_inputs` + `recompute` + `local_sources`); `argo mcp inject` (declarative `mcp/clients.yaml`); query normalize / variants / complexity gate / social-syntax first / TF-IDF fix / `--include-local`; Keenable web engine (free trial); security hardenings. See [release notes](docs/RELEASE_NOTES_v2.8.4.md) |
+| **v2.8.3** | **Multilingual routing fix + in-process anysearch + weighted RRF**: ja/ko queries return the target language; DE/FR/ES/IT via anysearch; weakest-link downweight (paper 2508.01405). See [release notes](docs/RELEASE_NOTES_v2.8.3.md) |
+| **v2.8.2** | **Windows + unified evidence semantics**: npm `os` limit removed; UTF-8 path against GBK crashes; main-package `dsh.bundle`; `wide_research` quality gate. See [release notes](docs/RELEASE_NOTES_v2.8.2.md) |
+| **v2.8.0** | **Evidence loop + jobs v3 + dual weather**: `fetch_required` / `--verify`; `argo job`; wttr.in + Open-Meteo; Parallel / You.com. See [release notes](docs/RELEASE_NOTES_v2.8.0.md) |
+| **v2.7.3** | Engine-layer HttpClient; TF-IDF activates 25 verticals; 70-domain TTL; bilingual verticals. See [release notes](docs/RELEASE_NOTES_v2.7.3.md) |
+| **v2.7.2** | Logged-in professional search (ego-search, off by default); JA/KO no longer mix Chinese engines. See [release notes](docs/RELEASE_NOTES_v2.7.2.md) |
+| **v2.7.1** | SSRF hardening + routing health-state fix. See [release notes](docs/RELEASE_NOTES_v2.7.1.md) |
 | **v2.6.0** | **Multilingual search** (detect / engine params / cross-lang fallback); film·sports·geo·org·media verticals; recovery anti-pollution; capability families + matrix regression; ~120+ sources. See [release notes](docs/RELEASE_NOTES_v2.6.0.md) |
 | **v2.5.1** | Thicker finance/macro/chemistry answer sources; engine tiers + combo budget; [v2.5.1 notes](docs/RELEASE_NOTES_v2.5.1.md) |
 | **v2.5.0** | Install script + npx; rewrite decoupled from routing; hot-path cache; compact MCP |

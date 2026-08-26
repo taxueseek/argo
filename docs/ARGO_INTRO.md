@@ -1,6 +1,6 @@
 # Argo 阿尔戈 — 统一搜索与证据核验
 
-> 一个开源的「搜索 + 证据核验」工具，给 AI Agent 和终端使用。把 120+ 搜索源、多语言路由、深度研究与证据判定整合在一个命令行 / MCP 里，让「搜」和「核」变成一件事。
+> 一个开源的「搜索 + 证据核验」工具，给 AI Agent 和终端使用。把 150+ 搜索源、多语言路由、深度研究与证据判定整合在一个命令行 / MCP 里，让「搜」和「核」变成一件事。
 
 ---
 
@@ -32,7 +32,7 @@ Claude / Codex / Kimi 等支持 MCP 的客户端，直接挂：
 }
 ```
 
-挂上后获得 10 个工具：`argo_search`、`argo_research`、`argo_evidence`、`argo_clarify`、`argo_fetch`、`argo_crawl`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_local_search`。
+挂上后获得 12 个工具：`argo_search`、`argo_local_search`、`argo_local_read`、`argo_recompute`、`argo_research`、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`。
 
 ### 依赖
 
@@ -91,7 +91,7 @@ results = search("查一下")
 **能力强项**
 
 - **多语言**：中 / 英 / 日 / 韩 / 欧语（德法西意）/ 西里尔等路由，多数查询返回对应目标语言（ja/ko 已大幅修复）
-- **120+ 搜索源** + TF-IDF 语义路由 + RRF 融合（weighted，弱源自动降权）
+- **150+ 搜索源、70+ 业务域** + TF-IDF 语义路由 + RRF 融合（weighted，弱源自动降权）
 - **垂直域**：金融行情、宏观数据、化学、学术、本地、社交、模态卡（火车票/油价/万年历等）
 - **证据闭环**：`fetch_required` / `--verify` / 证据分回填，适合高后果问题
 - **兼容开源生态**：可直接挂 MCP / DSH 插件（`wide_research` 并行研究编排）

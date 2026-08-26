@@ -1,6 +1,6 @@
 # argo-search 主包 bundle patch（精简面）：只挂 argo MCP 服务器。
 #
-# 装法 A（仅 MCP 10 工具）：
+# 装法 A（MCP 12 工具，与 mcp_server 全量相同）：
 #   dsh plugin --profile web add "github:taxueseek/argo"
 #
 # 装法 B（MCP + wide_research 并行研究编排）：
