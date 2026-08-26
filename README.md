@@ -639,3 +639,13 @@ MIT License © 2026 [taxueseek](https://github.com/taxueseek)
 ---
 
 > 好的搜索不是让你看得更多，是让你更敢下结论——以及知道什么时候还不该下结论。
+
+---
+
+## 生态联动：与 Invest 系列投资技能集成
+
+本引擎的财经垂直源（`eastmoney`、`nbs_stats`、`jin10`、`nbs`、`fred`、`eurostat`、`finviz` 等）已接入 [invest 系列投资技能](https://github.com/taxueseek/fund-investment-guide)。
+
+invest-cli 通过 `info`（`invest-cli info <词> --engine eastmoney`）与 `intent macro` 直接复用 argo 的财经 / 宏观 / 资讯取数，用于环节配额、低成本、多源数据，与 invest-cli 的结构化数据层（Wind / 盈米 / 东财 / yfinance / 天天基金）协同。
+
+> 最新版已完成 argo 数据与 invest 系列技能（v2.0.5）的集成。
