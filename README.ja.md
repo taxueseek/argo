@@ -29,6 +29,8 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
+> **これは taxueseek の DeepSeek Harness プラグイン群のひとつ**。仲間たち：[dsh-files](https://github.com/taxueseek/dsh-files)（ファイル送信・ドキュメント読取） · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)（スニペットお気に入り） · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)（読み取り専用ヘルスチェック） · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（プラグインセキュリティ監査） · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（プロンプト逆引き＆マルチプロバイダー画像生成）—— 全プラグインは[プロフィール](https://github.com/taxueseek)へ
+
 ---
 
 ## v2.8.4 のハイライト（v2.8.3 の上に）

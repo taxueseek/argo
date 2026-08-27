@@ -29,6 +29,8 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
+> **Este repositorio es parte del conjunto de plugins DeepSeek Harness de taxueseek** — hermanos: [dsh-files](https://github.com/taxueseek/dsh-files) (enviar archivos, leer documentos) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets) (favoritos de snippets) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck) (chequeo de solo lectura) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) (auditoría de seguridad de plugins) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) (ingeniería inversa de prompts e imágenes multi-proveedor) — todos los plugins en el [perfil](https://github.com/taxueseek)
+
 ---
 
 ## Destacados de v2.8.4 (sobre v2.8.3)
