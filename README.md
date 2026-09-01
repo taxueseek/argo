@@ -207,7 +207,7 @@ npx -y github:taxueseek/argo
 在 DeepSeek Harness 里一行安装（两种装法）：
 
 ```bash
-# 装法 A：12 个 mcp__argo__* 工具（主包自带 bundle，与 MCP 全量相同）
+# 装法 A：14 个 mcp__argo__* 工具（主包自带 bundle，与 MCP 全量相同）
 dsh plugin --profile web add "github:taxueseek/argo"
 
 # 装法 B：搜索工具 + wide_research 并行研究编排（子包）
@@ -345,7 +345,7 @@ python3 scripts/search.py --list-engines
 - **多语言路由修复（v2.8.3 新增）**：ja/ko 查询返回目标语言（不再被中文引擎污染）；德法西意等多语言走 anysearch 返回对应语言；weighted RRF 弱源降权（weakest-link，论文 2508.01405）；anysearch 进程内 builder（更快更稳）
 
 - **Windows 全平台可用（v2.8.2 新增）**：移除 npm `os` 限制；全链路 UTF-8 防线（`PYTHONUTF8` + `-X utf8` + 6 处 JSON `read_bytes`）根治 GBK 崩溃；工具探测改 `shutil.which`；Chrome/Edge 自动发现；Ctrl+C 干净退出
-- **DSH 插件两种装法（v2.8.2 新增）**：主包自带 `dsh.bundle`，`dsh plugin add github:taxueseek/argo` 即得 12 个 MCP 工具；子包再加 `wide_research` 并行研究编排
+- **DSH 插件两种装法（v2.8.2 新增）**：主包自带 `dsh.bundle`，`dsh plugin add github:taxueseek/argo` 即得 14 个 MCP 工具；子包再加 `wide_research` 并行研究编排
 - **wide_research 证据门禁（v2.8.2 新增）**：输出自带 `quality_gate_results`（`conclusion_cap` low/medium/high），与 dossier 同一套语义；`depends_on` 依赖分阶段；仅 http(s) 入证据账本；worker 不可调 `argo_research`（防研究套研究）
 - **取证协议化（v2.8.2）**：深度研究只产 dossier（来源/覆盖/缺口/门禁），判断稿归 Agent；`--work-packages` 按 `depends_on` 分阶段
 - **证据闭环（v2.8.0 新增）**：搜索输出自带证据门控——高后果问题（金融/医疗/法律）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记住，下次搜索直接显示已核实
@@ -356,7 +356,7 @@ python3 scripts/search.py --list-engines
 - **垂直结构化模态卡**：火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机参数 / 汽车 / 医疗挂号等查询返回实时结构化卡片（`modal_card` 域 → `bocha_ai` 原生引擎，失败自动回落 web 搜索）
 - **双层缓存**：内存 LRU + SQLite 持久化，时效性弱的内容不重复打 API；登录态结果单独隔离，不污染公共缓存
 - **为 Agent 节省 Token**：MCP 响应可紧凑裁剪、snippet 可控，输出为精简 JSON 而非整页文本
-- **12 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取、本地预览、可复算
+- **14 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取、本地预览、可复算、公众号文章全文、招聘聚合
 - **多语言搜索**：中、英、日、韩、西里尔、泰、阿、希伯来、希腊、天城体等；路由与引擎参数跟着语言走；非中文查询避免误入知乎 / 搜狗微信 / A 股快照等中文专用源
 - **登录态专业搜索**：ego-search 子技能，登录墙正文 / JS 渲染页 / 登录站点接口直取（默认关闭，见上节）
 - **垂直域门禁**：空结果恢复时不把 pypi / npm / 快讯等无关源「串」进影视、体育查询

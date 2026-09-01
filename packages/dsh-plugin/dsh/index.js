@@ -1,38 +1,77 @@
 /*
- * @taxueseek/argo-dsh — wide_research + native web_search provider
+ * @taxueseek/argo-dsh — wide_research + argo 原生工具 + 原生 web_search provider
  *
- * Same bundle that mounts the argo MCP also registers this orchestrator.
- * Workers collect evidence through mcp__argo__* (search / fetch / evidence);
- * they do not call argo_research, to avoid nested research fan-out.
+ * 本 bundle 默认不挂 argo MCP：搜索/抓取高频路径走原生工具与 web seam
+ * （CLI 单发，同引擎同守卫，零常驻 token 开销）；MCP 14 工具全量面按需
+ * 在 profile patch 中挂载。Workers 不调用 argo_research，避免嵌套扇出。
  * No @deepseek-ai/* imports: public ctx.tools / ctx.subagents / ctx.web only.
  *
- * Native web seam: when the web service exposes registerSearchProvider, this
- * bundle registers an "argo" provider so the built-in web_search tool routes
- * through the argo engine chain (same stdio MCP server the profile mounts).
- * Off by default via searchProviderEnabled: false; the profile patch flips
- * it on and selects "argo" as searchProvider.
+ * 三形态接入（互为冗余，同一搜索能力，按宿主能力自动降级）：
+ *   1. mcp__argo__*：profile 按需挂载的 stdio MCP，完整工具面（默认关）
+ *   2. 原生一等工具 argo_search / argo_fetch（ctx.tools.register）：CLI 单发
+ *      执行（bin call / mcp_server.py --call），不依赖 MCP 连接，默认入口；
+ *      nativeTools 配置（空数组=关）
+ *   3. 原生 web_search seam：web.registerSearchProvider 注册 "argo"
+ *      provider，内置 web_search 经 argo 引擎链路由；默认启用
+ *      （searchProviderEnabled: false 时注册但不可选）
  */
 
 import { spawn } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+// 原生工具规格表：由 scripts/gen_native_tools.py 从 schema 唯一真源
+// （scripts/mcp_tools.py）生成，勿手改；漂移由
+// tests/test_native_tools_sync.py 把关。除 argo_research 外全部 13 个工具
+// 都可经 nativeTools 配置按需启用为原生一等工具（默认只注册 search/fetch，
+// 零常驻 token 开销）。
+import { NATIVE_TOOLS as NATIVE_TOOL_SPECS } from './native-tools.mjs'
 
 export const name = 'wide-research'
 // 'web' 是可选增强（headless 无 web 服务）：官方约定可选依赖不入 inject，
 // 在 apply 内用 ctx.get('web') 查询；若声明为必需，headless 环境会阻塞加载。
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
+// worker 取证工具白名单（allow 语义，非「必须存在」）：mcp__argo__* 与原生
+// 一等工具双写 → MCP 形态开/关两态自洽。MCP 在时 worker 可用 14 工具全量面
+// （argo_research 除外，注册处硬排除）；MCP 缺席（默认）时自动落到原生
+// argo_search/argo_fetch 与宿主内置 web_search/web_fetch。
 const DEFAULT_CHILD_TOOLS = Object.freeze([
+  // MCP 形态（mcp-argo bundle 按需挂载时可用；与 mcp_tools.py 全量面对齐，
+  // 仅排除 argo_research——研究不套研究）
   'mcp__argo__argo_search',
   'mcp__argo__argo_evidence',
   'mcp__argo__argo_fetch',
   'mcp__argo__argo_crawl',
+  'mcp__argo__argo_article',
+  'mcp__argo__argo_job',
   'mcp__argo__argo_local_search',
   'mcp__argo__argo_local_read',
   'mcp__argo__argo_recompute',
   'mcp__argo__argo_social_search',
+  'mcp__argo__argo_clarify',
+  'mcp__argo__argo_pdf',
+  'mcp__argo__argo_screenshot',
+  // 原生一等工具（本 bundle 默认注册，不依赖 MCP 连接）
+  'argo_search',
+  'argo_fetch',
+  // 宿主内置 web_search 走本 bundle 的 argo provider（原生 web seam）
+  'web_search',
+  'web_fetch',
 ])
+
+/**
+ * worker 工具过滤（allow 语义，非「必须存在」）：未配置时用双写默认集
+ * （MCP 与原生两态自洽）；显式数组（含空数组=放弃 allow 走 deny）原样
+ * 尊重。任何路径都硬排除 wide_research 自身与 argo_research（研究不套研究）。
+ */
+export function buildChildToolFilters(config, toolName) {
+  const base = Array.isArray(config.childToolAllow) ? config.childToolAllow : DEFAULT_CHILD_TOOLS
+  const blocked = new Set([toolName, 'mcp__argo__argo_research'])
+  const allow = [...new Set(asStringArray(base, 100).filter(tool => !blocked.has(tool)))]
+  const deny = [...new Set([toolName, ...asStringArray(config.childToolDeny, 100)])]
+  return { allow, deny }
+}
 
 const DEFAULTS = Object.freeze({
   toolName: 'wide_research',
@@ -46,7 +85,14 @@ const DEFAULTS = Object.freeze({
   childToolDeny: [],
   childToolAllow: [...DEFAULT_CHILD_TOOLS],
   /** 原生 web_search 是否走 argo provider；false 时 provider 注册但不可选。 */
-  searchProviderEnabled: false,
+  searchProviderEnabled: true,
+  /** 原生一等工具（CLI 单发形态，不依赖 MCP 连接）：默认 argo_search +
+   *  argo_fetch；空数组关闭。未知工具名 loud fail。 */
+  nativeTools: ['argo_search', 'argo_fetch'],
+  /** 原生工具单次进程超时（ms）；fetch 含浏览器回退较慢，宽于 searchTimeoutMs。 */
+  nativeTimeoutMs: 60_000,
+  /** 原生工具返回文本上限（字符）；MCP 侧已压缩，此处兜底防上下文膨胀。 */
+  nativeMaxChars: 24_000,
   /** provider id；改它需同步 web 行的 searchProvider 配置。 */
   searchProviderId: 'argo',
   /** 入口：公开仓默认 npx（不泄露本机路径）；本机部署在用户层 patch 覆盖为
@@ -853,13 +899,109 @@ function extractValues(text) {
   return out
 }
 
+// --- 原生一等工具：CLI 单发（不依赖 MCP 连接）---
+// 与 web seam / wide_research 共用同一入口配置，两条执行路径殊途同归到
+// execute_tool（同引擎、同压缩、同守卫）：
+//   本机模式（searchArgs 为 mcp_server.py 路径）→ python3 <mcp_server.py> --call <tool> <json>
+//   npx 模式 → npx -y github:taxueseek/argo call <tool> <json>（bin 子命令分发）
+
+export function resolveNativeSpawn(config, tool, payload) {
+  const command = typeof config.searchCommand === 'string' && config.searchCommand !== ''
+    ? config.searchCommand
+    : DEFAULTS.searchCommand
+  const args = Array.isArray(config.searchArgs) && config.searchArgs.length > 0
+    ? config.searchArgs
+    : DEFAULTS.searchArgs
+  if (args.length === 1 && args[0].endsWith('mcp_server.py')) {
+    return { command, args: [args[0], '--call', tool, payload] }
+  }
+  return { command, args: [...args, 'call', tool, payload] }
+}
+
+// 非零退出时从 stdout 解出 MCP 形态的错误体（execute_tool isError 结果），
+// 丢失它模型只能看到 stderr 日志行（如 "[argo-mcp] starting"），错误不可行动。
+function nativeErrorText(stdout, stderr) {
+  try {
+    const parsed = JSON.parse(stdout)
+    const body = parsed?.content?.[0]?.text
+    if (typeof body === 'string' && body !== '') return body
+  } catch { /* 非 MCP 形态输出，回退 stderr/原始 stdout */ }
+  return stderr.trim() !== '' ? stderr : stdout
+}
+
+function runNativeCall({ command, args }, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error(`argo native call timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('error', (err) => { clearTimeout(timer); reject(err) })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) { resolve(stdout); return }
+      reject(new Error(`argo native call exited ${code}: ${clip(nativeErrorText(stdout, stderr), 500)}`))
+    })
+  })
+}
+
+function pickArgs(args, allowed) {
+  const out = {}
+  for (const [key, value] of Object.entries(args ?? {})) {
+    if (allowed.includes(key) && value !== undefined && value !== null && value !== '') {
+      out[key] = value
+    }
+  }
+  return out
+}
+
+export function makeNativeTool(config, kind, deps = {}) {
+  const spec = NATIVE_TOOL_SPECS[kind]
+  if (!spec) {
+    throw new Error(`argo-dsh: unknown native tool "${kind}" (known: ${Object.keys(NATIVE_TOOL_SPECS).join(', ')})`)
+  }
+  const run = deps.run ?? runNativeCall
+  return {
+    name: kind,
+    description: spec.description,
+    parameters: spec.parameters,
+    isConcurrencySafe: () => true,
+    output: {
+      schema: { type: 'object' },
+      render: (_args, value) => {
+        // execute_tool 返回 {content:[{type:'text',text}]}（与 mcp__argo__*
+        // 同压缩）；解析失败回退原始 stdout，截断防上下文膨胀。
+        let body = ''
+        try {
+          const parsed = JSON.parse(value.stdout)
+          body = parsed?.content?.[0]?.text ?? value.stdout
+        } catch {
+          body = value.stdout
+        }
+        return text(clip(body, config.nativeMaxChars ?? 24_000))
+      },
+    },
+    async execute(args) {
+      const payload = JSON.stringify(pickArgs(args, spec.allowed))
+      const spawnSpec = resolveNativeSpawn(config, kind, payload)
+      const stdout = await run(spawnSpec, config.nativeTimeoutMs)
+      return { stdout }
+    },
+  }
+}
+
 export function apply(ctx, providedConfig = {}) {
   const config = { ...DEFAULTS, ...(isObject(providedConfig) ? providedConfig : {}) }
   const toolName = asString(config.toolName, DEFAULTS.toolName)
   const providerName = asString(config.provider, DEFAULTS.provider)
 
-  // 配置 loud fail：启用搜索 provider 时入口必须可用（官方「配置错误要响亮」）。
-  if (config.searchProviderEnabled !== false) {
+  const nativeTools = asStringArray(config.nativeTools, 20)
+  // 配置 loud fail：启用搜索 provider 或原生工具时入口必须可用（官方「配置错误要响亮」）。
+  if (config.searchProviderEnabled !== false || nativeTools.length > 0) {
     if (typeof config.searchCommand !== 'string' || config.searchCommand === '') {
       throw new Error('argo-dsh: searchCommand must be a non-empty string when searchProviderEnabled')
     }
@@ -868,6 +1010,9 @@ export function apply(ctx, providedConfig = {}) {
     }
     if (!Number.isFinite(config.searchTimeoutMs) || config.searchTimeoutMs <= 0) {
       throw new Error('argo-dsh: searchTimeoutMs must be a positive number')
+    }
+    if (!Number.isFinite(config.nativeTimeoutMs) || config.nativeTimeoutMs <= 0) {
+      throw new Error('argo-dsh: nativeTimeoutMs must be a positive number')
     }
   }
 
@@ -891,14 +1036,19 @@ export function apply(ctx, providedConfig = {}) {
         }),
     })
   }
+
+  // 原生一等工具：CLI 单发形态（不依赖 MCP 连接），MCP 注入缺失时的兜底；
+  // 未知工具名在 makeNativeTool 内 loud fail。
+  for (const kind of nativeTools) {
+    ctx.tools.register(makeNativeTool(config, kind))
+  }
   const defaultWorkers = clamp(config.defaultWorkers, DEFAULTS.defaultWorkers, 1, 9)
   const maxWorkers = clamp(config.maxWorkers, DEFAULTS.maxWorkers, 1, 9)
   const maxTracks = clamp(config.maxTracks, DEFAULTS.maxTracks, 2, 9)
   const maxSourcesPerTrack = clamp(config.maxSourcesPerTrack, DEFAULTS.maxSourcesPerTrack, 1, 10)
   const workerMaxTokens = clamp(config.workerMaxTokens, DEFAULTS.workerMaxTokens, 512, 16_000)
   const synthesisMaxTokens = clamp(config.synthesisMaxTokens, DEFAULTS.synthesisMaxTokens, 512, 24_000)
-  const childToolAllow = [...new Set(asStringArray(config.childToolAllow, 100).filter(tool => tool !== toolName && tool !== 'mcp__argo__argo_research'))]
-  const childToolDeny = [...new Set([toolName, ...asStringArray(config.childToolDeny, 100)])]
+  const { allow: childToolAllow, deny: childToolDeny } = buildChildToolFilters(config, toolName)
 
   ctx.tools.register({
     name: toolName,

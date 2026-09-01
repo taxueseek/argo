@@ -1,7 +1,7 @@
 {
   "name": "@taxueseek/argo-dsh",
   "version": "2.8.4",
-  "description": "Argo 阿尔戈 — DSH plugin：挂载 argo 搜索 MCP（12 个工具）并注册 wide_research 并行研究编排。安装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"",
+  "description": "Argo 阿尔戈 — DSH plugin：argo 原生搜索/抓取工具 + web_search seam + wide_research 编排；argo MCP 14 工具全量面按需挂载。安装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"",
   "license": "MIT",
   "type": "module",
   "main": "./dsh/index.js",

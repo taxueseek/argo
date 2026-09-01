@@ -1,23 +1,31 @@
-# argo-dsh bundle：同一插件两行 —
-#   mcp-argo：挂 argo MCP（模型见 mcp__argo__*）
-#   wide-research：本包 apply() 注册 wide_research 编排
+# argo-dsh bundle：默认一行 —
+#   wide-research：本包 apply() 注册 wide_research 编排 + 原生一等工具
+#   （argo_search / argo_fetch）+ 原生 web_search seam（argo 引擎链）
+#
+# MCP 形态（mcp-argo，14 个 mcp__argo__* 完整工具面）默认不挂载：
+# 工具定义每轮注入上下文且压缩清不掉（实测 ≈2K token/轮），而搜索 /
+# 抓取高频路径已由原生工具与 web seam 覆盖，走 CLI 单发同引擎同守卫、
+# 零常驻开销（实测 14 工具 ≈2.3K token/轮）。需要长尾取证能力（screenshot / pdf / social / article /
+# job / evidence / clarify / crawl / local_*）时取消下方注释按需开启。
 #
 # 依赖：Node.js ≥ 18（npx）+ Python 3.10+（pip install pyyaml）。
 # 安装后重启 dsh web 生效。
 #
 # 同 id 可在用户层 cordis.patch.yml 覆盖（同 id + name 才是替换）。
-# worker 默认只用 argo 取证工具，不含 argo_research，避免研究套研究。
+# worker 取证工具白名单用内置默认（mcp__argo__* 与原生工具双写，
+# MCP 挂载与否两态自洽），不含 argo_research，避免研究套研究。
 
 - insert:
-    - id: mcp-argo
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        serverName: argo
-        transport: stdio
-        command: npx
-        args:
-          - '-y'
-          - 'github:taxueseek/argo'
+    # 按需开启：MCP 完整工具面（取消注释后重启生效）
+    # - id: mcp-argo
+    #   name: '@deepseek-ai/dsh-mcp-client'
+    #   config:
+    #     serverName: argo
+    #     transport: stdio
+    #     command: npx
+    #     args:
+    #       - '-y'
+    #       - 'github:taxueseek/argo'
     - id: wide-research
       name: '@taxueseek/argo-dsh'
       config:
@@ -29,12 +37,3 @@
         maxSourcesPerTrack: 5
         workerMaxTokens: 5000
         synthesisMaxTokens: 7000
-        childToolAllow:
-          - mcp__argo__argo_search
-          - mcp__argo__argo_evidence
-          - mcp__argo__argo_fetch
-          - mcp__argo__argo_crawl
-          - mcp__argo__argo_local_search
-          - mcp__argo__argo_local_read
-          - mcp__argo__argo_recompute
-          - mcp__argo__argo_social_search

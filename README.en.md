@@ -222,7 +222,7 @@ Unusual Python path: `export ARGO_PYTHON=/path/to/python3` (read by the npx entr
 Two install paths inside DeepSeek Harness:
 
 ```bash
-# A: 12 mcp__argo__* tools (main-package bundle, same as full MCP)
+# A: 14 mcp__argo__* tools (main-package bundle, same as full MCP)
 dsh plugin --profile web add "github:taxueseek/argo"
 
 # B: search tools + wide_research parallel research orchestration (subpackage)
@@ -296,7 +296,7 @@ python3 scripts/search.py --list-engines
 - **Structured search upgrades (new in v2.8.4)**: query normalize + variants + complexity gate; social-syntax first; TF-IDF keeps looking after dropping a Chinese engine; `--include-local`
 - **Keenable (new in v2.8.4)**: extra general web engine (L1 declarative HTTP, free trial, `ARGO_KEENABLE_API_KEY`)
 - **~150+ sources, 70+ domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml`)
-- **12 MCP tools**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute
+- **14 MCP tools**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute, WeChat article full text, job aggregation
 - **Multilingual search**: Chinese, English, Japanese, Korean, Cyrillic, Thai, Arabic, Hebrew, Greek, Devanagari, …; routing and engine params follow language; non-Chinese queries avoid Chinese-only sources (Zhihu / Sogou WeChat / A-share snapshots, etc.)
 - **Vertical recovery gates**: empty-result recovery will not “leak” pypi / npm / flash news into film or sports
 - **Faster daily, fuller research**: `engine_policy` tiers—tight daily combo, open long-tail for deep / research

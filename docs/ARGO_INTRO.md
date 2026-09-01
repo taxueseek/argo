@@ -32,7 +32,7 @@ Claude / Codex / Kimi 等支持 MCP 的客户端，直接挂：
 }
 ```
 
-挂上后获得 12 个工具：`argo_search`、`argo_local_search`、`argo_local_read`、`argo_recompute`、`argo_research`、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`。
+挂上后获得 14 个工具：`argo_search`、`argo_local_search`、`argo_local_read`、`argo_recompute`、`argo_research`、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_article`（公众号文章全文）、`argo_job`（招聘多平台聚合）。
 
 ### 依赖
 

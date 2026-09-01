@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracks, stageTracks, evaluateGates, normalizeSource, mapArgoToWebResult, buildLocalSources, parseJsonArray, parseJsonObject, extractValues } from '../dsh/index.js'
+import { normalizeTracks, stageTracks, evaluateGates, normalizeSource, mapArgoToWebResult, buildLocalSources, parseJsonArray, parseJsonObject, extractValues, resolveNativeSpawn, makeNativeTool, buildChildToolFilters, apply } from '../dsh/index.js'
 
 test('mapArgoToWebResult maps compact argo payload to web sources', () => {
   const mapped = mapArgoToWebResult({
@@ -263,4 +263,126 @@ test('evaluateGates: local first-hand source counts as evidence', () => {
     localSources: [{ path: '~/company.xlsx', ref: '[L1]' }],
   })
   assert.ok(!gates.failures.some(f => f.id === 'no_sources'), '本地一手存在时不应判 no_sources')
+})
+
+// ── 原生一等工具（CLI 单发形态）──────────────────────────────────────────
+
+test('resolveNativeSpawn: npx mode appends call subcommand', () => {
+  const config = { searchCommand: 'npx', searchArgs: ['-y', 'github:taxueseek/argo'] }
+  const spec = resolveNativeSpawn(config, 'argo_search', '{"query":"q"}')
+  assert.equal(spec.command, 'npx')
+  assert.deepEqual(spec.args.slice(-3), ['call', 'argo_search', '{"query":"q"}'])
+})
+
+test('resolveNativeSpawn: local mcp_server.py mode uses --call flag', () => {
+  const config = { searchCommand: 'python3', searchArgs: ['/opt/argo/scripts/mcp_server.py'] }
+  const spec = resolveNativeSpawn(config, 'argo_fetch', '{"url":"https://x"}')
+  assert.equal(spec.command, 'python3')
+  assert.deepEqual(spec.args, ['/opt/argo/scripts/mcp_server.py', '--call', 'argo_fetch', '{"url":"https://x"}'])
+})
+
+test('resolveNativeSpawn: empty config falls back to defaults with call tail', () => {
+  // DEFAULTS.searchCommand 读环境变量，不硬断言具体命令值；
+  // 两种部署路径的 args 尾部统一是 [tool, payload]。
+  const spec = resolveNativeSpawn({}, 'argo_search', '{"query":"q"}')
+  assert.equal(typeof spec.command, 'string')
+  assert.ok(spec.command.length > 0)
+  assert.deepEqual(spec.args.slice(-2), ['argo_search', '{"query":"q"}'])
+})
+
+test('makeNativeTool: execute forwards picked args and render unwraps MCP payload', async () => {
+  const captured = []
+  const run = async (spawnSpec) => {
+    captured.push(spawnSpec)
+    return JSON.stringify({ content: [{ type: 'text', text: 'hello argo' }] })
+  }
+  const tool = makeNativeTool({ nativeMaxChars: 24_000 }, 'argo_search', { run })
+  assert.equal(tool.name, 'argo_search')
+  assert.deepEqual(tool.parameters.required, ['query'])
+
+  const value = await tool.execute({ query: 'q1', evil: 'injected', engine: '' })
+  // junk 键被 pickArgs 丢弃、空串过滤；payload 只含合法非空参数
+  const payload = JSON.parse(captured[0].args[captured[0].args.length - 1])
+  assert.deepEqual(payload, { query: 'q1' })
+
+  const blocks = tool.output.render({}, value)
+  assert.equal(blocks[0].type, 'text')
+  assert.equal(blocks[0].text, 'hello argo')
+})
+
+test('makeNativeTool: render clips to nativeMaxChars and tolerates raw stdout', () => {
+  const run = async () => JSON.stringify({ content: [{ type: 'text', text: 'x'.repeat(100) }] })
+  const tool = makeNativeTool({ nativeMaxChars: 10 }, 'argo_fetch', { run })
+  const blocks = tool.output.render({}, { stdout: JSON.stringify({ content: [{ type: 'text', text: 'x'.repeat(100) }] }) })
+  assert.ok(blocks[0].text.length <= 10)
+  // 非 JSON stdout 原样透传（同样受 clip 约束）
+  const raw = makeNativeTool({ nativeMaxChars: 5 }, 'argo_fetch', { run: async () => 'plain text!' })
+  assert.ok(raw.output.render({}, { stdout: 'plain text!' })[0].text.length <= 5)
+})
+
+test('makeNativeTool: unknown tool name fails loudly', () => {
+  assert.throws(() => makeNativeTool({}, 'argo_nope'), /unknown native tool/)
+})
+
+function makeCtx() {
+  const registered = []
+  const providers = []
+  const ctx = {
+    tools: { register: (t) => registered.push(t) },
+    subagents: { getProvider: () => null, list: () => [] },
+    effect() {},
+    get: (svc) => svc === 'web' ? { registerSearchProvider: (p) => providers.push(p) } : null,
+  }
+  return { ctx, registered, providers }
+}
+
+test('apply: default config registers native tools and an available web provider', () => {
+  const { ctx, registered, providers } = makeCtx()
+  apply(ctx, {})
+  const names = registered.map(t => t.name)
+  assert.ok(names.includes('argo_search'), 'argo_search 应注册')
+  assert.ok(names.includes('argo_fetch'), 'argo_fetch 应注册')
+  assert.ok(names.includes('wide_research'))
+  assert.equal(providers.length, 1)
+  assert.equal(providers[0].id, 'argo')
+  assert.equal(providers[0].available(), true)
+})
+
+test('apply: nativeTools=[] and searchProviderEnabled=false disables both seams', () => {
+  const { ctx, registered, providers } = makeCtx()
+  apply(ctx, { nativeTools: [], searchProviderEnabled: false })
+  const names = registered.map(t => t.name)
+  assert.ok(!names.includes('argo_search'))
+  assert.ok(!names.includes('argo_fetch'))
+  assert.ok(names.includes('wide_research'), 'wide_research 不受搜索开关影响')
+  assert.equal(providers.length, 1, 'provider 仍注册（headless 一致性）')
+  assert.equal(providers[0].available(), false)
+})
+
+test('apply: unknown native tool name fails loudly', () => {
+  const { ctx } = makeCtx()
+  assert.throws(() => apply(ctx, { nativeTools: ['argo_nope'] }), /unknown native tool/)
+})
+
+test('buildChildToolFilters: default allow list dual-writes MCP and native tools', () => {
+  const { allow, deny } = buildChildToolFilters({}, 'wide_research')
+  for (const tool of ['argo_search', 'argo_fetch', 'web_search', 'web_fetch', 'mcp__argo__argo_search']) {
+    assert.ok(allow.includes(tool), `默认白名单应含 ${tool}（MCP/原生两态自洽）`)
+  }
+  assert.ok(!allow.includes('wide_research'), '自身不入白名单')
+  assert.ok(!allow.includes('mcp__argo__argo_research'), '研究不套研究')
+  assert.ok(deny.includes('wide_research'))
+})
+
+test('buildChildToolFilters: explicit empty allow falls back to deny path', () => {
+  const { allow, deny } = buildChildToolFilters({ childToolAllow: [] }, 'wide_research')
+  assert.deepEqual(allow, [])
+  assert.ok(deny.includes('wide_research'))
+})
+
+test('buildChildToolFilters: explicit list filters blocked names and dedupes', () => {
+  const { allow } = buildChildToolFilters({
+    childToolAllow: ['argo_search', 'argo_search', 'mcp__argo__argo_research', 'web_search'],
+  }, 'wide_research')
+  assert.deepEqual(allow, ['argo_search', 'web_search'])
 })
