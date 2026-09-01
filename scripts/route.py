@@ -598,6 +598,13 @@ _ZH_ONLY_ENGINES = frozenset({
 _SOCIAL_ZH_GENERAL = ("anysearch", "local_bing")
 
 
+def _move_to_tail(combo: list[str], excluded: frozenset[str]) -> list[str]:
+    """combo 中命中 excluded 的引擎稳定移尾（其余保持原顺序）。"""
+    keep = [e for e in combo if e not in excluded]
+    tail = [e for e in combo if e in excluded]
+    return keep + tail
+
+
 def _lang_aware_combo_order(combo: list[str], features: dict | None,
                             domain_name: str | None,
                             enabled: set[str]) -> list[str]:
@@ -620,9 +627,7 @@ def _lang_aware_combo_order(combo: list[str], features: dict | None,
     is_zh = primary_lang == "zh" or (
         primary_lang not in ("ja", "ko") and zh_ratio > 0.15)
     if is_zh:
-        keep = [e for e in combo if e not in _EN_ONLY_ENGINES]
-        tail = [e for e in combo if e in _EN_ONLY_ENGINES]
-        ordered = keep + tail
+        ordered = _move_to_tail(combo, _EN_ONLY_ENGINES)
         if domain_name == "social":
             for g in _SOCIAL_ZH_GENERAL:
                 if g in enabled and g in ordered:
@@ -631,9 +636,7 @@ def _lang_aware_combo_order(combo: list[str], features: dict | None,
         return ordered
     # 对称分支：非中文查询把中文专用源移尾（含 zh_ratio≤0.15 的混合查询）
     if features.get("primary_lang") in ("en", "ja", "ko"):
-        keep = [e for e in combo if e not in _ZH_ONLY_ENGINES]
-        tail = [e for e in combo if e in _ZH_ONLY_ENGINES]
-        return keep + tail
+        return _move_to_tail(combo, _ZH_ONLY_ENGINES)
     return combo
 
 

@@ -576,7 +576,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 return _ok({"query": "", "engine": "local_files", "count": 0,
                             "results": [], "errors": ["query 不能为空"]}, pretty=pretty)
             path = str(arguments.get("path", "~"))
-            max_results = max(1, min(int(arguments.get("max_results", 5) or 5), 20))
+            max_results = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
             exact = bool(arguments.get("exact", False))
             seek_py = _seek_py()
             cmd = [sys.executable, seek_py, query, "--path", path,
@@ -668,8 +668,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     inputs = json.loads(inputs_raw)
                 except (ValueError, TypeError):
                     inputs = []
-            timeout_s = max(1, min(int(arguments.get("timeout_s", 30) or 30), 120))
-            max_mem_mb = max(64, min(int(arguments.get("max_mem_mb", 512) or 512), 4096))
+            timeout_s = _clamp_int(arguments.get("timeout_s", 30), 30, 1, 120)
+            max_mem_mb = _clamp_int(arguments.get("max_mem_mb", 512), 512, 64, 4096)
             allow_exec = bool(arguments.get("allow_exec", False))
             if not script:
                 return _ok({"ok": False, "skipped_reason": "script 为空"}, pretty=pretty)
@@ -734,10 +734,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
             query = arguments["query"]
             # 边界夹取与 schema（1..20）同口径：客户端越界值不放大平台请求
-            try:
-                n = max(1, min(int(arguments.get("max_results", 5) or 5), 20))
-            except (TypeError, ValueError):
-                n = 5
+            n = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
             platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
             if arguments.get("mode", "text") == "sentiment":
                 # 舆情聚合逻辑下沉在 research.aggregate_social_sentiment

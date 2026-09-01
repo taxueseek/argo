@@ -336,6 +336,11 @@ def _record_quota(engine: str, success: bool) -> None:
         pass
 
 
+# 配额耗尽错误关键词（单一真源）：_classify_engine_outcome 的 quota-exhausted
+# 分类与自适应学习跳过逻辑共用。新增配额错误码（如新的 API 业务码）只改这里。
+_QUOTA_ERROR_KEYWORDS = ("quota", "10406")
+
+
 def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
     """远端明示配额耗尽（如 byted 10406）→ 标记到周期边界自动恢复。
 
@@ -873,7 +878,7 @@ def _classify_engine_outcome(eng: str, res: list[dict[str, Any]],
         msg = str(errors[0].get("error", "")).lower()
         if "timeout" in msg:
             st = "timeout"
-        elif "quota" in msg or "10406" in msg:
+        elif any(k in msg for k in _QUOTA_ERROR_KEYWORDS):
             st = "quota-exhausted"
         elif "rate" in msg or "429" in msg:
             st = "rate-limited"
@@ -1621,9 +1626,11 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             # 配额/鉴权类是配置态故障，不是引擎质量信号：计入会把恢复后的
             # 引擎分数毒化在历史失败里（byted 配额期 38 连败 → 分数 0.072，
             # 配额自愈后无流量刷正分，死锁）。此类错误不计入，保持中性。
+            # 配额关键词走 _QUOTA_ERROR_KEYWORDS 单一真源；鉴权类仅此处有。
             if errors and all(
-                any(k in msg.lower() for k in ("quota", "10406", "unauthorized",
-                                               "api key", "forbidden", "401", "403"))
+                any(k in msg.lower() for k in
+                    (*_QUOTA_ERROR_KEYWORDS, "unauthorized", "api key",
+                     "forbidden", "401", "403"))
                 for msg in errors
             ):
                 continue

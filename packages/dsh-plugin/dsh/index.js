@@ -233,7 +233,7 @@ function createMcpConnection(options) {
       conn.notify('notifications/initialized', {})
       return init
     },
-    request: (method, params) => {
+    request: (method, params, timeoutMs = 0) => {
       touchIdle()
       const run = () => new Promise((res, rej) => {
         if (proc === null || proc.stdin.destroyed) {
@@ -242,7 +242,24 @@ function createMcpConnection(options) {
         }
         const id = nextId
         nextId += 1
-        pending.set(id, { res, rej })
+        const entry = { res, rej }
+        pending.set(id, entry)
+        // 内建超时：到点后从 pending 清掉本 entry（否则响应永不来时
+        // entry 泄漏到进程 close 才释放），并 reject 本请求。
+        let reqTimer = null
+        if (timeoutMs > 0) {
+          reqTimer = setTimeout(() => {
+            pending.delete(id)
+            rej(new Error(`argo MCP request timed out after ${timeoutMs}ms: ${method}`))
+          }, timeoutMs)
+          if (reqTimer.unref) reqTimer.unref()
+        }
+        const settle = (fn, value) => {
+          if (reqTimer !== null) clearTimeout(reqTimer)
+          fn(value)
+        }
+        entry.res = (v) => settle(res, v)
+        entry.rej = (e) => settle(rej, e)
         try {
           proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
         } catch (err) {
@@ -313,28 +330,22 @@ export async function searchViaArgoMCP(query, maxResults = 5, signal, options = 
 
   const conn = await getSharedMcp({ command, args, idleMs: options.idleMs ?? DEFAULTS.searchIdleMs })
   const result = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('argo search timed out')), timeoutMs)
-    const onAbort = () => {
-      clearTimeout(timer)
-      reject(argoAborted())
-    }
+    const onAbort = () => reject(argoAborted())
     if (signal !== undefined) {
       if (signal.aborted) {
-        clearTimeout(timer)
         reject(argoAborted())
         return
       }
       signal.addEventListener('abort', onAbort, { once: true })
     }
+    // 超时内建在 conn.request：pending entry 同步清理，不再留泄漏到 close。
     conn.request('tools/call', {
       name: 'argo_search',
       arguments: { query, max_results: count, summary: true }
-    }).then((value) => {
-      clearTimeout(timer)
+    }, timeoutMs).then((value) => {
       if (signal !== undefined) signal.removeEventListener('abort', onAbort)
       resolve(value)
     }, (err) => {
-      clearTimeout(timer)
       if (signal !== undefined) signal.removeEventListener('abort', onAbort)
       reject(err)
     })
@@ -837,25 +848,17 @@ export async function recomputeViaArgoMCP(spec, fileInputs, options = {}) {
   const args = options.args ?? DEFAULTS.searchArgs
   const timeoutMs = options.timeoutMs ?? DEFAULTS.searchTimeoutMs
   const conn = await getSharedMcp({ command, args, idleMs: options.idleMs ?? DEFAULTS.searchIdleMs })
-  const result = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('argo recompute timed out')), timeoutMs)
-    conn.request('tools/call', {
-      name: 'argo_recompute',
-      arguments: {
-        script: asString(spec.script),
-        file_inputs: JSON.stringify(fileInputs),
-        timeout_s: Number(spec.budget?.timeout_s) || 30,
-        max_mem_mb: Number(spec.budget?.max_mem_mb) || 512,
-        allow_exec: true,
-      },
-    }).then((value) => {
-      clearTimeout(timer)
-      resolve(value)
-    }, (err) => {
-      clearTimeout(timer)
-      reject(err)
-    })
-  })
+  // 超时内建在 conn.request：pending entry 同步清理（与 searchViaArgoMCP 同口径）。
+  const result = await conn.request('tools/call', {
+    name: 'argo_recompute',
+    arguments: {
+      script: asString(spec.script),
+      file_inputs: JSON.stringify(fileInputs),
+      timeout_s: Number(spec.budget?.timeout_s) || 30,
+      max_mem_mb: Number(spec.budget?.max_mem_mb) || 512,
+      allow_exec: true,
+    },
+  }, timeoutMs)
   let payload
   try {
     const raw = result?.content?.[0]?.text
