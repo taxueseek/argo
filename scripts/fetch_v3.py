@@ -46,6 +46,15 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
+# 渲染层（第二级A）：TinyFish 直连渲染，独立模块以保持本文件聚焦主链编排
+import fetch_render_tinyfish as _render_tinyfish
+
+# 质量信号层（第三级）：来源分类 / 页面类型 / 质量分 / 内容安全
+import fetch_quality as _quality
+
+# 本地状态目录单一真源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
+import argo_paths as _paths
+
 
 # ─── 内容提取器（复用 fetch.py 的逻辑，增强版）──────────────────────────────
 
@@ -174,6 +183,18 @@ def _md_variant_enabled() -> bool:
         "0", "false", "False", "no")
 
 
+def _tinyfish_enabled() -> bool:
+    """tinyfish 免费渲染层开关（直连 api.fetch.tinyfish.ai，需 TINYFISH_API_KEY）：
+    ARGO_FETCH_TINYFISH=0 关闭，默认开启。
+
+    仅在http/指纹均失败或命中 JS/反爬壳时启用，结果失败自动回退，
+    不改变正常抓取路径。
+
+    实现委托给 fetch_render_tinyfish（渲染层已独立成模块）。
+    """
+    return _render_tinyfish.enabled()
+
+
 def _md_variant_url(url: str) -> str | None:
     """返回可探测的 .md 变体 URL；不适合探测时返回 None。
 
@@ -283,7 +304,7 @@ def _mobile_first_host(url: str) -> bool:
 _IDENTITY_TTL = 86400
 _IDENTITY_PATH = os.environ.get(
     "ARGO_IDENTITY_MEMORY",
-    os.path.expanduser("~/.cache/unified-search/fetch-identity.json"))
+    str(_paths.state_path("fetch-identity.json")))
 _identity_mem: dict[str, float] = {}
 _identity_loaded = False
 
@@ -530,6 +551,15 @@ def _make_result(url: str, html: str, max_chars: int,
     }
 
 
+# ─── 第二级A：tinyfish 直连渲染（Markdown 直出，含 JS 执行）─────────────
+# 实现见 fetch_render_tinyfish（独立模块）：markdown-only 渲染，
+# 不产 raw html，故 need_html 场景由主链跳过本层。
+
+def _tinyfish_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
+    """委托给 fetch_render_tinyfish.fetch（渲染层已拆为独立模块）。"""
+    return _render_tinyfish.fetch(url, max_chars=max_chars, timeout=timeout)
+
+
 # ─── 第二级：Chrome CDP 浏览器 ───────────────────────────────────────────────
 
 def _browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
@@ -581,125 +611,17 @@ def _browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
 
 
 # ─── 第三级：质量评估 ─────────────────────────────────────────────────────────
+# 实现见 fetch_quality（独立模块）：来源分类 / 页面类型 / 质量分 / 内容安全。
 
 def _assess_quality(result: dict) -> dict:
-    """计算内容质量信号（内联 content_signals 的核心逻辑）。"""
-    url = result.get("url", "")
-    content = result.get("content", "")
-    html = result.get("html", "")
-
-    # source_type + is_official
-    source_type, is_official = _classify_domain(url)
-
-    # page_type
-    page_type = _detect_page_type(html, content)
-
-    # quality_score
-    quality_score = _compute_quality(content, html)
-
-    # content_ok
-    content_ok = quality_score > 0.25 and len(content) > 80
-
-    # is_stale (简化：无日期信息时保守判定)
-    is_stale = False
-    content_age_days = -1
-
-    # 内容安全：注入检测 + 清洗（任何抓取内容先过安全引擎）
-    security = {}
-    if content:
-        try:
-            from content_security import scrub_to_dict
-            security = scrub_to_dict(content)
-        except Exception:
-            security = {}
-
-    result.update({
-        "content_ok": content_ok,
-        "page_type": page_type,
-        "source_type": source_type,
-        "is_official": is_official,
-        "is_stale": is_stale,
-        "content_age_days": content_age_days,
-        "quality_score": quality_score,
-        "content_security": security,
-    })
-    return result
+    """计算内容质量信号（委托 fetch_quality.assess）。"""
+    return _quality.assess(result)
 
 
-def _classify_domain(url: str) -> tuple[str, bool]:
-    """快速域名分类。"""
-    try:
-        host = urlparse(url).netloc.lower().split(":")[0]
-    except Exception:
-        return "unknown", False
-
-    if host.endswith(".gov") or ".gov." in host:
-        return "gov", True
-    if host.endswith(".edu") or host.endswith(".ac.uk"):
-        return "edu", True
-    if "github.com" in host or host.endswith(".github.io"):
-        return "github", True
-    if host.startswith("docs.") or host.startswith("developer."):
-        return "docs-site", True
-    if "stackoverflow" in host or "stackexchange" in host:
-        return "qa", False
-    if any(m in host for m in ("forum", "community", "discourse")):
-        return "forum", False
-    if host in ("reddit.com", "www.reddit.com", "old.reddit.com"):
-        return "forum", False
-    if any(host == d or host.endswith("." + d) for d in (
-        "nytimes.com", "bbc.com", "reuters.com", "theguardian.com",
-        "bloomberg.com", "techcrunch.com", "theverge.com",
-    )):
-        return "news", False
-    return "unknown", False
-
-
-def _detect_page_type(html: str, content: str) -> str:
-    """检测页面结构类型。"""
-    if not html:
-        return "unknown"
-    # 重定向
-    if re.search(r'<meta[^>]*http-equiv=["\']refresh["\']', html, re.I):
-        return "redirect"
-    # paywall
-    if re.search(r'subscribe to continue|paywall|premium content', html, re.I):
-        return "paywall"
-    # forum
-    if re.search(r'phpbb|discourse|class="forum|id="forum', html, re.I):
-        return "forum"
-    # qa
-    if re.search(r'stackoverflow|class="question|data-answerid', html, re.I):
-        return "qa"
-    # docs
-    if re.search(r'mkdocs|docusaurus|readthedocs|sphinx-document|md-nav', html, re.I):
-        return "docs"
-    # list/index (many links, little text)
-    link_count = len(re.findall(r'<a\s+href=', html))
-    text_len = len(content)
-    if link_count > 20 and text_len < 500:
-        return "list"
-    # article
-    if text_len > 200:
-        return "article"
-    return "unknown"
-
-
-def _compute_quality(content: str, html: str) -> float:
-    """计算质量评分（0-1）。"""
-    if not content:
-        return 0.0
-    word_count = len(content.split())
-    text_density = len(content.replace(" ", "").replace("\n", "")) / max(len(content), 1)
-    has_structure = bool(re.search(r'[.!?。！？].{10,}[.!?。！？]', content))
-
-    score = min(1.0, (
-        0.4 * min(word_count / 500, 1.0) +
-        0.3 * text_density +
-        0.2 * (1.0 if has_structure else 0.0) +
-        0.1 * (1.0 if len(content) > 1000 else 0.0)
-    ))
-    return round(score, 2)
+# 兼容别名：存量测试与调用方直接引用这些私有名，委托到 fetch_quality 保留。
+_detect_page_type = _quality._detect_page_type
+_compute_quality = _quality._compute_quality
+_classify_domain = _quality._classify_domain
 
 
 # ─── 主入口 ──────────────────────────────────────────────────────────────────
@@ -737,15 +659,27 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
              use_browser_fallback: bool = True,
              actions: list[dict] | None = None,
              force_browser: bool = False,
-             skip_cache: bool = False) -> dict:
-    """四级抓取主函数。
+             skip_cache: bool = False,
+             need_html: bool = False) -> dict:
+    """多级抓取降级链主函数（逐级升级，受全局 deadline 约束）。
 
-    第一级：增强 HTTP（UA 轮换 + Cookie 积累）
-    第一级B：TLS 指纹伪造（curl_cffi impersonate，指纹检测型反爬）
-    第二级：Wayback 快照 + Chrome CDP 浏览器（自动降级或 actions 触发）
-    第三级：质量评估（content_ok/page_type/quality_score）
+    执行顺序：
+      第零级：{url}.md 变体探测（AI 友好直出，命中即跳过整条反爬链）
+      第一级：增强 HTTP（UA 轮换 + Cookie 积累）；客户端形态分流型站点移动 UA 首发
+      第一级B：TLS 指纹伪造（curl_cffi impersonate，指纹检测型反爬）
+      第二级A：tinyfish 直连渲染（markdown-only，需 TINYFISH_API_KEY；need_html 或开关关闭时跳过）
+      第二级B：Wayback 快照 + Chrome CDP 浏览器（自动降级或 actions 触发）
+      第三级：质量评估（content_ok/page_type/quality_score）
+
+    全局 deadline：单次 fetch_v3 总耗时上限 = ARGO_FETCH_DEADLINE_S（默认 60，
+    可设 0 关闭）。降级是「延迟换成功率」的交易，延迟必须有一等公民约束——
+    逐级独立超时的加法无上限（8+8+8+12+8+15≈59s+），会击穿 MCP 客户端
+    工具超时。每级升级前检查剩余预算，耗尽即停链返回当前最优结果
+    （失败结果 + deadline_exhausted 标记），不再无限叠加。
 
     URL 级缓存：无 actions 的成功结果写入 SearchCache（L1+L2）。
+    need_html：调用方需要原始 HTML（如爬取提取链接）时置 True，跳过 tinyfish
+    （仅产 markdown 无 raw html），避免降级链在爬取场景行为漂移。
     """
     try:
         from url_safety import check_url
@@ -800,6 +734,25 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
     if force_browser:
         result = _browser_fetch(url, max_chars, timeout=15.0, actions=actions)
     else:
+        # 全局 deadline：所有降级升级动作共用的总预算（秒）。
+        # ARGO_FETCH_DEADLINE_S=0 关闭；默认 60s（MCP 客户端工具超时的安全下限）。
+        try:
+            deadline_s = float(os.environ.get("ARGO_FETCH_DEADLINE_S", "60") or 60)
+        except ValueError:
+            deadline_s = 60.0
+        t_chain0 = time.monotonic()
+        deadline_hit = {"flag": False}
+
+        def _budget_left() -> float:
+            """剩余降级预算；耗尽时置标记并返回 -1（调用方停止升级）。"""
+            if deadline_s <= 0:
+                return 1.0
+            left = deadline_s - (time.monotonic() - t_chain0)
+            if left <= 0:
+                deadline_hit["flag"] = True
+                return -1.0
+            return left
+
         host = (urlparse(url).hostname or "").lower()
         gated = (_mobile_branch_enabled()
                  and (_mobile_first_host(url) or _identity_is_mobile(host)))
@@ -826,7 +779,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
 
             # 明确停止信号（429/503）→ 不再升级 TLS/wayback/CDP。
             # 限速/过载与请求方式无关，继续升级重链 = 无视服务器指示放大负载。
-            if not result.get("stop_signal"):
+            if not result.get("stop_signal") and _budget_left() > 0:
                 # 第一级A2：移动端 UA 分支（客户端形态分流型反爬）。实测抖音
                 # iesdouyin 对真机 UA 返回 SSR 数据、对桌面/AI UA 一律风控壳；
                 # 该类分流与 TLS 指纹无关，stdlib 免费尝试即可，命中则免去
@@ -843,7 +796,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                         result = mob
                         _identity_remember_mobile(host)
 
-            if not result.get("stop_signal"):
+            if not result.get("stop_signal") and _budget_left() > 0:
                 # 第一级B：TLS 指纹伪造（HTTP 失败或疑似指纹拦截时）
                 # 指纹检测型反爬对 urllib 直接 403，TLS 层免起浏览器即可通过，
                 # 避免不必要的 CDP 冷启动。门控站跳过：单次直连原则，
@@ -858,7 +811,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                         spoof["http_fallback"] = True
                         result = spoof
 
-            if not result.get("stop_signal"):
+            if not result.get("stop_signal") and _budget_left() > 0:
                 # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
                 if not result.get("success"):
                     wb = _wayback_fetch(url, max_chars,
@@ -867,12 +820,26 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                         wb["http_fallback"] = True
                         result = wb
 
-                # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）
-                if use_browser_fallback and _needs_browser(result):
-                    browser_result = _browser_fetch(url, max_chars, timeout=15.0)
-                    if browser_result.get("success") or not result.get("success"):
-                        browser_result["http_fallback"] = True
-                        result = browser_result
+                # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）；预算耗尽不再升级
+                if use_browser_fallback and _needs_browser(result) and _budget_left() > 0:
+                    if _tinyfish_enabled() and not need_html:
+                        # tinyfish 免费渲染（返回 clean Markdown，含 JS 执行）优先于本地 Chrome；
+                        # 只产 markdown 无 raw html，爬取（need_html）跳过，失败自动回退。
+                        tf = _tinyfish_fetch(url, max_chars, timeout)
+                        if tf.get("success") and len(
+                                (tf.get("content") or "").strip()) >= 100:
+                            tf["http_fallback"] = True
+                            result = tf
+                    # tinyfish 未命中（关闭/缺 key/失败/短内容）才起本地 Chrome——
+                    # 内容过短的成功响应与失败同样需要继续降级
+                    if result.get("fetch_method") != _render_tinyfish.TINYFISH_METHOD:
+                        browser_result = _browser_fetch(url, max_chars, timeout=15.0)
+                        if browser_result.get("success") or not result.get("success"):
+                            browser_result["http_fallback"] = True
+                            result = browser_result
+
+        if deadline_hit["flag"]:
+            result["deadline_exhausted"] = True
 
     # 第三级：质量评估
     result = _assess_quality(result)
@@ -919,7 +886,7 @@ def fetch_page_v3(url: str, max_chars: int = 3000,
     需要原始 HTML 的场景必须重新抓取，才能拿到完整页面。
     """
     result = fetch_v3(url, max_chars=max_chars, timeout=float(timeout),
-                      skip_cache=raw)
+                      skip_cache=raw, need_html=raw)
     out = {
         "url": result["url"],
         "content": result["content"],

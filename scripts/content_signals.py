@@ -19,6 +19,10 @@ from urllib.parse import urlparse
 
 STALE_DAYS = 365
 
+# 判定为 article 的最小正文字数（正文充分性阈值）。
+# 供 detect_page_type 的 markdown-only 回退使用，避免与 fetch 判定漂移。
+MIN_ARTICLE_CHARS = 200
+
 _NEWS_DOMAINS = (
     "nytimes.com", "bbc.com", "bbc.co.uk", "reuters.com", "theguardian.com",
     "washingtonpost.com", "bloomberg.com", "apnews.com", "aljazeera.com",
@@ -202,14 +206,20 @@ def _count_content_links(html: str, host: str) -> int:
     return count
 
 
-def detect_page_type(html: str, url: str = "") -> dict:
+def detect_page_type(html: str, url: str = "", content: str = "") -> dict:
     """从 HTML 判断页面结构类型。
 
     返回 {"page_type", "confidence"}。
     page_type: article/list/forum/qa/docs/paywall/redirect/unknown。
     错误推导信号（js_shell/auth_wall）不在此处检测——由上层错误回调 override。
+
+    content 参数用于 markdown-only 源（.md 变体 / tinyfish 渲染层）回退：
+    这类源没有原始 HTML，docs / list / forum 等结构信号全部缺失，只能按
+    正文字数判「正文充分」，confidence 相应压低（0.4）以反映判定降级。
     """
     if not html or not html.strip():
+        if content and len(content) > MIN_ARTICLE_CHARS:
+            return {"page_type": "article", "confidence": 0.4}
         return {"page_type": "unknown", "confidence": 0.0}
     low = html.lower()
     # 跳转
