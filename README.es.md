@@ -18,34 +18,18 @@
   <a href="#inicio-rápido">Inicio rápido</a> ·
   <a href="#capacidades">Capacidades</a> ·
   <a href="#instalación-y-configuración">Config</a> ·
-  <a href="#historial-de-cambios">Actualizaciones</a>
+  <a href="#actualizaciones-recientes">Actualizaciones</a>
 </p>
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.5-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
 > **Este repositorio es parte del conjunto de plugins DeepSeek Harness de taxueseek** — hermanos: [dsh-files](https://github.com/taxueseek/dsh-files) (enviar archivos, leer documentos) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets) (favoritos de snippets) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck) (chequeo de solo lectura) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) (auditoría de seguridad de plugins) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) (ingeniería inversa de prompts e imágenes multi-proveedor) — todos los plugins en el [perfil](https://github.com/taxueseek)
-
----
-
-## Destacados de v2.8.4 (sobre v2.8.3)
-
-> En una frase: esta versión lleva más lejos el «encontrártelo» — **los datos locales de primera mano entran en la investigación**, **enganchar MCP en varios agentes es un comando**, **las preguntas simples ya no se arrastran a rondas extra**, **una fuente de búsqueda gratis más**, y algunos endurecimientos de seguridad.
-
-- **La investigación profunda puede comer tus datos locales**: los work packages admiten `file_inputs` (CSV / XLSX / literatura de primera mano; se registra el hash, no el contenido) + `recompute` (recalc en sandbox; los desajustes se marcan)
-- **El MCP ya no se edita a mano**: `argo mcp inject` escribe Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (escritura atómica + backup + deshacer)
-- **Las consultas simples se quedan baratas**: normalización (ancho completo→medio, barras de versión) + puerta de complejidad (lo simple no pasa a multi-fuente cara) + sintaxis social/plataforma primero + si se descarta un motor chino, se siguen mirando candidatos
-- **Keenable** como fuente web en prueba gratis (desactívala si termina la prueba)
-- **Seguridad**: recompute bloquea subprocesos de salida a red; las rutas de host son conscientes de la instalación (sin `~/.agents` hardcodeado); la pista de instalación ya no apunta al paquete npm obsoleto
-
-> Detalle al final: [historial](#historial-de-cambios) y [notas de release](docs/RELEASE_NOTES_v2.8.4.md).
-
----
 
 ## Por qué supera a la búsqueda del modelo, la búsqueda IA y el metasearch
 
@@ -155,7 +139,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.8.4**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
+Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.8.5**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -235,11 +219,11 @@ Reinicia `dsh web` tras instalar. Ver `packages/dsh-plugin/`.
 
 ### Opción 3: Tarball de release
 
-Abre [Releases](https://github.com/taxueseek/argo/releases), descarga **`argo-2.8.4.tar.gz`**:
+Abre [Releases](https://github.com/taxueseek/argo/releases), descarga **`argo-2.8.5.tar.gz`**:
 
 ```bash
-tar -xzf argo-2.8.4.tar.gz
-cd argo-2.8.4
+tar -xzf argo-2.8.5.tar.gz
+cd argo-2.8.5
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -333,7 +317,7 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.8.4)
+### Conjunto aproximado de capacidades (v2.8.5)
 
 - **Fusión de datos locales (nuevo en v2.8.4)**: work packages de investigación con `file_inputs` (datos locales de primera mano; se registra sha256/linaje) + `recompute` (recálculo en sandbox); el dossier emite `local_sources`
 - **Inyección MCP de un comando (nuevo en v2.8.4)**: `argo mcp inject` para Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (escritura atómica + backup + deshacer; fuente `mcp/clients.yaml`)
@@ -546,10 +530,33 @@ argo/
 
 ---
 
+## Actualizaciones recientes
+
+### v2.8.5: herramientas nativas del plugin DSH + MCP apagado por defecto + compatibilidad con Windows
+
+- **Herramientas nativas del plugin**: `argo_search` / `argo_fetch` se registran como herramientas nativas de primera clase, disponibles por defecto sin conexión MCP; los esquemas se generan desde la única fuente de verdad (`mcp_tools.py`), sin deriva; las 13 herramientas (salvo `argo_research`) se activan a demanda vía `nativeTools`
+- **MCP apagado por defecto**: tres formas de conexión (MCP a demanda / herramientas nativas como entrada por defecto / web_search seam); coste de token residente cero, y un profile patch abre la superficie completa de 14 herramientas
+- **Compatibilidad con Windows** (PR #11 de la comunidad): rutas temporales del sistema, arreglo de codificación GBK, resolución de intérprete en runtime (`python3`/`python`), symlink recurre a junction sin permisos, nuevo instalador PowerShell `install.ps1`
+- **Autocuración de cuotas**: el agotamiento de cuota remota oculto en HTTP 200 se detecta; el enrutamiento excluye ese motor y pasa a fuentes de respaldo, y vuelve automáticamente en el siguiente periodo
+- **Deadline global de fetch**: `ARGO_FETCH_DEADLINE_S` (60s por defecto) acota la cadena de respaldo; respeta señales de parada 429/503; renderizado tinyfish + sondas de variante `.md`
+
+### v2.8.4: fusión de datos locales + MCP en un comando
+
+- **La investigación profunda puede comer tus datos locales**: los work packages admiten `file_inputs` (CSV / XLSX / literatura de primera mano; se registra el hash, no el contenido) + `recompute` (recalc en sandbox; los desajustes se marcan)
+- **El MCP ya no se edita a mano**: `argo mcp inject` escribe Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (escritura atómica + backup + deshacer)
+- **Las consultas simples se quedan baratas**: normalización + puerta de complejidad + sintaxis social/plataforma primero + si se descarta un motor chino, se siguen mirando candidatos
+- **Keenable** como fuente web en prueba gratis
+- **Seguridad**: recompute bloquea subprocesos de salida a red; las rutas de host son conscientes de la instalación
+
+> Detalle: la tabla siguiente y las [notas de release](docs/) por versión.
+
+---
+
 ## Historial de cambios
 
 | Versión | Notas |
 |---------|-------|
+| **v2.8.5** | **Herramientas nativas del plugin DSH + MCP apagado por defecto + compatibilidad Windows + autocuración de cuotas + deadline de fetch**: `argo_search`/`argo_fetch` como herramientas nativas de primera clase (CLI de un tiro, mismo motor y guardas que MCP, esquema de fuente única + puerta contra deriva); tres formas de conexión, MCP a demanda; compatibilidad Windows (rutas temp / GBK / resolución de intérprete / junction / `install.ps1`, PR #11); bucle de autocuración de cuotas (detección de sobre HTTP 200 + exclusión de ruta + autocuración por periodo); deadline global de fetch (`ARGO_FETCH_DEADLINE_S`) + renderizado tinyfish + sondas `.md`; env de recarga caliente y directorio de estado de fuente única. [Notas](docs/RELEASE_NOTES_v2.8.5.md) |
 | **v2.8.4** | **Fusión de datos locales + inyección MCP multi-cliente + búsqueda estructurada + Keenable**: investigación L1 con datos locales de primera mano (`file_inputs` + `recompute` + `local_sources`); `argo mcp inject` (`mcp/clients.yaml` declarativo); normalización / variantes / puerta de complejidad / sintaxis social primero / arreglo TF-IDF / `--include-local`; motor Keenable (prueba gratis); endurecimiento de seguridad. Ver [notas de release](docs/RELEASE_NOTES_v2.8.4.md) |
 | **v2.8.3** | **Arreglo de enrutamiento multilingüe + anysearch in-process + RRF ponderado**: ja/ko devuelven el idioma objetivo; DE/FR/ES/IT vía anysearch; downweight weakest-link (paper 2508.01405). Ver [notas de release](docs/RELEASE_NOTES_v2.8.3.md) |
 | **v2.8.2** | **Windows + semántica de evidencia unificada**: se quita el límite npm `os`; UTF-8 contra cuelgues GBK; `dsh.bundle` en el paquete principal; puerta de calidad de `wide_research`. Ver [notas de release](docs/RELEASE_NOTES_v2.8.2.md) |

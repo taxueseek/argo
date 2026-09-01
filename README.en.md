@@ -18,7 +18,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#capabilities">Capabilities</a> ·
   <a href="#install--config">Config</a> ·
-  <a href="#changelog">Changelog</a>
+  <a href="#recent-updates">Recent updates</a>
 </p>
 
 <p align="center">
@@ -30,22 +30,6 @@
 </p>
 
 > **Part of the taxueseek DeepSeek Harness plugin lineup** — siblings: [dsh-files](https://github.com/taxueseek/dsh-files) (send files, read documents) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets) (snippet favorites) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck) (read-only checkup) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) (plugin security audit) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) (prompt reverse-engineering & multi-provider image generation) — see all plugins on the [profile](https://github.com/taxueseek#deepseek-harness-plugins)
-
----
-
-## v2.8.4 highlights (on top of v2.8.3)
-
-> One line: this release pushes “finding it for you” further — **local first-hand data can enter research**, **MCP attach across agents is one command**, **simple questions are no longer dragged into extra rounds**, **one more free search source**, plus a few security hardenings.
-
-- **Deep research can eat your local data**: work packages can take `file_inputs` (first-hand CSV / XLSX / literature; hash registered, content not stored) + `recompute` (sandboxed recalculation; mismatches are flagged)
-- **MCP attach is no longer hand-edited config**: `argo mcp inject` writes Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo)
-- **Simple queries stay cheap**: query normalize (fullwidth→halfwidth, version slashes) + complexity gate (low-complexity queries don't get expensive multi-source) + social/platform syntax first + if a Chinese engine is dropped, keep looking at backups
-- **Keenable** added as a free-trial web search source (disable it if the trial ends)
-- **Security**: recompute blocks outbound subprocesses; host paths are install-aware (no hardcoded `~/.agents`); install hint no longer points at the stale npm package
-
-> Full notes: [changelog](#changelog) and [release notes](docs/RELEASE_NOTES_v2.8.4.md).
-
----
 
 ## Why it's stronger than built-in search / AI search / metasearch
 
@@ -291,7 +275,7 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.8.4)
+### Rough capability set (v2.8.5)
 
 - **Local data fusion (new in v2.8.4)**: research work packages take `file_inputs` (first-hand local data; sha256/lineage registered) + `recompute` (sandboxed recalc); dossier emits `local_sources`
 - **One-command MCP inject (new in v2.8.4)**: `argo mcp inject` for Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo; source `mcp/clients.yaml`)
@@ -504,10 +488,33 @@ argo/
 
 ---
 
+## Recent updates
+
+### v2.8.5: native DSH plugin tools + MCP off by default + Windows support
+
+- **Native plugin tools**: `argo_search` / `argo_fetch` register as first-class native tools, available by default without an MCP connection; schemas are generated from the single source of truth (`mcp_tools.py`), zero drift; all 13 tools (except `argo_research`) can be enabled via `nativeTools`
+- **MCP off by default**: three plugin shapes (on-demand MCP / native tools as the default entry / web_search seam); zero standing token cost, and one profile patch opens the full 14-tool surface
+- **Windows compatibility** (community PR #11): system temp paths, GBK encoding fix, runtime interpreter resolution (`python3`/`python`), symlink falls back to junction, new PowerShell installer `install.ps1`
+- **Quota self-healing**: remote quota exhaustion hidden in HTTP 200 envelopes is detected; routing excludes that engine and switches to backup sources, returning automatically at the next quota period
+- **Fetch global deadline**: `ARGO_FETCH_DEADLINE_S` (default 60s) caps the fallback chain; 429/503 stop signals are honored; tinyfish rendering + `.md` variant probes
+
+### v2.8.4: local data fusion + one-command MCP attach
+
+- **Deep research can eat your local data**: work packages can take `file_inputs` (first-hand CSV / XLSX / literature; hash registered, content not stored) + `recompute` (sandboxed recalculation; mismatches are flagged)
+- **MCP attach is no longer hand-edited config**: `argo mcp inject` writes Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo)
+- **Simple queries stay cheap**: query normalize + complexity gate + social/platform syntax first + if a Chinese engine is dropped, keep looking at backups
+- **Keenable** added as a free-trial web search source
+- **Security**: recompute blocks outbound subprocesses; host paths are install-aware
+
+> Full notes: the table below and per-version [release notes](docs/).
+
+---
+
 ## Changelog
 
 | Version | Notes |
 |---------|-------|
+| **v2.8.5** | **Native DSH plugin tools + MCP off by default + Windows compat + quota self-healing + fetch deadline**: `argo_search`/`argo_fetch` as first-class native tools (CLI one-shot, same engine & guards as MCP, schema single-source + drift gate); three plugin shapes, MCP on-demand; Windows compatibility (temp paths / GBK / interpreter resolution / junction / `install.ps1`, PR #11); quota self-healing loop (HTTP 200 envelope detection + route exclusion + period self-heal); global fetch deadline (`ARGO_FETCH_DEADLINE_S`) + tinyfish rendering + `.md` variant probes; hot-reload env & state-dir single source. See [release notes](docs/RELEASE_NOTES_v2.8.5.md) |
 | **v2.8.4** | **Local data fusion + multi-client MCP inject + structured search + Keenable**: research L1 first-hand local data (`file_inputs` + `recompute` + `local_sources`); `argo mcp inject` (declarative `mcp/clients.yaml`); query normalize / variants / complexity gate / social-syntax first / TF-IDF fix / `--include-local`; Keenable web engine (free trial); security hardenings. See [release notes](docs/RELEASE_NOTES_v2.8.4.md) |
 | **v2.8.3** | **Multilingual routing fix + in-process anysearch + weighted RRF**: ja/ko queries return the target language; DE/FR/ES/IT via anysearch; weakest-link downweight (paper 2508.01405). See [release notes](docs/RELEASE_NOTES_v2.8.3.md) |
 | **v2.8.2** | **Windows + unified evidence semantics**: npm `os` limit removed; UTF-8 path against GBK crashes; main-package `dsh.bundle`; `wide_research` quality gate. See [release notes](docs/RELEASE_NOTES_v2.8.2.md) |

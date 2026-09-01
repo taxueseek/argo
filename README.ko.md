@@ -18,34 +18,18 @@
   <a href="#빠른-시작">빠른 시작</a> ·
   <a href="#기능">기능</a> ·
   <a href="#설치와-설정">설정</a> ·
-  <a href="#변경-이력">업데이트</a>
+  <a href="#최근-업데이트">업데이트</a>
 </p>
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.5-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
 > **이 저장소는 taxueseek의 DeepSeek Harness 플러그인 라인업 중 하나**입니다. 형제 플러그인: [dsh-files](https://github.com/taxueseek/dsh-files)(파일 전송·문서 읽기) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)(스니펫 즐겨찾기) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)(읽기 전용 점검) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)(플러그인 보안 감사) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)(프롬프트 역추론·멀티 프로바이더 이미지 생성) — 전체 플러그인은 [프로필](https://github.com/taxueseek)에서
-
----
-
-## v2.8.4 하이라이트 (v2.8.3 위에)
-
-> 한 줄: 이번 버전은 「찾아 주기」를 한 걸음 더 밉니다 — **로컬 1차 데이터가 연구에 들어갈 수 있고**, **여러 Agent에 MCP를 명령 한 줄로 붙이고**, **간단한 질문은 다라운드로 끌려가지 않으며**, **무료 검색 소스를 하나 더 달고**, 보안도 몇 곳 보강했습니다.
-
-- **심층 연구가 로컬 데이터를 먹을 수 있음**: 작업 패키지에 `file_inputs`(1차 CSV / XLSX / 문헌; 해시는 등기, 내용은 넣지 않음) + `recompute`(샌드박스 재계산; 불일치는 플래그)
-- **MCP 연결을 더 이상 손으로 안 고침**: `argo mcp inject`가 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline에 기록(원자 쓰기 + 백업 + 되돌리기)
-- **간단한 쿼리는 싸게 유지**: 정규화(전각→반각, 버전 슬래시) + 복잡도 게이트(저복잡도 쿼리는 고가 다소스로 안 감) + 소셜/플랫폼 문법 우선 + 중국어 엔진을 버려도 후보를 계속 봄
-- **Keenable** 을 무료 체험 웹 검색 소스로 추가(체험이 끝나면 끄면 됨)
-- **보안**: recompute가 외부 프로세스 출망을 차단; 호스트 경로는 설치 인지(하드코딩 `~/.agents` 없음); 설치 안내가 낡은 npm 패키지를 가리키지 않음
-
-> 자세한 내용은 끝의 [변경 이력](#변경-이력)과 [릴리스 노트](docs/RELEASE_NOTES_v2.8.4.md).
-
----
 
 ## 모델 내장 검색 / AI 검색 / 메타검색보다 강한 점
 
@@ -155,7 +139,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. **설치 진원은 GitHub뿐입니다**(`npx github:taxueseek/argo` 또는 `install.sh`); 현재 권장 **v2.8.4**. **`npm install argo-search`는 쓰지 마세요** — npm 레지스트리 사본은 **비공식 낡은 v1.0.1**(이 저장소가 아님, 기능 부족, 갱신 안 됨). 이 패키지는 `private: true`로 npm 오배포를 막습니다.
+경로를 고르면 됩니다. **설치 진원은 GitHub뿐입니다**(`npx github:taxueseek/argo` 또는 `install.sh`); 현재 권장 **v2.8.5**. **`npm install argo-search`는 쓰지 마세요** — npm 레지스트리 사본은 **비공식 낡은 v1.0.1**(이 저장소가 아님, 기능 부족, 갱신 안 됨). 이 패키지는 `private: true`로 npm 오배포를 막습니다.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -235,11 +219,11 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 
 ### 옵션 3: 릴리스 tarball
 
-[Releases](https://github.com/taxueseek/argo/releases)에서 **`argo-2.8.4.tar.gz`** 다운로드:
+[Releases](https://github.com/taxueseek/argo/releases)에서 **`argo-2.8.5.tar.gz`** 다운로드:
 
 ```bash
-tar -xzf argo-2.8.4.tar.gz
-cd argo-2.8.4
+tar -xzf argo-2.8.5.tar.gz
+cd argo-2.8.5
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -333,7 +317,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.8.4)
+### 대략적인 능력 세트 (v2.8.5)
 
 - **로컬 데이터 융합 (v2.8.4 신규)**: 연구 작업 패키지에 `file_inputs`(로컬 1차 데이터, sha256/혈통 등기) + `recompute`(샌드박스 재계산); dossier가 `local_sources` 출력
 - **MCP 한 줄 주입 (v2.8.4 신규)**: `argo mcp inject`로 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (원자 쓰기 + 백업 + 가역; 진원 `mcp/clients.yaml`)
@@ -546,10 +530,33 @@ argo/
 
 ---
 
+## 최근 업데이트
+
+### v2.8.5: DSH 플러그인 도구 네이티브화 + MCP 기본 끔 + Windows 호환
+
+- **플러그인 도구 네이티브화**: `argo_search` / `argo_fetch`가 1급 네이티브 도구로 등록되어 MCP 연결 없이 기본 사용 가능; 스키마는 단일 진원 `mcp_tools.py`에서 자동 생성되어 양쪽 모두 드리프트 없음; `argo_research`를 제외한 13개 도구를 `nativeTools`로 수시 활성화 가능
+- **MCP 기본 끔**: 3가지 접속 형태(수요 시 마운트 MCP / 기본 진입 네이티브 도구 / web_search seam); 평소 상주 토큰 비용 0, 14개 도구 전체가 필요하면 profile patch 한 장으로 엶
+- **Windows 호환**(커뮤니티 PR #11): 임시 경로는 시스템 temp, GBK 인코딩 수정, `python3`/`python` 런타임 해석, symlink는 권한 없으면 junction으로 폴백, PowerShell 일괄 설치 `install.ps1` 추가
+- **쿼터 자가 치유**: HTTP 200에 숨은 원격 쿼터 고갈을 감지하고, 라우팅이 해당 엔진을 제외해 백업 소스로 전환, 다음 쿼터 주기에 자동 복귀
+- **페치 전역 deadline**: `ARGO_FETCH_DEADLINE_S`(기본 60s)로 폴백 사슬 총 시간 상한; 429/503 정지 시그널 존중; tinyfish 렌더링 + `.md` 변형 프로브
+
+### v2.8.4: 로컬 데이터 융합 + 원 커맨드 MCP 연결
+
+- **심층 연구가 로컬 데이터를 먹을 수 있음**: 작업 패키지에 `file_inputs`(1차 CSV / XLSX / 문헌; 해시는 등기, 내용은 넣지 않음) + `recompute`(샌드박스 재계산; 불일치는 플래그)
+- **MCP 연결을 더 이상 손으로 안 고침**: `argo mcp inject`가 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline에 기록(원자 쓰기 + 백업 + 되돌리기)
+- **간단한 쿼리는 싸게 유지**: 정규화 + 복잡도 게이트 + 소셜/플랫폼 문법 우선 + 중국어 엔진을 버려도 후보를 계속 봄
+- **Keenable**을 무료 체험 웹 검색 소스로 추가
+- **보안**: recompute가 외부 프로세스 출망을 차단; 호스트 경로는 설치 인지
+
+> 자세한 내용은 아래 표와 각 버전 [릴리스 노트](docs/)。
+
+---
+
 ## 변경 이력
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.8.5** | **DSH 플러그인 도구 네이티브화 + MCP 기본 끔 + Windows 호환 + 쿼터 자가 치유 + 페치 deadline**: `argo_search`/`argo_fetch`가 1급 네이티브 도구로 기본 사용 가능(CLI 단발은 MCP와 동일 엔진·가드, 스키마 단일 진원 + 드리프트 게이트); 3가지 형태 접속, MCP는 수요 시 마운트 기본 끔; Windows 호환(temp 경로 / GBK / 인터프리터 해석 / junction / `install.ps1`, PR #11); 쿼터 자가 치유 루프(200 업무 오류 봉투 감지 + 라우트 제외 + 주기 자가 치유); 페치 전역 deadline(`ARGO_FETCH_DEADLINE_S`) + tinyfish 렌더링 + `.md` 변형 프로브; 핫리로드 env와 상태 디렉터리 단일 진원. [릴리스 노트](docs/RELEASE_NOTES_v2.8.5.md) |
 | **v2.8.4** | **로컬 데이터 융합 + 다중 클라이언트 MCP 주입 + 구조화 검색 + Keenable**: 연구 L1 로컬 1차 데이터(`file_inputs` + `recompute` + `local_sources`); `argo mcp inject`(선언적 `mcp/clients.yaml`); 쿼리 정규화 / 변체 / 복잡도 게이트 / 소셜 문법 우선 / TF-IDF 수정 / `--include-local`; Keenable(무료 체험); 보안 강화. [릴리스 노트](docs/RELEASE_NOTES_v2.8.4.md) |
 | **v2.8.3** | **다국어 라우팅 수정 + 프로세스 내 anysearch + weighted RRF**: ja/ko가 대상 언어를 반환; 독/불/서/이 anysearch; weakest-link 다운웨이트(논문 2508.01405). [릴리스 노트](docs/RELEASE_NOTES_v2.8.3.md) |
 | **v2.8.2** | **Windows + 증거 의미 통일**: npm `os` 제한 제거; GBK 크래시 대비 UTF-8; 메인 패키지 `dsh.bundle`; `wide_research` 품질 게이트. [릴리스 노트](docs/RELEASE_NOTES_v2.8.2.md) |

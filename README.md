@@ -18,7 +18,7 @@
   <a href="#快速开始">快速开始</a> ·
   <a href="#能做什么">能力</a> ·
   <a href="#安装与配置">配置</a> ·
-  <a href="#版本记录">更新</a>
+  <a href="#最近更新">更新</a>
 </p>
 
 <p align="center">
@@ -30,36 +30,6 @@
 </p>
 
 > **这是踏雪寻仙 DeepSeek Harness 插件系列的一员**，作者还有其他的优秀插件：[dsh-files](https://github.com/taxueseek/dsh-files)（传文件读文档） · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)（片段收藏夹） · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)（只读体检） · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（插件安全审计） · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（提示词反推与多供应商生图）—— 完整插件栏目见[个人主页](https://github.com/taxueseek#deepseek-harness-%E6%8F%92%E4%BB%B6)
-
----
-
-## v2.8.5 更新亮点（在 v2.8.4 基础上再进一步）
-
-> 一句话：这版把「用上 argo」的门槛再砍一刀——**DSH 插件不挂 MCP 就能用原生工具搜索抓取**、**MCP 默认关闭按需开启**、**Windows 开箱即跑**、**配额用尽自动切备用源**，抓取降级链有了全局超时上限。
-
-- **DSH 插件工具原生化**：`argo_search` / `argo_fetch` 以原生一等工具注册，默认可用，不依赖 MCP 连接；schema 从 `mcp_tools.py` 单一真源自动生成，两侧零漂移；除 `argo_research` 外 13 个工具都可经 `nativeTools` 按需启用
-- **MCP 默认关闭**：DSH 三形态接入（MCP 按需挂载 / 原生工具默认入口 / web_search seam），平时零常驻 token 开销，要完整 14 工具面时一条 profile patch 打开
-- **Windows 全平台兼容**（社区贡献 PR #11）：临时路径走系统 temp、GBK 编码修复、`python3`/`python` 运行时解析、symlink 无权限自动退化 junction、新增 PowerShell 一键安装 `install.ps1`
-- **配额自愈闭环**：远端配额耗尽（HTTP 200 藏错误）自动识别、路由排除该引擎切备用源，周期结束自动回归，无需人工改配置
-- **抓取全局 deadline**：`ARGO_FETCH_DEADLINE_S`（默认 60s）封顶降级链总耗时；429/503 停止信号尊重服务器指示；tinyfish 免费渲染层 + `.md` 变体探测命中即跳过反爬链
-
-> 完整变更见文末 [版本记录](#版本记录) 与 [发布说明](docs/RELEASE_NOTES_v2.8.5.md)。
-
----
-
-## v2.8.4 更新亮点（在 v2.8.3 基础上再进一步）
-
-> 一句话：这版把「帮你搜到」再往前推进——**本地一手数据能进研究**、**给各种 Agent 挂 MCP 一条命令搞定**、**简单问题不再被多轮拖慢**、**多接了一个免费搜索源**，顺手加固了几处安全细节。
-
-- **深度研究能吃你本地的数据了**：以前 `argo research` 只吃网页，现在工作包能带 `file_inputs`（你的一手 CSV / XLSX / 文献，登记哈希、内容不入账）+ `recompute`（可复算执行器，安全地重算数字并和检索对账，对不上就提示）
-- **挂 MCP 不再手改配置**：`argo mcp inject` 一条命令把 argo 注入 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline（原子写 + 自动备份 + 可还原）
-- **简单问题不被拖成多轮**：查询归一化（全角→半角、版本号拆斜杠）+ 复杂度门控（低复杂度查询不放行高价多源）+ 社交/平台检索语法优先 + 丢了一个中文引擎会继续看备选
-- **多接一个免费搜索源 Keenable**（免费体验期、量较大，到期出问题直接停用即可）
-- **安全加固**：recompute 封死外部进程出网、主机路径全部改为安装感知（不再写死 `~/.agents` 这类）、修了一处会把用户引向陈旧 npm 包的安装提示
-
-> 完整变更见文末 [版本记录](#版本记录) 与 [发布说明](docs/RELEASE_NOTES_v2.8.4.md)。
-
----
 
 ## 它和「模型自带搜索 / AI 搜索 / 聚合搜索」比，强在哪
 
@@ -617,6 +587,28 @@ argo/
 ├── tests/
 └── docs/
 ```
+
+---
+
+## 最近更新
+
+### v2.8.5：DSH 插件工具原生化 + MCP 默认关闭 + Windows 兼容
+
+- **DSH 插件工具原生化**：`argo_search` / `argo_fetch` 以原生一等工具注册，默认可用，不依赖 MCP 连接；schema 从 `mcp_tools.py` 单一真源自动生成，两侧零漂移；除 `argo_research` 外 13 个工具都可经 `nativeTools` 按需启用
+- **MCP 默认关闭**：DSH 三形态接入（MCP 按需挂载 / 原生工具默认入口 / web_search seam），平时零常驻 token 开销，要完整 14 工具面时一条 profile patch 打开
+- **Windows 全平台兼容**（社区贡献 PR #11）：临时路径走系统 temp、GBK 编码修复、`python3`/`python` 运行时解析、symlink 无权限自动退化 junction、新增 PowerShell 一键安装 `install.ps1`
+- **配额自愈闭环**：远端配额耗尽（HTTP 200 藏错误）自动识别、路由排除该引擎切备用源，周期结束自动回归，无需人工改配置
+- **抓取全局 deadline**：`ARGO_FETCH_DEADLINE_S`（默认 60s）封顶降级链总耗时；429/503 停止信号尊重服务器指示；tinyfish 免费渲染层 + `.md` 变体探测命中即跳过反爬链
+
+### v2.8.4：本地数据融合 + 多客户端 MCP 一键接入
+
+- **深度研究能吃你本地的数据了**：以前 `argo research` 只吃网页，现在工作包能带 `file_inputs`（你的一手 CSV / XLSX / 文献，登记哈希、内容不入账）+ `recompute`（可复算执行器，安全地重算数字并和检索对账，对不上就提示）
+- **挂 MCP 不再手改配置**：`argo mcp inject` 一条命令把 argo 注入 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline（原子写 + 自动备份 + 可还原）
+- **简单问题不被拖成多轮**：查询归一化（全角→半角、版本号拆斜杠）+ 复杂度门控（低复杂度查询不放行高价多源）+ 社交/平台检索语法优先 + 丢了一个中文引擎会继续看备选
+- **多接一个免费搜索源 Keenable**（免费体验期、量较大，到期出问题直接停用即可）
+- **安全加固**：recompute 封死外部进程出网、主机路径全部改为安装感知（不再写死 `~/.agents` 这类）、修了一处会把用户引向陈旧 npm 包的安装提示
+
+> 完整变更见下表与各版[发布说明](docs/)。
 
 ---
 

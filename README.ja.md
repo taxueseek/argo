@@ -18,34 +18,18 @@
   <a href="#クイックスタート">導入</a> ·
   <a href="#できること">機能</a> ·
   <a href="#インストールと設定">設定</a> ·
-  <a href="#更新履歴">更新</a>
+  <a href="#最近の更新">更新</a>
 </p>
 
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.5-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
 > **これは taxueseek の DeepSeek Harness プラグイン群のひとつ**。仲間たち：[dsh-files](https://github.com/taxueseek/dsh-files)（ファイル送信・ドキュメント読取） · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)（スニペットお気に入り） · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)（読み取り専用ヘルスチェック） · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（プラグインセキュリティ監査） · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（プロンプト逆引き＆マルチプロバイダー画像生成）—— 全プラグインは[プロフィール](https://github.com/taxueseek)へ
-
----
-
-## v2.8.4 のハイライト（v2.8.3 の上に）
-
-> 一言：今回は「見つけてあげる」をさらに進めた——**手元の一次データが研究に入れる**、**各 Agent への MCP 接続がコマンド 1 本**、**簡単な問いは多ラウンドに引き込まれない**、**無料検索源を 1 つ追加**、あわせてセキュリティを固めた。
-
-- **深掘り研究が手元データを食べられる**：作業パッケージに `file_inputs`（手元の CSV / XLSX / 文献。ハッシュだけ登記、中身は入れない）+ `recompute`（サンドボックス再計算。食い違いはフラグ）
-- **MCP 接続は手で設定をいじらない**：`argo mcp inject` が Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline に書く（アトミック書き込み + バックアップ + 復元）
-- **簡単なクエリは安いまま**：正規化（全角→半角、バージョンのスラッシュ）+ 複雑さゲート（低複雑度は高コスト多源に進まない）+ SNS/プラットフォーム構文優先 + 中国語エンジンを捨てても候補を見続ける
-- **Keenable** を無料体験のウェブ検索源として追加（体験終了時は無効化すればよい）
-- **セキュリティ**：recompute は外部プロセスの出網を遮断；ホストパスはインストール感知（`~/.agents` の直書きなし）；インストール案内が古い npm パッケージを指さない
-
-> 詳細は文末の [更新履歴](#更新履歴) と [リリースノート](docs/RELEASE_NOTES_v2.8.4.md)。
-
----
 
 ## モデル内蔵検索 / AI 検索 / 横断検索より強い点
 
@@ -155,7 +139,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**インストールの真源は GitHub のみ**（`npx github:taxueseek/argo` または `install.sh`）、現在推奨 **v2.8.4**。**`npm install argo-search` は使わないでください**——npm registry 上のそれは**非公式の古い v1.0.1**（本リポジトリ外、機能不足、更新されない）。本パッケージは `private: true` で npm 誤公開を防ぎます。
+どれか 1 つで十分です。**インストールの真源は GitHub のみ**（`npx github:taxueseek/argo` または `install.sh`）、現在推奨 **v2.8.5**。**`npm install argo-search` は使わないでください**——npm registry 上のそれは**非公式の古い v1.0.1**（本リポジトリ外、機能不足、更新されない）。本パッケージは `private: true` で npm 誤公開を防ぎます。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -235,11 +219,11 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 
 ### 方法三：Release ソースパッケージ
 
-[Releases](https://github.com/taxueseek/argo/releases) から **`argo-2.8.4.tar.gz`** を入手：
+[Releases](https://github.com/taxueseek/argo/releases) から **`argo-2.8.5.tar.gz`** を入手：
 
 ```bash
-tar -xzf argo-2.8.4.tar.gz
-cd argo-2.8.4
+tar -xzf argo-2.8.5.tar.gz
+cd argo-2.8.5
 pip3 install pyyaml
 python3 scripts/search.py "Python asyncio" --json
 python3 scripts/mcp_server.py
@@ -333,7 +317,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.8.4）
+### 現時点の能力概要（v2.8.5）
 
 - **ローカルデータ融合（v2.8.4 新）**：研究作業パッケージに `file_inputs`（手元一次データ、sha256/血統を登記）+ `recompute`（サンドボックス再計算）；dossier は `local_sources` を出す
 - **MCP 一発注入（v2.8.4 新）**：`argo mcp inject` で Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline（アトミック書き込み + バックアップ + 可逆。真源 `mcp/clients.yaml`）
@@ -546,10 +530,33 @@ argo/
 
 ---
 
+## 最近の更新
+
+### v2.8.5：DSH プラグインツールのネイティブ化 + MCP 既定オフ + Windows 対応
+
+- **プラグインツールのネイティブ化**：`argo_search` / `argo_fetch` がネイティブの一等ツールとして登録され、MCP 接続なしで既定使用可能；スキーマは唯一の真源 `mcp_tools.py` から自動生成され、両側で零ドリフト；`argo_research` 以外の 13 ツールは `nativeTools` で随時有効化可能
+- **MCP 既定オフ**：3 形態の接続（随時マウントの MCP / 既定入口のネイティブツール / web_search seam）；普段は常駐トークン消費ゼロ、14 ツール全量が必要なときは profile patch 1 枚で開く
+- **Windows 互換**（コミュニティ PR #11）：一時パスはシステム temp、GBK エンコード修正、`python3`/`python` の実行時解決、symlink は権限なしで junction にフォールバック、PowerShell 一括インストール `install.ps1` を追加
+- **クォータ自己修復**：HTTP 200 に隠れたリモートクォータ枯渇を検出し、ルーティングがそのエンジンを除外してバックアップ源へ切替、次クォータ期間で自動復帰
+- **フェッチ全体 deadline**：`ARGO_FETCH_DEADLINE_S`（既定 60s）でフォールバック連鎖の総時間を上限化；429/503 の停止シグナルを尊重；tinyfish レンダリング + `.md` 変体プローブ
+
+### v2.8.4：ローカルデータ融合 + ワンコマンド MCP 接続
+
+- **深掘り研究が手元データを食べられる**：作業パッケージに `file_inputs`（手元の CSV / XLSX / 文献。ハッシュだけ登記、中身は入れない）+ `recompute`（サンドボックス再計算。食い違いはフラグ）
+- **MCP 接続は手で設定をいじらない**：`argo mcp inject` が Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline に書く（アトミック書き込み + バックアップ + 復元）
+- **簡単なクエリは安いまま**：正規化 + 複雑さゲート + SNS/プラットフォーム構文優先 + 中国語エンジンを捨てても候補を見続ける
+- **Keenable** を無料体験のウェブ検索源として追加
+- **セキュリティ**：recompute は外部プロセスの出網を遮断；ホストパスはインストール感知
+
+> 詳細は下表と各版の[リリースノート](docs/)。
+
+---
+
 ## 更新履歴
 
 | 版 | 内容 |
 |----|------|
+| **v2.8.5** | **DSH プラグインツールのネイティブ化 + MCP 既定オフ + Windows 互換 + クォータ自己修復 + フェッチ deadline**：`argo_search`/`argo_fetch` がネイティブ一等ツールで既定可用（CLI 単発は MCP と同エンジン同ガード、スキーマ単一真源 + ドリフト門禁）；3 形態接続、MCP は随時マウント既定オフ；Windows 互換（temp パス / GBK / インタプリタ解決 / junction / `install.ps1`、PR #11）；クォータ自己修復ループ（200 業務エラー封筒検出 + ルート除外 + 周期自己修復）；フェッチ全体 deadline（`ARGO_FETCH_DEADLINE_S`）+ tinyfish レンダリング + `.md` 変体プローブ；ホットリロード env と状態ディレクトリ単一真源。[リリースノート](docs/RELEASE_NOTES_v2.8.5.md) |
 | **v2.8.4** | **ローカルデータ融合 + 多クライアント MCP 注入 + 構造化検索 + Keenable**：研究 L1 の手元一次データ（`file_inputs` + `recompute` + `local_sources`）；`argo mcp inject`（宣言的 `mcp/clients.yaml`）；クエリ正規化 / 変体 / 複雑さゲート / SNS 構文優先 / TF-IDF 修正 / `--include-local`；Keenable（無料体験）；セキュリティ強化。[リリースノート](docs/RELEASE_NOTES_v2.8.4.md) |
 | **v2.8.3** | **多言語ルーティング修正 + プロセス内 anysearch + weighted RRF**：ja/ko が対象言語を返す；独仏西伊は anysearch；weakest-link 降権（論文 2508.01405）。[リリースノート](docs/RELEASE_NOTES_v2.8.3.md) |
 | **v2.8.2** | **Windows + 証拠セマンティクス統一**：npm `os` 制限撤去；GBK クラッシュ対策の UTF-8；メインパッケージ `dsh.bundle`；`wide_research` 品質門禁。[リリースノート](docs/RELEASE_NOTES_v2.8.2.md) |
