@@ -20,7 +20,7 @@ except Exception:  # pragma: no cover
     hot_state = None  # type: ignore[assignment]
 
 # 版本真源：与 package.json / SKILL.md 保持一致（发布时统一升版）
-ARGO_MCP_VERSION = "2.8.4"
+ARGO_MCP_VERSION = "2.8.5"
 
 _response_format = "content-length"  # 根据客户端请求自动切换
 

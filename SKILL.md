@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。覆盖意图：搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合。多语言检测与跨语言回退；约 120+ 引擎 TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡（火车票/油价/贵金属/万年历/星座/手机/汽车/挂号）；日常 combo 预算与深度研究 boost；recovery 防污染；Selection×Absorption。CLI：argo search|research|fetch|crawl|article|job|evidence（同引擎 MCP 14 工具按需启用，默认关）。
-version: 2.8.4
+version: 2.8.5
 triggers:
   - 搜索
   - 查一下
@@ -24,11 +24,13 @@ triggers:
   - research
 ---
 
-# Argo v2.8.4 — 统一搜索与证据核验
+# Argo v2.8.5 — 统一搜索与证据核验
 
-> 从「帮你搜到」升级为「帮你核到」。搜索输出自带**证据闭环**：高后果问题（金融/医疗/法律/事实核查）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记忆，二次搜索直接显示已核实。本版详见 `docs/RELEASE_NOTES_v2.8.4.md` 与 `docs/RELEASE_NOTES_v2.8.0.md`。
+> 从「帮你搜到」升级为「帮你核到」。搜索输出自带**证据闭环**：高后果问题（金融/医疗/法律/事实核查）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记忆，二次搜索直接显示已核实。本版详见 `docs/RELEASE_NOTES_v2.8.5.md` 与 `docs/RELEASE_NOTES_v2.8.0.md`。
 >
-> v2.8.4 增量：接入 Keenable（L1 声明式 HTTP，免费体验期）；多客户端 MCP 一键注入/诊断/还原（`argo mcp inject`，客户端真源 `mcp/clients.yaml`，原子写 + 备份 + 可逆）；深度研究本地数据融合 L1（`file_inputs` 白名单入账 + `recompute` 可复算执行器 + `local_sources`，`no_primary_sources` 计入本地一手）；结构化搜索增强（查询归一化 + 检索变体 + 复杂度门控，避免简单问题被拖成多轮）；social 域优先 + TF-IDF 检索修复；`--include-local` 本机命中并入。本版详见 `docs/RELEASE_NOTES_v2.8.4.md`。
+> v2.8.5 增量：DSH 插件工具原生化（`argo_search`/`argo_fetch` 原生一等工具默认可用，schema 单一真源生成 + 漂移门禁）；MCP 默认关闭、三形态按需开启；Windows 全平台兼容（tempfile / GBK / 解释器解析 / junction / `install.ps1`，PR #11）；配额自愈闭环（200 业务错误封套识别 + 路由排除 + 周期自愈）；抓取全局 deadline（`ARGO_FETCH_DEADLINE_S`）+ tinyfish 渲染层 + `.md` 变体探测；密钥热读 + 状态目录单一真源。详见 `docs/RELEASE_NOTES_v2.8.5.md`。
+>
+> v2.8.4 增量：接入 Keenable（L1 声明式 HTTP，免费体验期）；多客户端 MCP 一键注入/诊断/还原（`argo mcp inject`，客户端真源 `mcp/clients.yaml`，原子写 + 备份 + 可逆）；深度研究本地数据融合 L1（`file_inputs` 白名单入账 + `recompute` 可复算执行器 + `local_sources`，`no_primary_sources` 计入本地一手）；结构化搜索增强（查询归一化 + 检索变体 + 复杂度门控，避免简单问题被拖成多轮）；social 域优先 + TF-IDF 检索修复；`--include-local` 本机命中并入。详见 `docs/RELEASE_NOTES_v2.8.4.md`。
 >
 > v2.8.3 增量：anysearch 改为进程内 builder（消除 subprocess 启动开销 + `HttpClient.post` UA 轮换/重试/退避）；weighted RRF 动态可靠性因子（weakest-link 弱源降权，论文 2508.01405）；多语言路由修复（ja/ko 返回目标语言 + 德法西意走 anysearch + 中文内容/金融/技术引擎双层过滤 + Bing `mkt` 市场码 + 语言偏好软排序）。
 >

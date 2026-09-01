@@ -24,12 +24,26 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.10+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.4-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.8.5-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-150+-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
 > **这是踏雪寻仙 DeepSeek Harness 插件系列的一员**，作者还有其他的优秀插件：[dsh-files](https://github.com/taxueseek/dsh-files)（传文件读文档） · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)（片段收藏夹） · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)（只读体检） · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（插件安全审计） · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（提示词反推与多供应商生图）—— 完整插件栏目见[个人主页](https://github.com/taxueseek#deepseek-harness-%E6%8F%92%E4%BB%B6)
+
+---
+
+## v2.8.5 更新亮点（在 v2.8.4 基础上再进一步）
+
+> 一句话：这版把「用上 argo」的门槛再砍一刀——**DSH 插件不挂 MCP 就能用原生工具搜索抓取**、**MCP 默认关闭按需开启**、**Windows 开箱即跑**、**配额用尽自动切备用源**，抓取降级链有了全局超时上限。
+
+- **DSH 插件工具原生化**：`argo_search` / `argo_fetch` 以原生一等工具注册，默认可用，不依赖 MCP 连接；schema 从 `mcp_tools.py` 单一真源自动生成，两侧零漂移；除 `argo_research` 外 13 个工具都可经 `nativeTools` 按需启用
+- **MCP 默认关闭**：DSH 三形态接入（MCP 按需挂载 / 原生工具默认入口 / web_search seam），平时零常驻 token 开销，要完整 14 工具面时一条 profile patch 打开
+- **Windows 全平台兼容**（社区贡献 PR #11）：临时路径走系统 temp、GBK 编码修复、`python3`/`python` 运行时解析、symlink 无权限自动退化 junction、新增 PowerShell 一键安装 `install.ps1`
+- **配额自愈闭环**：远端配额耗尽（HTTP 200 藏错误）自动识别、路由排除该引擎切备用源，周期结束自动回归，无需人工改配置
+- **抓取全局 deadline**：`ARGO_FETCH_DEADLINE_S`（默认 60s）封顶降级链总耗时；429/503 停止信号尊重服务器指示；tinyfish 免费渲染层 + `.md` 变体探测命中即跳过反爬链
+
+> 完整变更见文末 [版本记录](#版本记录) 与 [发布说明](docs/RELEASE_NOTES_v2.8.5.md)。
 
 ---
 
@@ -155,7 +169,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**以 GitHub 为唯一安装真源**（`npx github:taxueseek/argo` 或 `install.sh`），当前推荐 **v2.8.4**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
+任选一种即可。**以 GitHub 为唯一安装真源**（`npx github:taxueseek/argo` 或 `install.sh` / `install.ps1`），当前推荐 **v2.8.5**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -347,8 +361,13 @@ python3 scripts/search.py --list-engines
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.8.4）
+### 当前大致能力（v2.8.5）
 
+- **DSH 插件工具原生化（v2.8.5 新增）**：`argo_search` / `argo_fetch` 原生一等工具默认可用（CLI 单发，不依赖 MCP 连接）；schema 由 `gen_native_tools.py` 从 `mcp_tools.py` 单一真源生成（漂移门禁测试把关）；`nativeTools` 配置可按需启用全部 13 个工具（`argo_research` 除外）
+- **MCP 默认关闭（v2.8.5 变更）**：三形态接入——MCP 按需挂载（profile patch）/ 原生工具（默认入口）/ 原生 web_search seam；平时零常驻 token 开销
+- **Windows 全平台兼容（v2.8.5 增强，社区贡献）**：临时路径走 `tempfile.gettempdir()`；解析映射显式 UTF-8（根治 GBK 静默失效）；解释器运行时解析（python3 → python → sys.executable）；symlink 无权限退化 junction；PowerShell 一键安装 `install.ps1`；`--spotlight` 无 mdfind 自动退化 rg
+- **配额自愈闭环（v2.8.5 新增）**：HTTP 200 业务错误封套识别（火山/知乎风格）；远端配额耗尽自动标记 → 路由全模式排除 → 备用源接管 → 周期边界自愈回归；配额/鉴权错误不毒化自适应分数与熔断
+- **抓取全局 deadline（v2.8.5 新增）**：`ARGO_FETCH_DEADLINE_S`（默认 60s）封顶降级链总耗时；429/503 停止信号；tinyfish 渲染层（`TINYFISH_API_KEY`）+ `{url}.md` 变体探测；移动 UA 首发身份记忆
 - **本地数据融合（v2.8.4 新增，深度研究 L1）**：工作包可带 `file_inputs`（本地一手数据白名单入账，登记 sha256/血缘）与 `recompute`（可复算执行器，受限子进程安全重算，重算值与检索数字冲突触发 `recompute_conflict`）；dossier 输出 `local_sources`，本地一手计入一手命中（防 `no_sources` 假阴性）
 - **多客户端 MCP 一键接入（v2.8.4 新增）**：`argo mcp inject` 一键给 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline 注入 argo MCP（原子写 + 备份 + 可逆，客户端真源 `mcp/clients.yaml`）
 - **结构化搜索增强（v2.8.4 新增）**：查询归一化（全角→半角、点号版本拆斜杠）+ 检索变体 + 复杂度门控（低复杂度查询不放行高价多轮）；social 域语法优先（from:/subreddit:/lang: 命中提前）+ TF-IDF 检索修复（丢弃中文引擎后继续看 top-2/3）；`--include-local` 本机命中并入（默认关）
@@ -605,6 +624,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.8.5** | **DSH 插件工具原生化 + MCP 默认关闭 + Windows 兼容 + 配额自愈 + 抓取 deadline**：`argo_search`/`argo_fetch` 原生一等工具默认可用（CLI 单发与 MCP 同引擎同守卫，schema 单一真源生成 + 漂移门禁）；DSH 三形态接入、MCP 按需挂载默认关；Windows 全平台兼容（临时路径 / GBK / 解释器解析 / junction / `install.ps1`，PR #11）；配额自愈闭环（200 业务错误封套识别 + 路由排除 + 周期自愈）；抓取降级链全局 deadline（`ARGO_FETCH_DEADLINE_S`）+ tinyfish 渲染层 + `.md` 变体探测；密钥热读与状态目录单一真源。详见 [发布说明](docs/RELEASE_NOTES_v2.8.5.md) |
 | **v2.8.4** | **本地数据融合 + 多客户端 MCP 接入 + 结构化搜索增强 + Keenable**：深度研究 L1 本地一手数据入账（`file_inputs` 白名单 + `recompute` 可复算执行器 + `local_sources`，`no_primary_sources` 计入本地一手）；`argo mcp inject` 多客户端 MCP 一键注入/诊断/还原（`mcp/clients.yaml` 声明式真源）；结构化搜索增强（查询归一化 + 检索变体 + 复杂度门控 + social 域优先 + TF-IDF 检索修复 + `--include-local`）；接入 Keenable 通用网页搜索（L1 声明式 HTTP，免费体验期）；安全加固（recompute 封死 `subprocess`/`os.system` 出网通道 + 主机路径单真源化）。详见 [发布说明](docs/RELEASE_NOTES_v2.8.4.md) |
 | **v2.8.3** | **多语言路由修复 + anysearch 进程化 + weighted RRF**：anysearch 从 subprocess 改为进程内 builder（省 python 启动开销 + `HttpClient.post` UA 轮换/重试/退避）；weighted RRF 新增动态可靠性因子（weakest-link 弱源降权，论文 2508.01405）；多语言路由修复——ja/ko 查询返回目标语言（韩语/日语），欧语言（德法西意）走 anysearch 返回目标语言，中文内容/金融/技术引擎双层过滤（域命中 + TF-IDF），Bing `mkt` 市场码 + 语言偏好软排序。详见 [发布说明](docs/RELEASE_NOTES_v2.8.3.md) |
 | **v2.8.2** | **Windows 全平台 + 证据语义统一**：移除 npm `os` 限制；全链路 UTF-8 防线（`PYTHONUTF8` + `-X utf8` + JSON `read_bytes`）根治 GBK 崩溃；工具探测改 `shutil.which`；Chrome/Edge 自动发现；Ctrl+C 干净退出。主包新增 `dsh.bundle` 声明（`dsh plugin add github:taxueseek/argo` 即得 MCP 工具）；npm 包补 `engines/`、`data/`。`wide_research` 输出新增 `quality_gate_results` 门禁 + `depends_on` 分阶段 + SSRF 防线 + 研究递归硬保护；深度研究协议化（机器产 dossier、Agent 写判断稿，`--work-packages` 分阶段取证）。详见 [发布说明](docs/RELEASE_NOTES_v2.8.2.md) |

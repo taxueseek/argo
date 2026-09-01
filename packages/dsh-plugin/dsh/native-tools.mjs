@@ -407,7 +407,7 @@ export const NATIVE_TOOLS = {
         },
         "output_path": {
           "type": "string",
-          "description": "输出路径（默认 /tmp/argo_screenshot_<timestamp>.png）"
+          "description": "输出路径（默认写入系统临时目录：<temp>/argo_screenshot_<timestamp>.png）"
         }
       },
       "required": [

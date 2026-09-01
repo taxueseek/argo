@@ -228,7 +228,7 @@ function createMcpConnection(options) {
       const init = await conn.request('initialize', {
         protocolVersion: '2025-06-18',
         capabilities: {},
-        clientInfo: { name: 'argo-dsh', version: '2.8.4' }
+        clientInfo: { name: 'argo-dsh', version: '2.8.5' }
       })
       conn.notify('notifications/initialized', {})
       return init
