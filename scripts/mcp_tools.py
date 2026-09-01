@@ -164,7 +164,7 @@ TOOLS = [
             "properties": {
                 "url": {"type": "string", "description": "目标 URL"},
                 "full_page": {"type": "boolean", "description": "全页截图（默认仅当前视口）", "default": False},
-                "output_path": {"type": "string", "description": "输出路径（默认 /tmp/argo_screenshot_<timestamp>.png）"},
+                "output_path": {"type": "string", "description": "输出路径（默认写入系统临时目录：<temp>/argo_screenshot_<timestamp>.png）"},
             },
             "required": ["url"],
         },

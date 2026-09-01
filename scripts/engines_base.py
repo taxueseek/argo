@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -235,6 +236,10 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
         args = _resolve(search_args, query, n, mode=mode, **kwargs)
         if not cmd:
             return []
+        # 跨平台解释器解析：Windows 一般没有 python3 这个可执行名
+        if isinstance(cmd, list) and cmd and cmd[0] == "python3":
+            py3 = shutil.which("python3") or shutil.which("python") or sys.executable
+            cmd[0] = py3
         for key, tmpl in filter_args.items():
             if kwargs.get(key) not in (None, ""):
                 args += _resolve(tmpl, query, n, mode=mode, **kwargs)
@@ -419,7 +424,8 @@ def _load_parse_maps() -> dict:
         return {}
     try:
         import yaml
-        with open(maps_path) as f:
+        # Windows 下 locale 默认编码（GBK）会读崩 UTF-8 的 YAML，必须显式声明
+        with open(maps_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
     except Exception:
         return {}

@@ -57,7 +57,7 @@ python3 sub-skills/local-seek/scripts/seek.py --git-blame 12 文件路径   # �
 |------|-----|--------|
 | 搜代码/正文关键词 | rg（默认） | 毫秒级，尊重 .gitignore，自动排除 node_modules 等 |
 | 只记得文件名 | --filename（fd） | 按文件名模糊匹配 |
-| 搜 PDF/邮件/已归档内容 | --spotlight（mdfind） | 走 macOS 系统索引，零成本预建 |
+| 搜 PDF/邮件/已归档内容 | --spotlight（mdfind） | 走 macOS 系统索引，零成本预建（Windows/Linux 自动退化为 rg 正文搜索） |
 | 找代码模式（裸except/空catch等） | --structural | 按语义不按字符串 |
 | 追文件历史/单行归属 | --git-log / --git-blame | 免开终端敲 git |
 | 当前目录搜不到 | 先扩大 --path，再 --spotlight | 先窄后宽 |
