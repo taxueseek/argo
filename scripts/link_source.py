@@ -135,7 +135,23 @@ def link_one(target: Path, *, dry_run: bool, force: bool) -> int:
         return 0
     parent.mkdir(parents=True, exist_ok=True)
     # atomic-ish: symlink in place
-    os.symlink(source, target, target_is_directory=True)
+    try:
+        os.symlink(source, target, target_is_directory=True)
+    except OSError:
+        # Windows 无开发者模式/管理员权限时 symlink 会失败：
+        # 目录链接退化为 junction（mklink /J，不需要管理员权限），
+        # 语义与 symlink 基本一致（resolve() 同样指向真源）。
+        if os.name == "nt":
+            r = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(target), str(source)],
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+            )
+            if r.returncode == 0 and _is_link_to_source(target):
+                print(f"[link] {target} -> {source} (junction)")
+                return 0
+        print(f"[fail] 创建链接失败: {target} -> {source}", file=sys.stderr)
+        return 1
     print(f"[link] {target} -> {source}")
     return 0
 

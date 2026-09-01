@@ -32,6 +32,7 @@ import json
 import socket
 import ssl
 import subprocess
+import tempfile
 import time
 import os
 import signal
@@ -297,7 +298,9 @@ class _ChromeProcess:
         self.port = port or self._find_free_port()
         self.chrome_path = chrome_path or self._find_chrome()
         self._proc: subprocess.Popen | None = None
-        self._user_data_dir = f"/tmp/argo_chrome_{self.port}"
+        # 跨平台：/tmp 在 Windows 不存在，统一用系统临时目录
+        self._user_data_dir = os.path.join(
+            tempfile.gettempdir(), f"argo_chrome_{self.port}")
 
     @staticmethod
     def _find_free_port() -> int:
@@ -615,7 +618,8 @@ class ChromeCDP:
         if r and "data" in r:
             import base64
             data = base64.b64decode(r["data"])
-            path = path or f"/tmp/argo_screenshot_{int(time.time())}.png"
+            path = path or os.path.join(
+                tempfile.gettempdir(), f"argo_screenshot_{int(time.time())}.png")
             with open(path, "wb") as f:
                 f.write(data)
             if full_page:

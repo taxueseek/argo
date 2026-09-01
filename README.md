@@ -161,8 +161,18 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ### 方式一：一键脚本（推荐本机长期用）
 
+macOS / Linux：
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
+```
+
+Windows（PowerShell）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.ps1 | iex"
+# 或下载后执行：
+# powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 ```
 
 装到指定目录、并挂 Skill 入口：

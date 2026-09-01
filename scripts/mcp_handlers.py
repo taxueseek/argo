@@ -16,6 +16,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 from typing import Any
 
@@ -844,7 +845,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         elif name == "argo_screenshot":
             import time as _time
-            output = arguments.get("output_path", f"/tmp/argo_screenshot_{int(_time.time())}.png")
+            output = arguments.get("output_path") or os.path.join(
+                tempfile.gettempdir(), f"argo_screenshot_{int(_time.time())}.png")
             full_page = arguments.get("full_page", False)
             try:
                 cdp_mod = _lazy_cached("chrome_cdp")
