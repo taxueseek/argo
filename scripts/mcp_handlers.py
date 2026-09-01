@@ -233,6 +233,8 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         out["early_stopped"] = True
     if result.get("minhash_removed"):
         out["minhash_removed"] = result.get("minhash_removed")
+    if result.get("domain_filter"):
+        out["domain_filter"] = result["domain_filter"]
     if result.get("rank_method"):
         out["rank_method"] = result.get("rank_method")
     if result.get("reranker"):
@@ -481,6 +483,52 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
+    """边界夹取（与工具 schema 的 min/max 同口径）：非法回默认，越界取边界。"""
+    try:
+        return max(lo, min(int(value), hi))
+    except (TypeError, ValueError):
+        return default
+
+
+def _cap_extract_output(output: dict[str, Any]) -> dict[str, Any]:
+    """argo_fetch mode=extract 的输出上限（防大页表格撑爆上下文）。
+
+    结构级裁剪保持 JSON 可解析：表格数量/单元格、metadata 值、jsonld
+    条目体积分别设上限，超限截断并打标记。
+    """
+    tables = output.get("tables")
+    if isinstance(tables, list):
+        if len(tables) > 12:
+            output["tables"] = tables[:12]
+            output["tables_truncated"] = True
+        for t in output["tables"]:
+            if isinstance(t, list):
+                for i, row in enumerate(t):
+                    if isinstance(row, list):
+                        t[i] = [str(c)[:300] if c is not None else "" for c in row]
+    meta = output.get("metadata")
+    if isinstance(meta, dict):
+        output["metadata"] = {k: str(v)[:500] for k, v in meta.items()}
+    jsonld = output.get("jsonld")
+    if isinstance(jsonld, list):
+        capped = []
+        for entry in jsonld:
+            try:
+                text = json.dumps(entry, ensure_ascii=False)
+            except (TypeError, ValueError):
+                continue
+            if len(text) > 4000:
+                capped.append({"_clipped": True, "preview": text[:4000]})
+            else:
+                capped.append(entry)
+        if len(capped) > 8:
+            capped = capped[:8]
+            output["jsonld_truncated"] = True
+        output["jsonld"] = capped
+    return output
+
+
 def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """执行 MCP 工具，按需导入模块。
 
@@ -507,6 +555,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 until=arguments.get("until"),
                 sort=arguments.get("sort", "relevance"),
                 include_local=bool(arguments.get("include_local", False)),
+                include_domains=arguments.get("include_domains") or None,
+                exclude_domains=arguments.get("exclude_domains") or None,
                 cache=_get_cache(),
                 envelope=False,
                 context="search",
@@ -683,7 +733,11 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
             platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
             query = arguments["query"]
-            n = arguments.get("max_results", 5)
+            # 边界夹取与 schema（1..20）同口径：客户端越界值不放大平台请求
+            try:
+                n = max(1, min(int(arguments.get("max_results", 5) or 5), 20))
+            except (TypeError, ValueError):
+                n = 5
             platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
             if arguments.get("mode", "text") == "sentiment":
                 # 舆情聚合逻辑下沉在 research.aggregate_social_sentiment
@@ -735,8 +789,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         elif name == "argo_crawl":
             crawl_mod = _lazy_cached("crawl")
             strategy = arguments.get("strategy", "bfs")
-            max_pages = arguments.get("max_pages", 10)
-            max_depth = arguments.get("max_depth", 2)
+            # 夹取与 schema 同口径（max_pages 1..50，max_depth 1..5）
+            max_pages = _clamp_int(arguments.get("max_pages", 10), 10, 1, 50)
+            max_depth = _clamp_int(arguments.get("max_depth", 2), 2, 1, 5)
             timeout = _env_int("ARGO_MCP_TIMEOUT_CRAWL", int(arguments.get("timeout", 8)))
             if strategy == "sitemap":
                 result = crawl_mod.crawl_sitemap(arguments["url"], max_pages=max_pages, timeout=timeout)
@@ -766,7 +821,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 if emode in ("jsonld", "all"):
                     output["jsonld"] = extract_mod.extract_jsonld(html)
                 output["url"] = fetch_result["url"]
-                return _ok(output, pretty=pretty)
+                return _ok(_cap_extract_output(output), pretty=pretty)
 
             fetch_v3_mod = _lazy_cached("fetch_v3")
             result = fetch_v3_mod.fetch_v3(
@@ -822,8 +877,52 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             )
             return _ok(result, pretty=pretty)
 
+        elif name == "argo_article":
+            article_mod = _lazy_cached("article")
+            try:
+                out = article_mod.fetch_article(
+                    arguments["url"],
+                    timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH",
+                                     int(arguments.get("timeout", 30))),
+                )
+            except ValueError as e:
+                # URL 不合规格式：可行动错误（仅支持 mp.weixin.qq.com）
+                return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
+                        "isError": True}
+            if out.get("ok"):
+                max_c = int(arguments.get("max_chars", 20000))
+                if len(out.get("content", "")) > max_c:
+                    out["content"] = out["content"][:max_c]
+                    out["truncated"] = True
+            return _ok(out, pretty=pretty)
+
+        elif name == "argo_job":
+            job_mod = _lazy_cached("job")
+            try:
+                out = job_mod.search(
+                    arguments["query"],
+                    city=arguments.get("city", ""),
+                    # 夹取与 schema 同口径（num 1..20，fetch_detail 0..10）：
+                    # 六平台并发 × 越界条数会同时放大请求量与返回体积
+                    num=_clamp_int(arguments.get("num", 5), 5, 1, 20),
+                    platforms=arguments.get("platforms", ""),
+                    loose=bool(arguments.get("loose", False)),
+                    fetch_n=_clamp_int(arguments.get("fetch_detail", 0), 0, 0, 10),
+                )
+            except ValueError as e:
+                return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
+                        "isError": True}
+            return _ok(out, pretty=pretty)
+
         else:
-            return {"error": {"code": -32601, "message": f"Unknown tool: {name}"}}
+            # 未知工具走 isError 形态（与其他工具级错误同契约）：裸 {"error":...}
+            # 会被 transport 包成成功 result，客户端无法区分错误与正常输出
+            return {
+                "content": [{"type": "text",
+                             "text": _dumps({"error": {"code": -32601,
+                                                       "message": f"Unknown tool: {name}"}})}],
+                "isError": True,
+            }
 
     except Exception as e:
         return {

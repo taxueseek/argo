@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mcp_tools.py — MCP 工具 schema 唯一真源（P2-4 拆分自 mcp_server.py）。
 
-10 个工具的 inputSchema 只在本模块维护；mcp_transport 的 tools/list 与
+14 个工具的 inputSchema 只在本模块维护；mcp_transport 的 tools/list 与
 mcp_server 的兼容导出均从本模块取。改 schema 只动这一个文件。
 
 schema 设计原则（质量第一，token 第二）：
@@ -20,7 +20,7 @@ from __future__ import annotations
 TOOLS = [
     {
         "name": "argo_search",
-        "description": "统一网络搜索：多引擎融合、支持时间过滤与排序，返回带来源与摘要的结果。查资料、找答案、搜新闻/学术/代码/多语言内容等通用场景的首选工具。",
+        "description": "统一网络搜索：多引擎融合、支持时间过滤与域名过滤，返回带来源与摘要的结果。查资料、找答案、搜新闻/学术/代码/多语言内容等通用场景的首选工具。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -32,6 +32,8 @@ TOOLS = [
                 "since": {"type": "string", "description": "发布时间下限，如 7d / 2026-08-01"},
                 "until": {"type": "string", "description": "发布时间上限，如 7d / 2026-08-01"},
                 "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前", "default": "relevance"},
+                "include_domains": {"type": "array", "items": {"type": "string"}, "description": "仅保留这些域名（含子域），如 [\"github.com\"]", "default": []},
+                "exclude_domains": {"type": "array", "items": {"type": "string"}, "description": "排除这些域名（含子域），如 [\"pinterest.com\"]", "default": []},
                 "include_local": {"type": "boolean", "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认关）", "default": False},
                 "summary": {"type": "boolean", "description": "精简输出：截断摘要、去掉重字段，省 token", "default": True},
             },
@@ -192,6 +194,34 @@ TOOLS = [
                 "mode": {"type": "string", "enum": ["text", "sentiment"], "description": "text=帖子列表, sentiment=舆情聚合分析", "default": "text"},
                 "platforms": {"type": "string", "description": "平台列表，逗号分隔；可选 hackernews,v2ex,zhihu,bilibili,twitter,reddit,xiaohongshu,weibo", "default": "hackernews,zhihu,bilibili"},
                 "max_results": {"type": "integer", "description": "每个平台的结果条数", "default": 5, "minimum": 1, "maximum": 20},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "argo_article",
+        "description": "微信公众号文章全文抓取：标题/作者/发布时间/正文纯文本/图片列表。仅支持 mp.weixin.qq.com 链接；要读公众号文章全文时用（普通网页走 argo_fetch）。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "mp.weixin.qq.com 文章链接"},
+                "max_chars": {"type": "integer", "description": "返回正文最大字符数", "default": 20000, "minimum": 500, "maximum": 50000},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "argo_job",
+        "description": "招聘岗位多平台聚合：BOSS直聘/猎聘/智联/前程无忧/597/今日招聘，职位+地区并发搜索，三级地区命中判定+结构化字段（薪资/学历/经验）+跨平台去重。招聘市场调研时用。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "职位关键词，如：工艺工程师、会计、电工"},
+                "city": {"type": "string", "description": "地区：省/市/县或海外城市（成都、昆山、新加坡…），空=不过滤地区"},
+                "num": {"type": "integer", "description": "每后端条数", "default": 5, "minimum": 1, "maximum": 20},
+                "platforms": {"type": "string", "description": "逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp；空=全部", "default": ""},
+                "loose": {"type": "boolean", "description": "宽松：异地岗位也保留；默认严格地区过滤", "default": False},
+                "fetch_detail": {"type": "integer", "description": "对前 N 条高命中结果抓详情页补全结构化字段（0=仅 snippet 提取）", "default": 0, "minimum": 0, "maximum": 10},
             },
             "required": ["query"],
         },

@@ -1,9 +1,12 @@
-# Firecrawl 搜索引擎（官方云 API，需 FIRECRAWL_API_KEY）
+# Firecrawl 搜索引擎（官方云 API，keyless 免配置优先启用）
 # 文档: https://docs.firecrawl.dev/api-reference/endpoint/search
-# 额度: 免费层 1000 credits/月（按结果数计费，约 1 credit/条）；Billing Period 月重置
+# 额度: 免费层 1000 credits/月（按结果数计费，约 1 credit/条）；Billing Period 月重置。
+#       匿名（不带 Authorization）即走免费层；配置 FIRECRAWL_API_KEY（可选）后
+#       计入注册账号额度并支持更高稳定性
 # 特点: search+scrape 一体化、JS 渲染、categories(github/research/pdf)、tbs 时间窗、
 #       site:/inurl:/filetype: 高级算符
-# 定位: T2 补充引擎 —— deep/research 场景给全文，日常 fast 预算少用
+# 定位: T2 补充引擎 —— 免费池可路由（daily_support），priority 低 + combo 预算截断，
+#       日常少用保护共享免费层配额；deep/research 全量可用
 # 验证:
 #   python3 scripts/engine_validate.py --engine firecrawl --stage all --admit
 #   python3 scripts/search.py "climate change" --engine firecrawl --json
@@ -11,27 +14,26 @@
 engine_id: firecrawl
 type: http
 enabled: true
-cost_tier: paid
-# 分层：research_only —— 仅 context=research / depth=deep / mode=deep 时进 combo，
-# 日常 fast/auto 不消耗 1000 credits/月 额度（engine_policy.get_engine_tier 读 spec.tier）
-tier: research_only
+cost_tier: free
+# 分层：daily_support —— 日常 combo 可参与（failover 补位），budget 截断优先命中，
+# 不至于把 1000 credits/月 免费层当主力烧掉（engine_policy.get_engine_tier 读 spec.tier）
+tier: daily_support
 method: POST
 url: https://api.firecrawl.dev/v2/search
 timeout: 20
 canary_query: "climate change"
-desc: "Firecrawl 云搜索（search+全文markdown，JS渲染/学术/PDF垂直，月1000 credits 免费层）"
+desc: "Firecrawl 云搜索（search+全文markdown，JS渲染/学术/PDF垂直，keyless 免费层 1000 credits/月）"
 label: Firecrawl
 family: web_general
-# 预算感知：priority 低 + research_only，日常 fast/auto 少用，deep/research 才启用
+# 预算感知：priority 低 + daily_support，日常排 combo 后排，配额留给 failover 补位
 priority: 50
 qps: 1
 period: month
 limit: 1000
 cost_per_call: 0.001
 cost_unit: credit
-required_env:
-  - FIRECRAWL_API_KEY
 
+# 可选密钥（OPTIONAL_ENV_ENGINES）：未配置时不发送 Authorization（keyless 直连免费层）
 headers:
   Authorization: Bearer {FIRECRAWL_API_KEY}
   Content-Type: application/json

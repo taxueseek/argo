@@ -14,6 +14,10 @@ mcp_server.py — Argo MCP 服务入口（P2-4 拆分后为聚合薄壳）
 用法：
   python3 mcp_server.py                    # 启动 MCP stdio 服务
   python3 mcp_server.py --test             # 本地测试模式
+  python3 mcp_server.py --call <tool> '<json-args>'
+                                           # CLI 单发：与 stdio 共用 execute_tool
+                                           # （同引擎、同压缩、同守卫），供 DSH
+                                           # 原生工具等免帧协议调用方复用
 """
 
 from __future__ import annotations
@@ -108,6 +112,29 @@ def test_mode():
     print(result["content"][0]["text"][:500])
 
 
+def call_mode(tool: str, payload: str) -> int:
+    """CLI 单发（--call <tool> '<json-args>'）。
+
+    与 stdio 服务共用 execute_tool，stdout 只输出结果 JSON（isError 时
+    退出码 1）；不输出任何日志到 stdout，保证调用方解析不被污染。
+    """
+    try:
+        arguments = json.loads(payload) if payload.strip() else {}
+    except json.JSONDecodeError as e:
+        print(json.dumps({"error": f"invalid --call payload: {e}"}, ensure_ascii=False))
+        return 2
+    if not isinstance(arguments, dict):
+        print(json.dumps({"error": "--call payload must be a JSON object"}, ensure_ascii=False))
+        return 2
+    result = execute_tool(tool, arguments)
+    print(_dumps(result))
+    # isError 是工具级错误；裸 {"error": {...}} 是协议级错误（如未知工具）。
+    # 两者都必须非零退出，否则调用方（如 DSH 原生工具）把错误当成功渲染。
+    is_error = bool(result.get("isError")) or (
+        isinstance(result.get("error"), dict) and "content" not in result)
+    return 1 if is_error else 0
+
+
 # ── 入口 ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -122,5 +149,14 @@ if __name__ == "__main__":
         sys.exit(0)
     if "--test" in sys.argv:
         test_mode()
+    elif "--call" in sys.argv:
+        _i = sys.argv.index("--call")
+        _tool = sys.argv[_i + 1] if len(sys.argv) > _i + 1 else ""
+        if not _tool:
+            print(json.dumps({"error": "usage: mcp_server.py --call <tool> [json-args]"},
+                             ensure_ascii=False))
+            sys.exit(2)
+        _payload = sys.argv[_i + 2] if len(sys.argv) > _i + 2 else "{}"
+        sys.exit(call_mode(_tool, _payload))
     else:
         run_stdio()

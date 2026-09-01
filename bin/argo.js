@@ -25,20 +25,45 @@ if (!fs.existsSync(SCRIPT)) {
 // PEP 540 UTF-8 模式：Windows 默认 GBK 控制台/文件编码会打崩含中文的
 // JSON 读取与 stderr 输出，显式打开 UTF-8 模式（Python 3.7+ 支持）。
 const env = { ...process.env, PYTHONUTF8: process.env.PYTHONUTF8 || '1' };
-const proc = spawn(PYTHON, [SCRIPT], {
-  stdio: ['pipe', 'pipe', 'inherit'],
-  env,
-});
 
-process.stdin.pipe(proc.stdin);
-proc.stdout.pipe(process.stdout);
+const argv = process.argv.slice(2);
 
-proc.on('error', (err) => {
-  console.error(`argo-search: 无法启动 Python (${PYTHON}): ${err.message}`);
-  console.error('请确认已安装 Python 3.10+，并已执行: pip install pyyaml');
-  process.exit(1);
-});
+// 子命令分发：`argo-search call <tool> '<json-args>'` —— CLI 单发，与 stdio
+// 服务共用 mcp_server.py --call / execute_tool 入口（同引擎同压缩），供 DSH
+// 原生工具等调用方免 MCP 帧协议复用；无子命令保持原行为：启动 stdio 服务。
+if (argv[0] === 'call') {
+  const tool = argv[1];
+  if (!tool) {
+    console.error('usage: argo-search call <tool> [json-args]');
+    process.exit(2);
+  }
+  const cli = spawn(PYTHON, [SCRIPT, '--call', tool, argv[2] ?? '{}'], {
+    stdio: 'inherit',
+    env,
+  });
+  cli.on('error', (err) => {
+    console.error(`argo-search: 无法启动 Python (${PYTHON}): ${err.message}`);
+    process.exit(1);
+  });
+  cli.on('exit', (code) => {
+    process.exit(code || 0);
+  });
+} else {
+  const proc = spawn(PYTHON, [SCRIPT], {
+    stdio: ['pipe', 'pipe', 'inherit'],
+    env,
+  });
 
-proc.on('exit', (code) => {
-  process.exit(code || 0);
-});
+  process.stdin.pipe(proc.stdin);
+  proc.stdout.pipe(process.stdout);
+
+  proc.on('error', (err) => {
+    console.error(`argo-search: 无法启动 Python (${PYTHON}): ${err.message}`);
+    console.error('请确认已安装 Python 3.10+，并已执行: pip install pyyaml');
+    process.exit(1);
+  });
+
+  proc.on('exit', (code) => {
+    process.exit(code || 0);
+  });
+}

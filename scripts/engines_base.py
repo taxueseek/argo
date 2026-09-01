@@ -100,7 +100,20 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
     # env 占位符：缺失时替换为空串而非保留字面量。
     # 保留字面量会把 `Authorization: token {GITHUB_TOKEN}` 原样发出 → 401；
     # 空串 + 调用方过滤空头 = 未配置 key 的引擎自动退化为匿名请求。
-    return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), ""), s)
+    # 经 engine_env 按候选链解析（PLACEHOLDER_ALIASES：ARGO_ 推荐名优先 +
+    # 历史兼容名）：os.environ 优先 + ~/.config/argo/env 热读兜底
+    # （密钥轮换改文件即生效，无需重启）。
+    try:
+        from engine_env import PLACEHOLDER_ALIASES as _PA, get_env as _get_env
+        return re.sub(
+            r"\{([A-Z_][A-Z0-9_]*)\}",
+            lambda m: _get_env(
+                _PA.get(m.group(1), [f"ARGO_{m.group(1)}", m.group(1)]), ""
+            ),
+            s,
+        )
+    except ImportError:
+        return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), ""), s)
 
 
 _AUTH_PREFIXES = ("Bearer", "token", "Basic", "Key", "Api-Key", "X-Key", "Secret", "Appid")
@@ -315,10 +328,18 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                             body[k] = float(resolved)
                         except ValueError:
                             body[k] = resolved
+            # 与 GET 路径对齐：过滤空/认证前缀残留头（未配置的 {ENV} 不发送，
+            # POST 型可选密钥引擎如 firecrawl 才能 keyless 直连）
+            resolved_headers = {
+                k: v for k, v in (
+                    (k, _resolve(v, query, n, **kwargs))
+                    for k, v in headers.items()
+                ) if _header_meaningful(v)
+            }
             req = urllib.request.Request(
                 url_template,
                 data=json.dumps(body).encode("utf-8"),
-                headers={k: _resolve(v, query, n, **kwargs) for k, v in headers.items()},
+                headers=resolved_headers,
             )
             try:
                 with urllib.request.urlopen(req, timeout=to) as resp:
@@ -368,6 +389,40 @@ def _http_get_raw(url: str, headers: dict, timeout: float) -> str | None:
         return None
 
 
+def _envelope_error(data: Any) -> str:
+    """提取 HTTP 200 响应体里的业务错误（火山 ResponseMetadata.Error / 知乎
+    顶层 Code/Message 风格等）。
+
+    byted 免费配额耗尽（10406 Free quota exhausted）曾以 HTTP 200 + 空
+    WebResults 静默通过；zhihu 20001 Authorization failed 同理——错误藏在
+    200 响应体里，调用侧把「配额用完/鉴权失败」当「没结果」。
+    """
+    if not isinstance(data, dict):
+        return ""
+    rm = data.get("ResponseMetadata")
+    if isinstance(rm, dict):
+        e = rm.get("Error")
+        if isinstance(e, dict) and (e.get("Code") or e.get("Message")):
+            return f"{e.get('Code')}: {e.get('Message')}"
+    # 顶层 Code/Message 封套（知乎 zhihu_search 等）：Code 非 0 且有 Message。
+    # 成功码白名单含数值 200（部分 API 用 HTTP 语义的 200 表示成功）；
+    # Code=0 无 Message 时不算错误（纯 Code 字段的成功封套）
+    code = data.get("Code")
+    msg = data.get("Message") or data.get("message")
+    if msg and code not in (0, None, "", "0", "OK", "ok", "success", 200):
+        return f"{code}: {msg}"
+    for key in ("error", "Error"):
+        e = data.get(key)
+        if isinstance(e, dict):
+            code = e.get("Code") or e.get("code") or ""
+            msg = e.get("Message") or e.get("message") or ""
+            if code or msg:
+                return f"{code}: {msg}" if code and msg else str(msg or code)
+        elif isinstance(e, str) and e:
+            return e
+    return ""
+
+
 def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                         output_map: dict, spec: dict) -> list[dict[str, Any]]:
     """HTTP 引擎响应体解析（GET/POST 共用）。"""
@@ -378,6 +433,12 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
     except (json.JSONDecodeError, ValueError):
         logger.warning(f"HTTP 引擎解析失败: {eng} 非 JSON/XML 响应")
         return []
+    # 业务错误封套优先于条数提取：强封套错误（ResponseMetadata.Error、顶层
+    # error 对象）表示本次调用失败，返回结果必然为空或不可信
+    env_err = _envelope_error(data)
+    if env_err:
+        logger.warning(f"HTTP 引擎业务错误: {eng} {env_err[:120]}")
+        return [{"error": f"{eng} {env_err}", "source": eng}]
     limit = max(1, int(n or 5))
     # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）
     custom = _CUSTOM_JSON_PARSERS.get(eng)

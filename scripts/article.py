@@ -38,27 +38,22 @@ def strip_tags(s: str) -> str:
     return "\n".join(l for l in lines if l)
 
 
-def main():
-    ap = argparse.ArgumentParser(description="微信公众号文章全文抓取")
-    ap.add_argument("url", help="mp.weixin.qq.com 文章链接")
-    ap.add_argument("--json", action="store_true", help="输出 JSON")
-    args = ap.parse_args()
+def fetch_article(url: str, timeout: int = 30) -> dict:
+    """抓取并解析公众号文章，返回结构化 dict（CLI 与 MCP 共用主链）。
 
-    url = args.url
+    URL 非 mp.weixin.qq.com 时抛 ValueError（CLI 走 stderr 退出，
+    MCP 转 isError）；抓取失败/反爬拦截返回 {"ok": False, "error": ...}。
+    """
     if not re.match(r"https?://mp\.weixin\.qq\.com/", url):
-        print("仅支持 mp.weixin.qq.com 链接", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError("仅支持 mp.weixin.qq.com 链接")
 
     try:
-        raw = fetch(url)
+        raw = fetch(url, timeout)
     except Exception as e:
-        print(json.dumps({"ok": False, "error": f"抓取失败: {e}"}, ensure_ascii=False))
-        sys.exit(1)
+        return {"ok": False, "error": f"抓取失败: {e}"}
 
     if "js_content" not in raw and "环境异常" in raw:
-        print(json.dumps({"ok": False, "error": "微信反爬拦截（环境异常），请稍后重试"},
-                         ensure_ascii=False))
-        sys.exit(1)
+        return {"ok": False, "error": "微信反爬拦截（环境异常），请稍后重试"}
 
     def grab(pattern, default=""):
         m = re.search(pattern, raw)
@@ -80,7 +75,7 @@ def main():
     if not imgs:
         imgs = re.findall(r'src="(https://mmbiz\.qpic\.cn/[^"]+)"', body_html)
 
-    out = {
+    return {
         "ok": True,
         "url": url,
         "title": title,
@@ -91,6 +86,22 @@ def main():
         "images": imgs,
         "content": text,
     }
+
+
+def main():
+    ap = argparse.ArgumentParser(description="微信公众号文章全文抓取")
+    ap.add_argument("url", help="mp.weixin.qq.com 文章链接")
+    ap.add_argument("--json", action="store_true", help="输出 JSON")
+    args = ap.parse_args()
+
+    try:
+        out = fetch_article(args.url)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+    if not out["ok"]:
+        print(json.dumps(out, ensure_ascii=False))
+        sys.exit(1)
 
     if args.json:
         print(json.dumps(out, ensure_ascii=False, indent=2))

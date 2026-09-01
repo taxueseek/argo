@@ -858,55 +858,56 @@ def _fetch_detail(url: str, timeout: int = 10) -> Optional[dict]:
 # ── 主流程 ─────────────────────────────────────────────────────────────
 
 
-def main():
-    ap = argparse.ArgumentParser(description="求职岗位搜索：职位 + 地区 → 该地区在招岗位")
-    ap.add_argument("query", help="职位关键词，如：工艺工程师、会计、电工")
-    ap.add_argument("--city", default="",
-                    help="地区：任意省/市/县（四川、成都、昆山…）或海外国家/城市"
-                         "（新加坡、东京、Sydney…），多个用空格分隔")
-    ap.add_argument("-n", "--num", type=int, default=5, help="每后端条数")
-    ap.add_argument("--engine", default="all",
-                    choices=["all", "free"] + sorted(ALL_BACKENDS),
-                    help="搜索后端：all = exa+tavily+byted+bocha+octen"
-                         "（海外城市自动加 free 免 key 源）；free = 仅免 key 国际源")
-    ap.add_argument("--platforms", default="",
-                    help="逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp")
-    ap.add_argument("--loose", action="store_true",
-                    help="宽松：异地岗位也保留（命中置顶）；默认严格过滤")
-    ap.add_argument("--json", action="store_true", help="输出 JSON")
-    ap.add_argument("--fetch", type=int, default=0, metavar="N",
-                    help="对前 N 条 L1 结果抓详情页补全结构化字段（默认 0 不抓，"
-                         "仅用 snippet 提取）")
-    ap.add_argument("--watch", action="store_true",
-                    help="增量监控：存快照至 data/jobs/，二次运行对比输出新上线/已下架")
-    args = ap.parse_args()
+def sort_jobs(items: list[dict]) -> list[dict]:
+    """岗位排序（单一真源）：级别 L1 > L2 > L3 > 0 为主键（稳定排序先按
+    日期降序，级别内日期新→旧），过期垫底，空日期排最后。
 
-    platforms = PLATFORMS
-    if args.platforms:
-        wanted = {p.strip() for p in args.platforms.split(",")}
-        platforms = [(d, l) for d, l in PLATFORMS if d.split(".")[0] in wanted]
-    if not platforms:
-        sys.exit("未识别的平台，可用: zhipin,liepin,zhaopin,51job,597,jrzp")
+    CLI 与 MCP argo_job 共用，防止两处排序口径漂移。
+    """
+    out = list(items)
+    out.sort(key=lambda r: r.get("date", ""), reverse=True)
+    out.sort(key=lambda r: (r.get("hit_level", 0), r.get("stale", False)))
+    return out
+
+
+def search(query: str, city: str = "", num: int = 5, engine: str = "all",
+           platforms: str = "", loose: bool = False, fetch_n: int = 0) -> dict:
+    """聚合搜索主链（CLI 与 MCP 共用）。
+
+    多后端并发 → 白名单校验 → 三级地区判定 → snippet 结构化 → 指纹去重 →
+    排序。不含 --watch 增量对比（CLI 专属，main 基于返回结果做）。
+    platforms 为逗号分隔平台 id（zhipin,liepin,zhaopin,51job,597,jrzp），
+    空 = 全平台；未识别抛 ValueError。
+
+    返回与 CLI --json 相同结构的 dict：
+    query/backends/total/dropped_url/dropped_region/strict/errors/results。
+    """
+    plat_list = PLATFORMS
+    if platforms:
+        wanted = {p.strip() for p in platforms.split(",")}
+        plat_list = [(d, l) for d, l in PLATFORMS if d.split(".")[0] in wanted]
+    if not plat_list:
+        raise ValueError("未识别的平台，可用: zhipin,liepin,zhaopin,51job,597,jrzp")
 
     engines = []
-    if args.engine == "all":
+    if engine == "all":
         engines = list(DEFAULT_ENGINES)
-        if is_overseas(args.city):
+        if is_overseas(city):
             engines += list(FREE_BACKENDS)  # 海外自动启用免 key 源
-    elif args.engine == "free":
+    elif engine == "free":
         engines = list(FREE_BACKENDS)
     else:
-        engines = [args.engine]
+        engines = [engine]
 
-    query = f"{args.query} {args.city}".strip()
-    words = region_words(args.city) if args.city else []
+    full_query = f"{query} {city}".strip()
+    words = region_words(city) if city else []
 
     results, errors = [], []
 
     def run(name: str):
         try:
             fn = ALL_BACKENDS[name]
-            for r in fn(query, args.num):
+            for r in fn(full_query, num):
                 r["backend"] = name
                 results.append(r)
         except Exception as e:
@@ -935,7 +936,7 @@ def main():
             dropped_region += 1
         kept.append(nr)
 
-    strict = bool(words) and not args.loose
+    strict = bool(words) and not loose
     if strict:
         kept = [r for r in kept if r["hit_level"] in (1, 2)]
         # 资讯/攻略页（工资待遇/就业前景/新闻百科）非岗位，剔除
@@ -943,11 +944,11 @@ def main():
         # 平台标注「职位已关闭/已下线」的岗位，剔除
         kept = [r for r in kept if not CLOSED_RE.search(r.get("snippet", ""))]
 
-    # 详情页结构化补全（--fetch N，前 N 条 L1）
-    if args.fetch > 0:
+    # 详情页结构化补全（前 N 条 L1）
+    if fetch_n > 0:
         fetched = 0
         for r in sorted(kept, key=lambda x: (x["hit_level"], x.get("date", "")), reverse=True):
-            if fetched >= args.fetch:
+            if fetched >= fetch_n:
                 break
             if r["hit_level"] != 1:
                 continue
@@ -969,7 +970,55 @@ def main():
             seen_fp[fp] = r
     unique = list(seen_fp.values())
 
-    # watch 增量对比（对比用快照需在指纹去重前、含全部保留项）
+    # 排序：级别 L1 > L2 > L3 > 0 为主键（稳定排序先按日期降序，级别内日期新→旧），
+    # 过期垫底。空日期排最后（byted/tavily 无日期字段）。
+    # 单真源 sort_jobs()：CLI --json 与 MCP argo_job 共用同一排序。
+    unique = sort_jobs(unique)
+
+    return {"query": full_query, "backends": engines,
+            "total": len(unique),
+            "dropped_url": dropped_url,
+            "dropped_region": dropped_region,
+            "strict": strict,
+            "errors": errors, "results": unique}
+
+
+def main():
+    ap = argparse.ArgumentParser(description="求职岗位搜索：职位 + 地区 → 该地区在招岗位")
+    ap.add_argument("query", help="职位关键词，如：工艺工程师、会计、电工")
+    ap.add_argument("--city", default="",
+                    help="地区：任意省/市/县（四川、成都、昆山…）或海外国家/城市"
+                         "（新加坡、东京、Sydney…），多个用空格分隔")
+    ap.add_argument("-n", "--num", type=int, default=5, help="每后端条数")
+    ap.add_argument("--engine", default="all",
+                    choices=["all", "free"] + sorted(ALL_BACKENDS),
+                    help="搜索后端：all = exa+tavily+byted+bocha+octen"
+                         "（海外城市自动加 free 免 key 源）；free = 仅免 key 国际源")
+    ap.add_argument("--platforms", default="",
+                    help="逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp")
+    ap.add_argument("--loose", action="store_true",
+                    help="宽松：异地岗位也保留（命中置顶）；默认严格过滤")
+    ap.add_argument("--json", action="store_true", help="输出 JSON")
+    ap.add_argument("--fetch", type=int, default=0, metavar="N",
+                    help="对前 N 条 L1 结果抓详情页补全结构化字段（默认 0 不抓，"
+                         "仅用 snippet 提取）")
+    ap.add_argument("--watch", action="store_true",
+                    help="增量监控：存快照至 data/jobs/，二次运行对比输出新上线/已下架")
+    args = ap.parse_args()
+
+    try:
+        out = search(args.query, city=args.city, num=args.num,
+                     engine=args.engine, platforms=args.platforms,
+                     loose=args.loose, fetch_n=args.fetch)
+    except ValueError as e:
+        sys.exit(str(e))
+
+    query = out["query"]
+    engines = out["backends"]
+    unique = out["results"]
+    strict = out["strict"]
+
+    # watch 增量对比（快照含全部去重后保留项；排序不影响集合，先做无妨）
     new_jobs, gone_jobs = [], []
     if args.watch:
         path = snapshot_path(args.query, args.city)
@@ -996,18 +1045,8 @@ def main():
             if len(new_jobs) > 10 or len(gone_jobs) > 10:
                 print(f"  … 其余变化请查看快照 {path}")
 
-    # 排序：级别 L1 > L2 > L3 > 0 为主键（稳定排序先按日期降序，级别内日期新→旧），
-    # 过期垫底。空日期排最后（byted/tavily 无日期字段）。
-    unique.sort(key=lambda r: r.get("date", ""), reverse=True)
-    unique.sort(key=lambda r: (r.get("hit_level", 0), r.get("stale", False)))
-
+    # 排序已在 search() 内完成（sort_jobs），此处不再重排
     if args.json:
-        out = {"query": query, "backends": engines,
-               "total": len(unique),
-               "dropped_url": dropped_url,
-               "dropped_region": dropped_region,
-               "strict": strict,
-               "errors": errors, "results": unique}
         if args.watch:
             out["watch"] = {"new": len(new_jobs), "gone": len(gone_jobs)}
         print(json.dumps(out, ensure_ascii=False, indent=2))
