@@ -12,7 +12,7 @@
   - 强查询信号（zh/ja/ko/非拉丁等）以查询为准，习惯/系统只作补充与观测
   - 弱信号（mixed / other / 空）才用 prefer_langs[0] 驱动引擎语言参数
   - 中英基线始终在 prefer 列表中，习惯学到 ja 也不会丢掉 zh/en
-  - 纯本地、仅 stdlib；状态写 ~/.cache/unified-search/lang_habit.json
+  - 纯本地、仅 stdlib；状态写 <状态目录>/lang_habit.json（由 argo_paths 派生）
 """
 
 from __future__ import annotations
@@ -27,7 +27,13 @@ from typing import Any, Optional
 
 # ── 路径 / 常量 ──────────────────────────────────────────────────────────────
 
-STATE_DIR = Path.home() / ".cache" / "unified-search"
+def _state_dir() -> Path:
+    """状态目录（惰性派生，支持 ARGO_STATE_DIR 覆盖）。"""
+    import argo_paths
+    return argo_paths.ensure_state_dir()
+
+
+STATE_DIR = _state_dir()  # 兼容旧引用
 STATE_PATH = STATE_DIR / "lang_habit.json"
 
 # 全球默认：中英双语基线（永不剔除）

@@ -4,7 +4,7 @@
 纪律（开发做减法）：
   - 不做平台：只有「追加一条」「读最近 N 条」两个操作
   - 失败静默：任何异常都吞掉返回 False，绝不拖累搜索主路径
-  - 目录可注入：ARGO_TELEMETRY_DIR 覆盖（测试隔离），默认 ~/.cache/unified-search/telemetry/
+  - 目录可注入：ARGO_TELEMETRY_DIR 覆盖（测试隔离），默认 <状态目录>/telemetry/
   - 总开关：ARGO_TELEMETRY=0 / false 完全关闭
   - 脱敏：query 等敏感字段由调用方截断，本模块不放大
 
@@ -20,12 +20,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+# 本地状态目录单一真源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
+import argo_paths as _paths
+
 _STREAM_VERSION = 1
 
 
 def _telemetry_dir() -> Path:
-    override = os.environ.get("ARGO_TELEMETRY_DIR", "")
-    return Path(os.path.expanduser(override or "~/.cache/unified-search/telemetry"))
+    # ARGO_TELEMETRY_DIR 优先（测试隔离）；未设置时由单一真源派生
+    override = os.environ.get("ARGO_TELEMETRY_DIR", "").strip()
+    if override:
+        return Path(os.path.expanduser(override))
+    return _paths.state_path("telemetry")
 
 
 def _enabled() -> bool:

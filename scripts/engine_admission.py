@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """engine_admission.py — 引擎生产准入状态
 
-状态文件目录（默认）：
-  ~/.cache/unified-search/admission/<engine_id>.json
+状态文件目录（由 argo_paths 派生，ARGO_ADMISSION_DIR 可覆盖）：
+  <状态目录>/admission/<engine_id>.json
 
 字段：
   engine_id, admitted_at, stages_passed, quality_score,
@@ -23,10 +23,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# 本地状态目录单一真源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
+import argo_paths as _paths
+
+# ARGO_ADMISSION_DIR 优先（测试隔离）；未设置时由单一真源派生目录
 DEFAULT_ADMISSION_DIR = Path(
     os.path.expanduser(os.environ.get(
         "ARGO_ADMISSION_DIR",
-        "~/.cache/unified-search/admission",
+        str(_paths.state_path("admission")),
     ))
 )
 

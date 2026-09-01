@@ -18,7 +18,61 @@ from __future__ import annotations
 import os
 import re
 import json
+import shlex
+import threading
+from pathlib import Path
 from typing import Any
+
+# ── 密钥文件热读（~/.config/argo/env 唯一真源）─────────────────────────────
+# os.environ 优先（显式覆盖/测试注入），文件兜底：进程未经 mcp_launch.sh
+# 注入密钥时仍能拿到，且改文件无需重启——mtime+size 签名缓存，变更即重读。
+_envfile_lock = threading.Lock()
+_envfile_cache: dict[str, str] = {}
+_envfile_sig: tuple = ()
+
+
+def _envfile_path() -> Path:
+    return Path.home() / ".config" / "argo" / "env"
+
+
+def _envfile_load() -> dict[str, str]:
+    global _envfile_cache, _envfile_sig
+    p = _envfile_path()
+    try:
+        st = p.stat()
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = ()
+    with _envfile_lock:
+        if sig == _envfile_sig:
+            return _envfile_cache
+        data: dict[str, str] = {}
+        if sig:
+            try:
+                for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("export "):
+                        line = line[len("export "):]
+                    if "=" not in line:
+                        continue
+                    k, _, v = line.partition("=")
+                    k = k.strip()
+                    v = v.strip()
+                    if not k or not v:
+                        continue
+                    try:
+                        parts = shlex.split(v)
+                        val = parts[0] if parts else ""
+                    except ValueError:
+                        val = v.strip("'\"")
+                    data[k] = val
+            except OSError:
+                data = {}
+        _envfile_cache = data
+        _envfile_sig = sig
+        return data
 
 # 引擎 → 候选环境变量（从左到右优先）
 # 第一项为推荐新名（ARGO_ 前缀），后续为历史兼容名
@@ -39,6 +93,7 @@ KNOWN_ENV_ALIASES: dict[str, list[str]] = {
     "zhihu_global": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "zhihu_hot": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "anysearch": ["ARGO_ANYSEARCH_API_KEY", "ANYSEARCH_API_KEY"],  # 可选
+    "firecrawl": ["ARGO_FIRECRAWL_API_KEY", "FIRECRAWL_API_KEY"],  # 可选（keyless 免费层）
     "weread": ["ARGO_WEREAD_API_KEY", "WEREAD_API_KEY"],  # 微信读书 Agent Gateway
     "em_miaoxiang": ["ARGO_EASTMONEY_APIKEY", "EASTMONEY_APIKEY"],  # 东财妙想（可选）
 }
@@ -58,6 +113,7 @@ PLACEHOLDER_ALIASES: dict[str, list[str]] = {
     "WOLFRAM_APPID": ["ARGO_WOLFRAM_APPID", "WOLFRAM_APPID"],
     "ZHIHU_ACCESS_SECRET": ["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"],
     "ANYSEARCH_API_KEY": ["ARGO_ANYSEARCH_API_KEY", "ANYSEARCH_API_KEY"],
+    "FIRECRAWL_API_KEY": ["ARGO_FIRECRAWL_API_KEY", "FIRECRAWL_API_KEY"],
     "WEREAD_API_KEY": ["ARGO_WEREAD_API_KEY", "WEREAD_API_KEY"],
 }
 
@@ -69,17 +125,29 @@ _NON_SECRET_PLACEHOLDERS = {"QUERY", "N", "TIMESTAMP", "MODE", "DEPTH"}
 OPTIONAL_ENV_ENGINES: set[str] = {
     "github",       # GITHUB_TOKEN 仅提高限频
     "anysearch",    # ANYSEARCH_API_KEY 可选
+    "firecrawl",    # FIRECRAWL_API_KEY 可选：官方免费层匿名（keyless）即可搜索
 }
 
 
 def get_env(names: str | list[str], default: str = "") -> str:
-    """按优先级读取第一个非空环境变量。"""
+    """按优先级读取第一个非空环境变量；os.environ 优先，~/.config/argo/env
+    热读兜底（改文件即生效，无需重启）。"""
     if isinstance(names, str):
         names = [names]
     for name in names:
         if not name:
             continue
         val = os.environ.get(name)
+        if val is not None and str(val).strip() != "":
+            return str(val)
+    try:
+        file_env = _envfile_load()
+    except Exception:
+        file_env = {}
+    for name in names:
+        if not name:
+            continue
+        val = file_env.get(name)
         if val is not None and str(val).strip() != "":
             return str(val)
     return default

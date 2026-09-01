@@ -97,12 +97,17 @@ def detect(client: dict[str, Any]) -> bool:
 # ── MCP 命令模板 ────────────────────────────────────────────────────────
 
 def _mcp_command(client: dict[str, Any]) -> dict[str, Any]:
-    """生成该客户端应写入的 argo MCP entry（stdio 命令 + 可选 env）。"""
+    """生成该客户端应写入的 argo MCP entry（stdio 命令 + 可选 env）。
+
+    v2.8.5 起 command 指向 mcp_launch.sh 启动器而非 python 直启：
+    启动器负责注入引擎密钥（~/.config/argo/env 唯一真源 + launchctl 兜底），
+    任何客户端/启动上下文行为一致——密钥配置一次，处处生效。
+    """
     install_dir = Path(__file__).resolve().parent.parent
-    python = sys.executable
+    launcher = install_dir / "scripts" / "mcp_launch.sh"
     return {
-        "command": python,
-        "args": [str(install_dir / "scripts" / "mcp_server.py")],
+        "command": str(launcher),
+        "args": [],
         "env": {"PYTHONIOENCODING": "utf-8"},
     }
 

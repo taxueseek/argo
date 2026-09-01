@@ -16,6 +16,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+# 本地状态目录单一真源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
+import argo_paths as _paths
+
 logger = logging.getLogger("argo.engine_registry")
 if not logger.handlers:
     logger.setLevel(logging.WARNING)
@@ -24,7 +27,7 @@ if not logger.handlers:
 ARGO_DIR = Path(__file__).resolve().parent.parent
 LOCAL_SEARCH_DIR = ARGO_DIR / "sub-skills" / "local-search"
 LOCAL_SEARCH_CONFIG = LOCAL_SEARCH_DIR / "config.yaml"
-HEALTH_STATE_PATH = Path(os.path.expanduser("~/.cache/unified-search")) / "argo_engine_health.json"
+HEALTH_STATE_PATH = _paths.state_path("argo_engine_health.json")
 
 # ── YAML mtime 缓存（route 热路径会高频调用 list_local_engines） ──────────────
 _yaml_cache: dict[str, Any] | None = None

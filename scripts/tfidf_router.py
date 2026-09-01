@@ -25,6 +25,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+import argo_paths as _paths
+
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
 SKILL_DIR = Path(__file__).parent.parent
@@ -119,7 +121,7 @@ _COST_TIER_FACTOR = {"free": 1.0, "low": 0.85, "paid": 0.6}
 def _load_quota_state() -> dict:
     """加载配额状态文件（mtime 缓存）。"""
     global _quota_state_cache, _quota_state_mtime
-    quota_path = Path.home() / ".cache" / "unified-search" / "quota.json"
+    quota_path = _paths.state_path("quota.json")
     try:
         mtime = quota_path.stat().st_mtime
     except OSError:

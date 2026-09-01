@@ -35,7 +35,13 @@ except ImportError:
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
-DB_PATH = Path.home() / ".cache" / "unified-search" / "health.db"
+def _db_path() -> Path:
+    """状态库路径（惰性派生，支持 ARGO_STATE_DIR 覆盖）。"""
+    import argo_paths
+    return argo_paths.state_path("health.db")
+
+
+DB_PATH = _db_path()  # 兼容旧引用
 PROBE_INTERVAL = 300  # 5 分钟
 PROBE_TIMEOUT = 1.5  # 单次探测超时（快，不能拖慢启动）
 MAX_FAILURES = 2  # 连续失败次数阈值

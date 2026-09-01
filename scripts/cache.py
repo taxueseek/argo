@@ -31,10 +31,15 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from config import get_cache_config
 
+# 本地状态目录单一真源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
+import argo_paths
+
 
 # ── 常量 ──────────────────────────────────────────────────────────────────────
 
-DEFAULT_DB_PATH = "~/.cache/unified-search/cache.db"
+# 由单一真源派生，不再字面量拼 ~/.cache/unified-search。
+# 用 db_path() 而非 state_path()：config.yaml 显式改写 db_path 时尊重用户配置。
+DEFAULT_DB_PATH = str(argo_paths.db_path())
 DEFAULT_TTL = 3600
 MAX_MEMORY_ITEMS = 100
 MAX_DB_SIZE_MB = 100
@@ -281,17 +286,46 @@ class SQLiteCache:
         self._lock = threading.RLock()
         self._hits = 0
         self._misses = 0
+        # 缓存是加速层而非功能依赖：目录不可建/不可写（只读挂载、沙箱、
+        # 权限受限、磁盘满）时降级为“不可用”而不是抛异常拖垮调用方。
+        self._degraded_reason: str | None = None
         # :memory: 必须单连接（每次 connect(":memory:") 都是独立空库）
         self._mem_conn: sqlite3.Connection | None = None
         # :memory: / 空路径 / URI 无需建目录
         if self._db_path not in (":memory:", "") and not self._db_path.startswith("file:"):
             parent = os.path.dirname(self._db_path)
             if parent:
-                os.makedirs(parent, exist_ok=True)
+                try:
+                    os.makedirs(parent, exist_ok=True)
+                except OSError as e:
+                    self._degraded_reason = f"cache dir unavailable: {e}"
         if self._db_path == ":memory:":
             self._mem_conn = sqlite3.connect(":memory:", timeout=10)
             self._mem_conn.execute("PRAGMA synchronous=NORMAL")
-        self._init_db()
+        if self._degraded_reason is None:
+            try:
+                self._init_db()
+            except sqlite3.Error as e:
+                # 只读数据库 / 权限不足 / 磁盘满：整层降级，不向上传播
+                self._degraded_reason = f"cache db unavailable: {e}"
+                self._close_mem_conn()
+
+    def _close_mem_conn(self) -> None:
+        if self._mem_conn is not None:
+            try:
+                self._mem_conn.close()
+            except sqlite3.Error:
+                pass
+            self._mem_conn = None
+
+    @property
+    def degraded(self) -> bool:
+        """缓存层是否已降级（此时读写均为 no-op，调用方应当前作未命中）。"""
+        return self._degraded_reason is not None
+
+    @property
+    def degraded_reason(self) -> str | None:
+        return self._degraded_reason
 
     def _connect(self) -> sqlite3.Connection:
         if self._mem_conn is not None:
@@ -347,6 +381,10 @@ class SQLiteCache:
         return json.loads(raw.decode("utf-8"))
 
     def get(self, key: str) -> Optional[dict]:
+        if self._degraded_reason is not None:
+            # 降级：一律视作未命中。缓存是加速层，缺它只该变慢，不该变错。
+            self._misses += 1
+            return None
         with self._lock:
             with self._connect() as conn:
                 row = conn.execute(
@@ -370,6 +408,8 @@ class SQLiteCache:
 
     def set(self, key: str, query: str, engine: str, max_results: int,
             value: dict, domain: str = "general", ttl: int | None = None):
+        if self._degraded_reason is not None:
+            return
         with self._lock:
             blob, compressed = self._serialize(value)
             now = time.time()
@@ -398,6 +438,8 @@ class SQLiteCache:
                 conn.commit()
 
     def clear(self, older_than_hours: int = 24):
+        if self._degraded_reason is not None:
+            return
         with self._lock:
             cutoff = time.time() - older_than_hours * 3600
             with self._connect() as conn:
@@ -418,6 +460,8 @@ class SQLiteCache:
         """
         nq = normalize_query(query)
         base_len = len(nq)
+        if self._degraded_reason is not None:
+            return []
         with self._lock:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -446,6 +490,16 @@ class SQLiteCache:
 
     @property
     def stats(self) -> dict:
+        if self._degraded_reason is not None:
+            return {
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": round(self._hits / max(self._hits + self._misses, 1), 3),
+                "size_mb": 0.0,
+                "entries": 0,
+                "degraded": True,
+                "degraded_reason": self._degraded_reason,
+            }
         with self._lock:
             with self._connect() as conn:
                 row = conn.execute("SELECT COUNT(*), SUM(LENGTH(value_blob)) FROM search_cache").fetchone()
@@ -459,6 +513,8 @@ class SQLiteCache:
 
     @property
     def size_mb(self) -> float:
+        if self._degraded_reason is not None:
+            return 0.0
         with self._connect() as conn:
             row = conn.execute("SELECT SUM(LENGTH(value_blob)) FROM search_cache").fetchone()
         return (row[0] or 0) / 1024 / 1024
@@ -538,7 +594,9 @@ class SearchCache:
         if db_path != DEFAULT_DB_PATH:
             self._db_path = os.path.expanduser(db_path)
         else:
-            self._db_path = os.path.expanduser(cfg.get("db_path", db_path))
+            # ARGO_STATE_DIR 是硬开关，不能被磁盘 config.yaml 的 db_path 盖掉；
+            # 未设置时才尊重 config 的显式配置。
+            self._db_path = str(argo_paths.db_path())
         self._ttl = cfg.get("ttl", ttl)
         self._l1 = LRUCache(max_size=MAX_MEMORY_ITEMS)
         self._l2 = SQLiteCache(db_path=self._db_path, ttl=self._ttl)

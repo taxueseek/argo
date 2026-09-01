@@ -26,7 +26,13 @@ from typing import Optional
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
-DB_DIR = Path.home() / ".cache" / "unified-search"
+def _state_dir() -> Path:
+    """状态目录（惰性派生，支持 ARGO_STATE_DIR 覆盖）。"""
+    import argo_paths
+    return argo_paths.ensure_state_dir()
+
+
+DB_DIR = _state_dir()  # 兼容旧引用
 DB_PATH = DB_DIR / "adaptive.db"
 WINDOW_DAYS = 7
 

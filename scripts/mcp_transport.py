@@ -14,6 +14,11 @@ import sys
 from mcp_handlers import _warm_core_async, execute_tool
 from mcp_tools import TOOLS
 
+try:
+    import hot_state  # 代码/配置指纹自重启（失效则退化为旧行为：进程常驻）
+except Exception:  # pragma: no cover
+    hot_state = None  # type: ignore[assignment]
+
 # 版本真源：与 package.json / SKILL.md 保持一致（发布时统一升版）
 ARGO_MCP_VERSION = "2.8.4"
 
@@ -72,6 +77,15 @@ def run_stdio():
 
     while True:
         try:
+            # 代码/配置热生效：循环顶部 = 上一个响应已 flush、无在途工作，
+            # 此刻 execv 最安全。stdio fd 跨 exec 继承，客户端连接不断；
+            # 磁盘状态（quota/熔断/缓存）天然存活。
+            if hot_state is not None and hot_state.should_reload():
+                sys.stderr.write("[argo-mcp] fingerprint changed → self-exec reload\n")
+                sys.stderr.flush()
+                if hot_state.self_exec():
+                    continue
+
             # 读取 Content-Length 头
             header = sys.stdin.buffer.readline()
             if not header:
@@ -104,6 +118,15 @@ def run_stdio():
 
             # 通知消息无需回复
             if response is None:
+                continue
+
+            # 协议级错误（handle_rpc 的裸 {"error": {code, message}} 形态）
+            # 必须走 JSON-RPC error 通道；包成成功 result 会让客户端把
+            # 「Method not found」这类错误当正常响应解析。
+            if isinstance(response, dict) and "error" in response and "content" not in response:
+                err = response["error"]
+                _send_error(request_id, int(err.get("code", -32000) or -32000),
+                            str(err.get("message", "internal error")))
                 continue
 
             if request_id is not None:

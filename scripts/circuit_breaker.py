@@ -5,7 +5,7 @@
   - 连续失败 / 空结果 → 打开熔断，冷却期内跳过该引擎
   - 查询级负缓存：同一 query+engine 短 TTL 内不再打网络
 
-状态持久化：~/.cache/unified-search/circuit_breaker.json
+状态持久化：<状态目录>/circuit_breaker.json（由 argo_paths 派生）
 """
 
 from __future__ import annotations
@@ -17,7 +17,10 @@ import threading
 import time
 from typing import Any, Optional
 
-STATE_PATH = os.path.expanduser("~/.cache/unified-search/circuit_breaker.json")
+# 本地状态目录单一真源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
+import argo_paths as _paths
+
+STATE_PATH = str(_paths.state_path("circuit_breaker.json"))
 
 # 熔断参数
 FAILURE_THRESHOLD = 2          # 连续失败次数

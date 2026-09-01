@@ -24,6 +24,10 @@ CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # 外置引擎声明目录：engines/*.yaml（不含 plugins/、templates/、_ 前缀）
 ENGINES_DIR = Path(__file__).parent.parent / "engines"
 
+# 本地状态目录单一真源。argo_paths 只在函数体内反向 import config，
+# 因此此处模块级导入不会成环（config 未就绪时 argo_paths 会回落到历史目录）。
+import argo_paths  # noqa: E402
+
 
 # ── 默认配置 ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +50,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "fallback": "anysearch", "parallel": True,
         },
     ],
-    "cache": {"enabled": True, "db_path": "~/.cache/unified-search/cache.db", "ttl": 3600, "max_size_mb": 200},
+    # db_path 由 argo_paths 单一真源派生，不再字面量拼 ~/.cache/unified-search。
+    # 无 ARGO_STATE_DIR 时展开结果与历史默认一致，存量缓存不失效。
+    "cache": {"enabled": True, "db_path": str(argo_paths.db_path()), "ttl": 3600, "max_size_mb": 200},
     "execution": {"default_timeout": 8, "parallel_timeout": 6, "max_parallel_engines": 3, "retry_count": 0},
     "budget": {
         "fast": {"max_cost_per_query": 0.0, "allow_paid": False},
@@ -223,6 +229,15 @@ def _external_engines_mtime() -> float:
         except OSError:
             pass
     return latest
+
+
+def config_stamp() -> float:
+    """config.yaml + 外置引擎声明的综合 mtime（供 registry 等热加载判断）。"""
+    try:
+        combined = CONFIG_PATH.stat().st_mtime
+    except OSError:
+        combined = 0.0
+    return max(combined, _external_engines_mtime())
 
 
 def load_config(force: bool = False) -> dict[str, Any]:
