@@ -19,7 +19,13 @@ ZHIHU_API = "https://developer.zhihu.com/api/v1/content/zhihu_search"
 
 
 def _secret() -> str:
-    return os.environ.get("ZHIHU_ACCESS_SECRET") or os.environ.get("ARGO_ZHIHU_ACCESS_SECRET", "")
+    # 走 engine_env 规范访问器：os.environ 优先，~/.config/argo/env 热读兜底
+    # （密钥轮换改文件即生效，无需重启）
+    try:
+        from engine_env import get_env
+        return get_env(["ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"])
+    except ImportError:
+        return os.environ.get("ZHIHU_ACCESS_SECRET") or os.environ.get("ARGO_ZHIHU_ACCESS_SECRET", "")
 
 
 def search(query: str, n: int = 5) -> list[dict[str, Any]]:
@@ -46,11 +52,17 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8", "replace"))
-    except Exception:
-        return []
+    except urllib.error.HTTPError as e:
+        # 密钥无效/过期（401/403）等必须暴露为 auth-failed，而不是静默
+        # no-results——调用侧把「没配置」「没结果」区分开才可行动
+        return [{"error": f"zhihu API HTTP {e.code}", "source": "zhihu"}]
+    except Exception as e:
+        return [{"error": f"zhihu API {type(e).__name__}: {e}", "source": "zhihu"}]
 
     if data.get("Code") not in (0, None):
-        return []
+        return [{"error": f"zhihu API Code={data.get('Code')} "
+                          f"{str(data.get('Message') or '')[:100]}",
+                 "source": "zhihu"}]
 
     results: list[dict[str, Any]] = []
     items = (data.get("Data") or {}).get("Items") or []

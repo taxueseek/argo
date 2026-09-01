@@ -595,6 +595,12 @@ def build_profile_sub_queries(
     num_sub: int = 4,
 ) -> list[dict[str, str]]:
     """用 profile.query_templates 生成子查询列表。"""
+    # 长查询自带完整上下文，模板拼接只会污染检索串：
+    # 「…AI 照片转图像流行玩法全景：…」曾拼出「…大语言模型 OpenAI ChatGPT
+    # GPT-4 technical overview architecture」，把子查询改成模型架构题。
+    # 模板面向「Claude Opus 5」这类短主题；>50 字符的查询原样直查。
+    if len(query.strip()) > 50:
+        return [{"query": query, "intent": "原始查询", "strategy": "direct"}]
     templates = profile.get("query_templates") or []
     out: list[dict[str, str]] = []
     for i, tmpl in enumerate(templates):

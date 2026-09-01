@@ -1919,5 +1919,23 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "tinyfish": {
+    "label": "TinyFish 实时搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "tinyfish_news": {
+    "label": "TinyFish 实时新闻",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "tinyfish_paper": {
+    "label": "TinyFish 论文搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

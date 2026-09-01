@@ -669,8 +669,11 @@ class TestHttpClientEngineIntegration(unittest.TestCase):
             def close(self):
                 pass
 
+        # .example 是保留 TLD，SSRF 防护按「解析失败→保留段」拦截；
+        # 本测试只验证重定向跟随，显式放行以免 DNS 环境影响结果
         with patch("http.client.HTTPSConnection", _FakeConn), \
              patch("http.client.HTTPConnection", _FakeConn), \
+             patch.dict("os.environ", {"ARGO_ALLOW_PRIVATE_URLS": "1"}), \
              patch.object(HttpClient, "_apply_jitter"):
             c = HttpClient(timeout=5, max_retries=0)
             c._cookies = type("NoopCookies", (), {

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import sys
@@ -316,11 +317,13 @@ _SEMANTIC_ENGINES = frozenset({
 })
 
 _engine_registry: dict[str, Any] = {}
+_engine_specs: dict[str, dict[str, Any]] = {}
 _engine_registry_loaded = False
+_registry_stamp: float | None = None
 
 
 def _load_registry():
-    global _engine_registry, _engine_registry_loaded
+    global _engine_registry, _engine_specs, _engine_registry_loaded, _registry_stamp
     if _engine_registry_loaded:
         return
     cfg = load_config()
@@ -342,12 +345,43 @@ def _load_registry():
         else:
             logger.warning(f"未知引擎类型: {spec.get('type')} (引擎 {name})")
     _engine_registry = registry
+    # spec 侧表：engine_env 缺 env 检测等需要原始声明（registry 值是闭包）
+    global _engine_specs
+    _engine_specs = engines
     _engine_registry_loaded = True
+    try:
+        from config import config_stamp
+        _registry_stamp = config_stamp()
+    except ImportError:
+        _registry_stamp = None
 
 
 def get_registry() -> dict[str, Any]:
+    """引擎注册表。config 变更（综合 mtime 指纹）时自动重建——
+    增删引擎/改 qps/换声明等配置无需重启进程。"""
+    global _engine_registry, _engine_specs, _engine_registry_loaded, _registry_stamp
+    try:
+        from config import config_stamp
+        stamp = config_stamp()
+    except ImportError:
+        stamp = _registry_stamp
+    if _engine_registry_loaded and _registry_stamp is not None and stamp != _registry_stamp:
+        logger.info("config 变更 → 重建引擎注册表")
+        _engine_registry = {}
+        _engine_specs = {}
+        _engine_registry_loaded = False
     _load_registry()
     return _engine_registry
+
+
+def get_engine_spec(name: str) -> dict[str, Any] | None:
+    """返回引擎原始声明（spec），无此引擎返回 None。
+
+    registry 值是构建后的闭包，原始 spec（url/headers/required_env 等）
+    存侧表供 engine_env 缺 env 检测等调用方使用。
+    """
+    get_registry()  # 触发热重建检查，保持侧表与注册表同步
+    return _engine_specs.get(name)
 
 
 def available_engines() -> list[str]:
@@ -415,15 +449,33 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
         t0 = time.time()
         try:
             results = fn(query, eff_n, timeout, depth=depth, mode=mode, **kwargs)
-        except TypeError:
-            try:
-                results = fn(query, eff_n, timeout)
-            except Exception as e:
+        except Exception as e:
+            # TypeError 可能来自引擎内部逻辑错误而非签名不匹配。
+            # 用 inspect.signature 确认引擎是否接受 depth/mode 参数，
+            # 减少误判：只有引擎函数签名明确不接受这些参数时才回退。
+            _retry_simple = False
+            if isinstance(e, TypeError):
+                try:
+                    sig = inspect.signature(fn)
+                    params = list(sig.parameters.keys())
+                    _retry_simple = not (
+                        "depth" in params or "mode" in params or "kwargs" in params
+                        or any(
+                            p.kind == inspect.Parameter.VAR_KEYWORD
+                            for _, p in sig.parameters.items()
+                        )
+                    )
+                except (ValueError, TypeError):
+                    _retry_simple = False
+            if _retry_simple:
+                try:
+                    results = fn(query, eff_n, timeout)
+                except Exception as e2:
+                    logger.error(f"引擎 {engine} 回退失败: {type(e2).__name__}: {e2}")
+                    results = []
+            else:
                 logger.error(f"引擎 {engine} 异常: {type(e).__name__}: {e}")
                 results = []
-        except Exception as e:
-            logger.error(f"引擎 {engine} 异常: {type(e).__name__}: {e}")
-            results = []
         elapsed = time.time() - t0
         if results and isinstance(results, list):
             for r in results:

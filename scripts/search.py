@@ -307,11 +307,43 @@ def _sufficient_internal(
     return len(goods) >= 3 and with_snippet >= 2
 
 
+def _missing_env_for(eng: str) -> list[str]:
+    """返回引擎缺失的环境变量名列表；检测不可用时返回空（不阻断搜索）。
+
+    与路由层 env_ready(spec) 同口径：查当前注册表拿 spec，否则
+    声明里自定义 required_env 的引擎在此拦截不到（仅 KNOWN_ENV_ALIASES
+    成员能命中）。注册表值是 callable（spec 在闭包里）时退化为原名检测。
+    """
+    try:
+        from engine_env import missing_env_for as _missing
+        spec = None
+        try:
+            from engines import get_engine_spec
+            spec = get_engine_spec(eng)
+        except Exception:
+            spec = None
+        return _missing(eng, spec)
+    except Exception:
+        return []
+
+
 def _record_quota(engine: str, success: bool) -> None:
     """真实打网后写配额；失败静默。"""
     try:
         from quota import get_quota_manager
         get_quota_manager().record(engine, success=success)
+    except Exception:
+        pass
+
+
+def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
+    """远端明示配额耗尽（如 byted 10406）→ 标记到周期边界自动恢复。
+
+    标记后路由组合层全模式排除该引擎、备用源自然接管；恢复无需人工干预。
+    """
+    try:
+        from quota import get_quota_manager
+        get_quota_manager().mark_remote_exhausted(engine, reason=detail)
     except Exception:
         pass
 
@@ -516,7 +548,7 @@ def minhash_dedupe(
 
     流程：URL 归一键已去重 → 剩余按(score, selection)降序贪心，content_similarity ≥ threshold 视为近重复，仅留首条。
     开关：ARGO_MINHASH_DEDUPE=0 时关闭；默认开启（阈值可由 ARGO_MINHASH_THRESHOLD 覆盖，默认 0.85）。
-    返回 (deduped, removed_count)，每条被移除的结果记 _near_dup_of 指向保留条 ref。
+    返回 (deduped, removed_count)，每条被移除的结果记 `_near_dup=True`。
     """
     if enabled is None:
         enabled = os.environ.get("ARGO_MINHASH_DEDUPE", "1").strip() not in ("0", "false", "False", "no")
@@ -841,6 +873,8 @@ def _classify_engine_outcome(eng: str, res: list[dict[str, Any]],
         msg = str(errors[0].get("error", "")).lower()
         if "timeout" in msg:
             st = "timeout"
+        elif "quota" in msg or "10406" in msg:
+            st = "quota-exhausted"
         elif "rate" in msg or "429" in msg:
             st = "rate-limited"
         elif "auth" in msg or "401" in msg or "403" in msg:
@@ -1010,7 +1044,9 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         # P0-001：用 retrieval_query（clean_query）检索
         if retries is None:
             retries = _engine_retries(eng)
-        to = eff_timeout if eff_timeout is not None else timeout
+        # 默认超时用网络感知后的 _eff_timeout（慢网放大），与外层 as_completed
+        # 等待预算一致；非 tight 引擎（anysearch 等）慢网下同样获得放大窗口。
+        to = eff_timeout if eff_timeout is not None else _eff_timeout
         last_result: list[dict[str, Any]] = []
         for _attempt in range(retries + 1):
             last_result = engine_search(
@@ -1028,8 +1064,20 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         return last_result
 
     def _run_one(eng: str) -> tuple[str, list[dict[str, Any]], dict[str, Any], int]:
-        """单引擎：负缓存 → 熔断 → per-engine 缓存 → 网络。"""
+        """单引擎：缺 env → 负缓存 → 熔断 → per-engine 缓存 → 网络。"""
         t_eng = time.time()
+
+        # 缺环境变量前置拦截：把「静默 no-results」变成可行动的 error。
+        # 显式 engine= 覆盖会绕过路由的 env 过滤（zhihu/exa 未配密钥时曾
+        # 返回空列表，用户无法区分「没结果」和「没配置」）。
+        missing_env = _missing_env_for(eng)
+        if missing_env:
+            lat = int((time.time() - t_eng) * 1000)
+            outcome = _classify_engine_outcome(
+                eng, [], lat, status_hint="skipped-missing-env")
+            outcome["detail"] = (
+                f"缺少环境变量：{' / '.join(missing_env)}（配置后重试）")
+            return eng, [], outcome, lat
 
         # 时间窗只隔离带时间能力引擎的 per-engine 缓存（与 combo 键同语义）
         eng_since = since_iso if _is_time_capable(eng) else None
@@ -1110,11 +1158,17 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         outcome = _classify_engine_outcome(eng, res, lat)
         goods = [r for r in res if isinstance(r, dict) and "error" not in r]
         _record_quota(eng, success=bool(goods))
+        if outcome["status"] == "quota-exhausted":
+            # 远端配额耗尽：交由 quota 状态机接管（周期边界自愈），
+            # 不计入下面的健康熔断——配额问题不是引擎健康问题
+            _note_remote_quota_exhausted(eng, outcome.get("detail") or "")
 
         if breaker is not None:
             if outcome["status"] == "ok":
                 breaker.record_success(eng)
                 breaker.clear_negative(query, eng)
+            elif outcome["status"] == "quota-exhausted":
+                pass
             elif outcome["status"] == "no-results":
                 breaker.record_failure(eng, kind="empty")
                 breaker.set_negative(query, eng, status="no-results")
@@ -1227,6 +1281,9 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 if not fut.done():
                     fut.cancel()
     else:
+        # no_early_stop 域在串行路径同样生效：平台引擎「有结果」不等于「结果可用」，
+        # fast 模式 parallel=False 必走本分支，此前曾在此被噪声结果短路
+        no_early = bool(decision.get("no_early_stop", False))
         for eng in to_run:
             e, res, outcome, lat = _run_one(eng)
             _ingest(e, res, outcome, lat)
@@ -1234,13 +1291,13 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
             if not goods:
                 continue  # 无结果：串行试下一引擎
             # 答案型域 min_results=1：1 条快照即 early-stop
-            if allow_early and _results_sufficient(
+            if allow_early and not no_early and _results_sufficient(
                 goods, mode=mode, min_results=early_min,
             ):
                 early_stopped = True
                 break
             # 默认串行：任一引擎有结果即停（历史行为）；答案型不够用则继续补源
-            if early_min is None:
+            if early_min is None and not no_early:
                 break
 
     wasted_ms = nonlocal_wasted[0]
@@ -1560,6 +1617,16 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         from adaptive import get_learner
         learner = get_learner()
         for eng, res in raw_results.items():
+            errors = [str(r.get("error", "")) for r in res if isinstance(r, dict) and "error" in r]
+            # 配额/鉴权类是配置态故障，不是引擎质量信号：计入会把恢复后的
+            # 引擎分数毒化在历史失败里（byted 配额期 38 连败 → 分数 0.072，
+            # 配额自愈后无流量刷正分，死锁）。此类错误不计入，保持中性。
+            if errors and all(
+                any(k in msg.lower() for k in ("quota", "10406", "unauthorized",
+                                               "api key", "forbidden", "401", "403"))
+                for msg in errors
+            ):
+                continue
             success = bool(res and any(isinstance(r, dict) and "error" not in r for r in res))
             latency = engine_latency.get(eng, elapsed / max(len(raw_results), 1))
             cost = get_cost_factor(eng)
@@ -1631,6 +1698,46 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     return out
 
 
+def _domain_matches(host: str, domain: str) -> bool:
+    """host 等于域或是其子域（github.com 命中 api.github.com）。"""
+    return host == domain or host.endswith("." + domain)
+
+
+def filter_results_by_domains(
+    results: list[Any] | None,
+    include_domains: list[str] | None = None,
+    exclude_domains: list[str] | None = None,
+) -> tuple[list[Any], str | None]:
+    """域名后置过滤（引擎无关，融合排序之后执行）。
+
+    include：仅保留命中域名（含子域）的结果；exclude：剔除命中域名的结果。
+    返回 (保留列表, 说明文本)；两组过滤都为空时原样返回。
+    """
+    inc = [str(d).strip().lower() for d in (include_domains or []) if str(d).strip()]
+    exc = [str(d).strip().lower() for d in (exclude_domains or []) if str(d).strip()]
+    if not inc and not exc:
+        return results or [], None
+    kept: list[Any] = []
+    dropped = 0
+    for r in results or []:
+        host = ""
+        if isinstance(r, dict):
+            try:
+                from urllib.parse import urlparse as _up
+                host = (_up(r.get("url", "") or "").hostname or "").lower()
+            except Exception:
+                host = ""
+        if inc and not any(_domain_matches(host, d) for d in inc):
+            dropped += 1
+            continue
+        if any(_domain_matches(host, d) for d in exc):
+            dropped += 1
+            continue
+        kept.append(r)
+    note = f"domain filter: kept {len(kept)}, dropped {dropped}"
+    return kept, note
+
+
 def _collect_errors(raw_results: dict[str, list[dict[str, Any]]]) -> list[str]:
     errors = []
     for eng, res in raw_results.items():
@@ -1656,7 +1763,9 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  since: str | None = None,
                  until: str | None = None,
                  sort: str = "relevance",
-                 include_local: bool = False) -> dict[str, Any]:
+                 include_local: bool = False,
+                 include_domains: list[str] | None = None,
+                 exclude_domains: list[str] | None = None) -> dict[str, Any]:
     """统一搜索便捷入口。
 
     执行分层（不阻塞日常）：
@@ -1775,6 +1884,11 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             original_query, engine_override=engine, mode=mode,
             depth=depth, context=context, engines_boost=engines_boost,
         )
+    if context == "research":
+        # 研究子查询禁早停：第一个「有结果」的垂直目录（如 models_dev 的
+        # 模型规格页）不等于研究证据齐了，跑满 combo 再 RRF 融合。
+        # 复用 no_early_stop 通道，串行/并行两条执行路径均已消费该标志。
+        decision["no_early_stop"] = True
     if explain:
         combo = decision.get('engines_combo', decision.get('engines', []))
         print(
@@ -1875,6 +1989,19 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     except Exception as e:
         import logging
         logging.getLogger("unified_search").debug(f"证据门控跳过: {type(e).__name__}")
+
+    # 域过滤（后置，引擎无关）：融合排序之后裁剪，sources 与 results 保持一致。
+    # 裁剪导致不足 n 条是调用方过滤条件的诚实结果，不回填。
+    if include_domains or exclude_domains:
+        try:
+            kept, note = filter_results_by_domains(
+                result.get("results"), include_domains, exclude_domains)
+            result["results"] = kept
+            if note:
+                result["domain_filter"] = note
+        except Exception as e:
+            logging.getLogger("unified_search").debug(
+                f"[domain-filter] {type(e).__name__}: {e}")
 
     # 相关信源标准化（日常搜索底部引用列表；与 results 顺序一致）
     result["sources"] = build_sources(result.get("results") or [])
@@ -2105,6 +2232,10 @@ def main():
     parser.add_argument("--sort", default="relevance",
                         choices=["relevance", "oldest", "newest"],
                         help="时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前")
+    parser.add_argument("--include-domains", default="",
+                        help="仅保留这些域名（含子域），逗号分隔，如 github.com,arxiv.org")
+    parser.add_argument("--exclude-domains", default="",
+                        help="排除这些域名（含子域），逗号分隔，如 pinterest.com")
     parser.add_argument("--local-first", action="store_true",
                         help="强制优先使用 local_search 零成本聚合引擎")
     parser.add_argument(
@@ -2191,6 +2322,8 @@ def main():
         since=args.since,
         until=args.until,
         sort=args.sort,
+        include_domains=[d for d in args.include_domains.split(",") if d.strip()] or None,
+        exclude_domains=[d for d in args.exclude_domains.split(",") if d.strip()] or None,
     )
     results["query"] = args.query
 

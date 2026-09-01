@@ -238,7 +238,7 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # ── 域匹配（预编译 + mtime 缓存，避免每次 route 重新 compile 全部正则） ────────
 
 _compiled_domains: list[dict[str, Any]] | None = None
-_compiled_domains_id: int | None = None  # id(domains list) or len+name fingerprint
+_compiled_domains_id: tuple | None = None  # (name, patterns 长度) 内容指纹
 
 
 def _compile_domain_patterns(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -259,12 +259,23 @@ def _compile_domain_patterns(domains: list[dict[str, Any]]) -> list[dict[str, An
 
 def _get_compiled_domains(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
     global _compiled_domains, _compiled_domains_id
-    # domains 列表在 load_config 缓存命中时是同一对象
-    dom_id = id(domains)
-    if _compiled_domains is not None and _compiled_domains_id == dom_id:
+    # 用内容指纹替代 id(domains)，避免 GC 后 id 复用导致缓存失效/错误。
+    # 指纹含 patterns 本体（只记长度会漏「改正则不改条数」的编辑）。
+    # patterns 拼 hash 而非直接进 tuple：长正则列表构造开销大，hash 一次 O(n) 可控。
+    import hashlib
+    dom_fp = tuple(
+        (d.get("name", ""),
+         hashlib.sha1(
+             "\x00".join(
+                 p if isinstance(p, str) else str(p)
+                 for p in (d.get("patterns") or [])
+             ).encode("utf-8", "replace")).hexdigest()[:12])
+        for d in domains
+    )
+    if _compiled_domains is not None and _compiled_domains_id == dom_fp:
         return _compiled_domains
     _compiled_domains = _compile_domain_patterns(domains)
-    _compiled_domains_id = dom_id
+    _compiled_domains_id = dom_fp
     return _compiled_domains
 
 
@@ -393,10 +404,13 @@ def _expand_local_search(engine_list: list[str], features: dict | None = None) -
 
     selected = _select_sub_engines(sub_engines, features)
     result = [e for e in engine_list if e != "local_search"]
-    for eng in selected:
+    # 截断只限本地子引擎数量；远端成员总量由 route_query 末尾
+    # engine_policy.filter_combo_by_policy 统一管。曾用 result[:4] 整体截断，
+    # combo 声明顺序即生死（第 5 位起被无差别砍掉，octen/子引擎全灭）。
+    for eng in selected[:4]:
         if eng not in result:
             result.append(eng)
-    return result[:4]
+    return result
 
 
 def _general_fallback(enabled: set[str]) -> list[str]:
@@ -563,6 +577,66 @@ def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
     return engine_list + ["local_openstreetmap"]
 
 
+# 对中文查询几乎零召回的纯英文社区源。fast 模式 budget=2 截断按位置取前 N，
+# 这些引擎排在前排时会把中文可用源挤出预算（实测：「…小红书…」查询被截成
+# [bilibili, hackernews]，hackernews 必空、bilibili 关键词噪声早停）。
+_EN_ONLY_ENGINES = frozenset({
+    "hackernews", "reddit", "twitter", "nitter", "lobsters",
+})
+# 对非中文查询（en/ja/ko）几乎零召回的中文专用源（与 _EN_ONLY_ENGINES 对称）。
+# 域 patterns 认平台关键词不认查询语言：英文查询「reddit recommendations」
+# 照样命中 social 域，而域 combo 首引擎常是 zhihu——早停机制放大错配，
+# 实测英文查询 fast/auto 均 5/5 中文结果、hackernews 排第二永远轮不到。
+_ZH_ONLY_ENGINES = frozenset({
+    "zhihu", "zhihu_global", "zhihu_hot", "zhihu_content",
+    "bilibili", "v2ex", "xiaohongshu", "weibo",
+})
+# social 域中文查询的通用 web 兜底（按优先级）：平台词命中 social 域的查询
+# （提到「小红书/微信」≠ 搜小红书/微信），通用源覆盖真实主题，防平台噪声全占。
+# anysearch 优先：local_bing 直抓 bing.com 对长中文查询存在降级服务风险
+# （2026-08-29 实测：整条查询被 Bing 降级为单字「拍」匹配，返回字典页）。
+_SOCIAL_ZH_GENERAL = ("anysearch", "local_bing")
+
+
+def _lang_aware_combo_order(combo: list[str], features: dict | None,
+                            domain_name: str | None,
+                            enabled: set[str]) -> list[str]:
+    """语言感知的 combo 排序（返回新列表，不改动传入）。
+
+    双向对称：
+      zh 查询：纯英文社区引擎稳定移尾；social 域把通用中文 web 源提到最前。
+      en/ja/ko 查询：中文专用引擎稳定移尾（patterns 认关键词不认语言，
+      英文查询命中 social 域时 zhihu 排头会垄断 budget + 早停）。
+    排序发生在 engine_policy 截断之前，保证 budget 截断保留的是对查询
+    语言有用的引擎。
+    """
+    if not combo or not features:
+        return combo
+    zh_ratio = features.get("chinese_ratio") or 0
+    primary_lang = features.get("primary_lang")
+    # 汉字占比兜底不得命中 ja/ko：假名/谚文文本里的汉字同属 CJK 区段，
+    # 纯 ratio 判定会把日文查询（汉字占比常 >0.15）误入中文分支，
+    # 中文专用源占前排——与 query_rewriter 的语言门控口径一致。
+    is_zh = primary_lang == "zh" or (
+        primary_lang not in ("ja", "ko") and zh_ratio > 0.15)
+    if is_zh:
+        keep = [e for e in combo if e not in _EN_ONLY_ENGINES]
+        tail = [e for e in combo if e in _EN_ONLY_ENGINES]
+        ordered = keep + tail
+        if domain_name == "social":
+            for g in _SOCIAL_ZH_GENERAL:
+                if g in enabled and g in ordered:
+                    ordered = [g] + [e for e in ordered if e != g]
+                    break
+        return ordered
+    # 对称分支：非中文查询把中文专用源移尾（含 zh_ratio≤0.15 的混合查询）
+    if features.get("primary_lang") in ("en", "ja", "ko"):
+        keep = [e for e in combo if e not in _ZH_ONLY_ENGINES]
+        tail = [e for e in combo if e in _ZH_ONLY_ENGINES]
+        return keep + tail
+    return combo
+
+
 # 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
 # 中文 / 其它语种：_merge_language_engines 软追加即可，must_keep 会与垂直域抢预算
 # （实测：zh must_keep local_bing 会把 finance_macro 多源压成单源、挤掉 openstreetmap）。
@@ -710,6 +784,18 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     if "local_search" in filtered:
         filtered = _expand_local_search(filtered, features)
 
+    # F7：远端配额耗尽（如 byted 10406 Free quota exhausted）→ 全模式排除，
+    # 备用源自然接管，到周期边界惰性自愈（详见 quota.mark_remote_exhausted）。
+    # fail-open：全部被排除时保留原 combo，交由执行层把配额错误暴露出来。
+    try:
+        _qm = get_quota_manager()
+        if filtered:
+            _alive = [e for e in filtered if not _qm.is_hard_down(e)]
+            if _alive:
+                filtered = _alive
+    except Exception:
+        pass
+
     # fast/budget 模式过滤付费引擎
     if mode in ("fast", "budget"):
         quota_mgr = get_quota_manager()
@@ -852,12 +938,12 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         if ok:
             try:
                 from circuit_breaker import get_breaker
-                st = get_breaker().status(e)
-                st_state = st.get("state")
-                # 自适应禁用：disabled 引擎直接不可用（持久跳过）
-                if st_state == "disabled":
-                    ok = False
-                elif st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
+                # 必须用 allow() 而非 status()：allow 内置状态转移（disabled/open
+                # 冷却超时 → half_open 探测资格），status 只读。曾导致 disabled
+                # 引擎在 route 层被永久剔除、执行层 allow() 永远不被调用、
+                # B4 恢复通道成死代码（bocha 卡死 disabled 一天余的根因）。
+                allowed, _reason = get_breaker().allow(e)
+                if not allowed:
                     ok = False
             except ImportError:
                 pass
@@ -1135,6 +1221,8 @@ def route_query(query: str, engine_override: str = "auto",
         _pure_combo = domain.get("name") == "modal_card"
         if not _pure_combo:
             engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
+            engines_combo = _lang_aware_combo_order(
+                engines_combo, features, domain.get("name"), enabled)
         if not engines_combo:
             if _pure_combo:
                 # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
@@ -1259,8 +1347,11 @@ def route_query(query: str, engine_override: str = "auto",
         _foreign_macro = (
             domain.get("name") == "macro_data" and is_foreign_macro_query(query)
         )
+        # research 语境 + 画像 boosts：研究垂直源（arxiv/semantic_scholar 等）
+        # 前置是选题语义，primary（如 ai_model 的 models_dev 目录）不得顶回首位
+        _research_boost = bool(context == "research" and engines_boost)
         if (p and p in engines_combo and engines_combo[0] != p
-                and not _foreign_macro):
+                and not _foreign_macro and not _research_boost):
             try:
                 from circuit_breaker import get_breaker
                 st = get_breaker().status(p)
@@ -1289,8 +1380,12 @@ def route_query(query: str, engine_override: str = "auto",
         if not engines_combo:
             engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
         # budget 截断后对齐 parallel，避免短 combo 仍开多余并行
-        if mode == "fast" or len(engines_combo) <= 1:
+        # research 语境例外：子查询跑满 combo（no_early_stop），串行会拖垮
+        # 整条研究管线，强制并行
+        if (mode == "fast" and context != "research") or len(engines_combo) <= 1:
             parallel = False
+        elif context == "research":
+            parallel = True
         elif len(engines_combo) <= 2 and not domain.get("parallel", False):
             # 双引擎默认串行，利于 early-stop（答案域）
             parallel = parallel and len(engines_combo) > 2

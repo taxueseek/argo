@@ -821,9 +821,9 @@ domains:
   engines_combo:
   - bocha
   - byted
+  - octen
   - zhihu_global
   - wechat_sogou
-  - octen
   - local_search
   fallback: byted
   name: chinese_general
@@ -903,7 +903,12 @@ domains:
   - reddit
   - xiaohongshu
   - weibo
-  fallback: zhihu
+  # fallback 原为 zhihu（与 primary 相同，形同虚设）；anysearch 作通用 web 兜底，
+  # 平台源全军覆没时（如 zhihu 缺密钥被踢）仍有相关结果
+  fallback: anysearch
+  # 平台引擎按关键词召回，噪声结果也会满足条数阈值；禁早停让通用源参与 RRF 融合，
+  # 防止「提到平台词 ≠ 搜平台」的查询被 bilibili 噪声短路
+  no_early_stop: true
   name: social
   parallel: true
   patterns:
@@ -914,6 +919,95 @@ domains:
   quote: false
 
 engines:
+  tinyfish:
+    enabled: true
+    label: TinyFish 实时搜索
+    cost_tier: free
+    qps: 1
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - general
+    - english
+    - chinese
+    - news
+    desc: TinyFish 实时网页搜索（免费，浏览器渲染，结果含原文摘要，X-API-Key 认证）
+    method: GET
+    query_param: query
+    timeout: 15
+    type: http
+    url: https://api.search.tinyfish.ai
+    headers:
+      X-API-Key: '{TINYFISH_API_KEY}'
+    extra_params:
+      domain_type: web
+    output_map:
+      items: results
+      item_title: title
+      item_url: url
+      item_summary: snippet
+      item_source: site_name
+      item_published_at: date
+  tinyfish_news:
+    enabled: true
+    label: TinyFish 实时新闻
+    cost_tier: free
+    qps: 1
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - news
+    - english
+    desc: TinyFish 实时新闻搜索（免费，含 publisher 与发布日期）
+    method: GET
+    query_param: query
+    timeout: 15
+    type: http
+    url: https://api.search.tinyfish.ai
+    headers:
+      X-API-Key: '{TINYFISH_API_KEY}'
+    extra_params:
+      domain_type: news
+    output_map:
+      items: results
+      item_title: title
+      item_url: url
+      item_summary: snippet
+      item_source: site_name
+      item_published_at: date
+  tinyfish_paper:
+    enabled: true
+    label: TinyFish 论文搜索
+    cost_tier: free
+    qps: 1
+    priority: 12
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - academic
+    - english
+    desc: TinyFish 学术论文搜索（免费，含作者/发表处/年份/被引/pdf_url）
+    method: GET
+    query_param: query
+    timeout: 15
+    type: http
+    url: https://api.search.tinyfish.ai
+    headers:
+      X-API-Key: '{TINYFISH_API_KEY}'
+    extra_params:
+      domain_type: research_paper
+    output_map:
+      items: results
+      item_title: title
+      item_url: url
+      item_summary: snippet
+      item_source: site_name
+      item_published_at: date
   gdelt:
     type: gdelt
     enabled: true

@@ -41,7 +41,10 @@ class TestEngineEnv(unittest.TestCase):
 
     def test_missing_env_tavily(self):
         env = {k: v for k, v in os.environ.items() if "TAVILY" not in k}
-        with patch.dict(os.environ, env, clear=True):
+        # 同步屏蔽密钥文件兜底（本机 ~/.config/argo/env 真有 tavily key）
+        with patch.dict(os.environ, env, clear=True), \
+             patch("engine_env._envfile_path",
+                   lambda: Path("/nonexistent/argo/env")):
             miss = engine_env.missing_env_for("tavily", {"type": "http"})
             self.assertTrue(miss)
             self.assertFalse(engine_env.env_ready("tavily", {"type": "http"}))
@@ -133,6 +136,101 @@ class TestListStatus(unittest.TestCase):
         hn = engine_detail("hackernews")
         self.assertEqual(hn["engine_id"], "hackernews")
         self.assertTrue(hn["env_ready"])
+
+
+def _no_firecrawl_env() -> dict:
+    return {k: v for k, v in os.environ.items() if "FIRECRAWL" not in k}
+
+
+class TestFirecrawlKeyless(unittest.TestCase):
+    """firecrawl 可选密钥：缺 key 不阻断路由（keyless 免费层）。"""
+
+    _NONEXIST_ENVFILE = lambda: Path("/nonexistent/argo/env")  # noqa: E731
+
+    def test_firecrawl_optional_keyless_ready(self):
+        with patch.dict(os.environ, _no_firecrawl_env(), clear=True), \
+             patch("engine_env._envfile_path", self._NONEXIST_ENVFILE):
+            self.assertTrue(engine_env.env_ready("firecrawl", {}))
+            self.assertEqual(engine_env.required_env_for("firecrawl", {}), [])
+            self.assertEqual(engine_env.missing_env_for("firecrawl", {}), [])
+
+
+class TestPostHeaderKeyless(unittest.TestCase):
+    """POST 型 HTTP 引擎缺 key 时不发送认证残留头（与 GET 路径对齐）。
+
+    回归背景：firecrawl 为 POST，此前 POST 分支无 _header_meaningful 过滤，
+    keyless 时会把 'Bearer {FIRECRAWL_API_KEY}' 原样发出导致 401。
+    """
+
+    _NONEXIST_ENVFILE = lambda: Path("/nonexistent/argo/env")  # noqa: E731
+
+    @staticmethod
+    def _post_spec() -> dict:
+        return {
+            "engine_id": "fc_test",
+            "_name": "fc_test",
+            "type": "http",
+            "method": "POST",
+            "url": "https://api.example.test/v2/search",
+            "timeout": 5,
+            "headers": {
+                "Authorization": "Bearer {FIRECRAWL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            "body": {"query": "{query}", "limit": "{n}"},
+            "output_map": {
+                "items": "data.web",
+                "item_title": "title",
+                "item_url": "url",
+                "item_summary": "description",
+            },
+        }
+
+    @staticmethod
+    def _run_capture(env_extra: dict) -> tuple[list, dict]:
+        """跑一次 mock urlopen 的 POST 引擎，返回 (results, 捕获的请求头/体)。"""
+        from engines_base import _build_http_engine
+
+        captured: dict = {}
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return json.dumps({"data": {"web": [
+                    {"title": "t1", "url": "https://x/1", "description": "d1"},
+                ]}}).encode("utf-8")
+
+        def _fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.headers)
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            return _Resp()
+
+        with patch.dict(os.environ, env_extra, clear=True), \
+             patch("engine_env._envfile_path", TestPostHeaderKeyless._NONEXIST_ENVFILE), \
+             patch("urllib.request.urlopen", _fake_urlopen):
+            eng = _build_http_engine(TestPostHeaderKeyless._post_spec())
+            results = eng("climate", n=3)
+        return results, captured
+
+    def test_keyless_auth_header_not_sent(self):
+        results, captured = self._run_capture(_no_firecrawl_env())
+        self.assertEqual(len(results), 1)
+        header_keys = {k.lower() for k in captured["headers"]}
+        self.assertNotIn("authorization", header_keys)
+        self.assertIn("content-type", header_keys)
+
+    def test_with_key_auth_header_sent(self):
+        env = _no_firecrawl_env()
+        env["ARGO_FIRECRAWL_API_KEY"] = "fc-live"
+        results, captured = self._run_capture(env)
+        self.assertEqual(len(results), 1)
+        headers = {k.lower(): v for k, v in captured["headers"].items()}
+        self.assertEqual(headers.get("authorization"), "Bearer fc-live")
 
 
 if __name__ == "__main__":

@@ -609,13 +609,26 @@ class TestEngineLangParamWiring(unittest.TestCase):
 
 class TestRewriteMultilingual(unittest.TestCase):
     def test_japanese_technical_mix(self):
+        # 2026-08-31 语义更新：非中文查询的追加词与原文术语重复时不改写
+        # （实测重复拼接无召回增益，纯噪声）；zh 混合查询保持旧行为。
         r = rewrite_query("アニメ react 使い方")
-        self.assertIsNotNone(r["rewritten"])
-        self.assertIn("react", r["rewritten"].lower())
+        self.assertIsNone(r["rewritten"])
+        # zh 混合查询：术语拆分旧行为保留
+        r2 = rewrite_query("动画 vue 教程")
+        self.assertIsNotNone(r2["rewritten"])
+        self.assertIn("vue", r2["rewritten"].lower())
 
     def test_cyrillic_english_mix(self):
+        # 2026-08-31 语义更新：非中文查询的策略2（拉丁术语拆分）抽出的
+        # 永远是原文已有词，拼接即重复，实测无召回增益 → 一律不改写。
         r = rewrite_query("Python курс")
-        self.assertIsNotNone(r["rewritten"])
+        self.assertIsNone(r["rewritten"])
+        r2 = rewrite_query("курс python fastapi")
+        self.assertIsNone(r2["rewritten"])
+        # zh 混合查询的术语拆分旧行为保留（zh 分支不走本守卫）
+        r3 = rewrite_query("编程课程 python django")
+        self.assertIsNotNone(r3["rewritten"])
+        self.assertIn("django", r3["rewritten"].lower())
 
 
 if __name__ == "__main__":

@@ -58,6 +58,21 @@ class _FakeBreaker:
     def status(self, engine: str) -> dict:
         return self._states.get(engine, {"state": "closed", "cooldown_remain": 0})
 
+    def allow(self, engine: str) -> tuple[bool, str]:
+        """裁决语义对齐真实 circuit_breaker.allow()：cooldown_remain 由夹具
+        直接给出（真实实现按 opened_at/disabled_at 时间戳推算）。
+
+        disabled / open 且冷却中 → 拒绝；冷却已过（夹具 cooldown_remain=0
+        表达）→ half_open 探测资格，放行。路由层据此保留探测候选。
+        """
+        st = self._states.get(engine, {"state": "closed", "cooldown_remain": 0})
+        state, cd = st.get("state"), int(st.get("cooldown_remain") or 0)
+        if state == "disabled":
+            return (False, "auto_disabled") if cd > 0 else (True, "half_open_reenable")
+        if state == "open":
+            return (False, f"circuit_open:{cd}s") if cd > 0 else (True, "half_open_probe")
+        return True, "closed"
+
 
 class TestFallbackMerge(unittest.TestCase):
     """P0-1：fallback 在 combo 非空时必须并入（旧逻辑 combo 非空即忽略 fallback）。"""
@@ -114,8 +129,9 @@ class TestFallbackMerge(unittest.TestCase):
 
 
 class TestBreakerRemoval(unittest.TestCase):
-    """P0-3：确定不可用（disabled / open+cooldown>0）引擎直接剔除，
-    不沉底保留；half-open（cooldown 已过）保留探测资格。"""
+    """P0-3：确定不可用（disabled+冷却中 / open+cooldown>0）引擎直接剔除，
+    不沉底保留；冷却已过（half-open）保留探测资格。路由层走 allow() 裁决
+    （内置状态转移），status() 只读快照仅作观测。"""
 
     def test_open_with_cooldown_removed(self):
         from route import _get_engines_combo
@@ -142,11 +158,27 @@ class TestBreakerRemoval(unittest.TestCase):
             "primary": "a",
             "engines_combo": ["a", "b"],
         }
-        states = {"a": {"state": "disabled", "cooldown_remain": 0}}
+        # disabled + 冷却中（cooldown_remain>0 表达）→ 确定不可用，剔除
+        states = {"a": {"state": "disabled", "cooldown_remain": 1800}}
         with patch("route.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
             combo = _get_engines_combo(domain, {"a", "b"}, mode="auto")
         self.assertEqual(combo, ["b"])
+
+    def test_disabled_cooldown_expired_kept_for_probe(self):
+        """disabled 但冷却已过 → half_open 探测资格，保留不剔除（B4 恢复通道）。"""
+        from route import _get_engines_combo
+        domain = {
+            "name": "test",
+            "primary": "a",
+            "engines_combo": ["a", "b"],
+        }
+        states = {"a": {"state": "disabled", "cooldown_remain": 0}}
+        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+             patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
+            combo = _get_engines_combo(domain, {"a", "b"}, mode="auto")
+        self.assertIn("a", combo)
+        self.assertIn("b", combo)
 
     def test_half_open_kept_for_probe(self):
         """open 但 cooldown 已过 → half-open 探测资格，保留不剔除。"""

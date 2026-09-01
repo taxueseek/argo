@@ -1280,6 +1280,36 @@
     "cost_tier": "free",
     "priority": 20
   },
+  "tinyfish": {
+    "label": "TinyFish 实时搜索",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
+  "tinyfish_news": {
+    "label": "TinyFish 实时新闻",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
+  "tinyfish_paper": {
+    "label": "TinyFish 论文搜索",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 12
+  },
   "toutiao_hot": {
     "label": "今日头条热榜",
     "qps": 2,

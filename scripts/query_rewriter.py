@@ -126,6 +126,34 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
     # 延迟导入避免循环依赖
     from clarify import AMBIGUOUS_TERMS, BRAND_COLLISIONS
 
+    # 长查询自带完整上下文，扩词只会引入噪声：research 子查询含「GPT-4o」时
+    # 曾被扩成「…大语言模型 OpenAI ChatGPT GPT-4 technical overview…」，
+    # 整条检索串从照片趋势题变成模型架构题。短查询才需要补召回信号。
+    if len(query) > 60:
+        return {
+            "original": query,
+            "rewritten": None,
+            "confidence": 0.0,
+            "reason": "长查询跳过改写（自带完整上下文）",
+            "type": "direct",
+        }
+
+    # 非中文查询跳过策略1（REWRITE_MAP 中文领域扩词）：领域词全是中文
+    # （「编程语言 异步 开发」），拼进俄文/日文/泰文查询后检索串变成混合语，
+    # 实测俄文查询被污染成 9/9 中文结果（原文 0 中文）。
+    # 策略2（英文术语拆分）保留：追加的是查询自带的拉丁术语，无语言污染，
+    # 是非中文查询补召回信号的正途。
+    # 日语特殊：日文本身混用汉字（「比較」），不能靠汉字正则放行——
+    # detect_language 判 ja/ko 时直接按非中文处理。
+    try:
+        from lang_detect import detect_language as _detect_lang
+        _lang = _detect_lang(query)
+        _is_zh = _lang in ("zh", "mixed") or (
+            _lang not in ("ja", "ko") and re.search(r"[\u4e00-\u9fff]", query))
+        _skip_zh_expand = not _is_zh
+    except ImportError:
+        _skip_zh_expand = False
+
     # P0-001：先做查询理解，用 clean_query（去否定片段）做消歧，
     # 避免否定实体（如「除了百度」的百度）污染消歧信号。
     understanding = None
@@ -154,6 +182,12 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
         if term_lower not in query_lower and not (
             term.isascii()
             and re.search(r"\b" + re.escape(term) + r"\b", query, re.I)
+        ):
+            continue
+        # 型号后缀守卫：词后跟数字（GPT-4o / GPT5 / iPhone 15）是具体型号
+        # 提及而非品牌歧义词，展开只会把查询推向无关领域
+        if term.isascii() and re.search(
+            r"\b" + re.escape(term) + r"[-.\s]?\d", query, re.I
         ):
             continue
 
@@ -214,7 +248,7 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
         if best_domain and best_conf >= min_confidence:
             rewrite_key = (term, best_domain)
             append = REWRITE_MAP.get(rewrite_key)
-            if append:
+            if append and not _skip_zh_expand:
                 rewritten_parts.append(append)
                 reasons.append(f"「{term}」→ {best_domain} 领域")
                 total_confidence += best_conf
@@ -271,8 +305,19 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
     # 且混入子查询分解后产生 "Python async Python" 半改写残留。
     append_str = _dedupe_append_words(query, rewritten_parts)
     if not append_str:
-        # 去重后全空：混合语言拆分场景（日文查询 + 原文已有的英文术语）
-        # 仍保留追加，旧行为不改写会丢失语言补充信号
+        # 去重后全空：中文查询的混合拆分场景（日文查询 + 原文已有的英文术语）
+        # 仍保留追加，旧行为不改写会丢失语言补充信号；
+        # 非中文查询的追加全为原文术语时，重复拼接是纯噪声
+        # （实测俄文查询末尾重复 "python asyncio" 无增益），直接不改写。
+        if _skip_zh_expand:
+            return {
+                "original": query,
+                "rewritten": None,
+                "confidence": 0.0,
+                "reason": "非中文查询追加词与原文重复，跳过改写",
+                "type": "direct",
+                "understanding": understanding_dict,
+            }
         append_str = " ".join(rewritten_parts)
     rewritten = query + " " + append_str
 

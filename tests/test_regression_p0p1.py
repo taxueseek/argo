@@ -143,14 +143,15 @@ def test_parse_pages_specs():
 
 # ── MCP schema 契约（单真源；argo_fetch 无死 actions）────────────────────────
 
-def test_mcp_tools_ten_tools_single_source():
+def test_mcp_tools_full_list_single_source():
     names = [t["name"] for t in TOOLS]
-    assert len(TOOLS) == 12
+    assert len(TOOLS) == 14
     assert names == [
         "argo_search", "argo_local_search", "argo_local_read", "argo_recompute",
         "argo_research",
         "argo_evidence", "argo_clarify", "argo_crawl", "argo_fetch",
         "argo_screenshot", "argo_pdf", "argo_social_search",
+        "argo_article", "argo_job",
     ]
 
 

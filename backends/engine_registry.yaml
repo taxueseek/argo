@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从 config.yaml 派生，勿手工修改。
 version: 2
-last_updated: '2026-08-25'
+last_updated: '2026-08-28'
 engines:
 - name: anysearch
   tier: T1
@@ -1446,6 +1446,41 @@ engines:
   status: ok
   recommended: true
   desc: 同花顺热点（当日强势股+题材归因，独家能力）
+- name: tinyfish
+  tier: T1
+  type: http
+  coverage:
+  - general
+  - english
+  - chinese
+  - news
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: TinyFish 实时网页搜索（免费，浏览器渲染，结果含原文摘要，X-API-Key 认证）
+- name: tinyfish_news
+  tier: T1
+  type: http
+  coverage:
+  - news
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: TinyFish 实时新闻搜索（免费，含 publisher 与发布日期）
+- name: tinyfish_paper
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  desc: TinyFish 学术论文搜索（免费，含作者/发表处/年份/被引/pdf_url）
 - name: toutiao_hot
   tier: T1
   type: toutiao_hot
