@@ -29,6 +29,8 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-12%20tools-purple">
 </p>
 
+> **이 저장소는 taxueseek의 DeepSeek Harness 플러그인 라인업 중 하나**입니다. 형제 플러그인: [dsh-files](https://github.com/taxueseek/dsh-files)(파일 전송·문서 읽기) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)(스니펫 즐겨찾기) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)(읽기 전용 점검) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)(플러그인 보안 감사) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)(프롬프트 역추론·멀티 프로바이더 이미지 생성) — 전체 플러그인은 [프로필](https://github.com/taxueseek)에서
+
 ---
 
 ## v2.8.4 하이라이트 (v2.8.3 위에)
