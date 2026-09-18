@@ -100,6 +100,9 @@ class TestLimitationsSingleSource(unittest.TestCase):
             "recovery": {"engine": "x"},
             "cached": True,
             "cache_level": "L2",
+            "semantic_hit": True,
+            "semantic_query": "keywords:pi-package memory",
+            "semantic_similarity": 0.875,
             "login_state_used": True,
         }
         lim = candidate_envelope.build_limitations(
@@ -111,6 +114,26 @@ class TestLimitationsSingleSource(unittest.TestCase):
         self.assertIn("recovery path", joined, "recovery 未上报")
         self.assertIn("cache level=L2", joined, "cache 说明未上报")
         self.assertIn("login_state_used", joined, "登录态未上报")
+        self.assertIn("keywords:pi-package memory", joined, "软命中来源查询未上报")
+        self.assertIn("0.875", joined, "软命中相似度未上报")
+
+    def test_semantic_hit_explains_foreign_query(self):
+        """软命中必须说清「结果来自另一条查询」——只说 cache level 不够。"""
+        lim = candidate_envelope.build_limitations(
+            {"cached": True, "cache_level": "L2", "semantic_hit": True,
+             "semantic_query": "keywords:pi-package memory",
+             "semantic_similarity": 0.875})
+        joined = " ".join(lim)
+        self.assertIn("semantic cache hit", joined, "未说明是语义软命中")
+        self.assertIn("not from this exact query", joined,
+                      "未说明结果不属于本查询——调用方会当成自己的结果")
+
+    def test_no_semantic_hit_no_extra_limitation(self):
+        """精确命中不得出现软命中声明（不适用就不写，避免误报）。"""
+        lim = candidate_envelope.build_limitations(
+            {"cached": True, "cache_level": "L1"})
+        self.assertFalse([x for x in lim if "semantic" in x],
+                         "精确命中误报了软命中声明")
 
     def test_clean_result_still_has_baseline_warning(self):
         """没有任何异常信号时，仍必须给出基线警告（不能返回空列表）。"""

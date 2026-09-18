@@ -17,6 +17,13 @@ _semantic_hit / _semantic_similarity 等标记，导致 L1 二次命中
 伪装成硬命中，调用方无法区分「精确命中」与「相似查询命中」。
 
 本文件锁定三条契约：engine 精确隔离、auto 显式通配、标记不丢失。
+
+另追加一条（2026-09-18 修复）——**限定符隔离**：限定符（keywords:/site:/
+author: 等）是过滤器而非内容，整串 minhash 相似度会被它主导。实测
+`keywords:pi-package mcp` 与 `keywords:pi-package memory` 整串相似度 0.875
+（远超 0.7 阈值），判别词只占几个字符，于是软命中把 memory 那批包当成 mcp
+的结果交了出去（`argo search --engine npm` 实测复现）。现在先要求限定符集合
+相同，再比**载荷**的相似度。
 """
 
 import os
@@ -132,3 +139,53 @@ class TestSemanticMarkerPreserved:
         l1v = sc._l1.get(key) or {}
         assert l1v.get("_ttl"), "L1 载荷缺 _ttl → 过期判断失效"
         assert l1v.get("_ts"), "L1 载荷缺 _ts → 过期判断失效"
+
+
+class TestQualifierIsolation:
+    """限定符是过滤器：集合不同或载荷不同都不得软命中。"""
+
+    def test_same_qualifier_different_payload_does_not_hit(self, sc):
+        """原 bug 复现：同限定符、载荷不同（mcp vs memory）。
+
+        修复前整串相似度 0.875 ≥ 0.7，软命中把 memory 的结果当 mcp 的交出去。
+        """
+        sc.set("keywords:pi-package memory", "npm", 10,
+               _payload("pi-memory", "https://n/1"), domain="package_search")
+        got = sc._l2.find_similar(
+            "keywords:pi-package mcp", "npm", "package_search", limit=50)
+        assert got == [], f"同限定符不同载荷不得软命中，实际 {got}"
+
+    def test_different_qualifier_same_payload_does_not_hit(self, sc):
+        """限定符不同 → 结果全集不同，载荷一模一样也不得互换。"""
+        sc.set("keywords:mcp-server memory", "npm", 10,
+               _payload("mcp", "https://n/1"), domain="package_search")
+        got = sc._l2.find_similar(
+            "keywords:pi-package memory", "npm", "package_search", limit=50)
+        assert got == [], f"限定符不同不得软命中，实际 {got}"
+
+    def test_same_qualifier_near_duplicate_still_hits(self, sc):
+        """同限定符 + 载荷近重复 → 仍须软命中（修复不得把正常召回一起砍掉）。"""
+        sc.set("keywords:pi-package memory", "npm", 10,
+               _payload("pi-memory", "https://n/1"), domain="package_search")
+        got = {c["query"] for c in sc._l2.find_similar(
+            "keywords:pi-package memorys", "npm", "package_search", limit=50)}
+        assert got == {"keywords:pi-package memory"}, f"同限定符近重复应命中，实际 {got}"
+
+    def test_url_is_not_a_qualifier(self):
+        """URL 的 `https:` 不得被当成限定符：否则 URL 近重复软命中被误杀。"""
+        quals, payload = cache.split_qualifiers(
+            "https://developers.openai.com/api/docs/guides/image-prompting")
+        assert quals == frozenset(), f"URL 被误判成限定符：{quals}"
+        assert payload.startswith("https://"), "载荷不应被切掉"
+
+    def test_clock_time_is_not_a_qualifier(self):
+        """`10:30` 不是限定符（键须以字母开头）。"""
+        quals, payload = cache.split_qualifiers("10:30 的会议")
+        assert quals == frozenset(), f"时间写法被误判成限定符：{quals}"
+        assert payload == "10:30 的会议"
+
+    def test_payload_kept_for_plain_query(self):
+        """无限定符的查询：载荷即整串，行为不变。"""
+        quals, payload = cache.split_qualifiers("苹果 2025 年营收")
+        assert quals == frozenset()
+        assert payload == "苹果 2025 年营收"

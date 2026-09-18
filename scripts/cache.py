@@ -223,6 +223,31 @@ def query_similarity(q1: str, q2: str) -> float:
     return hits / _MINHASH_PERM
 
 
+# 结构化限定符（keywords:pi-package / site:zhihu.com / author:bcoe）。
+# 值里不含 `/` 是刻意的：URL 的 `https:` 因此不被当成限定符——fetch/evidence
+# 的 URL 近重复软命中（`.../x` 与 `.../x.md`，相似度 0.875）是既有的正确
+# 行为，不能被这次修复误伤。键以字母开头则排除 `10:30` 这类时间写法。
+_QUALIFIER_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_*.+-]+")
+
+
+def split_qualifiers(query: str) -> tuple[frozenset[str], str]:
+    """把查询拆成（限定符集合，载荷）。
+
+    限定符是**过滤器**而不是内容：两条查询的限定符集合不同，结果全集就不同，
+    再高的词面相似度也不构成可互换的理由。
+
+    为什么要拆：字符 n-gram 相似度会被长公共前缀主导。实测
+    `keywords:pi-package mcp` 与 `keywords:pi-package memory` 整串相似度
+    0.875（远超 0.7 阈值），而判别词只占几个字符——两条不同的检索需求被判成
+    近重复，软命中把 memory 的结果当成 mcp 的结果交了出去（2026-09-18 修复）。
+    拆开后比的是载荷（`mcp` vs `memory`，相似度 0.000），判据恢复有效。
+    """
+    text = query or ""
+    quals = frozenset(q.lower() for q in _QUALIFIER_RE.findall(text))
+    payload = re.sub(r"\s+", " ", _QUALIFIER_RE.sub(" ", text)).strip()
+    return quals, payload
+
+
 def is_freshness_sensitive_query(query: str) -> bool:
     """检测查询是否时效敏感（今日/实时/盘中/快讯等）。"""
     global FRESHNESS_QUERY_RE
@@ -506,9 +531,17 @@ class SQLiteCache:
         engine="auto" 保留为显式通配（调用方确实不关心来源时使用）。
         组合键（多引擎拼接的 `a+b`）不参与软命中：组合结果集是融合产物，
         与任何单引擎缓存都不可互换。
+
+        限定符隔离（2026-09-18 修复）：限定符是过滤器而非内容，整串相似度
+        会被它主导——`keywords:pi-package mcp` 与 `keywords:pi-package
+        memory` 整串相似度 0.875，判别词只占几个字符，于是软命中把另一条
+        查询的结果交了出去（实测 `--engine npm` 查 mcp 拿到 memory 那批包）。
+        现在先要求限定符集合相同，再比**载荷**的相似度；无限定符的查询载荷
+        即整串，行为不变。
         """
         nq = normalize_query(query)
-        base_len = len(nq)
+        nq_quals, nq_payload = split_qualifiers(nq)
+        base_len = len(nq_payload)
         if self._degraded_reason is not None:
             return []
         # engine 过滤：通配不过滤，否则精确匹配（engine 列同时承载 fetch/evidence 这类 kind 值）
@@ -538,11 +571,17 @@ class SQLiteCache:
             # 组合键不参与软命中：组合结果集 ≠ 任何单引擎结果集
             if "+" in (cached_engine or ""):
                 continue
-            clen = len(normalize_query(cached_q))
+            cnq = normalize_query(cached_q)
+            c_quals, c_payload = split_qualifiers(cnq)
+            # 限定符隔离：过滤器不同 → 结果全集不同，任何相似度都不成立
+            if c_quals != nq_quals:
+                continue
+            clen = len(c_payload)
             # 长度约束：差异过大（>50%）不可能是近重复
             if base_len > 0 and abs(clen - base_len) / max(base_len, 1) > 0.5:
                 continue
-            sim = query_similarity(nq, normalize_query(cached_q))
+            # 比载荷而非整串：限定符已在上面单独比对，留在串里只会稀释判据
+            sim = query_similarity(nq_payload, c_payload)
             if sim >= threshold:
                 candidates.append({
                     "key": key, "query": cached_q, "similarity": round(sim, 3),

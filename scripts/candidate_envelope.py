@@ -242,6 +242,14 @@ def build_limitations(
     if search_result.get("cached"):
         limitations.append(
             f"served from cache level={search_result.get('cache_level')}")
+    # 软命中必须单独说一句：它复用的是**另一条查询**的载荷，不是本查询的结果。
+    # 只说 cache level=L2 不足以让 agent 判断这一点，会把别人的结果当自己的。
+    if search_result.get("semantic_hit"):
+        limitations.append(
+            "semantic cache hit: results are reused from a similar query "
+            f"({search_result.get('semantic_query')!r}, "
+            f"similarity={search_result.get('semantic_similarity')}), "
+            "not from this exact query.")
     if _skill_registry_used(search_result):
         limitations.append(SKILL_REGISTRY_LIMITATION)
     if _route_login_used(search_result, candidates):

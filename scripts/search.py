@@ -1220,6 +1220,14 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 "engine_outcomes": hit.get("engine_outcomes") or [],
                 "time_filtered": 0,
             }
+            # 软命中披露：L2 语义命中返回的是**另一条查询**的载荷，不标出来
+            # 就与精确命中无法区分——调用方会以为这就是本查询的缓存。同样遵循
+            # 「不适用就整个键缺席」（见下方漏斗注释）：精确命中下这三个键不
+            # 存在，不写成 null。
+            if hit.get("_semantic_hit"):
+                _hit["semantic_hit"] = True
+                _hit["semantic_query"] = hit.get("_semantic_query")
+                _hit["semantic_similarity"] = hit.get("_semantic_similarity")
             # 缓存命中时漏斗记账沿用存档值（它描述的是上一次真实抓取）。
             # 存档里没有（该条写入于引入漏斗之前）就**整个键缺席**，不写成
             # null——null 会被读成「漏斗算出来是空」，而缺席只表示「这次没有
