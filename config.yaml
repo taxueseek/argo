@@ -3410,6 +3410,9 @@ engines:
       item_title: package.name
       item_url: package.links.npm
       item_summary: package.description
+      # 与 npm 引擎保持字段一致：同一 URL 走两条路径时结果形状不应有差别
+      item_published_at: package.date
+      item_upstream: package.links.homepage
     timeout: 8
     url: https://registry.npmjs.org/-/v1/search
   local_wikipedia:
@@ -4152,7 +4155,20 @@ engines:
     - code
     - javascript
     - package
-    desc: npm 包搜索（registry.npmjs.org，免认证）
+    # 包注册表的关键词发现源。text 原样透传，npm 自己的限定符语法直接可用，
+    # 所以「按生态收窄」不必另建引擎——范围写在查询里：
+    #   keywords:pi-package memory     Pi 扩展（pi.dev 官方目录的底层口径）
+    #   keywords:mcp-server 记忆        MCP 服务器
+    #   keywords:dsh-plugin 插件        DeepSeek Harness 插件
+    #   keywords:claude-code-plugin    Claude Code 插件
+    # 可用限定符还有 author:/maintainer:/scope:/not:unstable/not:insecure，
+    # 逗号=OR、+=AND、-=排除（见 npm REGISTRY-API.md 的 Package Endpoints）。
+    # 透传已验证：派发前只过 normalize_query（全角转半角、只拆版本号斜杠、
+    # 压空格），连字符与冒号保留。
+    # 两个口径坑：① 返回体 total 在带查询词时仍报关键词全集数，不能当结果
+    # 计数或空结果判据；② 关键词是自报的、噪声大（keywords:mcp-server 首条
+    # 是 yahoo-finance2），要收窄时叠下载量或描述过滤。
+    desc: "npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄）"
     format: json
     method: GET
     query_param: text
@@ -4163,6 +4179,26 @@ engines:
       item_title: package.name
       item_url: package.links.npm
       item_summary: package.description
+      # 最新版本的发布时间（ISO）——维护活跃度的可比信号。不是排序输入：
+      # freshness 由 score_freshness 从 URL/标题/摘要解析年份，不读本字段。
+      item_published_at: package.date
+      # 出处取 homepage 而非 links.repository：后者带 `git+` 前缀
+      # （git+https://github.com/x/y.git）浏览器打不开，homepage 是可点的
+      # https 地址，多数指向仓库本身。
+      item_upstream: package.links.homepage
+    # 准入校验查询：前一条验通用检索，后两条验限定符透传是否真的到了 npm
+    # （限定符被吞掉时结果会退回全库热度排序，一眼可辨）。
+    canary_query: markdown parser
+    quality_queries:
+    - id: npm_plain
+      query: markdown parser
+      category: code
+    - id: npm_pi
+      query: "keywords:pi-package memory"
+      category: ecosystem
+    - id: npm_dsh
+      query: "keywords:dsh-plugin plugin"
+      category: ecosystem
     timeout: 8
     url: https://registry.npmjs.org/-/v1/search
     headers:

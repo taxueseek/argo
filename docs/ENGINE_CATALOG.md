@@ -256,7 +256,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_npm` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | NPM本地 |
 | `local_stackoverflow` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | StackOverflow本地 |
 | `mdn` | 可直接用 | 免费 | 不限 | — | 域 code_search、域 web_docs | MDN Web Docs 搜索（en/官方 API，免认证） |
-| `npm` | 可直接用 | 免费 | 不限 | — | 域 package_search | npm 包搜索（registry.npmjs.org，免认证） |
+| `npm` | 可直接用 | 免费 | 不限 | — | 域 package_search | npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄） |
 | `pypi` | 可直接用 | 免费 | 不限 | — | 域 package_search | PyPI 包查询（/pypi/{name}/json 精确解析，免认证） |
 | `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs | Stack Overflow（Stack Exchange API，编程问答） |
 

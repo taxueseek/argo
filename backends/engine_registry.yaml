@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-09-17'
+last_updated: '2026-09-18'
 engines:
 - name: anysearch
   tier: T1
@@ -1747,7 +1747,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: npm 包搜索（registry.npmjs.org，免认证）
+  desc: 'npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄）'
 - name: nvd
   tier: T1
   type: http
