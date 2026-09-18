@@ -24,6 +24,17 @@ from urllib.parse import urlparse
 
 _TZ_CN = timezone(timedelta(hours=8))
 
+# 技能目录源（engines/specs/*.yaml 里声明 `coverage: skill` 的那些，加上走
+# 自定义引擎的 redskill）。这里用常量而非运行时读 spec：本函数在输出路径上，
+# config.yaml 有 130KB+，为一句局限声明去解析它是拿延迟换措辞。
+# 与 spec 的一致性由 tests/test_skill_registry_contract.py 断言，不靠人记。
+SKILL_REGISTRY_ENGINES = frozenset({"redskill", "skillsmp", "clawhub"})
+
+SKILL_REGISTRY_LIMITATION = (
+    "Skill directory hits are marketplace listings, not verified packages; "
+    "check the upstream reference before installing."
+)
+
 
 def canonicalize_url(url: str) -> str:
     """URL 归一化（薄转发到 url_canon 唯一来源）。
@@ -231,9 +242,30 @@ def build_limitations(
     if search_result.get("cached"):
         limitations.append(
             f"served from cache level={search_result.get('cache_level')}")
+    if _skill_registry_used(search_result):
+        limitations.append(SKILL_REGISTRY_LIMITATION)
     if _route_login_used(search_result, candidates):
         limitations.append("login_state_used: do not write to public SearchCache")
     return limitations
+
+
+def _skill_registry_used(search_result: dict[str, Any]) -> bool:
+    """本次结果里有没有技能目录源的贡献。
+
+    只看真正跑出结果的引擎（engines_used），不看 combo——combo 里挂了但
+    失败/未运行的源不该让「这条结果是市场页」的提示出现。
+    """
+    names: set[str] = set()
+    used = search_result.get("engines_used")
+    if isinstance(used, list):
+        names.update(str(x) for x in used)
+    for key in ("engine", "engines"):
+        val = search_result.get(key)
+        if isinstance(val, str) and val:
+            names.add(val)
+        elif isinstance(val, list):
+            names.update(str(x) for x in val)
+    return bool(names & SKILL_REGISTRY_ENGINES)
 
 
 def attach_envelope(

@@ -36,6 +36,12 @@ output_map:
   item_title: displayName
   item_url: canonicalUrl
   item_summary: summary
+  # 可验证出处：install.reference 是 `owner/slug` 形式的安装引用，比
+  # canonicalUrl 市场页更接近「装什么」（sourceUrl 多为 null 故不取）。
+  item_upstream: install.reference
+  # updatedAt 是 epoch **毫秒**（SkillsMP 同名字段是秒，差 1000 倍，由
+  # engines_base._normalize_epoch 按量级归一成日期）。
+  item_published_at: updatedAt
   url_template: "https://clawhub.ai{canonicalUrl}"
 quality_queries:
   - query: "git commit"

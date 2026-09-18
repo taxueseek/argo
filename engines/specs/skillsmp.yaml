@@ -38,6 +38,12 @@ output_map:
   item_title: name
   item_url: skillUrl
   item_summary: description
+  # 可验证出处：githubUrl 指向该技能在上游仓里的**目录**（…/tree/main/.agents/
+  # skills/xxx），是能核对、能安装的那个地址；skillUrl 只是市场页。
+  item_upstream: githubUrl
+  # updatedAt 是 epoch **秒**（ClawHub 同名字段是毫秒，差 1000 倍，由
+  # engines_base._normalize_epoch 按量级归一成日期）。
+  item_published_at: updatedAt
 quality_queries:
   - query: "git commit"
   - query: "code review"

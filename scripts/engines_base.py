@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -654,6 +655,33 @@ def _envelope_error(data: Any) -> str:
     return ""
 
 
+def _normalize_epoch(value: Any) -> str:
+    """epoch 秒/毫秒 → `YYYY-MM-DD`，非 epoch 原样返回。
+
+    技能目录源的 updatedAt 单位不统一：SkillsMP 给秒（1786285295），ClawHub
+    给毫秒（1789594554485），相差 1000 倍。原样映射等于把一串数字当
+    published_at 交出去，既读不出日期也无法与别的源比较。
+
+    按量级判别而非按源声明：1e9~1e11 是秒（2001~5138 年），1e11~1e14 是
+    毫秒，两位差三个数量级，不存在擦边区间。范围外的值不猜，原样返回——
+    猜错会把一个可疑值变成看起来正常的值，比留着更糟。
+    """
+    text = str(value).strip()
+    if not text.isdigit():
+        return text
+    num = int(text)
+    if 1_000_000_000 <= num < 100_000_000_000:
+        seconds = num
+    elif 100_000_000_000 <= num < 100_000_000_000_000:
+        seconds = num / 1000
+    else:
+        return text
+    try:
+        return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%Y-%m-%d")
+    except (OverflowError, OSError, ValueError):
+        return text
+
+
 def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                         output_map: dict, spec: dict) -> list[dict[str, Any]]:
     """HTTP 引擎响应体解析（GET/POST 共用）。"""
@@ -686,6 +714,11 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
             "snippet": output_map.get("item_summary", "snippet"),
             "source": output_map.get("item_source", "source"),
             "published_at": output_map.get("item_published_at", "published_at"),
+            # 可验证出处：技能目录源给的是市场页（skillUrl/canonicalUrl），
+            # 光有它只能再开一次浏览器。上游仓目录（SkillsMP 的 githubUrl）
+            # 或安装引用（ClawHub 的 install.reference）才是能核对、能安装的
+            # 那个地址，与市场页分开存。
+            "upstream": output_map.get("item_upstream", ""),
             # 可选图片字段：图源（nasa_images 等）声明 item_image 后，结果里多出
             # image_url / image_license，供「搜到图 → 直接看图」用。路径须指向
             # **字符串**（如 links.0.href）——指向 dict 会被 _coerce_field 丢成空串
@@ -697,6 +730,8 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
         _lic = spec.get("image_license")
         for r in parsed:
             r.setdefault("source", eng)
+            if r.get("published_at"):
+                r["published_at"] = _normalize_epoch(r["published_at"])
             if _lic and r.get("image_url"):
                 r.setdefault("image_license", _lic)
             if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
