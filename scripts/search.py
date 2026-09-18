@@ -2007,6 +2007,34 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         import logging
         logging.getLogger("unified_search").debug(f"plan 分流跳过: {type(e).__name__}")
 
+    # 无词元查询短路：整条查询连一个字母/数字/汉字都没有（纯符号、纯标点、
+    # 纯 emoji），任何文本引擎都不可能召回——实测放行只会白烧引擎调用与
+    # 3 秒级时延（"!!!" 实测 dispatch 3.1 s 且 anysearch 超时、缓存里多一条
+    # 垃圾空结果）。只拦 auto 档：显式指定引擎或 local_first 是用户在点名
+    # 「就要拿这个串去搜」，计划分流的 plan_only 也已在上方返回，均不受影响。
+    if (engine == "auto" and not local_first
+            and not re.search(r"\w", original_query)):
+        out = {
+            "query": original_query,
+            "engine": "none", "engines": [], "engines_used": [],
+            "domain": "general", "count": 0, "mode": mode, "depth": depth,
+            "status": "completed", "fetch_required": False,
+            "evidence_loop": {"high_consequence_domain": None,
+                              "suggested": [], "verified_count": 0,
+                              "pending_count": 0},
+            "errors": [], "login_hint": {"needs_login": False, "reason": ""},
+            "funnel": {"routed": 0, "called": 0, "returned": 0,
+                       "deduped": 0, "filtered": 0, "kept": 0},
+            "limitations": ["query has no word tokens (letters/digits/CJK); "
+                            "no engine can recall it, network dispatch skipped"],
+            "results": [],
+            "schema_version": "1.0",
+            "input_kind": kind, "execution_tier": tier,
+        }
+        if timing is not None:
+            out["timing"] = timing.summary()
+        return out
+
     # 查询改写：追加领域关键词提升搜索质量
     # local_first 路径跳过改写：改写词面向 web 引擎召回设计，套到本地
     # 聚合（search_v3 智能路由）上会稀释查询、收窄引擎选择、扩大失败面

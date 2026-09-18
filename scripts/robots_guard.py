@@ -24,8 +24,18 @@ from __future__ import annotations
 import os
 import threading
 import time
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
-from urllib.robotparser import RobotFileParser
+
+if TYPE_CHECKING:  # 仅类型检查用；运行时导入会连带 urllib.request → ssl → email
+    from urllib.robotparser import RobotFileParser
+
+# RobotFileParser 不在模块级导入：urllib.robotparser 会连带拉起
+# urllib.request → http.client → ssl → email（实测 ≈14 ms）。搜索路径的
+# known_blocked 只在「本机恰好有该主机 robots 存档」时才需要它，而那在
+# CLI 每次新进程里都是少数分支——把导入挪进两个真正构造解析器的函数，
+# 其余调用方（cache.local_status 每次搜索都来问一次）就不再为用不到的
+# 网络栈买单。
 
 try:
     from url_safety import check_url
@@ -87,8 +97,9 @@ def _get_parser(scheme: str, host: str, timeout: float) -> RobotFileParser | Non
             return cached[1]
 
     text = _fetch_robots_txt(host, timeout)
-    rp: RobotFileParser | None = None
+    rp = None
     if text is not None:
+        from urllib.robotparser import RobotFileParser
         rp = RobotFileParser()
         rp.parse(text.splitlines())
 
@@ -164,6 +175,7 @@ def known_blocked(url: str, max_age: float = _PERSIST_TTL) -> bool | None:
             return None
         if max_age and (time.time() - f.stat().st_mtime) > max_age:
             return None
+        from urllib.robotparser import RobotFileParser
         text = f.read_text(encoding="utf-8", errors="replace")
         rp = RobotFileParser()
         rp.parse(text.splitlines())

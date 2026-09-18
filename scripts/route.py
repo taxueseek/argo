@@ -1954,7 +1954,11 @@ def route_query(query: str, engine_override: str = "auto",
 # 这个既有的 mtime 综合戳（registry 热加载同款）——键计算从约 5 ms 降到 0.1 ms。
 
 _ROUTE_CACHE_SCHEMA = 1
-_ROUTE_CACHE_TTL_S = 300.0
+# TTL 只兜自适应学习器（adaptive.db）的渐进漂移——影响路由的持久状态
+# （config 改动 / 额度耗尽 / 熔断禁用）都在指纹里，变了键就换。原值 300 s
+# 让隔了几分钟的重复查询白付整笔 route_query 启动税（实测 130–300 ms），
+# 而指纹盖不住的那点排序漂移在一小时内不构成路由错误，放宽到 1 h。
+_ROUTE_CACHE_TTL_S = 3600.0
 _ROUTE_CACHE_MAX_ENTRIES = 200
 
 

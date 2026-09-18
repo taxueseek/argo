@@ -12,8 +12,12 @@
 
 from __future__ import annotations
 
+import os
 import socket
+import subprocess
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -148,6 +152,60 @@ class TestFetchRobotsTxt(unittest.TestCase):
         with _fake_public_dns(), \
              patch("http_client.HttpClient", return_value=fake_client):
             self.assertIsNone(robots_guard._fetch_robots_txt("example.com", 2.0))
+
+
+class TestKnownBlocked(unittest.TestCase):
+    """known_blocked 只读判定（搜索路径，零联网）。
+
+    RobotFileParser 是函数内懒加载的（模块级导入它会把 urllib.request
+    → http.client → ssl → email 整条链拉进每次搜索，实测 ≈14 ms），
+    这里同时锁住两件事：懒加载后判定行为不回归、模块导入面保持干净。
+    """
+
+    def setUp(self):
+        import robots_guard
+        robots_guard.clear_cache()
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._persist = patch.object(
+            robots_guard, "_persist_dir", return_value=Path(self._tmp.name))
+        self._persist.start()
+        self.addCleanup(self._persist.stop)
+
+    def _write_robots(self, host: str, text: str) -> None:
+        (Path(self._tmp.name) / f"{host}.txt").write_text(text, encoding="utf-8")
+
+    def test_no_archive_returns_none(self):
+        import robots_guard
+        self.assertIsNone(robots_guard.known_blocked("https://never-seen.example/x"))
+
+    def test_disallow_archive_blocks(self):
+        import robots_guard
+        self._write_robots("example.com", "User-agent: *\nDisallow: /private/\n")
+        self.assertTrue(robots_guard.known_blocked("https://example.com/private/a"))
+        self.assertFalse(robots_guard.known_blocked("https://example.com/public"))
+
+    def test_stale_archive_returns_none(self):
+        import robots_guard
+        self._write_robots("example.com", "User-agent: *\nDisallow: /\n")
+        f = Path(self._tmp.name) / "example.com.txt"
+        old = time.time() - robots_guard._PERSIST_TTL - 10
+        os.utime(f, (old, old))
+        self.assertIsNone(robots_guard.known_blocked("https://example.com/x"))
+
+    def test_module_import_stays_light(self):
+        """模块级导入不得拉起网络栈（回归门：RobotFileParser 保持函数内懒加载）。"""
+        code = (
+            "import sys; import robots_guard; "
+            "heavy = [m for m in ('urllib.robotparser', 'urllib.request', 'ssl') "
+            "if m in sys.modules]; "
+            "print('HEAVY:' + ','.join(heavy))"
+        )
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                              text=True, cwd=str(SCRIPT_DIR), timeout=60)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        line = next(ln for ln in proc.stdout.splitlines() if ln.startswith("HEAVY:"))
+        self.assertEqual(line, "HEAVY:", f"模块导入拉起了重依赖: {line}")
 
 
 if __name__ == "__main__":
