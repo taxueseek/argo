@@ -298,20 +298,26 @@ def verify_results(results: list[dict[str, Any]],
             continue
         targets.append(r)
 
-    def _fetch_one(r: dict) -> tuple[dict, dict | None]:
+    def _fetch_one(r: dict) -> tuple[dict, dict | None, str]:
         url = r.get("url") or ""
         try:
             fr = fetch_fn(url, max_chars=max_chars, timeout=timeout)
         except Exception as e:  # pragma: no cover
             logger.debug(f"verify fetch 异常 {url}: {type(e).__name__}")
-            return r, None
-        return r, extract_fetch_evidence(fr)
+            return r, None, ""
+        # fetch_fn 可能返回非 dict（上游异常形态），取正文前必须判型，
+        # 与 extract_fetch_evidence 的容错口径保持一致
+        text = (fr.get("content") or "") if isinstance(fr, dict) else ""
+        return r, extract_fetch_evidence(fr), text
+
+    # 语义层（默认关）的输入：正文已在内存，批量一次调用；关闭时不产生任何行为
+    scored_inputs: list[dict[str, Any]] = []
 
     if len(targets) > 1:
         with ThreadPoolExecutor(max_workers=min(len(targets), 3)) as ex:
             futures = [ex.submit(_fetch_one, r) for r in targets]
             for fut in as_completed(futures):
-                r, ev = fut.result()
+                r, ev, text = fut.result()
                 if ev is None:
                     pending.append(r.get("url") or "")
                     continue
@@ -319,13 +325,44 @@ def verify_results(results: list[dict[str, Any]],
                 # 并入该 URL 的正文条目。此处再写一遍是同源同刻的双写，
                 # 合并存储后还会因为「没有正文条目」而变成静默空操作。
                 _record_verify(r, ev, verified, revisions)
+                if text.strip():
+                    scored_inputs.append({"url": r.get("url") or "",
+                                          "title": r.get("title") or "",
+                                          "text": text})
     else:
         for r in targets:
-            r2, ev = _fetch_one(r)
+            r2, ev, text = _fetch_one(r)
             if ev is None:
                 pending.append(r2.get("url") or "")
                 continue
             _record_verify(r2, ev, verified, revisions)
+            if text.strip():
+                scored_inputs.append({"url": r2.get("url") or "",
+                                      "title": r2.get("title") or "",
+                                      "text": text})
+
+    semantic_meta: dict[str, Any] | None = None
+    if scored_inputs:
+        try:
+            from semantic_evidence import assess_support, enabled as _semantic_enabled
+            if _semantic_enabled():
+                support = assess_support(query, scored_inputs)
+                if support:
+                    for item in verified:
+                        info = support.get(item.get("url") or "")
+                        if info:
+                            item["semantic_support"] = info
+                    for r in results:
+                        info = support.get(r.get("url") or "")
+                        if info:
+                            r["semantic_support"] = info
+                    semantic_meta = {
+                        "scored": len(support),
+                        "supports": sum(1 for x in support.values() if x["supports"]),
+                        "contradicts": sum(1 for x in support.values() if x["contradicts"]),
+                    }
+        except Exception as e:  # fail-open：语义层不阻断核验
+            logger.debug(f"语义证据层失败: {type(e).__name__}")
 
     summary: dict[str, Any] = {"n": len(revisions)}
     if revisions:
@@ -339,10 +376,14 @@ def verify_results(results: list[dict[str, Any]],
             "min_delta": round(min(revisions), 3),
         })
 
-    return {
+    out: dict[str, Any] = {
         "query": query,
         "verified": verified,
         "revision_summary": summary,
         "pending": pending,
         "skipped_cached": skipped_cached,
     }
+    # 语义层默认关：关闭时连键都不出现，输出与未接入时逐位一致
+    if semantic_meta is not None:
+        out["semantic"] = semantic_meta
+    return out

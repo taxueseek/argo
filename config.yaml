@@ -4798,6 +4798,22 @@ output:
   include_routing_decision: true
   include_scores: true
 
+# ── 语义证据层（可选，默认关闭）─────────────────────────────────────────
+# 用 classifier.dev 的零样本分类，为显式核验链路（search --verify /
+# research --verify）补一层「正文是否支持该查询主张」的语义判定。密度分测
+# 「像不像证据块」，它测「是否支持」——实测两者近乎反向，假前提主张只有语义
+# 层能表达（详见 scripts/semantic_evidence.py 头部说明与
+# reports/classifier-dev-argo/A、B、F）。
+# 开启：此处 enabled: true，或设环境变量 ARGO_SEMANTIC_EVIDENCE=1（env 优先）。
+# 关闭时零影响：无网络调用、无新增字段、输出与未接入时逐位一致。
+semantic_evidence:
+  enabled: false
+  endpoint: "https://classifier.dev"
+  # 单次批量分类的超时（秒）。服务不可达时核验链路最多多等这么久，然后静默降级。
+  timeout_s: 5
+  # fast：决策模型一次往返；smart：低置信度条目转推理模型复核（慢，配额小 10 倍）
+  tier: fast
+
 # ── 网络出口调度（issue #13，2026-09-14）────────────────────────────────
 # 解析优先级：rules 域名命中 > ARGO_PROXY 环境变量 > 本段 url > 标准环境变量
 # （HTTPS_PROXY/HTTP_PROXY/ALL_PROXY，NO_PROXY 一直被尊重）> 直连。
