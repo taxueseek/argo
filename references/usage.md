@@ -40,6 +40,11 @@ python3 scripts/search.py "查询词" \
 
 - **Agent 消费再加 `--fields agent`**：剥掉遥测字段、只留答案与质量信号，
   实测 `-n 2` 输出 1.3 KB。`fetch_required` 与 `limitations` 在各档都保留。
+- **`--envelope` 与 `--fields agent` 不要同给**（2026-09-19 实测）：`_strip_for_agent`
+  会把 `candidates`/`coverage` 一并剥掉，envelope 的增量是 **0 字节**——同一查询
+  `--json` 7226 B、`--fields agent` 5614 B、`--envelope` 19066 B、
+  `--envelope --fields agent` 5614 B。调用方会以为拿到了 provenance、实际没有，
+  所以 CLI 在这个组合下会往 stderr 打一行告警。要 provenance 就去掉 `--fields agent`。
 - 三视图内部确实有重复（同一段 snippet 在三处各写一遍，合计约占全文档 40%）——
   那是**归档要的冗余**：`candidates.jsonl` 一行一条要能自证来源。所以做法是
   「要用时打开 `--envelope`」，不是把视图削瘦（削了归档就残了）。
@@ -92,7 +97,7 @@ python3 scripts/search.py "查询词" \
 
 ### `--list-engines` 的体积陷阱
 
-`--list-engines` 列名字约 3 KB；**`--detail` 带 `--engine` 过滤 = 单引擎全量诊断 ~0.9 KB**；不带过滤是瘦身全量清单（2026-09-16 实测 ~50 KB，原全量转储 151 KB，runtime/admission 嵌套占三成，已默认投影压缩）
+`--list-engines` 列名字约 3 KB（2026-09-19 实测 2697 B，可放心用）；**`--detail` 带 `--engine` 过滤 = 单引擎全量诊断 ~0.9 KB**；**不带过滤的 `--detail --json`** 才是体积陷阱（2026-09-16 实测 ~50 KB，2026-09-19 复测 50302 B；原全量转储 151 KB，runtime/admission 嵌套占三成，已默认投影压缩）
 （含每引擎的熔断/配额/准入/依赖运行态），属诊断转储。查单个或几个引擎请**同时
 给 `--engine`**（逗号分隔），体积降到 KB 级；未收录的名字会走 stderr 提示。
 

@@ -84,7 +84,7 @@ cost_factor: free=1.0（anysearch/zhihu/eastmoney/arxiv/ddgs/octen/local_*）
 
 ## 核心能力清单
 
-- **TF-IDF 语义路由**：二元组 + boost_keywords + boost_combos，< 5ms
+- **TF-IDF 语义路由**：二元组 + boost_keywords + boost_combos，< 5ms（**同进程稳态**；CLI 每次新进程的首调实测 40-80ms，由路由决策缓存兜到 ~1.8ms，2026-09-19 实测）
 - **加权 RRF（WG-RRF）**：权威源 1.2-1.4、社交源 0.7-0.8 加权融合
 - **语义缓存**：minhash n-gram 近重复软命中（阈值 0.7），自适应 TTL（稳定内容 ×2）
 - **自适应引擎禁用**：熔断 open 达 3 次自动 disabled，成功或新环境自动恢复
