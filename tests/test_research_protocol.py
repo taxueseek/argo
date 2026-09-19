@@ -363,3 +363,107 @@ class TestWorkPackageCollection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestResearchEvidenceGateWiring(unittest.TestCase):
+    """研究路径的高后果门控必须真的接上（2026-09-19 修复）。
+
+    `_attach_evidence_loop` 从**单条结果**读 `r.get("domain")` 当研究域，但全仓
+    没有任何 producer 往结果行写 `domain`（rerank 写的是 authority/absorption/
+    evidence_flags 那一组），而 `_search_one` 又把 super_search 返回的路由域整个
+    丢掉。于是 domain 恒空 → `is_high_consequence_domain(None)`=False →
+    finance/medical/legal 研究的 `fetch_required` 恒为 False，高后果 dossier
+    可以拿到 conclusion_cap=high 而从未核验正文。
+    """
+
+    def _gate(self, subs):
+        from research import _attach_evidence_loop
+        report = {}
+        _attach_evidence_loop(report, {"sub_results": subs})
+        return report.get("fetch_required")
+
+    def _sub(self, domain, intent="x"):
+        s = {"sub_query": "q", "intent": intent,
+             "results": [{"title": "T", "url": "https://a.example/1",
+                          "snippet": "s"}]}
+        if domain:
+            s["domain"] = domain
+        return s
+
+    def test_high_consequence_domain_sets_fetch_required(self):
+        for dom in ("stock_query", "financial_news", "medical", "legal"):
+            self.assertTrue(self._gate([self._sub(dom)]),
+                            f"{dom} 研究应要求核验正文")
+
+    def test_general_domain_does_not_require_fetch(self):
+        self.assertFalse(self._gate([self._sub("general_search")]))
+
+    def test_missing_domain_degrades_conservatively(self):
+        """没有域信息时不误报（历史形态）。"""
+        self.assertFalse(self._gate([self._sub(None)]))
+
+    def test_sub_query_carries_routed_domain(self):
+        """_search_one 必须把路由域带下去——否则门控拿不到任何输入。"""
+        import inspect
+        import research
+        src = inspect.getsource(research)
+        self.assertIn('"domain": result.get("domain")', src,
+                      "_search_one 的 out 里缺 domain，高后果门控会再次失联")
+
+
+class TestResearchGateVerifyTruthiness(unittest.TestCase):
+    """「跑过 --verify」≠「核验成功」（2026-09-19 修复）。
+
+    dossier["verify"] 是 verify_results 的返回 dict，research_cli 在 --verify
+    分支里无条件赋值它；全部 fetch 失败时它仍是 {verified: [], ...}，真值判据
+    为真。于是「高后果取证尚未核验」这道门在「核验全失败」时反而放行——正是
+    它要拦的场景。
+    """
+
+    def _gates(self, dossier):
+        from research_gates import evaluate_dossier_gates
+        return [f["id"] for f in evaluate_dossier_gates(dossier).get("failures", [])]
+
+    def test_all_failed_verify_still_blocks(self):
+        ids = self._gates({"fetch_required": True,
+                           "evidence_loop": {"verified_count": 0},
+                           "verify": {"verified": [], "revision_summary": {}}})
+        self.assertIn("fetch_required_unverified", ids)
+
+    def test_successful_verify_unblocks(self):
+        ids = self._gates({"fetch_required": True,
+                           "evidence_loop": {"verified_count": 0},
+                           "verify": {"verified": [{"url": "u"}]}})
+        self.assertNotIn("fetch_required_unverified", ids)
+
+    def test_not_run_verify_blocks(self):
+        ids = self._gates({"fetch_required": True,
+                           "evidence_loop": {"verified_count": 0}})
+        self.assertIn("fetch_required_unverified", ids)
+
+
+class TestCrossVerificationConflicts(unittest.TestCase):
+    """交叉验证的冲突检测曾是死代码（2026-09-19 修复）。
+
+    两个坑叠加：读的字段 `authority.source_type` 从未存在（score_authority 的
+    返回键是 score/reason/tier/domain/is_serp），且 credibility 只挂在 merged
+    上、不挂在各子查询的原始结果上。于是 tiers 恒空 → conflicts 恒空 →
+    报告里的「⚠ 混入低证据层级来源」永远不打印。
+    """
+
+    def _conflicts(self, urls):
+        from research_dossier import _build_cross_verification
+        sub = {"intent": "dim", "sub_query": "q",
+               "results": [{"title": t, "url": u} for t, u in urls]}
+        merged = [{"title": "m", "url": "https://www.gov.cn/a"}]
+        return _build_cross_verification(merged, "q", [sub]).get("conflicts") or []
+
+    def test_low_tier_mixed_in_is_detected(self):
+        got = self._conflicts([("a", "https://blog.example.com/p"),
+                               ("b", "https://www.gov.cn/a")])
+        self.assertEqual(len(got), 1, "混入低层级来源应报冲突")
+
+    def test_all_authoritative_is_clean(self):
+        got = self._conflicts([("a", "https://www.gov.cn/a"),
+                               ("b", "https://docs.python.org/3/")])
+        self.assertEqual(got, [], "全权威来源不应报冲突")

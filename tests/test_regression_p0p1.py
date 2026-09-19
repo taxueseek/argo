@@ -273,3 +273,34 @@ def test_mcp_debug_params_read_from_env(monkeypatch):
     assert _env_int("ARGO_MCP_TIMEOUT", 10) == 25
     monkeypatch.setenv("ARGO_MCP_TIMEOUT", "abc")
     assert _env_int("ARGO_MCP_TIMEOUT", 10) == 10          # 非法 -> 默认
+
+
+# ── 英文歧义词必须吃词边界（2026-09-19 修复）────────────────────────────────
+# 判据原写作 `term in query or (term.isascii() and \b...)`：裸子串那一支排在
+# 前面且对英文同样成立，词边界分支永远轮不到，整个判据退化成子串匹配。
+# 实测误报：`JavaScript 教程` 报「Java」歧义、`Google 发布 Gemini` 报「Go」、
+# `STORAGE 引擎对比` 报「RAG」，并据此翻转 recommended_strategy。
+
+def _ambiguous_terms(q):
+    from clarify import analyze_query
+    return [a.get("term") for a in (analyze_query(q).get("ambiguities") or [])]
+
+
+@pytest.mark.parametrize("query,bad", [
+    ("JavaScript 教程", "Java"),
+    ("Google 发布 Gemini", "Go"),
+    ("STORAGE 引擎对比", "RAG"),
+])
+def test_ascii_substring_is_not_ambiguous(query, bad):
+    assert bad not in _ambiguous_terms(query), f"{query} 不应因裸子串报出 {bad} 歧义"
+
+
+@pytest.mark.parametrize("query,term", [("Java 性能调优", "Java"), ("Go 并发 模型", "Go")])
+def test_real_ascii_ambiguity_survives(query, term):
+    assert term in _ambiguous_terms(query)
+
+
+@pytest.mark.parametrize("query", ["苹果 股价", "苹果 水果 营养"])
+def test_cjk_ambiguity_unaffected(query):
+    r"""中文歧义必须照旧命中——CJK 全是 \w，词边界对它们永不成立。"""
+    assert "苹果" in _ambiguous_terms(query)

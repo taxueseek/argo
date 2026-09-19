@@ -40,7 +40,14 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
         })
 
     fetch_required = bool(dossier.get("fetch_required"))
-    verified = bool(dossier.get("verify"))
+    # 「跑过 --verify」≠「核验成功」。dossier["verify"] 是 verify_results 的返回
+    # dict，而 research_cli 在 --verify 分支里**无条件**赋值它——全部 fetch 失败
+    # 时它仍是 {verified: [], revision_summary: {...}, ...}，真值判据为真。
+    # 于是「高后果取证尚未核验」这道门在「核验全失败」时反而放行，正是它要拦的
+    # 场景。判据取 verified 列表是否非空（那是真正拿到正文的那些 URL）。
+    verify_report = dossier.get("verify") or {}
+    verified = bool(verify_report.get("verified")) if isinstance(verify_report, dict) \
+        else bool(verify_report)
     if not verified:
         el = dossier.get("evidence_loop") or {}
         verified = int(el.get("verified_count") or 0) > 0

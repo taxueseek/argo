@@ -100,6 +100,33 @@ def _login_state_of(item: dict[str, Any], source: str = "") -> bool:
     return "ego-browser" in blob or "ego_browser" in blob or "browser_api" in blob
 
 
+def verification_of(item: dict[str, Any]) -> dict[str, Any]:
+    """核验状态：这条候选是「只有 snippet 线索」还是「原文已取到」。
+
+    历史 bug（2026-09-19）：这里硬编码 `opened_original: False`（注释还写着
+    「snippet 线索，未打开原文」），于是**同一份载荷自相矛盾**——已抓过正文的
+    结果行上明明带着 `local_body`（search 的本地正文回填）或
+    `has_fetched_evidence` / `post_fetch_absorption`（evidence_loop 的证据
+    回填），candidate 投影却声明「未打开原文」。下游按 verification 判断
+    「能不能把这条当事实」时，拿到的答案与载荷本身相反。
+
+    判据是「这条 URL 的原文已经被取到过」，三个等价证据任一成立即可：
+    `local_body`（本机正文在手）、`has_fetched_evidence`（已核验证据）、
+    `post_fetch_absorption`（正文级吸收分）。三者都由取数链路写在同一行上，
+    不额外联网、不额外读盘。
+    """
+    opened = bool(
+        item.get("local_body")
+        or item.get("has_fetched_evidence")
+        or item.get("post_fetch_absorption") is not None
+    )
+    return {
+        "status": "opened" if opened else "candidate",
+        "opened_original": opened,
+        "checked_at": None,
+    }
+
+
 def result_to_candidate(
     item: dict[str, Any],
     query: str,
@@ -150,11 +177,7 @@ def result_to_candidate(
             "visibility": "authenticated" if login_used else "public",
             "login_state_used": login_used,
         },
-        "verification": {
-            "status": "candidate",  # snippet 线索，未打开原文
-            "opened_original": False,
-            "checked_at": None,
-        },
+        "verification": verification_of(item),
         "provenance": {
             "source_id": social.get("id") if social else None,
             "retrieved_at": retrieved,

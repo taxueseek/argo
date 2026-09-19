@@ -547,9 +547,18 @@ class ContentScrubber:
     def _calculate_risk(self, threats: list[ThreatDetection]) -> float:
         if not threats:
             return 0.0
-        total = sum(t.confidence * WEIGHTS.get(t.threat_type, 0.5) for t in threats)
-        max_possible = len(threats) * max(WEIGHTS.values())
-        risk = min(total / max_possible, 1.0) if max_possible > 0 else 0.0
+        # 风险分 = **最强单条证据**（多类型再乘加成），不是平均值。
+        #
+        # 历史 bug（2026-09-19 复现）：旧式子是
+        # `total / (len(threats) * max_weight)`——分母随威胁条数线性增长，
+        # 于是它算的是「平均置信度」而不是「风险」，并且**非单调**：同一页
+        # 多检出 1 条 payload_smuggling，风险分反而从 0.900 降到 0.840。
+        # 后果不只是数值难看：`clean = risk_score < 0.5`，往恶意页里掺入
+        # 足够多低置信命中就能把风险分稀释到 0.5 以下，判定翻成「干净」。
+        # 取最大值天然单调——加证据只会抬高或持平，不可能降低。
+        risk = max(t.confidence * WEIGHTS.get(t.threat_type, 0.5)
+                   for t in threats)
+        risk = min(risk / max(WEIGHTS.values()), 1.0)
         # 多威胁类型加成
         unique_types = len(set(t.threat_type for t in threats))
         if unique_types > 2:

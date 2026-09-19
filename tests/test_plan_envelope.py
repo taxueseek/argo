@@ -337,3 +337,46 @@ class TestNoRegressionRoute(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVerificationOpenedOriginal(unittest.TestCase):
+    """verification 必须反映「原文是否真的取到过」（2026-09-19 修复）。
+
+    此前 candidate_envelope 硬编码 `opened_original: False`（注释还写着
+    「snippet 线索，未打开原文」），于是同一份载荷自相矛盾：已抓过正文的结果
+    行上带着 local_body / has_fetched_evidence / post_fetch_absorption，
+    candidate 投影却声明「未打开原文」。下游按 verification 判断「能不能把
+    这条当事实」时，拿到的答案与载荷本身相反。
+    """
+
+    def _v(self, item):
+        return result_to_candidate(item, "q", 1)["verification"]
+
+    def test_plain_snippet_stays_candidate(self):
+        v = self._v({"title": "T", "url": "https://a/1", "snippet": "s"})
+        self.assertEqual(v["status"], "candidate")
+        self.assertFalse(v["opened_original"])
+
+    def test_local_body_marks_opened(self):
+        v = self._v({"title": "T", "url": "https://a/1",
+                     "local_body": {"content": "x"}})
+        self.assertEqual(v["status"], "opened")
+        self.assertTrue(v["opened_original"])
+
+    def test_fetched_evidence_marks_opened(self):
+        v = self._v({"title": "T", "url": "https://a/1",
+                     "has_fetched_evidence": True})
+        self.assertTrue(v["opened_original"])
+
+    def test_absorption_zero_still_counts_as_opened(self):
+        """吸收分为 0 也是「取到了但没用」——不能用真值判断。"""
+        v = self._v({"title": "T", "url": "https://a/1",
+                     "post_fetch_absorption": 0.0})
+        self.assertTrue(v["opened_original"])
+
+    def test_verification_matches_payload_not_contradicts_it(self):
+        """锁住「不再自相矛盾」本身：同一行上 local_body 与 opened_original 同真。"""
+        item = {"title": "T", "url": "https://a/1",
+                "local_body": {"content": "x"}, "snippet": "s"}
+        v = self._v(item)
+        self.assertEqual(bool(item.get("local_body")), v["opened_original"])

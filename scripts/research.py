@@ -170,6 +170,13 @@ def collect_sources(sub_queries: list[dict[str, str]], max_results: int = 5,
             "cached": result.get("cached", False),
             "upgraded_to_full": upgraded,
             "route_strategy": strategy,
+            # 路由域必须随子结果传下去：它是高后果门控（fetch_required）的
+            # 唯一输入。此前这一项被丢在这里，下游只能去单条结果上找
+            # `domain`——而没有任何 producer 往结果行写它（rerank 写的是
+            # authority/absorption/evidence_flags 那一组），于是
+            # `_attach_evidence_loop` 永远拿到空域，金融/医疗/法律研究
+            # 的 fetch_required 恒为 False。
+            "domain": result.get("domain") or "",
         }
         if sq.get("package_id"):
             out["package_id"] = sq["package_id"]
@@ -462,10 +469,16 @@ def _attach_evidence_loop(report: dict[str, Any], collection: dict[str, Any]) ->
         sub_results = collection.get("sub_results") or []
         domain_counts: dict[str, int] = {}
         for sr in sub_results:
+            # 子查询级路由域是主来源（每个子查询各自路由，取多数）；
+            # 单条结果上的 domain 只作补充——目前没有 producer 写它，但
+            # 留这条路是为了将来结果行带上更细的域时能自动升级判据。
+            sr_domain = (sr.get("domain") or "").strip()
+            if sr_domain:
+                domain_counts[sr_domain] = domain_counts.get(sr_domain, 0) + 1
             for r in (sr.get("results") or [])[:3]:
                 if isinstance(r, dict):
                     all_results.append(r)
-                    d = r.get("domain") or ""
+                    d = (r.get("domain") or "").strip()
                     if d:
                         domain_counts[d] = domain_counts.get(d, 0) + 1
         domain = max(domain_counts, key=domain_counts.get) if domain_counts else ""

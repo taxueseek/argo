@@ -253,3 +253,50 @@ def test_http_fetch_without_markdown_permission_sends_no_accept(monkeypatch):
                                allow_markdown=False)
     assert captured["headers"] is None
     assert out["fetch_method"] != "http_md"
+
+
+# ─── need_html 契约：只产 markdown 的通道必须全部关闭 ────────────────────────
+# need_html 的 docstring 承诺「跳过 tinyfish/jina/Parallel（仅产 markdown）、
+# 停用内容协商」。`.md` 变体回探是同一类通道，2026-09-19 前漏在门外：
+# extract 传 need_html=True 抓到站点提供的 .md 后，html 字段为空，
+# extract.py 再拿 markdown 跑表格/Meta/JSON-LD 正则 → 三项全空却 success=True。
+
+_HTML_DOC = ("<html><head><title>T</title></head><body>"
+             "<table><tr><td>1</td></tr></table></body></html>")
+_MD_DOC = "# T\n\n| a | b |\n|---|---|\n| 1 | 2 |\n"
+
+
+def _install_md_variant(monkeypatch, calls):
+    def _fake_http(url, max_chars, timeout, allow_markdown=True):
+        calls.append(allow_markdown)
+        return {"url": url, "title": "T", "content": "", "html": _HTML_DOC,
+                "length": len(_HTML_DOC), "success": True, "error": "",
+                "fetch_method": "http"}
+
+    monkeypatch.setattr(fetch_v3, "_http_fetch", _fake_http)
+    monkeypatch.setattr(fetch_v3, "_md_variant_enabled", lambda: True)
+    monkeypatch.setattr(fetch_v3, "_md_variant_wanted", lambda r: True)
+    monkeypatch.setattr(fetch_v3, "_md_variant_fetch", lambda url, mc, to: {
+        "url": url, "title": "T", "content": _MD_DOC[:mc], "html": "",
+        "length": len(_MD_DOC), "success": True, "error": "",
+        "fetch_method": "md_variant"})
+    monkeypatch.setattr(fetch_v3, "_needs_browser", lambda r: False)
+
+
+def test_need_html_blocks_md_variant(monkeypatch):
+    """need_html=True：不得被 .md 变体替换，HTML 必须留在结果里。"""
+    calls = []
+    _install_md_variant(monkeypatch, calls)
+    out = fetch_v3.fetch_v3("https://example.com/doc", need_html=True,
+                            skip_cache=True)
+    assert out["fetch_method"] != "md_variant", "need_html 被 .md 变体绕过"
+    assert out["html"], "need_html=True 却拿不到 HTML（extract 会静默全空）"
+
+
+def test_without_need_html_md_variant_still_used(monkeypatch):
+    """对照面：默认路径必须照旧享受 .md 变体（能力不得被这次修复砍掉）。"""
+    calls = []
+    _install_md_variant(monkeypatch, calls)
+    out = fetch_v3.fetch_v3("https://example.com/doc", need_html=False,
+                            skip_cache=True)
+    assert out["fetch_method"] == "md_variant"

@@ -1358,6 +1358,31 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 return -1.0
             return left
 
+        def _level_timeout(requested: float) -> float:
+            """本降级级的 timeout：不超过剩余总预算。
+
+            **每一级都必须过这道口**。历史 bug（2026-09-19 复现）：只有
+            后加的 jina / Parallel 两级写了 `min(..., max(_budget_left(), 1.0))`，
+            而 mobile UA / TLS 指纹 / wayback / tinyfish / browser 五级都拿
+            原始的 timeout（8s / 8s / 12s / 8s / 15s）。预算只剩 0.1s 时，
+            这五级仍会各自跑满自己的超时，实测**可击穿总预算 34.9s**——
+            而 ARGO_FETCH_DEADLINE_S 存在的全部理由就是兜住 MCP 客户端
+            的工具超时（默认 60s），击穿等于让这条兜底失效。
+
+            `deadline_s <= 0` 表示 deadline 被显式关闭（ARGO_FETCH_DEADLINE_S=0），
+            此时 `_budget_left()` 返回的是「放行」哨兵 1.0 而不是真实剩余量，
+            必须原样放行——照抄 min() 会把关闭状态下的每一级都压成 1s。
+
+            下限 1.0s：预算所剩无几时，0 秒超时的请求本身没有意义（连不上
+            也读不到），留 1s 让它要么快速成功、要么快速失败。代价是总墙钟
+            的上界不是 deadline 本身，而是 **deadline + 5s**（预算耗尽后仍有
+            至多 5 个降级级各留 1s 下限）。这个上界是刻意的：比「击穿 34.9s」
+            小一个量级，又不必给每一级单独定义「多小的预算算不值得试」。
+            """
+            if deadline_s <= 0:
+                return requested
+            return min(requested, max(_budget_left(), 1.0))
+
         host = (urlparse(url).hostname or "").lower()
         gated = (_mobile_branch_enabled()
                  and (_mobile_first_host(url) or _identity_is_mobile(host)))
@@ -1387,8 +1412,16 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             # 主请求未得到 Markdown → 回探 AI 友好变体。
             # 门控站（抖音一类）跳过：少一次主机触碰，保住单次直连窗口
             # （实测 .md 探测会触发连坐限速）。
-            if (result is not None and not gated and _md_variant_enabled()
-                    and _md_variant_wanted(result)):
+            #
+            # need_html 一并关掉这条：它和 tinyfish/jina/Parallel 是同一类
+            # 「只产 markdown」的通道，而上面 docstring 已把「跳过只产
+            # markdown 的通道」写进 need_html 的契约。漏在这里的后果实测过
+            # （2026-09-19）：extract 传 need_html=True 抓 bun.sh/docs 这类
+            # 站点，结果被 .md 变体替换、html 字段为空，extract.py 再拿
+            # markdown 去跑表格/Meta/JSON-LD 正则 → 三项全空却 success=True，
+            # 正是 docstring 自己警告的「开关看着接上了、结果永远为空」。
+            if (result is not None and not gated and not need_html
+                    and _md_variant_enabled() and _md_variant_wanted(result)):
                 md = _md_variant_fetch(url, max_chars, timeout)
                 if md is not None:
                     md["md_variant"] = True
@@ -1406,7 +1439,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                         and result.get("fetch_method") != "http_mobile"
                         and (not result.get("success")
                              or _needs_browser(result))):
-                    mob = _mobile_http_fetch(url, max_chars, timeout)
+                    mob = _mobile_http_fetch(url, max_chars,
+                                             _level_timeout(timeout))
                     if (mob.get("success") and not mob.get("stop_signal")
                             and not _needs_browser(mob)):
                         mob["ua_profile"] = "mobile"
@@ -1422,7 +1456,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 if (not gated and _impersonate_enabled()
                         and (not result.get("success")
                              or _needs_browser(result))):
-                    spoof = _tls_spoof_fetch(url, max_chars, timeout)
+                    spoof = _tls_spoof_fetch(url, max_chars,
+                                             _level_timeout(timeout))
                     if spoof.get("stop_signal"):
                         result = spoof
                     elif spoof.get("success"):
@@ -1439,8 +1474,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                              or _needs_browser(result))):
                     # 超时受剩余预算约束：deadline 场景本级不得击穿总预算
                     jina = _jina_reader_fetch(
-                        url, max_chars,
-                        timeout=min(timeout, max(_budget_left(), 1.0)))
+                        url, max_chars, timeout=_level_timeout(timeout))
                     if jina is not None and jina.get("success"):
                         jina["http_fallback"] = True
                         result = jina
@@ -1456,7 +1490,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                              or _needs_browser(result))):
                     pm = _parallel_mcp_fetch(
                         url, max_chars,
-                        timeout=min(max(_budget_left(), 1.0), 25.0))
+                        timeout=min(_level_timeout(timeout), 25.0))
                     if pm.get("success") and not _needs_browser(pm):
                         pm["http_fallback"] = True
                         result = pm
@@ -1465,7 +1499,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 # 第二级：Wayback 快照回退（HTTP 失败 / 内容空 / 疑似被删页面）
                 if not result.get("success"):
                     wb = _wayback_fetch(url, max_chars,
-                                        timeout=min(timeout * 1.5, 12.0))
+                                        timeout=_level_timeout(
+                                            min(timeout * 1.5, 12.0)))
                     if wb.get("success"):
                         wb["http_fallback"] = True
                         result = wb
@@ -1475,7 +1510,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                     if _tinyfish_enabled() and not need_html:
                         # tinyfish 免费渲染（返回 clean Markdown，含 JS 执行）优先于本地 Chrome；
                         # 只产 markdown 无 raw html，爬取（need_html）跳过，失败自动回退。
-                        tf = _tinyfish_fetch(url, max_chars, timeout)
+                        tf = _tinyfish_fetch(url, max_chars,
+                                            _level_timeout(timeout))
                         if tf.get("success") and len(
                                 (tf.get("content") or "").strip()) >= 100:
                             tf["http_fallback"] = True
@@ -1483,7 +1519,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                     # tinyfish 未命中（关闭/缺 key/失败/短内容）才起本地 Chrome——
                     # 内容过短的成功响应与失败同样需要继续降级
                     if result.get("fetch_method") != _render_tinyfish.TINYFISH_METHOD:
-                        browser_result = _browser_fetch(url, max_chars, timeout=15.0)
+                        browser_result = _browser_fetch(
+                            url, max_chars, timeout=_level_timeout(15.0))
                         if browser_result.get("success") or not result.get("success"):
                             browser_result["http_fallback"] = True
                             result = browser_result

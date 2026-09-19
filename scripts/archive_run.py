@@ -275,6 +275,17 @@ def write_search_archive(
                 if isinstance(r, dict) and "error" not in r
             ]
         except Exception:
+            # 兜底投影：candidate_envelope 不可导入时才会走到。verification 的
+            # 判据**只有一处定义**（candidate_envelope.verification_of），这里
+            # 单独再试一次导入；连它都拿不到就取保守值（candidate / 未打开）——
+            # 判据不可得时不能凭空断言「已打开原文」。此前这里硬编码 False，
+            # 于是在「已抓过正文」的行上与本文件同源的 results 自相矛盾。
+            try:
+                from candidate_envelope import verification_of  # type: ignore
+            except Exception:
+                def verification_of(_item):  # type: ignore[misc]
+                    return {"status": "candidate", "opened_original": False,
+                            "checked_at": None}
             candidates = [
                 {
                     "candidate_id": f"web:rank-{i+1}",
@@ -284,7 +295,7 @@ def write_search_archive(
                     "snippet": (r.get("snippet") or "")[:300],
                     "backend": r.get("source") or r.get("_engine"),
                     "rank": i + 1,
-                    "verification": {"status": "candidate", "opened_original": False},
+                    "verification": verification_of(r),
                 }
                 for i, r in enumerate(results)
                 if isinstance(r, dict)

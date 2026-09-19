@@ -18,6 +18,11 @@ except ImportError:  # pragma: no cover
     compute_credibility = None  # type: ignore
 
 try:
+    from evidence import score_authority
+except ImportError:  # pragma: no cover
+    score_authority = None  # type: ignore
+
+try:
     from fact_align import align_facts
 except ImportError:  # pragma: no cover
     align_facts = None  # type: ignore
@@ -260,13 +265,33 @@ def _build_cross_verification(
         unverified = 0
         for sr in sub_results:
             results = sr.get("results") or []
-            tiers = [
-                r.get("credibility", {}).get("authority", {}).get("source_type")
-                for r in results[:5]
-                if r.get("credibility")
-            ]
-            tiers = [t for t in tiers if t]
-            if len(tiers) >= 2 and any(t in ("blog", "forum", "social") for t in tiers):
+            # 两个坑，缺一不可：
+            #
+            # 1) 字段名。此前读 `authority.source_type`——它从未存在。
+            #    evidence.score_authority 的返回键是
+            #    {score, reason, tier, domain, is_serp}（实测）。tier 取值
+            #    high/medium/low/very_low，语义与原来想要的 blog/forum/social
+            #    同类：低层级即需人工复核。
+            # 2) 数据源。`credibility` 只挂在 merged 上（compute_credibility 的
+            #    输入是 merged，不是各子查询的原始结果），所以直接读
+            #    sr["results"] 上的 credibility 恒为 None。这里按 URL 现算权威
+            #    层级——score_authority 带进程内缓存，不额外联网/读盘。
+            #
+            # 两处叠在一起时这段是**死代码**：tiers 恒空 → conflicts 恒空 →
+            # research_report 的「⚠ 混入低证据层级来源」永远不打印。
+            tiers = []
+            for r in results[:5]:
+                if not isinstance(r, dict):
+                    continue
+                t = (r.get("credibility") or {}).get("authority", {}).get("tier")
+                if not t and score_authority is not None:
+                    try:
+                        t = score_authority(r.get("url") or "").get("tier")
+                    except Exception:
+                        t = None
+                if t:
+                    tiers.append(t)
+            if len(tiers) >= 2 and any(t in ("low", "very_low") for t in tiers):
                 conflicts.append({
                     "dimension": sr.get("intent", ""),
                     "sub_query": sr.get("sub_query", ""),

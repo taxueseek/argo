@@ -449,7 +449,15 @@ def analyze_query(query: str) -> dict[str, Any]:
 
     # 歧义检测
     for term, info in AMBIGUOUS_TERMS.items():
-        if term in query or (term.isascii() and re.search(r'\b' + re.escape(term) + r'\b', query, re.I)):
+        # 英文歧义词必须吃词边界，中文必须**不**吃（CJK 全是 \w，词边界永不成立）。
+        #
+        # 此前写成 `term in query or (term.isascii() and \b...)`：裸子串那一支
+        # 排在前面且对英文同样成立，于是词边界分支永远轮不到——整个判据退化成
+        # 子串匹配。实测误报（2026-09-19）：`JavaScript 教程` 报「Java」歧义、
+        # `Google 发布 Gemini` 报「Go」、`STORAGE 引擎对比` 报「RAG」，并据此
+        # 翻转 recommended_strategy（把直搜改成 split_search）。
+        if (term in query if not term.isascii()
+                else re.search(r'\b' + re.escape(term) + r'\b', query, re.I)):
             # 检查上下文关键词
             matched_meanings = []
             for meaning in info["meanings"]:

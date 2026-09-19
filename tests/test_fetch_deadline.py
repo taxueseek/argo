@@ -138,3 +138,82 @@ def test_tinyfish_good_content_still_short_circuits(chain_env, monkeypatch):
     monkeypatch.setattr(fetch_v3, "_browser_fetch", _no_browser)
     out = fetch_v3.fetch_v3(_URL, skip_cache=True, use_browser_fallback=True)
     assert out["fetch_method"] == "tinyfish"
+
+
+def _recorder(asked, method, sleep=0.0):
+    """记录本级实际拿到的 timeout（位置或关键字都收），并返回失败结果。"""
+    def fn(url, max_chars=8000, timeout=None, **kwargs):
+        asked.append((method, timeout))
+        if sleep:
+            time.sleep(sleep)
+        return {"url": url, "content": "", "html": "", "title": "", "length": 0,
+                "success": False, "error": method, "fetch_method": method}
+    return fn
+
+
+def test_every_downgrade_level_is_clamped_by_budget(chain_env, monkeypatch):
+    """每一级的 timeout 都必须受剩余预算夹紧（2026-09-19 修复）。
+
+    历史 bug：只有后加的 jina / Parallel 两级写了
+    `min(..., max(_budget_left(), 1.0))`，而 mobile UA / TLS 指纹 / wayback /
+    tinyfish / browser 五级都拿原始 timeout（8s / 8s / 12s / 8s / 15s）。
+    预算只剩 0.1s 时这五级仍各跑满自己的超时——实测**可击穿总预算 34.9s**，
+    而 ARGO_FETCH_DEADLINE_S 存在的全部理由就是兜住 MCP 客户端的工具超时。
+
+    这里断言的是**请求出去的超时**（不是实际耗时）：实测耗时受 mock 控制，
+    而击穿风险恰恰来自「请求的 timeout 有多大」。
+    """
+    monkeypatch.setenv("ARGO_FETCH_DEADLINE_S", "2.0")
+    monkeypatch.setenv("ARGO_FETCH_IMPERSONATE", "1")
+    monkeypatch.setenv("ARGO_FETCH_MOBILE", "1")
+    monkeypatch.setenv("TINYFISH_API_KEY", "sk-test")
+    asked = []
+    # 第一级吃掉几乎全部预算（1.9s / 2.0s），其余级只记录不睡
+    monkeypatch.setattr(fetch_v3, "_http_fetch",
+                        _recorder(asked, "http", sleep=1.9))
+    for name, attr in (("mobile", "_mobile_http_fetch"),
+                       ("tls", "_tls_spoof_fetch"),
+                       ("wayback", "_wayback_fetch"),
+                       ("tinyfish", "_tinyfish_fetch"),
+                       ("browser", "_browser_fetch")):
+        monkeypatch.setattr(fetch_v3, attr, _recorder(asked, name))
+
+    fetch_v3.fetch_v3(_URL, timeout=8.0, skip_cache=True,
+                      use_browser_fallback=True)
+
+    tail = [(n, t) for n, t in asked if n != "http"]
+    assert tail, "降级链没有走到末级，用例前提不成立"
+    budget_left = 0.1  # 2.0 - 1.9
+    for name, t in tail:
+        assert t is not None, f"{name} 未收到 timeout"
+        assert t <= budget_left + 1.0, (
+            f"{name} 请求的 timeout={t}s 未受剩余预算夹紧"
+            f"（剩余 {budget_left}s，下限 1s → 上界 1.0s）")
+
+
+def test_disabled_deadline_does_not_shrink_timeouts(chain_env, monkeypatch):
+    """ARGO_FETCH_DEADLINE_S=0 时不得把各级压成 1s。
+
+    `_budget_left()` 在关闭状态下返回的是「放行」哨兵 1.0，不是真实剩余量；
+    夹紧函数若照抄 `min(requested, max(_budget_left(), 1.0))` 而不过这个特判，
+    关闭 deadline 的每一级都会被压到 1s——那会静默毁掉整条降级链的耐心。
+    """
+    monkeypatch.setenv("ARGO_FETCH_DEADLINE_S", "0")
+    monkeypatch.setenv("ARGO_FETCH_IMPERSONATE", "1")
+    monkeypatch.setenv("ARGO_FETCH_MOBILE", "1")
+    monkeypatch.setenv("TINYFISH_API_KEY", "sk-test")
+    asked = []
+    monkeypatch.setattr(fetch_v3, "_http_fetch", _recorder(asked, "http"))
+    for name, attr in (("mobile", "_mobile_http_fetch"),
+                       ("tls", "_tls_spoof_fetch"),
+                       ("wayback", "_wayback_fetch"),
+                       ("tinyfish", "_tinyfish_fetch"),
+                       ("browser", "_browser_fetch")):
+        monkeypatch.setattr(fetch_v3, attr, _recorder(asked, name))
+
+    fetch_v3.fetch_v3(_URL, timeout=8.0, skip_cache=True,
+                      use_browser_fallback=True)
+
+    got = {n: t for n, t in asked}
+    assert got.get("wayback", 0) > 1.0, f"wayback 被压成 {got.get('wayback')}s"
+    assert got.get("browser", 0) > 1.0, f"browser 被压成 {got.get('browser')}s"
