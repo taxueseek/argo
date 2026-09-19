@@ -2436,5 +2436,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "core": {
+    "label": "core",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

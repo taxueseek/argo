@@ -236,6 +236,10 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "zenodo": "academic",
     "tinyfish_paper": "academic",
     "k10plus": "academic",     # 德国最大联合目录：书目/馆藏
+    # CORE 也归 academic 而非新建族：它回答的仍是「这个主题有哪些论文」，
+    # 与 openalex/crossref 同一问题域；差别在**返回层**（可下载全文 PDF）
+    # 而非能力域。单独建族会让 dedupe_by_family 失去「同族去重」的意义。
+    "core": "academic",
     # 代码/包
     "deps_dev": "code",
     "endoflife": "code",

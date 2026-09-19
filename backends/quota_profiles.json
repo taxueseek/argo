@@ -250,6 +250,16 @@
     "cost_tier": "free",
     "priority": 32
   },
+  "core": {
+    "label": "core",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 31
+  },
   "courtlistener": {
     "label": "CourtListener 判例",
     "qps": 1,
@@ -741,14 +751,14 @@
     "priority": 50
   },
   "gdelt": {
-    "label": "GDELT 全球事件",
-    "qps": 2,
+    "label": "gdelt",
+    "qps": 1,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
     "cost_unit": "free",
     "cost_tier": "free",
-    "priority": 55
+    "priority": 50
   },
   "github": {
     "label": "GitHub",

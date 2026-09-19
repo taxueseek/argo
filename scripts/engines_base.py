@@ -367,6 +367,15 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
     headers = spec.get("headers", {"Content-Type": "application/json"})
     query_param = spec.get("query_param", "q")
     fmt = spec.get("format", "")
+    # format 的双重身份：它本来是**解析提示**（_parse_http_payload 用它区分
+    # xml/json 分支），但历史上被无条件当成查询参数拼进 URL。绝大多数 API
+    # 忽略未知参数所以没暴露问题，直到 local_pubmed 撞上 NCBI E-utilities——
+    # 那里 `format` 是**输出格式**参数且不接受 json，注入后同一条 URL 由
+    # HTTP 200 变 400（实测），引擎静默返回 0 结果。
+    # 默认仍注入（保持 47 个既有引擎行为不变），需要干净的引擎显式声明
+    # `format_is_query_param: false` 退出注入。改全局会动到全部 47 个源，
+    # 拿大范围风险换一个小修，故按引擎收敛。
+    format_is_query_param = spec.get("format_is_query_param", True)
     timeout = spec.get("timeout", 8)
     extra_params = spec.get("extra_params", {})
     output_map = spec.get("output_map", {})
@@ -394,7 +403,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
             parts: list[str] = []
             if query_param:  # 空字符串表示该 API 不用查询参数名（仅 extra_params）
                 parts.append(f"{query_param}={up.quote(query)}")
-            if fmt:
+            if fmt and format_is_query_param:
                 parts.append(f"format={up.quote(str(fmt))}")
             for k, v in extra_params.items():
                 # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang/mkt

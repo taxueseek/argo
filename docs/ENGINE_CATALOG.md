@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 237 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 198 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **收录 238 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **开箱可用 200 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 21 个**：`bocha`、`bocha_ai`、`byted`、`em_miaoxiang`、`exa`、`keenable`、`octen`、`parallel`、`qweather`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
-- **已停用 15 个**：`brave`、`europeana`、`felo`、`gdelt`、`jikan`、`local_goodreads`、`local_google`、`local_mojeek`、`local_startpage`、`local_yandex`、`metaso`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 7 个**：`doi`、`opencitations`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **已停用 14 个**：`brave`、`europeana`、`felo`、`jikan`、`local_goodreads`、`local_google`、`local_mojeek`、`local_startpage`、`local_yandex`、`metaso`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
+- **显式专用 8 个**：`doi`、`gdelt`、`opencitations`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 224 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 12 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 225 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 12 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 13 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -114,13 +114,14 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `you` | 需自备密钥 | 按调用计费 | 不限 | YDC_API_KEY | 域 news_realtime | You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并） |
 | `zhihu_global` | 需自备密钥 | 按调用计费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 chinese_general、域 news_realtime、域 zhihu_content | 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET） |
 
-### 学术文献（24）
+### 学术文献（25）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
 | `arxiv` | 可直接用 | 免费 | 不限 | — | 域 academic、域 local_academic、域 scholar_search、域 tech_deep、深度研究 boost、语义画像命中 | arXiv 论文搜索 |
 | `biorxiv` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | bioRxiv/medRxiv 预印本（DOI 单篇详情 / 最近 3 天列表） |
 | `cnii` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 日本国立情报学研究所学术总库（论文/博士论文/科研项目，JSON-LD） |
+| `core` | 可直接用 | 免费 | 不限 | — | 域 academic | CORE 开放获取全文（含 PDF 直链，覆盖机构仓储灰色文献） |
 | `crossref` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | Crossref DOI 元数据 API（免认证，礼貌池 mailto） |
 | `datacite` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | DataCite 科研数据集搜索（Dryad/Figshare/Dataverse/OSF 等仓储，免认证） |
 | `dblp` | 可直接用 | 免费 | 不限 | — | 域 academic | DBLP 计算机科学文献（免认证，偶发 SSL 抖动） |
@@ -132,7 +133,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `k10plus` | 可直接用 | 免费 | 不限 | — | 域 book_search | K10plus 联合目录（德国最大图书馆联合目录，SRU，免认证） |
 | `local_arxiv` | 可直接用 | 免费 | 不限 | — | 域 patent_search、语义画像命中 | arXiv本地 |
 | `local_crossref` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Crossref本地 |
-| `local_pubmed` | 可直接用 | 免费 | 不限 | — | 域 medical | PubMed本地 |
+| `local_pubmed` | 可直接用 | 免费 | 不限 | — | 域 academic、域 medical | PubMed本地 |
 | `local_semantic_scholar` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Semantic Scholar本地 |
 | `openalex` | 可直接用 | 免费 | 不限 | — | 域 academic、域 chem_search、域 tech_deep、深度研究 boost | OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto） |
 | `openreview` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | OpenReview 顶会论文（含评审可见性与 PDF，AI/ML 研究为主） |
@@ -274,7 +275,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `people_daily` | 可直接用 | 免费 | 不限 | — | 域 news_realtime | 人民网搜索（权威综合中文新闻，官方接口，免认证） |
 | `wallstreetcn` | 可直接用 | 免费 | 不限 | — | 域 financial_news | 华尔街见闻快讯（lives 直播流 JSON，免认证；全量流 + 本地关键词过滤） |
 | `em_miaoxiang` | 需自备密钥 | 免费 | 不限 | ARGO_EASTMONEY_APIKEY | 域 financial_news | 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY） |
-| `gdelt` | 已停用 | 免费 | 不限 | — | 已停用 | GDELT 全球新闻事件数据库（事件/舆情/地理维度，免认证） |
+| `gdelt` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | GDELT 全球新闻事件流（75+ 语言跨国媒体扫描，带域名/语言/国家标注） |
 | `seltz` | 需自备密钥 | 按调用计费 | 20000/月 | SELTZ_API_KEY | 语义画像命中 | Seltz 搜索（英文主力，news 语料；结果带发布日期与正文摘录；中文无召回价值已用 langs 排除） |
 | `tinyfish_news` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时新闻搜索（免费，含 publisher 与发布日期） |
 
@@ -494,7 +495,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `entity_search` | `wikidata` | `baidu_baike`、`wikidata`、`wikipedia`、`zh_wikipedia` |
 | `zhihu_user_data` | `zhihu_user` | `zhihu_user` |
 | `zhihu_content` | `zhihu` | `zhihu`、`zhihu_global`、`anysearch` |
-| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`crossref`、`europepmc`、`dblp`、`semantic_scholar` |
+| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`local_pubmed`、`core`、`crossref`、`europepmc`、`dblp`、`semantic_scholar` |
 | `tech_deep` | `openalex` | `openalex`、`arxiv`、`semantic_scholar`、`github`、`europepmc` |
 | `shopping` | `zhihu` | `zhihu`、`anysearch` |
 | `semantic_discovery` | `exa` | `exa`、`anysearch` |
@@ -520,7 +521,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 237 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 238 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

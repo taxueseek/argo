@@ -1075,6 +1075,20 @@ domains:
   - openreview
   - biorxiv
   - openalex
+  # 2026-09-19 追加，插在**第 5/6 位**——这个位次是算出来的，不是审美：
+  # route._new_source_extra 的加槽额度 = min(最深新源位次 - base, cap)，
+  # cap 在 auto/balanced 档为 4、base 为 3，故「两个新源都能进 kept」要求
+  #   最深位次 <= base + cap = 7。
+  #   · 放队尾（位次 9/10）→ 额度被封顶到 4、预算 7 < 9，两源全被截断
+  #     （表现为「装了但路由不带它」，test_new_source_reachability 会红）
+  #   · 放第 3/4 位 → 预算够，但会把 biorxiv 挤出 fast 档（实测 deep 档
+  #     combo 缩到 [arxiv, openreview, local_pubmed, core]，是真回归）
+  #   · 放第 5/6 位 → deepest=6、extra=min(3,4)=3、预算 6，恰好覆盖且
+  #     arxiv/openreview/biorxiv/openalex 前四位次一律不动
+  #     local_pubmed — 生物医学全文；此前是坏源（实测 0 条 / HTTP 400），本次修复
+  #     core         — 开放获取全文 + PDF 直链，补「元数据之外的全文层」
+  - local_pubmed
+  - core
   - crossref
   - europepmc
   - dblp
@@ -1492,25 +1506,6 @@ engines:
       item_summary: snippet
       item_source: site_name
       item_published_at: date
-  gdelt:
-    type: gdelt
-    enabled: false
-    label: GDELT 全球事件
-    note: 上游 api.gdeltproject.org/api/v2/doc/doc 持续返回 429（2026-09-17 本机
-      连续 3 次重试全部 429，argo 自身调用 TLS 握手超时）。它此前同时占着 global_event
-      域的 combo 首位、primary 与 fallback 三处，等于该域保底为空。恢复前禁用。
-    cost_tier: free
-    qps: 2
-    priority: 55
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    coverage:
-    - event
-    - news
-    - geo
-    desc: GDELT 全球新闻事件数据库（事件/舆情/地理维度，免认证）
-    timeout: 10
   opencorporates:
     type: opencorporates
     enabled: true
@@ -3226,7 +3221,16 @@ engines:
     timeout: 15
     url: http://export.arxiv.org/api/query
   local_pubmed:
-    type: http
+    # 两段式自定义 builder（esearch 取 PMID → esummary 取标题/期刊/日期/DOI）。
+    # 旧版是纯声明式 http spec，有两处结构性错误导致**静默返回 0 条**：
+    #   ① `format: json` 被 engines_base 当查询参数注入 URL，而 E-utilities
+    #      的 format 是输出格式参数且不接受 json —— 同一条 URL 加
+    #      `&format=json` 实测 HTTP 400、去掉 200；
+    #   ② output_map 的 items=esearchresult.idlist 是**字符串数组**，而
+    #      _make_field_parser 对非 dict 条目直接 continue，即便请求通了也
+    #      一条都解析不出来；且 esearch 只给 PMID，本就没有标题可填。
+    # 详见 engines_builders_batch9._build_pubmed_engine 文档串。
+    type: pubmed
     enabled: true
     label: PubMed本地
     cost_tier: free
@@ -3235,20 +3239,7 @@ engines:
     period: second
     cost_per_call: 0.0
     cost_unit: free
-    format: json
-    method: GET
-    query_param: term
-    extra_params:
-      db: pubmed
-      retmode: json
-      retmax: '{n}'
-    output_map:
-      items: esearchresult.idlist
-      item_title: pmid
-      item_url: pmid
-      item_summary: pmid
     timeout: 12
-    url: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi
   local_crossref:
     type: http
     enabled: true
@@ -4823,4 +4814,10 @@ network:
     # 例:
     #   "github.com": "http://127.0.0.1:7890"
     #   "bochaai.com": "direct"
-    rules: {}
+    # gdeltproject.org 显式走本地 Clash：GDELT 按出口 IP 限流（1 调用/5 秒，
+    # 触发后冷却以分钟计），argo 的真直连路径对它 TLS 握手超时（_ssl.c 实测
+    # 10s 打穿），curl 经 Clash TUN 分流可达但慢（14s）——显式指定本机代理
+    # 端口最稳（2026-09-17 的「死源」下线判定=429 连发+握手超时两根因叠加）。
+    # 其他环境按本机代理端口改写。
+    rules:
+      "gdeltproject.org": "http://127.0.0.1:7897"

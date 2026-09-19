@@ -1240,6 +1240,12 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # 后者补声明级核验——argo 此前没有任何「这个说法被判真伪」的一手源。
     "intl_news_flash": ("guardian_rss", "france24", "dw_news"),  # 一手外媒实时流，补英文主流媒体直采空白
     "claim_check": ("factcheck_org", "full_fact"),               # 美/英两法域核查口径
+    # 2026-09-19：academic 域两个源。core 是**新增**（开放获取全文 + PDF 直链，
+    # 与 openalex/crossref 的元数据、arxiv/biorxiv 的预印本分层不同）；
+    # local_pubmed 是**修复**（旧实现静默 400 且解析不出字符串数组，实测 0 条，
+    # 详见 engines_builders_batch9._build_pubmed_engine 文档串）。两者声明在
+    # 既有源之后，由本表加槽，不挤掉 arxiv/openreview 等既有位次。
+    "academic": ("local_pubmed", "core"),                        # 生物医学全文 + 机构仓储开放获取
 }
 
 # 垂直域主源保护名单：这些域的专属源被 budget 裁掉后该域等于没源可用。
@@ -1571,7 +1577,11 @@ def route_query(query: str, engine_override: str = "auto",
 
     if not skip_tfidf:
         try:
-            tfidf_scores = semantic_route(query, top_k=3)
+            # 经模块属性访问：未导入时由 __getattr__ 延迟导入，测试打桩
+            # patch("route.semantic_route") 也走这里。直接写全局名会
+            # NameError 被 try 吞掉，语义路由静默失效（ruff F821 抓的即此）
+            _semantic_route = sys.modules[__name__].semantic_route
+            tfidf_scores = _semantic_route(query, top_k=3)
             for cand, score, _ in tfidf_scores:
                 social_ok = True
                 if cand in SOCIAL_ENGINES:

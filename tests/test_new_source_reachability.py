@@ -184,6 +184,12 @@ class TestProbeActuallyRoutesToNewSource:
         # 2026-09-17：国际新闻实时流 + 声明核验两个新域的端到端探针
         "intl_news_flash": ("今日国际要闻",),
         "claim_check": ("疫苗谣言 是不是真的",),
+        # 2026-09-19：academic 域接入 local_pubmed（修复）+ core（新增）。
+        # 探针须落在 academic 且能选出新源——auto/balanced 档实测为
+        # [arxiv, openreview, biorxiv, local_pubmed, core]。
+        # 注意别用中医/生物词：CRISPR、基因编辑等会被 protein_search 域
+        # 先截走（那里有 uniprot/pubchem），探针就测不到本域的接线了。
+        "academic": ("machine learning survey", "文献综述 论文"),
     }
 
     @pytest.mark.parametrize("domain", sorted(NEW_SOURCES))
@@ -256,7 +262,13 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     "keenable": "待接线：english_tech 位次 4",
     "jikan": "anime_encyclopedia 位次 4：上游 /anime?q= 检索端点持续 504，"
              "spec enabled=false 暂停启用；恢复后改回 true 并接入加槽表",
-    "local_pubmed": "待接线：medical 位次 4",
+    # 2026-09-19：local_pubmed 从本台账**撤销**——它此前不只是「位置性休眠」，
+    # 而是根本不工作（请求被注入 format=json 而 NCBI 返回 400；output_map 又把
+    # title/url/summary 全指向 pmid，且 esearch 的 idlist 是字符串数组、解析器
+    # 对非 dict 条目直接跳过 → 实测稳定 0 条）。本次改为两段式 builder 并接进
+    # academic 加槽表后已能实际产出结果，故不再登记休眠。
+    # 详见 engines_builders_batch9._build_pubmed_engine 与
+    # tests/test_pubmed_local_0919.py。
     "nasa_images": "图源（astro_space@4 / earth_science@5）：另有图片意图通道，待核实",
     "parallel": "待接线：chinese_tech_deep 位次 5",
     "reddit": "social 域位次 7：社交引擎另有专用通道，待核实是否真休眠",

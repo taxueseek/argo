@@ -1277,3 +1277,192 @@ def _build_nhtsa_vpic_engine(spec: dict[str, Any]) -> Any:
             })
         return results
     return _engine
+
+
+# ── PubMed E-utilities（两段式：esearch 取 ID → esummary 取详情）──────────────
+
+def _build_pubmed_engine(spec: dict[str, Any]) -> Any:
+    """PubMed 生物医学文献（NCBI E-utilities，免 key）。
+
+    ## 为什么需要自定义 builder 而不是声明式 spec
+
+    旧实现是纯声明式：一次 esearch 拿 `idlist`，再靠 output_map
+    `item_title/item_url/item_summary: pmid` 取字段。它有两处结构性错误，
+    合起来让这个标着 ready 的引擎**静默返回 0 条**：
+
+    ① **请求被注入 `format=json` 而 400**。E-utilities 的 `format` 是输出
+       格式参数且不接受 json；同一条 URL 加 `&format=json` 实测 400、去掉
+       200。根因在 engines_base 把解析提示当查询参数发（已加
+       `format_is_query_param` 开关，本引擎声明 false）。
+    ② **idlist 是字符串数组**。`_make_field_parser` 对非 dict 条目
+       `continue`，所以哪怕请求通了也一条都解析不出来；退一步说，
+       esearch 只给 PMID，本就拿不到标题与摘要。
+
+    故本 builder 做两段：esearch 取 PMID → esummary 取 title/pubdate/
+    source/DOI。第二段失败时**降级为带 PMID 的最小条目**而非整体返回空
+    ——至少让用户能拿到可点的 PubMed 链接。
+    """
+    timeout = spec.get("timeout", 12)
+    base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+    # NCBI 免 key 档限 3 req/s；声明在 spec 上由 http_client 统一节流
+    tool = "argo-search"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None,
+                **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = (query or "").strip()
+        if not q:
+            return []
+        eng = spec.get("_name", "local_pubmed")
+        # 两段式要打两次网（实测 esearch≈1.4s、esummary≈1.1s，NCBI 本身不慢）。
+        # 关键：**第二段必须分到独立预算**。若两段共用同一个 to，esearch 用掉
+        # 大半后 esummary 只剩零头，并发场景下必然 timeout，整体降级成「无结果」
+        # ——用户看到的是「这个源坏了」，而实际只是预算没切分。按 6:4 切，
+        # 每段不低于 3s（低于 3s 时 NCBI 首包都可能收不完）。
+        if to > 6.0:
+            t1 = max(3.0, min(to * 0.6, to - 3.0))
+            t2 = max(3.0, to - t1)
+        else:
+            t1 = t2 = to
+        # 医学语料多为英文；中文查询直接进 esearch 会命中极少，交由
+        # recovery/通用源补位（此处不做静默翻译，避免伪造查询语义）。
+        want = max(1, min(int(n or 5), 20))
+        url1 = (f"{base}/esearch.fcgi?db=pubmed&retmode=json&sort=relevance"
+                f"&retmax={want}&tool={tool}&term={urllib.parse.quote(q)}")
+        try:
+            d1 = _json(url1, t1, eng)
+        except Exception as e:
+            logger.warning(f"PubMed esearch 失败: {e}")
+            return []
+        ids = (((d1 or {}).get("esearchresult") or {}).get("idlist")) or []
+        ids = [str(i) for i in ids if str(i).strip()][:want]
+        if not ids:
+            return []
+
+        # 第二段：取详情。失败则降级为 PMID 最小条目（可点链接仍可用）。
+        details: dict[str, dict] = {}
+        try:
+            url2 = (f"{base}/esummary.fcgi?db=pubmed&retmode=json"
+                    f"&tool={tool}&id={','.join(ids)}")
+            d2 = _json(url2, t2, eng)
+            res = (d2 or {}).get("result") or {}
+            for pid in ids:
+                it = res.get(pid)
+                if isinstance(it, dict):
+                    details[pid] = it
+        except Exception as e:
+            logger.warning(f"PubMed esummary 失败（降级为 PMID 条目）: {e}")
+
+        results: list[dict[str, Any]] = []
+        for _rk, pid in enumerate(ids):
+            it = details.get(pid) or {}
+            title = str(it.get("title") or "").strip()
+            src = str(it.get("source") or "").strip()
+            pubdate = str(it.get("pubdate") or it.get("epubdate") or "").strip()
+            # elocationid 形如 "doi: 10.xxxx/yyy"；抽出后可给可验证的出处
+            eloc = str(it.get("elocationid") or "")
+            doi = ""
+            m = re.search(r"10\.\d{4,9}/\S+", eloc)
+            if m:
+                doi = m.group(0).rstrip(".")
+            # 摘要不在 esummary 里（需 efetch），如实给期刊/日期/DOI 而不是编造
+            bits = [b for b in (src, pubdate, f"DOI {doi}" if doi else "") if b]
+            snippet = " · ".join(bits) or "PubMed 记录（详情见原文）"
+            results.append({
+                "title": (title or f"PubMed {pid}")[:200],
+                "url": f"https://pubmed.ncbi.nlm.nih.gov/{pid}/",
+                "snippet": snippet[:300],
+                "source": eng,
+                "score": rank_score(0.9, _rk),
+                "published_at": pubdate,
+            })
+        return results
+    return _engine
+
+
+# ── CORE：开放获取论文全文聚合（core.ac.uk v3，免 key）─────────────────────
+
+_CORE_ERROR_KEYS = ("message", "error", "detail")
+
+
+def _build_core_engine(spec: dict[str, Any]) -> Any:
+    """CORE 开放获取全文（api.core.ac.uk v3，免 key）。
+
+    ## 两个必须写在这里的理由
+
+    ① **限流是 HTTP 200 + 错误封套**。CORE 后端是 Azure Search，被限流时
+       返回 `{"message": "Azure search failed with status code: 503 ..."}`
+       且 HTTP 状态是 **200**。通用 `_envelope_error` 要求 `Code` 与
+       `message` 同时在场（火山/知乎那种封套），这里只有 `message`，
+       识别不出来 → 会被 pipeline 当成「这个词没结果」静默吞掉。
+       本 builder 显式检查：**响应同时缺 `results` 又带 message/error 时报错**，
+       让熔断器拿到失败信号而不是假空结果。
+    ② **端点必须带尾斜杠**。`/v3/search/works?q=` 会 301 到
+       `/v3/search/works/?q=`，多一次往返且部分客户端不跟随。
+
+    无 `downloadUrl` 的条目退回 CORE 详情页；仍无则用 DOI 兜底。
+    """
+    timeout = spec.get("timeout", 20)
+    endpoint = "https://api.core.ac.uk/v3/search/works/"
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None,
+                **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = (query or "").strip()
+        if not q:
+            return []
+        eng = spec.get("_name", "core")
+        want = max(1, min(int(n or 5), 20))
+        url = f"{endpoint}?q={urllib.parse.quote(q)}&limit={want}"
+        try:
+            data = _json(url, to, eng)
+        except Exception as e:
+            logger.warning(f"CORE 请求失败: {e}")
+            raise
+        # 显式限流/错误封套识别（见文档串①）
+        if isinstance(data, dict) and not data.get("results"):
+            for k in _CORE_ERROR_KEYS:
+                if data.get(k):
+                    msg = str(data[k])[:200]
+                    logger.warning(f"CORE 上游错误封套: {msg}")
+                    raise RuntimeError(f"core upstream error: {msg}")
+        items = (data or {}).get("results") if isinstance(data, dict) else None
+        if not isinstance(items, list):
+            return []
+
+        results: list[dict[str, Any]] = []
+        for _rk, it in enumerate(items[:want]):
+            if not isinstance(it, dict):
+                continue
+            title = str(it.get("title") or "").strip()
+            if not title:
+                continue
+            abstract = str(it.get("abstract") or "").strip()
+            doi = str(it.get("doi") or "").strip()
+            dl = str(it.get("downloadUrl") or "").strip()
+            year = str(it.get("yearPublished") or "").strip()
+            pub = str(it.get("publisher") or "").strip()
+            # 出处优先级：可下载全文 > DOI > CORE 详情页（全部可验证）
+            if dl:
+                url_out = dl
+            elif doi and doi.lower() != "none":
+                url_out = f"https://doi.org/{doi}"
+            else:
+                url_out = f"https://core.ac.uk/works/{it.get('id','')}"
+            bits = [b for b in (pub, year, f"DOI {doi}" if doi and doi.lower() != 'none' else "") if b]
+            if abstract:
+                snippet = abstract
+            else:
+                snippet = " · ".join(bits) or "CORE 开放获取记录"
+            results.append({
+                "title": title[:200],
+                "url": url_out,
+                "snippet": snippet[:300],
+                "source": eng,
+                "score": rank_score(0.85, _rk),
+                "published_at": year,
+            })
+        return results
+    return _engine

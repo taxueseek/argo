@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-09-18'
+last_updated: '2026-09-19'
 engines:
 - name: anysearch
   tier: T1
@@ -318,6 +318,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: CoinGecko 币种搜索（免认证）
+- name: core
+  tier: T1
+  type: core
+  coverage:
+  - academic
+  - science
+  latency_ms: 4000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: CORE 开放获取全文（含 PDF 直链，覆盖机构仓储灰色文献）
 - name: courtlistener
   tier: T1
   type: courtlistener
@@ -933,17 +945,17 @@ engines:
   desc: GDACS 全球多灾种预警（洪水/台风/野火/地震，EU JRC 官方，免认证）
 - name: gdelt
   tier: T1
-  type: gdelt
+  type: http
   coverage:
-  - event
   - news
-  - geo
+  - world
+  - multilingual
   latency_ms: 2000
   cost: free
-  status: disabled
-  recommended: true
-  explicit_only: false
-  desc: GDELT 全球新闻事件数据库（事件/舆情/地理维度，免认证）
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: GDELT 全球新闻事件流（75+ 语言跨国媒体扫描，带域名/语言/国家标注）
 - name: github
   tier: T1
   type: github
@@ -1443,7 +1455,7 @@ engines:
   desc: Nominatim 地理编码/地点搜索（OSM，免认证，须带 User-Agent）
 - name: local_pubmed
   tier: T2
-  type: http
+  type: pubmed
   coverage:
   - general
   latency_ms: 2000
@@ -1451,7 +1463,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: PubMed本地（http）
+  desc: PubMed本地（pubmed）
 - name: local_search
   tier: T2
   type: cli

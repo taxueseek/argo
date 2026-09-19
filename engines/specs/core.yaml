@@ -1,0 +1,35 @@
+# CORE — 开放获取论文全文聚合（api.core.ac.uk v3，免 key）
+#
+# 覆盖定位：聚合全球机构仓储的**开放获取全文**（实测 totalHits≈8 万/常见词）。
+# 与既有源的区别——openalex/crossref 给元数据，CORE 直接给可下载 PDF
+# （downloadUrl）；且覆盖机构仓储里未进 arXiv/PubMed 的学位论文与灰色文献。
+#
+# 两处实现要点（详见 engines_builders_batch9._build_core_engine 文档串）：
+#   ① 限流响应是 **HTTP 200 + 错误封套**（{"message":"Azure search failed
+#      with status code: 503..."}），通用 _envelope_error 要求 Code 与
+#      message 同时在场，识别不出 → 会静默变成「无结果」。本引擎显式识别。
+#   ② 端点**必须带尾斜杠**：/v3/search/works?q= 会 301 到 /works/?q=，
+#      多一次往返。故此处 type 走自定义 builder，URL 在 builder 内拼装。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine core --stage all --admit --write-doc
+
+engine_id: core
+type: core
+enabled: true
+cost_tier: free
+qps: 2
+priority: 31
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 20
+desc: "CORE 开放获取全文（含 PDF 直链，覆盖机构仓储灰色文献）"
+coverage: [academic, science]
+recommended: false
+latency_ms: 4000
+
+quality_queries:
+  - query: "CRISPR gene editing"
+  - query: "open access repository"
+  - query: "machine learning"
