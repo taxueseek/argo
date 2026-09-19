@@ -337,8 +337,35 @@ def invalidate_engine_weight_cache() -> None:
     _weight_cache.clear()
 
 
+def _rrf_weighted_default() -> bool:
+    """RRF 是否默认按引擎加权（WG-RRF）。
+
+    逃生开关 `ARGO_RRF_WEIGHTED=0`（或 off/no/false）退回**经典 RRF**：
+    Claude Shannon 原文那版，各引擎同位次等权。
+
+    为什么需要它：加权版把「权威源提权、社交源降权」的领域先验编进了融合层，
+    这在多数查询上是净收益，但它**改变了跨引擎的相对次序**——实测同一组
+    三引擎结果，加权版把「权威源第 1 条」排在首位，经典版则把「被两引擎
+    共同命中的共识条目」提到第 2。两者是**可辩驳的排序哲学差异**，不是
+    对错之分。留一个开关的意义在于：出现「本次结果不对劲」时能把融合层
+    单独摘出去定位（是融合的锅还是引擎的锅），以及为回归对比提供基线。
+
+    读环境变量而非写死常量：与仓库既有 ARGO_* 开关同一约定（如
+    ARGO_MINHASH_DEDUPE / ARGO_FETCH_JINA），且 CLI 与 MCP 两种宿主都能
+    在不改代码的前提下切换。
+    """
+    try:
+        from engine_env import get_env
+        v = get_env("ARGO_RRF_WEIGHTED")
+    except Exception:
+        v = os.environ.get("ARGO_RRF_WEIGHTED")
+    if v is None or str(v).strip() == "":
+        return True
+    return str(v).strip().lower() not in ("0", "off", "no", "false", "disable", "disabled")
+
+
 def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
-              weighted: bool = True,
+              weighted: bool | None = None,
               lang: str | None = None) -> list[dict[str, Any]]:
     """Reciprocal Rank Fusion 合并多引擎结果，保留 consensus_engines。
 
@@ -346,9 +373,15 @@ def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
     首次遇到的结果保留完整字段，后续同 URL 只累加共识、择优补充 snippet，
     避免「score 字段赢家通吃」覆盖共识内容。
 
-    weighted（WG-RRF）：按引擎来源加权（权威源提权、社交源降权），
-    默认开启；传 False 回到经典 RRF 行为。
+    weighted（WG-RRF）：按引擎来源加权（权威源提权、社交源降权）。
+    **默认值改为 None 表示「按 _rrf_weighted_default() 决定」**（即默认仍为
+    加权，与旧行为逐位一致），传 True/False 可显式覆盖——此前签名写死
+    `weighted: bool = True`，调用方想走经典 RRF 只能显式传 False，而
+    ARGO_RRF_WEIGHTED 这类环境开关无处生效。测试与消融脚本传显式值时
+    行为完全不变。
     """
+    if weighted is None:
+        weighted = _rrf_weighted_default()
     scores: dict[str, float] = {}
     items: dict[str, dict[str, Any]] = {}
 
