@@ -60,26 +60,95 @@ class QueryUnderstanding:
 # 实体边界：的 / 逗号 / 空白 / 以外之外外 / 末尾
 _ENT = r"([\u4e00-\u9fffA-Za-z0-9]{1,20}?)(?=的|[,，、\s]|以外|之外|外|$)"
 
-_NEGATION_PATTERNS: list[re.Pattern] = [
-    re.compile(r"除了" + _ENT),
-    re.compile(r"不想(?:要|用|看)?" + _ENT),
-    re.compile(r"不要" + _ENT),
-    re.compile(r"排除" + _ENT),
-    re.compile(r"(?<![A-Za-z0-9])-([A-Za-z0-9\u4e00-\u9fff]{1,20})"),
-    re.compile(r"\bNOT\s+([A-Za-z0-9\u4e00-\u9fff]{1,20})", re.I),
-    re.compile(r"\bwithout\s+([A-Za-z0-9\u4e00-\u9fff]{1,20})", re.I),
+# 否定模式的**单一来源**：一行 = 一条否定 = (提取正则, 剔除正则, 旗标, 触发必要条件)。
+# 新增第 8 条否定只改这里一行，正则与触发条件不会再漂移（此前是两张 SRC 表 +
+# 一份 _NEGATION_LITERALS 三处手工副本，加一条要散改三处）。
+#
+# 这 14 条正则**不在模块级编译**：它们含 [\u4e00-\u9fffA-Za-z0-9] 这类两万字符的
+# 字符集，CPython 编译每条要在 _optimize_charset 上建一次位图，14 条合计实测
+# 5.5 ms——而 import query_understanding 是**无条件**发生的（rewrite_query /
+# route.extract_features / execute_search 都会拉它），纯缓存命中的那一档也要付。
+# 绝大多数查询根本不含否定片段，为它们付这 5.5 ms 是纯固定税。
+# 触发条件是**必要条件**（宁可多答 True 走慢路径，也不能漏答让否定实体污染
+# 消歧信号与检索串）；"-" 是哨兵，表示按位置判定（见 _has_negation_trigger）。
+_NEGATION_SPECS: list[tuple[str, str, int, tuple[str, ...]]] = [
+    (r"除了" + _ENT,
+     r"除了[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|以外|之外|外|$)(?:以外|之外|外)?",
+     0, ("除了",)),
+    (r"不想(?:要|用|看)?" + _ENT,
+     r"不想(?:要|用|看)?[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|$)",
+     0, ("不想",)),
+    (r"不要" + _ENT,
+     r"不要[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|$)",
+     0, ("不要",)),
+    (r"排除" + _ENT,
+     r"排除[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|$)",
+     0, ("排除",)),
+    (r"(?<![A-Za-z0-9])-([A-Za-z0-9\u4e00-\u9fff]{1,20})",
+     r"(?<![A-Za-z0-9])-[A-Za-z0-9\u4e00-\u9fff]{1,20}",
+     0, ("-",)),
+    (r"\bNOT\s+([A-Za-z0-9\u4e00-\u9fff]{1,20})",
+     r"\bNOT\s+[A-Za-z0-9\u4e00-\u9fff]{1,20}",
+     re.I, ("not",)),
+    (r"\bwithout\s+([A-Za-z0-9\u4e00-\u9fff]{1,20})",
+     r"\bwithout\s+[A-Za-z0-9\u4e00-\u9fff]{1,20}",
+     re.I, ("without",)),
 ]
 
-# 否定片段本身（用于从 clean_query 中剔除触发词 + 实体，保留其后正文）
-_NEGATION_SPANS: list[re.Pattern] = [
-    re.compile(r"除了[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|以外|之外|外|$)(?:以外|之外|外)?"),
-    re.compile(r"不想(?:要|用|看)?[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|$)"),
-    re.compile(r"不要[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|$)"),
-    re.compile(r"排除[\u4e00-\u9fffA-Za-z0-9]{1,20}?(?=的|[,，、\s]|$)"),
-    re.compile(r"(?<![A-Za-z0-9])-[A-Za-z0-9\u4e00-\u9fff]{1,20}"),
-    re.compile(r"\bNOT\s+[A-Za-z0-9\u4e00-\u9fff]{1,20}", re.I),
-    re.compile(r"\bwithout\s+[A-Za-z0-9\u4e00-\u9fff]{1,20}", re.I),
-]
+
+@functools.lru_cache(maxsize=1)
+def _negation_patterns() -> tuple[list[re.Pattern], list[re.Pattern]]:
+    """首次真正需要否定解析时才编译这些正则（进程内只编一次）。
+
+    触发条件（第四列）在模块级是纯数据，不触发编译，所以「不含否定片段的
+    查询」这一档可以完全不付编译成本。
+    """
+    return (
+        [re.compile(extract, flags) for extract, _span, flags, _trig in _NEGATION_SPECS],
+        [re.compile(span, flags) for _extract, span, flags, _trig in _NEGATION_SPECS],
+    )
+
+
+_RE_COLLAPSE_WS = re.compile(r"\s+")
+_RE_LEAD_PARTICLES = re.compile(r"^[的了，,、\s]+")
+
+
+def _has_negation_trigger(query: str) -> bool:
+    """否定解析的廉价前置条件：**必要条件**，不是判据。
+
+    只回答「有没有可能命中」，答 True 就走完整解析。宁可多答 True（多编译一次
+    正则），也不能漏答——漏答会让否定实体重新污染消歧信号与检索串。
+
+    触发条件与正则同表（_NEGATION_SPECS 第四列），所以两者不会漂移；覆盖关系：
+      - 除了 / 不想 / 不要 / 排除：正则要求字面量本身，直接子串判定；
+      - NOT / without：正则带 re.I，故按小写子串判定；
+      - `-`（哨兵）：正则要求 (?<![A-Za-z0-9])，即连字符前一位不是 ASCII 字母数字。
+        逐个位置判而不是「含 - 就走慢路径」——GPT-4o / 2026-09-19 / SWE-bench
+        这类查询的连字符前是字母数字，本来就不构成否定，不该因此丢掉快路径。
+    """
+    lowered = query.lower()
+    for _extract, _span, _flags, triggers in _NEGATION_SPECS:
+        for trigger in triggers:
+            if trigger != "-":
+                if trigger in lowered:
+                    return True
+                continue
+            idx = query.find("-")
+            while idx != -1:
+                if idx == 0 or not (query[idx - 1].isascii()
+                                    and query[idx - 1].isalnum()):
+                    return True
+                idx = query.find("-", idx + 1)
+    return False
+
+
+def _normalize_clean(text: str) -> str:
+    """无否定片段时的 clean_query——与走完整 sub 链后完全同路。
+
+    两条 sub 在零命中时是恒等操作，所以「跳过解析」与「解析但没命中」必须给出
+    同一个 clean_query，否则跳过就成了行为变更（clean_query 会喂给消歧）。
+    """
+    return _RE_LEAD_PARTICLES.sub("", _RE_COLLAPSE_WS.sub(" ", text).strip()).strip()
 
 
 def parse_negation(query: str) -> tuple[list[str], str]:
@@ -88,20 +157,21 @@ def parse_negation(query: str) -> tuple[list[str], str]:
     Returns:
         (exclude_terms, clean_query)：被排除词列表 + 去掉否定片段后的查询。
     """
+    if not _has_negation_trigger(query):
+        return [], _normalize_clean(query)
+
+    patterns, spans = _negation_patterns()
     exclude: list[str] = []
-    for pat in _NEGATION_PATTERNS:
+    for pat in patterns:
         for m in pat.finditer(query):
             term = m.group(1).strip()
             if term and term not in exclude:
                 exclude.append(term)
 
     clean = query
-    for pat in _NEGATION_SPANS:
+    for pat in spans:
         clean = pat.sub(" ", clean)
-    clean = re.sub(r"\s+", " ", clean).strip()
-    # 去掉否定片段剔除后残留的前导虚词（如 "的搜索引擎" → "搜索引擎"）
-    clean = re.sub(r"^[的了，,、\s]+", "", clean).strip()
-    return exclude, clean
+    return exclude, _normalize_clean(clean)
 
 
 # ── 地域解析 ──────────────────────────────────────────────────────────────────
