@@ -56,7 +56,7 @@ domains:
   name: hackernews_search
   parallel: false
   patterns:
-  - (?i)(hacker.?news|hn|news\.ycombinator)
+  - (?i)(hacker.?news|\bhn\b|news\.ycombinator)
   - (?i)(hackernews|hn\s+search)
   primary: hackernews
 - desc: Stack Overflow 搜索
@@ -107,7 +107,7 @@ domains:
   parallel: false
   patterns:
   - (?i)(同花顺热点|强势股|涨停原因|题材归因|热点板块|今日强势)
-  - (?i)(hot stocks|trending stocks|market theme|momentum)
+  - (?i)(hot stocks|trending stocks|market theme|动量因子|动量策略|momentum stocks?)
   primary: ths_hot
 - desc: 财联社电报
   engines_combo:
@@ -117,7 +117,7 @@ domains:
   name: cls_telegraph_search
   parallel: false
   patterns:
-  - (?i)(财联社|cls\.cn|电报|快讯|财经快讯)
+  - (?i)(财联社|cls\.cn|财联社电报|电报快讯|电报原文|快讯|财经快讯)
   primary: cls_telegraph
 - desc: 东财全球资讯
   engines_combo:
@@ -138,7 +138,7 @@ domains:
   name: fund_query
   parallel: false
   patterns:
-  - (?i)(基金|公募|私募|基金经理|基金净值|基金排行|选基)
+  - (?i)(基金净值|基金排行|基金经理|公募基金|私募基金|公募|私募|选基|买基金|基金定投|基金收益|基金持仓)
   - (?i)\b(ETF|LOF|FOF)\b
   primary: eastmoney
   quote: true
@@ -183,8 +183,8 @@ domains:
   name: stock_query
   parallel: false
   patterns:
-  - (?i)(股价|行情|涨跌|K线|大盘|指数|涨停|跌停|板块|概念股)
-  - (?i)(stock|quote|price|market\s+cap)
+  - (?i)(股价|行情|涨跌|K线|大盘|大盘指数|指数行情|股票指数|沪深指数|上证指数|涨停|跌停|行业板块|板块行情|概念板块|板块轮动|概念股)
+  - (?i)(\bstock\b|stock price|share price|market\s+cap)
   - A股|港股|股票|ETF|板块
   - (资金流|主力资金|北向|龙虎榜|大宗交易|换手率)
   primary: sina_quote
@@ -212,7 +212,7 @@ domains:
   - (?i)(美国|美).{0,4}(CPI|通胀|失业率|非农|PPI|GDP增速|零售销售|M2|PCE)
   - (通胀率|失业率|非农就业|国债收益率|美债收益率|十年期国债|10年期国债|三十年期国债|30年期国债|两年期国债|2年期国债|联邦基金利率|美联储利率|隔夜回购|SOFR|美元指数|货币供应|汇率|兑人民币|兑美元)
   - (?i)\b(US\s+CPI|unemployment\s+rate|treasury\s+yield|fed\s+funds\s+rate|nonfarm\s+payrolls?|US\s+GDP|M2\s+supply|USD\s+CNY|exchange\s+rate)\b
-  - (中国|美国|日本|德国|印度|世界).{0,6}(GDP|通胀|CPI|失业率|人口|贸易|经济增长)
+  - (中国|美国|日本|德国|印度|世界).{0,6}(GDP|通胀|CPI|失业率|人口数据|人口统计|贸易额|贸易数据|进出口|经济增长)
   - (GDP|通货膨胀|CPI|失业率|人口数据|经济增长率)
   primary: fred
   early_stop_min_results: 1
@@ -228,8 +228,8 @@ domains:
   name: chem_search
   parallel: false
   patterns:
-  - (化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物|结构式|CAS\s*[- ]?\d)
-  - (?i)(chemical\s+formula|molecular\s+weight|iupac|cas\s+number|compound|drug|molecule|smiles)
+  - (化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物分子|结构式|CAS\s*[- ]?\d)
+  - (?i)(chemical\s+formula|molecular\s+weight|iupac|cas\s+number|compound|\bdrug\b|molecule|smiles)
   primary: pubchem
   early_stop_min_results: 1
 - desc: 生物物种检索
@@ -334,7 +334,7 @@ domains:
   - (?i)\bCVE(-|\b)
   - (?i)(安全漏洞|漏洞公告|漏洞情报|漏洞利用|漏洞评分|漏洞扫描|漏洞修复|CVSS|CVE|NVD|安全通告|zero.?day|零日漏洞|0day)
   - (?i)(security (advisory|vulnerability|bulletin)|cisa kev)
-  - (?i)(在野利用|已被利用|kev|exploited in the wild)
+  - (?i)(在野利用|已被利用|\bkev\b|exploited in the wild)
   - (?i)(依赖漏洞|组件漏洞|包漏洞|\bOSV\b|供应链攻击|软件成分分析|SBOM)
   # 常见漏洞类型：用户往往直接说类型而不是「漏洞」二字
   - (?i)(SQL\s*注入|命令注入|代码注入|反序列化|远程代码执行|\bRCE\b|权限提升|提权|越权访问|跨站脚本|\bXSS\b|\bCSRF\b|目录穿越|路径穿越)
@@ -388,8 +388,8 @@ domains:
   patterns:
   - '(?i)(天文|天文学|astronomy|天体|asteroid|小行星|彗星|comet)'
   - '(?i)(空间天气|space weather|太阳活动|solar flare|太阳黑子|sunspot|极光|aurora)'
-  - '(?i)(卫星|satellite|TLE|轨道根数|NORAD)'
-  - '(?i)(Kp\s*指数|地磁|geomagnetic|CME|日冕)'
+  - '(?i)(卫星|satellite|\bTLE\b|轨道根数|NORAD)'
+  - '(?i)(Kp\s*指数|地磁|geomagnetic|coronal mass ejection|日冕)'
 - desc: 电网/发电结构/碳强度（发电类型占比、电网碳强度、可再生占比）
   engines_combo:
   - energy_charts
@@ -414,7 +414,7 @@ domains:
   parallel: false
   patterns:
   - '(?i)(共享单车|bike share|bikeshare|滑板车|scooter|GBFS)'
-  - '(?i)(公交|地铁|metro|班次|时刻表|timetable|departure)'
+  - '(?i)(公交|地铁|metro\s+(line|station|system|map|service|route|card)|班次|时刻表|timetable|departure)'
 - desc: 车辆厂商/车型本体（NHTSA vPIC 权威命名映射）
   engines_combo:
   - nhtsa_vpic
@@ -424,7 +424,7 @@ domains:
   primary: nhtsa_vpic
   parallel: false
   patterns:
-  - '(?i)(车型|厂商|vehicle make|make and model|汽车厂商|VIN)'
+  - '(?i)(车型|厂商|vehicle make|make and model|汽车厂商|\bVIN\b)'
   - '(?i)(哪款车|什么车|车型库)'
 - desc: 日本法令检索（e-Gov 官方全文；与 flk_law/kor_law 构成东亚法条三源）
   # 触发词必须带日本语境。此前第二条 pattern 写成
@@ -478,7 +478,7 @@ domains:
   parallel: false
   patterns:
   - '(?i)(土壤|soil|土质|clay content|土壤属性|土壤类型)'
-  - '(?i)(农业|作物|crop|耕地|农田)'
+  - '(?i)(农业|作物|crop\s+(rotation|yield|farming|field|insurance)|耕地|农田)'
 - desc: 国家标准检索（std.samr + openstd 全文）
   engines_combo:
   - std_samr
@@ -521,7 +521,7 @@ domains:
   parallel: true
   patterns:
   - (博物馆|馆藏|藏品|美术馆|文物|艺术品|雕塑|名画|油画|画作|画家|谁画的)
-  - (?i)(met museum|museum collection|art collection|painting|sculpture|van gogh|monet|picasso|vermeer)
+  - (?i)(met museum|museum collection|art collection|painting|sculpture|van gogh|\bmonet\b|picasso|vermeer)
   primary: met_museum
 
 - desc: 科研数据集检索（DataCite + Zenodo；排在 academic 前，数据集≠论文）
@@ -551,7 +551,7 @@ domains:
   parallel: true
   patterns:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
-  - (?i)(financial|earnings|report|announcement)
+  - (?i)(financial|earnings report|annual report|announcement)
   primary: em_miaoxiang
   # 源保底分：cninfo 是官方公告源（标题是「年报」而非网页，token 覆盖低）
   score_floors:
@@ -574,7 +574,12 @@ domains:
   name: weather_query
   parallel: false
   patterns:
-  - (?i)(天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)
+  # 「天气/温度」是气候议题的高频子串（气候变化、极端天气、全球变暖），
+  # 裸词命中会把议题句锁死进天气实况源（实测返回「当前 30°C」）。这里用
+  # 行首负向排除而不是收窄词表：收窄（只留「天气预报」）会丢掉最自然的
+  # 「北京天气」，「未来一周」这类预报词也永远列不全（2026-09-19 实测，
+  # 让位表方案就是这样把「上海天气 未来一周」误让位的）。
+  - '(?i)^(?!.*(?:气候变化|极端天气|全球变暖|天气趋势|天气研究|天气影响|天气对)).*(?:天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)'
   # 日韩天气触发词（修复「東京の天気」「서울 날씨」漏召）
   - (?i)(天気|気温|温度|予報|雨|雪|何度)
   - (?i)(날씨|기온|온도|예보|몇\s*도)
@@ -596,7 +601,7 @@ domains:
   - (?i)(手机参数|手机配置|手机对比|手机报价|新款手机|手机型号)
   - (?i)(汽车报价|车型价格|落地价|汽车行情|新车价格|汽车参数)
   - (?i)(挂号|医院查询|医院预约|看病|急诊|医生出诊|门诊时间|三甲医院)
-  - (?i)(薪资|工资|薪酬|薪水|月薪|年薪|日薪|时薪|salary|pay|wage|income|compensation|remuneration)
+  - (?i)(薪资|工资|薪酬|薪水|月薪|年薪|日薪|时薪|\bsalary\b|\bwage\b|\bpay\b|income level|compensation package)
   - (?i)(多少钱一个月|收入水平|行业薪资|平均工资|median salary|average pay|薪资水平|薪资范围|薪资行情)
   primary: bocha_ai
 - desc: 财经快讯（金十数据）
@@ -779,8 +784,8 @@ domains:
   parallel: true
   patterns:
   - (?i)(临床试验|clinical trial|nct\d+|clinicaltrials\.gov|openfda|fda 药品|药品说明书|药物标签|drug label|适应症|不良反应)
-  - (?i)(medicine|pharmaceutical|dosage|contraindication|药物|药品|处方药|otc)
-  - (?i)(症状|用药|适应症|临床|指南|副作用|禁忌|诊断|治疗|病因)
+  - (?i)(medicine|pharmaceutical|dosage|contraindication|药物|药品|处方药|\botc\b)
+  - (?i)(症状|用药|适应症|临床|临床指南|诊疗指南|医学指南|用药指南|治疗指南|副作用|禁忌|诊断|治疗|病因)
   - '(?i)(WHO|世界卫生组织).{0,12}(通报|疫情|卫生|指标|统计)'
   - '(?i)(公共卫生|卫生指标|疾病负担|死亡率|发病率|卫生统计)'
   primary: clinicaltrials
@@ -850,7 +855,7 @@ domains:
   name: anime_encyclopedia
   parallel: false
   patterns:
-  - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|动画|galgame|vtuber|虚拟主播|东方project|型月|fate)
+  - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|日本动画|新番动画|动画番剧|动画推荐|看动画|galgame|vtuber|虚拟主播|东方project|型月|(?-i:\bFate\b))
   primary: moegirl
 - desc: 书籍/图书搜索（微信读书 + 豆瓣读书 + Open Library + Gutenberg）
   engines_combo:
@@ -866,7 +871,7 @@ domains:
   no_early_stop: true
   patterns:
   - (?i)(小说|书籍|图书|书单|好书|荐书|书荒|名著|畅销书|电子书|看书|出版社|ISBN|小说推荐|科幻小说|推理小说)
-  - (?i)\b(book|novel|isbn|ebook|bestseller)\b
+  - (?i)\b(book|isbn|ebook|bestseller)\b
   primary: weread
   # 源保底分：书目结果是「答案型」，书名对查询词的 token 覆盖率天然低
   # （「三体全集」vs「科幻小说推荐」），不保底会被列表页碾压
@@ -890,7 +895,7 @@ domains:
   - (?i)(电影|电视剧|纪录片|影视|大片|影评|影片|院线|票房|奥斯卡|金像奖|金马奖|戛纳|威尼斯电影节|剧集|连续剧|网剧|美剧|韩剧|日剧|英剧)
   - (?i)(导演|主演|演员|编剧|制片|出品|上映|首映|IMDb|imdb|豆瓣电影|影帝|影后|最佳影片)
   - (?i)\b(movie|film|tv\s*show|tv\s*series|cinema|oscar|emmy|director|screenwriter|box\s*office|netflix|hbo)\b
-  - (?i)\b(cast|starring|directed\s+by|written\s+by|released\s+in)\b
+  - (?i)\b(starring|directed\s+by|written\s+by|released\s+in\s+\d{4})\b
   # 日韩影视触发词（修复日韩电影查询漏召；纯题材词「アニメ/애니메이션」
   # 不在此列——动漫推荐类查询 imdb 无召回，交由 general 多语回退）
   - (?i)(映画|ドラマ|主演|監督|脚本|上映|配給|アカデミー|スタジオジブリ)
@@ -919,7 +924,7 @@ domains:
   - (?i)(决赛|半决赛|季后赛|总冠军|MVP|得分王|金靴|金球奖|转会|俱乐部|联赛|进球|助攻|夺冠|卫冕|球员|守门员|前锋|后卫)
   # 中英球队/效力语境（修复「库里 球队」「LeBron James team」「Ronaldo club」漏召）
   - (?i)(球队|球星|球会|球衣|队名|队史|效力于|效力|主教练|得分手)
-  - (?i)\b(team|club|player|coach|manager|roster|squad|jersey|striker|goalkeeper|midfielder|forward|defender)\b
+  - (?i)\b(team|club|coach|roster|squad|jersey|striker|goalkeeper|midfielder|defender)\b
   - (?i)\b(world\s*cup|olympics?|championship|finals?|playoffs?|league|fixture|matchday|transfer|hat-?trick)\b
   - (?i)\b(soccer|football|basketball|tennis|baseball|cricket|rugby|golf|formula\s*1|formula\s*one)\b
   # 日韩体育触发词（修复「メッシ クラブ」「손흥민 팀」漏召）
@@ -936,7 +941,11 @@ domains:
   name: geo_places
   parallel: true
   patterns:
-  - (?i)(在哪里|在哪儿|在哪|位于|坐落|坐标|经纬度|海拔|发源地|入海口|交汇|毗邻|接壤|边境|首都|省会|直辖市|地标|名胜|景点)
+  # 「在哪里」在软件语境里是最常见的疑问句开头（在哪里改配置/在哪里看日志），
+  # 裸命中会把排障句锁死进地理源（实测「在哪里 查看 报错 日志」拿到
+  # OpenStreetMap + 维基）。行首负向排除软件语境词，地理查询不受影响
+  # （让位表方案会连「埃菲尔铁塔 在哪里」一起让位，见 route.py 注释）。
+  - '(?i)^(?!.*(?:报错|错误|日志|失败|异常|配置|设置|安装|修改|代码|接口|参数|文档|教程)).*(?:在哪里|在哪儿|在哪|位于|坐落|坐标|经纬度|海拔|发源地|入海口|交汇|毗邻|接壤|边境|首都|省会|直辖市|地标|名胜|景点)'
   - (?i)(山脉|河流|湖泊|海洋|岛屿|半岛|沙漠|高原|盆地|峡谷|海峡|运河|瀑布|火山|冰川|赤道|经线|纬线|时区)
   # 水系/行政区划事实（修复「黄河 流经省份」漏召）
   - (?i)(流经|途经|贯穿|横跨|流域|水系|汇入|注入|源头|入海|几省|省份|省区|行政区划|发源于)
@@ -962,10 +971,14 @@ domains:
   patterns:
   # 政府/国际组织
   - (?i)(国务院|中共中央|全国人大|政协|外交部|财政部|发改委|央行|人民银行|最高法院|最高检|省政府|市政府|区政府|县委|市委)
-  - (?i)(联合国|安理会|世贸组织|WTO|WHO|UNESCO|IMF|世界银行|欧盟|北约|NATO|东盟|上合组织|G20|G7|非盟|阿盟)
+  - (?i)(联合国|安理会|世贸组织|WTO|UNESCO|IMF|世界银行|欧盟|北约|NATO|东盟|上合组织|G20|G7|非盟|阿盟)
+  # WHO 必须区分大小写：`(?i)` 下 `who` 会命中英语里最常见的疑问句开头
+  # （「who is the CEO of OpenAI」「who wrote the linux kernel」），把整个
+  # 疑问句锁死进机构域。机构缩写本就是大写专名，没有需要忽略大小写的理由。
+  - '\bWHO\b'
   - (?i)(白宫|五角大楼|国会山|克里姆林宫|唐宁街|青瓦台|首相府|总统府|议会|参议院|众议院|内阁|部委|政府机关)
   - (?i)\b(ministry|department\s+of|state\s+council|white\s+house|parliament|congress|senate|cabinet|government\s+of)\b
-  - (?i)\b(united\s+nations|world\s+bank|european\s+union|nato|who|unesco|imf)\b
+  - (?i)\b(united\s+nations|world\s+bank|european\s+union|nato|unesco|imf)\b
   # 知名机构缩写（与 founding/HQ 等事实问搭配；单独缩写也可进 org）
   - (?i)\b(NASA|ESA|CERN|FBI|CIA|FDA|CDC|NSA|EPA|OECD|OPEC|ASEAN)\b
   # 公司/组织实体 + 创办/成立年份（修复「创办年份」「founding year」漏召）
@@ -996,7 +1009,7 @@ domains:
   parallel: true
   patterns:
   - (?i)(歌曲|音乐|专辑|新歌|单曲|\bMV\b|mp3|歌词|歌手|乐队|音乐人|主唱|好听的歌|好歌推荐|听歌|歌单|的歌|主题曲|片尾曲|插曲|播客|有声书|演唱会|巡演)
-  - (?i)\b(music|song|album|podcast|soundtrack|lyrics|singer|band|single|discography|concert|tour)\b
+  - (?i)\b(music|song|album|podcast|soundtrack|lyrics|singer|discography|concert|tour)\b
   primary: itunes
 - desc: 图片/素材搜索（Openverse 开放版权图库）
   engines_combo:
@@ -1073,7 +1086,7 @@ domains:
   # 中文论文语境词此前是缺口：规则里有英文 preprint，却没有「预印本」。
   # 实测「生物医学预印本」因此一个域都不命中，掉进通用兜底（combo 变成
   # bocha+anysearch），biorxiv/openreview 这些已实现的源永远轮不上。
-  - (?i)(论文|paper|预印本|preprint|arXiv|bioRxiv|medRxiv|DOI|引用|citation|学术|文献|期刊|学报|综述|同行评议|影响因子|openalex|crossref|europe pmc|dblp|PubMed|知网|万方|维普)
+  - (?i)(论文|\bpaper\b|预印本|preprint|arXiv|bioRxiv|medRxiv|DOI|引用|citation|学术|文献|期刊|学报|综述|同行评议|影响因子|openalex|crossref|europe pmc|dblp|PubMed|知网|万方|维普)
   - \b\d{4}\.\d{4,5}\b
   - (?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)
   primary: arxiv
@@ -1346,7 +1359,7 @@ domains:
   name: social
   parallel: true
   patterns:
-  - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|v2ex|评论|帖子|热门|trending|viral|opinion|sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
+  - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|v2ex|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   - (?i)(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)
   primary: zhihu
