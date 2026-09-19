@@ -66,16 +66,40 @@ class TestEngineIsolation:
         assert got_em == {"苹果 2025 营收"}, f"eastmoney 只应看见自己的缓存，实际 {got_em}"
         assert got_xq == {"苹果 2025 年营收"}, f"xueqiu 只应看见自己的缓存，实际 {got_xq}"
 
-    def test_auto_is_explicit_wildcard(self, sc):
-        """engine='auto' 是显式通配：调用方声明不关心来源时可见全部。"""
+    def test_auto_is_not_a_wildcard(self, sc):
+        """engine='auto' 现在是**真实的请求身份**，不再是通配。
+
+        语义变更（2026-09-19）：engine 列从「路由出来的引擎组合」改存「请求侧
+        身份」（用户点名的引擎，或 auto）——因为组合是决策结果、会被 adaptive
+        学习器逐次改写，拿它当缓存键等于「用缓存让缓存失效」（实测 30% 的重复
+        查询因此白跑网络）。
+
+        通配的含义随之一并改变：以前 `auto` 不是列里会出现的值（组合列要么是
+        `a+b` 要么是单引擎名），通配分支其实从未被走到；现在 `auto` 是真实
+        请求身份，再通配就等于让「自动路由」的请求去吃「显式指定 eastmoney」
+        的缓存，正是 v2.4.2 要挡的跨引擎串味。请求不同 → 结果不可互换。
+        """
         sc.set("苹果 2025 营收", "eastmoney", 10,
                _payload("东财", "https://e/1"), domain="financial")
-        sc.set("苹果 2025 年营收", "xueqiu", 10,
-               _payload("雪球", "https://x/1"), domain="financial")
+        sc.set("苹果 2025 年营收", "auto", 10,
+               _payload("自动", "https://a/1"), domain="financial")
 
         got = {c["query"] for c in sc._l2.find_similar(
             "苹果 2025 年营收预测", "auto", "financial", limit=50)}
-        assert got == {"苹果 2025 营收", "苹果 2025 年营收"}
+        assert got == {"苹果 2025 年营收"}, \
+            f"auto 请求只应看见同为 auto 的缓存，实际 {got}"
+
+    def test_multi_engine_request_excluded_from_soft_hit(self, sc):
+        """逗号多引擎请求（`--engine a,b`）的融合产物不参与软命中。
+
+        engine 列存请求身份后，多引擎的形状从 `a+b`（旧：路由组合）变成
+        `a,b`（新：请求原串）。只挡 `+` 会让逗号多引擎请求偷偷进入软命中。
+        """
+        sc.set("苹果 2025 营收", "eastmoney,zhihu", 10,
+               _payload("融合", "https://f/1"), domain="financial")
+        got = sc._l2.find_similar("苹果 2025 年营收预测", "eastmoney,zhihu",
+                                  "financial", limit=50)
+        assert got == [], "多引擎融合产物不应被当作单引擎结果复用"
 
     def test_unknown_engine_sees_nothing(self, sc):
         """不存在的引擎名 → 空结果（修复前会返回任意引擎的缓存）。"""
@@ -189,3 +213,188 @@ class TestQualifierIsolation:
         quals, payload = cache.split_qualifiers("苹果 2025 年营收")
         assert quals == frozenset()
         assert payload == "苹果 2025 年营收"
+
+
+class TestModeDepthIsolation:
+    """mode / depth 维度必须参与软命中过滤（2026-09-19 修复）。
+
+    这是同一类串味的第三处，前两处（engine、限定符）修的时候漏了它。
+    `_key` 刻意把 mode/depth 编进键、类 docstring 也承诺「depth / mode 隔离，
+    防 fast/deep、budget 污染」，但软命中的 WHERE 只有 domain+engine：
+    `--depth deep` 请求会软命中一条按 fast 写的条目（或反过来），拿到的结果
+    集与请求档位不匹配，而结果里还报 `cached: true` / `reranker:
+    "skipped_cache"`，调用方无从察觉。
+    """
+
+    def test_different_depth_does_not_hit(self, sc):
+        """同 engine、同 domain、查询近重复，只有 depth 不同 → 不得软命中。"""
+        sc.set("苹果 2025 营收", "octen", 10, _payload("fast", "https://a/1"),
+               domain="financial_news", mode="auto", depth="fast")
+        hit = sc.get("苹果 2025年 营收", "octen", 5, domain="financial_news",
+                     mode="auto", depth="deep")
+        assert hit is None, "depth 不同却软命中了 fast 条目"
+
+    def test_different_mode_does_not_hit(self, sc):
+        sc.set("苹果 2025 营收", "octen", 10, _payload("auto", "https://a/1"),
+               domain="financial_news", mode="auto", depth="fast")
+        hit = sc.get("苹果 2025年 营收", "octen", 5, domain="financial_news",
+                     mode="budget", depth="fast")
+        assert hit is None, "mode 不同却软命中了 auto 条目"
+
+    def test_same_scope_still_hits(self, sc):
+        """对照面：档位一致时近重复查询必须照旧软命中（能力不得被砍掉）。"""
+        sc.set("苹果 2025 营收", "octen", 10, _payload("A", "https://a/1"),
+               domain="financial_news", mode="auto", depth="fast")
+        hit = sc.get("苹果 2025年 营收", "octen", 5, domain="financial_news",
+                     mode="auto", depth="fast")
+        assert hit is not None and hit.get("_semantic_hit"), "同档位应软命中"
+
+    def test_find_similar_filters_by_scope(self, sc):
+        """直接打 find_similar：不同档位的条目不得出现在候选里。"""
+        sc.set("苹果 2025 营收", "octen", 10, _payload("A", "https://a/1"),
+               domain="financial_news", mode="auto", depth="fast")
+        sc.set("苹果 2025 年营收", "octen", 10, _payload("B", "https://b/1"),
+               domain="financial_news", mode="deep", depth="deep")
+        q = "苹果 2025 年营收预测"
+        fast = {c["query"] for c in sc._l2.find_similar(
+            q, "octen", "financial_news", limit=50, mode="auto", depth="fast")}
+        deep = {c["query"] for c in sc._l2.find_similar(
+            q, "octen", "financial_news", limit=50, mode="deep", depth="deep")}
+        assert fast == {"苹果 2025 营收"}, f"fast 视角应只见 fast 条目，实际 {fast}"
+        assert deep == {"苹果 2025 年营收"}, f"deep 视角应只见 deep 条目，实际 {deep}"
+
+    def test_legacy_rows_without_scope_never_hit(self, sc):
+        """迁移前的历史行（mode/depth 未知，存空串）不得参与软命中。
+
+        空串与任何真实 mode/depth 都不相等，这是刻意的：默认成 auto/fast
+        等于替历史行猜一个档位，deep 请求会命中一条其实按 fast 写的条目——
+        正是要修的那个 bug。历史行由 `ALTER TABLE ... DEFAULT ''` 产生，
+        这里直接走底层写入复现那个形态（上层 SearchCache.set 总会带上档位）。
+        """
+        sc._l2.set("legacy-row-key", "苹果 2025 营收", "octen", 10,
+                   {"results": [{"title": "legacy", "url": "https://a/1"}]},
+                   "financial_news", 3600)  # 不传 mode/depth → 存空串
+        assert sc._l2.find_similar("苹果 2025年 营收", "octen", "financial_news",
+                                   limit=50) == []
+
+
+class TestCacheKeyIsRequestIdentity:
+    """缓存键的引擎维度必须是**请求侧身份**，不是路由出来的组合（2026-09-19）。
+
+    根因：`engines_combo` 是决策结果，被 adaptive 学习器按上一次搜索的成败逐次
+    改写。拿结果当键就是「用缓存让缓存失效」。确定性复现（不靠网络运气）：
+
+        route_query("python asyncio 教程")            -> [octen, anysearch]
+        写入 12 次「anysearch 失败 / octen 成功」
+        route_query("python asyncio 教程")            -> [octen, exa]
+
+    同一查询、同一配置，只因为上一次搜索的结果就让组合变了。实测 20 条样本里
+    最多 6 条（30%）重复查询因此白跑一遍网络，而查询/域/档位全都没变。
+
+    route 决策缓存早就识别过同一模式（见 `_route_state_fingerprint` 刻意排除
+    adaptive.db 的说明），结果缓存这条只是绕了一层。
+    """
+
+    def test_decision_carries_request_identity(self):
+        from route import route_query
+        assert route_query("随便什么查询")["engine_request"] == "auto"
+        d = route_query("asyncio", engine_override="pypi")
+        assert d["engine_request"] == "pypi", "用户点名的引擎必须原样进请求身份"
+
+    def _decision(self, combo, domain="english_tech"):
+        return {"domain": domain, "engine": combo[0], "engines_combo": list(combo),
+                "engines": list(combo), "engine_request": "auto",
+                "parallel": False, "mode": "auto", "depth": "fast",
+                "reason": "test", "features": {}}
+
+    def test_combo_drift_still_hits(self, monkeypatch, tmp_path):
+        """打真实链路：同一请求身份、路由组合漂移 → 仍然命中。
+
+        必须走 execute_search（而不是直接调 SearchCache.set/get）——直接调缓存
+        只锁住了缓存自己的契约，键怎么算出来那一段没被覆盖，改回旧写法测试照样绿。
+        """
+        import search as S
+        from engine_dispatch import DispatchResult
+
+        def fake_dispatch(**kw):
+            eng = kw["engines"][0]
+            res = [{"title": f"{eng} 标题", "url": f"https://{eng}.example/1",
+                    "snippet": "s", "source": eng}]
+            return DispatchResult({eng: res},
+                                  [{"engine": eng, "status": "ok",
+                                    "results_count": 1, "latency_ms": 10}],
+                                  {eng: 10}, 0, True, None, None, 10, None, 10)
+
+        monkeypatch.setattr(S, "run_dispatch", fake_dispatch)
+        c = cache.SearchCache(db_path=str(tmp_path / "c.db"))
+
+        r1 = S.execute_search("python asyncio 教程", self._decision(["octen", "anysearch"]),
+                              3, 10, "fast", c, False, mode="auto")
+        assert not r1.get("cached"), "第一次应为 miss"
+
+        # adaptive 学习把组合改掉了，请求身份仍是 auto
+        r2 = S.execute_search("python asyncio 教程", self._decision(["octen", "exa"]),
+                              3, 10, "fast", c, False, mode="auto")
+        assert r2.get("cached"), "组合漂移不应导致 miss（旧键会在这里失效）"
+
+    def test_explicit_engine_does_not_share_auto_cache(self, monkeypatch, tmp_path):
+        """对照面：显式 --engine 的隔离不能被这次改动削弱。"""
+        import search as S
+        from engine_dispatch import DispatchResult
+
+        def fake_dispatch(**kw):
+            eng = kw["engines"][0]
+            res = [{"title": f"{eng} 标题", "url": f"https://{eng}.example/1",
+                    "snippet": "s", "source": eng}]
+            return DispatchResult({eng: res},
+                                  [{"engine": eng, "status": "ok",
+                                    "results_count": 1, "latency_ms": 10}],
+                                  {eng: 10}, 0, True, None, None, 10, None, 10)
+
+        monkeypatch.setattr(S, "run_dispatch", fake_dispatch)
+        c = cache.SearchCache(db_path=str(tmp_path / "c.db"))
+
+        auto_d = self._decision(["octen", "exa"], domain="general_search")
+        S.execute_search("asyncio", auto_d, 3, 10, "fast", c, False, mode="auto")
+
+        exp_d = self._decision(["pypi"], domain="general_search")
+        exp_d["engine_request"] = "pypi"
+        r = S.execute_search("asyncio", exp_d, 3, 10, "fast", c, False, mode="auto")
+        assert not r.get("cached"), "auto 的缓存不得被显式 pypi 请求命中"
+
+    def test_cache_hit_reports_the_run_that_produced_it(self, monkeypatch, tmp_path):
+        """命中响应必须自描述：报产出这批结果的那次运行，不是本次路由。
+
+        键改成请求身份后，「本次路由」与「产出结果的运行」第一次可以不同——
+        而本次路由根本没执行。报它等于报一个没跑过的计划，还会与同样来自缓存的
+        engines_used / engine_outcomes 自相矛盾。
+        """
+        import search as S
+        from engine_dispatch import DispatchResult
+
+        def fake_dispatch(**kw):
+            eng = kw["engines"][0]
+            res = [{"title": f"{eng} 结果", "url": f"https://{eng}/1",
+                    "snippet": "s", "source": eng}]
+            return DispatchResult({eng: res},
+                                  [{"engine": eng, "status": "ok",
+                                    "results_count": 1, "latency_ms": 9}],
+                                  {eng: 9}, 0, True, None, None, 9, None, 9)
+
+        monkeypatch.setattr(S, "run_dispatch", fake_dispatch)
+        c = cache.SearchCache(db_path=str(tmp_path / "c.db"))
+
+        d1 = self._decision(["octen", "anysearch"])
+        d1["reason"] = "第一次路由"
+        S.execute_search("q", d1, 3, 10, "fast", c, False, mode="auto")
+
+        d2 = self._decision(["octen", "exa"])
+        d2["reason"] = "第二次路由（未执行）"
+        r2 = S.execute_search("q", d2, 3, 10, "fast", c, False, mode="auto")
+
+        assert r2.get("cached")
+        assert r2["engines"] == ["octen", "anysearch"], \
+            f"命中却报了本次路由的组合：{r2['engines']}"
+        assert r2["engines_combo"] == ["octen", "anysearch"]
+        assert r2["route_reason"] == "第一次路由", \
+            f"命中却报了没执行的那次路由理由：{r2['route_reason']}"

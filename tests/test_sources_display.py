@@ -81,3 +81,30 @@ class TestArchivePolicy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestBodyRefForUrllessResults(unittest.TestCase):
+    """正文区编号：无 URL 的条目不得打成 [None]。
+
+    天气/行情/宏观这类结构化快照本就没有可追溯链接（url 为空）。此前
+    分支条件写作 `if ref is None and url:`，无 URL 时 ref 保持 None，
+    正文直接输出 `[None]`（2026-09-19 实测「北京天气」复现）。
+    """
+
+    def _out(self, results):
+        return search_mod.format_text_output({
+            "query": "q", "count": len(results), "engine": "weather",
+            "elapsed_ms": 10, "results": results})
+
+    def test_urlless_result_has_no_none_ref(self):
+        out = self._out([{"title": "北京 当前 30°C", "snippet": "Thundery",
+                          "source": "weather", "score": 0.0, "url": ""}])
+        self.assertNotIn("[None]", out)
+        self.assertIn("[—]", out)
+
+    def test_url_result_still_numbered(self):
+        out = self._out([{"title": "Python docs", "snippet": "asyncio",
+                          "source": "octen", "score": 0.7,
+                          "url": "https://docs.python.org/3/"}])
+        self.assertNotIn("[None]", out)
+        self.assertIn("[1]", out)

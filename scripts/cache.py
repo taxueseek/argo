@@ -400,9 +400,32 @@ class SQLiteCache:
                 conn.execute("ALTER TABLE search_cache ADD COLUMN domain TEXT DEFAULT 'general'")
             if "ttl" not in cols:
                 conn.execute("ALTER TABLE search_cache ADD COLUMN ttl INTEGER DEFAULT 3600")
+            # mode/depth：软命中隔离用（见 find_similar）。
+            #
+            # 默认空串而不是 'auto'/'fast'：这两列要回答的是「这条缓存是按哪个
+            # mode/depth 写出来的」，而迁移前的历史行**无从得知**。默认成
+            # auto/fast 等于替它们猜一个——deep 请求会软命中一条其实按 fast
+            # 写的条目，正是要修的那个 bug。空串与任何真实 mode/depth 都不相等，
+            # 于是历史行自然不参与软命中，等 TTL 到期回收即可（现在每小时扫一次）。
+            if "mode" not in cols:
+                conn.execute("ALTER TABLE search_cache ADD COLUMN mode TEXT DEFAULT ''")
+            if "depth" not in cols:
+                conn.execute("ALTER TABLE search_cache ADD COLUMN depth TEXT DEFAULT ''")
             conn.executescript("""
                 CREATE INDEX IF NOT EXISTS idx_search_cache_expires ON search_cache(created_at);
                 CREATE INDEX IF NOT EXISTS idx_search_cache_domain ON search_cache(domain);
+                -- accessed_at 是两条热查询的排序列（淘汰取最旧、find_similar 取最新）。
+                -- 没有它两者都退化成「全表扫描 + 临时 B 树排序」：EXPLAIN 实测
+                -- `SCAN search_cache` + `USE TEMP B-TREE FOR ORDER BY`。
+                CREATE INDEX IF NOT EXISTS idx_search_cache_accessed ON search_cache(accessed_at);
+                -- find_similar 是「WHERE domain = ? AND mode = ? AND depth = ?
+                -- ORDER BY accessed_at DESC」：过滤列与排序列合成一个索引，
+                -- 否则 SQLite 仍要建临时 B 树排序（EXPLAIN 实测 `USE TEMP B-TREE
+                -- FOR ORDER BY`）。旧的两列版 domain_accessed 由这条覆盖（前缀
+                -- 相同），留着只是给每次写入多维护一棵 B 树。
+                DROP INDEX IF EXISTS idx_search_cache_domain_accessed;
+                CREATE INDEX IF NOT EXISTS idx_search_cache_scope_accessed
+                    ON search_cache(domain, mode, depth, accessed_at);
             """)
             conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
                          ("schema_version", str(self.SCHEMA_VERSION)))
@@ -421,6 +444,22 @@ class SQLiteCache:
     def _deserialize(blob: bytes, compressed: int) -> dict:
         raw = gzip.decompress(blob) if compressed else blob
         return json.loads(raw.decode("utf-8"))
+
+    def has_live(self, key: str) -> bool:
+        """该键是否已有一条**未过期**条目。
+
+        只读探测：不动 accessed_at、不计命中/未命中、不删过期行——它要回答的
+        只是「现在覆盖它会不会毁掉有效数据」，不是「这次查询命中了没有」。
+        用 get() 兼职探测会污染 LRU 的访问时间，也会让命中率统计失真。
+        """
+        if self._degraded_reason is not None:
+            return False
+        with self._lock:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT created_at, ttl FROM search_cache WHERE key = ?", (key,)
+                ).fetchone()
+        return row is not None and not self._is_expired(row[0], row[1])
 
     def get(self, key: str) -> Optional[dict]:
         if self._degraded_reason is not None:
@@ -449,7 +488,8 @@ class SQLiteCache:
                 return self._deserialize(value_blob, compressed)
 
     def set(self, key: str, query: str, engine: str, max_results: int,
-            value: dict, domain: str = "general", ttl: int | None = None):
+            value: dict, domain: str = "general", ttl: int | None = None,
+            mode: str = "", depth: str = ""):
         if self._degraded_reason is not None:
             return
         with self._lock:
@@ -459,9 +499,11 @@ class SQLiteCache:
             with self._connect() as conn:
                 conn.execute(
                     """INSERT OR REPLACE INTO search_cache
-                       (key, query, engine, max_results, domain, value_blob, compressed, ttl, created_at, accessed_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (key, query, engine, max_results, domain, blob, compressed, effective_ttl, now, now),
+                       (key, query, engine, max_results, domain, mode, depth,
+                        value_blob, compressed, ttl, created_at, accessed_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (key, query, engine, max_results, domain, mode, depth,
+                     blob, compressed, effective_ttl, now, now),
                 )
                 conn.commit()
             # 驱逐失败不阻断写入方：缓存是加速层，缺它只该变慢不该变错。
@@ -472,36 +514,99 @@ class SQLiteCache:
             except sqlite3.Error:
                 pass
 
-    def _evict_if_needed(self):
-        """超过 100MB（DB 文件占用）时删除最旧的记录。
+    # 过期行回收的节流间隔。扫描是 O(rows) 全表（`created_at + ttl < ?` 不可
+    # 走索引），放进每次 set() 的热路径会白付约 6ms/次；稳态下每小时一次足够
+    # 把库压在低位。
+    _EXPIRY_SWEEP_INTERVAL_S = 3600.0
+    # 定期清扫后是否 VACUUM 的门槛：空闲页到这个量才值得付一次整库重写。
+    _RECLAIM_MIN_BYTES = 4 * 1024 * 1024
 
-        O(N) 而非 O(N²)：进入时一次性读总量、批量 LIMIT 50 删除、局部跟踪剩余。
-        旧实现每轮 `while self.size_mb > target_mb` 都会开新连接 + 全表 SUM(LENGTH(blob))
-        扫描——100MB 库驱逐 1000 条 = 2–5s；新实现 <100ms。
+    def _expiry_sweep_due(self, conn) -> bool:
+        try:
+            row = conn.execute("SELECT value FROM meta WHERE key = ?",
+                               ("expiry_swept_at",)).fetchone()
+            return (not row
+                    or (time.time() - float(row[0])) > self._EXPIRY_SWEEP_INTERVAL_S)
+        except (sqlite3.Error, TypeError, ValueError):
+            return True  # 读不出来就扫一次，宁可多扫不积压
+
+    @staticmethod
+    def _mark_expiry_swept(conn) -> None:
+        try:
+            conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
+                         ("expiry_swept_at", str(time.time())))
+            conn.commit()
+        except sqlite3.Error:
+            pass
+
+    def _evict_if_needed(self):
+        """空间回收三步：过期行 → LRU 淘汰 → VACUUM。
+
+        **历史 bug（2026-09-19 复现）**：判定读的是文件页数
+        （page_count × page_size），扣减的却是 payload 净长。而本库
+        `auto_vacuum=0` 且全仓无 VACUUM，页数**永不下降**——库一旦超过
+        MAX_DB_SIZE_MB，`while total_bytes > target_bytes` 就永不收敛：
+        每次 set() 把整库（含刚写入的那一行）删空，此后每次写入重复清空，
+        缓存永久 100% miss。修法是让扣减与判定同源——进入淘汰循环后一律
+        用 payload 口径，删完再 VACUUM 把文件真正缩回去（不 VACUUM 的话
+        下一轮 set() 会看到同样的页数并重删一遍，正是这个 bug 的另一半）。
+
+        另一半是**过期行**：它们对任何调用方都不可见（get() 命中即删），
+        实测线上 5521 行里 5444 行（98.6%）已过期、占 payload 的 98.3%。
+        不回收不只是占盘——find_similar 与淘汰扫描都要扫过这些永不命中的行。
+        按节流间隔回收，稳态每小时一次。
         """
         with self._connect() as conn:
-            row = conn.execute(
+            limit_bytes = MAX_DB_SIZE_MB * 1024 * 1024
+
+            # 三条触发各自独立，代价都是 O(1)：
+            #   过期清扫（节流到每小时一次，因为它要全表扫）
+            #   LRU 淘汰（文件超限时）
+            #   纯回收（空闲页够多时——清扫刚删完一大片就会命中这条，
+            #          不把它独立出来，回收就会被节流挡到下一个清扫点，
+            #          文件白停在高水位一小时）
+            if self._expiry_sweep_due(conn):
+                conn.execute(
+                    "DELETE FROM search_cache WHERE created_at + ttl < ?",
+                    (time.time(),))
+                conn.commit()
+                self._mark_expiry_swept(conn)
+
+            page_bytes = conn.execute(
                 "SELECT (SELECT page_count FROM pragma_page_count)"
                 "      * (SELECT page_size  FROM pragma_page_size)"
-            ).fetchone()
-            total_bytes = row[0] or 0
-            limit_bytes = MAX_DB_SIZE_MB * 1024 * 1024
-            if total_bytes <= limit_bytes:
-                return
-            target_bytes = int(MAX_DB_SIZE_MB * 0.8 * 1024 * 1024)
-            # 用 payload 净长度做增量扣减；文件级 page 数会因碎片漂移，
-            # 但驱逐判定只要「大致降到 target 以下」，不必精确回收。
-            while total_bytes > target_bytes:
-                rows = conn.execute(
-                    "SELECT key, LENGTH(value_blob) FROM search_cache "
-                    "ORDER BY accessed_at ASC LIMIT 50"
-                ).fetchall()
-                if not rows:
-                    break
-                for k, sz in rows:
-                    conn.execute("DELETE FROM search_cache WHERE key = ?", (k,))
-                    total_bytes -= (sz or 0)
-                conn.commit()
+            ).fetchone()[0] or 0
+            if page_bytes > limit_bytes:
+                # 按最近访问时间淘汰最旧行；扣减口径与判定同源，循环必然收敛
+                target_bytes = int(limit_bytes * 0.8)
+                payload = conn.execute(
+                    "SELECT COALESCE(SUM(LENGTH(value_blob)), 0) FROM search_cache"
+                ).fetchone()[0] or 0
+                while payload > target_bytes:
+                    rows = conn.execute(
+                        "SELECT key, LENGTH(value_blob) FROM search_cache "
+                        "ORDER BY accessed_at ASC LIMIT 50"
+                    ).fetchall()
+                    if not rows:
+                        break
+                    conn.executemany("DELETE FROM search_cache WHERE key = ?",
+                                     [(k,) for k, _ in rows])
+                    payload -= sum((sz or 0) for _, sz in rows)
+                    conn.commit()
+
+            # 删行不会让文件变小：页进 freelist，文件停在高水位。不回收的话
+            # 稳态下会留着一整块「只有空闲页」的库——实测线上 10.1MB 文件里
+            # 活数据只有 0.12MB。空闲页不够多就不付 VACUUM 的整库重写代价。
+            if self._free_bytes(conn) >= self._RECLAIM_MIN_BYTES:
+                conn.execute("VACUUM")
+
+    @staticmethod
+    def _free_bytes(conn) -> int:
+        """空闲页占用的字节数（O(1)，用于决定是否值得 VACUUM）。"""
+        return conn.execute(
+            "SELECT (SELECT freelist_count FROM pragma_freelist_count)"
+            "      * (SELECT page_size      FROM pragma_page_size)"
+        ).fetchone()[0] or 0
 
     def clear(self, older_than_hours: int = 24):
         if self._degraded_reason is not None:
@@ -514,7 +619,8 @@ class SQLiteCache:
 
     def find_similar(self, query: str, engine: str = "auto",
                      domain: str = "general", limit: int = 50,
-                     threshold: float = 0.7) -> list[dict]:
+                     threshold: float = 0.7,
+                     mode: str = "auto", depth: str = "fast") -> list[dict]:
         """近重复查询软命中：扫描最近缓存，minhash 相似度 ≥ threshold 的条目。
 
         返回 [{key, query, similarity}]，按相似度降序。用于语义缓存——
@@ -528,9 +634,16 @@ class SQLiteCache:
         engine 但 WHERE 子句只用 domain，软命中因此跨引擎串味——实测
         `--engine v2ex` 可命中 bilibili 缓存；fetch 与 evidence 同 domain 下
         URL 词面相似（如 x 与 x.md，相似度 0.875）会互相串正文。
-        engine="auto" 保留为显式通配（调用方确实不关心来源时使用）。
         组合键（多引擎拼接的 `a+b`）不参与软命中：组合结果集是融合产物，
         与任何单引擎缓存都不可互换。
+
+        **engine 现在是精确匹配，不再是「auto 通配」**（2026-09-19 随之调整）：
+        engine 列从「路由出来的引擎组合」改存「请求侧身份」（用户点名的引擎
+        或 auto，见 search.execute_search 的 cache_engine_key 说明）。语义变了，
+        通配的含义也跟着变——以前 `auto` 不是列里会出现的值，通配分支其实
+        从未被走到（组合列要么是 `a+b` 要么是单引擎名）；现在 `auto` 是真实的
+        请求身份，再通配就等于让「自动路由」的请求去吃「显式指定 pypi」的
+        缓存，正是 v2.4.2 要挡的跨引擎串味。请求不同 → 结果不可互换。
 
         限定符隔离（2026-09-18 修复）：限定符是过滤器而非内容，整串相似度
         会被它主导——`keywords:pi-package mcp` 与 `keywords:pi-package
@@ -538,38 +651,41 @@ class SQLiteCache:
         查询的结果交了出去（实测 `--engine npm` 查 mcp 拿到 memory 那批包）。
         现在先要求限定符集合相同，再比**载荷**的相似度；无限定符的查询载荷
         即整串，行为不变。
+
+        mode/depth 隔离（2026-09-19 修复）：这是同一类串味的第三处，前两处
+        （engine、限定符）修的时候漏了它。`_key` 刻意把 mode/depth 编进键、
+        类 docstring 也承诺「depth / mode 隔离，防 fast/deep、budget 污染」，
+        但软命中的 WHERE 只有 domain+engine：`--depth deep` 请求会软命中一条
+        按 fast 写的条目（或反过来），拿到的结果集与请求档位不匹配，而结果里
+        还报 `cached: true`。现在 WHERE 带上 mode/depth 精确匹配——它们本来
+        就是「结果集全集的组成部分」，与限定符同理：档位不同，结果就不可互换。
         """
         nq = normalize_query(query)
         nq_quals, nq_payload = split_qualifiers(nq)
         base_len = len(nq_payload)
         if self._degraded_reason is not None:
             return []
-        # engine 过滤：通配不过滤，否则精确匹配（engine 列同时承载 fetch/evidence 这类 kind 值）
-        engine_filter = None if engine == "auto" else engine
+        # engine 精确匹配（请求身份不同 → 结果不可互换，见上方 docstring）
         with self._lock:
             with self._connect() as conn:
-                if engine_filter is None:
-                    rows = conn.execute(
-                        "SELECT key, query, engine, domain, ttl, created_at "
-                        "FROM search_cache WHERE domain = ? "
-                        "ORDER BY accessed_at DESC LIMIT ?",
-                        (domain, limit),
-                    ).fetchall()
-                else:
-                    rows = conn.execute(
-                        "SELECT key, query, engine, domain, ttl, created_at "
-                        "FROM search_cache WHERE domain = ? AND engine = ? "
-                        "ORDER BY accessed_at DESC LIMIT ?",
-                        (domain, engine_filter, limit),
-                    ).fetchall()
+                rows = conn.execute(
+                    "SELECT key, query, engine, domain, ttl, created_at "
+                    "FROM search_cache "
+                    "WHERE domain = ? AND mode = ? AND depth = ? AND engine = ? "
+                    "ORDER BY accessed_at DESC LIMIT ?",
+                    (domain, mode, depth, engine, limit),
+                ).fetchall()
         candidates = []
         for key, cached_q, cached_engine, cached_dom, ttl, created_at in rows:
             if not cached_q or cached_q == nq:
                 continue
             if self._is_expired(created_at, ttl):
                 continue
-            # 组合键不参与软命中：组合结果集 ≠ 任何单引擎结果集
-            if "+" in (cached_engine or ""):
+            # 多引擎请求不参与软命中：融合产物 ≠ 任何单引擎结果集。
+            # `+` 是历史写法（engine 列曾存路由出来的组合），`,` 是现在
+            # 请求身份的形状（`--engine a,b` 的 engine_request 就是原串），
+            # 两个都挡——只挡 `+` 会让逗号多引擎请求偷偷进入软命中。
+            if "+" in (cached_engine or "") or "," in (cached_engine or ""):
                 continue
             cnq = normalize_query(cached_q)
             c_quals, c_payload = split_qualifiers(cnq)
@@ -696,6 +812,27 @@ def assert_cacheable(payload: object, *, context: str = "cache") -> None:
         )
 
 
+def assert_results_cacheable(results: object, *, context: str) -> None:
+    """逐条检查结果列表——**不抽样**。
+
+    2026-09-19 修复：守卫此前只覆盖顶层载荷，于是两条真实缺口：
+
+      - `SearchCache.set`（combo，主写入路径）对 `results[]` **一条都不查**——
+        实测把 `login_state_used: True` 放在结果列表第 1 条，照样写进公共库；
+      - `set_engine` 只查 `results[:3]`，第 4 条起不查。
+
+    「硬拒绝」被降级成「抽样拒绝」，而登录态标记的生产者是存在的
+    （candidate_envelope / plan 会在**逐条**结果上写 login_state_used /
+    auth_partition / cache_eligible）。条目数本来就有上限（几十条），
+    逐条检查的代价可忽略，没有理由抽样。
+    """
+    if not isinstance(results, list):
+        return
+    for item in results:
+        if isinstance(item, dict):
+            assert_cacheable(item, context=context)
+
+
 class SearchCache:
     """
     双层缓存引擎：L1 LRU + L2 SQLite
@@ -802,11 +939,13 @@ class SearchCache:
         return None
 
     def _write(self, key: str, query: str, engine: str, max_results: int,
-               value: dict, domain: str, ttl: int) -> None:
+               value: dict, domain: str, ttl: int,
+               mode: str = "", depth: str = "") -> None:
         payload = {**value, "_domain": domain, "_ttl": ttl, "_ts": time.time(),
                    "_max_results": max_results}
         self._l1.set(key, payload)
-        self._l2.set(key, query, engine, max_results, payload, domain=domain, ttl=ttl)
+        self._l2.set(key, query, engine, max_results, payload, domain=domain,
+                     ttl=ttl, mode=mode, depth=depth)
 
     @staticmethod
     def _soft_slice(hit: dict, max_results: int) -> Optional[dict]:
@@ -834,7 +973,8 @@ class SearchCache:
             # 语义软命中：精确 miss 时，minhash 找近重复查询的缓存
             if domain != "general" or mode == "auto":
                 try:
-                    similar = self._l2.find_similar(query, engine, domain)
+                    similar = self._l2.find_similar(query, engine, domain,
+                                                    mode=mode, depth=depth)
                     for cand in similar:
                         s_hit = self._l2.get(cand["key"])
                         if s_hit is None:
@@ -871,8 +1011,20 @@ class SearchCache:
         # engine 名本身也可能标记登录态源
         assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set")
         result_list = results.get("results") if isinstance(results, dict) else None
+        # 逐条查：登录态标记的生产者在**逐条**结果上（见 assert_results_cacheable）
+        assert_results_cacheable(result_list, context="SearchCache.set")
         is_empty = isinstance(result_list, list) and len(result_list) == 0
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         if is_empty:
+            # 瞬时失败不得销毁好数据（2026-09-19 修复）。
+            #
+            # EMPTY_RESULT_TTL 的意图是「别把一次失败固化成『这个查询没结果』」，
+            # 但写入走的是 INSERT OR REPLACE——于是同键上一条还有一小时寿命的
+            # 有效缓存，会被一次网络抖动产生的空结果整条覆盖掉（实测复现）。
+            # 负缓存仍然要留（那正是短 TTL 的用途），只是**不覆盖已有活条目**：
+            # 有活条目说明上一次取到了东西，它比这次的失败更可信。
+            if self._l2.has_live(key):
+                return
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
@@ -880,8 +1032,8 @@ class SearchCache:
                 query, engine, domain, effective_ttl, result_list,
                 mode=mode, depth=depth,
             )
-        key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
-        self._write(key, query, engine, max_results, results, domain, effective_ttl)
+        self._write(key, query, engine, max_results, results, domain, effective_ttl,
+                    mode=mode, depth=depth)
 
     def _adaptive_ttl(self, query: str, engine: str, domain: str,
                       base_ttl: int, result_list: list,
@@ -940,10 +1092,7 @@ class SearchCache:
                    depth: str = "fast", ttl: int | None = None,
                    since: str | None = None, until: str | None = None):
         assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set_engine")
-        if isinstance(results, list):
-            for item in results[:3]:
-                if isinstance(item, dict):
-                    assert_cacheable(item, context="SearchCache.set_engine")
+        assert_results_cacheable(results, context="SearchCache.set_engine")
         is_empty = not results
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
@@ -951,7 +1100,8 @@ class SearchCache:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
         key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
                         since=since, until=until)
-        self._write(key, query, engine, max_results, {"results": results}, domain, effective_ttl)
+        self._write(key, query, engine, max_results, {"results": results}, domain,
+                    effective_ttl, mode=mode, depth=depth)
 
     # ── fetch URL 缓存 ───────────────────────────────────────────────────────
 

@@ -429,6 +429,14 @@ def _diffuse_intent_guard(hits: list[dict[str, Any]], query: str,
 # 英文备选吃 \b；中文备选必须在 \b 外——CJK 字符全是 \w，「npm安装报错」
 # 这类无空格连写永远撞不上词边界（2026-09-06 审查实锤），会让真实包查询
 # 被误让位。同 _DIFFUSE_SIGNAL_RE 中文备选的既有计算方式。
+#
+# 扩充门槛（2026-09-19 实测教训）：这份表**只收「域主源是唯一入口、误命中
+# 无通用保底」的点查域**。曾试过把 weather_query / geo_places 等 9 个多义域
+# 一并加进来治误判，结果三条既有回归门同时红——「上海天气 未来一周」被让位
+# 到 chinese_general、「東京 おすすめ ラーメン 屋 はどこ」丢掉 geo 主源。
+# 让位判据是「长主题句 + 无本域意图词」，而意图词表永远列不全（未来一周、
+# はどこ 都漏了），失败模式是**静默的能力回退**。多义域改用定向负向排除
+# （见 config.yaml 各域 pattern 的注释），不动这份契约。
 _POINTED_INTENT_RE: dict[str, str] = {
     "package_search": r"(?i)\b(install|add|uninstall|download)\b|安装|下载|替代包|包名",
     "ai_model": r"(?i)(价格|pricing|上下文|context window|token limit|vision|多模态|免费|开源|多少钱)",
@@ -1466,7 +1474,19 @@ def route_query(query: str, engine_override: str = "auto",
     start = time.perf_counter()
 
     def _done(**kw: Any) -> dict[str, Any]:
-        base = {"elapsed_ms": round((time.perf_counter() - start) * 1000, 3)}
+        base = {
+            "elapsed_ms": round((time.perf_counter() - start) * 1000, 3),
+            # 请求侧身份：用户点名了引擎就是那个名字，否则 auto。
+            #
+            # 结果缓存的键必须用它，**不能用 engines_combo**——combo 是决策
+            # 结果，会被 adaptive 学习器按上一次搜索的成败逐次改写。拿结果当
+            # 键就是「用缓存让缓存失效」：实测同一查询连跑两次，进键的引擎串
+            # 从 `anysearch+octen` 变成 `exa+octen`，30% 的重复查询因此白跑
+            # 一遍网络。route 决策缓存早已识别过同一模式（见
+            # `_route_state_fingerprint` 刻意排除 adaptive.db 的说明），
+            # 结果缓存这条只是绕了一层。
+            "engine_request": (engine_override or "auto"),
+        }
         base.update(kw)
         _sample_route(base, kw)
         return base

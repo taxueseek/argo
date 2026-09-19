@@ -1174,7 +1174,20 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     # 后过滤用 epoch 秒；非法输入保持原样下推、不参与后过滤。
     since_iso, until_iso, since_ts, until_ts = _normalize_time_window(since, until)
 
-    cache_engine_key = "+".join(sorted(engines)) if len(engines) > 1 else engines[0]
+    # 缓存键的引擎维度取**请求侧身份**（用户点名的引擎，或 auto），不取
+    # 路由出来的 engines_combo。
+    #
+    # 为什么（2026-09-19 实测）：combo 是决策结果，会被 adaptive 学习器按上一次
+    # 搜索的成败逐次改写。拿结果当键就是「用缓存让缓存失效」——同一查询连跑
+    # 两次，进键的引擎串从 `anysearch+octen` 变成 `exa+octen`、从 `byted+...`
+    # 变成 `local_bing+...`，20 条样本里 6 条重复查询（30%）因此白跑一遍网络，
+    # 而查询、域、档位全都没变。
+    #
+    # 语义边界：用户点名 `--engine pypi` 时键里就是 pypi（显式约束必须隔离，
+    # 这正是 v2.4.2 那条修复要保的东西）；`auto` 时键里是 auto——「用自动路由
+    # 搜这个查询」本身就是请求，具体挑了哪几个引擎是实现细节，由 TTL 兜住
+    # 时效，并原样保留在缓存载荷里供追溯。
+    cache_engine_key = decision.get("engine_request") or "auto"
     # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存；
     # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）。
     # 仅当组合内含带时间能力引擎时隔离：无时间字段引擎忽略时间窗、结果相同，
@@ -1204,13 +1217,21 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                 tfidf_scores = []
             # 排序在缓存读出后、返回前：缓存内容保持 score 序，sort 只改展示顺序
             hit_results = _sort_results(hit.get("results", []), sort)
+            # 命中时一律报**产出这批结果的那次运行**的组合与理由，而不是本次
+            # 路由的。此前两者恒等（组合就在缓存键里），这条区分不存在；键改成
+            # 请求身份后，同一查询两次运行可以路由到不同组合，而本次路由根本
+            # 没执行——报它等于报一个没跑过的计划，还会与同样来自缓存的
+            # engines_used / engine_outcomes 自相矛盾。
+            cached_combo = (hit.get("engines_combo") or hit.get("engines")
+                            or engines)
             _hit = {
-                "query": query, "engine": engine_label, "engines": engines,
-                "engines_combo": engines_combo, "cached": True,
+                "query": query, "engine": (cached_combo or engines)[0],
+                "engines": cached_combo,
+                "engines_combo": cached_combo, "cached": True,
                 "cache_level": hit.get("_cache_level", "L?"),
                 "domain": domain, "elapsed_ms": cache_elapsed,
                 "tfidf_scores": tfidf_scores,
-                "route_reason": decision.get("reason"),
+                "route_reason": hit.get("route_reason") or decision.get("reason"),
                 "login_hint": decision.get("login_hint"),
                 "results": hit_results,
                 "count": len(hit_results),
@@ -1647,6 +1668,16 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     result_payload = {
         "results": merged,
         "engines_used": list(raw_results.keys()),
+        # 产出这批结果的**那次运行**的组合与理由，随载荷一起存。
+        #
+        # 缓存键改成请求身份后，同一查询的两次运行可以路由到不同组合，而命中
+        # 时本次路由根本没执行。不存这两个字段的话，命中响应只能报本次路由，
+        # 那是一个没跑过的计划，还会与同样来自缓存的 engines_used /
+        # engine_outcomes 自相矛盾（2026-09-19）。约 100 字节/条，换来缓存
+        # 条目自描述。旧条目没有这两个键，命中路径回退到本次路由（原行为）。
+        "engines": list(engines),
+        "engines_combo": list(engines_combo),
+        "route_reason": decision.get("reason"),
         "domain": domain,
         "engine_outcomes": engine_outcomes,
         "time_filtered": time_filtered,
@@ -1659,13 +1690,9 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if not skip_cache:
         effective_ttl = None
         if merged and elapsed > 2000:
-            # 慢查询略延长；时效域最多 2×，且仍受 resolve_ttl cap
-            base_ttl = cache.resolve_ttl(domain, query=query)
-            multiplier = min(2 ** (elapsed // 2000), 8)
-            if base_ttl <= 900:
-                effective_ttl = min(base_ttl * min(multiplier, 2), base_ttl * 2)
-            else:
-                effective_ttl = base_ttl * multiplier
+            # 慢查询略延长缓存：省的是「同一查询再付一次慢网」的钱。
+            effective_ttl = _slow_query_ttl(cache.resolve_ttl(domain, query=query),
+                                            elapsed)
         cache.set(
             query, cache_engine_key, max_results, result_payload,
             domain=domain, ttl=effective_ttl, mode=mode, depth=depth,
@@ -2403,6 +2430,27 @@ def funnel_collapse(funnel: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _slow_query_ttl(base_ttl: int, elapsed_ms: int) -> int:
+    """慢查询的缓存 TTL：按耗时延长，上限一律 2× base。
+
+    慢查询值得多缓存一会儿——省的是「同一查询再付一次慢网」的钱。但上限
+    必须存在：此前这条逻辑写成 if/else 两支，`base_ttl > 900` 的 else 支
+    **没有上限**，而 multiplier 最大 8。实测后果：evergreen 档
+    （image_search / geo_places / book_search，base=86400s）的慢查询拿到
+    691200s＝**8 天** TTL，慢查询结果以「新鲜」的样子交付一整周；注释一直
+    写的是「时效域最多 2×」，代码只有一半兑现。
+
+    顺带修掉的冗余：原 ≤900 支写 `min(b * min(m, 2), b * 2)`，而它对任意
+    b、m 恒等于 `b * min(m, 2)`（外层 min 永远取不到第二个参数），两支本就
+    等价。合并后 TTL 延长规则只剩这一个定义点，也可被测试直接打到。
+
+    单独成函数是为了让回归测试调用**真实实现**——把公式抄进测试的写法，
+    实现回退时测试照样绿，等于没锁。
+    """
+    multiplier = min(2 ** (max(0, elapsed_ms) // 2000), 8)
+    return base_ttl * min(multiplier, 2)
+
+
 def build_sources(results: list[Any] | None) -> list[dict[str, Any]]:
     """将 results 投影为编号信源列表（传统搜索引擎底部「相关链接」形态）。
 
@@ -2506,9 +2554,13 @@ def format_text_output(results: dict[str, Any]) -> str:
     for r in body_items:
         url = (r.get("url") or "").strip()
         ref = url_to_ref.get(url)
-        if ref is None and url:
-            # 未进 sources 时临时编号
-            ref = "?"
+        if ref is None:
+            # 未进 sources 时临时编号。分两种：有 URL 但没被收进 sources
+            # （编号未知，用 ?）；以及**本就没有 URL** 的条目——天气/行情/
+            # 宏观这类结构化快照走的就是这条。此前两种情况共用一个分支，
+            # 且分支条件是 `and url`，于是无 URL 的条目 ref 保持 None，
+            # 正文里直接打成 `[None]`（2026-09-19 实测「北京天气」复现）。
+            ref = "?" if url else "—"
         score = r.get("score", 0)
         title = (r.get("title") or "?")[:80]
         score_s = f"{score:.2f}" if isinstance(score, (int, float)) and score else "—"
