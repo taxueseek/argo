@@ -342,7 +342,13 @@ class SQLiteCache:
                 except OSError as e:
                     self._degraded_reason = f"cache dir unavailable: {e}"
         if self._db_path == ":memory:":
-            self._mem_conn = sqlite3.connect(":memory:", timeout=10)
+            # check_same_thread=False：SQLiteCache 随 SearchCache 常驻，MCP 长驻
+            # 进程里第一次碰缓存的线程未必是建连接的那个线程，默认的
+            # 「同线程校验」会直接抛 ProgrammingError 让整层内存缓存不可用。
+            # 这里放开校验是安全的——所有 _mem_conn 访问都在 self._lock
+            # （RLock，见上方 __init__）之内串行化，不存在真正的并发使用。
+            self._mem_conn = sqlite3.connect(":memory:", timeout=10,
+                                             check_same_thread=False)
             self._mem_conn.execute("PRAGMA synchronous=NORMAL")
         if self._degraded_reason is None:
             try:

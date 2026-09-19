@@ -24,7 +24,6 @@ from cli_io import dumps
 try:
     from config import (load_config, get_engines, get_domains, get_cost_factor,
                         config_stamp)
-    from tfidf_router import semantic_route, get_router
     from quota import get_quota_manager
     from engine_families import engines_demote_for_lang, engines_not_for_lang, lang_allows
 except ImportError:
@@ -32,9 +31,14 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from config import (load_config, get_engines, get_domains, get_cost_factor,
                         config_stamp)
-    from tfidf_router import semantic_route, get_router
     from quota import get_quota_manager
     from engine_families import engines_demote_for_lang, engines_not_for_lang, lang_allows
+
+# tfidf_router 刻意**不在这里导入**（与下面 macro_countries 同一理由）：
+# 它只被 route_query 的 `if not skip_tfidf:` 分支用到，而 fast 模式命中硬域
+# 时整段跳过（-X importtime 实测 tfidf_router 588us / route 累计 3596us）。
+# `--engine X` 指定引擎、`argo paths` 这类不走向量路由的调用不必替它买单。
+# 延迟导入点见下方模块级 __getattr__（保留 route.semantic_route 可 patch）。
 
 # 世界银行国家表：macro_data 域按国家词分流（非美国国家查询让 worldbank 优先，
 # 避免 FRED 美国序列冒充「中国GDP」这类答案）
@@ -159,6 +163,19 @@ def __getattr__(name: str):
     # PEP 562：仅在常规模块属性查找失败时触发。
     if name == "_ENGINE_NAMES":
         return _engine_names_map()
+    if name in ("semantic_route", "get_router"):
+        # 延迟导入：tfidf_router 只被 route_query 的 `if not skip_tfidf:` 分支
+        # 用到（fast 模式命中硬域时整段跳过），却要占启动时间（-X importtime
+        # 实测 tfidf_router 588us / route 累计 3596us）。放模块级 __getattr__
+        # 而不是函数内 import：既让 `import route` 不拉起它，又保留
+        # `route.semantic_route` 这个可 patch 的模块属性——
+        # tests/test_multilingual_routing.py 用 patch("route.semantic_route")
+        # 打桩，把名字删干净会让 3 条用例直接 AttributeError。
+        # import 成功后写回 globals()，后续查找走正常属性路径不再进这里。
+        from tfidf_router import get_router, semantic_route
+        globals()["semantic_route"] = semantic_route
+        globals()["get_router"] = get_router
+        return globals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

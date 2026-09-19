@@ -250,6 +250,11 @@ _ENGINE_FUSION_WEIGHTS: dict[str, float] = {
 _rel_factor_cache: dict[str, tuple[float, float]] = {}
 _REL_FACTOR_TTL = 30.0
 
+# _engine_weight 的结果缓存：{(source, lang): (weight, expires_at)}。
+# 见 _engine_weight 文档串——rrf_merge 逐条调用而取值空间极小，缓存后 300 条
+# 结果由 0.54ms 降到常数级；TTL 与上面的可靠性窗口对齐，不额外冻结熔断状态。
+_weight_cache: dict[tuple[str, str], tuple[float, float]] = {}
+
 
 def _single_reliability(engine: str) -> float:
     now = time.time()
@@ -286,9 +291,21 @@ def _engine_weight(source: str, lang: str | None = None) -> float:
     能力画像（data/lang_matrix/lang_capability.json）决定——该语言下实测
     良好的引擎提权、实测噪声的降权、无数据的保持中性。画像缺失/过期时
     完全退化为原行为（见 lang_capability 的安全降级契约）。
+
+    结果缓存（_weight_cache，TTL = _REL_FACTOR_TTL）：
+    `rrf_merge` 对**每条结果**调用一次本函数，而同一次融合里 (source, lang)
+    的取值空间只有「参与引擎数 × 1」，300 条结果实测 0.54ms 全花在重复的
+    `split`/`max`/`min` 上。TTL 对齐底层可靠性因子的 30s 窗口，因此本缓存
+    **不会把熔断状态变化多冻结哪怕一秒**（旧实现靠 _rel_factor_cache 记忆，
+    同一个 TTL）。语言画像更新走 invalidate_engine_weight_cache()。
     """
     if not source:
         return 1.0
+    ck = (str(source), lang or "")
+    now = time.time()
+    ent = _weight_cache.get(ck)
+    if ent is not None and ent[1] > now:
+        return ent[0]
     # 合并来源：静态权重取最高源，可靠性取最低源（weakest-link：任一路径弱即降权）
     parts = [p.strip() for p in str(source).split("/") if p.strip()]
     if not parts:
@@ -305,7 +322,19 @@ def _engine_weight(source: str, lang: str | None = None) -> float:
             out *= adj
         except Exception:
             pass
-    return round(out, 3)
+    out = round(out, 3)
+    _weight_cache[ck] = (out, now + _REL_FACTOR_TTL)
+    return out
+
+
+def invalidate_engine_weight_cache() -> None:
+    """清空 _engine_weight 结果缓存。
+
+    与 lang_capability.reload() 配对使用：语言画像更新后必须调用本函数，
+    否则本缓存会在 TTL 窗口内继续返回旧画像算出的权重。熔断状态无需调用
+    ——两者 TTL 相同（_REL_FACTOR_TTL），不会互相冻结。
+    """
+    _weight_cache.clear()
 
 
 def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
