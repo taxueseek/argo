@@ -920,20 +920,41 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
             "prior": _priors[_i],
         })
 
+    # K 相关剪枝（可证明无损，2026-09-19）：
+    # 边际分 = 静态四维 + w_novelty·novelty + W_PRIOR·prior。novelty∈[0,1] 且
+    # prior 已知，所以任一条目在任一轮的边际分都 ≤ U_i = 静态分 + w_novelty
+    # + W_PRIOR·prior_i。记 L 为静态分的第 K 大值（K = top_n）：前 K 轮里最多
+    # 选走 K−1 条，池中必然还剩至少一条静态分 ≥ L 的条目，它的边际分 ≥ L。
+    # 因此 U_i < L 的条目在前 K 轮里不可能被选中——剪掉它，前 K 个选序与逐条
+    # 真算逐位一致（平局规则「首个索引胜出」也不受影响，被剪条目本来就赢不了）。
+    #
+    # 为什么不用「上一轮分数作上界」的增量剪枝：selected_bigrams 是并集，加入
+    # bigram 不重叠的条目会让 jaccard 下降、novelty 回升，边际分不是单调不增的，
+    # 那条界不成立（2026-09-19 对拍出 8 处差异后废弃，勿再尝试）。
+    #
+    # 静态分按原加法顺序（左结合到 completeness）预算，再逐项加 novelty 与
+    # prior——浮点加法顺序与改造前一致，金标对拍才可能零差异。
+    pool = enriched[:]
+    for e in pool:
+        e["_static4"] = (w["relevance"] * e["relevance"]
+                         + w["authority"] * e["authority"]
+                         + w["freshness"] * e["freshness"]
+                         + w["completeness"] * e["completeness"])
+        e["_ub"] = e["_static4"] + w["novelty"] + W_PRIOR * e["prior"]
+    if 0 < top_n < len(pool):
+        l_k = sorted((e["_static4"] for e in pool), reverse=True)[top_n - 1]
+        kept = [e for e in pool if e["_ub"] >= l_k]
+        if len(kept) < len(pool):
+            pool = kept
+
     # 贪心排序：每步选边际得分最高者，novelty 相对已选集合动态计算
     ranked: list[dict[str, Any]] = []
     selected_bigrams: set[str] = set()
-    pool = enriched[:]
     while pool:
         best_idx, best_score, best_novelty = 0, -1.0, 1.0
         for i, e in enumerate(pool):
             novelty = 1.0 - _jaccard(e["bg"], selected_bigrams)
-            score = (w["relevance"] * e["relevance"]
-                     + w["authority"] * e["authority"]
-                     + w["freshness"] * e["freshness"]
-                     + w["completeness"] * e["completeness"]
-                     + w["novelty"] * novelty
-                     + W_PRIOR * e["prior"])
+            score = e["_static4"] + w["novelty"] * novelty + W_PRIOR * e["prior"]
             if score > best_score:
                 best_idx, best_score, best_novelty = i, score, novelty
         chosen = pool.pop(best_idx)
@@ -1679,8 +1700,12 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if local_rerank_on and merged and len(merged) > 1 and \
             reranker_status in _RERANK_DEGRADED_STATUSES:
         try:
+            # top_n=max_results（而非 len(merged)）：下游 _apply_consensus_and_sort
+            # 紧接着就按 max_results 截断，尾部不会有人用。传真实 K 才能启用
+            # 函数内的 K 相关剪枝（可证明前 K 个选序不变），n=200 时把 O(n²)
+            # 贪心从 ~33ms 压到毫秒级。
             merged = local_five_dim_rerank(query, merged, domain=domain,
-                                           top_n=len(merged))
+                                           top_n=max_results)
             rank_method = "local_five_dim"
         except Exception as e:
             import logging
@@ -2982,6 +3007,17 @@ def main():
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}
         if args.fields == "agent":
+            # 静默白开：_strip_for_agent 会把 candidates/coverage 全剥掉，实测
+            # --envelope 在 agent 档下的增量是 0 字节（envelope 单独 19KB，叠加后
+            # 与纯 agent 档逐字节相同）。调用方会以为拿到了 provenance、实际没有，
+            # 所以这里明确告知，而不是让它默默失效。
+            if args.envelope:
+                print(
+                    "  [warning] --envelope 与 --fields agent 同时给时 envelope 会被"
+                    "剥光（实测增量 0 字节）：要 provenance 请去掉 --fields agent；"
+                    "只要瘦身就别加 --envelope。",
+                    file=sys.stderr,
+                )
             public = _strip_for_agent(public)
         print(dumps(public))
     else:
