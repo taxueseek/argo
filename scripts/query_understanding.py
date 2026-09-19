@@ -27,30 +27,61 @@ query_understanding.py — 查询理解中间层（P0-001）
 
 from __future__ import annotations
 
+import copy
 import functools
 import re
-from dataclasses import dataclass, field, asdict
 from typing import Any
 from cli_io import dumps
 
 
 # ── 数据结构 ──────────────────────────────────────────────────────────────────
 
-@dataclass
 class QueryUnderstanding:
-    """查询理解结果（结构化信号容器）。"""
+    """查询理解结果（结构化信号容器）。
 
-    original: str
-    clean_query: str
-    exclude_terms: list[str] = field(default_factory=list)
-    geo: dict[str, Any] | None = None
-    intents: list[str] = field(default_factory=list)
-    multi_intent_splits: list[str] = field(default_factory=list)
-    confidence: float = 0.0
+    用 __slots__ 类而不是 @dataclass：`from dataclasses import ...` 会把
+    inspect/dis/ast 链拉进 import（实测 3.9ms，占本模块导入成本近四成），而本
+    模块在每次查询里被无条件导入（query_rewriter / route.extract_features /
+    execute_search 三个调用点）。字段与 to_dict() 契约保持不变——
+    `_understand_cached` 依赖 `QueryUnderstanding(**to_dict())` 重建。
+    """
+
+    __slots__ = ("original", "clean_query", "exclude_terms", "geo",
+                 "intents", "multi_intent_splits", "confidence")
+
+    def __init__(self, original: str, clean_query: str,
+                 exclude_terms: list[str] | None = None,
+                 geo: dict[str, Any] | None = None,
+                 intents: list[str] | None = None,
+                 multi_intent_splits: list[str] | None = None,
+                 confidence: float = 0.0):
+        self.original = original
+        self.clean_query = clean_query
+        self.exclude_terms = list(exclude_terms) if exclude_terms else []
+        self.geo = geo
+        self.intents = list(intents) if intents else []
+        self.multi_intent_splits = list(multi_intent_splits) if multi_intent_splits else []
+        self.confidence = confidence
 
     def to_dict(self) -> dict[str, Any]:
-        """转为可 JSON 序列化的 dict。"""
-        return asdict(self)
+        """转为可 JSON 序列化的 dict（与旧 asdict(self) 同形、同样不共享内部容器）。"""
+        return {
+            "original": self.original,
+            "clean_query": self.clean_query,
+            "exclude_terms": list(self.exclude_terms),
+            "geo": copy.deepcopy(self.geo),
+            "intents": list(self.intents),
+            "multi_intent_splits": list(self.multi_intent_splits),
+            "confidence": self.confidence,
+        }
+
+    def __repr__(self) -> str:  # 等价于 dataclass 的默认 repr，便于日志排查
+        return (f"QueryUnderstanding(original={self.original!r}, "
+                f"clean_query={self.clean_query!r}, "
+                f"exclude_terms={self.exclude_terms!r}, geo={self.geo!r}, "
+                f"intents={self.intents!r}, "
+                f"multi_intent_splits={self.multi_intent_splits!r}, "
+                f"confidence={self.confidence!r})")
 
 
 # ── 否定解析 ──────────────────────────────────────────────────────────────────
