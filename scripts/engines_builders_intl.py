@@ -40,6 +40,29 @@ def _encode_url(url: str) -> str:
     return urllib.parse.quote(url, safe=_URL_SAFE)
 
 
+# 地理编码类查询的自然语言噪声：open_meteo 的 geocoding 只吃地名，
+# 「今日北京天气」「北京今天多少度」这类完整问句会让 name= 带上时间词与
+# 疑问词，上游 0 候选 → 引擎静默返回空（wx.py / weather_cn 各有一份同型
+# 正则，漏掉任一处该查询在对应源就全军覆没）。
+# 只剥「查询表达」不碰地名本身：坐标串（lat,lon）、纯地名原样通过。
+_GEO_COORD_RE = re.compile(r"-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?")
+_GEO_NOISE_RE = re.compile(
+    r"(天气|气温|温度|多少度|预报|怎么样|如何|下雨|降水|雪|晴|阴|"
+    r"今[天日晚]|明[天日晚]|后[天日]|昨[天日]|现在|实时|当前|查询|"
+    r"的|了|呢|吗|\?|？|，|,|。|\s)+",
+)
+
+
+def _geo_core(query: str) -> str:
+    """剥掉天气问句的时间/疑问词，留地名；空则回退原查询（不猜）。"""
+    raw = (query or "").strip()
+    # 坐标串（lat,lon）不是问句，原样透传——剥了逗号反而毁掉它
+    if _GEO_COORD_RE.fullmatch(raw):
+        return raw
+    q = _GEO_NOISE_RE.sub(" ", raw).strip()
+    return q or raw
+
+
 def _http_json(url: str, timeout: float, engine: str = "") -> Any:
     req = urllib.request.Request(_encode_url(url), headers={"User-Agent": _UA, "Accept-Encoding": "gzip"})
     with http_open(req, timeout=timeout, engine=engine) as resp:
@@ -478,9 +501,12 @@ def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         to = _timeout or timeout
+        # geocoding 只吃地名：完整天气问句（「今日北京天气」）先剥时间/疑问词，
+        # 否则上游 0 候选、引擎静默返回空
+        place_q = _geo_core(query)
         try:
             geo = _http_json(
-                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(query)}&count=3&language=zh",
+                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(place_q)}&count=3&language=zh",
                 to, engine=spec.get("_name", ""))
         except Exception as e:
             logger.warning(f"Open-Meteo geocode 失败: {e}")

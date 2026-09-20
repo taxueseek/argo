@@ -81,8 +81,8 @@ def _fetch(url: str, timeout: float = 8) -> str:
 
 
 _WEATHER_WORDS = re.compile(
-    r"(天气|气温|温度|多少度|预报|怎么样|如何|下雨|降水|雪|晴|今天|明天|后天|当前|现在|"
-    r"weather|forecast|temperature|today|tomorrow|now|current)",
+    r"(天气|气温|温度|多少度|预报|怎么样|如何|下雨|降水|雪|晴|今[天日晚]|明[天日晚]|后[天日]|昨[天日]|"
+    r"当前|现在|实时|weather|forecast|temperature|today|tonight|tomorrow|now|current)",
     re.IGNORECASE,
 )
 
@@ -249,7 +249,15 @@ def _open_meteo(loc: str) -> list[dict]:
         "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
     }
     url = f"{_OM_BASE}?{up.urlencode(params)}"
-    data = json.loads(_fetch(url))
+    # forecast 与 AQI 是同坐标的两个独立端点，geocode 之后并行取——
+    # 串行时 geocode→forecast→aqi 三跳各 ~1.4s（经代理实测 4.1s），并行后
+    # 墙钟 = geocode + max(forecast, aqi)。_aqi 内部自带容错（失败返回
+    # None），fetch 异常照旧冒泡给调用方的 _safe——两条失败语义都不变。
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_om = ex.submit(_fetch, url)
+        f_aqi = ex.submit(_aqi, lat, lon)
+        data = json.loads(f_om.result())
+        aqi = f_aqi.result()
     cur = data.get("current_weather") or {}
     rows = []
     if cur:
@@ -260,7 +268,6 @@ def _open_meteo(loc: str) -> list[dict]:
             "snippet": f"风速 {cur.get('windspeed', '?')}km/h · 风向 {cur.get('winddirection', '?')}° · 观测 {cur.get('time', '')}",
             "published_at": (cur.get("time") or "")[:10],
         }
-        aqi = _aqi(lat, lon)
         if aqi:
             row["snippet"] += f" · {aqi}"
         rows.append(row)

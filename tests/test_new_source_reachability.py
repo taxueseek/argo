@@ -256,6 +256,12 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     "docker_hub": "待接线：package_search 位次 4",
     "europepmc": "待接线：academic 位次 6；tech_deep 位次 5",
     "eurostat": "待接线：macro_data 位次 4",
+    # 2026-09-20：weather_query 域快源前置——weather_cn（国内城市实况两步
+    # 直连 0.46s）提到位次 3，weather（CLI 子进程 wttr/open-meteo 双源
+    # 1.5-4.3s）顺延到 4。fast 档 budget=2 下 weather 不参与自动路由；
+    # auto/balanced（budget 3，含 TF-IDF 注入的 open_meteo）仍可达，海外
+    # 城市 wttr 语义无替代源，保留在本域 + fallback 链/显式 --engine 触达。
+    "weather": "weather_query 位次 4（快源前置让位 weather_cn）：海外城市仍主用，fast 档靠 fallback 链兜底",
     "fx_rate": "待接线：macro_data 位次 5",
     "fxtwitter": "social 域位次 6：社交引擎另有专用通道，待核实是否真休眠",
     "gleif": "待接线：org_entity 位次 6",

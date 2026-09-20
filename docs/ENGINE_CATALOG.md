@@ -463,7 +463,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `dataset_search` | `datacite` | `datacite`、`zenodo`、`anysearch` |
 | `financial_news` | `em_miaoxiang` | `em_miaoxiang`、`cninfo`、`wallstreetcn`、`byted`、`eastmoney`、`anysearch` |
 | `aviation_weather` | `—` | `aviation_weather` |
-| `weather_query` | `qweather` | `qweather`、`byted`、`weather`、`weather_cn` |
+| `weather_query` | `qweather` | `qweather`、`byted`、`weather_cn`、`weather` |
 | `modal_card` | `bocha_ai` | `bocha_ai`、`bocha`、`train` |
 | `jin10_flash` | `jin10` | `jin10`、`cls_telegraph` |
 | `zhihu_hot_list` | `zhihu_hot` | `zhihu_hot`、`zhihu` |

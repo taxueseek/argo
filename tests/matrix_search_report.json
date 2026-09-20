@@ -915,7 +915,7 @@
     {
       "name": "route:R_zh_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikidata'] lang=zh",
       "meta": {
         "id": "R_zh_geo",
         "q": "埃菲尔铁塔在哪",
@@ -925,7 +925,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "wikipedia"
+          "wikidata"
         ],
         "primary_lang": "zh"
       }
@@ -933,7 +933,7 @@
     {
       "name": "route:R_en_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=en",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikidata'] lang=en",
       "meta": {
         "id": "R_en_geo",
         "q": "where is Eiffel Tower",
@@ -943,7 +943,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "wikipedia"
+          "wikidata"
         ],
         "primary_lang": "en"
       }
@@ -951,7 +951,7 @@
     {
       "name": "route:R_zh_geo2",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikidata'] lang=zh",
       "meta": {
         "id": "R_zh_geo2",
         "q": "黄河 流经省份",
@@ -961,7 +961,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "wikipedia"
+          "wikidata"
         ],
         "primary_lang": "zh"
       }
@@ -988,7 +988,7 @@
     {
       "name": "route:R_zh_org",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia', 'baidu_baike', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike', 'wikipedia', 'zh_wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_org",
         "q": "国务院职能",
@@ -998,8 +998,8 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "wikipedia",
           "baidu_baike",
+          "wikipedia",
           "zh_wikipedia"
         ],
         "primary_lang": "zh"
@@ -1048,7 +1048,7 @@
     {
       "name": "route:R_zh_org2",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia', 'baidu_baike', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike', 'wikipedia', 'zh_wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_org2",
         "q": "清华大学 创办年份",
@@ -1058,8 +1058,8 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "wikipedia",
           "baidu_baike",
+          "wikipedia",
           "zh_wikipedia"
         ],
         "primary_lang": "zh"
@@ -1108,7 +1108,7 @@
     {
       "name": "route:R_zh_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'byted', 'weather', 'weather_cn', 'local_openstreetmap'] lang=zh",
+      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'weather_cn', 'weather', 'local_openstreetmap'] lang=zh",
       "meta": {
         "id": "R_zh_weather",
         "q": "北京 天气",
@@ -1118,9 +1118,8 @@
         "engine": "open_meteo",
         "combo": [
           "open_meteo",
-          "byted",
-          "weather",
           "weather_cn",
+          "weather",
           "local_openstreetmap"
         ],
         "primary_lang": "zh"
@@ -1129,18 +1128,17 @@
     {
       "name": "route:R_en_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=byted combo=['byted', 'weather', 'weather_cn'] lang=en",
+      "detail": "domain=weather_query eng=weather_cn combo=['weather_cn', 'weather'] lang=en",
       "meta": {
         "id": "R_en_weather",
         "q": "weather Tokyo",
         "scenario": "weather",
         "lang": "en",
         "domain": "weather_query",
-        "engine": "byted",
+        "engine": "weather_cn",
         "combo": [
-          "byted",
-          "weather",
-          "weather_cn"
+          "weather_cn",
+          "weather"
         ],
         "primary_lang": "en"
       }
@@ -1148,7 +1146,7 @@
     {
       "name": "route:R_ja_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'weather', 'anysearch', 'weather_cn', 'local_bing', 'local_duckduckgo'] lang=ja",
+      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'weather_cn', 'anysearch', 'weather', 'local_bing'] lang=ja",
       "meta": {
         "id": "R_ja_weather",
         "q": "東京の天気",
@@ -1158,11 +1156,10 @@
         "engine": "open_meteo",
         "combo": [
           "open_meteo",
-          "weather",
-          "anysearch",
           "weather_cn",
-          "local_bing",
-          "local_duckduckgo"
+          "anysearch",
+          "weather",
+          "local_bing"
         ],
         "primary_lang": "ja"
       }
@@ -1170,7 +1167,7 @@
     {
       "name": "route:R_en_academic",
       "status": "PASS",
-      "detail": "domain=academic eng=arxiv combo=['arxiv', 'crossref'] lang=en",
+      "detail": "domain=academic eng=arxiv combo=['arxiv', 'openreview', 'local_pubmed', 'core'] lang=en",
       "meta": {
         "id": "R_en_academic",
         "q": "transformer attention paper",
@@ -1180,7 +1177,9 @@
         "engine": "arxiv",
         "combo": [
           "arxiv",
-          "crossref"
+          "openreview",
+          "local_pubmed",
+          "core"
         ],
         "primary_lang": "en"
       }
@@ -1242,7 +1241,7 @@
     {
       "name": "route:R_zh_package",
       "status": "PASS",
-      "detail": "domain=package_search eng=pypi combo=['pypi', 'npm'] lang=en",
+      "detail": "domain=package_search eng=pypi combo=['pypi', 'crates'] lang=en",
       "meta": {
         "id": "R_zh_package",
         "q": "requests pypi",
@@ -1252,7 +1251,7 @@
         "engine": "pypi",
         "combo": [
           "pypi",
-          "npm"
+          "crates"
         ],
         "primary_lang": "en"
       }
@@ -1408,17 +1407,17 @@
     {
       "name": "route:R_zh_gen",
       "status": "PASS",
-      "detail": "domain=chinese_tech_deep eng=byted combo=['byted', 'octen'] lang=zh",
+      "detail": "domain=chinese_tech_deep eng=octen combo=['octen', 'parallel'] lang=zh",
       "meta": {
         "id": "R_zh_gen",
         "q": "如何学习机器学习",
         "scenario": "general",
         "lang": "zh",
         "domain": "chinese_tech_deep",
-        "engine": "byted",
+        "engine": "octen",
         "combo": [
-          "byted",
-          "octen"
+          "octen",
+          "parallel"
         ],
         "primary_lang": "zh"
       }
@@ -1516,19 +1515,17 @@
     {
       "name": "route:N_en_history",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia', 'zh_wikipedia', 'ror'] lang=en",
+      "detail": "domain=general_search eng=duckduckgo combo=['duckduckgo', 'anysearch'] lang=en",
       "meta": {
         "id": "N_en_history",
         "q": "who invented the printing press",
         "scenario": "negative",
         "lang": "en",
-        "domain": "org_entity",
-        "engine": "wikidata",
+        "domain": "general_search",
+        "engine": "duckduckgo",
         "combo": [
-          "wikidata",
-          "wikipedia",
-          "zh_wikipedia",
-          "ror"
+          "duckduckgo",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -1835,7 +1832,7 @@
     {
       "name": "reach:summary",
       "status": "PASS",
-      "detail": "死源 0 个: 无；声明 explicit_only 7 个: doi, opencitations, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall"
+      "detail": "死源 0 个: 无；声明 explicit_only 8 个: doi, gdelt, opencitations, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall"
     }
   ]
 }

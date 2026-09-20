@@ -149,6 +149,14 @@ class TestWxPy(unittest.TestCase):
         self.assertEqual(wx._parse_location(["31.23", "121.47"]), "31.23,121.47")
         self.assertEqual(wx._parse_location([""]), "Beijing")
 
+    def test_parse_location_cleans_colloquial_time_words(self) -> None:
+        # 口语时间词「今日/明日/昨晚」与「今天/明天」同义，漏掉会让 wttr.in
+        # 拿「今日北京」查天气（HTTP 500，实测），三天气源同型全灭
+        self.assertEqual(wx._parse_location(["今日北京天气"]), "北京")
+        self.assertEqual(wx._parse_location(["明日上海天气"]), "上海")
+        self.assertEqual(wx._parse_location(["昨日北京天气"]), "北京")
+        self.assertEqual(wx._parse_location(["今晚上海天气"]), "上海")
+
     def test_wttr_parses_current_and_forecast(self) -> None:
         with _patch_wttr():
             rows = wx._wttr("Shanghai")

@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-09-19'
+last_updated: '2026-09-20'
 engines:
 - name: anysearch
   tier: T1

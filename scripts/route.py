@@ -1780,8 +1780,26 @@ def route_query(query: str, engine_override: str = "auto",
             mode=mode, depth=depth, context=context,
             enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
         )
-        # ja/ko：多语言主力源 anysearch 送到前二（策略截断后注入才不会被
-        # must_keep 换位挤出；primary 扶正前注入，域主源仍居首）
+        # 意图裁剪收口（幂等二次施加）：policy 层的新源 must_keep 补回会放大
+        # combo。只对 definition/fact 收口——单源即答语义下，扩容槽（新源
+        # 加槽补回的引擎）纯属阶梯等待浪费（实测 academic definition 1 → 3
+        # 引擎，test_p0_v25 锁的正是这条契约）。social/news/compare 本身要
+        # 多源，扩容与意图同向，且新源可达性由探针测试锁定（
+        # test_new_source_reachability），不收口。
+        # must_keep 成员豁免：它们有硬保留理由（geo 的 local_openstreetmap
+        # 被裁会退化成 wikidata 单源，实测 R_en_geo 矩阵 FAIL）。
+        _intents = features.get("intents") or []
+        if "definition" in _intents or "fact" in _intents:
+            _mk = set(must_keep)
+            _rest = [e for e in engines_combo if e not in _mk]
+            if len(_rest) != len(engines_combo):
+                _rest, parallel = _apply_intent_parallelism(
+                    _rest, features, domain, mode, parallel)
+                engines_combo = _rest + [e for e in engines_combo
+                                         if e in _mk and e not in _rest]
+            else:
+                engines_combo, parallel = _apply_intent_parallelism(
+                    engines_combo, features, domain, mode, parallel)
         engines_combo = _inject_multilingual_backup(engines_combo, enabled,
                                                     features)
         # 域 primary 扶正：已在 combo 且未熔断时置首（不覆盖冷却中的熔断沉底）
@@ -1898,6 +1916,21 @@ def route_query(query: str, engine_override: str = "auto",
             mode=mode, depth=depth, context=context,
             enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
         )
+        # 意图裁剪收口（与主域分支同一问题：policy 的 must_keep 补回会放大
+        # combo，抵消上面的意图裁剪）。同样只对 definition/fact 收口，
+        # must_keep 成员豁免（理由见主域分支注释）。
+        _intents = features.get("intents") or []
+        if "definition" in _intents or "fact" in _intents:
+            _mk = set(must_keep)
+            _rest = [e for e in engines_combo if e not in _mk]
+            if len(_rest) != len(engines_combo):
+                _rest, parallel = _apply_intent_parallelism(
+                    _rest, features, None, mode, parallel)
+                engines_combo = _rest + [e for e in engines_combo
+                                         if e in _mk and e not in _rest]
+            else:
+                engines_combo, parallel = _apply_intent_parallelism(
+                    engines_combo, features, None, mode, parallel)
         # ja/ko catch-all 与主域分支同计算方式：anysearch 前二（TF-IDF 直选路径
         # 也会把多语言主力挤掉）
         engines_combo = _inject_multilingual_backup(engines_combo, enabled,

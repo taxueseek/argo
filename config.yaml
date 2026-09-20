@@ -565,11 +565,14 @@ domains:
   patterns:
   - (?i)(metar|taf|aviation\s*weather|airport\s*weather|aviationweather\.gov|航空气象|机场天气|机场气象|飞行气象|通航气象)
 - desc: 天气查询（和风天气 + 免 Key 天气引擎 + 中国天气网）
+  # weather_cn 前置于 weather：国内城市实况实测 0.46s（两步直连）vs weather
+  # 子进程双源 1.5-4.3s；串行阶梯下位次即墙钟，快而权威的源先交付，early-stop
+  # 命中后不再起慢源。weather 仍在本域（海外城市 wttr 主用）+ fallback 链可达。
   engines_combo:
   - qweather
   - byted
-  - weather
   - weather_cn
+  - weather
   fallback: qweather
   name: weather_query
   parallel: false

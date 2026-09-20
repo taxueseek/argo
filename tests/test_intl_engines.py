@@ -212,6 +212,31 @@ class TestOpenMeteo(_BuilderCase):
             res = engine("q", 3)
         self.assertEqual(res, [])
 
+    def test_geo_core_strips_colloquial_time_words(self):
+        # 完整天气问句先剥时间/疑问词再 geocode：「今日北京天气」直接拼 name=
+        # 会让上游 0 候选、引擎静默返回空（实测）。坐标串不碰。
+        self.assertEqual(intl._geo_core("今日北京天气"), "北京")
+        self.assertEqual(intl._geo_core("明日上海天气"), "上海")
+        self.assertEqual(intl._geo_core("北京"), "北京")
+        self.assertEqual(intl._geo_core("31.23,121.47"), "31.23,121.47")
+
+    def test_full_sentence_query_reaches_geocode_cleaned(self):
+        # 问句「今日北京天气」最终送进 geocoding 的 name= 应是「北京」
+        seen_url = {}
+        def fake_json(url, timeout, engine=""):
+            if "geocoding" in url:
+                seen_url["u"] = url
+                return {"results": [{"name": "北京", "country": "中国",
+                                     "latitude": 39.9, "longitude": 116.4}]}
+            return {"current_weather": {"temperature": 27.3, "windspeed": 2.0,
+                                        "weathercode": 3}}
+        engine = intl._build_open_meteo_engine({"timeout": 8})
+        with patch.object(intl, "_http_json", side_effect=fake_json):
+            res = engine("今日北京天气", 3)
+        self.assertIn("name=%E5%8C%97%E4%BA%AC", seen_url["u"],
+                      "geocode 的 name= 应是剥过时间词的地名")
+        self.assertGreaterEqual(len(res), 1)
+
 
 class TestConfigDrivenEngines(unittest.TestCase):
     """config 驱动引擎（type: http + output_map）：构建并解析样例响应。"""
