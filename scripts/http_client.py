@@ -335,6 +335,10 @@ def host_throttle(url: str, engine: str | None = None):
         yield None
         return
     max_conc, interval = limits
+    # spec 单值声明（只给并发或只给间隔）时另一个分量为 None——BoundedSemaphore(None)
+    # 会在内部 value<0 处抛 TypeError，补默认值（与域族默认 2 并发一致；间隔 0=不限）
+    max_conc = max_conc if max_conc else 2
+    interval = interval if interval is not None else 0
     group = host_group_for(url)
     bucket_key = f"{group}|{max_conc}|{interval}"
     with _BUCKETS_LOCK:

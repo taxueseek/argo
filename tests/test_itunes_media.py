@@ -196,11 +196,15 @@ class TestShowFields:
         assert r["duration_minutes"] != 0
 
     def test_show_has_no_new_fields_beyond_contract(self, monkeypatch):
-        """只允许既有字段 + 本次显式登记的两个键（冻结字段集不得被动扩张）。"""
+        """只允许既有字段 + 本次显式登记的键（冻结字段集不得被动扩张）。
+
+        transcript_url 为 2026-09-19 登记的官方文字稿直链（Podcasting 2.0）。
+        """
         _patch(monkeypatch, search_payload=_SHOW, lookup_payload=_LOOKUP_EPS)
         r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
         allowed = {"title", "url", "snippet", "source", "score",
-                   "published_at", "episode_count", "duration_minutes"}
+                   "published_at", "episode_count", "duration_minutes",
+                   "transcript_url"}
         assert set(r) <= allowed, f"出现未登记字段: {sorted(set(r) - allowed)}"
 
     def test_enrichment_failure_is_fail_open(self, monkeypatch):
@@ -212,9 +216,13 @@ class TestShowFields:
         assert "duration_minutes" not in out[0]
 
     def test_enrichment_runs_only_once(self, monkeypatch):
-        """取样有上限：节目结果再多也只补首条，请求数不随结果数膨胀。"""
+        """取样有上限：节目结果再多也只补首条，请求数不随结果数膨胀。
+
+        collectionId 从 1 起（真实形态）：0 会被 _recent_episode_duration
+        当空值早退，让「只补首条」退化成「一条都没补」。
+        """
         many = {"results": [
-            dict(_SHOW["results"][0], collectionName=f"访谈节目{i}", collectionId=i)
+            dict(_SHOW["results"][0], collectionName=f"访谈节目{i}", collectionId=i + 1)
             for i in range(4)
         ]}
         calls = []
@@ -223,6 +231,119 @@ class TestShowFields:
         lookups = [u for u in calls if "/lookup" in u]
         assert len(lookups) == bd._ITUNES_SHOW_ENRICH_MAX
         assert sum(1 for r in out if "duration_minutes" in r) == 1
+
+
+# ── 官方文字稿增强（Podcasting 2.0 <podcast:transcript>，2026-09-19 新增）────
+
+_FEED_XML_VTT = """<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:podcast="https://podcastindex.org/namespace/1.0"><channel>
+<item><title>第 1 期</title>
+<podcast:transcript url="https://feed.example/ep1.vtt" type="text/vtt"/>
+</item>
+<item><title>第 2 期</title>
+<podcast:transcript url="https://feed.example/ep2.pdf" type="application/pdf"/>
+</item>
+</channel></rss>"""
+
+_SAMPLE_VTT = """WEBVTT
+
+00:00:01.000 --> 00:00:04.000
+<v 主播>欢迎收听本期<c.highlight>节目</c>
+
+00:00:04.000 --> 00:00:08.000
+今天聊播客行业的文字稿标准
+"""
+
+
+class TestShowTranscript:
+    """mock 节目的 feedUrl 指向 feed.example（_SHOW 的 xyzfm 真实域名不进测试）。"""
+
+    _FEED_URL = "https://feed.example/show.xml"
+
+    def _show_payload(self, **overrides):
+        base = dict(_SHOW["results"][0])
+        base["feedUrl"] = overrides.pop("feedUrl", self._FEED_URL)  # 覆盖真实域名
+        base.update(overrides)
+        return {"results": [base]}
+
+    def _patch_with_feed(self, monkeypatch, search_payload=None,
+                         feed_body: bytes | None = None,
+                         transcript_body: bytes | None = None,
+                         feed_raises: bool = False, calls=None):
+        feed = feed_body if feed_body is not None else _FEED_XML_VTT.encode()
+        vtt = transcript_body if transcript_body is not None else _SAMPLE_VTT.encode()
+        shows = search_payload if search_payload is not None else self._show_payload()
+
+        def handler(req, timeout=None, engine=""):
+            url = getattr(req, "full_url", req)
+            if calls is not None:
+                calls.append(url)
+            if "/lookup" in url:
+                return _FakeResp(json.dumps(_LOOKUP_EPS).encode())
+            if url.endswith(".vtt"):
+                return _FakeResp(vtt)
+            if url.startswith("https://feed.example"):
+                if feed_raises:
+                    raise RuntimeError("feed 拉取失败")
+                return _FakeResp(feed)
+            return _FakeResp(json.dumps(shows).encode())
+        monkeypatch.setattr(bd, "http_open", handler, raising=True)
+
+    def test_transcript_enriches_first_show(self, monkeypatch):
+        """feed 带 transcript 标签：首条节目拿到 transcript_url + 全文预览。"""
+        self._patch_with_feed(monkeypatch)
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert r["transcript_url"] == "https://feed.example/ep1.vtt"
+        assert "欢迎收听本期节目" in r["snippet"]
+        assert "今天聊播客行业的文字稿标准" in r["snippet"]
+        assert "-->" not in r["snippet"]
+
+    def test_transcript_fail_open(self, monkeypatch):
+        """feed 拉取失败：节目本体照常，只是没有 transcript_url。"""
+        self._patch_with_feed(monkeypatch, feed_raises=True)
+        out = _engine()("播客 张小珺 商业访谈录", n=3)
+        assert len(out) == 1
+        assert out[0]["episode_count"] == 156
+        assert "transcript_url" not in out[0]
+
+    def test_no_transcript_tag_is_noop(self, monkeypatch):
+        """feed 没挂 transcript 标签：条目照常返回，不产生额外字段。"""
+        self._patch_with_feed(
+            monkeypatch, feed_body=b"<rss><channel><item><title>x</title></item></channel></rss>")
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert "transcript_url" not in r
+
+    def test_unsupported_type_falls_to_next_candidate(self, monkeypatch):
+        """最新一期只有 PDF 时跳过，取下一期可解析格式（VTT）。"""
+        xml = _FEED_XML_VTT.replace(
+            '<podcast:transcript url="https://feed.example/ep1.vtt" type="text/vtt"/>',
+            '<podcast:transcript url="https://feed.example/ep1.pdf" type="application/pdf"/>',
+        ).replace(
+            '<podcast:transcript url="https://feed.example/ep2.pdf" type="application/pdf"/>',
+            '<podcast:transcript url="https://feed.example/ep2.vtt" type="text/vtt"/>',
+        )
+        self._patch_with_feed(monkeypatch, feed_body=xml.encode())
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert r["transcript_url"] == "https://feed.example/ep2.vtt"
+
+    def test_transcript_url_not_duplicated_by_enrich_quota(self, monkeypatch):
+        """配额只给首条：第二条节目不产生 transcript_url，请求数不膨胀。
+
+        collectionId 从 1 起（真实形态），0 会被 _recent_episode_duration
+        当空值早退，污染「配额=1」的断言。
+        """
+        many = {"results": [
+            dict(_SHOW["results"][0], collectionName=f"访谈节目{i}",
+                 collectionId=i + 1, feedUrl=self._FEED_URL)
+            for i in range(3)
+        ]}
+        calls = []
+        self._patch_with_feed(monkeypatch, search_payload=many, calls=calls)
+        out = _engine()("播客 访谈", n=5)
+        assert sum(1 for r in out if "transcript_url" in r) == 1
+        # 恰一次 feed 拉取 + 一次文字稿下载，请求数不随结果数膨胀
+        assert sum(1 for u in calls if u.endswith("show.xml")) == 1
+        assert sum(1 for u in calls if u.endswith(".vtt")) == 1
 
 
 class TestEpisodeFields:
@@ -290,6 +411,80 @@ class TestGeneralContract:
             raise RuntimeError("网络挂了")
         monkeypatch.setattr(bd, "http_open", boom, raising=True)
         assert _engine()("播客 测试", n=3) == []
+
+
+class TestTranscriptHardening:
+    """对抗审查补充：安全与边界（2026-09-19）。"""
+
+    def test_mime_with_charset_param(self, monkeypatch):
+        """type="text/vtt; charset=utf-8" 带参数不被拒。"""
+        xml = _FEED_XML_VTT.replace('type="text/vtt"', 'type="text/vtt; charset=utf-8"')
+        TestShowTranscript()._patch_with_feed(monkeypatch, feed_body=xml.encode())
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert r["transcript_url"] == "https://feed.example/ep1.vtt"
+
+    def test_single_quoted_attrs(self, monkeypatch):
+        """单引号属性的 transcript 标签能取到 URL。"""
+        xml = _FEED_XML_VTT.replace(
+            '<podcast:transcript url="https://feed.example/ep1.vtt" type="text/vtt"/>',
+            "<podcast:transcript url='https://feed.example/ep1.vtt' type='text/vtt'/>")
+        TestShowTranscript()._patch_with_feed(monkeypatch, feed_body=xml.encode())
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert r["transcript_url"] == "https://feed.example/ep1.vtt"
+
+    def test_malformed_url_does_not_crash(self, monkeypatch):
+        """畸形 URL（urljoin 会抛 ValueError）跳过该候选，不崩引擎。"""
+        xml = _FEED_XML_VTT.replace(
+            '<podcast:transcript url="https://feed.example/ep1.vtt" type="text/vtt"/>',
+            '<podcast:transcript url="http://[" type="text/vtt"/>')
+        TestShowTranscript()._patch_with_feed(monkeypatch, feed_body=xml.encode())
+        out = _engine()("播客 张小珺 商业访谈录", n=3)
+        assert len(out) == 1
+        assert "transcript_url" not in out[0]
+
+    def test_file_scheme_rejected(self, monkeypatch):
+        """file:// 与内网 http 的文字稿 URL 被拒（SSRF 防护）。"""
+        xml = _FEED_XML_VTT.replace(
+            '<podcast:transcript url="https://feed.example/ep1.vtt" type="text/vtt"/>',
+            '<podcast:transcript url="file:///Users/x/.ssh/id_rsa" type="text/plain"/>')
+        TestShowTranscript()._patch_with_feed(monkeypatch, feed_body=xml.encode())
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert "transcript_url" not in r
+
+    def test_first_candidate_download_fails_falls_to_next(self, monkeypatch):
+        """首份候选下载失败不放弃整条节目，转下一份可解析候选。"""
+        xml = _FEED_XML_VTT.replace("ep2.pdf", "ep2.vtt").replace(
+            '<podcast:transcript url="https://feed.example/ep2.vtt" type="application/pdf"/>',
+            '<podcast:transcript url="https://feed.example/ep2.vtt" type="text/vtt"/>')
+        calls = []
+        base = TestShowTranscript()._patch_with_feed
+
+        def handler(req, timeout=None, engine=""):
+            url = getattr(req, "full_url", req)
+            calls.append(url)
+            if "/lookup" in url:
+                return _FakeResp(json.dumps(_LOOKUP_EPS).encode())
+            if url.endswith("ep1.vtt"):
+                raise RuntimeError("首份下载失败")
+            if url.endswith(".vtt"):
+                return _FakeResp(_SAMPLE_VTT.encode())
+            if url.startswith("https://feed.example"):
+                return _FakeResp(xml.encode())
+            return _FakeResp(json.dumps(
+                TestShowTranscript()._show_payload()).encode())
+        monkeypatch.setattr(bd, "http_open", handler, raising=True)
+        r = _engine()("播客 张小珺 商业访谈录", n=3)[0]
+        assert r["transcript_url"] == "https://feed.example/ep2.vtt"
+
+    def test_transcript_to_text_srt_and_html(self):
+        """SRT 序号行/时间轴清除；HTML 去 tag 与实体。"""
+        srt = "1\n00:00:01,000 --> 00:00:04,000\n第一句台词\n\n2\n00:00:05,000 --> 00:00:08,000\n第二句台词\n"
+        out = bd._transcript_to_text(srt, "text/srt")
+        assert "第一句台词" in out and "-->" not in out and out.index("第一句") < out.index("第二句")
+        html = "<html><body>R&amp;D 测试<br/>正文&nbsp;行</body></html>"
+        out = bd._transcript_to_text(html, "text/html")
+        assert "&amp;" not in out and "nbsp" not in out and "正文" in out
+
 
 
 if __name__ == "__main__":

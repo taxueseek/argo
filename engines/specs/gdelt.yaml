@@ -1,0 +1,64 @@
+# GDELT 全球新闻事件流（免 Key）
+# 数据源: https://api.gdeltproject.org/api/v2/doc/doc  DOC 2.0 API
+# 能力: 全球媒体文章流——75+ 种语言（GDELT 机器翻译索引），一条查询横扫
+#       英/中/俄/土/阿尔巴尼亚等各国媒体，带 domain/language/sourcecountry
+#       与抓取时间。argo 原有新闻源是「单国单语」（google_news/dw_news/
+#       france24/人民日报），「同一事件看全球媒体怎么报」这个面是盲的。
+# 形态: type=http GET + ArtList 模式，query 驱动（非热榜），归 news_flash 族。
+# 坑: ①查询词太短报 "The specified phrase is too short"（纯文本非 JSON，
+#     走引擎失败路径返回空）——canary/质量查询必须用 ≥4 字符的真实词组。
+#     ②官方限流 1 调用/5 秒，超了 429 且冷却以分钟计（出口 IP 生效）——
+#     qps 压到 0.2，且 429 响应体来得慢（实测 14s），timeout 放宽到 25s
+#     才能读到响应体、正确归因而不是被记成 connection-failed。
+#     ③无摘要字段，snippet 留空；published_at 用 seendate
+#     （YYYYMMDDTHHMMSSZ 原样透传，与其他非 epoch 源一致）。
+# 历史: v2.8.9 曾以下线（当时判定「死源」）。根因是 qps:2 的重试节奏撞进
+#     429 冷却窗（越重试越 429）+ 共享代理出口常年半冷却；2026-09-19 实测
+#     上游活着（200 返回完整 JSON），改 qps 0.2 + direct 出口复活。
+# 验证:
+#   python3 scripts/engine_validate.py --engine gdelt --stage all --admit
+#   python3 scripts/search.py "artificial intelligence" --engine gdelt --json
+
+engine_id: gdelt
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://api.gdeltproject.org/api/v2/doc/doc
+timeout: 25
+query_param: query
+canary_query: "artificial intelligence"
+desc: "GDELT 全球新闻事件流（75+ 语言跨国媒体扫描，带域名/语言/国家标注）"
+coverage: [news, world, multilingual]
+recommended: false
+
+family: news_flash
+# min_interval_ms=5000：官方纪律是 1 调用/5 秒。qps 字段落地为滚动 60s 窗口
+# 的 rpm 上限，12 连发照样 3 秒内全打出去，兜不住 GDELT 的突发冷却——
+# 硬节流靠 min_interval_ms；qps: 1 显式声明配额闸，避免落回域族默认(qps=2)
+qps: 1
+min_interval_ms: 5000
+# explicit_only：限流严格、触发后冷却以分钟计——不能进默认 combo 打流量
+# （不达源门禁会拦），只在显式 --engine gdelt 时出
+explicit_only: true
+
+extra_params:
+  mode: ArtList
+  format: json
+  maxrecords: "{n}"
+  sort: DateDesc
+
+# domain 是真实发布方（土耳其 milliyet.com.tr / 美国 stardem.com...），
+# 保留而非改写为引擎名
+preserve_source: true
+
+output_map:
+  items: articles
+  item_title: title
+  item_url: url
+  item_source: domain
+  item_published_at: seendate
+
+quality_queries:
+  - query: "artificial intelligence"
+  - query: "climate change policy"

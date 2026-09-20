@@ -68,6 +68,16 @@ def published_ts(r: dict[str, Any]) -> float | None:
         return dt.timestamp()
     except ValueError:
         pass
+    # basic ISO（YYYYMMDDTHHMMSSZ，如 GDELT seendate）：Python 3.10 的
+    # fromisoformat 不认，插入分隔符归一化成扩展格式再走同一解析
+    if len(text) >= 15 and text[:8].isdigit() and text[8] == "T" and text[9:15].isdigit():
+        try:
+            dt = datetime.fromisoformat(
+                f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+                f"T{text[9:11]}:{text[11:13]}:{text[13:15]}+00:00")
+            return dt.timestamp()
+        except ValueError:
+            pass
     m = _DATE_RE.match(text)
     if not m:
         return None

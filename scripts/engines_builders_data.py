@@ -12,6 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
+from html import unescape as _unescape
 from typing import Any
 
 from engine_env import get_env
@@ -1984,12 +1985,40 @@ _MEDIA_INTENT_WORD_RE = re.compile(
 # 节目级时长必须二跳取样（见下方 docstring），逐条补会让请求数随结果数膨胀。
 # 只补首条：播客名查询通常只有一个正解（实测「张小珺 商业访谈录」Apple 只回 1 条）。
 _ITUNES_SHOW_ENRICH_MAX = 1
+# 文字稿/feed 拉取的字节上限：预览只需几百字，2MB 足够防超大文件吃内存
+_TRANSCRIPT_MAX_BYTES = 2 * 1024 * 1024
 
 
 def _itunes_date(raw: Any) -> str:
     """Apple 的 releaseDate 形如 2026-09-03T00:00:00Z，裁到日期部分供展示。"""
     s = str(raw or "").strip()
     return s[:10] if len(s) >= 10 else ""
+
+
+def _transcript_to_text(raw: str, ctype: str) -> str:
+    """文字稿原文 → 纯文本。VTT/SRT 去时间轴与样式行，HTML 去 tag。
+
+    Podcasting 2.0 文字稿的 type 值不统一（text/vtt、application/srt、
+    裸 text/plain 都见过），按字符串包含判断而非全等。
+    """
+    if "html" in ctype:
+        text = re.sub(r"<[^>]+>", " ", raw)
+        text = _unescape(text)
+    elif "vtt" in ctype or "srt" in ctype or "plain" in ctype:
+        lines: list[str] = []
+        for ln in raw.splitlines():
+            s = ln.strip()
+            if (not s or s == "WEBVTT"
+                    or s.startswith(("NOTE", "STYLE", "REGION"))
+                    or "-->" in s or s.isdigit()):
+                continue
+            s = re.sub(r"<[^>]+>", "", s)  # <c> 高亮、<v 说话人> 内联标签
+            if s:
+                lines.append(s)
+        text = " ".join(lines)
+    else:
+        text = raw
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _build_itunes_engine(spec: dict[str, Any]) -> Any:
@@ -2048,6 +2077,70 @@ def _build_itunes_engine(spec: dict[str, Any]) -> Any:
         if not mins:
             return None, 0
         return int(round(statistics.median(mins))), len(mins)
+
+    def _show_transcript(feed_url: str, to: float) -> tuple[str, str]:
+        """节目官方文字稿（Podcasting 2.0）：feed 里 <podcast:transcript> 标签
+        指向创作者自己挂的全文，不是 ASR 猜的——这是播客转录里唯一免费且
+        准确的通道（英文生态采纳率高，中文节目普遍没挂）。
+
+        取 feed 中第一份可解析格式的文字稿（最新一期）：搜索对象是「节目」，
+        最新一期代表当前内容；历史各期的文字稿同挂在 feed，下游拿着
+        transcript_url 可回读全文。任何失败一律 ("", "")，节目本体照常返回。
+        application/json（Podcasting 2.0 的机器格式）本版不解析，静默跳过。
+        """
+        if not feed_url:
+            return "", ""
+        feed_url = str(feed_url).strip()
+        if not feed_url.lower().startswith(("https://", "http://")):
+            return "", ""
+        try:
+            req = urllib.request.Request(feed_url, headers=ua_headers)
+            with http_open(req, timeout=to, engine=engine_tag) as resp:
+                feed_xml = resp.read(_TRANSCRIPT_MAX_BYTES).decode("utf-8", "replace")
+        except Exception as e:
+            logger.debug(f"iTunes 文字稿 feed 拉取失败: {e}")
+            return "", ""
+        ok_types = ("text/vtt", "text/srt", "text/plain", "text/html")
+        ok_exts = ("vtt", "srt", "txt", "html", "htm")
+        for m in re.finditer(r"<podcast:transcript\b[^>]*>", feed_xml):
+            tag = m.group(0)
+            # 属性可能是单引号或双引号；type 可能带 ;charset= 参数
+            url_m = re.search(r"""\burl=("([^"]+)"|'([^']+)')""", tag)
+            if not url_m:
+                continue
+            raw_url = url_m.group(2) or url_m.group(3)
+            type_m = re.search(r"""\btype=("([^"]+)"|'([^']+)')""", tag)
+            ctype = (type_m.group(2) or type_m.group(3) if type_m else "").lower()
+            ctype = ctype.split(";", 1)[0].strip()
+            try:
+                parsed = urllib.parse.urlsplit(raw_url)
+                if parsed.scheme == "":
+                    parsed = urllib.parse.urlsplit(urllib.parse.urljoin(feed_url, raw_url))
+                # 文字稿 URL 来自第三方 feed 内容：仅接受 https，防 file://
+                # 读本地文件、防内网地址（SSRF）；urlsplit 对畸形输入抛
+                # ValueError，一并拦下
+                if parsed.scheme != "https" or not parsed.hostname:
+                    continue
+                t_url = urllib.parse.urlunsplit(parsed)
+            except ValueError:
+                continue
+            if not ctype:
+                ext = parsed.path.rsplit(".", 1)[-1].lower() if "." in parsed.path.rsplit("?", 1)[0] else ""
+                if ext in ok_exts:
+                    ctype = "text/plain" if ext in ("txt", "srt") else f"text/{ext}"
+            if ctype not in ok_types:
+                continue
+            try:
+                req = urllib.request.Request(t_url, headers=ua_headers)
+                with http_open(req, timeout=to, engine=engine_tag) as resp:
+                    raw = resp.read(_TRANSCRIPT_MAX_BYTES).decode("utf-8", "replace")
+            except Exception as e:
+                logger.debug(f"iTunes 文字稿下载失败: {e}")
+                continue  # 这份坏了不放弃整条节目，试下一份候选
+            text = _transcript_to_text(raw, ctype)
+            if text:
+                return t_url, text
+        return "", ""
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -2179,11 +2272,21 @@ def _build_itunes_engine(spec: dict[str, Any]) -> Any:
                 if target is None or "duration_minutes" in target:
                     continue
                 mid, samples = _recent_episode_duration(it.get("collectionId"), country, to)
-                if mid is None:
-                    continue
-                target["duration_minutes"] = mid
-                target["snippet"] = f"{target['snippet']} · 近 {samples} 期中位 {mid} 分"[:300]
-                enriched += 1
+                if mid is not None:
+                    target["duration_minutes"] = mid
+                    target["snippet"] = f"{target['snippet']} · 近 {samples} 期中位 {mid} 分"
+                    enriched += 1
+                # 文字稿与时长共用 enrich 配额（前 1 条节目）：官方全文预览的
+                # 信息密度远高于「N 集 · 类型」元数据行，有文字稿时 snippet
+                # 拼接全文开头，episode_count/published_at 等结构字段不动
+                feed_url = str(it.get("feedUrl") or "").strip()
+                if feed_url:
+                    t_url, t_prev = _show_transcript(feed_url, to)
+                    if t_url:
+                        target["transcript_url"] = t_url
+                    if t_prev:
+                        target["snippet"] = f"{target['snippet']} ｜ {t_prev}"[:300]
+                    enriched += 1
         return out
     return _engine
 
@@ -2449,57 +2552,6 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
 
 
 # ── GDELT 全球事件数据库 ─────────────────────────────────────────────────────
-
-def _build_gdelt_engine(spec: dict[str, Any]) -> Any:
-    """GDELT 全球新闻事件数据库（api.gdeltproject.org/api/v2/doc/doc，免认证）。
-
-    全球事件/舆情查询：返回事件描述、来源、时间、国家标签。中文查询走
-    GEO JSON 全词搜索，英文走 phrase 搜索。独特价值：全球事件图谱，
-    覆盖 argo 现有新闻引擎（财联社/东财/Google News）的地理与事件维度。
-    """
-    timeout = spec.get("timeout", 10)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        has_cjk = bool(re.search(r"[\u4e00-\u9fff]", query))
-        mode = "geojson" if has_cjk else "phraselist"
-        url = (
-            "https://api.gdeltproject.org/api/v2/doc/doc"
-            f"?query={urllib.parse.quote(query)}&mode={mode}"
-            "&format=json&maxrecords=25&sort=hybridrel"
-            "&timespan=30d"
-        )
-        headers = {"User-Agent": "argo-search/2.6 (unified-search@local)"}
-        try:
-            with http_open(urllib.request.Request(url, headers=headers), timeout=to, engine=spec.get("_name", "")) as resp:
-                data = json.loads(resp.read().decode("utf-8", "replace"))
-        except Exception:
-            return []
-        articles = data.get("articles") or []
-        results: list[dict[str, Any]] = []
-        for _rk18, a in enumerate(articles[:n]):
-            title = a.get("title") or ""
-            if not title:
-                continue
-            src = a.get("sourcecountry") or a.get("domain") or "gdelt"
-            url_a = a.get("url") or ""
-            seendate = a.get("seendate") or ""
-            date_s = f"{seendate[:4]}-{seendate[4:6]}-{seendate[6:8]}" if len(seendate) >= 8 else ""
-            results.append({
-                "title": title[:200],
-                "url": url_a,
-                "snippet": (a.get("seentext") or "")[:300],
-                "source": "gdelt",
-                "score": rank_score(0.8, _rk18),
-                "published": date_s,
-                "country": src,
-                "language": a.get("lang") or "",
-                "domain_label": "事件",
-            })
-        return results
-    return _engine
-
 
 # ── OpenCorporates 全球公司注册 ──────────────────────────────────────────────
 
