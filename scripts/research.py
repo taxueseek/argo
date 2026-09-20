@@ -342,20 +342,14 @@ def _expand_sub_queries(
             seen_q.add(sq["query"])
     if not sub_queries:
         sub_queries = heuristic
-    try:
-        from query_variants import generate_query_variations
-        for v in generate_query_variations(query):
-            if len(sub_queries) >= num_sub_queries:
-                break
-            if v not in seen_q:
-                sub_queries.append({
-                    "query": v,
-                    "intent": "变体召回",
-                    "strategy": "query_variant",
-                })
-                seen_q.add(v)
-    except Exception:
-        pass
+    # query_variants 变体注入已消融移除（2026-09-20，冷缓存 4 查询实测）：
+    # 变体（research analysis / 最新进展等）与 anchor 高度同质，URL 边际
+    # 「全新」但只是同主题长尾页而非新角度，每个变体却付一次完整
+    # super_search（2-10s）——合计墙钟 33.3s → 23.9s（-28%），merged 仅降
+    # 约 26%（dossier 的 key_findings 每子查询取 top-1，citations 取前 N，
+    # 长尾页极少入账）。覆盖扩展由领域模板（finance/academic/security，
+    # 带真实增量词）与 Agent 工作包承担。query_variants 模块保留：
+    # parallel 引擎的多路召回在同一次 API 调用内发多查询，无额外成本。
     return _deduplicate_sub_queries(sub_queries[:num_sub_queries])
 
 
