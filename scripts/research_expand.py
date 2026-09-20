@@ -24,14 +24,10 @@ def expand_query(query: str, num_sub: int = 4) -> list[dict[str, str]]:
                 "strategy": "english_focused",
             })
 
-    year_match = re.search(r"20\d{2}", query)
-    if year_match:
-        year = year_match.group()
-        sub_queries.append({
-            "query": f"{query} {year} latest update",
-            "intent": f"{year}年最新进展",
-            "strategy": "temporal",
-        })
+    # 「{query} {year} latest update」分支已删除：year_match 来自查询本身，
+    # 查询必然已含该年份，拼出的变体对引擎就是原查询 + 噪声词（实测相对
+    # 原查询新信息率仅 0.18，纯冗余且抢占子查询槽位）。年份限定语义已由
+    # 原查询表达，时间窗过滤走 search 的 --since/--until。
 
     compare_match = re.search(r"(?:vs| versus |对比|比较|和|与|及)", query, re.I)
     if compare_match:
@@ -84,7 +80,8 @@ def expand_query(query: str, num_sub: int = 4) -> list[dict[str, str]]:
         })
 
     finance_match = re.search(
-        r"(?:股价|财报|基金|股票|行情|金融|financial|earnings|stock)", query, re.I
+        r"(?:股价|财报|年报|中报|季报|业绩|营收|利润|基金|股票|行情|金融"
+        r"|financial|earnings|stock|revenue)", query, re.I
     )
     if finance_match:
         sub_queries.append({
@@ -93,14 +90,10 @@ def expand_query(query: str, num_sub: int = 4) -> list[dict[str, str]]:
             "strategy": "finance",
         })
 
-    if not sub_queries:
-        sub_queries.append({
-            "query": query,
-            "intent": "原始查询",
-            "strategy": "direct",
-        })
-
-    if len(sub_queries) < num_sub:
+    # anchor：原查询本身永远占一席（唯一保证与用户意图对齐的子查询，
+    # 也是 dossier 的 baseline）。模板产出不含原查询文本时补上。
+    if len(sub_queries) < num_sub and all(
+            sq["query"] != query for sq in sub_queries):
         sub_queries.append({
             "query": query,
             "intent": "综合搜索",
@@ -111,23 +104,41 @@ def expand_query(query: str, num_sub: int = 4) -> list[dict[str, str]]:
 
 
 def _deduplicate_sub_queries(sub_queries: list[dict[str, str]]) -> list[dict[str, str]]:
-    """基于 Jaccard 相似度去重子查询。"""
-    def _tokens(q: str) -> set[str]:
-        return set(re.findall(r"[a-zA-Z]+|[\u4e00-\u9fff]", q.lower()))
+    """按「新信息率」去重子查询。
 
+    旧判据（与已有集合 Jaccard>0.6 判重）与扩词目的相反：Jaccard 衡量
+    重合度，扩词的价值恰恰是增量。实测（2026-09-20，char 粒度）：
+      「{query} 2024 latest update」0.83 —— 杀掉了原查询本身（anchor）；
+      「{query} arxiv semantic scholar ...」0.77 —— 杀掉了带 3 个英文
+        新词的学术变体；
+      「what is {query} and how does it work」套中文实体 0.59 —— 冗余
+        壳反而存活。
+    判据改为：子查询的新 token（未出现在已有集合）占比 <0.25 判冗余；
+    direct/general（=原查询）是 anchor，永不剔除。
+
+    token 粒度：英文按词、中文按双字组。旧实现的中文单字粒度下任意扩展
+    都摊薄重合度（0.5-0.59 全在阈值下），判据对中文形同虚设。
+    """
+    def _tokens(q: str) -> set[str]:
+        chars = re.findall(r"[\u4e00-\u9fff]", q.lower())
+        words = re.findall(r"[a-zA-Z]+", q.lower())
+        return set(words) | {chars[i] + chars[i + 1] for i in range(len(chars) - 1)}
+
+    def _novelty(tokens: set[str], covered: set[str]) -> float:
+        if not tokens:
+            return 1.0
+        return len(tokens - covered) / len(tokens)
+
+    anchor = {"direct", "general"}
     unique: list[dict[str, str]] = []
-    seen_tokens: list[set[str]] = []
+    covered: set[str] = set()
     for sq in sub_queries:
-        tokens = _tokens(sq["query"])
-        is_dup = False
-        for prev in seen_tokens:
-            jaccard = len(tokens & prev) / max(len(tokens | prev), 1)
-            if jaccard > 0.6:
-                is_dup = True
-                break
-        if not is_dup:
-            unique.append(sq)
-            seen_tokens.append(tokens)
+        toks = _tokens(sq["query"])
+        if unique and sq.get("strategy") not in anchor \
+                and _novelty(toks, covered) < 0.25:
+            continue
+        unique.append(sq)
+        covered |= toks
     return unique
 
 

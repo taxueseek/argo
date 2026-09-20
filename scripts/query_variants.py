@@ -178,6 +178,13 @@ def _to_question(query: str, words: list[str]) -> str | None:
     ):
         return None
 
+    # 英文问句壳只对纯拉丁查询生成：套在中文实体上（「what is 贵州茅台
+    # 2024年 年报 and how does it work」）对英文引擎是噪声、对中文引擎是
+    # 无效壳，实测占掉 2/4 子查询槽位。中文语义（是什么/怎么用）由
+    # research_expand 的领域模板与工作包承担。
+    if any("\u4e00" <= c <= "\u9fff" for c in query):
+        return None
+
     # 动作类 → "how to"
     action_words = {"install", "setup", "configure", "build", "create", "deploy",
                     "fix", "solve", "debug", "optimize", "improve", "migrate"}
@@ -223,7 +230,10 @@ def _opposing_viewpoint(original: str, query_lower: str,
         if trigger in words:
             return query_lower.replace(trigger, opposition, 1)
 
-    # 无触发词 → 通用反方框架
+    # 通用 criticism 壳与 _to_question 同理：不套中文实体（英文模板对
+    # 中文查询是无效壳）。触发词命中（词替换）保留——产出与查询同语言。
+    if any("\u4e00" <= c <= "\u9fff" for c in original):
+        return None
     if len(words) >= 2:
         return f"criticism problems with {original}"
     return None
@@ -231,8 +241,10 @@ def _opposing_viewpoint(original: str, query_lower: str,
 
 def _adjust_scope(original: str, query_lower: str, words: list[str]) -> str | None:
     """范围调整：短查询加限定，长查询去限定词。"""
-    # 短查询 → 加时间/最新限定
+    # 短查询 → 加时间限定；限定词与查询同语言（英文壳套中文实体是无效变体）
     if len(words) <= 2:
+        if any("\u4e00" <= c <= "\u9fff" for c in original):
+            return f"{original} 最新进展"
         return f"{original} in 2026 latest developments"
 
     # 长查询 → 去掉限定词（最新/最热等）
