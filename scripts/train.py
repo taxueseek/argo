@@ -19,6 +19,7 @@ import argparse
 import json
 import re
 import sys
+import tempfile
 import urllib.parse as up
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
@@ -50,8 +51,11 @@ def _cache_dir() -> Path:
     try:
         import argo_paths
         return argo_paths.state_path("train")
-    except Exception:  # argo_paths 不可用：退回旧位置，不让火车查询整个挂掉
-        return Path(__file__).resolve().parent / "data"
+    except Exception:
+        # 兜底也不能落回源码树：scripts/data/ 正是「测试污染生产缓存」的事故
+        # 现场，兜底回那里等于把刚修掉的坑重新挖开。退到系统临时目录仍然
+        # fail-open（火车查询不会整个挂掉），且不再可能被测试写进仓库。
+        return Path(tempfile.gettempdir()) / "argo-train-cache"
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
@@ -124,8 +128,10 @@ def _parse_query(q: str) -> dict | None:
     # 3) 去掉「从」前缀，按分隔符拆分起止站
     text = re.sub(r"^从", " ", text.strip())
     # 「N张」是购票数量，不是站名：不摘掉的话「1张 北京 到 上海」的起站会变成
-    # 「1张」（实测 2026-09-21）。后视断言要求张数带数字，站名不受影响。
-    text = re.sub(r"\d{1,2}\s*张(?![站口字])", " ", text)
+    # 「1张」（实测 2026-09-21）。判据是「独立成词」而不是「后面不接某几个字」：
+    # 负向列举永远列不全（实测「买1 张家口 到 北京」会被吃掉张字变成「家口」），
+    # 正向断言词尾才是这条规则的真实含义。
+    text = re.sub(r"\d{1,2}\s*张(?:票)?(?=\s|$|[，。！？、]|到|→|->|=>|至)", " ", text)
     parts = re.split(r"到|→|->|=>|至|—|--|\s+", text)
     # 只去空白与句读，**不要按字符集剥站名**：站名里含「张/高/次/包/头/站/车/票」
     # 的很多，`strip("站车票张次列高动直特快速字头")` 会把首字当填充字符吃掉——

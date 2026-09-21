@@ -219,6 +219,19 @@ class TestParseQuery(unittest.TestCase):
         """「1张」是购票数量，不能占掉起站位。"""
         q = train._parse_query("1张 北京 到 上海 车票")
         self.assertEqual((q["from"], q["to"]), ("北京", "上海"))
+        q = train._parse_query("1张票 北京 到 上海")
+        self.assertEqual((q["from"], q["to"]), ("北京", "上海"))
+
+    def test_ticket_quantity_guard_requires_token_boundary(self) -> None:
+        """摘「N张」必须按**词尾**判，不能按「后面不接哪几个字」判。
+
+        2026-09-21 实测：`\\d{1,2}\\s*张(?![站口字])` 这种负向列举漏掉了
+        「买1 张家口 到 北京」——张字被吃掉，终站变成「家口」。
+        """
+        q = train._parse_query("买1 张家口 到 北京")
+        self.assertEqual(q["to"], "张家口")
+        q = train._parse_query("2张 张家口 到 北京")
+        self.assertEqual((q["from"], q["to"]), ("张家口", "北京"))
 
 
 class TestStationCacheLocation(unittest.TestCase):

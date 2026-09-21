@@ -282,22 +282,21 @@ def _feature_labels(features: dict[str, Any]) -> str:
     return " + ".join(labels) if labels else "通用查询"
 
 
-# 语言模块不可用时返回 None（调用方退回旧判据，不编造语种名）
-_LANG_LABELS_CACHE: dict[str, str] | None = None
-
-
 def _lang_label(lang: Any) -> str | None:
-    """primary_lang → 中文名；en/latin/混合/未知返回 None（由调用方兜底）。"""
-    global _LANG_LABELS_CACHE
+    """primary_lang → 中文名；en/latin/混合/未知返回 None（由调用方兜底）。
+
+    名称表直接取自 lang_detect（单一真源），**不做进程内缓存**：本函数只在
+    拼 reason 时调用一次，而 extract_features 每次路由本来就会 import
+    lang_detect，多一次 sys.modules 查表是零成本；为它维护一个模块级可变
+    缓存只会多一个需要解释的状态。
+    """
     if not lang or lang in ("en", "latin", "mixed", "other"):
         return None
-    if _LANG_LABELS_CACHE is None:
-        try:
-            from lang_detect import LANG_LABELS
-            _LANG_LABELS_CACHE = dict(LANG_LABELS)
-        except ImportError:
-            _LANG_LABELS_CACHE = {}
-    return _LANG_LABELS_CACHE.get(lang)
+    try:
+        from lang_detect import LANG_LABELS
+    except ImportError:  # 语言模块不可用：不编造语种名，交给调用方兜底
+        return None
+    return LANG_LABELS.get(lang)
 
 
 # ── 登录态意图检测（P0-4：五路协同的种子）────────────────────────────────
