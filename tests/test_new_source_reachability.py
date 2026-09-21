@@ -190,6 +190,10 @@ class TestProbeActuallyRoutesToNewSource:
         # 注意别用中医/生物词：CRISPR、基因编辑等会被 protein_search 域
         # 先截走（那里有 uniprot/pubchem），探针就测不到本域的接线了。
         "academic": ("machine learning survey", "文献综述 论文"),
+        # 2026-09-21：soil_agri 接入 openfoodfacts（食品成分库，补 usda 的
+        # 单一国别）。探针须落在本域，所以用「土壤/农业」词——用「食品」
+        # 命不中本域 patterns（域只声明了土壤/农业两组）。
+        "soil_agri": ("土壤属性", "农业 作物"),
     }
 
     @pytest.mark.parametrize("domain", sorted(NEW_SOURCES))
@@ -237,6 +241,26 @@ class TestFastModeNotBloated:
 # 新增休眠引擎必须自觉登记（接线或写明原因），接线后休眠解除必须撤账。
 _DORMANT_ALLOWLIST: dict[str, str] = {
     # engine → 为什么允许它位置性休眠（一句话，供下一批接线决策用）
+    # 2026-09-21：world_news 域接入 14 个本地语言新闻源。该族是**语言绑定**
+    # 的——每个源服务一种语言，运行时由 route._filter_lang_bound_family 按
+    # 查询语言把不匹配的移出预算窗口，再由 _lang_must_keep 把匹配的那个保进
+    # 窗口（实测：ko → [anysearch, yna]、es → [anysearch, elpais]、ar →
+    # [anysearch, aljazeera]）。本检查只看 combo 位次、不含语言维度，故除
+    # 前两位（yna@2 / tass@3，位次在 budget 内）外一律判为位置性休眠——
+    # 这是检查口径与语言绑定机制的不匹配，不是死源。
+    "aljazeera": "world_news 位次 4：语言绑定源，按查询语言选入预算窗口（静态检查不含语言维度）",
+    "antara": "world_news 位次 12：语言绑定源，按查询语言选入预算窗口",
+    "ct24": "world_news 位次 15：语言绑定源，按查询语言选入预算窗口",
+    "elpais": "world_news 位次 5：语言绑定源，按查询语言选入预算窗口",
+    "faz": "world_news 位次 8：语言绑定源，按查询语言选入预算窗口",
+    "folha": "world_news 位次 6：语言绑定源，按查询语言选入预算窗口",
+    "hurriyet": "world_news 位次 13：语言绑定源，按查询语言选入预算窗口",
+    "lefigaro": "world_news 位次 7：语言绑定源，按查询语言选入预算窗口",
+    "matichon": "world_news 位次 10：语言绑定源，按查询语言选入预算窗口",
+    "nhk": "world_news 位次 9：语言绑定源，按查询语言选入预算窗口",
+    "vnpress": "world_news 位次 11：语言绑定源，按查询语言选入预算窗口",
+    "ynet": "world_news 位次 14：语言绑定源，按查询语言选入预算窗口",
+    "obis": "待接线：species_search 位次 4（iplant 接入后顺延；既有债务，非本次引入）",
     "cleveland": "art_museum 同质重复备份（与 artic 同能力，故意不加槽）",
     "cn_ai_news": "待接线：chinese_tech_deep 位次 4",
     # 2026-09-16：academic 域接入 openreview/biorxiv 后，原第 3 位的 crossref

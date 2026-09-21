@@ -1,5 +1,25 @@
 {
   "_description": "各引擎的配额/成本/限频配置。由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。",
+  "aljazeera": {
+    "label": "半岛电视台阿语 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 42
+  },
+  "antara": {
+    "label": "安塔拉通讯社 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "anysearch": {
     "label": "AnySearch",
     "qps": 5,
@@ -160,6 +180,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "cinii": {
+    "label": "cinii",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "cisa_kev": {
     "label": "CISA KEV 在野利用漏洞",
     "qps": 1,
@@ -310,8 +340,28 @@
     "cost_tier": "free",
     "priority": 30
   },
+  "ct24": {
+    "label": "捷克电视台24 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 53
+  },
   "datacite": {
     "label": "datacite",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "datagov_uk": {
+    "label": "datagov_uk",
     "qps": 2,
     "limit": null,
     "period": "second",
@@ -480,6 +530,16 @@
     "cost_tier": "free",
     "priority": 58
   },
+  "elpais": {
+    "label": "西班牙国家报 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 43
+  },
   "em_flow": {
     "label": "东财资金流",
     "qps": 2,
@@ -590,6 +650,16 @@
     "cost_tier": "free",
     "priority": 28
   },
+  "faz": {
+    "label": "法兰克福汇报 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 46
+  },
   "federal_register": {
     "label": "Federal Register 联邦公报",
     "qps": 2,
@@ -649,6 +719,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "folha": {
+    "label": "巴西页报 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 44
   },
   "fr_opendata": {
     "label": "法国政府开放数据",
@@ -880,6 +960,16 @@
     "cost_tier": "free",
     "priority": 44
   },
+  "hurriyet": {
+    "label": "自由报 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 51
+  },
   "imdb": {
     "label": "IMDb 影视",
     "qps": 3,
@@ -889,6 +979,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 34
+  },
+  "iplant": {
+    "label": "iplant",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
   },
   "itotii": {
     "label": "itotii梗百科",
@@ -989,6 +1089,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 47
+  },
+  "lefigaro": {
+    "label": "费加罗报 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 45
   },
   "lieu": {
     "label": "Lieu webring 搜索",
@@ -1270,6 +1380,16 @@
     "cost_tier": "free",
     "priority": 40
   },
+  "matichon": {
+    "label": "泰国民族报 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 48
+  },
   "mdn": {
     "label": "MDN Web Docs",
     "qps": 3,
@@ -1379,6 +1499,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "nhk": {
+    "label": "NHK 新闻 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 47
   },
   "nhtsa_vpic": {
     "label": "nhtsa_vpic",
@@ -1502,6 +1632,16 @@
   },
   "openfda": {
     "label": "openFDA",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
+  "openfoodfacts": {
+    "label": "openfoodfacts",
     "qps": 2,
     "limit": null,
     "period": "second",
@@ -1870,6 +2010,16 @@
     "cost_tier": "free",
     "priority": 54
   },
+  "tass": {
+    "label": "塔斯社 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 41
+  },
   "tatoeba": {
     "label": "Tatoeba 双语例句",
     "qps": 2,
@@ -2100,6 +2250,16 @@
     "cost_tier": "free",
     "priority": 19
   },
+  "vnpress": {
+    "label": "VnExpress RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 49
+  },
   "wallstreetcn": {
     "label": "华尔街见闻",
     "qps": 2,
@@ -2290,6 +2450,26 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "yna": {
+    "label": "韩联社 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 40
+  },
+  "ynet": {
+    "label": "Ynet 新闻 RSS",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 52
+  },
   "you": {
     "label": "You.com搜索",
     "qps": 3,
@@ -2299,6 +2479,16 @@
     "cost_unit": "free",
     "cost_tier": "api",
     "priority": 12
+  },
+  "zbmath": {
+    "label": "zbmath",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
   },
   "zdic": {
     "label": "zdic",

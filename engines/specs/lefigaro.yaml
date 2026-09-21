@@ -1,0 +1,43 @@
+# 费加罗报 RSS — Le Figaro，法国主流日报
+#
+# 补的盲区：**fr 本地一手新闻**。接入前 argo 的新闻链路只有中英源
+# （google_news/guardian_rss/dw_news/france24 都是英语视角），fr 查询
+# 拿不到本地一手报道。
+#
+# 实测（2026-09-21）：**20 条**，摘要中位 189 字、最长 255 字。
+#
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族——
+# 与 hot_trending（热榜）分族，避免同族 max_per_family=2 把本地源互相挤掉。
+# 语言由 langs 声明，路由按查询语言选源（见 route._lang_aware_combo_order）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine lefigaro --stage all --admit
+#   python3 scripts/search.py "actualités du jour" --engine lefigaro --json
+
+engine_id: lefigaro
+type: rss_feed
+enabled: true
+cost_tier: free
+label: 费加罗报 RSS
+family: world_news
+feed_mode: hot
+relevance_check: false
+priority: 45
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://www.lefigaro.fr/rss/figaro_actualites.xml
+langs:
+- fr
+canary_query: "actualités du jour"
+coverage:
+- news
+- france
+desc: "费加罗报（Le Figaro，法国主流日报，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "actualités du jour"
+  - query: "politique France"

@@ -1,0 +1,43 @@
+# 捷克电视台24 RSS — ČT24，捷克公共电视新闻
+#
+# 补的盲区：**cs 本地一手新闻**。接入前 argo 的新闻链路只有中英源
+# （google_news/guardian_rss/dw_news/france24 都是英语视角），cs 查询
+# 拿不到本地一手报道。
+#
+# 实测（2026-09-21）：**30 条**，摘要中位 433 字、最长 828 字。
+#
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族——
+# 与 hot_trending（热榜）分族，避免同族 max_per_family=2 把本地源互相挤掉。
+# 语言由 langs 声明，路由按查询语言选源（见 route._lang_aware_combo_order）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine ct24 --stage all --admit
+#   python3 scripts/search.py "dnešní zprávy" --engine ct24 --json
+
+engine_id: ct24
+type: rss_feed
+enabled: true
+cost_tier: free
+label: 捷克电视台24 RSS
+family: world_news
+feed_mode: hot
+relevance_check: false
+priority: 53
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://ct24.ceskatelevize.cz/rss/hlavni-zpravy
+langs:
+- cs
+canary_query: "dnešní zprávy"
+coverage:
+- news
+- czech
+desc: "捷克电视台24（ČT24，捷克公共电视新闻，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "dnešní zprávy"
+  - query: "ekonomika Česko"

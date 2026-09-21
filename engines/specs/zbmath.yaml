@@ -1,0 +1,40 @@
+# zbMATH Open — 数学文献权威索引（免 key，EMS/FIZ Karlsruhe）
+#
+# 补的盲区：**数学**。argo 的学术域覆盖 CS/生物医学/综合，但没有数学专门源——
+# arXiv 的 math.* 分类只是预印本，不含期刊评审后的索引与 MSC 分类号。
+#
+# 实测（2026-09-21）：JSON 直出，免 key；「algebra」返回结构化条目，含
+# title / contributors.authors / year / msc（数学分类）/ zbmath_url。
+#
+# 形态：检索式。summary 取 source.series.0.title（期刊/丛书名），取不到时留空
+# ——zbMATH 不提供摘要字段，宁缺勿假。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine zbmath --stage all --admit
+
+engine_id: zbmath
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://api.zbmath.org/v1/document/_search
+timeout: 20
+query_param: search_string
+canary_query: "algebra"
+family: academic
+coverage: [academic, math, paper]
+desc: "zbMATH Open 数学文献索引（含 MSC 分类号，免 key）"
+recommended: false
+explicit_only: true
+extra_params:
+  results_per_page: "{n}"
+output_map:
+  items: result
+  item_title: title.title
+  item_url: zbmath_url
+  item_summary: source.series.0.title
+  item_published_at: year
+
+quality_queries:
+  - query: "algebra"
+  - query: "topology"

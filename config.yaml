@@ -235,6 +235,7 @@ domains:
 - desc: 生物物种检索
   engines_combo:
   - gbif
+  - iplant
   - wikipedia
   - obis
   - worms
@@ -471,6 +472,7 @@ domains:
   engines_combo:
   - soilgrids
   - usda
+  - openfoodfacts
   - anysearch
   fallback: anysearch
   name: soil_agri
@@ -1092,6 +1094,7 @@ domains:
   #     core         — 开放获取全文 + PDF 直链，补「元数据之外的全文层」
   - local_pubmed
   - core
+  - cinii
   - crossref
   - europepmc
   - dblp
@@ -1106,6 +1109,7 @@ domains:
   - (?i)(论文|\bpaper\b|预印本|preprint|arXiv|bioRxiv|medRxiv|DOI|引用|citation|学术|文献|期刊|学报|综述|同行评议|影响因子|openalex|crossref|europe pmc|dblp|PubMed|知网|万方|维普)
   - \b\d{4}\.\d{4,5}\b
   - (?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)
+  - (?i)(論文|ジャーナル|学会誌|査読|研究論文|プレプリント)
   primary: arxiv
 - desc: 技术深度研究
   engines_combo:
@@ -1207,6 +1211,30 @@ domains:
   - (?i)(国际新闻|国际要闻|今日国际|国外新闻|国际动态|国际头条|外媒|海外新闻)
   - (?i)\b(world\s+news|international\s+news|global\s+headlines|foreign\s+news|overseas\s+news)\b
   primary: guardian_rss
+
+- desc: 各国本地语言一手新闻流（按查询语言选源：韩/俄/阿/西/葡/法/德/日/泰/越/印尼/土/希/捷）
+  engines_combo:
+  - anysearch
+  - yna
+  - tass
+  - aljazeera
+  - elpais
+  - folha
+  - lefigaro
+  - faz
+  - nhk
+  - matichon
+  - vnpress
+  - antara
+  - hurriyet
+  - ynet
+  - ct24
+  fallback: anysearch
+  name: world_news
+  parallel: true
+  patterns:
+  - (?i)(뉴스|новости|أخبار|noticias|notícias|nouvelles|actualités|Nachrichten|ニュース|ข่าว|tin tức|berita|haberler|חדשות|zprávy)
+  primary: anysearch
 
 - desc: 声明核验/辟谣（事实核查机构的声明级真伪判定）
   engines_combo:

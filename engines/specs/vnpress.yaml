@@ -1,0 +1,43 @@
+# VnExpress RSS — 越南最大网络新闻
+#
+# 补的盲区：**vi 本地一手新闻**。接入前 argo 的新闻链路只有中英源
+# （google_news/guardian_rss/dw_news/france24 都是英语视角），vi 查询
+# 拿不到本地一手报道。
+#
+# 实测（2026-09-21）：**49 条**，摘要中位 140 字、最长 202 字。
+#
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族——
+# 与 hot_trending（热榜）分族，避免同族 max_per_family=2 把本地源互相挤掉。
+# 语言由 langs 声明，路由按查询语言选源（见 route._lang_aware_combo_order）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine vnpress --stage all --admit
+#   python3 scripts/search.py "tin tức hôm nay" --engine vnpress --json
+
+engine_id: vnpress
+type: rss_feed
+enabled: true
+cost_tier: free
+label: VnExpress RSS
+family: world_news
+feed_mode: hot
+relevance_check: false
+priority: 49
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://vnexpress.net/rss/tin-moi-nhat.rss
+langs:
+- vi
+canary_query: "tin tức hôm nay"
+coverage:
+- news
+- vietnam
+desc: "VnExpress（越南最大网络新闻，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "tin tức hôm nay"
+  - query: "kinh tế Việt Nam"

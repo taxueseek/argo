@@ -1,0 +1,45 @@
+# Open Food Facts — 全球食品成分库（免 key，开放数据库）
+#
+# 补的盲区：**食品/营养**。argo 有 usda（美国农业部食品营养，DEMO_KEY 限流）
+# 但它是单一国别；Open Food Facts 是 200+ 国家的众包食品库，多语言
+# （产品名/配料表按语言分列），免 key 无配额。
+#
+# 实测（2026-09-21）：JSON 直出；「nutella」1038 条命中，含 additives_n /
+# brands / 各国产品名。条目数在垂直源里属最高档。
+#
+# 形态：检索式。url 由 url_template 从条码拼出（上游不返回绝对 URL）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine openfoodfacts --stage all --admit
+
+engine_id: openfoodfacts
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://world.openfoodfacts.org/cgi/search.pl
+timeout: 20
+query_param: search_terms
+canary_query: "nutella"
+family: misc_vertical
+coverage: [food, nutrition, product]
+desc: "Open Food Facts 全球食品成分库（200+ 国家，多语言，免 key）"
+recommended: false
+# 上游按 Accept 头做内容协商：不带 Accept 时返回 503（实测 2026-09-21，
+# 同一 URL 加 Accept: application/json 即 200）——不是限流，是端点策略。
+headers:
+  Accept: application/json
+extra_params:
+  search_simple: 1
+  action: process
+  json: 1
+  page_size: "{n}"
+output_map:
+  items: products
+  item_title: product_name
+  item_summary: brands
+  url_template: "https://world.openfoodfacts.org/product/{code}"
+
+quality_queries:
+  - query: "nutella"
+  - query: "yogurt"

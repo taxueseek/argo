@@ -264,6 +264,7 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     # 生物/医药
     "obis": "science_bio",
     "worms": "science_bio",
+    "iplant": "science_bio",   # 中文植物名 → 学名/分类（补 gbif 的中文盲区）
     "who_don": "science_bio",  # WHO 疫情暴发通报
     "who_gho": "science_bio",  # WHO 全球卫生指标
     # 地球/空间
@@ -316,6 +317,14 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "realtime_index": "misc_vertical",
     "gbfs_nyc": "misc_vertical",   # 共享单车站点
     "twitter_syndication": "social",
+    # 本地新闻流（world_news）：每源服务一种本地语言，按查询语言互斥选源。
+    # 声明在这里（而非只写在 spec）是因为 route._specs_snapshot() 在 engines
+    # 模块未加载时返回空表，族/语言判定必须能从静态表回退，否则路由层看不见。
+    "yna": "world_news", "tass": "world_news", "aljazeera": "world_news",
+    "elpais": "world_news", "folha": "world_news", "lefigaro": "world_news",
+    "faz": "world_news", "nhk": "world_news", "matichon": "world_news",
+    "vnpress": "world_news", "antara": "world_news", "hurriyet": "world_news",
+    "ynet": "world_news", "ct24": "world_news",
 }
 
 # 族 → 展示名
@@ -346,6 +355,12 @@ FAMILY_LABELS: dict[str, str] = {
     # 既不是「发生了什么」（news_flash）也不是「X 是什么」（knowledge）。
     # 单列一族是为了不与新闻源争 max_per_family=2 的同族槽位。
     "verification": "声明核验",
+    # 本地新闻流（各国本地语言的一手新闻 RSS）：与 hot_trending（中文热榜）
+    # 和 news_flash（财经快讯）区分——回答的是「某国此刻发生了什么」。
+    # 单列一族有三个理由：①同族 max_per_family=2 会把 20 个语言源互相挤掉；
+    # ②语言由 langs 声明、按查询语言选源，需要族内可枚举；
+    # ③它是实时流，不能参与通用 combo 回填（同 hot_trending）。
+    "world_news": "本地新闻流",
 }
 
 
@@ -388,8 +403,74 @@ ENGINE_LANGS: dict[str, list[str]] = {
     "em_global_news": ["zh", "en"], "em_miaoxiang": ["zh", "en"],
     "jin10": ["zh", "en"], "ths_hot": ["zh", "en"],
     "cls_telegraph": ["zh", "en"], "finviz": ["en"],
+    # 本地新闻流：语言绑定（俄语查询用韩联社只会拿到韩语新闻，是错不是次优），
+    # 路由据此在族内按查询语言互斥选源。
+    "yna": ["ko"], "nhk": ["ja"], "tass": ["ru"], "aljazeera": ["ar"],
+    "elpais": ["es"], "folha": ["pt"], "lefigaro": ["fr"], "faz": ["de"],
+    "matichon": ["th"], "vnpress": ["vi"], "antara": ["id"],
+    "hurriyet": ["tr"], "ynet": ["he"], "ct24": ["cs"],
+    # 语言专用的国别垂直库：与上面同理——只在 spec YAML 里声明会被路由层
+    # 漏掉（route._specs_snapshot() 在 engines 未加载时返回空表，回退到本表）。
+    # 实测：cinii 漏登记时英文查询照样把它选进 academic 域预算窗口。
+    "cinii": ["ja"],
 }
 ENGINE_LANGS_DEFAULT = ("*",)
+
+# 书写系统标签 → 该语系下的具体语言码。
+#
+# 为什么需要这张表：lang_detect 对**没有足够特征**的文本只给到书写系统
+# （西里尔/阿拉伯/希伯来/天城文/泰文），不给具体语言——`новости сегодня`
+# 返回 cyrillic、`أخبار اليوم` 返回 arabic。而源声明的是具体语言（tass=ru、
+# aljazeera=ar）。两边对不上时，该语言的本地源会被判成「不匹配」而永远
+# 选不中（实测：俄语/阿语新闻查询 combo 里没有任何本地源）。
+#
+# 展开方向是单向的：查询给语系 → 认该语系下的具体语言源；查询给具体语言
+# （ja/ko/zh 等）时不反向展开——那会把「zh 查询用日文源」这类错配放进来
+# （lang_capability 记过同类错误：ja 展开成 (zh, ja) 会串味）。
+_SCRIPT_FAMILY_LANGS: dict[str, tuple[str, ...]] = {
+    "cyrillic": ("ru", "uk", "bg", "sr", "mk", "be"),
+    "arabic": ("ar", "fa", "ur"),
+    "hebrew": ("he",),
+    "thai": ("th",),
+    "devanagari": ("hi", "mr", "ne"),
+    "greek": ("el",),
+}
+
+# 语言提示词：查询里出现这些实词时，按该语言处理。
+#
+# 为什么需要：lang_detect 对拉丁字母语言只给到 en/latin——`noticias de hoy`
+# 判成 en、`berita hari ini` 判成 en、`tin tức` 判成 latin。这些语言共享
+# 字母表，靠码位分不开（与 CJK 的汉字共享同一根因）。结果是西语/葡语/越南语/
+# 印尼语/土耳其语查询在 world_news 族里匹配不到任何源，只能拿到英文通用源，
+# 新接的 elpais/folha/vnpress/antara/hurriyet 永远选不中。
+#
+# 判据是**该语言的新闻/资讯类实词**（与 world_news 域 patterns 同一批词）：
+# 这类词在查询里出现，说明用户就是在用那种语言问「有什么新闻」。方向仍然是
+# 单向的——只在路由层做「查询语言 → 该语言源」的候选收窄，不改写查询、
+# 不参与语言能力加权，判定失误的代价仅限于选源顺序。
+_LANG_HINT_WORDS: dict[str, tuple[str, ...]] = {
+    "ko": ("뉴스",), "ru": ("новости",), "ar": ("أخبار",),
+    "es": ("noticias",), "pt": ("notícias",), "fr": ("actualités", "nouvelles"),
+    "de": ("nachrichten",), "ja": ("ニュース",), "th": ("ข่าว",),
+    "vi": ("tin tức",), "id": ("berita",), "tr": ("haberler", "haber"),
+    "he": ("חדשות",), "cs": ("zprávy",),
+}
+
+
+def lang_hint_from_query(query: str) -> str:
+    """从查询文本里的实词推断语言；无命中返回 ""。
+
+    只服务「本地语言源选源」这一个场景，不替代 lang_detect：调用方应在
+    语言判定给不出具体语种（en/latin/mixed）时才用它。
+    """
+    low = (query or "").lower()
+    if not low:
+        return ""
+    for lang, words in _LANG_HINT_WORDS.items():
+        for w in words:
+            if w.lower() in low:
+                return lang
+    return ""
 
 
 def engine_langs(engine: str, spec: dict[str, Any] | None = None) -> set[str]:
@@ -405,7 +486,10 @@ def engine_langs(engine: str, spec: dict[str, Any] | None = None) -> set[str]:
 def lang_allows(engine: str, lang: str, spec: dict[str, Any] | None = None) -> bool:
     """该引擎对 lang 是否有召回价值（"*" = 语言中立）。"""
     langs = engine_langs(engine, spec)
-    return "*" in langs or lang in langs
+    if "*" in langs or lang in langs:
+        return True
+    # 查询只判到书写系统时，认该语系下的具体语言源（见 _SCRIPT_FAMILY_LANGS）
+    return any(code in langs for code in _SCRIPT_FAMILY_LANGS.get(lang, ()))
 
 
 def engines_not_for_lang(engines: list[str], lang: str,
@@ -428,11 +512,27 @@ def engines_not_for_lang(engines: list[str], lang: str,
 
 def engines_demote_for_lang(engines: list[str], lang: str,
                             specs: dict[str, dict[str, Any]] | None = None) -> list[str]:
-    """语言重排降级名单（保守，忠实原 _EN_ONLY/_ZH_ONLY 双表语义）。
+    """语言重排降级名单：对该查询语言无召回价值的源，整体移尾。
 
     zh 查询：仅降英文社区类（family=social 对中文零召回——垂直源如
-    finviz 对「AAPL 美股盘前」这类中文查询仍完全有效，不降）；
-    en/ja/ko 查询：仅中文专用源降级（英文/中立源保留原位）。
+    finviz 对「AAPL 美股盘前」这类中文查询仍完全有效，不降）。
+    其余语言（含 en/ja/ko 与 ru/ar/es/th/vi 等）：降**语言专用源**——
+    声明了具体语言、不含查询语言、**且不含 en** 的那些。
+
+    2026-09-21 泛化说明：原实现对 en/ja/ko 只降「含 zh 的源」，其余语言
+    完全不降——这在只有中英日源时等价，但接入 14 个本地语言新闻源与
+    cinii（ja）这类国别垂直库后就漏了：中文查询会原样保留 cinii（日文论文），
+    英文查询会保留 kor_law（韩文判例）。
+
+    **「不含 en」这条判据不能省**：英文源是国际通用的（韩语/中文用户读英文
+    社区仍有价值），中文源、日文源则是单语读者专用的。所以
+    `["zhihu(zh)", "hackernews(en)"]` 在 ko 查询下要降 zhihu 而保留
+    hackernews——若改成「凡不含查询语言就降」，两者同时移尾、相对顺序不变，
+    等于没降（tests/test_review_round3 的 ko/ja 两个用例正是锁这个语义）。
+
+    注意：这条只管**顺序**（移尾，让位给匹配源），不删源——删除是
+    route._filter_lang_bound_family 对语言绑定族（world_news）的处置，
+    理由见该函数 docstring。
     """
     out: list[str] = []
     for e in engines:
@@ -443,7 +543,7 @@ def engines_demote_for_lang(engines: list[str], lang: str,
         if lang == "zh":
             if family_of(e, spec) == "social":
                 out.append(e)
-        elif "zh" in langs:
+        elif "en" not in langs:
             out.append(e)
     return out
 
@@ -537,6 +637,7 @@ def dedupe_by_family(engine_list: list[str], max_per_family: int = 2,
 _REFILL_EXCLUDED_FAMILIES = frozenset({
     "misc_vertical",
     "hot_trending",
+    "world_news",
     "media_book",
     "archive",
     "personal_data",

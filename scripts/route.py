@@ -25,14 +25,18 @@ try:
     from config import (load_config, get_engines, get_domains, get_cost_factor,
                         config_stamp)
     from quota import get_quota_manager
-    from engine_families import engines_demote_for_lang, engines_not_for_lang, lang_allows
+    from engine_families import (engines_demote_for_lang, engines_not_for_lang,
+                                 engine_langs, family_of, lang_allows,
+                                 lang_hint_from_query)
 except ImportError:
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
     from config import (load_config, get_engines, get_domains, get_cost_factor,
                         config_stamp)
     from quota import get_quota_manager
-    from engine_families import engines_demote_for_lang, engines_not_for_lang, lang_allows
+    from engine_families import (engines_demote_for_lang, engines_not_for_lang,
+                                 engine_langs, family_of, lang_allows,
+                                 lang_hint_from_query)
 
 # tfidf_router 刻意**不在这里导入**（与下面 macro_countries 同一理由）：
 # 它只被 route_query 的 `if not skip_tfidf:` 分支用到，而 fast 模式命中硬域
@@ -779,7 +783,8 @@ def _move_to_tail(combo: list[str], excluded) -> list[str]:
 
 def _lang_aware_combo_order(combo: list[str], features: dict | None,
                             domain_name: str | None,
-                            enabled: set[str]) -> list[str]:
+                            enabled: set[str],
+                            query: str = "") -> list[str]:
     """语言感知的 combo 排序（返回新列表，不改动传入）。
 
     双向对称：
@@ -815,34 +820,139 @@ def _lang_aware_combo_order(combo: list[str], features: dict | None,
                 ordered = ["zhihu", "zhihu_global"] + rest
             else:
                 ordered = ["zhihu_global"] + rest
-        return ordered
     # 对称分支：非中文查询把中文专用源移尾（含 zh_ratio≤0.15 的混合查询）
-    if features.get("primary_lang") in ("en", "ja", "ko"):
-        return _move_to_tail(
+    elif primary_lang in ("en", "ja", "ko"):
+        ordered = _move_to_tail(
             combo, engines_demote_for_lang(
                 combo, primary_lang or "en", _specs_snapshot()))
-    return combo
+    else:
+        ordered = combo
+    # 其余语言（ru/ar/es/pt/th/vi/…）此前完全不做降级：en/ja/ko/zh 在上方
+    # 分支处理过，这里补上，否则 cinii（声明 ja）在中文查询里、kor_law
+    # （声明 ko）在英文查询里都会占着原位。
+    _lang = _family_lang(features, query)
+    if _lang and _lang not in ("zh", "en", "ja", "ko", "mixed", "other"):
+        ordered = _move_to_tail(
+            ordered, engines_demote_for_lang(ordered, _lang, _specs_snapshot()))
+    # 语言绑定的族（本地新闻流）按查询语言互斥——见函数 docstring 末段。
+    return _filter_lang_bound_family(ordered, features, _specs_snapshot(), query)
+
+
+def _family_lang(features: dict | None, query: str = "") -> str:
+    """选源用的查询语言：lang_override > primary_lang > 查询实词兜底。
+
+    第三档专门补拉丁字母语言的判定缺口（lang_detect 对 noticias/berita/
+    tin tức 只给 en/latin），见 engine_families._LANG_HINT_WORDS 的说明。
+    """
+    lang = (features or {}).get("lang_override") or (features or {}).get("primary_lang") or ""
+    if lang in ("", "en", "latin", "mixed", "other"):
+        hint = lang_hint_from_query(query)
+        if hint:
+            return hint
+    return lang
+
+
+def _filter_lang_bound_family(combo: list[str], features: dict | None,
+                              specs: dict[str, dict[str, Any]] | None,
+                              query: str = "") -> list[str]:
+    """语言绑定族的成员按查询语言互斥：匹配语言的留原位，其余整体移尾。
+
+    与 hot_trending 不同，world_news 族（各国本地新闻流）是**语言绑定**的：
+    俄语查询用韩联社只会拿到韩语新闻，不是「次优」而是「错」。同族内每个
+    源各自服务一种语言，所以选源的第一判据是查询语言，不是 priority。
+
+    **非匹配源一律摘除，不做「移尾保留」**——这是与 engines_demote_for_lang
+    有意不同的一处。那条路径处理的是「同一份内容的不同语言版本」（降级），
+    这条处理的是「完全不同的国家与语言」：俄语查询跑韩联社拿回的是韩语新闻，
+    这不是次优而是错。实测 deep 档（不截断预算）下移尾方案会让韩语查询连跑
+    elpais/tass/aljazeera 等 16 个源，白付网络与配额。
+
+    摘除的代价是「语言判定失误时拿不到该语言源」，但 combo 里始终有语言中立
+    的兜底源（anysearch），不会零结果；判定不确定（mixed/other/空）时整个族
+    不动，按原样保留。
+
+    语言取 lang_override 优先（「用韩语搜 X」的显式意图胜过文本推断），
+    与 _select_language_engines / _lang_must_keep 同一口径。
+
+    specs 允许为空：_specs_snapshot() 在 engines 模块未加载时返回 {}（性能
+    设计，见该函数 docstring），此时 family_of / lang_allows 会回退
+    engine_families 的静态表——新源在那边也声明了一次，所以这里不依赖 spec。
+    """
+    if not combo or not features:
+        return combo
+    lang = _family_lang(features, query)
+    if not lang or lang in ("mixed", "other"):
+        return combo
+    keep: list[str] = []
+    for eng in combo:
+        spec = specs.get(eng)
+        # 两类源在非匹配语言时摘除，不是移尾：
+        #   ① 语言绑定族成员（world_news）：每个源服务一种语言；
+        #   ② 语言独占源（_LANG_EXCLUSIVE_ENGINES，如 cinii=ja）。
+        # 与 engines_demote_for_lang 的分工——那条只管顺序，这条管「该不该
+        # 在场」：移尾在源本来就排末位时等于没动（实测 cinii 在 academic 域
+        # 末位，英文查询照样进预算窗口）。
+        lang_bound = family_of(eng, spec) == "world_news"
+        lang_exclusive = eng in _LANG_EXCLUSIVE_ENGINES
+        if (lang_bound or lang_exclusive) and not lang_allows(eng, lang, spec):
+            continue
+        keep.append(eng)
+    # 族内非匹配成员一律摘除：一个匹配的都没有时退化成「整个族摘掉」（该族
+    # 服务不了这个查询——域 patterns 误伤，或语言不在这 14 种里）；有匹配时
+    # 摘掉的是「别的语言的一手源」。两种情形都不返回它们。通用源仍在 keep
+    # 里兜底，不会零结果。
+    return keep
 
 
 # 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
 # 中文 / 其它语种：_merge_language_engines 软追加即可，must_keep 会与垂直域抢预算
 # （实测：zh must_keep local_bing 会把 finance_macro 多源压成单源、挤掉 openstreetmap）。
+# 语言独占源：只服务一种语言、对别的语言**零召回**的源，非匹配语言时从
+# combo 里摘除（不只是移尾）。
+#
+# 为什么与 engines_demote_for_lang 的「移尾」分开：移尾在源本来就排末位时
+# 等于没动——实测 cinii 在 academic 域末位，英文查询照样进预算窗口（加槽
+# 后窗口扩到 6，它正好在第 6 位）。对「服务不了这个查询」的源，移尾是不够的。
+#
+# 为什么用白名单而不是「凡声明了具体语言的源都摘」：既有源（zhihu/kor_law/
+# bailian 等）的移尾语义是 2026-09-07 review 定下的契约，被
+# tests/test_review_round3 与 test_zh_search_quality 两处锁着；新源从接入起
+# 就按摘除处理，不回溯改既有行为。后续接入语言独占源时加进本表即可。
+_LANG_EXCLUSIVE_ENGINES: frozenset[str] = frozenset({
+    "cinii",     # 日本学术总库（ja）：中文/英文查询拿不到任何可用结果
+})
+
 _LANG_PREFERRED_ENGINES: dict[str, list[str]] = {
     "ja": ["local_yandex", "local_bing"],
     "ko": ["local_google", "local_bing"],
 }
 
 
-def _lang_must_keep(features: dict | None, enabled: set[str]) -> list[str]:
-    """返回语言相关的 must_keep 引擎（仅日/韩）。
+def _lang_must_keep(features: dict | None, enabled: set[str],
+                    combo: list[str] | None = None,
+                    query: str = "") -> list[str]:
+    """返回语言相关的 must_keep 引擎。
 
-    专用源（yandex/google）默认 disabled 时落到 local_bing；
-    多语言结果质量仍靠 engines_base 动态 setlang，不依赖强制占位。
+    两档判据，优先级从高到低：
+
+    1. **语言绑定的本地源**（world_news 族中匹配查询语言的成员）。这类源是
+       该语言的唯一一手通道，而通用 SERP（local_bing）只是二手转述——韩语
+       新闻查询被 budget 裁到 2 位时，该保的是韩联社。没有它，本地语言源
+       接进来也永远进不了预算窗口（实测：ko 查询 combo 被裁成
+       [anysearch, local_bing]，yna 在窗口外）。
+    2. 日/韩的通用本地引擎（yandex/google/bing）。专用源默认 disabled 时
+       落到 local_bing；多语言结果质量仍靠 engines_base 动态 setlang。
     """
     if not features or not enabled:
         return []
     # P2-3：显式语言覆盖（用日文搜/用韩语搜）与主语言同等进入 must_keep
-    lang = features.get("lang_override", "") or features.get("primary_lang", "")
+    lang = _family_lang(features, query)
+    if combo and lang:
+        bound = [e for e in combo if e in enabled
+                 and family_of(e, None) == "world_news"
+                 and lang_allows(e, lang, None)]
+        if bound:
+            return bound[:1]
     preferred = _LANG_PREFERRED_ENGINES.get(lang, [])
     for eng in preferred:
         if eng in enabled:
@@ -1022,6 +1132,17 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         # zhihu_content 的 zhihu_global 曾被 learner 低分过滤饿死（历史用量少
         # →分低→更不被用），37 天仅 53 次；断掉「饿死循环」
         "zhihu_content",
+        # soil_agri 的 openfoodfacts（食品成分库）同理：新源无历史分，
+        # 实测在 route_query 内被 learner 摘掉（combo 只剩 [usda, anysearch]），
+        # 而单独调 _get_engines_combo 时还在——差别就是 learner 是否已加载。
+        "soil_agri",
+        # world_news 的 14 个本地语言源有同一风险且更严重：它们首次运行时
+        # anysearch 先返回并 early-stop，语言源拿不到贡献分 → 分数低于 0.3 →
+        # 被自适应过滤摘出 combo → 下次更不可能被选中。实测：接线当天跑过一次
+        # 真实搜索后，`오늘 뉴스` 的 combo 就从 [anysearch, yna] 退化成
+        # [anysearch, local_bing]（源还在 enabled，只是被 learner 摘掉）。
+        # 该族每个源服务一种语言、无同族可替代，被摘掉即该语言通道消失。
+        "world_news",
     })
     primary = domain.get("primary")
     domain_name = domain.get("name")
@@ -1245,7 +1366,12 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # local_pubmed 是**修复**（旧实现静默 400 且解析不出字符串数组，实测 0 条，
     # 详见 engines_builders_batch9._build_pubmed_engine 文档串）。两者声明在
     # 既有源之后，由本表加槽，不挤掉 arxiv/openreview 等既有位次。
-    "academic": ("local_pubmed", "core"),                        # 生物医学全文 + 机构仓储开放获取
+    "academic": ("local_pubmed", "core", "cinii"),     # 生物医学全文 + 机构仓储开放获取 + 日本学术 + 数学索引
+    # 2026-09-21：academic 补两个国别/学科专门源。位次 5/6 是照本域上方注释
+    # 的既有实践选的（deepest=6 → 加槽后预算覆盖到 6，前四位次一律不动）。
+    # cinii 声明 langs=ja，靠 engines_demote_for_lang 的语言专用源降级，
+    # 只在日语查询里占位；zbmath 语言中立，数学查询与 deep 档可达。
+    "soil_agri": ("openfoodfacts",),   # 食品成分库：补 usda（单一国别）之外的多国食品数据
 }
 
 # 垂直域主源保护名单：这些域的专属源被 budget 裁掉后该域等于没源可用。
@@ -1656,7 +1782,7 @@ def route_query(query: str, engine_override: str = "auto",
         if not _pure_combo:
             engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
             engines_combo = _lang_aware_combo_order(
-                engines_combo, features, domain.get("name"), enabled)
+                engines_combo, features, domain.get("name"), enabled, query)
         if not engines_combo:
             if _pure_combo:
                 # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
@@ -1774,12 +1900,18 @@ def route_query(query: str, engine_override: str = "auto",
                     must_keep.append("local_openstreetmap")
 
         if not _pure_combo:
-            must_keep.extend(_lang_must_keep(features, enabled))
+            must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))
         engines_combo = _apply_policy_with_new_source_slots(
             domain, engines_combo,
             mode=mode, depth=depth, context=context,
             enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
         )
+        # 语言摘除必须在 policy 之后再走一遍：加槽补位会把「不在 combo 里」
+        # 的新专源当成「被预算裁掉」补回来（实测 cinii 在英文查询里被补回
+        # academic 域）。语言不匹配的源不是被裁掉，是不该在场——补回来等于
+        # 把摘除撤销。判据与顺序说明见 _filter_lang_bound_family docstring。
+        engines_combo = _filter_lang_bound_family(
+            engines_combo, features, _specs_snapshot(), query)
         # 意图裁剪收口（幂等二次施加）：policy 层的新源 must_keep 补回会放大
         # combo。只对 definition/fact 收口——单源即答语义下，扩容槽（新源
         # 加槽补回的引擎）纯属阶梯等待浪费（实测 academic definition 1 → 3
@@ -1910,12 +2042,18 @@ def route_query(query: str, engine_override: str = "auto",
         must_keep = []
         if features.get("has_geo") and "local_openstreetmap" in enabled:
             must_keep.append("local_openstreetmap")
-        must_keep.extend(_lang_must_keep(features, enabled))
+        must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))
         engines_combo = _apply_policy_with_new_source_slots(
             domain, engines_combo,
             mode=mode, depth=depth, context=context,
             enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
         )
+        # 语言摘除必须在 policy 之后再走一遍：加槽补位会把「不在 combo 里」
+        # 的新专源当成「被预算裁掉」补回来（实测 cinii 在英文查询里被补回
+        # academic 域）。语言不匹配的源不是被裁掉，是不该在场——补回来等于
+        # 把摘除撤销。判据与顺序说明见 _filter_lang_bound_family docstring。
+        engines_combo = _filter_lang_bound_family(
+            engines_combo, features, _specs_snapshot(), query)
         # 意图裁剪收口（与主域分支同一问题：policy 的 must_keep 补回会放大
         # combo，抵消上面的意图裁剪）。同样只对 definition/fact 收口，
         # must_keep 成员豁免（理由见主域分支注释）。
@@ -1985,7 +2123,7 @@ def route_query(query: str, engine_override: str = "auto",
     must_keep_fb = []
     if features.get("has_geo") and "local_openstreetmap" in enabled:
         must_keep_fb.append("local_openstreetmap")
-    must_keep_fb.extend(_lang_must_keep(features, enabled))
+    must_keep_fb.extend(_lang_must_keep(features, enabled, fallback_combo, query))
     fallback_combo = _apply_engine_policy(
         fallback_combo, mode=mode, depth=depth, context=context,
         engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,

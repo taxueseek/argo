@@ -1,0 +1,44 @@
+# CiNii Research — 日本学术总库（免 key，NII 官方）
+#
+# 补的盲区：**亚洲学术**。argo 的 academic 域此前全是欧美源
+# （arxiv/openalex/crossref/semantic_scholar/dblp/europepmc/biorxiv/
+# openreview/core），日文论文与日本学会刊没有任何直采通道。
+#
+# 实测（2026-09-21）：OpenSearch JSON，免 appid 可用；「AI」158741 条命中，
+# 返回 9230B / 2 条。条目含 dc:creator / dc:publisher / prism:publicationDate
+# / description，字段密度与 crossref 同档。
+#
+# 形态：检索式（query 参与检索），与 ndl（日本国会图书馆书目）互补——
+# ndl 查「有什么书」，cinii 查「有什么论文/研究项目」。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine cinii --stage all --admit
+
+engine_id: cinii
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://cir.nii.ac.jp/opensearch/all
+timeout: 15
+query_param: q
+canary_query: "人工知能"
+family: academic
+langs:
+- ja
+coverage: [academic, paper, japan]
+desc: "CiNii Research 日本学术总库（论文/博士论文/科研项目，免 key）"
+recommended: false
+extra_params:
+  format: json
+  count: "{n}"
+output_map:
+  items: items
+  item_title: title
+  item_url: link.@id
+  item_summary: description
+  item_published_at: prism:publicationDate
+
+quality_queries:
+  - query: "人工知能"
+  - query: "機械学習"

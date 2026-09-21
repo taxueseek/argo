@@ -1,7 +1,31 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-09-20'
+last_updated: '2026-09-21'
 engines:
+- name: aljazeera
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - arab
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 半岛电视台阿语（半岛阿语版，阿拉伯世界一手视角，免 key）
+- name: antara
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - indonesia
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 安塔拉通讯社（印尼国家通讯社（ANTARA），免 key）
 - name: anysearch
   tier: T1
   type: anysearch
@@ -206,6 +230,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: 英国电网碳强度与发电结构（国家电网官方，免认证）
+- name: cinii
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - paper
+  - japan
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: CiNii Research 日本学术总库（论文/博士论文/科研项目，免 key）
 - name: cisa_kev
   tier: T1
   type: cisa_kev
@@ -392,6 +429,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: CSDN 搜索（so.csdn.net v3 JSON，免认证；标题与摘要的高亮标签、URL 追踪参数在引擎内清洗）
+- name: ct24
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - czech
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 捷克电视台24（ČT24，捷克公共电视新闻，免 key）
 - name: datacite
   tier: T1
   type: http
@@ -405,6 +454,20 @@ engines:
   recommended: false
   explicit_only: false
   desc: DataCite 科研数据集搜索（Dryad/Figshare/Dataverse/OSF 等仓储，免认证）
+- name: datagov_uk
+  tier: T1
+  type: http
+  coverage:
+  - opendata
+  - government
+  - dataset
+  - uk
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: data.gov.uk 英国政府开放数据目录（CKAN，免 key）
 - name: dblp
   tier: T1
   type: http
@@ -609,6 +672,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: 全球电网分区目录（zones 免 key）
+- name: elpais
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - spain
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 西班牙国家报（El País，西语世界发行量最大的日报，免 key）
 - name: em_flow
   tier: T1
   type: em_flow
@@ -744,6 +819,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: FactCheck.org（美国事实核查：声明级真伪判定，摘要密度仅次于卫报）
+- name: faz
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - germany
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 法兰克福汇报（FAZ，德国全国性日报，免 key）
 - name: federal_register
   tier: T1
   type: http
@@ -819,6 +906,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: 国家法律法规数据库（法律/行政法规/司法解释全文，权威法条源，免认证）
+- name: folha
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - brazil
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 巴西页报（Folha de S.Paulo，巴西最大日报，免 key）
 - name: fr_opendata
   tier: T1
   type: http
@@ -1112,6 +1211,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: Hugging Face 模型搜索（免认证）
+- name: hurriyet
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - turkey
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 自由报（Hürriyet，土耳其主流日报，免 key）
 - name: imdb
   tier: T1
   type: imdb
@@ -1126,6 +1237,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: IMDb suggestion API（电影/剧集/人物，免认证）
+- name: iplant
+  tier: T1
+  type: iplant
+  coverage:
+  - species
+  - botany
+  - chinese
+  - science
+  latency_ms: 1200
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: iPlant 植物智（中文植物名/俗名 → 学名 + 分类，中科院植物所，免认证）
 - name: itotii
   tier: T1
   type: itotii
@@ -1257,6 +1382,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: 韩国国家法令信息中心判例全文检索（官方公开 demo 账号，韩文 XML）
+- name: lefigaro
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - france
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 费加罗报（Le Figaro，法国主流日报，免 key）
 - name: lieu
   tier: T1
   type: lieu
@@ -1577,6 +1714,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面，JSON 免认证）
+- name: matichon
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - thailand
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 泰国民族报（Matichon，泰国主流日报，免 key）
 - name: mdn
   tier: T1
   type: http
@@ -1719,6 +1868,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: 网易云音乐搜索（中文曲库/专辑元数据，免认证，非官方接口）
+- name: nhk
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - japan
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: NHK 新闻（日本放送协会主要新闻，公共广播一手源，免 key）
 - name: nhtsa_vpic
   tier: T1
   type: nhtsa_vpic
@@ -1885,6 +2046,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: openFDA 药品标签（免认证）
+- name: openfoodfacts
+  tier: T1
+  type: http
+  coverage:
+  - food
+  - nutrition
+  - product
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: Open Food Facts 全球食品成分库（200+ 国家，多语言，免 key）
 - name: openligadb
   tier: T1
   type: openligadb
@@ -2335,6 +2509,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: Steam 商店搜索（免认证）
+- name: tass
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - russia
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 塔斯社（俄罗斯国家通讯社（ТАСС），俄语一手新闻，免 key）
 - name: tatoeba
   tier: T1
   type: tatoeba
@@ -2624,6 +2810,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: V2EX（中文技术社区，官方 API 候选池 + 本地相关性过滤）
+- name: vnpress
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - vietnam
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: VnExpress（越南最大网络新闻，免 key）
 - name: wallstreetcn
   tier: T1
   type: wallstreetcn
@@ -2866,6 +3064,30 @@ engines:
   recommended: true
   explicit_only: false
   desc: 小红书
+- name: yna
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - korea
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 韩联社（韩国国家通讯社（연합뉴스），韩半岛一手新闻，免 key）
+- name: ynet
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  - israel
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: Ynet 新闻（以色列最大新闻站，希伯来语一手源，免 key）
 - name: you
   tier: T1
   type: you
@@ -2880,6 +3102,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并）
+- name: zbmath
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - math
+  - paper
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: zbMATH Open 数学文献索引（含 MSC 分类号，免 key）
 - name: zdic
   tier: T1
   type: zdic

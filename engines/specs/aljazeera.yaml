@@ -1,0 +1,43 @@
+# 半岛电视台阿语 RSS — 半岛阿语版，阿拉伯世界一手视角
+#
+# 补的盲区：**ar 本地一手新闻**。接入前 argo 的新闻链路只有中英源
+# （google_news/guardian_rss/dw_news/france24 都是英语视角），ar 查询
+# 拿不到本地一手报道。
+#
+# 实测（2026-09-21）：**25 条**，摘要中位 163 字、最长 218 字。
+#
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族——
+# 与 hot_trending（热榜）分族，避免同族 max_per_family=2 把本地源互相挤掉。
+# 语言由 langs 声明，路由按查询语言选源（见 route._lang_aware_combo_order）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine aljazeera --stage all --admit
+#   python3 scripts/search.py "أخبار اليوم" --engine aljazeera --json
+
+engine_id: aljazeera
+type: rss_feed
+enabled: true
+cost_tier: free
+label: 半岛电视台阿语 RSS
+family: world_news
+feed_mode: hot
+relevance_check: false
+priority: 42
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9
+langs:
+- ar
+canary_query: "أخبار اليوم"
+coverage:
+- news
+- arab
+desc: "半岛电视台阿语（半岛阿语版，阿拉伯世界一手视角，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "أخبار اليوم"
+  - query: "الشرق الأوسط"

@@ -1,0 +1,43 @@
+# NHK 新闻 RSS — 日本放送协会主要新闻，公共广播一手源
+#
+# 补的盲区：**ja 本地一手新闻**。接入前 argo 的新闻链路只有中英源
+# （google_news/guardian_rss/dw_news/france24 都是英语视角），ja 查询
+# 拿不到本地一手报道。
+#
+# 实测（2026-09-21）：**7 条**，摘要中位 103 字、最长 163 字。
+#
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族——
+# 与 hot_trending（热榜）分族，避免同族 max_per_family=2 把本地源互相挤掉。
+# 语言由 langs 声明，路由按查询语言选源（见 route._lang_aware_combo_order）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine nhk --stage all --admit
+#   python3 scripts/search.py "今日のニュース" --engine nhk --json
+
+engine_id: nhk
+type: rss_feed
+enabled: true
+cost_tier: free
+label: NHK 新闻 RSS
+family: world_news
+feed_mode: hot
+relevance_check: false
+priority: 47
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://www3.nhk.or.jp/rss/news/cat0.xml
+langs:
+- ja
+canary_query: "今日のニュース"
+coverage:
+- news
+- japan
+desc: "NHK 新闻（日本放送协会主要新闻，公共广播一手源，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "今日のニュース"
+  - query: "日本の政治"

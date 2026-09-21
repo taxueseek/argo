@@ -1,0 +1,41 @@
+# data.gov.uk — 英国政府开放数据目录（免 key，CKAN API）
+#
+# 补的盲区：**英国政府开放数据集**。argo 已有 eu_opendata（欧盟）与
+# fr_opendata（法国），英国这一档缺位；且英国是开放数据运动的发源地，
+# 数据集密度高于多数欧盟国家。
+#
+# 实测（2026-09-21）：CKAN package_search 免 key，JSON 直出；
+# 「climate」返回结构化数据集条目（title / notes / name / organization）。
+#
+# 形态：检索式。url 由 url_template 从数据集 slug 拼出。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine datagov_uk --stage all --admit
+
+engine_id: datagov_uk
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://data.gov.uk/api/3/action/package_search
+timeout: 20
+query_param: q
+canary_query: "climate"
+family: misc_vertical
+langs:
+- en
+coverage: [opendata, government, dataset, uk]
+desc: "data.gov.uk 英国政府开放数据目录（CKAN，免 key）"
+recommended: false
+explicit_only: true
+extra_params:
+  rows: "{n}"
+output_map:
+  items: result.results
+  item_title: title
+  item_summary: notes
+  url_template: "https://data.gov.uk/dataset/{name}"
+
+quality_queries:
+  - query: "climate"
+  - query: "transport"

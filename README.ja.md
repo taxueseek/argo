@@ -25,7 +25,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.8.9-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-238-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-257-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-14%20tools-purple">
 </p>
 
@@ -60,7 +60,7 @@
 4. **無料オープン生態系で足りる。** 政府・学術・標準・セキュリティの公開 API とキーレス エンジンで大部分をカバー（199 ソースが無設定）。
 5. **品質は測定可能。** ランキング金標・融合利得アブレーション・負のルーティング制御。
 
-> v2.8.9 はこの全てを実装：238 ソース / 92 ドメイン / 200 無設定。
+> v2.8.9 はこの全てを実装：257 ソース / 93 ドメイン / 219 無設定。
 
 ---
 
@@ -337,7 +337,7 @@ python3 scripts/search.py --list-engines
 - **MCP 一発注入（v2.8.4 新）**：`argo mcp inject` で Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline（アトミック書き込み + バックアップ + 可逆。来源 `mcp/clients.yaml`）
 - **構造化検索の強化（v2.8.4 新）**：クエリ正規化 + 変体 + 複雑さゲート；SNS 構文優先；TF-IDF は中国語エンジンを捨てた後も候補を見る；`--include-local`
 - **Keenable（v2.8.4 新）**：汎用ウェブ検索エンジン追加（L1 宣言的 HTTP、無料体験、`ARGO_KEENABLE_API_KEY`）
-- **238 ソース、92 ドメイン**（199 は設定不要）：一般ウェブ + 金融 / マクロ / 映像 / スポーツ / 地理 / 組織 / メディア / 化学 / 学術 / コード（来源：`config.yaml`）
+- **257 ソース、93 ドメイン**（219 無設定）：一般ウェブ + 金融 / マクロ / 映像 / スポーツ / 地理 / 組織 / メディア / 化学 / 学術 / コード（来源：`config.yaml`）
 - **12 の MCP ツール**：検索、研究、証拠、曖昧さ解消、取得、スクショ、PDF、SNS、ローカル、クロール、ローカルプレビュー、再計算
 - **多言語検索**：中・英・日・韓・キリル・タイ・アラビア・ヘブライ・ギリシャ・デーヴァナーガリーなど。ルーティングとエンジンパラメータが言語に追従。非中国語クエリは知乎 / 搜狗微信 / A 株スナップショットなど中国語専用源を避ける
 - **垂直復旧の門禁**：空結果復旧で pypi / npm / 速報などを映像・スポーツへ「混ぜない」
@@ -347,7 +347,7 @@ python3 scripts/search.py --list-engines
 
 ## エンジンとルーティング
 
-設定上およそ **218** ソース、**89** ドメイン（`config.yaml` と `--list-engines` が基準）。
+設定上およそ **257** ソース、**93** ドメイン（`config.yaml` と `--list-engines` が基準）。
 
 ### 直結・垂直（抜粋）
 

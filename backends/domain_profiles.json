@@ -2442,5 +2442,119 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "iplant": {
+    "label": "iplant",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "aljazeera": {
+    "label": "半岛电视台阿语 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "antara": {
+    "label": "安塔拉通讯社 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "ct24": {
+    "label": "捷克电视台24 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "elpais": {
+    "label": "西班牙国家报 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "faz": {
+    "label": "法兰克福汇报 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "folha": {
+    "label": "巴西页报 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "hurriyet": {
+    "label": "自由报 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "lefigaro": {
+    "label": "费加罗报 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "matichon": {
+    "label": "泰国民族报 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "nhk": {
+    "label": "NHK 新闻 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "tass": {
+    "label": "塔斯社 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "vnpress": {
+    "label": "VnExpress RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "yna": {
+    "label": "韩联社 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "ynet": {
+    "label": "Ynet 新闻 RSS",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "cinii": {
+    "label": "cinii",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "datagov_uk": {
+    "label": "datagov_uk",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "openfoodfacts": {
+    "label": "openfoodfacts",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "zbmath": {
+    "label": "zbmath",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

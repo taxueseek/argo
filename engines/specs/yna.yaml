@@ -1,0 +1,43 @@
+# 韩联社 RSS — 韩国国家通讯社（연합뉴스），韩半岛一手新闻
+#
+# 补的盲区：**ko 本地一手新闻**。接入前 argo 的新闻链路只有中英源
+# （google_news/guardian_rss/dw_news/france24 都是英语视角），ko 查询
+# 拿不到本地一手报道。
+#
+# 实测（2026-09-21）：**120 条**，摘要中位 83 字、最长 93 字。
+#
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族——
+# 与 hot_trending（热榜）分族，避免同族 max_per_family=2 把本地源互相挤掉。
+# 语言由 langs 声明，路由按查询语言选源（见 route._lang_aware_combo_order）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine yna --stage all --admit
+#   python3 scripts/search.py "오늘 뉴스" --engine yna --json
+
+engine_id: yna
+type: rss_feed
+enabled: true
+cost_tier: free
+label: 韩联社 RSS
+family: world_news
+feed_mode: hot
+relevance_check: false
+priority: 40
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://www.yna.co.kr/rss/news.xml
+langs:
+- ko
+canary_query: "오늘 뉴스"
+coverage:
+- news
+- korea
+desc: "韩联社（韩国国家通讯社（연합뉴스），韩半岛一手新闻，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "오늘 뉴스"
+  - query: "한국 정치"

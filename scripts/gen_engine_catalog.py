@@ -67,6 +67,7 @@ FAMILY_LABEL = {
     "news_flash": "快讯 / 电报",
     "social": "社区 UGC",
     "hot_trending": "热榜",
+    "world_news": "本地新闻流",
     "knowledge": "百科 / 实体",
     "science_chem": "化学 / 药学",
     "science_bio": "生物 / 蛋白",
