@@ -77,8 +77,6 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         1182, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
     "scripts/matrix_search_eval.py": (
         1103, "离线路由矩阵（138 条检查项），用例表占多数"),
-    "scripts/config.py": (
-        1007, "配置加载/合并/磁盘缓存/外键校验；已贴近上限，下次改动前先看切面"),
 }
 
 

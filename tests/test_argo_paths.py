@@ -59,6 +59,7 @@ def test_env_beats_config_yaml_db_path(monkeypatch, tmp_path):
 
 # ─── 各模块统一落在同一根目录 ─────────────────────────────────────────────────
 
+
 _EXPECT = {
     "argo_engine_registry": ("HEALTH_STATE_PATH", "argo_engine_health.json"),
     "circuit_breaker": ("STATE_PATH", "circuit_breaker.json"),

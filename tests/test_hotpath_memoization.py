@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import cache  # noqa: E402
 import config  # noqa: E402
+import config_cache  # noqa: E402
 import route  # noqa: E402
 
 
@@ -246,6 +247,18 @@ class TestConfigStampTtl:
         assert got >= expected
 
 
+def _use_config(monkeypatch, path):
+    """把「配置文件的身份」同时告诉两层。
+
+    磁盘缓存拆出 config_cache 后，路径有两个读取处：config 的加载器
+    （`config.CONFIG_PATH`）与缓存层（`config_cache._config_path()`）。测试要把
+    配置指向临时文件，就得两处都打——只打一处，另一半继续读真实 config.yaml
+    （2026-09-21 实测：只打 config.CONFIG_PATH 时缓存层静默读真实文件）。
+    """
+    monkeypatch.setattr(config, "CONFIG_PATH", path)
+    monkeypatch.setattr(config_cache, "_config_path", lambda: path)
+
+
 class TestConfigDiskCache:
     """写入文件配置缓存：省掉**每个新进程**的整条解析合并链（实测 57 ms → 11 ms）。
 
@@ -266,7 +279,7 @@ class TestConfigDiskCache:
         config._config_mtime = 0.0
         config._parsed_yaml_cache = None
         config._disk_cache_memo = None
-        config._content_digest_memo = None
+        config_cache._content_digest_memo = None
         # _ext_scan_cache 也要清：测试会 monkeypatch ENGINES_DIR/CONFIG_PATH，留着
         # 上一个夹具的外置声明指纹会让「本该不匹配」的缓存键恰好匹配，于是测试
         # 读到真实仓库的配置——缓存类用例最常见的假绿/假红来源。
@@ -310,7 +323,7 @@ class TestConfigDiskCache:
         p = tmp_path / "c.yaml"
         p.write_text("cache:\n  db_path: /tmp/a/x.db\nengines: {}\n",
                      encoding="utf-8")
-        monkeypatch.setattr(config, "CONFIG_PATH", p)
+        _use_config(monkeypatch, p)
         monkeypatch.setattr(config, "ENGINES_DIR", tmp_path / "no-engines")
         first = config.load_config()
         assert "/tmp/a/x.db" in json.dumps(first)
@@ -370,17 +383,21 @@ class TestConfigDiskCache:
         """等长改写（编辑器/脚本都可能）必须改变摘要——不靠 size 或 mtime。"""
         p = tmp_path / "c.yaml"
         p.write_text("a: 1111\n", encoding="utf-8")
-        monkeypatch.setattr(config, "CONFIG_PATH", p)
-        config._content_digest_memo = None
+        # 打桩打在**读取处**：摘要读的是 config_cache._config_path()（config 只是
+        # 同源转出）。打 config.CONFIG_PATH 依赖「两个模块对象是同一个」，
+        # 而 sys.modules 被别的测试 pop/重导入后会静默失效。
+        _use_config(monkeypatch, p)
+        config_cache._content_digest_memo = None
         first = config._config_content_digest(p.stat())
         p.write_text("a: 2222\n", encoding="utf-8")      # 同上长度
-        config._content_digest_memo = None
+        config_cache._content_digest_memo = None
         second = config._config_content_digest(p.stat())
         assert first and second and first != second, "等长改写没被摘要识别"
 
     def test_missing_digest_disables_cache(self, monkeypatch):
         """摘要取不到时不写也不读缓存：宁可每次解析，也不用来源不明的摘要命中。"""
-        monkeypatch.setattr(config, "_config_content_digest", lambda st: None)
+        # 打桩打在**读取处**（摘要与缓存 IO 都住在 config_cache）
+        monkeypatch.setattr(config_cache, "_config_content_digest", lambda st: None)
         assert config._load_config_disk_cache(
             config.CONFIG_PATH.stat(), (0.0, 0, 0, "x"), None) is None
         config._save_config_disk_cache(
@@ -409,7 +426,7 @@ class TestConfigDiskCache:
         """
         p = tmp_path / "c.yaml"
         p.write_text("cache:\n  db_path: /tmp/one/x.db\nengines: {}\n", encoding="utf-8")
-        monkeypatch.setattr(config, "CONFIG_PATH", p)
+        _use_config(monkeypatch, p)
         monkeypatch.setattr(config, "ENGINES_DIR", tmp_path / "no-engines")
         assert config.peek_cache_db_path() == "/tmp/one/x.db"
         config.load_config()

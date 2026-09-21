@@ -155,7 +155,8 @@ def test_sweep_removes_only_dead_path_slots(tmp_path, monkeypatch):
 
 def test_sweep_is_wired_into_the_save_path():
     """回收必须挂在写缓存路径上——只留一个没人调的函数，孤儿照样堆积。"""
-    tree = ast.parse((SCRIPT_DIR / "config.py").read_text(encoding="utf-8"))
+    # 写缓存路径住在 config_cache（配置的跨进程磁盘缓存已拆出）
+    tree = ast.parse((SCRIPT_DIR / "config_cache.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef) and node.name == "_save_config_disk_cache":
             assert "_sweep_orphan_cache_slots" in ast.unparse(node)
