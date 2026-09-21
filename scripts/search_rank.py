@@ -909,3 +909,16 @@ def filter_results_by_domains(
         kept.append(r)
     note = f"domain filter: kept {len(kept)}, dropped {dropped}"
     return kept, note
+
+# 「bocha 没有产出排序」的唯一来源：落到本地五维保底的状态全集。
+#
+# 此前是内联在调用点的四元素元组，新增状态极易漏改，而漏改的后果是静默的——
+# 既不精排也不保底，最终顺序退化成 RRF 原始序，没有任何信号。它属于精排层，
+# 因此住在精排函数旁边（search.py 只是同名转出）。
+_RERANK_DEGRADED_STATUSES = frozenset({
+    "skipped_no_key",        # 未配置密钥
+    "skipped_short",         # 结果太少，不值得精排
+    "skipped_fast",          # fast 档不付远程精排
+    "skipped_circuit_open",  # 端点熔断中（见 _RERANK_BREAKER_KEY）
+    "fallback",              # 端点报错或返回不可用数据
+})

@@ -57,19 +57,12 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_tech.py": (
         1102, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段"),
     "scripts/search.py": (
-        1730, "已拆出 search_rank / search_output / search_cli；剩余 execute_search(724 行) "
-              "与 super_search(398 行) 是网络调度+早停+验证的耦合体。"
-              "**锁已就位**（2026-09-21）：replay_eval 的 --save-baseline/--compare "
-              "改为字段级对比（results_full），实测能抓到「位次不变、单条分数漂移 0.01」。"
-              "切面已勘明：execute_search 的 705~1010 是一串「融合后加工阶段」，"
-              "其中 SERP 过滤 / minhash 去重 / 语言软排 / 否定词过滤 / 时间窗过滤是"
-              "**纯列表变换**（可先抽）；噪声门 / macro 补搜 / 空结果恢复树要打网络"
-              "（需回调参数）。首选形态是声明式**阶段表**（state → state），而不是继续"
-              "内联。**别做机械搬运**：实测该块接口是「20 个输入 / 12 个输出」"
-              "（含 timing tick、_run_one/_ingest 钩子、raw_results 就地改写），"
-              "照它搬出去只是把复杂度搬进一个 30 字段的接口，读者要同时握住的概念"
-              "一个不少。正解是先建两概念的 state 模型（请求侧不可变 + 运行侧累加），"
-              "再让阶段表只吃 state——属专门一轮"),
+        1371, "已拆出 search_rank / search_output / search_cli / search_pipeline；"
+              "剩余 execute_search 的**前半段**（准备 + dispatch + 收尾）是网络调度"
+              "与状态装配的耦合体。加工段已按两概念状态模型搬走"
+              "（search_pipeline: _SearchRequest / _SearchRun），下一步是把它同一套"
+              "模型套到 prepare / dispatch / finalize 三段上——锁（replay_eval 字段级"
+              "对比）与切面都已就位"),
     "scripts/fetch_v3.py": (
         1783, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面"),

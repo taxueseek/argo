@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+from enum import Enum
+
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
@@ -67,3 +69,19 @@ def normalize_result(item: dict, engine: str, default_score: float = 0.5) -> Sea
         metadata=item.get("metadata", {}),
         social_meta=item.get("social_meta"),
     )
+
+
+class Stage(str, Enum):
+    """进度回调的阶段名（on_progress 契约）。
+
+    从 search.py 搬来这里：执行层与加工层（search_pipeline）都要发进度事件，
+    枚举放在任何一侧都会让另一侧反向依赖；search_types 是本仓共享类型的家。
+    """
+
+    START = "start"
+    CACHE_HIT = "cache_hit"
+    ROUTING = "routing"
+    SEARCHING = "searching"
+    MERGING = "merging"
+    DONE = "done"
+    ERROR = "error"
