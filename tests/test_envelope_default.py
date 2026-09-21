@@ -31,10 +31,10 @@ if str(SCRIPT_DIR) not in sys.path:
 import search  # noqa: E402
 
 
-# ── 1. 源码形态锁 ─────────────────────────────────────────────────────────────
+# ── 1. 源码形态锁（读 search_cli.py：CLI 的默认档判据住在那里）────────────────
 
 def test_use_envelope_does_not_default_to_full():
-    tree = ast.parse((SCRIPT_DIR / "search.py").read_text(encoding="utf-8"))
+    tree = ast.parse((SCRIPT_DIR / "search_cli.py").read_text(encoding="utf-8"))
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(
@@ -93,7 +93,7 @@ def test_envelope_opt_in_restores_all_views(offline):
 
 def test_archive_implies_envelope_via_cli_flag():
     """`--archive` 必须强制打开 envelope——归档的候选列表靠它。"""
-    src = (SCRIPT_DIR / "search.py").read_text(encoding="utf-8")
+    src = (SCRIPT_DIR / "search_cli.py").read_text(encoding="utf-8")
     assert "use_envelope = args.envelope or args.archive" in src, (
         "归档路径依赖 envelope；--archive 必须强制打开，否则 candidates.jsonl 会空"
     )

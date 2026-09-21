@@ -57,7 +57,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_tech.py": (
         1102, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段"),
     "scripts/search.py": (
-        2033, "已拆出 search_rank / search_output；剩余 execute_search(724 行) "
+        1730, "已拆出 search_rank / search_output / search_cli；剩余 execute_search(724 行) "
               "与 super_search(398 行) 是网络调度+早停+验证的耦合体，"
               "拆它需要先给「结果加工」建离线快照锁（replay_eval 只覆盖 6 例）"),
     "scripts/fetch_v3.py": (

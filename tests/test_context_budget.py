@@ -216,12 +216,18 @@ class TestContextGuidanceIsReal(unittest.TestCase):
                       "SKILL.md 未教 Agent 用精简档——默认输出体积会翻倍")
 
     def test_cli_really_supports_documented_flags(self):
-        import inspect
-        import search as search_mod
-        src = inspect.getsource(search_mod)
-        self.assertIn('"--envelope"', src, "文档在教 --envelope，CLI 却不支持")
-        self.assertIn('"--no-envelope"', src,
-                      "--no-envelope 是兼容保留项，删掉会打断既有脚本")
+        """对着**解析器对象**断言，不 grep 源码文本。
+
+        源码文本断言在重构时会假红（2026-09-21 把 CLI 搬到 search_cli 时正是
+        如此），而且它断言的是字面量不是行为。`build_parser()` 就是为此抽出来的。
+        """
+        from search_cli import build_parser
+        parser = build_parser()
+        args = parser.parse_args(["q", "--envelope", "--archive"])
+        self.assertTrue(args.envelope, "文档在教 --envelope，CLI 却不支持")
+        args = parser.parse_args(["q", "--no-envelope"])
+        self.assertFalse(args.envelope,
+                         "--no-envelope 是兼容保留项，删掉会打断既有脚本")
 
     def test_list_engines_detail_filter_by_engine(self):
         """单引擎详细查询必须真的被过滤——曾静默忽略 --engine 吐全量 186 KB。"""
