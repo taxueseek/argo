@@ -173,3 +173,45 @@ def test_recording_data_is_healthy():
     assert "不是" in (meta.get("usage") or ""), (
         "缺使用说明：必须写明重跑保证的是「处理逻辑没有退步」，"
         "不是「现在网上就是这个样子」")
+
+
+# ── 5. 字段级灵敏度（拆加工层重构时的锁）─────────────────────────────────────
+
+def test_metrics_carry_full_result_fields():
+    """指标必须带上每条结果的全量字段。
+
+    只存 urls 的话，「位次没动但分数/来源/信号变了」看不见——而拆
+    execute_search 这类加工层重构时，那正是最容易漏掉的漂移。
+    """
+    payload = {"count": 1, "status": "completed",
+               "results": [{"url": "https://a", "title": "t", "source": "octen",
+                            "score": 0.61, "signals": {"freshness": 1}}]}
+    case = {"id": "c1", "query": "q", "max_results": 1}
+    m = replay_eval._collect_metrics(case, payload, set(), set())
+    assert m["results_full"] == payload["results"], m
+
+
+def test_diff_detects_field_level_change():
+    """同一 URL 上的分数变化必须被报出来（位次完全没动）。"""
+    base = {"cases": [{"id": "c1", "kept": 1, "bytes": 10, "urls": ["u1"],
+                       "results_full": [{"url": "u1", "score": 0.61,
+                                         "source": "octen"}]}]}
+    new = {"cases": [{"id": "c1", "kept": 1, "bytes": 10, "urls": ["u1"],
+                      "results_full": [{"url": "u1", "score": 0.58,
+                                        "source": "octen"}]}]}
+    d = replay_eval.diff_reports(base, new)
+    row = d["cases"][0]
+    assert d["n_changed"] == 1, d
+    assert row["field_changes"] == [
+        {"url": "u1", "fields": {"score": {"from": 0.61, "to": 0.58}}}], row
+
+
+def test_field_change_ignores_urls_that_came_or_went():
+    """进出的 URL 由 entered/left 表达，字段对比只管两边都有的（不重复报）。"""
+    base = {"cases": [{"id": "c1", "kept": 1, "bytes": 10, "urls": ["u1"],
+                       "results_full": [{"url": "u1", "score": 0.6}]}]}
+    new = {"cases": [{"id": "c1", "kept": 1, "bytes": 10, "urls": ["u2"],
+                      "results_full": [{"url": "u2", "score": 0.9}]}]}
+    row = replay_eval.diff_reports(base, new)["cases"][0]
+    assert "field_changes" not in row, row
+    assert row["entered"] == ["u2"] and row["left"] == ["u1"]

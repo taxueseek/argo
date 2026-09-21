@@ -245,6 +245,11 @@ def _collect_metrics(case: dict, payload: dict, not_recorded: set[str],
         "urls": urls,
         "bytes": _agent_bytes(payload),
         "errors": len(payload.get("errors") or []),
+        # 每条结果的**全量字段**：urls 只锁住位次，锁不住「分数/来源/信号怎么变的」。
+        # 拆 execute_search 这类加工层重构时，位次不变但分数漂移正是要抓的东西，
+        # 因此这里存全量而不是摘要（--compare 会做字段级对比）。
+        "results_full": [_jsonable(r) for r in (payload.get("results") or [])
+                         if isinstance(r, dict)],
     }
     out.update(_rank_metrics(urls, case.get("relevant")))
     if not_recorded:
@@ -344,6 +349,40 @@ def evaluate_all(data_path: Path | None = None) -> dict:
     return out
 
 
+def _clip_field(value: Any, limit: int = 90) -> Any:
+    """字段值截断：diff 是给人看的，整段 snippet 会把输出冲掉。"""
+    if isinstance(value, str) and len(value) > limit:
+        return value[:limit] + "…"
+    if isinstance(value, list) and len(value) > 12:
+        return value[:12] + ["…"]
+    return value
+
+
+def _field_changes(base_results: list | None,
+                   new_results: list | None) -> list[dict]:
+    """同一 URL 上的字段级变化（分数、来源、信号、共识引擎…）。
+
+    位次表（entered/left/moved）只看得到「谁进谁出」；加工层重构最容易造成的是
+    「位次没动但分数/字段变了」——那类漂移必须能看见，否则拆排序或信号阶段时
+    没有可信的锁。只比两边都有的 URL，进出的 URL 由 entered/left 表达。
+    """
+    bmap = {r.get("url"): r for r in (base_results or [])
+            if isinstance(r, dict) and r.get("url")}
+    rows: list[dict] = []
+    for r in new_results or []:
+        if not isinstance(r, dict):
+            continue
+        base = bmap.get(r.get("url"))
+        if base is None:
+            continue
+        diffs = {k: {"from": _clip_field(base.get(k)), "to": _clip_field(r.get(k))}
+                 for k in sorted(set(base) | set(r))
+                 if base.get(k) != r.get(k)}
+        if diffs:
+            rows.append({"url": r.get("url"), "fields": diffs})
+    return rows
+
+
 def diff_reports(base: dict, new: dict) -> dict:
     """两次运行之间的差异：指标变化、哪些结果新进来、哪些掉了、位次怎么动的。
 
@@ -375,12 +414,15 @@ def diff_reports(base: dict, new: dict) -> dict:
             "left": left,
             "moved": moved,
         }
+        fields = _field_changes(b.get("results_full"), c.get("results_full"))
+        if fields:
+            row["field_changes"] = fields
         if "ndcg" in c and "ndcg" in b:
             row["d_ndcg"] = round(c["ndcg"] - b["ndcg"], 4)
         rows.append(row)
     changed = [r for r in rows
                if r.get("d_kept") or r.get("d_bytes") or r.get("entered")
-               or r.get("left") or r.get("d_ndcg")]
+               or r.get("left") or r.get("d_ndcg") or r.get("field_changes")]
     out: dict[str, Any] = {
         "n_cases": len(rows),
         "n_changed": len(changed),
@@ -474,8 +516,13 @@ def _fmt_diff(d: dict) -> str:
             flags.append(f"掉了{len(r['left'])}条")
         if r.get("moved"):
             flags.append(f"位次变了{len(r['moved'])}条")
+        if r.get("field_changes"):
+            flags.append(f"字段变了{len(r['field_changes'])}条")
         if flags:
             lines.append(f"  {r['id']:<28} " + "  ".join(flags))
+        for fc in r.get("field_changes") or []:
+            keys = ", ".join(sorted(fc["fields"]))
+            lines.append(f"      {fc['url'][:60]} → 字段变化：{keys}")
     return "\n".join(lines)
 
 

@@ -58,8 +58,14 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         1102, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段"),
     "scripts/search.py": (
         1730, "已拆出 search_rank / search_output / search_cli；剩余 execute_search(724 行) "
-              "与 super_search(398 行) 是网络调度+早停+验证的耦合体，"
-              "拆它需要先给「结果加工」建离线快照锁（replay_eval 只覆盖 6 例）"),
+              "与 super_search(398 行) 是网络调度+早停+验证的耦合体。"
+              "**锁已就位**（2026-09-21）：replay_eval 的 --save-baseline/--compare "
+              "改为字段级对比（results_full），实测能抓到「位次不变、单条分数漂移 0.01」。"
+              "切面已勘明：execute_search 的 705~1010 是一串「融合后加工阶段」，"
+              "其中 SERP 过滤 / minhash 去重 / 语言软排 / 否定词过滤 / 时间窗过滤是"
+              "**纯列表变换**（可先抽）；噪声门 / macro 补搜 / 空结果恢复树要打网络"
+              "（需回调参数）。首选形态是声明式**阶段表**（state → state），而不是继续"
+              "内联——但那要把每阶段的计时与漏斗计数一起纳入 state，属专门一轮的工作量"),
     "scripts/fetch_v3.py": (
         1783, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面"),
