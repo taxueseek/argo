@@ -768,7 +768,7 @@ class TestRouteSamplingGuard(unittest.TestCase):
     """engine_override 直通分支无有效 features，不得消耗遥测采样槽。"""
 
     def test_override_branch_does_not_sample(self):
-        from route import _sample_route
+        from route_telemetry import sample_route as _sample_route
         calls = []
         orig_emit = None
         try:

@@ -51,13 +51,18 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import circuit_breaker  # noqa: E402
 import search  # noqa: E402
+import search_rank  # noqa: E402
 
 
 @pytest.fixture()
 def breaker(tmp_path):
-    """本用例私有的熔断器实例，并把它接到 search 的精排路径上。"""
+    """本用例私有的熔断器实例，并把它接到精排路径上。
+
+    打桩打在 search_rank（`rerank_results` 的家）：search 只是同名转出，
+    改转出副本不会影响实现读到的值。
+    """
     b = circuit_breaker.CircuitBreaker(state_path=str(tmp_path / "cb.json"))
-    with patch.object(search, "_rerank_breaker", lambda: b):
+    with patch.object(search_rank, "_rerank_breaker", lambda: b):
         yield b
 
 
@@ -106,7 +111,7 @@ def test_repeated_failure_opens_breaker_and_stops_calling_network(breaker, with_
     assert statuses[:2] == ["fallback", "fallback"], statuses
     assert statuses[2:] == ["skipped_circuit_open"] * 3, statuses
     assert len(calls) == 2, f"熔断后仍在打网：{len(calls)} 次"
-    assert breaker.status(search._RERANK_BREAKER_KEY)["state"] == "open"
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "open"
 
 
 def test_breaker_state_is_persisted_for_next_process(breaker, with_key):
@@ -119,7 +124,7 @@ def test_breaker_state_is_persisted_for_next_process(breaker, with_key):
         search.rerank_results("q", _docs())
 
     on_disk = json.loads(Path(breaker._path).read_text(encoding="utf-8"))
-    entry = on_disk["engines"].get(search._RERANK_BREAKER_KEY)
+    entry = on_disk["engines"].get(search_rank._RERANK_BREAKER_KEY)
     assert entry, "rerank 熔断态未落盘，下个 CLI 进程会重犯同一笔开销"
     assert entry["state"] == "open"
     assert entry["last_attribution"]["category"] == "auth", entry["last_attribution"]
@@ -133,7 +138,7 @@ def test_success_closes_breaker(breaker, with_key):
     with patch("net_proxy.open_url", _fail):
         search.rerank_results("q", _docs())
         search.rerank_results("q", _docs())
-    assert breaker.status(search._RERANK_BREAKER_KEY)["state"] == "open"
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "open"
 
     ok = {"data": {"results": [{"index": 0, "relevance_score": 0.9}]}}
     with patch("net_proxy.open_url", lambda req, timeout=None: _OkResp(ok)):
@@ -143,32 +148,32 @@ def test_success_closes_breaker(breaker, with_key):
     # 把 opened_at 拨回冷却期之前，走**真实的**半开探测路径（不等 60s，
     # 也不用 reenable 抄近路——那会把要验证的状态机整段跳过）。
     with breaker._lock:
-        st = breaker._engines[search._RERANK_BREAKER_KEY]
+        st = breaker._engines[search_rank._RERANK_BREAKER_KEY]
         st["opened_at"] = time.time() - circuit_breaker.OPEN_SECONDS - 1
-        breaker._engines[search._RERANK_BREAKER_KEY] = st
+        breaker._engines[search_rank._RERANK_BREAKER_KEY] = st
         breaker._save()
 
     with patch("net_proxy.open_url", lambda req, timeout=None: _OkResp(ok)):
         out, status = search.rerank_results("q", _docs())
         assert status == "ok", "半开探测应被放行并拿到可解析响应"
-    assert breaker.status(search._RERANK_BREAKER_KEY)["state"] == "closed"
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "closed"
 
 
 def test_missing_key_does_not_touch_breaker(breaker):
     """未配置密钥是配置态，不是端点故障——不得写进熔断状态。
 
-    直接 patch `search.get_env` 而不是清 os.environ：get_env 还有「读
+    直接 patch `search_rank.get_env` 而不是清 os.environ：get_env 还有「读
     ~/.config/argo/env」这一层回落，只清环境变量挡不住真实密钥文件。
     """
     def _no_key(names, default=""):
         return default
 
-    with patch.object(search, "get_env", _no_key), \
+    with patch.object(search_rank, "get_env", _no_key), \
             patch("net_proxy.open_url",
                   lambda req, timeout=None: pytest.fail("无密钥时不得发起请求")):
         _, status = search.rerank_results("q", _docs())
     assert status == "skipped_no_key"
-    assert breaker.status(search._RERANK_BREAKER_KEY)["state"] == "closed"
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "closed"
 
 
 def test_circuit_open_status_triggers_local_fallback():

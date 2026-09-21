@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-route.py — Unified Search v2 三层路由决策
+route.py — 路由**编排**（本模块只做决策调度，规则与策略各自成模块）
 
-路由策略：
-  1. 用户指定引擎 → 直接返回
-  2. TF-IDF 语义路由（二元组 + boost + cost + quota）
-  3. 正则硬规则匹配（config.yaml domains）
-  4. 融合决策：正则 + TF-IDF 验证 → 高置信度
-  5. budget 模式：过滤付费引擎
+route_query 的三条分支，按优先级：
+  1. 用户指定引擎 → 直接返回（不做任何推导）
+  2. 域命中（route_domains 判据）→ route_combo 装配 combo → route_policy 截断
+  3. 未命中 → TF-IDF 语义路由；再不行 → 通用保底组合
 
-每种决策都带 reason 字符串。
+模块分工（改动前先读对应模块的 docstring，别在这里加特例）：
+  route_domains   命中哪些域（声明式规则 + unless + intent_required）
+  route_lang      语言判定与按语言选源/排序
+  route_combo     引擎组合装配（谁在场、什么顺序）
+  route_policy    预算截断与保留（谁必须留下）
+  route_cache     决策缓存的存储层
+  route_telemetry 决策采样上报（旁路，失败静默）
+
+每种决策都带 reason 字符串（给人看的归因入口，字段口径见 _feature_labels）。
 """
 
 from __future__ import annotations
@@ -92,6 +98,9 @@ from route_cache import (  # noqa: E402
     invalidate_route_cache,
 )
 
+# 决策采样上报（旁路）：同名转出，测试打桩需打在 route_telemetry。
+from route_telemetry import sample_route  # noqa: E402
+
 # ── 语言与选源策略（route_lang）、组合装配（route_combo）、预算策略（route_policy）
 # 三块按职责拆出，这里同名转出：调用方与既有测试（route.extract_features /
 # route._get_engines_combo / route._VERTICAL_NEW_SOURCE …）无需改。
@@ -142,7 +151,6 @@ from route_policy import (  # noqa: E402
 
 # P2-3：显式语言意图 → 覆盖语言（「用英文搜」「in English」「日本語で」等）。
 # 命中后 lang_override 直接决定语言引擎选择与 must_keep，不被习惯/系统 locale 淹没。
-
 
 
 def _build_engine_names() -> dict[str, str]:
@@ -221,12 +229,6 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-
-
-
-
-
-
 # ── 登录态意图检测（P0-4：五路协同的种子）────────────────────────────────
 # 公开引擎拿不到登录态内容（收藏/关注/持仓/私密等）。route 只做标注不阻塞执行，
 # 上层（CLI/MCP 调用方）看到 login_hint 后可引导登录态搜索补充。
@@ -262,24 +264,6 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
     return {"needs_login": False, "reason": ""}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 语言重排的排除名单改为 engine_families.ENGINE_LANGS 派生（engines_not_for_lang），
 # 三张手写冻结表（_EN_ONLY/_ZH_ONLY/_JA_KO_CN）2026-09-07 收紧删除——
 # 新源声明 langs 一次，全部分发路径自动生效。_SOCIAL_ZH_GENERAL 保留
@@ -287,16 +271,6 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # （提到「小红书/微信」≠ 搜小红书/微信），通用源覆盖真实主题，防平台噪声全占。
 # anysearch 优先：local_bing 直抓 bing.com 对长中文查询存在降级服务风险
 # （2026-08-29 实测：整条查询被 Bing 降级为单字「拍」匹配，返回字典页）。
-
-
-
-
-
-
-
-
-
-
 
 
 # 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
@@ -315,21 +289,12 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # 就按摘除处理，不回溯改既有行为。后续接入语言独占源时加进本表即可。
 
 
-
-
-
 # 意图 → (期望引擎数, 是否并行)。P0-005 动态并行度。
 
 # 窄域引擎单点保护：这类引擎「永不返回零结果」或只覆盖单一主题
 # （跨域查询产出噪声，如 mdn 的 quantum computing → Cloud computing）。
 # definition/fact 意图裁到 1 引擎时，若主引擎是窄域引擎，强制保留 2 引擎，
 # 避免单引擎独占时噪声无处可挡。
-
-
-
-
-
-
 
 
 # ── 垂直域「新专源」保底表（批次九）────────────────────────────────────────────
@@ -349,48 +314,7 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # 模块级常量（原先定义在 route_query 内，每次调用重建一个 18 元素 frozenset）。
 
 
-
-
-
-
-
-
 # ── 路由主函数 ─────────────────────────────────────────────────────────────────
-
-# P2-6：语言路由采样——按采样率记录决策结果（features 齐全的决策点）。
-# 默认 1/20，ARGO_ROUTE_SAMPLE_RATE 可调；采样本身失败静默。
-_ROUTE_SAMPLE_RATE = max(1, int(os.environ.get("ARGO_ROUTE_SAMPLE_RATE", "20")))
-_route_sample_counter = 0
-
-
-def _sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
-    """P2-6：按采样率把路由决策落一条遥测记录。"""
-    global _route_sample_counter
-    if "features" not in kw or not kw.get("features"):
-        return  # engine_override 直通等无语义分支不采样
-    _route_sample_counter += 1
-    if _route_sample_counter % _ROUTE_SAMPLE_RATE != 0:
-        return
-    f = kw.get("features") or {}
-    try:
-        from telemetry import emit
-        emit("route", {
-            "domain": kw.get("domain"),
-            "engine": kw.get("engine"),
-            "engines": kw.get("engines"),
-            "confidence": kw.get("confidence"),
-            "mode": kw.get("mode"),
-            "lang_override": f.get("lang_override"),
-            "primary_lang": f.get("primary_lang"),
-            "script": f.get("script"),
-            "has_compare": f.get("has_compare"),
-            "has_technical": f.get("has_technical"),
-            "chinese_ratio": f.get("chinese_ratio"),
-            "intents": f.get("intents"),
-        })
-    except Exception:
-        pass
-
 
 def route_query(query: str, engine_override: str = "auto",
                 mode: str = "auto",
@@ -427,7 +351,7 @@ def route_query(query: str, engine_override: str = "auto",
             "engine_request": (engine_override or "auto"),
         }
         base.update(kw)
-        _sample_route(base, kw)
+        sample_route(base, kw)
         return base
 
     if engine_override and engine_override != "auto":

@@ -81,9 +81,9 @@ def test_tail_reads_recent(tele_dir):
 # ── 采集点：route 采样 ────────────────────────────────────────────────────────
 
 def test_route_sample_emits(tele_dir, monkeypatch):
-    from route import _sample_route
-    monkeypatch.setattr("route._ROUTE_SAMPLE_RATE", 1)
-    monkeypatch.setattr("route._route_sample_counter", 0)
+    from route_telemetry import sample_route as _sample_route
+    monkeypatch.setattr("route_telemetry._ROUTE_SAMPLE_RATE", 1)
+    monkeypatch.setattr("route_telemetry._route_sample_counter", 0)
 
     _sample_route({}, {
         "domain": "academic",
@@ -112,9 +112,9 @@ def test_route_sample_emits(tele_dir, monkeypatch):
 
 
 def test_route_sample_skips_without_features(tele_dir, monkeypatch):
-    from route import _sample_route
-    monkeypatch.setattr("route._ROUTE_SAMPLE_RATE", 1)
-    monkeypatch.setattr("route._route_sample_counter", 0)
+    from route_telemetry import sample_route as _sample_route
+    monkeypatch.setattr("route_telemetry._ROUTE_SAMPLE_RATE", 1)
+    monkeypatch.setattr("route_telemetry._route_sample_counter", 0)
 
     _sample_route({}, {"engine": "custom"})  # engine_override 直通无 features
     assert not (tele_dir / "route.jsonl").exists()

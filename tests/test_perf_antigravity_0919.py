@@ -55,6 +55,7 @@ class TestEngineWeightCache:
     def test_cache_preserves_values_exactly(self):
         """缓存不得改变任何 (source, lang) 组合的返回值。"""
         import search
+        import search_rank
 
         cases = [
             ("wikipedia", None), ("twitter", None), ("arxiv", None),
@@ -75,11 +76,12 @@ class TestEngineWeightCache:
     def test_cache_actually_hits(self):
         """缓存必须真的被命中——否则本优化是自证式（只断言值相等抓不到没生效）。"""
         import search
+        import search_rank
 
         search.invalidate_engine_weight_cache()
         search._engine_weight("wikipedia", lang="zh")
         # 篡改缓存值：若实现真的读缓存，这里必须读到我塞的哨兵值
-        search._weight_cache[("wikipedia", "zh")] = (0.123456, time.time() + 60)
+        search_rank._weight_cache[("wikipedia", "zh")] = (0.123456, time.time() + 60)
         try:
             assert search._engine_weight("wikipedia", lang="zh") == 0.123456, (
                 "缓存未被读取：返回值不是哨兵，说明 _engine_weight 仍在每次重算"
@@ -94,10 +96,11 @@ class TestEngineWeightCache:
         TTL，若外层缓存比它长，熔断打开后权重会被旧值压住。
         """
         import search
+        import search_rank
 
         search.invalidate_engine_weight_cache()
         search._engine_weight("wikipedia", lang=None)
-        _, expires_at = search._weight_cache[("wikipedia", "")]
+        _, expires_at = search_rank._weight_cache[("wikipedia", "")]
         remaining = expires_at - time.time()
         assert remaining <= search._REL_FACTOR_TTL + 1.0, (
             f"权重缓存 TTL({remaining:.1f}s) 超过可靠性窗口"
@@ -107,6 +110,7 @@ class TestEngineWeightCache:
     def test_repeated_calls_are_cheaper(self):
         """300 条结果的重复调用必须显著快于逐次重算（计时断言，非计数自证）。"""
         import search
+        import search_rank
 
         srcs = ["local_bing/sina_quote", "arxiv", "eastmoney", "byted",
                 "duckduckgo", "openalex", "crossref"]

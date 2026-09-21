@@ -10,10 +10,18 @@ argo/
 │   ├── domain_profiles.json   # TF-IDF 领域文档
 │   ├── engine_registry.yaml   # 引擎注册表
 │   └── quota_profiles.json    # 配额配置
-├── engines/specs/        # 外置引擎声明（10 个，优先覆盖同名）
+├── engines/specs/        # 外置引擎声明（优先覆盖同名 config.yaml）
 ├── scripts/
-│   ├── search.py         # CLI 入口 & 执行调度
-│   ├── route.py          # 三层路由决策
+│   ├── search.py         # 搜索 CLI 入口 & 执行编排（execute_search / super_search）
+│   ├── search_rank.py    # 排序/融合层（RRF、minhash 去重、精排、共识信号、域过滤）
+│   ├── search_output.py  # 输出成形（信源标准化、漏斗、人读格式）
+│   ├── route.py          # 路由编排（三分支：指定引擎 / 域命中 / TF-IDF 与保底）
+│   ├── route_domains.py  # 域规则（声明式 patterns/unless/intent_required + 匹配）
+│   ├── route_lang.py     # 语言判定与按语言选源/排序
+│   ├── route_combo.py    # 引擎组合装配（谁在场、什么顺序）
+│   ├── route_policy.py   # 预算截断与保留策略（谁必须留下）
+│   ├── route_cache.py    # 路由决策缓存（存储层）
+│   ├── route_telemetry.py # 路由决策采样上报（旁路，失败静默）
 │   ├── tfidf_router.py   # TF-IDF 语义路由
 │   ├── engine_families.py # 能力族分类（16 族，MECE）
 │   ├── engines.py        # 引擎适配层（_BUILDERS）
@@ -30,7 +38,7 @@ argo/
 │   ├── extract.py / fetch.py / focus_extract.py / pdf_extract.py
 │   ├── content_security.py # 内容安全引擎
 │   ├── content_signals.py  # 内容质量信号
-│   ├── mcp_server.py     # MCP 服务层（10 工具）
+│   ├── mcp_server.py     # MCP 服务层（工具清单见 scripts/mcp_tools.py，单一真源）
 │   └── social_engines/   # 社交平台引擎
 ├── sub-skills/
 │   ├── local-search/     # 本地引擎聚合

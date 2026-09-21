@@ -149,6 +149,58 @@ def _ruff_findings(targets: list[str]) -> list[str] | None:
     ]
 
 
+def _module_level_names(tree: ast.Module) -> set[str]:
+    """模块顶层真正会绑定名字的语句（赋值/def/class/import/try 里的赋值）。"""
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names.update((a.asname or a.name).split(".")[0] for a in node.names)
+        elif isinstance(node, ast.Try):  # try: import X / try: X = ... 的常见形态
+            for sub in ast.walk(node):
+                if isinstance(sub, (ast.Import, ast.ImportFrom)):
+                    names.update((a.asname or a.name).split(".")[0]
+                                 for a in sub.names)
+                elif isinstance(sub, ast.Assign):
+                    names.update(t.id for t in sub.targets
+                                 if isinstance(t, ast.Name))
+                elif isinstance(sub, ast.AnnAssign) and isinstance(sub.target, ast.Name):
+                    names.add(sub.target.id)
+    return names
+
+
+def _globals_without_binding(paths: list[Path]) -> list[str]:
+    """内建 ast 检测：`global X` 声明的名字在模块级没有绑定。
+
+    为什么 ruff F821 抓不到：`global X` 本身就是一次「X 在模块级」的声明，
+    ruff 据此认为该名已定义，于是 `global _CACHE; return _CACHE`（_CACHE 从未
+    赋值）零告警。运行时只在走到那一行 NameError，而这类行常在冷门分支。
+    """
+    problems: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue  # 语法错误交由 ruff/E9 报
+        bound = _module_level_names(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Global):
+                continue
+            for name in node.names:
+                if name not in bound:
+                    problems.append(
+                        f"{_rel(path)}:{node.lineno} global {name}"
+                        f"（模块级没有定义 → 走到该行即 NameError）")
+    return problems
+
+
 def _duplicate_dict_keys(paths: list[Path]) -> list[str]:
     """内建 ast 检测：字典字面量里的重复常量键。
 
@@ -385,6 +437,21 @@ class TestStaticLintGate(unittest.TestCase):
             "授权类开关没写明 expand/strict（少写前缀的变量、拼错的值都可能放行）：\n  "
             + "\n  ".join(problems))
 
+    def test_global_names_have_module_level_bindings(self):
+        """函数里 `global X` 声明的名字，模块级必须有定义。
+
+        ruff 的 F821 会放过这一类：`global _X` 让 ruff 认为 _X 是模块级名，
+        于是 `def f(): global _X; return _X` 在 _X 从未定义时也判为合法。运行时
+        只有在走到那一行才 NameError——而那一行往往在冷门分支里（2026-09-21
+        拆 search.py 时踩到：`_SCORE_FLOORS_CACHE` 只在「域相关性地板」首次
+        计算时被读到，测试全绿、排序照常，直到某条查询走进那个分支）。
+        """
+        problems = _globals_without_binding(_iter_target_files())
+        self.assertEqual(
+            problems, [],
+            "`global X` 没有模块级定义（走到那行才 NameError，静态门抓不到）：\n  "
+            + "\n  ".join(problems))
+
     def test_shell_vars_braced_before_multibyte(self):
         """shell 脚本里变量引用后紧贴中文必须加花括号（POSIX 模式会把中文并入变量名）。"""
         problems = _shell_var_before_multibyte(_iter_shell_files())
@@ -535,6 +602,32 @@ class TestStaticLintGate(unittest.TestCase):
             problems = _authorization_flags_are_explicit([bad])
         self.assertEqual(len(problems), 2, f"造错样本没被抓住：{problems}")
         self.assertTrue(all("ARGO_ALLOW_RECOMPUTE" in p for p in problems))
+
+    def test_gate_has_teeth_global_without_binding(self):
+        """造一个 `global X` 但 X 从未在模块级赋值的样本，规则必须抓住；
+        正常写法（模块级有定义）不得误报。"""
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "bad_global.py"
+            bad.write_text(
+                "def f():\n"
+                "    global _CACHE\n"
+                "    if _CACHE is None:\n"
+                "        _CACHE = {}\n"
+                "    return _CACHE\n",
+                encoding="utf-8")
+            problems = _globals_without_binding([bad])
+            good = Path(td) / "good_global.py"
+            good.write_text(
+                "_CACHE = None\n\n\n"
+                "def f():\n"
+                "    global _CACHE\n"
+                "    _CACHE = {}\n"
+                "    return _CACHE\n",
+                encoding="utf-8")
+            clean = _globals_without_binding([good])
+        self.assertEqual(len(problems), 1, f"造错样本没被抓住：{problems}")
+        self.assertIn("_CACHE", problems[0])
+        self.assertEqual(clean, [], f"正常写法被误报：{clean}")
 
     def test_gate_has_teeth_ruff_engine(self):
         """造一个用未导入 `Any` 的样本，ruff 必须抓住（对应本次修复的缺陷）。"""
