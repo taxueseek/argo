@@ -136,6 +136,11 @@ from route_combo import (  # noqa: E402
     _adaptive_learner,
     _NARROW_ENGINES,
     _INTENT_PARALLELISM,
+    inject_strong_semantic,
+    # combo 定稿的三段共享步骤（三条分支逐字重复过的那三段）
+    intent_squeeze,
+    geo_lang_must_keep,
+    breaker_filter,
 )
 from route_policy import (  # noqa: E402
     _VERTICAL_NEW_SOURCE,
@@ -520,13 +525,6 @@ def route_query(query: str, engine_override: str = "auto",
         # TF-IDF 验证 + catch-all 修复（仅高分才覆写）
         is_catch_all = not domain.get("patterns", [])  # 无模式 = 兜底域
 
-        # 强语义注入的通用引擎黑名单：这些引擎已被域 combo 覆盖，注入会喧宾夺主
-        _GENERAL_ENGINES = {
-            "anysearch", "byted", "bocha", "octen", "duckduckgo",
-            "local_search", "zhihu", "wechat_sogou", "uapi", "tavily",
-            "brave", "bocha_ai", "google_scholar", "arxiv", "wikipedia",
-        }
-
         if tfidf_best and tfidf_best in engines_combo:
             confidence = 0.95
         elif tfidf_best and tfidf_best != engines_combo[0]:
@@ -588,6 +586,9 @@ def route_query(query: str, engine_override: str = "auto",
             engines_combo, features, domain, mode, parallel)
 
         # P0：boost + tier/budget（depth/context）— 放在意图裁剪之后统一截断
+        # 注意：本分支的 must_keep 组装**不能**并成一次调用——geo 项与 lang 项
+        # 之间夹着垂直域主源保护，而 policy 是按 must_keep 的**顺序**补位的
+        # （见 _apply_engine_policy 的 `for e in must_keep`），合并会改变 combo 次序。
         must_keep = []
         if features.get("has_geo") and "local_openstreetmap" in enabled and not _pure_combo:
             must_keep.append("local_openstreetmap")
@@ -632,18 +633,8 @@ def route_query(query: str, engine_override: str = "auto",
         # test_new_source_reachability），不收口。
         # must_keep 成员豁免：它们有硬保留理由（geo 的 local_openstreetmap
         # 被裁会退化成 wikidata 单源，实测 R_en_geo 矩阵 FAIL）。
-        _intents = features.get("intents") or []
-        if "definition" in _intents or "fact" in _intents:
-            _mk = set(must_keep)
-            _rest = [e for e in engines_combo if e not in _mk]
-            if len(_rest) != len(engines_combo):
-                _rest, parallel = _apply_intent_parallelism(
-                    _rest, features, domain, mode, parallel)
-                engines_combo = _rest + [e for e in engines_combo
-                                         if e in _mk and e not in _rest]
-            else:
-                engines_combo, parallel = _apply_intent_parallelism(
-                    engines_combo, features, domain, mode, parallel)
+        engines_combo, parallel = intent_squeeze(
+            engines_combo, features, domain, mode, parallel, must_keep)
         engines_combo = _inject_multilingual_backup(engines_combo, enabled,
                                                     features)
         # 域 primary 扶正：已在 combo 且未熔断时置首（不覆盖冷却中的熔断沉底）
@@ -669,23 +660,15 @@ def route_query(query: str, engine_override: str = "auto",
             if p and p in engines_combo:
                 engines_combo = [p] + [e for e in engines_combo if e != p]
 
-        # 强语义注入（v2.7.10）：TF-IDF 高分推荐放宽到所有域，位置在 primary
-        # 扶正之后（否则被扶正压到第二位，串行 early-stop 下永远不执行）。
-        # marginalia/open_meteo/usda/gov_policy/cnii 等 25 个垂直新引擎有
-        # profile 文档，但正则域（chinese_general 等）命中后旧逻辑只对
-        # catch-all 域注入，这些引擎永远选不中。分数≥0.6（远高于最低阈值
-        # 0.12）表示查询与引擎文档强匹配，前置注入不锁死（域主源仍在尾部
-        # 备位，注入引擎失败时自然补位）。
-        if tfidf_best and tfidf_best_score >= 0.6 and not is_catch_all \
-                and tfidf_best not in engines_combo \
-                and tfidf_best not in _GENERAL_ENGINES \
-                and tfidf_best in enabled:
-            engines_combo = [tfidf_best] + [e for e in engines_combo if e != tfidf_best]
+        # 强语义注入（v2.7.10）：判据与「为什么放在 primary 扶正之后」见
+        # route_combo.inject_strong_semantic 的 docstring。
+        engines_combo, _strong = inject_strong_semantic(
+            engines_combo, tfidf_best=tfidf_best, score=tfidf_best_score,
+            is_catch_all=is_catch_all, enabled=enabled)
+        if _strong:
             confidence = 0.9
         # D4：统一熔断统一处理——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
-        engines_combo = _filter_breaker_blocked(engines_combo)
-        if not engines_combo:
-            engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
+        engines_combo = breaker_filter(engines_combo, enabled)
         # budget 截断后保持一致 parallel，避免短 combo 仍开多余并行
         # research 语境例外：子查询跑满 combo（no_early_stop），串行会拖垮
         # 整条研究管线，强制并行
@@ -751,10 +734,7 @@ def route_query(query: str, engine_override: str = "auto",
         engines_combo, parallel = _apply_intent_parallelism(
             engines_combo, features, None, mode, parallel)
 
-        must_keep = []
-        if features.get("has_geo") and "local_openstreetmap" in enabled:
-            must_keep.append("local_openstreetmap")
-        must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))
+        must_keep = geo_lang_must_keep(features, enabled, engines_combo, query)
         engines_combo = _apply_policy_with_new_source_slots(
             domain, engines_combo,
             mode=mode, depth=depth, context=context,
@@ -769,26 +749,14 @@ def route_query(query: str, engine_override: str = "auto",
         # 意图裁剪收口（与主域分支同一问题：policy 的 must_keep 补回会放大
         # combo，抵消上面的意图裁剪）。同样只对 definition/fact 收口，
         # must_keep 成员豁免（理由见主域分支注释）。
-        _intents = features.get("intents") or []
-        if "definition" in _intents or "fact" in _intents:
-            _mk = set(must_keep)
-            _rest = [e for e in engines_combo if e not in _mk]
-            if len(_rest) != len(engines_combo):
-                _rest, parallel = _apply_intent_parallelism(
-                    _rest, features, None, mode, parallel)
-                engines_combo = _rest + [e for e in engines_combo
-                                         if e in _mk and e not in _rest]
-            else:
-                engines_combo, parallel = _apply_intent_parallelism(
-                    engines_combo, features, None, mode, parallel)
+        engines_combo, parallel = intent_squeeze(
+            engines_combo, features, None, mode, parallel, must_keep)
         # ja/ko catch-all 与主域分支同计算方式：anysearch 前二（TF-IDF 直选路径
         # 也会把多语言主力挤掉）
         engines_combo = _inject_multilingual_backup(engines_combo, enabled,
                                                     features)
         # D4：统一熔断统一处理（TF-IDF 注入/语言追加可能绕过 _get_engines_combo）
-        engines_combo = _filter_breaker_blocked(engines_combo)
-        if not engines_combo:
-            engines_combo = [e for e in ["anysearch", "duckduckgo"] if e in enabled] or ["anysearch"]
+        engines_combo = breaker_filter(engines_combo, enabled)
         if mode == "fast":
             parallel = False
         else:
@@ -832,18 +800,14 @@ def route_query(query: str, engine_override: str = "auto",
     fallback_combo = _merge_language_engines(fallback_combo, features, lang_engines)
     # P0-001：geo 查询追加 OpenStreetMap
     fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
-    must_keep_fb = []
-    if features.get("has_geo") and "local_openstreetmap" in enabled:
-        must_keep_fb.append("local_openstreetmap")
-    must_keep_fb.extend(_lang_must_keep(features, enabled, fallback_combo, query))
+    must_keep_fb = geo_lang_must_keep(features, enabled, fallback_combo, query)
     fallback_combo = _apply_engine_policy(
         fallback_combo, mode=mode, depth=depth, context=context,
         engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,
     )
-    # D4：统一熔断统一处理（保底组合可能含熔断引擎）
-    fallback_combo = _filter_breaker_blocked(fallback_combo)
-    if not fallback_combo:
-        fallback_combo = ["anysearch"]
+    # D4：统一熔断统一处理（保底组合可能含熔断引擎）。
+    # 兜底次序与本分支的语义一致：通用保底路径只认 anysearch。
+    fallback_combo = breaker_filter(fallback_combo, enabled, empty=("anysearch",))
 
     low = tfidf_scores and all(s[1] < TFIDF_MIN_SCORE for s in tfidf_scores)
     reason = (

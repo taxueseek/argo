@@ -16,7 +16,7 @@ from typing import Any
 
 from config import get_engines
 from quota import get_quota_manager
-from route_lang import _enabled_local_engines, _get_registry
+from route_lang import _enabled_local_engines, _get_registry, _lang_must_keep
 
 # 自适应学习器（可选依赖）：按历史成败微调同族引擎的次序。
 # 从 route.py 搬来这里：它是 _get_engines_combo 的私有状态，放在 route.py 会让
@@ -468,3 +468,93 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         pass
 
     return filtered
+
+
+# ── combo 定稿的三段共享步骤 ───────────────────────────────────────────────────
+#
+# route_query 的三条分支（域命中 / TF-IDF / 通用保底）各自组装 combo，但有
+# 三段逻辑在每条分支里**逐字重复**。重复的代价不是行数，而是「改一处漏两处」：
+# 代码注释里已经记着两次因此产生的缺陷（TF-IDF 分支漏了语言过滤、语言/次域追加
+# 的引擎绕过了熔断处理）。这三段收在这里，新增一步只需要改一个地方。
+#
+# 刻意**不做**「把三条分支合并成一个带开关的函数」：三条流水线的步骤集合本身
+# 不同（保底分支不走语言摘除与意图收口，域分支多一步 primary 扶正），合并需要
+# 五六个模式开关——那是把显式的分支换成隐式的 flag 矩阵，读者更难判断某条路径
+# 到底跑了哪些步骤。共享的是**真正相同的步骤**，不是分支本身。
+
+
+def intent_squeeze(combo: list[str], features: dict | None, domain: dict | None,
+                   mode: str, parallel: bool,
+                   must_keep: list[str]) -> tuple[list[str], bool]:
+    """definition/fact 意图下收紧 combo（幂等二次施加）。
+
+    policy 层的新源 must_keep 补回会放大 combo：单源即答语义下，扩容槽纯属
+    阶梯等待浪费（实测 academic definition 1 → 3 引擎）。只对 definition/fact
+    收口——social/news/compare 本身要多源，扩容与意图同向。must_keep 成员豁免
+    （它们有硬保留理由：geo 的 local_openstreetmap 被裁会退化成 wikidata 单源）。
+    """
+    intents = (features or {}).get("intents") or []
+    if "definition" not in intents and "fact" not in intents:
+        return combo, parallel
+    keep = set(must_keep)
+    rest = [e for e in combo if e not in keep]
+    if len(rest) != len(combo):
+        rest, parallel = _apply_intent_parallelism(rest, features, domain, mode,
+                                                   parallel)
+        return rest + [e for e in combo if e in keep and e not in rest], parallel
+    return _apply_intent_parallelism(combo, features, domain, mode, parallel)
+
+
+def geo_lang_must_keep(features: dict | None, enabled: set[str],
+                       combo: list[str], query: str) -> list[str]:
+    """must_keep 的公共部分：geo 主源 + 语言保护（三条分支都要）。"""
+    out: list[str] = []
+    if (features or {}).get("has_geo") and "local_openstreetmap" in enabled:
+        out.append("local_openstreetmap")
+    out.extend(_lang_must_keep(features, enabled, combo, query))
+    return out
+
+
+def breaker_filter(combo: list[str], enabled: set[str],
+                   empty: tuple[str, ...] = ("anysearch", "duckduckgo")) -> list[str]:
+    """熔断统一处理 + 空回退。
+
+    combo 非空是执行层的前提（空 combo 会让 engines[0] IndexError），且语言/
+    geo/次域/TF-IDF 追加的引擎都可能处于熔断态——任何拼装路径的末尾都必须过这
+    一道，所以它是共享步骤而不是各分支自己写。`empty` 允许分支声明自己的兜底
+    次序（通用保底路径只认 anysearch）。
+    """
+    combo = _filter_breaker_blocked(combo)
+    if not combo:
+        combo = [e for e in empty if e in enabled] or ["anysearch"]
+    return combo
+
+
+# 强语义注入的通用引擎黑名单：这些引擎已被域 combo 覆盖，注入会喧宾夺主。
+# 放在模块级而不是 route_query 体内：它是**常量数据**，藏在热路径函数里每次
+# 调用重建（实测 0.074 µs，性能上无所谓，但读代码的人会以为它随调用变化）。
+_GENERAL_ENGINES = frozenset({
+    "anysearch", "byted", "bocha", "octen", "duckduckgo",
+    "local_search", "zhihu", "wechat_sogou", "uapi", "tavily",
+    "brave", "bocha_ai", "google_scholar", "arxiv", "wikipedia",
+})
+
+
+def inject_strong_semantic(combo: list[str], *, tfidf_best: str | None,
+                           score: float, is_catch_all: bool,
+                           enabled: set[str]) -> tuple[list[str], bool]:
+    """TF-IDF 强匹配时把推荐引擎前置（v2.7.10）。返回 (combo, 是否注入)。
+
+    位置由调用方决定：必须在 primary 扶正**之后**——否则被扶正压到第二位，
+    串行 early-stop 下永远不执行。
+
+    判据：分数 ≥0.6（远高于最低阈值 0.12）表示查询与引擎文档强匹配，前置注入
+    不锁死（域主源仍在尾部备位，注入引擎失败时自然补位）；已在 combo 里、
+    属于通用源（会被域 combo 覆盖）、catch-all 域、或不在 enabled 都不注入。
+    """
+    if not (tfidf_best and score >= 0.6 and not is_catch_all
+            and tfidf_best not in combo
+            and tfidf_best not in _GENERAL_ENGINES
+            and tfidf_best in enabled):
+        return combo, False
+    return [tfidf_best] + [e for e in combo if e != tfidf_best], True

@@ -174,6 +174,59 @@ def _module_level_names(tree: ast.Module) -> set[str]:
     return names
 
 
+def _shadowed_reexports(paths: list[Path]) -> list[str]:
+    """内建 ast 检测：模块级既 import 了 X，又自己赋值了 X。
+
+    拆模块后 route.py / search.py 成了「门面」——它们把实现模块的符号转出，
+    调用方与测试继续按旧路径引用。这类门面最危险的写法是**同名再定义一份**：
+    `from search_rank import _CACHE` 之后又写 `_CACHE = None`，于是门面自己那份
+    才是外部看到/打桩改到的，实现模块读的仍是自己那份——测试全绿、行为静默分叉。
+
+    合法的例外只有一种：`try: from X import Y / except ImportError: Y = None`
+    这类兜底（import 与赋值同处一个 Try 节点内），本检查已排除。
+    """
+    problems: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue
+        imported: dict[str, int] = {}
+        assigned: dict[str, int] = {}
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                for a in node.names:
+                    imported.setdefault((a.asname or a.name).split(".")[0], node.lineno)
+            elif isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name):
+                        assigned.setdefault(t.id, node.lineno)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                assigned.setdefault(node.target.id, node.lineno)
+            elif isinstance(node, ast.Try):
+                t_imported, t_assigned = set(), set()
+                for sub in ast.walk(node):
+                    if isinstance(sub, (ast.Import, ast.ImportFrom)):
+                        t_imported.update((a.asname or a.name).split(".")[0]
+                                          for a in sub.names)
+                    elif isinstance(sub, ast.Assign):
+                        t_assigned.update(t.id for t in sub.targets
+                                          if isinstance(t, ast.Name))
+                    elif isinstance(sub, ast.AnnAssign) and isinstance(sub.target, ast.Name):
+                        t_assigned.add(sub.target.id)
+                for name in t_imported:
+                    imported.setdefault(name, node.lineno)
+                for name in t_assigned - t_imported:
+                    assigned.setdefault(name, node.lineno)
+        for name in sorted(set(imported) & set(assigned)):
+            problems.append(
+                f"{_rel(path)}:{assigned[name]} 本地定义了 {name}"
+                f"（第 {imported[name]} 行已从别处导入 → 门面副本会遮蔽实现）")
+    return problems
+
+
 def _globals_without_binding(paths: list[Path]) -> list[str]:
     """内建 ast 检测：`global X` 声明的名字在模块级没有绑定。
 
@@ -602,6 +655,35 @@ class TestStaticLintGate(unittest.TestCase):
             problems = _authorization_flags_are_explicit([bad])
         self.assertEqual(len(problems), 2, f"造错样本没被抓住：{problems}")
         self.assertTrue(all("ARGO_ALLOW_RECOMPUTE" in p for p in problems))
+
+    def test_no_shadowed_reexports(self):
+        """门面模块不得既转出又本地定义同名符号（静默遮蔽实现）。"""
+        problems = _shadowed_reexports(_iter_target_files())
+        self.assertEqual(
+            problems, [],
+            "模块级同名重复定义（本地这份会遮蔽转出的实现，打桩与读取分叉）：\n  "
+            + "\n  ".join(problems))
+
+    def test_gate_has_teeth_shadowed_reexport(self):
+        """造一个「先 import 再本地赋值」的样本，规则必须抓住；
+        合法的 try/except ImportError 兜底不得误报。"""
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "bad_shadow.py"
+            bad.write_text(
+                "from other import _CACHE\n\n_CACHE = None\n",
+                encoding="utf-8")
+            problems = _shadowed_reexports([bad])
+            good = Path(td) / "good_shadow.py"
+            good.write_text(
+                "try:\n"
+                "    from other import _CACHE\n"
+                "except ImportError:\n"
+                "    _CACHE = None\n",
+                encoding="utf-8")
+            clean = _shadowed_reexports([good])
+        self.assertEqual(len(problems), 1, f"造错样本没被抓住：{problems}")
+        self.assertIn("_CACHE", problems[0])
+        self.assertEqual(clean, [], f"合法兜底被误报：{clean}")
 
     def test_gate_has_teeth_global_without_binding(self):
         """造一个 `global X` 但 X 从未在模块级赋值的样本，规则必须抓住；
