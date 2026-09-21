@@ -24,7 +24,8 @@ import os
 import re
 import sys
 import time
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Callable
 from cli_io import dumps
 
 try:
@@ -319,7 +320,446 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # 模块级常量（原先定义在 route_query 内，每次调用重建一个 18 元素 frozenset）。
 
 
+# ── 分支上下文 ─────────────────────────────────────────────────────────────────
+# 三条分支共享的输入。逐个传参要 11~14 个形参——那是把「谁在调用」变成「参数
+# 摆法」的噪声；用只读上下文传递，分支函数体才能逐字搬运（可验证）。
+
+# TF-IDF 语义路由的最低采纳分（原先藏在 route_query 体内，三条分支都要读它）。
+TFIDF_MIN_SCORE = 0.12
+
+
+@dataclass(frozen=True)
+class _RouteCtx:
+    """route_query 三条分支的共享输入。done 是收尾闭包（负责 elapsed_ms 与采样）。"""
+
+    query: str
+    features: dict[str, Any]
+    enabled: set[str]
+    mode: str
+    depth: str
+    context: str
+    engines_boost: list[str] | None
+    lang_engines: list[str]
+    tfidf_best: str | None
+    tfidf_best_score: float
+    tfidf_scores: list
+    done: Callable[..., dict[str, Any]]
+
+
 # ── 路由主函数 ─────────────────────────────────────────────────────────────────
+
+def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dict[str, Any]]) -> dict[str, Any]:
+    """域命中分支：combo 来自域声明，走完整的装配 + 策略 + 扶正流水线。
+
+    is_catch_all（无 patterns 的兜底域）在本分支内判定——它同时决定
+    「TF-IDF 推荐可否前置」与 reason 里是否标注覆写。
+    """
+    query = ctx.query
+    features = ctx.features
+    enabled = ctx.enabled
+    mode, depth, context = ctx.mode, ctx.depth, ctx.context
+    engines_boost, lang_engines = ctx.engines_boost, ctx.lang_engines
+    tfidf_best, tfidf_best_score = ctx.tfidf_best, ctx.tfidf_best_score
+    tfidf_scores = ctx.tfidf_scores
+    _done = ctx.done
+    is_catch_all = not domain.get("patterns", [])
+    engines_combo = _get_engines_combo(domain, enabled, mode, features)
+    # 🔑 ja/ko 查询：域命中路径也剔除中文内容/金融/新闻引擎（补齐 TF-IDF 层过滤缺口，
+    # 否则 ja 技术查询落 english_tech 用 octen 返回中文 CSDN）。2026-08 修复。
+    # （anysearch 前二注入在策略/预算截断之后统一做，见 _inject_multilingual_backup）
+    if features.get("primary_lang") in ("ja", "ko") and engines_combo:
+        _drop = set(engines_not_for_lang(
+            engines_combo, features.get("primary_lang") or "ja",
+            _specs_snapshot()))
+        _filtered = [e for e in engines_combo if e not in _drop]
+        engines_combo = _filtered or [e for e in ["anysearch"] if e in enabled] or engines_combo
+    # 🔑 中文查询 + 学术类域 → 剔除英文论文源（openalex/europepmc 对中文查询噪声大）
+    if (domain.get("name") in ("tech_deep", "academic")
+            and any("\u4e00" <= ch <= "\u9fff" for ch in query)):
+        engines_combo = [e for e in engines_combo
+                         if e not in ("openalex", "europepmc")]
+        if not engines_combo:
+            engines_combo = [e for e in ["arxiv", "anysearch", "local_search"]
+                             if e in enabled]
+    # 🔑 macro_data 域 + 非美国国家词 → worldbank 前置（FRED 无该国数据，
+    # 且错误结果会触发 early-stop 短路，导致「中国GDP」只回美国数据）
+    if (domain.get("name") == "macro_data"
+            and is_foreign_macro_query(query)
+            and "worldbank" in engines_combo):
+        engines_combo = ["worldbank"] + [e for e in engines_combo if e != "worldbank"]
+    # 🔑 macro_data 域 + 中国宏观词 → nbs_stats（国家统计局）前置：
+    # 本国宏观数据权威源，最新年份比 worldbank 全（worldbank 有 1-2 年
+    # 数据滞后，「2025 年 GDP」类查询会空手）。与上方 worldbank 前置
+    # 配合，中国查询最终位次 [nbs_stats, worldbank, ...]
+    if (domain.get("name") == "macro_data"
+            and "nbs_stats" in engines_combo
+            and ("中国" in query or "china" in query.lower())):
+        engines_combo = ["nbs_stats"] + [e for e in engines_combo if e != "nbs_stats"]
+    # 🔑 为中文/学术查询追加本地引擎
+    # modal_card 保持纯结构化路径：只走 bocha_ai → bocha，不混 web/geo 补充源
+    _pure_combo = domain.get("name") == "modal_card"
+    if not _pure_combo:
+        engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
+        engines_combo = _lang_aware_combo_order(
+            engines_combo, features, domain.get("name"), enabled, query)
+    if not engines_combo:
+        if _pure_combo:
+            # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
+            # 执行层返回 error item，避免静默改走 anysearch 污染结构化语义
+            declared = list(domain.get("engines_combo") or [])
+            if not declared and domain.get("primary"):
+                declared = [domain["primary"]]
+            try:
+                from engine_env import is_engine_allowed_by_env
+                engines_combo = [
+                    e for e in declared if is_engine_allowed_by_env(e)
+                ] or declared
+            except ImportError:
+                engines_combo = declared
+        if not engines_combo:
+            # 域内引擎全被过滤，回退（本地优先 + 通用免费源唯一来源）
+            engines_combo = _general_fallback(enabled)
+            if not engines_combo:
+                engines_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
+            # 扩展 local_search → 子引擎
+            engines_combo = _expand_local_search(engines_combo, features)
+
+    # TF-IDF 验证 + catch-all 修复（仅高分才覆写）
+    is_catch_all = not domain.get("patterns", [])  # 无模式 = 兜底域
+
+    if tfidf_best and tfidf_best in engines_combo:
+        confidence = 0.95
+    elif tfidf_best and tfidf_best != engines_combo[0]:
+        confidence = 0.8
+        # catch-all 域 + TF-IDF 高置信度推荐 → 注入推荐引擎到首位
+        if is_catch_all and tfidf_best_score > 0.15 and tfidf_best in enabled:
+            engines_combo = [tfidf_best] + [e for e in engines_combo if e != tfidf_best]
+            confidence = 0.85
+    else:
+        confidence = 0.9
+        # catch-all 域 + TF-IDF 推荐但不在 combo 中 → 前置
+        if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in enabled:
+            engines_combo.insert(0, tfidf_best)
+            confidence = 0.8
+
+    # P0-001：geo 查询追加 OpenStreetMap（模态卡域跳过，避免稀释结构化路径）
+    if not _pure_combo:
+        engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
+
+    # P1-1：多意图补充——次域 primary 在预算内补充（追加尾部，不占主位）。
+    # 预算截断由 _apply_engine_policy 完成；web_general 族计数检查防同质堆叠
+    # （与 _get_engines_combo 的能力族去重语义一致）。modal_card 纯结构化路径
+    # 不混入次域源。次域引擎不受 must_keep 保护，预算紧张时自然被裁。
+    if secondary and not _pure_combo:
+        try:
+            from engine_families import family_of
+            # 同 _get_engines_combo 的排序：必须把引擎声明传下去，否则
+            # config.yaml 里声明的族被忽略、一律算成 web_general，这里的
+            # 「同族已达 2 个就不再补」会误判，把次域的专业源挡在外面。
+            _sec_specs = get_engines()
+            if not isinstance(_sec_specs, dict):
+                _sec_specs = {}
+            fam_count: dict[str, int] = {}
+            for _e in engines_combo:
+                _f = family_of(_e, _sec_specs.get(_e))
+                fam_count[_f] = fam_count.get(_f, 0) + 1
+        except Exception:
+            fam_count = None
+        for _sec in secondary:
+            _sp = _sec.get("primary")
+            if not _sp or _sp not in enabled or _sp in engines_combo:
+                continue
+            if fam_count is not None:
+                _f = family_of(_sp, _sec_specs.get(_sp))
+                if _f == "web_general" and fam_count.get(_f, 0) >= 2:
+                    continue
+                fam_count[_f] = fam_count.get(_f, 0) + 1
+            engines_combo.append(_sp)
+            if len(engines_combo) >= 4:
+                break
+
+    parallel = bool(domain.get("parallel", False)) or len(engines_combo) > 2
+    # fast 模式强制串行，先 local_search 成功即避免额外 HTTP 开销
+    if mode == "fast":
+        parallel = False
+
+    # P0-005：意图驱动动态并行度（覆写域默认 parallel）
+    engines_combo, parallel = _apply_intent_parallelism(
+        engines_combo, features, domain, mode, parallel)
+
+    # P0：boost + tier/budget（depth/context）— 放在意图裁剪之后统一截断
+    # 注意：本分支的 must_keep 组装**不能**并成一次调用——geo 项与 lang 项
+    # 之间夹着垂直域主源保护，而 policy 是按 must_keep 的**顺序**补位的
+    # （见 _apply_engine_policy 的 `for e in must_keep`），合并会改变 combo 次序。
+    must_keep = []
+    if features.get("has_geo") and "local_openstreetmap" in enabled and not _pure_combo:
+        must_keep.append("local_openstreetmap")
+    # 垂直域主源保护（名单见模块级 _VERTICAL_KEEP）：这些域的专属源在
+    # combo 里不是「通用源」，被 budget 截断后该域等于没源可用（实测
+    # medical 的 who_don、japan_law 的 egov_law 均因 budget=2 被裁掉
+    # → 路由命中但零结果）。
+    if domain.get("name") in _VERTICAL_KEEP:
+        p = domain.get("primary")
+        # modal_card 可在缺 key（不在 enabled）时仍 must_keep，避免 budget 再裁
+        if p and p not in must_keep and (p in enabled or _pure_combo):
+            must_keep.append(p)
+        # modal_card 整 combo 保底（bocha_ai 无配额时 bocha 必须在位）
+        if domain.get("name") == "modal_card":
+            for e in domain.get("engines_combo") or []:
+                if e not in must_keep and (e in enabled or _pure_combo):
+                    must_keep.append(e)
+        elif p and p in enabled and p not in must_keep:
+            must_keep.append(p)
+        if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
+            if "local_openstreetmap" not in must_keep:
+                must_keep.append("local_openstreetmap")
+
+    if not _pure_combo:
+        must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))
+    engines_combo = _apply_policy_with_new_source_slots(
+        domain, engines_combo,
+        mode=mode, depth=depth, context=context,
+        enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
+    )
+    # 语言摘除必须在 policy 之后再走一遍：加槽补位会把「不在 combo 里」
+    # 的新专源当成「被预算裁掉」补回来（实测 cinii 在英文查询里被补回
+    # academic 域）。语言不匹配的源不是被裁掉，是不该在场——补回来等于
+    # 把摘除撤销。判据与顺序说明见 _filter_lang_bound_family docstring。
+    engines_combo = _filter_lang_bound_family(
+        engines_combo, features, _specs_snapshot(), query)
+    # 意图裁剪收口（幂等二次施加）：policy 层的新源 must_keep 补回会放大
+    # combo。只对 definition/fact 收口——单源即答语义下，扩容槽（新源
+    # 加槽补回的引擎）纯属阶梯等待浪费（实测 academic definition 1 → 3
+    # 引擎，test_p0_v25 锁的正是这条契约）。social/news/compare 本身要
+    # 多源，扩容与意图同向，且新源可达性由探针测试锁定（
+    # test_new_source_reachability），不收口。
+    # must_keep 成员豁免：它们有硬保留理由（geo 的 local_openstreetmap
+    # 被裁会退化成 wikidata 单源，实测 R_en_geo 矩阵 FAIL）。
+    engines_combo, parallel = intent_squeeze(
+        engines_combo, features, domain, mode, parallel, must_keep)
+    engines_combo = _inject_multilingual_backup(engines_combo, enabled,
+                                                features)
+    # 域 primary 扶正：已在 combo 且未熔断时置首（不覆盖冷却中的熔断沉底）
+    # open 但 cooldown 已过 → 允许扶正，交给 half-open 探测。
+    p = domain.get("primary")
+    # macro_data 非美国查询：worldbank 前置是领域语义（FRED 无该国数据，
+    # 先跑 fred + early-stop 会拿美国数据冒充），primary 扶正不得覆盖。
+    _foreign_macro = (
+        domain.get("name") == "macro_data" and is_foreign_macro_query(query)
+    )
+    # research 语境 + 画像 boosts：研究垂直源（arxiv/semantic_scholar 等）
+    # 前置是选题语义，primary（如 ai_model 的 models_dev 目录）不得顶回首位
+    _research_boost = bool(context == "research" and engines_boost)
+    if (p and p in engines_combo and engines_combo[0] != p
+            and not _foreign_macro and not _research_boost):
+        try:
+            from circuit_breaker import get_breaker
+            st = get_breaker().status(p)
+            if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
+                p = None
+        except Exception:
+            pass
+        if p and p in engines_combo:
+            engines_combo = [p] + [e for e in engines_combo if e != p]
+
+    # 强语义注入（v2.7.10）：判据与「为什么放在 primary 扶正之后」见
+    # route_combo.inject_strong_semantic 的 docstring。
+    engines_combo, _strong = inject_strong_semantic(
+        engines_combo, tfidf_best=tfidf_best, score=tfidf_best_score,
+        is_catch_all=is_catch_all, enabled=enabled)
+    if _strong:
+        confidence = 0.9
+    # D4：统一熔断统一处理——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
+    engines_combo = breaker_filter(engines_combo, enabled)
+    # budget 截断后保持一致 parallel，避免短 combo 仍开多余并行
+    # research 语境例外：子查询跑满 combo（no_early_stop），串行会拖垮
+    # 整条研究管线，强制并行
+    if (mode == "fast" and context != "research") or len(engines_combo) <= 1:
+        parallel = False
+    elif context == "research":
+        parallel = True
+    elif len(engines_combo) <= 2 and not domain.get("parallel", False):
+        # 双引擎默认串行，利于 early-stop（答案域）
+        parallel = parallel and len(engines_combo) > 2
+
+    return _done(
+        engine=engines_combo[0],
+        engines=engines_combo,
+        engines_combo=engines_combo,
+        # 恢复链 L3 候选：域声明但被预算截掉的成员优先（域最清楚自己
+        # 的保底次序，实测 macro_data 六成员被截成两个、恰好截掉国家
+        # 统计局），其余 enabled 引擎殿后
+        engines_fallback=(
+            [e for e in (domain.get("engines_combo") or [])
+             if e not in set(engines_combo)]
+            + [e for e in enabled if e not in engines_combo
+               and e not in set(domain.get("engines_combo") or [])]),
+        reason=(
+            f"{_feature_labels(features)} → 命中域 [{domain.get('name', '?')}]"
+            + (f" [TF-IDF→{tfidf_best}]" if tfidf_best else "")
+            + (" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in engines_combo else "")
+            + (f" [boost={engines_boost}]" if engines_boost else "")
+            + f" → {_engine_display(engines_combo[0])}"
+        ),
+        confidence=confidence, features=features,
+        domain=domain.get("name"), parallel=parallel,
+        no_early_stop=bool(domain.get("no_early_stop", False)),
+        early_stop_min_results=domain.get("early_stop_min_results"),
+        # 域命中时 combo 来自域配置，TF-IDF 候选只有真正进入 combo 才
+        # 算参与了决策；tfidf_best 落选仍照搬原始得分会误导消费方
+        # （实测「asyncio tutorial」报 qiita 前三、实际执行 octen/exa）。
+        # 落选的近失信号由 reason 的 [TF-IDF→x] 标注承载。
+        tfidf_scores=([{"engine": n, "score": s} for n, s, _ in tfidf_scores]
+                      if tfidf_best and tfidf_best in engines_combo else []),
+        mode=mode, depth=depth, context=context,
+        login_hint=_detect_login_intent(query, domain.get("name")),
+    )
+
+
+def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
+    """TF-IDF 语义路由分支：正则未命中，直接用语义推荐引擎 + 通用保底。
+
+    domain 恒为 None——有兜底域时 match_domains 会返回它，走的是域分支。
+    """
+    query = ctx.query
+    features = ctx.features
+    enabled = ctx.enabled
+    mode, depth, context = ctx.mode, ctx.depth, ctx.context
+    engines_boost, lang_engines = ctx.engines_boost, ctx.lang_engines
+    tfidf_best, tfidf_best_score = ctx.tfidf_best, ctx.tfidf_best_score
+    tfidf_scores = ctx.tfidf_scores
+    _done = ctx.done
+    domain = None  # 能走到这里说明没有域命中（含兜底域）
+    engines_combo = [tfidf_best]
+    if "anysearch" in enabled and "anysearch" not in engines_combo:
+        engines_combo.append("anysearch")
+    engines_combo = [e for e in engines_combo if e in enabled]
+    # 🔑 展开 local_search → 子引擎
+    engines_combo = _expand_local_search(engines_combo, features)
+    # 🔑 为中文/学术查询追加本地引擎
+    engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
+    # P0-001：geo 查询追加 OpenStreetMap
+    engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
+    if mode == "fast":
+        parallel = False
+    else:
+        parallel = len(engines_combo) > 1
+
+    # P0-005：意图驱动动态并行度
+    engines_combo, parallel = _apply_intent_parallelism(
+        engines_combo, features, None, mode, parallel)
+
+    must_keep = geo_lang_must_keep(features, enabled, engines_combo, query)
+    engines_combo = _apply_policy_with_new_source_slots(
+        domain, engines_combo,
+        mode=mode, depth=depth, context=context,
+        enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
+    )
+    # 语言摘除必须在 policy 之后再走一遍：加槽补位会把「不在 combo 里」
+    # 的新专源当成「被预算裁掉」补回来（实测 cinii 在英文查询里被补回
+    # academic 域）。语言不匹配的源不是被裁掉，是不该在场——补回来等于
+    # 把摘除撤销。判据与顺序说明见 _filter_lang_bound_family docstring。
+    engines_combo = _filter_lang_bound_family(
+        engines_combo, features, _specs_snapshot(), query)
+    # 意图裁剪收口（与主域分支同一问题：policy 的 must_keep 补回会放大
+    # combo，抵消上面的意图裁剪）。同样只对 definition/fact 收口，
+    # must_keep 成员豁免（理由见主域分支注释）。
+    engines_combo, parallel = intent_squeeze(
+        engines_combo, features, None, mode, parallel, must_keep)
+    # ja/ko catch-all 与主域分支同计算方式：anysearch 前二（TF-IDF 直选路径
+    # 也会把多语言主力挤掉）
+    engines_combo = _inject_multilingual_backup(engines_combo, enabled,
+                                                features)
+    # D4：统一熔断统一处理（TF-IDF 注入/语言追加可能绕过 _get_engines_combo）
+    engines_combo = breaker_filter(engines_combo, enabled)
+    if mode == "fast":
+        parallel = False
+    else:
+        parallel = len(engines_combo) > 1
+
+    return _done(
+        engine=engines_combo[0],
+        engines=engines_combo,
+        engines_combo=engines_combo,
+        reason=(
+            f"TF-IDF 语义路由 → {_engine_display(engines_combo[0])}"
+            f" (score={tfidf_best_score:.3f}, 正则未命中)"
+            + (f" [boost={engines_boost}]" if engines_boost else "")
+        ),
+        confidence=0.85, features=features, domain="general_search",
+        parallel=parallel,
+        tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
+        mode=mode, depth=depth, context=context,
+        login_hint=_detect_login_intent(query, None),
+    )
+
+
+def _route_by_fallback(ctx: _RouteCtx) -> dict[str, Any]:
+    """通用保底分支：零分 TF-IDF 与无语义候选都走这里（本地优先 + 免费通用源）。
+    """
+    query = ctx.query
+    features = ctx.features
+    enabled = ctx.enabled
+    mode, depth, context = ctx.mode, ctx.depth, ctx.context
+    engines_boost, lang_engines = ctx.engines_boost, ctx.lang_engines
+    tfidf_best, tfidf_best_score = ctx.tfidf_best, ctx.tfidf_best_score
+    tfidf_scores = ctx.tfidf_scores
+    _done = ctx.done
+    # 保底：免费通用引擎（零分 TF-IDF 也走这里）——本地优先 + 通用免费源唯一来源
+    fallback_combo = _general_fallback(enabled)
+    if not fallback_combo:
+        fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
+    # 日/韩主查询：优先 anysearch（多语言源对日/韩结果语言匹配更好），
+    # 再并语言专用本地引擎；避免旧逻辑只锁 local_bing（zh 参数）返回中文站。
+    # 注：byted 经实测对 ja/ko 也可，但其被 test_multilingual 定义为中文引擎，
+    # 强制优先会破坏 ja/ko 路由契约；byted 通过融合权重提权即可。2026-08。
+    if features.get("primary_lang") in ("ja", "ko") and _get_registry is not None:
+        lang_combo = _select_sub_engines(_enabled_local_engines(), features)
+        non_local = [e for e in fallback_combo if not e.startswith("local_")]
+        if "anysearch" in non_local:
+            non_local = ["anysearch"] + [e for e in non_local if e != "anysearch"]
+        if lang_combo:
+            fallback_combo = (non_local + lang_combo) if non_local else lang_combo
+        else:
+            fallback_combo = non_local or fallback_combo
+    else:
+        fallback_combo = _expand_local_search(fallback_combo, features)
+    fallback_combo = _merge_language_engines(fallback_combo, features, lang_engines)
+    # P0-001：geo 查询追加 OpenStreetMap
+    fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
+    must_keep_fb = geo_lang_must_keep(features, enabled, fallback_combo, query)
+    fallback_combo = _apply_engine_policy(
+        fallback_combo, mode=mode, depth=depth, context=context,
+        engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,
+    )
+    # D4：统一熔断统一处理（保底组合可能含熔断引擎）。
+    # 兜底次序与本分支的语义一致：通用保底路径只认 anysearch。
+    fallback_combo = breaker_filter(fallback_combo, enabled, empty=("anysearch",))
+
+    low = tfidf_scores and all(s[1] < TFIDF_MIN_SCORE for s in tfidf_scores)
+    reason = (
+        f"TF-IDF 低分回退通用引擎 → {_engine_display(fallback_combo[0])}"
+        if low else
+        f"无匹配域，回退 {_engine_display(fallback_combo[0])}"
+    )
+
+    return _done(
+        engine=fallback_combo[0],
+        engines=fallback_combo,
+        engines_combo=fallback_combo,
+        engines_fallback=[],
+        reason=reason,
+        confidence=0.35 if low else 0.3,
+        features=features, domain="general_search",
+        parallel=False if mode == "fast" else len(fallback_combo) > 1,
+        # 保底路径 tfidf_best 必为空（否则已走 TF-IDF 分支）：低于阈值的
+        # 候选分不是路由依据，输出只会误导，一律空表。
+        tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores]
+        if tfidf_best else [],
+        mode=mode, depth=depth, context=context,
+        login_hint=_detect_login_intent(query, None),
+    )
+
 
 def route_query(query: str, engine_override: str = "auto",
                 mode: str = "auto",
@@ -408,7 +848,6 @@ def route_query(query: str, engine_override: str = "auto",
     secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))
 
-    TFIDF_MIN_SCORE = 0.12
     SOCIAL_ENGINES = {
         "twitter", "reddit", "xiaohongshu", "bilibili", "weibo",
         "zhihu", "hackernews", "v2ex",
@@ -460,378 +899,23 @@ def route_query(query: str, engine_override: str = "auto",
                 f"TF-IDF 路由跳过: {type(e).__name__}"
             )
 
+    # 三条分支的共享输入在这里定稿（TF-IDF 候选已算完），分支函数才无需逐个传参
+    ctx = _RouteCtx(
+        query=query, features=features, enabled=enabled, mode=mode, depth=depth,
+        context=context, engines_boost=engines_boost, lang_engines=lang_engines,
+        tfidf_best=tfidf_best, tfidf_best_score=tfidf_best_score,
+        tfidf_scores=tfidf_scores, done=_done,
+    )
     if domain:
-        engines_combo = _get_engines_combo(domain, enabled, mode, features)
-        # 🔑 ja/ko 查询：域命中路径也剔除中文内容/金融/新闻引擎（补齐 TF-IDF 层过滤缺口，
-        # 否则 ja 技术查询落 english_tech 用 octen 返回中文 CSDN）。2026-08 修复。
-        # （anysearch 前二注入在策略/预算截断之后统一做，见 _inject_multilingual_backup）
-        if features.get("primary_lang") in ("ja", "ko") and engines_combo:
-            _drop = set(engines_not_for_lang(
-                engines_combo, features.get("primary_lang") or "ja",
-                _specs_snapshot()))
-            _filtered = [e for e in engines_combo if e not in _drop]
-            engines_combo = _filtered or [e for e in ["anysearch"] if e in enabled] or engines_combo
-        # 🔑 中文查询 + 学术类域 → 剔除英文论文源（openalex/europepmc 对中文查询噪声大）
-        if (domain.get("name") in ("tech_deep", "academic")
-                and any("\u4e00" <= ch <= "\u9fff" for ch in query)):
-            engines_combo = [e for e in engines_combo
-                             if e not in ("openalex", "europepmc")]
-            if not engines_combo:
-                engines_combo = [e for e in ["arxiv", "anysearch", "local_search"]
-                                 if e in enabled]
-        # 🔑 macro_data 域 + 非美国国家词 → worldbank 前置（FRED 无该国数据，
-        # 且错误结果会触发 early-stop 短路，导致「中国GDP」只回美国数据）
-        if (domain.get("name") == "macro_data"
-                and is_foreign_macro_query(query)
-                and "worldbank" in engines_combo):
-            engines_combo = ["worldbank"] + [e for e in engines_combo if e != "worldbank"]
-        # 🔑 macro_data 域 + 中国宏观词 → nbs_stats（国家统计局）前置：
-        # 本国宏观数据权威源，最新年份比 worldbank 全（worldbank 有 1-2 年
-        # 数据滞后，「2025 年 GDP」类查询会空手）。与上方 worldbank 前置
-        # 配合，中国查询最终位次 [nbs_stats, worldbank, ...]
-        if (domain.get("name") == "macro_data"
-                and "nbs_stats" in engines_combo
-                and ("中国" in query or "china" in query.lower())):
-            engines_combo = ["nbs_stats"] + [e for e in engines_combo if e != "nbs_stats"]
-        # 🔑 为中文/学术查询追加本地引擎
-        # modal_card 保持纯结构化路径：只走 bocha_ai → bocha，不混 web/geo 补充源
-        _pure_combo = domain.get("name") == "modal_card"
-        if not _pure_combo:
-            engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
-            engines_combo = _lang_aware_combo_order(
-                engines_combo, features, domain.get("name"), enabled, query)
-        if not engines_combo:
-            if _pure_combo:
-                # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
-                # 执行层返回 error item，避免静默改走 anysearch 污染结构化语义
-                declared = list(domain.get("engines_combo") or [])
-                if not declared and domain.get("primary"):
-                    declared = [domain["primary"]]
-                try:
-                    from engine_env import is_engine_allowed_by_env
-                    engines_combo = [
-                        e for e in declared if is_engine_allowed_by_env(e)
-                    ] or declared
-                except ImportError:
-                    engines_combo = declared
-            if not engines_combo:
-                # 域内引擎全被过滤，回退（本地优先 + 通用免费源唯一来源）
-                engines_combo = _general_fallback(enabled)
-                if not engines_combo:
-                    engines_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
-                # 扩展 local_search → 子引擎
-                engines_combo = _expand_local_search(engines_combo, features)
-
-        # TF-IDF 验证 + catch-all 修复（仅高分才覆写）
-        is_catch_all = not domain.get("patterns", [])  # 无模式 = 兜底域
-
-        if tfidf_best and tfidf_best in engines_combo:
-            confidence = 0.95
-        elif tfidf_best and tfidf_best != engines_combo[0]:
-            confidence = 0.8
-            # catch-all 域 + TF-IDF 高置信度推荐 → 注入推荐引擎到首位
-            if is_catch_all and tfidf_best_score > 0.15 and tfidf_best in enabled:
-                engines_combo = [tfidf_best] + [e for e in engines_combo if e != tfidf_best]
-                confidence = 0.85
-        else:
-            confidence = 0.9
-            # catch-all 域 + TF-IDF 推荐但不在 combo 中 → 前置
-            if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in enabled:
-                engines_combo.insert(0, tfidf_best)
-                confidence = 0.8
-
-        # P0-001：geo 查询追加 OpenStreetMap（模态卡域跳过，避免稀释结构化路径）
-        if not _pure_combo:
-            engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
-
-        # P1-1：多意图补充——次域 primary 在预算内补充（追加尾部，不占主位）。
-        # 预算截断由 _apply_engine_policy 完成；web_general 族计数检查防同质堆叠
-        # （与 _get_engines_combo 的能力族去重语义一致）。modal_card 纯结构化路径
-        # 不混入次域源。次域引擎不受 must_keep 保护，预算紧张时自然被裁。
-        if secondary and not _pure_combo:
-            try:
-                from engine_families import family_of
-                # 同 _get_engines_combo 的排序：必须把引擎声明传下去，否则
-                # config.yaml 里声明的族被忽略、一律算成 web_general，这里的
-                # 「同族已达 2 个就不再补」会误判，把次域的专业源挡在外面。
-                _sec_specs = get_engines()
-                if not isinstance(_sec_specs, dict):
-                    _sec_specs = {}
-                fam_count: dict[str, int] = {}
-                for _e in engines_combo:
-                    _f = family_of(_e, _sec_specs.get(_e))
-                    fam_count[_f] = fam_count.get(_f, 0) + 1
-            except Exception:
-                fam_count = None
-            for _sec in secondary:
-                _sp = _sec.get("primary")
-                if not _sp or _sp not in enabled or _sp in engines_combo:
-                    continue
-                if fam_count is not None:
-                    _f = family_of(_sp, _sec_specs.get(_sp))
-                    if _f == "web_general" and fam_count.get(_f, 0) >= 2:
-                        continue
-                    fam_count[_f] = fam_count.get(_f, 0) + 1
-                engines_combo.append(_sp)
-                if len(engines_combo) >= 4:
-                    break
-
-        parallel = bool(domain.get("parallel", False)) or len(engines_combo) > 2
-        # fast 模式强制串行，先 local_search 成功即避免额外 HTTP 开销
-        if mode == "fast":
-            parallel = False
-
-        # P0-005：意图驱动动态并行度（覆写域默认 parallel）
-        engines_combo, parallel = _apply_intent_parallelism(
-            engines_combo, features, domain, mode, parallel)
-
-        # P0：boost + tier/budget（depth/context）— 放在意图裁剪之后统一截断
-        # 注意：本分支的 must_keep 组装**不能**并成一次调用——geo 项与 lang 项
-        # 之间夹着垂直域主源保护，而 policy 是按 must_keep 的**顺序**补位的
-        # （见 _apply_engine_policy 的 `for e in must_keep`），合并会改变 combo 次序。
-        must_keep = []
-        if features.get("has_geo") and "local_openstreetmap" in enabled and not _pure_combo:
-            must_keep.append("local_openstreetmap")
-        # 垂直域主源保护（名单见模块级 _VERTICAL_KEEP）：这些域的专属源在
-        # combo 里不是「通用源」，被 budget 截断后该域等于没源可用（实测
-        # medical 的 who_don、japan_law 的 egov_law 均因 budget=2 被裁掉
-        # → 路由命中但零结果）。
-        if domain.get("name") in _VERTICAL_KEEP:
-            p = domain.get("primary")
-            # modal_card 可在缺 key（不在 enabled）时仍 must_keep，避免 budget 再裁
-            if p and p not in must_keep and (p in enabled or _pure_combo):
-                must_keep.append(p)
-            # modal_card 整 combo 保底（bocha_ai 无配额时 bocha 必须在位）
-            if domain.get("name") == "modal_card":
-                for e in domain.get("engines_combo") or []:
-                    if e not in must_keep and (e in enabled or _pure_combo):
-                        must_keep.append(e)
-            elif p and p in enabled and p not in must_keep:
-                must_keep.append(p)
-            if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
-                if "local_openstreetmap" not in must_keep:
-                    must_keep.append("local_openstreetmap")
-
-        if not _pure_combo:
-            must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))
-        engines_combo = _apply_policy_with_new_source_slots(
-            domain, engines_combo,
-            mode=mode, depth=depth, context=context,
-            enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
-        )
-        # 语言摘除必须在 policy 之后再走一遍：加槽补位会把「不在 combo 里」
-        # 的新专源当成「被预算裁掉」补回来（实测 cinii 在英文查询里被补回
-        # academic 域）。语言不匹配的源不是被裁掉，是不该在场——补回来等于
-        # 把摘除撤销。判据与顺序说明见 _filter_lang_bound_family docstring。
-        engines_combo = _filter_lang_bound_family(
-            engines_combo, features, _specs_snapshot(), query)
-        # 意图裁剪收口（幂等二次施加）：policy 层的新源 must_keep 补回会放大
-        # combo。只对 definition/fact 收口——单源即答语义下，扩容槽（新源
-        # 加槽补回的引擎）纯属阶梯等待浪费（实测 academic definition 1 → 3
-        # 引擎，test_p0_v25 锁的正是这条契约）。social/news/compare 本身要
-        # 多源，扩容与意图同向，且新源可达性由探针测试锁定（
-        # test_new_source_reachability），不收口。
-        # must_keep 成员豁免：它们有硬保留理由（geo 的 local_openstreetmap
-        # 被裁会退化成 wikidata 单源，实测 R_en_geo 矩阵 FAIL）。
-        engines_combo, parallel = intent_squeeze(
-            engines_combo, features, domain, mode, parallel, must_keep)
-        engines_combo = _inject_multilingual_backup(engines_combo, enabled,
-                                                    features)
-        # 域 primary 扶正：已在 combo 且未熔断时置首（不覆盖冷却中的熔断沉底）
-        # open 但 cooldown 已过 → 允许扶正，交给 half-open 探测。
-        p = domain.get("primary")
-        # macro_data 非美国查询：worldbank 前置是领域语义（FRED 无该国数据，
-        # 先跑 fred + early-stop 会拿美国数据冒充），primary 扶正不得覆盖。
-        _foreign_macro = (
-            domain.get("name") == "macro_data" and is_foreign_macro_query(query)
-        )
-        # research 语境 + 画像 boosts：研究垂直源（arxiv/semantic_scholar 等）
-        # 前置是选题语义，primary（如 ai_model 的 models_dev 目录）不得顶回首位
-        _research_boost = bool(context == "research" and engines_boost)
-        if (p and p in engines_combo and engines_combo[0] != p
-                and not _foreign_macro and not _research_boost):
-            try:
-                from circuit_breaker import get_breaker
-                st = get_breaker().status(p)
-                if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
-                    p = None
-            except Exception:
-                pass
-            if p and p in engines_combo:
-                engines_combo = [p] + [e for e in engines_combo if e != p]
-
-        # 强语义注入（v2.7.10）：判据与「为什么放在 primary 扶正之后」见
-        # route_combo.inject_strong_semantic 的 docstring。
-        engines_combo, _strong = inject_strong_semantic(
-            engines_combo, tfidf_best=tfidf_best, score=tfidf_best_score,
-            is_catch_all=is_catch_all, enabled=enabled)
-        if _strong:
-            confidence = 0.9
-        # D4：统一熔断统一处理——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
-        engines_combo = breaker_filter(engines_combo, enabled)
-        # budget 截断后保持一致 parallel，避免短 combo 仍开多余并行
-        # research 语境例外：子查询跑满 combo（no_early_stop），串行会拖垮
-        # 整条研究管线，强制并行
-        if (mode == "fast" and context != "research") or len(engines_combo) <= 1:
-            parallel = False
-        elif context == "research":
-            parallel = True
-        elif len(engines_combo) <= 2 and not domain.get("parallel", False):
-            # 双引擎默认串行，利于 early-stop（答案域）
-            parallel = parallel and len(engines_combo) > 2
-
-        return _done(
-            engine=engines_combo[0],
-            engines=engines_combo,
-            engines_combo=engines_combo,
-            # 恢复链 L3 候选：域声明但被预算截掉的成员优先（域最清楚自己
-            # 的保底次序，实测 macro_data 六成员被截成两个、恰好截掉国家
-            # 统计局），其余 enabled 引擎殿后
-            engines_fallback=(
-                [e for e in (domain.get("engines_combo") or [])
-                 if e not in set(engines_combo)]
-                + [e for e in enabled if e not in engines_combo
-                   and e not in set(domain.get("engines_combo") or [])]),
-            reason=(
-                f"{_feature_labels(features)} → 命中域 [{domain.get('name', '?')}]"
-                + (f" [TF-IDF→{tfidf_best}]" if tfidf_best else "")
-                + (" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in engines_combo else "")
-                + (f" [boost={engines_boost}]" if engines_boost else "")
-                + f" → {_engine_display(engines_combo[0])}"
-            ),
-            confidence=confidence, features=features,
-            domain=domain.get("name"), parallel=parallel,
-            no_early_stop=bool(domain.get("no_early_stop", False)),
-            early_stop_min_results=domain.get("early_stop_min_results"),
-            # 域命中时 combo 来自域配置，TF-IDF 候选只有真正进入 combo 才
-            # 算参与了决策；tfidf_best 落选仍照搬原始得分会误导消费方
-            # （实测「asyncio tutorial」报 qiita 前三、实际执行 octen/exa）。
-            # 落选的近失信号由 reason 的 [TF-IDF→x] 标注承载。
-            tfidf_scores=([{"engine": n, "score": s} for n, s, _ in tfidf_scores]
-                          if tfidf_best and tfidf_best in engines_combo else []),
-            mode=mode, depth=depth, context=context,
-            login_hint=_detect_login_intent(query, domain.get("name")),
-        )
+        return _route_by_domain(ctx, domain, secondary)
 
     # 正则未命中，用 TF-IDF 结果（已过滤低分）
     if tfidf_best and tfidf_best in enabled:
-        engines_combo = [tfidf_best]
-        if "anysearch" in enabled and "anysearch" not in engines_combo:
-            engines_combo.append("anysearch")
-        engines_combo = [e for e in engines_combo if e in enabled]
-        # 🔑 展开 local_search → 子引擎
-        engines_combo = _expand_local_search(engines_combo, features)
-        # 🔑 为中文/学术查询追加本地引擎
-        engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
-        # P0-001：geo 查询追加 OpenStreetMap
-        engines_combo = _maybe_add_geo_engine(engines_combo, features, enabled)
-        if mode == "fast":
-            parallel = False
-        else:
-            parallel = len(engines_combo) > 1
+        return _route_by_tfidf(ctx)
 
-        # P0-005：意图驱动动态并行度
-        engines_combo, parallel = _apply_intent_parallelism(
-            engines_combo, features, None, mode, parallel)
+    return _route_by_fallback(ctx)
 
-        must_keep = geo_lang_must_keep(features, enabled, engines_combo, query)
-        engines_combo = _apply_policy_with_new_source_slots(
-            domain, engines_combo,
-            mode=mode, depth=depth, context=context,
-            enabled=enabled, engines_boost=engines_boost, must_keep=must_keep,
-        )
-        # 语言摘除必须在 policy 之后再走一遍：加槽补位会把「不在 combo 里」
-        # 的新专源当成「被预算裁掉」补回来（实测 cinii 在英文查询里被补回
-        # academic 域）。语言不匹配的源不是被裁掉，是不该在场——补回来等于
-        # 把摘除撤销。判据与顺序说明见 _filter_lang_bound_family docstring。
-        engines_combo = _filter_lang_bound_family(
-            engines_combo, features, _specs_snapshot(), query)
-        # 意图裁剪收口（与主域分支同一问题：policy 的 must_keep 补回会放大
-        # combo，抵消上面的意图裁剪）。同样只对 definition/fact 收口，
-        # must_keep 成员豁免（理由见主域分支注释）。
-        engines_combo, parallel = intent_squeeze(
-            engines_combo, features, None, mode, parallel, must_keep)
-        # ja/ko catch-all 与主域分支同计算方式：anysearch 前二（TF-IDF 直选路径
-        # 也会把多语言主力挤掉）
-        engines_combo = _inject_multilingual_backup(engines_combo, enabled,
-                                                    features)
-        # D4：统一熔断统一处理（TF-IDF 注入/语言追加可能绕过 _get_engines_combo）
-        engines_combo = breaker_filter(engines_combo, enabled)
-        if mode == "fast":
-            parallel = False
-        else:
-            parallel = len(engines_combo) > 1
 
-        return _done(
-            engine=engines_combo[0],
-            engines=engines_combo,
-            engines_combo=engines_combo,
-            reason=(
-                f"TF-IDF 语义路由 → {_engine_display(engines_combo[0])}"
-                f" (score={tfidf_best_score:.3f}, 正则未命中)"
-                + (f" [boost={engines_boost}]" if engines_boost else "")
-            ),
-            confidence=0.85, features=features, domain="general_search",
-            parallel=parallel,
-            tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores],
-            mode=mode, depth=depth, context=context,
-            login_hint=_detect_login_intent(query, None),
-        )
-
-    # 保底：免费通用引擎（零分 TF-IDF 也走这里）——本地优先 + 通用免费源唯一来源
-    fallback_combo = _general_fallback(enabled)
-    if not fallback_combo:
-        fallback_combo = sorted(enabled)[:2] if enabled else ["anysearch"]
-    # 日/韩主查询：优先 anysearch（多语言源对日/韩结果语言匹配更好），
-    # 再并语言专用本地引擎；避免旧逻辑只锁 local_bing（zh 参数）返回中文站。
-    # 注：byted 经实测对 ja/ko 也可，但其被 test_multilingual 定义为中文引擎，
-    # 强制优先会破坏 ja/ko 路由契约；byted 通过融合权重提权即可。2026-08。
-    if features.get("primary_lang") in ("ja", "ko") and _get_registry is not None:
-        lang_combo = _select_sub_engines(_enabled_local_engines(), features)
-        non_local = [e for e in fallback_combo if not e.startswith("local_")]
-        if "anysearch" in non_local:
-            non_local = ["anysearch"] + [e for e in non_local if e != "anysearch"]
-        if lang_combo:
-            fallback_combo = (non_local + lang_combo) if non_local else lang_combo
-        else:
-            fallback_combo = non_local or fallback_combo
-    else:
-        fallback_combo = _expand_local_search(fallback_combo, features)
-    fallback_combo = _merge_language_engines(fallback_combo, features, lang_engines)
-    # P0-001：geo 查询追加 OpenStreetMap
-    fallback_combo = _maybe_add_geo_engine(fallback_combo, features, enabled)
-    must_keep_fb = geo_lang_must_keep(features, enabled, fallback_combo, query)
-    fallback_combo = _apply_engine_policy(
-        fallback_combo, mode=mode, depth=depth, context=context,
-        engines_boost=engines_boost, enabled=enabled, must_keep=must_keep_fb,
-    )
-    # D4：统一熔断统一处理（保底组合可能含熔断引擎）。
-    # 兜底次序与本分支的语义一致：通用保底路径只认 anysearch。
-    fallback_combo = breaker_filter(fallback_combo, enabled, empty=("anysearch",))
-
-    low = tfidf_scores and all(s[1] < TFIDF_MIN_SCORE for s in tfidf_scores)
-    reason = (
-        f"TF-IDF 低分回退通用引擎 → {_engine_display(fallback_combo[0])}"
-        if low else
-        f"无匹配域，回退 {_engine_display(fallback_combo[0])}"
-    )
-
-    return _done(
-        engine=fallback_combo[0],
-        engines=fallback_combo,
-        engines_combo=fallback_combo,
-        engines_fallback=[],
-        reason=reason,
-        confidence=0.35 if low else 0.3,
-        features=features, domain="general_search",
-        parallel=False if mode == "fast" else len(fallback_combo) > 1,
-        # 保底路径 tfidf_best 必为空（否则已走 TF-IDF 分支）：低于阈值的
-        # 候选分不是路由依据，输出只会误导，一律空表。
-        tfidf_scores=[{"engine": n, "score": s} for n, s, _ in tfidf_scores]
-        if tfidf_best else [],
-        mode=mode, depth=depth, context=context,
-        login_hint=_detect_login_intent(query, None),
-    )
 
 
 def route_query_cached(query: str, engine_override: str = "auto",
