@@ -238,7 +238,10 @@ def test_non_json_roundtrip_decision_is_not_cached(cache_on, monkeypatch):
 
 def test_entries_capped(cache_on, counted_route, monkeypatch):
     """条目数封顶，避免缓存文件无界增长。"""
-    monkeypatch.setattr(route, "_ROUTE_CACHE_MAX_ENTRIES", 5)
+    # 常量住在 route_cache（存储层），route 只是同名转出；打桩必须打在**读取处**，
+    # 否则改的是转出副本，实现仍读原值（拆模块时最容易踩的坑）。
+    import route_cache
+    monkeypatch.setattr(route_cache, "_ROUTE_CACHE_MAX_ENTRIES", 5)
     for i in range(12):
         route.route_query_cached(f"封顶测试 {i}", mode="auto", depth="fast")
     payload = json.loads(route._route_cache_file().read_text(encoding="utf-8"))

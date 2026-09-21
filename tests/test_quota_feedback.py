@@ -20,6 +20,7 @@ SCRIPT_DIR = SKILL_DIR / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from quota import QuotaManager  # noqa: E402
+import route_combo as route_combo_mod  # noqa: E402
 import route as route_mod  # noqa: E402
 
 
@@ -87,16 +88,16 @@ class TestRouteExclusion(unittest.TestCase):
     def test_hard_down_engine_replaced_by_fallback(self):
         mgr = _fresh_manager()
         mgr.mark_remote_exhausted("byted", reason="10406")
-        with patch.object(route_mod, "get_quota_manager", lambda: mgr):
-            combo = route_mod._get_engines_combo(
+        with patch.object(route_combo_mod, "get_quota_manager", lambda: mgr):
+            combo = route_combo_mod._get_engines_combo(
                 self.DOMAIN, {"byted", "anysearch"}, mode="auto", features=None)
         self.assertNotIn("byted", combo, "配额死引擎不得进组合")
         self.assertIn("anysearch", combo, "备用源应接管")
 
     def test_recovered_engine_returns_as_primary(self):
         mgr = _fresh_manager()
-        with patch.object(route_mod, "get_quota_manager", lambda: mgr):
-            combo = route_mod._get_engines_combo(
+        with patch.object(route_combo_mod, "get_quota_manager", lambda: mgr):
+            combo = route_combo_mod._get_engines_combo(
                 self.DOMAIN, {"byted", "anysearch"}, mode="auto", features=None)
         self.assertEqual(combo[0], "byted", "恢复后 primary 自动回归首位")
 

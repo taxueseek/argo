@@ -1723,6 +1723,161 @@ def _build_zdic_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── iPlant 植物智（中文植物名 → 学名 + 分类）──────────────────────────────────
+
+_IPLANT_HOST = "https://www.iplant.cn"
+_IPLANT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Referer": "https://www.iplant.cn/",
+}
+
+# 服务端渲染的页面变量。可靠——与「物种保护」「分类信息」那些 AJAX 填充块不同。
+_IPLANT_VAR_RE = re.compile(r"var\s+(spno|spcname|latin2|systype)\s*=\s*\"([^\"]*)\"")
+# 「您是否要找」消歧块：别名/泛称页在此给出接受名（中文名 + 学名 + 带内部 id 的链接）
+_IPLANT_SUGGEST_RE = re.compile(r"您是否要找[：:](.*?)</div>", re.S)
+_IPLANT_ANCHOR_RE = re.compile(r"<a\s+href='([^']+)'[^>]*>([^<]+)</a>")
+# 俗名块：<div>俗名：<a href='/info/苞米'>苞米</a>、…</div>
+# 不取「异名」：那是拉丁→拉丁的映射，gbif 本来就管得好，不属于本源承诺的
+# 「中文名/俗名 → 学名 + 分类」（它的块结构也不同，异名：后紧跟 </div>）
+_IPLANT_VERN_RE = re.compile(r"俗名：(.{0,400}?)</div>", re.S)
+# 用户常把「玉米 学名」这类整体丢进来，去掉修饰词后才是可查的名字
+_IPLANT_NOISE_RE = re.compile(
+    r"(学名|拉丁名|拉丁学名|俗名|别名|别称|植物|物种|分类|是什么|有哪些|查询|搜索)"
+)
+
+
+def _build_iplant_engine(spec: dict[str, Any]) -> Any:
+    """iPlant 植物智——中文植物名（含俗名）→ 学名 + 分类（HTML 解析，免认证）。
+
+    补的是 argo 一条硬盲区：此前没有任何从中文名进入生物数据库的路。gbif 对纯
+    中文查询返回的是无关属种（实测「玉米」首条是 Frithia 属；补 qField=VERNACULAR
+    仍是垃圾），本仓 gbif builder 也因此在中文查询上直接短路。iPlant 的 /info/{名}
+    直接吃中文名、学名、属名、科名，实测时延 0.29–0.41s。
+
+    **三级判据，少一级就错**（每级的实测依据见下）：
+      1. `spno` 为空 → 未收录 → 诚实空。**不能用 HTTP 状态码**：不存在的名字同样
+         返回 200（只是页面小 1.8KB）；**也不能用 latin2**：未收录时它把查询词本身
+         填回去（查 zzzz → latin2=zzzznotexist），看着像命中。
+      2. `spno` 非空且 `latin2` 非空 → 直接命中（玉米 / 牡丹 / 银杏）。
+      3. `spno` 非空但 `latin2` 为空 → 别名或泛称，接受名在「您是否要找」块里。
+         **这是俗名查询的主路径而非边缘情况**：玉米页列出的 5 个俗名（包谷 / 苞米 /
+         玉蜀黍 / 珍珠米 / 麻蜀棒子）逐个反查，全部走这一级——只做前两级等于对
+         中文俗名基本失效。
+
+    `systype` 过滤非植物：该站带「名称校对」功能，查「霸王龙」返回恐龙条目、
+    「蘑菇」返回菌物条目，对植物源是噪声。实测 1=植物 2=动物 3=菌物，只放行 1；
+    字段缺失时不拦（判不出类群就不拦截，宁放过不误杀）。
+
+    分类链来自 `/ashx/getspinfos.ashx?spid=&type=classsys`（免认证，实测可直调），
+    返回 8 套分类系统的 HTML 片段，取第一套——站点的默认展示（种>属>科>目>纲）。
+    植物志正文（frps/foc）、分布、标本都是 AJAX 填充且内部接口不可直调（参数空间
+    已试开，除本接口外一律空返回），不做承诺。
+    """
+    timeout = spec.get("timeout", 12)
+    engine_name = spec.get("_name", "iplant")
+
+    def _fetch(path: str, to: float) -> str | None:
+        return _http_get_raw(f"{_IPLANT_HOST}{path}", _IPLANT_HEADERS, to, engine=engine_name)
+
+    def _entry(path: str, to: float) -> dict[str, Any] | None:
+        """取一个物种条目。未收录、非植物、取不到都返回 None。"""
+        html = _fetch(path, to)
+        if not html:
+            return None
+        v = dict(_IPLANT_VAR_RE.findall(html))
+        if not v.get("spno"):
+            return None
+        if v.get("systype") and v["systype"] != "1":
+            return None
+        return {"spno": v["spno"], "cname": v.get("spcname", ""),
+                "latin": v.get("latin2", ""), "html": html}
+
+    def _classsys(spno: str, to: float) -> list[str]:
+        """分类链（第一套系统），从种到门；取不到返回空列表（分类是增益不是前提）。"""
+        raw = _fetch(f"/ashx/getspinfos.ashx?spid={spno}&type=classsys", to)
+        if not raw:
+            return []
+        try:
+            chains = (json.loads(raw) or {}).get("classsys") or []
+        except (json.JSONDecodeError, ValueError):
+            return []
+        if not isinstance(chains, list) or not chains:
+            return []
+        return re.findall(r"<a[^>]*>([^<]*)</a>", str(chains[0]))
+
+    def _suggest(html: str) -> list[dict[str, str]]:
+        """「您是否要找」里的接受名。href 带内部 id，需再取一次才有 spno 与分类。"""
+        blk = _IPLANT_SUGGEST_RE.search(html)
+        if not blk:
+            return []
+        out = []
+        for href, text in _IPLANT_ANCHOR_RE.findall(blk.group(1)):
+            label = re.sub(r"\s+", " ", text).strip()
+            m = re.match(r"^(\S+)\s+([A-Z][A-Za-z.\s×x]*)$", label)
+            out.append({"href": href,
+                        "cname": m.group(1) if m else label,
+                        "latin": m.group(2).strip() if m else ""})
+        return out
+
+    def _rel_path(href: str) -> str:
+        """页面里的相对 href → 可直接 GET 的路径。名字部分要转义，?id= 原样保留。"""
+        path, _, qs = href.partition("?")
+        return f"{urllib.parse.quote(path)}?{qs}" if qs else urllib.parse.quote(path)
+
+    def _names(html: str, pat: re.Pattern) -> list[str]:
+        """从「俗名：」「异名：」块取锚文本。"""
+        blk = pat.search(html or "")
+        if not blk:
+            return []
+        return [re.sub(r"\s+", " ", t).strip()
+                for t in re.findall(r"<a[^>]*>([^<]+)</a>", blk.group(1)) if t.strip()]
+
+    def _result(e: dict[str, Any], ranks: list[str], q: str, idx: int) -> dict[str, Any]:
+        cname = e.get("cname") or q
+        latin = e.get("latin") or ""
+        html = e.get("html") or ""
+        bits = [f"学名 {latin}"] if latin else []
+        # 分类链首段是种本身，取其后三段当属/科/目
+        bits += [f"{lab} {val}" for lab, val in zip(("属", "科", "目"), ranks[1:4])]
+        vern = _names(html, _IPLANT_VERN_RE)
+        if vern:
+            bits.append("俗名 " + "、".join(vern[:6]))
+        return {
+            "title": f"{cname} {latin}".strip(),
+            "url": f"{_IPLANT_HOST}/info/{urllib.parse.quote(cname)}",
+            "snippet": " | ".join(bits)[:300],
+            "source": engine_name,
+            "score": rank_score(0.95, idx),
+        }
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = _IPLANT_NOISE_RE.sub("", query).strip()
+        if not q or len(q) > 40:
+            return []
+        to = _timeout or timeout
+        head = _entry(f"/info/{urllib.parse.quote(q)}", to)
+        if head is None:
+            return []
+        if head["latin"]:
+            return [_result(head, _classsys(head["spno"], to), q, 0)]
+        # 第三级：别名/泛称 → 取「您是否要找」给的接受名
+        out: list[dict[str, Any]] = []
+        for s in _suggest(head["html"])[: max(int(n), 1)]:
+            acc = _entry(_rel_path(s["href"]), to)
+            if acc is None:
+                # 接受名页取不到（改版/超时）时退一步用提示里的名字对，仍比空手强
+                if not s["latin"]:
+                    continue
+                acc = {"spno": "", "cname": s["cname"], "latin": s["latin"], "html": ""}
+            ranks = _classsys(acc["spno"], to) if acc["spno"] else []
+            out.append(_result(acc, ranks, q, len(out)))
+        return out
+
+    return _engine
+
+
 def _build_people_daily_engine(spec: dict[str, Any]) -> Any:
     """人民网搜索（权威综合中文新闻，官方接口，免认证）。
 

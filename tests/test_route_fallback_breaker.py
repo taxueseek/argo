@@ -78,7 +78,7 @@ class TestFallbackMerge(unittest.TestCase):
     """P0-1：fallback 在 combo 非空时必须并入（旧逻辑 combo 非空即忽略 fallback）。"""
 
     def test_combo_nonempty_merges_real_fallback(self):
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "cls_telegraph_search",
             "primary": "cls_telegraph",
@@ -86,24 +86,24 @@ class TestFallbackMerge(unittest.TestCase):
             "engines_combo": ["cls_telegraph"],
             "parallel": False,
         }
-        with patch("route.get_quota_manager", return_value=_FakeQuota()):
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()):
             combo = _get_engines_combo(domain, {"cls_telegraph", "jin10"}, mode="auto")
         self.assertEqual(combo, ["cls_telegraph", "jin10"])
 
     def test_fallback_already_in_combo_not_duplicated(self):
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "fund_query",
             "primary": "eastmoney",
             "fallback": "anysearch",
             "engines_combo": ["eastmoney", "anysearch"],
         }
-        with patch("route.get_quota_manager", return_value=_FakeQuota()):
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()):
             combo = _get_engines_combo(domain, {"eastmoney", "anysearch"}, mode="auto")
         self.assertEqual(combo, ["eastmoney", "anysearch"])
 
     def test_fallback_not_enabled_is_skipped(self):
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "rfc_search",
             "primary": "rfc_editor",
@@ -111,19 +111,19 @@ class TestFallbackMerge(unittest.TestCase):
             "engines_combo": ["rfc_editor"],
         }
         # anysearch 不在 enabled → fallback 不得混入
-        with patch("route.get_quota_manager", return_value=_FakeQuota()):
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()):
             combo = _get_engines_combo(domain, {"rfc_editor"}, mode="auto")
         self.assertEqual(combo, ["rfc_editor"])
 
     def test_fallback_equals_primary_not_merged(self):
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "legacy",
             "primary": "x",
             "fallback": "x",  # 旧配置 fallback==primary，无备用语义
             "engines_combo": ["x"],
         }
-        with patch("route.get_quota_manager", return_value=_FakeQuota()):
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()):
             combo = _get_engines_combo(domain, {"x", "y"}, mode="auto")
         self.assertEqual(combo, ["x"])
 
@@ -134,7 +134,7 @@ class TestBreakerRemoval(unittest.TestCase):
     （内置状态转移），status() 只读快照仅作观测。"""
 
     def test_open_with_cooldown_removed(self):
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "test",
             "primary": "wikidata",
@@ -144,7 +144,7 @@ class TestBreakerRemoval(unittest.TestCase):
             "wikidata": {"state": "open", "cooldown_remain": 30},
             "baidu_baike": {"state": "closed", "cooldown_remain": 0},
         }
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
             combo = _get_engines_combo(domain, {"wikidata", "baidu_baike"}, mode="auto")
         # 故障源剔除，候选顶位
@@ -152,7 +152,7 @@ class TestBreakerRemoval(unittest.TestCase):
         self.assertNotIn("wikidata", combo)
 
     def test_disabled_removed(self):
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "test",
             "primary": "a",
@@ -160,21 +160,21 @@ class TestBreakerRemoval(unittest.TestCase):
         }
         # disabled + 冷却中（cooldown_remain>0 表达）→ 确定不可用，剔除
         states = {"a": {"state": "disabled", "cooldown_remain": 1800}}
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
             combo = _get_engines_combo(domain, {"a", "b"}, mode="auto")
         self.assertEqual(combo, ["b"])
 
     def test_disabled_cooldown_expired_kept_for_probe(self):
         """disabled 但冷却已过 → half_open 探测资格，保留不剔除（B4 恢复通道）。"""
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "test",
             "primary": "a",
             "engines_combo": ["a", "b"],
         }
         states = {"a": {"state": "disabled", "cooldown_remain": 0}}
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
             combo = _get_engines_combo(domain, {"a", "b"}, mode="auto")
         self.assertIn("a", combo)
@@ -182,14 +182,14 @@ class TestBreakerRemoval(unittest.TestCase):
 
     def test_half_open_kept_for_probe(self):
         """open 但 cooldown 已过 → half-open 探测资格，保留不剔除。"""
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "test",
             "primary": "a",
             "engines_combo": ["a", "b"],
         }
         states = {"a": {"state": "open", "cooldown_remain": 0}}
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
             combo = _get_engines_combo(domain, {"a", "b"}, mode="auto")
         self.assertIn("a", combo)
@@ -197,21 +197,21 @@ class TestBreakerRemoval(unittest.TestCase):
 
     def test_all_unusable_yields_empty(self):
         """域内全部不可用 → 返回空集，交由 route_query 尾部保底。"""
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "test",
             "primary": "a",
             "engines_combo": ["a"],
         }
         states = {"a": {"state": "open", "cooldown_remain": 60}}
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker(states)):
             combo = _get_engines_combo(domain, {"a"}, mode="auto")
         self.assertEqual(combo, [])
 
     def test_all_healthy_order_untouched(self):
         """全可用 → 顺序与集合不变（缓存键稳定，零速度倒退）。"""
-        from route import _get_engines_combo
+        from route_combo import _get_engines_combo
         domain = {
             "name": "test",
             "primary": "anysearch",
@@ -219,8 +219,8 @@ class TestBreakerRemoval(unittest.TestCase):
         }
         # 隔离自适应学习干扰（分数可能触发过滤）；三引擎分属
         # web_general/knowledge/academic 族，能力族去重不收缩
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
-             patch("route._adaptive_learner", None):
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
+             patch("route_combo._adaptive_learner", None):
             combo = _get_engines_combo(domain, {"anysearch", "wikipedia", "arxiv"}, mode="auto")
         self.assertEqual(combo, ["anysearch", "wikipedia", "arxiv"])
 
@@ -278,7 +278,7 @@ class TestEmptyEngineOverride(unittest.TestCase):
 
     def test_empty_override_falls_through_to_auto(self):
         from route import route_query
-        with patch("route.get_quota_manager", return_value=_FakeQuota()), \
+        with patch("route_combo.get_quota_manager", return_value=_FakeQuota()), \
              patch("circuit_breaker.get_breaker", return_value=_FakeBreaker()):
             d = route_query("Python 异步编程", engine_override="", mode="fast", depth="fast")
         self.assertNotEqual(d.get("engine"), "")

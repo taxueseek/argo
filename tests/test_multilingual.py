@@ -210,7 +210,7 @@ class TestLanguageEngineUnified(unittest.TestCase):
             "local_bing", "local_duckduckgo", "local_google",
             "local_yandex", "local_mojeek",
         ]
-        p = patch("route._enabled_local_engines", return_value=self.sub_engines)
+        p = patch("route_lang._enabled_local_engines", return_value=self.sub_engines)
         p.start()
         self.addCleanup(p.stop)
 
@@ -285,7 +285,7 @@ class TestLangOverride(unittest.TestCase):
             "local_bing", "local_duckduckgo", "local_google",
             "local_yandex", "local_mojeek",
         ]
-        p = patch("route._enabled_local_engines", return_value=self.sub_engines)
+        p = patch("route_lang._enabled_local_engines", return_value=self.sub_engines)
         p.start()
         self.addCleanup(p.stop)
 

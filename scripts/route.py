@@ -53,12 +53,6 @@ except ImportError:
 # 打网才需要——为了一个 8 行的纯文本谓词付这笔钱不值得。
 from macro_countries import is_foreign_macro_query
 
-# 自适应学习（可选依赖）
-try:
-    from adaptive import get_learner
-    _adaptive_learner = get_learner()
-except Exception:
-    _adaptive_learner = None
 
 # 引擎注册中心（子引擎可见性）
 try:
@@ -82,46 +76,74 @@ from route_domains import (  # noqa: E402
     _INTENT_MIN_TOKENS,
 )
 
+# 路由决策缓存（存储层）住在 route_cache；route_query_cached 是本模块的编排
+# （「什么时候用缓存」），留在下面。同名转出，既有测试与调用方无需改。
+from route_cache import (  # noqa: E402
+    _ROUTE_CACHE_SCHEMA,
+    _ROUTE_CACHE_TTL_S,
+    _ROUTE_CACHE_MAX_ENTRIES,
+    _route_cache_enabled,
+    _route_cache_file,
+    _route_state_fingerprint,
+    _route_cache_key,
+    _route_cache_read,
+    _route_cache_prune,
+    _route_cache_write,
+    invalidate_route_cache,
+)
+
+# ── 语言与选源策略（route_lang）、组合装配（route_combo）、预算策略（route_policy）
+# 三块按职责拆出，这里同名转出：调用方与既有测试（route.extract_features /
+# route._get_engines_combo / route._VERTICAL_NEW_SOURCE …）无需改。
+from route_lang import (  # noqa: E402
+    extract_features,
+    _detect_lang_override,
+    _feature_labels,
+    _lang_label,
+    _enabled_local_engines,
+    _specs_snapshot,
+    _select_language_engines,
+    _merge_language_engines,
+    _add_language_engines,
+    _inject_multilingual_backup,
+    _lang_aware_combo_order,
+    _lang_must_keep,
+    _family_lang,
+    _filter_lang_bound_family,
+    _move_to_tail,
+    _LANG_EXCLUSIVE_ENGINES,
+    _LANG_PREFERRED_ENGINES,
+    _SOCIAL_ZH_GENERAL,
+    _get_registry,
+)
+from route_combo import (  # noqa: E402
+    _expand_local_search,
+    _general_fallback,
+    _filter_breaker_blocked,
+    _maybe_add_geo_engine,
+    _apply_intent_parallelism,
+    _select_sub_engines,
+    _get_engines_combo,
+    _adaptive_learner,
+    _NARROW_ENGINES,
+    _INTENT_PARALLELISM,
+)
+from route_policy import (  # noqa: E402
+    _VERTICAL_NEW_SOURCE,
+    _VERTICAL_KEEP,
+    _new_source_budget_extra,
+    _apply_engine_policy,
+    _apply_policy_with_new_source_slots,
+)
+
 
 # ── 特征提取 ──────────────────────────────────────────────────────────────────
 
-_RE_CHINESE = re.compile(r"[一-鿿]")
-_RE_KANA = re.compile(r"[\u3040-\u30ff]")
-_RE_HANGUL = re.compile(r"[\uac00-\ud7af]")
-_RE_COMPARE = re.compile(r"\b(vs|versus)\b|(对比|比较|区别|相比|哪个好)", re.I)
-_RE_TECH = re.compile(
-    r"\b(api|python|javascript|typescript|code|react|vue|node|rust|go|"
-    r"golang|docker|kubernetes|linux|git|sql|error|bug|debug|exception|"
-    r"function|class|async|thread|database|algorithm|programming|framework|library)\b|"
-    r"(函数|方法|类|库|框架|报错|调试|编程|代码|开发|技术|源码|架构)", re.I)
-_RE_QUESTION = re.compile(
-    r"\b(how|what|why|when|where|which|who)\b|"
-    r"(怎么|什么|为什么|如何|哪里|哪个|谁|多少|几|吗|呢)", re.I)
-_RE_DEPTH = re.compile(
-    r"\b(deep|comprehensive|review|survey|research|paper|thesis)\b|"
-    r"(对比分析|深度|全面|详细|深入|系统|完整|综述|研究|探究|详解|论文)", re.I)
 
 # P2-3：显式语言意图 → 覆盖语言（「用英文搜」「in English」「日本語で」等）。
 # 命中后 lang_override 直接决定语言引擎选择与 must_keep，不被习惯/系统 locale 淹没。
-_LANG_OVERRIDE_MAP: dict[str, tuple[str, ...]] = {
-    "en": ("用英文", "用英语", "in english", "english version", "english only", "英語で"),
-    "ja": ("用日文", "用日语", "in japanese", "日本語で", "日本语"),
-    "ko": ("用韩文", "用韩语", "in korean", "한국어로"),
-    "zh": ("用中文", "用汉语", "in chinese", "中文版"),
-    "cyrillic": ("用俄语", "用俄文", "in russian", "по-русски"),
-}
 
 
-def _detect_lang_override(query: str) -> str | None:
-    """检测显式语言覆盖意图，返回目标语言（无则 None）。"""
-    if not query:
-        return None
-    ql = query.lower()
-    for lang, keys in _LANG_OVERRIDE_MAP.items():
-        for key in keys:
-            if key in ql:
-                return lang
-    return None
 
 def _build_engine_names() -> dict[str, str]:
     """从 config.yaml 引擎声明的 label 构建显示名映射（唯一来源）。
@@ -199,120 +221,10 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def extract_features(query: str) -> dict[str, Any]:
-    """提取查询特征向量。
-
-    P0-001：并入 has_geo / has_negation / intents，供下游路由/并行度决策使用。
-    查询理解不可用时退化为纯正则特征，不影响原有字段。
-
-    多语种（v2.7）：primary_lang 判定主语言（zh/en/ja/ko/latin/cyrillic/thai/
-    arabic/hebrew/greek/devanagari/mixed/other），script 给出书写系统类别，
-    is_latin 标记是否为拉丁语系查询。跨语言回退依据：非拉丁书写系统的主语言
-    在通用英文源覆盖可能不足，路由会追加英文通用源（duckduckgo/anysearch）。
-    """
-    total = len(query)
-    chinese = len(_RE_CHINESE.findall(query))
-    latin = len(re.findall(r"[A-Za-z]", query))
-    ratio = chinese / max(total, 1)
-
-    # 主语言判定统一走 lang_detect（假名/谚文/西里尔/泰/阿/希伯来/希腊强信号优先）
-    primary_lang = "mixed"
-    script = "other"
-    is_latin = False
-    try:
-        from lang_detect import detect_language, detect_script
-        primary_lang = detect_language(query)
-        script = detect_script(query)
-        is_latin = primary_lang in ("en", "latin")
-    except ImportError:
-        kana = len(_RE_KANA.findall(query))
-        hangul = len(_RE_HANGUL.findall(query))
-        if kana / max(total, 1) >= 0.15:
-            primary_lang = "ja"
-            script = "kana"
-        elif hangul / max(total, 1) >= 0.15:
-            primary_lang = "ko"
-            script = "hangul"
-        elif ratio > 0.3:
-            primary_lang = "zh"
-            script = "cjk"
-        elif latin / max(total, 1) > 0.5:
-            primary_lang = "en"
-            script = "latin"
-            is_latin = True
-        else:
-            primary_lang = "mixed"
-            script = "mixed"
-
-    features: dict[str, Any] = {
-        "chinese_ratio": ratio,
-        "english_ratio": latin / max(total, 1),
-        "length": total,
-        "primary_lang": primary_lang,
-        "script": script,
-        "is_latin": is_latin,
-        # P2-3：显式语言覆盖（「用英文搜」→ en）；无覆盖意图时为 None
-        "lang_override": _detect_lang_override(query),
-        "has_compare": bool(_RE_COMPARE.search(query)),
-        "has_technical": bool(_RE_TECH.search(query)),
-        "has_question": bool(_RE_QUESTION.search(query)),
-        "has_depth_word": bool(_RE_DEPTH.search(query)),
-        "has_geo": False,
-        "has_negation": False,
-        "intents": [],
-    }
-    try:
-        from query_understanding import _understand_cached as understand
-        qu = understand(query)
-        features["has_geo"] = bool(qu.geo)
-        features["has_negation"] = bool(qu.exclude_terms)
-        features["intents"] = list(qu.intents)
-    except ImportError:
-        pass  # query_understanding 不可用，保留默认值
-    except Exception as e:
-        import logging
-        logging.getLogger("unified_search.route").debug(
-            f"查询理解特征跳过: {type(e).__name__}")
-    return features
 
 
-def _feature_labels(features: dict[str, Any]) -> str:
-    labels = []
-    # 语言标签取 features.primary_lang（lang_detect 单一真源），**不用
-    # chinese_ratio 二分**：后者对谚文/假名/西里尔/阿拉伯查询一律给出
-    # chinese_ratio≈0，于是「한국 반도체 산업」这类韩文查询在 route_reason 里
-    # 被标成「英文」（2026-09-21 实测）。reason 是给人看的归因入口，标签错了
-    # 会把排障引向错误方向（以为命中了英文源）。名称表复用 lang_detect.LANG_LABELS，
-    # 不再在这里维护第二份语种名。
-    # 阈值语义保持不变：cr>0.6 记中文、0.1~0.6 的混合查询不记语言标签——
-    # 这次只修「cr<0.1 却断言是英文」那一条，不改变中英混合的既有形态。
-    cr = features.get("chinese_ratio", 0)
-    if cr > 0.6:
-        labels.append("中文")
-    elif cr < 0.1:
-        labels.append(_lang_label(features.get("primary_lang")) or "英文")
-    for key, name in (("has_technical", "技术向"), ("has_compare", "对比分析"),
-                      ("has_depth_word", "深度研究"), ("has_question", "问答型")):
-        if features.get(key):
-            labels.append(name)
-    return " + ".join(labels) if labels else "通用查询"
 
 
-def _lang_label(lang: Any) -> str | None:
-    """primary_lang → 中文名；en/latin/混合/未知返回 None（由调用方兜底）。
-
-    名称表直接取自 lang_detect（单一真源），**不做进程内缓存**：本函数只在
-    拼 reason 时调用一次，而 extract_features 每次路由本来就会 import
-    lang_detect，多一次 sys.modules 查表是零成本；为它维护一个模块级可变
-    缓存只会多一个需要解释的状态。
-    """
-    if not lang or lang in ("en", "latin", "mixed", "other"):
-        return None
-    try:
-        from lang_detect import LANG_LABELS
-    except ImportError:  # 语言模块不可用：不编造语种名，交给调用方兜底
-        return None
-    return LANG_LABELS.get(lang)
 
 
 # ── 登录态意图检测（P0-4：五路协同的种子）────────────────────────────────
@@ -350,236 +262,22 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
     return {"needs_login": False, "reason": ""}
 
 
-def _inject_multilingual_backup(engines_combo: list[str], enabled: set[str],
-                                features: dict) -> list[str]:
-    """ja/ko 查询把多语言主力源 anysearch 送到 combo 前二。
-
-    必须在 _apply_engine_policy（预算截断/must_keep 换位）之后调用：此前的
-    注入会被 must_keep 的尾位替换挤出去（2026-09-07 实测 geo 域 anysearch
-    被 local_bing 顶掉）。hedged 执行下 #2 位=primary 慢或不及格时的第一
-    救援；日韩查询过滤掉中文源后常只剩英文/本地源，缺位=无通用主力。
-
-    注：这条规则只覆盖 ja/ko。其余语言的同类问题（垂直专源占住 combo 预算、
-    通用保底源被截断剪掉）在声明来源层修，见 config.yaml 各域 engines_combo
-    的顺序约定与 tests/test_combo_budget_coverage.py 检查。
-    """
-    if features.get("primary_lang") not in ("ja", "ko"):
-        return engines_combo
-    if "anysearch" not in enabled or not engines_combo:
-        return engines_combo
-    if "anysearch" in engines_combo:
-        if engines_combo.index("anysearch") <= 1:
-            return engines_combo
-        engines_combo = [e for e in engines_combo if e != "anysearch"]
-    return engines_combo[:1] + ["anysearch"] + engines_combo[1:]
 
 
-def _enabled_local_engines() -> list[str]:
-    """返回已注册（enabled）的本地子引擎名。
-
-    路由选择的引擎必须能被执行层真正调用。list_local_engines(available_only=False)
-    返回全部子引擎（含 config.yaml enabled:false 的，如 local_yandex/local_google），
-    若路由选到这些引擎，执行层注册表里不存在 → 「未知引擎」空跑。
-    这里以 config.yaml 的 enabled 字段为准过滤，保证路由与执行一致。
-    """
-    if _get_registry is None:
-        return []
-    try:
-        from config import get_engines, load_config
-        cfg = load_config()
-        engines = get_engines(cfg) or {}
-        return [
-            e for e in _get_registry().list_local_engines(available_only=False)
-            if isinstance(engines.get(e), dict) and engines[e].get("enabled", True)
-        ]
-    except Exception:
-        return []
 
 
-def _expand_local_search(engine_list: list[str], features: dict | None = None) -> list[str]:
-    """将 local_search 扩展为具体的子引擎（基于查询特征）。"""
-    if "local_search" not in engine_list:
-        return engine_list
-    if _get_registry is None:
-        return engine_list
-
-    sub_engines = _enabled_local_engines()  # 内部自取注册表，此处不再重复加载
-    if not sub_engines:
-        return engine_list
-
-    selected = _select_sub_engines(sub_engines, features)
-    result = [e for e in engine_list if e != "local_search"]
-    # 截断只限本地子引擎数量；远端成员总量由 route_query 末尾
-    # engine_policy.filter_combo_by_policy 统一管。曾用 result[:4] 整体截断，
-    # combo 声明顺序即生死（第 5 位起被无差别砍掉，octen/子引擎全灭）。
-    for eng in selected[:4]:
-        if eng not in result:
-            result.append(eng)
-    return result
 
 
-def _general_fallback(enabled: set[str]) -> list[str]:
-    """本地优先 + 通用免费源保底（清单唯一来源 engine_policy.GENERAL_FREE_FALLBACK）。
-
-    域内引擎全被过滤 / 无匹配域时的回退组合：先 local_search（展开成本地子引擎），
-    再通用免费源。清单与 recovery L3 共用同一常量，避免两处清单漂移。
-    """
-    try:
-        from engine_policy import GENERAL_FREE_FALLBACK
-    except ImportError:
-        GENERAL_FREE_FALLBACK = ("anysearch", "duckduckgo", "local_bing")
-    return ["local_search"] + [e for e in GENERAL_FREE_FALLBACK if e in enabled]
 
 
-def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:
-    """剔除确定熔断态引擎（disabled / open 且冷却未过），与 _get_engines_combo
-    内的熔断感知过滤同一语义（half_open 保留探测资格）。
-
-    D4：语言引擎追加、通用保底、TF-IDF 注入等路径在 _get_engines_combo 之外，
-    追加的引擎可能处于熔断态仍进 combo，白占并行槽位。统一统一处理到最终组装后。
-    """
-    if not engine_list:
-        return engine_list
-    try:
-        from circuit_breaker import get_breaker
-        breaker = get_breaker()
-    except Exception:
-        return engine_list
-    out = []
-    for e in engine_list:
-        try:
-            st = breaker.status(e)
-            st_state = st.get("state")
-            if st_state == "disabled":
-                continue
-            if st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
-                continue
-        except Exception:
-            pass
-        out.append(e)
-    return out
 
 
-def _select_language_engines(features: dict | None = None) -> list[str]:
-    """按查询语言选择应追加的语言本地引擎（P2-1 单一入口，与组合无关）。
-
-    多语种（v2.7）：按 primary_lang 追加对应语言的本地引擎——
-      中文 → local_bing；日文 → local_yandex（日文索引更好）或 local_bing；
-      韩文 → local_google（韩国站点覆盖好）或 local_bing。
-    只做选择（已按 enabled 过滤、最多 2 个），不碰既有 combo；
-    route_query 内一次计算、三处合并共用，杜绝各路径逻辑漂移。
-    """
-    if _get_registry is None or not features:
-        return []
-
-    primary_lang = features.get("primary_lang", "")
-    chinese_ratio = features.get("chinese_ratio", 0)
-    sub_engines = _enabled_local_engines()
-    if not sub_engines:
-        return []
-
-    # P2-3：显式语言覆盖优先——「用英文搜 苹果」即使含中文也按 en 选引擎
-    lang_override = features.get("lang_override")
-    if lang_override:
-        if lang_override == "ja":
-            return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
-                    if e in sub_engines][:2]
-        if lang_override == "ko":
-            # local_google 已禁用（反爬强），不再引用死引擎
-            return [e for e in ["local_bing", "local_duckduckgo"]
-                    if e in sub_engines][:2]
-        if lang_override == "zh":
-            return [e for e in ["local_bing"] if e in sub_engines]
-        # en / cyrillic / 其他：中英基线本地引擎（动态 setlang 保底多语言索引）
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
-
-    # 日/韩：优先对应语言本地引擎。注：local_yandex 走 ddgs yandex 后端
-    # （实测 ~2s 可用）；local_google 默认 enabled:false，不引用死引擎。
-    if primary_lang == "ja":
-        return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
-                if e in sub_engines][:2]
-    if primary_lang == "ko":
-        return [e for e in ["local_bing", "local_duckduckgo"]
-                if e in sub_engines][:2]
-
-    if chinese_ratio > 0.1:
-        # 只要含中文字符就追加中文引擎（阈值 0.1 覆盖中英混合查询）
-        # 百度/搜狗质量低，仅作印证；自动追加只用 local_bing
-        return [e for e in ["local_bing"] if e in sub_engines]
-    if primary_lang in (
-        "cyrillic", "thai", "arabic", "hebrew", "greek", "devanagari",
-    ):
-        # 其他非拉丁语：local_bing 靠动态 setlang 吃多语言索引
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
-    if primary_lang in ("mixed", "other", ""):
-        # 弱信号：按 lang_pref（习惯/系统/中英基线）选本地引擎
-        prefer: list[str] = []
-        try:
-            from lang_pref import prefer_langs
-            prefer = prefer_langs(query_lang=primary_lang)
-        except ImportError:
-            prefer = ["zh", "en"]
-        top = prefer[0] if prefer else "en"
-        if top == "ja":
-            return [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
-        if top == "ko":
-            return [e for e in ["local_google", "local_bing"] if e in sub_engines]
-        if top == "zh":
-            return [e for e in ["local_bing"] if e in sub_engines]
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
-    if features.get("has_depth_word"):
-        return [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
-    return []
 
 
-def _merge_language_engines(engine_list: list[str], features: dict | None,
-                            lang_engines: list[str]) -> list[str]:
-    """把预选语言引擎合并进当前 combo（P2-1，三处共用、重复执行结果一致）。
-
-    日/韩：中文域引擎（byted/bocha 等）是噪声源需剔除，且不因「combo 已有
-      local_ 引擎」而跳过——中文引擎对日韩查询无用；
-    其他语种：combo 已含 local_ 引擎则跳过（避免与 _expand_local_search 重复追加）。
-    """
-    if not features:
-        return engine_list
-    result = list(engine_list)
-    # P2-3：显式语言覆盖 ja/ko 与主语言 ja/ko 同等对待（噪声剔除同一套规则）
-    if (features.get("lang_override") or features.get("primary_lang")) in ("ja", "ko"):
-        cn_noise = {"bocha", "byted", "wechat_sogou", "zhihu", "zhihu_global", "baidu_baike"}
-        result = [e for e in result if e not in cn_noise]
-        for eng in lang_engines[:2]:
-            if eng not in result:
-                result.append(eng)
-        return result
-    # 已包含 local_ 引擎则跳过
-    if any(e.startswith("local_") for e in result):
-        return result
-    for eng in lang_engines[:2]:
-        if eng not in result:
-            result.append(eng)
-    return result
 
 
-def _add_language_engines(engine_list: list[str], features: dict | None = None) -> list[str]:
-    """为已路由的查询添加语言相关的本地引擎（补充源，兼容入口）。
-
-    route_query 内已改为「先 _select_language_engines 一次、再
-    _merge_language_engines 三处共用」；本函数保留独立调用能力（重复执行结果一致），
-    供外部或未来调用方使用。
-    """
-    return _merge_language_engines(engine_list, features, _select_language_engines(features))
 
 
-def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
-                          enabled: set[str]) -> list[str]:
-    """P0-001：geo 查询追加 local_openstreetmap（地理编码/POI）。"""
-    if not features or not features.get("has_geo"):
-        return engine_list
-    if "local_openstreetmap" not in enabled:
-        return engine_list
-    if "local_openstreetmap" in engine_list:
-        return engine_list
-    return engine_list + ["local_openstreetmap"]
 
 
 # 语言重排的排除名单改为 engine_families.ENGINE_LANGS 派生（engines_not_for_lang），
@@ -589,156 +287,16 @@ def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
 # （提到「小红书/微信」≠ 搜小红书/微信），通用源覆盖真实主题，防平台噪声全占。
 # anysearch 优先：local_bing 直抓 bing.com 对长中文查询存在降级服务风险
 # （2026-08-29 实测：整条查询被 Bing 降级为单字「拍」匹配，返回字典页）。
-_SOCIAL_ZH_GENERAL = ("anysearch", "local_bing")
 
 
-def _specs_snapshot() -> dict:
-    """引擎 spec 快照（读 config langs 覆盖）；不可用时回退 ENGINE_LANGS 表。
-
-    **已加载才读，不为它去导入。** `engines` 连带 engines_base → urllib/http.client
-    整条 HTTP 栈；而它模块级的 `_engine_specs` 只在 registry 被 `_load_registry()`
-    填充，route 从不加载 registry——旧写法（`from engines import _engine_specs`）
-    付了整笔导入的钱，拿回的却是一个空表，路由结果与「不导入」逐位相同
-    （222 引擎全量比对：0 处差异；config 里声明 langs 的只有 6 个引擎，而
-    回退的 ENGINE_LANGS 表有 42 条，空表反而走的是更全的那条路）。
-    engines 真被导入过时（dispatch / available_engines 之后）两者取到的是
-    同一个 dict 对象，语义不变。
-    """
-    mod = sys.modules.get("engines")
-    if mod is None:
-        return {}
-    return getattr(mod, "_engine_specs", None) or {}
 
 
-def _move_to_tail(combo: list[str], excluded) -> list[str]:
-    """combo 中命中 excluded 的引擎稳定移尾（其余保持原顺序）。"""
-    excl = set(excluded)
-    keep = [e for e in combo if e not in excl]
-    tail = [e for e in combo if e in excl]
-    return keep + tail
 
 
-def _lang_aware_combo_order(combo: list[str], features: dict | None,
-                            domain_name: str | None,
-                            enabled: set[str],
-                            query: str = "") -> list[str]:
-    """语言感知的 combo 排序（返回新列表，不改动传入）。
-
-    双向对称：
-      zh 查询：纯英文社区引擎稳定移尾；social 域把通用中文 web 源提到最前。
-      en/ja/ko 查询：中文专用引擎稳定移尾（patterns 认关键词不认语言，
-      英文查询命中 social 域时 zhihu 排头会垄断 budget + 早停）。
-    排序发生在 engine_policy 截断之前，保证 budget 截断保留的是对查询
-    语言有用的引擎。
-    """
-    if not combo or not features:
-        return combo
-    zh_ratio = features.get("chinese_ratio") or 0
-    primary_lang = features.get("primary_lang")
-    # 汉字占比保底不得命中 ja/ko：假名/谚文文本里的汉字同属 CJK 区段，
-    # 纯 ratio 判定会把日文查询（汉字占比常 >0.15）误入中文分支，
-    # 中文专用源占前排——与 query_rewriter 的语言门控计算方式一致。
-    is_zh = primary_lang == "zh" or (
-        primary_lang not in ("ja", "ko") and zh_ratio > 0.15)
-    if is_zh:
-        ordered = _move_to_tail(
-            combo, engines_demote_for_lang(combo, "zh", _specs_snapshot()))
-        if domain_name == "social":
-            for g in _SOCIAL_ZH_GENERAL:
-                if g in enabled and g in ordered:
-                    ordered = [g] + [e for e in ordered if e != g]
-                    break
-        if domain_name == "zhihu_content" and "zhihu_global" in ordered:
-            # 站内主搜 + 站外全网搜是成对语义：learner 同族按分重排会把
-            # zhihu_global 挪到 anysearch 之后，叠加 auto 预算=2 即被截掉
-            # （37 天仅 53 次的死因）。zh 查询下固定提回 #2。
-            rest = [e for e in ordered if e not in ("zhihu", "zhihu_global")]
-            if "zhihu" in ordered:
-                ordered = ["zhihu", "zhihu_global"] + rest
-            else:
-                ordered = ["zhihu_global"] + rest
-    # 对称分支：非中文查询把中文专用源移尾（含 zh_ratio≤0.15 的混合查询）
-    elif primary_lang in ("en", "ja", "ko"):
-        ordered = _move_to_tail(
-            combo, engines_demote_for_lang(
-                combo, primary_lang or "en", _specs_snapshot()))
-    else:
-        ordered = combo
-    # 其余语言（ru/ar/es/pt/th/vi/…）此前完全不做降级：en/ja/ko/zh 在上方
-    # 分支处理过，这里补上，否则 cinii（声明 ja）在中文查询里、kor_law
-    # （声明 ko）在英文查询里都会占着原位。
-    _lang = _family_lang(features, query)
-    if _lang and _lang not in ("zh", "en", "ja", "ko", "mixed", "other"):
-        ordered = _move_to_tail(
-            ordered, engines_demote_for_lang(ordered, _lang, _specs_snapshot()))
-    # 语言绑定的族（本地新闻流）按查询语言互斥——见函数 docstring 末段。
-    return _filter_lang_bound_family(ordered, features, _specs_snapshot(), query)
 
 
-def _family_lang(features: dict | None, query: str = "") -> str:
-    """选源用的查询语言：lang_override > primary_lang > 查询实词兜底。
-
-    第三档专门补拉丁字母语言的判定缺口（lang_detect 对 noticias/berita/
-    tin tức 只给 en/latin），见 engine_families._LANG_HINT_WORDS 的说明。
-    """
-    lang = (features or {}).get("lang_override") or (features or {}).get("primary_lang") or ""
-    if lang in ("", "en", "latin", "mixed", "other"):
-        hint = lang_hint_from_query(query)
-        if hint:
-            return hint
-    return lang
 
 
-def _filter_lang_bound_family(combo: list[str], features: dict | None,
-                              specs: dict[str, dict[str, Any]] | None,
-                              query: str = "") -> list[str]:
-    """语言绑定族的成员按查询语言互斥：匹配语言的留原位，其余整体移尾。
-
-    与 hot_trending 不同，world_news 族（各国本地新闻流）是**语言绑定**的：
-    俄语查询用韩联社只会拿到韩语新闻，不是「次优」而是「错」。同族内每个
-    源各自服务一种语言，所以选源的第一判据是查询语言，不是 priority。
-
-    **非匹配源一律摘除，不做「移尾保留」**——这是与 engines_demote_for_lang
-    有意不同的一处。那条路径处理的是「同一份内容的不同语言版本」（降级），
-    这条处理的是「完全不同的国家与语言」：俄语查询跑韩联社拿回的是韩语新闻，
-    这不是次优而是错。实测 deep 档（不截断预算）下移尾方案会让韩语查询连跑
-    elpais/tass/aljazeera 等 16 个源，白付网络与配额。
-
-    摘除的代价是「语言判定失误时拿不到该语言源」，但 combo 里始终有语言中立
-    的兜底源（anysearch），不会零结果；判定不确定（mixed/other/空）时整个族
-    不动，按原样保留。
-
-    语言取 lang_override 优先（「用韩语搜 X」的显式意图胜过文本推断），
-    与 _select_language_engines / _lang_must_keep 同一口径。
-
-    specs 允许为空：_specs_snapshot() 在 engines 模块未加载时返回 {}（性能
-    设计，见该函数 docstring），此时 family_of / lang_allows 会回退
-    engine_families 的静态表——新源在那边也声明了一次，所以这里不依赖 spec。
-    """
-    if not combo or not features:
-        return combo
-    lang = _family_lang(features, query)
-    if not lang or lang in ("mixed", "other"):
-        return combo
-    keep: list[str] = []
-    for eng in combo:
-        spec = specs.get(eng)
-        # 两类源在非匹配语言时摘除，不是移尾：
-        #   ① 语言绑定族成员（world_news）：每个源服务一种语言；
-        #   ② 语言独占源（_LANG_EXCLUSIVE_ENGINES，如 cinii=ja）。
-        # 与 engines_demote_for_lang 的分工——那条只管顺序，这条管「该不该
-        # 在场」：移尾在源本来就排末位时等于没动（实测 cinii 在 academic 域
-        # 末位，英文查询照样进预算窗口）。
-        lang_bound = family_of(eng, spec) == "world_news"
-        lang_exclusive = eng in _LANG_EXCLUSIVE_ENGINES
-        if (lang_bound or lang_exclusive) and not lang_allows(eng, lang, spec):
-            continue
-        keep.append(eng)
-    # 族内非匹配成员一律摘除：一个匹配的都没有时退化成「整个族摘掉」（该族
-    # 服务不了这个查询——域 patterns 误伤，或语言不在这 14 种里）；有匹配时
-    # 摘掉的是「别的语言的一手源」。两种情形都不返回它们。通用源仍在 keep
-    # 里兜底，不会零结果。
-    return keep
 
 
 # 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
@@ -755,416 +313,23 @@ def _filter_lang_bound_family(combo: list[str], features: dict | None,
 # bailian 等）的移尾语义是 2026-09-07 review 定下的契约，被
 # tests/test_review_round3 与 test_zh_search_quality 两处锁着；新源从接入起
 # 就按摘除处理，不回溯改既有行为。后续接入语言独占源时加进本表即可。
-_LANG_EXCLUSIVE_ENGINES: frozenset[str] = frozenset({
-    "cinii",     # 日本学术总库（ja）：中文/英文查询拿不到任何可用结果
-})
-
-_LANG_PREFERRED_ENGINES: dict[str, list[str]] = {
-    "ja": ["local_yandex", "local_bing"],
-    "ko": ["local_google", "local_bing"],
-}
 
 
-def _lang_must_keep(features: dict | None, enabled: set[str],
-                    combo: list[str] | None = None,
-                    query: str = "") -> list[str]:
-    """返回语言相关的 must_keep 引擎。
 
-    两档判据，优先级从高到低：
-
-    1. **语言绑定的本地源**（world_news 族中匹配查询语言的成员）。这类源是
-       该语言的唯一一手通道，而通用 SERP（local_bing）只是二手转述——韩语
-       新闻查询被 budget 裁到 2 位时，该保的是韩联社。没有它，本地语言源
-       接进来也永远进不了预算窗口（实测：ko 查询 combo 被裁成
-       [anysearch, local_bing]，yna 在窗口外）。
-    2. 日/韩的通用本地引擎（yandex/google/bing）。专用源默认 disabled 时
-       落到 local_bing；多语言结果质量仍靠 engines_base 动态 setlang。
-    """
-    if not features or not enabled:
-        return []
-    # P2-3：显式语言覆盖（用日文搜/用韩语搜）与主语言同等进入 must_keep
-    lang = _family_lang(features, query)
-    if combo and lang:
-        bound = [e for e in combo if e in enabled
-                 and family_of(e, None) == "world_news"
-                 and lang_allows(e, lang, None)]
-        if bound:
-            return bound[:1]
-    preferred = _LANG_PREFERRED_ENGINES.get(lang, [])
-    for eng in preferred:
-        if eng in enabled:
-            return [eng]
-    return []
 
 
 # 意图 → (期望引擎数, 是否并行)。P0-005 动态并行度。
-_INTENT_PARALLELISM: dict[str, tuple[int, bool]] = {
-    "definition": (1, False),
-    "fact": (1, False),
-    "news": (2, True),
-    "compare": (3, True),
-    "social": (3, True),
-}
 
 # 窄域引擎单点保护：这类引擎「永不返回零结果」或只覆盖单一主题
 # （跨域查询产出噪声，如 mdn 的 quantum computing → Cloud computing）。
 # definition/fact 意图裁到 1 引擎时，若主引擎是窄域引擎，强制保留 2 引擎，
 # 避免单引擎独占时噪声无处可挡。
-_NARROW_ENGINES = frozenset({
-    "mdn", "models_dev", "huggingface", "devto",
-    "wikipedia", "baidu_baike", "openalex", "europepmc",
-})
 
 
-def _apply_intent_parallelism(engine_list: list[str], features: dict | None,
-                              domain: dict | None, mode: str,
-                              default_parallel: bool) -> tuple[list[str], bool]:
-    """P0-005：按意图动态裁剪引擎数与并行度。
-
-    definition/fact → 1 引擎串行；news → 2 引擎并行；compare/social → 3 引擎并行。
-    深度研究词（has_depth_word）视为 research，保持 3 引擎并行。
-    fast 模式强制串行（但仍可裁剪引擎数）。
-
-    Returns:
-        (裁剪后的引擎列表, 是否并行)
-    """
-    if not engine_list:
-        return engine_list, default_parallel
-
-    intents = (features or {}).get("intents") or []
-    is_research = bool((features or {}).get("has_depth_word"))
-
-    target_n: int | None = None
-    want_parallel = default_parallel
-
-    # research/compare 优先（更需要多源）
-    if is_research or "compare" in intents:
-        target_n, want_parallel = 3, True
-    elif "social" in intents:
-        target_n, want_parallel = 3, True
-    elif "news" in intents:
-        target_n, want_parallel = 2, True
-    elif "definition" in intents or "fact" in intents:
-        target_n, want_parallel = 1, False
-        # 窄域引擎单点保护：primary 是窄域引擎时保留 2 引擎并行
-        if engine_list and engine_list[0] in _NARROW_ENGINES and len(engine_list) > 1:
-            target_n, want_parallel = 2, True
-
-    if target_n is None:
-        return engine_list, default_parallel
-
-    trimmed = engine_list[:target_n]
-    if mode == "fast":
-        want_parallel = False
-    if len(trimmed) <= 1:
-        want_parallel = False
-    return trimmed, want_parallel
 
 
-def _select_sub_engines(sub_engines: list[str], features: dict | None = None) -> list[str]:
-    """根据查询特征选择子引擎。"""
-    if not features:
-        # 默认保底：快源优先（brave/yahoo 实测 ~1.1s），ddgs 默认后端慢不主动纳入
-        return [e for e in ["local_bing", "local_brave", "local_yahoo", "local_duckduckgo"]
-                if e in sub_engines]
-
-    primary_lang = features.get("primary_lang", "")
-    chinese_ratio = features.get("chinese_ratio", 0)
-
-    # 多语种（v2.7）：日/韩查询优先对应语言的本地引擎
-    if primary_lang == "ja":
-        return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"] if e in sub_engines]
-    if primary_lang == "ko":
-        return [e for e in ["local_google", "local_bing", "local_duckduckgo"] if e in sub_engines]
-    if chinese_ratio > 0.1:
-        # 百度/搜狗结果质量低（SERP 跳转链为主），仅作印证不主动纳入；
-        # 中文补充源只用 local_bing/local_duckduckgo
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
-    elif features.get("has_technical"):
-        return [e for e in ["local_github", "local_stackoverflow", "local_bing"] if e in sub_engines]
-    elif features.get("has_depth_word"):
-        return [e for e in ["local_arxiv", "local_semantic_scholar", "local_bing"] if e in sub_engines]
-    else:
-        # 2026-09-16 实测校正：原链条 [local_bing, local_duckduckgo, local_mojeek]
-        # 里后两个**都已损坏**——local_duckduckgo 连接失败；local_mojeek 被
-        # Mojeek 的 captcha 页拦住（HTTP 200 + <title>Captcha</title>，属静默
-        # 失败，靠 anti-bot 检测才判成 blocked）。它们占着 combo 槽位，而真正
-        # 能出结果的独立索引反而进不来（marginalia/wiby/searchmysite 实测各 10 条）。
-        #
-        # 换成可用且**更契合长尾**的独立索引：这三个都不是大厂代理，正是冲
-        # 「小网站/独立博客/非商业页面」去的，比再塞一个同类大引擎更有价值。
-        # local_bing 仍打头（唯一稳定可用的大厂 SERP）。
-        #
-        # ⚠️ 它们不是 local_* 子引擎，所以不能用 sub_engines 过滤——那会让这一支
-        # 恒等于 [local_bing]（实测英文通用查询只剩 1 个源），下面那三个名字
-        # 永远等不到。判据改成「本地子引擎 OR 已启用的顶层引擎」。
-        try:
-            from engines import available_engines
-            _available = set(available_engines())
-        except Exception:
-            _available = set()
-        return [e for e in ["local_bing", "marginalia", "wiby", "searchmysite"]
-                if e in sub_engines or e in _available]
 
 
-def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "auto",
-                       features: dict | None = None) -> list[str]:
-    """从域配置获取 engines_combo，过滤不可用/付费（budget 模式）。
-    自动将 local_search 扩展为子引擎（消灭黑盒）。
-
-    注意：depth/context 的 combo 预算与 research_only 截断在 route_query 末尾
-    统一走 engine_policy.filter_combo_by_policy，本函数只做可用性/成本/健康过滤。
-    """
-    combo = domain.get("engines_combo", [])
-    primary = domain.get("primary", "anysearch")
-    fallback = domain.get("fallback")
-    if combo:
-        filtered = [e for e in combo if e in enabled]
-    else:
-        engines = [primary]
-        if fallback and fallback != primary:
-            engines.append(fallback)
-        filtered = [e for e in engines if e in enabled]
-    # P0-1：fallback 语义修复——combo 非空时也并入 fallback 候选。
-    # 旧逻辑只在 combo 为空时读 fallback，而 69 个域全部配置了 engines_combo，
-    # 导致 22 个真备用 fallback 全部失效（备用源形同虚设）。
-    # 追加到尾部 + 串行执行：正常路径 primary 先跑，early-stop 命中即不触碰
-    # fallback（零额外开销）；仅当 primary 无结果/故障时才轮到 fallback 保底。
-    if fallback and fallback != primary and fallback in enabled and fallback not in filtered:
-        filtered.append(fallback)
-
-    # 🔑 关键改动：将 local_search 扩展为子引擎
-    if "local_search" in filtered:
-        filtered = _expand_local_search(filtered, features)
-
-    # F7：远端配额耗尽（如 byted 10406 Free quota exhausted）→ 全模式排除，
-    # 备用源自然接管，到周期边界惰性自愈（详见 quota.mark_remote_exhausted）。
-    # fail-open：全部被排除时保留原 combo，交由执行层把配额错误暴露出来。
-    try:
-        _qm = get_quota_manager()
-        if filtered:
-            _alive = [e for e in filtered if not _qm.is_hard_down(e)]
-            if _alive:
-                filtered = _alive
-    except Exception:
-        pass
-
-    # fast/budget 模式过滤付费引擎
-    if mode in ("fast", "budget"):
-        quota_mgr = get_quota_manager()
-        filtered = [e for e in filtered if quota_mgr.is_available(e, mode=mode)]
-
-    # fast/budget 模式优先前置零成本子引擎
-    if mode in ("fast", "budget"):
-        free_locals = [e for e in filtered if e.startswith("local_")]
-        others = [e for e in filtered if not e.startswith("local_")]
-        filtered = free_locals + others
-
-    # 垂直域主源保护
-    # 实测：wikipedia 分数常 <0.3，org_entity 在 wikidata 熔断时会只剩 baidu，英文 HQ 题脏结果。
-    # modal_card 的 bocha_ai/bocha 为 cost_tier=low（0.7），fast 的 0.85 阈值会误杀整 combo。
-    _VERTICAL_PROTECT = frozenset({
-        "film_search", "sports_search", "geo_places", "org_entity", "media_search",
-        "modal_card",
-        # zhihu_content 的 zhihu_global 曾被 learner 低分过滤饿死（历史用量少
-        # →分低→更不被用），37 天仅 53 次；断掉「饿死循环」
-        "zhihu_content",
-        # soil_agri 的 openfoodfacts（食品成分库）同理：新源无历史分，
-        # 实测在 route_query 内被 learner 摘掉（combo 只剩 [usda, anysearch]），
-        # 而单独调 _get_engines_combo 时还在——差别就是 learner 是否已加载。
-        "soil_agri",
-        # world_news 的 14 个本地语言源有同一风险且更严重：它们首次运行时
-        # anysearch 先返回并 early-stop，语言源拿不到贡献分 → 分数低于 0.3 →
-        # 被自适应过滤摘出 combo → 下次更不可能被选中。实测：接线当天跑过一次
-        # 真实搜索后，`오늘 뉴스` 的 combo 就从 [anysearch, yna] 退化成
-        # [anysearch, local_bing]（源还在 enabled，只是被 learner 摘掉）。
-        # 该族每个源服务一种语言、无同族可替代，被摘掉即该语言通道消失。
-        "world_news",
-    })
-    primary = domain.get("primary")
-    domain_name = domain.get("name")
-    protect: set[str] = set()
-    if primary:
-        protect.add(primary)
-    # 仅 modal_card 整 combo 免 cost 裁剪（结构化路径不可被 anysearch 顶替）
-    if domain_name == "modal_card":
-        protect.update(filtered)
-        protect.update(domain.get("engines_combo") or [])
-
-    # fast 模式：只保留免费引擎；modal_card / primary 保护成员例外
-    if mode == "fast":
-        from config import get_cost_factor
-        filtered = [
-            e for e in filtered
-            if e in protect or get_cost_factor(e) >= 0.85
-        ]
-
-    # 自适应学习过滤（保留主引擎 + 垂直域 combo 成员不被误杀）
-    if _adaptive_learner is not None and len(filtered) > 1:
-        original = filtered[:]
-        if domain_name in _VERTICAL_PROTECT:
-            protect = set(original) | protect
-        filtered = [
-            e for e in filtered
-            if e in protect or e == primary or _adaptive_learner.get_score(e) >= 0.3
-        ]
-        if not filtered:
-            filtered = original
-
-    # 网络环境感知排序（独立于过滤，主引擎永远第一）。
-    # 只重排「非主引擎」，且只在同能力族内排序（避免跨族调整破坏
-    # combo 预算——垂直族必须保持在 web_general 之前）。
-    # 有显著分数差（≥0.15）时同族内快源前置；不足则顺序不变（缓存键稳定）。
-    if _adaptive_learner is not None and len(filtered) > 1:
-        primary = domain.get("primary")
-        try:
-            from engine_families import family_of
-            # 引擎声明必须传下去：config.yaml 的 family 字段才是来源。
-            # 不传时 family_of 会退回静态覆盖表、再退到默认值 web_general——
-            # 实测 16 个引擎（含本次新接的 osv / cisa_kev / federal_register /
-            # unpaywall / opencitations，以及 sports 三个、weather 两个）因此
-            # 被当成通用源，在下面「同族按分数排序」里跟 anysearch(0.886) 同族，
-            # 于是一个个被挤到后面（us_legal 的 federal_register 就是这么掉到
-            # 第三位的，而它的域声明顺序本来是第二位）。
-            _specs = get_engines()
-            if not isinstance(_specs, dict):
-                _specs = {}
-        except ImportError:
-            family_of = None
-            _specs = {}
-
-        def _fam(e: str) -> str:
-            try:
-                return family_of(e, _specs.get(e)) if family_of else "?"
-            except Exception:
-                return "?"
-
-        if primary and primary in filtered:
-            primary_eng, rest = primary, [e for e in filtered if e != primary]
-        else:
-            primary_eng, rest = None, list(filtered)
-        if len(rest) > 1 and family_of is not None:
-            # 按原始顺序分组（同族相邻），族内按分数稳定排序
-            grouped: list[str] = []
-            seen_fam: set[str] = set()
-            for e in rest:
-                f = _fam(e)
-                if f not in seen_fam:
-                    seen_fam.add(f)
-                    members = [x for x in rest if _fam(x) == f]
-                    if len(members) > 1:
-                        scored = [(x, _adaptive_learner.get_score(x)) for x in members]
-                        top_score = max(s for _, s in scored)
-                        laggards = [x for x, s in scored if top_score - s >= 0.15]
-                        if laggards and len(laggards) < len(scored):
-                            fast = [x for x, s in scored if top_score - s < 0.15]
-                            grouped.extend(fast + laggards)
-                        else:
-                            grouped.extend(members)
-                    else:
-                        grouped.extend(members)
-            rest = grouped
-        filtered = ([primary_eng] if primary_eng else []) + rest
-
-    # 健康检查过滤：只对本地子引擎（local_*）做健康判定，非本地引擎
-    # 无条件保留。两条路径（scripts health_check / health_probe fallback）
-    # 必须保持同一语义，否则被劫持/缺模块时行为会静默漂移（曾导致
-    # wikipedia 被 health.db 的旧探测失败记录误过滤）。
-    try:
-        from health_check import is_available as _hc_available
-        healthy = []
-        for e in filtered:
-            if e.startswith("local_"):
-                if _hc_available(e):
-                    healthy.append(e)
-            else:
-                healthy.append(e)
-        if healthy:
-            filtered = healthy
-    except ImportError:
-        try:
-            from health_probe import get_engine_status
-            healthy = []
-            for e in filtered:
-                if e.startswith("local_"):
-                    if get_engine_status(e).get("available", True):
-                        healthy.append(e)
-                else:
-                    healthy.append(e)
-            if healthy:
-                filtered = healthy
-        except ImportError:
-            pass
-
-    # ── 配额/熔断感知：确定不可用源剔除 + 候选滚动（无缝切换）──────────
-    # 正常路径（全部引擎可用）顺序不变 → 引擎集合不变 → 缓存键不变 → 零速度倒退。
-    # P0-3：disabled / open+cooldown 的引擎是「确定不可用」——不再沉底保留
-    # （沉底后仍会被执行，白耗一次注定失败的超时），而是直接剔除，让域内
-    # 候选（fallback / combo 其他成员，天然同主题）自动顶位；域内无候选时
-    # 集合收缩，交由 route_query 尾部通用保底 / recovery 按 family 检查补源。
-    # open 但 cooldown 已过 → half-open 探测资格，保留（与 allow() 一致）。
-    # 缓存键基于 sorted(engines) 集合：剔除改变集合→键变，但 open+cooldown
-    # 时负缓存已生效，键变化无损失；且故障源不再被调用。
-    usable, unusable = [], []
-    for e in filtered:
-        ok = True
-        try:
-            if not get_quota_manager().is_available(e, mode=mode):
-                ok = False
-        except Exception:
-            pass
-        if ok:
-            try:
-                from circuit_breaker import get_breaker
-                # 必须用 allow() 而非 status()：allow 内置状态转移（disabled/open
-                # 冷却超时 → half_open 探测资格），status 只读。曾导致 disabled
-                # 引擎在 route 层被永久剔除、执行层 allow() 永远不被调用、
-                # B4 恢复通道成死代码（bocha 卡死 disabled 一天余的根因）。
-                allowed, _reason = get_breaker().allow(e)
-                if not allowed:
-                    ok = False
-            except ImportError:
-                pass
-            except Exception:
-                pass
-        (usable if ok else unusable).append(e)
-    if unusable and usable:
-        filtered = usable
-    elif unusable and not usable:
-        # 域内全部不可用：返回空集，由 route_query 尾部保底（通用免费源 /
-        # modal_card 保留声明引擎供执行层返回 error item）
-        filtered = []
-
-    # ── 能力族去重 + 互补回填（标准化调用契约）────────────────────────
-    # 全网搜索族同质化最高（byted/bocha/duckduckgo/octen 都是通用网页检索），
-    # 同族堆叠纯属浪费预算位：web_general 至多保留 2 个，垂直族保留多源。
-    # config.yaml 引擎声明的 family 字段是来源（spec_lookup 传入 family_of，
-    # 不再只看静态覆盖表）。去重腾出的槽位由 complement_refill 用互补能力族
-    # 引擎回填（与域主引擎 coverage 重叠的高优先级源），兑现「给其他族腾出
-    # 预算位」；已有垂直成员的域不再追加，尊重域作者配置。
-    try:
-        from engine_families import dedupe_by_family, complement_refill
-        specs = get_engines()
-        if isinstance(specs, dict):
-            # 只收缩 web_general：垂直族（academic/code/finance 等）保留多源
-            # 交叉验证，不去重（股票域 sina/eastmoney 双行情源必须共存）。
-            deduped = dedupe_by_family(
-                filtered, max_per_family=2, spec_lookup=specs,
-                limit_families=frozenset({"web_general"}),
-            )
-            removed = len(filtered) - len(deduped)
-            if removed > 0:
-                filtered = complement_refill(
-                    deduped, enabled=enabled, spec_lookup=specs,
-                    domain_primary=domain.get("primary"),
-                    max_slots=min(2, removed),
-                )
-            else:
-                filtered = deduped
-    except ImportError:
-        pass
-
-    return filtered
 
 
 # ── 垂直域「新专源」保底表（批次九）────────────────────────────────────────────
@@ -1179,227 +344,15 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
 #
 # 收录计算方式：只收「能力与既有源不重叠」的源；同能力横向重复
 # （如 art_museum 的 artic vs cleveland）不收，避免用同质源挤掉同质源。
-_VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
-    "species_search": ("worms",),               # 海洋分类学权威命名，无重叠
-    "medical": ("who_don",),                    # 疫情通报，与 clinicaltrials/openfda 不同能力
-    "book_search": ("k10plus",),                # 德语区最大联合目录，补区域空白
-    "film_search": ("tvmaze",),                 # 电视剧元数据（imdb/douban 偏电影）
-    "sports_search": ("openf1", "openligadb"),  # F1/德甲结构化赛程比分
-    "org_entity": ("ror",),                     # 研究机构标识（含域名映射）
-    "media_search": ("deezer", "listenbrainz"),  # 国际曲库 + 开源收听记录，能力互不重叠
-    # 2026-09-16：五个免密钥国内源接线。共同点是「补结构性空白」而非同质重复，
-    # 故声明在既有源之后、由本表加槽，不用新源挤掉既有源的位次。
-    "hot_trending": ("weibo_hot", "douyin_hot"),  # 微博/抖音两条主榜单，该域原先一条都没有
-    "cn_tech_community": ("csdn",),               # 中文技术社区最大一站，补掘金/少数派之外
-    "financial_news": ("wallstreetcn",),          # 快讯流上游与财联社/金十不同源
-    "weather_query": ("weather_cn",),             # 国内城市实况，补国际源的城市覆盖缺口
-    # 2026-09-17：国际新闻与事实核查两个新域。前者的三个种子按 feed_mode=hot
-    # 给「最新流」语义（与话题检索分流，见 engines_builders_feeds 说明）；
-    # 后者补声明级核验——argo 此前没有任何「这个说法被判真伪」的一手源。
-    "intl_news_flash": ("guardian_rss", "france24", "dw_news"),  # 一手外媒实时流，补英文主流媒体直采空白
-    "claim_check": ("factcheck_org", "full_fact"),               # 美/英两法域核查口径
-    # 2026-09-19：academic 域两个源。core 是**新增**（开放获取全文 + PDF 直链，
-    # 与 openalex/crossref 的元数据、arxiv/biorxiv 的预印本分层不同）；
-    # local_pubmed 是**修复**（旧实现静默 400 且解析不出字符串数组，实测 0 条，
-    # 详见 engines_builders_batch9._build_pubmed_engine 文档串）。两者声明在
-    # 既有源之后，由本表加槽，不挤掉 arxiv/openreview 等既有位次。
-    "academic": ("local_pubmed", "core", "cinii"),     # 生物医学全文 + 机构仓储开放获取 + 日本学术 + 数学索引
-    # 2026-09-21：academic 补两个国别/学科专门源。位次 5/6 是照本域上方注释
-    # 的既有实践选的（deepest=6 → 加槽后预算覆盖到 6，前四位次一律不动）。
-    # cinii 声明 langs=ja，靠 engines_demote_for_lang 的语言专用源降级，
-    # 只在日语查询里占位；zbmath 语言中立，数学查询与 deep 档可达。
-    "soil_agri": ("openfoodfacts",),   # 食品成分库：补 usda（单一国别）之外的多国食品数据
-}
 
 # 垂直域主源保护名单：这些域的专属源被 budget 裁掉后该域等于没源可用。
 # 模块级常量（原先定义在 route_query 内，每次调用重建一个 18 元素 frozenset）。
-_VERTICAL_KEEP: frozenset[str] = frozenset({
-    "film_search", "sports_search", "geo_places", "org_entity", "media_search",
-    "modal_card",
-    "astro_space", "energy_grid", "transport_rt", "vehicle_data",
-    "japan_law", "soil_agri", "species_search", "art_museum",
-    "anime_encyclopedia", "book_search", "medical", "earth_science",
-})
 
 
-def _new_source_budget_extra(
-    domain: dict[str, Any] | None,
-    engines_combo: list[str],
-    enabled: set[str],
-    *,
-    mode: str,
-    depth: str,
-    context: str,
-    live_combo: list[str] | None = None,
-) -> int:
-    """垂直域「新专源」的加槽额度（0 = 不加槽，行为与改造前逐位一致）。
-
-    按新专源在 combo 中的**最深位次**定额度，保证它落在本模式预算之内：
-    位次 d 的源需要 budget >= d，故 extra = max(d - base, 0)。
-
-    调用方应传域**声明**的 combo（不是已被前置裁剪动过的当前列表），
-    否则新源被摘掉后额度恒为 0——详见
-    `_apply_policy_with_new_source_slots` 的说明。
-
-    `live_combo` 是当前（已被上游重排过的）combo，用于第二处位次：新源**还在
-    combo 里、但被重排推到预算窗口之外**。只按声明位次定额度会漏掉这一态——
-    声明位次恰好等于预算时（financial_news 的 wallstreetcn：位次 3 = 预算 3）
-    extra 恒为 0，而 `_apply_policy_with_new_source_slots` 的 must_keep 补位
-    只在「源已不在 combo 里」时触发，两处保护同时失效，源被静默截断。
-    2026-09-16 实测：「财经」丢掉 wallstreetcn、「财经新闻」保住，同一个域
-    两种结果。位次取当前 combo 的较大者后额度随之抬高，新源留在预算内，且
-    额度是**扩容**不是腾位——既有源一个不少。
-
-    上限按模式分档 —— fast 强制串行（见 `_apply_intent_parallelism`），加槽直接
-    乘在延迟上，故上限 2；auto/balanced 走并行，放宽到 4。deep/research 本就
-    不截断（base 为 None），extra 无意义。
-
-    domain 可能为 None（TF-IDF 无命中时的 catch-all 分支），此时无域可谈，返回 0。
-    """
-    if not domain or not engines_combo:
-        return 0
-    pending = [
-        e for e in _VERTICAL_NEW_SOURCE.get(domain.get("name"), ())
-        if e in engines_combo and e in enabled
-    ]
-    if not pending:
-        return 0
-    deepest = max(engines_combo.index(e) + 1 for e in pending)
-    if live_combo:
-        # 新源在 live_combo 里的位次（可能比声明位次更靠后，见 docstring）
-        deepest = max(
-            [deepest] + [live_combo.index(e) + 1 for e in pending if e in live_combo]
-        )
-    try:
-        from engine_policy import combo_budget
-        base = combo_budget(mode=mode, depth=depth, context=context)
-    except Exception:
-        return 0
-    if base is None:  # 不截断的模式（deep/research）
-        return 0
-    cap = 2 if ((mode or "auto") in ("fast", "budget")
-                or (depth or "fast") == "fast") else 4
-    return min(max(deepest - base, 0), cap)
 
 
-def _apply_engine_policy(
-    engines_combo: list[str],
-    *,
-    mode: str = "auto",
-    depth: str = "fast",
-    context: str = "search",
-    engines_boost: list[str] | None = None,
-    enabled: set[str] | None = None,
-    must_keep: list[str] | None = None,
-    budget_extra: int = 0,
-) -> list[str]:
-    """boost 垂直源 + tier/budget 截断（单一策略入口）。
-
-    must_keep：预算截断后仍强制保留的引擎（如 geo 的 local_openstreetmap），
-    必要时从尾部腾位，避免特化源被 budget 裁掉。
-
-    budget_extra：垂直域新专源的**加槽**额度。与 must_keep 的区别是「不腾位、
-    只扩容」——must_keep 会挤掉既有可用源（实测会把 douban_movie/musicbrainz
-    挤出），而新专源与既有源多为互补能力，应当共存而非替换。
-    """
-    try:
-        from engine_policy import boost_into_combo, combo_budget, filter_combo_by_policy
-    except ImportError:
-        return engines_combo
-    out = list(engines_combo or [])
-    if engines_boost:
-        out = boost_into_combo(out, engines_boost, enabled=enabled)
-    out = filter_combo_by_policy(out, mode=mode, depth=depth, context=context,
-                                 budget_extra=budget_extra)
-    if must_keep:
-        budget = combo_budget(mode=mode, depth=depth, context=context,
-                              extra=budget_extra)
-        keep_set = set(must_keep)
-        for e in must_keep:
-            if not e or e in out:
-                continue
-            # must_keep 强制保留，不因 enabled 缺失丢弃
-            # （modal_card 缺 key 时仍保留 bocha_ai/bocha，由执行层返回 error item）
-            if budget is not None and len(out) >= budget:
-                # 替换末位「非保底」成员，腾出槽位；保底成员之间不互踩
-                # （modal_card 整 combo 保底：bocha/train 依次补位时不得顶掉彼此）
-                replace_idx = next(
-                    (i for i in range(len(out) - 1, -1, -1)
-                     if out[i] not in keep_set),
-                    None,
-                )
-                if replace_idx is not None:
-                    out = out[:replace_idx] + out[replace_idx + 1:] + [e]
-                else:
-                    # 尾部全是保底成员：直接追加（保底优先于预算）
-                    out.append(e)
-            else:
-                out.append(e)
-        # 去重保序
-        seen: set[str] = set()
-        deduped: list[str] = []
-        for e in out:
-            if e not in seen:
-                seen.add(e)
-                deduped.append(e)
-        out = deduped
-    return out
 
 
-def _apply_policy_with_new_source_slots(
-    domain: dict[str, Any] | None,
-    engines_combo: list[str],
-    *,
-    mode: str,
-    depth: str,
-    context: str,
-    enabled: set[str] | None = None,
-    engines_boost: list[str] | None = None,
-    must_keep: list[str] | None = None,
-) -> list[str]:
-    """按域预算截断 combo，并为该域的「新专源」加槽（不腾位）。
-
-    正则域命中分支与 catch-all 分支此前各抄一份
-    `_new_source_budget_extra(...)` + `_apply_engine_policy(...)`（参数与注释
-    逐字相同）；收紧成单一入口后，加槽计算方式只有一处可改。
-
-    **为什么额度按「声明位次」而非当前 combo 算**：进到这里的 combo 已经被
-    两道前置裁剪动过手——`_get_engines_combo` 的 web_general 能力族去重
-    （max_per_family=2）与 `_apply_intent_parallelism` 的意图裁剪。新专源
-    声明在 combo 后排，正是这两道裁剪的常客，源一旦被摘掉，按当前 combo
-    算的额度就恒为 0，加槽机制被静默废掉。实测两例（2026-09-13）：
-      - sports_search：openf1/openligadb 未声明 family → 落 web_general，
-        被族去重摘掉，加槽恒不生效；
-      - org_entity：ror 被意图裁剪摘掉，加槽恒不生效。
-    故额度按域**声明**的位次算；被摘掉的新专源在同一额度内补回（额度不够
-    时不强塞，交回既有 must_keep 换位逻辑，避免反过来挤掉既有源）。
-
-    额度取「声明位次」与「当前 combo 位次」的**较大者**（`live_combo` 参数）。
-    只取声明位次还有第二种失效态：源**没被摘掉，只是被排到窗口之外**。此时
-    `e not in engines_combo` 为假，上面那段补位不触发；而声明位次恰好等于预算
-    时 extra 也是 0——两处保护同时失效，源被预算静默截断。实测（2026-09-16）
-    financial_news 的 wallstreetcn：声明位次 3 = auto/balanced 预算 3，查询
-    「财经」时被自适应重排挤到 eastmoney 之后而落选，「财经新闻」时保住。
-    取较大者后该源额度为 1，两个源并存（扩容而非腾位）。
-    """
-    declared = list((domain or {}).get("engines_combo") or [])
-    live = [e for e in _VERTICAL_NEW_SOURCE.get((domain or {}).get("name"), ())
-            if e in declared and (enabled is None or e in enabled)]
-    keep = list(must_keep or [])
-    for e in live:
-        if e not in engines_combo and e not in keep:
-            keep.append(e)
-    return _apply_engine_policy(
-        engines_combo, mode=mode, depth=depth, context=context,
-        engines_boost=engines_boost, enabled=enabled,
-        must_keep=keep or None,
-        budget_extra=_new_source_budget_extra(
-            domain, declared or engines_combo, enabled or set(),
-            mode=mode, depth=depth, context=context,
-            # 传当前 combo：新源还在里面但被重排推出窗口时，额度要按它在
-            # 当前 combo 的位次算（只在声明位次上算会得到 0，见该函数说明）
-            live_combo=engines_combo),
-    )
 
 
 # ── 路由主函数 ─────────────────────────────────────────────────────────────────
@@ -1835,7 +788,7 @@ def route_query(query: str, engine_override: str = "auto",
             reason=(
                 f"{_feature_labels(features)} → 命中域 [{domain.get('name', '?')}]"
                 + (f" [TF-IDF→{tfidf_best}]" if tfidf_best else "")
-                + (f" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in engines_combo else "")
+                + (" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in engines_combo else "")
                 + (f" [boost={engines_boost}]" if engines_boost else "")
                 + f" → {_engine_display(engines_combo[0])}"
             ),
@@ -1991,144 +944,6 @@ def route_query(query: str, engine_override: str = "auto",
         mode=mode, depth=depth, context=context,
         login_hint=_detect_login_intent(query, None),
     )
-
-
-# ── 路由决策缓存（跨进程） ─────────────────────────────────────────────────────
-#
-# 为什么需要（2026-09-17 实测）：route_query 的**首次调用**要付约 103 ms 的
-# 进程级初始化——238 条域正则编译 33 ms（而跑完全部匹配只要 0.2 ms）、惰性导入、
-# 引擎环境/准入与 TF-IDF 装载；同进程内的后续调用只要 3.7 ms。CLI 每次调用都是
-# 新进程，于是这笔启动税每次重付。实测：跳过一次 route_query 后，缓存命中的
-# 一次完整搜索只要 26 ms（对比 route 首调 137 ms + 执行 3 ms）。
-#
-# 判据为什么与 config 磁盘缓存不同：那一层的产物被当作**事实**（db_path 等），
-# 必须逐字节正确，所以用内容摘要；这一层的产物是**优化结果**，偏差的后果只是
-# 一段时间内引擎排序不最优，且有 TTL 与下游失败分型兜底，故用 config_stamp()
-# 这个既有的 mtime 综合戳（registry 热加载同款）——键计算从约 5 ms 降到 0.1 ms。
-
-_ROUTE_CACHE_SCHEMA = 1
-# TTL 只兜自适应学习器（adaptive.db）的渐进漂移——影响路由的持久状态
-# （config 改动 / 额度耗尽 / 熔断禁用）都在指纹里，变了键就换。原值 300 s
-# 让隔了几分钟的重复查询白付整笔 route_query 启动税（实测 130–300 ms），
-# 而指纹盖不住的那点排序漂移在一小时内不构成路由错误，放宽到 1 h。
-_ROUTE_CACHE_TTL_S = 3600.0
-_ROUTE_CACHE_MAX_ENTRIES = 200
-
-
-def _route_cache_enabled() -> bool:
-    """ARGO_ROUTE_CACHE=0/false/no/off 关闭；判定链不可用时按「开」处理。
-
-    缓存是纯性能优化，关掉不影响正确性；判不开时维持既有行为（每次都实算）。
-    """
-    try:
-        from engine_env import env_flag
-        return env_flag("ARGO_ROUTE_CACHE", default=True)
-    except Exception:
-        return True
-
-
-def _route_cache_file():
-    import argo_paths
-    return argo_paths.state_path("route-cache.json")
-
-
-def _route_state_fingerprint() -> str:
-    """影响路由决策的可变状态摘要；取不到就返回空串（等价于不用缓存）。
-
-    - `config_stamp()`：config.yaml 与外置声明的 mtime，覆盖 enabled / domains /
-      engines_combo 的改动。
-    - 配额与熔断取**派生集合**（已耗尽额度 / 已自动禁用），不取状态文件的字节或
-      mtime。为什么：`quota.json` 每次运行都会被状态机重写（mtime 必变），文件里的
-      用量计数也随每次搜索变动——**实测拿 mtime 做摘要会让缓存 100% 失效**
-      （第二次调用就换了键）；而真正改变路由结果的只是「哪些源现在不可用」这个
-      集合，它只在源真的挂掉或恢复时变化。
-
-    刻意**不含** adaptive.db：自适应学习器每次搜索都写它，同理会让缓存立即失效；
-    它只影响引擎排序的软信号、变化渐进，由 TTL 兜住。
-
-    这是**粗粒度**信号：覆盖「源挂了 / 被禁 / 额度耗尽」这类持久状态，瞬时节流
-    （rpm 抖动）不在其中，由 TTL 兜住。空串判据与 config 磁盘缓存 digest 取不到
-    时的保守选择一致：空摘要永不等于任何已存条目的键，因此不会读到旧结论。
-    """
-    try:
-        from config import config_stamp
-        parts = [f"cfg={config_stamp():.0f}"]
-    except Exception:
-        return ""
-    try:
-        from quota import get_quota_manager
-        marks = get_quota_manager().remote_exhausted_marks()
-        parts.append("qe=" + ",".join(sorted(marks)))
-    except Exception:
-        return ""
-    try:
-        from circuit_breaker import get_breaker
-        parts.append("cb=" + ",".join(sorted(get_breaker().auto_disabled())))
-    except Exception:
-        return ""
-    return "|".join(parts)
-
-
-def _route_cache_key(query: str, engine_override: str, mode: str, depth: str,
-                     context: str, engines_boost: list[str] | None,
-                     fingerprint: str) -> str:
-    import hashlib
-    import json
-    raw = json.dumps({
-        "v": _ROUTE_CACHE_SCHEMA,
-        # 归一化空白：同一问题多打几个空格不该是两次路由
-        "q": " ".join(str(query or "").split()),
-        "eo": engine_override or "auto",
-        "mode": mode, "depth": depth, "context": context,
-        "boost": [str(b) for b in (engines_boost or [])],
-        "fp": fingerprint,
-    }, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
-
-
-def _route_cache_read() -> dict[str, Any]:
-    import json
-    try:
-        payload = json.loads(_route_cache_file().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    if not isinstance(payload, dict) or payload.get("schema") != _ROUTE_CACHE_SCHEMA:
-        return {}
-    entries = payload.get("entries")
-    return entries if isinstance(entries, dict) else {}
-
-
-def _route_cache_prune(entries: dict[str, Any]) -> dict[str, Any]:
-    now = time.time()
-    fresh = {k: v for k, v in entries.items()
-             if isinstance(v, dict)
-             and now - float(v.get("ts") or 0) <= _ROUTE_CACHE_TTL_S}
-    if len(fresh) > _ROUTE_CACHE_MAX_ENTRIES:
-        newest = sorted(fresh.items(),
-                        key=lambda kv: float(kv[1].get("ts") or 0), reverse=True)
-        fresh = dict(newest[:_ROUTE_CACHE_MAX_ENTRIES])
-    return fresh
-
-
-def _route_cache_write(entries: dict[str, Any]) -> None:
-    import argo_paths
-    try:
-        argo_paths.atomic_write_json(
-            _route_cache_file(),
-            {"schema": _ROUTE_CACHE_SCHEMA, "entries": entries},
-            indent=None,
-        )
-    except Exception:
-        return
-
-
-def invalidate_route_cache() -> bool:
-    """删除磁盘上的路由决策缓存（测试隔离与显式失效用）。"""
-    try:
-        _route_cache_file().unlink()
-        return True
-    except OSError:
-        return False
 
 
 def route_query_cached(query: str, engine_override: str = "auto",
