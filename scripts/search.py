@@ -86,6 +86,8 @@ from search_rank import (  # noqa: E402
     rerank_results,
     rrf_merge,
 )
+from quota import _QuotaBatch  # noqa: E402  # 配额记账收集器（规范层）
+from search_entry import _SearchHooks, dispatch, prepare  # noqa: E402
 from search_pipeline import (  # noqa: E402
     _SearchRequest,
     _SearchRun,
@@ -192,31 +194,6 @@ def _missing_env_for(eng: str) -> list[str]:
         return []
 
 
-class _QuotaBatch:
-    """一次搜索的配额记账收集器（累积 → 一次性写入文件）。
-
-    为什么不是每引擎各写一次：每次 record 都是「全量状态序列化 + rename」，
-    一次 5 引擎搜索即 5 次全量写。合并后写盘次数从 N 降到 1，且整批在
-    同一个跨进程文件锁内完成（`QuotaManager.record_many`）。
-
-    失败静默：记账属于观测层，任何异常都不得拖累搜索主路径。
-    """
-
-    def __init__(self) -> None:
-        self._entries: list[tuple[str, bool]] = []
-
-    def add(self, engine: str, success: bool) -> None:
-        self._entries.append((engine, success))
-
-    def flush(self) -> None:
-        entries, self._entries = self._entries, []
-        if not entries:
-            return
-        try:
-            from quota import get_quota_manager
-            get_quota_manager().record_many(entries)
-        except Exception:
-            pass
 
 
 def _record_quota(engine: str, success: bool) -> None:
@@ -475,181 +452,11 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                    sort: str = "relevance",
                    on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None,
                    timing: StageTiming | None = None) -> dict[str, Any]:
-    """执行搜索：缓存 → 熔断/负缓存 → 引擎 → 融合 → 精排 → 过滤 → 写缓存。"""
-    domain = decision.get("domain") or "general"
-    engine_label = decision.get("engine", "auto")
-    engines_combo = decision.get("engines_combo", decision.get("engines", [engine_label]))
-    # 防御：过滤空引擎名（空串会在 registry 查无 → 空结果 → 熔断空键 ''）。
-    # 全空时保底 anysearch，防止下方 engines[0] IndexError（route 层已保证
-    # combo 非空，此处仅防畸形 decision 直接调用 execute_search）。
-    engines = [e for e in engines_combo if e] or ["anysearch"]
-    parallel = decision.get("parallel", False) and len(engines) > 1
-
-    # P0-001：查询理解 — clean_query 用于检索，exclude_terms 用于融合后过滤
-    exclude_terms: list[str] = []
-    retrieval_query = query
-    qu = None
-    try:
-        from query_understanding import _understand_cached as understand
-        qu = understand(query)
-        exclude_terms = qu.exclude_terms
-        # 仅当去否定片段后仍有实义内容时才替换检索词，避免空检索
-        if qu.clean_query and qu.clean_query.strip():
-            retrieval_query = qu.clean_query
-    except ImportError:
-        pass  # query_understanding 不可用
-    except Exception as e:
-        import logging
-        logging.getLogger("unified_search").debug(f"查询理解跳过: {type(e).__name__}")
-
-    # 词形规范化：全角→半角、拆斜杠、压多余空格（提升精确源命中，治型号/日期分隔符）
-    try:
-        from query_enhance import normalize_query
-        retrieval_query = normalize_query(retrieval_query)
-    except ImportError:
-        pass
-
-    if on_progress:
-        on_progress(Stage.START, {"query": query})
-
-    # 网络环境感知：慢网放大超时预算（避免误杀），快网收紧（更快响应）
-    _eff_timeout = timeout
-    try:
-        from network_aware import adjusted_timeout, network_profile
-        _eff_timeout = adjusted_timeout(timeout, engines)
-        if _eff_timeout != timeout:
-            import logging
-            logging.getLogger("unified_search").debug(
-                f"网络感知超时: {timeout}s → {_eff_timeout}s "
-                f"({network_profile(engines).get('network')})",
-            )
-    except ImportError:
-        pass
-
-    # 时间窗归一化：下推/缓存键用归一化 ISO（相对值转绝对日期），
-    # 后过滤用 epoch 秒；非法输入保持原样下推、不参与后过滤。
-    since_iso, until_iso, since_ts, until_ts = _normalize_time_window(since, until)
-
-    # 缓存键的引擎维度取**请求侧身份**（用户点名的引擎，或 auto），不取
-    # 路由出来的 engines_combo。
-    #
-    # 为什么（2026-09-19 实测）：combo 是决策结果，会被 adaptive 学习器按上一次
-    # 搜索的成败逐次改写。拿结果当键就是「用缓存让缓存失效」——同一查询连跑
-    # 两次，进键的引擎串从 `anysearch+octen` 变成 `exa+octen`、从 `byted+...`
-    # 变成 `local_bing+...`，20 条样本里 6 条重复查询（30%）因此白跑一遍网络，
-    # 而查询、域、档位全都没变。
-    #
-    # 语义边界：用户点名 `--engine pypi` 时键里就是 pypi（显式约束必须隔离，
-    # 这正是 v2.4.2 那条修复要保的东西）；`auto` 时键里是 auto——「用自动路由
-    # 搜这个查询」本身就是请求，具体挑了哪几个引擎是实现细节，由 TTL 兜住
-    # 时效，并原样保留在缓存载荷里供追溯。
-    cache_engine_key = decision.get("engine_request") or "auto"
-    # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存；
-    # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）。
-    # 仅当组合内含带时间能力引擎时隔离：无时间字段引擎忽略时间窗、结果相同，
-    # 隔离只会降低命中率（7d/30d 查 octen/anysearch 命中同一缓存）。
-    time_aware = any(_is_time_capable(e) for e in engines)
-    if since_iso and time_aware:
-        cache_engine_key += f"|since={since_iso}"
-    if until_iso and time_aware:
-        cache_engine_key += f"|until={until_iso}"
-
-    if on_progress:
-        on_progress(Stage.ROUTING, {"domain": domain, "engine": engine_label, "engines": engines})
-
-    # combo 缓存命中（含 depth + 柔性命中）
-    if not skip_cache:
-        t_cache_start = time.time()
-        _tk_cache = _tick(timing)
-        hit = cache.get(query, cache_engine_key, max_results, domain=domain,
-                        mode=mode, depth=depth)
-        _tock(timing, "cache_lookup", _tk_cache)
-        if hit:
-            cache_elapsed = int((time.time() - t_cache_start) * 1000)
-            if on_progress:
-                on_progress(Stage.CACHE_HIT, {"cache_level": hit.get("_cache_level", "L?")})
-            tfidf_scores = decision.get("tfidf_scores", [])
-            if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):
-                tfidf_scores = []
-            # 排序在缓存读出后、返回前：缓存内容保持 score 序，sort 只改展示顺序
-            hit_results = _sort_results(hit.get("results", []), sort)
-            # 命中时一律报**产出这批结果的那次运行**的组合与理由，而不是本次
-            # 路由的。此前两者恒等（组合就在缓存键里），这条区分不存在；键改成
-            # 请求身份后，同一查询两次运行可以路由到不同组合，而本次路由根本
-            # 没执行——报它等于报一个没跑过的计划，还会与同样来自缓存的
-            # engines_used / engine_outcomes 自相矛盾。
-            cached_combo = (hit.get("engines_combo") or hit.get("engines")
-                            or engines)
-            _hit = {
-                "query": query, "engine": (cached_combo or engines)[0],
-                "engines": cached_combo,
-                "engines_combo": cached_combo, "cached": True,
-                "cache_level": hit.get("_cache_level", "L?"),
-                "domain": domain, "elapsed_ms": cache_elapsed,
-                "tfidf_scores": tfidf_scores,
-                "route_reason": hit.get("route_reason") or decision.get("reason"),
-                "login_hint": decision.get("login_hint"),
-                "results": hit_results,
-                "count": len(hit_results),
-                "engines_used": hit.get("engines_used") or engines,
-                "mode": mode, "depth": depth,
-                "reranker": "skipped_cache",
-                "engine_outcomes": hit.get("engine_outcomes") or [],
-                "time_filtered": 0,
-            }
-            # 软命中披露：L2 语义命中返回的是**另一条查询**的载荷，不标出来
-            # 就与精确命中无法区分——调用方会以为这就是本查询的缓存。同样遵循
-            # 「不适用就整个键缺席」（见下方漏斗注释）：精确命中下这三个键不
-            # 存在，不写成 null。
-            if hit.get("_semantic_hit"):
-                _hit["semantic_hit"] = True
-                _hit["semantic_query"] = hit.get("_semantic_query")
-                _hit["semantic_similarity"] = hit.get("_semantic_similarity")
-            # 缓存命中时漏斗记账沿用存档值（它描述的是上一次真实抓取）。
-            # 存档里没有（该条写入于引入漏斗之前）就**整个键缺席**，不写成
-            # null——null 会被读成「漏斗算出来是空」，而缺席只表示「这次没有
-            # 这个数据」。两种档位（默认/agent）必须同一形态，否则同一件事
-            # 有两种表述。
-            if hit.get("funnel") is not None:
-                _hit["funnel"] = hit["funnel"]
-            if timing is not None:
-                _hit["timing"] = timing.summary()
-            return _hit
-
-    if on_progress:
-        on_progress(Stage.SEARCHING, {"engines": engines})
-
-    try:
-        from circuit_breaker import get_breaker
-        breaker = get_breaker()
-    except ImportError:
-        breaker = None
-
-    t0 = time.time()
-    # 单调钟基准：预算窗不随 NTP 跳变失真（engine_dispatch 整套换钟，见其垫片注释）
-    t0_mono = time.monotonic()
-    _tk_dispatch = _tick(timing)
-    # 配额批次在这里建、在融合后的 D6 补搜之后才 flush：中间所有 _ingest
-    # （含补搜）都要记进同一批，提前 flush 会让补搜引擎的记账落不了盘。
-    quota_batch = _QuotaBatch()
-    # 引擎编排（并发/串行调度、重试、熔断、结局分类）整段在 engine_dispatch。
-    # 入口与常量**按值传入**而非让那边直接 import search：测试靠
-    # patch.object(search, "engine_search" / "get_engines" / "_missing_env_for" /
-    # "_FAST_TOTAL_BUDGET_S" / "_PRIMARY_GRACE_S") 换掉它们，直连绑定会让补丁
-    # 静默失效（假引擎不被调用、真网络被打开）。
-    _dispatch = run_dispatch(
-        query=query, retrieval_query=retrieval_query, engines=engines,
-        decision=decision, parallel=parallel,
-        domain=domain, mode=mode, depth=depth,
-        max_results=max_results, timeout=timeout, net_timeout=_eff_timeout,
-        skip_cache=skip_cache, cache=cache, breaker=breaker,
-        since_iso=since_iso, until_iso=until_iso, t0=t0, t0_mono=t0_mono,
-        engine_search=engine_search,
-        get_engines_fn=get_engines,
-        get_execution_config_fn=get_execution_config,
+    hooks = _SearchHooks(
+        engine_search=engine_search, available_engines=available_engines,
+        get_engines=get_engines, get_execution_config=get_execution_config,
         missing_env_for=_missing_env_for,
         classify_outcome=_classify_engine_outcome,
-        quota_batch=quota_batch,
         note_quota_exhausted=_note_remote_quota_exhausted,
         per_engine_budget_s=_PER_ENGINE_BUDGET_S,
         fast_budget_s=_FAST_TOTAL_BUDGET_S,
@@ -658,65 +465,15 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         straggler_grace_s=_straggler_grace(),
         serial_stagger_s=_serial_stagger(),
     )
-    raw_results = _dispatch.raw_results
-    engine_outcomes = _dispatch.engine_outcomes
-    engine_latency = _dispatch.engine_latency
-    wasted_ms = _dispatch.wasted_ms
-    useful_ms = _dispatch.useful_ms
-    early_stopped = _dispatch.early_stopped
-    budget_used_ms = _dispatch.budget_used_ms
-    budget_total_ms = _dispatch.budget_total_ms
-    # 融合后的 D6 补搜要用同一套「跑单引擎 + 入账」，钩子由此取回
-    _run_one = _dispatch.run_one
-    _ingest = _dispatch.ingest
-
-    elapsed = int((time.time() - t0) * 1000)
-    _tock(timing, "dispatch", _tk_dispatch)
-    _tk_fusion = _tick(timing)
-
-    # 融合后加工（13 个阶段）整段住在 search_pipeline：请求侧/运行侧两个状态对象
-    # 就是它的全部接口，见该模块 docstring。
-    _pipeline_req = _SearchRequest(
-        query=query, decision=decision, engines=engines,
-        engines_combo=engines_combo, domain=domain, mode=mode, depth=depth,
-        timeout=timeout, max_results=max_results, exclude_terms=exclude_terms,
-        qu=qu, since_iso=since_iso, until_iso=until_iso, since_ts=since_ts,
-        until_ts=until_ts, time_aware=time_aware, skip_cache=skip_cache,
-        timing=timing, on_progress=on_progress, tk_fusion=_tk_fusion,
-        sort=sort, cache=cache, engine_label=engine_label,
-        cache_engine_key=cache_engine_key,
-        engine_search=engine_search, available_engines=available_engines,
-        run_one=_run_one, ingest=_ingest, emit_telemetry=_emit_telemetry,
-        quota_batch=quota_batch, breaker=breaker,
-    )
-    # merged 由 pipeline 的融合阶段产出（融合也是加工的一步），这里给空表起手
-    _run = postprocess(_pipeline_req, _SearchRun(
-        raw_results=raw_results, engine_outcomes=engine_outcomes, merged=[]))
-    merged = _run.merged
-    minhash_removed = _run.minhash_removed
-    excluded_count = _run.excluded_count
-    time_filtered = _run.time_filtered
-    time_filter_warning = _run.time_filter_warning
-    recovery_info = _run.recovery_info
-    rank_method = _run.rank_method
-    reranker_status = _run.reranker_status
-    local_rerank_on = _run.local_rerank_on
-    fact_alignment = _run.fact_alignment
-    _noise_dropped = _run.noise_dropped
-    funnel = _run.funnel
-    result_payload = _run.result_payload
-    _tk_cache_write = _tick(timing)
-
-    # 收尾（缓存写 + 自适应记账 + 语言偏好 + 输出装配）整段住在
-    # search_pipeline.finalize：与加工段同一套 (req, run) 接口。
-    return finalize(_pipeline_req, replace(_run,
-                                           engine_latency=engine_latency,
-                                           wasted_ms=wasted_ms,
-                                           useful_ms=useful_ms,
-                                           early_stopped=early_stopped,
-                                           budget_used_ms=budget_used_ms,
-                                           budget_total_ms=budget_total_ms,
-                                           elapsed=elapsed))
+    prepared = prepare(query, decision, max_results, timeout, depth, cache,
+                       skip_cache, mode=mode, since=since, until=until,
+                       sort=sort, on_progress=on_progress, timing=timing,
+                       hooks=hooks)
+    if prepared.cached is not None:
+        return prepared.cached
+    run = dispatch(prepared.req, prepared.run, hooks)
+    run = postprocess(prepared.req, run)
+    return finalize(prepared.req, run)
 
 
 

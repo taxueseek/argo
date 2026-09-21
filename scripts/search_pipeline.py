@@ -59,7 +59,7 @@ from time_utils import sort_results_by_time as _sort_results
 
 @dataclass(frozen=True)
 class _SearchRequest:
-    """请求侧输入：加工阶段只读。"""
+    """请求侧输入：进入加工后不再改变（请求参数、派生查询、钩子、计时句柄）。"""
 
     query: str
     decision: dict[str, Any]
@@ -70,6 +70,9 @@ class _SearchRequest:
     depth: str
     timeout: int
     max_results: int
+    retrieval_query: str
+    parallel: bool
+    eff_timeout: float
     exclude_terms: list[str]
     qu: Any
     since_iso: str | None
@@ -84,23 +87,20 @@ class _SearchRequest:
     cache: Any
     engine_label: str
     cache_engine_key: Any
-    sort: str
-    cache: Any
-    engine_label: str
-    cache_engine_key: Any
-    tk_fusion: float
     engine_search: Any
     available_engines: Any
-    run_one: Any
-    ingest: Any
     emit_telemetry: Any
-    quota_batch: Any
     breaker: Any
 
 
 @dataclass(frozen=True)
 class _SearchRun:
-    """运行侧状态：加工阶段读改写（`replace` 返回新实例，字段语义见各处注释）。"""
+    """运行侧状态：被阶段逐步改写（`replace` 返回新实例）。
+
+    字段分三组：结果集（raw_results / engine_outcomes / merged）、加工累加量
+    （各类剔除计数、精排状态、漏斗、缓存载荷）、调度产出（engine_latency /
+    预算与墙钟账 / 计时句柄与钩子）。
+    """
 
     raw_results: dict[str, list[dict[str, Any]]]
     engine_outcomes: list[dict[str, Any]]
@@ -117,15 +117,10 @@ class _SearchRun:
     noise_dropped: list[dict[str, Any]] = field(default_factory=list)
     funnel: dict[str, Any] | None = None
     result_payload: dict[str, Any] | None = None
-    # dispatch 段产出的量（收尾段要读；由 execute_search 在调用前填好）
-    engine_latency: dict[str, float] = field(default_factory=dict)
-    wasted_ms: int = 0
-    useful_ms: int = 0
-    early_stopped: bool = False
-    budget_used_ms: int | None = None
-    budget_total_ms: int | None = None
-    elapsed: int = 0
-    # dispatch 段产出的量（收尾段要读；由 execute_search 在调用前填好）
+    quota_batch: Any = None
+    tk_fusion: float = 0.0
+    run_one: Any = None
+    ingest: Any = None
     engine_latency: dict[str, float] = field(default_factory=dict)
     wasted_ms: int = 0
     useful_ms: int = 0
@@ -154,15 +149,15 @@ def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
     until_ts = req.until_ts
     time_aware = req.time_aware
     skip_cache = req.skip_cache
-    timing = req.timing
-    on_progress = req.on_progress
-    _tk_fusion = req.tk_fusion
     engine_search = req.engine_search
     available_engines = req.available_engines
-    _run_one = req.run_one
-    _ingest = req.ingest
+    timing = req.timing
+    on_progress = req.on_progress
+    _tk_fusion = run.tk_fusion
+    _run_one = run.run_one
+    _ingest = run.ingest
     _emit_telemetry = req.emit_telemetry
-    quota_batch = req.quota_batch
+    quota_batch = run.quota_batch
     breaker = req.breaker
     raw_results = run.raw_results
     engine_outcomes = run.engine_outcomes

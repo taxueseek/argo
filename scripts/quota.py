@@ -397,3 +397,30 @@ if __name__ == "__main__":
         print(f"{'✅ 已清除' if ok else 'ℹ️ 无标记'}: {sys.argv[2]}")
     else:
         print("用法: python3 quota.py stats | python3 quota.py reset <engine>")
+
+
+class _QuotaBatch:
+    """一次搜索的配额记账收集器（累积 → 一次性写入文件）。
+
+    为什么不是每引擎各写一次：每次 record 都是「全量状态序列化 + rename」，
+    一次 5 引擎搜索即 5 次全量写。合并后写盘次数从 N 降到 1，且整批在
+    同一个跨进程文件锁内完成（`QuotaManager.record_many`）。
+
+    失败静默：记账属于观测层，任何异常都不得拖累搜索主路径。
+    """
+
+    def __init__(self) -> None:
+        self._entries: list[tuple[str, bool]] = []
+
+    def add(self, engine: str, success: bool) -> None:
+        self._entries.append((engine, success))
+
+    def flush(self) -> None:
+        entries, self._entries = self._entries, []
+        if not entries:
+            return
+        try:
+            from quota import get_quota_manager
+            get_quota_manager().record_many(entries)
+        except Exception:
+            pass

@@ -56,12 +56,6 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         1220, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异"),
     "scripts/engines_builders_tech.py": (
         1102, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段"),
-    "scripts/search.py": (
-        1206, "已拆出 search_rank / search_output / search_cli / search_pipeline"
-              "（postprocess + finalize 两段，均吃 (req, run) 两个状态对象）；"
-              "剩余是 execute_search 的准备段与 dispatch 段，以及 super_search 的"
-              "编排。prepare / dispatch 用同一套模型即可继续拆——锁（replay_eval"
-              "字段级对比）与切面都已就位"),
     "scripts/fetch_v3.py": (
         1783, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面"),
