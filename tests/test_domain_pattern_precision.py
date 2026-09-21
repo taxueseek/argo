@@ -50,6 +50,18 @@ SUBSTRING_ACCIDENTS = [
     ("drugstore 连锁", "chem_search"),                          # drug ⊂ drugstore
     ("price of iPhone 15", "stock_query"),                     # price 过泛
     ("who wrote the linux kernel", "org_entity"),              # who ⊂ 疑问句开头
+    # C 类：CJK 单字/单音节备选（2026-09-21 实测，geo_places 18 例里 8 例误判）。
+    # CJK 没有词边界，单字是最高频的构词成分，裸子串匹配必然撞车：
+    #   川 ⊂ 川菜、塔 ⊂ 塔罗牌、山|川|湖|島|塔 ⊂ 汉字词
+    #   산 ⊂ 산업|생산|부산、강 ⊂ 강아지|강의、섬 ⊂ 섬유、반도 ⊂ 반도체
+    ("川菜 做法", "geo_places"),                                # 川 ⊂ 川菜
+    ("塔罗牌 入门教程", "geo_places"),                           # 塔 ⊂ 塔罗牌
+    ("한국 반도체 산업", "geo_places"),                          # 산 ⊂ 산업、반도 ⊂ 반도체
+    ("일본 자동차 산업", "geo_places"),                          # 산 ⊂ 산업
+    ("강아지 사료 추천", "geo_places"),                          # 강 ⊂ 강아지
+    ("중국 산업 정책", "geo_places"),                            # 산 ⊂ 산업
+    ("부산 맛집", "geo_places"),                                 # 산 ⊂ 부산
+    ("국경일 휴무", "geo_places"),                               # 국경 ⊂ 국경일
 ]
 
 
@@ -79,6 +91,9 @@ POLYSEMY_MISROUTES = [
     ("Telegram 电报 机器人 开发", "cls_telegraph_search"),
     ("美国 人口 结构 变化", "macro_data"),             # 人口 → 人口数据/人口统计
     ("世界 贸易 组织 改革", "macro_data"),             # 贸易 → 贸易额/进出口
+    ("日志 文件 位置", "geo_places"),                   # 位置 → 软件语境行首负向排除
+    ("图片 位置 居中 CSS", "geo_places"),
+    ("元素 位置 偏移", "geo_places"),
 ]
 
 
@@ -115,6 +130,15 @@ LEGITIMATE_ROUTES = [
     # 这两条是定向收窄相对让位表的核心优势，必须常驻。
     ("上海天气 未来一周", "weather_query"),
     ("東京 おすすめ ラーメン 屋 はどこ", "geo_places"),
+    # C 类修复点的对照面：单字触发词删掉后，无歧义的日韩地理说法必须仍然命中
+    ("エッフェル塔 どこ", "geo_places"),
+    ("에펠탑 어디", "geo_places"),
+    ("富士山 標高", "geo_places"),
+    ("東京 地図", "geo_places"),
+    ("한강 지도", "geo_places"),
+    ("한반도 지도", "geo_places"),
+    ("국경 분쟁", "geo_places"),
+    ("埃菲尔铁塔 位置", "geo_places"),
     # 收窄后的真查询
     ("上证指数 行情", "stock_query"),
     ("临床指南 糖尿病", "medical"),

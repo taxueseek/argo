@@ -198,6 +198,54 @@ class TestParseQuery(unittest.TestCase):
         self.assertIsNone(train._parse_query("上海"))
         self.assertIsNone(train._parse_query("随便什么乱七八糟"))
 
+    def test_station_names_are_not_char_set_stripped(self) -> None:
+        """站名首字不得被当填充字符剥掉。
+
+        2026-09-21 实测（修复前）：`strip(" 站车票张次列高动直特快速字头，。！？")`
+        按字符集剥站名，把「张家口」剥成「家口」、「包头」剥成「包」、
+        「高碑店」剥成「碑店」、「次渠」剥成「渠」——这些是真实站名，
+        剥完解析不到站点码，整条余票查询静默失败。
+        """
+        for query, frm, to in [
+            ("张家口 到 北京 高铁", "张家口", "北京"),
+            ("包头 到 北京", "包头", "北京"),
+            ("高碑店 到 北京", "高碑店", "北京"),
+            ("次渠 到 亦庄", "次渠", "亦庄"),
+        ]:
+            q = train._parse_query(query)
+            self.assertEqual((q["from"], q["to"]), (frm, to), query)
+
+    def test_ticket_quantity_is_not_a_station(self) -> None:
+        """「1张」是购票数量，不能占掉起站位。"""
+        q = train._parse_query("1张 北京 到 上海 车票")
+        self.assertEqual((q["from"], q["to"]), ("北京", "上海"))
+
+
+class TestStationCacheLocation(unittest.TestCase):
+    """站点表缓存不得落在源码树内。
+
+    2026-09-19 实测事故：默认缓存目录是 `scripts/data/`（源码树内），而
+    tests/conftest.py 只隔离了 ARGO_STATE_DIR——一次全量 pytest 把夹具里的
+    4 个站写进 scripts/data/stations.json，此后 7 天（TTL）真实查询只认这
+    4 个站，其余站名全部解析失败且无任何报错。缓存改走
+    argo_paths.state_path("train") 后，测试会话自动隔离。
+    """
+
+    def test_default_cache_dir_is_outside_source_tree(self) -> None:
+        cache_dir = train._cache_dir()
+        source_tree = SKILL_DIR.resolve()
+        self.assertNotEqual(cache_dir, source_tree)
+        self.assertNotIn(source_tree, cache_dir.resolve().parents,
+                         f"站点缓存又落回源码树：{cache_dir}")
+
+    def test_default_cache_dir_follows_state_dir(self) -> None:
+        # conftest 把 ARGO_STATE_DIR 指到临时目录，缓存必须跟着走。
+        state_dir = os.environ.get("ARGO_STATE_DIR", "")
+        if not state_dir:
+            self.skipTest("本会话未设置 ARGO_STATE_DIR")
+        self.assertTrue(
+            str(train._cache_dir()).startswith(state_dir),
+            f"站点缓存未跟随 ARGO_STATE_DIR：{train._cache_dir()}")
 
 class TestStations(unittest.TestCase):
     """站点表解析与站名→站点码"""

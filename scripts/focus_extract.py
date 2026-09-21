@@ -169,7 +169,10 @@ def focus_extract(content: str, query: str, top_k: int = 5,
 
     block_tokens = [_tokens(bl) for bl in blocks]
     n = len(blocks)
-    avgdl = (sum(len(t) for t in block_tokens) / n) if n else 0.0 or 1.0
+    # `else 1.0`：没有段落时避免除零。此前写作 `else 0.0 or 1.0`（等价但读起来
+    # 像是「0 也当 1 用」），且让紧随其后的 `if avgdl == 0` 看着像死代码——
+    # 那条其实是活的：n>0 但所有段落都切不出词元时 avgdl 仍是 0。
+    avgdl = (sum(len(t) for t in block_tokens) / n) if n else 1.0
     if avgdl == 0:
         avgdl = 1.0
 

@@ -262,16 +262,42 @@ def extract_features(query: str) -> dict[str, Any]:
 
 def _feature_labels(features: dict[str, Any]) -> str:
     labels = []
+    # 语言标签取 features.primary_lang（lang_detect 单一真源），**不用
+    # chinese_ratio 二分**：后者对谚文/假名/西里尔/阿拉伯查询一律给出
+    # chinese_ratio≈0，于是「한국 반도체 산업」这类韩文查询在 route_reason 里
+    # 被标成「英文」（2026-09-21 实测）。reason 是给人看的归因入口，标签错了
+    # 会把排障引向错误方向（以为命中了英文源）。名称表复用 lang_detect.LANG_LABELS，
+    # 不再在这里维护第二份语种名。
+    # 阈值语义保持不变：cr>0.6 记中文、0.1~0.6 的混合查询不记语言标签——
+    # 这次只修「cr<0.1 却断言是英文」那一条，不改变中英混合的既有形态。
     cr = features.get("chinese_ratio", 0)
     if cr > 0.6:
         labels.append("中文")
     elif cr < 0.1:
-        labels.append("英文")
+        labels.append(_lang_label(features.get("primary_lang")) or "英文")
     for key, name in (("has_technical", "技术向"), ("has_compare", "对比分析"),
                       ("has_depth_word", "深度研究"), ("has_question", "问答型")):
         if features.get(key):
             labels.append(name)
     return " + ".join(labels) if labels else "通用查询"
+
+
+# 语言模块不可用时返回 None（调用方退回旧判据，不编造语种名）
+_LANG_LABELS_CACHE: dict[str, str] | None = None
+
+
+def _lang_label(lang: Any) -> str | None:
+    """primary_lang → 中文名；en/latin/混合/未知返回 None（由调用方兜底）。"""
+    global _LANG_LABELS_CACHE
+    if not lang or lang in ("en", "latin", "mixed", "other"):
+        return None
+    if _LANG_LABELS_CACHE is None:
+        try:
+            from lang_detect import LANG_LABELS
+            _LANG_LABELS_CACHE = dict(LANG_LABELS)
+        except ImportError:
+            _LANG_LABELS_CACHE = {}
+    return _LANG_LABELS_CACHE.get(lang)
 
 
 # ── 登录态意图检测（P0-4：五路协同的种子）────────────────────────────────

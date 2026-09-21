@@ -13,7 +13,6 @@ topic_research_profiles.py — 选题研究配置文件
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 # ── 深度研究触发词（Agent / 斜杠命令路由用）────────────────────────────────
@@ -552,16 +551,10 @@ def detect_topic_from_query(query: str) -> str | None:
     if not query:
         return None
     q = query.lower()
-    # 直接别名整词
-    for alias, key in ALIASES.items():
-        if len(alias) >= 2 and alias.lower() in q:
-            # 短别名如 ic 需词界
-            if len(alias) <= 2 and alias.isascii():
-                if not re.search(rf"\b{re.escape(alias)}\b", q, re.I):
-                    continue
-            # 优先返回更高专业度：下面用 ordered scan
-            pass
-
+    # 别名打分与专业度排序都在下面一次扫描里完成。此前这里还有一段
+    # 「先扫别名」的循环，但它只算不写（末尾是 `pass`，没有 return 也没有
+    # 累计），对结果零影响——2026-09-21 审查确认后删除。留着它的代价是
+    # 读者会以为「别名整词」已经在这里生效过，从而误判下面的打分口径。
     order = [
         "academic",
         "finance",

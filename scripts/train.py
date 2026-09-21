@@ -28,8 +28,30 @@ from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修
 _INIT_URL = "https://kyfw.12306.cn/otn/leftTicket/init?linktypeid=dc"
 _QUERY_URL = "https://kyfw.12306.cn/otn/leftTicket/queryG"
 _STATION_JS_URL = "https://kyfw.12306.cn/otn/resources/js/framework/station_name.js"
-_CACHE_DIR = Path(__file__).resolve().parent / "data"
 _CACHE_TTL_SECONDS = 7 * 24 * 3600
+
+
+def _cache_dir() -> Path:
+    """站点表缓存目录：argo 状态目录下的 train/，**不写进源码树**。
+
+    此前是 `scripts/data/`（源码树内的目录），两个后果都实测过：
+
+    1. 测试污染生产缓存：tests/conftest.py 只隔离了 ARGO_STATE_DIR，而这里
+       绕过了它。2026-09-19 一次全量 pytest 把夹具里的 4 个站写进
+       scripts/data/stations.json，此后 7 天（TTL）真实查询只认那 4 个站，
+       「张家口 到 北京」这类站名全部解析失败——静默降级，没有任何报错。
+       （conftest 的注释记着同一类事故：v2ex 节点表曾把假节点写进
+       ~/.cache/unified-search/。）
+    2. npx / 只读安装下源码树不可写，缓存必须落到可写的位置。
+
+    与 circuit_breaker / admission / health 同惯例：走 argo_paths.state_path()，
+    测试会话自动隔离，平台惯例目录也自动生效。
+    """
+    try:
+        import argo_paths
+        return argo_paths.state_path("train")
+    except Exception:  # argo_paths 不可用：退回旧位置，不让火车查询整个挂掉
+        return Path(__file__).resolve().parent / "data"
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
@@ -101,8 +123,16 @@ def _parse_query(q: str) -> dict | None:
 
     # 3) 去掉「从」前缀，按分隔符拆分起止站
     text = re.sub(r"^从", " ", text.strip())
+    # 「N张」是购票数量，不是站名：不摘掉的话「1张 北京 到 上海」的起站会变成
+    # 「1张」（实测 2026-09-21）。后视断言要求张数带数字，站名不受影响。
+    text = re.sub(r"\d{1,2}\s*张(?![站口字])", " ", text)
     parts = re.split(r"到|→|->|=>|至|—|--|\s+", text)
-    parts = [p.strip(" 站车票张次列高动直特快快速字头，。！？") for p in parts if p.strip()]
+    # 只去空白与句读，**不要按字符集剥站名**：站名里含「张/高/次/包/头/站/车/票」
+    # 的很多，`strip("站车票张次列高动直特快速字头")` 会把首字当填充字符吃掉——
+    # 2026-09-21 实测「张家口 到 北京」→「家口」、「包头 到 北京」→「包」、
+    # 「高碑店」→「碑店」、「次渠」→「渠」。站名后缀（北京站/上海市）由
+    # _resolve_station 统一剥离（它已有 `[市站]$`），这里不必也不该再剥一遍。
+    parts = [p.strip(" \t，。！？、") for p in parts if p.strip()]
     if len(parts) < 2:
         return None
     from_name, to_name = parts[0], parts[1]
@@ -183,7 +213,7 @@ def _parse_station_data(js: str) -> dict:
 
 def _load_stations(force: bool = False, cache_dir: Path | None = None) -> dict:
     """读取站点表（优先 7 天缓存）。"""
-    cache_dir = cache_dir or _CACHE_DIR
+    cache_dir = cache_dir or _cache_dir()
     cache_file = cache_dir / "stations.json"
     if not force and cache_file.is_file():
         try:

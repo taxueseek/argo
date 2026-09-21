@@ -115,7 +115,6 @@ class EngineRegistry:
 
     def list_local_engines(self, available_only: bool = False) -> list[str]:
         """列出 local-search 子引擎名（mtime 缓存全量列表）。"""
-        global _yaml_mtime
         # 全量列表可缓存；available_only 需结合 health 过滤
         if not available_only:
             try:

@@ -60,7 +60,9 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
             "social_meta": {
                 "platform": "v2ex",
                 "content_type": "topic",
-                "id": path.lstrip("/t/"),
+                # 剥的是**前缀**，不是字符集：lstrip("/t/") 会连 topic id 里
+                # 出现的 't' 一起吃掉（当前 href 正则限定 \d+ 才没暴露）。
+                "id": path.removeprefix("/t/"),
                 "provider": "v2ex_html",
             },
         })

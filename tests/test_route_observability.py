@@ -29,7 +29,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from route import route_query  # noqa: E402
+from route import _feature_labels, route_query  # noqa: E402
 
 
 class TestEngineOverrideCommaSplit(unittest.TestCase):
@@ -81,6 +81,45 @@ class TestTfidfScoresEmission(unittest.TestCase):
             self.skipTest("查询意外命中 TF-IDF 主导路径，跳过兜底检查")
         self.assertEqual(d.get("tfidf_scores"), [])
         self.assertTrue(d.get("reason"))
+
+
+class TestReasonLanguageLabel(unittest.TestCase):
+    """route_reason 的语言标签必须按真实语种写。
+
+    2026-09-21 实测：标签由 `chinese_ratio` 二分（>0.6 中文 / <0.1 英文），
+    谚文、假名、西里尔、阿拉伯查询的 chinese_ratio 都是 0 → 一律被写成
+    「英文 → 命中域 [x]」。reason 是排障时第一眼看归因的地方，标签错了会把
+    人引向「为什么命中了英文源」这个不存在的问题。
+
+    判据直接打在 `_feature_labels` 上（纯函数），避免依赖某条查询恰好走到
+    哪条路由分支；另留一条端到端断言防止标签在拼装 reason 时被丢掉。
+    """
+
+    def test_non_latin_scripts_are_labelled_honestly(self):
+        cases = [
+            ("ko", "韩文"),
+            ("ja", "日文"),
+            ("cyrillic", "西里尔语系"),
+            ("arabic", "阿拉伯语"),
+            ("thai", "泰语"),
+        ]
+        for lang, want in cases:
+            with self.subTest(lang=lang):
+                got = _feature_labels({"primary_lang": lang, "chinese_ratio": 0.0})
+                self.assertEqual(got, want)
+
+    def test_latin_and_mixed_keep_previous_labels(self):
+        # 纯英文仍是「英文」；中英混合（cr 在 0.1~0.6）维持不写语言标签的旧形态；
+        # 中文（cr>0.6）仍是「中文」；语言判不出来时不编造语种。
+        self.assertEqual(_feature_labels({"primary_lang": "en", "chinese_ratio": 0.0}), "英文")
+        self.assertEqual(_feature_labels({"primary_lang": "zh", "chinese_ratio": 0.9}), "中文")
+        self.assertEqual(_feature_labels({"primary_lang": "en", "chinese_ratio": 0.3}), "通用查询")
+        self.assertEqual(_feature_labels({"primary_lang": "mixed", "chinese_ratio": 0.0}), "英文")
+
+    def test_reason_carries_the_label_end_to_end(self):
+        # 域命中路径的 reason 前缀就是语言标签（不依赖 TF-IDF 分支）。
+        reason = route_query("에펠탑 어디").get("reason", "")
+        self.assertTrue(reason.startswith("韩文"), f"reason 未带语言标签：{reason}")
 
 
 if __name__ == "__main__":
