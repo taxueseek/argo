@@ -42,9 +42,10 @@ except ImportError:
 from route import route_query_cached  # noqa: E402  # 跨进程路由决策缓存（见 route 内说明）
 from config import get_execution_config, get_cost_factor, get_engines  # noqa: E402
 
-# ── 排序/融合层（search_rank）与输出层（search_output）按职责拆出，这里同名
-# 转出：调用方与既有测试（search.rerank_results / search.funnel_collapse …）
-# 无需改。打桩点若落在这些符号上，必须打在**读取处**（search_rank / search_output）。
+# ── 排序/融合层（search_rank）与输出层（search_output）按职责拆出，这里同名转出，
+# 调用方与既有测试无需改。打桩点若落在这些符号上，必须打在**读取处**（实现模块）。
+# **别按「谁引用了它」裁剪这份清单**：测试用字符串引用模块属性（patch.object
+# (search, "_tokens")），AST 统计会漏——照它裁 24 个名字，全量测试红 83 条。
 from search_rank import (  # noqa: E402
     _CJK_OR_WORD,
     _ENGINE_FUSION_WEIGHTS,
@@ -1725,6 +1726,5 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
 
 
 if __name__ == "__main__":
-    from search_cli import main
-
+    from search_cli import main  # 反向导入放这里：CLI 依赖本模块，模块级会成环
     main()
