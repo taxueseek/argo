@@ -233,10 +233,35 @@ class TestAgentTierKeepsQualitySignals(unittest.TestCase):
 
 
 class TestLimitationsNotGatedByEnvelope(unittest.TestCase):
-    """静态结构检查：局限声明必须与归档开关拆开。"""
+    """局限声明必须与归档开关拆开：一条静态形态检查 + 一条行为断言。
+
+    行为断言是主检查（它验的是契约），静态检查是补充（拦住「把调用挪回
+    `if envelope:` 里」这种形态回退）。
+    """
+
+    def test_limitations_present_without_envelope_behaviourally(self):
+        """envelope=False（精简档）时 limitations 必须仍然生成。"""
+        from search_output import _ShapeContext, shape_response
+
+        class _NullCache:
+            def local_status(self, urls):
+                return {}
+
+        ctx = _ShapeContext(
+            query="q", kind="keyword", tier="daily", envelope=False,
+            decision={}, extra_lim=["测试局限"], cache=_NullCache(),
+            include_domains=[], exclude_domains=[], include_local=False, n=1,
+            run_local_seek=lambda *a, **k: [],
+        )
+        result = {"results": [{"url": "https://a", "title": "t", "snippet": "s"}]}
+        out = shape_response(ctx, result)
+        self.assertIn("limitations", out, "精简档丢了局限声明")
+        self.assertTrue(out["limitations"], out)
 
     def test_not_gated_in_real_source(self):
-        src = (SCRIPTS / "search.py").read_text(encoding="utf-8")
+        # 局限声明的生成逻辑住在 search_output.shape_response（响应契约层）；
+        # search.py 只是调用方。扫源码要扫**实现处**，否则重构一次就假红。
+        src = (SCRIPTS / "search_output.py").read_text(encoding="utf-8")
         offenders, has_non_envelope_path = _scan_envelope_gating(src)
         self.assertEqual(offenders, [],
                          "局限声明又被关回归档开关：\n  " + "\n  ".join(offenders))

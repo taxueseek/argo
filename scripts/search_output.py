@@ -8,6 +8,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+from search_rank import filter_results_by_domains
 from typing import Any
 
 
@@ -324,3 +327,178 @@ def _collect_errors(raw_results: dict[str, list[dict[str, Any]]],
             continue
         _add(f"{o.get('engine')}: {detail}")
     return errors
+
+@dataclass(frozen=True)
+class _ShapeContext:
+    """输出成形的全部选项（请求侧只读 + 一个本地检索钩子）。"""
+
+    query: str
+    kind: str
+    tier: str
+    envelope: bool
+    decision: dict[str, Any]
+    extra_lim: list[str]
+    cache: Any
+    include_domains: list[str]
+    exclude_domains: list[str]
+    include_local: bool
+    n: int
+    run_local_seek: Any
+
+
+def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]:
+    """把执行层载荷整理成对外响应（就地改 result 并返回它）。
+
+    七个阶段，顺序即契约：档位局限 → envelope/局限声明 → 本地正文索引 →
+    证据门控（fetch_required / evidence_loop）→ 域过滤 → 信源标准化 → 本地命中并入。
+    每一步都 fail-open（增强失败不得让一次搜索失败），因此每段自带 try。
+
+    住在 search_output 而不是 search.py：这是**响应契约**（字段形态、什么时候
+    生成 sources、envelope 与精简档的差异），与执行/调度无关。
+    """
+    query = ctx.query
+    kind, tier = ctx.kind, ctx.tier
+    envelope = ctx.envelope
+    decision = ctx.decision
+    extra_lim = ctx.extra_lim
+    cache = ctx.cache
+    include_domains, exclude_domains = ctx.include_domains, ctx.exclude_domains
+    include_local, n = ctx.include_local, ctx.n
+    _run_local_seek = ctx.run_local_seek
+    if tier == "daily":
+        extra_lim.append(
+            "daily tier: direct search; no pre-confirm gate"
+        )
+    elif tier == "professional":
+        extra_lim.append(
+            "professional tier: plan metadata attached; verify top-k before hard claims"
+        )
+
+    # 候选交接包（附加字段，不改 results 排序）
+    if envelope:
+        try:
+            from candidate_envelope import attach_envelope
+            attach_envelope(
+                result,
+                query=query,
+                input_kind=kind,
+                route_reason=decision.get("reason"),
+                extra_limitations=extra_lim,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"envelope 跳过: {type(e).__name__}")
+            result.setdefault("schema_version", "1.0")
+            result.setdefault("limitations", [])
+    else:
+        # 精简档：attach_envelope 不跑，局限声明仍须上报（同一个 build_limitations
+        # 实现，避免两处各写一份导致计算方式漂移）
+        try:
+            from candidate_envelope import build_limitations
+            result["limitations"] = build_limitations(result, extra_lim)
+        except Exception:
+            result.setdefault("limitations", list(extra_lim))
+
+    # 本地正文索引：给每条结果标出「这篇的正文我已经取回过」，并给出全文位置。
+    # 结果原本只有 300 字摘要与核验分，调用方看不出本地已有正文——想核对原文
+    # 只能重新 fetch，或者压根不知道能回看。这里是纯本地查询（冷 L1 下 20 条
+    # 约 1.7 ms），不联网、不额外请求，故无条件附加。
+    try:
+        _urls = [r.get("url") for r in (result.get("results") or [])
+                 if isinstance(r, dict) and r.get("url")]
+        _local = cache.local_status(_urls) if _urls else {}
+        for _r in (result.get("results") or []):
+            if not isinstance(_r, dict):
+                continue
+            _st = _local.get(_r.get("url") or "")
+            if not _st:
+                continue
+            if _st.get("body"):
+                _r["local_body"] = _st["body"]
+            if _st.get("retrieval"):
+                # 取数可用性：把「取不到」（系统类）与「取到了但没用」（内容类）
+                # 分开报，两者都不等于「还没试过」。搜索阶段就能判定的事，不该
+                # 留给调用方抓一次才知道。
+                _r["retrieval"] = _st["retrieval"]
+    except Exception as _e:
+        logging.getLogger("unified_search").debug(f"本地正文索引跳过: {type(_e).__name__}")
+
+    # 证据完整链路 P0：回填已核验证据分 + 高后果门控（finance/health/legal）
+    # 输出 fetch_required / evidence_loop 汇总，每条结果带 fetch_suggested
+    # 与 has_fetched_evidence / post_fetch_absorption（若此前 fetch 过）。
+    try:
+        from evidence_loop import gate_results
+        gate = gate_results(result.get("results") or [], result.get("domain"))
+        result["fetch_required"] = gate["fetch_required"]
+        result["evidence_loop"] = {
+            "high_consequence_domain": gate["high_consequence_domain"],
+            "suggested": gate["suggested"],
+            "verified_count": gate["verified_count"],
+            "pending_count": gate["pending_count"],
+        }
+        # 已知取不到的源不再「建议核验」——建议了也只会白跑一趟。
+        # 必须放在 gate_results 之后：它才是 fetch_suggested 的产出方。
+        # 不改「该不该核验」的判断，只去掉注定徒劳的那部分，并把原因写清楚，
+        # 否则调用方会把「未建议」误读成「不必核验」。
+        try:
+            _blocked = []
+            _keep = []
+            for _u in (result["evidence_loop"].get("suggested") or []):
+                _hit = _local.get(_u) or {}
+                if (_hit.get("retrieval") or {}).get("status") == "blocked":
+                    _blocked.append(_u)
+                else:
+                    _keep.append(_u)
+            if _blocked:
+                result["evidence_loop"]["suggested"] = _keep
+                result["evidence_loop"]["unretrievable"] = _blocked
+                result["evidence_loop"]["pending_count"] = max(
+                    0, int(result["evidence_loop"].get("pending_count") or 0)
+                    - len(_blocked))
+                for _r in (result.get("results") or []):
+                    if isinstance(_r, dict) and _r.get("url") in _blocked:
+                        _r["fetch_suggested"] = False
+                        _r["fetch_blocked"] = (_local[_r["url"]]
+                                               .get("retrieval") or {}).get("reason")
+        except Exception as e:
+            import logging
+            logging.getLogger("unified_search").debug(f"不可取源筛选跳过: {type(e).__name__}")
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(f"证据门控跳过: {type(e).__name__}")
+
+    # 域过滤（后置，引擎无关）：融合排序之后裁剪，sources 与 results 保持一致。
+    # 裁剪导致不足 n 条是调用方过滤条件的诚实结果，不回填。
+    if include_domains or exclude_domains:
+        try:
+            kept, note = filter_results_by_domains(
+                result.get("results"), include_domains, exclude_domains)
+            result["results"] = kept
+            if note:
+                result["domain_filter"] = note
+        except Exception as e:
+            logging.getLogger("unified_search").debug(
+                f"[domain-filter] {type(e).__name__}: {e}")
+
+    # 相关信源标准化（日常搜索底部引用列表；与 results 顺序一致）。
+    # sources 是 results 的降级投影（URL 100% 重叠，实测零信息增量），
+    # --no-envelope（Agent 默认输出）下不再生成：每次调用省 ~0.9KB，
+    # 要 provenance 时用 envelope 模式或 --archive（2026-09-13 审查 P2-1）。
+    if envelope:
+        result["sources"] = build_sources(result.get("results") or [])
+
+    # 本地命中并入（默认关）：seek 结果尾部拼入，来源 local_files，
+    # 不参与融合评分。仅显式开启（--include-local / MCP include_local）才触发。
+    if include_local:
+        try:
+            local_hits = _run_local_seek(query, n)
+        except Exception as e:
+            local_hits = []
+            logging.getLogger("unified_search").debug(
+                f"[include-local] {type(e).__name__}: {e}")
+        if local_hits:
+            result.setdefault("results", []).extend(local_hits)
+            result["local_results"] = local_hits
+        result["include_local"] = True
+    return result
