@@ -87,8 +87,6 @@ class _SearchRequest:
     cache: Any
     engine_label: str
     cache_engine_key: Any
-    engine_search: Any
-    available_engines: Any
     emit_telemetry: Any
     breaker: Any
 
@@ -130,8 +128,14 @@ class _SearchRun:
     elapsed: int = 0
 
 
-def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
-    """融合后加工：13 个阶段，顺序即契约（过滤 → 去重 → 软排 → 精排 → 标注）。"""
+def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
+    """融合后加工：13 个阶段，顺序即契约（过滤 → 去重 → 软排 → 精排 → 标注）。
+
+    hooks 只用于两处需要回到调度层的动作（D6 macro 补搜、空结果恢复树）——
+    入口按值传入，见 search_entry 的 _SearchHooks 说明。
+    """
+    engine_search = hooks.engine_search
+    available_engines = hooks.available_engines
     query = req.query
     decision = req.decision
     engines = req.engines
@@ -149,8 +153,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
     until_ts = req.until_ts
     time_aware = req.time_aware
     skip_cache = req.skip_cache
-    engine_search = req.engine_search
-    available_engines = req.available_engines
     timing = req.timing
     on_progress = req.on_progress
     _tk_fusion = run.tk_fusion

@@ -244,8 +244,6 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
         time_aware=time_aware, skip_cache=skip_cache, timing=timing,
         on_progress=on_progress, sort=sort, cache=cache,
         engine_label=engine_label, cache_engine_key=cache_engine_key,
-        engine_search=hooks.engine_search,
-        available_engines=hooks.available_engines,
         emit_telemetry=_emit_telemetry, breaker=breaker,
     ), run=_SearchRun(raw_results={}, engine_outcomes=[], merged=[]))
 

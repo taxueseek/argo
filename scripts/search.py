@@ -472,7 +472,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     if prepared.cached is not None:
         return prepared.cached
     run = dispatch(prepared.req, prepared.run, hooks)
-    run = postprocess(prepared.req, run)
+    run = postprocess(prepared.req, run, hooks)
     return finalize(prepared.req, run)
 
 
