@@ -281,3 +281,46 @@ def format_text_output(results: dict[str, Any]) -> str:
             lines.append(f"  ! {lim}")
 
     return "\n".join(lines)
+
+
+# 不算失败的 outcome 状态：这些情况「引擎跑了、没问题」，不该出现在 errors[]
+_NON_ERROR_OUTCOME = frozenset({
+    "ok", "ok-cached", "partial", "no-results", "no-results-cached",
+})
+
+
+def _collect_errors(raw_results: dict[str, list[dict[str, Any]]],
+                    engine_outcomes: list[dict[str, Any]] | None = None
+                    ) -> list[str]:
+    """收集失败文本，两个来源缺一不可。
+
+    1. raw_results 里的 error 条目——引擎把失败**当成结果**返回（异常被
+       `_exec_engine` 捕获后塞进列表）。
+    2. engine_outcomes 里带 detail 的失败 outcome——引擎内部**吞掉**异常，
+       只把失败原因写进记录（engines_base.note_failure），列表是空的。
+
+    只收第 1 类时，`--engine you` 的 SSL 超时会上报成
+    `status=completed, count=0, errors=[]`：调用方（Agent）据此判定「网上
+    没有这个信息」并停止追问，而真相是引擎连不上（2026-09-15 实测）。
+    去重按整行，避免同一失败既来自 error 条目又来自 outcome detail。
+    """
+    errors: list[str] = []
+    seen: set[str] = set()
+
+    def _add(line: str) -> None:
+        if line and line not in seen:
+            seen.add(line)
+            errors.append(line)
+
+    for eng, res in raw_results.items():
+        for r in res:
+            if isinstance(r, dict) and "error" in r:
+                _add(f"{eng}: {r['error']}")
+    for o in (engine_outcomes or []):
+        if not isinstance(o, dict):
+            continue
+        detail = str(o.get("detail") or "").strip()
+        if not detail or str(o.get("status") or "") in _NON_ERROR_OUTCOME:
+            continue
+        _add(f"{o.get('engine')}: {detail}")
+    return errors

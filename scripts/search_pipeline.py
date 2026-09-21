@@ -30,11 +30,14 @@ http_client / engines_base / engine_dispatch。
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from config import get_cost_factor
+from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
-from search_output import build_funnel
+from search_output import _collect_errors, _slow_query_ttl, build_funnel
 from search_rank import (
     _RERANK_DEGRADED_STATUSES,
     _align_facts_safe,
@@ -51,6 +54,7 @@ from search_rank import (
 from search_types import Stage
 from stage_timing import tick as _tick, tock as _tock
 from time_utils import apply_time_window as _apply_time_window
+from time_utils import sort_results_by_time as _sort_results
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,14 @@ class _SearchRequest:
     skip_cache: bool
     timing: Any
     on_progress: Any
+    sort: str
+    cache: Any
+    engine_label: str
+    cache_engine_key: Any
+    sort: str
+    cache: Any
+    engine_label: str
+    cache_engine_key: Any
     tk_fusion: float
     engine_search: Any
     available_engines: Any
@@ -105,6 +117,22 @@ class _SearchRun:
     noise_dropped: list[dict[str, Any]] = field(default_factory=list)
     funnel: dict[str, Any] | None = None
     result_payload: dict[str, Any] | None = None
+    # dispatch 段产出的量（收尾段要读；由 execute_search 在调用前填好）
+    engine_latency: dict[str, float] = field(default_factory=dict)
+    wasted_ms: int = 0
+    useful_ms: int = 0
+    early_stopped: bool = False
+    budget_used_ms: int | None = None
+    budget_total_ms: int | None = None
+    elapsed: int = 0
+    # dispatch 段产出的量（收尾段要读；由 execute_search 在调用前填好）
+    engine_latency: dict[str, float] = field(default_factory=dict)
+    wasted_ms: int = 0
+    useful_ms: int = 0
+    early_stopped: bool = False
+    budget_used_ms: int | None = None
+    budget_total_ms: int | None = None
+    elapsed: int = 0
 
 
 def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
@@ -301,7 +329,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
     if time_aware and (since_ts is not None or until_ts is not None) and merged:
         merged, time_filtered = _apply_time_window(merged, since_ts, until_ts)
         if time_filtered:
-            import logging
             logging.getLogger("unified_search").debug(
                 f"时间窗后过滤剔除 {time_filtered} 条（since={since_iso}, until={until_iso}）")
     # 漏斗第 5 格：否定词过滤 + 时间窗过滤之后（见 build_funnel）
@@ -418,7 +445,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
         except ImportError:
             pass  # recovery 模块不可用
         except Exception as e:
-            import logging
             logging.getLogger("unified_search").debug(
                 f"错误恢复跳过: {type(e).__name__}")
 
@@ -450,7 +476,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
                                            top_n=max_results)
             rank_method = "local_five_dim"
         except Exception as e:
-            import logging
             logging.getLogger("unified_search").debug(
                 f"本地五维 rerank 跳过: {type(e).__name__}")
     elif not local_rerank_on and reranker_status in _RERANK_DEGRADED_STATUSES:
@@ -531,3 +556,188 @@ def postprocess(req: _SearchRequest, run: _SearchRun) -> _SearchRun:
         funnel=funnel,
         result_payload=result_payload,
     )
+
+def finalize(req: _SearchRequest, run: _SearchRun) -> dict[str, Any]:
+    """收尾：写缓存 → 自适应记账 → 语言偏好 → 装配对外响应。
+
+    与 postprocess 的分工：那里决定「结果是什么」，这里决定「怎么对外说」
+    （缓存写入、学习器记账、漏斗/计时/信源的字段形态）。签名同样只吃两个
+    状态对象——execute_search 里不再有一串需要手工搬运的局部量。
+    """
+    query = req.query
+    decision = req.decision
+    engines = req.engines
+    engines_combo = req.engines_combo
+    domain = req.domain
+    mode, depth = req.mode, req.depth
+    max_results = req.max_results
+    timing, on_progress = req.timing, req.on_progress
+    sort, cache = req.sort, req.cache
+    engine_label, cache_engine_key = req.engine_label, req.cache_engine_key
+    skip_cache = req.skip_cache
+    merged = run.merged
+    raw_results = run.raw_results
+    engine_outcomes = run.engine_outcomes
+    engine_latency = run.engine_latency
+    minhash_removed = run.minhash_removed
+    excluded_count = run.excluded_count
+    time_filtered = run.time_filtered
+    time_filter_warning = run.time_filter_warning
+    recovery_info = run.recovery_info
+    rank_method = run.rank_method
+    reranker_status = run.reranker_status
+    local_rerank_on = run.local_rerank_on
+    fact_alignment = run.fact_alignment
+    _noise_dropped = run.noise_dropped
+    funnel = run.funnel
+    result_payload = run.result_payload
+    wasted_ms, useful_ms = run.wasted_ms, run.useful_ms
+    early_stopped = run.early_stopped
+    budget_used_ms, budget_total_ms = run.budget_used_ms, run.budget_total_ms
+    elapsed = run.elapsed
+    exclude_terms = req.exclude_terms
+    _tk_cache_write = _tick(timing)
+    # 写 combo 缓存：空结果短 TTL / 时效 cap 由 cache.set 处理
+    if not skip_cache:
+        effective_ttl = None
+        if merged and elapsed > 2000:
+            # 慢查询略延长缓存：省的是「同一查询再付一次慢网」的钱。
+            effective_ttl = _slow_query_ttl(cache.resolve_ttl(domain, query=query),
+                                            elapsed)
+        cache.set(
+            query, cache_engine_key, max_results, result_payload,
+            domain=domain, ttl=effective_ttl, mode=mode, depth=depth,
+        )
+    _tock(timing, "cache_write", _tk_cache_write)
+
+    # 自适应学习
+    try:
+        from adaptive import get_learner
+        learner = get_learner()
+        # 引擎结局映射：下面要区分「空结果」与「真失败」，需要它
+        _status_of = {o.get("engine"): o.get("status")
+                      for o in engine_outcomes if isinstance(o, dict)}
+        for eng, res in raw_results.items():
+            errors = [str(r.get("error", "")) for r in res if isinstance(r, dict) and "error" in r]
+            # 配额/鉴权类是配置态故障，不是引擎质量信号：计入会把恢复后的
+            # 引擎分数毒化在历史失败里（byted 配额期 38 连败 → 分数 0.072，
+            # 配额自愈后无流量刷正分，死锁）。此类错误不计入，保持中性。
+            # 配额关键词走 _QUOTA_ERROR_KEYWORDS 唯一来源；鉴权类仅此处有。
+            if errors and all(
+                any(k in msg.lower() for k in
+                    (*_QUOTA_ERROR_KEYWORDS, "unauthorized", "api key",
+                     "forbidden", "401", "403"))
+                for msg in errors
+            ):
+                continue
+            success = bool(res and any(isinstance(r, dict) and "error" not in r for r in res))
+            # 「引擎正常、但这次查询它没有结果」与「引擎失败」是两回事：
+            # 前者说明的是查询与源不匹配，不是源坏了。混在一起会误杀——实测
+            # github 窗口内 63 次调用的失败归因全是 empty，它却在 local_code /
+            # package_search 这些**声明要用它**的域里因分数低于 0.3 被整个剔除
+            # （同类还有 wikipedia 0.17 / openalex 0.29 / hackernews 0.10 /
+            # twitter 0.17 / open_library 0.17，共 16 个域受影响）。
+            # 空结果只单独统计，不参与成功率计算（见 adaptive.get_score）。
+            empty = (not success) and _status_of.get(eng) in (
+                "no-results", "no-results-cached")
+            latency = engine_latency.get(eng, elapsed / max(len(raw_results), 1))
+            cost = get_cost_factor(eng)
+            learner.record(eng, success=success, latency_ms=latency,
+                           cost=0.0 if cost >= 0.85 else 0.001, empty=empty)
+    except ImportError:
+        pass
+    except Exception as e:
+        logging.getLogger("unified_search").debug(f"自适应学习记录跳过: {type(e).__name__}")
+
+    # 语言偏好：记录本轮查询语 + 输出观测快照（默认中英 + 系统 + 习惯）
+    lang_pref_info: dict[str, Any] | None = None
+    try:
+        from lang_pref import record_query_lang, lang_pref_snapshot
+        feats = decision.get("features") or {}
+        q_lang = feats.get("primary_lang") or ""
+        if not q_lang:
+            try:
+                from lang_detect import detect_language
+                q_lang = detect_language(query)
+            except ImportError:
+                q_lang = ""
+        if q_lang:
+            record_query_lang(q_lang)
+        lang_pref_info = lang_pref_snapshot(query_lang=q_lang)
+    except ImportError:
+        pass
+    except Exception as e:
+        logging.getLogger("unified_search").debug(
+            f"语言偏好记录跳过: {type(e).__name__}")
+
+    if on_progress:
+        on_progress(Stage.DONE, {"count": len(merged), "elapsed_ms": elapsed})
+
+    tfidf_scores = decision.get("tfidf_scores", [])
+    if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):
+        tfidf_scores = []
+
+    # 排序在返回前、写缓存后：缓存内容保持 score 序（缓存键/内容不受 sort 影响），
+    # sort 只改变本次展示顺序；缓存命中路径在 return 前同样处理，两路径行为一致。
+    out_results = _sort_results(merged, sort)
+
+    out: dict[str, Any] = {
+        "query": query, "engine": engine_label, "engines": engines,
+        "engines_combo": engines_combo, "cached": False,
+        "domain": domain, "elapsed_ms": elapsed,
+        "tfidf_scores": tfidf_scores,
+        "route_reason": decision.get("reason"),
+        "results": out_results,
+        "count": len(out_results), "engines_used": list(raw_results.keys()),
+        "errors": _collect_errors(raw_results, engine_outcomes),
+        "engine_outcomes": engine_outcomes,
+        # 阶段漏斗账：0 结果时用它定位塌在哪一层（见 build_funnel）
+        "funnel": funnel,
+        # 多语言噪声门：被剔除的引擎及原因（可观测，便于定位「为什么少了几个源」）
+        "noise_dropped": _noise_dropped,
+        "wasted_engine_ms": wasted_ms,
+        "early_stopped": early_stopped,
+        "reranker": reranker_status,
+        "rank_method": rank_method,
+        "minhash_removed": minhash_removed,
+        "local_rerank_on": local_rerank_on,
+        "recovery": recovery_info,
+        "fact_alignment": fact_alignment,
+        "exclude_terms": exclude_terms,
+        "excluded_count": excluded_count,
+        "time_filtered": time_filtered,
+        "time_filter_warning": time_filter_warning,
+        "mode": mode, "depth": depth,
+        "login_hint": decision.get("login_hint"),
+    }
+    if lang_pref_info is not None:
+        out["lang_pref"] = lang_pref_info
+    if timing is not None:
+        # 并发效率：dispatch 是墙钟，engine_latency 之和是各引擎各自耗时。
+        # 比值远小于引擎数说明并发没排满（或某个慢源独占尾部），是判断
+        # 「该加并发还是该摘慢源」的直接依据。
+        eng_sum = sum(engine_latency.values())
+        out["timing"] = timing.summary()
+        out["timing"]["elapsed_ms"] = elapsed
+        out["timing"]["dispatch"] = {
+            # 用 dispatch 自己那口单调钟量出来的墙钟（budget_used_ms），不用外层
+            # 这笔 time.time() 差值：useful/wasted 都是单调钟算的，混用两种钟会
+            # 让「useful + wasted ≡ wall」只在毫秒取整恰好对齐时成立——而这条
+            # 恒等式正是测试与文档承诺的「唯一自洽的墙钟分解」。
+            "wall_ms": budget_used_ms,
+            "engines_run": len(engine_latency),
+            "engine_sum_ms": eng_sum,
+            "parallel_efficiency": (round(eng_sum / budget_used_ms, 2)
+                                    if budget_used_ms else None),
+            # useful_ms + wasted_ms ≡ wall_ms（唯一自洽的墙钟分解）。
+            # useful = 最后一个有效贡献引擎完成的时刻，wasted = 此后还在等。
+            "useful_ms": useful_ms,
+            "wasted_ms": wasted_ms,
+            "early_stopped": early_stopped,
+        }
+        if budget_total_ms is not None:
+            # 预算消耗额：fast/auto 有总预算，deep 无（键缺席即「无预算」）。
+            # timing 在 agent 档保留，预算可见性随答案一起到达。
+            out["timing"]["budget"] = {"used_ms": budget_used_ms,
+                                       "total_ms": budget_total_ms}
+    return out
