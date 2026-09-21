@@ -50,6 +50,7 @@ class _SearchHooks:
 
     engine_search: Any
     available_engines: Any
+    get_cost_factor: Any
     get_engines: Any
     get_execution_config: Any
     missing_env_for: Any

@@ -28,7 +28,6 @@ import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
 import sys  # noqa: E402
-from enum import Enum  # noqa: E402
 from typing import Any, Callable, Optional  # noqa: E402
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +39,7 @@ try:
 except ImportError:
     _query_similarity = None  # type: ignore
 from route import route_query_cached  # noqa: E402  # 跨进程路由决策缓存（见 route 内说明）
-from config import get_execution_config, get_cost_factor, get_engines  # noqa: E402
+from config import get_cost_factor, get_execution_config, get_engines  # noqa: E402
 
 # ── 排序/融合层（search_rank）与输出层（search_output）按职责拆出，这里同名转出，
 # 调用方与既有测试无需改。打桩点若落在这些符号上，必须打在**读取处**（实现模块）。
@@ -94,7 +93,6 @@ from search_pipeline import (  # noqa: E402
     finalize,
     postprocess,
 )
-from dataclasses import replace  # noqa: E402
 from search_output import (  # noqa: E402
     _ShapeContext,
     shape_response,
@@ -456,6 +454,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                    timing: StageTiming | None = None) -> dict[str, Any]:
     hooks = _SearchHooks(
         engine_search=engine_search, available_engines=available_engines,
+        get_cost_factor=get_cost_factor,
         get_engines=get_engines, get_execution_config=get_execution_config,
         missing_env_for=_missing_env_for,
         classify_outcome=_classify_engine_outcome,
@@ -475,7 +474,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         return prepared.cached
     run = dispatch(prepared.req, prepared.run, hooks)
     run = postprocess(prepared.req, run, hooks)
-    return finalize(prepared.req, run)
+    return finalize(prepared.req, run, hooks)
 
 
 

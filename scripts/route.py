@@ -20,8 +20,6 @@ route_query 的三条分支，按优先级：
 
 from __future__ import annotations
 
-import os
-import re
 import sys
 import time
 from dataclasses import dataclass
@@ -29,8 +27,7 @@ from typing import Any, Callable
 from cli_io import dumps
 
 try:
-    from config import (load_config, get_engines, get_domains, get_cost_factor,
-                        config_stamp)
+    from config import (load_config, get_engines, get_domains, config_stamp)
     from quota import get_quota_manager
     from engine_families import (engines_demote_for_lang, engines_not_for_lang,
                                  engine_langs, family_of, lang_allows,
@@ -38,8 +35,7 @@ try:
 except ImportError:
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
-    from config import (load_config, get_engines, get_domains, get_cost_factor,
-                        config_stamp)
+    from config import (load_config, get_engines, get_domains, config_stamp)
     from quota import get_quota_manager
     from engine_families import (engines_demote_for_lang, engines_not_for_lang,
                                  engine_langs, family_of, lang_allows,

@@ -34,7 +34,6 @@ import logging
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from config import get_cost_factor
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
 from search_output import _collect_errors, _slow_query_ttl, build_funnel
@@ -554,13 +553,17 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         result_payload=result_payload,
     )
 
-def finalize(req: _SearchRequest, run: _SearchRun) -> dict[str, Any]:
+def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]:
     """收尾：写缓存 → 自适应记账 → 语言偏好 → 装配对外响应。
 
     与 postprocess 的分工：那里决定「结果是什么」，这里决定「怎么对外说」
     （缓存写入、学习器记账、漏斗/计时/信源的字段形态）。签名同样只吃两个
     状态对象——execute_search 里不再有一串需要手工搬运的局部量。
+
+    hooks 只用于 `get_cost_factor`：测试靠 patch 它把成本系数钉成常数，
+    按值传入才能让补丁生效（见 search_entry._SearchHooks）。
     """
+    get_cost_factor = hooks.get_cost_factor
     query = req.query
     decision = req.decision
     engines = req.engines
