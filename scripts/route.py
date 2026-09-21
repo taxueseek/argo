@@ -66,6 +66,22 @@ try:
 except Exception:
     _get_registry = None
 
+# 域规则（声明式加载 + 匹配 + 精度守卫）整体住在 route_domains：
+# 「查询命中哪些域」与「命中之后怎么组合引擎」是两件事，混在一个文件里时
+# 域规则只能靠 2400 行文件里的行号定位。这里保留同名转出，调用方与既有
+# 测试（route._get_compiled_domains / route.match_domains）不需要改。
+from route_domains import (  # noqa: E402
+    match_domains,
+    match_domain,
+    _get_compiled_domains,
+    _compile_domain_patterns,
+    _social_domain_first,
+    _intent_gate,
+    _ZH_LANG_GATED_DOMAINS,
+    _DIFFUSE_SIGNAL_RE,
+    _INTENT_MIN_TOKENS,
+)
+
 
 # ── 特征提取 ──────────────────────────────────────────────────────────────────
 
@@ -334,169 +350,6 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
     return {"needs_login": False, "reason": ""}
 
 
-# ── 域匹配（预编译 + mtime 缓存，避免每次 route 重新 compile 全部正则） ────────
-
-_compiled_domains: list[dict[str, Any]] | None = None
-_compiled_domains_id: tuple | None = None  # (name, patterns 长度) 内容指纹
-
-
-def _compile_domain_patterns(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    compiled = []
-    for idx, domain in enumerate(domains):
-        patterns = domain.get("patterns", [])
-        if isinstance(patterns, str):
-            patterns = []
-        regexes = []
-        for p in patterns:
-            try:
-                regexes.append(re.compile(p))
-            except re.error:
-                continue
-        compiled.append({**domain, "_idx": idx, "_compiled": regexes})
-    return compiled
-
-
-def _get_compiled_domains(domains: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    global _compiled_domains, _compiled_domains_id
-    # 用内容指纹替代 id(domains)，避免 GC 后 id 复用导致缓存失效/错误。
-    # 指纹含 patterns 本体（只记长度会漏「改正则不改条数」的编辑）。
-    # patterns 拼 hash 而非直接进 tuple：长正则列表构造开销大，hash 一次 O(n) 可控。
-    import hashlib
-    dom_fp = tuple(
-        (d.get("name", ""),
-         hashlib.sha1(
-             "\x00".join(
-                 p if isinstance(p, str) else str(p)
-                 for p in (d.get("patterns") or [])
-             ).encode("utf-8", "replace")).hexdigest()[:12])
-        for d in domains
-    )
-    if _compiled_domains is not None and _compiled_domains_id == dom_fp:
-        return _compiled_domains
-    _compiled_domains = _compile_domain_patterns(domains)
-    _compiled_domains_id = dom_fp
-    return _compiled_domains
-
-
-# 语言门控白名单：这些域以中文内容为主，明确的非中文查询（ja/ko/en/latin 等主
-# 语言）不应命中。日文/韩文查询常含汉字或谚文字符，易被中文泛内容域的 `[一-\u9fff]`
-# 或单音节子串正则误爆（如韩语「비교」命中天气的「비」、日语汉字命中 chinese_general），
-# 在 match_domains 层按主语言跳过即可修正。2026-08 修复。
-_ZH_LANG_GATED_DOMAINS = frozenset({
-    "chinese_general", "local_chinese", "chinese_tech_deep",
-    "cn_tech_community", "zhihu_content", "zhihu_hot_list",
-    "wechat_search", "cn_encyclopedia", "cn_ai_news",
-    "moegirl", "juejin", "bilibili", "weibo",
-    # 中文政策/百科/医疗域：日韩查询不应进（如日文「政策金利」命中 gov_policy）
-    "gov_policy", "baidu_baike", "medical",
-})
-
-# 语言过滤名单改由 engine_families.ENGINE_LANGS 派生（lang_allows/
-# engines_not_for_lang）：语言能力随引擎注册声明一次（config `langs` 可
-# 覆盖），四张手写冻结表（_ZH_CONTENT/_JA_KO_CN/_EN_ONLY/_ZH_ONLY）
-# 2026-09-07 收紧删除。成员忠实自原表推导，多语言契约测试验收。
-
-
-# ── 结构化平台语法（唯一来源：config.yaml 的 social 域 patterns）─────────────
-# 查询含平台搜索语法（from:/subreddit:/lang:/filter: 等）时把 social 域提前为
-# 主域，避免查询里的实体词（GPT/Llama/api）把 model/_tech 域排前面。
-# 语法判定不再在 Python 侧复制正则（此前与 config.yaml social patterns 第三
-# 条字面重复，两处改动必须同步）；social 域 patterns 命中即判定，route 只做
-# 顺序调整。repo:/site: 另勘。
-
-
-def _social_domain_first(_hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """命中列表里有 social 域 → 提到首位（无则原样）。
-
-    排位在 social 之前的更具体域保持原序不抢占：「小红书技能排行」的
-    redskill_search（小红书技能垂直域）、「我的收藏/我的回答」的
-    zhihu_user_data（个人数据意图，收藏/关注是社交平台通用功能词，
-    泛 social 域语义更宽）。
-    """
-    social = [h for h in _hits if h.get("name") == "social"]
-    if not social:
-        return _hits
-    idx_first_social = _hits.index(social[0])
-    # 「热搜/热榜」是比泛 social 更具体的意图：查询里带微博/抖音这类平台名时，
-    # social 会被提前，把 hot_trending 顶掉——用户问的是榜单，不是社交帖子。
-    _SPECIFIC_BEFORE_SOCIAL = ("redskill_search", "zhihu_user_data", "hot_trending")
-    idx_specific = next(
-        (i for i, h in enumerate(_hits)
-         if h.get("name") in _SPECIFIC_BEFORE_SOCIAL), None
-    )
-    if idx_specific is not None and idx_specific < idx_first_social:
-        return _hits
-    return social + [h for h in _hits if h.get("name") != "social"]
-
-
-def _diffuse_intent_guard(hits: list[dict[str, Any]], query: str,
-                          features: dict | None = None) -> list[dict[str, Any]]:
-    """面查意图守卫：点查域在「主题句式查询」下让位。
-
-    点查域（package_search / ai_model）语义是「查询主体即目标对象」：
-    「pnpm add lodash」「GPT-4o」该走结构化源。但当查询是长主题句
-    （去重 token ≥5）且不含该域意图词时，实体词（pnpm/DeepSeek）只是
-    上下文，域命中属词面误抢——2026-09-06 实测：「pnpm file: directory
-    dependency no content hash reinstall」（无意图词）被锁死 pypi，
-    返回单字垃圾包且骗过覆盖守卫早停；「DeepSeek Harness DSH 插件开发」
-    被锁死 models_dev。让位后主域由次域 / TF-IDF / 通用组合接管。
-
-    判别优先级：面查信号 > 意图豁免 > token 门槛。面查信号命中即让位
-    （「npm 包 安装 报错」意图是解决报错，不是找包）；意图词命中则豁免
-    （「python 环境安装 requests 库」确实是包查询）。
-    """
-    if not hits:
-        return hits
-    try:
-        from tfidf_router import tokenize
-        n_tokens = len(set(tokenize(query)))
-    except Exception:
-        return hits  # 分词不可用不设卡（fail-open，同覆盖守卫口径）
-    if n_tokens < _POINTED_MIN_TOKENS:
-        return hits
-    diffuse_hit = re.search(_DIFFUSE_SIGNAL_RE, query) is not None
-    kept: list[dict[str, Any]] = []
-    for d in hits:
-        name = d.get("name") or ""
-        intent_re = _POINTED_INTENT_RE.get(name)
-        if intent_re is None:
-            kept.append(d)
-            continue
-        if diffuse_hit:
-            continue  # 面查信号压过意图豁免：报错/排查/对比类走通用
-        if re.search(intent_re, query):
-            kept.append(d)
-            continue
-        continue  # 长主题句 + 无意图词：实体词只是上下文，让位
-    return kept
-
-
-# 点查域 → 意图豁免词（命中即视为真正的结构化点查）。
-# 英文备选吃 \b；中文备选必须在 \b 外——CJK 字符全是 \w，「npm安装报错」
-# 这类无空格连写永远撞不上词边界（2026-09-06 审查实锤），会让真实包查询
-# 被误让位。同 _DIFFUSE_SIGNAL_RE 中文备选的既有计算方式。
-#
-# 扩充门槛（2026-09-19 实测教训）：这份表**只收「域主源是唯一入口、误命中
-# 无通用保底」的点查域**。曾试过把 weather_query / geo_places 等 9 个多义域
-# 一并加进来治误判，结果三条既有回归门同时红——「上海天气 未来一周」被让位
-# 到 chinese_general、「東京 おすすめ ラーメン 屋 はどこ」丢掉 geo 主源。
-# 让位判据是「长主题句 + 无本域意图词」，而意图词表永远列不全（未来一周、
-# はどこ 都漏了），失败模式是**静默的能力回退**。多义域改用定向负向排除
-# （见 config.yaml 各域 pattern 的注释），不动这份契约。
-_POINTED_INTENT_RE: dict[str, str] = {
-    "package_search": r"(?i)\b(install|add|uninstall|download)\b|安装|下载|替代包|包名",
-    "ai_model": r"(?i)(价格|pricing|上下文|context window|token limit|vision|多模态|免费|开源|多少钱)",
-}
-# 面查信号：查询在研究/排障/对比一个主题，而非定位一个对象
-_DIFFUSE_SIGNAL_RE = re.compile(
-    r"(?i)\b(issue|bug|regression|reinstall|stale|not.?work|broken|crash"
-    r"|how (to|does|do)|why (is|does|do)|difference|vs\.?)\b"
-    r"|报错|失效|不生效|不更新|出错|排查|区别|对比"
-)
-# 长主题句门槛：去重 token 少于此值不设卡（短查询大概率是点查）
-_POINTED_MIN_TOKENS = 5
-
-
 def _inject_multilingual_backup(engines_combo: list[str], enabled: set[str],
                                 features: dict) -> list[str]:
     """ja/ko 查询把多语言主力源 anysearch 送到 combo 前二。
@@ -519,47 +372,6 @@ def _inject_multilingual_backup(engines_combo: list[str], enabled: set[str],
             return engines_combo
         engines_combo = [e for e in engines_combo if e != "anysearch"]
     return engines_combo[:1] + ["anysearch"] + engines_combo[1:]
-
-
-def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
-                  max_n: int = 3,
-                  primary_lang: str | None = None) -> list[dict[str, Any]]:
-    """按 config.yaml domains 顺序返回全部命中域（多意图，主域 1 + 次域 max_n-1）。
-
-    旧 match_domain 单射只取首个命中域，多意图查询（如「北京 AI 公司融资」同时
-    命中 geo/finance/tech）只走一个域。本函数返回命中列表供 route 主域执行 +
-    次域按预算补充。catch-all（无 patterns）只做垫底：有命中时不掺入。
-    max_n 限制命中数，防止正则宽泛的域批量命中稀释主域。
-
-    primary_lang：查询主语言（来自 extract_features）。当为明确的非中文语言
-    （ja/ko/en/latin/cyrillic/thai 等）时，跳过中文内容域白名单，避免韩/日查询
-    被中文泛内容域误捕获。传 None 时不做门控（兼容旧调用方）。
-    """
-    if domains is None:
-        domains = get_domains()
-    compiled = _get_compiled_domains(domains)
-    hits: list[dict[str, Any]] = []
-    catch_all: dict[str, Any] | None = None
-    non_zh = bool(primary_lang and primary_lang not in ("zh", "mixed", "other"))
-    for domain in compiled:
-        if not domain.get("patterns", []):
-            catch_all = domain
-            continue
-        if non_zh and domain.get("name") in _ZH_LANG_GATED_DOMAINS:
-            continue
-        for regex in domain["_compiled"]:
-            if regex.search(query):
-                hits.append(domain)
-                break
-        if len(hits) >= max_n:
-            break
-    return hits if hits else ([catch_all] if catch_all else [])
-
-
-def match_domain(query: str, domains: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
-    """兼容旧接口：返回首个命中域（或 catch-all）。"""
-    hits = match_domains(query, domains, max_n=1)
-    return hits[0] if hits else None
 
 
 def _enabled_local_engines() -> list[str]:
@@ -1705,13 +1517,11 @@ def route_query(query: str, engine_override: str = "auto",
     # 正则硬规则优先（cheap）；fast + 实域命中时跳过 TF-IDF，省掉语义路由开销
     domains_cfg = get_domains(cfg)
     # P1-1：多意图路由——主域执行 + 次域按预算补充（仅域命中分支消费 secondary）
+    # 结构化域提前与面查意图门都在 match_domains 内部按契约顺序完成
+    # （见 route_domains 模块 docstring）：域精度的全部规则只有那一个实现，
+    # 这里不再各调一次，避免「某个守卫忘了在另一条路径上施加」。
     _domain_hits = match_domains(query, domains_cfg,
                                  primary_lang=features.get("primary_lang"))
-    # 结构化域优先：social 域 patterns（config.yaml 唯一来源）命中即提前，
-    # 避免被 query 里的实体词（GPT/Llama/api）误抢到模型库/技术域。
-    _domain_hits = _social_domain_first(_domain_hits)
-    # 面查意图守卫：长主题句 + 无意图词时点查域让位（防 pypi/models_dev 词面误抢）
-    _domain_hits = _diffuse_intent_guard(_domain_hits, query, features)
     domain = _domain_hits[0] if _domain_hits else None
     secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))

@@ -169,30 +169,25 @@ def test_legitimate_queries_still_route_to_their_domain():
 
 
 def test_pointed_intent_re_stays_minimal():
-    """让位表必须**保持最小**：只收「域主源是唯一入口、误命中无通用保底」的
-    点查域。
+    """意图门（`intent_required`）名单必须**保持最小**：只收「域主源是唯一
+    入口、误命中无通用保底」的点查域。
 
     2026-09-19 实测：把 weather_query / geo_places 等 9 个多义域加进来治误判，
     三条既有回归门同时红——「上海天气 未来一周」被让位到 chinese_general、
     「東京 おすすめ ラーメン 屋 はどこ」丢掉 geo 主源。让位判据是「长主题句
     + 无本域意图词」，而意图词表永远列不全（未来一周、はどこ 都漏了），失败
-    模式是**静默的能力回退**。多义域改用定向负向排除（见 config.yaml 注释）。
+    模式是**静默的能力回退**。多义域改用定向否决（config.yaml 里挂在触发词
+    上的 `unless`），不动这份契约。
+
+    2026-09-21：机制从 Python 侧的 `_POINTED_INTENT_RE` 字典搬到域声明的
+    `intent_required` 字段（与 `unless` 合成同一套精度机制），契约不变。
     """
-    from route import _POINTED_INTENT_RE
-    extra = sorted(set(_POINTED_INTENT_RE) - {"package_search", "ai_model"})
-    assert not extra, f"让位表被扩充（会静默让位真查询）：{extra}"
+    from route_domains import intent_gated_domains
+    extra = sorted(intent_gated_domains() - {"package_search", "ai_model"})
+    assert not extra, f"意图门被扩充（会静默让位真查询）：{extra}"
 
 
-def test_domain_patterns_compile():
-    """config.yaml 里写坏的正则会被静默丢弃（route.py 的 `except re.error`），
-    那个域从此永不命中且无任何报错。这里把「写坏」变成可见失败。"""
-    import re
-    from config import load_config
-    broken = []
-    for d in load_config().get("domains", []):
-        for p in d.get("patterns") or []:
-            try:
-                re.compile(p)
-            except re.error as e:
-                broken.append((d.get("name"), p, str(e)))
-    assert not broken, f"域正则编译失败（该域已静默失能）：{broken}"
+# 「域正则写坏即静默失能」的检查统一在 tests/test_domain_rule_schema.py：
+# 那里同时覆盖条目形态、内联否决禁令、unless 反例与字段白名单。此处不再留
+# 第二份实现——两份重复的门禁会各自漂移（旧版只认字符串条目，新条目形态上线
+# 当天它就误报了三处）。

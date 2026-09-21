@@ -52,18 +52,9 @@ class TestDomainPatternsCompile(unittest.TestCase):
         self.assertGreaterEqual(len(self.domains), 70,
                                 f"只读到 {len(self.domains)} 个域，配置加载可能失效")
 
-    def test_every_pattern_compiles(self):
-        bad = []
-        for d in self.domains:
-            for p in (d.get("patterns") or []):
-                try:
-                    re.compile(p)
-                except re.error as e:
-                    bad.append(f"{d.get('name')}: {p!r} → {e}")
-        self.assertFalse(bad, (
-            "以下域正则编译失败。route 对编译失败是静默 continue——"
-            "该 pattern（或整个域）会永久失效且不报错，必须修掉：\n  "
-            + "\n  ".join(bad)))
+    # 「每条正则都能编译」的检查在 tests/test_domain_rule_schema.py：那里同时
+    # 覆盖条目形态、内联否决禁令、unless 反例与字段白名单，此处不再留第二份
+    # 实现（重复门禁会各自漂移，旧版只认字符串条目）。
 
     def test_no_domain_without_patterns(self):
         empty = [d.get("name") for d in self.domains if not (d.get("patterns") or [])]
@@ -73,15 +64,21 @@ class TestDomainPatternsCompile(unittest.TestCase):
 
     def test_compiled_count_matches_declared(self):
         """直接对冲 route 的静默跳过：编译结果条数必须等于声明条数。"""
-        from route import _compile_domain_patterns
+        from route_domains import _compile_domain_patterns, _split_pattern_entry
         mismatched = []
         for src, comp in zip(self.domains, _compile_domain_patterns(self.domains)):
             want = len(src.get("patterns") or [])
-            got = len(comp.get("_compiled") or [])
-            if want != got:
-                mismatched.append(f"{src.get('name')}: 声明 {want} 条，编译成功 {got} 条")
+            want_unless = sum(
+                1 for p in (src.get("patterns") or [])
+                if _split_pattern_entry(p)[1])
+            rules = comp.get("_rules") or []
+            got_unless = sum(1 for _m, u in rules if u is not None)
+            if want != len(rules) or want_unless != got_unless:
+                mismatched.append(
+                    f"{src.get('name')}: 声明 {want} 条触发词/{want_unless} 条 unless，"
+                    f"编译成功 {len(rules)}/{got_unless}")
         self.assertFalse(mismatched, (
-            "有 pattern 被 _compile_domain_patterns 静默丢弃（编译失败的都进不了 _compiled）：\n  "
+            "有规则被 _compile_domain_patterns 静默丢弃（编译失败的都进不了 _rules）：\n  "
             + "\n  ".join(mismatched)))
 
 
