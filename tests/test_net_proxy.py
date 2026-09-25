@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import sys
 import unittest
+import http.client
 import urllib.parse
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
@@ -101,7 +103,7 @@ class TestOpenConnection(unittest.TestCase):
             def set_tunnel(self, host, port):
                 seen["tunnel"] = (host, port)
 
-        with patch.object(net_proxy.http.client, "HTTPSConnection", FakeTunnelHTTPS):
+        with patch.object(http.client, "HTTPSConnection", FakeTunnelHTTPS):
             conn, via = net_proxy.open_connection(parsed, 5.0, _PROXY)
         self.assertTrue(via)
         self.assertEqual(seen["conn"], ("127.0.0.1", 7890))
@@ -145,8 +147,8 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
 
         with patch.object(net_proxy, "_network_cfg",
                           return_value=_cfg(rules={"github.com": _PROXY})), \
-             patch.object(net_proxy.urllib.request, "build_opener", _fake_build), \
-             patch.object(net_proxy.urllib.request, "urlopen",
+             patch.object(urllib.request, "build_opener", _fake_build), \
+             patch.object(urllib.request, "urlopen",
                           side_effect=AssertionError("不该走直连")):
             out = net_proxy.open_url("https://github.com/a/b", timeout=7.0)
         self.assertEqual(out, "RESP")
@@ -163,8 +165,8 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
             return "DIRECT"
 
         with patch.object(net_proxy, "_network_cfg", return_value=_cfg()), \
-             patch.object(net_proxy.urllib.request, "urlopen", _fake_urlopen), \
-             patch.object(net_proxy.urllib.request, "build_opener",
+             patch.object(urllib.request, "urlopen", _fake_urlopen), \
+             patch.object(urllib.request, "build_opener",
                           side_effect=AssertionError("无代理不该建 opener")):
             with patch.dict("os.environ", {}, clear=True):
                 out = net_proxy.open_url("https://example.com/x", timeout=3.0)
@@ -173,9 +175,9 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
         self.assertEqual(calls["timeout"], 3.0)
 
     def test_accepts_request_object(self):
-        req = net_proxy.urllib.request.Request("https://example.com/y")
+        req = urllib.request.Request("https://example.com/y")
         with patch.object(net_proxy, "_network_cfg", return_value=_cfg()), \
-             patch.object(net_proxy.urllib.request, "urlopen",
+             patch.object(urllib.request, "urlopen",
                           lambda r, timeout=None: r):
             out = net_proxy.open_url(req, timeout=1.0)
         self.assertIs(out, req)
@@ -184,7 +186,7 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
         """标准环境变量由 urlopen 自己认，本函数不得重复接管（会改 mock 契约）。"""
         with patch.object(net_proxy, "_network_cfg", return_value=_cfg()), \
              patch.dict("os.environ", {"HTTPS_PROXY": _PROXY}), \
-             patch.object(net_proxy.urllib.request, "build_opener",
+             patch.object(urllib.request, "build_opener",
                           side_effect=AssertionError("不该重复接管标准环境变量")):
             self.assertIsNone(
                 net_proxy.resolve_proxy("https://example.com", include_standard_env=False))

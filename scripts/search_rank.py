@@ -27,10 +27,12 @@ from url_canon import canonical_url as _canonical_url_impl
 
 try:
     from cache import query_similarity as _query_similarity
-except ImportError:
+except ImportError as _err:
+    # 硬失败但保留真因：cache 缺 query_similarity 往往意味着 cache.py 本身
+    # 没装好/没编译好，吞掉 ImportError 会让下游拿到残缺的排序行为。
     raise RuntimeError(
         "search_rank 需要 cache.query_similarity——cache 模块不完整或未正确安装"
-    ) from None
+    ) from _err
 
 
 # 中文/英文混合分词用的正则，延迟编译（首次 _tokens 时建）
@@ -261,11 +263,10 @@ def _content_similarity(a: str, b: str) -> float:
     """标题+片段的 minhash 相似度（复用 cache.query_similarity，失败回退 Jaccard）。"""
     if not a or not b:
         return 0.0
-    if _query_similarity is not None:
-        try:
-            return float(_query_similarity(a, b))
-        except Exception:
-            pass
+    try:
+        return float(_query_similarity(a, b))
+    except Exception:
+        pass  # 单条相似度计算失败按「无相似度」处理，回退 Jaccard
     import re as _re
     sa, sb = set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", a.lower())), set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", b.lower()))
     if not sa or not sb:

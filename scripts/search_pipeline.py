@@ -36,6 +36,7 @@ from typing import Any
 
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
+from except_sets import OPT_IMPORT, SHAPE_BENIGN
 from search_output import _collect_errors, _slow_query_ttl, build_funnel
 from search_rank import (
     _RERANK_DEGRADED_STATUSES,
@@ -280,7 +281,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
             deduped, minhash_removed = minhash_dedupe(merged, max_keep=_pool_limit)
             merged = deduped
         except Exception as _e:
-            import logging
             logging.getLogger("unified_search").debug(f"minhash 去重跳过: {type(_e).__name__}")
     _tock(timing, "dedupe", _tk_dedupe)
     # 漏斗第 4 格：跨引擎合并 + 近重复去重之后还剩多少（见 build_funnel）
@@ -299,7 +299,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         _p_lang = (decision or {}).get("features", {}).get("primary_lang")
         if _p_lang in ("ja", "ko"):
             merged = _lang_prefer_rerank(merged, _p_lang)
-    except (ImportError, TypeError, ValueError):
+    except OPT_IMPORT + SHAPE_BENIGN:  # 软排序增强，任何失败按「不排序」处理
         pass
 
     # 放宽截断：rerank 阶段看到 _pool_limit 条，最终输出再截断 max_results
@@ -353,7 +353,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         from query_enhance import complexity_gate
         if qu is not None and complexity_gate(query, qu) == "low":
             _max_rec_level = "L2"
-    except (ImportError, TypeError, ValueError):
+    except OPT_IMPORT + SHAPE_BENIGN:  # 门控判定失败按「不限制放宽档位」处理
         pass
     _tk_recovery = _tick(timing)
     _recovery_engines: set[str] = set()
@@ -423,7 +423,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                         "final_query": (recovery_info.get("final_query") or "")[:60],
                         "note": recovery_info.get("note", ""),
                     })
-                except (TypeError, AttributeError):
+                except SHAPE_BENIGN:  # 遥测记录失败不影响恢复结果本身
                     pass
             if rec_results:
                 merged = deduplicate_by_url(rec_results)[:max_results]

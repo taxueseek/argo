@@ -21,7 +21,6 @@ import logging
 import os
 import sys
 import time
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +59,9 @@ def _detect_anti_bot(text: str) -> bool:
 
 def check_http_engine(name: str, url: str, spec: dict) -> dict:
     """检查 HTTP/HTML 引擎健康状态。"""
+    # 仅真探测需要 urllib；route 热路径的 is_available 只读注册表，
+    # 不该为模块级这行 import 每次多付 ~26ms（urllib+http.client 链）。
+    import urllib.request
     result = {"available": False, "latency_ms": 0, "error": None}
     try:
         req = urllib.request.Request(url, headers={

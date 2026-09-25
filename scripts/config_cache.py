@@ -26,6 +26,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from except_sets import OPT_IMPORT, SHAPE_BENIGN
+
 # 状态目录唯一来源。argo_paths 只在函数体内反向 import config，此处模块级导入
 # 不会成环（与 config.py 的同一处理，见那边的注释）。
 import argo_paths  # noqa: E402
@@ -82,7 +84,7 @@ def _config_disk_cache_enabled() -> bool:
     try:
         from engine_env import env_flag
         return env_flag("ARGO_CONFIG_CACHE", default=True)
-    except (ImportError, ValueError, KeyError):
+    except OPT_IMPORT + SHAPE_BENIGN:
         # 判定链不可用时按「开」处理：缓存是纯性能优化，关掉它不影响正确性，
         # 而误判为「关」只会让每次调用回到全量解析（旧的既定行为）。
         return True

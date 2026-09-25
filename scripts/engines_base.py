@@ -340,6 +340,7 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
             return []
         # 跨平台解释器解析：Windows 一般没有 python3 这个可执行名
         if isinstance(cmd, list) and cmd and cmd[0] == "python3":
+            import shutil  # 仅 CLI 引擎解析解释器时需要，不进模块级导入链
             py3 = shutil.which("python3") or shutil.which("python") or sys.executable
             cmd[0] = py3
         for key, tmpl in filter_args.items():
@@ -507,6 +508,7 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
     # 回退 urllib（原行为）。出口仍须经 net_proxy——否则设
     # ARGO_ENGINE_HTTP_CLIENT=0 就顺带关掉了代理支持，在必须走代理的环境里
     # 这条保底路径会一直连不上（issue #13 的形态）。
+    import http.client  # except 元组求值需要；走到这里 urlopen 已加载过，零成本
     try:
         from net_proxy import open_url as _proxy_open
         import urllib.request as _urllib_request
@@ -574,6 +576,7 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
     # rules / ARGO_PROXY / config url + 标准环境变量）的唯一来源。此前这里
     # 自带一份 opener 拼装，与 fetch/job 等处的 urlopen 各写一份，于是 issue
     # #13 只修了本函数覆盖的引擎路径，其余出口仍然直接调用。
+    import http.client  # except 元组求值需要；走到这里 urlopen 已加载过，零成本
     from net_proxy import open_url
     try:
         resp = open_url(req, timeout=timeout)

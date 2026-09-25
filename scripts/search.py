@@ -204,7 +204,7 @@ def _record_quota(engine: str, success: bool) -> None:
     try:
         from quota import get_quota_manager
         get_quota_manager().record(engine, success=success)
-    except (ImportError, OSError, ValueError):
+    except Exception:  # 侧信道：记账失败不得影响搜索主流程（规则见 except_sets）
         pass
 
 
@@ -228,7 +228,7 @@ def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
     try:
         from quota import get_quota_manager
         get_quota_manager().mark_remote_exhausted(engine, reason=detail)
-    except (ImportError, OSError, ValueError):
+    except Exception:  # 侧信道：标记失败不得影响搜索主流程（规则见 except_sets）
         pass
 
 

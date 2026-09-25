@@ -35,6 +35,7 @@ except ImportError:
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths
 from cli_io import dumps
+from except_sets import IO_BENIGN, SHAPE_BENIGN
 
 
 # ── 常量 ──────────────────────────────────────────────────────────────────────
@@ -1018,7 +1019,7 @@ class SearchCache:
                             # 固化成硬命中（v2.4.2 修复）。
                             self._l1.set(key, out)
                             return out
-                except (OSError, IOError):
+                except IO_BENIGN:
                     pass
             return None
         sliced = self._soft_slice(hit, max_results)
@@ -1094,7 +1095,7 @@ class SearchCache:
                 # 稳定 → 延长（上限为 base 的 2 倍，不超域上限）
                 return min(base_ttl * 2, self.resolve_ttl(domain, query=query) * 2)
             return base_ttl
-        except (TypeError, ValueError, KeyError):
+        except SHAPE_BENIGN:
             return base_ttl
 
     # ── per-engine 结果缓存 ──────────────────────────────────────────────────
@@ -1172,7 +1173,7 @@ class SearchCache:
                 continue
             try:
                 hit = self._read(self._fetch_key(url))
-            except (OSError, ValueError, KeyError):
+            except IO_BENIGN + SHAPE_BENIGN:
                 hit = None
             entry: dict = {}
 
@@ -1228,7 +1229,7 @@ class SearchCache:
                 try:
                     if _known_blocked(url) is True:
                         entry["retrieval"] = {"status": "blocked", "reason": "robots"}
-                except (TypeError, AttributeError):
+                except Exception:  # 侧信道：robots 只读判定失败按「不知道」处理（规则见 except_sets）
                     pass
 
             if entry:
@@ -1283,7 +1284,7 @@ class SearchCache:
         try:
             self._write(self._fetch_key(url), url, "fetch", 0, merged, "fetch",
                         ttl if ttl is not None else FETCH_DEFAULT_TTL)
-        except (OSError, ValueError):
+        except IO_BENIGN + SHAPE_BENIGN:
             pass
 
     def clear(self, older_than_hours: int = 24):

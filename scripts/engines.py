@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import json
 import logging
@@ -205,6 +206,23 @@ if not logger.handlers:
     logger.addHandler(logging.StreamHandler(sys.stderr))
 
 
+@contextlib.contextmanager
+def _sys_path_tmp(path: str):
+    """临时把 path 加入 sys.path，退出时移除——只移除自己添加的那一次。
+
+    append 而非 insert(0)：sub-skills 顶层有与 scripts 同名的模块
+    （health_check 等），插到前面会劫持 scripts 下同名模块的解析。
+    """
+    added = path not in sys.path
+    if added:
+        sys.path.append(path)
+    try:
+        yield
+    finally:
+        if added:
+            sys.path.remove(path)
+
+
 def _build_local_search_engine(spec: dict[str, Any]) -> Any:
     """进程内调用 local-search 子技能，避免 subprocess 冷启动（~300-500ms/次）。
 
@@ -224,17 +242,9 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
         try:
             from engines_base import _resolve as _resolve_tpl
             sub_dir = Path(__file__).resolve().parent.parent / "sub-skills" / "local-search"
-            # 用上下文管理器临时添加路径，import 完成后自动清理——
-            # 避免 sys.path 被永久污染（原实现 append 后不 remove）。
-            import contextlib
-            added = str(sub_dir) not in sys.path
-            if added:
-                sys.path.append(str(sub_dir))  # append 而非 insert(0)：避免劫持 scripts 下同名模块
-            try:
+            # 临时加路径 import，完事自动清理（助手语义见定义处）
+            with _sys_path_tmp(str(sub_dir)):
                 import search_v3
-            finally:
-                if added:
-                    sys.path.remove(str(sub_dir))
             res = search_v3.search_engines(
                 query, engines=None, n=n, timeout=float(timeout),
                 max_parallel=5, skip_cache=bool(kwargs.get("skip_cache", False)),

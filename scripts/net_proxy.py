@@ -27,12 +27,17 @@
 
 from __future__ import annotations
 
-import http.client
 import logging
 import os
-import urllib.parse
-import urllib.request
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # 仅注解引用（ParseResult/HTTPConnection）；运行时按需惰性导入
+    from http.client import HTTPConnection
+    from urllib.parse import ParseResult
+
+# urllib 栈（http.client+urllib.request≈26ms）不进模块级导入链：本模块被
+# 13 处导入，其中 health_check.is_available（route 热路径）、job/fetch 等场景
+# 导入了却未必真发请求；urllib 推迟到各函数体内首次调用时加载（进程内仅一次）。
 
 logger = logging.getLogger("unified_search.net_proxy")
 
@@ -69,6 +74,9 @@ def resolve_proxy(url: str, override: str | None = None,
     环境变量，调用方只需 argo 级增量配置；重复接管反而改变 mock 契约与
     失败路径。http.client 类传输层（HttpClient）必须 True（它自己不认 env）。
     """
+    import urllib.parse
+    import urllib.request
+
     if override is not None:
         return None if str(override).strip().lower() == "direct" else override
 
@@ -122,6 +130,9 @@ def open_url(req: Any, timeout: float = 10.0):
     失败语义与 `urlopen` 完全一致：原样抛出，调用方既有的 `except` 分支
     （含 `urllib.error.HTTPError` / `URLError`）不受影响。
     """
+    import urllib.parse
+    import urllib.request
+
     if isinstance(req, str):
         req = urllib.request.Request(req)
     url = getattr(req, "full_url", "") or ""
@@ -143,14 +154,17 @@ def open_url(req: Any, timeout: float = 10.0):
     return opener.open(req, timeout=timeout)
 
 
-def open_connection(parsed: urllib.parse.ParseResult, timeout: float,
-                    proxy_url: str | None) -> tuple[http.client.HTTPConnection, bool]:
+def open_connection(parsed: ParseResult, timeout: float,
+                    proxy_url: str | None) -> tuple[HTTPConnection, bool]:
     """按是否走代理构造 http.client 连接。返回 (conn, via_proxy)。
 
     https 目标 + 代理 → 到代理的 HTTPSConnection + set_tunnel（CONNECT 隧道）；
     http 目标 + 代理 → 到代理的 HTTPConnection，request 须用绝对 URL
     （见 request_selector）。
     """
+    import http.client
+    import urllib.parse
+
     target_port = parsed.port or (443 if parsed.scheme == "https" else 80)
     if not proxy_url:
         cls = (http.client.HTTPSConnection if parsed.scheme == "https"
@@ -165,7 +179,7 @@ def open_connection(parsed: urllib.parse.ParseResult, timeout: float,
     return http.client.HTTPConnection(p.hostname, proxy_port, timeout=timeout), True
 
 
-def request_selector(parsed: urllib.parse.ParseResult, path: str,
+def request_selector(parsed: ParseResult, path: str,
                      via_proxy: bool) -> str:
     """http 经代理时请求行必须是绝对 URL（RFC 7230 5.3.2）；https 隧道用相对。"""
     if via_proxy and parsed.scheme == "http":

@@ -60,9 +60,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         1783, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面"),
     "scripts/engines_base.py": (
-        1437, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起"),
+        1440, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起"),
     "scripts/cache.py": (
-        1355, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"),
+        1356, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
+              "（+1=except_sets 具名异常导入行）"),
     "scripts/job.py": (
         1182, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
     "scripts/matrix_search_eval.py": (
