@@ -254,6 +254,135 @@ def _globals_without_binding(paths: list[Path]) -> list[str]:
     return problems
 
 
+def _local_import_shadows_global(paths: list[Path]) -> list[str]:
+    """内建 ast 检测：函数内的裸 import 遮蔽了同名的模块级绑定。
+
+    这是 2026-09-25 实际发生过的两个 P0（search_output.shape_response 与
+    search_pipeline.postprocess）：模块级 `import logging`，函数内**某个 except
+    分支**里又写了一次 `import logging`。CPython 在**编译期**就把 `logging`
+    判定为该函数的局部变量——不管那次 import 是否执行到。于是同一函数里
+    其余 3~5 处 `logging.getLogger(...)` 全部编译成 LOAD_FAST（读局部槽），
+    走到就抛 `UnboundLocalError`。
+
+    为什么现有门禁与 ruff 都抓不到，两者是同一个盲区：
+      - ruff F821 只查「这个名字全仓都没定义过」。`logging` 在模块级**确实**
+        定义过，F821 判为合法。
+      - `_globals_without_binding` 只查 `global X` 声明，而这里根本没有 global。
+    后果被放大了三倍：这些 `logging.*` 全部位于 `except` 处理器内，处理器里
+    再抛异常会**顶替掉原本被 fail-open 吞掉的错误**——一个「增强失败不得让搜索
+    失败」的路径，变成搜索整体崩溃。
+
+    判定条件（三条同时满足才报，避免误伤正常局部 import）：
+      1. 函数内某处有裸 `import X`（`import X as Y` 不算，不遮蔽原名）；
+      2. X 在模块级有绑定（否则它是本就该有的局部，函数内 import 是正确写法）；
+      3. X 在该函数内被读取，且**不保证**在 import 之前执行过。
+    """
+    problems: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        except SyntaxError:
+            continue  # 语法错误交由 ruff/E9 报
+        module_bound = _module_level_names(tree)
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            imported: dict[str, list[int]] = {}
+            reads: list[tuple[int, str]] = []
+            for node in ast.walk(fn):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.asname is None:  # `import X as Y` 不遮蔽 X
+                            imported.setdefault(alias.name, []).append(node.lineno)
+                elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                    reads.append((node.lineno, node.id))
+            conditional_imports = _imports_inside_branches(fn)
+            for name, lines in imported.items():
+                if name not in module_bound:
+                    continue  # 本来就是局部名，函数内 import 是对的
+                first = min(lines)
+                # 函数体首部的 import 一定先于后续读取执行（`def f(): import x` 是
+                # 最常见也最正确的写法）；只有落进条件分支的 import 才是缺陷——
+                # 那种写法下「import 执行到」不再是前提。
+                if not any(lineno in conditional_imports for lineno in lines):
+                    continue
+                exposed = sorted(
+                    lineno for lineno, read_name in reads
+                    if read_name == name and lineno > first)
+                if not exposed:
+                    continue
+                # 读取全部落在 import 所在的 try 块内 → 该 try 执行到就安全
+                if _reads_guarded_by(fn, name, first, exposed):
+                    continue
+                shown = ", ".join(str(x) for x in exposed[:3])
+                more = "…" if len(exposed) > 3 else ""
+                problems.append(
+                    f"{_rel(path)}:{exposed[0]} {fn.name}() 读 '{name}'，"
+                    f"但它只在第 {first} 行的条件分支里被 import 绑定"
+                    f"（{shown}{more}）；未走到那行即 UnboundLocalError")
+    return problems
+
+
+def _imports_inside_branches(fn: ast.AST) -> set[int]:
+    """函数体内「落进条件/异常/循环分支」的 import 行号集合。
+
+    关键区别：`def f(): import x` 里的 import 是**无条件执行**的，后续读取必然
+    在它之后——这是最常见的正确写法。只有当 import 位于 `if` / `try` / `except` /
+    `with` / `for` / `while` 内部时，「import 已执行」才不再是前提，遮蔽才会致命。
+    2026-09-25 的两个 P0 都属于后者。
+    """
+    conditional: set[int] = set()
+
+    def visit(node: ast.AST, inside_branch: bool) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.Import, ast.ImportFrom)):
+                if inside_branch:
+                    conditional.add(child.lineno)
+            elif isinstance(child, (ast.If, ast.Try, ast.With, ast.For,
+                                     ast.While, ast.FunctionDef, ast.AsyncFunctionDef,
+                                     ast.ClassDef, ast.Lambda)):
+                # 嵌套 def/lambda 是独立作用域，不算本函数的分支
+                nested = isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                            ast.ClassDef, ast.Lambda))
+                visit(child, inside_branch or not nested)
+            else:
+                visit(child, inside_branch)
+
+    visit(fn, False)
+    return conditional
+
+
+def _reads_guarded_by(fn: ast.AST, name: str, import_line: int,
+                      exposed: list[int]) -> bool:
+    """exposed 里的读取是否全部被「含该 import 的 try 块」包住。
+
+    `try: import X ... except: X.log()` 里的读取是安全的：要么 import 成功
+    （读已绑定），要么抛异常走 except 分支——except 分支若也裸读 X 仍不安全，
+    所以这里只认**在 try 体内**的读取。
+    """
+    guarded: set[int] = set()
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Try):
+            continue
+        has_import = any(
+            isinstance(inner, (ast.Import, ast.ImportFrom))
+            and any((a.asname or a.name).split(".")[0] == name for a in inner.names)
+            for stmt in node.body for inner in ast.walk(stmt))
+        if not has_import or import_line not in {
+            inner.lineno for stmt in node.body
+            for inner in ast.walk(stmt)
+            if isinstance(inner, (ast.Import, ast.ImportFrom))}:
+            continue
+        for stmt in node.body:
+            for inner in ast.walk(stmt):
+                if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load) \
+                        and inner.id == name:
+                    guarded.add(inner.lineno)
+    return bool(guarded) and set(exposed) <= guarded
+
+
 def _duplicate_dict_keys(paths: list[Path]) -> list[str]:
     """内建 ast 检测：字典字面量里的重复常量键。
 
@@ -505,6 +634,20 @@ class TestStaticLintGate(unittest.TestCase):
             "`global X` 没有模块级定义（走到那行才 NameError，静态门抓不到）：\n  "
             + "\n  ".join(problems))
 
+    def test_local_import_shadows_global(self):
+        """函数内裸 import 遮蔽同名模块级绑定 → 同函数其余读取即 UnboundLocalError。
+
+        2026-09-25 的两个 P0：search_output.shape_response（本地正文索引 /
+        域过滤 / include-local 三处 except 处理器）与 search_pipeline.postprocess
+        （时间窗过滤 / 恢复 / 本地 rerank 三处）。当时 2854 条测试全绿。
+        """
+        problems = _local_import_shadows_global(_iter_target_files())
+        self.assertEqual(
+            problems, [],
+            "函数内 import 遮蔽了模块级同名符号，走到未保护的读取即 "
+            "UnboundLocalError（fail-open 会变成 fail-closed）：\n  "
+            + "\n  ".join(problems))
+
     def test_shell_vars_braced_before_multibyte(self):
         """shell 脚本里变量引用后紧贴中文必须加花括号（POSIX 模式会把中文并入变量名）。"""
         problems = _shell_var_before_multibyte(_iter_shell_files())
@@ -710,6 +853,53 @@ class TestStaticLintGate(unittest.TestCase):
         self.assertEqual(len(problems), 1, f"造错样本没被抓住：{problems}")
         self.assertIn("_CACHE", problems[0])
         self.assertEqual(clean, [], f"正常写法被误报：{clean}")
+
+    def test_gate_has_teeth_local_import_shadows_global(self):
+        """造两份样本：一份复刻 2026-09-25 的 P0 原文，规则必须抓住；
+        一份是正常写法（别名 / 函数首行 import / 本就该是局部名），不得误报。"""
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "bad_shadow.py"
+            # 逐字复刻 search_output.shape_response 的缺陷形态
+            bad.write_text(
+                "import logging\n\n\n"
+                "def shape():\n"
+                "    try:\n"
+                "        x = 1\n"
+                "    except Exception:\n"
+                "        import logging\n"
+                "        logging.getLogger('a').debug('in-try')\n"
+                "    try:\n"
+                "        y = 2\n"
+                "    except Exception:\n"
+                "        logging.getLogger('a').debug('out-of-try')\n",
+                encoding="utf-8")
+            problems = _local_import_shadows_global([bad])
+
+            good = Path(td) / "good_shadow.py"
+            # 三种合法写法：别名 import / 函数首行 import / 无模块级绑定的局部名
+            good.write_text(
+                "import logging\n\n\n"
+                "def alias_ok():\n"
+                "    import logging as _lg\n"
+                "    return _lg.getLogger('a')\n\n\n"
+                "def first_stmt_ok():\n"
+                "    import json\n"
+                "    return json.dumps({})\n\n\n"
+                "def local_ok():\n"
+                "    import tomllib\n"
+                "    return tomllib\n\n\n"
+                "def guarded_ok():\n"
+                "    try:\n"
+                "        import yaml\n"
+                "        return yaml.safe_load('a')\n"
+                "    except ImportError:\n"
+                "        return None\n",
+                encoding="utf-8")
+            clean = _local_import_shadows_global([good])
+        self.assertEqual(len(problems), 1, f"造错样本没被抓住：{problems}")
+        self.assertIn("logging", problems[0])
+        self.assertIn("shape", problems[0])
+        self.assertEqual(clean, [], f"合法写法被误报：{clean}")
 
     def test_gate_has_teeth_ruff_engine(self):
         """造一个用未导入 `Any` 的样本，ruff 必须抓住（对应本次修复的缺陷）。"""

@@ -14,6 +14,24 @@ from search_rank import filter_results_by_domains
 from typing import Any
 
 
+# 本模块的 6 处日志都写在 **except 处理器**里，且分散在 shape_response 的
+# 不同阶段。此前其中三处各写了一次裸 `import logging`——CPython 在**编译期**
+# 就把 `logging` 判成 shape_response 的局部变量（与那行是否执行到无关），
+# 于是其余三处 `logging.getLogger(...)` 全部编译成 LOAD_FAST，走到即
+# UnboundLocalError；而它们位于 except 内部，处理器再抛异常会**顶替掉**原本
+# 被 fail-open 吞掉的错误——「增强失败不得让搜索失败」变成整次搜索崩溃。
+#
+# 修法是**一处按需取 logger 的小函数**，全模块统一走它：只在真的要记日志时
+# 才 import logging，模块级不留任何绑定。这样既没有局部遮蔽，也不会把
+# traceback → dataclasses → inspect → _colorize（CPython 3.13+ 实测 21 ms）
+# 拖进 import search 的必经之路——本模块的日志全是 debug，而全仓没有把
+# `unified_search` 的 level 调离默认 WARNING，也就是说它们默认永不产生输出。
+def _log(message: str) -> None:
+    """默认静默的调试出口；仅在真正需要记录时才引入 logging。"""
+    import logging
+    logging.getLogger("unified_search").debug(message)
+
+
 _AGENT_RESULT_FIELDS = (
     "title", "url", "snippet", "source", "score", "ref",
     "published_at", "fetch_suggested", "full_text_url",
@@ -386,9 +404,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
                 extra_limitations=extra_lim,
             )
         except Exception as e:
-            import logging
-            logging.getLogger("unified_search").debug(
-                f"envelope 跳过: {type(e).__name__}")
+            _log(f"envelope 跳过: {type(e).__name__}")
             result.setdefault("schema_version", "1.0")
             result.setdefault("limitations", [])
     else:
@@ -422,7 +438,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
                 # 留给调用方抓一次才知道。
                 _r["retrieval"] = _st["retrieval"]
     except Exception as _e:
-        logging.getLogger("unified_search").debug(f"本地正文索引跳过: {type(_e).__name__}")
+        _log(f"本地正文索引跳过: {type(_e).__name__}")
 
     # 证据完整链路 P0：回填已核验证据分 + 高后果门控（finance/health/legal）
     # 输出 fetch_required / evidence_loop 汇总，每条结果带 fetch_suggested
@@ -462,11 +478,9 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
                         _r["fetch_blocked"] = (_local[_r["url"]]
                                                .get("retrieval") or {}).get("reason")
         except Exception as e:
-            import logging
-            logging.getLogger("unified_search").debug(f"不可取源筛选跳过: {type(e).__name__}")
+            _log(f"不可取源筛选跳过: {type(e).__name__}")
     except Exception as e:
-        import logging
-        logging.getLogger("unified_search").debug(f"证据门控跳过: {type(e).__name__}")
+        _log(f"证据门控跳过: {type(e).__name__}")
 
     # 域过滤（后置，引擎无关）：融合排序之后裁剪，sources 与 results 保持一致。
     # 裁剪导致不足 n 条是调用方过滤条件的诚实结果，不回填。
@@ -478,8 +492,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             if note:
                 result["domain_filter"] = note
         except Exception as e:
-            logging.getLogger("unified_search").debug(
-                f"[domain-filter] {type(e).__name__}: {e}")
+            _log(f"[domain-filter] {type(e).__name__}: {e}")
 
     # 相关信源标准化（日常搜索底部引用列表；与 results 顺序一致）。
     # sources 是 results 的降级投影（URL 100% 重叠，实测零信息增量），
@@ -495,8 +508,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             local_hits = _run_local_seek(query, n)
         except Exception as e:
             local_hits = []
-            logging.getLogger("unified_search").debug(
-                f"[include-local] {type(e).__name__}: {e}")
+            _log(f"[include-local] {type(e).__name__}: {e}")
         if local_hits:
             result.setdefault("results", []).extend(local_hits)
             result["local_results"] = local_hits
