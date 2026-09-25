@@ -1018,7 +1018,7 @@ class SearchCache:
                             # 固化成硬命中（v2.4.2 修复）。
                             self._l1.set(key, out)
                             return out
-                except Exception:
+                except (OSError, IOError):
                     pass
             return None
         sliced = self._soft_slice(hit, max_results)
@@ -1094,7 +1094,7 @@ class SearchCache:
                 # 稳定 → 延长（上限为 base 的 2 倍，不超域上限）
                 return min(base_ttl * 2, self.resolve_ttl(domain, query=query) * 2)
             return base_ttl
-        except Exception:
+        except (TypeError, ValueError, KeyError):
             return base_ttl
 
     # ── per-engine 结果缓存 ──────────────────────────────────────────────────
@@ -1160,11 +1160,11 @@ class SearchCache:
             return out
         try:
             from fulltext_store import path_for as _ft_path
-        except Exception:
+        except ImportError:
             _ft_path = None
         try:
             from robots_guard import known_blocked as _known_blocked
-        except Exception:
+        except ImportError:
             _known_blocked = None
 
         for url in urls:
@@ -1172,7 +1172,7 @@ class SearchCache:
                 continue
             try:
                 hit = self._read(self._fetch_key(url))
-            except Exception:
+            except (OSError, ValueError, KeyError):
                 hit = None
             entry: dict = {}
 
@@ -1215,7 +1215,7 @@ class SearchCache:
                         if not cached:
                             body["truncated"] = False
                             body["full_length"] = fp.stat().st_size
-                except Exception:
+                except OSError:
                     pass
             if body:
                 body["source"] = ("cache+archive" if cached
@@ -1228,7 +1228,7 @@ class SearchCache:
                 try:
                     if _known_blocked(url) is True:
                         entry["retrieval"] = {"status": "blocked", "reason": "robots"}
-                except Exception:
+                except (TypeError, AttributeError):
                     pass
 
             if entry:
@@ -1283,7 +1283,7 @@ class SearchCache:
         try:
             self._write(self._fetch_key(url), url, "fetch", 0, merged, "fetch",
                         ttl if ttl is not None else FETCH_DEFAULT_TTL)
-        except Exception:
+        except (OSError, ValueError):
             pass
 
     def clear(self, older_than_hours: int = 24):

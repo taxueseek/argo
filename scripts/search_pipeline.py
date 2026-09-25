@@ -299,7 +299,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         _p_lang = (decision or {}).get("features", {}).get("primary_lang")
         if _p_lang in ("ja", "ko"):
             merged = _lang_prefer_rerank(merged, _p_lang)
-    except Exception:
+    except (ImportError, TypeError, ValueError):
         pass
 
     # 放宽截断：rerank 阶段看到 _pool_limit 条，最终输出再截断 max_results
@@ -353,7 +353,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         from query_enhance import complexity_gate
         if qu is not None and complexity_gate(query, qu) == "low":
             _max_rec_level = "L2"
-    except Exception:
+    except (ImportError, TypeError, ValueError):
         pass
     _tk_recovery = _tick(timing)
     _recovery_engines: set[str] = set()
@@ -423,7 +423,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                         "final_query": (recovery_info.get("final_query") or "")[:60],
                         "note": recovery_info.get("note", ""),
                     })
-                except Exception:
+                except (TypeError, AttributeError):
                     pass
             if rec_results:
                 merged = deduplicate_by_url(rec_results)[:max_results]

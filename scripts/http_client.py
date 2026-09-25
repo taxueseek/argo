@@ -32,7 +32,6 @@ import subprocess
 import threading
 import time
 import urllib.parse
-import urllib.request
 from contextlib import contextmanager
 from typing import Any
 
@@ -363,7 +362,8 @@ class _CookieManager:
         """获取适用于指定 URL 的 Cookie 头。"""
         parsed = urllib.parse.urlparse(url)
         # 构建一个虚拟 request 对象让 cookiejar 提取
-        req = urllib.request.Request(url)
+        import urllib.request as _urllib_request
+        req = _urllib_request.Request(url)
         self._jar.add_cookie_header(req)
         return req.get_header("Cookie") or ""
 
@@ -371,7 +371,8 @@ class _CookieManager:
         """从响应头提取 Set-Cookie 并存入 jar。"""
         parsed = urllib.parse.urlparse(url)
         # 构建 mock request 让 cookiejar 能提取
-        req = urllib.request.Request(url)
+        import urllib.request as _urllib_request
+        req = _urllib_request.Request(url)
         # 使用 http.cookiejar.extract_cookies 需要 response 对象
         # 简化：手动解析 Set-Cookie
         for name, value in response_headers:

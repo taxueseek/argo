@@ -10,13 +10,11 @@ import logging
 import math
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
 import time
 import urllib.error
-import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -453,7 +451,8 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                     for k, v in headers.items()
                 ) if _header_meaningful(v)
             }
-            req = urllib.request.Request(
+            import urllib.request as _urllib_request
+            req = _urllib_request.Request(
                 url_template,
                 data=json.dumps(body).encode("utf-8"),
                 headers=resolved_headers,
@@ -510,14 +509,15 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
     # 这条保底路径会一直连不上（issue #13 的形态）。
     try:
         from net_proxy import open_url as _proxy_open
-        req = urllib.request.Request(url, headers=headers)
+        import urllib.request as _urllib_request
+        req = _urllib_request.Request(url, headers=headers)
         with _proxy_open(req, timeout=timeout) as resp:
             return resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         body = ""
         try:
             body = e.read().decode("utf-8", errors="replace")[:400]
-        except Exception:
+        except (OSError, http.client.HTTPException):
             pass
         logger.warning(f"HTTP 引擎失败: HTTP {e.code} {engine}")
         _note_http_failure(engine, e.code, body)
@@ -568,7 +568,8 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
     engine 传空串时不写寄存器（测试直调 builder 未标引擎名时保持惰性）。
     """
     if isinstance(req, str):
-        req = urllib.request.Request(req)
+        import urllib.request as _urllib_request
+        req = _urllib_request.Request(req)
     # 出口调度（issue #13）：统一走 net_proxy.open_url——代理解析（argo 级
     # rules / ARGO_PROXY / config url + 标准环境变量）的唯一来源。此前这里
     # 自带一份 opener 拼装，与 fetch/job 等处的 urlopen 各写一份，于是 issue
@@ -582,7 +583,7 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
             # 限长：错误页可能几十 MB，而调用方只用前 400 字符归因。
             # 无上限会把整页读进内存，并经归因持久化进磁盘状态文件。
             body_bytes = e.read(_HTTP_ERROR_BODY_CAP) or b""
-        except Exception:
+        except (OSError, http.client.HTTPException):
             pass
         logger.warning(f"HTTP 引擎失败: HTTP {e.code} {engine}")
         _note_http_failure(engine, e.code,
@@ -626,7 +627,7 @@ def _restore_error_body(e: urllib.error.HTTPError, body: bytes) -> None:
         for attr in ("read", "readline", "readlines", "seek", "tell",
                      "close", "__iter__"):
             e.__dict__.pop(attr, None)
-    except Exception:
+    except AttributeError:
         pass
 
 

@@ -28,7 +28,9 @@ from url_canon import canonical_url as _canonical_url_impl
 try:
     from cache import query_similarity as _query_similarity
 except ImportError:
-    _query_similarity = None  # type: ignore
+    raise RuntimeError(
+        "search_rank 需要 cache.query_similarity——cache 模块不完整或未正确安装"
+    ) from None
 
 
 # 中文/英文混合分词用的正则，延迟编译（首次 _tokens 时建）

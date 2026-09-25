@@ -204,7 +204,7 @@ def _record_quota(engine: str, success: bool) -> None:
     try:
         from quota import get_quota_manager
         get_quota_manager().record(engine, success=success)
-    except Exception:
+    except (ImportError, OSError, ValueError):
         pass
 
 
@@ -228,7 +228,7 @@ def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
     try:
         from quota import get_quota_manager
         get_quota_manager().mark_remote_exhausted(engine, reason=detail)
-    except Exception:
+    except (ImportError, OSError, ValueError):
         pass
 
 
@@ -758,7 +758,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                 input_kind=kind if kind != "auto" else "auto",
                 context=context,
             )
-    except Exception:
+    except (OSError, ValueError, TypeError, KeyError):
         pass
 
     # 结果局限声明：**质量信号，与归档开关无关**，两条路径共用同一计算方式。

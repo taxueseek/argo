@@ -50,7 +50,7 @@ class TestContentlessQueryGuard(unittest.TestCase):
         self.assertEqual(out["results"], [])
 
     def test_single_letter_not_blocked(self):
-        """单字母 "C" 有词元（\w 命中），必须照常进 execute_search。"""
+        r"""单字母 "C" 有词元（\w 命中），必须照常进 execute_search。"""
         import search
         with patch.object(search, "execute_search",
                           side_effect=lambda **kw: _sentinel_result(kw.get("query", ""))):

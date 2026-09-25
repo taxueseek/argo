@@ -553,7 +553,7 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
             st = get_breaker().status(p)
             if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
                 p = None
-        except Exception:
+        except (ImportError, OSError, KeyError):
             pass
         if p and p in engines_combo:
             engines_combo = [p] + [e for e in engines_combo if e != p]

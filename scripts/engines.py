@@ -224,11 +224,17 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
         try:
             from engines_base import _resolve as _resolve_tpl
             sub_dir = Path(__file__).resolve().parent.parent / "sub-skills" / "local-search"
-            if str(sub_dir) not in sys.path:
-                # append 而非 insert(0)：避免 sub-skills 顶层模块名
-                # （health_check 等）劫持 scripts 下同名模块的解析。
-                sys.path.append(str(sub_dir))
-            import search_v3
+            # 用上下文管理器临时添加路径，import 完成后自动清理——
+            # 避免 sys.path 被永久污染（原实现 append 后不 remove）。
+            import contextlib
+            added = str(sub_dir) not in sys.path
+            if added:
+                sys.path.append(str(sub_dir))  # append 而非 insert(0)：避免劫持 scripts 下同名模块
+            try:
+                import search_v3
+            finally:
+                if added:
+                    sys.path.remove(str(sub_dir))
             res = search_v3.search_engines(
                 query, engines=None, n=n, timeout=float(timeout),
                 max_parallel=5, skip_cache=bool(kwargs.get("skip_cache", False)),

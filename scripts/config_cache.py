@@ -82,7 +82,7 @@ def _config_disk_cache_enabled() -> bool:
     try:
         from engine_env import env_flag
         return env_flag("ARGO_CONFIG_CACHE", default=True)
-    except Exception:
+    except (ImportError, ValueError, KeyError):
         # 判定链不可用时按「开」处理：缓存是纯性能优化，关掉它不影响正确性，
         # 而误判为「关」只会让每次调用回到全量解析（旧的既定行为）。
         return True
