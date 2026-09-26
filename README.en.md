@@ -24,8 +24,8 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.9-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-257-orange">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.0-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-267-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-14%20tools-purple">
 </p>
 
@@ -57,10 +57,10 @@
 1. **From links to evidence.** Agents need structured material they can rank, verify and fit in context — Argo returns credibility-decomposed JSON, not SERP lists.
 2. **Context is the first cost.** A single page scrape can burn 10k+ tokens; Argo's agent profile is ~3.7KB per call, with field sets and byte budgets pinned by gates.
 3. **Sites now prepare content for AI.** llms.txt and `.md` direct-out are spreading across major doc sites — Argo's fetch chain probes them at level 0, with an r.jina.ai reader fallback.
-4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (219 keyless sources).
+4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (229 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> v2.8.9 ships all of the above: 257 sources, 93 domains, 219 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> v2.8.9 ships all of the above: 267 sources, 93 domains, 229 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
@@ -295,7 +295,7 @@ python3 scripts/search.py --list-engines
 - **One-command MCP inject (new in v2.8.4)**: `argo mcp inject` for Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo; source `mcp/clients.yaml`)
 - **Structured search upgrades (new in v2.8.4)**: query normalize + variants + complexity gate; social-syntax first; TF-IDF keeps looking after dropping a Chinese engine; `--include-local`
 - **Keenable (new in v2.8.4)**: extra general web engine (L1 declarative HTTP, free trial, `ARGO_KEENABLE_API_KEY`)
-- **257 sources (219 usable with no key), 93 domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml` + `engines/specs/*.yaml`)
+- **267 sources (229 usable with no key), 93 domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml` + `engines/specs/*.yaml`)
 - **14 MCP tools**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute, WeChat article full text, job aggregation
 - **Multilingual search**: Chinese, English, Japanese, Korean, Cyrillic, Thai, Arabic, Hebrew, Greek, Devanagari, …; routing and engine params follow language; non-Chinese queries avoid Chinese-only sources (Zhihu / Sogou WeChat / A-share snapshots, etc.)
 - **Vertical recovery gates**: empty-result recovery will not “leak” pypi / npm / flash news into film or sports
@@ -305,7 +305,7 @@ python3 scripts/search.py --list-engines
 
 ## Engines & routing
 
-Config currently has **257** sources (**219** usable with no key) and **93** domains (see `config.yaml` and `--list-engines`).
+Config currently has **267** sources (**229** usable with no key) and **93** domains (see `config.yaml` and `--list-engines`).
 
 ### Direct & vertical (excerpt)
 

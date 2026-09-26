@@ -24,8 +24,8 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.8.9-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-257-orange">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.0-informational">
+  <img alt="engines" src="https://img.shields.io/badge/engines-267-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-14%20tools-purple">
 </p>
 
@@ -57,10 +57,10 @@
 1. **링크에서 증거로.** 에이전트는 정렬·검증 가능하고 컨텍스트에 맞는 구조화 자료가 필요 — Argo는 신뢰도 분해 JSON을 반환.
 2. **컨텍스트가 첫 번째 비용.** 에이전트 프로필은 회당 약 3.7KB, 필드와 바이트 예산은 게이트로 고정.
 3. **사이트들이 AI용 콘텐츠를 준비.** llms.txt와 `.md` 직접 출력이 확산 — fetch 체인이 레벨 0에서 자동 탐지, r.jina.ai 리더가 fallback.
-4. **무료 오픈 생태계로 충분.** 정부·학술·표준·보안 공개 API와 키리스 엔진이 대부분 도메인을 커버 (무설정 215개).
+4. **무료 오픈 생태계로 충분.** 정부·학술·표준·보안 공개 API와 키리스 엔진이 대부분 도메인을 커버 (무설정 229개).
 5. **품질은 측정 가능.** 랭킹 골든 플로어, 융합 이득 어블레이션 게이트, 음의 라우팅 제어.
 
-> v2.8.9은 이 모두를 구현: 257 소스 / 93 도메인 / 219 무설정.
+> v2.8.9은 이 모두를 구현: 267 소스 / 93 도메인 / 229 무설정.
 
 ---
 
@@ -337,7 +337,7 @@ python3 scripts/search.py --list-engines
 - **MCP 한 줄 주입 (v2.8.4 신규)**: `argo mcp inject`로 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (원자 쓰기 + 백업 + 가역; 진원 `mcp/clients.yaml`)
 - **구조화 검색 강화 (v2.8.4 신규)**: 쿼리 정규화 + 변체 + 복잡도 게이트; 소셜 문법 우선; TF-IDF는 중국어 엔진을 버린 뒤에도 후보를 봄; `--include-local`
 - **Keenable (v2.8.4 신규)**: 일반 웹 검색 엔진 추가 (L1 선언적 HTTP, 무료 체험, `ARGO_KEENABLE_API_KEY`)
-- **257 소스, 93 도메인** (219 무설정): 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
+- **267 소스, 93 도메인** (229 무설정): 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
 - **MCP 도구 12개**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute
 - **다국어 검색**: 중국어, 영어, 일본어, 한국어, 키릴, 태국어, 아랍어, 히브리어, 그리스어, 데바나가리, …; 라우팅과 엔진 파라미터가 언어를 따름; 비중국어 쿼리는 중국어 전용 소스 회피 (Zhihu / Sogou WeChat / A주 스냅샷 등)
 - **수직 복구 게이트**: 빈 결과 복구 시 영화·스포츠에 pypi / npm / 속보 등이 「새지」 않음
@@ -347,7 +347,7 @@ python3 scripts/search.py --list-engines
 
 ## 엔진과 라우팅
 
-설정에는 현재 약 **257** 소스와 **93** 도메인이 있습니다 (`config.yaml`, `--list-engines` 참고).
+설정에는 현재 약 **267** 소스와 **93** 도메인이 있습니다 (`config.yaml`, `--list-engines` 참고).
 
 ### 직접·수직 (발췌)
 
