@@ -618,6 +618,11 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
         _status_of = {o.get("engine"): o.get("status")
                       for o in engine_outcomes if isinstance(o, dict)}
         for eng, res in raw_results.items():
+            # 早停收工弃置的引擎（cancelled）不参与成败记账：它没有失败，
+            # 也没交付结果——记失败会把健康引擎的 combo 分数被早停逐次毒化，
+            # 记空结果会污染 empty 统计。与上面配额/鉴权的中性语义同源。
+            if _status_of.get(eng) == "cancelled":
+                continue
             errors = [str(r.get("error", "")) for r in res if isinstance(r, dict) and "error" in r]
             # 配额/鉴权类是配置态故障，不是引擎质量信号：计入会把恢复后的
             # 引擎分数毒化在历史失败里（byted 配额期 38 连败 → 分数 0.072，

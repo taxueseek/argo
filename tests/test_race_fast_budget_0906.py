@@ -434,5 +434,82 @@ class TestStragglerGraceAfterReject(unittest.TestCase):
         self.assertGreaterEqual(wall, 0.35, "主引擎结果不该被白白放弃")
 
 
+class TestEarlyStopCancelledOutcome(unittest.TestCase):
+    """早停收工弃置 ≠ 超时（2026-09-26）。
+
+    此前 `_settle_pending` 把两种弃置一律标 timeout，实测两个后果：
+      - 主搜成功触发早停后，hedge 引擎（anysearch 等）启动仅 ~26ms 就被弃置，
+        errors[] 必出一条假超时（8s 超时上限下 26ms 不可能是真超时）；
+      - adaptive 学习器读到 {"error": "timeout"} 把它记成 success=False，
+        健康 hedge 引擎的 combo 分数被早停逐次毒化（对冲静默退化）。
+    修复后：早停弃置标 cancelled（无 error 条目、errors[] 干净、学习器跳过）；
+    等待预算到期仍标 timeout（test_hedge_race_timeout… 的 race 双超窗语义不变）。
+    """
+
+    def _run(self, fake, combo):
+        calls: list[str] = []
+
+        def _spy(q_, eng, **kw):
+            calls.append(eng)
+            return fake(q_, eng)
+
+        learner = MagicMock()
+        decision = {"engines_combo": combo, "engines": combo,
+                    "parallel": True, "domain": "general_search",
+                    "engine": combo[0]}
+        cache = SearchCache(db_path=":memory:")
+        with ExitStack() as stack:
+            for p in (
+                patch("search.engine_search", side_effect=_spy),
+                patch("circuit_breaker.get_breaker", return_value=_AllowAllBreaker()),
+                patch("quota.get_quota_manager", return_value=MagicMock()),
+                patch.object(search, "_PRIMARY_GRACE_S", 0.3),
+                patch("adaptive.get_learner", return_value=learner),
+            ):
+                stack.enter_context(p)
+            out = execute_search(
+                QUERY, decision, max_results=5, timeout=10, depth="fast",
+                cache=cache, skip_cache=True, mode="fast")
+        return out, calls, learner
+
+    def test_early_stop_abandoned_engine_is_cancelled_not_timeout(self):
+        def fake(_q, eng):
+            if eng == "slow_primary":
+                time.sleep(3.5)      # 远超 grace：赢家早停后被弃置
+                return _good("slow")
+            if eng == "fast_backup":
+                time.sleep(0.02)
+                return _good("bk")
+            return []
+
+        out, calls, learner = self._run(fake, ["slow_primary", "fast_backup"])
+        self.assertIn("slow_primary", calls, "慢引擎已启动才会被弃置")
+        outcomes = {o.get("engine"): o for o in out.get("engine_outcomes", [])}
+        self.assertEqual(outcomes.get("slow_primary", {}).get("status"),
+                         "cancelled",
+                         f"早停弃置应标 cancelled：{outcomes.get('slow_primary')}")
+        self.assertNotIn("timeout", " ".join(out.get("errors") or []),
+                         f"errors[] 不该出现假超时：{out.get('errors')}")
+        recorded = {c.args[0] for c in learner.record.call_args_list}
+        self.assertNotIn("slow_primary", recorded,
+                         f"弃置引擎不得进学习器记账：{learner.record.call_args_list}")
+
+    def test_cancelled_engine_leaves_no_error_result_entry(self):
+        """弃置引擎的 raw 记账不得含 error 条目——那是学习器毒化的人口。"""
+        def fake(_q, eng):
+            if eng == "slow_primary":
+                time.sleep(3.5)
+                return _good("slow")
+            return _good("fast")
+
+        out, _calls, _learner = self._run(fake, ["slow_primary", "fast_backup"])
+        # errors[] 干净 + 弃置引擎 outcome 无 detail
+        self.assertEqual(out.get("errors"), [],
+                         f"早停成功的搜索不应带任何错误：{out.get('errors')}")
+        outcomes = {o.get("engine"): o for o in out.get("engine_outcomes", [])}
+        self.assertNotIn("detail", outcomes.get("slow_primary", {}),
+                         f"弃置不该伪造失败详情：{outcomes.get('slow_primary')}")
+
+
 if __name__ == "__main__":
     unittest.main()

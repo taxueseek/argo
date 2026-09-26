@@ -238,9 +238,14 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
 
     @safe_search
     def _engine(query: str, n: int = 5, timeout: float = 8, mode: str = "fast", **kwargs) -> list[dict[str, Any]]:
+        # 回退路径无条件依赖 _resolve：必须放 try 外。放 try 首行时，import 失败
+        # 会被下面的 except Exception 吞掉，回退路径读 _resolve_tpl 直接
+        # UnboundLocalError——「进程内失败回退 subprocess」的语义被架空
+        # （ef4e509 同类：分支内 import 污染同函数后续读取，静态门禁
+        # test_local_import_shadows_global 依赖此处不报）。
+        from engines_base import _resolve as _resolve_tpl
         # 进程内优先（省 subprocess 冷启动）
         try:
-            from engines_base import _resolve as _resolve_tpl
             sub_dir = Path(__file__).resolve().parent.parent / "sub-skills" / "local-search"
             # 临时加路径 import，完事自动清理（助手语义见定义处）
             with _sys_path_tmp(str(sub_dir)):

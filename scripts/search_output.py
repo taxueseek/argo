@@ -305,8 +305,10 @@ def format_text_output(results: dict[str, Any]) -> str:
 
 
 # 不算失败的 outcome 状态：这些情况「引擎跑了、没问题」，不该出现在 errors[]
+# cancelled = 早停收工时被主动弃置（结果已够，引擎没失败也没超窗）
 _NON_ERROR_OUTCOME = frozenset({
     "ok", "ok-cached", "partial", "no-results", "no-results-cached",
+    "cancelled",
 })
 
 

@@ -520,21 +520,40 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             return []
         return [x for x in r[1] if isinstance(x, dict) and "error" not in x]
 
-    def _settle_pending(pending: list[tuple[dict[str, Any], Any, str]]) -> None:
-        """收尾一组待定线程：仍活的标 timeout（daemon 自行结束，不阻塞退出），
-        恰在末次轮询后完成的照常入账——否则它既不 ingest 也不标 timeout，
-        结果会悄悄丢掉。latency 用真实等待时长（原 timeout 参数×1000 是假值）。"""
+    def _settle_pending(pending: list[tuple[dict[str, Any], Any, str]],
+                        *, status: str) -> None:
+        """收尾一组待定线程：按弃置原因记账（daemon 自行结束，不阻塞退出），
+        恰在末次轮询后完成的照常入账——否则它既不 ingest 也不标状态，
+        结果会悄悄丢掉。latency 用真实等待时长（原 timeout 参数×1000 是假值）。
+
+        status 对应两种不同的弃置原因，必须分开：
+          - "timeout"：等待预算到期仍活——引擎确实超窗，沿用 timeout 语义
+            （error 条目 + 熔断可见的 outcome）；race 双超窗测试依赖此形态。
+          - "cancelled"：早停收工（结果已够）主动弃置——引擎没有失败，是
+            编排的收工决定。此前一律标 timeout 的实测后果：每次带对冲且主搜
+            成功的搜索，errors[] 必出一条假超时（anysearch: timeout @26ms，
+            8s 超时上限下 26ms 不可能是真超时）；且 adaptive 学习器把
+            {"error": ...} 记成 success=False，健康引擎的 combo 分数被早停
+            逐次毒化（2026-09-26 复现并定位）。
+        """
         for holder, th, eng in pending:
             lat_ms = int((_now() - holder.get("t0", _now())) * 1000)
             if th.is_alive():
-                # 走 _ingest 而不是手写两行收账：超时路径此前漏记 engine_latency，
-                # 而 timing.dispatch 的 engines_run / engine_sum_ms / parallel_efficiency
-                # 全是从 engine_latency 推的——一轮里引擎全部超时时，会报出「跑了 0 个
-                # 引擎」，而那恰恰是最该被看见的一轮。归一到同一处记账，以后 _ingest
-                # 再加字段，超时路径自动跟上。
-                res = [{"error": "timeout", "source": eng}]
-                _ingest(eng, res,
-                        classify_outcome(eng, res, lat_ms, "timeout"), lat_ms)
+                if status == "cancelled":
+                    # 空列表而非 error 条目：error 条目会被学习器当失败、
+                    # 被 _collect_errors 当错误文本收进 errors[]
+                    _ingest(eng, [],
+                            classify_outcome(eng, [], lat_ms, "cancelled"),
+                            lat_ms)
+                else:
+                    # 走 _ingest 而不是手写两行收账：超时路径此前漏记 engine_latency，
+                    # 而 timing.dispatch 的 engines_run / engine_sum_ms / parallel_efficiency
+                    # 全是从 engine_latency 推的——一轮里引擎全部超时时，会报出「跑了 0 个
+                    # 引擎」，而那恰恰是最该被看见的一轮。归一到同一处记账，以后 _ingest
+                    # 再加字段，超时路径自动跟上。
+                    res = [{"error": "timeout", "source": eng}]
+                    _ingest(eng, res,
+                            classify_outcome(eng, res, lat_ms, "timeout"), lat_ms)
             else:
                 _ingest_holder(holder)
 
@@ -603,7 +622,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 progressed = True
                 goods = _holder_goods(holder)
                 if stop is not None and stop(eng, goods):
-                    _settle_pending(pending)
+                    _settle_pending(pending, status="cancelled")
                     return True
                 if goods and tail_grace_s > 0.0:
                     # 有东西可交付了：剩余等待收窄到宽限窗（只收紧一次，不回扩）
@@ -616,7 +635,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 # 自适应后平均等待时长降至 5-8ms。
                 remain = deadline - _now()
                 time.sleep(min(0.02, remain / 10) if remain > 0 else 0.005)
-        _settle_pending(pending)
+        _settle_pending(pending, status="timeout")
         return False
 
     if parallel and to_run and allow_early and len(to_run) > 1:
