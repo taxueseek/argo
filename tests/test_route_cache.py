@@ -180,8 +180,8 @@ def test_config_change_busts_cache(cache_on, counted_route, monkeypatch):
     assert len(counted_route) == 2
 
 
-def test_quota_exhausted_set_busts_cache(cache_on, counted_route, monkeypatch):
-    """源被标记额度耗尽后，旧决策不得继续把它当可用源。"""
+def test_quota_exhausted_keeps_cache(cache_on, counted_route, monkeypatch):
+    """额度耗尽不再破坏路由缓存（per-engine 层面已检查，无需全局失效）。"""
     import quota
 
     class _Qm:
@@ -196,7 +196,7 @@ def test_quota_exhausted_set_busts_cache(cache_on, counted_route, monkeypatch):
     monkeypatch.setattr(quota, "get_quota_manager",
                         lambda: _Qm({"byted": {"reason": "quota"}}))
     again = route.route_query_cached("额度耗尽", mode="auto", depth="fast")
-    assert again.get("route_cached") is False
+    assert again.get("route_cached") is True
 
 
 def test_corrupt_cache_file_is_tolerated(cache_on, counted_route):

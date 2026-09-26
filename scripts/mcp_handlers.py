@@ -548,6 +548,31 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """
     pretty = _env_bool("ARGO_MCP_PRETTY", bool(arguments.get("pretty", False)))
     try:
+        # 必填参数验证：缺参数时返回清晰错误，而非 KeyError → -32000
+        _required = {
+            "argo_search": ("query",),
+            "argo_research": ("query",),
+            "argo_social_search": ("query",),
+            "argo_evidence": ("query",),
+            "argo_clarify": ("query",),
+            "argo_crawl": ("url",),
+            "argo_fetch": ("url",),
+            "argo_screenshot": ("url",),
+            "argo_pdf": ("url",),
+            "argo_article": ("url",),
+            "argo_job": ("query",),
+        }
+        if name in _required:
+            missing = [p for p in _required[name] if not arguments.get(p)]
+            if missing:
+                return {
+                    "content": [{"type": "text",
+                                 "text": _dumps({"error": {
+                                     "code": -32602,
+                                     "message": f"Missing required parameter(s): {', '.join(missing)}"
+                                 }})}],
+                    "isError": True,
+                }
         if name == "argo_search":
             search_mod = _lazy_cached("search")
             # MCP 默认 envelope=False：减 candidates/coverage 构造开销；

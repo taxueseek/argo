@@ -869,9 +869,12 @@ def route_query(query: str, engine_override: str = "auto",
                         "讨论", "网友", "评论", "b站", "bilibili", "抖音",
                     )
                     social_ok = any(s in ql for s in social_signals)
-                if score < TFIDF_MIN_SCORE or not social_ok:
+                if score < TFIDF_MIN_SCORE:
                     # 分数降序：后续候选分更低，整条 TF-IDF 分支作废
                     break
+                if not social_ok:
+                    # 社交引擎候选但查询无社交信号：跳过看下一个候选
+                    continue
                 # ja/ko 查询：候选若是中文内容/政策引擎（gov_policy/百科等），
                 # 对日/韩用户无关（返回中文站），丢弃让通用 anysearch 主导。
                 # 丢弃当前候选后继续看下一个（2026-08 修复：旧逻辑只看 top-1，

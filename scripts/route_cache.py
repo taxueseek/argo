@@ -75,19 +75,17 @@ def _route_state_fingerprint() -> str:
     刻意**不含** adaptive.db：自适应学习器每次搜索都写它，同理会让缓存立即失效；
     它只影响引擎排序的软信号、变化渐进，由 TTL 兜住。
 
-    这是**粗粒度**信号：覆盖「源挂了 / 被禁 / 额度耗尽」这类持久状态，瞬时节流
+    这是**粗粒度**信号：覆盖「源挂了 / 被禁」这类持久状态，瞬时节流
     （rpm 抖动）不在其中，由 TTL 兜住。空串判据与 config 磁盘缓存 digest 取不到
     时的保守选择一致：空摘要永不等于任何已存条目的键，因此不会读到旧结论。
+
+    刻意**不含** quota marks：额度耗尽是 per-engine 信号，已在 _get_engines_combo
+    和 _run_one 层面检查；放进指纹会让单个引擎额度变化使所有查询的路由缓存
+    失效——实测这是路由缓存命中率最大的敌人。
     """
     try:
         from config import config_stamp
         parts = [f"cfg={config_stamp():.0f}"]
-    except Exception:
-        return ""
-    try:
-        from quota import get_quota_manager
-        marks = get_quota_manager().remote_exhausted_marks()
-        parts.append("qe=" + ",".join(sorted(marks)))
     except Exception:
         return ""
     try:

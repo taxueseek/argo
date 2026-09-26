@@ -241,7 +241,6 @@ def main():
         exclude_domains=[d for d in args.exclude_domains.split(",") if d.strip()] or None,
         timing=_timing,
     )
-    results["query"] = args.query
 
     # 固定开销（import + argparse + 收尾）：缓存命中时它占墙钟大头，而它不出现
     # 在任何阶段里——不显式报出来，看的人会把「启动 80 ms」当成「搜索 80 ms」，

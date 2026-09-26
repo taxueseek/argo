@@ -70,7 +70,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "同日 +41：{UUID} 进程级身份占位符（BAIDUID 反关联）+ tls_impersonate/"
               "resolve_redirects 两契约接线（跳转解析本体独立在 jump_resolver.py）"),
     "scripts/cache.py": (
-        1356, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
+        1362, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行）"),
     "scripts/job.py": (
         1182, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),

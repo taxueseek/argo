@@ -289,7 +289,7 @@ def _score_authority_cached(url: str, source: str = "") -> tuple:
     tier = (
         "high" if best_score >= 0.8
         else "medium" if best_score >= 0.6
-        else "low" if best_score >= 0.4
+        else "low" if best_score >= 0.35
         else "very_low"
     )
 

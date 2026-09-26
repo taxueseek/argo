@@ -512,7 +512,7 @@ def _search_greenhouse(q: str, n: int) -> list:
     for t in threads:
         t.start()
     for t in threads:
-        t.join()
+        t.join(timeout=12)
     return out[: n * 3]
 
 
@@ -542,7 +542,7 @@ def _search_ashby(q: str, n: int) -> list:
     for t in threads:
         t.start()
     for t in threads:
-        t.join()
+        t.join(timeout=12)
     return out[: n * 3]
 
 
@@ -586,7 +586,7 @@ def _search_lever(q: str, n: int) -> list:
     for t in threads:
         t.start()
     for t in threads:
-        t.join()
+        t.join(timeout=12)
     return out[: n * 3]
 
 
@@ -1030,7 +1030,7 @@ def search(query: str, city: str = "", num: int = 5, engine: str = "all",
     for t in threads:
         t.start()
     for t in threads:
-        t.join()
+        t.join(timeout=12)
 
     # 统一字段 + 白名单后置校验 + 三级判定 + 时效 + 结构化字段
     kept, dropped_url, dropped_region = [], 0, 0

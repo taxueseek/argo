@@ -517,26 +517,30 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
                   allow_recompute: bool = False,
                   broaden: bool = False) -> dict[str, Any]:
     """执行取证。有工作包则按依赖分阶段；否则扩词检索。产出 dossier。"""
+    import time as _time
+    _deadline = _time.time() + timeout * 3
     original_query = query
     engines_priority = list((profile or {}).get("engines_priority") or [])
     vertical_engines = list((profile or {}).get("vertical_engines") or [])
 
     plan_info: dict[str, Any] | None = None
     try:
-        from plan import build_plan
-        plan_info = build_plan(
-            query, mode=mode, depth=depth, max_results=max_results,
-            context="research",
-        )
+        if _time.time() < _deadline:
+            from plan import build_plan
+            plan_info = build_plan(
+                query, mode=mode, depth=depth, max_results=max_results,
+                context="research",
+            )
     except Exception:
         plan_info = None
 
     rewrite_result = None
     try:
-        from query_rewriter import rewrite_query as do_rewrite
-        rewrite_result = do_rewrite(query)
-        if rewrite_result["rewritten"] and rewrite_result["confidence"] >= 0.7:
-            query = rewrite_result["rewritten"]
+        if _time.time() < _deadline:
+            from query_rewriter import rewrite_query as do_rewrite
+            rewrite_result = do_rewrite(query)
+            if rewrite_result["rewritten"] and rewrite_result["confidence"] >= 0.7:
+                query = rewrite_result["rewritten"]
     except Exception:
         pass
 
@@ -600,6 +604,8 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
     recompute_expected = False
     if packages:
         for p in packages:
+            if _time.time() >= _deadline:
+                break
             all_file_inputs.extend(p.get("file_inputs") or [])
             rec = p.get("recompute")
             if rec:

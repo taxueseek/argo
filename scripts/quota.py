@@ -291,9 +291,10 @@ class QuotaManager:
 
     def get_current_rpm(self, engine: str) -> float:
         """获取最近 1 分钟的调用速率。"""
-        state = self._state.get(engine, {})
-        now = time.time()
-        return len([t for t in state.get("calls", []) if now - t < 60])
+        with self._lock:
+            state = self._state.get(engine, {})
+            now = time.time()
+            return len([t for t in state.get("calls", []) if now - t < 60])
 
     def get_error_rate(self, engine: str) -> float:
         """最近 1 小时的错误率。
@@ -304,34 +305,63 @@ class QuotaManager:
 
         现在改为同窗口：窗口内没有样本时返回 0.0（无观测 ≠ 高错误率）。
         """
-        state = self._state.get(engine, {})
-        cutoff = time.time() - 3600
-        window_calls = [t for t in state.get("calls", []) if t > cutoff]
-        if not window_calls:
-            return 0.0
-        return min(1.0, state.get("errors", 0) / len(window_calls))
+        with self._lock:
+            state = self._state.get(engine, {})
+            cutoff = time.time() - 3600
+            window_calls = [t for t in state.get("calls", []) if t > cutoff]
+            if not window_calls:
+                return 0.0
+            return min(1.0, state.get("errors", 0) / len(window_calls))
 
     def is_available(self, engine: str, mode: str = "auto") -> bool:
         """检查引擎是否可用（配额未耗尽且未触发限频 + 预算模式）。"""
-        if self.is_remote_exhausted(engine):
-            return False
-        qr = self.get_remaining_ratio(engine)
-        if qr <= 0:
-            return False
+        with self._lock:
+            return self._is_available_locked(engine, mode)
 
+    def _is_available_locked(self, engine: str, mode: str = "auto") -> bool:
+        """is_available 的持锁内部版本（调用方必须已持有 self._lock）。
+
+        将 is_remote_exhausted / get_remaining_ratio / get_current_rpm 的
+        检查合并到单次持锁中，消除 TOCTOU 间隙。
+        """
+        self._fresh_locked()
+        # is_remote_exhausted 的内联版本（不重复获取锁）
+        self._refresh_remote_state_locked(engine, time.time())
+        if "remote_exhausted" in (self._state.get(engine) or {}):
+            return False
+        # get_remaining_ratio 的内联版本（不重复获取锁）
         profile = self._profiles.get(engine, {})
+        state = self._state.get(engine, {})
+        used = state.get("used", 0)
+        period = profile.get("period", "day")
+        last_reset = state.get("last_reset", 0)
+        now = time.time()
+        if period == "month" and now - last_reset > 30 * 86400:
+            state["used"] = 0
+            state["last_reset"] = now
+            self._save_state()
+            used = 0
+        elif period == "day" and now - last_reset > 86400:
+            state["used"] = 0
+            state["last_reset"] = now
+            self._save_state()
+            used = 0
+        limit = profile.get("limit")
+        if limit is not None:
+            qr = max(0.0, (limit - used) / limit)
+            if qr <= 0:
+                return False
+        # get_current_rpm 的内联版本（不重复获取锁）
         qps = profile.get("qps")
         if qps is not None:
-            rpm = self.get_current_rpm(engine)
+            rpm = len([t for t in state.get("calls", []) if now - t < 60])
             if rpm >= qps * 60:
                 return False
-
         # budget 模式禁用付费引擎
         if mode in ("fast", "budget"):
             cost_tier = profile.get("cost_tier", "free")
             if cost_tier == "paid":
                 return False
-
         return True
 
     def get_cost_per_call(self, engine: str) -> float:
@@ -343,7 +373,8 @@ class QuotaManager:
 
     def get_total_cost(self, engine: str) -> float:
         """获取引擎累计成本。"""
-        return self._state.get(engine, {}).get("total_cost", 0.0)
+        with self._lock:
+            return self._state.get(engine, {}).get("total_cost", 0.0)
 
     def get_stats(self) -> dict:
         """获取所有引擎的配额统计。"""
