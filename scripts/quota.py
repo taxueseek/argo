@@ -163,36 +163,48 @@ class QuotaManager:
 
         self._mutate_locked(_apply)
 
-    def get_remaining_ratio(self, engine: str) -> float:
-        """获取配额剩余比例。无限配额返回 1.0。
+    def _period_elapsed(self, engine: str, now: float) -> bool:
+        """该引擎的配额周期是否已过（只判断，不改状态）。"""
+        profile = self._profiles.get(engine, {})
+        state = self._state.get(engine)
+        if not isinstance(state, dict):
+            return False
+        span = 30 * 86400 if profile.get("period", "day") == "month" else 86400
+        return now - float(state.get("last_reset") or 0) > span
 
-        整体持锁：周期重置的写 + _save_state 与 record() 并发安全。
+    def _reset_period_locked(self, engine: str, now: float) -> None:
+        """周期重置的 load-modify-write，**调用方须已持文件锁**。
+
+        get_remaining_ratio / is_available 此前各抄了一份这段逻辑，也各抄了
+        一份「threading.Lock 下改完就 _save_state」的写法——于是周期边界那一刻
+        的并发写会互相覆盖整个状态文件。统一走这里：先判是否过期，过期才在
+        锁内重读并归零。
         """
+        with argo_paths.file_lock(QUOTA_STATE_PATH):
+            self._load_state()
+            if not self._period_elapsed(engine, now):
+                return
+            state = self._state.get(engine)
+            if not isinstance(state, dict):
+                return
+            state["used"] = 0
+            state["last_reset"] = now
+            argo_paths.atomic_write_json(QUOTA_STATE_PATH, self._state)
+
+    def get_remaining_ratio(self, engine: str) -> float:
+        """获取配额剩余比例。无限配额返回 1.0。"""
         with self._lock:
             self._fresh_locked()
+            # 按周期重置（先于 limit 判空：null 引擎计数也要按周期归零，
+            # 否则遥测永久累计、无周期语义）。重置在文件锁内落盘。
+            if self._period_elapsed(engine, time.time()):
+                self._reset_period_locked(engine, time.time())
             profile = self._profiles.get(engine, {})
             state = self._state.get(engine, {})
-            used = state.get("used", 0)
-            period = profile.get("period", "day")
-            last_reset = state.get("last_reset", 0)
-            now = time.time()
-
-            # 按周期重置（先于 limit 判空：null 引擎计数也要按周期归零，
-            # 否则遥测永久累计、无周期语义）
-            if period == "month" and now - last_reset > 30 * 86400:
-                state["used"] = 0
-                state["last_reset"] = now
-                self._save_state()
-                used = 0
-            elif period == "day" and now - last_reset > 86400:
-                state["used"] = 0
-                state["last_reset"] = now
-                self._save_state()
-                used = 0
             limit = profile.get("limit")
             if limit is None:
                 return 1.0
-            return max(0.0, (limit - used) / limit)
+            return max(0.0, (limit - state.get("used", 0)) / limit)
 
     def mark_remote_exhausted(self, engine: str, reason: str = "",
                               period: str | None = None) -> None:
@@ -204,47 +216,54 @@ class QuotaManager:
         可执行 `python3 scripts/quota.py reset <engine>`。
         """
         with self._lock:
-            self._fresh_locked()
-            st = self._state.setdefault(engine, {
-                "used": 0, "limit": 0, "calls": [],
-                "errors": 0, "last_reset": time.time(), "total_cost": 0.0,
-            })
-            profile = self._profiles.get(engine, {})
-            p = period or profile.get("period") or "day"
-            seconds = self._PERIOD_SECONDS.get(p, 86400)
-            if seconds < 3600:
-                seconds = 86400
-            st["remote_exhausted"] = {
-                "until": time.time() + seconds,
-                "reason": (reason or "")[:200],
-                "marked_at": time.time(),
-            }
-            self._save_state()
+            def _apply() -> None:
+                st = self._state.setdefault(engine, {
+                    "used": 0, "limit": 0, "calls": [],
+                    "errors": 0, "last_reset": time.time(), "total_cost": 0.0,
+                })
+                profile = self._profiles.get(engine, {})
+                p = period or profile.get("period") or "day"
+                seconds = self._PERIOD_SECONDS.get(p, 86400)
+                if seconds < 3600:
+                    seconds = 86400
+                st["remote_exhausted"] = {
+                    "until": time.time() + seconds,
+                    "reason": (reason or "")[:200],
+                    "marked_at": time.time(),
+                }
+            self._mutate_locked(_apply)
 
     def clear_remote_exhausted(self, engine: str) -> bool:
         """手动清除远端耗尽标记（充值后提前恢复）。"""
+        cleared = False
         with self._lock:
-            # 与 record/mark 同计算方式：先热读磁盘，防止用陈旧内存态覆盖他进程写入
-            self._fresh_locked()
-            st = self._state.get(engine)
-            if st and "remote_exhausted" in st:
-                st.pop("remote_exhausted", None)
-                self._save_state()
-                return True
-            return False
+            def _apply() -> None:
+                nonlocal cleared
+                st = self._state.get(engine)
+                if st and "remote_exhausted" in st:
+                    st.pop("remote_exhausted", None)
+                    cleared = True
+            # 锁内重读：不清也可能命中（他进程已清），故只在真删掉时写盘
+            with argo_paths.file_lock(QUOTA_STATE_PATH):
+                self._load_state()
+                _apply()
+                if cleared:
+                    argo_paths.atomic_write_json(QUOTA_STATE_PATH, self._state)
+        return cleared
 
     def _refresh_remote_state_locked(self, engine: str, now: float) -> None:
-        """周期边界自愈（调用方须已持锁）。"""
+        """周期边界自愈（调用方须已持锁）。
+
+        走 _mutate_locked 而非就地 _save_state：这是 load-modify-write，
+        只用 threading.Lock 时 CLI 与 MCP 并发会互相覆盖整个状态文件。
+        """
         st = self._state.get(engine) or {}
         mark = st.get("remote_exhausted")
         # mark 残缺（手工编辑/截断成非 dict）时按过期处理：清掉坏标记自愈
-        if mark and not isinstance(mark, dict):
-            st.pop("remote_exhausted", None)
-            self._save_state()
-            return
-        if mark and now >= float(mark.get("until") or 0):
-            st.pop("remote_exhausted", None)
-            self._save_state()
+        if mark and (not isinstance(mark, dict) or now >= float(mark.get("until") or 0)):
+            def _drop() -> None:
+                (self._state.get(engine) or {}).pop("remote_exhausted", None)
+            self._mutate_locked(_drop)
 
     def is_remote_exhausted(self, engine: str) -> bool:
         with self._lock:
@@ -263,6 +282,7 @@ class QuotaManager:
             self._fresh_locked()
             now = time.time()
             out: dict[str, dict[str, Any]] = {}
+            stale: list[str] = []
             for engine, st in list(self._state.items()):
                 if not isinstance(st, dict):
                     continue
@@ -270,13 +290,19 @@ class QuotaManager:
                 if not isinstance(mark, dict):
                     continue
                 if now >= float(mark.get("until") or 0):
-                    st.pop("remote_exhausted", None)
-                    self._save_state()
+                    stale.append(engine)
                     continue
                 out[engine] = {
                     "reason": str(mark.get("reason") or ""),
                     "until": float(mark.get("until") or 0),
                 }
+            # 过期自愈是 load-modify-write：与其他写路径一样必须在文件锁内，
+            # 否则与并发的 record/mark 互相覆盖（丢计数或丢标记）。
+            if stale:
+                def _drop() -> None:
+                    for eng in stale:
+                        (self._state.get(eng) or {}).pop("remote_exhausted", None)
+                self._mutate_locked(_drop)
             return out
 
     def is_hard_down(self, engine: str) -> bool:
@@ -332,20 +358,11 @@ class QuotaManager:
         # get_remaining_ratio 的内联版本（不重复获取锁）
         profile = self._profiles.get(engine, {})
         state = self._state.get(engine, {})
-        used = state.get("used", 0)
-        period = profile.get("period", "day")
-        last_reset = state.get("last_reset", 0)
         now = time.time()
-        if period == "month" and now - last_reset > 30 * 86400:
-            state["used"] = 0
-            state["last_reset"] = now
-            self._save_state()
-            used = 0
-        elif period == "day" and now - last_reset > 86400:
-            state["used"] = 0
-            state["last_reset"] = now
-            self._save_state()
-            used = 0
+        if self._period_elapsed(engine, now):
+            self._reset_period_locked(engine, now)
+            state = self._state.get(engine, {})
+        used = state.get("used", 0)
         limit = profile.get("limit")
         if limit is not None:
             qr = max(0.0, (limit - used) / limit)
@@ -447,11 +464,20 @@ class _QuotaBatch:
         self._entries.append((engine, success))
 
     def flush(self) -> None:
-        entries, self._entries = self._entries, []
-        if not entries:
+        # 取出但不立即清空：写盘失败时把这批放回队首，下次 flush 会重试。
+        # 原实现 `entries, self._entries = self._entries, []` 先清空再写，
+        # 于是 record_many 一旦抛异常（磁盘满 / 状态文件被换 inode），这批
+        # 记账**永久消失且无任何痕迹**——配额被系统性少记，用户只会看到
+        # 「额度仿佛变多了」，而那正是最需要报警的信号。
+        # 代价：失败时本批滞留缓冲，可能被重复计入；但重复计入的方向是
+        # 「高估已用量」（引擎被限得更狠），远好过「低估已用量」（超用）。
+        if not self._entries:
             return
+        entries = list(self._entries)
         try:
             from quota import get_quota_manager
             get_quota_manager().record_many(entries)
         except Exception:
-            pass
+            return
+        # 只在成功后丢弃已写入的前缀，保留 flush 期间新 add 的条目
+        del self._entries[:len(entries)]

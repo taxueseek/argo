@@ -515,15 +515,64 @@ def geo_lang_must_keep(features: dict | None, enabled: set[str],
     return out
 
 
+def lang_aux_engines(features: dict | None, enabled: set[str],
+                     query: str) -> list[str]:
+    """语言查询的补充引擎：预算定稿后**追加**到 combo 末尾，不进 must_keep。
+
+    与 must_keep 的分工是硬性的，不是风格选择：must_keep 的语义是「别把
+    这个挤掉」，而 policy 层会把 must_keep 的项**提到 combo 前部**。实测把
+    hatena_bookmark 塞进 must_keep 后，ja 的 TF-IDF 兜底分支 combo 从
+    [anysearch, local_bing] 变成 [local_bing, hatena_bookmark]，
+    `engine` 也从 anysearch 变成 local_bing——直接违反
+    tests/test_multilingual_routing.py::TestJaKoTfidfSkip 钉住的契约
+    （「候选全被语言过滤时退到通用保底 anysearch」）。
+
+    追加到末尾既保住了通用保底的首位，也让补充源真的参与这次搜索。
+    """
+    if not features or not enabled:
+        return []
+    from route_lang import _LANG_AUX_ENGINES, _family_lang
+    lang = _family_lang(features, query)
+    if not lang:
+        return []
+    return [e for e in _LANG_AUX_ENGINES.get(lang, []) if e in enabled]
+
+
+def apply_lang_aux(combo: list[str], features: dict | None,
+                   enabled: set[str], query: str,
+                   skip: bool = False) -> list[str]:
+    """把语言补充源追加到 combo 末尾（幂等）。
+
+    `skip` 对应 route.py 的 `_pure_combo`（用户显式指定引擎）：那类 combo 是
+    用户意图本身，不该被路由补充。做成参数而不是让两处调用方各自 if，是为了让
+    route.py 少一行——它已在 1000 行门禁的临界值上。
+    """
+    if skip:
+        return combo
+    for e in lang_aux_engines(features, enabled, query):
+        if e not in combo and e in enabled:
+            combo.append(e)
+    return combo
+
+
 def breaker_filter(combo: list[str], enabled: set[str],
-                   empty: tuple[str, ...] = ("anysearch", "local_bing")) -> list[str]:
-    """熔断统一处理 + 空回退。
+                   empty: tuple[str, ...] = ("anysearch", "local_bing"),
+                   features: dict | None = None, query: str = "",
+                   skip_aux: bool = False) -> list[str]:
+    """熔断统一处理 + 空回退 + 语言补充源追加（combo 定稿的最后一道）。
 
     combo 非空是执行层的前提（空 combo 会让 engines[0] IndexError），且语言/
     geo/次域/TF-IDF 追加的引擎都可能处于熔断态——任何拼装路径的末尾都必须过这
     一道，所以它是共享步骤而不是各分支自己写。`empty` 允许分支声明自己的兜底
     次序（通用保底路径只认 anysearch）。
+
+    语言补充源（`_LANG_AUX_ENGINES`）也收在这里，而不是让 route.py 的两条
+    combo 定稿路径各调一次 `apply_lang_aux`：那是同一个「按语言调整 combo」的
+    动作，放在定稿收口里既保证一定被应用，也省掉 route.py 的行数——它已在
+    1000 行模块体积门禁的临界值上。放在熔断之后是有意的：补充源若恰处熔断
+    态，会被 `_filter_breaker_blocked` 一并摘掉。
     """
+    combo = apply_lang_aux(combo, features, enabled, query, skip=skip_aux)
     combo = _filter_breaker_blocked(combo)
     if not combo:
         combo = [e for e in empty if e in enabled] or ["anysearch"]

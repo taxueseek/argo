@@ -918,9 +918,9 @@ class SearchCache:
 
     @staticmethod
     def _seconds_until_end_of_day() -> int:
-        """计算距离当天 23:59:59 的剩余秒数。"""
+        """距本地当天 23:59:59 的剩余秒数（aware 而非 naive 是为 DST 切换日）。"""
         import datetime
-        now = datetime.datetime.now()
+        now = datetime.datetime.now().astimezone()
         end_of_day = now.replace(hour=23, minute=59, second=59, microsecond=0)
         return max(int((end_of_day - now).total_seconds()), 60)
 

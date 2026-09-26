@@ -163,8 +163,6 @@ def _validate_engine_paths(config: dict[str, Any]) -> dict[str, Any]:
     目录下 165 个引擎可用、在 /tmp 下只剩 163（train/weather 被静默停用），
     一致性检查也随之红/绿漂移。
     """
-    import logging as _logging
-    _log = _logging.getLogger("unified_search.config")
     base = CONFIG_PATH.parent
     for name, spec in config.get("engines", {}).items():
         if not isinstance(spec, dict) or spec.get("type") != "cli":

@@ -414,6 +414,14 @@ ENGINE_LANGS: dict[str, list[str]] = {
     # 漏掉（route._specs_snapshot() 在 engines 未加载时返回空表，回退到本表）。
     # 实测：cinii 漏登记时英文查询照样把它选进 academic 域预算窗口。
     "cinii": ["ja"],
+    # 同样只存在于 config.yaml 而未登记本表的日语源（route_lang 查
+    # ENGINE_LANGS 决定族内互斥与 must_keep，漏登记 = 在语言路由层隐形）：
+    #   qiita  实测日文查询 5/5 全日文，是 ja 技术类查询的主力源；
+    #   hatena_bookmark 日本技术圈书签聚合，同族。
+    # ndl（日本国立国会图书馆书目）**故意不登记**：实测它对任何语言都返回
+    # 0 条（上游 OpenSearch 正常 200，builder 已注册，故是解析层坏了）。
+    # 登记一个恒返回空的源只会让路由把预算花在死源上。修好解析层再登记。
+    "qiita": ["ja"], "hatena_bookmark": ["ja"],
 }
 ENGINE_LANGS_DEFAULT = ("*",)
 

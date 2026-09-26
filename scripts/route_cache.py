@@ -43,6 +43,10 @@ _ROUTE_CACHE_SCHEMA = 1
 _ROUTE_CACHE_TTL_S = 3600.0
 _ROUTE_CACHE_MAX_ENTRIES = 200
 
+# _route_cache_read 的进程内解析缓存：(mtime_ns, size) -> entries。None = 未缓存。
+# 声明在此而非函数内，是为了让「这个模块有一个可变全局」这件事在阅读时可见。
+_READ_MEMO: tuple[tuple[int, int], dict[str, Any]] | None = None
+
 
 def _route_cache_enabled() -> bool:
     """ARGO_ROUTE_CACHE=0/false/no/off 关闭；判定链不可用时按「开」处理。
@@ -113,16 +117,35 @@ def _route_cache_key(query: str, engine_override: str, mode: str, depth: str,
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
-def _route_cache_read() -> dict[str, Any]:
-    import json
-    try:
-        payload = json.loads(_route_cache_file().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+def _extract_entries(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict) or payload.get("schema") != _ROUTE_CACHE_SCHEMA:
         return {}
     entries = payload.get("entries")
     return entries if isinstance(entries, dict) else {}
+
+
+def _route_cache_read() -> dict[str, Any]:
+    import json
+    # 进程内 memo：一次 argo 调用里 _route_cache_read 可能被调多次，而每次都
+    # 全量重解析整份 JSON（实测 24 条目 ≈ 0.4 ms，条目满 200 条时线性放大）。
+    # 以 mtime_ns + size 为失效键——写路径走 os.replace 原子替换（换 inode、
+    # 换 mtime），所以不会读到半写状态；跨进程则由 mtime 变化自然穿透。
+    global _READ_MEMO
+    f = _route_cache_file()
+    try:
+        st = f.stat()
+    except OSError:
+        _READ_MEMO = None
+        return {}
+    stamp = (st.st_mtime_ns, st.st_size)
+    if _READ_MEMO is not None and _READ_MEMO[0] == stamp:
+        return _READ_MEMO[1]
+    try:
+        entries = _extract_entries(json.loads(f.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return {}
+    _READ_MEMO = (stamp, entries)
+    return entries
 
 
 def _route_cache_prune(entries: dict[str, Any]) -> dict[str, Any]:
@@ -139,18 +162,24 @@ def _route_cache_prune(entries: dict[str, Any]) -> dict[str, Any]:
 
 def _route_cache_write(entries: dict[str, Any]) -> None:
     import argo_paths
+    global _READ_MEMO
     try:
         argo_paths.atomic_write_json(
             _route_cache_file(),
             {"schema": _ROUTE_CACHE_SCHEMA, "entries": entries},
             indent=None,
         )
+        # mtime_ns 理论上会穿透 memo，但同秒内两次写入的 mtime 粒度差异
+        # 在部分文件系统上不足 1ms。显式作废是零成本的那道保险。
+        _READ_MEMO = None
     except Exception:
         return
 
 
 def invalidate_route_cache() -> bool:
     """删除磁盘上的路由决策缓存（测试隔离与显式失效用）。"""
+    global _READ_MEMO
+    _READ_MEMO = None
     try:
         _route_cache_file().unlink()
         return True

@@ -375,20 +375,68 @@ def deduplicate_by_url(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+# 「结果是否以目标语言书写」判定表：lang -> (命中, 排除)。
+# 命中 = 目标语言的特征码位；排除 = 与之共享码位、必须让位的语言特征。
+#
+# 这张表取代了原先三处并存的硬编码闸门（rerank 入口 `not in ("ja","ko")`、
+# search_pipeline 调用点 `in ("ja","ko")`、噪声门 `not in ("zh","en",...)`）。
+# 原 bug：`argo search "记忆宫殿"` 的 5 条结果里有 3 条是日文/捷克文/英文，
+# 而 zh 被三道闸门同时排除在语言处理之外——中文路径零语言感知。
+#
+# 为什么是数据驱动而不是再加一个 if：任何新增的受追踪语言只需要往这张表
+# 加一行，而不是去三处各改一次字面量；漏改的后果是「静默失效」，肉眼只能
+# 从结果语种不对上看出来。tests/test_lang_prefer_scope.py 的
+# TestNoHardcodedLangGateRemains 把这条纪律钉成断言。
+#
+# 为什么需要「排除」侧：中日共享汉字表。日文标题「記憶の宮殿」里的「記憶」
+# 落在 zh 的 CJK 区间内，只判命中就会把日文当成中文顶到第一位——比原 bug
+# 更糟（用户看到的第一条是日文，而语种过滤「本来是管这个的」）。故 zh 的
+# 判定额外要求「不含假名」：现代日文文本几乎总带假名，而纯中文文本不会。
+_LANG_SCRIPT: dict[str, tuple[str, str | None]] = {
+    "ja": (r"[\u3040-\u30ff]", None),                      # 平假名 / 片假名
+    "ko": (r"[\uac00-\ud7af]", None),                      # 谚文音节
+    "zh": (r"[\u4e00-\u9fff]", r"[\u3040-\u30ff\uac00-\ud7af]"),  # CJK，且非日/韩
+    "ru": (r"[\u0400-\u04ff]", None),                      # 西里尔
+    "el": (r"[\u0370-\u03ff]", None),                      # 希腊
+    "ar": (r"[\u0600-\u06ff]", None),                      # 阿拉伯
+    "he": (r"[\u0590-\u05ff]", None),                      # 希伯来
+    "th": (r"[\u0e00-\u0e7f]", None),                      # 泰
+    "hi": (r"[\u0900-\u097f]", None),                      # 天城文
+}
+
+
 def _lang_prefer_rerank(results: list[dict[str, Any]],
                         primary_lang: str | None) -> list[dict[str, Any]]:
-    if not results or primary_lang not in ("ja", "ko"):
+    """按目标语言的书写系统把属于该语言的结果前置（软排序，不删除）。
+
+    `en` 刻意不在表里：拉丁字母是 web 的通用语种，「含拉丁字母」对几乎
+    所有结果都命中，该信号无区分度。对 en 而言 RRF 融合的相关度排序已经
+    够用，故保持恒等（返回原对象，不引入无谓重排）。
+    """
+    if not results:
         return results
-    if primary_lang == "ja":
-        _pat = re.compile(r"[\u3040-\u30ff]")
-    else:
-        _pat = re.compile(r"[\uac00-\ud7af]")
+    spec = _LANG_SCRIPT.get(primary_lang or "")
+    if not spec:
+        return results
+    hit_src, excl_src = spec
+    pat = re.compile(hit_src)
+    excl = re.compile(excl_src) if excl_src else None
 
     def _key(r: dict[str, Any]) -> int:
         hay = f"{r.get('title', '')} {r.get('snippet', '')}"
-        return 0 if _pat.search(hay) else 1
+        if not pat.search(hay):
+            return 1
+        if excl is not None and excl.search(hay):
+            return 1
+        return 0
 
-    # stable sort：含目标语言字符在前，其余保持原 RRF 顺序
+    keys = [_key(r) for r in results]
+    # 没有任何结果属于目标语言时原样返回：既省掉一次无意义的 list 拷贝，
+    # 也让「软排序不改变输入」这条性质对调用方恒真（否则 identity 断言会
+    # 在「无命中」这个最常见的场景下假性失败）。
+    if not any(k == 0 for k in keys):
+        return results
+    # stable sort：属于目标语言的结果在前，其余保持原 RRF 顺序
     return sorted(results, key=_key)
 
 

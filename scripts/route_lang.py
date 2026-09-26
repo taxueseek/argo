@@ -517,8 +517,25 @@ _LANG_EXCLUSIVE_ENGINES: frozenset[str] = frozenset({
 
 
 _LANG_PREFERRED_ENGINES: dict[str, list[str]] = {
+    # 保持 local_bing 在首位：它带动态 setlang，是 ja/ko 的通用兜底通道，
+    # 且 tests/test_multilingual.py::test_route_query_override_ja_no_cn_noise
+    # 把「日文覆盖查询的 combo 必含 local_bing/local_yandex」钉成契约。
+    # 本函数只返回 preferred[:1]，所以排第一的会挤掉其余——把 hatena 放前面
+    # 会让该契约失败（实测 combo 变成 [redskill, hatena_bookmark]）。
+    #
+    # hatena_bookmark（日文实测 5/5 全日文、40 条候选）改为通过
+    # _LANG_AUX_ENGINES 作为**补充**注入，不占 must_keep 席位。
     "ja": ["local_bing"],
     "ko": ["local_bing"],
+}
+
+# 语言查询的补充引擎：在 must_keep 之外、combo 末尾注入，补首选源覆盖不到的面。
+# 与 _LANG_PREFERRED_ENGINES 的区别见 route_combo.lang_aux_engines 的 docstring。
+_LANG_AUX_ENGINES: dict[str, list[str]] = {
+    # ja：qiita 只对技术类有效且召回差（搜「プロンプト」返回 ROCm/Copilot
+    # 文章，被噪声门判 noise 丢掉），hatena_bookmark 是日文技术圈书签聚合，
+    # 对日文长尾能给出真实结果。
+    "ja": ["hatena_bookmark"],
 }
 
 
