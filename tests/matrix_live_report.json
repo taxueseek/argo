@@ -1,0 +1,646 @@
+{
+  "summary": {
+    "ok": 10,
+    "fail": 2,
+    "warn": 1,
+    "by_status": {
+      "PASS": 10,
+      "FAIL": 2,
+      "WARN": 1
+    },
+    "by_section": {
+      "live": {
+        "PASS": 10,
+        "FAIL": 2,
+        "WARN": 1
+      }
+    },
+    "route_by_scenario": {},
+    "route_by_lang": {},
+    "live_summary": {
+      "n": 13,
+      "domain_acc": 1.0,
+      "engine_acc": 1.0,
+      "selection_hit": 0.7692307692307693,
+      "domain_and_hit": 0.7692307692307693,
+      "pollute_n": 0
+    },
+    "live_rows": [
+      {
+        "id": "L_en_film",
+        "q": "Inception movie director",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "film_search",
+        "engine": "imdb",
+        "n": 5,
+        "ms": 806,
+        "gold_matched": "inception",
+        "top1": "Inception",
+        "recovery": null
+      },
+      {
+        "id": "L_zh_film",
+        "q": "肖申克的救赎 主演",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "film_search",
+        "engine": "imdb",
+        "n": 2,
+        "ms": 2178,
+        "gold_matched": "shawshank",
+        "top1": "《肖申克的救赎》：主演访谈",
+        "recovery": null
+      },
+      {
+        "id": "L_en_sports",
+        "q": "Cristiano Ronaldo club",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": false,
+        "pollute": [],
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "n": 5,
+        "ms": 6768,
+        "gold_matched": "",
+        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "recovery": null
+      },
+      {
+        "id": "L_zh_sports",
+        "q": "库里 球队",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": false,
+        "pollute": [],
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "n": 5,
+        "ms": 3401,
+        "gold_matched": "",
+        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "recovery": null
+      },
+      {
+        "id": "L_zh_media",
+        "q": "周杰伦 专辑",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "media_search",
+        "engine": "itunes",
+        "n": 5,
+        "ms": 1662,
+        "gold_matched": "周杰倫",
+        "top1": "周熙杰",
+        "recovery": null
+      },
+      {
+        "id": "L_en_media",
+        "q": "Taylor Swift album",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "media_search",
+        "engine": "itunes",
+        "n": 5,
+        "ms": 573,
+        "gold_matched": "taylor",
+        "top1": "Taylor Swift (Bonus Track Version)",
+        "recovery": null
+      },
+      {
+        "id": "L_en_org",
+        "q": "NASA founding year",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "n": 5,
+        "ms": 581,
+        "gold_matched": "nasa",
+        "top1": "NASA WorldWind",
+        "recovery": null
+      },
+      {
+        "id": "L_en_geo",
+        "q": "where is Eiffel Tower",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "geo_places",
+        "engine": "local_openstreetmap",
+        "n": 5,
+        "ms": 3461,
+        "gold_matched": "eiffel",
+        "top1": "Eiffel Tower Information, Tips and History",
+        "recovery": {
+          "triggered": true,
+          "recovered": true,
+          "level_used": "L3",
+          "strategy_used": "switch_engine",
+          "steps_tried": [
+            {
+              "level": "L3",
+              "strategy": "switch_engine",
+              "query": "where is Eiffel Tower",
+              "engines": [
+                "anysearch",
+                "local_bing"
+              ],
+              "outcome": "10 results"
+            }
+          ],
+          "final_query": "where is Eiffel Tower",
+          "note": "经 L3/switch_engine 恢复成功"
+        }
+      },
+      {
+        "id": "L_zh_stock",
+        "q": "贵州茅台股价",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "stock_query",
+        "engine": "sina_quote",
+        "n": 1,
+        "ms": 6079,
+        "gold_matched": "茅台",
+        "top1": "贵州茅台 1237.000 ↓-1.14%",
+        "recovery": null
+      },
+      {
+        "id": "L_zh_chem",
+        "q": "阿司匹林 分子式",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "chem_search",
+        "engine": "pubchem",
+        "n": 5,
+        "ms": 2441,
+        "gold_matched": "阿司匹林",
+        "top1": "氯吡格雷联合阿司匹林急诊治疗急性心肌梗死的临床效果",
+        "recovery": null
+      },
+      {
+        "id": "L_ja_gen",
+        "q": "アニメ おすすめ",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": false,
+        "pollute": [],
+        "domain": "general_search",
+        "engine": "qiita",
+        "n": 0,
+        "ms": 798,
+        "gold_matched": "",
+        "top1": null,
+        "recovery": {
+          "triggered": true,
+          "recovered": false,
+          "level_used": null,
+          "strategy_used": null,
+          "steps_tried": [],
+          "final_query": "アニメ おすすめ",
+          "note": "无可用恢复策略"
+        }
+      },
+      {
+        "id": "L_ko_gen",
+        "q": "한국 영화 추천",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "film_search",
+        "engine": "imdb",
+        "n": 5,
+        "ms": 2880,
+        "gold_matched": "영화",
+        "top1": "뭐 볼까 고민하지 말자. 한국 영화 추천 100선",
+        "recovery": null
+      },
+      {
+        "id": "L_cyr_gen",
+        "q": "Как написать скрипт python",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "english_tech",
+        "engine": "octen",
+        "n": 5,
+        "ms": 1351,
+        "gold_matched": "python",
+        "top1": "6 способов запустить скрипт на Python",
+        "recovery": null
+      }
+    ]
+  },
+  "rows": [
+    {
+      "name": "live:L_en_film",
+      "status": "PASS",
+      "detail": "dom=film_search eng=imdb n=5 ms=806 hit=True gold='inception' pollute=[] used=['imdb'] rec=None",
+      "meta": {
+        "id": "L_en_film",
+        "q": "Inception movie director",
+        "scenario": "film",
+        "lang": "en",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "film_search",
+        "engine": "imdb",
+        "n": 5,
+        "ms": 806,
+        "gold_matched": "inception",
+        "top1": "Inception",
+        "sources": [
+          "imdb",
+          "imdb",
+          "imdb",
+          "imdb",
+          "imdb"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_zh_film",
+      "status": "PASS",
+      "detail": "dom=film_search eng=imdb n=2 ms=2178 hit=True gold='shawshank' pollute=[] used=['imdb', 'itunes', 'douban_movie', 'tvmaze'] rec=None",
+      "meta": {
+        "id": "L_zh_film",
+        "q": "肖申克的救赎 主演",
+        "scenario": "film",
+        "lang": "zh",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "film_search",
+        "engine": "imdb",
+        "n": 2,
+        "ms": 2178,
+        "gold_matched": "shawshank",
+        "top1": "《肖申克的救赎》：主演访谈",
+        "sources": [
+          "douban_movie",
+          "imdb"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_en_sports",
+      "status": "FAIL",
+      "detail": "dom=sports_search eng=thesportsdb n=5 ms=6768 hit=False gold='' pollute=[] used=['jolpica', 'thesportsdb', 'openf1', 'openligadb'] rec=None",
+      "meta": {
+        "id": "L_en_sports",
+        "q": "Cristiano Ronaldo club",
+        "scenario": "sports",
+        "lang": "en",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": false,
+        "pollute": [],
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "n": 5,
+        "ms": 6768,
+        "gold_matched": "",
+        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "sources": [
+          "jolpica",
+          "openligadb",
+          "jolpica",
+          "jolpica",
+          "jolpica"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_zh_sports",
+      "status": "FAIL",
+      "detail": "dom=sports_search eng=thesportsdb n=5 ms=3401 hit=False gold='' pollute=[] used=['jolpica', 'thesportsdb', 'openligadb', 'openf1'] rec=None",
+      "meta": {
+        "id": "L_zh_sports",
+        "q": "库里 球队",
+        "scenario": "sports",
+        "lang": "zh",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": false,
+        "pollute": [],
+        "domain": "sports_search",
+        "engine": "thesportsdb",
+        "n": 5,
+        "ms": 3401,
+        "gold_matched": "",
+        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "sources": [
+          "jolpica",
+          "openligadb",
+          "jolpica",
+          "jolpica",
+          "jolpica"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_zh_media",
+      "status": "PASS",
+      "detail": "dom=media_search eng=itunes n=5 ms=1662 hit=True gold='周杰倫' pollute=[] used=['itunes', 'musicbrainz'] rec=None",
+      "meta": {
+        "id": "L_zh_media",
+        "q": "周杰伦 专辑",
+        "scenario": "media",
+        "lang": "zh",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "media_search",
+        "engine": "itunes",
+        "n": 5,
+        "ms": 1662,
+        "gold_matched": "周杰倫",
+        "top1": "周熙杰",
+        "sources": [
+          "musicbrainz",
+          "musicbrainz",
+          "musicbrainz",
+          "musicbrainz",
+          "musicbrainz"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_en_media",
+      "status": "PASS",
+      "detail": "dom=media_search eng=itunes n=5 ms=573 hit=True gold='taylor' pollute=[] used=['itunes'] rec=None",
+      "meta": {
+        "id": "L_en_media",
+        "q": "Taylor Swift album",
+        "scenario": "media",
+        "lang": "en",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "media_search",
+        "engine": "itunes",
+        "n": 5,
+        "ms": 573,
+        "gold_matched": "taylor",
+        "top1": "Taylor Swift (Bonus Track Version)",
+        "sources": [
+          "itunes",
+          "itunes",
+          "itunes",
+          "itunes",
+          "itunes"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_en_org",
+      "status": "PASS",
+      "detail": "dom=org_entity eng=wikidata n=5 ms=581 hit=True gold='nasa' pollute=[] used=['wikidata'] rec=None",
+      "meta": {
+        "id": "L_en_org",
+        "q": "NASA founding year",
+        "scenario": "org",
+        "lang": "en",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "n": 5,
+        "ms": 581,
+        "gold_matched": "nasa",
+        "top1": "NASA WorldWind",
+        "sources": [
+          "wikidata",
+          "wikidata",
+          "wikidata",
+          "wikidata",
+          "wikidata"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_en_geo",
+      "status": "PASS",
+      "detail": "dom=geo_places eng=local_openstreetmap n=5 ms=3461 hit=True gold='eiffel' pollute=[] used=['wikipedia', 'local_openstreetmap', 'anysearch'] rec={'triggered': True, 'recovered': True, 'level_used': 'L3', 'strategy_used': 'switch_engine', 'steps_tried': [{'level': 'L3', 'strategy': 'switch_engine', 'query': 'where is Eiffel Tower', 'engines': ['anysearch', 'local_bing'], 'outcome': '10 results'}], 'final_query': 'where is Eiffel Tower', 'note': '经 L3/switch_engine 恢复成功'}",
+      "meta": {
+        "id": "L_en_geo",
+        "q": "where is Eiffel Tower",
+        "scenario": "geo",
+        "lang": "en",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "geo_places",
+        "engine": "local_openstreetmap",
+        "n": 5,
+        "ms": 3461,
+        "gold_matched": "eiffel",
+        "top1": "Eiffel Tower Information, Tips and History",
+        "sources": [
+          "anysearch",
+          "anysearch",
+          "anysearch",
+          "anysearch",
+          "anysearch"
+        ],
+        "recovery": {
+          "triggered": true,
+          "recovered": true,
+          "level_used": "L3",
+          "strategy_used": "switch_engine",
+          "steps_tried": [
+            {
+              "level": "L3",
+              "strategy": "switch_engine",
+              "query": "where is Eiffel Tower",
+              "engines": [
+                "anysearch",
+                "local_bing"
+              ],
+              "outcome": "10 results"
+            }
+          ],
+          "final_query": "where is Eiffel Tower",
+          "note": "经 L3/switch_engine 恢复成功"
+        }
+      }
+    },
+    {
+      "name": "live:L_zh_stock",
+      "status": "PASS",
+      "detail": "dom=stock_query eng=sina_quote n=1 ms=6079 hit=True gold='茅台' pollute=[] used=['eastmoney', 'sina_quote'] rec=None",
+      "meta": {
+        "id": "L_zh_stock",
+        "q": "贵州茅台股价",
+        "scenario": "finance",
+        "lang": "zh",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "stock_query",
+        "engine": "sina_quote",
+        "n": 1,
+        "ms": 6079,
+        "gold_matched": "茅台",
+        "top1": "贵州茅台 1237.000 ↓-1.14%",
+        "sources": [
+          "sina_quote"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_zh_chem",
+      "status": "PASS",
+      "detail": "dom=chem_search eng=pubchem n=5 ms=2441 hit=True gold='阿司匹林' pollute=[] used=['openalex', 'pubchem'] rec=None",
+      "meta": {
+        "id": "L_zh_chem",
+        "q": "阿司匹林 分子式",
+        "scenario": "chem",
+        "lang": "zh",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "chem_search",
+        "engine": "pubchem",
+        "n": 5,
+        "ms": 2441,
+        "gold_matched": "阿司匹林",
+        "top1": "氯吡格雷联合阿司匹林急诊治疗急性心肌梗死的临床效果",
+        "sources": [
+          "openalex",
+          "openalex",
+          "openalex",
+          "openalex",
+          "openalex"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_ja_gen",
+      "status": "WARN",
+      "detail": "dom=general_search eng=qiita n=0 ms=798 hit=False gold='' pollute=[] used=['qiita'] rec={'triggered': True, 'recovered': False, 'level_used': None, 'strategy_used': None, 'steps_tried': [], 'final_query': 'アニメ おすすめ', 'note': '无可用恢复策略'}",
+      "meta": {
+        "id": "L_ja_gen",
+        "q": "アニメ おすすめ",
+        "scenario": "general",
+        "lang": "ja",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": false,
+        "pollute": [],
+        "domain": "general_search",
+        "engine": "qiita",
+        "n": 0,
+        "ms": 798,
+        "gold_matched": "",
+        "top1": null,
+        "sources": [],
+        "recovery": {
+          "triggered": true,
+          "recovered": false,
+          "level_used": null,
+          "strategy_used": null,
+          "steps_tried": [],
+          "final_query": "アニメ おすすめ",
+          "note": "无可用恢复策略"
+        }
+      }
+    },
+    {
+      "name": "live:L_ko_gen",
+      "status": "PASS",
+      "detail": "dom=film_search eng=imdb n=5 ms=2880 hit=True gold='영화' pollute=[] used=['imdb', 'anysearch'] rec=None",
+      "meta": {
+        "id": "L_ko_gen",
+        "q": "한국 영화 추천",
+        "scenario": "general",
+        "lang": "ko",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "film_search",
+        "engine": "imdb",
+        "n": 5,
+        "ms": 2880,
+        "gold_matched": "영화",
+        "top1": "뭐 볼까 고민하지 말자. 한국 영화 추천 100선",
+        "sources": [
+          "anysearch",
+          "anysearch",
+          "anysearch",
+          "anysearch",
+          "anysearch"
+        ],
+        "recovery": null
+      }
+    },
+    {
+      "name": "live:L_cyr_gen",
+      "status": "PASS",
+      "detail": "dom=english_tech eng=octen n=5 ms=1351 hit=True gold='python' pollute=[] used=['octen', 'anysearch'] rec=None",
+      "meta": {
+        "id": "L_cyr_gen",
+        "q": "Как написать скрипт python",
+        "scenario": "general",
+        "lang": "cyrillic",
+        "dom_ok": true,
+        "eng_ok": true,
+        "hit": true,
+        "pollute": [],
+        "domain": "english_tech",
+        "engine": "octen",
+        "n": 5,
+        "ms": 1351,
+        "gold_matched": "python",
+        "top1": "6 способов запустить скрипт на Python",
+        "sources": [
+          "octen",
+          "octen",
+          "octen",
+          "octen",
+          "octen"
+        ],
+        "recovery": null
+      }
+    }
+  ]
+}

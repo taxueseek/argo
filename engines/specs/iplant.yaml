@@ -1,0 +1,25 @@
+# iPlant 植物智（中科院植物所）——中文植物名（含俗名）→ 学名 + 分类
+# 补的是 argo 一条硬盲区：此前没有任何从中文名进入生物数据库的路。gbif 对纯中文
+# 查询返回无关属种（实测「玉米」首条是 Frithia 属，补 qField=VERNACULAR 仍是垃圾），
+# 本仓 gbif builder 也因此在中文查询上直接短路。iPlant 的 /info/{名} 直接吃中文名、
+# 学名、属名、科名，免认证，实测时延 0.29–0.41s。
+# 只承诺名称规范化（学名 + 属/科/目 + 俗名）；植物志正文（frps/foc）是 AJAX
+# 填充且内部接口不可直调，不做承诺。
+# 验证:
+#   python3 scripts/engine_validate.py --engine iplant --stage all --admit --write-doc
+
+engine_id: iplant
+type: iplant
+enabled: true
+cost_tier: free
+timeout: 15
+canary_query: "玉米"
+desc: "iPlant 植物智（中文植物名/俗名 → 学名 + 分类，中科院植物所，免认证）"
+coverage: [species, botany, chinese, science]
+recommended: false
+latency_ms: 1200
+
+quality_queries:
+  - query: "玉米"      # 正名：一级直接命中
+  - query: "包谷"      # 俗名：走二级消歧取接受名
+  - query: "银杏"
