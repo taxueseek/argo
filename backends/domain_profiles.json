@@ -201,38 +201,6 @@
       "GPT": 1.5
     }
   },
-  "duckduckgo": {
-    "label": "DuckDuckGo",
-    "documents": [
-      "quick answer fact check definition explanation",
-      "what is how to why when where who",
-      "weather time zone population distance conversion",
-      "dictionary thesaurus pronunciation meaning",
-      "是什么 怎么 为什么 哪里 谁 多少",
-      "天气 时区 人口 距离 换算 计算",
-      "定义 解释 含义 概念 术语"
-    ],
-    "boost_keywords": {
-      "what": 2.0,
-      "how": 2.0,
-      "why": 2.0,
-      "when": 2.0,
-      "where": 2.0,
-      "who": 2.0,
-      "is": 1.5,
-      "does": 1.5,
-      "do": 1.5,
-      "是什么": 2.0,
-      "怎么": 2.0,
-      "为什么": 2.0,
-      "哪里": 2.0,
-      "谁": 2.0,
-      "天气": 1.5,
-      "时间": 1.5,
-      "定义": 1.5,
-      "含义": 1.5
-    }
-  },
   "uapi": {
     "label": "UAPI中文搜索",
     "documents": [
@@ -997,12 +965,6 @@
   },
   "local_startpage": {
     "label": "Startpage本地",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "local_duckduckgo": {
-    "label": "DuckDuckGo本地",
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}

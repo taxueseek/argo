@@ -183,8 +183,8 @@ def run_offline(c: Checker) -> None:
     )
 
     # 用户指定引擎不受 budget 影响
-    d_fix = route_query("x", engine_override="duckduckgo", mode="fast", depth="fast")
-    c.check("override_intact", d_fix.get("engines_combo") == ["duckduckgo"])
+    d_fix = route_query("x", engine_override="bocha", mode="fast", depth="fast")
+    c.check("override_intact", d_fix.get("engines_combo") == ["bocha"])
 
 
 def run_live(c: Checker) -> None:

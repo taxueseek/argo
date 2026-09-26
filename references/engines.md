@@ -50,11 +50,11 @@
 `parallel_free`（2026-09-14 收录）同为末位补位：官方免费 MCP 端点
 （search.parallel.ai，无账号无 key），与按量计费的 `parallel`（REST + key）分立——
 key 缺失/额度耗尽/REST 失败时由它接住，自带 excerpts 长摘录省一次 fetch。
-`duckduckgo` 2026-09 移出（实测 45% 错误率 + 11 秒 0 条）。
+`duckduckgo` 2026-09-07 移出保底链（实测 45% 错误率 + 11 秒 0 条）；2026-09-26 两引擎（Instant Answer API + local_duckduckgo）随本机可达性门下线：出口对本域 TLS 层阻断，html/api 子域全灭，curl_cffi 三种指纹亦无法穿透，同类项目（ddgs 等）同样处于与该封锁的军备竞赛中，无客户端解法。
 
 ## 四、本地零成本引擎（`local_search` 聚合，25 个子引擎声明）
 
-`local_bing` / `local_baidu` / `local_sogou` / `local_duckduckgo` / `local_google` /
+`local_bing` / `local_baidu` / `local_sogou` / `local_google` /
 `local_yandex` / `local_mojeek` / `local_startpage` / `local_github` / `local_gitlab` /
 `local_npm` / `local_stackoverflow` / `local_arxiv` / `local_pubmed` /
 `local_semantic_scholar` / `local_crossref` / `local_wikipedia` / `local_wikiquote` /

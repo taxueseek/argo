@@ -286,9 +286,9 @@ def pick_alternative_engines(tried: list[str], engines_fallback: list[str] | Non
 # ── L4 跨语言回退（原中英互译启发式升级）───────────────────────────────────────
 
 # 非拉丁 / 中文主语言零结果时，用通用源补搜（原文即可，无需真翻译）
-_CROSS_LANG_ENGINES = ["duckduckgo", "anysearch", "wikipedia"]
+_CROSS_LANG_ENGINES = ["anysearch", "local_bing", "wikipedia"]
 # 中英基线反向：英文主查询零结果且用户偏好含 zh 时，补中文源
-_CN_BASELINE_ENGINES = ["local_bing", "anysearch", "duckduckgo"]
+_CN_BASELINE_ENGINES = ["local_bing", "anysearch", "bocha"]
 
 _CROSS_LANG_SIGNAL = re.compile(
     r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff\u0e00-\u0e7f"

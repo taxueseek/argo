@@ -35,7 +35,6 @@ SCRIPT_DIR = SKILL_DIR / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from engines import (  # noqa: E402
-    _parse_duckduckgo,
     _parse_uapi,
     _parse_semantic_scholar,
     search as engine_search,
@@ -49,8 +48,8 @@ from config import get_engines, load_config  # noqa: E402
 # ── 常量 ──────────────────────────────────────────────────────────────────────
 
 # uapi 在 config 中可能 enabled:false，注册表测试按「启用的引擎」与「配置仍存在」拆分
-NEW_ENGINES = ("duckduckgo", "uapi", "semantic_scholar")
-NEW_ENGINES_REQUIRED_ENABLED = ("duckduckgo", "semantic_scholar")
+NEW_ENGINES = ("uapi", "semantic_scholar")
+NEW_ENGINES_REQUIRED_ENABLED = ("semantic_scholar",)
 
 REQUIRED_RESULT_KEYS = ("title", "source")
 
@@ -60,14 +59,14 @@ SCENARIOS: list[dict[str, Any]] = [
         "query": "北京今天天气",
         "expect_domain_any": {"fact_check", "weather_query", "chinese_general", "general_search"},
         # 天气双源（v2.8+）：open_meteo/weather 是当前气象域主力；qweather 需 key
-        "expect_combo_has_any": {"duckduckgo", "uapi", "anysearch", "qweather", "byted", "bocha",
+        "expect_combo_has_any": {"uapi", "anysearch", "qweather", "byted", "bocha",
                                  "open_meteo", "weather"},
     },
     {
         "id": "en_fact_capital",
         "query": "what is the capital of France",
         "expect_domain_any": {"fact_check", "general_search", "code_search", "english_tech", "semantic_discovery"},
-        "expect_combo_has_any": {"duckduckgo", "anysearch", "uapi", "github", "octen", "wikipedia", "bocha"},
+        "expect_combo_has_any": {"anysearch", "uapi", "github", "octen", "wikipedia", "bocha"},
     },
     {
         "id": "academic_transformer",
@@ -92,7 +91,7 @@ SCENARIOS: list[dict[str, Any]] = [
             "english_tech", "chinese_tech_deep", "code_search",
         },
         "expect_combo_has_any": {
-            "anysearch", "uapi", "duckduckgo", "octen", "byted", "bocha", "github",
+            "anysearch", "uapi", "octen", "byted", "bocha", "github",
         },
     },
 ]
@@ -141,11 +140,9 @@ class TestNewEngineRegistration(unittest.TestCase):
 
     def test_config_urls(self) -> None:
         raw = load_config(force=True).get("engines", {})
-        self.assertIn("api.duckduckgo.com", raw["duckduckgo"]["url"])
         self.assertIn("search/aggregate", raw["uapi"]["url"])
         self.assertIn("semanticscholar.org", raw["semantic_scholar"]["url"])
         self.assertEqual(raw["uapi"].get("method", "POST").upper(), "POST")
-        self.assertEqual(raw["duckduckgo"].get("method", "GET").upper(), "GET")
 
     # ── parallel / you.com 通用引擎（v2.8.0）──────────────────────────────
 
@@ -182,40 +179,6 @@ class TestNewEngineRegistration(unittest.TestCase):
 class TestParsers(unittest.TestCase):
     """单引擎返回格式 — 解析层。"""
 
-    def test_parse_duckduckgo_abstract_and_topics(self) -> None:
-        data = {
-            "Abstract": "Python is a high-level programming language.",
-            "Heading": "Python (programming language)",
-            "AbstractURL": "https://en.wikipedia.org/wiki/Python_(programming_language)",
-            "RelatedTopics": [
-                {
-                    "Text": "NumPy - numerical computing library",
-                    "FirstURL": "https://duckduckgo.com/NumPy",
-                },
-                {"Topics": [{"Text": "nested", "FirstURL": "https://x"}]},  # 嵌套组跳过
-            ],
-        }
-        results = _parse_duckduckgo(data)
-        _assert_result_schema(results, "duckduckgo")
-        self.assertEqual(results[0]["source"], "duckduckgo")
-        self.assertIn("Python", results[0]["title"])
-        self.assertTrue(results[0]["url"].startswith("http"))
-        self.assertTrue(any("NumPy" in r.get("title", "") for r in results))
-
-    def test_parse_duckduckgo_empty_abstract(self) -> None:
-        data = {
-            "Abstract": "",
-            "Heading": "X",
-            "RelatedTopics": [
-                {"Text": "Only topic", "FirstURL": "https://example.com/t"},
-            ],
-        }
-        results = _parse_duckduckgo(data)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["url"], "https://example.com/t")
-
-    def test_parse_duckduckgo_empty_payload(self) -> None:
-        self.assertEqual(_parse_duckduckgo({}), [])
 
     def test_parse_uapi(self) -> None:
         data = {
@@ -348,7 +311,7 @@ class TestMultiEngineAndFallback(unittest.TestCase):
         def fake(query: str, eng: str, n: int = 5, timeout: float = 8,
                  depth: str = "fast", **_kwargs: Any):
             calls.append(eng)
-            if eng == "duckduckgo":
+            if eng == "bocha":
                 return []
             if eng == "anysearch":
                 return [
@@ -363,15 +326,15 @@ class TestMultiEngineAndFallback(unittest.TestCase):
 
         decision = {
             "domain": "fact_check",
-            "engine": "duckduckgo",
-            "engines": ["duckduckgo", "anysearch", "uapi"],
-            "engines_combo": ["duckduckgo", "anysearch", "uapi"],
+            "engine": "bocha",
+            "engines": ["bocha", "anysearch", "uapi"],
+            "engines_combo": ["bocha", "anysearch", "uapi"],
             "parallel": False,
             "tfidf_scores": [],
         }
         out = self._run(decision, fake, "what is the capital of France")
         self.assertTrue(calls, "应至少调用一个引擎")
-        self.assertEqual(calls[0], "duckduckgo")
+        self.assertEqual(calls[0], "bocha")
         self.assertIn("anysearch", calls)
         # 顺序模式：anysearch 成功后不应再打 uapi
         self.assertNotIn("uapi", calls)
@@ -385,9 +348,9 @@ class TestMultiEngineAndFallback(unittest.TestCase):
 
         decision = {
             "domain": "fact_check",
-            "engine": "duckduckgo",
-            "engines": ["duckduckgo", "anysearch"],
-            "engines_combo": ["duckduckgo", "anysearch"],
+            "engine": "bocha",
+            "engines": ["bocha", "anysearch"],
+            "engines_combo": ["bocha", "anysearch"],
             "parallel": False,
             "tfidf_scores": [],
         }
@@ -401,7 +364,7 @@ class TestMultiEngineAndFallback(unittest.TestCase):
         def fake(query: str, eng: str, n: int = 5, timeout: float = 8,
                  depth: str = "fast", **_kwargs: Any):
             calls.append(eng)
-            if eng == "duckduckgo":
+            if eng == "bocha":
                 return []  # 一路失败
             return [
                 {
@@ -700,21 +663,6 @@ class TestKnownIssues(unittest.TestCase):
             [{"title": "t", "url": "https://u", "source": "stackoverflow"}], "uapi"
         )
         self.assertEqual(fixed[0]["source"], "uapi")
-
-    def test_ddg_disambiguation_risk(self) -> None:
-        """缺陷风险：q=what+is+python 可能命中 Cold War PYTHON 而非编程语言。
-
-        查询应使用明确实体名；配置可加 skip_disambig=1。
-        """
-        ambiguous = _parse_duckduckgo(
-            {
-                "Abstract": "PYTHON was a Cold War contingency plan",
-                "Heading": "PYTHON",
-                "AbstractURL": "https://en.wikipedia.org/wiki/PYTHON",
-                "RelatedTopics": [],
-            }
-        )
-        self.assertIn("Cold War", ambiguous[0]["snippet"])
 
 
 if __name__ == "__main__":

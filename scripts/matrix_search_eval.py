@@ -48,16 +48,16 @@ _RECOVERY_POLLUTE = frozenset({
 
 # 日韩等语言引擎候选
 _LANG_ENGINE_CANDIDATES = {
-    "ja": ("local_yandex", "local_bing", "local_duckduckgo", "local_google"),
-    "ko": ("local_google", "local_bing", "local_duckduckgo"),
-    "cyrillic": ("local_bing", "anysearch", "duckduckgo", "local_yandex"),
-    "thai": ("local_bing", "anysearch", "duckduckgo"),
-    "arabic": ("local_bing", "anysearch", "duckduckgo"),
-    "hebrew": ("local_bing", "anysearch", "duckduckgo"),
-    "greek": ("local_bing", "anysearch", "duckduckgo"),
-    "devanagari": ("local_bing", "anysearch", "duckduckgo"),
-    "en": ("anysearch", "duckduckgo", "local_bing", "octen", "exa"),
-    "zh": ("byted", "bocha", "local_bing", "anysearch", "zhihu_global", "duckduckgo"),
+    "ja": ("local_yandex", "local_bing", "local_google"),
+    "ko": ("local_google", "local_bing"),
+    "cyrillic": ("local_bing", "anysearch", "local_yandex"),
+    "thai": ("local_bing", "anysearch"),
+    "arabic": ("local_bing", "anysearch"),
+    "hebrew": ("local_bing", "anysearch"),
+    "greek": ("local_bing", "anysearch"),
+    "devanagari": ("local_bing", "anysearch"),
+    "en": ("anysearch", "local_bing", "octen", "exa"),
+    "zh": ("byted", "bocha", "local_bing", "anysearch", "zhihu_global"),
 }
 
 
@@ -315,10 +315,10 @@ ROUTE_MATRIX: list[dict[str, Any]] = [
     # 返回高计数垃圾时早停吞掉次引擎（execution 层守卫见 search.py
     # _query_coverage_ok；此处钉路由层契约：保底 combo 必含 ≥2 个免费通用源）。
     {"id": "R_en_tech_nodomain", "q": "Crawl4AI pruning content filter extraction",
-     "lang": "en", "domain": "general_search", "primary_any": ["anysearch", "duckduckgo"],
+     "lang": "en", "domain": "general_search", "primary_any": ["anysearch", "local_bing"],
      "forbid_cn": True, "scenario": "general"},
     {"id": "R_en_tech_py", "q": "python asyncio tutorial", "lang": "en",
-     "domain": "english_tech", "primary_any": ["octen", "anysearch", "duckduckgo"],
+     "domain": "english_tech", "primary_any": ["octen", "anysearch", "local_bing"],
      "forbid_cn": True, "scenario": "general"},
     {"id": "R_zh_food", "q": "附近好吃的本帮菜馆", "lang": "zh",
      "domain": "chinese_general", "primary_any": ["bocha", "anysearch", "local_bing"],
@@ -523,7 +523,7 @@ def run_offline_recovery(c: Checker) -> None:
     # L3：空 tried 时不得选污染垂直源
     picks = pick_alternative_engines(
         tried=["imdb"],
-        engines_fallback=["pypi", "npm", "jin10", "anysearch", "duckduckgo"],
+        engines_fallback=["pypi", "npm", "jin10", "anysearch", "local_bing"],
     )
     c.check(
         "rec_l3_no_pollute_film",
@@ -571,13 +571,13 @@ def run_offline_recovery(c: Checker) -> None:
 
     # plan 含 L4 cross_lang（非 fast）
     plan = build_recovery_plan(
-        "アニメ おすすめ", ["anysearch"], ["duckduckgo", "wikipedia"], mode="auto",
+        "アニメ おすすめ", ["anysearch"], ["bocha", "wikipedia"], mode="auto",
     )
     strategies = [s.strategy for s in plan]
     c.check("rec_plan_cross_lang", "cross_lang" in strategies, detail=str(strategies))
 
     plan_fast = build_recovery_plan(
-        "アニメ おすすめ", ["anysearch"], ["duckduckgo"], mode="fast",
+        "アニメ おすすめ", ["anysearch"], ["bocha"], mode="fast",
     )
     c.check(
         "rec_fast_no_cross",
@@ -598,7 +598,7 @@ def run_offline_recovery(c: Checker) -> None:
 
 FAMILY_EXPECT: dict[str, str] = {
     "anysearch": "web_general",
-    "duckduckgo": "web_general",
+    "bocha": "web_general",
     "local_bing": "web_general",
     "arxiv": "academic",
     "github": "code",

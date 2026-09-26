@@ -136,7 +136,7 @@ class TestRoutingLanguage(unittest.TestCase):
         combo = d.get("engines_combo", [])
         # yandex 默认 disabled，实际落到 local_bing（动态 setlang=ja-JP）
         self.assertTrue(
-            any(e in combo for e in ("local_yandex", "local_bing", "local_duckduckgo")),
+            any(e in combo for e in ("local_yandex", "local_bing")),
             f"日文查询 combo 缺语言引擎: {combo}",
         )
         for cn in ("bocha", "byted", "wechat_sogou", "zhihu"):
@@ -146,7 +146,7 @@ class TestRoutingLanguage(unittest.TestCase):
         d = route_query("한국 영화 추천", mode="auto")
         combo = d.get("engines_combo", [])
         self.assertTrue(
-            any(e in combo for e in ("local_google", "local_bing", "local_duckduckgo")),
+            any(e in combo for e in ("local_google", "local_bing")),
             f"韩文查询 combo 缺语言引擎: {combo}",
         )
 
@@ -155,7 +155,7 @@ class TestRoutingLanguage(unittest.TestCase):
         combo = d.get("engines_combo", [])
         # 非拉丁语应追加 local_bing（动态 setlang=ru-RU）或至少通用源
         self.assertTrue(
-            any(e in combo for e in ("local_bing", "anysearch", "duckduckgo")),
+            any(e in combo for e in ("local_bing", "anysearch")),
             f"西里尔查询 combo 过空: {combo}",
         )
 
@@ -176,7 +176,7 @@ class TestRoutingLanguage(unittest.TestCase):
         f = {"primary_lang": "ja"}
         # 模拟生产：yandex 不在 enabled
         self.assertEqual(
-            _lang_must_keep(f, {"local_bing", "local_duckduckgo"}),
+            _lang_must_keep(f, {"local_bing"}),
             ["local_bing"],
         )
         # 专用源可用时优先 yandex
@@ -207,7 +207,7 @@ class TestLanguageEngineUnified(unittest.TestCase):
 
     def setUp(self):
         self.sub_engines = [
-            "local_bing", "local_duckduckgo", "local_google",
+            "local_bing", "local_google",
             "local_yandex", "local_mojeek",
         ]
         p = patch("route_lang._enabled_local_engines", return_value=self.sub_engines)
@@ -227,11 +227,10 @@ class TestLanguageEngineUnified(unittest.TestCase):
         )
 
     def test_select_ko(self):
-        # local_google 默认禁用（反爬强），韩文不再引用死引擎，
-        # 落 local_bing + local_duckduckgo（ddgs 后端）
+        # local_google 默认禁用（反爬强），韩文落 local_bing
         self.assertEqual(
             _select_language_engines({"primary_lang": "ko"}),
-            ["local_bing", "local_duckduckgo"],
+            ["local_bing"],
         )
 
     def test_select_no_features_returns_empty(self):
@@ -239,16 +238,16 @@ class TestLanguageEngineUnified(unittest.TestCase):
         self.assertEqual(_select_language_engines({}), [])
 
     def test_merge_idempotent(self):
-        combo = ["anysearch", "duckduckgo"]
+        combo = ["anysearch", "wikipedia"]
         feats = {"primary_lang": "zh", "chinese_ratio": 0.9}
         lang = _select_language_engines(feats)
         once = _merge_language_engines(combo, feats, lang)
         twice = _merge_language_engines(once, feats, lang)
         self.assertEqual(once, twice)
-        self.assertEqual(once, ["anysearch", "duckduckgo", "local_bing"])
+        self.assertEqual(once, ["anysearch", "wikipedia", "local_bing"])
 
     def test_compat_wrapper_equals_split(self):
-        combo = ["anysearch", "duckduckgo"]
+        combo = ["anysearch", "wikipedia"]
         feats = {"primary_lang": "zh", "chinese_ratio": 0.9}
         split = _merge_language_engines(combo, feats, _select_language_engines(feats))
         self.assertEqual(_add_language_engines(combo, feats), split)
@@ -282,7 +281,7 @@ class TestLangOverride(unittest.TestCase):
 
     def setUp(self):
         self.sub_engines = [
-            "local_bing", "local_duckduckgo", "local_google",
+            "local_bing", "local_google",
             "local_yandex", "local_mojeek",
         ]
         p = patch("route_lang._enabled_local_engines", return_value=self.sub_engines)
@@ -316,7 +315,7 @@ class TestLangOverride(unittest.TestCase):
     def test_select_override_en(self):
         f = {"lang_override": "en", "primary_lang": "zh", "chinese_ratio": 0.5}
         self.assertEqual(
-            _select_language_engines(f), ["local_bing", "local_duckduckgo"])
+            _select_language_engines(f), ["local_bing"])
 
     def test_merge_override_ja_removes_cn_noise(self):
         f = {"primary_lang": "zh", "lang_override": "ja", "chinese_ratio": 0.9}
@@ -328,7 +327,7 @@ class TestLangOverride(unittest.TestCase):
     def test_must_keep_override_ja(self):
         f = {"primary_lang": "zh", "lang_override": "ja"}
         self.assertEqual(
-            _lang_must_keep(f, {"local_bing", "local_duckduckgo"}), ["local_bing"])
+            _lang_must_keep(f, {"local_bing"}), ["local_bing"])
 
     def test_route_query_override_ja_no_cn_noise(self):
         d = route_query("用日文搜 苹果手机", mode="auto")
@@ -336,7 +335,7 @@ class TestLangOverride(unittest.TestCase):
         for cn in ("bocha", "byted", "wechat_sogou", "zhihu"):
             self.assertNotIn(cn, combo, f"日文覆盖查询误含中文引擎 {cn}")
         self.assertTrue(
-            any(e in combo for e in ("local_bing", "local_yandex", "local_duckduckgo")),
+            any(e in combo for e in ("local_bing", "local_yandex")),
             f"日文覆盖查询缺语言引擎: {combo}",
         )
 
@@ -349,7 +348,7 @@ class TestCrossLangRecovery(unittest.TestCase):
     def test_non_latin_triggers_cross_lang(self):
         cq, ce = cross_lang_query("アニメ おすすめ")
         self.assertTrue(ce)
-        self.assertIn("duckduckgo", ce)
+        self.assertIn("anysearch", ce)
 
     def test_chinese_triggers_cross_lang(self):
         cq, ce = cross_lang_query("如何用Python写爬虫")
@@ -369,13 +368,13 @@ class TestCrossLangRecovery(unittest.TestCase):
 
     def test_recovery_plan_has_cross_lang(self):
         plan = build_recovery_plan(
-            "アニメ おすすめ", ["anysearch"], ["duckduckgo", "wikipedia"], mode="auto")
+            "アニメ おすすめ", ["anysearch"], ["bocha", "wikipedia"], mode="auto")
         strategies = [s.strategy for s in plan if s.level == "L4"]
         self.assertIn("cross_lang", strategies)
 
     def test_fast_mode_skips_cross_lang(self):
         plan = build_recovery_plan(
-            "アニメ おすすめ", ["anysearch"], ["duckduckgo"], mode="fast")
+            "アニメ おすすめ", ["anysearch"], ["bocha"], mode="fast")
         strategies = [s.strategy for s in plan]
         self.assertNotIn("cross_lang", strategies)
 
@@ -399,7 +398,7 @@ class TestCrossLangRecovery(unittest.TestCase):
     def test_recovery_plan_baseline_zh_for_en(self):
         # 强制 prefer 含 zh：本机系统多为 zh，plan 应含 baseline_zh
         plan = build_recovery_plan(
-            "hello world", ["duckduckgo"], ["wikipedia"], mode="auto")
+            "hello world", ["anysearch"], ["wikipedia"], mode="auto")
         strategies = [s.strategy for s in plan if s.level == "L4"]
         # 系统 locale 含 zh 或习惯含 zh 时出现；无 zh 时可不出现
         # 这里只检查：中文查询有 cross_lang、英文查询无 cross_lang

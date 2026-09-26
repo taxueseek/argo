@@ -145,7 +145,7 @@ class TestEnginesBaseWiring:
     def test_frozen_engine_set(self):
         assert engines_base.SERP_GUARD_ENGINES == frozenset({
             "local_bing", "local_google", "local_baidu", "local_sogou",
-            "local_yandex", "local_startpage", "local_mojeek", "local_duckduckgo",
+            "local_yandex", "local_startpage", "local_mojeek",
         })
 
     def test_member_engine_junk_dropped(self):

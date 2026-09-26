@@ -20,7 +20,7 @@ export const NATIVE_TOOLS = {
         },
         "engine": {
           "type": "string",
-          "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/duckduckgo/byted/bocha/tavily/github/wikipedia/semantic_scholar/local_search 等）",
+          "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/github/wikipedia/semantic_scholar/local_search 等）",
           "default": "auto"
         },
         "max_results": {

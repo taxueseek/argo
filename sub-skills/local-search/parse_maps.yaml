@@ -47,14 +47,6 @@ html:
     url_attr: href
     score: 0.7
 
-  local_duckduckgo:
-    container: ".result"
-    title: "a.result__a"
-    url: "a.result__a"
-    snippet: "a.result__snippet"
-    url_attr: href
-    score: 0.7
-
   local_baidu:
     container: ".result, .c-container, .cosc-card-content-border"
     title: "h3"

@@ -105,7 +105,7 @@ def test_mode():
     sample_results = json.dumps({
         "results": [
             {"title": "Python docs", "url": "https://docs.python.org", "snippet": "Official Python documentation", "source": "wikipedia", "score": 0.9},
-            {"title": "Some blog", "url": "https://random-blog.com/python", "snippet": "Python tutorial", "source": "duckduckgo", "score": 0.6},
+            {"title": "Some blog", "url": "https://random-blog.com/python", "snippet": "Python tutorial", "source": "byted", "score": 0.6},
         ]
     })
     result = execute_tool("argo_evidence", {"query": "Python tutorial", "results_json": sample_results})

@@ -59,7 +59,7 @@ def _general_fallback(enabled: set[str]) -> list[str]:
     try:
         from engine_policy import GENERAL_FREE_FALLBACK
     except ImportError:
-        GENERAL_FREE_FALLBACK = ("anysearch", "duckduckgo", "local_bing")
+        GENERAL_FREE_FALLBACK = ("anysearch", "local_bing")
     return ["local_search"] + [e for e in GENERAL_FREE_FALLBACK if e in enabled]
 
 
@@ -168,7 +168,7 @@ def _select_sub_engines(sub_engines: list[str], features: dict | None = None) ->
     """根据查询特征选择子引擎。"""
     if not features:
         # 默认保底：快源优先（brave/yahoo 实测 ~1.1s），ddgs 默认后端慢不主动纳入
-        return [e for e in ["local_bing", "local_brave", "local_yahoo", "local_duckduckgo"]
+        return [e for e in ["local_bing", "local_brave", "local_yahoo"]
                 if e in sub_engines]
 
     primary_lang = features.get("primary_lang", "")
@@ -176,13 +176,13 @@ def _select_sub_engines(sub_engines: list[str], features: dict | None = None) ->
 
     # 多语种（v2.7）：日/韩查询优先对应语言的本地引擎
     if primary_lang == "ja":
-        return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"] if e in sub_engines]
+        return [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
     if primary_lang == "ko":
-        return [e for e in ["local_google", "local_bing", "local_duckduckgo"] if e in sub_engines]
+        return [e for e in ["local_google", "local_bing"] if e in sub_engines]
     if chinese_ratio > 0.1:
         # 百度/搜狗结果质量低（SERP 跳转链为主），仅作印证不主动纳入；
-        # 中文补充源只用 local_bing/local_duckduckgo
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+        # 中文补充源只用 local_bing
+        return [e for e in ["local_bing"] if e in sub_engines]
     elif features.get("has_technical"):
         return [e for e in ["local_github", "local_stackoverflow", "local_bing"] if e in sub_engines]
     elif features.get("has_depth_word"):
@@ -439,7 +439,7 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         filtered = []
 
     # ── 能力族去重 + 互补回填（标准化调用契约）────────────────────────
-    # 全网搜索族同质化最高（byted/bocha/duckduckgo/octen 都是通用网页检索），
+    # 全网搜索族同质化最高（byted/bocha/octen 都是通用网页检索），
     # 同族堆叠纯属浪费预算位：web_general 至多保留 2 个，垂直族保留多源。
     # config.yaml 引擎声明的 family 字段是来源（spec_lookup 传入 family_of，
     # 不再只看静态覆盖表）。去重腾出的槽位由 complement_refill 用互补能力族
@@ -516,7 +516,7 @@ def geo_lang_must_keep(features: dict | None, enabled: set[str],
 
 
 def breaker_filter(combo: list[str], enabled: set[str],
-                   empty: tuple[str, ...] = ("anysearch", "duckduckgo")) -> list[str]:
+                   empty: tuple[str, ...] = ("anysearch", "local_bing")) -> list[str]:
     """熔断统一处理 + 空回退。
 
     combo 非空是执行层的前提（空 combo 会让 engines[0] IndexError），且语言/
@@ -534,7 +534,7 @@ def breaker_filter(combo: list[str], enabled: set[str],
 # 放在模块级而不是 route_query 体内：它是**常量数据**，藏在热路径函数里每次
 # 调用重建（实测 0.074 µs，性能上无所谓，但读代码的人会以为它随调用变化）。
 _GENERAL_ENGINES = frozenset({
-    "anysearch", "byted", "bocha", "octen", "duckduckgo",
+    "anysearch", "byted", "bocha", "octen",
     "local_search", "zhihu", "wechat_sogou", "uapi", "tavily",
     "brave", "bocha_ai", "google_scholar", "arxiv", "wikipedia",
 })

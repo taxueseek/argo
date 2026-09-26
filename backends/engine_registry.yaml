@@ -621,17 +621,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: 抖音热榜（iesdouyin word_list JSON，免认证）
-- name: duckduckgo
-  tier: T1
-  type: http
-  coverage:
-  - general
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: false
-  desc: DuckDuckGo Instant Answer API（T2 替代）
 - name: dw_news
   tier: T1
   type: rss_feed
@@ -1488,17 +1477,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: Crossref本地（http）
-- name: local_duckduckgo
-  tier: T2
-  type: html
-  coverage:
-  - general
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: false
-  desc: DuckDuckGo本地（html）
 - name: local_github
   tier: T2
   type: http

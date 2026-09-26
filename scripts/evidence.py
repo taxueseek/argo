@@ -106,7 +106,6 @@ SOURCE_TYPE_MAP = {
     "bocha": ("中文搜索", 0.7),
     "tavily": ("AI搜索", 0.75),
     "felo": ("AI搜索", 0.7),
-    "duckduckgo": ("通用搜索", 0.65),
     "wikipedia": ("百科", 0.75),
     "baidu_baike": ("中文百科", 0.72),
     "mdn": ("官方文档", 0.9),

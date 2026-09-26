@@ -1801,24 +1801,6 @@ engines:
       item_summary: publisher
     headers:
       User-Agent: argo-search/2.5 (mailto:unified-search@local)
-  duckduckgo:
-    enabled: true
-    label: DuckDuckGo
-    cost_tier: free
-    qps: 5
-    priority: 13
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    coverage:
-    - general
-    desc: DuckDuckGo Instant Answer API（T2 替代）
-    format: json
-    method: GET
-    query_param: q
-    timeout: 5
-    type: http
-    url: https://api.duckduckgo.com/
   exa:
     enabled: true
     label: Exa语义搜索
@@ -3220,19 +3202,6 @@ engines:
     url: https://www.startpage.com/do/dsearch
     query_param: query
     timeout: 10
-  local_duckduckgo:
-    type: html
-    enabled: true
-    label: DuckDuckGo本地
-    cost_tier: free
-    qps: 5
-    priority: 25
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    url: https://html.duckduckgo.com/html/
-    query_param: q
-    timeout: 8
   local_baidu:
     type: html
     enabled: true

@@ -29,11 +29,11 @@ class TestGeneralFreeSingleSource(unittest.TestCase):
         from route import _general_fallback
         # 取样集合从唯一来源推导，不写死名单：名单增删时这条守的是
         # 「本地优先 + 顺序与来源一致」这个契约，而不是某天的某个快照。
-        enabled = {"local_search", "duckduckgo"} | set(GENERAL_FREE_FALLBACK)
+        enabled = {"local_search", "github"} | set(GENERAL_FREE_FALLBACK)
         fb = _general_fallback(enabled)
         self.assertEqual(fb[0], "local_search")
         self.assertEqual(fb[1:], list(GENERAL_FREE_FALLBACK))
-        self.assertNotIn("duckduckgo", fb)
+        self.assertNotIn("github", fb)
 
     def test_route_fallback_filters_disabled(self):
         from route import _general_fallback

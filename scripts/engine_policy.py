@@ -35,7 +35,7 @@ FORCE_DAILY_CORE: frozenset[str] = frozenset({
     "sina_quote", "tencent_quote", "em_flow", "eastmoney",
     "fred", "worldbank", "fx_rate", "nbs_stats", "eurostat",
     "pubchem", "rfc_editor", "gbif", "clinicaltrials",
-    "finviz", "anysearch", "duckduckgo", "byted", "octen",
+    "finviz", "anysearch", "byted", "octen",
     "arxiv", "github", "wikipedia",
     "zhihu", "zhihu_hot",
 })

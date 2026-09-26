@@ -821,7 +821,7 @@ def _detect_anti_bot(html: str) -> bool:
 # 契约，不走这张表。判定规则与逃生门（ARGO_SERP_GUARD=0）在 serp_guard 单点。
 SERP_GUARD_ENGINES = frozenset({
     "local_bing", "local_google", "local_baidu", "local_sogou",
-    "local_yandex", "local_startpage", "local_mojeek", "local_duckduckgo",
+    "local_yandex", "local_startpage", "local_mojeek",
 })
 
 
@@ -1239,33 +1239,6 @@ def _ensure_engine_source(
     return results
 
 
-def _parse_duckduckgo(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """解析 DuckDuckGo Instant Answer API 响应。"""
-    if not isinstance(data, dict):
-        return []
-    results: list[dict[str, Any]] = []
-
-    abstract = data.get("Abstract", "")
-    if abstract:
-        results.append({
-            "title": data.get("Heading", "DuckDuckGo Answer"),
-            "url": data.get("AbstractURL", ""),
-            "snippet": abstract[:300],
-            "source": "duckduckgo",
-        })
-
-    for topic in data.get("RelatedTopics", [])[:5]:
-        if isinstance(topic, dict) and "Text" in topic:
-            results.append({
-                "title": topic.get("Text", "")[:100],
-                "url": topic.get("FirstURL", ""),
-                "snippet": topic.get("Text", "")[:300],
-                "source": "duckduckgo",
-            })
-
-    return results[:5]
-
-
 def _parse_uapi(data: dict[str, Any]) -> list[dict[str, Any]]:
     """解析 UAPI 搜索响应。"""
     if not isinstance(data, dict):
@@ -1417,7 +1390,6 @@ def _parse_doi(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 # 引擎名 → 专用 JSON 解析器（无 output_map 时的精确格式）
 _CUSTOM_JSON_PARSERS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]] = {
-    "duckduckgo": _parse_duckduckgo,
     "uapi": _parse_uapi,
     "semantic_scholar": _parse_semantic_scholar,
     "doi": _parse_doi,

@@ -626,7 +626,7 @@ def recommend_routing(analysis: dict[str, Any]) -> dict[str, Any]:
         routing["mode"] = "auto"
 
     elif strategy == "news_priority":
-        routing["engines"] = ["byted", "uapi", "duckduckgo"]
+        routing["engines"] = ["byted", "uapi"]
         routing["explanation"] = "检测到新闻/动态意图，优先使用新闻引擎"
         routing["mode"] = "fast"
 
@@ -647,7 +647,7 @@ def recommend_routing(analysis: dict[str, Any]) -> dict[str, Any]:
             routing["engines"] = ["anysearch"]
             routing["explanation"] = "检测到 CVE 编号，使用安全垂直域"
         elif "search_tech" in intents:
-            routing["engines"] = ["github", "duckduckgo", "uapi"]
+            routing["engines"] = ["github", "uapi"]
             routing["explanation"] = "检测到技术意图，优先技术源"
         elif "search_opinion" in intents:
             routing["engines"] = ["zhihu", "byted"]

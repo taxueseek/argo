@@ -4,12 +4,12 @@ engine_families.py — 搜索源能力族分类（第一性原理重构）
 
 问题重定义：
   旧：每个搜索源是独立个体，type/cost/coverage 散落，路由靠 domain 手写 combo，
-      同类源（如 byted/bocha/duckduckgo 都是全网搜索）无法互换、无法统一测试。
+      同类源（如 byted/bocha 都是全网搜索）无法互换、无法统一测试。
   新：搜索源按「检索能力」归族（MECE），同族源共享统一调用契约——
       任意组合、标准化输入输出、金标集按族检查、A/B 可替换。
 
 能力族（MECE，互斥且穷尽）：
-  web_general      全网网页检索（多语言）    byted / bocha / duckduckgo / tavily / anysearch / octen / exa
+  web_general      全网网页检索（多语言）    byted / bocha / tavily / anysearch / octen / exa
   web_chinese      中文全网检索              bocha / byted / wechat_sogou / local_bing 等
   academic         学术文献                  arxiv / openalex / crossref / semantic_scholar / dblp / europepmc
   code             代码/包/文档              github / pypi / npm / mdn / stackoverflow / crates / gitlab / devto
@@ -52,7 +52,6 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     # 全网搜索
     "byted": "web_general",
     "bocha": "web_general",
-    "duckduckgo": "web_general",
     "tavily": "web_general",
     "anysearch": "web_general",
     "octen": "web_general",
@@ -68,7 +67,6 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "local_sogou": "web_general",
     "local_360": "web_general",
     "local_jisilu": "social",
-    "local_duckduckgo": "web_general",
     "local_mojeek": "web_general",
     "local_startpage": "web_general",
     "local_google": "web_general",
