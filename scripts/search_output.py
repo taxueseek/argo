@@ -103,7 +103,10 @@ def build_funnel(routed: int, called: int, returned: int,
     routed   = 路由选出的引擎数（engines_combo）
     called   = 实际发起调用的引擎数（早停时小于 routed）
     returned = 引擎返回的原始条数（跨引擎去重前）
-    deduped  = 跨引擎合并 + 近重复去重后
+    deduped  = 跨引擎合并 + 近重复去重后（SERP/跳转页过滤的损耗已计入本格
+               之差，取值点在 SERP 过滤之前、minhash 之后；此前取值点在
+               minhash 之后，把 SERP 丢弃也算成「去重削掉了」，会让 0 结果
+               的首要诊断入口给出错误归因）
     filtered = 否定词过滤 + 时间窗过滤后
     kept     = 最终输出条数
     """

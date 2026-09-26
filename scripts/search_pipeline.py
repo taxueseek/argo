@@ -343,6 +343,14 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _tk_dedupe = _tick(timing)
 
     # ── P0：过滤 SERP/跳转 URL（搜索结果页、baidu.com/link 等不可当信源正文）──
+    # 漏斗第 4 格必须**在 SERP 过滤之前**取值。此前取值点在下面 minhash 之后
+    # （:366），于是 SERP 丢弃的条目被算进「跨引擎去重」那格的损耗里：
+    # 实测 `local_bing` 返回 10 条全是裸 bing.com/search、全部被 SERP 过滤掉，
+    # 漏斗报的是 `returned 11 → deduped 0`，把人指向「去重削没了」——而
+    # 去重根本无辜（ARGO_MINHASH_DEDUPE=0 时照样归零）。funnel_collapse 会
+    # 回答「结果在 deduped 归零 = 被当重复削掉」，那个归因在这里是错的，
+    # 而它恰是 0 结果的首要诊断入口。
+    _funnel_deduped = len(merged)
     if merged:
         try:
             from evidence import is_serp_or_jump_url as _is_serp
@@ -362,8 +370,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         except Exception as _e:
             _log(f"minhash 去重跳过: {type(_e).__name__}")
     _tock(timing, "dedupe", _tk_dedupe)
-    # 漏斗第 4 格：跨引擎合并 + 近重复去重之后还剩多少（见 build_funnel）
-    _funnel_deduped = len(merged)
     # 三个子段各自计时，**不能共用一个 tick**：
     # `filter`（否定词 + 时间窗过滤）是纯本地遍历；`recovery` 是**网络调用**
     # （域路由零结果时的救援链，见下）；`rerank` 是纯本地重排。此前三者共用

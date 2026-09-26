@@ -920,9 +920,8 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
         separator = "&" if "?" in resolved_url else "?"
         full_url = f"{resolved_url}{separator}{query_param}={up.quote(query)}"
         for k, v in extra_params.items():
-            # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang，
-            # 让 local_bing/local_google 等对非中文查询返回对应语言结果。
-            if k in ("setlang", "hl", "lang", "uselang"):
+            # 语言参数动态化：按查询主语言覆盖 setlang/hl/lang/mkt（此前漏 mkt）
+            if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                 v = _lang_param(k, query) or v
             full_url += f"&{k}={up.quote(_resolve(str(v), query, n))}"
         resolved_headers = {

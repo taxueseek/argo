@@ -63,12 +63,14 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         1783, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面"),
     "scripts/engines_base.py": (
-        1495, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+        1494, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
               "2026-09-26 +42：SERP 垃圾守卫接线（守卫本体独立在 serp_guard.py，此处只留"
               "冻结集+调用点）、反爬全文级标记（DDG challenge 实测）、key 脱敏三形态兜底；"
               "同日 −28：移除 DDG Instant Answer 解析器（引擎随本机可达性门下线）；"
               "同日 +41：{UUID} 进程级身份占位符（BAIDUID 反关联）+ tls_impersonate/"
-              "resolve_redirects 两契约接线（跳转解析本体独立在 jump_resolver.py）"),
+              "resolve_redirects 两契约接线（跳转解析本体独立在 jump_resolver.py）；"
+              "同日 −1：语言参数动态化补上 mkt（_build_html_engine 这侧漏了，"
+              "lang_detect 的 mkt 表一直备着却无人调用），注释同步精简"),
     "scripts/cache.py": (
         1362, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行）"),
