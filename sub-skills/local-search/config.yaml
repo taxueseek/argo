@@ -32,30 +32,6 @@ engines:
     fallback_params:
       setlang: zh-Hans
 
-  local_google:
-    type: html
-    enabled: false
-    categories: [web_general]
-    url: "https://www.google.com/search"
-    query_param: q
-    method: GET
-    timeout: 8
-    format: html
-    extra_params:
-      hl: zh-CN
-    note: ddgs google backend unreliable, use HTML directly when enabled
-
-  local_mojeek:
-    type: html
-    enabled: true
-    categories: [web_general]
-    url: "https://www.mojeek.com/search"
-    query_param: q
-    method: GET
-    timeout: 10
-    format: html
-    note: ddgs mojeek backend returns nav links, use HTML directly
-
   local_yandex:
     type: cli
     enabled: true
@@ -66,20 +42,8 @@ engines:
     timeout: 8
     output_format: json
     use_lang_region: true
-    fallback_type: html
-    fallback_url: "https://yandex.com/search/"
-    fallback_param: text
-
-  local_startpage:
-    type: html
-    enabled: true
-    categories: [web_general]
-    url: "https://www.startpage.com/do/dsearch"
-    query_param: query
-    method: GET
-    timeout: 10
-    format: html
-    note: ddgs startpage backend unreliable, use HTML directly
+    # html fallback 已删：yandex.com 直连被 SmartCaptcha 墙（2026-09-26 实测），
+    # 无 selectors 可用，cli 失败即诚实空
 
   local_duckduckgo:
     type: cli

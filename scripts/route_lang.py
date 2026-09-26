@@ -236,7 +236,7 @@ def _enabled_local_engines() -> list[str]:
     """返回已注册（enabled）的本地子引擎名。
 
     路由选择的引擎必须能被执行层真正调用。list_local_engines(available_only=False)
-    返回全部子引擎（含 config.yaml enabled:false 的，如 local_yandex/local_google），
+    返回全部子引擎（已按 config.yaml enabled 字段过滤，禁用引擎不入选），
     若路由选到这些引擎，执行层注册表里不存在 → 「未知引擎」空跑。
     这里以 config.yaml 的 enabled 字段为准过滤，保证路由与执行一致。
     """
@@ -258,8 +258,8 @@ def _select_language_engines(features: dict | None = None) -> list[str]:
     """按查询语言选择应追加的语言本地引擎（P2-1 单一入口，与组合无关）。
 
     多语种（v2.7）：按 primary_lang 追加对应语言的本地引擎——
-      中文 → local_bing；日文 → local_yandex（日文索引更好）或 local_bing；
-      韩文 → local_google（韩国站点覆盖好）或 local_bing。
+      中文/日文/韩文 → local_bing（动态 setlang 吃对应语言索引；yandex/
+      google 直连 html 引擎已随本机可达性门下线，ddgs 后端路子在子技能侧保留）。
     只做选择（已按 enabled 过滤、最多 2 个），不碰既有 combo；
     route_query 内一次计算、三处合并共用，杜绝各路径逻辑漂移。
     """
@@ -276,25 +276,20 @@ def _select_language_engines(features: dict | None = None) -> list[str]:
     lang_override = features.get("lang_override")
     if lang_override:
         if lang_override == "ja":
-            return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
-                    if e in sub_engines][:2]
+            return [e for e in ["local_bing"] if e in sub_engines][:2]
         if lang_override == "ko":
-            # local_google 已禁用（反爬强），不再引用死引擎
-            return [e for e in ["local_bing", "local_duckduckgo"]
-                    if e in sub_engines][:2]
+            return [e for e in ["local_bing"] if e in sub_engines][:2]
         if lang_override == "zh":
             return [e for e in ["local_bing"] if e in sub_engines]
-        # en / cyrillic / 其他：中英基线本地引擎（动态 setlang 保底多语言索引）
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+        # en / cyrillic / 其他：动态 setlang 保底多语言索引
+        return [e for e in ["local_bing"] if e in sub_engines]
 
-    # 日/韩：优先对应语言本地引擎。注：local_yandex 走 ddgs yandex 后端
-    # （实测 ~2s 可用）；local_google 默认 enabled:false，不引用死引擎。
+    # 日/韩：local_bing 动态 setlang 承接（yandex/google 直连引擎已下线，
+    # 可达性判决见 references/engines.md；ddgs 后端路子在子技能侧保留）。
     if primary_lang == "ja":
-        return [e for e in ["local_yandex", "local_bing", "local_duckduckgo"]
-                if e in sub_engines][:2]
+        return [e for e in ["local_bing"] if e in sub_engines][:2]
     if primary_lang == "ko":
-        return [e for e in ["local_bing", "local_duckduckgo"]
-                if e in sub_engines][:2]
+        return [e for e in ["local_bing"] if e in sub_engines][:2]
 
     if chinese_ratio > 0.1:
         # 只要含中文字符就追加中文引擎（阈值 0.1 覆盖中英混合查询）
@@ -304,7 +299,7 @@ def _select_language_engines(features: dict | None = None) -> list[str]:
         "cyrillic", "thai", "arabic", "hebrew", "greek", "devanagari",
     ):
         # 其他非拉丁语：local_bing 靠动态 setlang 吃多语言索引
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+        return [e for e in ["local_bing"] if e in sub_engines]
     if primary_lang in ("mixed", "other", ""):
         # 弱信号：按 lang_pref（习惯/系统/中英基线）选本地引擎
         prefer: list[str] = []
@@ -315,12 +310,12 @@ def _select_language_engines(features: dict | None = None) -> list[str]:
             prefer = ["zh", "en"]
         top = prefer[0] if prefer else "en"
         if top == "ja":
-            return [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
+            return [e for e in ["local_bing"] if e in sub_engines]
         if top == "ko":
-            return [e for e in ["local_google", "local_bing"] if e in sub_engines]
+            return [e for e in ["local_bing"] if e in sub_engines]
         if top == "zh":
             return [e for e in ["local_bing"] if e in sub_engines]
-        return [e for e in ["local_bing", "local_duckduckgo"] if e in sub_engines]
+        return [e for e in ["local_bing"] if e in sub_engines]
     if features.get("has_depth_word"):
         return [e for e in ["local_arxiv", "local_semantic_scholar"] if e in sub_engines]
     return []
@@ -522,8 +517,8 @@ _LANG_EXCLUSIVE_ENGINES: frozenset[str] = frozenset({
 
 
 _LANG_PREFERRED_ENGINES: dict[str, list[str]] = {
-    "ja": ["local_yandex", "local_bing"],
-    "ko": ["local_google", "local_bing"],
+    "ja": ["local_bing"],
+    "ko": ["local_bing"],
 }
 
 

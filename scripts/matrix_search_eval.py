@@ -48,9 +48,9 @@ _RECOVERY_POLLUTE = frozenset({
 
 # 日韩等语言引擎候选
 _LANG_ENGINE_CANDIDATES = {
-    "ja": ("local_yandex", "local_bing", "local_google"),
-    "ko": ("local_google", "local_bing"),
-    "cyrillic": ("local_bing", "anysearch", "local_yandex"),
+    "ja": ("local_bing",),
+    "ko": ("local_bing",),
+    "cyrillic": ("local_bing", "anysearch"),
     "thai": ("local_bing", "anysearch"),
     "arabic": ("local_bing", "anysearch"),
     "hebrew": ("local_bing", "anysearch"),

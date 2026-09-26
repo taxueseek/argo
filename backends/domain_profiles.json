@@ -945,30 +945,6 @@
     "boost_keywords": {},
     "boost_combos": {}
   },
-  "local_google": {
-    "label": "Google本地",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "local_mojeek": {
-    "label": "Mojeek本地",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "local_yandex": {
-    "label": "Yandex本地",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
-  "local_startpage": {
-    "label": "Startpage本地",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
   "local_pubmed": {
     "label": "PubMed本地",
     "documents": [],

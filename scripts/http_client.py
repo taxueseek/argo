@@ -441,7 +441,8 @@ class HttpClient:
 
     def get(self, url: str, extra_headers: dict | None = None,
             follow_redirects: bool = True,
-            engine: str | None = None) -> dict:
+            engine: str | None = None,
+            impersonate_profiles: list[str] | None = None) -> dict:
         """发送 GET 请求，返回统一响应格式。
 
         SSRF 防护：默认拒绝内网 / 私有地址目标（ARGO_ALLOW_PRIVATE_URLS=1
@@ -469,7 +470,15 @@ class HttpClient:
         with host_throttle(url, engine):
             for attempt in range(self.max_retries + 1):
                 try:
-                    resp = self._do_get(url, extra_headers, follow_redirects)
+                    if impersonate_profiles:
+                        # TLS 指纹仿冒档：反爬按 ClientHello 判机器人时启用
+                        # （2026-09-26 Baidu 实测：Python 原生指纹整 IP 被降级
+                        # 为壳页，chrome/safari 仿冒同刻 17/12 条）。
+                        resp = self.get_impersonated(
+                            url, extra_headers=extra_headers,
+                            timeout=self.timeout, profiles=impersonate_profiles)
+                    else:
+                        resp = self._do_get(url, extra_headers, follow_redirects)
                     # 429/503 + Retry-After：服务器明确要求等待 → 按其指示等待后重试
                     # （等待服务器说的时间，而非盲退避；无头/超阈值则直接返回不重试）
                     wait = retry_after_seconds(resp.get("status", 0),

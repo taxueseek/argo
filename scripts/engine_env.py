@@ -210,7 +210,8 @@ PLACEHOLDER_ALIASES: dict[str, list[str]] = {
 
 _PLACEHOLDER_RE = re.compile(r"\{([A-Z_][A-Z0-9_]*)\}")
 # 动态生成的非密钥占位符，不算 required_env
-_NON_SECRET_PLACEHOLDERS = {"QUERY", "N", "TIMESTAMP", "MODE", "DEPTH"}
+# （UUID = engines_base._proc_uuid 的进程级一次性身份，见其 docstring）
+_NON_SECRET_PLACEHOLDERS = {"QUERY", "N", "TIMESTAMP", "MODE", "DEPTH", "UUID"}
 
 # 可选密钥：有则更好，缺失不阻断自动路由
 OPTIONAL_ENV_ENGINES: set[str] = {

@@ -3134,80 +3134,18 @@ engines:
       setlang: zh-Hans
       mkt: zh-CN
     timeout: 8
-  local_google:
-    type: html
-    enabled: false
-    label: Google本地
-    cost_tier: free
-    qps: 3
-    priority: 21
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    url: https://www.google.com/search
-    query_param: q
-    extra_params:
-      hl: zh-CN
-    timeout: 8
-  local_mojeek:
-    type: html
-    # 2026-09-16 实测停用：Mojeek 对自动化查询返回 captcha 页——先 HTTP 403
-    # 「your network appears to be sending automated queries」，随后变成
-    # HTTP 200 + <title>Captcha</title>（更隐蔽：状态码正常但正文无结果）。
-    # 换浏览器 UA / curl UA / 无 UA 都一样；首页与 /about 正常 200，仅 /search
-    # 被拦，且无免 key 的官方 API（services/search 404、api.mojeek.com 403）。
-    # 属上游策略限制，非本地可修。
-    # 长尾召回已由 marginalia/wiby/searchmysite 承担（三者实测均 10 条可用）。
-    enabled: false
-    label: Mojeek本地
-    note: 上游对自动化查询返回 captcha（403→200+captcha 页）；无免 key API。长尾改由 marginalia/wiby/searchmysite 承担
-    cost_tier: free
-    qps: 3
-    priority: 22
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    url: https://www.mojeek.com/search
-    query_param: q
-    timeout: 10
-  local_yandex:
-    type: html
-    enabled: false
-    label: Yandex本地
-    cost_tier: free
-    qps: 3
-    priority: 23
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    url: https://yandex.com/search/
-    query_param: text
-    extra_params:
-      lang: ru  # 动态覆盖：engines_base 按查询主语言改写（ja/ko/en/...）
-    timeout: 10
-  local_startpage:
-    type: html
-    # 2026-09-16 实测停用：Startpage 返回 anti-bot 拦截页（引擎如实判为
-    # blocked，非静默空结果）。Startpage 是 Google 结果的代理层，反爬强度高，
-    # 且同类能力已由 local_bing（实测 10 条）覆盖，维护收益低。
-    enabled: false
-    label: Startpage本地
-    note: 上游 anti-bot 拦截页；Google 类结果已由 local_bing 覆盖，不再维护
-    cost_tier: free
-    qps: 3
-    priority: 24
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    url: https://www.startpage.com/do/dsearch
-    query_param: query
-    timeout: 10
   local_baidu:
     type: html
     enabled: true
     label: 百度本地
     cost_tier: free
     qps: 3
+    # 风控按突发触发：连发即降级（真 SERP→稀页→壳页）。2s 最小间隔实测稳定
+    min_interval_ms: 2000
+    # 2026-09-26 升级实测：密集调用后本 IP 对 Python 原生 TLS 指纹整档降级为
+    # 壳页（1438B），同刻 chrome131/safari184 仿冒 17/12 条——按 ClientHello
+    # 拦截。tls_impersonate 声明仿冒档，firefox135 同刻被杀故不入列
+    tls_impersonate: [chrome131, safari184]
     priority: 26
     period: second
     cost_per_call: 0.0
@@ -3216,6 +3154,15 @@ engines:
     query_param: wd
     extra_params:
       ie: utf-8
+    # 2026-09-26 实测：无 Cookie 首刷可出结果，随后被风控逐级降级（947KB 真
+    # SERP → 632KB 稀页 → 1438B 壳页）。带 BAIDUID 后稳定出结果——值本身
+    # 不敏感（随机 hex 即可），要求只是跨请求一致；但固定写死值会被关联拉黑
+    # （实测同一值密集调用后整值作废），故用 {UUID}：每次进程启动新身份、
+    # 进程内跨请求一致，配合 2s 最小间隔长期稳定。
+    headers:
+      User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+      Cookie: BAIDUID={UUID}:FG=1
+      Accept-Language: zh-CN,zh;q=0.9
     timeout: 8
   local_sogou:
     type: html
@@ -3229,6 +3176,8 @@ engines:
     cost_unit: free
     url: https://www.sogou.com/web
     query_param: query
+    # 结果链接走 sogou.com/link 跳转壳：同 baidu，须解析才有产出
+    resolve_redirects: true
     timeout: 8
   local_arxiv:
     type: http

@@ -144,8 +144,7 @@ class TestEnginesBaseWiring:
 
     def test_frozen_engine_set(self):
         assert engines_base.SERP_GUARD_ENGINES == frozenset({
-            "local_bing", "local_google", "local_baidu", "local_sogou",
-            "local_yandex", "local_startpage", "local_mojeek",
+            "local_bing", "local_baidu", "local_sogou",
         })
 
     def test_member_engine_junk_dropped(self):
@@ -190,7 +189,7 @@ class TestFullEngineChain:
 
     def _run(self, bing_engine, monkeypatch, html, query):
         monkeypatch.setattr(engines_base, "_http_get_raw",
-                            lambda url, headers, timeout, engine="?": html)
+                            lambda url, headers, timeout, engine="?" , **kw: html)
         return bing_engine(query)
 
     def test_junk_serp_becomes_honest_empty(self, bing_engine, monkeypatch):

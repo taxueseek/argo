@@ -134,21 +134,18 @@ class TestRoutingLanguage(unittest.TestCase):
     def test_japanese_query_gets_local_engine(self):
         d = route_query("アニメ おすすめ", mode="auto")
         combo = d.get("engines_combo", [])
-        # yandex 默认 disabled，实际落到 local_bing（动态 setlang=ja-JP）
-        self.assertTrue(
-            any(e in combo for e in ("local_yandex", "local_bing")),
-            f"日文查询 combo 缺语言引擎: {combo}",
-        )
+        # ja/ko 语言引擎已收敛到 local_bing（动态 setlang 承接，yandex/google
+        # 直连引擎随可达性门下线，见 references/engines.md）
+        self.assertIn("local_bing", combo,
+                      f"日文查询 combo 缺语言引擎: {combo}")
         for cn in ("bocha", "byted", "wechat_sogou", "zhihu"):
             self.assertNotIn(cn, combo, f"日文查询误含中文引擎 {cn}")
 
     def test_korean_query_gets_local_engine(self):
         d = route_query("한국 영화 추천", mode="auto")
         combo = d.get("engines_combo", [])
-        self.assertTrue(
-            any(e in combo for e in ("local_google", "local_bing")),
-            f"韩文查询 combo 缺语言引擎: {combo}",
-        )
+        self.assertIn("local_bing", combo,
+                      f"韩文查询 combo 缺语言引擎: {combo}")
 
     def test_cyrillic_gets_local_bing_supplement(self):
         d = route_query("Как написать скрипт", mode="auto")
@@ -179,10 +176,10 @@ class TestRoutingLanguage(unittest.TestCase):
             _lang_must_keep(f, {"local_bing"}),
             ["local_bing"],
         )
-        # 专用源可用时优先 yandex
+        # 语言引擎已收敛到 local_bing（yandex 直连引擎下线）
         self.assertEqual(
             _lang_must_keep(f, {"local_yandex", "local_bing"}),
-            ["local_yandex"],
+            ["local_bing"],
         )
         f_ko = {"primary_lang": "ko"}
         self.assertEqual(
@@ -206,10 +203,7 @@ class TestLanguageEngineUnified(unittest.TestCase):
     """
 
     def setUp(self):
-        self.sub_engines = [
-            "local_bing", "local_google",
-            "local_yandex", "local_mojeek",
-        ]
+        self.sub_engines = ["local_bing"]
         p = patch("route_lang._enabled_local_engines", return_value=self.sub_engines)
         p.start()
         self.addCleanup(p.stop)
@@ -223,11 +217,11 @@ class TestLanguageEngineUnified(unittest.TestCase):
     def test_select_ja(self):
         self.assertEqual(
             _select_language_engines({"primary_lang": "ja"}),
-            ["local_yandex", "local_bing"],
+            ["local_bing"],
         )
 
     def test_select_ko(self):
-        # local_google 默认禁用（反爬强），韩文落 local_bing
+        # google 直连引擎已下线，韩文落 local_bing
         self.assertEqual(
             _select_language_engines({"primary_lang": "ko"}),
             ["local_bing"],
@@ -280,10 +274,7 @@ class TestLangOverride(unittest.TestCase):
     """
 
     def setUp(self):
-        self.sub_engines = [
-            "local_bing", "local_google",
-            "local_yandex", "local_mojeek",
-        ]
+        self.sub_engines = ["local_bing"]
         p = patch("route_lang._enabled_local_engines", return_value=self.sub_engines)
         p.start()
         self.addCleanup(p.stop)
@@ -308,9 +299,9 @@ class TestLangOverride(unittest.TestCase):
 
     def test_select_override_ja_wins_over_zh_ratio(self):
         f = extract_features("用日文搜 苹果手机")
-        # chinese_ratio 高，但 override=ja → 选日文引擎
+        # chinese_ratio 高，但 override=ja → 走语言引擎链（现为 local_bing）
         sel = _select_language_engines(f)
-        self.assertEqual(sel[0], "local_yandex")
+        self.assertEqual(sel, ["local_bing"])
 
     def test_select_override_en(self):
         f = {"lang_override": "en", "primary_lang": "zh", "chinese_ratio": 0.5}

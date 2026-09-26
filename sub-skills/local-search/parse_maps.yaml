@@ -15,38 +15,6 @@ html:
     url_attr: href
     score: 0.75
 
-  local_google:
-    container: "div.g"
-    title: "h3"
-    url: "a"
-    snippet: "div.VwiC3b, div.s, span.aCOpRe"
-    url_attr: href
-    score: 0.75
-
-  local_mojeek:
-    container: "li.results-standard-list"
-    title: "a.ob"
-    url: "a.ob"
-    snippet: "p.s"
-    url_attr: href
-    score: 0.7
-
-  local_yandex:
-    container: "li.serp-item"
-    title: "a.Link"
-    url: "a.Link"
-    snippet: "div.TextContainer"
-    url_attr: href
-    score: 0.65
-
-  local_startpage:
-    container: "div.result"
-    title: "a.result-title"
-    url: "a.result-title"
-    snippet: "p.result-snippet"
-    url_attr: href
-    score: 0.7
-
   local_baidu:
     container: ".result, .c-container, .cosc-card-content-border"
     title: "h3"

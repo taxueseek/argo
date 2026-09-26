@@ -88,7 +88,7 @@ class TestFullEngineChain:
             "query_param": "q",
         })
         monkeypatch.setattr(engines_base, "_http_get_raw",
-                            lambda url, headers, timeout, engine="?": _CHALLENGE_PAGE)
+                            lambda url, headers, timeout, engine="?" , **kw: _CHALLENGE_PAGE)
         out = eng("quantum computing tutorial")
         assert out == []
         note = engines_base.pop_failure_note("local_duckduckgo")

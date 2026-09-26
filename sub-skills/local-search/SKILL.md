@@ -1,7 +1,7 @@
 ---
 name: local-search
 parent: argo
-description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 32 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --sub-skill local-search 或 --local-first 调用。
+description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 29 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --sub-skill local-search 或 --local-first 调用。
 version: 1.1.0
 ---
 
@@ -19,15 +19,12 @@ Local Search 是 argo 的「零成本兜底适配器」，用于：
 - **输出与主 skill 同 schema**：`results[]` / `engines_used` / `errors` / `elapsed_ms`，可直接进 evidence 与 RRF。
 - **`local_X` 与主清单的 `X` 是别名，不是备份**：`local_arxiv`/`local_crossref`/`local_semantic_scholar`/`local_github`/`local_npm`/`local_wikipedia`/`local_stackoverflow`/`local_google_news` 与主清单同名项**打同一个上游端点**（主清单走官方 API、这里走免密钥直取），不存在「API 挂了抓取版兜底」。同上游同格式由 `tests/test_local_search_registry.py` 锁定。
 
-### 本地引擎列表（32 个，29 个默认启用）
+### 本地引擎列表（29 个，27 个默认启用）
 
 | unified 名称 | 类型 | 默认启用 | 类别 | 说明 |
 |--------------|------|----------|------|------|
 | local_bing | cli(ddgs) | ✅ | web_general | Bing 网页结果（ddgs -b bing + JSON） |
-| local_google | html | ❌ | web_general | Google 网页结果（反爬强；ddgs google backend 不可用） |
-| local_mojeek | html | ✅ | web_general | Mojeek 独立索引（ddgs backend 返回导航链接） |
 | local_yandex | cli(ddgs) | ✅ | web_general/japanese | Yandex 搜索（ddgs -b yandex） |
-| local_startpage | html | ✅ | web_general | Startpage 隐私搜索（ddgs backend 不可用） |
 | local_duckduckgo | cli(ddgs) | ✅ | web_general | DuckDuckGo（ddgs 默认） |
 | local_brave | cli(ddgs) | ✅ | web_general | Brave 搜索（ddgs -b brave，实测稳定） |
 | local_yahoo | cli(ddgs) | ✅ | web_general | Yahoo 搜索（ddgs -b yahoo，实测稳定） |

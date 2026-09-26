@@ -1510,17 +1510,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: Goodreads本地（html）
-- name: local_google
-  tier: T2
-  type: html
-  coverage:
-  - general
-  latency_ms: 2000
-  cost: free
-  status: disabled
-  recommended: true
-  explicit_only: false
-  desc: Google本地（html）
 - name: local_google_news
   tier: T2
   type: http
@@ -1545,17 +1534,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: IMDb suggestion API（local-search 垂直别名，与 imdb 同源）
-- name: local_mojeek
-  tier: T2
-  type: html
-  coverage:
-  - general
-  latency_ms: 2000
-  cost: free
-  status: disabled
-  recommended: true
-  explicit_only: false
-  desc: Mojeek本地（html）
 - name: local_npm
   tier: T2
   type: http
@@ -1635,17 +1613,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: StackOverflow本地（http）
-- name: local_startpage
-  tier: T2
-  type: html
-  coverage:
-  - general
-  latency_ms: 2000
-  cost: free
-  status: disabled
-  recommended: true
-  explicit_only: false
-  desc: Startpage本地（html）
 - name: local_wikipedia
   tier: T2
   type: http
@@ -1679,17 +1646,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: Wiktionary本地（http）
-- name: local_yandex
-  tier: T2
-  type: html
-  coverage:
-  - general
-  latency_ms: 2000
-  cost: free
-  status: disabled
-  recommended: true
-  explicit_only: false
-  desc: Yandex本地（html）
 - name: marginalia
   tier: T1
   type: marginalia

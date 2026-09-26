@@ -1200,16 +1200,6 @@
     "cost_tier": "free",
     "priority": 43
   },
-  "local_google": {
-    "label": "Google本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 21
-  },
   "local_google_news": {
     "label": "Google News本地",
     "qps": 3,
@@ -1229,16 +1219,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 42
-  },
-  "local_mojeek": {
-    "label": "Mojeek本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 22
   },
   "local_npm": {
     "label": "NPM本地",
@@ -1310,16 +1290,6 @@
     "cost_tier": "free",
     "priority": 36
   },
-  "local_startpage": {
-    "label": "Startpage本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 24
-  },
   "local_wikipedia": {
     "label": "Wikipedia本地",
     "qps": 10,
@@ -1349,16 +1319,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 40
-  },
-  "local_yandex": {
-    "label": "Yandex本地",
-    "qps": 3,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 23
   },
   "marginalia": {
     "label": "Marginalia 独立索引",

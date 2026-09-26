@@ -67,10 +67,6 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "local_sogou": "web_general",
     "local_360": "web_general",
     "local_jisilu": "social",
-    "local_mojeek": "web_general",
-    "local_startpage": "web_general",
-    "local_google": "web_general",
-    "local_yandex": "web_general",
     # 批次十（2026-09-26）：bing_rss 是 local_bing 的 RSS 稳定出口；
     # tineye 反搜图不属于任何既有能力族，归 misc_vertical。
     "bing_rss": "web_general",

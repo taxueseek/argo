@@ -649,7 +649,8 @@ class TestHttpClientEngineIntegration(unittest.TestCase):
             def __init__(self, *a, **kw):
                 calls.append(("init", kw.get("jitter"), kw.get("max_retries")))
 
-            def get(self, url, extra_headers=None, follow_redirects=False, engine=None):
+            def get(self, url, extra_headers=None, follow_redirects=False, engine=None,
+                    impersonate_profiles=None):
                 calls.append(("get", url, bool(follow_redirects)))
                 return {"status": 200, "text": '{"ok": 1}', "error": ""}
 

@@ -176,9 +176,9 @@ def _select_sub_engines(sub_engines: list[str], features: dict | None = None) ->
 
     # 多语种（v2.7）：日/韩查询优先对应语言的本地引擎
     if primary_lang == "ja":
-        return [e for e in ["local_yandex", "local_bing"] if e in sub_engines]
+        return [e for e in ["local_bing"] if e in sub_engines]
     if primary_lang == "ko":
-        return [e for e in ["local_google", "local_bing"] if e in sub_engines]
+        return [e for e in ["local_bing"] if e in sub_engines]
     if chinese_ratio > 0.1:
         # 百度/搜狗结果质量低（SERP 跳转链为主），仅作印证不主动纳入；
         # 中文补充源只用 local_bing

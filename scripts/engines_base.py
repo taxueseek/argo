@@ -177,12 +177,32 @@ def _run(cmd: list[str], timeout: float = 8, engine_name: str = "?") -> str:
     return ""
 
 
+_PROC_UUID: str | None = None
+
+
+def _proc_uuid() -> str:
+    """进程级一次性 UUID（大写 hex）：同进程跨请求一致、跨进程彼此不同。
+
+    服务「要一个稳定身份但不想要固定身份」的上游——典型如 Baidu BAIDUID：
+    固定值会随请求量被关联拉黑（2026-09-26 实测：同一写死值密集调用后整值
+    作废），随机新值 + 进程内一致性即可稳定出结果。{UUID} 在 env 占位符
+    替换**之前**落地，避免被 {ENV} 正则吞掉去查不存在的环境变量。
+    """
+    global _PROC_UUID
+    if _PROC_UUID is None:
+        import uuid as _uuid
+        _PROC_UUID = _uuid.uuid4().hex.upper()
+    return _PROC_UUID
+
+
 def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> list[str] | str:
     """替换模板占位符。"""
     if isinstance(template, list):
         return [_resolve(item, query, n, **extra) for item in template]
     s = template.replace("{query}", query).replace("{n}", str(n))
     s = s.replace("{TIMESTAMP}", str(int(time.time())))
+    if "{UUID}" in s:
+        s = s.replace("{UUID}", _proc_uuid())
     for key, val in extra.items():
         s = s.replace(f"{{{key}}}", str(val))
     if s.startswith("~"):
@@ -469,7 +489,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
 
 
 def _http_get_raw(url: str, headers: dict, timeout: float,
-                  engine: str = "?") -> str | None:
+                  engine: str = "?", tls_profiles: list[str] | None = None) -> str | None:
     """GET 原始响应体（HttpClient 渐进增强；ARGO_ENGINE_HTTP_CLIENT=0 回退 urllib）。
 
     返回响应文本；任何失败返回 None（调用方按「无结果」处理）。
@@ -486,6 +506,7 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
             # 上移到调度层（hedged race 换引擎 / 熔断降权 / 串行救援链）
             resp = HttpClient(timeout=timeout, max_retries=0, jitter=False).get(
                 url, extra_headers=headers, follow_redirects=True, engine=engine,
+                impersonate_profiles=tls_profiles,
             )
             status = resp.get("status") or 0
             text = resp.get("text") or ""
@@ -820,8 +841,7 @@ def _detect_anti_bot(html: str) -> bool:
 # 解析上游 HTML 页，最易被缓存 SERP / 无关结果静默命中；API 引擎结果自带结构化
 # 契约，不走这张表。判定规则与逃生门（ARGO_SERP_GUARD=0）在 serp_guard 单点。
 SERP_GUARD_ENGINES = frozenset({
-    "local_bing", "local_google", "local_baidu", "local_sogou",
-    "local_yandex", "local_startpage", "local_mojeek",
+    "local_bing", "local_baidu", "local_sogou",
 })
 
 
@@ -880,6 +900,12 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
         except ImportError:
             pass
     _parse_maps_cache: dict = {}
+    _tls_raw = spec.get("tls_impersonate")
+    _tls_profiles = ([_tls_raw] if isinstance(_tls_raw, str) else list(_tls_raw)) if _tls_raw else None
+    _resolve_redir = bool(spec.get("resolve_redirects"))
+    # 不透明跳转壳（baidu/sogou/so /link，token 型）不解析会被聚合层 P0 整批
+    # 滤掉 → 引擎永远 0 条；resolve_redirects 声明即契约。实现见 jump_resolver
+    # （单跳 Location 换真链，失败丢弃，与 _unwrap_ddg_link 同哲学）。
 
     def _get_parse_maps() -> dict:
         if not _parse_maps_cache:
@@ -905,8 +931,11 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
                 for k, v in headers.items()
             ) if _header_meaningful(v)  # 过滤空/认证前缀残留头（未配置的 {ENV} 不发送）
         }
-        # HTML 引擎同样走 HttpClient 渐进增强（UA 轮换/重定向跟随/重试/节流）
-        html = _http_get_raw(full_url, resolved_headers, to, engine=engine_name)
+        # HTML 引擎同样走 HttpClient 渐进增强（UA 轮换/重定向跟随/重试/节流）；
+        # tls_impersonate 声明即契约：反爬按 TLS ClientHello 拦截的源（如 Baidu）
+        # 按序尝试仿冒档，全部失败按原归因路径上报
+        html = _http_get_raw(full_url, resolved_headers, to, engine=engine_name,
+                             tls_profiles=_tls_profiles)
         if html is None:
             return []
         if _detect_anti_bot(html):
@@ -1008,6 +1037,18 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
                 results.append({"title": title, "url": url, "snippet": snippet, "score": round(score, 3), "source": engine_name})
             except Exception:
                 continue
+        if _resolve_redir and results:
+            from jump_resolver import is_jump_url, resolve_jump_url
+            kept = []
+            for r in results[:n]:
+                u = str(r.get("url") or "")
+                if is_jump_url(u):
+                    real = resolve_jump_url(u, _tls_profiles)
+                    if not real:
+                        continue  # 解不开的跳转壳 = 不可核验信源，P0 也会滤它
+                    r["url"] = real
+                kept.append(r)
+            results = kept
         return _serp_guard_apply(engine_name, query, results[:n])
     return _engine
 

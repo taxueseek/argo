@@ -54,8 +54,11 @@ key 缺失/额度耗尽/REST 失败时由它接住，自带 excerpts 长摘录�
 
 ## 四、本地零成本引擎（`local_search` 聚合，25 个子引擎声明）
 
-`local_bing` / `local_baidu` / `local_sogou` / `local_google` /
-`local_yandex` / `local_mojeek` / `local_startpage` / `local_github` / `local_gitlab` /
+`local_bing` / `local_baidu` / `local_sogou` /
+`local_github` / `local_gitlab` /
+
+
+本地 SERP 直连引擎的可达性判决（2026-09-26 实测口径）：`local_bing`（稳定）/`local_baidu`（BAIDUID={UUID} 随机身份 + 2s 间隔 + chrome131/safari184 TLS 指纹仿冒 + /link 跳转链解析后可用）/`local_sogou`（跳转链解析后可用）；google（JS 壳）/startpage（Blocked）/mojeek（Captcha）/yandex（SmartCaptcha）四源为 IP 级反爬墙，curl_cffi 三种指纹均无法穿透，已下线——yandex 需求由 local-search 子技能的 ddgs cli 后端承接（实测可用）。
 `local_npm` / `local_stackoverflow` / `local_arxiv` / `local_pubmed` /
 `local_semantic_scholar` / `local_crossref` / `local_wikipedia` / `local_wikiquote` /
 `local_wiktionary` / `local_imdb` / `local_openstreetmap` / `local_bing_news` /
