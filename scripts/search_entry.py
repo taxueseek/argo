@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Optional
 
 from engine_dispatch import run_dispatch
-from usage_log import emit as _emit_telemetry
+from usage_log import emit as _emit_usage
 from quota import _QuotaBatch
 from search_pipeline import _SearchRequest, _SearchRun
 from search_types import Stage
@@ -245,7 +245,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
         time_aware=time_aware, skip_cache=skip_cache, timing=timing,
         on_progress=on_progress, sort=sort, cache=cache,
         engine_label=engine_label, cache_engine_key=cache_engine_key,
-        emit_telemetry=_emit_telemetry, breaker=breaker,
+        emit_usage_log=_emit_usage, breaker=breaker,
     ), run=_SearchRun(raw_results={}, engine_outcomes=[], merged=[]))
 
 

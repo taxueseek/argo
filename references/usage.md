@@ -319,10 +319,10 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 
 ## 功能开关总表（`ARGO_*`，唯一事实=源码扫描）
 
-> 55 个开关按五类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
+> 56 个开关按五类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
-### 能力开关（27）
+### 能力开关（28）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -341,6 +341,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_MINHASH_DEDUPE` | ('近重复结果去重', '默认开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_MOBILE_FIRST_HOSTS` | mobile first hosts | 见 references/operations.md 与模块 docstring |
 | `ARGO_NO_AUTORELOAD` | no autoreload | 见 references/operations.md 与模块 docstring |
+| `ARGO_NO_CACHE` | ('跳过结果缓存读', '默认关；等价 --no-cache') | 见 references/operations.md 与模块 docstring |
 | `ARGO_PROXY` | proxy | 见 references/operations.md 与模块 docstring |
 | `ARGO_PYTHON` | python | 见 references/operations.md 与模块 docstring |
 | `ARGO_REDSKILL_CACHE` | redskill cache | 见 references/operations.md 与模块 docstring |

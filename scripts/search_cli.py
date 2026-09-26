@@ -18,6 +18,7 @@ import time
 from typing import Any
 
 from cli_io import dumps
+from engine_env import env_flag
 from stage_timing import StageTiming
 from search import (
     available_engines,
@@ -94,7 +95,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-results", "-n", type=int, default=5)
     parser.add_argument("--depth", "-d", default="fast",
                         choices=["fast", "balanced", "deep"])
-    parser.add_argument("--no-cache", action="store_true")
+    # --no-cache 与 ARGO_NO_CACHE 合并成一个判据。此前只有 flag：用户照文档
+    # 设 ARGO_NO_CACHE=1 却静默拿到缓存结果（cached=true、0 ms）——开关看着
+    # 生效、其实没生效，是最难查的一类问题。走 engine_env.env_flag 这一个
+    # 全仓统一的解析器，语义与其它 ARGO_* 开关一致。
+    parser.add_argument("--no-cache", action="store_true",
+                        default=env_flag("ARGO_NO_CACHE", False))
     parser.add_argument("--explain", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     parser.add_argument("--timeout", "-t", type=int, default=10)

@@ -103,7 +103,7 @@ class _SearchRequest:
     cache: Any
     engine_label: str
     cache_engine_key: Any
-    emit_telemetry: Any
+    emit_usage_log: Any
     breaker: Any
 
 
@@ -207,7 +207,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _tk_fusion = run.tk_fusion
     _run_one = run.run_one
     _ingest = run.ingest
-    _emit_telemetry = req.emit_telemetry
+    _emit_usage = req.emit_usage_log
     quota_batch = run.quota_batch
     breaker = req.breaker
     raw_results = run.raw_results
@@ -493,9 +493,9 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                 max_level=rec_level)
             recovery_info = rec_result.to_dict()
             # P2-6：恢复遥测——query 截断脱敏，只记概览不记明细
-            if _emit_telemetry is not None:
+            if _emit_usage is not None:
                 try:
-                    _emit_telemetry("recovery", {
+                    _emit_usage("recovery", {
                         "query": (query[:60] if query else query),
                         "triggered": recovery_info.get("triggered"),
                         "recovered": recovery_info.get("recovered"),
@@ -762,11 +762,11 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
 
     # 使用日志：每次非缓存搜索一条总账（stats 命令的数据源）。query 截断 60
     # 字符（与 recovery 流同一脱敏纪律）；记录失败静默，绝不拖累主路径。
-    # 取自 req 而非局部别名：_emit_telemetry 是 postprocess 的局部变量，
+    # 取自 req 而非局部别名：_emit_usage 是 postprocess 的局部变量，
     # 本函数（finalize）不在其作用域内，直接引用会 NameError。
-    if req.emit_telemetry is not None:
+    if req.emit_usage_log is not None:
         try:
-            req.emit_telemetry("query", {
+            req.emit_usage_log("query", {
                 "query": (query[:60] if query else query),
                 "count": len(merged),
                 "elapsed_ms": round(elapsed),

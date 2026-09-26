@@ -108,10 +108,6 @@ from search_output import (  # noqa: E402
     format_timing,
     funnel_collapse,
 )
-try:
-    from usage_log import emit as _emit_telemetry
-except ImportError:
-    _emit_telemetry = None  # type: ignore
 
 # import 链结束的时点。固定开销 = 导入 + argparse + 收尾；这里把导入那段
 # 单独报出来，因为它的可控性最好（延迟导入 / 拆模块就是冲它去的）。
