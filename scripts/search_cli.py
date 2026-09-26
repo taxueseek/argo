@@ -161,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--fields", choices=("full", "agent"), default="full",
-        help="JSON 字段档位：full=全量（默认）；agent=只留答案内容（剥遥测标量"
+        help="JSON 字段档位：full=全量（默认）；agent=只留答案内容（剥观测标量"
              "与 null 键，每条 result 留 title/url/snippet/source/score 等；"
              "fetch_required 保留），配合 --no-envelope 供 Agent 消费",)
     parser.add_argument(
@@ -331,9 +331,17 @@ def main():
     # 证据完整链路 P0：--verify 显式核验 top-k 未核验结果（fetch + 回填 + revision 分布）
     if args.verify:
         try:
-            from evidence_loop import verify_results
+            from evidence_loop import verify_results, reorder_by_evidence
             v = verify_results(results.get("results") or [], args.query, top_k=args.verify)
             results["verify"] = v
+            # A-3（2026-09-27）：正文级证据**回写排序**。此前 verify 只改字段不重排，
+            # 抓回的正文质量到不了排序器——花了 RTT 却不改结果次序。
+            try:
+                reorder = reorder_by_evidence(results.get("results") or [])
+                if reorder.get("reordered"):
+                    results["evidence_reorder"] = reorder
+            except Exception as _re:
+                print(f"  [verify reorder skipped] {type(_re).__name__}", file=sys.stderr)
             results["fetch_required"] = bool(results.get("fetch_required"))
             # verify 已回填/核验结果 → 刷新门控汇总，避免 suggested 含已核验 URL
             try:
@@ -355,6 +363,10 @@ def main():
                     f"degraded={rs.get('degraded', 0)} mean_delta={rs.get('mean_delta', 0)}",
                     file=sys.stderr,
                 )
+                ro = results.get("evidence_reorder") or {}
+                if ro.get("reordered"):
+                    print(f"  [verify] 证据回写排序：调整 {len(ro.get('adjusted') or [])} 条，"
+                          f"位次变动 {ro.get('moved', 0)} 处", file=sys.stderr)
         except Exception as e:
             print(f"  [verify error] {type(e).__name__}: {e}", file=sys.stderr)
 

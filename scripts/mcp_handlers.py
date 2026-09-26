@@ -587,7 +587,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 query=arguments["query"],
                 engine=arguments.get("engine", "auto"),
                 n=arguments.get("max_results", 5),
-                skip_cache=_env_bool("ARGO_MCP_SKIP_CACHE", bool(arguments.get("skip_cache", False))),
+                skip_cache=_env_bool("ARGO_MCP_SKIP_CACHE", _env_bool("ARGO_NO_CACHE", False) or bool(arguments.get("skip_cache", False))),  # ARGO_NO_CACHE（CLI 等价 --no-cache）也覆盖 MCP：任一为真即跳过，显式传参优先
                 timeout=_env_int("ARGO_MCP_TIMEOUT", int(arguments.get("timeout", 10))),
                 depth=arguments.get("depth", "fast"),
                 mode=arguments.get("mode", "auto"),
@@ -612,61 +612,61 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         elif name == "argo_local_search":
             # 本地文件搜索：封装 local-seek 的 seek.py（搜本机文件/记录，非联网）
             query = str(arguments.get("query", "")).strip()
+
+            def _local_err(msg: str) -> dict:
+                return _ok({"query": query, "engine": "local_files", "count": 0, "results": [],
+                            "errors": [msg]}, pretty=pretty)
+
             if not query:
-                return _ok({"query": "", "engine": "local_files", "count": 0,
-                            "results": [], "errors": ["query 不能为空"]}, pretty=pretty)
+                return _local_err("query 不能为空")
             path = str(arguments.get("path", "~"))
             max_results = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
             exact = bool(arguments.get("exact", False))
+            # 宽泛根守卫（search._is_broad_local_root，与 CLI --include-local 同判据）：
+            # 缺省 ~ 会对整个 home 跑 rg，实测 30 s 后报错（CLI 22.6 s 事故同形态）
+            try:
+                if _lazy_cached("search")._is_broad_local_root(os.path.expanduser(path)):
+                    return _local_err("路径过宽（home / 根目录），扫全盘既慢又失准，已拒绝；请传具体目录")
+            except Exception:
+                pass  # 守卫不可用 fail-open：按原行为继续
             seek_py = _seek_py()
-            cmd = [sys.executable, seek_py, query, "--path", path,
-                   "--json", "--max", str(max_results)]
+            cmd = [sys.executable, seek_py, query, "--path", path, "--json",
+                   "--max", str(max_results)]
             if exact:
                 cmd.append("--exact")
             try:
-                # 子进程是我们的 seek_py：显式 UTF-8 双向（Windows 默认 GBK，
-                # 中文 query 的 JSON 输出会 mojibake/解码崩）
+                # 子进程是我们的 seek_py：显式 UTF-8 双向（Windows 默认 GBK，中文
+                # query 的 JSON 输出会 mojibake/解码崩）；超时 15 s 是显式调用上界
                 proc = subprocess.run(
                     cmd, capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=60,
+                    encoding="utf-8", errors="replace", timeout=15,
                     env={**os.environ, "PYTHONUTF8": "1"})
             except Exception as e:
-                return _ok({"query": query, "engine": "local_files", "count": 0,
-                            "results": [], "errors": [f"本地搜索执行失败: {e}"]}, pretty=pretty)
+                return _local_err(f"本地搜索执行失败: {e}")
             if proc.returncode != 0:
                 msg = (proc.stdout or proc.stderr or "").strip() or "本地搜索无结果"
-                return _ok({"query": query, "engine": "local_files", "count": 0,
-                            "results": [], "errors": [msg]}, pretty=pretty)
+                return _local_err(msg)
             try:
                 payload = json.loads(proc.stdout)
             except Exception:
-                return _ok({"query": query, "engine": "local_files", "count": 0,
-                            "results": [], "errors": ["本地搜索输出解析失败"]}, pretty=pretty)
+                return _local_err("本地搜索输出解析失败")
             mode = payload.get("mode", "fast")
             score = 0.9 if mode == "fast" else 0.7  # 精确命中 0.9，扩展召回 0.7
             results = []
             for r in payload.get("results") or []:
                 abspath = os.path.abspath(r.get("path", ""))
                 line = r.get("line") or 0
-                url = f"file://{abspath}" + (f"#L{line}" if line else "")
                 results.append({
                     "title": abspath,
-                    "url": url,
+                    "url": f"file://{abspath}" + (f"#L{line}" if line else ""),
                     "snippet": _trim_snippet(r.get("snippet"), 120),
-                    "source": "local_files",
-                    "score": score,
+                    "source": "local_files", "score": score,
                 })
             return _ok({
-                "query": query,
-                "engine": "local_files",
-                "engines_used": ["local_files"],
-                "count": len(results),
-                "elapsed_ms": payload.get("elapsed_ms"),
-                "cached": False,
-                "mode": mode,
-                "depth": None,
-                "results": results,
-                "errors": [],
+                "query": query, "engine": "local_files", "engines_used": ["local_files"],
+                "count": len(results), "elapsed_ms": payload.get("elapsed_ms"),
+                "cached": False, "mode": mode, "depth": None,
+                "results": results, "errors": [],
             }, pretty=pretty)
 
         elif name == "argo_local_read":

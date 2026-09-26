@@ -15,6 +15,8 @@ HttpClient 接入后这些 mock 不再生效。默认回退 urllib 路径，保�
 import os
 import tempfile
 
+import pytest
+
 os.environ.setdefault("ARGO_ENGINE_HTTP_CLIENT", "0")
 
 # 路由决策缓存默认关闭，理由与上面的 HTTP_CLIENT 同类：它是跨进程的持久缓存，
@@ -27,3 +29,26 @@ os.environ["ARGO_ROUTE_CACHE"] = "0"
 # 状态目录隔离（必须在任何 argo 模块 import 前设置）
 _STATE_DIR = tempfile.mkdtemp(prefix="argo-test-state-")
 os.environ["ARGO_STATE_DIR"] = _STATE_DIR
+
+
+# HTTP 连接池（conn_pool）是**进程级**可变状态：某个用例期间建立的空闲连接
+# 会被后续用例复用，改变它们看到的网络形态。实测（2026-09-27）：
+# test_fetch_md_negotiate 的用例给 example.com 留了一条经代理的活连接，
+# test_stop_signal 的 mobile fetch 复用它拿到真实内容、链条在移动端短路，
+# 断言随之失败——而单独跑两个文件都绿。与 ARGO_STATE_DIR 同一理由：
+# 跨用例共享的进程级状态必须每用例清空。
+@pytest.fixture(autouse=True)
+def _isolate_conn_pool():
+    import sys
+    from pathlib import Path
+    scripts = Path(__file__).resolve().parent.parent / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        import conn_pool
+    except ImportError:
+        yield
+        return
+    conn_pool.clear()
+    yield
+    conn_pool.clear()

@@ -19,10 +19,20 @@ MECE 分工（互不重叠）：
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Callable, Optional
 
-logger = logging.getLogger("unified_search.evidence_loop")
+
+def _log(message: str) -> None:
+    """默认静默的调试出口；仅在真正需要记录时才引入 logging。
+
+    与 search_output._log 同一范式。本模块曾被 search_output 在**每次搜索的
+    输出阶段**导入（shape_response → gate_results），模块级 `import logging`
+    会把 logging→traceback→dataclasses→inspect→_colorize（实测 21 ms）拖进
+    那条路；而全仓没有把 `unified_search` 的 level 调离默认 WARNING，这些
+    debug 默认永不产生输出——纯粹是花钱买一个不说话的 logger。
+    """
+    import logging
+    logging.getLogger("unified_search.evidence_loop").debug(message)
 
 # ── 高后果域（finance / health / legal / 事实与安全）──────────────────────────
 # 命中这些域时，Agent 在把搜索结果当答案前必须先核验正文。
@@ -74,7 +84,7 @@ def extract_fetch_evidence(fetch_result: dict[str, Any]) -> Optional[dict[str, A
         qual = compute_content_quality(content, title)
         evidence = dict(qual)
     except Exception as e:  # pragma: no cover - 防御降级
-        logger.debug(f"compute_content_quality 失败: {type(e).__name__}")
+        _log(f"compute_content_quality 失败: {type(e).__name__}")
 
     return {
         "url": url,
@@ -117,7 +127,7 @@ def store_fetch_evidence(url: str, evidence: dict[str, Any],
         c = cache if cache is not None else SearchCache()
         c.set_evidence(url, evidence, ttl=ttl if ttl is not None else EVIDENCE_DEFAULT_TTL)
     except Exception as e:  # pragma: no cover
-        logger.debug(f"store_fetch_evidence 失败: {type(e).__name__}")
+        _log(f"store_fetch_evidence 失败: {type(e).__name__}")
 
 
 def lookup_fetch_evidence(url: str, cache: Any | None = None) -> Optional[dict[str, Any]]:
@@ -130,7 +140,7 @@ def lookup_fetch_evidence(url: str, cache: Any | None = None) -> Optional[dict[s
             out = {k: v for k, v in hit.items() if not str(k).startswith("_")}
             return out
     except Exception as e:  # pragma: no cover
-        logger.debug(f"lookup_fetch_evidence 失败: {type(e).__name__}")
+        _log(f"lookup_fetch_evidence 失败: {type(e).__name__}")
     return None
 
 
@@ -303,7 +313,7 @@ def verify_results(results: list[dict[str, Any]],
         try:
             fr = fetch_fn(url, max_chars=max_chars, timeout=timeout)
         except Exception as e:  # pragma: no cover
-            logger.debug(f"verify fetch 异常 {url}: {type(e).__name__}")
+            _log(f"verify fetch 异常 {url}: {type(e).__name__}")
             return r, None, ""
         # fetch_fn 可能返回非 dict（上游异常形态），取正文前必须判型，
         # 与 extract_fetch_evidence 的容错口径保持一致
@@ -362,7 +372,7 @@ def verify_results(results: list[dict[str, Any]],
                         "contradicts": sum(1 for x in support.values() if x["contradicts"]),
                     }
         except Exception as e:  # fail-open：语义层不阻断核验
-            logger.debug(f"语义证据层失败: {type(e).__name__}")
+            _log(f"语义证据层失败: {type(e).__name__}")
 
     summary: dict[str, Any] = {"n": len(revisions)}
     if revisions:

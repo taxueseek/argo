@@ -130,7 +130,6 @@ from route_combo import (  # noqa: E402
     _apply_intent_parallelism,
     _select_sub_engines,
     _get_engines_combo,
-    _adaptive_learner,
     _NARROW_ENGINES,
     _INTENT_PARALLELISM,
     inject_strong_semantic,

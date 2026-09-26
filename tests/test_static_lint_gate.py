@@ -274,8 +274,14 @@ def _local_import_shadows_global(paths: list[Path]) -> list[str]:
 
     判定条件（三条同时满足才报，避免误伤正常局部 import）：
       1. 函数内某处有裸 `import X`（`import X as Y` 不算，不遮蔽原名）；
-      2. X 在模块级有绑定（否则它是本就该有的局部，函数内 import 是正确写法）；
+      2. X 在模块级有绑定，**或** X 在该函数内被 import 两次以上；
       3. X 在该函数内被读取，且**不保证**在 import 之前执行过。
+
+    2026-09-27 补充第四条（零误报）：读取位于该函数**所有** import 之前。
+    CPython 编译期把「函数内任何位置 import 过 X」定为 X 是函数局部，于是
+    该读取永远 UnboundLocalError——与分支是否走到无关。ruff F821 看不见
+    它（F821 认为函数内的 import 就是绑定）。这条不要求模块级有绑定，
+    覆盖「模块级没有 import X、函数内 import 在读取之后」的文件。
     """
     problems: list[str] = []
     for path in paths:
@@ -300,9 +306,25 @@ def _local_import_shadows_global(paths: list[Path]) -> list[str]:
                     reads.append((node.lineno, node.id))
             conditional_imports = _imports_inside_branches(fn)
             for name, lines in imported.items():
-                if name not in module_bound:
-                    continue  # 本来就是局部名，函数内 import 是对的
                 first = min(lines)
+                # 零误报判定：读取在所有 import 之前 → 编译期即定的
+                # UnboundLocalError（见 docstring 第四条）。不要求模块级绑定。
+                early = sorted(
+                    lineno for lineno, read_name in reads
+                    if read_name == name and lineno < first)
+                if early:
+                    shown = ", ".join(str(x) for x in early[:3])
+                    more = "…" if len(early) > 3 else ""
+                    problems.append(
+                        f"{_rel(path)}:{early[0]} {fn.name}() 读 '{name}'，"
+                        f"但函数内所有 import 都在它之后（首个在第 {first} 行，"
+                        f"{shown}{more}）——编译期即定为局部，走到即 "
+                        f"UnboundLocalError")
+                    continue
+                # 条件 2：模块级有绑定，或函数内多次 import 同一名字。
+                multi_import = len(lines) >= 2
+                if name not in module_bound and not multi_import:
+                    continue  # 单处函数内 import 且模块级无绑定：正确写法
                 # 函数体首部的 import 一定先于后续读取执行（`def f(): import x` 是
                 # 最常见也最正确的写法）；只有落进条件分支的 import 才是缺陷——
                 # 那种写法下「import 执行到」不再是前提。
@@ -356,30 +378,36 @@ def _imports_inside_branches(fn: ast.AST) -> set[int]:
 
 def _reads_guarded_by(fn: ast.AST, name: str, import_line: int,
                       exposed: list[int]) -> bool:
-    """exposed 里的读取是否全部被「含该 import 的 try 块」包住。
+    """exposed 里的读取是否全部被「同一语句块里的 import」包住。
 
     `try: import X ... except: X.log()` 里的读取是安全的：要么 import 成功
     （读已绑定），要么抛异常走 except 分支——except 分支若也裸读 X 仍不安全，
-    所以这里只认**在 try 体内**的读取。
+    所以这里只认**import 与读取同块**的形态。
+
+    2026-09-27 补充：守卫判定从「只认 try 体」扩展到 try 的全部语句块
+    （body / orelse / finalbody / 各 handler 体）。`try: import X ...
+    finally: import X; X.restore()` 是安全的常见形态——每次读取都紧随自己
+    那块里的 import；旧实现只扫 try 体，会把 finally 里的读取误报。
     """
     guarded: set[int] = set()
     for node in ast.walk(fn):
         if not isinstance(node, ast.Try):
             continue
-        has_import = any(
-            isinstance(inner, (ast.Import, ast.ImportFrom))
-            and any((a.asname or a.name).split(".")[0] == name for a in inner.names)
-            for stmt in node.body for inner in ast.walk(stmt))
-        if not has_import or import_line not in {
-            inner.lineno for stmt in node.body
-            for inner in ast.walk(stmt)
-            if isinstance(inner, (ast.Import, ast.ImportFrom))}:
-            continue
-        for stmt in node.body:
-            for inner in ast.walk(stmt):
-                if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load) \
-                        and inner.id == name:
-                    guarded.add(inner.lineno)
+        blocks: list[list[ast.stmt]] = [node.body, node.orelse, node.finalbody]
+        blocks.extend(h.body for h in node.handlers)
+        for block in blocks:
+            has_import = any(
+                isinstance(inner, (ast.Import, ast.ImportFrom))
+                and any((a.asname or a.name).split(".")[0] == name
+                        for a in inner.names)
+                for stmt in block for inner in ast.walk(stmt))
+            if not has_import:
+                continue
+            for stmt in block:
+                for inner in ast.walk(stmt):
+                    if isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load) \
+                            and inner.id == name:
+                        guarded.add(inner.lineno)
     return bool(guarded) and set(exposed) <= guarded
 
 

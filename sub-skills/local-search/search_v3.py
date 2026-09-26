@@ -260,8 +260,18 @@ def _fetch(url: str, method: str = "GET", data: bytes | None = None,
     if user_agent:
         req_headers["User-Agent"] = user_agent
     req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
+    # 出口统一走 net_proxy.open_url（urllib 类出口的唯一入口）：裸 urlopen
+    # 不认 argo 在 config.yaml network.proxy 里配置的 url/rules，在「必须
+    # 经代理才能出网」的环境里本地子引擎会一直连不上，而症状与「源挂了」
+    # 完全一样（主仓 issue #13 的形态，已在 13 个模块修掉，这里是漏网的一个）。
+    # 失败语义与 urlopen 完全一致：原样抛出，下面的 except 分支不受影响。
+    # scripts/ 不在路径（独立打包形态）时回退裸 urlopen，行为与改动前一致。
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        from net_proxy import open_url
+    except ImportError:
+        open_url = urllib.request.urlopen  # type: ignore[assignment]
+    try:
+        with open_url(req, timeout=timeout) as resp:
             raw = resp.read()
             if raw.startswith(b"\x1f\x8b"):
                 import gzip
@@ -860,22 +870,19 @@ def _parse_cli_json(data: Any, engine_name: str) -> list[dict[str, Any]]:
 def _check_cli_available(cmd: str) -> bool:
     """Check if a CLI command is available（结果缓存 TTL=_CLI_AVAIL_TTL）。
 
-    `ddgs --help` 冷启动 ~190ms/次；多 ddgs 引擎并行搜索时若每次都检查，
-    单次搜索白等 N×190ms 纯检查开销。缓存按命令名 + 60s TTL。
+    判据用 `shutil.which`：微秒级、无子进程。旧判据是 `cmd --help` 子进程
+    （ddgs 冷启 ~190ms），而 TTL 缓存只在**同一进程内**有效——CLI 用法下
+    每次 argo 调用都是新进程，等于每次搜索都白付一次 190ms。which 只回答
+    「PATH 上有没有这个可执行文件」，正是可用性判定需要的判据； shim 损坏
+    （能 which 到但跑不动）由后续真实调用暴露，与改动前的失败路径相同。
     """
+    import shutil
+
     now = time.time()
     hit = _CLI_AVAIL_CACHE.get(cmd)
     if hit is not None and now - hit[0] < _CLI_AVAIL_TTL:
         return hit[1]
-    try:
-        result = subprocess.run(
-            [cmd, "--help"],
-            capture_output=True,
-            timeout=5,
-        )
-        ok = result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        ok = False
+    ok = shutil.which(cmd) is not None
     _CLI_AVAIL_CACHE[cmd] = (time.time(), ok)
     return ok
 
@@ -1240,13 +1247,28 @@ def search_engines(
         # 运行中的线程受各自 HTTP 超时约束自然结束，见 total_budget docstring。
         ex.shutdown(wait=False, cancel_futures=True)
 
+    # 相关度重排（D1，2026-09-27）：位次衰减 → BM25 相关度 × 引擎位次先验。
+    # 旧口径 score=max(0.7-idx*0.05, 0.1) 是纯位次——「第 3 条」永远压
+    # 「第 1 条不相关结果」，无论是否含查询词。这里在**融合前**把每个引擎
+    # 的列表重排为相关度序：RRF 的输入序即相关度序，单引擎路径直接按新
+    # score 排序（此前 B3 的 score/_rrf_score 双键分裂随之消解——score
+    # 只有「混合相关度」一个含义）。
+    # Fail-soft：查询无 token 或全部文档零词面重叠时退化为位次序，与升级前
+    # 逐位一致（见 bm25.rerank docstring）；bm25 模块缺失时整段跳过。
+    try:
+        from bm25 import rerank as _bm25_rerank
+        _bm25_rerank(by_engine, query)
+    except Exception as e:
+        logger.warning(f"BM25 重排不可用，保持位次分: {e}")
+
     # 融合：多引擎时接主仓唯一来源 rrf_merge——WG-RRF 引擎加权 +
     # canonical URL 跨引擎去重合并 + consensus_engines 标注。此前是
     # 「位次自行验证」排序：score=0.9-i*0.05 只是单引擎内位次，同位次必然
     # 同分，全局 sort 退化为提交顺序（稳定排序），且无跨引擎去重
-    # （2026-09-13 审查 BUG-4）。单引擎保留位次序（引擎自身的相关性序
-    # 比单列表 RRF 更有信息量）；主仓不可用时退回旧排序（子技能仍可
-    # 独立运行）。
+    # （2026-09-13 审查 BUG-4）。D1（2026-09-27）起 RRF 的输入是 BM25
+    # 重排过的相关度序（见上方 _bm25_rerank）；单引擎路径按同一把 score
+    # 排序——score 自此只有「混合相关度」一个含义，B3 的双键分裂消解。
+    # 主仓不可用时退回 score 排序（子技能仍可独立运行）。
     if len(by_engine) > 1:
         try:
             _root_scripts = Path(__file__).resolve().parents[2] / "scripts"
@@ -1258,7 +1280,7 @@ def search_engines(
                        reverse=True)
             all_results = fused
         except Exception as e:
-            logger.warning(f"rrf_merge 融合不可用，退回位次排序: {e}")
+            logger.warning(f"rrf_merge 融合不可用，退回相关度排序: {e}")
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
     else:
         all_results.sort(key=lambda x: x.get("score", 0), reverse=True)

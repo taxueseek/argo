@@ -29,13 +29,51 @@ BACKENDS_DIR = SKILL_DIR / "backends"
 QUOTA_PROFILES_PATH = BACKENDS_DIR / "quota_profiles.json"
 
 
+_STATE_DIR_CACHE: tuple[str, Path] | None = None
+
+
 def _state_dir() -> Path:
-    """状态目录（惰性派生，支持 ARGO_STATE_DIR 覆盖）。"""
-    return argo_paths.ensure_state_dir()
+    """状态目录（惰性派生 + 按根记忆化，支持 ARGO_STATE_DIR 覆盖）。
+
+    按 `argo_paths.state_root()` 的解析结果键控：测试在运行期切换
+    ARGO_STATE_DIR（conftest 全局隔离 + 若干用例的临时覆盖）时缓存自然失效，
+    不会把上一个用例的目录当成事实。
+    """
+    global _STATE_DIR_CACHE
+    root = argo_paths.state_root()
+    key = str(root)
+    if _STATE_DIR_CACHE is None or _STATE_DIR_CACHE[0] != key:
+        _STATE_DIR_CACHE = (key, argo_paths.ensure_state_dir())
+    return _STATE_DIR_CACHE[1]
 
 
-QUOTA_STATE_DIR = _state_dir()  # 兼容旧引用
-QUOTA_STATE_PATH = QUOTA_STATE_DIR / "quota.json"
+def _state_path() -> Path:
+    """quota.json 的完整路径（惰性解析，见下方 __getattr__ 的说明）。
+
+    解析顺序：模块属性 `QUOTA_STATE_PATH`（测试与旧调用方直接赋值覆盖，
+    这是它们既有的隔离契约）→ 惰性派生。PEP 562 的 `__getattr__` 只服务
+    「属性不存在时」的外部读取，模块内的裸全局名查找看不见它，所以内部
+    引用统一走本函数，赋值覆盖与惰性派生两条路都尊重。
+    """
+    override = globals().get("QUOTA_STATE_PATH")
+    if override is not None:
+        return override
+    return _state_dir() / "quota.json"
+
+
+def __getattr__(name: str) -> Any:
+    # import 期零副作用（2026-09-27）：这两个名字曾在模块级求值，而
+    # `ensure_state_dir()` 会 mkdir——于是每次 `import quota`（route →
+    # route_combo 全链路，含纯缓存命中的 CLI 调用）都在 import 阶段碰一次
+    # 文件系统。改成 PEP 562 惰性属性：旧引用 `quota.QUOTA_STATE_PATH`
+    # 的语义不变（首次使用时才派生），import 不再产生任何 I/O。
+    # 注意：外部**赋值** `quota.QUOTA_STATE_PATH = p` 会落进模块命名空间，
+    # 之后的读取与内部 _state_path() 都会尊重它（见该函数 docstring）。
+    if name == "QUOTA_STATE_DIR":
+        return _state_dir()
+    if name == "QUOTA_STATE_PATH":
+        return _state_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class QuotaManager:
@@ -57,7 +95,7 @@ class QuotaManager:
         try:
             from hot_state import HotFile
             self._profiles_hot = HotFile(QUOTA_PROFILES_PATH)
-            self._state_hot = HotFile(QUOTA_STATE_PATH)
+            self._state_hot = HotFile(_state_path())
             # 基线与 init 加载的内存态保持一致（load 已读过磁盘）：预建签名，
             # 消除 HotFile「首次 changed 只建基线」把 init 之后、首次访问之前
             # 的他进程写入吃掉的窗口
@@ -87,13 +125,13 @@ class QuotaManager:
                 self._profiles = {}
 
     def _load_state(self) -> None:
-        if QUOTA_STATE_PATH.exists():
+        if _state_path().exists():
             try:
-                self._state = json.loads(QUOTA_STATE_PATH.read_bytes())
+                self._state = json.loads(_state_path().read_bytes())
             except (json.JSONDecodeError, OSError):
                 # 损坏不清空：保留旧状态（配额/限频记忆），仅告警
                 import sys
-                print(f"[quota] 状态文件损坏，保留旧状态: {QUOTA_STATE_PATH}",
+                print(f"[quota] 状态文件损坏，保留旧状态: {_state_path()}",
                       file=sys.stderr)
 
     def _save_state(self) -> None:
@@ -103,7 +141,7 @@ class QuotaManager:
         或评测脚本）同时写时互相搬走/删除对方的 tmp，replace 抛
         FileNotFoundError，且失败方本次计数直接丢失。
         """
-        argo_paths.atomic_write_json(QUOTA_STATE_PATH, self._state)
+        argo_paths.atomic_write_json(_state_path(), self._state)
 
     def _mutate_locked(self, mutator) -> None:
         """跨进程安全的「重读 → 改 → 写入文件」序列。
@@ -112,10 +150,10 @@ class QuotaManager:
         评测脚本三者并行时，各自读到旧状态、各自 +1、后写者覆盖前写者，
         计数直接丢失。这里在文件锁内重读最新磁盘态，保证增量不丢。
         """
-        with argo_paths.file_lock(QUOTA_STATE_PATH):
+        with argo_paths.file_lock(_state_path()):
             self._load_state()
             mutator()
-            argo_paths.atomic_write_json(QUOTA_STATE_PATH, self._state)
+            argo_paths.atomic_write_json(_state_path(), self._state)
 
     def record(self, engine: str, success: bool = True, credits: int = 1) -> None:
         """记录一次 API 调用（单条，跨进程安全）。"""
@@ -180,7 +218,7 @@ class QuotaManager:
         的并发写会互相覆盖整个状态文件。统一走这里：先判是否过期，过期才在
         锁内重读并归零。
         """
-        with argo_paths.file_lock(QUOTA_STATE_PATH):
+        with argo_paths.file_lock(_state_path()):
             self._load_state()
             if not self._period_elapsed(engine, now):
                 return
@@ -189,14 +227,14 @@ class QuotaManager:
                 return
             state["used"] = 0
             state["last_reset"] = now
-            argo_paths.atomic_write_json(QUOTA_STATE_PATH, self._state)
+            argo_paths.atomic_write_json(_state_path(), self._state)
 
     def get_remaining_ratio(self, engine: str) -> float:
         """获取配额剩余比例。无限配额返回 1.0。"""
         with self._lock:
             self._fresh_locked()
             # 按周期重置（先于 limit 判空：null 引擎计数也要按周期归零，
-            # 否则遥测永久累计、无周期语义）。重置在文件锁内落盘。
+            # 否则用量计数永久累计、无周期语义）。重置在文件锁内落盘。
             if self._period_elapsed(engine, time.time()):
                 self._reset_period_locked(engine, time.time())
             profile = self._profiles.get(engine, {})
@@ -244,11 +282,11 @@ class QuotaManager:
                     st.pop("remote_exhausted", None)
                     cleared = True
             # 锁内重读：不清也可能命中（他进程已清），故只在真删掉时写盘
-            with argo_paths.file_lock(QUOTA_STATE_PATH):
+            with argo_paths.file_lock(_state_path()):
                 self._load_state()
                 _apply()
                 if cleared:
-                    argo_paths.atomic_write_json(QUOTA_STATE_PATH, self._state)
+                    argo_paths.atomic_write_json(_state_path(), self._state)
         return cleared
 
     def _refresh_remote_state_locked(self, engine: str, now: float) -> None:

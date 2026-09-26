@@ -337,26 +337,22 @@ class TestDdgsJsonParse(unittest.TestCase):
         self.assertEqual(self.search_v3._parse_cli_json({"a": 1}, "x"), [])
 
     def test_cli_avail_cache(self):
-        """_check_cli_available 结果缓存：第二次不重跑 subprocess。"""
+        """_check_cli_available 结果缓存：TTL 内不重复探测。
+
+        2026-09-27 起判据是 `shutil.which`（PATH 存在性，微秒级、无子进程）：
+        旧判据 `cmd --help` 子进程在 CLI 用法下每次 argo 调用都是新进程，
+        TTL 缓存形同虚设，等于每次搜索白付 ~190ms。这里锁新契约的两条——
+        探测结果进缓存 + TTL 内不二次探测。
+        """
         sv3 = self.search_v3
         sv3._CLI_AVAIL_CACHE.clear()
-        calls = {"n": 0}
-        real_run = sv3.subprocess.run
-
-        def fake_run(*args, **kwargs):
-            calls["n"] += 1
-            class R:
-                returncode = 0
-            return R()
-
-        sv3.subprocess.run = fake_run
-        try:
-            self.assertTrue(sv3._check_cli_available("fakecli"))
-            self.assertTrue(sv3._check_cli_available("fakecli"))
-            self.assertEqual(calls["n"], 1)  # 只跑一次
-        finally:
-            sv3.subprocess.run = real_run
-            sv3._CLI_AVAIL_CACHE.clear()
+        with patch("shutil.which", return_value="/usr/bin/python3") as m:
+            self.assertTrue(sv3._check_cli_available("python3"))
+            self.assertTrue(sv3._check_cli_available("python3"))
+            self.assertEqual(m.call_count, 1, "TTL 内不应重复探测")
+        with patch("shutil.which", return_value=None):
+            self.assertFalse(sv3._check_cli_available("definitely-missing-cli"))
+        sv3._CLI_AVAIL_CACHE.clear()
 
     def test_time_capable_local_set(self):
         sv3 = self.search_v3

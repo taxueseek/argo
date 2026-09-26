@@ -72,7 +72,7 @@ def build_report(n: int) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="argo stats", description="使用日志与反馈状态（本地遥测只读出口）")
+        prog="argo stats", description="使用日志与反馈状态（本地使用日志只读出口）")
     ap.add_argument("-n", type=int, default=50, help="回看最近 N 条（默认 50）")
     ap.add_argument("--json", action="store_true", help="JSON 输出")
     args = ap.parse_args(argv)

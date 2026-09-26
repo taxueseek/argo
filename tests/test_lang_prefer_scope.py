@@ -128,6 +128,25 @@ class TestNoHardcodedLangGateRemains(unittest.TestCase):
             gate, "调用点仍是硬编码 ja/ko 闸门（search_pipeline.py）",
         )
 
+    def test_no_baseline_lang_whitelist_literal(self):
+        """可执行代码里不得出现中英白名单字面量（第三处，2026-09-27 收口）。
+
+        本 bug 类别是「三处硬编码抄成第四处」：软排序、调用点两处早已被上面
+        两条断言锁住，而噪声门的排除表 ("zh", "en", "mixed", "other", "")
+        一直在暗处——新增受追踪语言时改了前两处、忘了它，噪声门就对新语言
+        静默失效。现在三处都从 lang_pref 的 BASELINE_LANGS / WEAK_QUERY_LANGS
+        派生，这条断言锁住「不要再出现字面量」这个类别本身。
+        """
+        for name in self.FILES:
+            src = self._src(name)
+            hit = re.search(
+                r'not\s+in\s+\(\s*"zh"\s*,\s*"en"\s*,\s*"mixed"', src)
+            self.assertIsNone(
+                hit,
+                f"{name} 又出现中英白名单字面量闸门——从 lang_pref 派生，"
+                f"别抄第四处",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

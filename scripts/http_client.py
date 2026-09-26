@@ -520,16 +520,28 @@ class HttpClient:
                 parsed = urllib.parse.urlparse(current_url)
 
             # 使用 http.client（不自动解压，我们可以手动处理）；出口经 net_proxy 调度
-            from net_proxy import open_connection, request_selector, resolve_proxy
+            from net_proxy import request_selector, resolve_proxy
+            from conn_pool import discard as _pool_discard, give_back as _pool_give, borrow_via_net_proxy as _pool_borrow
             proxy_url = resolve_proxy(current_url)
-            conn, via_proxy = open_connection(parsed, self.timeout, proxy_url)
+            # 连接池：优先取同主机空闲连接，没有才经 net_proxy 新建（出口单点不变）
+            conn, _key, _reused = _pool_borrow(parsed, self.timeout, proxy_url)
 
             path = parsed.path or "/"
             if parsed.query:
                 path += "?" + parsed.query
 
-            conn.request("GET", request_selector(parsed, path, via_proxy), headers=headers)
-            resp = conn.getresponse()
+            for _try in (0, 1):
+                try:
+                    conn.request("GET", request_selector(parsed, path, bool(proxy_url)),
+                                 headers=headers)
+                    resp = conn.getresponse()
+                    break
+                except (http.client.HTTPException, ConnectionError, OSError):
+                    # 复用连接被服务端悄悄关闭（keep-alive 空闲超时）是最高频失效形态：丢弃换新重试一次，不占调用方重试预算
+                    _pool_discard(_key, conn)
+                    if not _reused or _try:
+                        raise
+                    conn, _key, _reused = _pool_borrow(parsed, self.timeout, proxy_url)
             status = resp.status
             resp_headers = dict(resp.getheaders())
 
@@ -539,7 +551,12 @@ class HttpClient:
             # 跟随重定向（301/302/303/307/308）：Location 相对/绝对都解析
             if status in (301, 302, 303, 307, 308) and redirects_left > 0:
                 loc = resp.getheader("Location")
-                conn.close()
+                # 响应体读干才能还池；读失败（连接已坏）就地丢弃。
+                try:
+                    resp.read()
+                    _pool_give(_key, conn)
+                except Exception:
+                    _pool_discard(_key, conn)
                 if not loc:
                     break
                 current_url = urllib.parse.urljoin(current_url, loc)
@@ -560,7 +577,11 @@ class HttpClient:
 
             # 读取 body
             raw_body = resp.read()
-            conn.close()
+            # 还池 vs 关闭：服务端明示 Connection: close（will_close）时读完即废。
+            if getattr(resp, "will_close", False):
+                _pool_discard(_key, conn)
+            else:
+                _pool_give(_key, conn)
 
             # 手动解压
             encoding = resp.getheader("Content-Encoding", "")

@@ -939,7 +939,7 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             # 语言参数动态化：按查询主语言覆盖 setlang/hl/lang/mkt（此前漏 mkt）
             if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                 v = _lang_param(k, query) or v
-            full_url += f"&{k}={up.quote(_resolve(str(v), query, n))}"
+            full_url += f"&{k}={up.quote(_resolve(str(v), query, n, **kwargs))}"  # **kwargs 必传（声明式路径 :441 传了）：否则 {MODE}/{DEPTH} 带字面量花括号进 URL
         resolved_headers = {
             k: v for k, v in (
                 (k, _resolve(v, query, n))

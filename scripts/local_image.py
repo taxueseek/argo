@@ -254,6 +254,9 @@ def index_paths(
     返回统计：total / new / updated / unchanged / gone / failed。
     """
     files = walk_images(roots)
+    # gone 判定的磁盘全集必须在 max_images 截断**之前**取：截断只会限制
+    # 「本次要新算指纹的文件数」，不该把没进本次批次的历史条目判成消失。
+    disk_all = {str(p) for p in files}
     if max_images is not None:
         files = files[:max_images]
     stat = {"total": len(files), "new": 0, "updated": 0, "unchanged": 0,
@@ -277,7 +280,11 @@ def index_paths(
         if prev is None:
             stat["new"] += 1
             todo.append(p)
-        elif (prev[0], prev[1]) != (cur[0], cur[1]):
+        elif prev != cur:
+            # 三元组整体比较（mtime, size, inode）——docstring 说的「三者一起比」。
+            # 此前只比前两项，inode 被 SELECT 出来、被存进 existing，却在比较时
+            # 被丢弃：跨文件系统复制后 mtime 可能保留，inode 必然不同，
+            # 漏比它就漏掉这次重算（返回陈旧指纹）。
             stat["updated"] += 1
             todo.append(p)
         else:
@@ -285,8 +292,20 @@ def index_paths(
 
     # 消失的文件：清出索引，否则检索会返回打不开的路径
     if incremental:
-        disk = {str(p) for p in files}
-        gone = [sp for sp in existing if sp not in disk]
+        # gone 判定必须带 root 维度（2026-09-27 数据丢失修复）：索引是多次
+        # 增量累积的，本次只扫了 roots 下的文件。若拿全表路径与本次磁盘集合
+        # 做差，上一次索引的其他 root 下的条目会被整批判为消失删光——实测
+        # 先索引 ~/Pictures 再索引 ~/Downloads，第一次的条目全部误删。
+        # 故只删「属于本次 root 且不在磁盘上」的条目；roots 为空（没扫任何
+        # 东西）时同理不做全表差。
+        _root_prefixes = tuple(
+            str(Path(r).expanduser()).rstrip(os.sep) + os.sep for r in roots if r)
+        disk = disk_all
+        if _root_prefixes:
+            gone = [sp for sp in existing
+                    if sp not in disk and sp.startswith(_root_prefixes)]
+        else:
+            gone = []
         for i in range(0, len(gone), 500):
             chunk = gone[i:i + 500]
             conn.executemany("DELETE FROM images WHERE path = ?",
@@ -441,13 +460,21 @@ def search_local(
 
     # SQL 侧先粗筛：任一 token 出现在 path/ocr/labels 里。避免把 7 万行
     # 全捞进 Python 打分——全表载入 + 逐行解析标签的成本远高于一次 LIKE。
+    #
+    # 显式列名而非 SELECT *：fp 是指纹 BLOB（768×float32 = 3072 B/行），
+    # 而文本检索的消费方（_score_row 与下方 item 组装）只读 path/ocr/labels/
+    # width/height/size/mtime。一个 token 命中 1 万行时，SELECT * 会连带
+    # 多读约 30 MB 永不使用的 BLOB（2026-09-27 实测口径）。
     where = " OR ".join(
         ["path LIKE ? OR ocr LIKE ? OR labels LIKE ?"] * len(q_tokens))
     params: list[str] = []
     for t in q_tokens:
         like = f"%{t}%"
         params += [like, like, like]
-    sql = f"SELECT * FROM images WHERE {where}"
+    sql = (
+        "SELECT path, ocr, labels, width, height, size, mtime FROM images "
+        f"WHERE {where}"
+    )
     rows = list(conn.execute(sql, params))
 
     scored: list[tuple[float, list[str], sqlite3.Row]] = []

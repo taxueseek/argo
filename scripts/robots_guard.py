@@ -124,6 +124,38 @@ def _get_parser(scheme: str, host: str, timeout: float) -> RobotFileParser | Non
 _PERSIST_TTL = 24 * 3600   # 只读判定用的有效期（仅作建议，抓取侧仍以实时为准）
 _PERSIST_MAX = 500         # 落盘主机数上限，超出按 mtime 淘汰
 
+# known_blocked 的解析记忆化：host → (mtime_ns, RobotFileParser)。
+# 搜索路径对同一主机的 N 条结果会问 N 次（cache.local_status → known_blocked），
+# 旧实现每次都 read_text + RobotFileParser().parse()——同一 host 的 robots.txt
+# 被读 N 遍、解析 N 遍（20 条结果 / ~12 个主机 ≈ 1.5–4 ms/次搜索，每次搜索
+# 都付）。按 (host, mtime_ns) 记忆：文件被改写时 mtime 变，缓存自然失效；
+# 与上面抓取侧的 _cache（TTL 1h）互不共享——那条服务「抓不抓」，这条服务
+# 「建议不建议核验」，两者的失效判据不同（一个跟时间，一个跟文件变化）。
+_parser_cache: dict[str, tuple[int, "RobotFileParser"]] = {}
+_PARSER_CACHE_MAX = 512
+
+
+def _parser_for(host: str, f) -> "RobotFileParser | None":
+    """按 (host, mtime_ns) 复用 RobotFileParser；读盘/解析失败返回 None。"""
+    try:
+        mtime_ns = f.stat().st_mtime_ns
+    except OSError:
+        return None
+    hit = _parser_cache.get(host)
+    if hit is not None and hit[0] == mtime_ns:
+        return hit[1]
+    try:
+        from urllib.robotparser import RobotFileParser
+        text = f.read_text(encoding="utf-8", errors="replace")
+        rp = RobotFileParser()
+        rp.parse(text.splitlines())
+    except Exception:
+        return None
+    if len(_parser_cache) >= _PARSER_CACHE_MAX:  # 有界：防长驻进程无限增长
+        _parser_cache.clear()
+    _parser_cache[host] = (mtime_ns, rp)
+    return rp
+
 
 def _persist_dir():
     try:
@@ -175,10 +207,9 @@ def known_blocked(url: str, max_age: float = _PERSIST_TTL) -> bool | None:
             return None
         if max_age and (time.time() - f.stat().st_mtime) > max_age:
             return None
-        from urllib.robotparser import RobotFileParser
-        text = f.read_text(encoding="utf-8", errors="replace")
-        rp = RobotFileParser()
-        rp.parse(text.splitlines())
+        rp = _parser_for(host, f)
+        if rp is None:
+            return None
         return not rp.can_fetch("*", url)
     except Exception:
         return None
@@ -211,6 +242,10 @@ def clear_cache() -> None:
     """清空 robots.txt 缓存（测试隔离用）。"""
     with _lock:
         _cache.clear()
+    # known_blocked 的解析记忆化一并清：它按 mtime_ns 自失效，但测试可能在
+    # 同一纳秒粒度内改写文件，显式清掉更稳（clear_cache 的契约就是「回到
+    # 什么都没读过的状态」）。
+    _parser_cache.clear()
 
 
 if __name__ == "__main__":

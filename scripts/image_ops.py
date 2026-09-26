@@ -268,7 +268,10 @@ def _cli_result_row(item: dict[str, Any], engine_name: str) -> dict[str, Any]:
     r: dict[str, Any] = {
         "title": item.get("title", ""),
         "url": item.get("url", ""),
-        "snippet": str(item.get("snippet", item.get("content", "")))[:300],
+        # `dict.get(k, default)` 在键存在但值为 None 时**返回 None**（不吃
+        # default）——CLI 引擎显式输出 "snippet": null 时，旧写法会渲染出
+        # 字面量字符串 "None" 进交付结果。用 or 链吃 None 与空串两种。
+        "snippet": str(item.get("snippet") or item.get("content") or "")[:300],
         "source": engine_name,
     }
     if item.get("published_at"):

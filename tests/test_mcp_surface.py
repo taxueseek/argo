@@ -138,5 +138,41 @@ class TestArgoAnswer(unittest.TestCase):
         self.assertTrue(result.get("isError"))
 
 
+class TestArgoLocalSearchScopeGuard(unittest.TestCase):
+    """argo_local_search 的宽泛根守卫（2026-09-27）。
+
+    缺省 path="~" 时旧实现对整个 home 跑 rg——实测 30 s 后报错返回，与 CLI
+    侧已修掉的 22.6 s 事故同一形态。守卫必须在发起子进程之前拒绝，且显式
+    传的窄路径不受影响（打桩 seek.py 不存在来证明没有起进程）。
+    """
+
+    def test_default_home_path_rejected(self):
+        result = mcp_handlers.execute_tool(
+            "argo_local_search", {"query": "x", "max_results": 2})
+        payload = _payload(result)
+        self.assertEqual(payload["count"], 0)
+        self.assertTrue(any("过宽" in e for e in payload["errors"]),
+                        f"宽泛根应被拒绝并说清原因: {payload['errors']}")
+
+    def test_tmp_path_rejected(self):
+        result = mcp_handlers.execute_tool(
+            "argo_local_search", {"query": "x", "path": "/tmp"})
+        payload = _payload(result)
+        self.assertTrue(any("过宽" in e for e in payload["errors"]))
+
+    def test_narrow_path_not_blocked_by_guard(self):
+        """窄路径必须过守卫（子进程照常起；这里用不存在的 seek 路径证明守卫放行）。"""
+        import os
+        import tempfile
+        narrow = tempfile.mkdtemp(prefix="argo-narrow-")
+        with patch("mcp_handlers._seek_py", return_value="/nonexistent-seek.py"):
+            result = mcp_handlers.execute_tool(
+                "argo_local_search", {"query": "x", "path": narrow})
+        payload = _payload(result)
+        self.assertFalse(any("过宽" in e for e in payload["errors"]),
+                         "窄路径不该被守卫拦截")
+        self.assertTrue(os.path.isdir(narrow))
+
+
 if __name__ == "__main__":
     unittest.main()

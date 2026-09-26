@@ -37,7 +37,7 @@ _AGENT_RESULT_FIELDS = (
     "published_at", "fetch_suggested", "full_text_url",
     "image_url", "image_license",
     "episode_count", "duration_minutes",
-    # 本地已有正文：是可操作提示而非遥测——告诉 Agent 这条不必重新联网，
+    # 本地已有正文：是可操作提示而非观测数据——告诉 Agent 这条不必重新联网，
     # 以及全文在哪（被截断时还给出 full_text_path）。剥掉它等于把「随时
     # 核对原文」这条路径从 Agent 视野里藏起来，而它正是 Agent 最需要的。
     # 只在确有本地正文时出现，单条约 60 字节。
@@ -55,7 +55,7 @@ _AGENT_RESULT_FIELDS = (
 def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
     """--fields agent：输出只留答案内容（P2-2，2026-09-13）。
 
-    在默认精简档之上再剥遥测标量（tfidf_scores/lang_pref/engine_outcomes 等）
+    在默认精简档之上再剥观测标量（tfidf_scores/lang_pref/engine_outcomes 等）
     与 null/空键。fetch_required 必须保留——SKILL.md 的高后果门控纪律依赖它，
     不能被瘦身掉；funnel 同理保留，它是 agent 判「0 结果卡在哪一层」的唯一依据。
     """
@@ -425,6 +425,12 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
     # 结果原本只有 300 字摘要与核验分，调用方看不出本地已有正文——想核对原文
     # 只能重新 fetch，或者压根不知道能回看。这里是纯本地查询（冷 L1 下 20 条
     # 约 1.7 ms），不联网、不额外请求，故无条件附加。
+    #
+    # `_local` 在 try 外初始化：cache.local_status() 抛异常（SQLite 锁/库损坏）
+    # 时下面 :469 的 blocked 筛选仍要读它——try 内首次赋值会让那条路径吃
+    # NameError，被外层 except 吞掉后「不可取源不再建议核验」这段增强静默
+    # 永不执行，日志还把原因误报成「不可取源筛选跳过: NameError」。
+    _local: dict[str, Any] = {}
     try:
         _urls = [r.get("url") for r in (result.get("results") or [])
                  if isinstance(r, dict) and r.get("url")]
@@ -450,7 +456,14 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
     # 与 has_fetched_evidence / post_fetch_absorption（若此前 fetch 过）。
     try:
         from evidence_loop import gate_results
-        gate = gate_results(result.get("results") or [], result.get("domain"))
+        # cache 必须传下去：gate_results → backfill_results → lookup_fetch_evidence
+        # 对每条结果 URL 查证据缓存。不传时每条结果各新建一个 SearchCache——
+        # 每次 _init_db（connect + 3 PRAGMA + executescript + 2×table_info）
+        # 再加一次整页 fetch 条目的 gunzip+json.loads，只为取其中一个子键。
+        # 默认 n=5 即 5–20 ms/次搜索纯浪费（缓存命中的整次搜索只要 ~26 ms）。
+        # ctx.cache 就在同函数上方 :431 刚用过，递一下参数即可。
+        gate = gate_results(result.get("results") or [], result.get("domain"),
+                            cache=cache)
         result["fetch_required"] = gate["fetch_required"]
         result["evidence_loop"] = {
             "high_consequence_domain": gate["high_consequence_domain"],

@@ -366,10 +366,10 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 
 ## 功能开关总表（`ARGO_*`，唯一事实=源码扫描）
 
-> 56 个开关按五类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
+> 77 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
-### 能力开关（28）
+### 能力开关（30）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -383,7 +383,9 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_ENGINE_HTTP_CLIENT` | ('HttpClient 渐进增强层（UA轮换/节流/重试）', '默认开；=0 回退 urllib 保底') | 见 references/operations.md 与模块 docstring |
 | `ARGO_ENV_FILE` | env file | 见 references/operations.md 与模块 docstring |
 | `ARGO_FULLTEXT` | ('抓取全文存档（--full）', '随 --full 启用') | 见 references/operations.md 与模块 docstring |
+| `ARGO_HTTP_POOL` | ('HTTP keep-alive 连接池', '默认开；=0 退回一次请求一条连接') | 同主机请求复用 TCP+TLS 连接；对拍/应急用 0 |
 | `ARGO_IDENTITY_MEMORY` | identity memory | 见 references/operations.md 与模块 docstring |
+| `ARGO_IMAGE_DB` | ('本地图片索引库路径', '默认 ~/.cache/argo-image/index.db') | 建库与检索共用；换库位置只改这一处 |
 | `ARGO_LOCAL_RERANK` | ('本地五维重排', '默认开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_MINHASH_DEDUPE` | ('近重复结果去重', '默认开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_MOBILE_FIRST_HOSTS` | mobile first hosts | 见 references/operations.md 与模块 docstring |

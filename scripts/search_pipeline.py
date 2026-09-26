@@ -149,8 +149,14 @@ class _SearchRun:
 # 兜底补搜的候选顺序。anysearch 在前是因为它对日/韩这类通用查询的召回
 # 实测最好；local_bing 次之（带 setlang 的本地 SERP）；再往后是各语言的
 # 通用源，都不行时至少还有 wikipedia 这类必定有结果的百科。
+#
+# 2026-09-27：删去 duckduckgo——engine_policy 已记录「2026-09-07：duckduckgo
+# 移出」（本机出口网络层阻断，无客户端解法）。留着它不会真调到死源
+# （_fallback_candidates 用 available 过滤），但 ja/ko 零结果兜底会白白
+# 少一个候选位，而 tests/test_noise_gate_fallback.py 的 available 集合手写
+# 包含它，死引用没有任何测试能发现。
 _FALLBACK_ENGINES: tuple[str, ...] = (
-    "anysearch", "local_bing", "duckduckgo", "wikipedia", "octen",
+    "anysearch", "local_bing", "wikipedia", "octen",
 )
 
 
@@ -250,8 +256,14 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _noise_dropped: list[dict[str, Any]] = []
     try:
         from result_lang import assess_results as _assess_lang
+        # 「非中英才启用噪声门」的白名单从 lang_pref 单一真源派生
+        # （BASELINE_LANGS + WEAK_QUERY_LANGS）：此前这里是第四处硬编码
+        # ("zh", "en", "mixed", "other", "")——新增受追踪语言要改三处的
+        # bug 类别，门禁只锁住了两处，这条一直在暗处。
+        from lang_pref import BASELINE_LANGS, WEAK_QUERY_LANGS
+        _baseline_or_weak = frozenset(BASELINE_LANGS) | WEAK_QUERY_LANGS
         _q_lang = _q_lang_for_fusion
-        if _q_lang and _q_lang not in ("zh", "en", "mixed", "other", ""):
+        if _q_lang and _q_lang not in _baseline_or_weak:
             _kept = []
             for _lst in clean_lists:
                 if not _lst:
@@ -318,11 +330,16 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     # deep 研究场景下结果 <2 条说明结构化源未覆盖该查询：追加通用保底引擎
     # 补证据，避免「单引擎单结果」被事实核查 / 融合阶段当作答案；补搜结果
     # 一并进 RRF，consensus 维度天然加权。
+    #
+    # depth 只判 "deep"：--depth 的 choices 是 fast|balanced|deep，"research"
+    # 永远不会出现（2026-09-27 清掉的半死条件）。候选表里的 duckduckgo
+    # 同样清掉——engine_policy 已记录它 2026-09-07 移出，留着只会让
+    # 「这个引擎还在不在」没有单一答案。
     if (domain == "macro_data" and merged and len(merged) < 2
-            and depth in ("deep", "research")):
+            and depth == "deep"):
         _done = set(raw_results.keys())
         _cands = [
-            e for e in ("anysearch", "duckduckgo", "local_bing")
+            e for e in ("anysearch", "local_bing")
             if e not in _done
             and e in set(available_engines())
             and (breaker is None or breaker.allow(e)[0])
@@ -340,10 +357,8 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     # 配额记账：整批一次写入文件（同一次搜索的 N 个引擎合并为一次写）。
     # 必须放在 D6 补搜之后：那是最后一个 _ingest 调用点，flush 提前会让
     # 补搜引擎的记账永远落不了盘（2026-09-13 审查实锤）。
-    quota_batch.flush()
     _tock(timing, "fusion", _tk_fusion)
     _tk_dedupe = _tick(timing)
-
     # ── P0：过滤 SERP/跳转 URL（搜索结果页、baidu.com/link 等不可当信源正文）──
     # 漏斗第 4 格必须**在 SERP 过滤之前**取值。此前取值点在下面 minhash 之后
     # （:366），于是 SERP 丢弃的条目被算进「跨引擎去重」那格的损耗里：
@@ -514,6 +529,11 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                         res = []
                     goods = [r for r in (res or [])
                              if isinstance(r, dict) and "error" not in r]
+                    # 恢复段同样进配额账：它真的打了引擎（engine_search），
+                    # 而 quota_batch.add 的全仓唯一常规入口在 dispatch 的
+                    # _run_one 里——恢复链不走那条路，不在这里补一行，
+                    # 这批消耗就落在本地账本之外（见下方 flush 处注释）。
+                    quota_batch.add(eng, bool(goods))
                     if goods:
                         for r in goods:
                             r.setdefault("_engine", eng)
@@ -527,7 +547,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                 engines_fallback=fallback_engines, enabled=enabled_set, mode=mode,
                 max_level=rec_level)
             recovery_info = rec_result.to_dict()
-            # P2-6：恢复遥测——query 截断脱敏，只记概览不记明细
+            # P2-6：恢复使用日志——query 截断脱敏，只记概览不记明细
             if _emit_usage is not None:
                 try:
                     _emit_usage("recovery", {
@@ -540,7 +560,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                         "final_query": (recovery_info.get("final_query") or "")[:60],
                         "note": recovery_info.get("note", ""),
                     })
-                except SHAPE_BENIGN:  # 遥测记录失败不影响恢复结果本身
+                except SHAPE_BENIGN:  # 使用日志记录失败不影响恢复结果本身
                     pass
             if rec_results:
                 merged = deduplicate_by_url(rec_results)[:max_results]
@@ -560,6 +580,15 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         except Exception as e:
             _log(
                 f"错误恢复跳过: {type(e).__name__}")
+
+    # 配额记账落盘：整批一次写入文件（同一次搜索的 N 个引擎合并为一次写）。
+    # 位置是契约：必须在**最后一个 quota add 点**之后。D6 补搜走后，
+    # 恢复链（_recovery_executor 里同样 quota_batch.add）是最后一个——
+    # 它走的不是 dispatch 的 _run_one（全仓唯一的记账入口），不单独补一行
+    # add，恢复段消耗的远端额度就不进本地账本：get_remaining_ratio 高估
+    # 剩余 → 路由继续派发 → 上游 429/10406，而配额状态机看不到任何迹象
+    # （2026-09-27 审查实锤，与「配额自愈闭环」的设计目标直接矛盾）。
+    quota_batch.flush()
 
     # Reranker：ARGO_LOCAL_RERANK 开关（0 关闭本地五维保底；默认 1 开启）
     _tock(timing, "recovery", _tk_recovery)

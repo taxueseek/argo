@@ -33,7 +33,7 @@ from typing import Any, Callable, Optional
 
 from engine_dispatch import run_dispatch
 from usage_log import emit as _emit_usage
-from quota import _QuotaBatch
+from search_output import _collect_errors
 from search_pipeline import _SearchRequest, _SearchRun
 from search_types import Stage
 from stage_timing import StageTiming, tick as _tick, tock as _tock
@@ -42,6 +42,21 @@ from time_utils import (
     normalize_time_window as _normalize_time_window,
     sort_results_by_time as _sort_results,
 )
+
+
+def _log(message: str) -> None:
+    """默认静默的调试出口；仅在真正需要记录时才引入 logging。
+
+    与 search_output._log 同一范式。本模块的 prepare 曾有两处**函数内**裸
+    `import logging`：CPython 在编译期就把 `logging` 定为 prepare 的局部名，
+    任何早于它们的分支再加一处 `logging.getLogger(...)`，另外两处立刻编译成
+    LOAD_FAST → UnboundLocalError，而它们全在 except 处理器内，处理器再抛会
+    顶替掉原本被 fail-open 吞掉的错误。模块级不留绑定：既无局部遮蔽，也不把
+    logging→traceback→dataclasses→inspect（实测 21 ms）拖进 import search
+    的必经之路。
+    """
+    import logging
+    logging.getLogger("unified_search").debug(message)
 
 
 @dataclass(frozen=True)
@@ -113,8 +128,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
     except ImportError:
         pass  # query_understanding 不可用
     except Exception as e:
-        import logging
-        logging.getLogger("unified_search").debug(f"查询理解跳过: {type(e).__name__}")
+        _log(f"查询理解跳过: {type(e).__name__}")
 
     # 词形规范化：全角→半角、拆斜杠、压多余空格（提升精确源命中，治型号/日期分隔符）
     try:
@@ -132,8 +146,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
         from network_aware import adjusted_timeout, network_profile
         _eff_timeout = adjusted_timeout(timeout, engines)
         if _eff_timeout != timeout:
-            import logging
-            logging.getLogger("unified_search").debug(
+            _log(
                 f"网络感知超时: {timeout}s → {_eff_timeout}s "
                 f"({network_profile(engines).get('network')})",
             )
@@ -209,6 +222,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
                 "mode": mode, "depth": depth,
                 "reranker": "skipped_cache",
                 "engine_outcomes": hit.get("engine_outcomes") or [],
+                "errors": _collect_errors({}, hit.get("engine_outcomes") or []),
                 "time_filtered": 0,
             }
             # 软命中披露：L2 语义命中返回的是**另一条查询**的载荷，不标出来
@@ -275,6 +289,12 @@ def dispatch(req: _SearchRequest, run: _SearchRun, hooks: _SearchHooks) -> _Sear
     _tk_dispatch = _tick(timing)
     # 配额批次在这里建、在融合后的 D6 补搜之后才 flush：中间所有 _ingest
     # （含补搜）都要记进同一批，提前 flush 会让补搜引擎的记账落不了盘。
+    #
+    # import 放在函数内：quota 模块在 import 期就 ensure_state_dir()（mkdir）。
+    # 放模块级意味着每次 argo 调用——含纯缓存命中、根本不建批次的路径——
+    # 都要碰一次文件系统。批量对象只可能在本函数被创建，没理由让不建批次的
+    # 路径付这笔钱。
+    from quota import _QuotaBatch
     quota_batch = _QuotaBatch()
     # 引擎编排（并发/串行调度、重试、熔断、结局分类）整段在 engine_dispatch。
     # 入口与常量**按值传入**而非让那边直接 import search：测试靠

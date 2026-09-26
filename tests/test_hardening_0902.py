@@ -290,8 +290,13 @@ class TestLocalSearchSubprocessEncoding(unittest.TestCase):
             return _FakeProc()
 
         with patch.object(mcp_handlers.subprocess, "run", _fake_run):
+            # 显式给窄路径：缺省 path="~" 自 2026-09-27 起被宽泛根守卫拒绝
+            # （不再对 home 全盘 rg），根本到不了子进程——那一条由
+            # test_mcp_surface.TestArgoLocalSearchScopeGuard 锁定。
+            narrow = tempfile.mkdtemp(prefix="argo-encoding-")
             mcp_handlers.execute_tool("argo_local_search",
-                                      {"query": "中文查询", "max_results": 3})
+                                      {"query": "中文查询", "max_results": 3,
+                                       "path": narrow})
         self.assertEqual(captured.get("encoding"), "utf-8")
         self.assertEqual(captured.get("errors"), "replace")
         self.assertEqual((captured.get("env") or {}).get("PYTHONUTF8"), "1")

@@ -996,6 +996,11 @@ export async function recomputeViaArgoMCP(spec, fileInputs, options = {}) {
     args,
     idleMs: options.idleMs ?? DEFAULTS.searchIdleMs,
     max: options.max ?? DEFAULTS.searchConcurrency,
+    // 握手必须有上界：send 默认 timeoutMs=0 就是不装定时器，第一次搜索会
+    // 永远挂着（入口进程起不来/不回 initialize 时）。另两个入口
+    // （searchViaArgoMCP / nativeViaMcpPool）都传了 initMs，这条漏了——
+    // 挂死后该连接 claims 已 +1、load() 永不为 0，池子再也选不中它。
+    initMs: timeoutMs,
   })
   // 超时内建在 conn.request：pending entry 同步清理（与 searchViaArgoMCP 同口径）。
   const result = await conn.request('tools/call', {
@@ -1488,7 +1493,11 @@ export function apply(ctx, providedConfig = {}) {
         output.reportPath = await persistReport(config.reportDir, question, output.report)
       } catch (err) {
         // 落盘失败不阻断返回：render 回退为完整报告文本。
-        output.reportPath = undefined
+        // 用 delete 而非赋 undefined：outputSchema 是 additionalProperties:false
+        // 且 reportPath: {type:'string'}——键存在但值 undefined 在严格校验器
+        // （ajv nullable:false）下判失败；delete 让键整个缺席，与「不适用就
+        // 整个键缺席」的输出契约一致。
+        delete output.reportPath
       }
       return output
     },

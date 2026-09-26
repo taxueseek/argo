@@ -21,6 +21,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import engine_env  # noqa: E402
+import route_combo  # noqa: E402  # noqa: F401  （_isolated_route 打桩 learner 单例）
 from route import route_query  # noqa: E402
 from quota import QuotaManager  # noqa: E402
 
@@ -144,7 +145,26 @@ class TestQuotaProfilesAligned(unittest.TestCase):
     （浪费 80% 额度）、anysearch=null 则完全没有次数限制保护。"""
 
     def setUp(self):
-        self.qm = QuotaManager()
+        # 状态文件隔离 + 同模块对象构造（2026-09-27）：
+        # 1) get_remaining_ratio 的周期重置会在文件锁内 _load_state() 重读磁盘。
+        #    不隔离时，同进程前序搜索写出的 quota.json 会把本用例注入的内存状态
+        #    整份冲掉（实测 KeyError: '_test_null_eng'）。
+        # 2) **必须函数内 import**：test_argo_paths 的参数化用例会
+        #    sys.modules.pop("quota") 后重新 import——本文件顶层的
+        #    `from quota import QuotaManager` 绑的是旧模块对象，override 打在新
+        #    对象上，两侧错位后隔离静默失效（与 test_quota_lock_scope 的 _quota()
+        #    同一理由：被测代码经模块全局查找，补丁必须打在同一个对象上）。
+        import quota as _quota_mod
+        self._d = tempfile.mkdtemp()
+        self._orig_state_path = _quota_mod.QUOTA_STATE_PATH
+        _quota_mod.QUOTA_STATE_PATH = Path(self._d) / "quota.json"
+        self.addCleanup(self._restore)
+
+        self.qm = _quota_mod.QuotaManager()
+
+    def _restore(self):
+        import quota as _quota_mod
+        _quota_mod.QUOTA_STATE_PATH = self._orig_state_path
 
     def test_limits(self):
         cases = {"zhihu": 5000, "anysearch": 2000, "zhihu_global": 5000}
@@ -197,12 +217,21 @@ class _AllowAllBreaker:
 
 
 def _isolated_route(query: str, **kwargs):
-    """route_query 但打桩熔断器与配额（并发 live 评测会写共享状态文件，
-    直连真实单例会让 combo 检查偶发抖动）。"""
+    """route_query 但打桩熔断器、配额与自适应学习器（并发 live 评测会写共享
+    状态文件/DB，直连真实单例会让 combo 检查偶发抖动）。
+
+    learner 是第三个共享单例：engine_perf 表在同进程的用例之间累积，
+    test_cache_engine_isolation 等跑完后 byted/octen 的分数足以在
+    「同族按分重排」里把 zhihu_global 挤出 news_realtime 的前二
+    （实测 2026-09-27：组合跑必挂、单独跑全绿）。打桩成 None 后 learner
+    的过滤与重排都不参与，combo 只由域声明与注入逻辑决定——正是本类
+    断言想锁的行为。
+    """
     from unittest.mock import MagicMock
     with patch("circuit_breaker.get_breaker",
                return_value=_AllowAllBreaker()), \
-         patch("quota.get_quota_manager", return_value=MagicMock()):
+         patch("quota.get_quota_manager", return_value=MagicMock()), \
+         patch("route_combo._adaptive_learner", None):
         return route_query(query, **kwargs)
 
 

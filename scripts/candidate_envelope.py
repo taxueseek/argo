@@ -46,10 +46,13 @@ def canonicalize_url(url: str) -> str:
     return _impl(url)
 
 
-def _candidate_id(platform: str, url: str, source_id: str | None = None) -> str:
+def _candidate_id(platform: str, url: str, source_id: str | None = None,
+                  canon: str | None = None) -> str:
     if source_id:
         return f"{platform}:{source_id}"
-    raw = canonicalize_url(url) or url or ""
+    # canon 由调用方传入（result_to_candidate 已为 canonical_url 字段算过
+    # 同一份）：旧实现在这里再调一次 canonicalize_url，同一条结果算两遍。
+    raw = (canon if canon is not None else canonicalize_url(url)) or url or ""
     h = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     return f"{platform}:{h}"
 
@@ -159,7 +162,7 @@ def result_to_candidate(
     if login_used:
         limitations.append("login_state_used: not eligible for public SearchCache")
     return {
-        "candidate_id": _candidate_id(platform, url),
+        "candidate_id": _candidate_id(platform, url, canon=canon),
         "query": query,
         "platform": platform,
         "backend": source or "unknown",

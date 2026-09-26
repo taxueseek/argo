@@ -60,7 +60,7 @@ def usage_log_dir() -> Path:
 
 
 def stream_dir() -> Path:
-    """遥测目录（公开读出口：stats 等读者需要展示数据在哪）。"""
+    """使用日志目录（公开读出口：stats 等读者需要展示数据在哪）。"""
     return usage_log_dir()
 
 

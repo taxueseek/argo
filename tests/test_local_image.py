@@ -265,7 +265,13 @@ class TestIndexIncremental:
         assert (prev[0], prev[1]) == (cur[0], cur[1])
 
     def test_gone_files_removed_from_index(self, conn, tmp_path):
-        """消失的文件必须清出索引：否则检索给出打不开的路径。"""
+        """消失的文件必须清出索引：否则检索给出打不开的路径。
+
+        root 维度（2026-09-27 数据丢失修复）：只清「属于本次扫描 root 且不在
+        磁盘上」的条目。本次 root 之外的条目（别的 root 索引进来的）必须保留
+        ——旧实现拿全表路径与本次磁盘集合做差，先索引 ~/Pictures 再索引
+        ~/Downloads 会把第一次的条目全部误删。
+        """
         tmp = tmp_path / "gone.png"
         Image = pytest.importorskip("PIL.Image")
         Image.new("RGB", (10, 10)).save(tmp)
@@ -274,10 +280,49 @@ class TestIndexIncremental:
         before = conn.execute("SELECT COUNT(*) c FROM images").fetchone()["c"]
         assert before == 2
         os.unlink(tmp)
-        # 只扫 tmp_path（不含 /img），两个都该被清掉
+        # 只扫 tmp_path（不含 /img）：root 内的 gone.png 该被清掉，
+        # /img 的条目不属于本次 root，必须留下。
         li.index_paths(conn, [str(tmp_path)])
         after = conn.execute("SELECT COUNT(*) c FROM images").fetchone()["c"]
-        assert after == 0
+        assert after == 1
+        left = conn.execute("SELECT path FROM images").fetchone()["path"]
+        assert left == "/img/also-gone.png"
+
+    def test_cross_root_indexing_keeps_previous_root(self, conn, tmp_path):
+        """分两次索引不同 root：第二次不得把第一次的条目判成 gone 删光。
+
+        这正是 2026-09-27 修复的数据丢失场景（先 ~/Pictures 再 ~/Downloads）。
+        同时锁定 max_images 截断不参与 gone 判定：截断只限制新算批次。
+        """
+        Image = pytest.importorskip("PIL.Image")
+        root_a = tmp_path / "a"
+        root_b = tmp_path / "b"
+        root_a.mkdir()
+        root_b.mkdir()
+        Image.new("RGB", (4, 4)).save(root_a / "keep.png")
+        Image.new("RGB", (4, 4)).save(root_b / "new.png")
+        _put(conn, str(root_a / "keep.png"), mtime=1.0)
+
+        # 第二次只索引 root_b，且 max_images=1（截断到 1 个文件）
+        li.index_paths(conn, [str(root_b)], max_images=1)
+        paths = {r["path"] for r in conn.execute("SELECT path FROM images")}
+        assert str(root_a / "keep.png") in paths, "上一个 root 的条目被误删"
+        assert str(root_b / "new.png") in paths, "本次 root 的条目应入索引"
+
+    def test_incremental_judge_uses_full_triple(self, conn, tmp_path):
+        """增量判据是 (mtime, size, inode) 三元组——docstring 说的「三者一起比」。
+
+        旧实现只比前两项：inode 被 SELECT 出来、被存进 existing，却在比较时
+        被丢弃。跨文件系统复制后 mtime 可能保留，漏比 inode 就漏重算。
+        """
+        Image = pytest.importorskip("PIL.Image")
+        p = tmp_path / "x.png"
+        Image.new("RGB", (4, 4)).save(p)
+        st = p.stat()
+        # mtime+size 相同、inode 不同 → 必须判为 updated
+        _put(conn, str(p), mtime=st.st_mtime, size=st.st_size, inode=st.st_ino + 1)
+        stat = li.index_paths(conn, [str(tmp_path)])
+        assert stat["updated"] == 1, "inode 变化未被判据认出（只比了 mtime/size）"
 
 
 class TestWalkImages:

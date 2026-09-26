@@ -24,6 +24,7 @@ research_dossier.py:canonical_url。四份的追踪参数表、大小写处理�
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
 
 __all__ = ["canonical_url", "TRACKING_PARAMS", "is_tracking_param"]
@@ -117,6 +118,7 @@ def _collapse_slashes(path: str) -> str:
     return re.sub(r"/{2,}", "/", path)
 
 
+@lru_cache(maxsize=4096)
 def canonical_url(
     url: str,
     *,
@@ -142,6 +144,12 @@ def canonical_url(
       8. 折叠重复斜杠、去尾斜杠（根路径保留）
 
     任何解析失败都原样返回输入（fail-open：规范化的失败不该让结果消失）。
+
+    纯函数 + 热路径，故加 lru_cache：result_to_candidate → _candidate_id
+    每条结果要算 4–5 次（候选 ID、去重、minhash、RRF 各若干），urlparse +
+    2 次 regex sub + parse_qsl + urlencode 无记忆化时约 15–40 µs/次 × 5 ×
+    20 条 ≈ 1.5–4 ms/次搜索。键空间 = 去重前 URL 数（有界），4096 覆盖一次
+    搜索的全部结果；同一 URL 的二次查询天然命中。入参全是 str/bool，可哈希。
     """
     if not url:
         return ""

@@ -21,11 +21,32 @@ from route_lang import _enabled_local_engines, _get_registry, _lang_must_keep
 # 自适应学习器（可选依赖）：按历史成败微调同族引擎的次序。
 # 从 route.py 搬来这里：它是 _get_engines_combo 的私有状态，放在 route.py 会让
 # 「import route」白付一次 adaptive 装载（路由热路径，缓存命中也要走）。
-try:
-    from adaptive import get_learner
-    _adaptive_learner = get_learner()
-except Exception:
-    _adaptive_learner = None
+#
+# 惰性化（2026-09-27）：上一段注释的意图此前并没有兑现——route.py:125 是
+# **模块级**导入本模块，`get_learner()` 照样在 import route 时构造。而构造
+# 即 `_init_db()`：connect + 3 PRAGMA + CREATE TABLE + 3×PRAGMA table_info +
+# CREATE INDEX + 全表 DELETE 剪枝 + commit，随 engine_perf 行数线性增长
+# （实测 5k 行 1–3 ms、50k 行 10–30 ms），每次进程启动都付。改成首次
+# **使用**时才构造：缓存命中路径（不进 _get_engines_combo）与只读路由路径
+# 都不再付这笔钱。
+#
+# `_UNRESOLVED` 哨兵而非 None：测试用 `patch("route_combo._adaptive_learner",
+# None)` 隔离学习器干扰，None 必须是「已解析且没有」的合法值，不能与
+# 「还没解析」共用同一个值。
+_UNRESOLVED: Any = object()
+_adaptive_learner: Any = _UNRESOLVED
+
+
+def _get_learner() -> Any:
+    """首次使用时才构造自适应学习器（失败或无依赖返回 None）。"""
+    global _adaptive_learner
+    if _adaptive_learner is _UNRESOLVED:
+        try:
+            from adaptive import get_learner
+            _adaptive_learner = get_learner()
+        except Exception:
+            _adaptive_learner = None
+    return _adaptive_learner
 
 
 def _expand_local_search(engine_list: list[str], features: dict | None = None) -> list[str]:
@@ -218,6 +239,9 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     注意：depth/context 的 combo 预算与 research_only 截断在 route_query 末尾
     统一走 engine_policy.filter_combo_by_policy，本函数只做可用性/成本/健康过滤。
     """
+    # 学习器在此处首次解析（惰性，见模块顶部 _get_learner）：走到这里说明
+    # 真的要装配 combo，这笔钱躲不掉；不进本函数的路径（缓存命中等）不付。
+    _adaptive_learner = _get_learner()
     combo = domain.get("engines_combo", [])
     primary = domain.get("primary", "anysearch")
     fallback = domain.get("fallback")
