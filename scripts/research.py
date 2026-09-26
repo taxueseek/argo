@@ -514,7 +514,8 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
                   budget: int | None = None,
                   route_strategy: str | None = None,
                   work_packages: Any = None,
-                  allow_recompute: bool = False) -> dict[str, Any]:
+                  allow_recompute: bool = False,
+                  broaden: bool = False) -> dict[str, Any]:
     """执行取证。有工作包则按依赖分阶段；否则扩词检索。产出 dossier。"""
     original_query = query
     engines_priority = list((profile or {}).get("engines_priority") or [])
@@ -560,6 +561,37 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
             budget=budget,
             route_strategy=route_strategy,
         )
+
+    # --broaden: 来源不足时自动追加英文/学术方向补充搜索
+    if broaden and not packages:
+        all_urls: set[str] = set()
+        for sr in collection["sub_results"]:
+            for r in sr.get("results", []):
+                url = r.get("url") or r.get("canonical_url")
+                if url:
+                    all_urls.add(url)
+        if len(all_urls) < 15:
+            broaden_subs = [
+                {"query": f"{query} 论文 学术", "intent": "学术补充", "strategy": "academic"},
+                {"query": f"{query} research paper", "intent": "英文学术补充", "strategy": "english_focused"},
+            ]
+            existing_queries = {sq["query"] for sq in sub_queries}
+            broaden_subs = [sq for sq in broaden_subs if sq["query"] not in existing_queries]
+            if broaden_subs:
+                broaden_collection = collect_sources(
+                    broaden_subs, max_results, timeout, depth, mode,
+                    engines_priority=engines_priority or None,
+                    profile=profile, budget=budget, route_strategy=route_strategy,
+                )
+                collection["sub_results"].extend(broaden_collection["sub_results"])
+                sub_queries.extend(broaden_subs)
+                # 重新融合：把所有 sub_results 的 results 合并进 merged_results
+                result_lists = [sr["results"] for sr in collection["sub_results"] if sr.get("results")]
+                if len(result_lists) > 1:
+                    from search_rank import rrf_merge
+                    collection["merged_results"] = rrf_merge(result_lists)[:max_results * 3]
+                elif result_lists:
+                    collection["merged_results"] = result_lists[0]
 
     gaps = identify_gaps(collection["sub_results"], original_query)
     source_grades = (profile or {}).get("source_grades") if profile else None

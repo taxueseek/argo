@@ -359,6 +359,13 @@ def build_dossier(
         src = r.get("source", "unknown")
         source_counts[src] = source_counts.get(src, 0) + 1
 
+    url_sub_query_count: dict[str, int] = {}
+    for sr in sub_results:
+        for r in sr.get("results", []):
+            cu = canonical_url(r.get("url") or "") or (r.get("url") or "")
+            if cu:
+                url_sub_query_count[cu] = url_sub_query_count.get(cu, 0) + 1
+
     citations = []
     sources = []
     seen_canon: set[str] = set()
@@ -374,6 +381,7 @@ def build_dossier(
         ref += 1
         title = r.get("title") or ""
         eng = r.get("source") or ""
+        sq_count = url_sub_query_count.get(canon, 1)
         citations.append({
             "id": f"[{ref}]",
             "ref": ref,
@@ -383,6 +391,10 @@ def build_dossier(
             "source": eng,
             "score": r.get("score", 0),
             "snippet": (r.get("snippet") or "")[:160] or None,
+            "corroboration": {
+                "sub_query_count": sq_count,
+                "single_source": sq_count <= 1,
+            },
         })
         sources.append({
             "ref": ref,
@@ -391,6 +403,10 @@ def build_dossier(
             "engine": eng,
             "score": r.get("score"),
             "snippet": (r.get("snippet") or "")[:160] or None,
+            "corroboration": {
+                "sub_query_count": sq_count,
+                "single_source": sq_count <= 1,
+            },
         })
         if ref >= 15:
             break

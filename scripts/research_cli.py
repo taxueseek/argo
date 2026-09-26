@@ -43,6 +43,10 @@ def main() -> None:
         default=None,
         help="工作包 JSON 文件路径或内联 JSON 数组；有则跳过扩词、按 depends_on 分阶段",
     )
+    parser.add_argument(
+        "--broaden", action="store_true",
+        help="第一轮来源不足 15 个时自动追加英文/学术方向补充搜索",
+    )
     parser.add_argument("--platforms", type=str, default=None, help="社交平台，逗号分隔")
     parser.add_argument(
         "--topic",
@@ -58,6 +62,10 @@ def main() -> None:
     parser.add_argument("--archive-note", default=None)
     parser.add_argument(
         "--verify", nargs="?", const=3, type=int, default=None, metavar="TOP_K",
+    )
+    parser.add_argument(
+        "--deep-read", action="store_true",
+        help="对 top 3-5 结果 fetch 全文摘要写入 fulltext_excerpts",
     )
     parser.add_argument(
         "--allow-recompute", action="store_true",
@@ -190,6 +198,7 @@ def main() -> None:
             route_strategy=args.route_strategy,
             work_packages=work_packages,
             allow_recompute=args.allow_recompute,
+            broaden=args.broaden,
         )
 
     if profile_applied:
@@ -234,6 +243,41 @@ def main() -> None:
                 )
         except Exception as e:
             print(f"  [verify error] {type(e).__name__}: {e}", file=sys.stderr)
+
+    if args.deep_read:
+        try:
+            from fetch import fetch_pages_parallel
+            targets = []
+            for c in report.get("citations") or report.get("sources") or []:
+                if isinstance(c, dict) and c.get("url"):
+                    targets.append({
+                        "url": c.get("url"),
+                        "title": c.get("title") or "",
+                        "snippet": c.get("snippet") or "",
+                        "score": c.get("score", 0),
+                    })
+            targets.sort(key=lambda x: x.get("score", 0), reverse=True)
+            urls = [t["url"] for t in targets[:5]]
+            if urls:
+                results = fetch_pages_parallel(urls, max_chars=8000, timeout=8, max_workers=3)
+                excerpts = []
+                for r in results:
+                    excerpts.append({
+                        "url": r.get("url", ""),
+                        "title": next((t["title"] for t in targets if t["url"] == r.get("url")), ""),
+                        "content_excerpt": (r.get("content") or "")[:2000],
+                        "length": r.get("length", 0),
+                        "success": r.get("success", False),
+                    })
+                report["fulltext_excerpts"] = excerpts
+                from research_gates import evaluate_dossier_gates
+                report["quality_gate_results"] = evaluate_dossier_gates(report)
+                report["conclusion_cap"] = report["quality_gate_results"]["conclusion_cap"]
+                if not args.json:
+                    ok = sum(1 for e in excerpts if e.get("success"))
+                    print(f"  [deep-read] fetch {len(excerpts)} 篇，成功 {ok} 篇", file=sys.stderr)
+        except Exception as e:
+            print(f"  [deep-read error] {type(e).__name__}: {e}", file=sys.stderr)
 
     if do_archive:
         try:
