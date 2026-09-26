@@ -589,7 +589,16 @@ domains:
   - match: '(?i)(天气|气温|温度|预报|下雨|降水|多少度|weather|forecast)'
     unless: '(?i)(气候变化|极端天气|全球变暖|天气趋势|天气研究|天气影响|天气对)'
   # 日韩天气触发词（修复「東京の天気」「서울 날씨」漏召）
-  - (?i)(天気|気温|温度|予報|雨|雪|何度)
+  - (?i)(天気|気温|予報|何度)
+  # 「雨/雪」此前裸放在上一条日文模式里，而这两个字在中文里**同时是图片词**
+  # （雪景/雨景/雪花/大雪壁纸）。实测代价：`雪景 壁纸`、`雨景 摄影`、
+  # `雪花 插画`、`壁纸 雪山`、`帮我找几张雪山壁纸` 全部被抢进 weather_query，
+  # 返回天气网和必应网页结果——图片需求一条图都拿不到。含「雪/雨」的中文
+  # 图片查询是高频场景（壁纸、摄影、插画），不是边缘 case。
+  # 与 geo_places 同法加让位表：出现图片/摄影语境时让位给 image_search，
+  # 其余情况仍按天气处理（「明天会下雪吗」照旧命中天气）。
+  - match: '(?i)(雨|雪)'
+    unless: '(?i)(图片|壁纸|照片|图库|素材|插画|头像|背景图|桌面|png|jpg|海报|摄影|写真|剧照|表情|雪花|雪景|雨景|wallpaper|photo|image|picture|illustration|poster)'
   - (?i)(날씨|기온|온도|예보|몇\s*도)
   primary: qweather
 - desc: 垂直结构化模态卡（统一语义识别：火车票/油价/贵金属/万年历/星座/手机/汽车/挂号/薪资等）
@@ -977,7 +986,14 @@ domains:
   - (?i)(地理|地图|方位|东南西北|几公里|多远|距离.*多远|openstreetmap|nominatim|geonames)
   - (?i)\b(where\s+is|located\s+in|latitude|longitude|elevation|coordinates?|border(s|ing)?|tributary)\b
   - (?i)\b(flows?\s+through|drainage|basin|source\s+of|passes\s+through)\b
-  - (?i)\b(mountain|river|lake|ocean|island|peninsula|desert|plateau|canyon|strait|volcano|glacier|timezone)\b
+  # 自然地貌词（mountain/river/lake…）加**图片让位表**：这些词在中英文里
+  # 同时是图片检索的高频词（`snow mountain wallpaper`、`lake photo`），
+  # 而本域排在 image_search 之前，会把图片需求截走——实测
+  # `snow mountain wallpaper` 落在 geo_places，6 条结果全无图（返回的是
+  # OSM/百科的地名条目）。与上面「位置/坐标」那条同法处理：出现图片语境
+  # 就让位。不含图片词时照旧按地理处理（`mountains in nepal` 不受影响）。
+  - match: '(?i)\b(mountain|river|lake|ocean|island|peninsula|desert|plateau|canyon|strait|volcano|glacier|timezone)\b'
+    unless: '(?i)(wallpaper|photo|image|picture|illustration|poster|壁纸|照片|图片|图库|素材|插画|头像|背景图|摄影|剧照|雨景|雪景|夜景|风景照)'
   # 日韩地理触发词（修复「エッフェル塔 どこ」「에펠탑 어디」漏召）。
   # **刻意不收单字触发词**（山|川|湖|島|塔、산|강|섬）：CJK 单字是最常见的
   # 构词成分，裸子串匹配实测把「川菜 做法」「塔罗牌 入门教程」「한국 반도체
@@ -1045,17 +1061,32 @@ domains:
   - (?i)(歌曲|音乐|专辑|新歌|单曲|\bMV\b|mp3|歌词|歌手|乐队|音乐人|主唱|好听的歌|好歌推荐|听歌|歌单|的歌|主题曲|片尾曲|插曲|播客|有声书|演唱会|巡演)
   - (?i)\b(music|song|album|podcast|soundtrack|lyrics|singer|discography|concert|tour)\b
   primary: itunes
-- desc: 图片/素材搜索（Openverse 开放版权图库）
+- desc: 图片/素材搜索（Openverse + Wikimedia Commons + 全网图片）
   engines_combo:
   - openverse
+  - wikimedia_commons
+  - ddgs_images
   - anysearch
   fallback: anysearch
   name: image_search
-  parallel: false
+  parallel: true
   patterns:
-  - (?i)(图片|壁纸|照片|图库|素材|插画|无版权|免费图片|头像|背景图|表情图|png|jpg 图片|壁纸下载)
-  - (?i)\b(wallpaper|photo|image|picture|illustration|stock photo|free image)\b
+  # 「雨景/雪景/夜景」这类**景观词本身就是图片意图**：中文用户说「雨景 摄影」
+  # 想要的是照片，不是天气。此前它们不在词表里，而域匹配是先到先得——被
+  # 后面的 chinese_general 兜底域截走（实测 route_reason 显示命中
+  # chinese_general 后 TF-IDF 落到 local_imdb）。
+  # 单字「摄影」不收：它太宽（「摄影技巧教程」是要文章不是要图），
+  # 收「摄影作品/摄影图」这类带结果的写法。
+  # 同理收「海报/封面图/图标/字体图」——实测 `vintage poster` 落
+  # general_search、`海报` 落 chinese_general，都是明确的图片需求被截走。
+  - (?i)(图片|壁纸|照片|图库|素材|插画|无版权|免费图片|头像|背景图|表情图|png|jpg 图片|壁纸下载|摄影作品|摄影图|写真|剧照|雨景|雪景|夜景|风景照|风光照|海报|封面图|图标|logo 图|贴图|素材图|配图)
+  - (?i)\b(wallpaper|photo|image|picture|illustration|stock photo|free image|poster|icon set|clip ?art|thumbnail|artwork)\b
   primary: openverse
+  # 版权优先：要「能合法用」的图时 openverse 带许可标注，ddgs 全网图多数
+  # 无授权信息。两条并行取回后由合并层按需取舍，而不是先跑一条再补另一条
+  # ——排序口径见 engines_combo 顺序（openverse 结果在同等分数下更靠前）。
+  # 中文查询由 ddgs_images 兜底：Openverse 对中文关键词命中率低（实测
+  # 「雪山 星空 壁纸」0 条），而 ddgs 走 Bing 图片索引有中文覆盖。
 - desc: 知识实体/维基数据查询
   engines_combo:
   - baidu_baike
@@ -3874,6 +3905,19 @@ engines:
       item_title: title
       item_url: foreign_landing_url
       item_summary: creator
+      # 图片字段：此前只映射标题/落地页/作者，结果「搜到图源却拿不到图」——
+      # 上游一直返回 url（图片直链）、license/license_version/license_url、
+      # width/height、thumbnail，只是没人接。落地页 foreign_landing_url 是
+      # Flickr 那种详情页，不是能直接用的图，这是本源最该修的一处。
+      item_image: url
+      item_image_license: license
+      item_image_license_url: license_url
+      item_image_width: width
+      item_image_height: height
+      # license_version 单独带出来：Openverse 的 license 是 `by-sa` 短码，
+      # 拼上版本才是能搜到条款原文的 `CC BY-SA 2.0`（由
+      # engines_base.finalize_image_fields 归一）。
+      item_image_license_version: license_version
     timeout: 10
     url: https://api.openverse.org/v1/images
   coingecko:

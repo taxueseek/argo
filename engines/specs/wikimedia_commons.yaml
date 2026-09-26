@@ -1,0 +1,34 @@
+# Wikimedia Commons — 通用图库（免 key，CC 素材，字段齐全）
+#
+# 为什么收这个源：argo 的图片能力此前只有 openverse 一个通用图库，而 Openverse
+# 自身的统计显示其图库主体就来自 Wikimedia（88M 图里 Commons 占最大份额）——
+# 直连 Commons 等于绕过中间层拿上游，且字段更全（extmetadata 带许可全称、
+# 作者、描述原文，imageinfo 带原图直链与宽高）。中文查询覆盖也优于 Openverse
+# （Commons 有大量中文题注的素材）。
+#
+# 与既有图源的分工：
+#   - wikimedia_commons：通用图库，CC 授权明确，**首选素材源**
+#   - openverse：同为 CC 图库，含 Flickr 等来源，与 Commons 互补不重复
+#   - ddgs_images：全网图片（无许可标注），覆盖优先
+#   - met/artic/cleveland/nasa_images：垂直馆藏（艺术/航天）
+#
+# 解析说明：query.pages 是以 pageid 为键的字典，声明式 output_map 处理不了
+# （_extract_items 会把 dict 包成单条且字段全空），故用 builder 展开。
+# 验证:
+#   python3 scripts/engine_validate.py --engine wikimedia_commons --stage all --admit
+
+engine_id: wikimedia_commons
+type: wikimedia_commons
+enabled: true
+cost_tier: free
+label: Wikimedia图库
+desc: "Wikimedia Commons 通用图库（免 key，CC 素材，原图直链+许可+宽高）"
+coverage: [image, media, cc, reference]
+family: misc_vertical
+priority: 30
+timeout: 20
+canary_query: "snow mountain"
+quality_queries:
+  - query: "snow mountain"
+  - query: "ukiyo-e"
+  - query: "cat"

@@ -120,6 +120,8 @@ class _SearchRun:
     engine_outcomes: list[dict[str, Any]]
     merged: list[dict[str, Any]]
     minhash_removed: int = 0
+    image_dup_removed: int = 0
+    image_dropped: dict[str, int] = field(default_factory=dict)
     excluded_count: int = 0
     time_filtered: int = 0
     time_filter_warning: str | None = None
@@ -369,6 +371,18 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
             merged = deduped
         except Exception as _e:
             _log(f"minhash 去重跳过: {type(_e).__name__}")
+    # ── 图片级去重（文本去重之后，图片粒度）─────────────────────────────
+    # 上面两道去重都只看页面（URL/标题/正文），对图本身无感知：同一素材在
+    # 不同 CDN 上的 URL 不同、标题也可能不同，两道都判不出来——实测
+    # 「雪景 壁纸」的结果里存在同一张图占两位的情况。这里按图片直链归一键
+    # 补一刀。放在文本去重之后：文本重复量大且比较便宜，先削一批再比图片。
+    image_dup_removed = 0
+    if merged and len(merged) > 1:
+        try:
+            from image_ops import deduplicate_images as _dedupe_images
+            merged, image_dup_removed = _dedupe_images(merged)
+        except Exception as _e:
+            _log(f"图片去重跳过: {type(_e).__name__}")
     _tock(timing, "dedupe", _tk_dedupe)
     # 三个子段各自计时，**不能共用一个 tick**：
     # `filter`（否定词 + 时间窗过滤）是纯本地遍历；`recovery` 是**网络调用**
@@ -418,6 +432,21 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     # 漏斗第 5 格：否定词过滤 + 时间窗过滤之后（见 build_funnel）
     _funnel_filtered = len(merged)
     _tock(timing, "filter", _tk_filter)
+
+    # ── 图片可用性过滤（仅图片检索域）─────────────────────────────────
+    # 只在 image_search 这种「用户要的就是图」的查询上启用：普通网页搜索的
+    # 结果里也可能带 image_url（正文配图），那里图小不构成丢弃整篇文章的理由。
+    # 判据与阈值见 image_ops（分辨率下限、极端长宽比、明确非商用）。
+    # 默认只剔「字段层面即可确定不可用」的（无图/过小/极端比例）；非商用图
+    # 不剔——「搜图看看」和「找能发布的素材」是两个需求，后者由调用方显式
+    # 开启。剔除明细进 image_dropped，供诊断「为什么少了 N 条」。
+    image_dropped: dict[str, int] = {}
+    if merged and domain == "image_search":
+        try:
+            from image_ops import filter_usable_images as _filter_imgs
+            merged, image_dropped = _filter_imgs(merged)
+        except Exception as _e:
+            _log(f"图片可用性过滤跳过: {type(_e).__name__}")
 
     # D5：时间窗空操作告警——用户指定了时间窗，组合内含时间能力引擎，
     # 但结果没有任何 published_at（下推缺失/源端未返回）：
@@ -628,6 +657,8 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         run,
         merged=merged,
         minhash_removed=minhash_removed,
+        image_dup_removed=image_dup_removed,
+        image_dropped=image_dropped,
         excluded_count=excluded_count,
         time_filtered=time_filtered,
         time_filter_warning=time_filter_warning,
@@ -668,6 +699,8 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
     engine_outcomes = run.engine_outcomes
     engine_latency = run.engine_latency
     minhash_removed = run.minhash_removed
+    image_dup_removed = run.image_dup_removed
+    image_dropped = run.image_dropped
     excluded_count = run.excluded_count
     time_filtered = run.time_filtered
     time_filter_warning = run.time_filter_warning
@@ -812,6 +845,8 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
         "reranker": reranker_status,
         "rank_method": rank_method,
         "minhash_removed": minhash_removed,
+        "image_dup_removed": image_dup_removed,
+        "image_dropped": image_dropped or None,
         "local_rerank_on": local_rerank_on,
         "recovery": recovery_info,
         "fact_alignment": fact_alignment,

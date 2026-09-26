@@ -26,6 +26,16 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from config import load_config, get_engines
 
+# 图片许可判定 / 字段收尾 / CLI 字段契约收敛都在 image_ops（体积门禁要求，
+# 且同属「引擎输出 → 对外契约」这一层）。转发导入保持调用点不变。
+from image_ops import (  # noqa: E402
+    CLI_PASSTHROUGH_FIELDS as _CLI_PASSTHROUGH_FIELDS,
+    _cli_result_row,
+    _license_allows_commercial,
+    finalize_image_fields,
+    image_output_map_fields,
+)
+
 logger = logging.getLogger("unified_search.engines")
 if not logger.handlers:
     logger.setLevel(logging.WARNING)
@@ -759,6 +769,8 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
             # （NASA 的 links.0 是 {href, rel, render, ...}）。
             "image_url": output_map.get("item_image", ""),
             "image_license": output_map.get("item_image_license", ""),
+            # 其余图片字段（许可链接/协议版本原料/像素尺寸）见 image_ops
+            **image_output_map_fields(output_map),
         }, url_template=output_map.get("url_template"))(data)
         # spec 级授权常量：授权不随条目变化的源（如 NASA 公版）在 spec 上写一次
         _lic = spec.get("image_license")
@@ -770,6 +782,10 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                 r.setdefault("image_license", _lic)
             if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
                 r["snippet"] = r["snippet"][:300]
+        # 图片元数据收尾（尺寸转 int / 许可归一 / 商用判据）——落在这个共同
+        # 出口而不是各 parser 里：图源有三条产出路径（声明式 output_map、
+        # 自定义 builder、通用兜底），只覆盖一条会让契约对一半结果生效。
+        finalize_image_fields(parsed, _lic or "")
         # preserve_source（声明式 spec）：保留 API 返回的真实来源标注
         return _ensure_engine_source(
             parsed, eng, preserve=bool(spec.get("preserve_source"))
@@ -1064,31 +1080,15 @@ def _parse_text_output(text: str, engine_name: str, output_format: str = "", n: 
         data = json.loads(text)
         limit = max(1, n)
         if isinstance(data, list):
-            out = []
-            for i in data[:limit]:
-                if not isinstance(i, dict):
-                    continue
-                r = {"title": i.get("title", ""), "url": i.get("url", ""),
-                     "snippet": i.get("snippet", i.get("content", ""))[:300],
-                     "source": engine_name}
-                if i.get("published_at"):
-                    r["published_at"] = str(i["published_at"])[:64]
-                out.append(r)
-            return out
+            return finalize_image_fields(
+                [_cli_result_row(i, engine_name) for i in data[:limit]
+                 if isinstance(i, dict)])
         if isinstance(data, dict):
             items = data.get("results", data.get("items", data.get("data", [])))
             if isinstance(items, list):
-                out = []
-                for i in items[:limit]:
-                    if not isinstance(i, dict):
-                        continue
-                    r = {"title": i.get("title", ""), "url": i.get("url", ""),
-                         "snippet": i.get("snippet", i.get("content", ""))[:300],
-                         "source": engine_name}
-                    if i.get("published_at"):
-                        r["published_at"] = str(i["published_at"])[:64]
-                    out.append(r)
-                return out
+                return finalize_image_fields(
+                    [_cli_result_row(i, engine_name) for i in items[:limit]
+                     if isinstance(i, dict)])
     except (json.JSONDecodeError, ValueError):
         pass
 

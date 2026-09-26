@@ -1,0 +1,45 @@
+# 通用图片搜索（免 Key，走 ddgs/Bing 图片通道）
+#
+# 为什么要有这个源：image_search 域此前只有 openverse 一个通用图库，而它是
+# **开放版权素材库**——查「雪山」给的是 Flickr 上 CC 授权的照片，覆盖窄，且
+# 对「这个产品长什么样」「这个梗图」这类检索无能为力。本引擎补的是**全网
+# 图片**维度：底层 ddgs 走 Bing 图片索引，覆盖商业图库、新闻配图、社交平台
+# （实测中文查询能出花瓣、千叶网等站点），是通用图库之外的覆盖面。
+#
+# 与 openverse 的分工（两者都要，不是替代）：
+#   - openverse：要「能合法发布」的素材 → 带 license/宽高/商用判据
+#   - ddgs_images：要「能找到这张图」 → 覆盖面优先，**多数结果无许可信息**
+# 因此本源结果不带 image_commercial_ok（上游不给许可字段，判定为「未判定」
+# 而非「不可商用」），用在要发布的稿子里之前须自行核对。
+#
+# 实现复用 sub-skills/local-search 的 local_ddgs_images 子引擎（那边已写好
+# ddgs 调用与字段解析），不在主仓重复实现一遍 CLI 调用逻辑。
+# 验证:
+#   python3 scripts/engine_validate.py --engine ddgs_images --stage all --admit
+
+engine_id: ddgs_images
+type: cli
+enabled: true
+cost_tier: free
+label: 通用图片
+desc: "通用图片搜索（免 Key，覆盖全网图片；无版权标注，发布前须自行核对）"
+coverage: [image, media, web]
+family: misc_vertical
+priority: 34
+timeout: 20
+canary_query: "snow mountain"
+cmd:
+- python3
+- sub-skills/local-search/search_v3.py
+search_args:
+- '{query}'
+- --n
+- '{n}'
+- --engine
+- local_ddgs_images
+- --json
+output_format: json
+quality_queries:
+  - query: "snow mountain"
+  - query: "雪山"
+  - query: "vintage poster"

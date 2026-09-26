@@ -291,6 +291,53 @@ URL 就在 `results[].url` 里（`--fields agent` 也保留），零额外成本
 - 智能路由：`sub-skills/local-search/smart_router.py` 按查询特征选引擎组合
 - 输出与 argo 同 schema，直接参与 RRF 融合
 
+### 图片检索（网络图与本地图）
+
+**网络图**走 `argo search`，命中 `image_search` 域（`openverse` + `wikimedia_commons`
++ `ddgs_images` 三源并行）。结果里的图片字段：
+
+| 字段 | 含义 |
+|------|------|
+| `image_url` | 图片直链（可直接嵌入/下载；非详情页） |
+| `image_license` | 归一后的协议名（`CC BY-SA 4.0`；上游短码 `by-sa` + 版本号已拼好） |
+| `image_license_url` | 条款原文页（能点开核对的那一个） |
+| `image_width` / `image_height` | 像素尺寸（int；上游没给则为缺省） |
+| `image_commercial_ok` | `true` 可商用 / `false` 明确不可（NC/受版权）/ **缺省=未判定** |
+
+三源分工：`openverse` 与 `wikimedia_commons` 是开放版权图库（**带许可，用于要发布的素材**），
+`ddgs_images` 是全网图片（覆盖最广，但多数无许可信息，属「未判定」而非「不可商用」）。
+中文查询 Openverse 命中率低，此时结果主要由 `ddgs_images` 承担——**许可字段会普遍缺失，
+这是上游数据边界不是缺陷**，用在公开材料前须自行核对。
+
+`image_search` 域内会自动剔除字段层面即可判定不可用的图（过小、极端长宽比）；
+**尺寸未知的一律放行**（拿不到尺寸不等于图小）。剔除明细见输出 `image_dropped`，
+重复图剔除数见 `image_dup_removed`（同一素材跨 CDN 的两个 URL 会被归一为一张）。
+
+**本地图**走 `argo local-image`，用 macOS 内置 Vision 建索引（无第三方依赖）：
+
+```bash
+argo local-image index ~/Pictures ~/Downloads   # 建库；默认增量（(mtime,size) 变化才重算）
+                                                # 约 0.12 秒/张（4 路并行），7.7 万张约 2.5 小时
+argo local-image search "MCP 配置"              # 按 文件名 / 图中文字(OCR) / 分类标签 三档打分
+argo local-image search --similar-to a.png      # 以图找相似（768 维 Vision 特征指纹）
+argo local-image search "海报" -n 12 --sheet /tmp/s.png   # 候选拼成联络表
+argo local-image stats                          # 索引概况
+```
+
+索引三个维度各自的用途：**图中文字**（截图/海报/文档类最有用）、**分类标签**（Vision
+提供的场景词，如 stairs/document）、**特征指纹**（以图搜图与相似图判定）。
+指纹用 SQLite BLOB 存，检索是矩阵点积（7.7 万张约 2-3ms），未引入向量索引——
+这是几十万级规模，FAISS 的收益在千万级。
+
+`--sheet` 是「脚本与多模态模型复合」的关键出口：把候选拼成一张联络表并给出
+**编号 → 路径**映射。把这张图交给多模态模型，它能一次看清 12 张并回答「哪几张是用户
+要的」——理解否定、关系、审美这些标签与 OCR 表达不了的部分。模型用编号作答，调用方
+按映射换回路径（不让模型抄长路径，它会抄错）。
+
+已知边界：纯氛围类查询（「暖光下孤独感的照片」）召回有洞——标签里不会出现「孤独」。
+这类需要真正的图像-文本嵌入（CLIP 路线），本机当前未接（要 ~2GB 依赖）；接口留了位，
+需要时再挂，不为少数场景让所有安装背上重依赖。
+
 ### local-seek（本机文件搜索）
 
 ```bash

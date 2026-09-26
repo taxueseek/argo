@@ -2506,5 +2506,17 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "ddgs_images": {
+    "label": "通用图片",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "wikimedia_commons": {
+    "label": "Wikimedia图库",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

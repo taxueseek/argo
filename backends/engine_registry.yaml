@@ -492,6 +492,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: DBLP 计算机科学文献（免认证，偶发 SSL 抖动）
+- name: ddgs_images
+  tier: T1
+  type: cli
+  coverage:
+  - image
+  - media
+  - web
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: 通用图片搜索（免 Key，覆盖全网图片；无版权标注，发布前须自行核对）
 - name: deezer
   tier: T1
   type: deezer
@@ -2948,6 +2961,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: Wikidata 实体搜索（wbsearchentities，免认证，限流较严）
+- name: wikimedia_commons
+  tier: T1
+  type: wikimedia_commons
+  coverage:
+  - image
+  - media
+  - cc
+  - reference
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Wikimedia Commons 通用图库（免 key，CC 素材，原图直链+许可+宽高）
 - name: wikipedia
   tier: T1
   type: http

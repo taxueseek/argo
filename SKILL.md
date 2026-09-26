@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。覆盖意图：搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合。多语言检测与跨语言回退；253 个源（219 个免密钥开箱可用）TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡；recovery 防污染。CLI：search|research|fetch|crawl|extract|article|job|evidence|clarify|preflight|answer|watch|cite|mcp。
+description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。覆盖意图：搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合。多语言检测与跨语言回退；255 个源（221 个免密钥开箱可用）TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；垂直结构化模态卡；recovery 防污染。CLI：search|research|fetch|crawl|extract|article|job|evidence|clarify|preflight|answer|watch|cite|mcp。
 version: 2.9.0
 triggers:
   - 搜索
@@ -38,10 +38,9 @@ python3 scripts/search.py "查询词" --verify 3            # 核验 top-3 并�
 python3 scripts/research.py "复杂问题" --json            # 取证包（扩词或多工作包 → dossier）
 ```
 
-默认不附归档用的 candidates/sources（它们是同一批结果的重复投影），一次 5 条约
-5.6 KB；`--fields agent` 再剥遥测只留答案。要来源追溯或归档时加 `--envelope`
-（`--archive` 自动带上）。三视图分工、全量字段与 `--list-engines --detail` 的
-体积陷阱见 `references/usage.md`。
+默认不附归档用的 candidates/sources（同一批结果的重复投影），一次 5 条约 5.6 KB；
+`--fields agent` 再剥遥测只留答案；要来源追溯或归档才加 `--envelope`（`--archive`
+自动带上）。
 
 深度研究只此一条。机器产出**取证包（dossier）**：来源、覆盖、缺口、是否达标，不是判断稿。Agent 先读 `references/research-protocol.md`（含多轨道「广泛研究」节），写出工作包再取证；判断按事实/推断/建议写。不要另装「专业深度研究」skill。
 
@@ -61,6 +60,12 @@ python3 scripts/research.py "复杂问题" --json            # 取证包（扩�
 | `--verify [N]` | 对 top-N 未核验结果 fetch 正文，回填证据分（URL→证据分缓存，同 URL 二次搜索自动复用） |
 | `--domain` `--sub_domain` | 垂直域 / 子域限定 |
 
+### 图片检索
+
+网络图走 `search`（`image_search` 域自动命中）；本地素材走 `argo local-image`
+（Vision 索引：图中文字 + 分类标签 + 特征指纹；`--similar-to` 找相似图，
+`--sheet` 出联络表交多模态模型判断）。用法与字段见 `references/usage.md`。
+
 ### 增强三工具
 
 ```bash
@@ -76,7 +81,6 @@ echo '{"results": [...]}' | python3 scripts/evidence.py "查询词" --stdin --js
 python3 scripts/clarify.py "有歧义的查询" --explain --json
 ```
 
-> research 全参数、工作包骨架与输出字段见 `references/usage.md` 与 `references/research-templates.md`。
 
 ### 抓取三工具（`bin/argo` 入口）
 
@@ -101,7 +105,6 @@ argo watch add|check|list|remove   # 观察模式：快照+变化检测（check 
 
 ## 证据流程（v2.8.0）
 
-搜索输出自带判定开关（`fetch_required`、`evidence_loop` 等），字段语义见 `references/usage.md`。
 
 ```bash
 python3 scripts/search.py "贵州茅台股价" --verify 3
@@ -115,7 +118,7 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 | 场景 | 读什么 |
 |------|--------|
 | MCP 工具全清单 / 多客户端注入 / DSH 插件接入 / 配额·TinyFish / 子技能 / 本地打通 / 工程纪律 | `references/operations.md` |
-| **使用指南**：全命令、参数、74 开关总表、日志反馈 | `references/usage.md` |
+| **使用指南**：全命令、参数、74 开关总表、输出体积陷阱、日志反馈 | `references/usage.md` |
 | 深度研究协议：约定、工作包、取证包 vs 判断稿、达标检查 | `references/research-protocol.md` |
 | 约定 / 工作包 / 判断稿模板 | `references/research-templates.md` |
 | 引擎全景：垂直域/社交/学术/本地引擎表 + 路由规则 | `references/engines.md` |

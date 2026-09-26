@@ -390,6 +390,16 @@
     "cost_tier": "free",
     "priority": 48
   },
+  "ddgs_images": {
+    "label": "通用图片",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 34
+  },
   "deezer": {
     "label": "deezer",
     "qps": 2,
@@ -2349,6 +2359,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 33
+  },
+  "wikimedia_commons": {
+    "label": "Wikimedia图库",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
   },
   "wikipedia": {
     "label": "Wikipedia",

@@ -20,8 +20,13 @@ BIN_ARGO = (REPO / "bin" / "argo").read_text(encoding="utf-8")
 
 
 def _dispatch_commands() -> set[str]:
-    """bin/argo 分发表（'命令': ("脚本", ...)）的唯一事实提取。"""
-    return set(re.findall(r'"([a-z_]+)":\s*\("', BIN_ARGO))
+    """bin/argo 分发表（'命令': ("脚本", ...)）的唯一事实提取。
+
+    命令名允许连字符（`local-image`）：提取正则不含 `-` 时，文档里的
+    `argo local-image index` 会被截成 `local` 并报「幻影命令」——问题其实
+    在提取规则比命名规则窄，不在文档。
+    """
+    return set(re.findall(r'"([a-z][a-z_-]*)":\s*\("', BIN_ARGO))
 
 
 class TestUsageDocCommands(unittest.TestCase):
@@ -32,7 +37,7 @@ class TestUsageDocCommands(unittest.TestCase):
                          f"分发表命令未在 usage.md 文档化（补命令节）：{missing}")
 
     def test_doc_commands_are_real(self):
-        doc_cmds = set(re.findall(r"`?argo ([a-z_]+)", USAGE))
+        doc_cmds = set(re.findall(r"`?argo ([a-z][a-z_-]*)", USAGE))
         phantom = doc_cmds - _dispatch_commands()
         self.assertEqual(phantom, set(),
                          f"usage.md 引用了不存在的命令：{phantom}")

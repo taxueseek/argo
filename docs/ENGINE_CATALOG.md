@@ -6,8 +6,8 @@
 
 ## 一、总量与口径
 
-- **收录 253 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 219 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **收录 255 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **开箱可用 221 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 21 个**：`bocha`、`bocha_ai`、`byted`、`em_miaoxiang`、`exa`、`keenable`、`octen`、`parallel`、`qweather`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 10 个**：`brave`、`europeana`、`felo`、`jikan`、`local_goodreads`、`metaso`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 240 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 12 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 242 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 12 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 13 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -141,13 +141,14 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `unpaywall` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_UNPAYWALL_EMAIL | 显式调用（--engine） | Unpaywall 开放获取定位（DOI → 是否有合法免费全文及链接；需 ARGO_UNPAYWALL_EMAIL） |
 | `zbmath` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | zbMATH Open 数学文献索引（含 MSC 分类号，免 key） |
 
-### 其他垂直（24）
+### 其他垂直（26）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
 | `aviation_weather` | 可直接用 | 免费 | 不限 | — | 域 aviation_weather | 航空气象（METAR 实时例行天气报告，按 ICAO 机场代码查询） |
 | `clawhub` | 可直接用 | 免费 | 不限 | — | 域 skill_search | ClawHub 技能生态聚合搜索（OpenClaw 原生 + skills.sh 条目，免认证，下载量口径） |
 | `coingecko` | 可直接用 | 免费 | 不限 | — | 域 crypto_search、语义画像命中 | CoinGecko 币种搜索（免认证） |
+| `ddgs_images` | 可直接用 | 免费 | 不限 | — | 域 image_search | 通用图片搜索（免 Key，覆盖全网图片；无版权标注，发布前须自行核对） |
 | `electricity_maps` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 全球电网分区目录（zones 免 key） |
 | `eu_opendata` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 欧盟开放数据目录（24 语言元数据） |
 | `fr_opendata` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 法国政府开放数据目录（data.gouv.fr） |
@@ -165,6 +166,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `urban_dictionary` | 可直接用 | 免费 | 不限 | — | 域 meme_slang、语义画像命中 | Urban Dictionary（英文俚语定义与例句，官方 API） |
 | `weather` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 天气查询（免 Key：wttr.in 主用 + Open-Meteo 兜底，当前+未来预报） |
 | `weather_cn` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 中国天气网城市实况（城市联想取 cityid → sk JSON，免认证，两步） |
+| `wikimedia_commons` | 可直接用 | 免费 | 不限 | — | 域 image_search | Wikimedia Commons 通用图库（免 key，CC 素材，原图直链+许可+宽高） |
 | `datagov_uk` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | data.gov.uk 英国政府开放数据目录（CKAN，免 key） |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 已停用 | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
@@ -511,7 +513,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `geo_places` | `local_openstreetmap` | `local_openstreetmap`、`wikipedia`、`wikidata`、`zh_wikipedia` |
 | `org_entity` | `wikidata` | `wikidata`、`wikipedia`、`baidu_baike`、`zh_wikipedia`、`ror`、`gleif` |
 | `media_search` | `itunes` | `itunes`、`musicbrainz`、`netease_music`、`deezer`、`listenbrainz` |
-| `image_search` | `openverse` | `openverse`、`anysearch` |
+| `image_search` | `openverse` | `openverse`、`wikimedia_commons`、`ddgs_images`、`anysearch` |
 | `entity_search` | `wikidata` | `baidu_baike`、`wikidata`、`wikipedia`、`zh_wikipedia` |
 | `zhihu_user_data` | `zhihu_user` | `zhihu_user` |
 | `zhihu_content` | `zhihu` | `zhihu`、`zhihu_global`、`anysearch` |
@@ -542,7 +544,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 253 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 255 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

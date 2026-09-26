@@ -291,6 +291,9 @@ Usage:
   argo job       "query"          招聘岗位多平台聚合（BOSS/猎聘/智联/前程无忧/597/今日招聘）
   argo preflight "url1 url2 ..."  批量 URL 预检（登录墙/已死/已归档分类，--probe 联网探测）
   argo cite "doi" [doi...]         DOI → 引用条目（GB/T 7714/顺序编码/APA/BibTeX，--style 可选）
+  argo local-image index [目录...]  本地图片建库（Vision：图中文字+标签+特征指纹）
+  argo local-image search "词"      搜本地图片（--similar-to 给图找相似；--sheet 出联络表）
+  argo local-image stats            索引概况
   argo mcp       {{status|inject|undo}}   多客户端 MCP 一键注入/诊断/还原
   argo paths [--check] [--migrate]     路径自省 / 本机自检 / 搬历史状态到惯例目录
   argo stats [-n N]                    使用日志与反馈状态（本地遥测只读出口）
@@ -364,7 +367,11 @@ def main():
         # 第一问，且不必进 MCP 工具面（与 answer/watch 同类）。
         "paths":     ("argo_paths.py", []),
         # cite：DOI → 引用条目（GB/T 7714/APA/BibTeX，Crossref+OpenAlex，免 key）
-        "cite":      ("cite_cli.py",  []),
+        "cite":     ("cite_cli.py",  []),
+        # local-image：本地图片检索（Vision 索引 + 以图找相似 + 联络表）。
+        # 网络图走 `argo search`（image_search 域），本地图走这里——两者是
+        # 「全网找图」与「在自己素材里找图」的分工，不重叠。
+        "local-image": ("local_image.py", []),
     }
 
     if sub not in scripts:

@@ -206,6 +206,11 @@ from engines_builders import (
 from engines_builders_batch10 import (  # noqa: F401
     _build_zhihu_global_engine as _build_zhihu_global_engine_v2,
 )
+# 批次十一（engines_builders_batch11）：图源补强。Wikimedia Commons 的
+# query.pages 是 pageid 字典，声明式 output_map 取不到字段，必须有 builder。
+from engines_builders_batch11 import (  # noqa: F401
+    _build_wikimedia_commons_engine,
+)
 
 logger = logging.getLogger("unified_search.engines")
 if not logger.handlers:
@@ -427,6 +432,7 @@ _BUILDERS = {
     "openligadb": _build_openligadb_engine,
     "artic": _build_artic_engine,
     "cleveland": _build_cleveland_engine,
+    "wikimedia_commons": _build_wikimedia_commons_engine,
     "tvmaze": _build_tvmaze_engine,
     "jikan": _build_jikan_engine,
     "deezer": _build_deezer_engine,
