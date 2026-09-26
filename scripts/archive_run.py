@@ -89,9 +89,16 @@ _BEARER_RE = re.compile(r"(bearer\s+)[A-Za-z0-9._\-]+", re.IGNORECASE)
 # 厂商密钥前缀：不少上游在错误体里回显密钥片段
 # （如 OpenAI `Incorrect API key provided: sk-...`），而它既不是 query 参数
 # 也不是 Bearer 头，前两类规则都漏。前缀取主流按段可辨识者。
+# Google/AWS/Slack 三家的 key 不带统一分隔符（实测 AIzaSy…、AKIA…、xoxb-…
+# 在上面「前缀+分隔符」规则下全部漏过），按各家官方形态单列：AIza 起头总长
+# 39 字符、AKIA 后接 16 位大写数字、xoxb- 后接数字段。同一文本里兄弟 key
+# 各自独立命中，re.sub 全量替换。
 _VENDOR_KEY_RE = re.compile(
-    r"\b(?:sk|rk|pk|gsk|xai|hf|ghp|gho|github_pat|glpat|AIza|ya29)"
-    r"[-_][A-Za-z0-9._\-]{8,}")
+    r"\b(?:sk|rk|pk|gsk|xai|hf|ghp|gho|github_pat|glpat|ya29)"
+    r"[-_][A-Za-z0-9._\-]{8,}"
+    r"|\bAIza[A-Za-z0-9_\-]{30,}"
+    r"|\bAKIA[A-Z0-9]{16}"
+    r"|\bxoxb-[A-Za-z0-9\-]{20,}")
 _HOME_PATH_RE = re.compile(
     r"([A-Za-z]:\\Users\\[^\\\s:\"]+"      # Windows：C:\Users\<name>
     r"|/Users/[^/\s:\"]+"                  # macOS

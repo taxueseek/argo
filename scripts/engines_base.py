@@ -777,20 +777,32 @@ def _load_parse_maps() -> dict:
 
 
 def _detect_anti_bot(html: str) -> bool:
-    """检测反爬/拦截页面。只检查关键区域，避免正文误判。"""
+    """检测反爬/拦截页面。head 区扫通用标记 + 全文扫高特异性标记。"""
     if not html:
         return True
     if len(html.strip()) < 500:
         return True
-    # 只在前 2000 字符（head 区域）检测反爬标记
-    head_section = html[:2000].lower()
+    lowered = html.lower()
+    # 通用标记只在前 2000 字符（head 区域）检测：captcha/challenge 这类词
+    # 出现在正文属合法语义，全文扫会误杀
     anti_bot_head = [
         "captcha", "challenge", "cf-browser-verification",
         "access denied", "rate limit", "too many requests",
         "checking your browser", "ddos-guard", "perimeterx",
     ]
     for marker in anti_bot_head:
-        if marker in head_section:
+        if marker in lowered[:2000]:
+            return True
+    # 全文级高特异性标记：实测 DDG challenge 页以 HTTP 202 返回且文案不在
+    # head 区（首个 challenge 字样在 2600+ 字符处，urllib 回退路径会把这种
+    # body 当正常页送进解析），head 扫描必然漏。这张表只收带站点专名/语境
+    # 的短语——不带专名的词（如 anomaly，会在讨论异常检测的结果页正文里
+    # 合法出现）禁止进表，否则误杀正常页。
+    for marker in (
+        "bots use duckduckgo",                   # DDG challenge 页实测文案
+        "select all squares containing a duck",  # 同上，点选验证题干
+    ):
+        if marker in lowered:
             return True
     # 如果页面有大量链接且内容充实，判定为正常结果页
     if len(html) > 50000:
@@ -802,6 +814,34 @@ def _detect_anti_bot(html: str) -> bool:
         except Exception:
             pass
     return False
+
+
+# SERP 垃圾结果守卫的引擎范围（冻结）：仅覆盖无 API 的网页 SERP 引擎——它们
+# 解析上游 HTML 页，最易被缓存 SERP / 无关结果静默命中；API 引擎结果自带结构化
+# 契约，不走这张表。判定规则与逃生门（ARGO_SERP_GUARD=0）在 serp_guard 单点。
+SERP_GUARD_ENGINES = frozenset({
+    "local_bing", "local_google", "local_baidu", "local_sogou",
+    "local_yandex", "local_startpage", "local_mojeek", "local_duckduckgo",
+})
+
+
+def _serp_guard_apply(engine_name: str, query: str,
+                      results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """守卫接线：命中引擎且整页判垃圾 → 返回 []。
+
+    判垃圾是「结果无关」不是「引擎故障」：不写 note_failure（结果无关不该进
+    熔断归因），也不伪装成成功——返回诚实空。serp_guard 导入失败按不拦截处理
+    （fail-open）：守卫自身故障不能放大成搜索故障。
+    """
+    if not results or engine_name not in SERP_GUARD_ENGINES:
+        return results
+    try:
+        from serp_guard import is_junk_serp
+    except ImportError:
+        return results
+    if is_junk_serp(query, results):
+        return []
+    return results
 
 
 def _build_html_engine(spec: dict[str, Any]) -> Any:
@@ -939,7 +979,9 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
                         "score": default_score,
                         "source": engine_name,
                     }]
-                    return results
+                    # 条目页直连分支同样过守卫：SERP 引擎落到这个分支说明页面
+                    # 不是结果列表（重定向/拦截页），单条「页面标题」恰是垃圾
+                    return _serp_guard_apply(engine_name, query, results)
             except Exception:
                 pass
 
@@ -966,7 +1008,7 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
                 results.append({"title": title, "url": url, "snippet": snippet, "score": round(score, 3), "source": engine_name})
             except Exception:
                 continue
-        return results[:n]
+        return _serp_guard_apply(engine_name, query, results[:n])
     return _engine
 
 # ── 通用解析器 ─────────────────────────────────────────────────────────────────
