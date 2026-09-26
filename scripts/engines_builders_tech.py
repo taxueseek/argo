@@ -11,7 +11,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 from engines_base import (safe_search, _run, _resolve, _get_path, _coerce_field, rank_score,
@@ -22,8 +24,154 @@ logger = logging.getLogger("unified_search.engines")
 
 # ── Exa 专用引擎 ──────────────────────────────────────────────────────────────
 
+_EXA_MCP_URL = "https://mcp.exa.ai/mcp"
+
+# Exa MCP 文本应答的字段行。Published 的实际标签是 "Published Date"，
+# 归一成 published；Highlights 可能折行，由解析器把续行并入上一字段。
+_EXA_BLOCK_LABEL_RE = re.compile(
+    r"^(Title|URL|Published(?:\s+Date)?|Author|Highlights?):\s*(.*)$")
+
+
+def _parse_exa_text_blocks(text: str) -> list[dict[str, str]]:
+    """把 Exa MCP web_search_exa 的 text content 解析成字段 dict 列表。
+
+    应答文本是逐条目的标签行（Title:/URL:/...），块以新的 Title: 行开始；
+    不属于任何标签行的非空行是上一字段的续行（Highlights 摘要常被折行）。
+    """
+    blocks: list[dict[str, str]] = []
+    cur: dict[str, str] = {}
+    last_key = ""
+    for line in (text or "").splitlines():
+        m = _EXA_BLOCK_LABEL_RE.match(line.strip())
+        if m:
+            key = m.group(1).split()[0].lower()  # "Published Date" → published
+            val = m.group(2).strip()
+            if key == "title" and cur:
+                blocks.append(cur)
+                cur = {}
+            if val:
+                cur[key] = val
+            else:
+                cur.setdefault(key, "")
+            last_key = key
+        elif line.strip() and cur and last_key:
+            cur[last_key] = (cur[last_key] + " " + line.strip()).strip()
+    if cur:
+        blocks.append(cur)
+    return blocks
+
+
+def _parse_mcp_wire(raw: str) -> dict | None:
+    """把 MCP 应答解析成 JSON-RPC dict；SSE 与纯 JSON 两种形态都支持。
+
+    MCP 的 HTTP 传输没有强约定：text/event-stream 时应答藏在 data: 行里，
+    application/json 时整个 body 就是一个 JSON-RPC 响应。两者都必须吃下，
+    否则同一通道会随服务端 content-type 切换而「时好时坏」。SSE 场景下取
+    第一个含 result/error 的 data 行（MCP 单请求-单应答，不做多事件聚合）。
+    """
+    text = (raw or "").strip()
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+            return data if isinstance(data, dict) else None
+        except ValueError:
+            return None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[len("data:"):].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            obj = json.loads(payload)
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and ("result" in obj or "error" in obj):
+            return obj
+    return None
+
+
+def _exa_mcp_keyless(query: str, n: int, to: float,
+                     spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """exa 免 key 匿名通道：POST Exa 托管 MCP，调 web_search_exa 工具。
+
+    任何一层失败（网络 / 非 MCP 应答 / JSON-RPC 错误 / isError）都返回
+    带 error 的记录——匿名通道是免费的兼容路径，坏了必须让调度层看见，
+    静默返回 [] 会和「真没结果」混淆并掩盖通道失效。
+    """
+    body = json.dumps({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "web_search_exa",
+                   "arguments": {"query": query, "numResults": min(n, 10)}},
+    }).encode("utf-8")
+    headers = {"Content-Type": "application/json",
+               "Accept": "application/json, text/event-stream",
+               # mcp.exa.ai 在 Cloudflare 之后：默认 Python-urllib UA 直接
+               # 403（实测 2026-09-26），必须带浏览器 UA
+               "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                             "AppleWebKit/537.36 (KHTML, like Gecko) "
+                             "Chrome/120.0.0.0 Safari/537.36"}
+    req = urllib.request.Request(_EXA_MCP_URL, data=body, headers=headers)
+    try:
+        with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
+            raw = resp.read().decode("utf-8", "replace")
+    except Exception as e:
+        logger.warning(f"exa 匿名 MCP 通道失败: {e}")
+        return [{"error": f"exa mcp: {type(e).__name__}: {e}", "source": "exa"}]
+    data = _parse_mcp_wire(raw)
+    if not isinstance(data, dict):
+        return [{"error": "exa mcp: 响应不是可解析的 MCP 应答（SSE/JSON 均失败）",
+                 "source": "exa"}]
+    mcp_err = _mcp_error_of(data)
+    if mcp_err:
+        logger.warning(f"exa 匿名 MCP 上游错误: {mcp_err}")
+        return [{"error": mcp_err, "source": "exa"}]
+    result = data.get("result")
+    if not isinstance(result, dict):
+        return [{"error": "exa mcp: 响应缺少 result 字段（非 tools/call 应答）",
+                 "source": "exa"}]
+    text = "".join(
+        str(c.get("text", "")) for c in (result.get("content") or [])
+        if isinstance(c, dict))
+    results = []
+    for i, blk in enumerate(_parse_exa_text_blocks(text)[:max(1, n)]):
+        url = blk.get("url", "")
+        title = (blk.get("title") or url).strip()
+        if not url and not title:
+            continue
+        r: dict[str, Any] = {
+            "title": title[:200],
+            "url": url,
+            "snippet": (blk.get("highlights") or "").strip()[:400],
+            "source": "exa",
+            "score": rank_score(0.75, len(results)),
+        }
+        # 匿名通道无值时给字面 "N/A"（实测 2026-09-26），等于没有，不能
+        # 当成真实的发布时间/作者写进结果
+        published = blk.get("published", "").strip()
+        if published and published.lower() != "n/a":
+            r["published_at"] = published
+        author = blk.get("author", "").strip()
+        if author and author.lower() != "n/a":
+            r["metadata"] = {"author": author}
+        results.append(r)
+    return results
+
+
 def _build_exa_engine(spec: dict[str, Any]) -> Any:
-    """Exa 语义搜索专用引擎（embedding 匹配 + 内容摘要）"""
+    """Exa 语义搜索专用引擎（embedding 匹配 + 内容摘要）。
+
+    按是否有 key 分两级通道：
+      - 有 key（ARGO_EXA_API_KEY / EXA_API_KEY）→ 官方 REST /search（原路径，
+        字段语义不变）。
+      - 无 key → Exa 托管 MCP 匿名通道（_exa_mcp_keyless）：POST
+        https://mcp.exa.ai/mcp 调 web_search_exa，免 key 匿名可用
+        （2026-09-26 实测）。通道失效（改版/加鉴权/限流）时表现为带 error
+        的记录而非空结果，调度层据此切换备选源。
+    """
     timeout = spec.get("timeout", 15)
 
     @safe_search
@@ -31,9 +179,7 @@ def _build_exa_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         api_key = get_env(["ARGO_EXA_API_KEY", "EXA_API_KEY"])
         if not api_key:
-            logger.warning("exa 密钥未设置（ARGO_EXA_API_KEY / EXA_API_KEY）")
-            return [{"error": "exa: ARGO_EXA_API_KEY / EXA_API_KEY 未设置",
-                     "source": "exa"}]
+            return _exa_mcp_keyless(query, n, to, spec)
         url = "https://api.exa.ai/search"
         body = json.dumps({
             "query": query,
@@ -531,9 +677,95 @@ def _build_google_scholar_engine(spec: dict[str, Any]) -> Any:
 # （实测 "AI" 查询会返回 0 条）。CJK 词不受此门槛限制。
 MIN_LATIN_TERM_LEN = 2
 
+_SOV2EX_API = "https://www.sov2ex.com/api/search"
+
+
+def _sov2ex_search(query: str, n: int, timeout: float,
+                   engine: str) -> list[dict[str, Any]] | None:
+    """第一级来源：sov2ex 社区全文搜索（社区维护的 V2EX 全文索引）。
+
+    GET /api/search?q=&size=，返回 {total, hits:[{_id, title, content,
+    created, _score, highlight?}]}（2026-09-26 实测）。命中产出带真实
+    /t/<id> 链接的全文结果；**空结果 / 失败 / 响应不可解析一律返回 None**，
+    由调用方落回官方 API 候选池路径——None 是「此级无产出」的信号，
+    不是最终结果，最终诚实空由池路径给出。
+
+    字段读取兼容 _source 包裹：sov2ex 底层是 Elasticsearch，部分部署形态
+    会把字段收进 hits[]._source，两种形态都认，避免索引端调整即失效。
+    """
+    q = (query or "").strip()
+    if not q:
+        return None
+    u = f"{_SOV2EX_API}?{urllib.parse.urlencode({'q': q, 'size': n})}"
+    raw = _http_get_raw(u, {"Accept": "application/json"}, timeout, engine=engine)
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    hits = data.get("hits")
+    if not isinstance(hits, list) or not hits:
+        return None
+    results: list[dict[str, Any]] = []
+    for i, hit in enumerate(hits[:max(1, n)]):
+        if not isinstance(hit, dict):
+            continue
+        src = hit.get("_source") if isinstance(hit.get("_source"), dict) else hit
+        tid = str(hit.get("_id") or src.get("id") or "").strip()
+        if not tid:
+            continue
+        # snippet 优先吃 highlight（查询词命中片段，更相关），缺失再退整段正文
+        hl = hit.get("highlight")
+        snippet = ""
+        if isinstance(hl, dict):
+            frag = hl.get("content")
+            if isinstance(frag, list) and frag:
+                snippet = " … ".join(str(x) for x in frag)
+            elif isinstance(frag, str):
+                snippet = frag
+        if not snippet:
+            snippet = str(src.get("content") or "")
+        snippet = re.sub(r"</?em>", "", snippet).strip()
+        published = ""
+        try:
+            published = datetime.fromtimestamp(
+                int(src.get("created"))
+            ).astimezone().isoformat(timespec="seconds")
+        except (TypeError, ValueError, OSError):
+            published = ""
+        r: dict[str, Any] = {
+            "title": (str(src.get("title") or "").strip() or tid)[:120],
+            "url": f"https://www.v2ex.com/t/{tid}",
+            "snippet": snippet[:300],
+            "source": "v2ex",
+            # sov2ex 的 _score 是 BM25 分，量纲与 argo 的 0-1 分不可比，
+            # 不透传；上游相关性顺序用序位衰减编码，原始分进 social_meta
+            "score": rank_score(0.85, len(results)),
+            "social_meta": {
+                "platform": "v2ex",
+                "content_type": "topic",
+                "url_verifiable": True,
+                "retrieval_mode": "sov2ex_fulltext",
+                "sov2ex_score": hit.get("_score"),
+            },
+        }
+        if published:
+            r["published_at"] = published
+        results.append(r)
+    return results or None
+
 
 def _build_v2ex_engine(spec: dict[str, Any]) -> Any:
-    """V2EX 社区搜索（官方 API + 本地相关性过滤）
+    """V2EX 社区搜索（sov2ex 全文优先 + 官方 API 候选池降级）
+
+    两级来源，按可用性互补：
+      1. sov2ex 社区全文搜索（_sov2ex_search）——能答「全文关键词」问题，
+         命中即返回，不再消耗官方 API 配额；
+      2. 官方开放 API 候选池 + 本地相关性过滤——sov2ex 空结果/失败/超时
+         时的降级路径，语义保持不变。
 
     为什么不是「爬 /search 页」：V2EX 的站内搜索需要登录态，未登录访问
     `/search?q=` 会 302 到 `/go/search`——那是「搜索引擎技术研究」**节点页**，
@@ -543,13 +775,13 @@ def _build_v2ex_engine(spec: dict[str, Any]) -> Any:
     「装机 配置 预算」）。coverage 仍报 status=ok/returned=10，
     失败伪装成成功，破坏 argo「结果可核验」的证据完整链路。
 
-    现方案走官方开放 API（只读、无鉴权、配额 600 次/[窗口]）：
+    降级路径走官方开放 API（只读、无鉴权、配额 600 次/[窗口]）：
       - /api/topics/hot.json      热门主题
       - /api/topics/latest.json   最新主题
       - /api/replies/show.json    主题回复（按 topic_id）
     API 没有搜索端点，因此策略是「拉候选池 → 在本地按查询词做相关性过滤
     → 按命中强度排序」。这样产出的每条结果都带真实 /t/<id> 链接与真正文，
-    可被 fetch 复核。若候选池内无任何条目与查询相关，**诚实返回空列表**
+    可被 fetch 复核。若两级来源都无任何条目与查询相关，**诚实返回空列表**
     （调用方据此标记该引擎无结果），而不是回落到伪造占位结果。
     """
     timeout = spec.get("timeout", 10)
@@ -557,6 +789,11 @@ def _build_v2ex_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         to = _timeout or timeout
+
+        # ── 第一级：sov2ex 全文搜索，命中即返回（省官方 API 配额）────
+        sov2ex_hits = _sov2ex_search(query, n, to, spec.get("_name", "v2ex"))
+        if sov2ex_hits:
+            return sov2ex_hits
 
         def _fetch_json(path: str, params: dict | None = None):
             u = f"https://www.v2ex.com{path}"
@@ -1000,6 +1237,171 @@ def _build_osv_engine(spec: dict[str, Any]) -> Any:
                 "score": rank_score(0.85, i),
             })
         return results
+    return _engine
+
+
+# ── TinEye 反向图片搜索（以图搜图，免 key）────────────────────────────────
+
+def _build_tineye_engine(spec: dict[str, Any]) -> Any:
+    """TinEye 反向图片搜索（公开 JSON 端点，免 key）。
+
+    填补的空白：argo 此前没有任何反搜图能力——通用网页引擎只吃文字查询，
+    「这张图出自哪里 / 谁在用这张图 / 图片最早出现在哪」一类问题无源可查。
+    TinEye 以图片指纹检索其历史索引，返回出现过该图的页面。
+
+    用法约束：**query 必须是公网图片 URL（http(s):// 开头）**，不是关键词——
+    本引擎不做关键词搜索。喂文字查询返回带提示的 error 记录（模型能从
+    提示里纠正用法），诚实失败优于空结果或瞎猜。
+
+    端点 GET https://tineye.com/api/v1/result_json/?url={image_url}，
+    响应 matches[]：{image_url, domain, score(0-100 相似度), width, height,
+    backlinks[]: {url(图片地址), backlink(出现该图的页面), crawl_date}}
+    （字段名与 SearXNG 适配器/SAC_search tineye.ts 一致）。
+    """
+    timeout = spec.get("timeout", 15)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = (query or "").strip()
+        if not re.match(r"(?i)^https?://", q):
+            return [{"error": "tineye: 反搜图引擎要喂图片 URL（http(s):// 开头）"
+                              f"作为查询，收到的是关键词「{q[:50]}」",
+                     "source": "tineye"}]
+        # 图片 URL 里的 ://?& 必须整体编码，否则会被当成 query 参数边界
+        u = ("https://tineye.com/api/v1/result_json/?url="
+             + urllib.parse.quote(q, safe=""))
+        raw = _http_get_raw(u, {"Accept": "application/json"}, to,
+                            engine=spec.get("_name", ""))
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        matches = data.get("matches") if isinstance(data, dict) else None
+        if not isinstance(matches, list):
+            return []
+        results: list[dict[str, Any]] = []
+        seen_pages: set[str] = set()
+        for m in matches:
+            if len(results) >= max(1, n):
+                break
+            if not isinstance(m, dict):
+                continue
+            # 一个 match 可带多个 backlink（同一图多次收录）：取第一个有
+            # 页面地址的；同一页面被多个 match 命中时只保留首条
+            bl = next((b for b in (m.get("backlinks") or [])
+                       if isinstance(b, dict) and (b.get("backlink") or b.get("url"))), None)
+            if not bl:
+                continue
+            page_url = str(bl.get("backlink") or bl.get("url") or "")
+            if not page_url or page_url in seen_pages:
+                continue
+            seen_pages.add(page_url)
+            try:
+                sim = float(m.get("score"))
+            except (TypeError, ValueError):
+                sim = 0.0
+            domain = str(m.get("domain") or "").strip()
+            try:
+                w, h = int(m.get("width") or 0), int(m.get("height") or 0)
+            except (TypeError, ValueError):
+                w = h = 0
+            crawl = str(bl.get("crawl_date") or "").strip()
+            bits = [b for b in (
+                f"相似度 {sim:g}%" if sim > 0 else "",
+                f"来源 {domain}" if domain else "",
+                f"{w}x{h}" if w and h else "",
+                f"收录 {crawl[:10]}" if crawl else "",
+            ) if b]
+            # TinEye score 是 0-100 相似度：归一到 0-1 当档位分再做序位衰减；
+            # 上游没给分（0）时退固定档位，避免 0 分被下游当无效分
+            base = min(sim / 100.0, 1.0) if sim > 0 else 0.7
+            results.append({
+                "title": (domain or "TinEye 图片匹配")[:120],
+                "url": page_url,
+                "snippet": " · ".join(bits),
+                "source": "tineye",
+                "score": rank_score(base, len(results)),
+                "metadata": {
+                    "image_url": str(m.get("image_url") or ""),
+                    "similarity": sim,
+                    "domain": domain,
+                    "width": w,
+                    "height": h,
+                    "crawl_date": crawl,
+                },
+            })
+        return results
+    return _engine
+
+
+# ── Bing RSS 通用网页搜索（免 key，稳定备胎）─────────────────────────────
+
+def _build_bing_rss_engine(spec: dict[str, Any]) -> Any:
+    """Bing 网页搜索 RSS 出口（免 key、免 HTML 解析的稳定备胎）。
+
+    与 local_bing 的分工：local_bing 解析结果页 HTML，Bing 一改版式就
+    全军覆没（argo 历史上 local_bing 因改版多次返工），且 HTML 路径对
+    反爬更敏感；本引擎走 Bing 官方 format=rss 出口——字段语义由 RSS 2.0
+    规范保证，没有版式可变，作为 local_bing 被改版/风控打断时的兜底源。
+    代价：单页结果少（≤20 条）、不支持 setlang/mkt 本地化参数，中文场景
+    优先 local_bing，这里保底；两者可同跑互补。
+
+    GET https://www.bing.com/search?q={q}&format=rss&count={n≤20}，
+    RSS item 的 title/link/description/pubDate；description 里的 HTML
+    标签剥掉。pubDate 是 RFC 822（如 Wed, 24 Sep 2026 08:00:00 GMT），
+    解析失败原样透传，不丢时间信息。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = (query or "").strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        u = (f"https://www.bing.com/search?q={urllib.parse.quote(q)}"
+             f"&format=rss&count={min(max(int(n), 1), 20)}")
+        raw = _http_get_raw(u, {"Accept": "application/rss+xml, application/xml, text/xml"},
+                            to, engine=spec.get("_name", ""))
+        if not raw:
+            return []
+        # 编码已由统一 GET 出口按 utf-8 errors=replace 解码；声明行剥掉——
+        # 带 encoding 声明的 str 会被 ET.fromstring 拒收，且声明里的编码
+        # 与解码后的实际内容已无关
+        text = re.sub(r"^\s*<\?xml[^>]*\?>", "", raw.strip())
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError:
+            return []
+        # .//item 不依赖 channel 层级；item 标签本身无命名空间（rss 的
+        # xmlns 声明只修饰带前缀的扩展元素，不影响普通子标签查找）
+        out: list[dict[str, Any]] = []
+        for i, item in enumerate(root.findall(".//item")[:max(1, int(n))]):
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            if not title or not link:
+                continue
+            desc = re.sub(r"<[^>]+>", "",
+                          item.findtext("description") or "").strip()
+            r: dict[str, Any] = {
+                "title": title[:200],
+                "url": link,
+                "snippet": desc[:300],
+                "source": "bing_rss",
+                "score": rank_score(0.7, i),
+            }
+            pub = (item.findtext("pubDate") or "").strip()
+            if pub:
+                try:
+                    r["published_at"] = parsedate_to_datetime(
+                        pub).astimezone().isoformat(timespec="seconds")
+                except (TypeError, ValueError):
+                    r["published_at"] = pub
+            out.append(r)
+        return out
     return _engine
 
 

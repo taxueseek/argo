@@ -73,6 +73,22 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "local_startpage": "web_general",
     "local_google": "web_general",
     "local_yandex": "web_general",
+    # 批次十（2026-09-26）：toutiao/local_quark 循 wechat_sogou 先例归
+    # web_general，中文能力由 ENGINE_LANGS 承担；bing_rss 是 local_bing 的
+    # RSS 稳定出口；tineye 反搜图不属于任何既有能力族，归 misc_vertical。
+    "toutiao": "web_general",
+    "local_quark": "web_general",
+    "bing_rss": "web_general",
+    "tineye": "misc_vertical",
+    # 购物族：SAC 式 DDG site: 包装的电商横评。单列一族有两个理由：
+    # ①web_general 的同族 max_per_family=2 槽位不该被六个电商源挤占；
+    # ②「比价/购买」意图与「网页检索」的路由组合策略不同，族内可枚举。
+    "jd": "shopping",
+    "taobao": "shopping",
+    "pdd": "shopping",
+    "dangdang": "shopping",
+    "suning": "shopping",
+    "kaola": "shopping",
     # 学术
     "arxiv": "academic",
     "openalex": "academic",
@@ -361,6 +377,9 @@ FAMILY_LABELS: dict[str, str] = {
     # ②语言由 langs 声明、按查询语言选源，需要族内可枚举；
     # ③它是实时流，不能参与通用 combo 回填（同 hot_trending）。
     "world_news": "本地新闻流",
+    # 购物（2026-09-26 批次十）：电商站内搜索登录墙/强反爬，六源均为 DDG
+    # site: 语法包装，回答「某商品在某平台的在售/价格」，不是通用网页检索。
+    "shopping": "购物",
 }
 
 
@@ -393,6 +412,10 @@ ENGINE_LANGS: dict[str, list[str]] = {
     "weibo": ["zh"], "baidu_baike": ["zh"], "moegirl": ["zh"],
     "cn_encyclopedia": ["zh"], "gov_policy": ["zh"], "cn_ai_news": ["zh"],
     "wechat_sogou": ["zh"], "baidu_hot": ["zh"], "toutiao_hot": ["zh"],
+    # 批次十（2026-09-26）：中文源（tineye 反搜图/bing_rss 语言中立，走默认 ["*"]）
+    "toutiao": ["zh"], "local_quark": ["zh"],
+    "jd": ["zh"], "taobao": ["zh"], "pdd": ["zh"],
+    "dangdang": ["zh"], "suning": ["zh"], "kaola": ["zh"],
     "bilibili_hot": ["zh"], "juejin": ["zh"], "cnblogs": ["zh"],
     "wenshu": ["zh"], "kor_law": ["ko"],
     # 中英双语（ja/ko 无召回）：金融/中文 web API 源

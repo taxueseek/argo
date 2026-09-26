@@ -127,6 +127,9 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
     quota_mark = quota_marks.get(engine_id)
     quota_exhausted = bool(quota_mark)
     # 自动路由可用条件（含后端依赖：缺 xhs/yt-dlp 这类工具时不该进路由）
+    # explicit_only 排除在外：声明即「不进自动路由，只等显式 --engine」
+    # （--routable-only 的帮助文案与 available_engines 同一口径）。此前漏判，
+    # 旧显式源恰好被 env/dep 门挡住没暴露；toutiao（免 key 免依赖）把它炸出。
     routable = (
         config_enabled
         and allowed
@@ -134,6 +137,7 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
         and dep_ok
         and not blocked
         and not quota_exhausted
+        and not bool(spec.get("explicit_only"))
     )
     status = "ready"
     if not config_enabled:

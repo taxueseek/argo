@@ -15,6 +15,7 @@
 真实可核验链接、相关性过滤有效、无关查询诚实返回空、字段完备。
 """
 
+import json
 import os
 import sys
 
@@ -185,3 +186,132 @@ class TestNoResultsIsHonest:
         monkeypatch.setattr(ebt, "_http_get_raw", lambda u, h, t, engine=None: "not-json")
         eng = ebt._build_v2ex_engine({})
         assert eng("iPhone", n=5) == []
+
+
+# ── sov2ex 全文搜索优先（两级来源）────────────────────────────────────────────
+
+def _sov2ex_body(hits):
+    return json.dumps({"took": 3, "total": len(hits), "hits": hits})
+
+
+class TestSov2exFirstTier:
+    """sov2ex 社区全文搜索是第一级来源，官方 API 池路径是降级备胎。
+
+    锁定三条契约：
+      - sov2ex 命中 → 直接返回全文结果，不得再消耗官方 API 配额；
+      - sov2ex 空 / 失败 / 响应不可解析 → 落回池路径，池路径语义一行不改；
+      - 两级都无相关条目 → 诚实空列表（任何一级都不许伪造结果）。
+    """
+
+    HIT = [{
+        "_id": "10453081",
+        "title": "有人用 Claude Code 吗",
+        "content": "最近在用 Claude Code 写 V2EX 相关的小工具",
+        "created": 1758860000,
+        "_score": 3.42,
+        "highlight": {"content": ["最近在用 <em>Claude</em> <em>Code</em> 写东西"]},
+    }]
+
+    def test_sov2ex_hit_returns_fulltext(self, monkeypatch):
+        calls = []
+
+        def fake(url, headers, timeout, engine=None):
+            calls.append(url)
+            if "sov2ex.com" in url:
+                return _sov2ex_body(self.HIT)
+            raise AssertionError(f"sov2ex 命中后不得再请求 {url}")
+
+        monkeypatch.setattr(ebt, "_http_get_raw", fake)
+        eng = ebt._build_v2ex_engine({})
+        rs = eng("Claude Code", n=5)
+        assert rs, "sov2ex 命中必须产出结果"
+        r = rs[0]
+        assert r["url"] == "https://www.v2ex.com/t/10453081"
+        assert r["title"] == "有人用 Claude Code 吗"
+        assert r["source"] == "v2ex"
+        assert "<em>" not in r["snippet"] and "</em>" not in r["snippet"]
+        assert "Claude" in r["snippet"]
+        assert r["social_meta"]["retrieval_mode"] == "sov2ex_fulltext"
+        assert "sov2ex.com" in calls[0]
+        assert len(calls) == 1
+
+    def test_sov2ex_hit_published_unix_to_iso(self, monkeypatch):
+        from datetime import datetime
+        monkeypatch.setattr(ebt, "_http_get_raw",
+                            lambda u, h, t, engine=None: _sov2ex_body(self.HIT))
+        eng = ebt._build_v2ex_engine({})
+        r = eng("Claude Code", n=5)[0]
+        expect = datetime.fromtimestamp(
+            1758860000).astimezone().isoformat(timespec="seconds")
+        assert r["published_at"] == expect
+
+    def test_sov2ex_highlight_missing_falls_back_to_content(self, monkeypatch):
+        hit = dict(self.HIT[0])
+        del hit["highlight"]
+        monkeypatch.setattr(ebt, "_http_get_raw",
+                            lambda u, h, t, engine=None: _sov2ex_body([hit]))
+        eng = ebt._build_v2ex_engine({})
+        r = eng("Claude Code", n=5)[0]
+        assert "V2EX 相关的小工具" in r["snippet"]
+
+    def test_sov2ex_em_marks_stripped_from_plain_content(self, monkeypatch):
+        hit = dict(self.HIT[0], content="正文里有 <em>Claude</em> 标记", highlight=None)
+        monkeypatch.setattr(ebt, "_http_get_raw",
+                            lambda u, h, t, engine=None: _sov2ex_body([hit]))
+        eng = ebt._build_v2ex_engine({})
+        r = eng("Claude Code", n=5)[0]
+        assert "<em>" not in r["snippet"] and "Claude" in r["snippet"]
+
+    def test_sov2ex_empty_falls_back_to_pool(self, monkeypatch):
+        pool = [_topic(7, "Claude Code 体验", "写 V2EX 插件", "程序员", 3)]
+
+        def fake(url, headers, timeout, engine=None):
+            if "sov2ex.com" in url:
+                return _sov2ex_body([])
+            return json.dumps(pool)
+
+        monkeypatch.setattr(ebt, "_http_get_raw", fake)
+        eng = ebt._build_v2ex_engine({})
+        rs = eng("Claude Code", n=5)
+        assert rs and rs[0]["url"] == "https://www.v2ex.com/t/7"
+        assert rs[0]["social_meta"]["retrieval_mode"] != "sov2ex_fulltext"
+
+    def test_sov2ex_failure_falls_back_to_pool(self, monkeypatch):
+        pool = [_topic(7, "Claude Code 体验", "写 V2EX 插件", "程序员", 3)]
+
+        def fake(url, headers, timeout, engine=None):
+            if "sov2ex.com" in url:
+                return None  # 超时/网络错误在统一 GET 出口已折算为 None
+            return json.dumps(pool)
+
+        monkeypatch.setattr(ebt, "_http_get_raw", fake)
+        eng = ebt._build_v2ex_engine({})
+        assert eng("Claude Code", n=5)[0]["url"] == "https://www.v2ex.com/t/7"
+
+    def test_sov2ex_garbage_falls_back_to_pool(self, monkeypatch):
+        pool = [_topic(7, "Claude Code 体验", "写 V2EX 插件", "程序员", 3)]
+
+        def fake(url, headers, timeout, engine=None):
+            if "sov2ex.com" in url:
+                return "<html>blocked by waf</html>"
+            return json.dumps(pool)
+
+        monkeypatch.setattr(ebt, "_http_get_raw", fake)
+        eng = ebt._build_v2ex_engine({})
+        assert eng("Claude Code", n=5)[0]["url"] == "https://www.v2ex.com/t/7"
+
+    def test_both_tiers_empty_is_honest_empty(self, monkeypatch):
+        def fake(url, headers, timeout, engine=None):
+            if "sov2ex.com" in url:
+                return _sov2ex_body([])
+            return "[]"
+
+        monkeypatch.setattr(ebt, "_http_get_raw", fake)
+        eng = ebt._build_v2ex_engine({})
+        assert eng("Claude Code", n=5) == []
+
+    def test_both_tiers_failing_is_honest_empty(self, monkeypatch):
+        monkeypatch.setattr(ebt, "_http_get_raw",
+                            lambda u, h, t, engine=None: None)
+        eng = ebt._build_v2ex_engine({})
+        assert eng("Claude Code", n=5) == []

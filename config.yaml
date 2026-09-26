@@ -3815,6 +3815,180 @@ engines:
     # 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
     relevance_check: false
     timeout: 10
+  toutiao:
+    type: toutiao
+    enabled: true
+    # 2026-09-26 本机实测 shark 反爬（data=null）——按可达性门声明 explicit_only，
+    # 显式 --engine 可用；他环境验证通过后再晋升自动路由
+    explicit_only: true
+    label: 头条搜索
+    cost_tier: free
+    qps: 1
+    priority: 24
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - chinese
+    - news
+    - realtime
+    desc: 今日头条站内全文搜索（content API，免认证；2026-09-26 本机实测 shark 反爬 data=null，他环境可能可用，空结果诚实透出）
+    timeout: 10
+  local_quark:
+    type: html
+    enabled: true
+    label: 夸克搜索
+    cost_tier: free
+    qps: 2
+    priority: 20
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - chinese
+    - web
+    desc: 夸克搜索（quark.sm.cn HTML，免 key；选择器 2026-09-26 实测三页验证，见 parse_maps.yaml）
+    timeout: 10
+  tineye:
+    type: tineye
+    enabled: true
+    # 反搜图 query 语义特殊（须喂图片 URL），不进通用网页 combo——显式调用
+    explicit_only: true
+    label: TinEye反搜图
+    cost_tier: free
+    qps: 1
+    priority: 30
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - image
+    - reverse_image
+    desc: TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力）
+    timeout: 20
+  bing_rss:
+    type: bing_rss
+    enabled: true
+    # local_bing 的备胎出口：先显式使用观察命中率，再决定是否进通用 combo
+    explicit_only: true
+    label: BingRSS
+    cost_tier: free
+    qps: 5
+    priority: 22
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - web
+    - general
+    desc: Bing 网页搜索 RSS 出口（免 key 免 HTML 解析；local_bing 改版/风控时的稳定备胎）
+    timeout: 10
+  jd:
+    type: ddg_site
+    domain: jd.com
+    enabled: true
+    # 购物族六源同此声明：DDG html 端点本机不可达（连接失败），他环境可用；
+    # 显式 --engine 调用，验证后晋升
+    explicit_only: true
+    label: 京东商品
+    cost_tier: free
+    qps: 1
+    priority: 32
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - shopping
+    - chinese
+    desc: 京东商品搜索（DDG site 语法包装，绕站内登录墙；解析 0 条时自动去 site 前缀兜底）
+    timeout: 8
+  taobao:
+    type: ddg_site
+    domain: taobao.com
+    enabled: true
+    explicit_only: true
+    label: 淘宝天猫商品
+    cost_tier: free
+    qps: 1
+    priority: 32
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - shopping
+    - chinese
+    desc: 淘宝/天猫商品搜索（DDG site:taobao.com 包装，同 SAC taobao.ts 口径）
+    timeout: 8
+  pdd:
+    type: ddg_site
+    domain:
+    - pinduoduo.com
+    - yangkeduo.com
+    enabled: true
+    explicit_only: true
+    label: 拼多多商品
+    cost_tier: free
+    qps: 1
+    priority: 32
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - shopping
+    - chinese
+    desc: 拼多多商品搜索（DDG site 语法双域名 OR 包装，同 SAC pdd.ts 口径）
+    timeout: 8
+  dangdang:
+    type: ddg_site
+    domain: dangdang.com
+    enabled: true
+    explicit_only: true
+    label: 当当商品
+    cost_tier: free
+    qps: 1
+    priority: 32
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - shopping
+    - chinese
+    desc: 当当商品搜索（DDG site 语法包装，图书类目强项）
+    timeout: 8
+  suning:
+    type: ddg_site
+    domain: suning.com
+    enabled: true
+    explicit_only: true
+    label: 苏宁商品
+    cost_tier: free
+    qps: 1
+    priority: 32
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - shopping
+    - chinese
+    desc: 苏宁商品搜索（DDG site 语法包装）
+    timeout: 8
+  kaola:
+    type: ddg_site
+    domain: kaola.com
+    enabled: true
+    explicit_only: true
+    label: 考拉商品
+    cost_tier: free
+    qps: 1
+    priority: 32
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - shopping
+    - chinese
+    desc: 考拉海购商品搜索（DDG site 语法包装）
+    timeout: 8
   weibo_hot:
     type: weibo_hot
     family: hot_trending

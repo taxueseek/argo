@@ -105,6 +105,8 @@ from engines_builders import (
     _build_stackoverflow_engine,
     _build_google_scholar_engine,
     _build_v2ex_engine,
+    _build_tineye_engine,
+    _build_bing_rss_engine,
     _build_ths_hot_engine,
     _build_cls_telegraph_engine,
     _build_em_global_news_engine,
@@ -198,6 +200,14 @@ from engines_builders import (
     _build_qq_music_engine,
     _build_github_engine,
     _build_rss_feed_engine,
+)
+# 批次十（engines_builders_batch10）：engines_builders.py 聚合层暂未转出该模块，
+# 先直连其源模块——engines_builders.py 补转出后可并入上方聚合 import。
+# zhihu_global 用别名：与上方 engines_builders 转出的 cn 旧版同名，F811 门禁
+# 禁止静默重定义；别名让「batch10 取代 cn 版」在注册表处显式可见。
+from engines_builders_batch10 import (  # noqa: F401
+    _build_ddg_site_engine,
+    _build_zhihu_global_engine as _build_zhihu_global_engine_v2,
 )
 
 logger = logging.getLogger("unified_search.engines")
@@ -324,6 +334,8 @@ _BUILDERS = {
     "github": _build_github_engine,
     "google_scholar": _build_google_scholar_engine,
     "v2ex": _build_v2ex_engine,
+    "tineye": _build_tineye_engine,
+    "bing_rss": _build_bing_rss_engine,
     "ths_hot": _build_ths_hot_engine,
     "cls_telegraph": _build_cls_telegraph_engine,
     "twitter_syndication": _build_twitter_syndication_engine,
@@ -342,7 +354,8 @@ _BUILDERS = {
     "open_library": _build_open_library_engine,
     "weread": _build_weread_engine,
     "douban_book": _build_douban_book_engine,
-    "zhihu_global": _build_zhihu_global_engine,
+    "zhihu_global": _build_zhihu_global_engine_v2,  # 补强版在 batch10（候选池取满 + 错误行动提示；cn 版被取代，cn 冻结在行数门禁上限）
+    "ddg_site": _build_ddg_site_engine,
     "zhihu_user": _build_zhihu_user_engine,
     "fred": _build_fred_engine,
     "fx_rate": _build_fx_rate_engine,

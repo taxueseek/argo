@@ -55,12 +55,17 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_intl.py": (
         1220, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异"),
     "scripts/engines_builders_tech.py": (
-        1102, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段"),
+        1504, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
+              "2026-09-26 批次十增强净增 +402：sov2ex 一级全文来源（v2ex 就地升级）、"
+              "tineye/bing_rss 新引擎、exa 免 key 匿名通道——与原逐源一段同性质，"
+              "拆出只会把同一张表切碎（新引擎的下一站是 batch 模块）"),
     "scripts/fetch_v3.py": (
         1783, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面"),
     "scripts/engines_base.py": (
-        1440, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起"),
+        1482, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+              "2026-09-26 +42：SERP 垃圾守卫接线（守卫本体独立在 serp_guard.py，此处只留"
+              "冻结集+调用点）、反爬全文级标记（DDG challenge 实测）、key 脱敏三形态兜底"),
     "scripts/cache.py": (
         1356, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行）"),

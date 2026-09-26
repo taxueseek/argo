@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 257 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 219 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **收录 267 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **开箱可用 229 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 21 个**：`bocha`、`bocha_ai`、`byted`、`em_miaoxiang`、`exa`、`keenable`、`octen`、`parallel`、`qweather`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 14 个**：`brave`、`europeana`、`felo`、`jikan`、`local_goodreads`、`local_google`、`local_mojeek`、`local_startpage`、`local_yandex`、`metaso`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 10 个**：`datagov_uk`、`doi`、`gdelt`、`opencitations`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 19 个**：`bing_rss`、`dangdang`、`datagov_uk`、`doi`、`gdelt`、`jd`、`kaola`、`opencitations`、`pdd`、`suning`、`taobao`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`toutiao`、`twitter_syndication`、`unpaywall`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 244 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 12 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 254 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 12 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 13 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -76,7 +76,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 状态含义：**可直接用** = 自动路由会用上；**需自配密钥 / 需装后端工具** = 配好后即可用；**被上游封锁** = 源站当前拒绝；**已停用** = 配置层面关闭。
 
-### 全网搜索（33）
+### 全网搜索（36）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -87,6 +87,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_baidu` | 可直接用 | 免费 | 不限 | — | 语义画像命中、通用兜底链 | 百度本地 |
 | `local_bing` | 可直接用 | 免费 | 不限 | — | 深度研究 boost、通用兜底链 | Bing本地 |
 | `local_duckduckgo` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | DuckDuckGo本地 |
+| `local_quark` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | 夸克搜索（quark.sm.cn HTML，免 key；选择器 2026-09-26 实测三页验证，见 parse_maps.yaml） |
 | `local_search` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 local_academic、域 local_chinese、域 local_code、域 local_general、域 local_news、域 local_reference、语义画像命中 | Local Search 聚合 |
 | `local_sogou` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 搜狗本地 |
 | `marginalia` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面，JSON 免认证） |
@@ -95,6 +96,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `uapi` | 可直接用 | 免费 | 不限 | — | 语义画像命中、通用兜底链 | UAPI 聚合搜索 |
 | `wechat_sogou` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 wechat_search | 搜狗微信搜索引擎（公众号文章，免登录） |
 | `wiby` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | Wiby 老式手工网页索引（专收非商业化页面，JSON 免认证） |
+| `bing_rss` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Bing 网页搜索 RSS 出口（免 key 免 HTML 解析；local_bing 改版/风控时的稳定备胎） |
 | `bocha` | 需自备密钥 | 低价计费 | 10000/月 | ARGO_BOCHA_API_KEY | 域 chinese_general、域 local_chinese、域 modal_card、语义画像命中 | 博查搜索 API（中文，freshness 按查询时效动态化） |
 | `brave` | 已停用 | 低价计费 | 不限 | ARGO_BRAVE_API_KEY | 已停用 | Brave Search API |
 | `byted` | 需自备密钥 | 低价计费 | 不限 | ARGO_BYTED_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 fact_check、域 financial_news、域 legal、域 local_news、域 news_realtime、域 weather_query、语义画像命中 | 字节搜索 API，中文通用/news |
@@ -111,6 +113,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `searxng` | 已停用 | 免费 | 不限 | — | 已停用 | SearXNG 直连（已废弃，由 T3 替代） |
 | `tavily` | 需自备密钥 | 按调用计费 | 1000/月 | ARGO_TAVILY_API_KEY | 语义画像命中 | Tavily AI 搜索 API（免费层 1000 次/月，按 credit 计费；与 exa 同为 api 档） |
 | `tinyfish` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时网页搜索（免费，浏览器渲染，结果含原文摘要，X-API-Key 认证） |
+| `toutiao` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 今日头条站内全文搜索（content API，免认证；2026-09-26 本机实测 shark 反爬 data=null，他环境可能可用，空结果诚实透出） |
 | `you` | 需自备密钥 | 按调用计费 | 不限 | YDC_API_KEY | 域 news_realtime | You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并） |
 | `zhihu_global` | 需自备密钥 | 按调用计费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 chinese_general、域 news_realtime、域 zhihu_content | 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET） |
 
@@ -146,7 +149,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `unpaywall` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_UNPAYWALL_EMAIL | 显式调用（--engine） | Unpaywall 开放获取定位（DOI → 是否有合法免费全文及链接；需 ARGO_UNPAYWALL_EMAIL） |
 | `zbmath` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | zbMATH Open 数学文献索引（含 MSC 分类号，免 key） |
 
-### 其他垂直（23）
+### 其他垂直（24）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -173,6 +176,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `datagov_uk` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | data.gov.uk 英国政府开放数据目录（CKAN，免 key） |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 已停用 | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
+| `tineye` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力） |
 
 ### 媒体 / 图书（22）
 
@@ -377,6 +381,17 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `tencent_kline` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 腾讯财经前复权日 K 线（A股+港股+美股） |
 | `tencent_quote` | 可直接用 | 免费 | 不限 | — | 域 stock_query | 腾讯实时行情（qt.gtimg.cn 免认证，含换手率/市盈率/五档） |
 
+### shopping（6）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `dangdang` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 当当商品搜索（DDG site 语法包装，图书类目强项） |
+| `jd` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 京东商品搜索（DDG site 语法包装，绕站内登录墙；解析 0 条时自动去 site 前缀兜底） |
+| `kaola` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 考拉海购商品搜索（DDG site 语法包装） |
+| `pdd` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 拼多多商品搜索（DDG site 语法双域名 OR 包装，同 SAC pdd.ts 口径） |
+| `suning` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 苏宁商品搜索（DDG site 语法包装） |
+| `taobao` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 淘宝/天猫商品搜索（DDG site:taobao.com 包装，同 SAC taobao.ts 口径） |
+
 ### 宏观数据（6）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -546,7 +561,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 257 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 267 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

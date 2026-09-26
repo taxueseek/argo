@@ -41,6 +41,8 @@ from engines_builders_tech import (
     _build_cisa_kev_engine,
     _build_v2ex_engine,
     _build_github_engine,
+    _build_tineye_engine,
+    _build_bing_rss_engine,
 )
 from engines_builders_cn import (
     _build_em_miaoxiang_engine,
