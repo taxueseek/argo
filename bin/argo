@@ -293,6 +293,7 @@ Usage:
   argo cite "doi" [doi...]         DOI → 引用条目（GB/T 7714/顺序编码/APA/BibTeX，--style 可选）
   argo mcp       {{status|inject|undo}}   多客户端 MCP 一键注入/诊断/还原
   argo paths [--check] [--migrate]     路径自省 / 本机自检 / 搬历史状态到惯例目录
+  argo stats [-n N]                    使用日志与反馈状态（本地遥测只读出口）
 
 Common flags: --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
 
@@ -357,6 +358,8 @@ def main():
         "job":       ("job.py",        []),
         "preflight": ("batch_probe.py", []),
         "mcp":       ("mcp_setup.py",  []),
+        # stats：本地遥测只读出口（日志与反馈的规范化入口，见 references/usage.md）
+        "stats":     ("stats_cli.py",  ["--json"]),
         # paths：路径自省（状态目录/密钥文件到底解析到了哪里）。支持类问题的
         # 第一问，且不必进 MCP 工具面（与 answer/watch 同类）。
         "paths":     ("argo_paths.py", []),

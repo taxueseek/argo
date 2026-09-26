@@ -115,7 +115,7 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 | 场景 | 读什么 |
 |------|--------|
 | MCP 工具全清单 / 多客户端注入 / DSH 插件接入 / 配额·TinyFish / 子技能 / 本地打通 / 工程纪律 | `references/operations.md` |
-| 参数大全、三大工具输出字段、子技能细节 | `references/usage.md` |
+| **使用指南**：全命令、参数、74 开关总表、日志反馈 | `references/usage.md` |
 | 深度研究协议：约定、工作包、取证包 vs 判断稿、达标检查 | `references/research-protocol.md` |
 | 约定 / 工作包 / 判断稿模板 | `references/research-templates.md` |
 | 引擎全景：垂直域/社交/学术/本地引擎表 + 路由规则 | `references/engines.md` |

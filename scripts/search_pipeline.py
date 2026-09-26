@@ -30,15 +30,31 @@ http_client / engines_base / engine_dispatch。
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field, replace
 from typing import Any
+
+# 模块级曾有一行 `import logging`，而本模块 7 处 `logging.getLogger(...)`
+# 全部是 debug 级别、且全仓从未把 unified_search 的 level 调离默认 WARNING
+# ——也就是说它们默认永不产生输出，代价却是把 traceback → dataclasses →
+# inspect → _colorize（CPython 3.13+ 实测 14.6 ms / 87 个模块）拖进
+# `import search` 的必经之路。search.py 在模块级导入本模块，所以每次 argo
+# 调用（含纯缓存命中的那一档）都要付这笔钱去买一个从不打字的 logger。
+#
+# 修法沿用 search_output.py / argo_engine_registry.py 的既定模式：一处按需
+# 取 logger 的小函数，模块级不留任何绑定。绝不能改成就地 `import logging`
+# ——那会与下面 `except` 块内的局部导入形成遮蔽，重演 search_output 里那次
+# UnboundLocalError。
+def _log(message: str) -> None:
+    """默认静默的调试出口；仅在真正需要记录时才引入 logging。"""
+    import logging
+    logging.getLogger("unified_search").debug(message)
 
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
 from except_sets import OPT_IMPORT, SHAPE_BENIGN
 from search_output import _collect_errors, _slow_query_ttl, build_funnel
 from search_rank import (
+    _LANG_SCRIPT,
     _RERANK_DEGRADED_STATUSES,
     _align_facts_safe,
     _apply_consensus_and_sort,
@@ -126,6 +142,39 @@ class _SearchRun:
     budget_used_ms: int | None = None
     budget_total_ms: int | None = None
     elapsed: int = 0
+
+
+# 兜底补搜的候选顺序。anysearch 在前是因为它对日/韩这类通用查询的召回
+# 实测最好；local_bing 次之（带 setlang 的本地 SERP）；再往后是各语言的
+# 通用源，都不行时至少还有 wikipedia 这类必定有结果的百科。
+_FALLBACK_ENGINES: tuple[str, ...] = (
+    "anysearch", "local_bing", "duckduckgo", "wikipedia", "octen",
+)
+
+
+def _fallback_candidates(already: set[str], available: set[str],
+                         breaker: Any = None) -> list[str]:
+    """噪声门清空结果后的兜底引擎：跳过已试过的、不可用的、被熔断的。
+
+    与 D6（macro_data 域）的候选筛选同构，抽成函数是为了让「兜底只补搜、
+    不复活被丢弃结果」这条契约有地方可测——两处各写一份筛选逻辑时，
+    其中一处漏掉 breaker 判断就会变成绕过熔断。
+    """
+    out: list[str] = []
+    for name in _FALLBACK_ENGINES:
+        if name in already or name not in available:
+            continue
+        if breaker is not None:
+            try:
+                allowed, _ = breaker.allow(name)
+            except Exception:
+                allowed = True  # 熔断器自身故障不该阻断兜底
+            if not allowed:
+                continue
+        out.append(name)
+        if len(out) >= 2:  # 上界：一次搜索最多补两个，避免拖成长任务
+            break
+    return out
 
 
 def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
@@ -221,6 +270,36 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         import logging as _lg
         _lg.getLogger("unified_search.search").debug(f"噪声门跳过: {_e}")
 
+    # ── 噪声门兜底：非中英查询下门清空了全部结果时补搜 ────────────────
+    # 实测 bug：`argo search "プロンプト エンジニアリング"` 返回 count=0
+    # 而 errors=[]。链路是——路由派给 qiita（TF-IDF 0.683）→ qiita 的
+    # `?query=` 对日语召回极差、静默降级 → 噪声门**正确**判定 noise 并丢弃
+    # → combo 里的 anysearch 因早停被 cancelled → merged 空、errors 空。
+    #
+    # 噪声门没错（qiita 确实在降级），错的是清空之后没有兜底：同文件 D6
+    # 分支早就为 macro_data 域做了「结构化源覆盖不足就追加通用引擎」，噪声
+    # 门这条路却没有对应机制，于是一次静默降级被放大成零结果且无任何线索。
+    #
+    # 只补搜、不复活：被噪声门丢掉的列表绝不回填（否则噪声门形同虚设），
+    # 兜底的结果来自**另外的引擎**，仍要过 RRF 与后续的精排/去重。
+    if not clean_lists and _noise_dropped:
+        try:
+            _fb = _fallback_candidates(
+                already=set(raw_results.keys()),
+                available=set(available_engines()),
+                breaker=breaker,
+            )
+            for _eng in _fb:
+                _e2, _res2, _out2, _lat2 = _run_one(_eng)
+                _ingest(_e2, _res2, _out2, _lat2)
+                _goods2 = [r for r in _res2
+                           if isinstance(r, dict) and "error" not in r]
+                if _goods2:
+                    clean_lists.append(_goods2)
+        except Exception as _e2:  # 兜底是最后一道保底，失败不得反噬主流程
+            import logging as _lg2
+            _lg2.getLogger("unified_search.search").debug(f"噪声门兜底跳过: {_e2}")
+
     if len(clean_lists) > 1:
         merged = rrf_merge(clean_lists, lang=_q_lang_for_fusion)
     elif clean_lists:
@@ -281,7 +360,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
             deduped, minhash_removed = minhash_dedupe(merged, max_keep=_pool_limit)
             merged = deduped
         except Exception as _e:
-            logging.getLogger("unified_search").debug(f"minhash 去重跳过: {type(_e).__name__}")
+            _log(f"minhash 去重跳过: {type(_e).__name__}")
     _tock(timing, "dedupe", _tk_dedupe)
     # 漏斗第 4 格：跨引擎合并 + 近重复去重之后还剩多少（见 build_funnel）
     _funnel_deduped = len(merged)
@@ -294,10 +373,13 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     # 报错桶等于把人指向错误的优化对象。
     _tk_filter = _tick(timing)
 
-    # ── P2：多语言语言偏好软排序（ja/ko 前置含目标语言字符结果，软排不删除）──
+    # ── P2：多语言语言偏好软排序（属目标语言书写系统的结果前置，软排不删除）──
+    # 判据在 search_rank._LANG_SCRIPT 这张表里；此处只问「该语言被追踪吗」。
+    # 原先这里是 `_p_lang in ("ja", "ko")`，与 rerank 入口、噪声门构成三处
+    # 各自独立的硬编码闸门，于是 zh 被三处同时排除（详见 search_rank 注释）。
     try:
-        _p_lang = (decision or {}).get("features", {}).get("primary_lang")
-        if _p_lang in ("ja", "ko"):
+        _p_lang = ((decision or {}).get("features") or {}).get("primary_lang")
+        if _p_lang in _LANG_SCRIPT:
             merged = _lang_prefer_rerank(merged, _p_lang)
     except OPT_IMPORT + SHAPE_BENIGN:  # 软排序增强，任何失败按「不排序」处理
         pass
@@ -325,7 +407,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     if time_aware and (since_ts is not None or until_ts is not None) and merged:
         merged, time_filtered = _apply_time_window(merged, since_ts, until_ts)
         if time_filtered:
-            logging.getLogger("unified_search").debug(
+            _log(
                 f"时间窗后过滤剔除 {time_filtered} 条（since={since_iso}, until={until_iso}）")
     # 漏斗第 5 格：否定词过滤 + 时间窗过滤之后（见 build_funnel）
     _funnel_filtered = len(merged)
@@ -441,7 +523,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         except ImportError:
             pass  # recovery 模块不可用
         except Exception as e:
-            logging.getLogger("unified_search").debug(
+            _log(
                 f"错误恢复跳过: {type(e).__name__}")
 
     # Reranker：ARGO_LOCAL_RERANK 开关（0 关闭本地五维保底；默认 1 开启）
@@ -472,7 +554,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                                            top_n=max_results)
             rank_method = "local_five_dim"
         except Exception as e:
-            logging.getLogger("unified_search").debug(
+            _log(
                 f"本地五维 rerank 跳过: {type(e).__name__}")
     elif not local_rerank_on and reranker_status in _RERANK_DEGRADED_STATUSES:
         rank_method = "none"
@@ -652,7 +734,7 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
     except ImportError:
         pass
     except Exception as e:
-        logging.getLogger("unified_search").debug(f"自适应学习记录跳过: {type(e).__name__}")
+        _log(f"自适应学习记录跳过: {type(e).__name__}")
 
     # 语言偏好：记录本轮查询语 + 输出观测快照（默认中英 + 系统 + 习惯）
     lang_pref_info: dict[str, Any] | None = None
@@ -672,11 +754,30 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
     except ImportError:
         pass
     except Exception as e:
-        logging.getLogger("unified_search").debug(
+        _log(
             f"语言偏好记录跳过: {type(e).__name__}")
 
     if on_progress:
         on_progress(Stage.DONE, {"count": len(merged), "elapsed_ms": elapsed})
+
+    # 使用日志：每次非缓存搜索一条总账（stats 命令的数据源）。query 截断 60
+    # 字符（与 recovery 流同一脱敏纪律）；记录失败静默，绝不拖累主路径。
+    # 取自 req 而非局部别名：_emit_telemetry 是 postprocess 的局部变量，
+    # 本函数（finalize）不在其作用域内，直接引用会 NameError。
+    if req.emit_telemetry is not None:
+        try:
+            req.emit_telemetry("query", {
+                "query": (query[:60] if query else query),
+                "count": len(merged),
+                "elapsed_ms": round(elapsed),
+                "engines_used": list(raw_results.keys())[:8],
+                "errors": len(_collect_errors(raw_results, engine_outcomes)),
+                "recovered": bool(recovery_info.get("recovered")) if recovery_info else False,
+                "early_stopped": bool(early_stopped),
+                "depth": depth, "mode": mode, "domain": domain,
+            })
+        except SHAPE_BENIGN:
+            pass
 
     tfidf_scores = decision.get("tfidf_scores", [])
     if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):

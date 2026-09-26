@@ -1,4 +1,30 @@
-# Argo 详细用法（v2.8.0）
+# Argo 详细用法（v2.9.0）
+
+> 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
+> bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
+
+## 命令总览（18 个，唯一事实=bin/argo 分发表）
+
+| 命令 | 一句话 |
+|------|--------|
+| `argo search` | 统一搜索（多引擎融合；`--list-engines` 看源清单） |
+| `argo research` | 深度研究（问题分解→多源采集→综合报告，`--broaden`/`--deep-read`） |
+| `argo evidence` | 可信度评估（选拔×吸收两维） |
+| `argo clarify` | 意图消歧（歧义检测+意图分类+路由建议） |
+| `argo fetch` | 单页正文抓取（六级降级链，`--full` 全文存档） |
+| `argo crawl` | 站点爬取（sitemap/BFS 多页） |
+| `argo extract` | 结构化提取（表格/Meta/JSON-LD） |
+| `argo article` | 公众号文章全文（标题/正文/图片） |
+| `argo screenshot` | 网页截图（`--full-page`/`--output`） |
+| `argo pdf` | PDF 正文提取（`--pages`/`--password`） |
+| `argo answer` | 直答（Seltz 带引用合成答案） |
+| `argo watch` | 网页变化监控（add/check/list/remove） |
+| `argo job` | 招聘多平台聚合 |
+| `argo preflight` | 批量 URL 预检（`--probe` 联网探测） |
+| `argo cite` | DOI 引用条目（四格式） |
+| `argo mcp` | 多客户端 MCP 注入/诊断/还原 |
+| `argo paths` | 路径自省与状态目录自检 |
+| `argo stats` | 使用日志与反馈状态（本地遥测只读出口） |
 
 > SKILL.md 只留核心命令；本页是参数大全与输出字段说明。
 
@@ -289,3 +315,178 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 - 双运行时：ego lite + Kimi WebBridge，`--runtime auto|ego|webbridge`
 - 与常规检索隔离：`search_partition=login`、`cache_eligible=false`；`--site host` 粘性空间
 - 专业模式默认关：`enable`/`disable`/`status`
+
+
+## 功能开关总表（`ARGO_*`，唯一事实=源码扫描）
+
+> 55 个开关按五类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
+> 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
+
+### 能力开关（27）
+
+| 变量 | 作用 | 默认/备注 |
+|------|------|----------|
+| `ARGO_ADMISSION_DIR` | admission dir | 见 references/operations.md 与模块 docstring |
+| `ARGO_ALLOW_PRIVATE_URLS` | allow private urls | 见 references/operations.md 与模块 docstring |
+| `ARGO_ALLOW_RECOMPUTE` | ('research 可复算脚本执行', '默认拒绝，显式授权') | 见 references/operations.md 与模块 docstring |
+| `ARGO_CONFIG_CACHE` | ('配置解析缓存', '默认开') | 见 references/operations.md 与模块 docstring |
+| `ARGO_CONFIG_STAMP_TTL_S` | config stamp ttl s | 见 references/operations.md 与模块 docstring |
+| `ARGO_DISABLE_ENGINES` | disable engines | 见 references/operations.md 与模块 docstring |
+| `ARGO_ENABLE_ENGINES` | enable engines | 见 references/operations.md 与模块 docstring |
+| `ARGO_ENGINE_HTTP_CLIENT` | ('HttpClient 渐进增强层（UA轮换/节流/重试）', '默认开；=0 回退 urllib 保底') | 见 references/operations.md 与模块 docstring |
+| `ARGO_ENV_FILE` | env file | 见 references/operations.md 与模块 docstring |
+| `ARGO_FULLTEXT` | ('抓取全文存档（--full）', '随 --full 启用') | 见 references/operations.md 与模块 docstring |
+| `ARGO_IDENTITY_MEMORY` | identity memory | 见 references/operations.md 与模块 docstring |
+| `ARGO_LOCAL_RERANK` | ('本地五维重排', '默认开') | 见 references/operations.md 与模块 docstring |
+| `ARGO_MINHASH_DEDUPE` | ('近重复结果去重', '默认开') | 见 references/operations.md 与模块 docstring |
+| `ARGO_MOBILE_FIRST_HOSTS` | mobile first hosts | 见 references/operations.md 与模块 docstring |
+| `ARGO_NO_AUTORELOAD` | no autoreload | 见 references/operations.md 与模块 docstring |
+| `ARGO_PROXY` | proxy | 见 references/operations.md 与模块 docstring |
+| `ARGO_PYTHON` | python | 见 references/operations.md 与模块 docstring |
+| `ARGO_REDSKILL_CACHE` | redskill cache | 见 references/operations.md 与模块 docstring |
+| `ARGO_RESPECT_ROBOTS` | ('robots.txt 遵守', '默认遵守') | 见 references/operations.md 与模块 docstring |
+| `ARGO_ROUTE_CACHE` | ('路由决策跨进程缓存', '默认开；测试环境默认关') | 见 references/operations.md 与模块 docstring |
+| `ARGO_RRF_WEIGHTED` | ('RRF 加权融合', '默认关（逃生开关）') | 见 references/operations.md 与模块 docstring |
+| `ARGO_SEMANTIC_EVIDENCE` | ('可选语义证据层（classifier.dev）', '默认关，个人可选开') | 见 references/operations.md 与模块 docstring |
+| `ARGO_SERP_GUARD` | ('SERP 垃圾结果守卫', '默认开；=0 关闭') | 见 references/operations.md 与模块 docstring |
+| `ARGO_TELEMETRY` | ('本地遥测（JSONL 流，stats 数据源）', '默认开；=0 整体关闭') | 见 references/operations.md 与模块 docstring |
+| `ARGO_UNPAYWALL_EMAIL` | unpaywall email | 见 references/operations.md 与模块 docstring |
+| `ARGO_WOLFRAM_APPID` | wolfram appid | 见 references/operations.md 与模块 docstring |
+| `ARGO_XHS_TIMEOUT` | xhs timeout | 见 references/operations.md 与模块 docstring |
+
+### API 密钥（值放 ~/.config/argo/env）（17）
+
+| 变量 | 作用 | 默认/备注 |
+|------|------|----------|
+| `ARGO_ANYSEARCH_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_BOCHA_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_BRAVE_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_BYTED_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_EASTMONEY_APIKEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_EXA_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_FELO_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_FIRECRAWL_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_GITHUB_TOKEN` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_METASO_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_OCTEN_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_QWEATHER_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_TAVILY_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_TINYFISH_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_WEB_SEARCH_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_WEREAD_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_ZHIHU_ACCESS_SECRET` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+
+### 行为调参（7）
+
+| 变量 | 作用 | 默认/备注 |
+|------|------|----------|
+| `ARGO_ADMISSION_TTL_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_FETCH_DEADLINE_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_MINHASH_THRESHOLD` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_ROUTE_SAMPLE_RATE` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_SERIAL_STAGGER_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_STRAGGLER_GRACE_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_TOOL_CALL_COALESCE` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+
+### 路径与数据位置（10）
+
+| 变量 | 作用 | 默认/备注 |
+|------|------|----------|
+| `ARGO_ARCHIVE_ROOT` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_CLIENTS_PATH` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_FULLTEXT_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_HOME_OVERRIDE` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_LINK_TARGETS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_LOCAL_READ_DIRS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_LOCAL_SEEK_PATH` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_LOCAL_SEEK_ROOTS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_STATE_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_TELEMETRY_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+
+### MCP 运行配置（6）
+
+| 变量 | 作用 | 默认/备注 |
+|------|------|----------|
+| `ARGO_MCP_PRETTY` | MCP 输出缩进美化 | server 层接管，模型不可见 |
+| `ARGO_MCP_SKIP_CACHE` | 跳过缓存直连 | server 层接管，模型不可见 |
+| `ARGO_MCP_TIMEOUT` | MCP 工具统一超时秒 | server 层接管，模型不可见 |
+| `ARGO_MCP_TIMEOUT_CRAWL` | crawl 专用超时 | server 层接管，模型不可见 |
+| `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时 | server 层接管，模型不可见 |
+| `ARGO_MCP_TOOLS` | tools/list 注入范围（core 三件套/all/逗号名单） | server 层接管，模型不可见 |
+
+### 抓取降级链分级开关（7）
+
+| 变量 | 作用 | 默认/备注 |
+|------|------|----------|
+| `ARGO_FETCH_IMPERSONATE` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_JINA` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_MD_NEGOTIATE` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_MD_VARIANT` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_MOBILE` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_PARALLEL` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_TINYFISH` | fetch 降级链单级启停 | 默认自动降级 |
+
+## 监控与取证命令（v2.9.0 补齐，MCP 同步有 argo_watch/argo_preflight/argo_cite）
+
+### argo watch — 网页变化监控
+
+```bash
+argo watch add "url" --note "备注"   # 登记快照（本地状态文件）
+argo watch check [url]               # 复查变化（缺省查全部）；cron 可用
+argo watch list                      # 看清单
+argo watch remove "url"              # 取消关注
+```
+适合盯价格页/公告页/版本发布页。MCP 工具 `argo_watch` 的 action 参数与此一一对应。
+
+### argo preflight — 批量 URL 预检
+
+```bash
+argo preflight "url1" "url2" ...     # 纯本地规则：登录墙/已死/已归档/需确认分类
+argo preflight --probe "url1" ...    # 追加联网探测（404/410 判死）
+```
+引用或抓取一批来源前先过一遍。MCP 工具 `argo_preflight` 同能力。
+
+### argo cite — DOI 引用条目
+
+```bash
+argo cite "10.1038/xxx" "10.1000/yyy"          # 默认 GB/T 7714
+argo cite "10.1038/xxx" --style apa            # apa | bibtex | numeric | gbt7714
+```
+Crossref+OpenAlex 免 key。MCP 工具 `argo_cite`（dois 数组 + style）。
+
+### argo job / paths / mcp
+
+- `argo job "query" --city 成都`：BOSS/猎聘/智联/前程无忧/597/今日招聘并发聚合。
+- `argo paths [--check] [--migrate]`：状态目录/密钥文件位置自省与本机自检。
+- `argo mcp {{status|inject|undo}}`：多客户端 MCP 一键注入/诊断/还原。
+
+## 日志与反馈（本地遥测 + stats 读出口）
+
+### 数据在哪、有什么
+
+`<状态目录>/telemetry/`（`argo stats` 首行给出实际路径）下四个 append-only JSONL 流，
+单流 1MB/2000 行自动回缩，**本地数据不出本机**：
+
+| 流 | 一条 = | 用途 |
+|----|--------|------|
+| `query` | 一次非缓存搜索的总账：query(截断60字)/count/elapsed_ms/engines_used/errors/recovered | 使用统计与命中率 |
+| `recovery` | 救援链触发概览 | 看救援是否过度 |
+| `route` | 路由采样（域/引擎/置信/语言） | 路由质量分析 |
+| `merge` | 本地数据融合概览 | 数据融合审计 |
+
+### 怎么读
+
+```bash
+argo stats          # 汇总：命中率/平均时延/引擎频次/救援率 + 最近 5 条
+argo stats -n 200   # 回看窗口加大
+ARGO_TELEMETRY=0    # 整体关闭（写入侧静默失败，关闭零风险）
+```
+
+### 反馈闭环（搜索质量的自我修正）
+
+- **失败归因寄存器**：引擎级失败（限流/封锁/网络）写入归因，聚合层区分「引擎坏」与「被挡住」；
+- **自适应调度**：adaptive 学习器消费引擎结果质量，坏源自动降权、好源升权（弃置≠超时已分流，不毒化学习器）;
+- **熔断**：连续失败引擎熔断跳过，恢复后自动回归；
+- **归档**：`argo search --archive` 留完整候选（流量回放/审计用），`ARGO_ARCHIVE_ROOT` 定位置。
+
+隐私纪律：遥测只在本机、query 截断脱敏、**本机用量统计不进任何对外材料**（判据=对方能否在仓库里复现该数字）。

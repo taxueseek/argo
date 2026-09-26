@@ -59,6 +59,11 @@ def _telemetry_dir() -> Path:
     return _paths.state_path("telemetry")
 
 
+def stream_dir() -> Path:
+    """遥测目录（公开读出口：stats 等读者需要展示数据在哪）。"""
+    return _telemetry_dir()
+
+
 def _enabled() -> bool:
     return env_flag("ARGO_TELEMETRY")
 
