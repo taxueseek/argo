@@ -350,7 +350,8 @@ def main():
         # 保持一一对应，少一个入口就意味着该能力只能靠 MCP（默认关）够得着
         "screenshot": ("screenshot.py", []),
         "pdf":        ("pdf_extract.py", []),
-        # answer/watch：CLI 子命令（不进 MCP 工具面，工具数门禁口径不变）
+        # answer/watch：MCP 工具面 2026-09-26 补齐（argo_answer/argo_watch），
+        # CLI 与 MCP 能力面自此一一对应
         "answer":    ("answer.py",     ["--json"]),
         "watch":     ("watch.py",      []),
         "job":       ("job.py",        []),

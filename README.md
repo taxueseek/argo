@@ -26,7 +26,7 @@
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-253-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-14%20tools-purple">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
 > **这是踏雪寻仙 DeepSeek Harness 插件系列的一员**，作者还有其他的优秀插件：[dsh-files](https://github.com/taxueseek/dsh-files)（传文件读文档） · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)（片段收藏夹） · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)（只读体检） · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（插件安全审计） · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（提示词反推与多供应商生图）—— 完整插件栏目见[个人主页](https://github.com/taxueseek#deepseek-harness-%E6%8F%92%E4%BB%B6)
@@ -363,7 +363,7 @@ python3 scripts/search.py --list-engines
 - **多语言路由修复（v2.8.3 新增）**：ja/ko 查询返回目标语言（不再被中文引擎污染）；德法西意等多语言走 anysearch 返回对应语言；weighted RRF 弱源降权（weakest-link，论文 2508.01405）；anysearch 进程内 builder（更快更稳）
 
 - **Windows 全平台可用（v2.8.2 新增）**：移除 npm `os` 限制；全链路 UTF-8 防线（`PYTHONUTF8` + `-X utf8` + 6 处 JSON `read_bytes`）根治 GBK 崩溃；工具探测改 `shutil.which`；Chrome/Edge 自动发现；Ctrl+C 干净退出
-- **DSH 插件两种装法（v2.8.2 新增）**：主包自带 `dsh.bundle`，`dsh plugin add github:taxueseek/argo` 即得 14 个 MCP 工具；子包再加 `wide_research` 并行研究调度
+- **DSH 插件两种装法（v2.8.2 新增）**：主包自带 `dsh.bundle`，`dsh plugin add github:taxueseek/argo` 即得 19 个 MCP 工具；子包再加 `wide_research` 并行研究调度
 - **wide_research 证据检查（v2.8.2 新增）**：输出自带 `quality_gate_results`（`conclusion_cap` low/medium/high），与 dossier 同一套语义；`depends_on` 依赖分阶段；仅 http(s) 入证据账本；worker 不可调 `argo_research`（防研究套研究）
 - **取证协议化（v2.8.2）**：深度研究只产 dossier（来源/覆盖/缺口/检查），判断稿归 Agent；`--work-packages` 按 `depends_on` 分阶段
 - **证据完整链路（v2.8.0 新增）**：搜索输出自带证据门控——高后果问题（金融/医疗/法律）标 `fetch_required`，每条结果标 `fetch_suggested`；`--verify` 一键核验正文并回填「核实后证据分」，核实过的链接自动记住，下次搜索直接显示已核实
@@ -374,7 +374,7 @@ python3 scripts/search.py --list-engines
 - **垂直结构化模态卡**：火车票 / 油价 / 贵金属 / 万年历 / 星座 / 手机参数 / 汽车 / 医疗挂号等查询返回实时结构化卡片（`modal_card` 域 → `bocha_ai` 原生引擎，失败自动回落 web 搜索）
 - **双层缓存**：内存 LRU + SQLite 持久化，时效性弱的内容不重复打 API；登录态结果单独隔离，不污染公共缓存
 - **为 Agent 节省 Token**：MCP 响应可紧凑裁剪、snippet 可控，输出为精简 JSON 而非整页文本
-- **14 个 MCP 工具**：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取、本地预览、可复算、公众号文章全文、招聘聚合
+- **19 个 MCP 工具**（与 CLI 能力面对齐）：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取、本地预览、可复算、公众号文章全文、招聘聚合、结构化提取、URL 批量预检、直答、网页变化监控、DOI 引用条目
 - **多语言搜索**：中、英、日、韩、西里尔、泰、阿、希伯来、希腊、天城体等；路由与引擎参数跟着语言走；非中文查询避免误入知乎 / 搜狗微信 / A 股快照等中文专用源
 - **登录态专业搜索**：ego-search 子技能，登录墙正文 / JS 渲染页 / 登录站点接口直取（默认关闭，见上节）
 - **垂直域检查**：空结果恢复时不把 pypi / npm / 快讯等无关源「串」进影视、体育查询
@@ -636,7 +636,7 @@ argo/
 ### v2.8.5：DSH 插件工具原生化 + MCP 默认关闭 + Windows 兼容
 
 - **DSH 插件工具原生化**：`argo_search` / `argo_fetch` 以原生一等工具注册，默认可用，不依赖 MCP 连接；schema 从 `mcp_tools.py` 唯一来源自动生成，两侧零漂移；除 `argo_research` 外 13 个工具都可经 `nativeTools` 按需启用
-- **MCP 默认关闭**：DSH 三形态接入（MCP 按需挂载 / 原生工具默认入口 / web_search seam），平时零常驻 token 开销，要完整 14 工具面时一条 profile patch 打开
+- **MCP 默认关闭**：DSH 三形态接入（MCP 按需挂载 / 原生工具默认入口 / web_search seam），平时零常驻 token 开销，要完整 19 工具面时一条 profile patch 打开
 - **Windows 全平台兼容**（社区贡献 PR #11）：临时路径走系统 temp、GBK 编码修复、`python3`/`python` 运行时解析、symlink 无权限自动退化 junction、新增 PowerShell 一键安装 `install.ps1`
 - **配额自愈完整链路**：远端配额耗尽（HTTP 200 藏错误）自动识别、路由排除该引擎切备用源，周期结束自动回归，无需人工改配置
 - **抓取全局 deadline**：`ARGO_FETCH_DEADLINE_S`（默认 60s）封顶降级链总耗时；429/503 停止信号尊重服务器指示；tinyfish 免费渲染层 + `.md` 变体探测命中即跳过反爬链

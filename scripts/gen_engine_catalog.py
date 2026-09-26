@@ -287,7 +287,7 @@ def render() -> str:
     L.append("")
     L.append("## 四、默认关闭的能力怎么打开")
     L.append("")
-    L.append("- **MCP 14 工具面**：默认关（工具定义会常驻注入上下文）。DSH 用户在 profile patch "
+    L.append("- **MCP 19 工具面**（与 CLI 能力面对齐）：默认关（工具定义会常驻注入上下文）。DSH 用户在 profile patch "
              "里取消 `mcp-argo` 段注释后重启；其他客户端见 README「MCP 接入」。")
     L.append("- **原生工具**：默认只注册 `argo_search` / `argo_fetch`；"
              "`nativeTools` 配置可按需放开全部 13 个（`argo_research` 除外）。")

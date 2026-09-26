@@ -252,7 +252,7 @@ class TestContextGuidanceIsReal(unittest.TestCase):
 
 
 class TestMcpToolsListBudget(unittest.TestCase):
-    """tools/list 默认 CORE 三件套；全量仍 14；未知过滤不得吐全量。"""
+    """tools/list 默认 CORE 三件套；全量 19（CLI 面对齐）；未知过滤不得吐全量。"""
 
     CORE = ("argo_search", "argo_fetch", "argo_local_search")
     BUDGET_CORE_BYTES = 4000
@@ -261,9 +261,12 @@ class TestMcpToolsListBudget(unittest.TestCase):
         from mcp_tools import listed_tools, TOOLS
         names = [t["name"] for t in listed_tools("")]
         self.assertEqual(tuple(names), self.CORE)
-        self.assertEqual(len(TOOLS), 14, "全量 TOOLS 必须仍是 14——能力不删")
+        self.assertEqual(len(TOOLS), 19,
+                         "全量 TOOLS 计数（与 CLI 能力面对齐：+extract/preflight/answer/watch/cite）")
+        names = [x["name"] for x in TOOLS]
+        self.assertEqual(len(names), len(set(names)), "工具名必须唯一")
 
-    def test_all_returns_fourteen(self):
+    def test_all_returns_every_tool(self):
         from mcp_tools import listed_tools, TOOLS
         self.assertEqual([t["name"] for t in listed_tools("all")],
                          [t["name"] for t in TOOLS])

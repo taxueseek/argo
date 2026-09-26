@@ -157,6 +157,12 @@ def _dumps(obj: Any, pretty: bool = False) -> str:
     return cli_io.dumps_pretty(obj) if pretty else cli_io.dumps(obj)
 
 
+def _err_is(message: str) -> dict[str, Any]:
+    """工具级参数错误（isError 契约，与 _ok 对偶）。"""
+    return {"content": [{"type": "text", "text": _dumps({"error": message})}],
+            "isError": True}
+
+
 def _ok(payload: Any, pretty: bool = False) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": _dumps(payload, pretty=pretty)}]}
 
@@ -966,6 +972,15 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
                         "isError": True}
             return _ok(out, pretty=pretty)
+
+        # 2026-09-26 补齐 CLI 面的五工具（extract/preflight/answer/watch/cite）
+        # 独立成模块：本文件涨破 1000 行硬上限，门禁要求拆分（route_* 先例）
+        surface = _lazy_cached("mcp_handlers_surface")
+        surface_result = surface.handle_surface_tool(name, arguments, pretty=pretty)
+        if surface_result is not None:
+            # 约定：surface 分支已返回完整 result（_ok 产物或 isError 形态），
+            # 不再二次包装
+            return surface_result
 
         else:
             # 未知工具走 isError 形态（与其他工具级错误同契约）：裸 {"error":...}

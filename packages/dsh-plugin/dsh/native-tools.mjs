@@ -571,5 +571,173 @@ export const NATIVE_TOOLS = {
       "loose",
       "fetch_detail"
     ]
+  },
+  "argo_extract": {
+    "description": "网页结构化提取：表格、Meta 元数据（og:/description）、JSON-LD 结构化数据。要拿页面的表格数据或结构化字段时用；正文通读走 argo_fetch。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "目标网页链接"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "tables",
+            "metadata",
+            "jsonld",
+            "all"
+          ],
+          "description": "提取内容：tables=HTML表格, metadata=Meta元数据, jsonld=JSON-LD, all=全部",
+          "default": "all"
+        },
+        "max_chars": {
+          "type": "integer",
+          "description": "抓取页面最大字符数",
+          "default": 50000,
+          "minimum": 1000,
+          "maximum": 200000
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "allowed": [
+      "url",
+      "mode",
+      "max_chars"
+    ]
+  },
+  "argo_preflight": {
+    "description": "批量 URL 预检：把候选链接分类为可用/登录墙/已失效/需联网确认，probe 开启时实测存活。引用或抓取一批来源前先过一遍，避免把死链和登录墙当信源。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "待预检的 URL 列表",
+          "minItems": 1
+        },
+        "probe": {
+          "type": "boolean",
+          "description": "联网探测存活（404/410 判死；默认纯本地规则）",
+          "default": false
+        }
+      },
+      "required": [
+        "urls"
+      ],
+      "additionalProperties": false
+    },
+    "allowed": [
+      "urls",
+      "probe"
+    ]
+  },
+  "argo_answer": {
+    "description": "直答：对事实型问题返回带引用的合成答案与置信口径。要一句话答案而非链接列表时用；开放式调研走 argo_research。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "要回答的问题"
+        },
+        "scope": {
+          "type": "string",
+          "description": "答案域（如 news）；空=默认"
+        },
+        "model": {
+          "type": "string",
+          "description": "答案模型；空=默认"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "additionalProperties": false
+    },
+    "allowed": [
+      "query",
+      "scope",
+      "model"
+    ]
+  },
+  "argo_watch": {
+    "description": "网页变化监控：对关注页面做快照并在复查时报告变化。add 登记关注、check 复查变化、list 看清单、remove 取消；适合盯价格/公告/版本发布页。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "add",
+            "check",
+            "list",
+            "remove"
+          ],
+          "description": "add=登记快照, check=复查变化（可指定单个 url）, list=看清单, remove=取消关注"
+        },
+        "url": {
+          "type": "string",
+          "description": "目标页面（add/remove 必填；check 可选=只查这一条）"
+        },
+        "note": {
+          "type": "string",
+          "description": "备注（add 可选）",
+          "default": ""
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "allowed": [
+      "action",
+      "url",
+      "note"
+    ]
+  },
+  "argo_cite": {
+    "description": "DOI → 引用条目：GB/T 7714 / 顺序编码 / APA / BibTeX 四格式，Crossref+OpenAlex 免 key。论文引用、参考文献列表生成时用。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dois": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "DOI 列表，如 [\"10.1038/s41586-024-0001-x\"]",
+          "minItems": 1
+        },
+        "style": {
+          "type": "string",
+          "enum": [
+            "gbt7714",
+            "numeric",
+            "apa",
+            "bibtex"
+          ],
+          "description": "引用格式",
+          "default": "gbt7714"
+        }
+      },
+      "required": [
+        "dois"
+      ],
+      "additionalProperties": false
+    },
+    "allowed": [
+      "dois",
+      "style"
+    ]
   }
 };

@@ -26,7 +26,7 @@
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-253-orange">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-14%20tools-purple">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
 > **Part of the taxueseek DeepSeek Harness plugin lineup** — siblings: [dsh-files](https://github.com/taxueseek/dsh-files) (send files, read documents) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets) (snippet favorites) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck) (read-only checkup) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) (plugin security audit) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) (prompt reverse-engineering & multi-provider image generation) — see all plugins on the [profile](https://github.com/taxueseek#deepseek-harness-plugins)

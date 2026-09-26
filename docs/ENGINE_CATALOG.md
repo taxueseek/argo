@@ -67,7 +67,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 四、默认关闭的能力怎么打开
 
-- **MCP 14 工具面**：默认关（工具定义会常驻注入上下文）。DSH 用户在 profile patch 里取消 `mcp-argo` 段注释后重启；其他客户端见 README「MCP 接入」。
+- **MCP 19 工具面**（与 CLI 能力面对齐）：默认关（工具定义会常驻注入上下文）。DSH 用户在 profile patch 里取消 `mcp-argo` 段注释后重启；其他客户端见 README「MCP 接入」。
 - **原生工具**：默认只注册 `argo_search` / `argo_fetch`；`nativeTools` 配置可按需放开全部 13 个（`argo_research` 除外）。
 - **需密钥的源**：把密钥写进 `~/.config/argo/env`（600 权限）或环境变量，下表中「需自备密钥」一列即变量名。
 - **显式专用源**：不进自动路由，用 `argo search "词" --engine <引擎名>` 调用。

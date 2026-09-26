@@ -145,13 +145,16 @@ def test_parse_pages_specs():
 
 def test_mcp_tools_full_list_single_source():
     names = [t["name"] for t in TOOLS]
-    assert len(TOOLS) == 14
+    assert len(TOOLS) == 19  # 与 CLI 能力面对齐（extract/preflight/answer/watch/cite）
     assert names == [
         "argo_search", "argo_local_search", "argo_local_read", "argo_recompute",
         "argo_research",
         "argo_evidence", "argo_clarify", "argo_crawl", "argo_fetch",
         "argo_screenshot", "argo_pdf", "argo_social_search",
         "argo_article", "argo_job",
+        # CLI 面对齐补齐（2026-09-26）：argo_extract/argo_preflight/argo_answer/
+        # argo_watch/argo_cite
+        "argo_extract", "argo_preflight", "argo_answer", "argo_watch", "argo_cite",
     ]
 
 

@@ -5,7 +5,7 @@
 # MCP 形态（mcp-argo，14 个 mcp__argo__* 完整工具面）默认不挂载：
 # 工具定义每轮注入上下文且压缩清不掉（实测 ≈2K token/轮），而搜索 /
 # 抓取高频路径已由原生工具与 web seam 覆盖，走 CLI 单发同引擎同守卫、
-# 零常驻开销（实测 14 工具 ≈2.3K token/轮）。需要长尾取证能力（screenshot / pdf / social / article /
+# 零常驻开销（实测 19 工具 ≈3.7K token/轮）。需要长尾取证能力（screenshot / pdf / social / article /
 # job / evidence / clarify / crawl / local_*）时取消下方注释按需开启。
 #
 # 依赖：Node.js ≥ 18（npx）+ Python 3.10+（pip install pyyaml）。

@@ -2,7 +2,7 @@
  * @taxueseek/argo-dsh — wide_research + argo 原生工具 + 原生 web_search provider
  *
  * 本 bundle 默认不挂 argo MCP：搜索/抓取高频路径走原生工具与 web seam
- * （CLI 单发，同引擎同守卫，零常驻 token 开销）；MCP 14 工具全量面按需
+ * （CLI 单发，同引擎同守卫，零常驻 token 开销）；MCP 19 工具全量面按需
  * 在 profile patch 中挂载。Workers 不调用 argo_research，避免嵌套扇出。
  * No @deepseek-ai/* imports: public ctx.tools / ctx.subagents / ctx.web only.
  *
@@ -60,7 +60,7 @@ export const name = 'wide-research'
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
 // worker 取证工具白名单（allow 语义，非「必须存在」）：mcp__argo__* 与原生
-// 一等工具双写 → MCP 形态开/关两态自洽。MCP 在时 worker 可用 14 工具全量面
+// 一等工具双写 → MCP 形态开/关两态自洽。MCP 在时 worker 可用 19 工具全量面
 // （argo_research 除外，注册处硬排除）；MCP 缺席（默认）时自动落到原生
 // argo_search/argo_fetch 与宿主内置 web_search/web_fetch。
 const DEFAULT_CHILD_TOOLS = Object.freeze([

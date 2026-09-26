@@ -25,6 +25,7 @@ import json
 import re
 import subprocess
 import sys
+import unittest
 from pathlib import Path
 
 import pytest
@@ -483,3 +484,50 @@ class TestMeteredSourceBilling:
             checked += 1
             assert not _free_engine(name), f"{name} 是 api 档却被当成免费源"
         assert checked, "没有任何 api 档引擎可校验，检查档位声明"
+
+
+class TestMcpSurfaceConsistency(unittest.TestCase):
+    """CLI ↔ MCP 能力面一致性门禁（2026-09-26 起为硬不变量）。
+
+    此前的漂移形态：CLI 先有 cite，MCP 面落后；「14」在 9 处文案/门禁各写一份。
+    锁两件事：①CLI 能力命令与 argo_* 工具一一映射；②文案里的工具计数必须等
+    于 len(TOOLS)（计数唯一事实在 mcp_tools.TOOLS）。
+    """
+
+    CLI_COMMAND_TO_TOOL = {
+        "search": "argo_search", "research": "argo_research", "fetch": "argo_fetch",
+        "crawl": "argo_crawl", "extract": "argo_extract", "article": "argo_article",
+        "job": "argo_job", "evidence": "argo_evidence", "clarify": "argo_clarify",
+        "preflight": "argo_preflight", "answer": "argo_answer", "watch": "argo_watch",
+        "cite": "argo_cite",
+    }
+
+    def test_cli_capabilities_have_tools(self):
+        sys.path.insert(0, str(SKILL_DIR / "scripts"))
+        from mcp_tools import TOOLS
+        names = {x["name"] for x in TOOLS}
+        missing = {cmd: tool for cmd, tool in self.CLI_COMMAND_TO_TOOL.items()
+                   if tool not in names}
+        self.assertEqual(missing, {},
+                         f"CLI 有此能力但 MCP 面缺工具，补 schema 到 mcp_tools.py：{missing}")
+
+    def test_every_tool_has_handler(self):
+        sys.path.insert(0, str(SKILL_DIR / "scripts"))
+        from mcp_tools import TOOLS
+        import mcp_handlers
+        unknown = []
+        for tool in TOOLS:
+            result = mcp_handlers.execute_tool(tool["name"], {})
+            blob = json.dumps(result, ensure_ascii=False)
+            if "Unknown tool" in blob:
+                unknown.append(tool["name"])
+        self.assertEqual(unknown, [],
+                         f"schema 有但 execute_tool 无分支（调到 Unknown tool）：{unknown}")
+
+    def test_tool_count_in_copy_matches_tools(self):
+        sys.path.insert(0, str(SKILL_DIR / "scripts"))
+        from mcp_tools import TOOLS
+        desc = json.loads((SKILL_DIR / "package.json").read_text(encoding="utf-8"))["description"]
+        n = len(TOOLS)
+        self.assertIn(f"{n} 个 MCP 工具", desc,
+                      f"package.json description 未写 {n} 个 MCP 工具（计数唯一事实=TOOLS）")
