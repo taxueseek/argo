@@ -360,16 +360,6 @@
     "cost_tier": "free",
     "priority": 53
   },
-  "dangdang": {
-    "label": "当当商品",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
-  },
   "datacite": {
     "label": "datacite",
     "qps": 2,
@@ -1030,16 +1020,6 @@
     "cost_tier": "free",
     "priority": 30
   },
-  "jd": {
-    "label": "京东商品",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
-  },
   "jikan": {
     "label": "jikan",
     "qps": 2,
@@ -1089,16 +1069,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
-  },
-  "kaola": {
-    "label": "考拉商品",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
   },
   "keenable": {
     "label": "Keenable",
@@ -1319,16 +1289,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 29
-  },
-  "local_quark": {
-    "label": "夸克搜索",
-    "qps": 2,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 20
   },
   "local_search": {
     "label": "Local Search 聚合",
@@ -1780,16 +1740,6 @@
     "cost_tier": "free",
     "priority": 55
   },
-  "pdd": {
-    "label": "拼多多商品",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
-  },
   "people_daily": {
     "label": "people_daily",
     "qps": 2,
@@ -2070,26 +2020,6 @@
     "cost_tier": "free",
     "priority": 54
   },
-  "suning": {
-    "label": "苏宁商品",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
-  },
-  "taobao": {
-    "label": "淘宝天猫商品",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 32
-  },
   "tass": {
     "label": "塔斯社 RSS",
     "qps": 1,
@@ -2209,16 +2139,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
-  },
-  "toutiao": {
-    "label": "头条搜索",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 24
   },
   "toutiao_hot": {
     "label": "今日头条热榜",

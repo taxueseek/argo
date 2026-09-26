@@ -15,18 +15,6 @@ html:
     url_attr: href
     score: 0.75
 
-  # 夸克搜索（quark.sm.cn）：自然结果容器有两型——sc_natural_result（带
-  # .result 类）与 sc_structure_template_normal，逗号并列覆盖；2026-09-26
-  # 实测三页（argo/人工智能 × 移动与桌面 UA）每页均命中 6 条 title+url。
-  # 视频类结果的 href 是 page.sm.cn 跳转壳，属上游产物，与 SAC quark.ts 同口径原样透出
-  local_quark:
-    container: ".result, .sc_structure_template_normal"
-    title: ".qk-title-text"
-    url: "a.qk-link-wrapper"
-    snippet: ".qk-paragraph-text"
-    url_attr: href
-    score: 0.7
-
   local_google:
     container: "div.g"
     title: "h3"

@@ -453,18 +453,6 @@ engines:
   recommended: false
   explicit_only: false
   desc: 捷克电视台24（ČT24，捷克公共电视新闻，免 key）
-- name: dangdang
-  tier: T1
-  type: ddg_site
-  coverage:
-  - shopping
-  - chinese
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 当当商品搜索（DDG site 语法包装，图书类目强项）
 - name: datacite
   tier: T1
   type: http
@@ -1303,18 +1291,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: iTunes Search API（音乐/专辑、播客节目与单集（含集数/时长/发布日期）；中文 country=cn，免认证）
-- name: jd
-  tier: T1
-  type: ddg_site
-  coverage:
-  - shopping
-  - chinese
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 京东商品搜索（DDG site 语法包装，绕站内登录墙；解析 0 条时自动去 site 前缀兜底）
 - name: jikan
   tier: T1
   type: jikan
@@ -1381,18 +1357,6 @@ engines:
   recommended: false
   explicit_only: false
   desc: K10plus 联合目录（德国最大图书馆联合目录，SRU，免认证）
-- name: kaola
-  tier: T1
-  type: ddg_site
-  coverage:
-  - shopping
-  - chinese
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 考拉海购商品搜索（DDG site 语法包装）
 - name: keenable
   tier: T1
   type: http
@@ -1649,18 +1613,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: PubMed本地（pubmed）
-- name: local_quark
-  tier: T2
-  type: html
-  coverage:
-  - chinese
-  - web
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: false
-  desc: 夸克搜索（quark.sm.cn HTML，免 key；选择器 2026-09-26 实测三页验证，见 parse_maps.yaml）
 - name: local_search
   tier: T2
   type: cli
@@ -2221,18 +2173,6 @@ engines:
   explicit_only: false
   desc: Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的
     parallel REST 通道分立，作其缺位时的补位）
-- name: pdd
-  tier: T1
-  type: ddg_site
-  coverage:
-  - shopping
-  - chinese
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 拼多多商品搜索（DDG site 语法双域名 OR 包装，同 SAC pdd.ts 口径）
 - name: people_daily
   tier: T1
   type: people_daily
@@ -2581,30 +2521,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: Steam 商店搜索（免认证）
-- name: suning
-  tier: T1
-  type: ddg_site
-  coverage:
-  - shopping
-  - chinese
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 苏宁商品搜索（DDG site 语法包装）
-- name: taobao
-  tier: T1
-  type: ddg_site
-  coverage:
-  - shopping
-  - chinese
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 淘宝/天猫商品搜索（DDG site:taobao.com 包装，同 SAC taobao.ts 口径）
 - name: tass
   tier: T1
   type: rss_feed
@@ -2757,19 +2673,6 @@ engines:
   recommended: false
   explicit_only: false
   desc: TLE 轨道根数镜像（第三方，Celestrak 不可达时替代，免认证）
-- name: toutiao
-  tier: T1
-  type: toutiao
-  coverage:
-  - chinese
-  - news
-  - realtime
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: 今日头条站内全文搜索（content API，免认证；2026-09-26 本机实测 shark 反爬 data=null，他环境可能可用，空结果诚实透出）
 - name: toutiao_hot
   tier: T1
   type: toutiao_hot

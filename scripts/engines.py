@@ -206,7 +206,6 @@ from engines_builders import (
 # zhihu_global 用别名：与上方 engines_builders 转出的 cn 旧版同名，F811 门禁
 # 禁止静默重定义；别名让「batch10 取代 cn 版」在注册表处显式可见。
 from engines_builders_batch10 import (  # noqa: F401
-    _build_ddg_site_engine,
     _build_zhihu_global_engine as _build_zhihu_global_engine_v2,
 )
 
@@ -355,7 +354,6 @@ _BUILDERS = {
     "weread": _build_weread_engine,
     "douban_book": _build_douban_book_engine,
     "zhihu_global": _build_zhihu_global_engine_v2,  # 补强版在 batch10（候选池取满 + 错误行动提示；cn 版被取代，cn 冻结在行数门禁上限）
-    "ddg_site": _build_ddg_site_engine,
     "zhihu_user": _build_zhihu_user_engine,
     "fred": _build_fred_engine,
     "fx_rate": _build_fx_rate_engine,
