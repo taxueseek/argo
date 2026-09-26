@@ -43,7 +43,21 @@
     "so.com",
     "bing.com",
     "google.com",
-    "google.com.hk"
+    "google.com.hk",
+    "google.co.jp",
+    "google.co.uk",
+    "google.de",
+    "yahoo.com",
+    "yahoo.co.jp",
+    "duckduckgo.com",
+    "baidu.co.jp",
+    "bing.co.jp",
+    "ecosia.org",
+    "startpage.com",
+    "search.brave.com",
+    "qwant.com",
+    "searx.be",
+    "lite.duckduckgo.com"
   ],
   "serp_url_patterns": [
     "baidu.com/s?",

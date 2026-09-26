@@ -834,5 +834,20 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
 
 
 if __name__ == "__main__":
+    # 把本模块（此刻身份是 __main__）的 import 时点交给 search_cli。
+    #
+    # 为什么需要这一行：入口是 bin/argo → runpy.run_module("search",
+    # run_name="__main__")，本模块体以 __main__ 身份跑完整条 import 链，
+    # 置的 _MODULE_T0 / _IMPORTS_DONE 是真值（约 30 ms）。紧接着下面这行
+    # `from search_cli import main` 会让 search_cli 执行 `from search import
+    # _MODULE_T0` —— 那是**第二次**导入 search（真模块），此刻依赖全在
+    # sys.modules 里，差值 ≈ 0。于是 --explain-timing 的 import_ms 恒为 0.0，
+    # 而它这一栏恰恰是给「优化固定开销」用的，报 0 等于把人指向错的数字。
+    #
+    # runpy 不会把 __main__ 留在 sys.modules['__main__']（它会恢复原模块），
+    # 所以靠 __main__ 取不到；写进 search_cli 的模块属性是唯一稳定的交接点。
     from search_cli import main  # 反向导入放这里：CLI 依赖本模块，模块级会成环
+    import search_cli as _cli_mod
+    _cli_mod._TRUE_IMPORT_T0 = _MODULE_T0
+    _cli_mod._TRUE_IMPORTS_DONE = _IMPORTS_DONE
     main()

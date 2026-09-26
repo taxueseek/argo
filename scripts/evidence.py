@@ -197,12 +197,23 @@ def is_serp_or_jump_url(url: str) -> bool:
         query = urlparse(url).query or ""
     except Exception:
         path, query = "", ""
-    serp_hosts = set(cfg.get("serp_host_markers") or []) | {
-        "baidu.com", "sogou.com", "so.com", "bing.com",
-        "google.com", "google.com.hk", "weixin.sogou.com",
-    }
+    # serp 域名只从 source_types_cn.json 的 serp_host_markers 读。此前这里
+    # 还并列写了一份字面量集合，两处各写一份正是漏网的成因：google.co.jp /
+    # yahoo.co.jp / duckduckgo.com 的结果页会被当成正文信源（authority 拿
+    # 到正常分、并进入最终输出），而 google.com 被拦——同一个概念两种判定。
+    #
+    # 判定用**后缀匹配**而非等值：同一搜索引擎的入口域名很多（yahoo.co.jp /
+    # search.yahoo.co.jp、duckduckgo.com / lite.duckduckgo.com、brave.com /
+    # search.brave.com），而 _normalize_domain 只去 www.，子域会原样保留。
+    # 等值比较下每上一个新入口就得往表里再补一条——那正是这份表原本在漏的。
+    serp_hosts = tuple(cfg.get("serp_host_markers") or ())
     host_bare = host[4:] if host.startswith("www.") else host
-    if host_bare in serp_hosts or host in serp_hosts:
+    _hit = any(
+        host_bare == m or host == m
+        or host_bare.endswith("." + m) or host.endswith("." + m)
+        for m in serp_hosts
+    )
+    if _hit:
         if path in ("", "/", "/s", "/web", "/search") or path.startswith("/s") \
                 or "link" in path or "search" in path or "q=" in query or "wd=" in query:
             return True

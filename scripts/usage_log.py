@@ -52,7 +52,7 @@ def _trim_if_oversized(path: Path) -> None:
 
 
 def usage_log_dir() -> Path:
-    # ARGO_TELEMETRY_DIR 优先（测试隔离）；未设置时由唯一来源派生
+    # ARGO_USAGE_LOG_DIR 优先（测试隔离）；未设置时由唯一来源派生
     override = os.environ.get("ARGO_USAGE_LOG_DIR", "").strip()
     if override:
         return Path(os.path.expanduser(override))
@@ -88,9 +88,19 @@ def emit(stream: str, record: dict[str, Any]) -> bool:
         d = usage_log_dir()
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{stream}.jsonl"
-        _trim_if_oversized(path)
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
+        # 「回缩 + 追加」必须在同一个文件锁内，这是数据不丢的前提。
+        #
+        # why：回缩走 argo_paths.atomic_write_text，它是 os.replace —— **换
+        # inode 并 unlink 旧 inode**。若两段之间没有锁：进程 A 回缩替换了文件，
+        # 进程 B 此前已按旧路径打开的追加 fd（或紧接着 open 到的旧 inode）
+        # 就写进了已被 unlink 的孤儿 inode —— 记录「写成功」但永远读不到。
+        # 长驻 MCP server（多线程并发 search）与 CLI 同写一个流文件时，文件
+        # 恰好跨过 1 MiB 的那一刻就会触发。这与 quota.py 当初补文件锁要修的
+        # 是同一类 bug（load-modify-write 缺跨进程锁则计数丢失）。
+        with _paths.file_lock(path):
+            _trim_if_oversized(path)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
         return True
     except Exception:
         return False

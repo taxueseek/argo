@@ -32,6 +32,41 @@ from search import (
 )
 
 
+# 真值时点的交接槽。由 search.py 的 __main__ 块在跑完整条 import 链后写入
+# （见该文件底部），因为那一刻本模块的身份是 __main__，而 runpy 事后会把
+# sys.modules['__main__'] 恢复成原模块——事后从 __main__ 上取不到了。
+_TRUE_IMPORT_T0: float | None = None
+_TRUE_IMPORTS_DONE: float | None = None
+
+
+def _resolve_module_timing() -> tuple[float, float]:
+    """取 import 计时的两个时点。
+
+    三个来源按可靠性排序：
+
+    1. `_TRUE_IMPORT_T0` —— search.py 以 `__main__` 身份跑完整条 import 链
+       后写入的交接值，这是**真值**（约 30 ms）。
+    2. `sys.modules['__main__']` 上的同名属性 —— 直接 `python3 search.py` 时
+       成立。
+    3. 本模块 import 进来的 `search._MODULE_T0` —— **兜底，也是恒为 0 的那个**：
+       入口经 `bin/argo → runpy.run_module('search', run_name='__main__')`，
+       本模块执行 `from search import _MODULE_T0` 时，search 已以 __main__
+       跑过一遍，这是**第二次**导入，依赖全在 sys.modules 里，差值 ≈ 0。
+
+    走 3 正是 --explain-timing 的 import_ms 恒为 0.0 的原因，而它这一栏
+    恰恰是给「优化固定开销」用的——报 0 等于把优化者指向错误的数字。
+    """
+    if _TRUE_IMPORT_T0 is not None and _TRUE_IMPORTS_DONE is not None:
+        return _TRUE_IMPORT_T0, _TRUE_IMPORTS_DONE
+    main_mod = sys.modules.get("__main__")
+    if main_mod is not None:
+        t0 = getattr(main_mod, "_MODULE_T0", None)
+        done = getattr(main_mod, "_IMPORTS_DONE", None)
+        if isinstance(t0, float) and isinstance(done, float):
+            return t0, done
+    return _MODULE_T0, _IMPORTS_DONE
+
+
 # ── CLI 主入口 ─────────────────────────────────────────────────────────────────
 
 
@@ -246,10 +281,11 @@ def main():
     # 在任何阶段里——不显式报出来，看的人会把「启动 80 ms」当成「搜索 80 ms」，
     # 优化方向就找错了。
     if _timing is not None and "timing" in results:
-        _now_ms = (time.perf_counter() - _MODULE_T0) * 1000.0
+        _mod_t0, _imports_done = _resolve_module_timing()
+        _now_ms = (time.perf_counter() - _mod_t0) * 1000.0
         _stages = results["timing"].get("stages_ms") or 0
         results["timing"]["import_ms"] = round(
-            (_IMPORTS_DONE - _MODULE_T0) * 1000.0, 1)
+            (_imports_done - _mod_t0) * 1000.0, 1)
         results["timing"]["overhead_ms"] = round(max(0.0, _now_ms - _stages), 1)
         results["timing"]["process_ms"] = round(_now_ms, 1)
 

@@ -13,7 +13,24 @@ from __future__ import annotations
 import os
 from typing import Any
 
-_ROUTE_SAMPLE_RATE = max(1, int(os.environ.get("ARGO_ROUTE_SAMPLE_RATE", "20")))
+
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    """读整型环境变量，任何异常都退回 default。
+
+    为什么必须有：这一行原本裸写 `int(os.environ.get(...))`，于是
+    `ARGO_ROUTE_SAMPLE_RATE=abc` 在**模块导入期**抛 ValueError，经
+    route.py 的导入链直接把整个 `argo search` 打挂——与本模块 docstring
+    写的「必须永远 fail-open，遥测写失败绝不能让一次搜索失败」正好相反，
+    而且触发它的只是一个拼错的采样率。mcp_handlers 早有同名 _env_int，
+    两处各写各的才是这个 bug 的成因。
+    """
+    try:
+        return max(minimum, int(str(os.environ.get(name, "")).strip() or default))
+    except (TypeError, ValueError):
+        return default
+
+
+_ROUTE_SAMPLE_RATE = _env_int("ARGO_ROUTE_SAMPLE_RATE", 20)
 _route_sample_counter = 0
 
 
