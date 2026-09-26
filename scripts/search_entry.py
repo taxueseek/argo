@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Optional
 
 from engine_dispatch import run_dispatch
-from telemetry import emit as _emit_telemetry
+from usage_log import emit as _emit_telemetry
 from quota import _QuotaBatch
 from search_pipeline import _SearchRequest, _SearchRun
 from search_types import Stage

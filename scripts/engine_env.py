@@ -281,7 +281,7 @@ def env_flag(name: str, default: bool = True, *, expand: bool = True,
 
     此前全仓有四套互不兼容的判断规则，同一写法在不同开关上行为不同：
       - `not in ("0","false","False")`      → 不认 no/off（ARGO_FETCH_PARALLEL、
-                                               ARGO_TELEMETRY）
+                                               ARGO_USAGE_LOG）
       - `not in ("0","false","False","no")` → 不认 off（fetch_v3 的四个开关、
                                                引擎 HTTP、robots、tinyfish、search 两处）
       - `not in {"","0","false","off","no"}` → 空串算关（recompute，语义不同）

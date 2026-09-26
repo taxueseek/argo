@@ -93,7 +93,7 @@ def _items_from_payload(payload: dict[str, Any], *, partition: str) -> list[dict
 def _emit_merge_telemetry(out: dict[str, Any]) -> None:
     """融合结果遥测（计数 + conflicts 概览）。失败静默，不拖累融合主路径。"""
     try:
-        from telemetry import emit
+        from usage_log import emit
         sources = out.get("sources") or {}
         emit("merge", {
             "query": (out.get("query") or "")[:60],

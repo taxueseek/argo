@@ -109,7 +109,7 @@ from search_output import (  # noqa: E402
     funnel_collapse,
 )
 try:
-    from telemetry import emit as _emit_telemetry
+    from usage_log import emit as _emit_telemetry
 except ImportError:
     _emit_telemetry = None  # type: ignore
 

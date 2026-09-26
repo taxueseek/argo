@@ -122,12 +122,12 @@ class TestAgentProfileKeepsRequestedTiming:
         assert "timing" in out
         assert out["timing"] == {"stages": []}
 
-    def test_telemetry_still_stripped(self):
+    def test_usage_log_still_stripped(self):
         payload = {"query": "q", "results": [], "engine_outcomes": [{"x": 1}],
                    "tfidf_scores": [1, 2], "lang_pref": {"a": 1}}
         out = S._strip_for_agent(payload)
         for k in ("engine_outcomes", "tfidf_scores", "lang_pref"):
-            assert k not in out, f"{k} 属遥测标量，仍应被剥掉"
+            assert k not in out, f"{k} 属本地使用日志标量，仍应被剥掉"
 
 
 if __name__ == "__main__":

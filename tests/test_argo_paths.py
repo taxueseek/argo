@@ -63,7 +63,7 @@ def test_env_beats_config_yaml_db_path(monkeypatch, tmp_path):
 _EXPECT = {
     "argo_engine_registry": ("HEALTH_STATE_PATH", "argo_engine_health.json"),
     "circuit_breaker": ("STATE_PATH", "circuit_breaker.json"),
-    "telemetry": ("_telemetry_dir", "telemetry"),
+    "usage_log": ("usage_log_dir", "usage_log"),
     "engine_admission": ("DEFAULT_ADMISSION_DIR", "admission"),
     "adaptive": ("DB_PATH", "adaptive.db"),
     "lang_pref": ("STATE_PATH", "lang_habit.json"),
@@ -80,7 +80,7 @@ def test_module_paths_under_state_root(monkeypatch, tmp_path, mod_name, attr_nam
     mod = __import__(mod_name)
     got = getattr(mod, attr_name)
     if callable(got):
-        # telemetry._telemetry_dir 是惰性函数（每次调用重读 env）
+        # usage_log.usage_log_dir 是惰性函数（每次调用重读 env）
         got = got()
     expect_name = _EXPECT[mod_name][1]
     expect = tmp_path if expect_name == "." else tmp_path / expect_name

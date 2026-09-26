@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""route_telemetry.py — 路由决策采样上报（旁路，失败静默）。
+"""route_log.py — 路由决策采样落日志（旁路，失败静默，仅本机）。
 
 按采样率把「features 齐全」的决策点落一条遥测记录（P2-6）。单独成模块的理由：
 它是路由模块**唯一**的写副作用（除决策缓存外），且必须永远 fail-open——
@@ -27,7 +27,7 @@ def sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
         return
     f = kw.get("features") or {}
     try:
-        from telemetry import emit
+        from usage_log import emit
         emit("route", {
             "domain": kw.get("domain"),
             "engine": kw.get("engine"),

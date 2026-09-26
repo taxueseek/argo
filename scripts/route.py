@@ -13,7 +13,7 @@ route_query 的三条分支，按优先级：
   route_combo     引擎组合装配（谁在场、什么顺序）
   route_policy    预算截断与保留（谁必须留下）
   route_cache     决策缓存的存储层
-  route_telemetry 决策采样上报（旁路，失败静默）
+  route_log 决策采样落日志（旁路，失败静默）
 
 每种决策都带 reason 字符串（给人看的归因入口，字段口径见 _feature_labels）。
 """
@@ -95,8 +95,8 @@ from route_cache import (  # noqa: E402
     invalidate_route_cache,
 )
 
-# 决策采样上报（旁路）：同名转出，测试打桩需打在 route_telemetry。
-from route_telemetry import sample_route  # noqa: E402
+# 决策采样落日志（旁路）：同名转出，测试打桩需打在 route_log。
+from route_log import sample_route  # noqa: E402
 
 # ── 语言与选源策略（route_lang）、组合装配（route_combo）、预算策略（route_policy）
 # 三块按职责拆出，这里同名转出：调用方与既有测试（route.extract_features /
@@ -566,7 +566,8 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
     if _strong:
         confidence = 0.9
     # D4：统一熔断统一处理——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
-    engines_combo = breaker_filter(engines_combo, enabled)
+    engines_combo = breaker_filter(engines_combo, enabled, features=features,
+                                   query=query, skip_aux=_pure_combo)  # 收口
     # budget 截断后保持一致 parallel，避免短 combo 仍开多余并行
     # research 语境例外：子查询跑满 combo（no_early_stop），串行会拖垮
     # 整条研究管线，强制并行
@@ -664,10 +665,10 @@ def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
         engines_combo, features, None, mode, parallel, must_keep)
     # ja/ko catch-all 与主域分支同计算方式：anysearch 前二（TF-IDF 直选路径
     # 也会把多语言主力挤掉）
-    engines_combo = _inject_multilingual_backup(engines_combo, enabled,
-                                                features)
+    engines_combo = _inject_multilingual_backup(engines_combo, enabled, features)
     # D4：统一熔断统一处理（TF-IDF 注入/语言追加可能绕过 _get_engines_combo）
-    engines_combo = breaker_filter(engines_combo, enabled)
+    engines_combo = breaker_filter(engines_combo, enabled, features=features,
+                                   query=query)
     if mode == "fast":
         parallel = False
     else:
@@ -952,7 +953,9 @@ def route_query_cached(query: str, engine_override: str = "auto",
     hit = entries.get(key)
     if isinstance(hit, dict) and isinstance(hit.get("decision"), dict) \
             and time.time() - float(hit.get("ts") or 0) <= _ROUTE_CACHE_TTL_S:
-        decision = hit["decision"]
+        # 深拷贝：调用方就地改 decision，route_cache memo 又让多次读共享对象
+        # （走 JSON 往返而非 copy：能进缓存本就以 JSON 可逆为前提）
+        decision = json.loads(json.dumps(hit["decision"], ensure_ascii=False))
         decision["route_cached"] = True
         # 用真实耗时覆盖存档值：这个字段会经 plan 输出给用户，报旧值就是撒谎
         decision["elapsed_ms"] = round((time.time() - t0) * 1000, 2)

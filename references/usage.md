@@ -24,7 +24,7 @@
 | `argo cite` | DOI 引用条目（四格式） |
 | `argo mcp` | 多客户端 MCP 注入/诊断/还原 |
 | `argo paths` | 路径自省与状态目录自检 |
-| `argo stats` | 使用日志与反馈状态（本地遥测只读出口） |
+| `argo stats` | 使用日志与反馈状态（本地使用日志只读出口） |
 
 > SKILL.md 只留核心命令；本页是参数大全与输出字段说明。
 
@@ -64,7 +64,7 @@ python3 scripts/search.py "查询词" \
 | `sources` | **引用用这个**：底部相关链接形态的稳定 5 字段投影 | 1.0 KB |
 | `candidates` | **归档/整理素材才要**：完整候选记录，带来源追溯字段（`candidate_id`/`canonical_url`/`platform`/`verification`/`metrics`/`limitations`） | 4.9 KB |
 
-- **Agent 消费再加 `--fields agent`**：剥掉遥测字段、只留答案与质量信号，
+- **Agent 消费再加 `--fields agent`**：剥掉本地使用日志字段、只留答案与质量信号，
   实测 `-n 2` 输出 1.3 KB。`fetch_required` 与 `limitations` 在各档都保留。
 - **`--envelope` 与 `--fields agent` 不要同给**（2026-09-19 实测）：`_strip_for_agent`
   会把 `candidates`/`coverage` 一并剥掉，envelope 的增量是 **0 字节**——同一查询
@@ -349,7 +349,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_RRF_WEIGHTED` | ('RRF 加权融合', '默认关（逃生开关）') | 见 references/operations.md 与模块 docstring |
 | `ARGO_SEMANTIC_EVIDENCE` | ('可选语义证据层（classifier.dev）', '默认关，个人可选开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_SERP_GUARD` | ('SERP 垃圾结果守卫', '默认开；=0 关闭') | 见 references/operations.md 与模块 docstring |
-| `ARGO_TELEMETRY` | ('本地遥测（JSONL 流，stats 数据源）', '默认开；=0 整体关闭') | 见 references/operations.md 与模块 docstring |
+| `ARGO_USAGE_LOG` | ('本地使用日志（JSONL 流，stats 数据源）', '默认开；=0 整体关闭') | 见 references/operations.md 与模块 docstring |
 | `ARGO_UNPAYWALL_EMAIL` | unpaywall email | 见 references/operations.md 与模块 docstring |
 | `ARGO_WOLFRAM_APPID` | wolfram appid | 见 references/operations.md 与模块 docstring |
 | `ARGO_XHS_TIMEOUT` | xhs timeout | 见 references/operations.md 与模块 docstring |
@@ -401,7 +401,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_LOCAL_SEEK_PATH` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
 | `ARGO_LOCAL_SEEK_ROOTS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
 | `ARGO_STATE_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_TELEMETRY_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_USAGE_LOG_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
 
 ### MCP 运行配置（6）
 
@@ -460,11 +460,11 @@ Crossref+OpenAlex 免 key。MCP 工具 `argo_cite`（dois 数组 + style）。
 - `argo paths [--check] [--migrate]`：状态目录/密钥文件位置自省与本机自检。
 - `argo mcp {{status|inject|undo}}`：多客户端 MCP 一键注入/诊断/还原。
 
-## 日志与反馈（本地遥测 + stats 读出口）
+## 日志与反馈（本地使用日志 + stats 读出口）
 
 ### 数据在哪、有什么
 
-`<状态目录>/telemetry/`（`argo stats` 首行给出实际路径）下四个 append-only JSONL 流，
+`<状态目录>/usage_log/`（`argo stats` 首行给出实际路径）下四个 append-only JSONL 流，
 单流 1MB/2000 行自动回缩，**本地数据不出本机**：
 
 | 流 | 一条 = | 用途 |
@@ -479,7 +479,7 @@ Crossref+OpenAlex 免 key。MCP 工具 `argo_cite`（dois 数组 + style）。
 ```bash
 argo stats          # 汇总：命中率/平均时延/引擎频次/救援率 + 最近 5 条
 argo stats -n 200   # 回看窗口加大
-ARGO_TELEMETRY=0    # 整体关闭（写入侧静默失败，关闭零风险）
+ARGO_USAGE_LOG=0    # 整体关闭（写入侧静默失败，关闭零风险）
 ```
 
 ### 反馈闭环（搜索质量的自我修正）
@@ -489,4 +489,4 @@ ARGO_TELEMETRY=0    # 整体关闭（写入侧静默失败，关闭零风险）
 - **熔断**：连续失败引擎熔断跳过，恢复后自动回归；
 - **归档**：`argo search --archive` 留完整候选（流量回放/审计用），`ARGO_ARCHIVE_ROOT` 定位置。
 
-隐私纪律：遥测只在本机、query 截断脱敏、**本机用量统计不进任何对外材料**（判据=对方能否在仓库里复现该数字）。
+隐私纪律：本地使用日志只在本机、query 截断脱敏、**本机用量统计不进任何对外材料**（判据=对方能否在仓库里复现该数字）。

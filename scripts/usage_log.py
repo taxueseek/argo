@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""telemetry.py — argo 最小观测遥测（append-only JSONL）
+"""usage_log.py — argo 本地使用日志（append-only JSONL，仅本机，不外发）
 
 纪律（开发做减法）：
   - 不做平台：只有「追加一条」「读最近 N 条」两个操作
   - 失败静默：任何异常都吞掉返回 False，绝不拖累搜索主路径
-  - 目录可注入：ARGO_TELEMETRY_DIR 覆盖（测试隔离），默认 <状态目录>/telemetry/
-  - 总开关：ARGO_TELEMETRY=0 / false 完全关闭
+  - 目录可注入：ARGO_USAGE_LOG_DIR 覆盖（测试隔离），默认 <状态目录>/usage_log/
+  - 总开关：ARGO_USAGE_LOG=0 / false 完全关闭
   - 脱敏：query 等敏感字段由调用方截断，本模块不放大
 
 Schema（每条一行 JSON，UTF-8）：
@@ -51,25 +51,25 @@ def _trim_if_oversized(path: Path) -> None:
         return
 
 
-def _telemetry_dir() -> Path:
+def usage_log_dir() -> Path:
     # ARGO_TELEMETRY_DIR 优先（测试隔离）；未设置时由唯一来源派生
-    override = os.environ.get("ARGO_TELEMETRY_DIR", "").strip()
+    override = os.environ.get("ARGO_USAGE_LOG_DIR", "").strip()
     if override:
         return Path(os.path.expanduser(override))
-    return _paths.state_path("telemetry")
+    return _paths.state_path("usage_log")
 
 
 def stream_dir() -> Path:
     """遥测目录（公开读出口：stats 等读者需要展示数据在哪）。"""
-    return _telemetry_dir()
+    return usage_log_dir()
 
 
 def _enabled() -> bool:
-    return env_flag("ARGO_TELEMETRY")
+    return env_flag("ARGO_USAGE_LOG")
 
 
 def emit(stream: str, record: dict[str, Any]) -> bool:
-    """追加一条观测记录到 <telemetry_dir>/<stream>.jsonl。
+    """追加一条日志记录到 <usage_log_dir>/<stream>.jsonl。
 
     失败静默返回 False，绝不抛异常；记录内会补 ts / stream / version。
     """
@@ -85,7 +85,7 @@ def emit(stream: str, record: dict[str, Any]) -> bool:
             },
             ensure_ascii=False,
         )
-        d = _telemetry_dir()
+        d = usage_log_dir()
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"{stream}.jsonl"
         _trim_if_oversized(path)
@@ -99,7 +99,7 @@ def emit(stream: str, record: dict[str, Any]) -> bool:
 def tail(stream: str, n: int = 10) -> list[dict[str, Any]]:
     """读取最近 n 条记录（供分析与测试）。读失败返回空列表。"""
     try:
-        d = _telemetry_dir()
+        d = usage_log_dir()
         lines = (d / f"{stream}.jsonl").read_text(encoding="utf-8").splitlines()
         return [json.loads(x) for x in lines[-n:]]
     except Exception:

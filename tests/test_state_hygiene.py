@@ -6,7 +6,7 @@
   1. **SQLite WAL 不回缩**：默认 `journal_size_limit=-1`，检查点后 `-wal` 停在
      自动检查点阈值（1000 页 ≈ 3.94 MB）。实测 cache.db + adaptive.db 两库合计
      约 7.9 MB；`limit=1 MB + autocheckpoint=256 页` 后稳态约 1 MB。
-  2. **遥测无轮转**：append-only 而无上限，三个流实测 771 KB 且只增不减。
+  2. **本地使用日志无轮转**：append-only 而无上限，三个流实测 771 KB 且只增不减。
   3. **配置缓存槽成孤儿**：槽按 config.yaml 路径分（多 checkout 安全所必需），
      临时 checkout（测试/基准跑出来的 /tmp 副本）留下的槽永不回收，实测 8 个槽
      里 6 个是孤儿、合计 1.13 MB。
@@ -28,7 +28,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import argo_paths  # noqa: E402
 import config  # noqa: E402
-import telemetry  # noqa: E402
+import usage_log  # noqa: E402
 
 
 # ── 1. SQLite WAL 策略 ────────────────────────────────────────────────────────
@@ -76,13 +76,13 @@ def test_both_state_dbs_use_the_shared_policy(tmp_path, monkeypatch):
         == argo_paths.WAL_AUTOCHECKPOINT_PAGES
 
 
-# ── 2. 遥测轮转 ───────────────────────────────────────────────────────────────
+# ── 2. 本地使用日志轮转 ───────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def tele_dir(tmp_path, monkeypatch):
-    d = tmp_path / "telemetry"
-    monkeypatch.setenv("ARGO_TELEMETRY_DIR", str(d))
-    monkeypatch.setenv("ARGO_TELEMETRY", "1")
+    d = tmp_path / "usage_log"
+    monkeypatch.setenv("ARGO_USAGE_LOG_DIR", str(d))
+    monkeypatch.setenv("ARGO_USAGE_LOG", "1")
     return d
 
 
@@ -93,10 +93,10 @@ def _lines(d: Path, stream: str) -> list[str]:
 
 def test_telemetry_trims_when_over_cap(tele_dir, monkeypatch):
     """超过上限就回缩到最近 N 行，且不丢最新一条。"""
-    monkeypatch.setattr(telemetry, "_MAX_BYTES", 300)
-    monkeypatch.setattr(telemetry, "_KEEP_LINES", 5)
+    monkeypatch.setattr(usage_log, "_MAX_BYTES", 300)
+    monkeypatch.setattr(usage_log, "_KEEP_LINES", 5)
     for i in range(60):
-        telemetry.emit("rotation", {"i": i, "pad": "y" * 40})
+        usage_log.emit("rotation", {"i": i, "pad": "y" * 40})
     lines = _lines(tele_dir, "rotation")
     assert len(lines) <= 6, f"未回缩：{len(lines)} 行"
     assert json.loads(lines[-1])["i"] == 59, "最新一条不能丢"
@@ -104,21 +104,21 @@ def test_telemetry_trims_when_over_cap(tele_dir, monkeypatch):
 
 def test_telemetry_untouched_under_cap(tele_dir, monkeypatch):
     """没超上限时一次读取都不该发生（只付 stat 的代价）。"""
-    monkeypatch.setattr(telemetry, "_MAX_BYTES", 10 ** 9)
+    monkeypatch.setattr(usage_log, "_MAX_BYTES", 10 ** 9)
     for i in range(20):
-        telemetry.emit("small", {"i": i})
+        usage_log.emit("small", {"i": i})
     assert len(_lines(tele_dir, "small")) == 20
 
 
 def test_telemetry_trim_failure_is_silent(tele_dir, monkeypatch):
     """回缩失败不得把异常抛到搜索主路径上。"""
-    monkeypatch.setattr(telemetry, "_MAX_BYTES", 1)
+    monkeypatch.setattr(usage_log, "_MAX_BYTES", 1)
 
     def boom(*_a, **_k):
         raise OSError("只读文件系统")
 
-    monkeypatch.setattr(telemetry._paths, "atomic_write_text", boom)
-    assert telemetry.emit("broken", {"i": 1}) is True
+    monkeypatch.setattr(usage_log._paths, "atomic_write_text", boom)
+    assert usage_log.emit("broken", {"i": 1}) is True
 
 
 # ── 3. 配置缓存槽回收 ─────────────────────────────────────────────────────────
