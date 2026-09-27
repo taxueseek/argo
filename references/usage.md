@@ -38,7 +38,7 @@ python3 scripts/search.py "查询词" \
   [--mode fast|auto|deep|budget] # 预算模式\
   [--local-first]             # 本地零成本聚合优先\
   [--no-cache] [--explain] [--json]\
-  [--timeout S] [--progress]\
+  [--timeout S]\
   [--since 7d|2026-08-01] [--until 2026-08-01] [--sort relevance|oldest|newest]\
   [--domain DOMAIN] [--sub_domain SUB_DOMAIN]  # 垂直域限定\
   [--input-kind auto|keyword|url-seed|known-url]\
@@ -170,7 +170,7 @@ echo '{"results": [...]}' | python3 scripts/evidence.py "查询词" --stdin --js
 ## clarify 输出字段
 
 ```bash
-python3 scripts/clarify.py "有歧义的查询" --explain --json
+python3 scripts/clarify.py "有歧义的查询" --json
 ```
 
 `ambiguities`（歧义词+可能含义+置信度）、`intents`（意图分类）、`recommended_strategy`（clarify_first/deep_research/split_search/direct_search）。

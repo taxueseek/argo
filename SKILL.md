@@ -78,7 +78,7 @@ python3 scripts/research.py "查询" [--work-packages PATH|JSON] [--depth deep] 
 echo '{"results": [...]}' | python3 scripts/evidence.py "查询词" --stdin --json [--high-stakes]
 
 # clarify — 意图消歧
-python3 scripts/clarify.py "有歧义的查询" --explain --json
+python3 scripts/clarify.py "有歧义的查询" --json
 ```
 
 

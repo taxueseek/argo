@@ -132,7 +132,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--domain", default="", help="AnySearch 垂直域")
     parser.add_argument("--sub_domain", default="", help="AnySearch 子域")
-    parser.add_argument("--progress", action="store_true")
     parser.add_argument(
         "--input-kind", default="auto",
         choices=["auto", "keyword", "url-seed", "known-url"],

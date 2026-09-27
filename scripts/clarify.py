@@ -665,7 +665,6 @@ def main():
     ensure_utf8_stdio()  # 入口第一件事：钉住 stdout/stderr 编码（见 cli_io）
     parser = argparse.ArgumentParser(description="意图消歧工具")
     parser.add_argument("query", help="搜索查询")
-    parser.add_argument("--explain", action="store_true", help="详细解释")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     args = parser.parse_args()
 
