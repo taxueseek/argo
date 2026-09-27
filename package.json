@@ -29,10 +29,6 @@
   "files": [
     "bin/",
     "scripts/",
-    "!**/__pycache__/**",
-    "!**/*.pyc",
-    "!sub-skills/**/__pycache__/**",
-    "!sub-skills/**/*.pyc",
     "config.yaml",
     "engines/",
     "backends/",
@@ -44,7 +40,11 @@
     "packages/dsh-plugin/",
     "README.md",
     "SKILL.md",
-    "LICENSE"
+    "LICENSE",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!sub-skills/**/__pycache__/**",
+    "!sub-skills/**/*.pyc"
   ],
   "dsh": {
     "bundle": {
