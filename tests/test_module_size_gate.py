@@ -65,7 +65,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
               "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）"),
     "scripts/engines_base.py": (
-        1508, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+        1509, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
               "2026-09-26 +42：SERP 垃圾守卫接线（守卫本体独立在 serp_guard.py，此处只留"
               "冻结集+调用点）、反爬全文级标记（DDG challenge 实测）、key 脱敏三形态兜底；"
               "同日 −28：移除 DDG Instant Answer 解析器（引擎随本机可达性门下线）；"
@@ -74,15 +74,17 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "同日 −1：语言参数动态化补上 mkt（_build_html_engine 这侧漏了，"
               "lang_detect 的 mkt 表一直备着却无人调用），注释同步精简；"
               "2026-09-27 +14：logging 延迟加载（_get_logger 模式）+ "
-              "_redact_secrets fallback 加基本脱敏（Bearer token + key=value）"),
+              "_redact_secrets fallback 加基本脱敏（Bearer token + key=value）；"
+              "2026-09-28 +2：_detect_anti_bot head 区按需 lower（性能优化）"),
     "scripts/cache.py": (
-        1374, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
+        1375, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行；+3=2026-09-27 退化写入守卫的两处"
               "调用点与一行 import——判定逻辑本身已拆到 cache_guard.py，本文件"
               "只剩调用，不再是「准入策略混在存储实现里」的状态；"
               "2026-09-27 +9：sqlite3 延迟导入（_get_sqlite3 模式）+ L1 100→500；"
               "−1=2026-09-27 引擎级垂直域维度（--domain/--sub_domain）并入缓存键，"
-              "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点）"),
+              "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点；"
+              "2026-09-28 +2：normalize_query 加 @lru_cache 装饰器（性能优化）"),
     "scripts/http_client.py": (
         1005, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
               "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）"),

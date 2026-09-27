@@ -833,7 +833,6 @@ def _detect_anti_bot(html: str) -> bool:
         return True
     if len(html.strip()) < 500:
         return True
-    lowered = html.lower()
     # 通用标记只在前 2000 字符（head 区域）检测：captcha/challenge 这类词
     # 出现在正文属合法语义，全文扫会误杀
     anti_bot_head = [
@@ -841,14 +840,16 @@ def _detect_anti_bot(html: str) -> bool:
         "access denied", "rate limit", "too many requests",
         "checking your browser", "ddos-guard", "perimeterx",
     ]
+    lowered_head = html[:2000].lower()
     for marker in anti_bot_head:
-        if marker in lowered[:2000]:
+        if marker in lowered_head:
             return True
     # 全文级高特异性标记：实测 DDG challenge 页以 HTTP 202 返回且文案不在
     # head 区（首个 challenge 字样在 2600+ 字符处，urllib 回退路径会把这种
     # body 当正常页送进解析），head 扫描必然漏。这张表只收带站点专名/语境
     # 的短语——不带专名的词（如 anomaly，会在讨论异常检测的结果页正文里
     # 合法出现）禁止进表，否则误杀正常页。
+    lowered = html.lower()
     for marker in (
         "bots use duckduckgo",                   # DDG challenge 页实测文案
         "select all squares containing a duck",  # 同上，点选验证题干

@@ -204,11 +204,22 @@ class SemanticRouter:
         self.boost_keywords: dict[str, dict[str, float]] = {}
         self.boost_combos: dict[str, dict[str, float]] = {}
         self._loaded = False
+        self._profiles_mtime: float = 0.0
 
     def _ensure_loaded(self) -> None:
-        """懒加载领域文档，只加载一次。"""
+        """懒加载领域文档；文件变化时自动重载。"""
         if self._loaded:
-            return
+            try:
+                mtime = DOMAIN_PROFILES_PATH.stat().st_mtime
+                if mtime == self._profiles_mtime:
+                    return
+            except OSError:
+                return
+            self._loaded = False
+            self.engine_names.clear()
+            self.engine_vectors.clear()
+            self.boost_keywords.clear()
+            self.boost_combos.clear()
         if not DOMAIN_PROFILES_PATH.exists():
             self._loaded = True
             return
@@ -231,6 +242,7 @@ class SemanticRouter:
             self.vectorizer.fit(corpus)
             for i, name in enumerate(self.engine_names):
                 self.engine_vectors[name] = self.vectorizer.transform(corpus[i])
+        self._profiles_mtime = DOMAIN_PROFILES_PATH.stat().st_mtime
         self._loaded = True
 
     def route(self, query: str, top_k: int = 3,

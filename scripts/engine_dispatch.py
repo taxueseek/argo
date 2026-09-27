@@ -624,7 +624,8 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         last_start: float | None = None
         while (queue or pending) and _now() < deadline:
             started = False
-            while queue and len(pending) < 3:
+            max_concurrency = 3  # 可配置：deep 模式可提高到 5-8
+            while queue and len(pending) < max_concurrency:
                 if gate is not None and _now() >= gate:
                     break  # 预算耗尽：不再起新引擎（既有 fast 契约）
                 if (pending and stagger_s > 0.0 and last_start is not None

@@ -3,7 +3,7 @@
 cache.py — Unified Search v2 双层缓存引擎
 
 功能：
-  L1: 内存 LRU 热缓存（100 条），避免同进程重复查询
+  L1: 内存 LRU 热缓存（1000 条），避免同进程重复查询
   L2: SQLite 持久化缓存（TTL 可配置），跨进程复用
   分级 TTL：financial / news / realtime / general / research / evergreen
   大值 gzip 压缩（> 1KB）
@@ -57,8 +57,8 @@ DEFAULT_DB_PATH = str(argo_paths.db_path())
 DEFAULT_TTL = 3600
 MAX_MEMORY_ITEMS = 1000
 MAX_DB_SIZE_MB = 200
-COMPRESSION_THRESHOLD = 1024
-COMPRESSION_LEVEL = 6
+COMPRESSION_THRESHOLD = 768
+COMPRESSION_LEVEL = 1
 
 # 分级 TTL（秒）
 CACHE_TIERS = {
@@ -167,6 +167,7 @@ DOMAIN_TIER_MAP = {
 }
 
 
+@functools.lru_cache(maxsize=4096)
 def normalize_query(query: str) -> str:
     """缓存键用查询归一化：折叠空白、全半角空格、两端 trim、小写英文字母。
 
@@ -221,7 +222,7 @@ def _hash_token(t: str, seed: int) -> int:
     return h
 
 
-@functools.lru_cache(maxsize=2048)
+@functools.lru_cache(maxsize=8192)
 def _signature(s: str) -> tuple[int, ...]:
     """查询的 minhash 签名：每个置换下全部 n-gram 的最小哈希。
 
