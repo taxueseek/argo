@@ -340,3 +340,60 @@ class TestNoHandRolledTmp:
             "发现手写固定名 .tmp（应用 argo_paths.atomic_write_json）:\n"
             + "\n".join(offenders)
         )
+
+
+class TestQuotaDropsForeignEngineNames:
+    """配额账本只为「配置里真的存在的引擎」留行（2026-09-27）。
+
+    实测（改前）：本机 quota.json 419 条里 195 条是测试/探针残留
+    （`eng_x`、`benchmark_a`、`p_<8hex>`、`nope`…），只增不减——每跑一次测试或
+    评测就多几行并永久留存。它不改变配额判断（那些名字不会被路由到），但让
+    「引擎用量账本」从根上不可信：近一半的行不指向任何真实来源。
+
+    修法的两条边界同样重要，都在本文件锁住：
+      - **不按「现在能否路由」删**：临时缺密钥/熔断禁用的源恢复后要接着用这份账。
+      - **不删本次正在写入的名字**：测试替身与评测脚本靠这个口子写非配置名，
+        删掉会让「写进了什么」与「读回来什么」不一致（实测三处并发/窗口用例
+        因此变红）。
+    """
+
+    def test_drops_only_names_absent_from_config(self):
+        import quota
+        state = {
+            "anysearch": {"used": 1, "calls": []},
+            "definitely-not-in-config": {"used": 9, "calls": []},
+        }
+        out = quota._prune_foreign_engines(state, set())
+        assert "anysearch" in out, "真实引擎被误删"
+        assert "definitely-not-in-config" not in out, "配置外的残留没被丢掉"
+
+    def test_keeps_names_written_in_this_batch(self):
+        """本次正在写入的名字永不删——否则测试替身/评测脚本写不下去。"""
+        import quota
+        state = {"quick_primary": {"used": 1, "calls": []},
+                 "benchmark_a": {"used": 2, "calls": []}}
+        out = quota._prune_foreign_engines(state, {"quick_primary"})
+        assert "quick_primary" in out
+        assert "benchmark_a" not in out
+
+    def test_fail_safe_when_config_unavailable(self):
+        """拿不到配置就不删（判据不可用时不猜）。"""
+        import quota
+        state = {"whatever": {"used": 1, "calls": []}}
+        orig = quota._config_engine_names
+        quota._config_engine_names = lambda: None
+        try:
+            out = quota._prune_foreign_engines(state, set())
+        finally:
+            quota._config_engine_names = orig
+        assert out == state, "判据不可用时不该丢任何行"
+
+    def test_prune_is_wired_into_the_write_path(self):
+        """形态门：自愈必须挂在唯一写入口，否则它只是个没人调的函数。"""
+        src = (SCRIPT_DIR / "quota.py").read_text(encoding="utf-8")
+        assert "_prune_foreign_engines(" in src, "自愈没有接线"
+        # 取**最后一次**出现（调用点在定义之后）：定义那次不带宽进 protect。
+        call = src.rsplit("_prune_foreign_engines(", 1)[1][:200]
+        assert "self._state" in call, "自愈没有作用在状态上"
+        assert "{name for name" in call or "entries" in call, (
+            "protect 没传本次写入的名字：自愈会删掉自己刚写的行")

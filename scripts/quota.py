@@ -76,6 +76,45 @@ def __getattr__(name: str) -> Any:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def _config_engine_names() -> set[str] | None:
+    """config.yaml 里声明的**全部**引擎名（含未启用的）；取不到返回 None。
+
+    刻意取全部而不是 `get_engines()`（它只返回 enabled=True 的）：判据是
+    「配置里有没有这个名字」，不是「现在能不能用」。按后者删会把「临时缺密钥 /
+    熔断禁用」的源的历史计数一起抹掉，而它们恢复后要接着用这份账。
+    """
+    try:
+        from config import load_config
+        engines = (load_config() or {}).get("engines")
+    except Exception:
+        return None
+    return set(engines) if isinstance(engines, dict) else None
+
+
+def _prune_foreign_engines(state: dict, protect: set[str]) -> dict:
+    """丢掉配置里根本不存在的引擎名；判据不可用时原样返回（fail-safe）。
+
+    why（2026-09-27 实测）：本机 quota.json 419 条里 195 条是测试/探针残留
+    （`eng_x`、`benchmark_a`、`p_<8hex>`、`nope`…），而且**只增不减**——每跑一次
+    测试或评测就往里加几个名字并永久留存。它不改变配额判断（那些名字不会被路由
+    到），但让「引擎用量账本」这件事从根上不可信：账本里近一半的行不指向任何
+    真实来源。
+
+    `protect` 是**本次正在写入**的名字，永不删：测试替身（`quick_primary`）与
+    评测脚本（`benchmark_a`）都靠这个口子写非配置名，删掉它们等于让「写进了
+    什么」与「读回来什么」不一致——实测三处并发/窗口用例因此变红。删的只是
+    「本次没提到、配置里也不存在」的历史残留。
+
+    位置选在唯一写入口 `record_many` 的更改函数里：判据一旦成立，下一次真实
+    搜索就会顺带自愈，不需要额外的清理命令，也不会与并发写打架。
+    """
+    known = _config_engine_names()
+    if not known:
+        return state
+    return {name: st for name, st in state.items()
+            if name in known or name in protect}
+
+
 class QuotaManager:
     """配额追踪与消耗速率计算（v2）。"""
 
@@ -198,6 +237,10 @@ class QuotaManager:
         now = time.time()
 
         def _apply() -> None:
+            # 自愈：丢掉「本次没提到、配置里也不存在」的历史残留
+            # （见 _prune_foreign_engines 的 why）。放在重读之后、逐条记账之前。
+            self._state = _prune_foreign_engines(
+                self._state, {name for name, _ok in entries})
             for engine, success in entries:
                 st = self._state.setdefault(engine, {
                     "used": 0, "limit": 0, "calls": [],

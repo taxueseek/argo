@@ -21,7 +21,7 @@ argo/
 │   ├── route_combo.py    # 引擎组合装配（谁在场、什么顺序）
 │   ├── route_policy.py   # 预算截断与保留策略（谁必须留下）
 │   ├── route_cache.py    # 路由决策缓存（存储层）
-│   ├── route_telemetry.py # 路由决策采样上报（旁路，失败静默）
+│   ├── route_log.py      # 路由决策采样落本地日志（旁路，失败静默；「遥测」已正名为本地使用日志）
 │   ├── tfidf_router.py   # TF-IDF 语义路由
 │   ├── engine_families.py # 能力族分类（16 族，MECE）
 │   ├── engines.py        # 引擎适配层（_BUILDERS）
