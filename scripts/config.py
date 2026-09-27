@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 import shutil
 import time
@@ -23,7 +22,10 @@ from typing import Any, Callable
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
-_logger = logging.getLogger("unified_search.config")
+# logging 延迟导入：config.py 的 import 链实测 31ms，其中 logging 占 13ms。
+# _logger 仅 1 处 warning 使用，模块级导入会让所有 import config 的路径白付。
+# 延迟到首次调用时 import，--list-engines / --help 等路径省 13ms。
+# shutil 保留模块级：仅 5ms，且测试用 patch.object(config_mod.shutil, ...) 依赖它。
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # 外置引擎声明目录：engines/*.yaml（不含 plugins/、templates/、_ 前缀）
@@ -502,7 +504,9 @@ def get_engines(config: dict[str, Any] | None = None,
         # 未过滤集，但**必须留痕**：静默返回意味着 blocked 与 env 未就绪的
         # 引擎重新可路由，是最难查的一类故障。注意这里与上面两处不同——
         # 上面两处是同一仓内的死回退（已删），这里是真会发生的降级（保留）。
-        _logger.warning("routable_only 过滤不可用（%s），本次返回未过滤引擎集", e)
+        import logging
+        logging.getLogger("unified_search.config").warning(
+            "routable_only 过滤不可用（%s），本次返回未过滤引擎集", e)
         return result
     filtered: dict[str, dict[str, Any]] = {}
     for name, spec in result.items():

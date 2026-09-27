@@ -195,7 +195,11 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
     # （连接错/4xx）保留重试，重试成本低。
     try:
         _engine_specs = get_engines_fn()
-    except Exception:
+    except Exception as e:
+        import sys
+        sys.stderr.write(
+            f"[dispatch] 引擎规格加载失败（{type(e).__name__}），"
+            f"本次按无声明超时/重试\n")
         _engine_specs = {}
 
     def _declared_timeout(eng: str) -> float | None:

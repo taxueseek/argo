@@ -533,7 +533,10 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                                             timeout=timeout, depth=depth, mode=mode,
                                             since=since_iso, until=until_iso,
                                             skip_cache=skip_cache)
-                    except Exception:
+                    except Exception as e:
+                        import sys
+                        sys.stderr.write(
+                            f"[recovery] 恢复链异常（{type(e).__name__}）: {e}\n")
                         res = []
                     goods = [r for r in (res or [])
                              if isinstance(r, dict) and "error" not in r]

@@ -59,7 +59,6 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-from route import route_query_cached  # noqa: E402  # 跨进程路由决策缓存（见 route 内说明）
 from config import get_cost_factor, get_execution_config, get_engines  # noqa: E402
 
 # ── 排序/融合层（search_rank）与输出层（search_output）按职责拆出，这里同名转出，
@@ -813,6 +812,11 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         rewritten, rewrite_result = _apply_query_rewrite(original_query)
         if rewrite_result and rewrite_result.get("rewritten"):
             search_query = rewritten
+
+    # route 延迟导入：route.py 的 import 链（config → logging/shutil/dataclasses）
+    # 实测 31ms，而 --list-engines / --help / plan_only 路径对它零依赖。
+    # 搜索路径在首次调用时付一次（sys.modules 缓存后免费），非搜索路径省整条链。
+    from route import route_query_cached
 
     if local_first:
         _tk_route = _tick(timing)

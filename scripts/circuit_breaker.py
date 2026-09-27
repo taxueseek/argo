@@ -48,13 +48,16 @@ class CircuitBreaker:
 
     def _load(self) -> None:
         try:
-            if os.path.exists(self._path):
-                # with 关闭句柄：原 open(...).read() 靠 CPython 引用计数兜住，
-                # 在别的解释器实现上会泄漏 fd（SIM115）
-                with open(self._path, encoding="utf-8") as f:
-                    data = json.loads(f.read())
-                self._engines = data.get("engines") or {}
-                # 负缓存仅进程内有效，不从磁盘恢复（避免长期脏状态）
+            # 直接 open 而非 os.path.exists + open：后者有 check-then-act 竞态
+            # （文件可能在两者之间被删除），且 FileNotFoundError 已被外层捕获。
+            # with 关闭句柄：原 open(...).read() 靠 CPython 引用计数兜住，
+            # 在别的解释器实现上会泄漏 fd（SIM115）
+            with open(self._path, encoding="utf-8") as f:
+                data = json.loads(f.read())
+            self._engines = data.get("engines") or {}
+            # 负缓存仅进程内有效，不从磁盘恢复（避免长期脏状态）
+        except FileNotFoundError:
+            pass  # 文件不存在，保留空态
         except Exception as e:
             # 解析失败**不清空**已有记忆：清空 = 已被判死的源重新进路由、
             # auto-disable 全部重置，而且没有任何提示（用户看到的是「今天
@@ -84,6 +87,9 @@ class CircuitBreaker:
                 "opened_at": opened_at,
                 "last_kind": st.get("last_kind"),
                 "last_attribution": st.get("last_attribution"),
+                # 用 time.time()（墙钟）而非 time.monotonic()：熔断状态持久化到文件，
+                # 跨进程恢复时 opened_at 必须可比较。monotonic 在不同进程间基准不同，
+                # 换用会导致跨进程冷却判断错误。时钟回拨风险可控（只会让冷却提前结束）。
                 "cooldown_remain": max(0, int(OPEN_SECONDS - (time.time() - opened_at)))
                 if state == "open" else 0,
             }
@@ -170,9 +176,11 @@ class CircuitBreaker:
     def _reload_engines(self) -> None:
         """重读磁盘上的引擎态（只在文件锁内调用）。解析失败保留内存态。"""
         try:
-            if os.path.exists(self._path):
-                with open(self._path, encoding="utf-8") as f:
-                    self._engines = (json.loads(f.read()).get("engines") or {})
+            # 直接 open 而非 os.path.exists + open：消灭 check-then-act 竞态
+            with open(self._path, encoding="utf-8") as f:
+                self._engines = (json.loads(f.read()).get("engines") or {})
+        except FileNotFoundError:
+            pass  # 文件不存在，保留内存态
         except Exception:
             pass
 

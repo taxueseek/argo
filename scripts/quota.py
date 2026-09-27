@@ -86,7 +86,10 @@ def _config_engine_names() -> set[str] | None:
     try:
         from config import load_config
         engines = (load_config() or {}).get("engines")
-    except Exception:
+    except Exception as e:
+        import sys
+        sys.stderr.write(
+            f"[quota] 配置加载失败（{type(e).__name__}），本次跳过清理\n")
         return None
     return set(engines) if isinstance(engines, dict) else None
 
@@ -155,8 +158,10 @@ class QuotaManager:
                 self._load_profiles()
             if self._state_hot is not None and self._state_hot.changed():
                 self._load_state()
-        except Exception:
-            pass
+        except Exception as e:
+            import sys
+            sys.stderr.write(
+                f"[quota] 热文件检测失败（{type(e).__name__}）\n")
 
     def _load_profiles(self) -> None:
         if QUOTA_PROFILES_PATH.exists():
