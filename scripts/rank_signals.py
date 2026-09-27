@@ -120,13 +120,122 @@ def _coverage(units: set[str], title: str, snippet: str) -> tuple[float, float]:
     return t_cov, s_cov
 
 
+def keyword_density(text: str, units: set[str]) -> float:
+    """查询词密度：命中单元数 / 文档单元总数（0-1）。
+
+    **这个量与「命中次数」是不同的事，是本模块 2026-09-27 最重要的修正。**
+
+    原先只按「命中次数 / 查询单元数」判堆砌，那个体现在两个真实场景上都错：
+
+    ① 触底太早。原惩罚下限 0.35，而实测堆砌样本普遍是 **5-8 倍**超额——
+       5 倍时惩罚正好触底，于是「5 倍堆砌」和「20 倍堆砌」拿到同一个系数。
+       内容农场只会越刷越多，不会刚好停在惩罚拐点上。
+
+    ② 更根本的是：只看**标题**会漏掉正文堆砌，而只看**次数**会误杀正常文。
+       实测把正文并进来算「次数」：11 条 stuffing 样本里能罚到 7 条，
+       但 4 条正常 SEO 长文也被罚 3 条（专家评测/步骤文/FAQ 都会在每段
+       复述主题词，这很正常）。**次数分不出好坏，密度可以。**
+
+    标定数据（tests/golden/lowquality_calibration.json，25 条对照）：
+
+        整体密度 AUC = 0.896   ← 本仓现有信号里最强（clickbait 0.685）
+        正文密度 AUC = 0.753
+        标题密度 AUC = 0.698
+
+    阈值取 **0.22** 而非 F1 最优点 0.08：0.08 虽 F1=0.839，但会误杀全部
+    4 条 SEO 对照组（正常文章本来就会提查询词）。0.22 是**零误杀前提下
+    的 F1 最优**（TP=9 / FP=0 / FN=5）。宁可漏放也不误伤：误伤的是正常
+    内容农场式 SEO 优化站，漏放的还有来源侧信号兜着。
+    """
+    if not units or not text:
+        return 0.0
+    doc_units = relevance_units(text)
+    if not doc_units:
+        return 0.0
+    hits = sum(1 for u in doc_units if u in units)
+    return hits / len(doc_units)
+
+
+# 关键词密度惩罚的门槛与下限（标定得出，见 keyword_density 的 docstring）
+STUFFING_DENSITY_THRESHOLD = 0.22
+STUFFING_DENSITY_FLOOR = 0.35
+
+# 密度判据的**最小文档长度**（以相关性单元计）。与 serp_guard 的
+# _MIN_QUERY_TOKENS 同一条纪律：比率型判据在分母太小时必然失真。
+# 实测踩到的例子：标题「讨论：某技术选型」+ snippet「短」（1 个字），
+# 合并单元只有 5 个而命中 3 个 → 密度 0.60，越过 0.22 阈值，
+# 于是一条正常的共识条目被当成堆砌压掉，挤掉了多引擎共识排序
+# （tests/test_ranking_contract.py 的不变式 2 当场变红）。
+# 短 snippet 是 SERP 的常态（各家摘要长度不一），不是农场特征，故按长度
+# 豁免而不是调高阈值——调高阈值会连带放过真正的短堆砌页
+# （标定集里 stuff_low_query_echo 的 snippet 就很短）。
+STUFFING_MIN_UNITS = 20
+
+# 「关键词流」判据：空格分隔的词条串。
+#
+# 只看 **snippet**，不看合并文本——实测金标用例的标题是
+# 「青藏高原 形成成因：板块 碰撞 的 结果」，标题里有「：」，拿合并文本判
+# 会因为这一个标点而整条豁免掉，守卫直接失效（第一版就踩了这个）。
+# 真正说明问题的是**摘要**：SERP 摘要被上游抽成词条时才会出现
+# 「零标点 + 多空格」，而标题里的标点与摘要的抽取方式无关。
+_KW_STREAM_MIN_SPACES = 2
+
+
+def _looks_like_keyword_stream(snippet: str) -> bool:
+    """摘要是否是被抽成词条的形态（多空格、零标点）。"""
+    if not snippet:
+        return False
+    if re.search(r"[。，、！？；：,.!?;:]", snippet):
+        return False
+    return snippet.count(" ") + snippet.count("　") >= _KW_STREAM_MIN_SPACES
+
+
+def stuffing_density_penalty(title: str, snippet: str,
+                            units: set[str]) -> float:
+    """按整体关键词密度给堆砌折扣（≤1，只降不升）。
+
+    判据用 **title + snippet 合并后的整体密度**，不是标题密度：农场页的
+    堆砌主要发生在正文（标题被 SEO 插件限长），而正常长文的高密度来自
+    「每个小节都在讲这个主题」——那是内容的合理形态。
+    """
+    if not units or not (title or snippet):
+        return 1.0
+    text = f"{title or ''} {snippet or ''}"
+    # 长度不足不判：比率型判据在分母太小时必然失真（见 STUFFING_MIN_UNITS）
+    if len(relevance_units(text)) < STUFFING_MIN_UNITS:
+        return 1.0
+    # 「关键词流」形态不判：SERP 摘要常被上游抽成空格分隔的词条
+    # （实测金标用例「青藏高原 形成成因 印度 板块 与 欧亚 板块 碰撞 隆起」）。
+    # 这种文本的每个 token 都是查询词，密度天然接近 1.0——但那是**上游抽取
+    # 方式**的产物，不是内容农场特征。判它错等于惩罚所有被抽成词条的正常
+    # 来源（金标 floor MRR 1.0 → 0.5 就是这么掉的）。
+    if _looks_like_keyword_stream(snippet or ""):
+        return 1.0
+    density = keyword_density(text, units)
+    if density < STUFFING_DENSITY_THRESHOLD:
+        return 1.0
+    # 密度 0.22 → ×1.0（不罚），线性降到 0.60 → ×0.35（地板）。
+    # 0.60 是实测最高的两条（query_echo 0.833、punctuation_spray 0.947）
+    # 之外的稳健上限，地板 0.35 与旧实现一致，避免一次改太多。
+    span = 0.60 - STUFFING_DENSITY_THRESHOLD
+    severity = min(1.0, (density - STUFFING_DENSITY_THRESHOLD) / span)
+    return round(1.0 - (1.0 - STUFFING_DENSITY_FLOOR) * severity, 4)
+
+
 def title_stuffing_penalty(title: str, units: set[str]) -> float:
-    """标题堆砌惩罚：同一查询单元在标题里重复出现时的折扣系数（0.5-1.0）。
+    """标题堆砌惩罚：同一查询单元在标题里重复出现时的折扣系数。
 
     内容农场的标题形态是「颈椎枕头推荐_颈椎病枕头怎么选_枕头推荐颈椎病」——
     查询单元全部命中，但重复了五六遍。覆盖率看不见这种堆砌（分子封顶在
     查询单元数），所以必须单独量「文档侧冗余」：命中次数 / 查询单元数。
-    自然表述的标题里，各单元通常各出现一次。
+
+    ⚠️ 2026-09-27 降级说明：本函数只按**标题**算，且下限 0.35 会在 5 倍
+    超额时就触底。扩充标定集后实测：
+      - 只看标题会漏掉「标题正常、正文堆砌」的形态；
+      - 放宽下限会连带误杀正常长文（次数罚不出好坏，见 keyword_density）。
+    故它的角色从「主判据」降为「标题这一处的补充」，整体密度判据见
+    stuffing_density_penalty。保留本函数是因为标题堆砌是独立可解释的信号，
+    且在「同一域刷标题」的场景下仍有效。
     """
     if not units or not title:
         return 1.0
@@ -136,11 +245,6 @@ def title_stuffing_penalty(title: str, units: set[str]) -> float:
     hits = sum(1 for u in t_units_list if u in units)
     if hits <= len(units):
         return 1.0
-    # 允许上限 = 查询单元数（自然标题一次覆盖即达标）；超出越多折扣越大。
-    # 斜率 0.30/倍、下限 0.35：实测「颈椎病 枕头 推荐」上，2.5 倍堆砌的标题
-    # 原始覆盖率 1.0 而正常表述只有 0.75，若惩罚不够陡则堆砌仍然胜出——
-    # 这正是本次改造要消灭的方向（0.30 斜率下 2.5 倍堆砌 ≈ ×0.55，
-    # 0.65→0.36 < 正常型的 0.49）。
     excess = hits / max(len(units), 1)
     return round(max(0.35, 1.0 - 0.30 * (excess - 1.0)), 4)
 
@@ -165,7 +269,13 @@ def score_relevance(query_units: set[str], title: str, snippet: str) -> float:
         return round(min(1.0, 0.65 * title_cov + 0.35 * snip_cov), 4)
     t_cov, s_cov = _coverage(query_units, title, snippet)
     raw = 0.65 * t_cov + 0.35 * s_cov
-    return round(min(1.0, raw * title_stuffing_penalty(title, query_units)), 4)
+    # 两个堆砌判据取**更严**的一个（min），不是相乘：相乘会双重折同一类
+    # 滥用（同一份文本既标题堆砌又高密度时白吃两次罚），且让「两个信号
+    # 都不强但都沾边」的情形过度惩罚。取 min 的语义是「哪条判据更确信
+    # 这是滥用，就用哪条」。
+    penalty = min(title_stuffing_penalty(title, query_units),
+                  stuffing_density_penalty(title, snippet, query_units))
+    return round(min(1.0, raw * penalty), 4)
 
 
 # ── 完整性维度（2026-09-27 重写：QSDM 信息/噪声比）───────────────────────────
