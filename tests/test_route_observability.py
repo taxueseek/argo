@@ -122,5 +122,72 @@ class TestReasonLanguageLabel(unittest.TestCase):
         self.assertTrue(reason.startswith("韩文"), f"reason 未带语言标签：{reason}")
 
 
+class TestUnknownEngineIsReported(unittest.TestCase):
+    """未注册引擎必须变成可行动的 error，而不是静默 no-results（2026-09-27）。
+
+    实测（改前）：`--engine nope` 产出
+    `status=completed / errors=[] / engines_used=['nope'] / count=0`——调用方
+    （Agent）据此判定「网上没有这个信息」并停止追问，而真相是这个名字在本版
+    registry 里根本不存在。stderr 还把同一条警告重复 3–4 遍（主 combo、次域
+    补充、恢复链各试一遍）。
+
+    与「缺环境变量」是同一个根因的第二处实例，处置也照抄：执行层前置拦截成
+    带 detail 的 outcome。本类全程离线——被拦截的引擎根本不会被调用，所以
+    这里只测「拦截形态」与「plumbing 是否把 status 变成 errors」，不触网。
+    """
+
+    def test_is_registered_is_the_single_judgement(self):
+        import engines
+        self.assertFalse(engines.is_registered("definitely-not-an-engine-xyz"))
+        self.assertTrue(engines.is_registered("anysearch"),
+                        "anysearch 不在册——判据或 registry 坏了")
+
+    def test_detector_flags_only_unregistered_names(self):
+        """判据本身：只在「显式点名 + 本版查无」时报，其余一律放行。"""
+        from search import unknown_requested_engines
+        self.assertEqual(
+            unknown_requested_engines("definitely-not-an-engine-xyz"),
+            ["definitely-not-an-engine-xyz"])
+        self.assertEqual(unknown_requested_engines("anysearch"), [])
+        # 混合：只报查无的那个，且按输入顺序去重
+        self.assertEqual(
+            unknown_requested_engines("anysearch, nope, nope , octen"),
+            ["nope"])
+        # 不该报的三种情形：默认路由、local-first、空串
+        self.assertEqual(unknown_requested_engines("auto"), [])
+        self.assertEqual(unknown_requested_engines(""), [])
+        self.assertEqual(
+            unknown_requested_engines("definitely-not-an-engine-xyz",
+                                      local_first=True), [])
+
+    def test_super_search_reports_unknown_names(self):
+        """形态门：判据必须真的接进响应，否则它只是个好函数。"""
+        src = (SCRIPT_DIR / "search.py").read_text(encoding="utf-8")
+        self.assertIn("unknown_requested_engines(engine, local_first)", src,
+                      "判据没有接进 super_search——未注册引擎又会静默空结果")
+        self.assertIn("unknown engine name(s) requested", src,
+                      "局限声明没接上，调用方看不到降级原因")
+
+    def test_warning_is_emitted_once_per_name(self):
+        import logging
+        import engines
+        records: list[logging.LogRecord] = []
+
+        class _H(logging.Handler):
+            def emit(self, record):
+                records.append(record)
+
+        handler = _H()
+        engines.logger.addHandler(handler)
+        try:
+            engines._unknown_engine_warned.discard("dedupe-probe-engine")
+            engines._warn_unknown_engine("dedupe-probe-engine")
+            engines._warn_unknown_engine("dedupe-probe-engine")
+        finally:
+            engines.logger.removeHandler(handler)
+        self.assertEqual(len(records), 1,
+                         f"同名警告重复了 {len(records)} 条；噪声会淹掉真信号")
+
+
 if __name__ == "__main__":
     unittest.main()

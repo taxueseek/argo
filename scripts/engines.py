@@ -213,9 +213,39 @@ from engines_builders_batch11 import (  # noqa: F401
 )
 
 logger = logging.getLogger("unified_search.engines")
+
 if not logger.handlers:
     logger.setLevel(logging.WARNING)
     logger.addHandler(logging.StreamHandler(sys.stderr))
+
+
+# 「未知引擎」警告按名字每进程只报一次。
+_unknown_engine_warned: set[str] = set()
+
+
+def _warn_unknown_engine(engine: str) -> None:
+    """未注册引擎的日志警告（同名每进程一次）。
+
+    why 去重：同一次调用里，主 combo、次域补充、恢复链会各试一遍同一个名字，
+    实测同一条警告重复 3–4 行。重复并不增加信息，只会把真信号淹掉。
+    机器可读的那一份不在这里——它走 outcome 的 `status=unknown-engine` + detail，
+    最终进响应的 `errors`（见 engine_dispatch 的前置拦截）。
+    """
+    if engine in _unknown_engine_warned:
+        return
+    _unknown_engine_warned.add(engine)
+    logger.warning(
+        "未知引擎: %s（registry 查无此名：拼写错误，或该源未随本版发布）", engine)
+
+
+def is_registered(engine: str) -> bool:
+    """该名字在本版 registry 里是否存在。
+
+    唯一判据就是 `get_registry()`，与 `run_engine` 内部的 `registry.get()` 同源：
+    调用方（engine_dispatch 的前置拦截）必须与执行层看到同一个注册表，各写一份
+    `in` 判断迟早漂移。
+    """
+    return engine in get_registry()
 
 
 @contextlib.contextmanager
@@ -661,7 +691,7 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
     registry = get_registry()
     fn = registry.get(engine)
     if not fn:
-        logger.warning(f"未知引擎: {engine}")
+        _warn_unknown_engine(engine)
         return []
     # 语义型引擎不识别平台结构化语法，剥掉字段只留核心词；透传型保持原 query。
     if engine in _SEMANTIC_ENGINES:
