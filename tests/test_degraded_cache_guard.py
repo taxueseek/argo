@@ -34,6 +34,8 @@ from cache_guard import (  # noqa: E402
     DEGRADED_RELEVANCE_FLOOR,
     DegradedCacheRejected,
     assert_not_degraded,
+    attempt_cache_write,
+    cache_write_rejections,
     is_degraded_results,
 )
 
@@ -97,3 +99,162 @@ class TestDegradedGuard:
         assert is_degraded_results(batch) is False
         batch = [_r(DEGRADED_RELEVANCE_FLOOR - 0.01) for _ in range(5)]
         assert is_degraded_results(batch) is True
+
+
+class TestAttemptCacheWrite:
+    """守卫拒绝只取消写入，不取消本次检索（2026-09-27 修复）。
+
+    实锤：`Apple Inc 10-K annual report 2025` 命中 sec_edgar 后（1 条相关 +
+    4 条噪音）触发退化守卫，异常穿透到 CLI 顶层 traceback 退出——已检索到的
+    结果连同响应一起丢弃。守卫的意图是「别固化」，不是「别返回」。
+    """
+
+    def test_rejection_returns_class_name_instead_of_raising(self):
+        def _reject():
+            raise DegradedCacheRejected("上游退化")
+
+        assert attempt_cache_write(_reject, context="t") == "DegradedCacheRejected"
+
+    def test_success_returns_none(self):
+        calls = []
+        assert attempt_cache_write(lambda: calls.append(1), context="t") is None
+        assert calls == [1], "写入必须真的执行——守卫不得变成「一律不写」"
+
+    def test_login_rejection_also_swallowed(self):
+        """登录态守卫与退化守卫同一处理：两条都是「这次别写」而非「这次别答」。"""
+        from cache import LoginCacheRejected
+
+        def _reject():
+            raise LoginCacheRejected("登录态载荷")
+
+        assert attempt_cache_write(_reject, context="t") == "LoginCacheRejected"
+
+    def test_unrelated_exception_still_propagates(self):
+        """只吞写入守卫的两类异常：其它异常照旧穿透，不把真 bug 静默掉。"""
+        def _boom():
+            raise RuntimeError("别的毛病")
+
+        with pytest.raises(RuntimeError):
+            attempt_cache_write(_boom, context="t")
+
+    def test_rejection_tuple_covers_both_guards(self):
+        names = {c.__name__ for c in cache_write_rejections()}
+        assert names == {"DegradedCacheRejected", "LoginCacheRejected"}
+
+
+class TestRejectionDoesNotKillTheQuery:
+    """端到端：combo 写入被拒时，结果照常返回且带可观测信号。"""
+
+    def test_combo_write_rejection_keeps_results(self, tmp_path, monkeypatch):
+        import search as search_mod
+        from cache import SearchCache
+        from search import execute_search
+        from stage_timing import StageTiming
+
+        good = [
+            {"title": f"Python 教程 {i}", "snippet": "Python 编程入门内容",
+             "url": f"https://example.com/{i}"}
+            for i in range(3)
+        ]
+
+        class _AllowAll:
+            def allow(self, eng):
+                return True, "closed"
+
+            def get_negative(self, *a, **k):
+                return None
+
+            def status(self, eng):
+                return {"state": "closed"}
+
+            def record_success(self, *a, **k):
+                pass
+
+            def record_failure(self, *a, **k):
+                pass
+
+            def set_negative(self, *a, **k):
+                pass
+
+            def clear_negative(self, *a, **k):
+                pass
+
+        def _reject_set(self, *a, **k):
+            raise DegradedCacheRejected("上游退化（注入）")
+
+        monkeypatch.setattr(search_mod, "engine_search",
+                            lambda q, e, **k: good)
+        monkeypatch.setattr("circuit_breaker.get_breaker",
+                            lambda *a, **k: _AllowAll())
+        monkeypatch.setattr(SearchCache, "set", _reject_set)
+
+        out = execute_search(
+            "Python",
+            {"engines_combo": ["t_eng"], "engines": ["t_eng"], "parallel": True,
+             "domain": "general_search", "engine": "t_eng"},
+            max_results=5, timeout=10, depth="fast",
+            cache=SearchCache(db_path=str(tmp_path / "c.db")),
+            skip_cache=False, mode="fast", timing=StageTiming(),
+        )
+        assert out["count"] > 0, "结果不得因写入被拒而丢弃"
+        assert out["cache_write_skip"] == "DegradedCacheRejected"
+        assert [(o["engine"], o["status"]) for o in out["engine_outcomes"]] == [
+            ("t_eng", "ok")], "成功的引擎调用不得被写成 error"
+
+    def test_engine_write_rejection_keeps_engine_healthy(self, tmp_path, monkeypatch):
+        """per-engine 写入被拒：引擎仍记 ok，结果不被清空（曾记成 error）。"""
+        import search as search_mod
+        from cache import SearchCache
+        from search import execute_search
+        from stage_timing import StageTiming
+
+        good = [
+            {"title": f"Python 教程 {i}", "snippet": "Python 编程入门内容",
+             "url": f"https://example.com/{i}"}
+            for i in range(3)
+        ]
+
+        class _AllowAll:
+            def allow(self, eng):
+                return True, "closed"
+
+            def get_negative(self, *a, **k):
+                return None
+
+            def status(self, eng):
+                return {"state": "closed"}
+
+            def record_success(self, *a, **k):
+                pass
+
+            def record_failure(self, *a, **k):
+                pass
+
+            def set_negative(self, *a, **k):
+                pass
+
+            def clear_negative(self, *a, **k):
+                pass
+
+        def _reject_set_engine(self, *a, **k):
+            raise DegradedCacheRejected("上游退化（注入）")
+
+        monkeypatch.setattr(search_mod, "engine_search",
+                            lambda q, e, **k: good)
+        monkeypatch.setattr("circuit_breaker.get_breaker",
+                            lambda *a, **k: _AllowAll())
+        monkeypatch.setattr(SearchCache, "set_engine", _reject_set_engine)
+
+        out = execute_search(
+            "Python",
+            {"engines_combo": ["t_eng"], "engines": ["t_eng"], "parallel": True,
+             "domain": "general_search", "engine": "t_eng"},
+            max_results=5, timeout=10, depth="fast",
+            cache=SearchCache(db_path=str(tmp_path / "c.db")),
+            skip_cache=False, mode="fast", timing=StageTiming(),
+        )
+        assert out["count"] > 0
+        outcomes = [(o["engine"], o["status"]) for o in out["engine_outcomes"]]
+        assert outcomes == [("t_eng", "ok")], (
+            f"per-engine 写入被拒不得改写成 error，实得 {outcomes}")
+        assert out["errors"] == []

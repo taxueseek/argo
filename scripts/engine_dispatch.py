@@ -26,6 +26,7 @@ import time
 import threading
 from typing import Any, Callable
 
+from cache_guard import attempt_cache_write
 from time_utils import is_time_capable
 from query_signals import (
     cumulative_sufficient,
@@ -434,18 +435,20 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 breaker.record_failure(eng, kind="error", attribution=_attr)
                 breaker.set_negative(query, eng, status=outcome["status"])
 
-        if not skip_cache and goods:
-            cache.set_engine(
-                query, eng, max_results, goods,
-                domain=domain, mode=mode, depth=depth,
-                since=eng_since, until=eng_until,
-            )
-        elif not skip_cache and not goods:
-            # 空结果短 TTL 写入 per-engine，配合负缓存
-            cache.set_engine(
-                query, eng, max_results, [],
-                domain=domain, mode=mode, depth=depth,
-                since=eng_since, until=eng_until,
+        # 写 per-engine 缓存。守卫拒绝（登录态 / 退化）只该跳过这次写入：
+        # 异常不接的话会被 _daemon_start 的兜底 except 接走，把一次**成功**的
+        # 引擎调用改写成 status=error、结果清空，还按 kind=error 记账进熔断器
+        # ——健康引擎被自己刚交出的结果推向 auto-disable（2026-09-27 实锤）。
+        # 空结果同样要写（短 TTL 负缓存，配合熔断的 set_negative）；TTL 的
+        # 空/非空分支由 cache.set_engine 内部处理，这里只决定写什么。
+        if not skip_cache:
+            attempt_cache_write(
+                lambda: cache.set_engine(
+                    query, eng, max_results, goods if goods else [],
+                    domain=domain, mode=mode, depth=depth,
+                    since=eng_since, until=eng_until,
+                ),
+                context=f"dispatch.cache_set_engine({eng})",
             )
 
         return eng, (goods if goods else res), outcome, lat

@@ -8,12 +8,16 @@ tests/test_module_size_gate.py 的 GRANDFATHERED 里登记（1362 行上限）�
 
 ## 两条守卫
 
-**登录态守卫**（原在 cache.py，本模块只转出）：登录态检索的结果不得进入
+**登录态守卫**（本体与异常类都在 cache.py）：登录态检索的结果不得进入
 公共缓存，避免一个账号的私有结果被所有人共享。
 
-**退化守卫**（本次新增）：上游抖动返回的残次品不得写入。
+**退化守卫**：上游抖动返回的残次品不得写入。
 实锤事故见 is_degraded_results 的 docstring——一次上游把整句当单词查、
 返回 8 条词典释义，相关性全为 0.1429，却照常缓存并从此固化。
+
+两个守卫的异常类**不在同一个模块**：cache.py 模块级 `from cache_guard
+import ...`，所以这里只能用函数级 import 去取 LoginCacheRejected，模块级
+会成环。统一入口是 attempt_cache_write，调用方不必自己认这两个类。
 
 ## 为什么退化守卫在「写入」这一层而不是「返回」那一层
 
@@ -22,10 +26,67 @@ tests/test_module_size_gate.py 的 GRANDFATHERED 里登记（1362 行上限）�
 但它**不该被缓存**：一旦缓存，退化就从「一次抖动」变成「永久结果」——
 后续每次命中缓存都复现，且没有任何信号提示它曾经退化过。
 写入层拦截是唯一能切断这个固化的位置。
+
+## 调用方必须走 attempt_cache_write，不要裸调 cache.set
+
+「不写缓存」和「检索失败」是两件事。守卫抛出的异常如果穿透到调用主路径，
+代价是一次检索白跑——而且比白跑更糟，见 attempt_cache_write 的 docstring。
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
+
+from except_sets import OPT_IMPORT
+
+
+class DegradedCacheRejected(ValueError):
+    """退化结果（低相关/查询词回声）禁止写入公共 SearchCache。"""
+
+
+def cache_write_rejections() -> tuple[type[Exception], ...]:
+    """写入守卫会抛的全部异常类：退化（本模块）+ 登录态（cache.py）。
+
+    登录态那一个只能函数级取：cache.py 模块级 import 本模块，反向 import
+    会成环。取不到（cache 被换掉/裁掉）时只留退化守卫——少认一种异常最多
+    让那一路退回旧行为，不该反过来让调用方炸掉。
+    """
+    try:
+        from cache import LoginCacheRejected
+    except OPT_IMPORT:
+        return (DegradedCacheRejected,)
+    return (DegradedCacheRejected, LoginCacheRejected)
+
+
+def attempt_cache_write(write: Callable[[], Any], *,
+                        context: str = "cache") -> str | None:
+    """执行一次缓存写入；被写入守卫拒绝时返回异常类别名，而不是抛出。
+
+    守卫的职责是「不固化」，不是「不返回」——两者在调用主路径上必须分开：
+
+      - **combo 写入点**（search_pipeline.finalize）：异常穿透会取消整个
+        查询。2026-09-27 实锤——`Apple Inc 10-K annual report 2025` 的 5 条
+        结果里 4 条 relevance=0 触发退化守卫，CLI 直接 traceback 退出，
+        **已检索到的结果全部丢弃**（这批结果本身是有用的：第 1 条正是
+        Apple 的 CIK 归档页）。
+      - **per-engine 写入点**（engine_dispatch）：异常被 daemon 线程的兜底
+        except 接住，后果更隐蔽——那次**成功的**引擎调用被改写成
+        `status=error` 且结果清空，还按 kind=error 记账进熔断器，把一个
+        健康引擎推向 auto-disable。
+
+    返回值为 None 表示写入成功（或本就没有可写内容）；返回字符串表示被
+    拒绝，值即异常类别名（如 `"DegradedCacheRejected"`），供调用方写进
+    响应字段或日志。*context* 只用于日志措辞。
+    """
+    try:
+        write()
+    except cache_write_rejections() as exc:
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"{context}: 缓存写入跳过（{type(exc).__name__}）: {exc}")
+        return type(exc).__name__
+    return None
+
 
 # 退化判据的阈值。与 rank_signals 的相关性算子配套：正常结果的 rel 普遍
 # ≥0.35，查询词回声（上游把整句当单词查、返回词典释义）稳定在 0.05-0.20。
@@ -38,10 +99,6 @@ DEGRADED_BATCH_RATIO = 0.7
 
 # 可判定条目数下限。低于此不判：样本太少时比例不可信，且宁可漏拦不误伤。
 DEGRADED_MIN_SCORED = 3
-
-
-class DegradedCacheRejected(ValueError):
-    """退化结果（低相关/查询词回声）禁止写入公共 SearchCache。"""
 
 
 def _entry_relevance(item: Any) -> float | None:

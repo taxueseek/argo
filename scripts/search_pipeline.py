@@ -49,6 +49,7 @@ def _log(message: str) -> None:
     import logging
     logging.getLogger("unified_search").debug(message)
 
+from cache_guard import attempt_cache_write
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
 from except_sets import OPT_IMPORT, SHAPE_BENIGN
@@ -747,16 +748,26 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
     elapsed = run.elapsed
     exclude_terms = req.exclude_terms
     _tk_cache_write = _tick(timing)
-    # 写 combo 缓存：空结果短 TTL / 时效 cap 由 cache.set 处理
+    # 写 combo 缓存：空结果短 TTL / 时效 cap 由 cache.set 处理。
+    #
+    # 守卫拒绝（登录态 / 上游退化）只该取消**这次写入**，不该取消这次查询。
+    # 2026-09-27 实锤：`Apple Inc 10-K annual report 2025` 命中 sec_edgar
+    # 拿到 Apple 的 CIK 归档页（1 条相关 + 4 条全文检索噪音），批内多数
+    # relevance=0 触发退化守卫，异常穿透到 CLI 顶层——traceback 退出，已检索
+    # 到的结果连同响应一起丢弃。守卫的意图是「别固化」而不是「别返回」。
+    cache_write_skip: str | None = None
     if not skip_cache:
         effective_ttl = None
         if merged and elapsed > 2000:
             # 慢查询略延长缓存：省的是「同一查询再付一次慢网」的钱。
             effective_ttl = _slow_query_ttl(cache.resolve_ttl(domain, query=query),
                                             elapsed)
-        cache.set(
-            query, cache_engine_key, max_results, result_payload,
-            domain=domain, ttl=effective_ttl, mode=mode, depth=depth,
+        cache_write_skip = attempt_cache_write(
+            lambda: cache.set(
+                query, cache_engine_key, max_results, result_payload,
+                domain=domain, ttl=effective_ttl, mode=mode, depth=depth,
+            ),
+            context="finalize.cache_set",
         )
     _tock(timing, "cache_write", _tk_cache_write)
 
@@ -883,6 +894,10 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
         "excluded_count": excluded_count,
         "time_filtered": time_filtered,
         "time_filter_warning": time_filter_warning,
+        # 缓存被写入守卫拒绝时记下类别名（如 DegradedCacheRejected）。
+        # 这次结果照常返回，但下次不会命中缓存——没有这个字段，使用者只会
+        # 看到「同一个查询每次都很慢」，且无从知道原因是守卫在拒写。
+        "cache_write_skip": cache_write_skip,
         "mode": mode, "depth": depth,
         "login_hint": decision.get("login_hint"),
     }
