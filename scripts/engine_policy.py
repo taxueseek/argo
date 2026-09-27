@@ -112,7 +112,7 @@ def _tier_lookup() -> Callable[[str], str]:
         from config import get_engines, load_config
         engines = get_engines(load_config())
     except Exception:
-        engines = {}
+        engines = {}  # 配置加载失败：退回空引擎表，tier 查询退化为默认值
 
     def _t(eid: str) -> str:
         return get_engine_tier(eid, engines.get(eid) if isinstance(engines, dict) else None)

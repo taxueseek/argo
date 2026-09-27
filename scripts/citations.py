@@ -187,7 +187,7 @@ def _get_json(url: str) -> object:
             # 错误输出撑成错误屏；状态码 + 首行足够归因。
             detail = body.splitlines()[0][:120] if body else ""
         except Exception:
-            detail = ""
+            detail = ""  # HTTP 错误体读取失败（非 UTF-8 / 连接中断），退回空 detail
         raise CiteError(f"HTTP {e.code}: {detail}".rstrip()) from None
     except urllib.error.URLError as e:
         raise CiteError(f"连接失败: {getattr(e, 'reason', e)}") from None

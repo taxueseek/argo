@@ -126,7 +126,7 @@ def _is_single_tweet(url: str) -> bool:
         from engines_builders_intl import extract_tweet_id
         return extract_tweet_id(url) is not None
     except Exception:
-        return False
+        return False  # engines_builders_intl 不可用或解析失败：安全退回「非 tweet URL」
 
 
 def canonicalize_url(url: str) -> str:

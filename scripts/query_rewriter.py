@@ -166,7 +166,7 @@ def rewrite_query(query: str, min_confidence: float = 0.7) -> dict[str, Any]:
     except ImportError:
         pass  # query_understanding 不可用，退回原查询
     except Exception:
-        pass  # 理解失败不阻断改写
+        pass  # query_understanding 不可用或返回异常：退回原查询，不阻断改写
 
     rewritten_parts: list[str] = []
     reasons: list[str] = []

@@ -385,6 +385,7 @@ def test_identity_persist_and_expiry(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch_v3, "_IDENTITY_PATH", str(p))
     monkeypatch.setattr(fetch_v3, "_identity_loaded", False)
     monkeypatch.setattr(fetch_v3, "_identity_mem", {})
+    monkeypatch.setattr(fetch_v3, "_identity_last_flush", 0.0)
     fetch_v3._identity_remember_mobile("a.example.com")
     assert p.exists()
     # 重载后仍命中

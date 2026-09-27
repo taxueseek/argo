@@ -1,9 +1,12 @@
 # SEC EDGAR 美国证监会全文检索（免 Key，官方数据）
 # 文档: https://www.sec.gov/search-filings/edgar-search-assistance
-# 注意: SEC 强制要求 User-Agent，q 支持 efts 语法（如 q=apple AND form_type:"10-K"）
+# 注意: SEC 强制要求 User-Agent
+# q 参数只支持裸关键词搜索（如 q=apple 或 q="apple 10-K"），不支持 field:syntax。
+# 表单过滤必须走 forms= 参数（efts 的 q 参数里写 form_type:10-K 返回 0 条）。
 # 验证:
 #   python3 scripts/engine_validate.py --engine sec_edgar --stage all --admit
-#   python3 scripts/search.py "apple 10-K" --engine sec_edgar --json
+#   python3 scripts/search.py "apple" --engine sec_edgar --json
+#   python3 scripts/search.py "apple" --engine sec_edgar --forms 10-K --json
 
 engine_id: sec_edgar
 type: http
@@ -13,6 +16,11 @@ method: GET
 url: https://efts.sec.gov/LATEST/search-index
 timeout: 15
 query_param: q
+extra_params:
+  forms: forms
+  ciks: ciks
+  startdt: startdt
+  enddt: enddt
 canary_query: "apple"
 desc: "SEC EDGAR 美国证监会官方全文检索（公司/财报/申报，免认证）"
 coverage: [finance, us_stock, legal, company]
@@ -29,5 +37,7 @@ headers:
 output_map:
   items: hits.hits
   item_title: _source.display_names.0
-  url_template: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={_source.ciks.0}
+  # 文档本体 URL：Archives/edgar/data/{cik}/{accession_no_dashes}/{primary_doc}
+  # 如果 efts 返回 accession 字段则拼文档本体，否则回退到 browse 页
+  url_template: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={_source.ciks.0}&type={forms}&dateb=&owner=include&count=40
   item_summary: _source.file_description

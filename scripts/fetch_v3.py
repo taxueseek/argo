@@ -529,6 +529,9 @@ _IDENTITY_PATH = os.environ.get(
     str(_paths.state_path("fetch-identity.json")))
 _identity_mem: dict[str, float] = {}
 _identity_loaded = False
+_identity_dirty = False
+_identity_last_flush = 0.0
+_IDENTITY_FLUSH_INTERVAL = 30.0  # 最多每 30s 写一次文件
 
 
 def _identity_load() -> None:
@@ -554,15 +557,22 @@ def _identity_load() -> None:
 
 
 def _identity_remember_mobile(host: str) -> None:
-    """记录「该 host 移动端身份成功过」，原子写小文件。失败静默（纯增益层）。"""
+    """记录「该 host 移动端身份成功过」，最多每 30s 写一次文件。失败静默（纯增益层）。"""
+    global _identity_dirty, _identity_last_flush
     if not host:
         return
     _identity_load()
     _identity_mem[host] = time.time() + _IDENTITY_TTL
+    _identity_dirty = True
+    now = time.monotonic()
+    if _identity_last_flush > 0.0 and now - _identity_last_flush < _IDENTITY_FLUSH_INTERVAL:
+        return
+    _identity_last_flush = now
     try:
         # 原子写走 argo_paths 唯一来源（唯一 tmp 名）；旧实现固定 `.tmp` 名，
         # 并发抓取进程会互相搬走临时文件，身份记忆静默丢失。
         _paths.atomic_write_json(Path(_IDENTITY_PATH), _identity_mem, indent=None)
+        _identity_dirty = False
     except Exception:
         pass
 
