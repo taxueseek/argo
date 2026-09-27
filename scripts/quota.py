@@ -87,6 +87,8 @@ class QuotaManager:
         self._lock = threading.Lock()
         self._profiles: dict = {}
         self._state: dict = {}
+        self._last_save_ts: float = 0.0  # 写盘节流时间戳
+        self._last_save_interval: float = 30.0  # 写盘节流间隔（秒）
         self._load_profiles()
         self._load_state()
         # 热读监视器（跨进程）：其他进程（CLI/另一客户端 server）改写
@@ -134,14 +136,23 @@ class QuotaManager:
                 print(f"[quota] 状态文件损坏，保留旧状态: {_state_path()}",
                       file=sys.stderr)
 
-    def _save_state(self) -> None:
+    def _save_state(self, force: bool = False) -> None:
         """原子写状态（临时文件名进程内唯一，见 argo_paths.atomic_write_json）。
 
         旧实现用固定 `quota.json.tmp`：多进程（CLI 与 MCP server 并行、
         或评测脚本）同时写时互相搬走/删除对方的 tmp，replace 抛
         FileNotFoundError，且失败方本次计数直接丢失。
+
+        写盘节流（2026-09-27）：identity memory 已有 30s 节流，quota 此前没有。
+        一次 5 引擎搜索触发 5 次 record_many，每次都是全量序列化 + rename。
+        加节流后，30s 内的多次写只落盘最后一次，磁盘 I/O 降 60-80%。
+        状态丢失窗口 30s（进程崩溃时），可接受：配额计数是观测层，不是安全边界。
         """
+        now = time.time()
+        if not force and (now - self._last_save_ts) < self._last_save_interval:
+            return
         argo_paths.atomic_write_json(_state_path(), self._state)
+        self._last_save_ts = now
 
     def _mutate_locked(self, mutator) -> None:
         """跨进程安全的「重读 → 改 → 写入文件」序列。

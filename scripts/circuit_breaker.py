@@ -43,6 +43,8 @@ class CircuitBreaker:
         self._lock = threading.RLock()
         self._engines: dict[str, dict[str, Any]] = {}
         self._neg: dict[str, dict[str, Any]] = {}  # key → {expires, status}
+        self._last_save_ts: float = 0.0  # 写盘节流时间戳
+        self._last_save_interval: float = 30.0  # 写盘节流间隔（秒）
         self._load()
 
     def _load(self) -> None:
@@ -65,16 +67,24 @@ class CircuitBreaker:
                   f"保留内存态 {len(self._engines)} 条：{self._path}",
                   file=_sys.stderr)
 
-    def _save(self) -> None:
+    def _save(self, force: bool = False) -> None:
         try:
             # 原子写走唯一来源（唯一 tmp 名 + 同目录 rename）。
             # 旧实现写固定的 `<path>.tmp`：并发进程互相搬走对方的 tmp，
             # os.replace 抛 FileNotFoundError，熔断态静默丢失。
+            #
+            # 写盘节流（2026-09-27）：与 quota.py 同策略。熔断状态变更不频繁
+            # （引擎故障是低频事件），30s 节流足够。force=True 用于关键状态
+            # 转换（open → disabled）确保落盘。
+            now = time.time()
+            if not force and (now - self._last_save_ts) < self._last_save_interval:
+                return
             _paths.atomic_write_json(
                 Path(self._path),
                 {"engines": self._engines, "updated": time.time()},
                 indent=None,
             )
+            self._last_save_ts = now
         except Exception:
             pass
 
@@ -117,7 +127,7 @@ class CircuitBreaker:
                     st["state"] = "half_open"
                     st["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
                     self._engines[engine] = st
-                    self._save()
+                    self._save(force=True)
                     return True, "half_open_reenable"
                 return False, "auto_disabled"
 
@@ -134,12 +144,12 @@ class CircuitBreaker:
                         st["state"] = "disabled"
                         st["disabled_at"] = time.time()
                         self._engines[engine] = st
-                        self._save()
+                        self._save(force=True)
                         return False, "auto_disabled"
                     # half-open：允许一次探测
                     st["state"] = "half_open"
                     self._engines[engine] = st
-                    self._save()
+                    self._save(force=True)
                     return True, "half_open_probe"
                 remain = int(OPEN_SECONDS - (time.time() - opened_at))
                 return False, f"circuit_open:{remain}s"
@@ -202,6 +212,9 @@ class CircuitBreaker:
                 # 连续 open 计数：仅 error/timeout 计入（引擎级故障），
                 # empty 不计入，避免「查询无结果」被误判为引擎持续故障
                 st["opens"] = int(st.get("opens") or 0) + 1
+                self._engines[engine] = st
+                self._save(force=True)  # open 是关键状态转换，立即落盘
+                return
             self._engines[engine] = st
             self._save()
 
@@ -212,7 +225,7 @@ class CircuitBreaker:
                 "state": "closed", "failures": 0, "opens": 0,
                 "last_ok": time.time(), "reenabled_at": time.time(),
             }
-            self._save()
+            self._save(force=True)
 
     def record_note(self, engine: str,
                     attribution: dict[str, Any] | None = None) -> None:

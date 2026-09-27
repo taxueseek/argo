@@ -54,8 +54,8 @@ from except_sets import IO_BENIGN, SHAPE_BENIGN
 # 用 db_path() 而非 state_path()：config.yaml 显式改写 db_path 时尊重用户配置。
 DEFAULT_DB_PATH = str(argo_paths.db_path())
 DEFAULT_TTL = 3600
-MAX_MEMORY_ITEMS = 500
-MAX_DB_SIZE_MB = 100
+MAX_MEMORY_ITEMS = 1000
+MAX_DB_SIZE_MB = 200
 COMPRESSION_THRESHOLD = 1024
 COMPRESSION_LEVEL = 6
 
