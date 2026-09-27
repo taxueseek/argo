@@ -19,6 +19,36 @@ USAGE = (REPO / "references" / "usage.md").read_text(encoding="utf-8")
 BIN_ARGO = (REPO / "bin" / "argo").read_text(encoding="utf-8")
 
 
+def _code_switches() -> set[str]:
+    """扫描源码里实存的 ARGO_* 开关（开关的唯一事实）。
+
+    历史 bug（2026-09-27 实测定位）：原实现是
+        subprocess.run(["git", "grep", "-hoE", r'"ARGO_[A-Z_0-9]+"', ...])
+    `git grep` **只搜索已跟踪文件**。新建的模块（当次改造拆出的
+    scripts/rank_signals.py）在 `git add` 之前是 `??` 状态，门禁看不见它，
+    于是把实存于代码的 ARGO_RELEVANCE_V2 / ARGO_COMPLETENESS_V2 /
+    ARGO_DOMAIN_CONCENTRATION 判成「usage.md 写了代码里不存在的开关」——
+    报错方向恰好与事实相反，把排查引向文档，实际病因在工作区暂存状态。
+
+    换成 Python 自己的遍历：读的是**磁盘真实内容**，与 git 索引状态无关。
+    附带两个好处：不必在跑测试前先 git add；`.pyc` 天然被排除（只认 .py）。
+    遍历范围沿用原口径（scripts/ + bin/argo），`__pycache__` 显式跳过。
+    """
+    out: set[str] = set()
+    targets = [REPO / "scripts", REPO / "bin" / "argo"]
+    for target in targets:
+        files = [target] if target.is_file() else sorted(target.rglob("*.py"))
+        for f in files:
+            if "__pycache__" in f.parts:
+                continue
+            try:
+                text = f.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            out.update(re.findall(r'"ARGO_[A-Z_0-9]+"', text))
+    return {m.strip('"') for m in out}
+
+
 def _dispatch_commands() -> set[str]:
     """bin/argo 分发表（'命令': ("脚本", ...)）的唯一事实提取。
 
@@ -45,11 +75,7 @@ class TestUsageDocCommands(unittest.TestCase):
 
 class TestUsageDocSwitches(unittest.TestCase):
     def test_doc_switches_exist_in_code(self):
-        import subprocess
-        out = subprocess.run(
-            ["git", "grep", "-hoE", r'"ARGO_[A-Z_0-9]+"', "--", "scripts/", "bin/argo"],
-            capture_output=True, text=True, cwd=REPO).stdout
-        code_vars = set(re.findall(r"ARGO_[A-Z_0-9]+", out))
+        code_vars = _code_switches()
         doc_vars = set(re.findall(r"ARGO_[A-Z_0-9]+", USAGE))
         phantom = doc_vars - code_vars
         self.assertEqual(phantom, set(),
@@ -57,11 +83,7 @@ class TestUsageDocSwitches(unittest.TestCase):
 
     def test_switch_table_covers_code_vars(self):
         """代码新增开关必须入表（总表节双向锁定，防表外漂移）。"""
-        import subprocess
-        out = subprocess.run(
-            ["git", "grep", "-hoE", r'"ARGO_[A-Z_0-9]+"', "--", "scripts/", "bin/argo"],
-            capture_output=True, text=True, cwd=REPO).stdout
-        code_vars = set(re.findall(r"ARGO_[A-Z_0-9]+", out))
+        code_vars = _code_switches()
         m = re.search(r"## 功能开关总表.*?(?=\n## |\Z)", USAGE, re.S)
         self.assertIsNotNone(m, "usage.md 缺「功能开关总表」节")
         table_vars = set(re.findall(r"ARGO_[A-Z_0-9]+", m.group(0)))
