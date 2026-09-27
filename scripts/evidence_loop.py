@@ -79,16 +79,46 @@ def extract_fetch_evidence(fetch_result: dict[str, Any]) -> Optional[dict[str, A
         return None
 
     evidence: dict[str, Any] = {}
+    seo_signals: dict[str, Any] = {}
     try:
-        from content_signals import compute_content_quality
+        from content_signals import (compute_content_quality, score_clickbait,
+                                     score_title_body_consistency,
+                                     score_template_repetition)
         qual = compute_content_quality(content, title)
         evidence = dict(qual)
+        # SEO/低质信号（2026-09-27 新增）：三个信号与 absorption 互补——
+        # absorption 量「有没有可抽取的证据块」，这三个量「这些内容是不是
+        # 为了被检索而制造的」。标题党/文不对题/模板化都会拉低吸收分，
+        # 因为它们是「看起来有内容、实际不可用」的典型形态。
+        seo_signals = {
+            "clickbait": score_clickbait(title),
+            "title_body": score_title_body_consistency(title, content),
+            "template": score_template_repetition(content),
+        }
     except Exception as e:  # pragma: no cover - 防御降级
         _log(f"compute_content_quality 失败: {type(e).__name__}")
 
+    # 低质折扣：三项都只降不升（乘子 ≤1），且各自设下限，避免单个信号
+    # 就抹掉全部吸收分——假阳性代价高于漏放。
+    absorption = evidence.get("absorption_score")
+    if absorption is not None and seo_signals:
+        discount = 1.0
+        cb = seo_signals.get("clickbait") or {}
+        tb = seo_signals.get("title_body") or {}
+        tp = seo_signals.get("template") or {}
+        if cb.get("score", 0) >= 0.5:
+            discount *= 0.80                      # 标题党：-20%
+        if tb.get("mismatch"):
+            # 文不对题按覆盖度线性折扣：coverage=0 → ×0.7，coverage=0.5 → ×0.85
+            cov = float(tb.get("coverage") or 0.0)
+            discount *= (0.70 + 0.30 * min(cov / 0.5, 1.0))
+        if tp.get("repetition", 0) >= 0.75:
+            discount *= 0.85                      # 模板重复：-15%
+        absorption = round(max(0.0, float(absorption) * discount), 3)
+
     return {
         "url": url,
-        "absorption": evidence.get("absorption_score"),
+        "absorption": absorption,
         "quality_score": evidence.get("quality_score", fetch_result.get("quality_score")),
         "content_ok": evidence.get("content_ok", fetch_result.get("content_ok")),
         "word_count": evidence.get("word_count", len(content)),
@@ -97,6 +127,7 @@ def extract_fetch_evidence(fetch_result: dict[str, Any]) -> Optional[dict[str, A
             for k in ("has_numbers", "has_definition", "has_comparison",
                       "has_howto", "has_disclose", "is_qa_format")
         },
+        "seo_signals": seo_signals or None,
         "page_type": fetch_result.get("page_type"),
         "source_type": fetch_result.get("source_type"),
         "fetch_method": fetch_result.get("fetch_method"),
@@ -230,6 +261,109 @@ def gate_results(results: list[dict[str, Any]],
 
 
 # ── E. 核验模式（显式，不阻塞热路径）────────────────────────────────────────────
+
+def reorder_by_evidence(results: list[dict[str, Any]],
+                        pre_scores: dict[str, float] | None = None,
+                        weight: float = 0.35) -> dict[str, Any]:
+    """把正文级证据分回写进排序（2026-09-27 新增，补上闭环缺口）。
+
+    **为什么需要它**：`verify_results` 抓回正文、算了正文级 absorption，但旧
+    实现只把分数写进 `post_fetch_absorption` 字段，**不重排**（调用点在
+    `search_cli.py` 的排序之后）。于是「抓取链路已经识别出这是低质正文」这份
+    情报到不了排序器——`--verify` 花了 RTT 却只改展示，不改结果顺序。实测
+    `argo search "护眼台灯 推荐" --verify 3` 的 rerank_dims 里 authority 一字未变。
+
+    **做法**：只对**已核验**的结果降权（不提升），中性点为 0.5：
+
+        factor = 1 - weight × max(0, (0.5 - 正文质量)) / 0.5
+        新分 = 原分 × factor
+
+    三个设计取舍，都是为了避免「验证过的反而吃亏」这类采样偏差：
+
+    ① **只降不升**。verify 只覆盖 top-k，若正文质量好的条目被加分，等于
+       奖励「恰好被抓取」——而抓取与否与内容质量无关。降权没有这个问题：
+       它表达的是「抓到的证据表明这条不实」，是真实信号。
+    ② **0.5 为中性点**。absorption 的分布大致以 0.3-0.6 为主（见
+       content_signals.compute_content_quality 的权重），若以「质量本身」
+       直接做系数，绝大多数正常内容都会被无端降权（0.4 分的内容 ×0.4）。
+       以 0.5 为界则只有明显低质者受罚。
+    ③ **未核验条目不参与比较**。它们的分数保持原样，因此不会出现
+       「没验证过的因为没被降权而反超」。
+
+    pre_scores：可选的 {url: 原始 score} 快照，用于在返回里给出 delta 分布，
+    便于观测「这次核验让谁动了、动了多少」。
+
+    返回：{reordered: bool, adjusted: [...], moved: int}
+    """
+    if not results:
+        return {"reordered": False, "adjusted": [], "moved": 0}
+    try:
+        weight = float(weight)
+    except (TypeError, ValueError):
+        weight = 0.35
+    weight = max(0.0, min(1.0, weight))
+
+    adjusted: list[dict[str, Any]] = []
+    old_order = [(r.get("url") or "") for r in results]
+
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        # 只处理**真的核验过**的条目：has_fetched_evidence 由 _record_verify 写入，
+        # 是「本次或历史抓取确实拿到了正文」的标志。
+        if not r.get("has_fetched_evidence"):
+            continue
+        q = r.get("post_fetch_absorption")
+        if q is None:
+            q = r.get("absorption")
+        try:
+            quality = float(q)
+        except (TypeError, ValueError):
+            continue
+        quality = max(0.0, min(1.0, quality))
+
+        try:
+            base = float(r.get("score") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        # 只降不升：中性点 0.5，低于它才按偏离幅度打折
+        shortfall = max(0.0, (0.5 - quality) / 0.5)
+        factor = 1.0 - weight * shortfall
+        new_score = base * factor
+        if new_score == base:
+            continue                    # 无变化：不记入 adjusted（避免噪声）
+        r["score"] = round(new_score, 4)
+        dims = r.get("rerank_dims")
+        if isinstance(dims, dict):
+            dims["post_fetch_quality"] = round(quality, 3)
+        adjusted.append({
+            "url": r.get("url") or "",
+            "pre_score": round(base, 4),
+            "post_score": round(new_score, 4),
+            "quality": round(quality, 3),
+        })
+
+    if not adjusted:
+        return {"reordered": False, "adjusted": [], "moved": 0}
+
+    # 只在确有分数变化时重排；无变化时保持原序（逐位可对拍）
+    changed = any(a["pre_score"] != a["post_score"] for a in adjusted)
+    if changed:
+        # 不加 abs()：分数是「越大越相关」，负数不该被顶到最前。原实现用
+        # abs() 纯属冗余（score 恒非负），但它把「负分=最相关」这个反向
+        # 语义留在了排序器里——一旦将来有算子产出负分（如「扣分制」改版），
+        # 排序会静默倒置。降权只会让分数更小，用普通降序即可。
+        results.sort(key=lambda r: r.get("score", 0) or 0, reverse=True)
+    new_order = [(r.get("url") or "") for r in results]
+    moved = sum(1 for i, u in enumerate(new_order)
+                if i < len(old_order) and u != old_order[i])
+
+    if pre_scores is not None:
+        for a in adjusted:
+            a["delta"] = round(a["post_score"] - a["pre_score"], 4)
+
+    return {"reordered": changed, "adjusted": adjusted, "moved": moved}
+
 
 def verify_results(results: list[dict[str, Any]],
                    query: str,
