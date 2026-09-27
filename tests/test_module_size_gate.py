@@ -75,11 +75,13 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-27 +14：logging 延迟加载（_get_logger 模式）+ "
               "_redact_secrets fallback 加基本脱敏（Bearer token + key=value）"),
     "scripts/cache.py": (
-        1375, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
+        1374, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行；+3=2026-09-27 退化写入守卫的两处"
               "调用点与一行 import——判定逻辑本身已拆到 cache_guard.py，本文件"
               "只剩调用，不再是「准入策略混在存储实现里」的状态；"
-              "2026-09-27 +9：sqlite3 延迟导入（_get_sqlite3 模式）+ L1 100→500）"),
+              "2026-09-27 +9：sqlite3 延迟导入（_get_sqlite3 模式）+ L1 100→500；"
+              "−1=2026-09-27 引擎级垂直域维度（--domain/--sub_domain）并入缓存键，"
+              "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点）"),
     "scripts/http_client.py": (
         1005, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
               "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）"),

@@ -165,7 +165,9 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                  auto_budget_s: float,
                  primary_grace_s: float,
                  straggler_grace_s: float = 1.5,
-                 serial_stagger_s: float = 0.8) -> DispatchResult:
+                 serial_stagger_s: float = 0.8,
+                 engine_domain: str | None = None,
+                 engine_sub_domain: str | None = None) -> DispatchResult:
     """把 engines 跑完并收账：并发/串行调度 → 结局分类 → 熔断与配额记账。
 
     依赖全部显式注入（原因见模块头）。返回编排产出与两个补搜钩子。
@@ -218,6 +220,20 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             return 0
         return retry_count
 
+    def _engine_domain_kwargs() -> dict[str, str]:
+        """CLI --domain / --sub_domain 的引擎入参（未给则不下发空键）。
+
+        刻意**不**并进缓存键：这两个值此前既没进键也没进请求，而任何引擎
+        都可能对同 query 返回不同结果集；先让参数真正生效，键的隔离由
+        engine_domain_key 单独补齐（见下方 cache key 注释）。
+        """
+        out: dict[str, str] = {}
+        if engine_domain:
+            out["domain"] = engine_domain
+        if engine_sub_domain:
+            out["sub_domain"] = engine_sub_domain
+        return out
+
     def _exec_engine(eng: str, retries: int | None = None,
                      eff_timeout: float | None = None) -> list[dict[str, Any]]:
         # P0-001：用 retrieval_query（clean_query）检索
@@ -262,6 +278,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             last_result = engine_search(
                 retrieval_query, eng, n=max_results, timeout=attempt_to, depth=depth, mode=mode,
                 since=since_iso, until=until_iso, skip_cache=skip_cache,
+                **_engine_domain_kwargs(),
             )
             if last_result and any("error" not in r for r in last_result):
                 return last_result
@@ -274,6 +291,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     timeout=min(to, max(0.5, _remain)),
                     depth="balanced", mode=mode,
                     since=since_iso, until=until_iso, skip_cache=skip_cache,
+                    **_engine_domain_kwargs(),
                 )
         return last_result
 
@@ -320,6 +338,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             eng_hit = cache.get_engine(
                 query, eng, max_results, domain=domain, mode=mode, depth=depth,
                 since=eng_since, until=eng_until,
+                engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
             )
             if eng_hit is not None:
                 lat = int((_now() - t_eng) * 1000)
@@ -447,6 +466,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     query, eng, max_results, goods if goods else [],
                     domain=domain, mode=mode, depth=depth,
                     since=eng_since, until=eng_until,
+                    engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
                 ),
                 context=f"dispatch.cache_set_engine({eng})",
             )

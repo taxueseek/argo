@@ -106,6 +106,13 @@ class _SearchRequest:
     cache_engine_key: Any
     emit_usage_log: Any
     breaker: Any
+    # 引擎级垂直域/子域（CLI --domain/--sub_domain）。此前这两个开关被
+    # argparse 接下、SKILL.md 与 usage.md 都写进了用法，却没有任何一层读取
+    # 它们——请求照发、结果照回，只是 `domain` 参数根本没到引擎，于是
+    # 「限定金融域」静默退化成通用搜索。`domain` 字段（上方）是**路由域**，
+    # 与这里的引擎入参同名不同义，刻意不合并。
+    engine_domain: str | None = None
+    engine_sub_domain: str | None = None
 
 
 @dataclass(frozen=True)

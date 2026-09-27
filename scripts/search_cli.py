@@ -304,6 +304,8 @@ def main():
         sort=args.sort,
         include_domains=[d for d in args.include_domains.split(",") if d.strip()] or None,
         exclude_domains=[d for d in args.exclude_domains.split(",") if d.strip()] or None,
+        engine_domain=args.domain or None,
+        engine_sub_domain=args.sub_domain or None,
         timing=_timing,
     )
 

@@ -44,6 +44,7 @@ except ImportError:
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths
 from cache_guard import assert_not_degraded  # 退化写入守卫（2026-09-27 拆出）
+from cache_key_vdom import cache_key_vdom  # 引擎级垂直域维度（--domain/--sub_domain）
 from cli_io import dumps
 from except_sets import IO_BENIGN, SHAPE_BENIGN
 
@@ -902,15 +903,13 @@ class SearchCache:
     @staticmethod
     def _key(query: str, engine: str, max_results: int = 0, domain: str = "general",
              mode: str = "auto", depth: str = "fast", kind: str = "combo",
-             since: str | None = None, until: str | None = None) -> str:
+             since: str | None = None, until: str | None = None,
+             **vdom) -> str:
         """生成缓存键。max_results 不参与 key（柔性命中）；kind 区分 combo/engine/fetch。"""
-        nq = normalize_query(query)
-        raw = f"{kind}|{nq}|{engine}|{domain}|{mode}|{depth}"
-        # 时间窗并入 key：同一 query 不同 since/until 不串缓存
-        if since:
-            raw += f"|since={since}"
-        if until:
-            raw += f"|until={until}"
+        raw = f"{kind}|{normalize_query(query)}|{engine}|{domain}|{mode}|{depth}"
+        for tag, val in (("since", since), ("until", until), *cache_key_vdom(vdom)):
+            if val:
+                raw += f"|{tag}={val}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
     @staticmethod
@@ -1120,9 +1119,9 @@ class SearchCache:
     def get_engine(self, query: str, engine: str, max_results: int,
                    domain: str = "general", mode: str = "auto",
                    depth: str = "fast", since: str | None = None,
-                   until: str | None = None) -> Optional[list]:
+                   until: str | None = None, **vdom) -> Optional[list]:
         key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
-                        since=since, until=until)
+                        since=since, until=until, **vdom)
         hit = self._read(key)
         if hit is None:
             return None
@@ -1134,7 +1133,7 @@ class SearchCache:
     def set_engine(self, query: str, engine: str, max_results: int,
                    results: list, domain: str = "general", mode: str = "auto",
                    depth: str = "fast", ttl: int | None = None,
-                   since: str | None = None, until: str | None = None):
+                   since: str | None = None, until: str | None = None, **vdom):
         assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set_engine")
         assert_results_cacheable(results, context="SearchCache.set_engine")
         assert_not_degraded(results, context="SearchCache.set_engine")
@@ -1144,7 +1143,7 @@ class SearchCache:
         else:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
         key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
-                        since=since, until=until)
+                        since=since, until=until, **vdom)
         self._write(key, query, engine, max_results, {"results": results}, domain,
                     effective_ttl, mode=mode, depth=depth)
 

@@ -98,6 +98,8 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
             *, mode: str = "auto", since: str | None = None,
             until: str | None = None, sort: str = "relevance",
             on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None,
+            engine_domain: str | None = None,
+            engine_sub_domain: str | None = None,
             timing: StageTiming | None = None,
             hooks: _SearchHooks) -> _Prepared:
     """请求侧整理 + 缓存查询；命中时 `cached` 非空（调用方直接返回它）。
@@ -171,6 +173,14 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
     # 搜这个查询」本身就是请求，具体挑了哪几个引擎是实现细节，由 TTL 兜住
     # 时效，并原样保留在缓存载荷里供追溯。
     cache_engine_key = decision.get("engine_request") or "auto"
+    # 引擎级垂直域并入缓存键：--domain/--sub_domain 改变了发给引擎的请求，
+    # 同 query 在不同 domain 下的结果集不同。不隔离就会把「不限域」的结果
+    # 当成「限定金融域」的答案发回去——而这两个开关此前连请求都没带上，
+    # 静默退化成通用搜索（同一个坑的另一半）。
+    if engine_domain:
+        cache_engine_key += f"|ed={engine_domain}"
+    if engine_sub_domain:
+        cache_engine_key += f"|esd={engine_sub_domain}"
     # 时间窗并入缓存键：同一 query 不同 since/until 不串缓存；
     # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）。
     # 仅当组合内含带时间能力引擎时隔离：无时间字段引擎忽略时间窗、结果相同，
@@ -260,6 +270,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
         on_progress=on_progress, sort=sort, cache=cache,
         engine_label=engine_label, cache_engine_key=cache_engine_key,
         emit_usage_log=_emit_usage, breaker=breaker,
+        engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
     ), run=_SearchRun(raw_results={}, engine_outcomes=[], merged=[]))
 
 
@@ -321,6 +332,8 @@ def dispatch(req: _SearchRequest, run: _SearchRun, hooks: _SearchHooks) -> _Sear
         primary_grace_s=hooks.primary_grace_s,
         straggler_grace_s=hooks.straggler_grace_s,
         serial_stagger_s=hooks.serial_stagger_s,
+        engine_domain=req.engine_domain,
+        engine_sub_domain=req.engine_sub_domain,
     )
     raw_results = _dispatch.raw_results
     engine_outcomes = _dispatch.engine_outcomes

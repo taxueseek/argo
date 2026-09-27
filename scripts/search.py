@@ -471,6 +471,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
                    since: str | None = None, until: str | None = None,
                    sort: str = "relevance",
                    on_progress: Optional[Callable[[Stage, dict[str, Any]], None]] = None,
+                   engine_domain: str | None = None,
+                   engine_sub_domain: str | None = None,
                    timing: StageTiming | None = None) -> dict[str, Any]:
     hooks = _SearchHooks(
         engine_search=engine_search, available_engines=available_engines,
@@ -489,6 +491,8 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     prepared = prepare(query, decision, max_results, timeout, depth, cache,
                        skip_cache, mode=mode, since=since, until=until,
                        sort=sort, on_progress=on_progress, timing=timing,
+                       engine_domain=engine_domain,
+                       engine_sub_domain=engine_sub_domain,
                        hooks=hooks)
     if prepared.cached is not None:
         return prepared.cached
@@ -669,6 +673,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  include_local: bool = False,
                  include_domains: list[str] | None = None,
                  exclude_domains: list[str] | None = None,
+                 engine_domain: str | None = None,
+                 engine_sub_domain: str | None = None,
                  timing: StageTiming | None = None) -> dict[str, Any]:
     """统一搜索便捷入口。
 
@@ -842,6 +848,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         timeout=timeout, depth=depth, cache=cache,
         skip_cache=skip_cache, mode=mode, on_progress=on_progress,
         since=since, until=until, sort=sort, timing=timing,
+        engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
     )
     # 对外仍报告用户原始 query
     result["query"] = original_query
