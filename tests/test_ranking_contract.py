@@ -91,7 +91,15 @@ class TestConsensusSurvivesRerank:
 
 
 class TestNoFusionSignalEquivalence:
-    """不变式 1：无融合信息时与旧实现逐位等价（本次改动零扰动）。"""
+    """不变式 1：无融合信息时的确定性行为（本次改动零扰动）。
+
+    2026-09-27 更新：本类原断言 `["5","4","3","2","1","0"]`，即「snippet 越长
+    排越前」。那是**完整性维度旧实现**（0.6×snippet 长度）的直接产物，也正是
+    当日修掉的反向激励——内容农场唯一要刷的指标就是长度，实证 SEO 软文在该
+    公式下得 0.556、正经来源只得 0.239。断言更新为「确定性 + 不丢结果」，
+    本类守护的不变式（无 prior 时排序确定、且不依赖融合信号）保持不变。
+    旧行为可由 ARGO_COMPLETENESS_V2=0 复现（逃生门）。
+    """
 
     def _results(self):
         return [
@@ -100,15 +108,20 @@ class TestNoFusionSignalEquivalence:
             for i in range(6)
         ]
 
-    def test_order_unchanged_without_prior(self):
+    def test_order_deterministic_without_prior(self):
         from search import local_five_dim_rerank
         res = self._results()
         ranked = local_five_dim_rerank("标题 详细内容", [dict(x) for x in res],
                                        domain="general", top_n=6)
         # prior 恒 0（无 _rrf_score、无 consensus_engines）
         assert all(r["rerank_dims"]["prior"] == 0.0 for r in ranked)
-        # 文本更完整者在前：旧实现的确定性行为，不得被本次改动打乱
-        assert [r["url"].split("/")[-1] for r in ranked] == ["5", "4", "3", "2", "1", "0"]
+        # 确定性：同样输入两次运行结果一致（不依赖字典序/时间等外部状态）
+        ranked2 = local_five_dim_rerank("标题 详细内容",
+                                        [dict(x) for x in self._results()],
+                                        domain="general", top_n=6)
+        assert [r["url"] for r in ranked] == [r["url"] for r in ranked2]
+        # 六条全部返回且不重复（长度不再决定名次，但一条都不能丢）
+        assert len({r["url"] for r in ranked}) == 6
 
     def test_weights_scale_uniformly(self):
         """前五维必须被同一常数缩放，否则 prior 缺席时会改变相对权重。
