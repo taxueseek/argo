@@ -297,5 +297,69 @@ class TestLimitationsNotGatedByEnvelope(unittest.TestCase):
         self.assertTrue(ok, "正确形态被误判")
 
 
+class TestDerivedScalarsFollowResults(unittest.TestCase):
+    """后置过滤改了 `results`，派生字段必须跟着走（2026-09-27）。
+
+    实测：`--include-domains example.com` 返回 `count=4` 而 `results=[]`——
+    JSON 消费者按 `count` 循环会取到空气，而按 `results` 判断又对不上账。
+    根因是域过滤在**后置**阶段改了 results，而 count 与 evidence_loop 是更早
+    算出来的。修法不是在过滤处补一行（下一个后置阶段照样会漏），而是把重算
+    放进 `shape_response` 的唯一出口。
+
+    这批用例全部离线：直接喂合成 results 给 shape_response，不跑真实搜索。
+    """
+
+    def _shape(self, results, **overrides):
+        from search_output import _ShapeContext, shape_response
+
+        class _NullCache:
+            def local_status(self, urls):
+                return {}
+
+        fields = dict(
+            query="q", kind="keyword", tier="daily", envelope=False,
+            decision={}, extra_lim=[], cache=_NullCache(),
+            include_domains=[], exclude_domains=[], include_local=False, n=5,
+            run_local_seek=lambda *a, **k: [],
+        )
+        fields.update(overrides)
+        return shape_response(_ShapeContext(**fields), {"results": list(results)})
+
+    _TWO = [{"url": "https://kept.example/a", "title": "a"},
+            {"url": "https://dropped.example/b", "title": "b"}]
+
+    def test_count_follows_include_filter_to_empty(self):
+        out = self._shape(self._TWO, include_domains=["none.example"])
+        self.assertEqual(out["count"], 0, "count 停在过滤前的值")
+        self.assertEqual(len(out["results"]), 0)
+        # 非空断言：确认过滤真的发生了。少了它，一旦过滤失效这条用例会假绿
+        # （空的 results 与 count=0 恰好都成立）。
+        self.assertIn("dropped 2", str(out.get("domain_filter") or ""),
+                      "域过滤没生效，本用例失去意义")
+        self.assertTrue(out["evidence_loop"]["suggested"] == [], out["evidence_loop"])
+
+    def test_count_follows_include_filter_partial(self):
+        out = self._shape(self._TWO, include_domains=["kept.example"])
+        self.assertEqual(out["count"], 1)
+        self.assertEqual(len(out["results"]), 1)
+
+    def test_count_follows_exclude_filter(self):
+        out = self._shape(self._TWO, exclude_domains=["dropped.example"])
+        self.assertEqual(out["count"], 1)
+
+    def test_count_matches_results_without_any_filter(self):
+        out = self._shape(self._TWO, exclude_domains=["unrelated.example"])
+        self.assertEqual(out["count"], len(out["results"]))
+
+    def test_evidence_loop_never_suggests_dropped_urls(self):
+        """建议核验的 URL 必须仍在这批结果里，pending 计数与 suggested 同长。"""
+        out = self._shape(self._TWO, include_domains=["kept.example"])
+        ev = out["evidence_loop"]
+        live = {r.get("url") for r in out["results"]}
+        self.assertEqual(ev["pending_count"], len(ev["suggested"]))
+        for url in ev["suggested"]:
+            self.assertIn(url, live, f"建议核验了不在结果里的 URL：{url}")
+
+
 if __name__ == "__main__":
     unittest.main()

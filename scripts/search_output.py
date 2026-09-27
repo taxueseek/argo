@@ -531,4 +531,28 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             result.setdefault("results", []).extend(local_hits)
             result["local_results"] = local_hits
         result["include_local"] = True
+    # ── 收口：重算一切「由 results 派生」的字段 ────────────────────────────────
+    #
+    # why：本函数**后置**改 results 的地方不止一处（域过滤裁剪、本地命中并入），
+    # 而 count / evidence_loop 的更早版本是按改之前的 results 算的。实测
+    # `--include-domains example.com` 得到 `count=4` 而 `results=[]`——JSON 消费
+    # 者会以为拿到了 4 条答案，而下游按 count 循环就会取到空气。
+    #
+    # 这类「改了 results、忘了改派生字段」的缺陷根治不了，只能靠位置根治：把
+    # 重算放在**唯一出口**，任何后置改写都自动被覆盖，新增后置阶段也不必记得
+    # 来这里补一行。判定以 results 为唯一真值来源，而不是把旧值加减修正——
+    # 后者在多次改写叠加时必然漂移。
+    result["count"] = len(result.get("results") or [])
+    _el = result.get("evidence_loop")
+    if isinstance(_el, dict):
+        _live = {r.get("url") for r in (result.get("results") or [])
+                 if isinstance(r, dict)}
+        _sug = [u for u in (_el.get("suggested") or []) if u in _live]
+        if len(_sug) != len(_el.get("suggested") or []):
+            # suggested 是「建议核验的 URL」，被域过滤裁掉的 URL 不该再出现在
+            # 这里；pending_count 的语义就是 len(suggested)（见 evidence_loop.
+            # gate_results 的返回），两者必须同步，否则会出现「建议 4 条、
+            # 待核验 0 条」这类自相矛盾的口径。
+            _el["suggested"] = _sug
+            _el["pending_count"] = len(_sug)
     return result
