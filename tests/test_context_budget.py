@@ -436,3 +436,55 @@ class TestListEnginesCompactProjection:
         total = sum(len(json.dumps(compact_engine_row(r), ensure_ascii=False))
                     for r in rows)
         assert total < 64 * 1024, f"瘦身全量超 64KB：{total}B（检查投影字段集）"
+
+
+class TestEngineListDefaultIsASummary:
+    """`--list-engines --detail` 无过滤时默认给摘要，不是逐条清单（2026-09-27）。
+
+    沿革：全量转储 151 KB → 瘦身投影 54 KB → **默认摘要 2.5 KB**。前两次都在
+    压字段，但「逐条列出 245 个健康源」这件事本身就不该是默认——它对这一档要
+    回答的两个问题（多少源可用 / 不可用的为什么不可用）贡献为零，代价却是
+    ~14k token 进上下文。要逐条全量必须显式加 `--all`。
+    """
+
+    def _rows(self):
+        from engine_status import list_engines_detail
+        return [dict(r, explicit_only=bool(r.get("explicit_only")))
+                for r in list_engines_detail()]
+
+    def test_summary_counts_are_consistent(self):
+        from search_cli import _summarize_engine_rows
+        summary = _summarize_engine_rows(self._rows())
+        assert summary["total"] == (summary["routable"]
+                                   + summary["explicit_only"]
+                                   + summary["not_routable"]), summary
+        # 成因计数之和必须等于「不可路由总数」，否则读者会以为漏了一类
+        assert sum(summary["by_reason"].values()) == summary["not_routable"], summary
+        assert len(summary["not_routable_engines"]) == summary["not_routable"]
+        assert summary["routable"] > 100, f"可路由数异常：{summary['routable']}"
+
+    def test_summary_does_not_enumerate_healthy_engines(self):
+        """健康源不进名单——它们的答案都是「可用」，逐条列出是纯体积。"""
+        from search_cli import _summarize_engine_rows
+        rows = self._rows()
+        summary = _summarize_engine_rows(rows)
+        listed = {r["engine_id"] for r in summary["not_routable_engines"]}
+        assert len(listed) < len(rows) / 2, "摘要把半数组件都列出来了，等于没摘要"
+        routable = {r["engine_id"] for r in rows} - listed
+        assert not (routable & listed), "同一引擎既算可用又算不可用"
+
+    def test_summary_stays_within_budget(self):
+        """体积契约：默认档 < 8 KB（改前逐条 ~54 KB）。"""
+        from cli_io import dumps
+        from search_cli import _summarize_engine_rows
+        payload = dumps(_summarize_engine_rows(self._rows()))
+        size = len(payload.encode("utf-8"))
+        assert size < 8 * 1024, f"引擎摘要超 8KB：{size}B"
+
+    def test_cli_defaults_to_summary_and_requires_all(self):
+        """形态门：默认走摘要分支，逐条清单必须显式 --all。"""
+        src = (ROOT / "scripts" / "search_cli.py").read_text(encoding="utf-8")
+        assert "_summarize_engine_rows(rows)" in src, "摘要没接进 CLI"
+        assert "args.list_all" in src, "--all 没接上，逐条全量拿不回来"
+        assert 'dest="list_all"' in src, "--all 的 dest 改名会让 args.list_all 失效"
+        assert "逐条全量清单加 --all" in src, "摘要必须自我说明怎么拿全量"

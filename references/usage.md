@@ -123,12 +123,20 @@ python3 scripts/search.py "查询词" \
 
 ### `--list-engines` 的体积陷阱
 
-`--list-engines` 列名字约 3 KB（2026-09-19 实测 2697 B，可放心用）；**`--detail` 带 `--engine` 过滤 = 单引擎全量诊断 ~0.9 KB**；**不带过滤的 `--detail --json`** 才是体积陷阱（2026-09-16 实测 ~50 KB，2026-09-19 复测 50302 B；原全量转储 151 KB，runtime/admission 嵌套占三成，已默认投影压缩）
-（含每引擎的熔断/配额/准入/依赖运行态），属诊断转储。查单个或几个引擎请**同时
-给 `--engine`**（逗号分隔），体积降到 KB 级；未收录的名字会走 stderr 提示。
+`--list-engines` 列名字约 3 KB（2026-09-19 实测 2697 B，可放心用）。
+
+**`--detail` 不带过滤 = 分组摘要 ≈2.5 KB**（2026-09-27 起）：答的是「多少个源
+可用、不可用的那些为什么不可用」——计数 + 成因分组 + 只列不可路由项。
+要逐条全量（含每引擎的熔断/配额/准入/依赖运行态）加 **`--all`**，约 54 KB，
+那是诊断转储、不是日常档（2026-09-16 前是 151 KB，2026-09-19 压到 50 KB）。
+
+**`--detail --engine <名>`（逗号分隔可多个）= 单引擎全量诊断**，~0.9 KB/个；
+未收录的名字会走 stderr 提示。
 
 ```bash
-python3 scripts/search.py --list-engines --detail --engine egov_law,kor_law   # ≈2 KB
+python3 scripts/search.py --list-engines --detail                            # ≈2.5 KB 摘要
+python3 scripts/search.py --list-engines --detail --engine egov_law,kor_law  # ≈2 KB 全量行
+python3 scripts/search.py --list-engines --detail --all --json                # ≈54 KB 逐条
 ```
 
 

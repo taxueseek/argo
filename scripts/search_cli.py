@@ -110,6 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="与 --list-engines 联用：输出详细状态")
     parser.add_argument("--routable-only", action="store_true",
                         help="与 --list-engines 联用：仅可自动路由的引擎")
+    parser.add_argument("--all", action="store_true", dest="list_all",
+                        help="与 --list-engines --detail 联用：输出全部引擎的"
+                             "逐条清单（默认只给分组摘要 + 非可路由项的成因）")
     parser.add_argument("--mode", default="auto",
                         choices=["fast", "auto", "deep", "budget"],
                         help="预算模式: fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制")
@@ -189,6 +192,101 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# ── --list-engines --detail 无过滤时的摘要（2026-09-27）────────────────────────
+#
+# 逐条清单要回答的问题只有两个：**有多少源可用**、**不可用的那些为什么不可用**。
+# 245 个健康源逐条列出对这两个问题的贡献是零（每一条的答案都是「可用」），
+# 而代价是 54 KB ≈ 14k token 进上下文。所以默认给分组计数 + 只列非可路由项。
+
+# 不可自动路由的成因，顺序即优先级：一个源可能同时缺 env 又缺依赖，若把每种
+# 成立的理由都计一次，分组之和会大于「不可路由总数」，自相矛盾。只认第一个。
+_ENGINE_BLOCK_REASONS: tuple[tuple[str, str], ...] = (
+    ("disabled", "enabled=False（未启用）"),
+    ("missing_env", "缺环境变量（配好密钥即可用）"),
+    ("missing_deps", "缺可选依赖（装好即可用）"),
+    ("quota_exhausted", "配额耗尽（等窗口重置）"),
+    ("not_routable", "其它不可路由（见 --engine <名> 全量行）"),
+)
+
+
+def _engine_block_reason(row: dict[str, Any]) -> str | None:
+    """一条引擎记录「不可自动路由」的成因；可自动路由返回 None。"""
+    if not row.get("enabled", True):
+        return "disabled"
+    if row.get("missing_env"):
+        return "missing_env"
+    if row.get("missing_deps"):
+        return "missing_deps"
+    if row.get("quota_exhausted"):
+        return "quota_exhausted"
+    if not row.get("routable", True):
+        return "not_routable"
+    return None
+
+
+def _summarize_engine_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """把逐条清单压成「计数 + 只列非可路由项」。"""
+    routable: list[str] = []
+    explicit_only: list[str] = []
+    blocked: list[dict[str, Any]] = []
+    by_reason: dict[str, int] = {}
+    for row in rows:
+        name = str(row.get("engine_id") or "")
+        if row.get("explicit_only"):
+            # 只能显式点名、不进自动路由——这是设计如此，不是故障，
+            # 所以单独一桶，不混进「不可用」，也不逐条展开。
+            explicit_only.append(name)
+            continue
+        reason = _engine_block_reason(row)
+        if reason is None:
+            routable.append(name)
+            continue
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+        blocked.append({
+            "engine_id": name,
+            "reason": reason,
+            **({"missing_env": row["missing_env"]} if row.get("missing_env") else {}),
+            **({"missing_deps": row["missing_deps"]} if row.get("missing_deps") else {}),
+            **({"status": row["status"]} if row.get("status") else {}),
+        })
+    return {
+        "total": len(rows),
+        "routable": len(routable),
+        "explicit_only": len(explicit_only),
+        "not_routable": len(blocked),
+        "by_reason": {k: by_reason[k] for k, _ in _ENGINE_BLOCK_REASONS
+                      if k in by_reason},
+        "reason_legend": {k: label for k, label in _ENGINE_BLOCK_REASONS},
+        "not_routable_engines": sorted(blocked, key=lambda r: r["reason"]),
+        "hint": "逐条全量清单加 --all；单引擎全量诊断用 --engine <名>",
+    }
+
+
+def _format_engine_summary(summary: dict[str, Any]) -> str:
+    """摘要的人类可读渲染（非 --json 时用）。"""
+    lines = [
+        f"引擎清单摘要：共 {summary['total']} 条，可自动路由 {summary['routable']} 条，"
+        f"仅显式点名 {summary['explicit_only']} 条，不可路由 {summary['not_routable']} 条",
+    ]
+    for reason, count in (summary.get("by_reason") or {}).items():
+        label = (summary.get("reason_legend") or {}).get(reason, reason)
+        lines.append(f"  · {reason:<16}{count:>4}  {label}")
+    blocked = summary.get("not_routable_engines") or []
+    if blocked:
+        lines.append("不可路由项：")
+        for row in blocked:
+            extra = ""
+            if row.get("missing_env"):
+                # 成因与细节可能同时成立（如「未启用」的源也缺密钥）：
+                # 用「另缺」而不是直接并列，避免读成两个互斥的原因。
+                extra = f"（另缺 {'/'.join(str(x) for x in row['missing_env'])}）"
+            elif row.get("missing_deps"):
+                extra = f"（另缺 {'/'.join(str(x) for x in row['missing_deps'])}）"
+            lines.append(f"  - {row['engine_id']:<28}{row['reason']}{extra}")
+    lines.append(str(summary.get("hint") or ""))
+    return "\n".join(lines)
+
+
 def main():
     # 入口第一件事：钉住 stdout/stderr 编码（实现唯一，见 cli_io）。
     # 放在这里而不是 import 期：本模块被 search.py 与 bin/argo 两条路调用，
@@ -214,11 +312,24 @@ def main():
                 rows = list_engines_detail(routable_only=args.routable_only,
                                            engines=_wanted)
                 if not _wanted:
-                    # 全量转储 2026-09-16 实测 151 KB（≈50k token），Agent 一旦
-                    # 拉进上下文就是事故；全量清单要回答的只是「哪些源可用/
-                    # 为什么不可用」，瘦身投影（~1/4 体积）足够。单引擎全量
-                    # 诊断（admission/runtime）用 --engine 过滤后拿完整行。
+                    # 不带过滤时**默认不吐逐条清单**（2026-09-27 收紧）。
+                    #
+                    # 沿革：全量转储 151 KB → 瘦身投影 54 KB（compact_engine_row，
+                    # 2026-09-16）→ 仍在一次调用里塞 54 KB ≈ 14k token 进上下文。
+                    # 而这一档要回答的问题只有两个：**有多少源可用**、**不可用的
+                    # 那些为什么不可用**。逐条列出 245 个健康源，是对这两个问题
+                    # 的零贡献——它们每一个的答案都是「可用」。
+                    #
+                    # 所以默认改成「分组计数 + 只列非可路由项（带成因）」，
+                    # 实测 54 KB → 约 2 KB；要逐条全量照旧加 --all。
+                    # 单引擎全量诊断仍走 --engine <名>（不受本分支影响）。
                     rows = [compact_engine_row(r) for r in rows]
+                if not _wanted and not args.list_all and args.json_output:
+                    print(dumps(_summarize_engine_rows(rows)))
+                    return
+                if not _wanted and not args.list_all:
+                    print(_format_engine_summary(_summarize_engine_rows(rows)))
+                    return
                 if _wanted:
                     # 未命中的名字要显式报出（走 stderr，保持 stdout 是纯 JSON）——
                     # 否则「查了没输出」会被误读成「该引擎状态为空」。
