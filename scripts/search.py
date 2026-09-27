@@ -656,39 +656,6 @@ def _run_local_seek(query: str, max_n: int = 5,
     return out
 
 
-def unknown_requested_engines(engine_override: str,
-                              local_first: bool = False) -> list[str]:
-    """用户显式点名的引擎里，本版 registry 查无的那些（按输入顺序，去重）。
-
-    why：`--engine nope` 此前产出
-    `status=completed / errors=[] / engines_used=['nope'] / count=0`——调用方
-    （Agent）据此判定「网上没有这个信息」并停止追问，而真相是这个名字在本版
-    registry 里根本不存在（拼写错、或该源未随本版发布）。它与「缺 API Key 的
-    静默 no-results」是同一根因，处置也应一致：变成可行动的 error。
-
-    **为什么拦在请求层而不是执行层**：执行层收到的引擎名可以是测试替身
-    （test_serial_hedge 的 quick_primary、test_race_fast_budget 的 fast_garbage
-    都从 dispatch 入口走），在那里按 registry 判「未注册」会误伤替身——实测
-    11 个 dispatch 用例集体变红。而「用户点了个不存在的名字」是**请求级**的
-    事实，判在请求层才既不误伤、又落在正确的抽象层。
-
-    判据只认 `engines.is_registered`（registry 的唯一来源），这里不另写一份
-    `in` 判断——两份判据迟早漂移。
-    """
-    if local_first or not engine_override or engine_override == "auto":
-        return []
-    try:
-        from engines import is_registered
-    except ImportError:
-        return []  # 拿不到判据时不猜，维持既有行为
-    unknown: list[str] = []
-    for raw in str(engine_override).split(","):
-        name = raw.strip()
-        if name and name not in unknown and not is_registered(name):
-            unknown.append(name)
-    return unknown
-
-
 def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = False,
                  skip_cache: bool = False, timeout: int = 10,
                  depth: str = "fast", mode: str = "auto", local_first: bool = False,
@@ -961,7 +928,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     # unknown_requested_engines）。局限声明走既有通道 extra_lim，错误行在
     # 成形之后追加——errors 是执行层写的，这里只做「请求级事实」的补充，
     # 不去改执行层的账（两份账混写会互相覆盖）。
-    _unknown_engines = unknown_requested_engines(engine, local_first)
+    from engines import unknown_requested_engines as _unknown_requested
+    _unknown_engines = [] if local_first else _unknown_requested(engine)
     if _unknown_engines:
         extra_lim.append(
             "unknown engine name(s) requested: "

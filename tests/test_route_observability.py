@@ -144,7 +144,7 @@ class TestUnknownEngineIsReported(unittest.TestCase):
 
     def test_detector_flags_only_unregistered_names(self):
         """判据本身：只在「显式点名 + 本版查无」时报，其余一律放行。"""
-        from search import unknown_requested_engines
+        from engines import unknown_requested_engines
         self.assertEqual(
             unknown_requested_engines("definitely-not-an-engine-xyz"),
             ["definitely-not-an-engine-xyz"])
@@ -153,18 +153,17 @@ class TestUnknownEngineIsReported(unittest.TestCase):
         self.assertEqual(
             unknown_requested_engines("anysearch, nope, nope , octen"),
             ["nope"])
-        # 不该报的三种情形：默认路由、local-first、空串
+        # 不该报的两种情形：默认路由、空串（local_first 由调用方短路，见下）
         self.assertEqual(unknown_requested_engines("auto"), [])
         self.assertEqual(unknown_requested_engines(""), [])
-        self.assertEqual(
-            unknown_requested_engines("definitely-not-an-engine-xyz",
-                                      local_first=True), [])
 
     def test_super_search_reports_unknown_names(self):
         """形态门：判据必须真的接进响应，否则它只是个好函数。"""
         src = (SCRIPT_DIR / "search.py").read_text(encoding="utf-8")
-        self.assertIn("unknown_requested_engines(engine, local_first)", src,
+        self.assertIn("_unknown_requested(engine)", src,
                       "判据没有接进 super_search——未注册引擎又会静默空结果")
+        self.assertIn("[] if local_first else", src,
+                      "local-first 短路丢了：本地聚合本来就不走 web 引擎点名")
         self.assertIn("unknown engine name(s) requested", src,
                       "局限声明没接上，调用方看不到降级原因")
 
