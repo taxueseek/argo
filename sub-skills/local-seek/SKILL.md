@@ -31,6 +31,7 @@ description: 本机文件与代码内容搜索（rg/fd/mdfind/grep 统一入口 
 python3 sub-skills/local-seek/scripts/seek.py "查询词"                 # 默认：当前目录全文
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes   # 指定目录
 python3 sub-skills/local-seek/scripts/seek.py "词" --path ~/.agents --dot  # 连以 . 开头的目录和软链一起搜；搜 ~/.agents、~/.zcode 时要加（Spotlight 收不到这类目录，--dot 对 --spotlight 没用）
+python3 sub-skills/local-seek/scripts/seek.py "词" --path . --include-noise  # repos/、tests/、tmp/、日期归档目录与真源平权（默认这些排在真源之后，但**仍然搜得到**）
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --count          # 先数命中，再决定是否深入
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --filename       # 按文件名
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --spotlight      # 全盘兜底（PDF/邮件/笔记）

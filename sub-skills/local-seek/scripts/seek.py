@@ -59,6 +59,27 @@ DEFAULT_EXCLUDES = [
     ".mypy_cache", ".ruff_cache", "coverage", "htmlcov", ".idea", ".vscode",
     ".venv", "venv", "env", ".env", "site-packages", "node_modules/.cache",
 ]
+
+# ── 噪声档（2026-09-27 新增）───────────────────────────────────────────────
+# 实测（Documents/GPT 搜 "import"，rg 61899 处命中）：
+#     vendor/生成物/归档  7%    测试/fixture/benchmark  27%    tmp/  7%
+# 合计 41% 的命中是「搜代码时不想看到的东西」。DEFAULT_EXCLUDES 已经挡掉
+# 一部分生成物，但漏了三类最大的：repos/（克隆的第三方仓）、__tests__|tests|
+# fixtures|benchmark（测试与固件）、tmp/（临时检出）。
+#
+# 为什么是**降权**而不是排除：
+#   排除 = 这些内容永远搜不到。搜「某个第三方仓里怎么写的」「我的测试怎么
+#   写的」是真实且常见的用法，排除会让工具在这些查询上直接给错答案。
+#   降权 = 真实源优先，源不够时再回落到噪声档。既改善日常体验，又不制造
+#   「明明有却搜不到」这种更糟的失败模式。
+NOISE_TIER = [
+    "repos", "repo", "third_party", "thirdparty", "vendors",
+    "__tests__", "__test__", "testdata", "test_data", "fixtures", "fixture",
+    "__mocks__", "__snapshots__", "e2e", "benchmark", "benchmarks",
+    "tmp", "temp", ".tmp", "tmpdir", "archive", "archives", ".trash",
+    "2026-*",   # 本工作区的日期归档目录：研究产物，非源码
+]
+_NOISE_SET = frozenset(n for n in NOISE_TIER if not n.endswith("*"))
 DOC_EXTS = {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "md", "txt",
             "rtf", "html", "htm", "epub", "csv", "json", "yaml", "yml", "log"}
 CODE_EXTS = {"py", "js", "ts", "tsx", "jsx", "go", "rs", "java", "c", "h",
@@ -83,11 +104,38 @@ def needs_pcre2(query: str) -> bool:
 
 
 def pcre2_supported() -> bool:
-    """本机 rg 是否编译了 pcre2 特性（模块级缓存，只测一次）。"""
-    global _pcre2_ok
-    if _pcre2_ok is None:
+    """本机 rg 是否编译了 pcre2 特性（模块级缓存，只测一次）。
+
+    判据读 `rg --version` 的 features 行（如 `features:+pcre2`），
+    **不再用「跑一次匹配看返回码」**。
+
+    历史 bug（2026-09-27 实测定位）：原判据是
+
         proc = run(["rg", "--pcre2", "-e", "x", os.devnull])
         _pcre2_ok = proc is not None and proc.returncode == 0
+
+    `/dev/null` 永远没有匹配，rg 无匹配时返回 **1**，于是 `returncode == 0`
+    恒为 False——本机 rg 15.0.0 明明带 `+pcre2`（PCRE2 10.45 带 JIT），
+    却永远被判为「未编译 PCRE2」。后果是所有 look-around / 反向引用查询
+    被拒绝：
+
+        $ seek.py 'foo(?=\\d)' --path /tmp/pcretest
+        local-seek: 本机 rg 未编译 PCRE2，不支持 look-around 语法，请简化查询
+        $ rg --pcre2 -e 'foo(?=\\d)' /tmp/pcretest     # 同一个 rg，正常工作
+        /tmp/pcretest/a.txt:foo123
+
+    新判据与 rg 自己声明的能力一致，不依赖「某个文件恰好有匹配」这种
+    与探测目标无关的巧合；`rg --version` 不输出 ANSI 颜色（实测
+    CLICOLOR_FORCE=1 下 features 行仍是纯文本），无需额外 strip。
+    也不看 returncode——`rg --version` 正常时返回 0，但把它纳入判据等于
+    给「返回码语义」留后门（原缺陷正是踩在这里），只看 features 行更纯。
+    rg 不存在时 run 返回 None，同样落到 False（走 grep 回退路径）。
+    """
+    global _pcre2_ok
+    if _pcre2_ok is None:
+        proc = run(["rg", "--version"])
+        _pcre2_ok = bool(proc is not None
+                         and "+pcre2" in (proc.stdout or ""))
     return _pcre2_ok
 
 
@@ -172,9 +220,44 @@ def truncate(text: str, n: int = 120) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+def _is_noise_path(fp: str, root: str) -> bool:
+    """该命中是否落在噪声档目录（相对**搜索根**判定）。
+
+    为什么必须相对搜索根：直接对整条路径做分段匹配是错的——搜索根自己叫
+    `tests/` 或含 `2026-` 时（本工作区正是如此），整棵树都会被判成噪声。
+    rg 的 -g glob 犯的正是这个错（`**/tests/**` 会匹配路径里任意一段），
+    所以降权放到 Python 层做，不交给 glob。
+    """
+    try:
+        rel = Path(fp).resolve().relative_to(Path(root).resolve())
+    except (ValueError, OSError):
+        rel = Path(fp)          # 不在根之下（软链/越界）时退回整条判定
+    parts = rel.parts
+    if not parts:
+        return False
+    for p in parts[:-1]:         # 最后一段是文件名，不参与目录判定
+        if p in _NOISE_SET:
+            return True
+        # 日期归档目录（2026-09-26_xxx）
+        if p[:4].isdigit() and p[4:5] in "-_" and len(p) >= 5:
+            return True
+    return False
+
+
+def _apply_noise_floor(rows, root, max_results):
+    """噪声档结果排到真源之后；真源够数时直接不返回噪声档。
+
+    不是排除：真源不足 max_results 时用噪声档补满，保证「有结果总比没结果好」，
+    也保证搜第三方仓里的内容仍然可达。
+    """
+    clean = [r for r in rows if not _is_noise_path(r[0], root)]
+    noisy = [r for r in rows if _is_noise_path(r[0], root)]
+    return (clean + noisy)[:max_results]
+
+
 def rg_search(patterns, path, excludes, exts, context, count, max_results,
-              fixed, raw_query="", dots=False):
-    def build(fixed):
+              fixed, raw_query="", dots=False, drop_noise=True):
+    def build(fixed, drop_noise=True):
         cmd = ["rg", "--line-number", "--no-heading", "-i", "--color", "never"]
         if dots:
             # rg 默认既不进以 . 开头的目录，也不跟软链。本机 skill 就放在
@@ -203,14 +286,14 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
         cmd.append(str(path))
         return cmd, None
 
-    cmd, err = build(fixed)
+    cmd, err = build(fixed, drop_noise=drop_noise)
     if err:
         return [], err
     proc = run(cmd)
     if (proc is not None and proc.returncode == 2 and not fixed
             and "regex parse error" in (proc.stderr or "")):
         # regex 解析失败（如按字面意图输入 interface{}、foo.bar），回退固定字符串
-        cmd2, _ = build(True)
+        cmd2, _ = build(True, drop_noise=drop_noise)
         proc = run(cmd2)
     if proc is None or proc.returncode not in (0, 1, 2):
         return [], "rg 执行失败"
@@ -226,15 +309,25 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
                 fp, _, n = line.rpartition(":")
                 counts.append((fp, int(n) if n.isdigit() else 0, ""))
         counts.sort(key=lambda t: t[1], reverse=True)
-        return counts[:max_results], None
+        return _apply_noise_floor(counts, path, max_results) if drop_noise \
+            else counts[:max_results], None
     out = []
+    # 提前截断：rg 的输出是「文件内按行序」，直接 break 会砍掉后面文件里的
+    # 命中，而这些文件可能才是真源（噪声档过滤要看到全量才能排序）。故先
+    # 收满一个**上界**再交给 _apply_noise_floor 排序截断。上界取 max_results
+    # 的 4 倍并设下限，保证「真源排在前面」这个目标有素材可用。
+    cap = max(max_results, min(max_results * 4, 400))
     for line in proc.stdout.splitlines():
         m = re.match(r"^(.*?):(\d+):(.*)$", line)
         if m:
             fp, ln, txt = m.group(1), int(m.group(2)), m.group(3)
             out.append((fp, ln, truncate(txt)))
-        if len(out) >= max_results:
+        if len(out) >= cap:
             break
+    if drop_noise:
+        out = _apply_noise_floor(out, path, max_results)
+    else:
+        out = out[:max_results]
     return out, None
 
 
@@ -794,6 +887,9 @@ def main():
     ap.add_argument("--spotlight", action="store_true", help="Spotlight 全盘兜底")
     ap.add_argument("--dot", action="store_true",
                     help="连以 . 开头的目录和软链一起搜（默认关；搜 ~/.agents、~/.zcode 时要加）")
+    ap.add_argument("--include-noise", action="store_true",
+                    help="不降权：repos/、tests/、tmp/、日期归档目录与真源平权"
+                         "（默认排在真源之后，但仍可达，故通常无需显式加）")
     ap.add_argument("--type", default="", help="限定扩展名，逗号分隔（py,ts,md）")
     ap.add_argument("--count", action="store_true", help="只输出每文件命中数")
     ap.add_argument("--context", type=int, default=0, help="上下文行数（默认 0）")
@@ -951,19 +1047,27 @@ def main():
         mode = "deep" if (args.context > 0 or args.count) else "fast"
         if not args.exact and len(patterns) > 1:
             # 中文扩展遵循「先窄后宽」：先精确匹配，命中不足才放宽到扩展词
+            _dn = not args.include_noise
             results, err = rg_search([args.query], path, excludes, exts,
                                      args.context, args.count, max_results,
-                                     is_literal(args.query), args.query, args.dot)
+                                     is_literal(args.query), args.query, args.dot,
+                                     drop_noise=_dn)
             if not results and not err:
                 results, err = rg_search(patterns, path, excludes, exts,
                                          args.context, args.count, max_results,
-                                         fixed, args.query, args.dot)
+                                         fixed, args.query, args.dot, drop_noise=_dn)
                 if results:
                     mode += "+扩展"
         else:
             results, err = rg_search(patterns, path, excludes, exts,
                                      args.context, args.count, max_results,
-                                     fixed, args.query, args.dot)
+                                     fixed, args.query, args.dot,
+                                     drop_noise=not args.include_noise)
+
+    # 注：噪声档**只降权不排除**（见 _apply_noise_floor），所以这里没有
+    # 「搜不到就回落重搜」的分支——噪声内容始终在结果池里，只是排在真源之后。
+    # 早先版本用 rg 的 -g glob 排除，那会连搜索根自己叫 tests/ 的情况一起打死
+    # （实测整棵树被判空、且回落也不触发），故改成 Python 层排序。
 
     elapsed = int((time.time() - start) * 1000)
     # 时间窗：统一出口按文件 mtime 过滤（rg/fd/mdfind 共用）
