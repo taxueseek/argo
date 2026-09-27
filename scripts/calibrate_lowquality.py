@@ -48,7 +48,20 @@ def _signals(sample: dict) -> dict:
         "template": float(tp.get("repetition", 0.0)),
         # title_body: 越小越文不对题 → 取反，使三个信号同向（越大越低质）
         "title_body_gap": 1.0 - float(tb.get("coverage", 0.5)),
+        # keyword_density: 越大越是关键词堆砌（排序层信号，见 rank_signals）
+        "keyword_density": _density(sample),
     }
+
+
+def _density(sample: dict) -> float:
+    """整体关键词密度（title+snippet 合并）。延迟导入避免顶层拖慢 --help。"""
+    try:
+        from rank_signals import keyword_density, relevance_units
+    except ImportError:
+        return 0.0
+    uq = set(relevance_units(sample.get("query", "")))
+    return keyword_density(
+        f"{sample.get('title', '')} {sample.get('content', '')}", uq)
 
 
 # 现行 evidence_loop.py 里的实际门槛，改动这里必须同步改那里
@@ -56,14 +69,20 @@ CURRENT_THRESHOLDS = {
     "clickbait": ("ge", 0.5),
     "title_body_gap": ("mismatch", 0.5),   # 语义阈值：coverage < 0.5
     "template": ("ge", 0.75),
+    # 排序层：rank_signals.stuffing_density_penalty 的门槛
+    "keyword_density": ("ge", 0.22),
 }
 
 
 def _auc(pairs: list[tuple[float, int]]) -> float:
-    """AUC：正类（low=1）得分普遍高于负类（good=0）的概率，Mann-Whitney U 形式。
+    """AUC（越大越 low 方向）：正类（low=1）得分高于负类（good=0）的概率。
 
-    ties 记 0.5。用排序累加而非 sklearn：零依赖，且样本量小（十几条），
-    O(n²) 完全够。
+    约定：所有进入本函数的信号都**同向**——score 越大越像低质
+    （clickbait / template / title_body_gap / keyword_density 皆如此，
+    前两个本来就是，title_body_gap 在取反时已转正）。故 AUC 可直接跨信号
+    比较，0.5 = 无判别力，>0.5 = 有判别力。ties 记 0.5。
+
+    实现用排序累加而非 sklearn：零依赖，样本量小，O(n²) 完全够。
     """
     pos = [s for s, y in pairs if y == 1]
     neg = [s for s, y in pairs if y == 0]
@@ -106,7 +125,7 @@ def run() -> dict:
         s["_sig"] = _signals(s)
 
     report: dict = {"n": len(samples), "signals": {}}
-    for name in ("clickbait", "template", "title_body_gap"):
+    for name in ("clickbait", "template", "title_body_gap", "keyword_density"):
         pairs = [(s["_sig"][name], 1 if s["quality"] == "low" else 0) for s in samples]
         auc = _auc(pairs)
         thr, f1 = _best_threshold(pairs)
@@ -122,8 +141,38 @@ def run() -> dict:
             "current_threshold": cur_t,
             "false_positive_ids": fp,   # good 被判低质
             "false_negative_ids": fn,   # low 被放过
+            # 分低质类别的 AUC：一个信号通常只对某一类低质负责，把它不负责的
+            # 类别也塞进同一个 AUC 会得出「越改越差」的反直觉结论。
+            # 2026-09-27 踩过：堆砌密度信号上线后总体 AUC 0.571→0.370，
+            # 实际是因为「文不对题」「标题党」这些**密度天然低**的样本被算进
+            # 了分母——它们 relevance 高是**正确**的（确实高度相关，只是别的
+            # 问题），不该由密度信号压。按类拆开后该信号在 stuffing 类上
+            # AUC=0.964（越大越低质方向），即近乎完美。
+            "auc_by_lowclass": _auc_by_lowclass(samples, name),
         }
     return report
+
+
+def _auc_by_lowclass(samples: list[dict], name: str) -> dict:
+    """按低质类别（用 id 前缀归组）分别算 AUC。
+
+    类别取 id 的第一个下划线段：farm_* / stuff_* / seo_good_*。
+    """
+    out: dict = {}
+    groups = sorted({s["id"].split("_")[0] for s in samples
+                     if s["quality"] == "low"})
+    for g in groups:
+        sub_low = [s for s in samples
+                   if s["quality"] == "low" and s["id"].startswith(g + "_")]
+        if not sub_low:
+            continue
+        neg = [s for s in samples if s["quality"] == "good"]
+        if not neg:
+            continue
+        pairs = [(s["_sig"][name], 1) for s in sub_low] + \
+                [(s["_sig"][name], 0) for s in neg]
+        out[g] = round(_auc(pairs), 4)
+    return out
 
 
 def main() -> int:
@@ -137,16 +186,23 @@ def main() -> int:
         return 0
 
     print(f"低质信号区分度标定（{rep['n']} 条样本，好/坏对半）\n")
-    print(f"{'信号':<16}{'AUC':>8}{'现门槛':>9}{'最佳门槛':>10}{'最佳F1':>9}")
-    print("-" * 52)
+    print(f"{'信号':<18}{'总体AUC':>9}{'现门槛':>9}{'最佳门槛':>10}{'最佳F1':>9}")
+    print("-" * 55)
     for name, m in rep["signals"].items():
-        print(f"{name:<16}{m['auc']:>8.3f}{m['current_threshold']:>9.2f}"
+        print(f"{name:<18}{m['auc']:>9.3f}{m['current_threshold']:>9.2f}"
               f"{m['best_threshold']:>10.3f}{m['best_f1']:>9.3f}")
-    print("\nAUC 读数：0.5=无判别力，0.75=可用，0.9+=强。")
-    print("误杀(good 判成 low) / 漏放(low 判成 good)：")
+    print("\n总体 AUC：0.5=无判别力，0.75=可用，0.9+=强。")
+    print("⚠️ 总体 AUC 会误导——一个信号通常只对某一类低质负责。**按类看**：")
     for name, m in rep["signals"].items():
-        print(f"  {name:<16} 误杀={m['false_positive_ids'] or '无'}")
-        print(f"  {'':<16} 漏放={m['false_negative_ids'] or '无'}")
+        byc = m.get("auc_by_lowclass") or {}
+        if not byc:
+            continue
+        cells = "  ".join(f"{k}={v:.3f}" for k, v in sorted(byc.items()))
+        print(f"  {name:<18} {cells}")
+    print("\n误杀(good 判成 low) / 漏放(low 判成 good)：")
+    for name, m in rep["signals"].items():
+        print(f"  {name:<18} 误杀={m['false_positive_ids'] or '无'}")
+        print(f"  {'':<18} 漏放={m['false_negative_ids'] or '无'}")
     return 0
 
 
