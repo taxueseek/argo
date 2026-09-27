@@ -43,8 +43,7 @@ class CircuitBreaker:
         self._lock = threading.RLock()
         self._engines: dict[str, dict[str, Any]] = {}
         self._neg: dict[str, dict[str, Any]] = {}  # key → {expires, status}
-        self._last_save_ts: float = 0.0  # 写盘节流时间戳
-        self._last_save_interval: float = 30.0  # 写盘节流间隔（秒）
+        self._last_save_ts: float = 0.0  # 最近一次成功落盘时刻（观测用）
         self._load()
 
     def _load(self) -> None:
@@ -67,28 +66,7 @@ class CircuitBreaker:
                   f"保留内存态 {len(self._engines)} 条：{self._path}",
                   file=_sys.stderr)
 
-    def _save(self, force: bool = False) -> None:
-        try:
-            # 原子写走唯一来源（唯一 tmp 名 + 同目录 rename）。
-            # 旧实现写固定的 `<path>.tmp`：并发进程互相搬走对方的 tmp，
-            # os.replace 抛 FileNotFoundError，熔断态静默丢失。
-            #
-            # 写盘节流（2026-09-27）：与 quota.py 同策略。熔断状态变更不频繁
-            # （引擎故障是低频事件），30s 节流足够。force=True 用于关键状态
-            # 转换（open → disabled）确保落盘。
-            now = time.time()
-            if not force and (now - self._last_save_ts) < self._last_save_interval:
-                return
-            _paths.atomic_write_json(
-                Path(self._path),
-                {"engines": self._engines, "updated": time.time()},
-                indent=None,
-            )
-            self._last_save_ts = now
-        except Exception:
-            pass
-
-    # ── 引擎熔断 ────────────────────────────────────────────────────────────
+    # 引擎熔断 ────────────────────────────────────────────────────────────
 
     def status(self, engine: str) -> dict[str, Any]:
         """只读查询引擎熔断状态（不推进 half-open 探测、不写入文件）。
@@ -124,10 +102,11 @@ class CircuitBreaker:
                 disabled_at = float(st.get("disabled_at") or 0)
                 if disabled_at == 0 or \
                         (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS:
-                    st["state"] = "half_open"
-                    st["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
-                    self._engines[engine] = st
-                    self._save(force=True)
+                    def _reenable_probe() -> None:
+                        st["state"] = "half_open"
+                        st["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
+                        self._engines[engine] = st
+                    self._mutate_locked(_reenable_probe)
                     return True, "half_open_reenable"
                 return False, "auto_disabled"
 
@@ -141,29 +120,71 @@ class CircuitBreaker:
                         (disabled_at == 0 or
                          (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS)
                     if can_disable:
-                        st["state"] = "disabled"
-                        st["disabled_at"] = time.time()
-                        self._engines[engine] = st
-                        self._save(force=True)
+                        def _auto_disable() -> None:
+                            st["state"] = "disabled"
+                            st["disabled_at"] = time.time()
+                            self._engines[engine] = st
+                        self._mutate_locked(_auto_disable)
                         return False, "auto_disabled"
                     # half-open：允许一次探测
-                    st["state"] = "half_open"
-                    self._engines[engine] = st
-                    self._save(force=True)
+                    def _half_open() -> None:
+                        st["state"] = "half_open"
+                        self._engines[engine] = st
+                    self._mutate_locked(_half_open)
                     return True, "half_open_probe"
                 remain = int(OPEN_SECONDS - (time.time() - opened_at))
                 return False, f"circuit_open:{remain}s"
             return True, "closed"
 
-    def record_success(self, engine: str) -> None:
+    def _mutate_locked(self, mutator) -> None:
+        """跨进程安全的「重读 → 改 → 写入」序列（与 quota._mutate_locked 同形）。
+
+        进程内 RLock 只挡得住同进程线程；CLI / MCP server / 评测脚本三者并行时，
+        各自在构造期读了一次旧状态、各自 +1、后写者覆盖前写者，计数直接丢失。
+        这里在文件锁内重读最新磁盘态再改再写，增量才不丢。fail-open：锁层
+        出问题绝不阻断搜索主路径（同 argo_paths.file_lock 的契约）。
+        """
         with self._lock:
+            applied = False
+            try:
+                with _paths.file_lock(Path(self._path)):
+                    self._reload_engines()
+                    mutator()
+                    applied = True
+                    _paths.atomic_write_json(
+                        Path(self._path),
+                        {"engines": self._engines, "updated": time.time()},
+                        indent=None,
+                    )
+                    self._last_save_ts = time.time()
+            except Exception:
+                # 锁/写盘失败：若变更尚未落到内存则补一次，保证本进程内行为
+                # 正确；已应用过就绝不再跑（否则计数会翻倍）。丢的只是跨进程
+                # 可见性，下一次成功写入会带上。
+                if not applied:
+                    try:
+                        mutator()
+                    except Exception:
+                        pass
+
+    def _reload_engines(self) -> None:
+        """重读磁盘上的引擎态（只在文件锁内调用）。解析失败保留内存态。"""
+        try:
+            if os.path.exists(self._path):
+                with open(self._path, encoding="utf-8") as f:
+                    self._engines = (json.loads(f.read()).get("engines") or {})
+        except Exception:
+            pass
+
+    def record_success(self, engine: str) -> None:
+        def _m() -> None:
             self._engines[engine] = {
                 "state": "closed",
                 "failures": 0,
                 "opens": 0,          # 重置连续 open 计数
                 "last_ok": time.time(),
             }
-            self._save()
+        self._mutate_locked(_m)
 
     def record_failure(self, engine: str, kind: str = "error",
                        attribution: dict[str, Any] | None = None) -> None:
@@ -185,6 +206,19 @@ class CircuitBreaker:
         auto-disable 是封错人——引擎实现没有问题，换客户端形态、
         等冷却或等源站策略变化即可恢复。
         """
+        self._mutate_locked(lambda: self._mutate_failure(engine, kind, attribution))
+
+    def _mutate_failure(self, engine: str, kind: str,
+                        attribution: dict[str, Any] | None) -> None:
+        """`record_failure` 的状态变更体（只改内存，不落盘）。
+
+        拆出来是为了让整段「重读 → 改 → 写」跑在同一个文件锁内：进程内
+        RLock 只挡同进程线程，CLI / MCP server / 评测脚本并行时各自持有
+        构造期读到的旧快照、各自 +1、后写者覆盖前写者。实测 4 进程 × 20 次
+        record_failure 丢 48%（6 进程丢 35%，8 进程丢 44%），丢掉的正是
+        `failures` / `opens` 增量——`DISABLE_AFTER_OPENS` 永远攒不够，
+        真坏掉的引擎于是持续被派发。这与 quota._mutate_locked 同一处理。
+        """
         with self._lock:
             st = self._engines.get(engine) or {"failures": 0, "state": "closed"}
             drives_opens = kind not in ("empty", "blocked", "rate-limited")
@@ -193,7 +227,6 @@ class CircuitBreaker:
                 st["empty_streak"] = int(st.get("empty_streak") or 0) + 1
                 if st["empty_streak"] < 2:
                     self._engines[engine] = st
-                    self._save()
                     return
                 st["empty_streak"] = 0
             st["failures"] = int(st.get("failures") or 0) + 1
@@ -212,20 +245,18 @@ class CircuitBreaker:
                 # 连续 open 计数：仅 error/timeout 计入（引擎级故障），
                 # empty 不计入，避免「查询无结果」被误判为引擎持续故障
                 st["opens"] = int(st.get("opens") or 0) + 1
-                self._engines[engine] = st
-                self._save(force=True)  # open 是关键状态转换，立即落盘
-                return
             self._engines[engine] = st
-            self._save()
 
     def reenable(self, engine: str) -> None:
         """外部主动恢复（用户测试通过 / 新环境确认）。"""
-        with self._lock:
+
+        def _m() -> None:
             self._engines[engine] = {
                 "state": "closed", "failures": 0, "opens": 0,
                 "last_ok": time.time(), "reenabled_at": time.time(),
             }
-            self._save(force=True)
+
+        self._mutate_locked(_m)
 
     def record_note(self, engine: str,
                     attribution: dict[str, Any] | None = None) -> None:
@@ -238,11 +269,13 @@ class CircuitBreaker:
         """
         if not attribution:
             return
-        with self._lock:
+
+        def _m() -> None:
             st = self._engines.get(engine) or {"failures": 0, "state": "closed"}
             st["last_attribution"] = dict(attribution)
             self._engines[engine] = st
-            self._save()
+
+        self._mutate_locked(_m)
 
     def auto_disabled(self) -> list[str]:
         """返回所有处于自动禁用状态的引擎。"""

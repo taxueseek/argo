@@ -147,11 +147,14 @@ def test_success_closes_breaker(breaker, with_key):
 
     # 把 opened_at 拨回冷却期之前，走**真实的**半开探测路径（不等 60s，
     # 也不用 reenable 抄近路——那会把要验证的状态机整段跳过）。
-    with breaker._lock:
+    # 经 `_mutate_locked` 落盘而不是手调 `_save`：状态写入的唯一入口就是它
+    # （2026-09-27 起 `_save` 已删除，裸写会绕过重读-改-写序列）。
+    def _rewind() -> None:
         st = breaker._engines[search_rank._RERANK_BREAKER_KEY]
         st["opened_at"] = time.time() - circuit_breaker.OPEN_SECONDS - 1
         breaker._engines[search_rank._RERANK_BREAKER_KEY] = st
-        breaker._save()
+
+    breaker._mutate_locked(_rewind)
 
     with patch("net_proxy.open_url", lambda req, timeout=None: _OkResp(ok)):
         out, status = search.rerank_results("q", _docs())
