@@ -47,7 +47,8 @@ HARD_LIMIT = 1000
 # 现在不拆——「以后再拆」不算理由，要写清楚卡在哪（缺锁、缺测试、边界不清）。
 GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_data.py": (
-        2927, "源声明构建器（数据表性质，逐源一段），拆开只是把同一张表切成多份"),
+        2924, "源声明构建器（数据表性质，逐源一段），拆开只是把同一张表切成多份；"
+              "2026-09-27 −3：百度百科相关度门与化学 token 改用 cjk_tokens 共享切分"),
     "scripts/engines_builders_cn.py": (
         2319, "中文源声明构建器，逐源一段（数据表性质）；按语言/领域切只会把同一张表切碎"),
     "scripts/engines_builders_batch9.py": (

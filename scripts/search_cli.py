@@ -17,7 +17,7 @@ import sys
 import time
 from typing import Any
 
-from cli_io import dumps
+from cli_io import dumps, ensure_utf8_stdio
 from engine_env import env_flag
 from stage_timing import StageTiming
 from search import (
@@ -191,6 +191,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main():
+    # 入口第一件事：钉住 stdout/stderr 编码（实现唯一，见 cli_io）。
+    # 放在这里而不是 import 期：本模块被 search.py 与 bin/argo 两条路调用，
+    # 入口点是唯一能覆盖两者的位置。
+    ensure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args()
 
@@ -231,10 +235,10 @@ def main():
             except Exception as e:
                 print(dumps({"error": str(e), "engines": available_engines()}))
         else:
-            try:
-                names = available_engines(routable_only=args.routable_only)
-            except TypeError:
-                names = available_engines()
+            # 不包 try/except TypeError：available_engines 已收 routable_only
+            # （它当初没收，被这里的回退静默吞掉，于是 --routable-only 一直
+            # 返回全量）。契约见 test_engine_catalog 的签名用例。
+            names = available_engines(routable_only=args.routable_only)
             if _wanted:
                 names = [n for n in names if n in set(_wanted)]
             print(dumps(names))

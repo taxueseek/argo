@@ -20,7 +20,7 @@ import argparse
 import re
 import sys
 from typing import Any
-from cli_io import dumps
+from cli_io import dumps, ensure_utf8_stdio
 
 
 # ── 歧义词库 ──────────────────────────────────────────────────────────────────
@@ -662,6 +662,7 @@ def recommend_routing(analysis: dict[str, Any]) -> dict[str, Any]:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
+    ensure_utf8_stdio()  # 入口第一件事：钉住 stdout/stderr 编码（见 cli_io）
     parser = argparse.ArgumentParser(description="意图消歧工具")
     parser.add_argument("query", help="搜索查询")
     parser.add_argument("--explain", action="store_true", help="详细解释")

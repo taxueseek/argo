@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from cjk_tokens import signal_tokens
+
 _BACKENDS_DIR = Path(__file__).parent.parent / "backends"
 _SYNONYMS_PATH = _BACKENDS_DIR / "query_synonyms_cn.json"
 
@@ -515,12 +517,10 @@ def _result_has_query_signal(query: str, item: dict[str, Any]) -> bool:
     blob = f"{item.get('title', '')} {item.get('snippet', '')} {item.get('url', '')}".lower()
     if not blob.strip():
         return False
-    keys: list[str] = []
-    for t in re.findall(r"[A-Z]{2,}|[a-zA-Z]{3,}|[\u4e00-\u9fff]{2,}", query):
-        if t.isupper() and len(t) >= 2:
-            keys.append(t.lower())
-        elif t.lower() not in _REC_SIGNAL_STOP:
-            keys.append(t.lower())
+    # 中文走 2-gram 展开（cjk_tokens）：旧写法 `[\u4e00-\u9fff]{2,}` 会把无空格
+    # 中文整句吃成一个 token，子串包含恒假 → 真实结果全被拒 → 中文查询的恢复
+    # 链路形同不存在（实测 6 个无空格中文查询：旧判据通过 0~2/5，展开后 5/5）。
+    keys = signal_tokens(query, stop=_REC_SIGNAL_STOP)
     if not keys:
         return True  # 无可用信号时不拦
     return any(k in blob for k in keys)

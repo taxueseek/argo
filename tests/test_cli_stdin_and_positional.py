@@ -166,5 +166,84 @@ class TestEvidenceFlowDoesNotCrash:
         assert "Traceback" not in out, f"管道模式回归：{out[-300:]}"
 
 
+class TestEmptyOpenPipeDoesNotHang:
+    """**空且不关闭**的管道必须立刻放行（2026-09-27）。
+
+    上一节守的是「fd 类型判对」，那解决「要不要读」；这一节守的是
+    「读到什么时候」，两者才是完整判据。FIFO 的 `read()` 要等写端关闭才返回，
+    而 agent / CI / cron 起的子进程 stdin 正是「空、且全程不关闭」的管道：
+    实测 `bin/argo evidence "query" --json` 在那种 stdin 下 90 秒不返回，
+    `< /dev/null` 才 1 秒退出——于是所有调用方只能等自己的超时。
+
+    回归检查刻意放在**子进程 + 超时**里：判据要是退回阻塞读，这里会超时失败，
+    而不是把整个测试会话挂死。
+    """
+
+    def _probe(self, timeout=30):
+        """在「写端打开、不写」的管道上读 stdin，返回子进程的 stdout。
+
+        耗时由子进程自己报（`ELAPSED=`），父进程不再计时：父进程那次计时
+        包含解释器启动，与「读 stdin 花了多久」不是同一件事。
+        """
+        code = (
+            "import sys, time;"
+            "sys.path.insert(0, " + repr(str(SCRIPTS)) + ");"
+            "import cli_io as c;"
+            "t0 = time.monotonic();"
+            "data = c.read_stdin_if_piped();"
+            "print('ELAPSED=%.2f LEN=%d' % (time.monotonic() - t0, len(data)), end='')"
+        )
+        r, w = os.pipe()
+        try:
+            with os.fdopen(r, "rb") as read_end:
+                out = subprocess.run([sys.executable, "-c", code], stdin=read_end,
+                                     capture_output=True, text=True, timeout=timeout)
+        finally:
+            os.close(w)
+        return out.stdout
+
+    def test_empty_open_pipe_returns_promptly(self):
+        stdout = self._probe()
+        m = re.search(r"ELAPSED=([\d.]+)", stdout)
+        assert m, f"探针没跑起来：{stdout!r}"
+        assert "LEN=0" in stdout, f"空管道不应读出内容：{stdout!r}"
+        elapsed = float(m.group(1))
+        # 首字节期限 0.25s；读 stdin 本身不该超过它太多
+        assert elapsed < 1.0, f"空管道仍被阻塞：{elapsed:.2f}s"
+
+    def test_argo_evidence_survives_open_pipe(self):
+        """端到端：`argo evidence <query>` 在空管道 stdin 下必须走自动搜索。"""
+        r, w = os.pipe()
+        try:
+            with os.fdopen(r, "rb") as read_end:
+                res = subprocess.run(
+                    ["argo", "evidence", "python dataclass", "--json"],
+                    capture_output=True, text=True, timeout=90,
+                    stdin=read_end, cwd=str(ROOT))
+        finally:
+            os.close(w)
+        err = res.stderr or ""
+        assert "Python error" not in err and "Traceback" not in err, err[-300:]
+        assert res.returncode == 0, f"rc={res.returncode} {err[-300:]}"
+        assert "credibility" in res.stdout, f"没走到自动搜索：{res.stdout[:200]}"
+
+    def test_no_daemon_reader_thread(self):
+        """静态门：不许用「后台线程阻塞读」实现期限。
+
+    实测坑：daemon 线程阻塞在 BufferedReader 的 C 读上时，解释器退出会撞
+    `_enter_buffered_busy: could not acquire lock for <_io.BufferedReader
+    name='<stdin>'> at interpreter shutdown`，进程直接 SIGABRT（rc=-6）——
+    比原来的挂起更难查。期限逻辑必须留在主线程（非阻塞轮询）。
+    """
+        src = (SCRIPTS / "cli_io.py").read_text(encoding="utf-8")
+        stripped = re.sub(r'""".*?"""', "", src, flags=re.S)
+        stripped = re.sub(r"^\s*#.*$", "", stripped, flags=re.M)
+        assert "threading" not in stripped, (
+            "cli_io 里出现了 threading：期限逻辑一旦挪进后台线程，"
+            "退出期会因 stdin 缓冲锁 SIGABRT（见本测试 docstring）")
+        assert "read1" not in stripped, (
+            "不要用缓冲区 read1 阻塞读；非阻塞 os.read + 轮询才是这里的实现")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

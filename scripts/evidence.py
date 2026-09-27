@@ -32,7 +32,7 @@ import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
-from cli_io import dumps
+from cli_io import dumps, ensure_utf8_stdio
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKENDS_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "backends"))
@@ -610,6 +610,7 @@ def compute_credibility(
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
+    ensure_utf8_stdio()  # 入口第一件事：钉住 stdout/stderr 编码（见 cli_io）
     parser = argparse.ArgumentParser(description="来源可信度评估工具（Selection×Absorption）")
     parser.add_argument("query", nargs="?", default="", help="搜索查询词")
     parser.add_argument("--stdin", action="store_true", help="从 stdin 读取 JSON 搜索结果")

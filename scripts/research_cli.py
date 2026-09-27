@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from typing import Any
-from cli_io import dumps
+from cli_io import dumps, ensure_utf8_stdio
 
 
 def _load_work_packages(raw: str | None) -> Any:
@@ -21,6 +21,7 @@ def _load_work_packages(raw: str | None) -> Any:
 
 
 def main() -> None:
+    ensure_utf8_stdio()  # 入口第一件事：钉住 stdout/stderr 编码（见 cli_io）
     parser = argparse.ArgumentParser(description="深度研究取证")
     parser.add_argument("query", nargs="?", default=None, help="研究查询（--topic help 时可省略）")
     parser.add_argument("--sub-queries", type=int, default=None, help="扩词数量（有工作包时忽略）")

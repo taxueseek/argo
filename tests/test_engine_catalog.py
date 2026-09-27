@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
@@ -74,6 +75,42 @@ def test_routable_only_flag_actually_filters():
     from engine_status import list_routable_engine_ids
     assert set(ro_ids) == set(list_routable_engine_ids()), \
         "--routable-only 的结果与 routable 判定不一致"
+
+
+def test_routable_only_signature_contract():
+    """两个入口必须一直收 routable_only。
+
+    调用侧此前包着 `except TypeError: 回退全量`，等函数补上参数后回退就变成
+    死代码：它只会在签名被改坏时静默把「筛过了」变成「没筛」。死回退已删，
+    这条契约改用显式断言守着（参数在、且真的被接受）。
+    """
+    from config import get_engines, load_config
+    from engines import available_engines
+
+    specs = get_engines(load_config(), routable_only=True)  # 不收就 TypeError
+    assert isinstance(specs, dict) and specs, "routable_only 过滤后不应该为空"
+    names = available_engines(routable_only=True)          # 不收就 TypeError
+    assert isinstance(names, list)
+    assert set(names) <= set(available_engines())
+
+
+def test_routable_degrade_logs_instead_of_silent(caplog):
+    """可选依赖缺失时按历史语义返回未过滤集，但必须留痕。
+
+    静默返回未过滤集的代价是 blocked / env 未就绪的引擎重新可路由——
+    本仓反复踩的「静默失效」，所以降级可以，无声不行。
+    """
+    from config import get_engines, load_config
+
+    cfg = load_config()
+    unfiltered = set(get_engines(cfg))
+    with patch.dict(sys.modules, {"engine_env": None}), \
+         caplog.at_level("WARNING", logger="unified_search.config"):
+        result = get_engines(cfg, routable_only=True)
+    assert set(result) == unfiltered, "预期降级为未过滤集"
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("routable_only" in m for m in messages), \
+        f"降级必须打 WARNING，不能静默（实际：{messages}）"
 
 
 def test_dead_sources_are_zero_or_declared_explicit_only():

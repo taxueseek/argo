@@ -15,6 +15,7 @@ from datetime import datetime
 from html import unescape as _unescape
 from typing import Any
 
+from cjk_tokens import cjk_term_grams, signal_tokens
 from engine_env import get_env
 from engines_base import (
     rank_score,
@@ -316,17 +317,13 @@ def _build_baidu_baike_engine(spec: dict[str, Any]) -> Any:
                         })
             except Exception:
                 pass
-        # 相关度检查：英文实体问返回「我们选择登月」等零重叠词条时丢弃，触发 recovery
-        q_keys = set()
-        for t in re.findall(r"[A-Z]{2,}|[a-zA-Z]{3,}|[\u4e00-\u9fff]{2,}", q):
-            if t.isupper() and len(t) >= 2:
-                q_keys.add(t.lower())
-            elif t.lower() not in {
-                "the", "and", "for", "year", "founded", "founding", "headquarters",
-                "where", "what", "when", "which", "with", "from", "that", "this",
-                "年份", "时间", "成立", "创办", "创立", "总部", "职能", "简介",
-            }:
-                q_keys.add(t.lower())
+        # 相关度检查：零重叠词条丢弃（触发 recovery）。中文走 2-gram，见 cjk_tokens：
+        # 旧写法对无空格中文把整句当一个 token，子串包含恒假，词条全被丢弃。
+        q_keys = set(signal_tokens(q, stop={
+            "the", "and", "for", "year", "founded", "founding", "headquarters",
+            "where", "what", "when", "which", "with", "from", "that", "this",
+            "年份", "时间", "成立", "创办", "创立", "总部", "职能", "简介",
+        }))
         if q_keys:
             filtered = []
             for r in results:
@@ -1121,7 +1118,7 @@ def _chem_tokens(text: str) -> set[str]:
         return set()
     low = text.lower()
     tokens = set(re.findall(r"[a-z][a-z0-9\-]{1,}", low))
-    tokens.update(re.findall(r"[\u4e00-\u9fff]{2,}", text))
+    tokens.update(cjk_term_grams(text))
     tokens.update(re.findall(r"\d{2,}", text))
     return {t for t in tokens if t not in _CHEM_TOKEN_NOISE and len(t) >= 2}
 

@@ -47,6 +47,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from cjk_tokens import cjk_term_grams
+
 # 节点表缓存
 _CACHE_TTL = 24 * 3600          # 24h：节点表变化极慢
 _CACHE_FILE = "v2ex_nodes_cache.json"
@@ -259,8 +261,9 @@ def pick_nodes(query: str, *, top_k: int = DEFAULT_TOP_K,
     # shanghai=「上海」），可把中文查询意图反查到英文节点名。
     # 实测：「工作」→jobs/career/remote 有效；「招聘」→ 无（词面差异，
     # 此时诚实回落 L3/none，不硬凑）。
-    # 要求 CJK 词长 ≥2，避免单字（「上」「大」）噪声。
-    cjk_terms = {t for t in re.findall(r"[\u4e00-\u9fff]{2,}", q)}
+    # 要求 CJK 词长 ≥2，避免单字（「上」「大」）噪声；长串按 2-gram 展开
+    # （cjk_tokens），否则「怎么找工作」整句当一个词，与「酷工作」永不交集。
+    cjk_terms = set(cjk_term_grams(q))
     if cjk_terms:
         for n in nodes:
             if not _eligible(n):

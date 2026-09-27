@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import shutil
 import time
@@ -21,6 +22,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
+
+_logger = logging.getLogger("unified_search.config")
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # 外置引擎声明目录：engines/*.yaml（不含 plugins/、templates/、_ 前缀）
@@ -494,7 +497,12 @@ def get_engines(config: dict[str, Any] | None = None,
     try:
         from engine_env import is_engine_allowed_by_env, env_ready
         from engine_admission import is_blocked
-    except ImportError:
+    except ImportError as e:
+        # 单机可选依赖（engine_env / engine_admission）缺失时按历史语义返回
+        # 未过滤集，但**必须留痕**：静默返回意味着 blocked 与 env 未就绪的
+        # 引擎重新可路由，是最难查的一类故障。注意这里与上面两处不同——
+        # 上面两处是同一仓内的死回退（已删），这里是真会发生的降级（保留）。
+        _logger.warning("routable_only 过滤不可用（%s），本次返回未过滤引擎集", e)
         return result
     filtered: dict[str, dict[str, Any]] = {}
     for name, spec in result.items():

@@ -17,7 +17,7 @@ LOCAL_SEARCH_DIR = SKILL_DIR / "sub-skills" / "local-search"
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(LOCAL_SEARCH_DIR))
 
-from config import load_config, get_engines, get_domains, get_cost_factor, get_cost_tiers
+from config import load_config, get_engines, get_domains, get_cost_factor, get_cost_tiers, cost_tier_of
 from route import extract_features, match_domain, route_query
 from cache import SearchCache, DOMAIN_TIER_MAP, CACHE_TIERS  # noqa: F401
 from engines import get_registry, available_engines, search as engine_search
@@ -111,10 +111,19 @@ class TestRoute(unittest.TestCase):
         )
 
     def test_mode_budget_filters_paid(self):
-        d = route_query("latest AI news", mode="budget")
-        # budget 模式不应包含付费引擎
-        for eng in d.get("engines", []):
-            self.assertNotEqual(get_cost_factor(eng), 0.3)
+        """fast/budget 不得选中按量计费引擎（api 或 paid 档）。
+
+        旧断言是 `get_cost_factor(eng) != 0.3`，而 api 档的因子是 1.0，
+        于是断言恒真——实测 --mode budget 路由仍选中 octen。它锁死的是
+        quota.is_available 只认 "paid" 那个缺陷。现在按**档位**断言：
+        api 档的 7 个源（exa/octen/parallel/seltz/tavily/you/zhihu_global）
+        全部按量计费，一个都不许在这两个模式里出现。
+        """
+        for mode in ("fast", "budget"):
+            d = route_query("latest AI news", mode=mode)
+            tiers = {cost_tier_of(e) for e in d.get("engines", [])}
+            self.assertNotIn("api", tiers, f"{mode} 模式选中了按量计费源")
+            self.assertNotIn("paid", tiers, f"{mode} 模式选中了付费源")
 
     def test_features_extracted(self):
         f = extract_features("React vs Vue 哪个好")

@@ -304,7 +304,28 @@ Common flags: --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{
 逐源费用/密钥/状态：docs/ENGINE_CATALOG.md
 """
 
+def _pin_stdio():
+    """把本进程 stdout/stderr 的编码钉住（实现只有一处：cli_io.ensure_utf8_stdio）。
+
+    为什么在入口而不是模块 import 期：本文件先被系统 `python3` 解释一次、
+    再按需换解释器，**import 期不碰仓库内模块**是既有纪律（见文件头），
+    所以这层薄封装只负责「按需导入 + 兜异常」，判据与实现都留在 cli_io。
+
+    为什么必须最早调用：非 UTF-8 控制台（Windows 老终端）或显式
+    `PYTHONIOENCODING=ascii` 下，连 `argo --help` 的中文 usage 都会
+    UnicodeEncodeError——它在选解释器之前就发生了。
+    """
+    try:
+        sys.path.insert(0, SCRIPTS)
+        from cli_io import ensure_utf8_stdio
+        ensure_utf8_stdio()
+    except Exception:
+        # 纯加固：拿不到实现就按原样跑，不影响任何子命令
+        pass
+
+
 def main():
+    _pin_stdio()
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print(_usage())
         # 帮助不是错误：--help/help 正常退出（0），无参数调用才是用法错误（1）

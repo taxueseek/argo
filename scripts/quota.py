@@ -423,11 +423,11 @@ class QuotaManager:
             rpm = len([t for t in state.get("calls", []) if now - t < 60])
             if rpm >= qps * 60:
                 return False
-        # budget 模式禁用付费引擎
-        if mode in ("fast", "budget"):
-            cost_tier = profile.get("cost_tier", "free")
-            if cost_tier == "paid":
-                return False
+        # fast/budget 禁用按量计费引擎。判据必须连 api 档一起拦——7 个按量源
+        # （exa/octen/parallel/seltz/tavily/you/zhihu_global）声明的都是 api 档，
+        # 只认 paid 会让「免费优先 / 配额控制」两个模式照样选中它们并烧额度。
+        if mode in ("fast", "budget") and profile.get("cost_tier") in ("api", "paid"):
+            return False
         return True
 
     def get_cost_per_call(self, engine: str) -> float:
