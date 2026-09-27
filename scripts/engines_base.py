@@ -6,7 +6,6 @@ from __future__ import annotations
 import functools
 import io
 import json
-import logging
 import math
 import os
 import re
@@ -36,10 +35,19 @@ from image_ops import (  # noqa: E402
     image_output_map_fields,
 )
 
-logger = logging.getLogger("unified_search.engines")
-if not logger.handlers:
-    logger.setLevel(logging.WARNING)
-    logger.addHandler(logging.StreamHandler(sys.stderr))
+_logger = None
+
+
+def _get_logger():
+    """延迟创建 logger，避免 import logging 的重量级 import 链（traceback→dataclasses→inspect）。"""
+    global _logger
+    if _logger is None:
+        import logging
+        _logger = logging.getLogger("unified_search.engines")
+        if not _logger.handlers:
+            _logger.setLevel(logging.WARNING)
+            _logger.addHandler(logging.StreamHandler(sys.stderr))
+    return _logger
 
 
 # ── 引擎级失败归因寄存器 ─────────────────────────────────────────────────────
@@ -59,8 +67,14 @@ _HTTP_ERROR_BODY_CAP = 64 * 1024
 # 复用 archive_run 的唯一脱敏实现，避免各写一份规则。
 try:
     from archive_run import redact_secrets as _redact_secrets
-except Exception:  # pragma: no cover - archive_run 不可用时退化为不脱敏
+except Exception:  # pragma: no cover - archive_run 不可用时退化为基本脱敏
+    _FALLBACK_BEARER_RE = re.compile(r'(Bearer\s+)[A-Za-z0-9._\-]+')
+    _FALLBACK_KEY_RE = re.compile(r'((?:api[_-]?key|token|secret)["\']?\s*[:=]\s*["\']?)[A-Za-z0-9._\-]{8,}')
+
     def _redact_secrets(text: str) -> str:
+        """archive_run 不可用时的兜底脱敏：至少覆盖 Bearer token 和 key=value 形式。"""
+        text = _FALLBACK_BEARER_RE.sub(r'\1***', text)
+        text = _FALLBACK_KEY_RE.sub(r'\1***', text)
         return text
 
 
@@ -115,15 +129,15 @@ def safe_search(fn: Callable) -> Callable:
         try:
             return fn(*args, **kwargs)
         except subprocess.TimeoutExpired:
-            logger.warning(f"引擎 {name} 超时")
+            _get_logger().warning(f"引擎 {name} 超时")
         except FileNotFoundError as e:
-            logger.warning(f"引擎 {name} 命令不存在: {e}")
+            _get_logger().warning(f"引擎 {name} 命令不存在: {e}")
         except (urllib.error.URLError, urllib.error.HTTPError) as e:
-            logger.warning(f"引擎 {name} HTTP 错误: {e}")
+            _get_logger().warning(f"引擎 {name} HTTP 错误: {e}")
         except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"引擎 {name} 解析错误: {e}")
+            _get_logger().warning(f"引擎 {name} 解析错误: {e}")
         except Exception as e:
-            logger.error(f"引擎 {name} 未预期异常: {type(e).__name__}: {e}", exc_info=True)
+            _get_logger().error(f"引擎 {name} 未预期异常: {type(e).__name__}: {e}", exc_info=True)
         return []
     return wrapper
 
@@ -176,14 +190,14 @@ def _run(cmd: list[str], timeout: float = 8, engine_name: str = "?") -> str:
         if r.returncode == 0:
             return r.stdout
         tail = (r.stderr or "").strip()[:200]
-        logger.warning(f"引擎 {engine_name} 失败 (rc={r.returncode}): {tail}")
+        _get_logger().warning(f"引擎 {engine_name} 失败 (rc={r.returncode}): {tail}")
         return r.stdout if r.stdout.strip() else ""
     except subprocess.TimeoutExpired:
-        logger.warning(f"引擎 {engine_name} 超时 (>{timeout}s)")
+        _get_logger().warning(f"引擎 {engine_name} 超时 (>{timeout}s)")
     except FileNotFoundError as e:
-        logger.error(f"引擎 {engine_name} CLI 缺失: {e}")
+        _get_logger().error(f"引擎 {engine_name} CLI 缺失: {e}")
     except Exception as e:
-        logger.error(f"引擎 {engine_name} 异常: {type(e).__name__}: {e}")
+        _get_logger().error(f"引擎 {engine_name} 异常: {type(e).__name__}: {e}")
     return ""
 
 
@@ -492,7 +506,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 with http_open(req, timeout=to, engine=eng) as resp:
                     raw = resp.read().decode("utf-8")
             except Exception as e:
-                logger.warning(f"HTTP 引擎失败: {e}")
+                _get_logger().warning(f"HTTP 引擎失败: {e}")
                 return []
             return _parse_http_payload(raw, fmt, eng, n, output_map, spec)
     return _engine
@@ -523,7 +537,7 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
             if status == 200 and text:
                 return text
             if status >= 400 or status == 0:
-                logger.warning(
+                _get_logger().warning(
                     f"HTTP 引擎失败: status={status} {resp.get('error', '')[:120]}"
                 )
                 _note_http_failure(engine, status,
@@ -532,7 +546,7 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
             # 2xx/3xx 无 body：视为失败
             return None
         except Exception as e:
-            logger.warning(f"HTTP 引擎失败(HttpClient): {type(e).__name__} {e}")
+            _get_logger().warning(f"HTTP 引擎失败(HttpClient): {type(e).__name__} {e}")
             note_failure(engine, "network", "exception",
                          f"{type(e).__name__}: {e}")
             return None
@@ -552,11 +566,11 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
             body = e.read().decode("utf-8", errors="replace")[:400]
         except (OSError, http.client.HTTPException):
             pass
-        logger.warning(f"HTTP 引擎失败: HTTP {e.code} {engine}")
+        _get_logger().warning(f"HTTP 引擎失败: HTTP {e.code} {engine}")
         _note_http_failure(engine, e.code, body)
         return None
     except Exception as e:
-        logger.warning(f"HTTP 引擎失败: {e}")
+        _get_logger().warning(f"HTTP 引擎失败: {e}")
         note_failure(engine, "network", "exception", str(e))
         return None
 
@@ -619,17 +633,17 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
             body_bytes = e.read(_HTTP_ERROR_BODY_CAP) or b""
         except (OSError, http.client.HTTPException):
             pass
-        logger.warning(f"HTTP 引擎失败: HTTP {e.code} {engine}")
+        _get_logger().warning(f"HTTP 引擎失败: HTTP {e.code} {engine}")
         _note_http_failure(engine, e.code,
                            body_bytes.decode("utf-8", errors="replace")[:400])
         _restore_error_body(e, body_bytes)
         raise
     except urllib.error.URLError as e:
-        logger.warning(f"HTTP 引擎失败: {e}")
+        _get_logger().warning(f"HTTP 引擎失败: {e}")
         note_failure(engine, "network", "urlopen", str(e)[:160])
         raise
     except OSError as e:
-        logger.warning(f"HTTP 引擎失败: {e}")
+        _get_logger().warning(f"HTTP 引擎失败: {e}")
         note_failure(engine, "network", "exception",
                      f"{type(e).__name__}: {e}")
         raise
@@ -637,7 +651,7 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
         # http.client.HTTPException（BadStatusLine / IncompleteRead 等）与
         # ValueError 既不是 URLError 也不是 OSError，不兜这一层就会穿透归因，
         # 与该函数的契约不符，也比 _http_get_raw 的保底更窄。归因后原样抛出。
-        logger.warning(f"HTTP 引擎失败: {type(e).__name__} {e}")
+        _get_logger().warning(f"HTTP 引擎失败: {type(e).__name__} {e}")
         note_failure(engine, "network", "exception",
                      f"{type(e).__name__}: {e}")
         raise
@@ -734,13 +748,13 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
-        logger.warning(f"HTTP 引擎解析失败: {eng} 非 JSON/XML 响应")
+        _get_logger().warning(f"HTTP 引擎解析失败: {eng} 非 JSON/XML 响应")
         return []
     # 业务错误封套优先于条数提取：强封套错误（ResponseMetadata.Error、顶层
     # error 对象）表示本次调用失败，返回结果必然为空或不可信
     env_err = _envelope_error(data)
     if env_err:
-        logger.warning(f"HTTP 引擎业务错误: {eng} {env_err[:120]}")
+        _get_logger().warning(f"HTTP 引擎业务错误: {eng} {env_err[:120]}")
         return [{"error": f"{eng} {env_err}", "source": eng}]
     limit = max(1, int(n or 5))
     # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）

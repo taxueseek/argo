@@ -11,18 +11,27 @@ cache.py — Unified Search v2 双层缓存引擎
 
 from __future__ import annotations
 
-import copy
 import functools
 import gzip
 import hashlib
 import json
 import os
 import re
-import sqlite3
 import threading
 import time
 from collections import OrderedDict
 from typing import Optional
+
+_sqlite3 = None
+
+
+def _get_sqlite3():
+    """延迟导入 sqlite3，避免重量级 import 链（sqlite3 → _sqlite3 → zlib → bz2 → lzma）。"""
+    global _sqlite3
+    if _sqlite3 is None:
+        import sqlite3
+        _sqlite3 = sqlite3
+    return _sqlite3
 
 try:
     from config import get_cache_config
@@ -45,7 +54,7 @@ from except_sets import IO_BENIGN, SHAPE_BENIGN
 # 用 db_path() 而非 state_path()：config.yaml 显式改写 db_path 时尊重用户配置。
 DEFAULT_DB_PATH = str(argo_paths.db_path())
 DEFAULT_TTL = 3600
-MAX_MEMORY_ITEMS = 100
+MAX_MEMORY_ITEMS = 500
 MAX_DB_SIZE_MB = 100
 COMPRESSION_THRESHOLD = 1024
 COMPRESSION_LEVEL = 6
@@ -354,7 +363,7 @@ class SQLiteCache:
         # 权限受限、磁盘满）时降级为“不可用”而不是抛异常拖垮调用方。
         self._degraded_reason: str | None = None
         # :memory: 必须单连接（每次 connect(":memory:") 都是独立空库）
-        self._mem_conn: sqlite3.Connection | None = None
+        self._mem_conn: _get_sqlite3().Connection | None = None
         # :memory: / 空路径 / URI 无需建目录
         if self._db_path not in (":memory:", "") and not self._db_path.startswith("file:"):
             parent = os.path.dirname(self._db_path)
@@ -369,13 +378,13 @@ class SQLiteCache:
             # 「同线程校验」会直接抛 ProgrammingError 让整层内存缓存不可用。
             # 这里放开校验是安全的——所有 _mem_conn 访问都在 self._lock
             # （RLock，见上方 __init__）之内串行化，不存在真正的并发使用。
-            self._mem_conn = sqlite3.connect(":memory:", timeout=10,
+            self._mem_conn = _get_sqlite3().connect(":memory:", timeout=10,
                                              check_same_thread=False)
             self._mem_conn.execute("PRAGMA synchronous=NORMAL")
         if self._degraded_reason is None:
             try:
                 self._init_db()
-            except sqlite3.Error as e:
+            except _get_sqlite3().Error as e:
                 # 只读数据库 / 权限不足 / 磁盘满：整层降级，不向上传播
                 self._degraded_reason = f"cache db unavailable: {e}"
                 self._close_mem_conn()
@@ -384,7 +393,7 @@ class SQLiteCache:
         if self._mem_conn is not None:
             try:
                 self._mem_conn.close()
-            except sqlite3.Error:
+            except _get_sqlite3().Error:
                 pass
             self._mem_conn = None
 
@@ -397,10 +406,10 @@ class SQLiteCache:
     def degraded_reason(self) -> str | None:
         return self._degraded_reason
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self) -> _get_sqlite3().Connection:
         if self._mem_conn is not None:
             return self._mem_conn
-        conn = sqlite3.connect(self._db_path, timeout=10)
+        conn = _get_sqlite3().connect(self._db_path, timeout=10)
         argo_paths.apply_state_pragmas(conn)
         conn.execute("PRAGMA synchronous=NORMAL")
         return conn
@@ -539,7 +548,7 @@ class SQLiteCache:
             # 异常时，宁可让下次搜索多写一条也不让 execute_search 在最后一步 traceback。
             try:
                 self._evict_if_needed()
-            except sqlite3.Error:
+            except _get_sqlite3().Error:
                 pass
 
     # 过期行回收的节流间隔。扫描是 O(rows) 全表（`created_at + ttl < ?` 不可
@@ -555,7 +564,7 @@ class SQLiteCache:
                                ("expiry_swept_at",)).fetchone()
             return (not row
                     or (time.time() - float(row[0])) > self._EXPIRY_SWEEP_INTERVAL_S)
-        except (sqlite3.Error, TypeError, ValueError):
+        except (_get_sqlite3().Error, TypeError, ValueError):
             return True  # 读不出来就扫一次，宁可多扫不积压
 
     @staticmethod
@@ -564,7 +573,7 @@ class SQLiteCache:
             conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
                          ("expiry_swept_at", str(time.time())))
             conn.commit()
-        except sqlite3.Error:
+        except _get_sqlite3().Error:
             pass
 
     def _evict_if_needed(self):

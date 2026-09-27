@@ -110,6 +110,22 @@ _rel_factor_cache: dict[str, tuple[float, float]] = {}
 
 
 _REL_FACTOR_TTL = 30.0
+_MAX_CACHE_SIZE = 256
+
+
+def _evict_cache(cache: dict, now: float) -> None:
+    """缓存淘汰：先清除过期条目，如果仍超上限则清除最老的条目。"""
+    if len(cache) < _MAX_CACHE_SIZE:
+        return
+    # 第一轮：清除过期条目
+    expired = [k for k, v in cache.items() if v[1] <= now]
+    for k in expired:
+        del cache[k]
+    # 第二轮：如果仍超上限，清除最老的条目（按过期时间排序）
+    if len(cache) >= _MAX_CACHE_SIZE:
+        sorted_keys = sorted(cache.keys(), key=lambda k: cache[k][1])
+        for k in sorted_keys[:len(cache) - _MAX_CACHE_SIZE + 1]:
+            del cache[k]
 
 
 _weight_cache: dict[tuple[str, str], tuple[float, float]] = {}
@@ -136,6 +152,7 @@ def _single_reliability(engine: str) -> float:
             factor = min(factor, 0.8)
     except Exception:
         factor = 1.0
+    _evict_cache(_rel_factor_cache, now)
     _rel_factor_cache[engine] = (factor, now + _REL_FACTOR_TTL)
     return factor
 
@@ -182,6 +199,7 @@ def _engine_weight(source: str, lang: str | None = None) -> float:
         except Exception:
             pass
     out = round(out, 3)
+    _evict_cache(_weight_cache, now)
     _weight_cache[ck] = (out, now + _REL_FACTOR_TTL)
     return out
 

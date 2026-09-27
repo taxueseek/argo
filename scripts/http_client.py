@@ -318,6 +318,8 @@ class _HostBucket:
 
 _BUCKETS: dict[str, _HostBucket] = {}
 _BUCKETS_LOCK = threading.Lock()
+_MAX_BUCKETS = 100
+_bucket_last_used: dict[str, float] = {}
 
 
 @contextmanager
@@ -341,8 +343,14 @@ def host_throttle(url: str, engine: str | None = None):
     with _BUCKETS_LOCK:
         bucket = _BUCKETS.get(bucket_key)
         if bucket is None:
+            if len(_BUCKETS) >= _MAX_BUCKETS:
+                # LRU 淘汰：移除最久未用的 bucket
+                evict_key = min(_bucket_last_used, key=_bucket_last_used.get)
+                del _BUCKETS[evict_key]
+                del _bucket_last_used[evict_key]
             bucket = _HostBucket(max_conc, interval)
             _BUCKETS[bucket_key] = bucket
+        _bucket_last_used[bucket_key] = time.monotonic()
     with bucket.lease():
         yield group
 
