@@ -22,31 +22,46 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 
-# ── 1. 路由预热 ──────────────────────────────────────────────────────────────
+# ── 1. 路由预热：已删除，改为「不许再塞回来」的门 ──────────────────────────────
 
-class TestPrewarmRoute:
-    """验证预热线程能在 500ms 内完成域正则编译。"""
+# 上一版守卫的是「预热线程能在 500ms 内跑完」——那锁的是一个已被两次推翻的设计
+# （daemon 线程版 → 同步版 → 删除）。与本文档头的 pickle 用例同一处置原则：
+# 守卫一个已撤销的改动，等于让下一次想重新引入它的人拿到虚假的安全感。
 
-    def test_prewarm_completes_within_500ms(self):
-        """预热线程启动后，500ms 内域正则应已编译完成。"""
-        import threading
-        from route import match_domains
-        from config import get_domains, load_config
+_PREWARM_NEEDLE = 'match_domains("argo-prewarm"'
 
-        completed = threading.Event()
 
-        def _do_prewarm():
-            try:
-                cfg = load_config()
-                match_domains("argo-prewarm", get_domains(cfg))
-            finally:
-                completed.set()
+def _has_startup_prewarm(src: str) -> bool:
+    """源码里是否又出现了启动期无条件预热。"""
+    return _PREWARM_NEEDLE in src
 
-        t0 = time.perf_counter()
-        t = threading.Thread(target=_do_prewarm, daemon=True)
-        t.start()
-        completed.wait(timeout=0.5)
-        elapsed_ms = (time.perf_counter() - t0) * 1000
 
-        assert completed.is_set(), "预热线程在 500ms 内未完成"
-        assert elapsed_ms < 500, f"预热耗时 {elapsed_ms:.1f}ms，超过 500ms 预算"
+class TestNoUnconditionalPrewarm:
+    """启动期无条件预热必须保持删除状态（2026-09-27 实测）。
+
+    删除理由（逐条都是本机实测，不是推断）：
+
+    1. **route-cache 命中时 route 根本不编译域正则**。生产默认路径就是命中，
+       交替 5 组实测：route 阶段有无预热都是 4.2ms，整次调用中位墙上时间
+       107.8ms → 68.9ms。省下的 38.9ms（36%）正是这笔支出本体，即 100% 白付。
+    2. **未命中时也预付错了对象**：profile 显示 route_query 首次调用贵在懒加载
+       import 与构建 249 个引擎的注册表，先预热之后 route 阶段实测仍要 47–121ms。
+    3. **未命中路径总额不变**：编译挪回 route 内部，仍然只付一次。
+
+    所以任何「预热」要能通过的门槛是：证明它预热的正是 route 会在同一进程、
+    同一路径上付的那一笔。
+    """
+
+    def test_search_cli_has_no_startup_prewarm(self):
+        src = (SCRIPT_DIR / "search_cli.py").read_text(encoding="utf-8")
+        assert not _has_startup_prewarm(src), (
+            "search_cli 又出现了启动期预热。它在 route-cache 命中时是纯支出，"
+            "未命中时 route 自己会付（见本类 docstring 的三条实测）")
+
+    def test_gate_has_teeth(self):
+        """变异：把预热塞回源码，判据必须报红——否则这门是摆设。"""
+        mutated = ('def main():\n'
+                   '    route.match_domains("argo-prewarm", get_domains(cfg))\n')
+        assert _has_startup_prewarm(mutated), "造错样本没被抓住，静态判据失效"
+        assert not _has_startup_prewarm("def main():\n    pass\n"), (
+            "判据对正常源码误报")

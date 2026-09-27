@@ -265,30 +265,23 @@ def main():
     # 想知道瓶颈只能外部计时 + 临时代码，等于把优化门槛抬到只有维护者能过。
     _timing = StageTiming() if args.timing else None
 
-    # 路由预热：提前触发域正则编译（255 个域的模式编译是本进程最大的一笔
-    # 固定开销），使 route_query_cached 首次调用不必现付。
+    # 路由预热（`_prewarm`）**已删除**（2026-09-27）。历史：daemon 线程版 →
+    # 同步版（「把 22ms 变成确定的支出」）→ 删除。
     #
-    # **为什么改回同步**（2026-09-27，方案 B）：原实现起 daemon 线程就撒手，
-    # 「异步」是假的——CPython 的线程受 GIL 约束，预热与主线程的
-    # super_search 准备段**串行**执行，而不是重叠。真正的问题是**不保证完成**：
-    # 机器忙或主线程先跑完准备段时，prewarm 可能还没编译完，super_search
-    # 就撞上未预热的 match_domains，那笔开销照样付。实测「新进程内
-    # match_domains 冷编译 17.8ms、首次 route 51.8ms；先预热后 29.7ms」——
-    # 异步版本拿到的收益完全取决于线程调度，不可复现也不可保证。
-    # 同步版把这 22ms 变成确定的支出，而不是一份运气。
+    # 它建立在「预热的那笔钱 route 一定要付」这个前提上，而实测前提不成立：
     #
-    # 仍然静默失败：预热是纯优化，任何异常都只退回「未预热」的既有路径，
-    # 不影响正确性（不 raise、不改返回值、不影响 --explain 输出）。
-    def _prewarm() -> None:
-        try:
-            from route import match_domains
-            from config import get_domains, load_config
-            match_domains("argo-prewarm", get_domains(load_config()))
-        except Exception:
-            pass
-
-    _prewarm()
-
+    #   1. **route-cache 命中时 route 根本不编译域正则**（生产默认，覆盖几乎
+    #      所有重复查询）。交替 5 组实测：route 阶段在有无预热下都是 4.2ms，
+    #      而整次调用的中位墙上时间 107.8ms → 68.9ms——预热是 100% 白付，
+    #      省下的 38.9ms（36%）正是这笔支出本身。
+    #   2. **未命中时也预付错了对象**。profile 显示 route_query 首次调用的
+    #      开销主要来自懒加载 import 与构建 249 个引擎的注册表；先预热再
+    #      `route_query`，route 阶段实测仍要 47–121ms。域编译只是其中一小截。
+    #   3. 未命中路径的总额不因删除而变：编译挪回 route 内部，同样只付一次。
+    #
+    # 想重新引入时先读这三条：任何「预热」都必须证明它预热的正是 route 会在
+    # 同一进程、同一路径上付的那一笔，否则只是把支出提前，不是省下。
+    # 回归守卫见 tests/test_plan_a_optimizations.py::TestNoUnconditionalPrewarm。
     results = super_search(
         query=args.query,
         engine=args.engine,
