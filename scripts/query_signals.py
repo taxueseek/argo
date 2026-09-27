@@ -102,6 +102,53 @@ def query_coverage_ok(results: list[dict[str, Any]], query: str) -> bool:
     return covered >= max(1, (len(results) + 1) // 2)
 
 
+def result_relevance(query: str, results: list[dict[str, Any]],
+                     top_k: int = 3) -> float | None:
+    """单个引擎这次结果的相关度代理 ∈ [0,1]；**拿不到信号时返回 None**。
+
+    用途：给 `adaptive` 学习器回写质量维度（见 adaptive.quality_factor），
+    让引擎排序不再只学「快慢/成败」而能学「好坏」。零网络成本——只读结果
+    文本与查询词元。
+
+    与 `query_coverage_ok` 的区别是本末颠倒：那个问「够不够好到可以停」
+    （二元判定，判据保守到宁可多跑一个引擎），这个问「有多好」
+    （连续量，用于跨引擎、跨时间比较）。两者共用词面覆盖的直觉，但口径必须
+    分开：早停判据要求高敏感度（漏放=放出垃圾），质量分要求可比较
+    （量纲稳定，否则引擎之间的分数不可比）。
+
+    取「前 top_k 条里每条对查询的覆盖率，再取均值」，而不是全量平均：
+    一条半相关文档不该替整个结果集背书，反之亦然。
+
+    返回 None 而非 0.0 是关键：0.0 在自适应评分里是「测过了、很差」，
+    None 才是「本次没测」。两者混同会让「无法判定」把引擎打落
+    （`adaptive.record` 负责把 None 落成不参与判定的 0.0）。
+    """
+    if not query or not query.strip():
+        return None
+    try:
+        from tfidf_router import tokenize
+    except ImportError:
+        return None  # 分词不可用 → 无信号（fail-open，不影响主路径）
+    q_set = set(tokenize(query))
+    if not q_set:
+        return None  # 查询无内容词元（纯符号）→ 无法判定
+    scored: list[float] = []
+    for r in results:
+        if not isinstance(r, dict) or "error" in r:
+            continue
+        text = f"{r.get('title') or ''} {r.get('snippet') or ''}"
+        d_set = set(tokenize(text))
+        if not d_set:
+            scored.append(0.0)  # 有结果却零词元：结构化源常见，计为不相关
+            continue
+        scored.append(len(q_set & d_set) / len(q_set))
+        if len(scored) >= top_k:
+            break
+    if not scored:
+        return None  # 无有效结果（全部 error / 空列表）→ 无信号
+    return sum(scored) / len(scored)
+
+
 def score_clarity_ok(results: list[dict[str, Any]]) -> bool:
     """无标注 QPP 信号（2026-09-16）：结果分平坦且数量仅达下限时拒绝早停。
 

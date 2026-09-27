@@ -815,8 +815,21 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
                 "no-results", "no-results-cached")
             latency = engine_latency.get(eng, elapsed / max(len(raw_results), 1))
             cost = get_cost_factor(eng)
+            # 质量回写（2026-09-27 接通）：把「这次结果有多相关」喂给自适应
+            # 学习器，让引擎排序能学好坏而不只学快慢。零网络成本——只是对
+            # 已经拿在手里的 res 算一次词元覆盖率。
+            # 只在 success 时算：空/失败没有「结果质量」可言（empty 有独立
+            # 口径，见上），给一个 0.0 会被 quality_factor 当成「测过且很差」。
+            quality = None
+            if success:
+                try:
+                    from query_signals import result_relevance
+                    quality = result_relevance(query, res)
+                except Exception:
+                    quality = None
             learner.record(eng, success=success, latency_ms=latency,
-                           cost=0.0 if cost >= 0.85 else 0.001, empty=empty)
+                           cost=0.0 if cost >= 0.85 else 0.001, empty=empty,
+                           quality=quality)
     except ImportError:
         pass
     except Exception as e:
