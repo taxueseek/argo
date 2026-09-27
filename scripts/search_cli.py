@@ -261,6 +261,30 @@ def main():
     # 想知道瓶颈只能外部计时 + 临时代码，等于把优化门槛抬到只有维护者能过。
     _timing = StageTiming() if args.timing else None
 
+    # 路由预热：提前触发域正则编译（255 个域的模式编译是本进程最大的一笔
+    # 固定开销），使 route_query_cached 首次调用不必现付。
+    #
+    # **为什么改回同步**（2026-09-27，方案 B）：原实现起 daemon 线程就撒手，
+    # 「异步」是假的——CPython 的线程受 GIL 约束，预热与主线程的
+    # super_search 准备段**串行**执行，而不是重叠。真正的问题是**不保证完成**：
+    # 机器忙或主线程先跑完准备段时，prewarm 可能还没编译完，super_search
+    # 就撞上未预热的 match_domains，那笔开销照样付。实测「新进程内
+    # match_domains 冷编译 17.8ms、首次 route 51.8ms；先预热后 29.7ms」——
+    # 异步版本拿到的收益完全取决于线程调度，不可复现也不可保证。
+    # 同步版把这 22ms 变成确定的支出，而不是一份运气。
+    #
+    # 仍然静默失败：预热是纯优化，任何异常都只退回「未预热」的既有路径，
+    # 不影响正确性（不 raise、不改返回值、不影响 --explain 输出）。
+    def _prewarm() -> None:
+        try:
+            from route import match_domains
+            from config import get_domains, load_config
+            match_domains("argo-prewarm", get_domains(load_config()))
+        except Exception:
+            pass
+
+    _prewarm()
+
     results = super_search(
         query=args.query,
         engine=args.engine,

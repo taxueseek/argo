@@ -28,16 +28,37 @@ import json  # noqa: E402
 import os  # noqa: E402
 import re  # noqa: E402
 import sys  # noqa: E402
-from typing import Any, Callable, Optional  # noqa: E402
+from typing import Any, Callable, Optional, TYPE_CHECKING  # noqa: E402
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
-from cache import SearchCache  # noqa: E402
-try:
-    from cache import query_similarity as _query_similarity
-except ImportError:
-    _query_similarity = None  # type: ignore
+# cache 的导入**推迟到真正要用时**（2026-09-27，方案 B3）。
+# cache.py 的 import 链（sqlite3 / shutil / tempfile / gzip / hashlib）实测
+# 16-25ms，而 import search 本身只要 ~30ms；它只在「真的要读/写缓存」时
+# 才需要——`--list-engines`、纯路由决策、plan_only 路径都用不上。
+#
+# SearchCache 仍是本模块的公开面（tests/test_search_timing.py 写
+# `S.SearchCache()`），故用显式的 `__getattr__` 转发保持可访问。
+# 踩过的坑：**不要**在模块内写裸名 `SearchCache()` 指望 __getattr__ 兜底——
+# PEP 562 只管 `search.SearchCache` 这种属性访问，模块内全局名查找直接
+# NameError（实测 33 条测试集体红）。所以构造点是**函数内局部 import**，
+# 公开面是**属性访问**，两条路各走各的。
+if TYPE_CHECKING:  # pragma: no cover - 仅类型检查期
+    from cache import SearchCache  # noqa: F401
+
+# 被移除的 `query_similarity` 是**从未被调用**的死导入（全仓无引用）。
+
+
+def __getattr__(name: str):
+    """按需转发 cache.SearchCache（模块级惰性属性，仅服务 `search.SearchCache`）。"""
+    if name == "SearchCache":
+        from cache import SearchCache
+        globals()["SearchCache"] = SearchCache
+        return SearchCache
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 from route import route_query_cached  # noqa: E402  # 跨进程路由决策缓存（见 route 内说明）
 from config import get_cost_factor, get_execution_config, get_engines  # noqa: E402
 
@@ -680,7 +701,9 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     注意：路由永远基于原始 query。改写词只用于引擎检索，避免
     「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
     """
-    cache = cache if cache is not None else SearchCache()
+    if cache is None:
+        from cache import SearchCache  # 局部 import；见模块头注释（不能用裸名）
+        cache = SearchCache()
     original_query = query
 
     # 查询改写：仅影响检索串，不影响路由（在执行引擎前应用）

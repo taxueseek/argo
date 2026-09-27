@@ -10,6 +10,10 @@
 CLI、输出格式分开后，「排序改动」可以只跑秒级的排序金标，不必拖上整条链路。
 函数一律吃列表、吐列表/标量，不碰全局状态（缓存除外，见下）。
 
+2026-09-27 拆分：单条结果的**打分算子**（相关性/完整性/域级惩罚）搬去
+rank_signals.py，本文件保留融合与调度。分界是「打分 vs 编排」——前者
+只吃一条结果的文本与前缀状态，后者管多结果的次序、去重与截断。
+
 缓存说明：`_rel_factor_cache` / `_weight_cache` 是进程内 TTL 记忆化，
 `invalidate_engine_weight_cache()` 是它的显式失效口（配置变更后调用）。
 """
@@ -25,21 +29,49 @@ from typing import Any
 from engine_env import env_flag, get_env
 from url_canon import canonical_url as _canonical_url_impl
 
-try:
-    from cache import query_similarity as _query_similarity
-except ImportError as _err:
-    # 硬失败但保留真因：cache 缺 query_similarity 往往意味着 cache.py 本身
-    # 没装好/没编译好，吞掉 ImportError 会让下游拿到残缺的排序行为。
-    raise RuntimeError(
-        "search_rank 需要 cache.query_similarity——cache 模块不完整或未正确安装"
-    ) from _err
+# cache 延迟到首次真正需要相似度时再导入（2026-09-27，方案 B3）：顶层 import
+# 会把 cache.py 连带 sqlite3/shutil/tempfile 整条拉进每次 import search 的
+# 路径（实测 16-25ms，而 import 本身只要 30ms）。调用点 _content_similarity
+# 自带 Jaccard 兜底，故延迟导入不改变行为。
+# 名字**不能**叫 `_query_similarity`：那会把包装对象遮蔽成自身，递归到
+# RecursionError 后被 except 吞掉、静默退化成 Jaccard——去重阈值 0.85 之下
+# Jaccard 0.88 会把 20 条不同结果并成 1 条（minhash 只有 0.375）。
+_QUERY_SIMILARITY = None
+
+
+def _resolve_query_similarity():
+    """取 cache.query_similarity（首次调用导入，之后走模块级记忆）。"""
+    global _QUERY_SIMILARITY
+    if _QUERY_SIMILARITY is None:
+        try:
+            from cache import query_similarity as _fn
+        except ImportError:
+            return None
+        _QUERY_SIMILARITY = _fn
+    return _QUERY_SIMILARITY
+
+# 打分算子已拆分到 rank_signals（2026-09-27，本文件触及 1000 行硬上限时拆出）。
+# 分工：rank_signals 只回答「这条结果多匹配、这份内容多可信」，本文件负责
+# 融合/去重/语言偏好/截断等调度。开关与常量仍走 ARGO_*，行为不变。
+from rank_signals import (  # noqa: E402
+    CJK_STOPCHARS as _CJK_STOPCHARS,
+    completeness_v2_enabled as _completeness_v2_enabled,
+    domain_concentration_penalty as _domain_concentration_penalty,
+    domain_penalty_enabled as _domain_penalty_enabled,
+    domain_score_floors as _domain_score_floors,
+    host_of as _host_of,
+    relevance_units as _relevance_units,
+    relevance_v2_enabled as _relevance_v2_enabled,
+    score_completeness as _score_completeness,
+    score_relevance as _score_relevance,
+    title_stuffing_penalty as _title_stuffing_penalty,
+)
 
 
 # 中文/英文混合分词用的正则，延迟编译（首次 _tokens 时建）
 _CJK_OR_WORD = None
 
 # 域相关性地板表（按域/源），延迟加载一次
-_SCORE_FLOORS_CACHE: dict[str, dict[str, dict[str, float]]] | None = None
 
 
 def _canonical_url(url: str) -> str:
@@ -263,10 +295,12 @@ def _content_similarity(a: str, b: str) -> float:
     """标题+片段的 minhash 相似度（复用 cache.query_similarity，失败回退 Jaccard）。"""
     if not a or not b:
         return 0.0
-    try:
-        return float(_query_similarity(a, b))
-    except Exception:
-        pass  # 单条相似度计算失败按「无相似度」处理，回退 Jaccard
+    _sim_fn = _resolve_query_similarity()   # cache 不可用时返回 None
+    if _sim_fn is not None:
+        try:
+            return float(_sim_fn(a, b))
+        except Exception:
+            pass  # 单条相似度计算失败按「无相似度」处理，回退 Jaccard
     import re as _re
     sa, sb = set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", a.lower())), set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", b.lower()))
     if not sa or not sb:
@@ -557,7 +591,12 @@ def rerank_results(query: str, results: list[dict[str, Any]],
 
 
 def _tokens(text: str) -> list[str]:
-    """轻量分词：中文单字 + 英文单词，统一小写（复用 tfidf 风格）。"""
+    """轻量分词：中文单字 + 英文单词，统一小写（复用 tfidf 风格）。
+
+    保留单字切分供 `_bigrams`（新颖性去冗余）使用——那里比的是「两段文本
+    的用字是否雷同」，单字粒度足够且更宽容。**相关性**不能用它，见
+    `_relevance_units` 的模块注释。
+    """
     global _CJK_OR_WORD
     if _CJK_OR_WORD is None:
         import re as _re
@@ -577,24 +616,6 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return inter / union if union else 0.0
 
 
-def _score_relevance(query_tokens: set[str], title: str, snippet: str) -> float:
-    """相关性：查询 token 在 title+snippet 的覆盖率（title 权重更高）。"""
-    if not query_tokens:
-        return 0.5
-    t_tokens = set(_tokens(title))
-    s_tokens = set(_tokens(snippet))
-    title_cov = len(query_tokens & t_tokens) / len(query_tokens)
-    snip_cov = len(query_tokens & s_tokens) / len(query_tokens)
-    return round(min(1.0, 0.65 * title_cov + 0.35 * snip_cov), 4)
-
-
-def _score_completeness(title: str, snippet: str) -> float:
-    """完整性：snippet 长度 + 是否含数字/结构信号，归一到 0-1。"""
-    length = len(snippet or "")
-    length_score = min(length / 200.0, 1.0)
-    has_digit = 1.0 if any(c.isdigit() for c in (snippet or "")) else 0.0
-    has_title = 1.0 if (title or "").strip() else 0.0
-    return round(min(1.0, 0.6 * length_score + 0.2 * has_digit + 0.2 * has_title), 4)
 
 
 def _consensus_prior(results: list[dict[str, Any]]) -> list[float]:
@@ -629,37 +650,7 @@ def _consensus_prior(results: list[dict[str, Any]]) -> list[float]:
     return priors
 
 
-def _domain_score_floors() -> dict[str, dict[str, dict[str, float]]]:
-    """域级源保底分（config.yaml 各域的 score_floors），进程内缓存。
 
-    这些分值是「域对源的先验信任」，属于引擎/域声明而非排序算法——
-    此前硬编码在 local_five_dim_rerank 里，每接一个新源都可能要改排序
-    代码（2026-09-13 审查 P1-2）。声明形态：
-
-      score_floors:
-        sina_quote: {relevance: 1.0, authority: 0.85, freshness: 0.85}
-
-    生效时机：relevance 在相关性评分后立即生效；authority/freshness 仅在
-    evidence 评分可用时生效（无 evidence 时两维本就恒 0.5，保底无意义，
-    与旧实现逐位一致）。源匹配按「/」切分成员判断（rrf 合并源
-    "local_bing/sina_quote" 也要吃到保底）。
-    """
-    global _SCORE_FLOORS_CACHE
-    if _SCORE_FLOORS_CACHE is None:
-        try:
-            from config import load_config
-            floors: dict[str, dict[str, dict[str, float]]] = {}
-            for d in (load_config().get("domains") or []):
-                if isinstance(d, dict) and d.get("score_floors"):
-                    floors[d["name"]] = {
-                        str(src): dict(fl)
-                        for src, fl in d["score_floors"].items()
-                        if isinstance(fl, dict)
-                    }
-            _SCORE_FLOORS_CACHE = floors
-        except Exception:
-            _SCORE_FLOORS_CACHE = {}
-    return _SCORE_FLOORS_CACHE
 
 
 def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
@@ -713,8 +704,19 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
     except ImportError:
         _has_evidence = False
 
-    query_tokens = set(_tokens(query))
+    # 相关性比对单元（2026-09-27 换算子）：CJK 字符二元组 + 拉丁词，
+    # 不再是中文单字。ARGO_RELEVANCE_V2=0 时 _score_relevance 内部退回旧口径，
+    # 但那时它需要的是单字集合——故这里按开关形态分别构造，保证逃生门
+    # 「逐位回到旧行为」这条性质真的成立。
+    query_tokens = (set(_tokens(query)) if not _relevance_v2_enabled()
+                    else set(_relevance_units(query)))
     floors = _domain_score_floors().get(domain, {})
+
+    # 域级聚合惩罚（2026-09-27）：同一域名在本次结果里占比过半时整体降权。
+    # 作用方式是在**贪心选序之后**对最终分做乘法（见下方 ranked 循环），
+    # 不参与 _static4——这样 K 剪枝的上界 `U_i = 静态分 + w_novelty +
+    # W_PRIOR·prior` 仍然成立（惩罚系数 ≤1，只会让上界更保守，不会失效）。
+    domain_penalty = _domain_concentration_penalty(results) if _domain_penalty_enabled() else {}
 
     # 先计算前四维静态分
     enriched = []
@@ -780,6 +782,18 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
                          + w["authority"] * e["authority"]
                          + w["freshness"] * e["freshness"]
                          + w["completeness"] * e["completeness"])
+        # 域级惩罚：作为静态分的乘子（≤1），在**贪心之前**应用。
+        # 这样两个性质同时成立：
+        #   ① 无需事后重排——贪心选序自然就把被罚条目压低，且不会打乱
+        #      「无惩罚时与旧实现逐位一致」的既有不变式（惩罚表为空时
+        #      本行是 ×1.0，浮点上逐位无操作）。
+        #   ② K 剪枝上界仍成立：新 _ub = penalty×_static4 + w_novelty +
+        #      W_PRIOR×prior ≤ 旧上界，故按旧界剪掉的条目在新界下更不可能
+        #      入选，剪枝安全（保守方向）。
+        _pf = domain_penalty.get(_host_of(e["r"].get("url") or ""))
+        if _pf is not None and _pf < 1.0:
+            e["_static4"] *= _pf
+            e["_domain_factor"] = _pf
         e["_ub"] = e["_static4"] + w["novelty"] + W_PRIOR * e["prior"]
     if 0 < top_n < len(pool):
         l_k = sorted((e["_static4"] for e in pool), reverse=True)[top_n - 1]
@@ -787,7 +801,8 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
         if len(kept) < len(pool):
             pool = kept
 
-    # 贪心排序：每步选边际得分最高者，novelty 相对已选集合动态计算
+    # 贪心排序：每步选边际得分最高者，novelty 相对已选集合动态计算。
+    # 域级惩罚在选序后按最终分乘算（见下），保证 K 剪枝上界不受影响。
     ranked: list[dict[str, Any]] = []
     selected_bigrams: set[str] = set()
     while pool:
@@ -808,6 +823,9 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
             "novelty": round(best_novelty, 4),
             "prior": round(chosen["prior"], 4),
         }
+        _df = chosen.get("_domain_factor")
+        if _df is not None:
+            r["rerank_dims"]["domain_concentration"] = _df
         selected_bigrams |= chosen["bg"]
         ranked.append(r)
 
