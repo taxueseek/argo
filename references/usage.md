@@ -378,6 +378,9 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_ALLOW_RECOMPUTE` | ('research 可复算脚本执行', '默认拒绝，显式授权') | 见 references/operations.md 与模块 docstring |
 | `ARGO_CONFIG_CACHE` | ('配置解析缓存', '默认开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_CONFIG_STAMP_TTL_S` | config stamp ttl s | 见 references/operations.md 与模块 docstring |
+| `ARGO_COMPLETENESS_V2` | ('完整性维度 QSDM 信息/噪声比', '默认开；=0 退回长度启发式') | 见 rank_signals.py docstring |
+| `ARGO_CROSS_DOMAIN_HOMOGENEITY` | ('跨域内容同质惩罚（异域发同一篇内容降权，对应 Google scaled content abuse）', '默认开') | 见 rank_signals.py docstring |
+| `ARGO_DOMAIN_CONCENTRATION` | ('域级聚合惩罚（同域占比过半降权）', '默认开') | 见 rank_signals.py docstring |
 | `ARGO_DISABLE_ENGINES` | disable engines | 见 references/operations.md 与模块 docstring |
 | `ARGO_ENABLE_ENGINES` | enable engines | 见 references/operations.md 与模块 docstring |
 | `ARGO_ENGINE_HTTP_CLIENT` | ('HttpClient 渐进增强层（UA轮换/节流/重试）', '默认开；=0 回退 urllib 保底') | 见 references/operations.md 与模块 docstring |
@@ -433,6 +436,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_ADMISSION_TTL_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
 | `ARGO_FETCH_DEADLINE_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
 | `ARGO_MINHASH_THRESHOLD` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_RELEVANCE_V2` | ('相关性算子：CJK 二元组覆盖率', '默认开；=0 退回单字覆盖率') | 见 rank_signals.py docstring |
 | `ARGO_ROUTE_SAMPLE_RATE` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
 | `ARGO_SERIAL_STAGGER_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
 | `ARGO_STRAGGLER_GRACE_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |

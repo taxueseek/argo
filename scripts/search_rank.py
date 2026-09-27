@@ -10,9 +10,8 @@
 CLI、输出格式分开后，「排序改动」可以只跑秒级的排序金标，不必拖上整条链路。
 函数一律吃列表、吐列表/标量，不碰全局状态（缓存除外，见下）。
 
-2026-09-27 拆分：单条结果的**打分算子**（相关性/完整性/域级惩罚）搬去
-rank_signals.py，本文件保留融合与调度。分界是「打分 vs 编排」——前者
-只吃一条结果的文本与前缀状态，后者管多结果的次序、去重与截断。
+2026-09-27 拆分：单条结果的**打分算子**（相关性/完整性/各项惩罚）搬去
+rank_signals.py，本文件保留融合与调度。
 
 缓存说明：`_rel_factor_cache` / `_weight_cache` 是进程内 TTL 记忆化，
 `invalidate_engine_weight_cache()` 是它的显式失效口（配置变更后调用）。
@@ -53,9 +52,14 @@ def _resolve_query_similarity():
 # 打分算子已拆分到 rank_signals（2026-09-27，本文件触及 1000 行硬上限时拆出）。
 # 分工：rank_signals 只回答「这条结果多匹配、这份内容多可信」，本文件负责
 # 融合/去重/语言偏好/截断等调度。开关与常量仍走 ARGO_*，行为不变。
-from rank_signals import (  # noqa: E402
+from rank_signals import (  # noqa: E402,F401
     CJK_STOPCHARS as _CJK_STOPCHARS,
+    combined_source_penalties as _combined_source_penalties,
     completeness_v2_enabled as _completeness_v2_enabled,
+    # 兼容转出：搜索路径走 combined_source_penalties，不再直接调这三个，
+    # 但 tests 直接 from search_rank import 它们，删掉会 ImportError。
+    cross_domain_homogeneity_enabled as _cross_domain_homogeneity_enabled,
+    cross_domain_homogeneity_penalty as _cross_domain_homogeneity_penalty,
     domain_concentration_penalty as _domain_concentration_penalty,
     domain_penalty_enabled as _domain_penalty_enabled,
     domain_score_floors as _domain_score_floors,
@@ -704,19 +708,17 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
     except ImportError:
         _has_evidence = False
 
-    # 相关性比对单元（2026-09-27 换算子）：CJK 字符二元组 + 拉丁词，
-    # 不再是中文单字。ARGO_RELEVANCE_V2=0 时 _score_relevance 内部退回旧口径，
-    # 但那时它需要的是单字集合——故这里按开关形态分别构造，保证逃生门
-    # 「逐位回到旧行为」这条性质真的成立。
+    # 相关性比对单元（2026-09-27 换算子）：CJK 二元组 + 拉丁词，不再是中文
+    # 单字。ARGO_RELEVANCE_V2=0 时 _score_relevance 退回旧口径，而那时它需要
+    # 单字集合——故按开关形态分别构造，保证逃生门「逐位回到旧行为」成立。
     query_tokens = (set(_tokens(query)) if not _relevance_v2_enabled()
                     else set(_relevance_units(query)))
     floors = _domain_score_floors().get(domain, {})
 
-    # 域级聚合惩罚（2026-09-27）：同一域名在本次结果里占比过半时整体降权。
-    # 作用方式是在**贪心选序之后**对最终分做乘法（见下方 ranked 循环），
-    # 不参与 _static4——这样 K 剪枝的上界 `U_i = 静态分 + w_novelty +
-    # W_PRIOR·prior` 仍然成立（惩罚系数 ≤1，只会让上界更保守，不会失效）。
-    domain_penalty = _domain_concentration_penalty(results) if _domain_penalty_enabled() else {}
+    # 来源侧惩罚（域级集中 + 跨域同质），均为 _static4 的乘子（≤1），在
+    # 贪心之前应用——故 K 剪枝上界 U_i = 静态分 + w_novelty + W_PRIOR·prior
+    # 仍保守成立（系数 ≤1 只会让上界更小，不会失效）。
+    domain_penalty, _xh = _combined_source_penalties(results)
 
     # 先计算前四维静态分
     enriched = []
@@ -782,18 +784,18 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
                          + w["authority"] * e["authority"]
                          + w["freshness"] * e["freshness"]
                          + w["completeness"] * e["completeness"])
-        # 域级惩罚：作为静态分的乘子（≤1），在**贪心之前**应用。
-        # 这样两个性质同时成立：
-        #   ① 无需事后重排——贪心选序自然就把被罚条目压低，且不会打乱
-        #      「无惩罚时与旧实现逐位一致」的既有不变式（惩罚表为空时
-        #      本行是 ×1.0，浮点上逐位无操作）。
-        #   ② K 剪枝上界仍成立：新 _ub = penalty×_static4 + w_novelty +
-        #      W_PRIOR×prior ≤ 旧上界，故按旧界剪掉的条目在新界下更不可能
-        #      入选，剪枝安全（保守方向）。
+        # 来源侧惩罚（域级集中 / 跨域同质）作为静态分乘子（≤1）在**贪心之前**
+        # 应用：① 无需事后重排，且惩罚表为空时本行是 ×1.0、浮点上逐位无操作，
+        # 「无惩罚时与旧实现逐位一致」的不变式不被破坏；② K 剪枝上界
+        # penalty×_static4 + w_novelty + W_PRIOR×prior ≤ 旧上界，剪枝仍安全。
         _pf = domain_penalty.get(_host_of(e["r"].get("url") or ""))
         if _pf is not None and _pf < 1.0:
             e["_static4"] *= _pf
             e["_domain_factor"] = _pf
+        _xf = _xh.get(e["r"].get("url") or "")
+        if _xf is not None and _xf < 1.0:
+            e["_static4"] *= _xf
+            e["_cross_domain_factor"] = _xf
         e["_ub"] = e["_static4"] + w["novelty"] + W_PRIOR * e["prior"]
     if 0 < top_n < len(pool):
         l_k = sorted((e["_static4"] for e in pool), reverse=True)[top_n - 1]
@@ -823,9 +825,13 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
             "novelty": round(best_novelty, 4),
             "prior": round(chosen["prior"], 4),
         }
+        # 降权项留可观测项：线上出现「为什么这条掉了」时才查得到原因
         _df = chosen.get("_domain_factor")
         if _df is not None:
             r["rerank_dims"]["domain_concentration"] = _df
+        _xdf = chosen.get("_cross_domain_factor")
+        if _xdf is not None:
+            r["rerank_dims"]["cross_domain_homogeneity"] = _xdf
         selected_bigrams |= chosen["bg"]
         ranked.append(r)
 
