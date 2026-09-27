@@ -130,7 +130,10 @@ def main() -> int:
     as_json = "--json" in sys.argv[1:]
     rep = run()
     if as_json:
-        print(json.dumps(rep, ensure_ascii=False, indent=2))
+        # 走统一入口而非 json.dumps(indent=2)：stdout 不出缩进 JSON
+        # （tests/test_context_budget.py 门禁；人读格式在下方非 --json 分支）
+        from cli_io import dumps
+        print(dumps(rep))
         return 0
 
     print(f"低质信号区分度标定（{rep['n']} 条样本，好/坏对半）\n")
