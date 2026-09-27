@@ -20,6 +20,7 @@ from typing import Any
 from cli_io import dumps, ensure_utf8_stdio
 from engine_env import env_flag
 from stage_timing import StageTiming
+from time_utils import WINDOW_FORMATS_HINT, is_valid_time_window
 from search import (
     available_engines,
     _run_local_seek,
@@ -72,6 +73,19 @@ def _resolve_module_timing() -> tuple[float, float]:
 
 
 
+def _window_arg(value: str) -> str:
+    """argparse 的 `type=`：坏时间窗直接拒（判据在 time_utils，提示语同源）。
+
+    用 `ArgumentTypeError` 而不是裸 `ValueError`：两者的差别是**用户看不看得见
+    原因**——argparse 对 ValueError 只印 "invalid _window_arg value: 'garbage'"
+    并把说明丢掉，对 ArgumentTypeError 则原样印出我们的提示。
+    """
+    if not is_valid_time_window(value):
+        raise argparse.ArgumentTypeError(
+            f"无法解析的时间窗 {value!r}：{WINDOW_FORMATS_HINT}")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     """构造 CLI 参数解析器。
 
@@ -117,8 +131,10 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=["fast", "auto", "deep", "budget"],
                         help="预算模式: fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制")
     parser.add_argument("--since", default=None,
+                        type=_window_arg,
                         help="发布时间下限（7d / 2026-08-01），下推到支持时间窗的引擎")
     parser.add_argument("--until", default=None,
+                        type=_window_arg,
                         help="发布时间上限（7d / 2026-08-01），下推到支持时间窗的引擎")
     parser.add_argument("--sort", default="relevance",
                         choices=["relevance", "oldest", "newest"],

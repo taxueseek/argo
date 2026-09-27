@@ -495,5 +495,49 @@ class TestCliEngineRetry(unittest.TestCase):
         self.assertEqual(res[1]["url"], "https://www.python.org/")
 
 
+class TestTimeWindowInputIsValidated(unittest.TestCase):
+    """非法时间窗必须被拒，不能静默降级成「没过滤」（2026-09-27）。
+
+    实测（改前）：`--since garbage` 走完整条流程——原样回显在响应里、
+    `time_filtered=0`、没有任何说明，调用方以为自己拿到了筛过的结果。这是
+    「静默不生效」里最坏的一种：不是少一层增强，而是**答案被当成已经筛过**。
+
+    判据与 `parse_time_value` 同源（`is_valid_time_window` 直接调它），所以
+    接受面永远等于解析器真正认识的那些写法；下面同时锁「该收的收、该拒的拒」。
+    """
+
+    def test_accepts_everything_the_parser_understands(self):
+        from time_utils import is_valid_time_window
+        for value in ("7d", "24h", "2w", "2026-09-01", "2026-09-01 12:00",
+                      "2026-09-01T12:00:00Z", "2026-09-01T12:00:00+08:00",
+                      "1789000000"):
+            self.assertTrue(is_valid_time_window(value), f"误拒：{value}")
+
+    def test_no_value_is_not_a_bad_value(self):
+        from time_utils import is_valid_time_window
+        for value in (None, ""):
+            self.assertTrue(is_valid_time_window(value),
+                            "「没给」不是「给错了」，不该报错")
+
+    def test_rejects_typos(self):
+        from time_utils import is_valid_time_window
+        for value in ("garbage", "7x", "2026-13-45", "yesterday", "上次",
+                      "2026/09/01"):
+            self.assertFalse(is_valid_time_window(value), f"误收：{value}")
+
+    def test_cli_rejects_bad_window_before_searching(self):
+        """CLI 层：坏值 rc=2 且提示里带上可接受的写法（离线：解析期就退出）。"""
+        import subprocess
+        from pathlib import Path
+        script = Path(__file__).resolve().parent.parent / "scripts" / "search.py"
+        r = subprocess.run([sys.executable, str(script), "test",
+                            "--since", "garbage", "--json"],
+                           capture_output=True, text=True, timeout=120,
+                           stdin=subprocess.DEVNULL)
+        self.assertEqual(r.returncode, 2, r.stdout[-300:])
+        self.assertIn("无法解析的时间窗", r.stderr)
+        self.assertIn("7d", r.stderr, "提示没说清能收什么写法，等于让用户猜")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -137,6 +137,28 @@ def parse_time_value(value: Any) -> tuple[str | None, float | None]:
     return dt.isoformat(timespec="seconds"), dt.timestamp()
 
 
+#: 时间窗接受的写法（给用户看的唯一一份说明；CLI 的 argparse 与 MCP 的错误行
+#: 都从这里取，避免「文档说支持 2w、代码其实只认 d」这类漂移）。
+WINDOW_FORMATS_HINT = (
+    "支持 7d/24h/2w、2026-09-01、2026-09-01 12:00、"
+    "ISO 8601（含 Z / ±HH:MM）或 epoch 秒")
+
+
+def is_valid_time_window(value: Any) -> bool:
+    """入参能否解析成时间窗（判据与 `parse_time_value` 同源，不另写一套正则）。
+
+    why：此前非法值被**静默接受**——`--since garbage` 原样回显在响应里、
+    `time_filtered=0`、没有任何说明，调用方以为自己拿到了筛过的结果。
+    这是「静默不生效」里最坏的一种：不是少了一层增强，而是**答案被当成
+    已经筛过的**（同一条查询用 `--since 2026-09-01` 与 `--since garbage`
+    拿到同一批结果，且无从分辨）。
+    """
+    if value in (None, ""):
+        return True  # 没给就是没给，不是坏值
+    _iso, ts = parse_time_value(value)
+    return ts is not None
+
+
 def normalize_time_window(
     since: str | None, until: str | None
 ) -> tuple[str | None, str | None, float | None, float | None]:
