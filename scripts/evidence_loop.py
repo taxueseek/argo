@@ -100,20 +100,28 @@ def extract_fetch_evidence(fetch_result: dict[str, Any]) -> Optional[dict[str, A
 
     # 低质折扣：三项都只降不升（乘子 ≤1），且各自设下限，避免单个信号
     # 就抹掉全部吸收分——假阳性代价高于漏放。
+    #
+    # 权重按 2026-09-27 标定数据重排（tests/golden/lowquality_calibration.json）：
+    #   title_body  AUC 0.643 最佳门槛 0.697 最佳F1 0.714 → 主力，折扣最深
+    #   clickbait   AUC 0.643 最佳门槛 0.075 最佳F1 0.444 → 辅助，门槛保持 0.5
+    #   template    AUC 0.500（=随机）                      → 降为纯旁挂，见下
+    #
+    # template 的折扣从 ×0.85 撤掉：它在本仓口径下与随机猜测无差别（正常技术
+    # 长文 0.833 vs 农场 0.875），却要对每一篇句式平行的正常长文都扣 15%——
+    # 那是**确定的伤害换不到的收益**。信号仍照常计算并输出（可观测、未来可
+    # 替换为真句法分析），但不再参与折扣计算。若将来接入 POS/依存句法并跑出
+    # AUC>0.75，这里是恢复点。
     absorption = evidence.get("absorption_score")
     if absorption is not None and seo_signals:
         discount = 1.0
         cb = seo_signals.get("clickbait") or {}
         tb = seo_signals.get("title_body") or {}
-        tp = seo_signals.get("template") or {}
         if cb.get("score", 0) >= 0.5:
-            discount *= 0.80                      # 标题党：-20%
+            discount *= 0.90                      # 标题党（弱信号）：-10%
         if tb.get("mismatch"):
             # 文不对题按覆盖度线性折扣：coverage=0 → ×0.7，coverage=0.5 → ×0.85
             cov = float(tb.get("coverage") or 0.0)
             discount *= (0.70 + 0.30 * min(cov / 0.5, 1.0))
-        if tp.get("repetition", 0) >= 0.75:
-            discount *= 0.85                      # 模板重复：-15%
         absorption = round(max(0.0, float(absorption) * discount), 3)
 
     return {

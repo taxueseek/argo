@@ -5,6 +5,9 @@
   compute_freshness       时效性（年龄 + stale）
   detect_page_type        页面结构类型
   compute_content_quality 内容质量评分
+  score_clickbait         标题党检测（2026-09-27 新增）
+  score_title_body_consistency  标题-正文一致性（2026-09-27 新增）
+  score_template_repetition     句法模板重复率（2026-09-27 新增）
 主入口：analyze_fetch_result(url, html, content, metadata) -> dict。
 零外部依赖，单次调用微秒级。
 """
@@ -400,16 +403,241 @@ def compute_content_quality(content: str, title: str = "") -> dict:
     }
 
 
-# ── 5. 整合入口 ─────────────────────────────────────────────────────
+# ── 5. SEO/低质内容信号（2026-09-27 新增）───────────────────────────
+#
+# 三个互补信号，全部纯规则、零依赖，服务于「主题相关但质量低」的内容——
+# 这类内容能骗过 serp_guard（token 交集高）也能骗过长度型完整性分。
+#
+# 文献依据（详见 research/argo-低质内容检测调研.md）：
+#   - Chang & Huang, PACLIC 2024：中文标题党的四类语言特征，并明确警告
+#     「单纯数标点会误杀」——故本实现要求悬念/夸张词与标点**共现**才算
+#   - Google Search Quality Rater Guidelines 4.0/5.0：把「title extremely
+#     misleading, shocking, or exaggerated」列为独立的最低质量判据
+#   - 百度《违规低质页面问题说明》：「资源内容不符」（内容与标题不一致）
+#   - Shaib et al., EMNLP 2024：模板重复率（模型 76% vs 人类 35%）
+
+# 中文停用字：高频但无区分度。与 search_rank._CJK_STOPCHARS 同表——
+# 两处独立维护是为了避开反向依赖（search_rank 在 import 链上游，
+# content_signals 不能被它反向依赖），分叉由测试的一致性用例发现。
+_ZH_STOPCHARS: frozenset[str] = frozenset(
+    "的了是和与或在有为被把对从到就都也还很更最之其此这那一个"
+    "个们我你他她它上下中里外前后时和及等所可能够会要"
+    "怎幺么样如选哪个多少何呢吗吧啊哦呀嘛"
+)
+
+# PACLIC 2024 的悬念词/夸张词表（原文四类里可直接规则化的两类）。
+# 刻意保持小规模（<20 词）：词表越长越容易误伤正常标题。
+_ZH_SUSPENSE_WORDS = ("疑", "曝", "露", "公開", "揭秘", "内幕", "真相", "原来")
+_ZH_EXAGGERATED_WORDS = ("震惊", "驚", "轟", "必看", "绝对", "史上最", "第一", "唯一",
+                         "彻底", "惊呆", "炸了", "翻车", "逆天")
+# 前指代词/列表数字：制造 curiosity gap 与 listicle 结构
+_ZH_FORWARD_REFS = ("这", "那", "他", "她", "它", "此", "该")
+
+
+def score_clickbait(title: str) -> dict:
+    """标题党打分（0-1，越高越像标题党）。
+
+    2026-09-27 标定（tests/golden/lowquality_calibration.json，14 条好/坏对照）
+    量化出两件事，直接决定了这个函数的形态：
+
+    1. **纯词表对现代农场标题近乎无效**。标定集 7 条低质样本里 6 条得 0.00，
+       只有 2020 年代的老式标题党（震惊！…99% 的人都不知道）被抓到。2026 年
+       的 SEO 写法是「2026最新推荐10款，看完这篇你就懂了」——一个词表都不沾。
+    2. **单纯换结构模式也不够**。试过疑问尾钩/数字开头/年份/比较声明/利益承诺/
+       最高级/破折号/副标题八种模式，各自的区分度都在噪声附近，且
+       「疑问尾钩」把正常的技术文标题（"Python 性能优化从哪开始？"）误伤。
+
+    故现在的形态是**词汇与结构取并集、且两者都弱**：词表命中给 0.30/0.35，
+    结构模式每个只给 0.08-0.12。理由见下——
+
+    这个信号在标定集上 AUC 仅 0.643，**它本就该是弱信号**。它的价值不在
+    独立判别（做不到），而在当它与 title_body / 来源侧证据**同时**命中时提高
+    置信度。因此宁可漏放也不误杀：单信号误伤的代价（正常长文被判农场）
+    高于漏放（反正还有别的信号兜着）。真要提升整体判别力，该加的是来源侧
+    证据（见 rank_signals.cross_domain_homogeneity_penalty），不是在这里
+    堆词表。
+
+    PACLIC 2024 的教训仍然生效：标点**不单独计分**，只作已有命中的放大器
+    （原文发现模型把「含感叹/疑问号的中文非标题党」过度泛化为标题党）。
+    """
+    t = (title or "").strip()
+    if not t:
+        return {"score": 0.0, "hits": [], "is_clickbait": False}
+
+    hits: list[str] = []
+    score = 0.0
+
+    # ── 词汇层：老式标题党仍能抓到，权重维持较高 ──
+    sus = [w for w in _ZH_SUSPENSE_WORDS if w in t]
+    exa = [w for w in _ZH_EXAGGERATED_WORDS if w in t]
+    if sus:
+        score += 0.30
+        hits.extend(sus)
+    if exa:
+        score += 0.35
+        hits.extend(exa)
+
+    # ── 结构层：现代农场写法，每个模式只给弱权重 ──
+    # 数字 listicle：「10款」「3款」等。不要求数字前有分隔符——「震惊！这3款…」
+    # 这种形态里数字紧跟量词，漏掉它就丢掉了最典型的一类现代标题党。
+    if re.search(r"\d+\s*(?:个|款|种|条|大|招|步|类)", t):
+        score += 0.12
+        hits.append("listicle")
+    # 分隔式堆砌：三段以上短语（内容农场标题的标准形态）
+    if len([s for s in re.split(r"[，,、|｜;；【】]", t) if s.strip()]) >= 3:
+        score += 0.12
+        hits.append("segmented")
+    # 伪新鲜：标题里的年份几乎从不参与正文判断，是农场刷新页的标志
+    if re.search(r"(?:19|20)\d{2}\s*年", t):
+        score += 0.08
+        hits.append("year_prefix")
+    # 利益承诺：「看完…你就会」「建议收藏」「一篇搞懂」
+    if re.search(r"(看完|建议收藏|建议收藏|一篇(?:讲|说|搞懂)|全解析|必看|建议收藏)", t):
+        score += 0.10
+        hits.append("benefit_promise")
+
+    # 标点：仅在已有命中时作**放大器**（PACLIC 的误杀教训）
+    if score > 0:
+        if "！" in t or "!" in t:
+            score += 0.12
+            hits.append("!")
+        if "？" in t or "?" in t:
+            score += 0.08
+            hits.append("?")
+    # 前指代词开头制造悬念
+    if t[0] in _ZH_FORWARD_REFS:
+        score += 0.10
+        hits.append("fwd_ref")
+
+    score = round(min(score, 1.0), 3)
+    return {"score": score, "hits": hits, "is_clickbait": score >= 0.5}
+
+
+def score_title_body_consistency(title: str, content: str) -> dict:
+    """标题-正文一致性（0-1，越高越一致）。
+
+    百度官方低质判据里的「资源内容不符」——标题承诺的主题在正文里找不到。
+    纯规则实现：标题的信息单元（CJK bigram + 拉丁词）在正文里的覆盖率。
+    标题党与洗稿站常在这里露馅：标题堆满热词，正文却是通用模板。
+    """
+    t = (title or "").strip()
+    if not t or not content:
+        return {"score": 0.5, "coverage": 0.0, "unmatched": [], "mismatch": False}
+    # 复用与 search_rank 同口径的单元划分（此处独立实现以避开循环导入：
+    # search_rank 已经在 import 链的上游，content_signals 不能被它反向依赖）
+    def _units(text: str) -> list[str]:
+        low = text.lower()
+        out: list[str] = []
+        for run in re.findall(r"[\u4e00-\u9fff]+", low):
+            kept = [ch for ch in run if ch not in _ZH_STOPCHARS]
+            if len(kept) == 1:
+                out.append(kept[0])
+            else:
+                out.extend(kept[i] + kept[i + 1] for i in range(len(kept) - 1))
+        out.extend(re.findall(r"[a-zA-Z0-9]+", low))
+        return out
+
+    tu = _units(t)
+    if not tu:
+        return {"score": 0.5, "coverage": 0.0, "unmatched": [], "mismatch": False}
+    # 误伤防护（2026-09-27）：本信号只对**中文标题**判定。
+    # 理由：英文标题常是单个词或短短语（"Gold" / "Test" / "Pricing"），
+    # 与正文的 bigram 交集天然稀疏，覆盖率恒低会误判为「文不对题」——
+    # 实测 tests/test_evidence_loop.py 的 mock（title="Test"，正文为黄金行情
+    # 英文段落）覆盖率 0.0，直接把正常抓取压成 mismatch。
+    # 中文标题的信息单元密度高，覆盖率才有判别力；英文交给 clickbait 与
+    # template 两个信号处理。
+    if not re.search(r"[\u4e00-\u9fff]", t):
+        return {"score": 0.5, "coverage": 0.0, "unmatched": [], "mismatch": False,
+                "skipped": "non_cjk_title"}
+    # 标题过短（单元数 <3）时覆盖率噪声大，不判定
+    uniq_cjk = [u for u in dict.fromkeys(tu) if re.search(r"[\u4e00-\u9fff]", u)]
+    if len(uniq_cjk) < 3:
+        return {"score": 0.5, "coverage": 0.0, "unmatched": [], "mismatch": False,
+                "skipped": "title_too_short"}
+    body = set(_units(content))
+    uniq = list(dict.fromkeys(tu))          # 去重保序，避免长标题压倒短标题
+    hit = [u for u in uniq if u in body]
+    coverage = len(hit) / len(uniq)
+    unmatched = [u for u in uniq if u not in body][:8]
+    return {
+        "score": round(coverage, 3),
+        "coverage": round(coverage, 3),
+        "unmatched": unmatched,
+        # 阈值 0.5：过半数标题单元在正文里找不到 → 文不对题
+        "mismatch": coverage < 0.5,
+    }
+
+
+def score_template_repetition(content: str) -> dict:
+    """句法模板重复率（0-1，越高越像批量生成/模板化内容）。
+
+    依据 Shaib et al. (EMNLP 2024)：LLM 生成文本的句法模板重复率显著高于
+    人类（76% vs 35%），且微调后不被覆盖。此处用**粗粒度近似**（不做 POS
+    标注，避免引入 NLP 工具）：每句取「首二字 + 末二字 + 长度档位」作模板
+    指纹，统计同一指纹在文内的重复率。
+
+    ⚠️ **2026-09-27 标定结论：这个近似在本仓的口径下没有判别力，勿依赖它。**
+
+    标定集（14 条好/坏对照）实测 AUC = **0.500**——恰好等于随机猜测。逐条
+    看：正常技术长文得 0.833，LLM 批量生成文本得 0.875，两者几乎不可分。
+    原因不难理解：中文技术写作本身句式就高度平行（「X 通过 Y 实现 Z」、
+    「需要注意的一点是」），首二字+末二字这个指纹在**人类**文本上同样高频
+    重复。论文测的是英文 POS 模板，被搬到中文后失去了分辨力。
+
+    又试了三个更贴近论文的廉价代理，全部落在噪声附近：
+      标点序列模板 AUC=0.551 / 句首二字集中度 AUC=0.592 / 句长自相关 AUC=0.531
+
+    结论：要做这件事需要真正的句法分析（POS 标注或依存句法），那会引入
+    重依赖，与本仓「零外部依赖、单次调用微秒级」的纪律冲突。故**保留字段
+    但降权到几乎不参与决策**（见 evidence_loop 的折扣系数），并在标定脚本
+    里持续显示 AUC=0.5 作为「已知无效」的显式记录。将来若接入句法分析，
+    这里是接入点，且标定集能立刻给出 before/after。
+    """
+    text = (content or "").strip()
+    if len(text) < 120:
+        return {"score": 0.0, "templates": 0, "sentences": 0, "repetition": 0.0}
+    # 分句：中英标点 + 换行
+    sents = [s.strip() for s in re.split(r"[。！？!?；;\n]+", text) if len(s.strip()) >= 6]
+    if len(sents) < 4:
+        return {"score": 0.0, "templates": len(sents), "sentences": len(sents),
+                "repetition": 0.0}
+    sigs: list[str] = []
+    for s in sents:
+        head = s[:2]
+        tail = s[-2:]
+        # 长度档位：粗化到 3 档，避免「模板相同但字数微差」被判为不同
+        bucket = "S" if len(s) < 25 else ("M" if len(s) < 60 else "L")
+        sigs.append(f"{head}|{tail}|{bucket}")
+    uniq = len(set(sigs))
+    repetition = 1.0 - uniq / len(sigs)
+    return {
+        "score": round(min(repetition, 1.0), 3),
+        "templates": uniq,
+        "sentences": len(sigs),
+        "repetition": round(repetition, 3),
+    }
+
+
+# 中文停用字（与 search_rank._CJK_STOPCHARS 同表；此处独立维护以避开
+# 反向依赖，两处若分叉由 tests/test_relevance_cjk.py 的一致性用例发现）
+
+
+# ── 6. 整合入口 ─────────────────────────────────────────────────────
 
 def analyze_fetch_result(url: str, html: str, content: str, metadata: dict | None = None) -> dict:
     """综合所有信号返回完整质量信封。"""
     metadata = metadata or {}
+    title = metadata.get("title", "")
     return {
         "source": classify_source(url),
         "freshness": compute_freshness(metadata),
         "page_type": detect_page_type(html, url),
-        "quality": compute_content_quality(content, metadata.get("title", "")),
+        "quality": compute_content_quality(content, title),
+        # SEO/低质信号（2026-09-27）：只在有正文时才有意义，故随主信封一起算
+        "clickbait": score_clickbait(title),
+        "title_body": score_title_body_consistency(title, content),
+        "template": score_template_repetition(content),
     }
 
 
