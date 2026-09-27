@@ -34,6 +34,7 @@ except ImportError:
 
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths
+from cache_guard import assert_not_degraded  # 退化写入守卫（2026-09-27 拆出）
 from cli_io import dumps
 from except_sets import IO_BENIGN, SHAPE_BENIGN
 
@@ -1045,6 +1046,8 @@ class SearchCache:
         result_list = results.get("results") if isinstance(results, dict) else None
         # 逐条查：登录态标记的生产者在**逐条**结果上（见 assert_results_cacheable）
         assert_results_cacheable(result_list, context="SearchCache.set")
+        # 退化守卫：上游抖动返回的残次品不得固化（见 is_degraded_results）
+        assert_not_degraded(result_list, context="SearchCache.set")
         is_empty = isinstance(result_list, list) and len(result_list) == 0
         key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         if is_empty:
@@ -1125,6 +1128,7 @@ class SearchCache:
                    since: str | None = None, until: str | None = None):
         assert_cacheable({"engine": engine, "source": engine}, context="SearchCache.set_engine")
         assert_results_cacheable(results, context="SearchCache.set_engine")
+        assert_not_degraded(results, context="SearchCache.set_engine")
         is_empty = not results
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
