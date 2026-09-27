@@ -3,11 +3,112 @@
 
 topic profile 的 quality_gates 字符串是给 Agent 的自检提示。
 这里的谓词决定 conclusion_cap，过不了就降级，不打印空勾选充数。
+
+2026-09-27 新增三类门控（方案 C）：
+  - 来源多样性：单一域名占比过高时降级（仿 CDQ 的站点级信号）
+  - 时效性：过时内容占比过高时降级（仿 Google E-E-A-T 的时效性信号）
+  - 事实一致性：多来源事实冲突时降级（仿 Fact-Check-X 的核验流程）
 """
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from typing import Any
+from urllib.parse import urlparse
+
+
+def _host_of(url: str) -> str:
+    """取规范化 host（www 折叠为裸域）。"""
+    if not url:
+        return ""
+    try:
+        host = urlparse(url).netloc.lower().split(":", 1)[0]
+    except Exception:
+        return ""
+    return host[4:] if host.startswith("www.") else host
+
+
+def _check_source_diversity(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    """来源多样性门控：单一域名占比过高时降级。
+
+    仿 CDQ（Content Quality Score）的站点级信号：深度研究可能从同一域名
+    获取多条来源（如知乎专栏的多篇文章），这些来源看似独立，实则同源。
+
+    判据：单一域名占比 > 60% 且总来源数 >= 3 时触发。
+    """
+    hosts = []
+    for s in sources:
+        if not isinstance(s, dict):
+            continue
+        host = _host_of(s.get("url") or "")
+        if host:
+            hosts.append(host)
+    if len(hosts) < 3:
+        return {"triggered": False, "max_share": 0.0, "max_host": ""}
+    counts = Counter(hosts)
+    max_host, max_count = counts.most_common(1)[0]
+    share = max_count / len(hosts)
+    return {
+        "triggered": share > 0.6,
+        "max_share": round(share, 3),
+        "max_host": max_host,
+    }
+
+
+def _check_freshness(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    """时效性门控：过时内容占比过高时降级。
+
+    仿 Google E-E-A-T 的时效性信号：深度研究可能引用过时内容（如 2020 年的
+    「最新推荐」），影响结论可靠性。
+
+    判据：过时内容（> 365 天）占比 > 50% 且总来源数 >= 2 时触发。
+    """
+    now_ts = __import__("time").time()
+    stale_count = 0
+    total = 0
+    for s in sources:
+        if not isinstance(s, dict):
+            continue
+        total += 1
+        # 尝试从多个字段获取时间
+        date_str = (s.get("published_time") or s.get("modified_time")
+                    or s.get("date") or "")
+        if not date_str:
+            continue
+        try:
+            from datetime import datetime, timezone
+            # 尝试 ISO 格式
+            dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            age_days = (datetime.now(timezone.utc) - dt).days
+            if age_days > 365:
+                stale_count += 1
+        except Exception:
+            continue
+    if total < 2:
+        return {"triggered": False, "stale_ratio": 0.0, "stale_count": 0}
+    ratio = stale_count / total
+    return {
+        "triggered": ratio > 0.5,
+        "stale_ratio": round(ratio, 3),
+        "stale_count": stale_count,
+    }
+
+
+def _check_fact_consistency(dossier: dict[str, Any]) -> dict[str, Any]:
+    """事实一致性门控：多来源事实冲突时降级。
+
+    仿 Fact-Check-X 的核验流程：各方答案汇总 → 聚合 → 权威核验 → 最终答案。
+    这里只做粗粒度检测：fact_conflicts 非空时降级。
+
+    判据：fact_conflicts 非空且冲突数 >= 2 时触发。
+    """
+    fa = dossier.get("fact_alignment") or {}
+    conflicts = fa.get("fact_conflicts") or []
+    return {
+        "triggered": len(conflicts) >= 2,
+        "conflict_count": len(conflicts),
+    }
 
 
 def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
@@ -64,6 +165,45 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
             "id": "fact_conflicts",
             "detail": f"{len(conflicts)} 组事实冲突未校准",
             "count": len(conflicts),
+        })
+
+    # ── 方案 C：三类新门控 ──────────────────────────────────────────────
+    # 1) 来源多样性门控（仿 CDQ 站点级信号）
+    diversity = _check_source_diversity(sources)
+    if diversity["triggered"]:
+        warnings.append({
+            "id": "low_source_diversity",
+            "detail": (
+                f"单一域名 {diversity['max_host']} 占比 "
+                f"{diversity['max_share']:.0%}，来源多样性不足"
+            ),
+            "max_host": diversity["max_host"],
+            "max_share": diversity["max_share"],
+        })
+
+    # 2) 时效性门控（仿 Google E-E-A-T 时效性信号）
+    freshness = _check_freshness(sources)
+    if freshness["triggered"]:
+        warnings.append({
+            "id": "stale_content_heavy",
+            "detail": (
+                f"过时内容占比 {freshness['stale_ratio']:.0%}"
+                f"（{freshness['stale_count']} 条），时效性不足"
+            ),
+            "stale_ratio": freshness["stale_ratio"],
+            "stale_count": freshness["stale_count"],
+        })
+
+    # 3) 事实一致性门控（仿 Fact-Check-X 核验流程）
+    consistency = _check_fact_consistency(dossier)
+    if consistency["triggered"]:
+        warnings.append({
+            "id": "fact_consistency_low",
+            "detail": (
+                f"{consistency['conflict_count']} 组事实冲突未校准，"
+                f"结论可靠性不足"
+            ),
+            "conflict_count": consistency["conflict_count"],
         })
 
     # ── recompute 检查（P0-2）：可复算完整链路 ──

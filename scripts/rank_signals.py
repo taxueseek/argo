@@ -402,6 +402,14 @@ def score_completeness(title: str, snippet: str) -> float:
 # **来源**去集中，两者正交——同一个域名可以发多篇不同内容（都被压），
 # 同一篇内容也可以跨多个域名转载（由 minhash + novelty 负责）。
 
+# 进程内缓存：纯函数（只读输入列表），同进程内重复调用共享结果。
+# 键用 tuple(urls) 而非整个列表——列表不可哈希，且 url 序列足以区分不同结果集。
+# 用 OrderedDict 实现 LRU，上限 128 条防止无界增长（一次搜索最多几十个 URL，
+# 128 足够覆盖同进程内的重复调用）。
+from collections import OrderedDict
+_DOMAIN_PENALTY_CACHE: OrderedDict[tuple, dict[str, float]] = OrderedDict()
+_DOMAIN_PENALTY_CACHE_MAX = 128
+
 
 def domain_penalty_enabled() -> bool:
     """域级聚合惩罚开关：ARGO_DOMAIN_CONCENTRATION=0 关闭。"""
@@ -424,20 +432,34 @@ def domain_concentration_penalty(results: list[dict[str, Any]]) -> dict[str, flo
 
     返回 {host: factor}；不触发时返回空表（调用方据此完全跳过，保证
     「无惩罚时与旧实现逐位一致」这条既有纪律）。
+
+    2026-09-27 加 lru_cache：纯函数（只读输入列表），同进程内重复调用
+    （rerank / selection / evidence 打分）共享结果。键用 (tuple(urls),) 而非
+    整个列表——列表不可哈希，且 url 序列足以区分不同结果集。
     """
     if not results:
         return {}
+    # 缓存键：只取 url 列表（可哈希），避免整个 dict 列表不可哈希的问题
+    cache_key = tuple(str(r.get("url") or "") for r in results if isinstance(r, dict))
+    if not cache_key:
+        return {}
+    cached = _DOMAIN_PENALTY_CACHE.get(cache_key)
+    if cached is not None:
+        # LRU：命中时移到末尾（最新使用）
+        _DOMAIN_PENALTY_CACHE.move_to_end(cache_key)
+        return cached
     from collections import Counter
     counts: Counter = Counter()
-    for r in results:
-        if not isinstance(r, dict):
-            continue
-        host = host_of(r.get("url") or "")
+    for url in cache_key:
+        host = host_of(url)
         if host:
             counts[host] += 1
     total = sum(counts.values())
     if total < 3 or not counts:
         # 结果太少时占比噪声太大（2 条里 1 条就是 50%），不判定
+        if len(_DOMAIN_PENALTY_CACHE) >= _DOMAIN_PENALTY_CACHE_MAX:
+            _DOMAIN_PENALTY_CACHE.popitem(last=False)
+        _DOMAIN_PENALTY_CACHE[cache_key] = {}
         return {}
     if len(counts) == 1:
         # 全部结果来自同一域名：这不是「某站从多源里占榜」，而是「本次召回
@@ -445,6 +467,9 @@ def domain_concentration_penalty(results: list[dict[str, Any]]) -> dict[str, flo
         # 罚它等于对所有单源结果无条件降权——既打不出多样性（没有别的源
         # 可让位），又破坏了「无融合信息时与旧实现确定性」这条既有不变式
         # （由 tests/test_ranking_contract.py 锁定）。故只在**多域并存**时判定。
+        if len(_DOMAIN_PENALTY_CACHE) >= _DOMAIN_PENALTY_CACHE_MAX:
+            _DOMAIN_PENALTY_CACHE.popitem(last=False)
+        _DOMAIN_PENALTY_CACHE[cache_key] = {}
         return {}
     penalty: dict[str, float] = {}
     for host, n in counts.items():
@@ -454,6 +479,10 @@ def domain_concentration_penalty(results: list[dict[str, Any]]) -> dict[str, flo
         # 占比过半起罚：0.5 → 1.0（不罚），1.0 → 0.75（满罚 25%）
         # 用意是「打散占榜」而非「删除结果」——同域仍可按内容质量排序。
         penalty[host] = round(1.0 - 0.25 * (share - 0.5) / 0.5, 4)
+    # LRU 写入：超限时淘汰最久未使用的条目
+    if len(_DOMAIN_PENALTY_CACHE) >= _DOMAIN_PENALTY_CACHE_MAX:
+        _DOMAIN_PENALTY_CACHE.popitem(last=False)
+    _DOMAIN_PENALTY_CACHE[cache_key] = penalty
     return penalty
 
 
