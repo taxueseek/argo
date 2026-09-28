@@ -239,6 +239,20 @@ from engine_dispatch import (  # noqa: E402
 )
 from local_seek import _run_local_seek, _LOCAL_SEEK_TIMEOUT_S  # noqa: E402
 
+# include-local 的本地搜索 worker：模块级单例。此前每次调用新建
+# ThreadPoolExecutor 且从不 shutdown——CLI 一次性进程无感，常驻 MCP server
+# 每跑一次 --include-local 就泄漏一个非 daemon 线程（线性累积，永不回收）。
+_LOCAL_SEEK_EXECUTOR = None
+
+
+def _get_local_seek_executor():
+    global _LOCAL_SEEK_EXECUTOR
+    if _LOCAL_SEEK_EXECUTOR is None:
+        import concurrent.futures
+        _LOCAL_SEEK_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="local-seek")
+    return _LOCAL_SEEK_EXECUTOR
+
 
 def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
     """远端明示配额耗尽（如 byted 10406）→ 标记到周期边界自动恢复。
@@ -710,9 +724,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     # 与主搜索并行执行。主搜索完成时本地搜索通常已就绪，零额外墙钟。
     _local_seek_future = None
     if include_local:
-        import concurrent.futures as _cf
-        _local_seek_executor = _cf.ThreadPoolExecutor(max_workers=1)
-        _local_seek_future = _local_seek_executor.submit(
+        _local_seek_future = _get_local_seek_executor().submit(
             _run_local_seek, query, n)
 
     result = execute_search(
