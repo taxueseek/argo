@@ -374,8 +374,12 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 try:
                     if breaker.status(eng).get("state") == "half_open":
                         cap = min(cap, 2.0)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    # 读失败按默认 cap 处理（fail-open），但必须留痕：
+                    # 静默回退曾让「探测收紧到 2s」的慢源修复失明
+                    import logging
+                    logging.getLogger("unified_search").debug(
+                        f"breaker.status({eng}) 读取失败，探测收紧未生效: {_exc!r}")
             if eng_to is not None and eng_to >= 8.0:
                 eff_to = min(float(timeout), cap)
             # 声明值 < 8s 的收紧由 engines.search 分发层统一执行

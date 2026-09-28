@@ -427,8 +427,11 @@ class _CookieManager:
                     cookie.name, cookie.value = nv.split("=", 1)
                     cookie.domain = parsed.hostname or ""
                     self._jar.set_cookie(cookie)
-        except Exception:
-            pass
+        except Exception as _exc:
+            # 每响应都跑：坏 Set-Cookie 留 debug 痕迹（此前是全仓最高频静默点）
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"Set-Cookie 解析失败: {_exc!r}")
 
     @property
     def jar(self) -> http.cookiejar.CookieJar:

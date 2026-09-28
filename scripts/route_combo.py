@@ -107,8 +107,12 @@ def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:
                 continue
             if st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
                 continue
-        except Exception:
-            pass
+        except Exception as _exc:
+            # 熔断状态读取失败 ≠ 未熔断：fail-open 保留，但必须留痕——
+            # 此前静默 pass 让「读失败」与「健康」不可区分（017b01a 姊妹形状）
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"breaker.status 读取失败，按健康处理: {_exc!r}")
         out.append(e)
     return out
 

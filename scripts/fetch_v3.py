@@ -562,6 +562,8 @@ def _identity_remember_mobile(host: str) -> None:
     if not host:
         return
     _identity_load()
+    if len(_identity_mem) >= 512:  # 有界：内存表防长驻进程无限增长（磁盘侧有 TTL）
+        _identity_mem.pop(next(iter(_identity_mem)), None)
     _identity_mem[host] = time.time() + _IDENTITY_TTL
     _identity_dirty = True
     now = time.monotonic()

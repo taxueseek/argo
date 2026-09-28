@@ -48,6 +48,7 @@ from engine_env import env_flag  # 布尔开关统一判断（见 env_flag 的�
 
 # robots.txt 进程内缓存：key=(scheme, host)，TTL 1 小时
 _CACHE_TTL = 3600
+_CACHE_MAX = 512  # 有界：与 _parser_cache 同纪律（长驻进程防无限增长）
 _cache: dict[tuple[str, str], tuple[float, "RobotFileParser | None"]] = {}
 _lock = threading.Lock()
 
@@ -104,6 +105,8 @@ def _get_parser(scheme: str, host: str, timeout: float) -> RobotFileParser | Non
         rp.parse(text.splitlines())
 
     with _lock:
+        if len(_cache) >= _CACHE_MAX:  # 有界：防长驻进程无限增长
+            _cache.clear()
         _cache[key] = (now, rp)
     if text is not None:
         # 顺带落盘，供搜索路径只读复用（不影响本次判定）

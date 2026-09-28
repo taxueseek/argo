@@ -189,6 +189,7 @@ def _engine_weight(source: str, lang: str | None = None) -> float:
     static = max([_ENGINE_FUSION_WEIGHTS.get(p, 1.0) for p in parts])
     rel = min([_single_reliability(p) for p in parts])
     out = static * rel
+    adjusted = True
     if lang:
         try:
             from lang_capability import score_adjust
@@ -197,10 +198,13 @@ def _engine_weight(source: str, lang: str | None = None) -> float:
             adj = max([score_adjust(p, lang) for p in parts] or [1.0])
             out *= adj
         except Exception:
-            pass
+            # 调整失败：本次按未调整值使用，但**不写缓存**——缓存键含 lang，
+            # 固化 30s 会让该语言持续拿到降级权重（与「退化结果不写缓存」同源）
+            adjusted = False
     out = round(out, 3)
-    _evict_cache(_weight_cache, now)
-    _weight_cache[ck] = (out, now + _REL_FACTOR_TTL)
+    if adjusted:
+        _evict_cache(_weight_cache, now)
+        _weight_cache[ck] = (out, now + _REL_FACTOR_TTL)
     return out
 
 
