@@ -3098,7 +3098,7 @@ engines:
     - chinese
     - wechat
     - article
-    desc: 搜狗微信搜索引擎（公众号文章，免登录）
+    desc: 搜狗微信搜索引擎（公众号文章，免登录，中间链自动解析为微信真实链接可引用；fast 跳过解析）
     timeout: 10
   twitter:
     type: cli
@@ -4823,6 +4823,65 @@ engines:
     - id: weather_cn_bj
       query: 北京气温
       category: weather
+    timeout: 10
+
+  # ── 2026-09-28（9044621）新增：构建器同日落地，本段声明为补齐件——
+  # 此前只有 _BUILDERS 没有 spec 声明，is_registered=False，--engine 点名
+  # 与 chinese_general combo 里的名字全部静默落空（test_route_bangs
+  # 注册冒烟抓住）。声明与构建器必须成对出现，缺一就是死引擎。
+  so:
+    type: so
+    enabled: true
+    label: 360搜索
+    cost_tier: free
+    qps: 3
+    priority: 20
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage: [chinese, general]
+    desc: 360 搜索（so.com/s HTML 解析），中文通用网页
+    timeout: 10
+  shenma:
+    type: shenma
+    enabled: true
+    label: 神马搜索
+    cost_tier: free
+    qps: 3
+    priority: 20
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage: [chinese, general]
+    desc: 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页
+    timeout: 10
+  qwant:
+    type: qwant
+    enabled: true
+    explicit_only: true
+    label: Qwant
+    cost_tier: free
+    qps: 2
+    priority: 20
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage: [english, general]
+    desc: Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页
+    timeout: 10
+  ecosia:
+    type: ecosia
+    enabled: true
+    explicit_only: true
+    label: Ecosia
+    cost_tier: free
+    qps: 2
+    priority: 20
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage: [english, general]
+    desc: Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页
     timeout: 10
 execution:
   default_timeout: 8

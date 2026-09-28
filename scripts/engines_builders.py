@@ -65,8 +65,6 @@ from engines_builders_cn import (
     _build_std_samr_engine,
     _build_openstd_engine,
     _build_bangumi_engine,
-    _build_so_engine,
-    _build_shenma_engine,
     _build_douban_movie_engine,
     _build_zdic_engine,
     _build_iplant_engine,
@@ -78,6 +76,10 @@ from engines_builders_cn import (
     _build_csdn_engine,
     _build_wallstreetcn_engine,
     _build_weather_cn_engine,
+)
+from engines_builders_batch12 import (
+    _build_so_engine,
+    _build_shenma_engine,
 )
 from engines_builders_data import (
     _build_open_library_engine,

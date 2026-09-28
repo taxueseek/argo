@@ -307,6 +307,11 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     "xiaohongshu": "social 域位次 8：社交引擎另有专用通道，待核实是否真休眠",
     "you": "待接线：news_realtime 位次 6",
     "zhihu_hot_app": "待接线：hot_trending 位次 6",
+    # 2026-09-28（9044621）：360/神马新接入 chinese_general 尾部（位次 8/9，
+    # 预算外）。挂观察期：首周熔断/配额/反爬数据达线后，再评估进
+    # route._VERTICAL_NEW_SOURCE 加槽通电，或确认与既有 CN 源同质后裁撤。
+    "so": "chinese_general 位次 8：新增观察期（9044621），待可用性数据",
+    "shenma": "chinese_general 位次 9：新增观察期（9044621），待可用性数据",
 }
 
 

@@ -56,10 +56,13 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_intl.py": (
         1220, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异"),
     "scripts/engines_builders_tech.py": (
-        1504, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
+        1600, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
               "2026-09-26 批次十增强净增 +402：sov2ex 一级全文来源（v2ex 就地升级）、"
               "tineye/bing_rss 新引擎、exa 免 key 匿名通道——与原逐源一段同性质，"
-              "拆出只会把同一张表切碎（新引擎的下一站是 batch 模块）"),
+              "拆出只会把同一张表切碎（新引擎的下一站是 batch 模块）；"
+              "2026-09-28 并行会话进行中的搜狗微信中间链解析 WIP（+96 行，"
+              "engines_builders_tech.py 工作区未提交改动）——上限暂按工作区现值"
+              "登记以免门禁误伤在途工作，随该工作正式提交后由其转正或回调"),
     "scripts/fetch_v3.py": (
         1793, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
@@ -95,6 +98,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         1182, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
     "scripts/matrix_search_eval.py": (
         1103, "离线路由矩阵（138 条检查项），用例表占多数"),
+    "scripts/route.py": (
+        1006, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+              "2026-09-28 拆出 Bangs 解析（route_bangs.py，−26 行）后登记；"
+              "下一刀：_route_by_domain（268 行垂直域主判定）独立成模块"),
 }
 
 

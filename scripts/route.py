@@ -98,6 +98,9 @@ from route_cache import (  # noqa: E402
 # 决策采样落日志（旁路）：同名转出，测试打桩需打在 route_log。
 from route_log import sample_route  # noqa: E402
 
+# Bangs 解析（!gh react → github）：纯查表逻辑，2026-09-28 拆出以回门禁。
+from route_bangs import resolve_bangs  # noqa: E402
+
 # ── 语言与选源策略（route_lang）、组合装配（route_combo）、预算策略（route_policy）
 # 三块按职责拆出，这里同名转出：调用方与既有测试（route.extract_features /
 # route._get_engines_combo / route._VERTICAL_NEW_SOURCE …）无需改。
@@ -757,36 +760,6 @@ def _route_by_fallback(ctx: _RouteCtx) -> dict[str, Any]:
     )
 
 
-# DuckDuckGo Bangs 映射表：!gh → github，!so → stackoverflow，!w → wikipedia
-# 纯路由层逻辑：解析出目标引擎后走用户指定引擎分支，不碰查询改写
-_BANGS_MAP = {
-    "!g": "local_bing",
-    "!gh": "github",
-    "!so": "stackoverflow",
-    "!w": "wikipedia",
-    "!yt": "google",
-    "!gmaps": "local_openstreetmap",
-}
-
-
-def _bangs_resolve(query: str) -> tuple[str, str] | None:
-    """解析 DuckDuckGo Bangs 语法：!gh react → (github, react)。
-
-    未命中返回 None（走正常路由）。Bangs 是路由层逻辑（决定用哪个引擎），
-    不是查询改写层逻辑，故放在 route.py 而非 query_rewriter.py。
-    """
-    if not query.startswith("!"):
-        return None
-    parts = query.split(None, 1)
-    if len(parts) < 2:
-        return None
-    bang, rest = parts
-    engine = _BANGS_MAP.get(bang)
-    if not engine:
-        return None
-    return engine, rest
-
-
 def route_query(query: str, engine_override: str = "auto",
                 mode: str = "auto",
                 depth: str = "fast",
@@ -825,17 +798,10 @@ def route_query(query: str, engine_override: str = "auto",
         sample_route(base, kw)
         return base
 
-    # DuckDuckGo Bangs：!gh react → 指定 github 搜 react。
-    # 只处理首 token，保留其余查询原样；未收录的 Bangs 继续走正常路由。
-    if query.startswith("!"):
-        bang, sep, remainder = query.partition(" ")
-        target = _BANGS_MAP.get(bang.lower())
-        if target and sep:
-            engine_override = target
-            query = remainder.strip()
-        elif target:
-            engine_override = target
-            query = ""
+    # DuckDuckGo Bangs：!gh react → 指定 github 搜 react；未收录走正常路由。
+    _bangs = resolve_bangs(query)
+    if _bangs:
+        engine_override, query = _bangs
 
     if engine_override and engine_override != "auto":
         # 逗号多引擎与 --list-engines 路径（search.py --engine split(',')）
