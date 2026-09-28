@@ -128,3 +128,18 @@ def test_mcp_include_local_defaults_true():
 def test_cli_has_no_local_flag():
     src = (ROOT / "scripts" / "search_cli.py").read_text(encoding="utf-8")
     assert '"--no-local"' in src
+
+
+# ── 6. 缓存命中路径等待预算（H1）──────────────────────────────────────────────
+
+def test_cache_hit_wait_budget_wiring():
+    """H1 源码钉住：cached 结果的本地等待收窄到宽限窗，且 deadline 跨
+    两个等待点共享（预等待 + shape_response 合并等待共用同一预算）。"""
+    src = (ROOT / "scripts" / "search.py").read_text(encoding="utf-8")
+    assert "_LOCAL_SEEK_GRACE_S" in src
+    assert 'result.get("cached")' in src
+    # 两个等待点都必须走 deadline（剩余预算），不能各自拿满超时
+    assert src.count("_local_deadline - time.monotonic()") == 2
+    # 宽限窗必须显著小于常规超时（快路径保护语义）
+    import search as search_mod
+    assert search_mod._LOCAL_SEEK_GRACE_S < search_mod._LOCAL_SEEK_TIMEOUT_S / 4

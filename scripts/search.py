@@ -239,6 +239,12 @@ from engine_dispatch import (  # noqa: E402
 )
 from local_seek import _run_local_seek, _LOCAL_SEEK_TIMEOUT_S  # noqa: E402
 
+# 缓存命中路径的 include-local 宽限窗（秒）：主结果命中缓存时墙钟已极小
+# （~25ms），为本地命中等满 _LOCAL_SEEK_TIMEOUT_S 会把快路径拖成慢路径
+# （实测 cached 查询 111~138ms vs --no-local 55ms）。宽限覆盖 seek 的常规
+# 60~140ms；超窗的慢 seek 本次不并入——本地命中缺席总好过拖垮快路径。
+_LOCAL_SEEK_GRACE_S = 0.25
+
 # include-local 的本地搜索 worker：模块级单例。此前每次调用新建
 # ThreadPoolExecutor 且从不 shutdown——CLI 一次性进程无感，常驻 MCP server
 # 每跑一次 --include-local 就泄漏一个非 daemon 线程（线性累积，永不回收）。
@@ -748,10 +754,16 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
     )
 
+    # include-local 等待预算（H1，2026-09-29）：deadline 跨两个等待点共享
+    #（此处的预等待 + 下方 shape_response 的合并等待），总预算不叠加。
+    # 主结果命中缓存时收窄到宽限窗 _LOCAL_SEEK_GRACE_S。
+    _local_wait_cached = isinstance(result, dict) and bool(result.get("cached"))
+    _local_deadline = time.monotonic() + (_LOCAL_SEEK_GRACE_S if _local_wait_cached
+                                          else _LOCAL_SEEK_TIMEOUT_S)
     # 主搜索完成后，本地搜索应已就绪；若未完成则等待剩余预算
     if _local_seek_future is not None:
         try:
-            _local_seek_future.result(timeout=_LOCAL_SEEK_TIMEOUT_S)
+            _local_seek_future.result(timeout=max(_local_deadline - time.monotonic(), 0))
         except Exception:
             pass  # 本地搜索失败不影响主结果
     # 对外仍报告用户原始 query
@@ -840,10 +852,12 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             + ", ".join(_unknown_engines)
             + "; results may come only from the remaining engines")
     # 包装 _run_local_seek：若 Future 已完成则直接返回结果，否则等待
+    # （共享上方的 _local_deadline：缓存命中路径的合并等待同样受宽限窗约束）
     def _local_seek_wrapper(q, max_n, search_dir=None):
         if _local_seek_future is not None:
             try:
-                return _local_seek_future.result(timeout=_LOCAL_SEEK_TIMEOUT_S)
+                return _local_seek_future.result(
+                    timeout=max(_local_deadline - time.monotonic(), 0))
             except Exception:
                 return []
         return _run_local_seek(q, max_n, search_dir)
