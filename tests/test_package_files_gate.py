@@ -78,6 +78,65 @@ class TestFilesFieldOrdering(unittest.TestCase):
                       "data/jobs（用户数据）必须在 files 里显式排除")
 
 
+class TestDocsWhitelist(unittest.TestCase):
+    """docs/ 发布采用**白名单**（逐文件列出），不是整目录。
+
+    为什么：docs/ 里混着两类文件——对外承诺面（发布说明/引擎目录/使用
+    文档）与内部工作文档（批次落地报告/审查/交接/对标研究/调研，其中
+    8 个在仓库里就是 600 权限）。2026-09-28 之前 "docs/" 整目录随包，
+    13 份内部文档一并发布。白名单缺省拒绝：以后新增内部工作文档
+    （本仓惯例是「主题_2026-MM-DD.md」命名）**默认不进包**，不用每次记着排除。
+
+    同时守反向不变量：公开面（SKILL.md / 各 README）引用到的 docs 文件
+    必须在白名单里——引用了却没带，装到用户机器上就是死链。
+    """
+
+    def _files(self) -> list:
+        return json.loads(PKG.read_text(encoding="utf-8"))["files"]
+
+    def _doc_entries(self) -> list:
+        return [f for f in self._files() if f.startswith("docs/")]
+
+    def test_docs_is_whitelisted_not_whole_dir(self):
+        self.assertNotIn("docs/", self._files(),
+                         "docs/ 整目录不得再进 files（白名单模式已接管）")
+
+    def test_no_dated_internal_docs_shipped(self):
+        """内部工作文档的仓库名惯例是「主题_日期.md」——带日期的 docs 条目
+        一律不得发布（历史条目正是批次报告/审查/交接/调研这一批）。"""
+        import re
+        dated = [f for f in self._doc_entries() if re.search(r"\d{4}-\d{2}-\d{2}", f)]
+        self.assertEqual(dated, [], f"带日期的 docs 条目不得发布：{dated}")
+
+    def test_referenced_docs_are_whitelisted(self):
+        """公开面引用的 docs/*.md 必须在白名单里（防死链）。
+
+        SKILL.md 里 `docs/RELEASE_NOTES_v2.8.*.md` 是 glob 写法，展开成
+        前缀匹配校验；其余按精确名。
+
+        口径：只强制**磁盘上存在**的被引用文件——README 发布史表格里躺着
+        指向早已删除的旧文档（v2.4/v2.7 时代）的历史死链，那属于文档考古，
+        不归本门禁管：仓库里都没有的文件，装包前后一样是死的。
+        """
+        import re
+        files = set(self._files())
+        refs = set()
+        for rel in ("SKILL.md", "README.md", "README.en.md",
+                    "README.es.md", "README.ja.md", "README.ko.md"):
+            text = (REPO / rel).read_text(encoding="utf-8")
+            refs |= set(re.findall(r"docs/[\w\-.]+\.md", text))
+        missing = []
+        for ref in sorted(refs):
+            if "*" in ref:
+                prefix = ref.split("*")[0]
+                if not any(f.startswith(prefix) for f in files):
+                    missing.append(f"{ref}（glob 无任何展开命中）")
+            elif ref not in files and (REPO / ref).is_file():
+                missing.append(ref)
+        self.assertEqual(missing, [],
+                         f"公开面引用了白名单外的 docs 文件（装包即死链）：{missing}")
+
+
 class TestPackedTarballIfPresent(unittest.TestCase):
     """动态门禁：仓库里若已有打包产物，它不得含 .pyc 或主机路径。
 
