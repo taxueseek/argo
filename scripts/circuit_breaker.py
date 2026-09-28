@@ -109,9 +109,13 @@ class CircuitBreaker:
                 if disabled_at == 0 or \
                         (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS:
                     def _reenable_probe() -> None:
-                        st["state"] = "half_open"
-                        st["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
-                        self._engines[engine] = st
+                        # 锁内重读后再改：_reload_engines 刚整体替换过
+                        # self._engines，闭包里的旧 st 会把另一进程刚落盘的
+                        # 状态盖回去（017b01a 修的那类丢更新在 allow() 的漏网处）。
+                        fresh = self._engines.get(engine) or {}
+                        fresh["state"] = "half_open"
+                        fresh["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
+                        self._engines[engine] = fresh
                     self._mutate_locked(_reenable_probe)
                     return True, "half_open_reenable"
                 return False, "auto_disabled"
@@ -127,15 +131,17 @@ class CircuitBreaker:
                          (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS)
                     if can_disable:
                         def _auto_disable() -> None:
-                            st["state"] = "disabled"
-                            st["disabled_at"] = time.time()
-                            self._engines[engine] = st
+                            fresh = self._engines.get(engine) or {}  # 同上：锁内重读
+                            fresh["state"] = "disabled"
+                            fresh["disabled_at"] = time.time()
+                            self._engines[engine] = fresh
                         self._mutate_locked(_auto_disable)
                         return False, "auto_disabled"
                     # half-open：允许一次探测
                     def _half_open() -> None:
-                        st["state"] = "half_open"
-                        self._engines[engine] = st
+                        fresh = self._engines.get(engine) or {}  # 同上：锁内重读
+                        fresh["state"] = "half_open"
+                        self._engines[engine] = fresh
                     self._mutate_locked(_half_open)
                     return True, "half_open_probe"
                 remain = int(OPEN_SECONDS - (time.time() - opened_at))
