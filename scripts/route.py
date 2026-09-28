@@ -807,21 +807,6 @@ def route_query(query: str, engine_override: str = "auto",
     """
     start = time.perf_counter()
 
-    # Bangs 解析：!gh react → engine_override=github, query=react
-    # 必须在用户指定引擎分支之前，Bangs 解析出目标引擎后直接走该分支
-    _bangs = _bangs_resolve(query)
-    if _bangs:
-        engine_override, query = _bangs
-        if not query:
-            return _done(
-                engine=engine_override, engines=[engine_override],
-                engines_combo=[engine_override],
-                reason=f"Bangs: {_bangs[0]}", confidence=1.0,
-                features={}, domain=None, parallel=False, mode=mode,
-                depth=depth, context=context,
-                login_hint=_detect_login_intent(query, None),
-            )
-
     def _done(**kw: Any) -> dict[str, Any]:
         base = {
             "elapsed_ms": round((time.perf_counter() - start) * 1000, 3),
@@ -839,6 +824,18 @@ def route_query(query: str, engine_override: str = "auto",
         base.update(kw)
         sample_route(base, kw)
         return base
+
+    # DuckDuckGo Bangs：!gh react → 指定 github 搜 react。
+    # 只处理首 token，保留其余查询原样；未收录的 Bangs 继续走正常路由。
+    if query.startswith("!"):
+        bang, sep, remainder = query.partition(" ")
+        target = _BANGS_MAP.get(bang.lower())
+        if target and sep:
+            engine_override = target
+            query = remainder.strip()
+        elif target:
+            engine_override = target
+            query = ""
 
     if engine_override and engine_override != "auto":
         # 逗号多引擎与 --list-engines 路径（search.py --engine split(',')）
