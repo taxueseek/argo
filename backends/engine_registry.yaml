@@ -659,6 +659,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: 东方财富，金融数据首选
+- name: ecosia
+  tier: T1
+  type: ecosia
+  coverage:
+  - english
+  - general
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页
 - name: egov_law
   tier: T1
   type: egov_law
@@ -2196,6 +2208,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: QQ 音乐曲库搜索（歌手/歌曲/专辑）
+- name: qwant
+  tier: T1
+  type: qwant
+  coverage:
+  - english
+  - general
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页
 - name: qweather
   tier: T1
   type: qweather
@@ -2366,6 +2390,31 @@ engines:
   recommended: true
   explicit_only: false
   desc: Semantic Scholar API（备选）
+- name: shenma
+  tier: T1
+  type: shenma
+  coverage:
+  - chinese
+  - general
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页
+- name: shopping_cn
+  tier: T1
+  type: cli
+  coverage:
+  - chinese
+  - shopping
+  - price_compare
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: 全网商品比价（淘宝/京东/拼多多/苏宁/唯品会等9平台聚合：标题/店铺/原价/券后价/月销）
 - name: sina_quote
   tier: T1
   type: sina_quote
@@ -2391,6 +2440,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: SkillsMP Agent 技能聚合目录（200万+ 开源技能独立索引，免费 keyless REST API，stars 排序）
+- name: so
+  tier: T1
+  type: so
+  coverage:
+  - chinese
+  - general
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: 360 搜索（so.com/s HTML 解析），中文通用网页
 - name: soilgrids
   tier: T1
   type: soilgrids

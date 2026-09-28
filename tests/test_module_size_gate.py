@@ -56,13 +56,13 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_intl.py": (
         1220, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异"),
     "scripts/engines_builders_tech.py": (
-        1600, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
+        1604, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
               "2026-09-26 批次十增强净增 +402：sov2ex 一级全文来源（v2ex 就地升级）、"
               "tineye/bing_rss 新引擎、exa 免 key 匿名通道——与原逐源一段同性质，"
               "拆出只会把同一张表切碎（新引擎的下一站是 batch 模块）；"
-              "2026-09-28 并行会话进行中的搜狗微信中间链解析 WIP（+96 行，"
-              "engines_builders_tech.py 工作区未提交改动）——上限暂按工作区现值"
-              "登记以免门禁误伤在途工作，随该工作正式提交后由其转正或回调"),
+              "2026-09-28 并行会话进行中的搜狗微信中间链解析 WIP（+96 行起，"
+              "工作区未提交、当日仍在增长 1600→1604）——上限随工作区现值登记，"
+              "随该工作正式提交后由其转正或回调"),
     "scripts/fetch_v3.py": (
         1793, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
@@ -89,8 +89,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点；"
               "2026-09-28 +2：normalize_query 加 @lru_cache 装饰器（性能优化）"),
     "scripts/http_client.py": (
-        1005, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
-              "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）"),
+        1015, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
+              "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）；"
+              "2026-09-28 +10：淘汰只踢零活跃桶（_active 计数 + idle 过滤），"
+              "消灭「踢掉在用桶 → 同主机限速击穿」"),
     "scripts/search_rank.py": (
         1017, "RRF 融合 + minhash 去重 + 五维重排；"
               "2026-09-27 +18：_weight_cache/_rel_factor_cache 加 TTL+大小限制（_evict_cache）"),
