@@ -479,6 +479,7 @@ def main():
             print(f"  [archive error] {type(e).__name__}: {e}", file=sys.stderr)
 
     # 证据完整链路 P0：--verify 显式核验 top-k 未核验结果（fetch + 回填 + revision 分布）
+    _t_verify0 = time.perf_counter()
     if args.verify:
         try:
             from evidence_loop import verify_results, reorder_by_evidence
@@ -523,6 +524,24 @@ def main():
                           f"位次变动 {ro.get('moved', 0)} 处", file=sys.stderr)
         except Exception as e:
             print(f"  [verify error] {type(e).__name__}: {e}", file=sys.stderr)
+
+    # 计时盲区修补（2026-09-29）：--verify 的 top-k fetch 发生在上面计时快照
+    # （process_ms 定格处）之后，净增 280–1160ms 完全不进任何账——实测
+    # wall 776–1746ms vs process_ms 494–701ms，「这次为什么慢」归因指错
+    # 方向。快照后移做不到（verify 是装配后的可选后处理），补一个 stage
+    # 并把耗时并回 stages_ms / process_ms，两个总数保持自洽。
+    if _timing is not None and "timing" in results and args.verify:
+        _verify_ms = (time.perf_counter() - _t_verify0) * 1000.0
+        _t = results["timing"]
+        _total = float(_t.get("stages_ms") or 0) + _verify_ms
+        _t.setdefault("stages", []).append({
+            "stage": "verify",
+            "ms": round(_verify_ms, 1),
+            "pct": round(_verify_ms * 100.0 / _total, 1) if _total > 0 else 0.0,
+        })
+        _t["stages_ms"] = round(_total, 1)
+        _t["process_ms"] = round(
+            float(_t.get("process_ms") or 0) + _verify_ms, 1)
 
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}

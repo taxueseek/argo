@@ -326,6 +326,14 @@ class TestCacheKeyIsRequestIdentity:
                                   {eng: 10}, 0, True, None, None, 10, None, 10)
 
         monkeypatch.setattr(S, "run_dispatch", fake_dispatch)
+        # 恢复链走的是 engine_search 钩子（不是 run_dispatch），不打桩会真连
+        # 网——2026-09-29 实测：env 隔离后恢复引擎报 skipped-missing-env，
+        # 叠加失败态守卫，空载荷被拒绝入缓存，本用例随网络运气时红时绿。
+        monkeypatch.setattr(S, "engine_search", lambda *a, **k: [])
+        # octen 自备密钥（2026-09-29）：无密钥时真实 dispatch 判
+        # skipped-missing-env，失败态守卫据此拒绝负缓存——本用例锁的
+        # 是「请求身份键」契约，需要一次可缓存的运行（含空结果负缓存）
+        monkeypatch.setenv("ARGO_OCTEN_API_KEY", "test-key")
         c = cache.SearchCache(db_path=str(tmp_path / "c.db"))
 
         r1 = S.execute_search("python asyncio 教程", self._decision(["octen", "anysearch"]),
@@ -352,6 +360,14 @@ class TestCacheKeyIsRequestIdentity:
                                   {eng: 10}, 0, True, None, None, 10, None, 10)
 
         monkeypatch.setattr(S, "run_dispatch", fake_dispatch)
+        # 恢复链走的是 engine_search 钩子（不是 run_dispatch），不打桩会真连
+        # 网——2026-09-29 实测：env 隔离后恢复引擎报 skipped-missing-env，
+        # 叠加失败态守卫，空载荷被拒绝入缓存，本用例随网络运气时红时绿。
+        monkeypatch.setattr(S, "engine_search", lambda *a, **k: [])
+        # octen 自备密钥（2026-09-29）：无密钥时真实 dispatch 判
+        # skipped-missing-env，失败态守卫据此拒绝负缓存——本用例锁的
+        # 是「请求身份键」契约，需要一次可缓存的运行（含空结果负缓存）
+        monkeypatch.setenv("ARGO_OCTEN_API_KEY", "test-key")
         c = cache.SearchCache(db_path=str(tmp_path / "c.db"))
 
         auto_d = self._decision(["octen", "exa"], domain="general_search")
@@ -382,6 +398,14 @@ class TestCacheKeyIsRequestIdentity:
                                   {eng: 9}, 0, True, None, None, 9, None, 9)
 
         monkeypatch.setattr(S, "run_dispatch", fake_dispatch)
+        # 恢复链走的是 engine_search 钩子（不是 run_dispatch），不打桩会真连
+        # 网——2026-09-29 实测：env 隔离后恢复引擎报 skipped-missing-env，
+        # 叠加失败态守卫，空载荷被拒绝入缓存，本用例随网络运气时红时绿。
+        monkeypatch.setattr(S, "engine_search", lambda *a, **k: [])
+        # octen 自备密钥（2026-09-29）：无密钥时真实 dispatch 判
+        # skipped-missing-env，失败态守卫据此拒绝负缓存——本用例锁的
+        # 是「请求身份键」契约，需要一次可缓存的运行（含空结果负缓存）
+        monkeypatch.setenv("ARGO_OCTEN_API_KEY", "test-key")
         c = cache.SearchCache(db_path=str(tmp_path / "c.db"))
 
         d1 = self._decision(["octen", "anysearch"])

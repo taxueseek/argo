@@ -56,7 +56,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_batch9.py": (
         1468, "批次九的源声明构建器，逐源一段；与既有构建器同形，拆开不减少概念"),
     "scripts/engines_builders_intl.py": (
-        1220, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异"),
+        1239, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异；"
+              "2026-09-29 +19：open_meteo 多 place forecast 并行化（串行 9.28s → "
+              "3.9-5.1s，bounded_run 有界并发 + 保序）"),
     "scripts/engines_builders_tech.py": (
         1604, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
               "2026-09-26 批次十增强净增 +402：sov2ex 一级全文来源（v2ex 就地升级）、"

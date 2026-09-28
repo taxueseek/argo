@@ -25,6 +25,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from engines_base import safe_search, _http_get_raw, http_open, rank_score
+from bounded_run import run_bounded
 
 logger = logging.getLogger("unified_search.engines")
 
@@ -512,16 +513,21 @@ def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
             logger.warning(f"Open-Meteo geocode 失败: {e}")
             return []
         results = []
-        for _rk9, place in enumerate((geo.get("results") or [])[:n]):
-            lat, lon = place.get("latitude"), place.get("longitude")
-            if lat is None or lon is None:
-                continue
+        places = [p for p in (geo.get("results") or [])[:n]
+                  if p.get("latitude") is not None and p.get("longitude") is not None]
+        if not places:
+            return results
+
+        def _fetch_place(item: tuple[int, dict[str, Any]]):
+            """单个 place 的 forecast；失败返回 None（与串行版逐个 except 一致）。"""
+            _rk9, place = item
+            lat, lon = place["latitude"], place["longitude"]
             try:
                 wx = _http_json(
                     f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true",
                     to, engine=spec.get("_name", ""))
             except Exception:
-                continue
+                return None
             cw = wx.get("current_weather") or {}
             name = place.get("name", "")
             country = place.get("country", "")
@@ -531,7 +537,7 @@ def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
             wmo = {0: "晴", 1: "基本晴", 2: "多云", 3: "阴", 45: "雾", 48: "雾凇",
                    51: "毛毛雨", 61: "小雨", 63: "中雨", 65: "大雨", 71: "小雪",
                    73: "中雪", 75: "大雪", 80: "阵雨", 95: "雷暴"}.get(wcode, f"code{wcode}")
-            results.append({
+            return (_rk9, {
                 "title": f"{name} · {country} 天气",
                 "url": f"https://open-meteo.com/en/docs?latitude={lat}&longitude={lon}",
                 "snippet": (f"当前 {temp}°C · {wmo} · 风速 {windspeed}km/h"
@@ -539,6 +545,19 @@ def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
                 "source": "open_meteo",
                 "score": rank_score(0.7, _rk9),
             })
+
+        # 多 place 的 forecast 并行（2026-09-29）：串行版在 geocode 返回 3 个
+        # 候选时墙钟 = geocode + 3×forecast（实测 9.28s 恒定）；有界并发后
+        # = geocode + max(forecast)（实测 3.9-5.1s）。总上限 to+2s ≤ 串行
+        # 最坏 n×to；daemon 线程 + 轮询，卡住的 HTTP 读拖不垮止损
+        # （bounded_run 文档依据；与 wx.py:252「同坐标多端点并行」同哲学）。
+        finished, _unfinished = run_bounded(
+            list(enumerate(places)), _fetch_place,
+            wait_s=float(to) + 2.0, max_workers=3)
+        # 保序：按候选序号重排，与串行版输出逐位一致（rank_score 依赖 _rk9）
+        results = [r for _rk, r in sorted(
+            (v for _i, v in finished if isinstance(v, tuple)),
+            key=lambda t: t[0])]
         return results
     return _engine
 
