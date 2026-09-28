@@ -2518,5 +2518,29 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "so": {
+    "label": "360搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "shenma": {
+    "label": "神马搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "qwant": {
+    "label": "Qwant",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "ecosia": {
+    "label": "Ecosia",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

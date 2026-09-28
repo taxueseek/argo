@@ -326,13 +326,101 @@ def _build_anysearch_engine(spec: dict[str, Any]) -> Any:
 
 # ── 搜狗微信搜索引擎 ─────────────────────────────────────────────────────────
 
+# 搜狗中间链 → 微信真实链接（mp.weixin.qq.com）的解析预算与熔断参数：
+# 搜狗 /link、/weixin 跳转链是 SERP 链（SKILL.md 纪律 3：不得作正文来源），
+# 且分钟级过期，--verify 与 article 均无法消费；解析在引擎内就地完成。
+_SOGOU_RESOLVE_TIMEOUT_CAP = 3.5    # 单条解析请求超时封顶（秒）
+_SOGOU_RESOLVE_BUDGET_S = 4.0       # 单轮解析墙钟预算，超预算的余下结果回落中间链
+_SOGOU_RESOLVE_BODY_CAP = 65536     # 反爬 JS 页很小，响应体读取上限
+_SOGOU_RESOLVE_FAIL_LIMIT = 3       # 连续失败达阈值 → 冷却期内跳过解析
+_SOGOU_RESOLVE_COOLDOWN_S = 300.0
+_SOGOU_RESOLVE_MAX_PER_CALL = 5     # 单轮解析条数封顶：n>5 无收益，少发请求降风控暴露
+
+
+def _sogou_is_intermediate(url: str) -> bool:
+    """是否搜狗中间跳转链（/link?url= 或 /weixin?url=），待解析成真实链接。"""
+    if "weixin.sogou.com" not in url:
+        return False
+    return "/link?" in url or "/weixin?" in url
+
+
+def _resolve_sogou_link(url: str, to: float, engine_name: str,
+                        cookie: str = "") -> str:
+    """单条搜狗中间链 → mp.weixin.qq.com 真实文章链接，失败返回空串。
+
+    两条恢复路径：
+      a) 正常风控：302 直落真实链，urllib 自动跟随，geturl() 即终址；
+      b) 反爬 JS 页（200 + `url += '片段'` 拼接跳转）：按序拼回真实地址。
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://weixin.sogou.com/",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+    # 搜狗把原始查询词原样塞进 /link 的 query（如 query=AI agent 工作），空格
+    # 不编码会被 urllib 拒收（InvalidURL: control characters）
+    url = url.replace(" ", "%20")
+    req = urllib.request.Request(url, headers=headers)
+    with http_open(req, timeout=min(to, _SOGOU_RESOLVE_TIMEOUT_CAP),
+                   engine=engine_name) as resp:
+        final = resp.geturl() if hasattr(resp, "geturl") else ""
+        if "mp.weixin.qq.com" in final:
+            return final
+        body = resp.read(_SOGOU_RESOLVE_BODY_CAP).decode("utf-8", errors="replace")
+    candidate = "".join(re.findall(r"\burl\b\s*\+?=\s*['\"]([^'\"]*)['\"]", body))
+    if "mp.weixin.qq.com" in candidate:
+        return candidate
+    return ""
+
+
 def _build_wechat_sogou_engine(spec: dict[str, Any]) -> Any:
     """搜狗微信搜索引擎（weixin.sogou.com）
 
-    抓取搜狗微信搜索结果页，提取公众号文章标题、链接、摘要、公众号名。
+    抓取搜狗微信搜索结果页，提取公众号文章标题、链接、摘要、公众号名，
+    并将搜狗中间跳转链解析为 mp.weixin.qq.com 真实文章链接
+    （url_resolved 标注解析结果，失败回落中间链，连续失败熔断冷却）。
     无需登录，无需 API key，纯 HTML 解析。
     """
     timeout = spec.get("timeout", 10)
+    engine_name = spec.get("_name", "")
+    resolve_state = {"fails": 0, "cooldown_until": 0.0}
+
+    def _resolve_results(results: list[dict[str, Any]], to: float,
+                         cookie: str) -> None:
+        """就地解析结果中的搜狗中间链；降级不丢结果，熔断不白耗请求。"""
+        import random
+        started = time.monotonic()
+        pending = 0
+        for r in results:
+            if not _sogou_is_intermediate(r.get("url", "")):
+                continue
+            if (pending >= _SOGOU_RESOLVE_MAX_PER_CALL
+                    or time.monotonic() - started > _SOGOU_RESOLVE_BUDGET_S
+                    or time.monotonic() < resolve_state["cooldown_until"]):
+                r["url_resolved"] = False
+                continue
+            pending += 1
+            time.sleep(random.uniform(0.05, 0.15))  # 逐条限速，贴近引擎 qps 声明
+            try:
+                real = _resolve_sogou_link(r["url"], to, engine_name, cookie)
+            except Exception as e:
+                logger.warning(f"搜狗中间链解析失败: {e}")
+                real = ""
+            if real:
+                resolve_state["fails"] = 0
+                r["url"] = real
+                r["url_resolved"] = True
+            else:
+                resolve_state["fails"] += 1
+                r["url_resolved"] = False
+                if resolve_state["fails"] >= _SOGOU_RESOLVE_FAIL_LIMIT:
+                    resolve_state["cooldown_until"] = (
+                        time.monotonic() + _SOGOU_RESOLVE_COOLDOWN_S)
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -348,6 +436,10 @@ def _build_wechat_sogou_engine(spec: dict[str, Any]) -> Any:
         try:
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
                 html = resp.read().decode("utf-8")
+                # 复用搜索响应的 Set-Cookie（SNUID/SUV）：中间链跳转带上可降风控
+                _set_cookies = (resp.headers.get_all("Set-Cookie")
+                                if hasattr(resp, "headers") else None)
+            cookie = "; ".join(c.split(";")[0] for c in _set_cookies) if _set_cookies else ""
             results = []
             li_pattern = re.compile(
                 r'<li\s+id="sogou_vr_11002601_box_\d+"[^>]*>(.*?)</li>', re.DOTALL
@@ -394,6 +486,14 @@ def _build_wechat_sogou_engine(spec: dict[str, Any]) -> Any:
                 if published_at:
                     result["published_at"] = published_at
                 results.append(result)
+            if results:
+                if str(kwargs.get("mode", "auto")) == "fast":
+                    # fast：省时延跳过解析，统一显式标注未解析
+                    for r in results:
+                        if _sogou_is_intermediate(r.get("url", "")):
+                            r["url_resolved"] = False
+                else:
+                    _resolve_results(results, to, cookie)
             return results
         except Exception as e:
             logger.warning(f"搜狗微信搜索失败: {e}")

@@ -2402,19 +2402,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页
-- name: shopping_cn
-  tier: T1
-  type: cli
-  coverage:
-  - chinese
-  - shopping
-  - price_compare
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: false
-  desc: 全网商品比价（淘宝/京东/拼多多/苏宁/唯品会等9平台聚合：标题/店铺/原价/券后价/月销）
 - name: sina_quote
   tier: T1
   type: sina_quote

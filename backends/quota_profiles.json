@@ -520,6 +520,16 @@
     "cost_tier": "free",
     "priority": 3
   },
+  "ecosia": {
+    "label": "Ecosia",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
+  },
   "egov_law": {
     "label": "egov_law",
     "qps": 2,
@@ -1750,6 +1760,16 @@
     "cost_tier": "free",
     "priority": 63
   },
+  "qwant": {
+    "label": "Qwant",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
+  },
   "qweather": {
     "label": "和风天气",
     "qps": 2,
@@ -1890,6 +1910,16 @@
     "cost_tier": "free",
     "priority": 10
   },
+  "shenma": {
+    "label": "神马搜索",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
+  },
   "sina_quote": {
     "label": "新浪行情",
     "qps": 2,
@@ -1909,6 +1939,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "so": {
+    "label": "360搜索",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
   },
   "soilgrids": {
     "label": "soilgrids",
