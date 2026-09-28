@@ -274,6 +274,7 @@ class _HostBucket:
         self._interval = max(0.0, min_interval_ms / 1000.0)
         self._lock = threading.Lock()
         self._last_dispatch = 0.0
+        self._active = 0  # 在途 lease() 数：LRU 淘汰只踢零活跃的桶（见 host_throttle）
 
     def _wait_slot(self) -> None:
         """等到本线程拿到「发起权」，并保证相邻发起间隔 >= interval。
@@ -309,10 +310,14 @@ class _HostBucket:
     def lease(self):
         """进入即拿并发名额并按最小间隔排期，退出释放。"""
         self._sem.acquire()
+        with self._lock:
+            self._active += 1
         try:
             self._wait_slot()
             yield
         finally:
+            with self._lock:
+                self._active -= 1
             self._sem.release()
 
 
@@ -344,10 +349,15 @@ def host_throttle(url: str, engine: str | None = None):
         bucket = _BUCKETS.get(bucket_key)
         if bucket is None:
             if len(_BUCKETS) >= _MAX_BUCKETS:
-                # LRU 淘汰：移除最久未用的 bucket
-                evict_key = min(_bucket_last_used, key=_bucket_last_used.get)
-                del _BUCKETS[evict_key]
-                del _bucket_last_used[evict_key]
+                # LRU 淘汰，但只踢**零活跃**的桶：踢掉正被 lease() 持有的桶，
+                # 同 key 新桶与旧桶租户并行，该主机的并发上限与最小间隔瞬间
+                # 双份（限速击穿）。全部活跃时宁可靠桶数短暂越上限（桶键空间
+                # 受配置约束，有界），也不打破约束。
+                idle = [k for k in _bucket_last_used if _BUCKETS[k]._active == 0]
+                if idle:
+                    evict_key = min(idle, key=_bucket_last_used.get)
+                    del _BUCKETS[evict_key]
+                    del _bucket_last_used[evict_key]
             bucket = _HostBucket(max_conc, interval)
             _BUCKETS[bucket_key] = bucket
         _bucket_last_used[bucket_key] = time.monotonic()

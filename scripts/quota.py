@@ -183,6 +183,12 @@ class QuotaManager:
     def _save_state(self, force: bool = False) -> None:
         """原子写状态（临时文件名进程内唯一，见 argo_paths.atomic_write_json）。
 
+        ⚠️ 生产写入一律走 _mutate_locked（文件锁内「重读→改→写」）。本方法
+        是**无锁读改写 + 30s 节流**：在锁序列里调用它，节流窗口内的变更会被
+        后写者整体覆盖——复刻 017b01a 在 circuit_breaker 修掉的跨进程丢更新。
+        当前仅测试引用（test_audit_fixes 直调、其余打桩跳写）；接入任何生产
+        路径前必须先包 file_lock 并去掉节流语义。
+
         旧实现用固定 `quota.json.tmp`：多进程（CLI 与 MCP server 并行、
         或评测脚本）同时写时互相搬走/删除对方的 tmp，replace 抛
         FileNotFoundError，且失败方本次计数直接丢失。
