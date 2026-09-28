@@ -216,7 +216,11 @@ def _apply_time_window(results: list[dict[str, Any]],
         return results
     kept: list[dict[str, Any]] = []
     for r in results:
-        pa = r.get("published_at")
+        # 入口归一化：CLI JSON 的 date 形如 2026-09-28T15:30:11+00:00（实测），
+        # 裸串喂给 _date_key 会 ValueError 并炸掉整个引擎的结果收集。
+        # _normalize_date 覆盖 ISO-T/RFC822/unix/年月全部形态，解析失败按
+        # 无日期处理（剔除）——一行把「原始日期形态」这一类问题收口。
+        pa = _normalize_date(r.get("published_at"))
         if not pa:
             continue
         if since_iso and _date_key(pa) < _date_key(since_iso):
@@ -755,11 +759,11 @@ def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            last_err = f"{cli_cmd} timed out after {timeout}s"
-            if attempt < _CLI_RETRIES:
-                time.sleep(0.3)
-                continue
-            return [], last_err
+            # 慢失败不重试：后端 timeout 秒都没回来，0.3s 后再来一次大概率
+            # 还是 timeout（网络/服务端慢是相关信号），重试只把最坏墙钟翻倍、
+            # 结果仍为空（实测空结果查询单引擎 15.8s = 8s×2+0.3s）。快失败
+            # （DecodeError/No results，2-3s 内返回）才是真间歇，下方重试。
+            return [], f"{cli_cmd} timed out after {timeout}s"
         except FileNotFoundError:
             return [], f"{cli_cmd} not found"
         except Exception as e:
@@ -1048,6 +1052,11 @@ def _search_one(engine_name: str, query: str, n: int = 5,
                     results = _apply_time_window(results, since, until)
         if not results:
             return results, err if err else f"{engine_name} CLI and fallback both failed"
+        # 时间窗后过滤（CLI 成功路径此前被跳过——until 完全失效、since 只剩
+        # ddgs 粗粒度下推（2d 被放大成过去一周）、绝对日期 since 无效，三个
+        # 症状同源于此）。日期归一化由 _apply_time_window 入口保证。
+        if time_aware and (since or until) and results:
+            results = _apply_time_window(results, since, until)
         for r in results:
             r["_engine"] = engine_name
             r["_elapsed"] = 0
@@ -1248,6 +1257,11 @@ def search_engines(
         # 不等慢引擎（wait=False）：已收结果立即返回；排队未启动的直接取消。
         # 运行中的线程受各自 HTTP 超时约束自然结束，见 total_budget docstring。
         ex.shutdown(wait=False, cancel_futures=True)
+
+    # engines_used 按路由序归一（此前按完成序追加：线程完成顺序不定，同输入
+    # 两次运行的 JSON 输出里顺序不同，破坏可复现性与快照对比）。
+    _used = set(engines_used)
+    engines_used = [e for e in engines if e in _used]
 
     # 相关度重排（D1，2026-09-27）：位次衰减 → BM25 相关度 × 引擎位次先验。
     # 旧口径 score=max(0.7-idx*0.05, 0.1) 是纯位次——「第 3 条」永远压

@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import time
 import urllib.error
 import urllib.parse
@@ -162,6 +163,13 @@ def _check_cli_engine(engine_name: str, spec: dict[str, Any],
         return {"name": engine_name, "url": "", "status": None,
                 "latency_ms": 0, "parse_ok": False, "text_sample": "",
                 "fail_reason": "missing_cli_command", "available": False}
+    # which 短路：二进制不在 PATH 上时不再白付一次 --help 子进程 spawn
+    # （ddgs 冷启实测 0.35s）。与 search_v3._check_cli_available 同判据；
+    # shim 损坏（能 which 到但跑不动）仍由下方真实调用暴露。
+    if shutil.which(cli_cmd) is None:
+        return {"name": engine_name, "url": "", "status": None,
+                "latency_ms": 0, "parse_ok": False, "text_sample": "",
+                "fail_reason": "cli_not_found", "available": False}
     import subprocess
     t0 = time.time()
     fail_reason = None
