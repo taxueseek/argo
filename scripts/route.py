@@ -757,6 +757,36 @@ def _route_by_fallback(ctx: _RouteCtx) -> dict[str, Any]:
     )
 
 
+# DuckDuckGo Bangs 映射表：!gh → github，!so → stackoverflow，!w → wikipedia
+# 纯路由层逻辑：解析出目标引擎后走用户指定引擎分支，不碰查询改写
+_BANGS_MAP = {
+    "!g": "local_bing",
+    "!gh": "github",
+    "!so": "stackoverflow",
+    "!w": "wikipedia",
+    "!yt": "google",
+    "!gmaps": "local_openstreetmap",
+}
+
+
+def _bangs_resolve(query: str) -> tuple[str, str] | None:
+    """解析 DuckDuckGo Bangs 语法：!gh react → (github, react)。
+
+    未命中返回 None（走正常路由）。Bangs 是路由层逻辑（决定用哪个引擎），
+    不是查询改写层逻辑，故放在 route.py 而非 query_rewriter.py。
+    """
+    if not query.startswith("!"):
+        return None
+    parts = query.split(None, 1)
+    if len(parts) < 2:
+        return None
+    bang, rest = parts
+    engine = _BANGS_MAP.get(bang)
+    if not engine:
+        return None
+    return engine, rest
+
+
 def route_query(query: str, engine_override: str = "auto",
                 mode: str = "auto",
                 depth: str = "fast",
@@ -776,6 +806,21 @@ def route_query(query: str, engine_override: str = "auto",
         dict: {engine, engines, engines_combo, reason, confidence, domain, ...}
     """
     start = time.perf_counter()
+
+    # Bangs 解析：!gh react → engine_override=github, query=react
+    # 必须在用户指定引擎分支之前，Bangs 解析出目标引擎后直接走该分支
+    _bangs = _bangs_resolve(query)
+    if _bangs:
+        engine_override, query = _bangs
+        if not query:
+            return _done(
+                engine=engine_override, engines=[engine_override],
+                engines_combo=[engine_override],
+                reason=f"Bangs: {_bangs[0]}", confidence=1.0,
+                features={}, domain=None, parallel=False, mode=mode,
+                depth=depth, context=context,
+                login_hint=_detect_login_intent(query, None),
+            )
 
     def _done(**kw: Any) -> dict[str, Any]:
         base = {

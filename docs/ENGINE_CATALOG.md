@@ -532,7 +532,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `chinese_tech_deep` | `byted` | `byted`、`octen`、`juejin`、`cn_ai_news`、`parallel` |
 | `english_tech` | `octen` | `octen`、`anysearch`、`exa`、`keenable` |
 | `company_search` | `opencorporates` | `opencorporates`、`cninfo`、`baidu_baike` |
-| `chinese_general` | `bocha` | `bocha`、`byted`、`anysearch`、`octen`、`zhihu_global`、`wechat_sogou`、`local_search` |
+| `chinese_general` | `bocha` | `bocha`、`byted`、`anysearch`、`octen`、`zhihu_global`、`wechat_sogou`、`local_search`、`so`、`shenma` |
 | `local_chinese` | `local_search` | `local_search`、`bocha` |
 | `local_news` | `local_search` | `local_search`、`byted` |
 | `local_code` | `local_search` | `local_search`、`github`、`anysearch` |

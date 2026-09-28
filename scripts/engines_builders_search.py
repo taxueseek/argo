@@ -342,3 +342,77 @@ def _build_you_engine(spec: dict[str, Any]) -> Any:
                 })
         return results
     return _engine
+
+
+# ── Qwant（欧盟 GDPR 合规）──────────────────────────────────────────────────
+
+def _build_qwant_engine(spec: dict[str, Any]) -> Any:
+    """Qwant 搜索（qwant.com/?q=，HTML 解析，欧盟 GDPR 合规）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = "https://www.qwant.com/?q=" + up.quote(query)
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.qwant.com/"}
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
+                page = resp.read().decode("utf-8", "replace")
+            results = []
+            for m in re.finditer(r'<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>', page, re.S):
+                url_m, title_m = m.group(1), re.sub(r'<[^>]+>', '', m.group(2)).strip()
+                if not title_m or not url_m or "qwant" in url_m or len(title_m) < 5:
+                    continue
+                results.append({
+                    "title": title_m[:80],
+                    "url": url_m,
+                    "snippet": "",
+                    "source": "qwant",
+                    "score": max(1.0 - len(results) * 0.1, 0.1),
+                })
+                if len(results) >= n:
+                    break
+            return results
+        except Exception as e:
+            logger.warning(f"Qwant 搜索失败: {e}")
+            return []
+    return _engine
+
+
+# ── Ecosia（环保隐私引擎）───────────────────────────────────────────────────
+
+def _build_ecosia_engine(spec: dict[str, Any]) -> Any:
+    """Ecosia 搜索（ecosia.org/search?q=，HTML 解析，环保隐私引擎）"""
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        import urllib.parse as up
+        to = _timeout or timeout
+        url = "https://www.ecosia.org/search?q=" + up.quote(query)
+        headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://www.ecosia.org/"}
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
+                page = resp.read().decode("utf-8", "replace")
+            results = []
+            for m in re.finditer(r'<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>', page, re.S):
+                url_m, title_m = m.group(1), re.sub(r'<[^>]+>', '', m.group(2)).strip()
+                if not title_m or not url_m or "ecosia" in url_m or len(title_m) < 5:
+                    continue
+                results.append({
+                    "title": title_m[:80],
+                    "url": url_m,
+                    "snippet": "",
+                    "source": "ecosia",
+                    "score": max(1.0 - len(results) * 0.1, 0.1),
+                })
+                if len(results) >= n:
+                    break
+            return results
+        except Exception as e:
+            logger.warning(f"Ecosia 搜索失败: {e}")
+            return []
+    return _engine

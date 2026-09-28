@@ -65,6 +65,8 @@ from engines_builders_cn import (
     _build_std_samr_engine,
     _build_openstd_engine,
     _build_bangumi_engine,
+    _build_so_engine,
+    _build_shenma_engine,
     _build_douban_movie_engine,
     _build_zdic_engine,
     _build_iplant_engine,
@@ -126,6 +128,8 @@ from engines_builders_search import (
     _build_parallel_free_engine,
     _build_seltz_engine,
     _build_you_engine,
+    _build_qwant_engine,
+    _build_ecosia_engine,
 )
 from engines_builders_intl import (
     _build_cnii_engine,

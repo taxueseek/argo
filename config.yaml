@@ -1373,6 +1373,8 @@ domains:
   - zhihu_global
   - wechat_sogou
   - local_search
+  - so
+  - shenma
   fallback: byted
   name: chinese_general
   parallel: true
