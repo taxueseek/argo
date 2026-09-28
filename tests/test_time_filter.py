@@ -436,19 +436,20 @@ class TestCliEngineRetry(unittest.TestCase):
         self.assertIn("DDGSException", err)
         self.assertIn("No results", err)
 
-    def test_timeout_retries_then_recovers(self):
-        """场景：首次超时 → 重试 → 恢复。"""
+    def test_timeout_no_retry_returns_immediately(self):
+        """场景：超时即放弃，不重试（2026-09-29 方案A 契约变更）。
+
+        慢失败不重试：后端 timeout 秒都没回来，0.3s 后再来一次大概率还是
+        timeout——慢是相关信号，重试只把最坏墙钟翻倍、结果仍为空（实测
+        空结果查询单引擎 15.8s = 8s×2+0.3s）。快失败（rc=0 错误信号）的
+        重试契约由 test_rc0_error_signal_retries_then_recovers 守护。
+        """
         sv3 = self.search_v3
-        import json
         state = {"n": 0}
 
         def se(cmd, **kwargs):
             state["n"] += 1
-            if state["n"] == 1:
-                raise sv3.subprocess.TimeoutExpired(cmd, 8)
-            with open(cmd[cmd.index("-o") + 1], "w") as f:
-                json.dump([{"title": "AfterTimeout", "href": "https://ok", "body": "b"}], f)
-            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            raise sv3.subprocess.TimeoutExpired(cmd, 8)
 
         real_run = sv3.subprocess.run
         sv3.subprocess.run = self._fake_help_aware(se)
@@ -456,9 +457,9 @@ class TestCliEngineRetry(unittest.TestCase):
             res, err = sv3._run_cli_engine(self._spec(), "q", 3, 8.0)
         finally:
             sv3.subprocess.run = real_run
-        self.assertEqual(state["n"], 2)
-        self.assertEqual(len(res), 1)
-        self.assertEqual(res[0]["title"], "AfterTimeout")
+        self.assertEqual(state["n"], 1)
+        self.assertEqual(res, [])
+        self.assertIn("timed out", err)
 
     def test_text_parse_path_returns_flat_list(self):
         """无 -o 文本解析路径：返回扁平 list，不嵌套元组（回归：重试版曾
