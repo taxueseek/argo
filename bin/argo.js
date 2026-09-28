@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * npx / npm 入口：启动 Argo MCP Server。
- * 需要本机 Python 3.10+；可用 ARGO_PYTHON / PYTHON 指定解释器。
+ * 需要本机 Python 3.9+；可用 ARGO_PYTHON / PYTHON 指定解释器。
  */
 const { spawn } = require('child_process');
 const path = require('path');
@@ -76,7 +76,7 @@ if (argv[0] === 'call') {
 
   proc.on('error', (err) => {
     console.error(`argo-search: 无法启动 Python (${PYTHON}): ${err.message}`);
-    console.error('请确认已安装 Python 3.10+，并已执行: pip install pyyaml');
+    console.error('请确认已安装 Python 3.9+，并已执行: pip install pyyaml');
     process.exit(1);
   });
 

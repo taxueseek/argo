@@ -44,7 +44,8 @@
     "!**/__pycache__/**",
     "!**/*.pyc",
     "!sub-skills/**/__pycache__/**",
-    "!sub-skills/**/*.pyc"
+    "!sub-skills/**/*.pyc",
+    "!data/jobs"
   ],
   "dsh": {
     "bundle": {

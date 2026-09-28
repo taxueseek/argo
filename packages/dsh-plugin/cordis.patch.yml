@@ -8,7 +8,7 @@
 # 零常驻开销（实测 19 工具 ≈3.7K token/轮）。需要长尾取证能力（screenshot / pdf / social / article /
 # job / evidence / clarify / crawl / local_*）时取消下方注释按需开启。
 #
-# 依赖：Node.js ≥ 18（npx）+ Python 3.10+（pip install pyyaml）。
+# 依赖：Node.js ≥ 18（npx）+ Python 3.9+（pip install pyyaml）。
 # 安装后重启 dsh web 生效。
 #
 # 同 id 可在用户层 cordis.patch.yml 覆盖（同 id + name 才是替换）。

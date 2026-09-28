@@ -142,11 +142,13 @@ if __name__ == "__main__":
     # -X utf8 启动自己，保证中文 JSON 读取与 stderr 输出不因控制台编码崩。
     if not sys.flags.utf8_mode and os.name == "nt":
         import subprocess as _sp
-        _sp.run(
+        _rc = _sp.run(
             [sys.executable, "-X", "utf8", __file__, *sys.argv[1:]],
             env={**os.environ, "PYTHONUTF8": "1"},
-        )
-        sys.exit(0)
+        ).returncode
+        # 子进程的退出码就是本进程的退出码：无条件 sys.exit(0) 会把失败
+        # 伪装成成功，调用方（DSH 原生工具/脚本）据此渲染必然说谎
+        sys.exit(_rc)
     # env 文件 → os.environ 同步（只填缺失，不覆盖已有值）：非 mcp_launch.sh
     # 启动（直跑本文件/裸宿主直连）时密钥仍能到位，读取方零改动
     try:
@@ -154,6 +156,19 @@ if __name__ == "__main__":
         sync_envfile_to_environ()
     except Exception:
         pass
+    # 未知旗标显式报错（exit 2）：此前任何拼错的 flag 都静默落进 stdio 模式
+    # ——stdio 挂着等 stdin，调用方看到的是「卡死」而不是「参数错了」。
+    _skip = 0
+    for _a in sys.argv[1:]:
+        if _skip:
+            _skip -= 1
+            continue
+        if _a == "--call":
+            _skip = 2  # 工具名与 JSON payload 是它的操作数
+            continue
+        if _a.startswith("-") and _a != "--test":
+            print(_dumps({"error": f"未知参数: {_a}（支持 --test / --call <tool> [json]；无参数 = stdio 服务）"}))
+            sys.exit(2)
     if "--test" in sys.argv:
         test_mode()
     elif "--call" in sys.argv:

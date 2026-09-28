@@ -67,6 +67,16 @@ class TestFilesFieldOrdering(unittest.TestCase):
         self.assertIn("sub-skills/", self.files,
                       "sub-skills/ 必须在包含列表里：local-seek/local-search 都在其中")
 
+    def test_user_data_dirs_are_excluded(self):
+        """data/jobs 是用户本机使用痕迹（求职记录等）。
+
+        .gitignore 挡得住 git，挡不住 npm——`files` 白名单含 `data/` 时
+        必须显式否定，否则用户的私人数据随包发布（2026-09-28 实锤：
+        data/jobs/3a13ddfebf40.json 曾会进 tarball）。
+        """
+        self.assertIn("!data/jobs", self.files,
+                      "data/jobs（用户数据）必须在 files 里显式排除")
+
 
 class TestPackedTarballIfPresent(unittest.TestCase):
     """动态门禁：仓库里若已有打包产物，它不得含 .pyc 或主机路径。

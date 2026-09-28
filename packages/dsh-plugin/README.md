@@ -23,7 +23,7 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 ## 依赖
 
 - Node.js ≥ 18（npx 拉取 argo 包）
-- Python 3.10+，`pip install pyyaml`
+- Python 3.9+，`pip install pyyaml`
 - DSH 子代理 provider 需支持 `outputSchema`、`toolFilter`、`depthLimit`（标准 `spawn` 即可）
 
 ## 自定义（可选）
