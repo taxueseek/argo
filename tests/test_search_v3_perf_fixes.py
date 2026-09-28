@@ -131,6 +131,44 @@ def test_fast_failure_still_retries(monkeypatch):
     assert err == "" and len(results) == 1
 
 
+def test_slow_empty_result_not_retried(monkeypatch):
+    """慢空结果不重试（G 修订，2026-09-29）。
+
+    实测推翻「管道排空」假设后的修正：12.1s 尾部的真实结构是
+    「第一次 4.4s 慢空（No results）→ 重试 → 第二次挂满 8s 超时」。
+    后端真跑完检索才返回的空是真空/慢性故障，重试大概率重演——
+    只有快失败（传输层瞬时错误，<2.5s 内暴露）才重试。
+    本用例把阈值钉到 0：任何耗时 >0 的失败都不重试，锁定判据生效。
+    """
+    calls = {"n": 0}
+
+    def fake_run(*a, **k):
+        calls["n"] += 1
+
+        class P:
+            returncode = 0
+            stdout = "DDGSException: DDGSException('No results found.')"
+            stderr = ""
+
+        return P()
+
+    import shutil as _shutil
+    monkeypatch.setattr(_shutil, "which", lambda cmd: "/usr/bin/ddgs")
+    monkeypatch.setattr(search_v3.subprocess, "run", fake_run)
+    monkeypatch.setattr(search_v3, "_RETRY_FAST_S", 0.0)
+    results, err = search_v3._run_cli_engine(
+        {"cli_command": "ddgs", "cli_args": ["text", "-q", "{query}"],
+         "key": "k"}, "q", 5, 8)
+    assert calls["n"] == 1  # 此前恒重试 = 2 次调用
+    assert results == []
+    assert "No results" in err
+
+
+def test_retry_threshold_is_fast_failure_semantics():
+    """阈值语义自证：默认值落在「传输层瞬时错误」量级（<3s），而非超时量级。"""
+    assert 0 < search_v3._RETRY_FAST_S < 3
+
+
 # ── 4. engines_used 路由序 ────────────────────────────────────────────────────
 
 def test_engines_used_follows_routed_order(monkeypatch):

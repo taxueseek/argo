@@ -653,6 +653,13 @@ _CLI_ERROR_MARKERS: tuple[str, ...] = (
 )
 _CLI_RETRIES = 1
 
+# 重试的「快失败」判据（秒，2026-09-29 G 修订）：只有**快**结束的失败才值得
+# 重试——传输层瞬时错误（DecodeError/ConnectError）在连接阶段就暴露（实测
+# <2.5s）；跑了数秒才返回的 "No results" 意味着后端真的做完了检索，是真空
+# 或慢性故障，重试大概率重演。实测尾部形态：第一次 4.4s 慢空 → 重试 →
+# 第二次挂满 8s 超时 = 12.1s；本判据把这类尾部砍回单次（~4s）。
+_RETRY_FAST_S = 2.5
+
 
 def _since_to_ddgs_timelimit(since: str | None, until: str | None) -> str | None:
     """Convert since/until to ddgs timelimit argument.
@@ -749,6 +756,7 @@ def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
     # 输出文件为 0 字节。逐次尝试：识别错误信号 → 重试 1 次 → 明确错误。
     last_err = ""
     for attempt in range(_CLI_RETRIES + 1):
+        t_attempt = time.monotonic()
         try:
             result = subprocess.run(
                 cmd,
@@ -803,13 +811,14 @@ def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
         if err_marker:
             detail = combined_output.strip().replace("\n", " ")[:120]
             last_err = f"{cli_cmd}: {err_marker}: {detail}"
-            if attempt < _CLI_RETRIES:
+            # 快失败判据：慢失败（后端真跑完了检索的慢空/慢性故障）不重试
+            if attempt < _CLI_RETRIES and time.monotonic() - t_attempt <= _RETRY_FAST_S:
                 time.sleep(0.3)
                 continue
             return [], last_err
         if result.returncode != 0:
             last_err = f"{cli_cmd} exit {result.returncode}: {combined_output[:200]}"
-            if attempt < _CLI_RETRIES:
+            if attempt < _CLI_RETRIES and time.monotonic() - t_attempt <= _RETRY_FAST_S:
                 time.sleep(0.3)
                 continue
             return [], last_err
@@ -819,7 +828,7 @@ def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
         if parsed:
             return parsed, parse_err
         last_err = f"{cli_cmd}: empty output"
-        if attempt < _CLI_RETRIES:
+        if attempt < _CLI_RETRIES and time.monotonic() - t_attempt <= _RETRY_FAST_S:
             time.sleep(0.3)
             continue
         return [], last_err
