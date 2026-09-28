@@ -237,6 +237,7 @@ from engine_dispatch import (  # noqa: E402
     classify_engine_outcome as _classify_engine_outcome,
     run_dispatch,
 )
+from local_seek import _run_local_seek, _LOCAL_SEEK_TIMEOUT_S  # noqa: E402
 
 
 def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
@@ -511,148 +512,6 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
 # ── 统一入口 ──────────────────────────────────────────────────────────────────
 
-# 本机文件命中（--include-local）的子进程超时（秒）。**必须显著小于 fast/auto 的
-# 总预算**：本地命中是尾部增强项，不是主结果，它的等待不配与搜索引擎同等。
-#
-# 此前是 20 s，配合下面的「宽泛根」缺陷叠加成一次实测事故：在 home 目录执行
-# `argo search "argo" --include-local`，搜索本体 72 ms（process_ms=72.4），
-# 之后 seek.py 对着整个 home 做全量 rg，20 s 超时后才返回，整条命令墙钟
-# **22.6 s**。用户体感就是「搜索卡死了」，而卡死的那段一个字的结果都没产出。
-#
-# 取 3.0 s：热缓存下 seek.py 在本机中等目录（5000 文件）实测 27-80 ms，
-# 3 s 给出约 40 倍余量；配合宽泛根守卫后，正常路径根本碰不到这个上限。
-_LOCAL_SEEK_TIMEOUT_S = 3.0
-
-# 「宽泛根」判定：这些目录**不能**当作本地检索范围。
-#
-# 问题的实质不是「seek.py 的默认路径不对」，而是**本地检索的语义在宽泛根上
-# 不成立**。seek.py 默认 `--path .`，而子进程继承 cwd（实测确认），所以
-# `argo search --include-local` 的范围完全由「用户在哪个目录敲命令」决定：
-#
-#   cwd=/tmp/globtest   62 ms      cwd=/tmp          1170 ms
-#   cwd=~            >20000 ms     cwd=/           >20000 ms
-#
-# 在 home 或根目录敲命令是常见操作（打开终端默认就在 ~），而此时的
-# 「本地文件命中」既不精确（整个 home 的噪音）又极慢（20 s 量级）。
-# 早先的修法设想是「显式传 --path」，但那与默认值等价，等于没改；
-# 正确做法是**在范围本身不合理时直接放弃**，把 3 个引擎的搜索结果还给用户，
-# 而不是让一个增强项把整条命令拖成 22 秒。
-#
-# 只列真正宽泛的根：当前用户 home、文件系统根、/tmp 与 /private/tmp
-# （macOS 上 /tmp 是软链）、以及系统顶层目录。判定用 realpath + 前缀，
-# 避免 /tmp 与 /private/tmp 两种形态漏判。
-_BROAD_LOCAL_ROOTS = ("/", "/tmp", "/private/tmp", "/var", "/usr", "/System",
-                      "/Library", "/Applications", "/Volumes", "/Network")
-
-
-def _is_broad_local_root(path: str) -> bool:
-    """path 是否是「不能当作本地检索范围」的宽泛根。
-
-    判据从 _local_seek_dir 提取为可复用函数：MCP 的 argo_local_search
-    默认 path="~"，与 CLI 的 cwd 缺省是同一类事故形态（2026-09-27 实测
-    MCP 侧对整个 home 跑 rg，30 s 后报错返回），两侧必须共用同一判据。
-    """
-    try:
-        real = os.path.realpath(path)
-    except OSError:
-        return True
-    home = os.path.realpath(os.path.expanduser("~"))
-    if real == home:
-        return True
-    for root in _BROAD_LOCAL_ROOTS:
-        if real == root or real == os.path.realpath(root):
-            return True
-    return False
-
-
-def _local_seek_dir() -> str | None:
-    """本地检索的适用范围；宽泛根返回 None（调用方据此跳过本地命中）。
-
-    宁可返回 None 也不返回一个「象征性收窄」的路径：本地命中是增强项，
-    在范围不合理时**不产出**比产出噪音 + 20 s 等待更符合用户预期。
-    用户想搜特定树时用 `argo local-search` 或 seek.py 显式给 --path，
-    那条路径不受此守卫影响。
-    """
-    cwd = os.getcwd()
-    if _is_broad_local_root(cwd):
-        return None
-    return cwd
-
-
-def _run_local_seek(query: str, max_n: int = 5,
-                    search_dir: str | None = None) -> list[dict[str, Any]]:
-    """本机文件命中（--include-local 用）：调 local-seek 子技能，JSON 并入。
-
-    仅在显式开启时调用（默认零开销）；结果不参与融合评分，
-    仅作尾部来源（source=local_files）。
-
-    三个边界（2026-09-27 实测补齐，此前会拖垮整次搜索）：
-
-    1. **宽泛根直接不查**（见 `_local_seek_dir`）：cwd 是 home 或根目录时
-       返回 None 并跳过。这是 22.6 s 事故的根因修复，「显式传 --path」
-       解决不了（子进程继承 cwd，显式传与默认等价）。
-    2. **超时从 20 s 收到 _LOCAL_SEEK_TIMEOUT_S**。本地命中是增强项，不是
-       主结果；它的等待上限必须显著小于用户对一次搜索的耐心。
-    3. **TimeoutExpired 必须在这里吞掉**。此前没有 try，该异常一路冒泡到
-       CLI/MCP 调用方（实测栈打到 `subprocess.py:1268`）；上层虽有兜底，
-       但本地命中失败本就不该让整次搜索承担异常路径。
-    """
-    import subprocess as _sp
-
-    target = search_dir or _local_seek_dir()
-    if not target:
-        # 宽泛根：不查，但必须留下可归因的痕迹（docstring 第 1 条）。
-        # 「跳过」与「查了没有」在返回值上都是空列表，但含义完全不同——
-        # 静默跳过会让用户以为本地没匹配，而事实是根本没查。返回一个
-        # 占位「结果」又会污染 results（它只是个说明，不是命中），所以
-        # 说明走 stderr：与 CLI 既有的 include-local 异常提示同一条通道。
-        sys.stderr.write(
-            "  [include-local] 当前目录过宽（home / 根目录），本地检索会扫全盘，已跳过；"
-            "要搜本地文件请 cd 到目标目录，或用 argo local-search\n")
-        return []
-
-    # 安装感知 + 唯一来源：委托 seek_locator 统一发现 local-seek/scripts/seek.py
-    # （打包子技能优先，ARGO_LOCAL_SEEK_PATH / ARGO_LOCAL_SEEK_ROOTS 承载自定义/遗留）。
-    # 不硬编码 ~/.agents/skills|~/.claude/skills 主机路径（SKILL.md 明令禁止）。
-    from seek_locator import resolve_seek_py
-    seek_py = resolve_seek_py()
-    if not seek_py or not os.path.isfile(seek_py):
-        return []
-    cmd = [sys.executable, seek_py, query, "--json", "--max", str(max(max_n, 1)),
-           "--path", target]
-    try:
-        r = _sp.run(
-            cmd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=_LOCAL_SEEK_TIMEOUT_S,
-            env={**os.environ, "PYTHONUTF8": "1"},  # 子进程是自家 seek.py，双向显式 UTF-8
-        )
-    except _sp.TimeoutExpired:
-        return []  # 本地命中是增强项：超时即弃，不冒泡（docstring 第 2、3 条）
-    except OSError:
-        return []  # 解释器/脚本不可执行等环境问题：同样不该拖垮主搜索
-    if r.returncode != 0 or not r.stdout.strip():
-        return []
-    try:
-        payload = json.loads(r.stdout)
-    except ValueError:
-        return []
-    hits = payload.get("results") or payload.get("files") or []
-    out = []
-    for h in hits[:max_n]:
-        if not isinstance(h, dict):
-            continue
-        path = h.get("path") or h.get("file") or ""
-        line = h.get("line") or h.get("lineno") or 1
-        url = f"file://{path}" + (f"#{line}" if str(line).isdigit() else "")
-        out.append({
-            "title": path,
-            "url": url,
-            "snippet": (h.get("snippet") or h.get("text") or h.get("line_text") or "")[:160],
-            "source": "local_files",
-            "score": 0.0,
-            "kind": "local",
-        })
-    return out
 
 
 def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = False,
@@ -847,6 +706,15 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         )
         if search_query != original_query:
             print(f"[改写] {original_query} → {search_query}", file=sys.stderr)
+    # L1 并行化：include_local 时把 _run_local_seek 提前提交到线程池，
+    # 与主搜索并行执行。主搜索完成时本地搜索通常已就绪，零额外墙钟。
+    _local_seek_future = None
+    if include_local:
+        import concurrent.futures as _cf
+        _local_seek_executor = _cf.ThreadPoolExecutor(max_workers=1)
+        _local_seek_future = _local_seek_executor.submit(
+            _run_local_seek, query, n)
+
     result = execute_search(
         query=search_query, decision=decision, max_results=n,
         timeout=timeout, depth=depth, cache=cache,
@@ -854,6 +722,13 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         since=since, until=until, sort=sort, timing=timing,
         engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
     )
+
+    # 主搜索完成后，本地搜索应已就绪；若未完成则等待剩余预算
+    if _local_seek_future is not None:
+        try:
+            _local_seek_future.result(timeout=_LOCAL_SEEK_TIMEOUT_S)
+        except Exception:
+            pass  # 本地搜索失败不影响主结果
     # 对外仍报告用户原始 query
     result["query"] = original_query
     if since:
@@ -939,11 +814,20 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             "unknown engine name(s) requested: "
             + ", ".join(_unknown_engines)
             + "; results may come only from the remaining engines")
+    # 包装 _run_local_seek：若 Future 已完成则直接返回结果，否则等待
+    def _local_seek_wrapper(q, max_n, search_dir=None):
+        if _local_seek_future is not None:
+            try:
+                return _local_seek_future.result(timeout=_LOCAL_SEEK_TIMEOUT_S)
+            except Exception:
+                return []
+        return _run_local_seek(q, max_n, search_dir)
+
     result = shape_response(_ShapeContext(
         query=query, kind=kind, tier=tier, envelope=envelope, decision=decision,
         extra_lim=extra_lim, cache=cache, include_domains=include_domains,
         exclude_domains=exclude_domains, include_local=include_local, n=n,
-        run_local_seek=_run_local_seek,
+        run_local_seek=_local_seek_wrapper,
     ), result)
 
     for _name in _unknown_engines:

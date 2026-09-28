@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""local_seek.py — 本地文件命中（--include-local 用）。
+
+从 search.py 拆出：本地搜索的宽泛根守卫、子进程调用、结果缓存。
+search.py 的 _run_local_seek 调用点改为从本模块导入。
+
+三个边界（2026-09-27 实测补齐，此前会拖垮整次搜索）：
+
+1. **宽泛根直接不查**（见 `_local_seek_dir`）：cwd 是 home 或根目录时
+   返回 None 并跳过。这是 22.6 s 事故的根因修复，「显式传 --path」
+   解决不了（子进程继承 cwd，显式传与默认等价）。
+2. **超时从 20 s 收到 _LOCAL_SEEK_TIMEOUT_S**。本地命中是增强项，不是
+   主结果；它的等待上限必须显著小于用户对一次搜索的耐心。
+3. **TimeoutExpired 必须在这里吞掉**。此前没有 try，该异常一路冒泡到
+   CLI/MCP 调用方（实测栈打到 `subprocess.py:1268`）；上层虽有兜底，
+   但本地命中失败本就不该让整次搜索承担异常路径。
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from typing import Any
+
+# 本机文件命中子进程超时（秒）。**必须显著小于 fast/auto 的总预算**：
+# 本地命中是尾部增强项，不是主结果，它的等待不配与搜索引擎同等。
+_LOCAL_SEEK_TIMEOUT_S = 3.0
+
+# 「宽泛根」判定：这些目录**不能**当作本地检索范围。
+_BROAD_LOCAL_ROOTS = ("/", "/tmp", "/private/tmp", "/var", "/usr", "/System",
+                      "/Library", "/Applications", "/Volumes", "/Network")
+
+# 本地文件命中缓存：key = (query, max_n, target) → (写入时间, 结果列表)。
+# 文件修改后 TTL 内可能返回旧结果，对本地文件搜索可接受（文件不频繁修改）。
+# 容量上限 64 条，超出时整表清空（低频增强项，LRU 的简单替代）。
+_LOCAL_SEEK_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_LOCAL_SEEK_TTL_S = 300.0
+_LOCAL_SEEK_CACHE_MAX = 64
+
+
+def _is_broad_local_root(path: str) -> bool:
+    """path 是否是「不能当作本地检索范围」的宽泛根。
+
+    判据从 _local_seek_dir 提取为可复用函数：MCP 的 argo_local_search
+    默认 path="~"，与 CLI 的 cwd 缺省是同一类事故形态（2026-09-27 实测
+    MCP 侧对整个 home 跑 rg，30 s 后报错返回），两侧必须共用同一判据。
+    """
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        return True
+    home = os.path.realpath(os.path.expanduser("~"))
+    if real == home:
+        return True
+    for root in _BROAD_LOCAL_ROOTS:
+        if real == root or real == os.path.realpath(root):
+            return True
+    return False
+
+
+def _local_seek_dir() -> str | None:
+    """本地检索的适用范围；宽泛根返回 None（调用方据此跳过本地命中）。
+
+    宁可返回 None 也不返回一个「象征性收窄」的路径：本地命中是增强项，
+    在范围不合理时**不产出**比产出噪音 + 20 s 等待更符合用户预期。
+    用户想搜特定树时用 `argo local-search` 或 seek.py 显式给 --path，
+    那条路径不受此守卫影响。
+    """
+    cwd = os.getcwd()
+    if _is_broad_local_root(cwd):
+        return None
+    return cwd
+
+
+def _run_local_seek(query: str, max_n: int = 5,
+                    search_dir: str | None = None) -> list[dict[str, Any]]:
+    """本机文件命中（--include-local 用）：调 local-seek 子技能，JSON 并入。
+
+    仅在显式开启时调用（默认零开销）；结果不参与融合评分，
+    仅作尾部来源（source=local_files）。
+    """
+    import subprocess as _sp
+
+    target = search_dir or _local_seek_dir()
+    if not target:
+        # 宽泛根：不查，但必须留下可归因的痕迹（docstring 第 1 条）。
+        # 「跳过」与「查了没有」在返回值上都是空列表，但含义完全不同——
+        # 静默跳过会让用户以为本地没匹配，而事实是根本没查。返回一个
+        # 占位「结果」又会污染 results（它只是个说明，不是命中），所以
+        # 说明走 stderr：与 CLI 既有的 include-local 异常提示同一条通道。
+        sys.stderr.write(
+            "  [include-local] 当前目录过宽（home / 根目录），本地检索会扫全盘，已跳过；"
+            "要搜本地文件请 cd 到目标目录，或用 argo local-search\n")
+        return []
+
+    # 缓存：同 query+target 在 TTL 内直接命中，避免重复冷启动 seek.py 子进程。
+    # 文件修改后 TTL 内可能返回旧结果，对本地文件搜索可接受（文件不频繁修改）。
+    cache_key = f"{query}|{max_n}|{target}"
+    cached = _LOCAL_SEEK_CACHE.get(cache_key)
+    if cached is not None and time.time() - cached[0] < _LOCAL_SEEK_TTL_S:
+        return cached[1]
+
+    # 安装感知 + 唯一来源：委托 seek_locator 统一发现 local-seek/scripts/seek.py
+    # （打包子技能优先，ARGO_LOCAL_SEEK_PATH / ARGO_LOCAL_SEEK_ROOTS 承载自定义/遗留）。
+    # 不硬编码 ~/.agents/skills|~/.claude/skills 主机路径（SKILL.md 明令禁止）。
+    from seek_locator import resolve_seek_py
+    seek_py = resolve_seek_py()
+    if not seek_py or not os.path.isfile(seek_py):
+        return []
+    cmd = [sys.executable, seek_py, query, "--json", "--max", str(max(max_n, 1)),
+           "--path", target]
+    try:
+        r = _sp.run(
+            cmd, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=_LOCAL_SEEK_TIMEOUT_S,
+            env={**os.environ, "PYTHONUTF8": "1"},  # 子进程是自家 seek.py，双向显式 UTF-8
+        )
+    except _sp.TimeoutExpired:
+        return []  # 本地命中是增强项：超时即弃，不冒泡（docstring 第 2、3 条）
+    except OSError:
+        return []  # 解释器/脚本不可执行等环境问题：同样不该拖垮主搜索
+    if r.returncode != 0 or not r.stdout.strip():
+        return []
+    try:
+        payload = json.loads(r.stdout)
+    except ValueError:
+        return []
+    hits = payload.get("results") or payload.get("files") or []
+    out = []
+    for h in hits[:max_n]:
+        if not isinstance(h, dict):
+            continue
+        path = h.get("path") or h.get("file") or ""
+        line = h.get("line") or h.get("lineno") or 1
+        url = f"file://{path}" + (f"#{line}" if str(line).isdigit() else "")
+        out.append({
+            "title": path,
+            "url": url,
+            "snippet": (h.get("snippet") or h.get("text") or h.get("line_text") or "")[:160],
+            "source": "local_files",
+            "score": 0.0,
+            "kind": "local",
+        })
+    if len(_LOCAL_SEEK_CACHE) >= _LOCAL_SEEK_CACHE_MAX:
+        _LOCAL_SEEK_CACHE.clear()
+    _LOCAL_SEEK_CACHE[cache_key] = (time.time(), out)
+    return out

@@ -206,7 +206,7 @@ def run(cmd, cwd=None, timeout=30):
                               cwd=cwd, timeout=timeout)
     except subprocess.TimeoutExpired:
         return None
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError, OSError):
         return None
 
 
@@ -299,6 +299,10 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
         return [], "rg 执行失败"
     if proc.returncode == 1:
         return [], None  # 无匹配，正常
+    if proc.returncode == 2:
+        # regex parse error 已回退，其他错误需要报告（权限不足、路径不存在等）
+        err = (proc.stderr or "").strip()
+        return [], f"rg 错误: {err[:200]}" if err else "rg 执行错误"
     if count:
         # 全量收集后按命中数降序取前 N：rg --count-matches 的输出顺序是
         # 目录遍历序，直接截断会让「哪些文件命中最多」系统性答错——
