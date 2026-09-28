@@ -23,7 +23,6 @@ from stage_timing import StageTiming
 from time_utils import WINDOW_FORMATS_HINT, is_valid_time_window
 from search import (
     available_engines,
-    _run_local_seek,
     execute_search,
     format_text_output,
     format_timing,
@@ -146,8 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--local-first", action="store_true",
                         help="强制优先使用 local_search 零成本聚合引擎")
     parser.add_argument(
-        "--include-local", action="store_true",
-        help="并入本机文件命中（seek 结果尾部，source=local_files；默认关）",
+        "--include-local", action="store_true", default=None,
+        help="强制并入本机文件命中（source=local_files；fast/budget 模式默认已开）",
+    )
+    parser.add_argument(
+        "--no-local", action="store_true",
+        help="关闭本机文件命中（fast/budget 模式默认并入，此项退出）",
     )
     parser.add_argument("--domain", default="", help="AnySearch 垂直域")
     parser.add_argument("--sub_domain", default="", help="AnySearch 子域")
@@ -430,6 +433,13 @@ def main():
         engine_domain=args.domain or None,
         engine_sub_domain=args.sub_domain or None,
         timing=_timing,
+        # 三态：--include-local 强制开 / --no-local 强制关 / 都不给 = None
+        #（由 super_search 按模式自动解析，fast/budget 开）。本地命中并入
+        # 统一走 shape_response（search_output）——此前 CLI 在搜索结束后
+        # 串行补一次合并（白等一个 seek 子进程，且与库路径双份逻辑），
+        # 交回 super_search 后自动获得 L1 并行提交（与主搜索同时跑）。
+        include_local=(True if args.include_local
+                       else (False if args.no_local else None)),
     )
 
     # 固定开销（import + argparse + 收尾）：缓存命中时它占墙钟大头，而它不出现
@@ -444,17 +454,8 @@ def main():
         results["timing"]["overhead_ms"] = round(max(0.0, _now_ms - _stages), 1)
         results["timing"]["process_ms"] = round(_now_ms, 1)
 
-    # 本地命中并入（默认关）：seek 结果尾部拼入，来源 local_files，不参与融合评分
-    if args.include_local:
-        try:
-            local_hits = _run_local_seek(args.query, args.max_results)
-        except Exception as e:
-            local_hits = []
-            sys.stderr.write(f"  [include-local] {type(e).__name__}: {e}\n")
-        if local_hits:
-            results.setdefault("results", []).extend(local_hits)
-            results["local_results"] = local_hits
-        results["include_local"] = True
+    # 本地命中并入已上移进 super_search（shape_response 统一出口，L1 并行），
+    # 这里不再串行补合并——双份合并会让同一批命中出现两次。
 
     if args.archive and results.get("status") != "handoff_required":
         try:

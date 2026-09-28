@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from typing import Any
@@ -29,8 +30,15 @@ from typing import Any
 _LOCAL_SEEK_TIMEOUT_S = 3.0
 
 # 「宽泛根」判定：这些目录**不能**当作本地检索范围。
+# 跨平台补齐（2026-09-29）：/mnt（WSL 挂载根）、/cygdrive（Cygwin）——
+# 此前是 macOS 视角清单，Windows/WSL 的等价宽根漏网。
 _BROAD_LOCAL_ROOTS = ("/", "/tmp", "/private/tmp", "/var", "/usr", "/System",
-                      "/Library", "/Applications", "/Volumes", "/Network")
+                      "/Library", "/Applications", "/Volumes", "/Network",
+                      "/mnt", "/cygdrive")
+
+# Windows 盘符根（C:\ / C:/ / C:）：与上面清单同义，但形态是「字母+冒号」，
+# 用模式判而不用枚举（盘符有 26 个）。
+_WIN_DRIVE_ROOT_RE = re.compile(r"^[A-Za-z]:[\\/]?$")
 
 # 本地文件命中缓存：key = (query, max_n, target) → (写入时间, 结果列表)。
 # 文件修改后 TTL 内可能返回旧结果，对本地文件搜索可接受（文件不频繁修改）。
@@ -54,6 +62,10 @@ def _is_broad_local_root(path: str) -> bool:
     home = os.path.realpath(os.path.expanduser("~"))
     if real == home:
         return True
+    # 盘符根同时查原始与 realpath 形态：realpath 在 POSIX 上会把 "C:\"
+    # 当相对路径拼接（cwd + "/C:\"），只有 raw 形态还能保住判据。
+    if _WIN_DRIVE_ROOT_RE.match(path) or _WIN_DRIVE_ROOT_RE.match(real):
+        return True
     for root in _BROAD_LOCAL_ROOTS:
         if real == root or real == os.path.realpath(root):
             return True
@@ -65,7 +77,8 @@ def _local_seek_dir() -> str | None:
 
     宁可返回 None 也不返回一个「象征性收窄」的路径：本地命中是增强项，
     在范围不合理时**不产出**比产出噪音 + 20 s 等待更符合用户预期。
-    用户想搜特定树时用 `argo local-search` 或 seek.py 显式给 --path，
+    用户想搜特定树时 cd 到目标目录，或用 local-seek 的 seek.py 显式给
+    --path（网络类查询另有 argo search --local-first 走本地引擎聚合），
     那条路径不受此守卫影响。
     """
     cwd = os.getcwd()
@@ -78,8 +91,11 @@ def _run_local_seek(query: str, max_n: int = 5,
                     search_dir: str | None = None) -> list[dict[str, Any]]:
     """本机文件命中（--include-local 用）：调 local-seek 子技能，JSON 并入。
 
-    仅在显式开启时调用（默认零开销）；结果不参与融合评分，
-    仅作尾部来源（source=local_files）。
+    本机文件命中：调 local-seek 子技能，JSON 并入（source=local_files）。
+
+    fast/budget 模式下由 super_search 自动调用（_resolve_include_local），
+    auto/deep 需显式 --include-local / MCP include_local。评分与
+    MCP argo_local_search 同口径（0.9 精确 / 0.7 扩展）。
     """
     import subprocess as _sp
 
@@ -92,7 +108,7 @@ def _run_local_seek(query: str, max_n: int = 5,
         # 说明走 stderr：与 CLI 既有的 include-local 异常提示同一条通道。
         sys.stderr.write(
             "  [include-local] 当前目录过宽（home / 根目录），本地检索会扫全盘，已跳过；"
-            "要搜本地文件请 cd 到目标目录，或用 argo local-search\n")
+            "要搜本机文件请 cd 到目标目录后重试，或用 local-seek 的 seek.py --path <目录>\n")
         return []
 
     # 缓存：同 query+target 在 TTL 内直接命中，避免重复冷启动 seek.py 子进程。
@@ -128,6 +144,11 @@ def _run_local_seek(query: str, max_n: int = 5,
     except ValueError:
         return []
     hits = payload.get("results") or payload.get("files") or []
+    # 评分与 MCP argo_local_search 同口径（0.9 精确命中 / 0.7 扩展召回）：
+    # 此前 CLI 路径恒 0.0——同一能力两套语义，且任何按分排序/过滤的下游
+    # 都会把本地命中沉底。
+    seek_mode = payload.get("mode", "fast")
+    hit_score = 0.9 if seek_mode == "fast" else 0.7
     out = []
     for h in hits[:max_n]:
         if not isinstance(h, dict):
@@ -140,7 +161,7 @@ def _run_local_seek(query: str, max_n: int = 5,
             "url": url,
             "snippet": (h.get("snippet") or h.get("text") or h.get("line_text") or "")[:160],
             "source": "local_files",
-            "score": 0.0,
+            "score": hit_score,
             "kind": "local",
         })
     if len(_LOCAL_SEEK_CACHE) >= _LOCAL_SEEK_CACHE_MAX:

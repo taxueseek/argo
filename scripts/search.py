@@ -526,6 +526,18 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
 
 # ── 统一入口 ──────────────────────────────────────────────────────────────────
 
+def _resolve_include_local(include_local: bool | None, mode: str) -> bool:
+    """include-local 三态解析：True/False 显式，None=自动（fast/budget 开）。
+
+    本地文件命中此前默认全关，模型与用户在正常使用中永远看不到本机内容
+    （2026-09-29 审查：「本地内容搜索被忽略」）。自动开的安全垫已齐备：
+    宽根守卫（home/根目录不扫）+ 3s 子进程超时 + L1 并行提交（不占墙钟，
+    常规项目目录 rg 实测 33ms）。auto/deep 保持显式开启——深度模式由
+    调用方自主决定证据面。
+    """
+    if include_local is None:
+        return mode in ("fast", "budget")
+    return bool(include_local)
 
 
 def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = False,
@@ -542,7 +554,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  since: str | None = None,
                  until: str | None = None,
                  sort: str = "relevance",
-                 include_local: bool = False,
+                 include_local: bool | None = None,
                  include_domains: list[str] | None = None,
                  exclude_domains: list[str] | None = None,
                  engine_domain: str | None = None,
@@ -722,6 +734,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             print(f"[改写] {original_query} → {search_query}", file=sys.stderr)
     # L1 并行化：include_local 时把 _run_local_seek 提前提交到线程池，
     # 与主搜索并行执行。主搜索完成时本地搜索通常已就绪，零额外墙钟。
+    include_local = _resolve_include_local(include_local, mode)
     _local_seek_future = None
     if include_local:
         _local_seek_future = _get_local_seek_executor().submit(

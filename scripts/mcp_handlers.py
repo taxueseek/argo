@@ -572,7 +572,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 since=arguments.get("since"),
                 until=arguments.get("until"),
                 sort=arguments.get("sort", "relevance"),
-                include_local=bool(arguments.get("include_local", False)),
+                # 缺省 True（2026-09-29 扶正）：本机文件命中默认并入对话搜索；
+                # 显式 false 可关。安全垫：宽根守卫 + 3s 子进程超时 + 并行提交。
+                include_local=bool(arguments.get("include_local", True)),
                 include_domains=arguments.get("include_domains") or None,
                 exclude_domains=arguments.get("exclude_domains") or None,
                 cache=_get_cache(),

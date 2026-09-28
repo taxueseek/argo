@@ -52,7 +52,7 @@ python3 scripts/research.py "复杂问题" --json            # 取证包（扩�
 |------|------|
 | `--engine <name>` | 强制引擎（anysearch/byted/bocha/exa/tavily/eastmoney/zhihu/arxiv/pypi/mdn/hackernews/v2ex/redskill…，全量见 `--list-engines`） |
 | `--local-first` | 本地零成本聚合优先（local_search 32 引擎） |
-| `--include-local` | 并入本机文件命中（seek 结果尾部，source=local_files；默认关） |
+| `--include-local` / `--no-local` | 并入本机文件命中（source=local_files，score 0.9/0.7）：fast/budget 模式默认开，auto/deep 默认关；查询指向本机内容（我的笔记/这个仓库/本地 PDF）时建议显式开 |
 | `--mode fast|auto|deep|budget` | fast 免费优先 / auto 成本感知（默认）/ deep 质量优先 / budget 配额控制 |
 | `--explain` | 解释路由决策（含 TF-IDF 分数） |
 | `--no-cache` / `--depth fast|balanced|deep` | 跳过缓存 / 搜索深度 |

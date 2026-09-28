@@ -519,8 +519,11 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
     if envelope:
         result["sources"] = build_sources(result.get("results") or [])
 
-    # 本地命中并入（默认关）：seek 结果尾部拼入，来源 local_files，
-    # 不参与融合评分。仅显式开启（--include-local / MCP include_local）才触发。
+    # 本地命中并入：seek 结果尾部拼入，来源 local_files（score 0.9 精确命中 /
+    # 0.7 扩展召回，与 MCP argo_local_search 同口径）。触发：fast/budget 自动
+    #（宽根守卫 + 3s 超时兜底），--include-local / MCP include_local 显式开，
+    # --no-local / include_local=false 关。按 URL 去重后并入，防止与既有
+    # 结果（或未来评分变化）产生双份条目。
     if include_local:
         try:
             local_hits = _run_local_seek(query, n)
@@ -528,8 +531,13 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             local_hits = []
             _log(f"[include-local] {type(e).__name__}: {e}")
         if local_hits:
-            result.setdefault("results", []).extend(local_hits)
-            result["local_results"] = local_hits
+            _seen_urls = {r.get("url") for r in (result.get("results") or [])
+                          if isinstance(r, dict)}
+            _fresh_local = [h for h in local_hits
+                            if isinstance(h, dict) and h.get("url") not in _seen_urls]
+            if _fresh_local:
+                result.setdefault("results", []).extend(_fresh_local)
+                result["local_results"] = _fresh_local
         result["include_local"] = True
     # ── 收口：重算一切「由 results 派生」的字段 ────────────────────────────────
     #
