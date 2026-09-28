@@ -45,7 +45,8 @@ PAGE_URL = "https://cowork.xiaohongshu.com/s/redskill-rank/"
 EXPLORE_URL = "https://www.xiaohongshu.com/explore/{}"
 SEARCH_URL = "https://www.xiaohongshu.com/search_result?keyword={}"
 PROFILE_URL = "https://www.xiaohongshu.com/user/profile/{}"
-CACHE_DIR = Path(os.environ.get("ARGO_REDSKILL_CACHE", "~/.cache/argo-redskill")).expanduser()
+CACHE_DIR = Path(os.environ.get("ARGO_REDSKILL_CACHE")
+                 or (argo_paths.platform_cache_default() / "argo-redskill"))
 CACHE_FILE = CACHE_DIR / "data.json"
 USER_AGENT = "argo-search/1.0 (+https://github.com/taxueseek/argo; redskill)"
 DOWNLOAD_TIMEOUT = 120  # 14.6MB 全量，首次下载需要更长时间

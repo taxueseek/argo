@@ -52,10 +52,17 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 # 版本下限与 bin/argo 的 MIN_PYTHON、install.sh 保持一致：改一处就要改另外两处。
+# 探测 python；无别名时回退 Windows 官方 py 启动器（bin/argo 候选链同样支持）
+$script:py = @("python")
 $pyOk = (python -c "import sys; print(1 if sys.version_info >= (3, 9) else 0)" 2>$null).Trim()
 if ($pyOk -ne "1") {
-    Write-Error "当前 Python 版本低于 3.9，或 python 不在 PATH。"
-    exit 1
+    $py3Ok = (py -3 -c "import sys; print(1 if sys.version_info >= (3, 9) else 0)" 2>$null).Trim()
+    if ($py3Ok -eq "1") {
+        $script:py = @("py", "-3")
+    } else {
+        Write-Error "当前 Python 版本低于 3.9，或 python/py 启动器不在 PATH。"
+        exit 1
+    }
 }
 
 if (Test-Path (Join-Path $InstallDir ".git")) {
@@ -86,10 +93,10 @@ if ($Pin) {
 
 if (-not $SkipPip) {
     Write-Host "==> 安装依赖 (PyYAML)…"
-    python -m pip install pyyaml
+    & $script:py -m pip install pyyaml
     if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 PyYAML 失败，可手动: pip install pyyaml" }
     Write-Host "==> 安装可选增强 (curl_cffi: TLS 指纹伪造，缺失不影响核心功能)…"
-    python -m pip install curl_cffi
+    & $script:py -m pip install curl_cffi
     if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 curl_cffi 失败（可选依赖）" }
 }
 
@@ -97,7 +104,7 @@ if ($LinkTargets.Count -gt 0 -or (Test-Path (Join-Path $InstallDir "installs.loc
     Write-Host "==> 链接 Skill 入口（符号链接回真源，不复制）…"
     $linkArgs = @()
     foreach ($t in $LinkTargets) { if ($t) { $linkArgs += @("--to", $t) } }
-    python (Join-Path $InstallDir "scripts\link_source.py") @linkArgs
+    & $script:py (Join-Path $InstallDir "scripts\link_source.py") @linkArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[warn] 链接未完成。可稍后手动:"
         Write-Host "  python $InstallDir\scripts\link_source.py --to C:\Users\you\.claude\skills\argo"
@@ -107,22 +114,25 @@ if ($LinkTargets.Count -gt 0 -or (Test-Path (Join-Path $InstallDir "installs.loc
 Write-Host ""
 Write-Host "==> 安装完成"
 Write-Host ""
+$pyLabel = $script:py -join " "
 Write-Host "快速验证:"
-Write-Host "  python $InstallDir\scripts\search.py ""Python asyncio"" --json"
-Write-Host "  python $InstallDir\scripts\search.py --list-engines"
+Write-Host "  & $pyLabel $InstallDir\scripts\search.py ""Python asyncio"" --json"
+Write-Host "  & $pyLabel $InstallDir\scripts\search.py --list-engines"
 Write-Host ""
 Write-Host "启动 MCP（给 Claude / Kimi / Cursor 等用）:"
-Write-Host "  python $InstallDir\scripts\mcp_server.py"
+Write-Host "  & $pyLabel $InstallDir\scripts\mcp_server.py"
 Write-Host ""
-Write-Host "或用 npx（需 Node.js 18+）:"
-Write-Host "  npx -y argo-search"
+Write-Host "或用 npx（需 Node.js 18+，推荐，不依赖 npm 发版）:"
+Write-Host "  npx -y github:taxueseek/argo"
 Write-Host ""
-Write-Host "客户端 MCP 配置示例（路径请按本机替换）:"
+Write-Host "客户端 MCP 配置示例（command 用解释器绝对路径：GUI 宿主的子进程 PATH 常缺 python）:"
+$pythonExe = (Get-Command $script:py[0] -ErrorAction SilentlyContinue).Source
+if (-not $pythonExe) { $pythonExe = $script:py[0] }
 Write-Host @"
 {
   "mcpServers": {
     "argo": {
-      "command": "python",
+      "command": "$pythonExe",
       "args": ["$InstallDir\scripts\mcp_server.py"]
     }
   }

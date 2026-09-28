@@ -73,11 +73,12 @@ from serp_spec import SEARCH_URLS, build_serp_js as _build_serp_js
 DEFAULT_TIMEOUT = 120  # 秒
 API_DATA_LIMIT = 100_000  # 字符；超限截断并标记
 
-# 专业搜索模式状态文件（默认 ~/.local/state/ego-search/pro-mode.json；
-# 可用环境变量 EGO_SEARCH_STATE 覆盖，测试用）
-DEFAULT_STATE_PATH = os.path.join(
-    os.path.expanduser("~"), ".local", "state", "ego-search", "pro-mode.json"
+# 专业搜索模式状态文件（默认 $XDG_STATE_HOME/ego-search/pro-mode.json，
+# XDG 未设时回落 ~/.local/state/；可用环境变量 EGO_SEARCH_STATE 覆盖，测试用）
+_STATE_HOME = os.environ.get("XDG_STATE_HOME", "").strip() or os.path.join(
+    os.path.expanduser("~"), ".local", "state"
 )
+DEFAULT_STATE_PATH = os.path.join(_STATE_HOME, "ego-search", "pro-mode.json")
 STATE_PATH = os.environ.get("EGO_SEARCH_STATE") or DEFAULT_STATE_PATH
 
 # 登录态 provenance 字段（公共 SearchCache 必须拒绝此类载荷）

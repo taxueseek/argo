@@ -108,8 +108,12 @@ def resolve_proxy(url: str, override: str | None = None,
         scheme = urllib.parse.urlparse(
             url if "//" in url else "https://" + url).scheme or "https"
         proxies = urllib.request.getproxies()
-        if proxies.get(scheme) and not urllib.request.proxy_bypass(host):
-            return proxies[scheme]
+        # ALL_PROXY 在 getproxies() 里映射成 'all' 键，urllib 自身也不会按
+        # scheme 分发它——文档承诺支持 ALL_PROXY，这里必须显式回退，否则
+        # 只配 ALL_PROXY 的用户（Linux 惯例）全链路直连（2026-09-28 实锤）
+        px = proxies.get(scheme) or proxies.get("all")
+        if px and not urllib.request.proxy_bypass(host):
+            return px
     except Exception:
         pass
     return None
@@ -171,6 +175,13 @@ def open_connection(parsed: ParseResult, timeout: float,
                else http.client.HTTPConnection)
         return cls(parsed.hostname, target_port, timeout=timeout), False
     p = urllib.parse.urlparse(proxy_url)
+    if p.scheme.startswith("socks"):
+        # socks 代理需要 socks 客户端栈（http.client 没有 CONNECT 之外的
+        # 隧道语义）；此前表现为挂起/失败且无提示。curl 通道（-x）原生支持
+        # socks5，不受此限——本显式报错只挡 open_connection 这条 urllib 出口。
+        raise ValueError(
+            f"暂不支持 socks 代理（{proxy_url}）：open_connection 仅支持 "
+            "http/https 代理；请改用 http 代理或 ARGO_PROXY=direct")
     proxy_port = p.port or (443 if p.scheme == "https" else 80)
     if parsed.scheme == "https":
         conn = http.client.HTTPSConnection(p.hostname, proxy_port, timeout=timeout)

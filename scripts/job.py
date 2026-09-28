@@ -728,10 +728,14 @@ def _search_jobspy(q: str, n: int) -> list:
 
 # ── mcp-jobs（猎聘/BOSS/智联，MCP stdio 协议）─────────────────────────
 # npm 包 mcp-jobs 无 bin 入口（README 的 npx 启动方式不可用），
-# 固定安装到 ~/.cache/argo-mcpjobs 后直接 node dist/mcp.js 启动。
+# 固定安装到平台缓存目录后直接 node dist/mcp.js 启动。
+# 2026-09-28 起路径随平台惯例（argo_paths；旧 ~/.cache/argo-mcpjobs 可删）。
 
 _MCPJ = {"proc": None, "id": 0}
-MCPJOBS_DIR = os.path.join(os.path.expanduser("~"), ".cache", "argo-mcpjobs")
+from argo_paths import platform_cache_default  # noqa: E402
+
+MCPJOBS_DIR = os.environ.get("ARGO_MCPJOBS_DIR") or str(
+    platform_cache_default() / "argo-mcpjobs")
 MCPJOBS_ENTRY = os.path.join(MCPJOBS_DIR, "node_modules", "mcp-jobs", "dist", "mcp.js")
 
 

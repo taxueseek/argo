@@ -34,9 +34,20 @@ SCRIPTS = os.path.join(ARGO_HOME, "scripts")
 #
 # 版本判据另有独立的历史 bug，见 MIN_PYTHON 上方说明：真正在选人并写缓存的
 # 那条路径反而没有版本闸门，3.9 会被选中并固化进缓存。
+# 缓存根的平台惯例与 argo_paths 保持一致（bin/argo 是 entrypoint，不 import
+# scripts/ 里的模块以保持零依赖）：Windows 走 LOCALAPPDATA，POSIX 走 XDG。
+def _default_cache_root():
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "unified-search")
+    xdg = os.environ.get("XDG_CACHE_HOME", "").strip()
+    if xdg:
+        return os.path.join(xdg, "unified-search")
+    return os.path.expanduser("~/.cache/unified-search")
+
+
 _PY_CACHE = os.path.join(
-    os.environ.get("ARGO_STATE_DIR", "").strip()
-    or os.path.expanduser("~/.cache/unified-search"),
+    os.environ.get("ARGO_STATE_DIR", "").strip() or _default_cache_root(),
     ".argo_python",
 )
 

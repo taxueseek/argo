@@ -918,6 +918,15 @@ class HttpClient:
         headers = _random_headers(extra_headers)
         cmd = ["curl", "-s", "--max-time", str(int(self.timeout)), "-X", "POST",
                "-w", "\\n%{http_code}\\n%{url_effective}"]
+        # 出口调度（issue #13）：与 GET 路径同一判据——此前这条分支漏了
+        # resolve_proxy，「须代理出网」环境里 POST 必然直连失败（2026-09-28 复核）
+        try:
+            from net_proxy import resolve_proxy
+            _px = resolve_proxy(url)
+            if _px:
+                cmd.extend(["-x", _px])
+        except Exception:
+            pass
         for k, v in headers.items():
             cmd.extend(["-H", f"{k}: {v}"])
         if payload is not None:

@@ -90,6 +90,25 @@ class TestResolvePriority(unittest.TestCase):
                          "http_proxy": ""}, clear=False):
             self.assertIsNone(net_proxy.resolve_proxy("https://a.com"))
 
+    def test_all_proxy_fallback(self):
+        """ALL_PROXY 在 getproxies() 里是 'all' 键（2026-09-28 实锤：此前
+        resolve_proxy 只按 scheme 取，只配 ALL_PROXY 的用户全链路直连）。"""
+        with patch("urllib.request.getproxies", return_value={"all": _PROXY}), \
+             patch("urllib.request.proxy_bypass", return_value=False), \
+             patch.dict("os.environ", {"ARGO_PROXY": ""}):
+            self.assertEqual(net_proxy.resolve_proxy("https://a.com"), _PROXY)
+
+    def test_all_proxy_respects_bypass(self):
+        with patch("urllib.request.getproxies", return_value={"all": _PROXY}), \
+             patch("urllib.request.proxy_bypass", return_value=True):
+            self.assertIsNone(net_proxy.resolve_proxy("https://a.com"))
+
+    def test_socks_proxy_rejected_loudly(self):
+        """socks 代理在 open_connection 这条 urllib 出口必须显式报错，不是挂起。"""
+        with self.assertRaises(ValueError):
+            net_proxy.open_connection(urllib.parse.urlparse("https://a.com/x"),
+                                      5.0, "socks5://127.0.0.1:1080")
+
 
 class TestOpenConnection(unittest.TestCase):
     def test_https_via_proxy_sets_tunnel(self):

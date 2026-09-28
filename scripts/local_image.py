@@ -78,9 +78,12 @@ _SKIP_DIRS = frozenset((
     ".library", "site-packages",
 ))
 
+from argo_paths import platform_cache_default  # noqa: E402
+
 DEFAULT_DB = Path(
-    os.environ.get("ARGO_IMAGE_DB", "~/.cache/argo-image/index.db")
-).expanduser()
+    os.environ.get("ARGO_IMAGE_DB")
+    or (platform_cache_default() / "argo-image" / "index.db")
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
