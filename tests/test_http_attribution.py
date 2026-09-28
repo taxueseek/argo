@@ -512,6 +512,11 @@ class TestSurveyFixes:
         for i, name in enumerate(router.engine_names):
             router.engine_vectors[name] = router.vectorizer.transform("天气 查询")
         router._loaded = True
+        # 热重载契约（_ensure_loaded 以 mtime 判变化）：手工语料装好后必须把
+        # mtime 对齐当前文件，否则 route() 入口的 _ensure_loaded 判「文件已变」
+        # 触发整体重载，手工语料被真实语料冲掉 → KeyError: 'bounded'
+        # （2026-09-28 实锤；手工注入语料类测试的通用前置）。
+        router._profiles_mtime = t.DOMAIN_PROFILES_PATH.stat().st_mtime
 
         profiles = {"bounded": {"limit": 1000, "cost_tier": "free"},
                     "healthy": {"limit": 1000, "cost_tier": "free"}}

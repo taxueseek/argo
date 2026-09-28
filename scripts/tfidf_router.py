@@ -222,11 +222,16 @@ class SemanticRouter:
             self.boost_combos.clear()
         if not DOMAIN_PROFILES_PATH.exists():
             self._loaded = True
+            # mtime 一并复位：留着旧值的话，文件以原 mtime 还原（回收站恢复/
+            # 原子写回滚）时会被上面判成「未变化」，路由带着已清空的 vectors
+            # 永久空转——静默，无任何报错。
+            self._profiles_mtime = 0.0
             return
         try:
             profiles = json.loads(DOMAIN_PROFILES_PATH.read_bytes())
         except (json.JSONDecodeError, OSError):
             self._loaded = True
+            self._profiles_mtime = 0.0  # 同上：坏文件不占住旧 mtime
             return
 
         corpus = []
