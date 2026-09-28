@@ -367,27 +367,6 @@ def _compact_research_result(report: dict[str, Any], summary: bool = False) -> d
     return out
 
 
-def _warm_local_seek() -> None:
-    """预热 local-seek 模块导入（P2-4，为 P2-5 进程内调用铺路）。
-
-    用 importlib 从文件加载 seek.py 为命名模块（模块级代码安全，无副作用），
-    缓存进 _module_cache["local_seek"]；失败仅记日志，本地搜索继续走
-    subprocess 保底，不影响核心预热。
-    """
-    try:
-        seek_py = _seek_py()
-        if not os.path.exists(seek_py):
-            sys.stderr.write("[argo-mcp] warm local-seek: not found\n")
-            return
-        spec = importlib.util.spec_from_file_location("local_seek", seek_py)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules["local_seek"] = mod
-        spec.loader.exec_module(mod)
-        _module_cache["local_seek"] = mod
-        sys.stderr.write("[argo-mcp] warm local-seek ok\n")
-    except Exception as e:
-        sys.stderr.write(f"[argo-mcp] warm local-seek fail: {type(e).__name__}: {e}\n")
-
 def _warm_core_async() -> None:
     """initialize 后后台预热 search+cache，摊平首次 tools/call 延迟。"""
     global _warm_started
@@ -404,7 +383,6 @@ def _warm_core_async() -> None:
             sys.stderr.write(f"[argo-mcp] warm-core ok {ms}ms\n")
         except Exception as e:
             sys.stderr.write(f"[argo-mcp] warm-core fail: {type(e).__name__}: {e}\n")
-        _warm_local_seek()
         sys.stderr.flush()
 
     threading.Thread(target=_run, name="argo-mcp-warm", daemon=True).start()
@@ -622,13 +600,19 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             path = str(arguments.get("path", "~"))
             max_results = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
             exact = bool(arguments.get("exact", False))
-            # 宽泛根守卫（search._is_broad_local_root，与 CLI --include-local 同判据）：
-            # 缺省 ~ 会对整个 home 跑 rg，实测 30 s 后报错（CLI 22.6 s 事故同形态）
+            # 宽泛根守卫（与 CLI --include-local 同判据）：缺省 ~ 会对整个 home
+            # 跑 rg，实测 30 s 后报错（CLI 22.6 s 事故同形态）。判据唯一来源是
+            # local_seek._is_broad_local_root——它 2026-09-28 从 search.py 拆出后
+            # 这里还在调旧家，AttributeError 被 fail-open 吞掉，守卫整条失效
+            # （实测 home 路径一路跑到 15s 子进程超时）。
             try:
-                if _lazy_cached("search")._is_broad_local_root(os.path.expanduser(path)):
+                if _lazy_cached("local_seek")._is_broad_local_root(os.path.expanduser(path)):
                     return _local_err("路径过宽（home / 根目录），扫全盘既慢又失准，已拒绝；请传具体目录")
-            except Exception:
-                pass  # 守卫不可用 fail-open：按原行为继续
+            except Exception as e:
+                # 守卫不可用 fail-open：按原行为继续，但必须留痕——静默跳过守卫
+                # 与「查询确实无命中」在外部看起来一样，排查时无从下手。
+                sys.stderr.write(
+                    f"[argo-mcp] local_search 宽泛根守卫不可用（{type(e).__name__}），fail-open\n")
             seek_py = _seek_py()
             cmd = [sys.executable, seek_py, query, "--path", path, "--json",
                    "--max", str(max_results)]

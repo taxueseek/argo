@@ -33,6 +33,11 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import search  # noqa: E402
+import local_seek as ls  # noqa: E402
+
+# 守卫与执行器的实现家：2026-09-28（4e1d017）从 search.py 拆到
+# scripts/local_seek.py。测试跟着实现走——「打桩点落在读取处」是本仓库
+# 的既有纪律（见 search.py 对 search_rank 转出清单的说明）。
 
 
 class TestLocalSeekDirGuard(unittest.TestCase):
@@ -41,7 +46,7 @@ class TestLocalSeekDirGuard(unittest.TestCase):
     def _at(self, cwd: str):
         """在指定 cwd 语义下求值（不真 chdir，避免影响其他用例）。"""
         with mock.patch.object(os, "getcwd", return_value=cwd):
-            return search._local_seek_dir()
+            return ls._local_seek_dir()
 
     def test_home_is_skipped(self):
         home = os.path.realpath(os.path.expanduser("~"))
@@ -83,7 +88,7 @@ class TestRunLocalSeekGuard(unittest.TestCase):
              mock.patch("subprocess.run") as m_run:
             buf = io.StringIO()
             with redirect_stderr(buf):
-                hits = search._run_local_seek("anything", 5)
+                hits = ls._run_local_seek("anything", 5)
             self.assertEqual(hits, [], "跳过时必须返回空列表")
             m_run.assert_not_called()
             self.assertIn("过宽", buf.getvalue(),
@@ -100,7 +105,7 @@ class TestRunLocalSeekGuard(unittest.TestCase):
              mock.patch.object(os.path, "isfile", return_value=True), \
              mock.patch("subprocess.run") as m_run:
             m_run.return_value = mock.Mock(returncode=1, stdout="")
-            search._run_local_seek("q", 5, search_dir=target)
+            ls._run_local_seek("q", 5, search_dir=target)
             self.assertTrue(m_run.called, "显式 search_dir 时必须真的调用 seek.py")
             cmd = m_run.call_args[0][0]
             self.assertIn(target, cmd, "显式 search_dir 必须真的传给 seek.py")
@@ -116,16 +121,16 @@ class TestRunLocalSeekGuard(unittest.TestCase):
              mock.patch.object(sp, "run",
                                side_effect=sp.TimeoutExpired("cmd", 3)):
             try:
-                hits = search._run_local_seek("q", 5)
+                hits = ls._run_local_seek("q", 5)
             except sp.TimeoutExpired:
                 self.fail("TimeoutExpired 冒泡了：本地命中不应让整次搜索承担异常")
             self.assertEqual(hits, [])
 
     def test_timeout_budget_is_small(self):
         """超时常量必须是「增强项」量级，不能接近搜索总预算。"""
-        self.assertLessEqual(search._LOCAL_SEEK_TIMEOUT_S, 5.0,
+        self.assertLessEqual(ls._LOCAL_SEEK_TIMEOUT_S, 5.0,
                              "本地命中是尾部增强项，超时不该到搜索引擎量级")
-        self.assertGreaterEqual(search._LOCAL_SEEK_TIMEOUT_S, 1.0,
+        self.assertGreaterEqual(ls._LOCAL_SEEK_TIMEOUT_S, 1.0,
                                 "太小会让正常目录的正常查询被误杀")
 
 
