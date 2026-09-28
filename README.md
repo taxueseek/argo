@@ -281,11 +281,21 @@ python3 scripts/search.py --list-engines
 ### 安装后自检
 
 ```bash
-python3 --version          # 需要 3.9+
+python3 --version          # 需要 3.9+（Windows 可用 py -3）
 python3 -c "import yaml; print('PyYAML OK')"
-python3 -m pytest tests/test_unit.py -q   # 可选
-python3 scripts/search.py --list-engines
+python3 scripts/search.py --list-engines            # 引擎面与状态总览
+python3 scripts/search.py --list-engines --detail   # 逐源状态：配了 key 却没结果，
+                                                    # 先看 missing_env 给出的确切变量名
+python3 scripts/health_check.py --all               # 真联网探针：验证 key 对端真认（可选）
+python3 bin/argo paths --check                      # 本机路径自检（可选）
+python3 bin/argo mcp status                         # MCP 注入/连通诊断（可选）
+python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 ```
+
+> MCP 起不来时：`python3 scripts/mcp_diag.py` 会把 stdin 往来记录到
+> `~/.kimi/argo_diag.log`。`health_check.py` 是给人用的联网探针，
+> `health_probe.py` 写健康库供路由消费——名字相近，职责不同。
+> CLI 退出码恒 0（含断网）：成败判断走 JSON 的 `status` / `errors` 字段。
 
 ---
 

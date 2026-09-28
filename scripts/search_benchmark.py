@@ -279,6 +279,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--engine-delay", type=float, default=0.15,
                         help="假引擎固定延迟秒数（默认 0.15）")
     parser.add_argument("--json", action="store_true", help="只输出 JSON")
+    parser.add_argument("--save-baseline", metavar="PATH",
+                        help="结果（含环境 meta）写入 PATH，作为 --compare 的基线")
+    parser.add_argument("--compare", metavar="PATH",
+                        help="与基线对比：route/serial/parallel 中位数回归 >15%% 时退出码 1")
     args = parser.parse_args(argv)
     if args.runs < 1 or args.engine_delay <= 0:
         parser.error("--runs 必须 >= 1，--engine-delay 必须 > 0")
@@ -301,6 +305,45 @@ def main(argv: list[str] | None = None) -> int:
         # 「不留残留」约定一致）。
         shutil.rmtree(state_dir, ignore_errors=True)
 
+    # 环境 meta：跨机器/跨时间数字漂移的归因依据（PR #14「可对比」的收口件）
+    import platform
+    result["env"] = {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+    # 与基线对比：三个中位数回归 >15% 记 REGRESSION，整体退出码 1。
+    # 阈值 15% 是给机器抖动留的余量（本基准离线确定性，抖动通常 <5%）。
+    regressions: list[str] = []
+    if args.compare:
+        import json
+        base = json.loads(Path(args.compare).read_text(encoding="utf-8"))
+        if (base.get("dispatch") or {}).get("engine_delay_ms") != \
+                result["dispatch"]["engine_delay_ms"]:
+            print("[warn] engine_delay 与基线不同，dispatch 对比仅作参考")
+        for section, key in (("route", "per_query_median_ms"),
+                             ("dispatch", "serial_median_ms"),
+                             ("dispatch", "parallel_median_ms")):
+            b = (base.get(section) or {}).get(key)
+            c = result[section][key]
+            if not b:
+                continue
+            delta = (c - b) / b * 100.0
+            hit = c > b * 1.15
+            if hit:
+                regressions.append(f"{section}.{key}")
+            print(f"compare {section}.{key}: {b:.1f} → {c:.1f} ms "
+                  f"({delta:+.1f}%){'  [REGRESSION >15%]' if hit else ''}")
+        if regressions:
+            print(f"性能回归: {', '.join(regressions)}")
+
+    if args.save_baseline:
+        out_path = Path(args.save_baseline)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(dumps(result) + "\n", encoding="utf-8")
+        print(f"[baseline] 已写入 {out_path}")
+
     if args.json:
         print(dumps(result))
     else:
@@ -316,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{dispatch['engine_count']} engines × "
             f"{dispatch['engine_delay_ms']:.0f} ms)"
         )
-    return 0
+    return 1 if regressions else 0
 
 
 if __name__ == "__main__":

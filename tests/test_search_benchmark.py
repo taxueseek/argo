@@ -76,3 +76,27 @@ def test_json_benchmark_schema():
     assert dispatch["engine_count"] == 3
     assert dispatch["parallel_speedup"] > 1.5
     assert "serial_median_ms" in dispatch and "parallel_median_ms" in dispatch
+
+
+def test_save_baseline_and_compare_roundtrip(tmp_path):
+    """基线闭环（2026-09-28，PR #14「可对比」收口）：save→compare 同参不误报。"""
+    base = tmp_path / "baseline.json"
+    rc1 = search_benchmark.main(["--runs", "1", "--engine-delay", "0.05",
+                                 "--save-baseline", str(base)])
+    assert rc1 == 0
+    payload = json.loads(base.read_text(encoding="utf-8"))
+    assert "env" in payload and "python" in payload["env"], \
+        "基线必须带环境 meta（跨机器漂移归因用）"
+    rc2 = search_benchmark.main(["--runs", "1", "--engine-delay", "0.05",
+                                 "--compare", str(base)])
+    assert rc2 == 0, "同机同参不得误报回归"
+
+
+def test_compare_catches_real_regression(tmp_path):
+    """存在性证明：10 倍延迟差必须被 >15% 阈值抓住（退出码 1）。"""
+    base = tmp_path / "baseline.json"
+    search_benchmark.main(["--runs", "1", "--engine-delay", "0.05",
+                           "--save-baseline", str(base)])
+    rc = search_benchmark.main(["--runs", "1", "--engine-delay", "0.5",
+                                "--compare", str(base)])
+    assert rc == 1, "真实回归必须被拦下，否则基准没有存在意义"
