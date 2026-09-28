@@ -1021,6 +1021,7 @@ def _search_one(engine_name: str, query: str, n: int = 5,
     # ── CLI engine path ───────────────────────────────────────────
     if spec.get("type") == "cli":
         results, err = _run_cli_engine(spec, query, n, to, since=since, until=until)
+        fb_err: str | None = None
         # Fallback to HTML/JSON/RSS if CLI fails
         if not results and spec.get("fallback_type"):
             fmt = spec["fallback_type"]
@@ -1045,13 +1046,16 @@ def _search_one(engine_name: str, query: str, n: int = 5,
                             results = _parse_json(engine_name, text, maps)
                         elif fmt in ("rss", "xml"):
                             results = _parse_xml(engine_name, text, maps, is_rss=(fmt=="rss"))
-                except Exception:
-                    pass
+                except Exception as e:
+                    # 吞错类残留：fallback 失败此前静默 pass，引擎最后报的
+                    # 仍是 CLI 错误，排查时看不到 fallback 也死了。
+                    fb_err = f"{engine_name} fallback 抓取失败: {e}"
                 # 时间窗保底过滤（与 HTTP 路径同语义；仅带时间能力引擎）
                 if time_aware and (since or until) and results:
                     results = _apply_time_window(results, since, until)
         if not results:
-            return results, err if err else f"{engine_name} CLI and fallback both failed"
+            combined_err = "; ".join(x for x in (err, fb_err) if x)
+            return results, combined_err or f"{engine_name} CLI and fallback both failed"
         # 时间窗后过滤（CLI 成功路径此前被跳过——until 完全失效、since 只剩
         # ddgs 粗粒度下推（2d 被放大成过去一周）、绝对日期 since 无效，三个
         # 症状同源于此）。日期归一化由 _apply_time_window 入口保证。
@@ -1105,6 +1109,34 @@ def _cache_key(engines: list[str]) -> str:
     return "local_search+" + "+".join(sorted(engines)) if engines else "local_search"
 
 
+# 引擎分类 → 缓存域（DOMAIN_TIER_MAP 已有的 local_* 键，TTL 随域走：
+# news 600s / academic、code research 2h / reference evergreen 24h）
+_CATEGORY_CACHE_DOMAIN = {
+    "news": "local_news",
+    "academic": "local_academic",
+    "code": "local_code",
+    "reference": "local_reference",
+}
+
+
+def _infer_cache_domain(engines: list[str], reg: EngineRegistry) -> str:
+    """显式引擎时按首个带可映射分类的引擎推断缓存域。
+
+    此前显式引擎路径 domain 恒 None → cache_domain 恒 local_general →
+    新闻类引擎结果被按 general 1h TTL 缓存（新鲜度税）。自动路由路径
+    的 domain 由 route_query 给出，不受影响。
+    """
+    for e in engines:
+        spec = reg.get_engine(e) or {}
+        cats = spec.get("categories") or []
+        if isinstance(cats, str):
+            cats = [cats]
+        for c in cats:
+            if c in _CATEGORY_CACHE_DOMAIN:
+                return _CATEGORY_CACHE_DOMAIN[c]
+    return "local_general"
+
+
 def _cache_domain(domain: str | None) -> str:
     return domain or "local_general"
 
@@ -1149,7 +1181,9 @@ def search_engines(
         engines = decision["engines"]
         domain = decision.get("domain")
     else:
-        domain = None
+        # 显式引擎时从引擎分类推断缓存域（此前恒 local_general，
+        # 新闻结果被按 general 1h TTL 缓存），见 _infer_cache_domain。
+        domain = _infer_cache_domain(engines, reg)
 
     # 健康过滤（fast/budget 模式下更严格，只检查实际要用的引擎）。
     # 被过滤掉的引擎必须上报（engines_dropped）——静默替换会让「我要的三
@@ -1185,7 +1219,12 @@ def search_engines(
         hit = cache.get(query, engine=cache_key, max_results=n, domain=cache_domain,
                        mode=mode, depth="fast")
         if hit:
-            hit_results = _sort_results(hit.get("results", []), sort)
+            # relevance 是写侧给退化守卫看的内部字段，命中返回时剥掉，
+            # 保证命中/未命中两条路径的对外 schema 一致。
+            hit_results = _sort_results(
+                [{k: v for k, v in r.items() if k != "relevance"}
+                 if isinstance(r, dict) else r
+                 for r in hit.get("results", [])], sort)
             return {
                 "query": query,
                 "engine": engines[0] if engines else "local_search",
@@ -1308,10 +1347,24 @@ def search_engines(
         "engines_used": engines_used,
     }
 
-    # 写缓存：使用 SearchCache 标准接口
+    # 写缓存：使用 SearchCache 标准接口。
+    # 写侧补 relevance=score：cache_guard._entry_relevance 只认
+    # relevance/rerank_dims.relevance，local 结果只有 score——退化守卫对
+    # local 缓存完全失明，「退化回声固化进缓存」原事故类在 local 侧不设防。
+    # relevance 只进缓存载荷（命中返回时剥掉），对外 schema 不变。
+    # set 整体 try 包裹：守卫（LoginCacheRejected/DegradedCacheRejected）
+    # 与 IO 异常只剥夺本次缓存资格，不应炸掉已经拿到的搜索结果。
     if not skip_cache and cache is not None:
-        cache.set(query, engine=cache_key, max_results=n, results=payload,
-                   domain=cache_domain, mode=mode, depth="fast")
+        cache_payload = {
+            "results": [{**r, "relevance": r.get("score", 0.0)}
+                        for r in payload.get("results", []) if isinstance(r, dict)],
+            "engines_used": engines_used,
+        }
+        try:
+            cache.set(query, engine=cache_key, max_results=n, results=cache_payload,
+                      domain=cache_domain, mode=mode, depth="fast")
+        except Exception as e:
+            logger.warning(f"缓存写入被拒绝/失败，本次跳过: {e}")
 
     # 排序在返回前：sort 只改变本次展示顺序，缓存命中路径同样处理
     out_results = _sort_results(final_results, sort)

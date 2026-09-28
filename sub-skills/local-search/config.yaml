@@ -6,7 +6,6 @@ settings:
   default_results: 5
   max_parallel_engines: 5
   user_agent: "Mozilla/5.0 (compatible; unified-search-local/1.0.1; +https://local)"
-  request_interval_ms: 500
   health_check:
     canary_query: "test"
     ttl_minutes: 5
