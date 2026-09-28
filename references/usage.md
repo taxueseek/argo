@@ -398,6 +398,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_IDENTITY_MEMORY` | identity memory | 见 references/operations.md 与模块 docstring |
 | `ARGO_IMAGE_DB` | ('本地图片索引库路径', '默认 ~/.cache/argo-image/index.db') | 建库与检索共用；换库位置只改这一处 |
 | `ARGO_LOCAL_RERANK` | ('本地五维重排', '默认开') | 见 references/operations.md 与模块 docstring |
+| `ARGO_MCPJOBS_DIR` | ('mcp-jobs 安装根', '默认随平台缓存根 argo-mcpjobs') | job.py 安装与启动共用；换位置只改这一处 |
 | `ARGO_MINHASH_DEDUPE` | ('近重复结果去重', '默认开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_MOBILE_FIRST_HOSTS` | mobile first hosts | 见 references/operations.md 与模块 docstring |
 | `ARGO_NO_AUTORELOAD` | no autoreload | 见 references/operations.md 与模块 docstring |

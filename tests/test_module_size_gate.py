@@ -66,9 +66,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "工作区未提交、当日仍在增长 1600→1604）——上限随工作区现值登记，"
               "随该工作正式提交后由其转正或回调"),
     "scripts/fetch_v3.py": (
-        1793, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
+        1795, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
-              "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）"),
+              "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）；"
+              "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰"),
     "scripts/engines_base.py": (
         1509, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
               "2026-09-26 +42：SERP 垃圾守卫接线（守卫本体独立在 serp_guard.py，此处只留"
@@ -91,20 +92,26 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点；"
               "2026-09-28 +2：normalize_query 加 @lru_cache 装饰器（性能优化）"),
     "scripts/http_client.py": (
-        1015, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
+        1027, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
               "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）；"
               "2026-09-28 +10：淘汰只踢零活跃桶（_active 计数 + idle 过滤），"
-              "消灭「踢掉在用桶 → 同主机限速击穿」"),
+              "消灭「踢掉在用桶 → 同主机限速击穿」；"
+              "同日 +12：POST curl fallback 补 resolve_proxy（POST 代理缝隙）+ "
+              "Set-Cookie 解析失败 debug 留痕（最高频静默点）"),
     "scripts/search_rank.py": (
-        1017, "RRF 融合 + minhash 去重 + 五维重排；"
-              "2026-09-27 +18：_weight_cache/_rel_factor_cache 加 TTL+大小限制（_evict_cache）"),
+        1021, "RRF 融合 + minhash 去重 + 五维重排；"
+              "2026-09-27 +18：_weight_cache/_rel_factor_cache 加 TTL+大小限制（_evict_cache）；"
+              "2026-09-28 +4：语言调整失败不写 _weight_cache（防 30s 固化降级权重）"),
     "scripts/job.py": (
-        1182, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
+        1186, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
+              "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "
+              "ARGO_MCPJOBS_DIR 显式覆盖（原硬编码 ~/.cache）"),
     "scripts/matrix_search_eval.py": (
         1103, "离线路由矩阵（138 条检查项），用例表占多数"),
     "scripts/route.py": (
-        1006, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+        1008, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
               "2026-09-28 拆出 Bangs 解析（route_bangs.py，−26 行）后登记；"
+              "同日 +2：breaker.status 读失败 debug 留痕（fail-open 语义不变）；"
               "下一刀：_route_by_domain（268 行垂直域主判定）独立成模块"),
 }
 
