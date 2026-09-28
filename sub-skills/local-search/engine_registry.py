@@ -105,7 +105,12 @@ class EngineRegistry:
             with self.health_state_path.open("r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
-                return data
+                # 陈旧条目清理（2026-09-29）：健康文件此前只增不减——实测
+                # 有条目 49 天未刷新、还有测试引擎名残留。30 天未探针的记录
+                # 对路由已无参考价值（引擎配置都可能换过），读入时丢弃。
+                cutoff = time.time() - 30 * 86400
+                return {k: v for k, v in data.items()
+                        if isinstance(v, dict) and v.get("last_checked", 0) >= cutoff}
         except Exception as e:
             logger.warning(f"加载健康状态失败: {e}")
         return {}
@@ -213,24 +218,33 @@ class EngineRegistry:
     def get_health(self, name: str) -> dict[str, Any]:
         return dict(self._health.get(name, {}))
 
-    def update_availability(self, name: str, available: bool, **extra: Any) -> None:
-        """更新单个引擎的可用状态，并持久化。"""
+    def update_availability(self, name: str, available: bool,
+                            persist: bool = True, **extra: Any) -> None:
+        """更新单个引擎的可用状态。
+
+        persist=False 时只改内存、不落盘——批量更新方（run_health_check 一轮
+        N 个引擎）用它把 N 次全文件重写收成 1 次，由调用方最后统一 _save_health。
+        """
         now = time.time()
         record = self._health.setdefault(name, {})
         record["last_checked"] = now
         record["available"] = available
         if available:
             record["consecutive_failures"] = 0
+            # 连续成功计数：健康门自适应 TTL 的依据（稳定引擎拉长探针间隔）
+            record["consecutive_ok"] = record.get("consecutive_ok", 0) + 1
             record["last_ok"] = now
             record["fail_reason"] = None
         else:
             record["consecutive_failures"] = record.get("consecutive_failures", 0) + 1
+            record["consecutive_ok"] = 0
             if extra.get("fail_reason"):
                 record["fail_reason"] = extra["fail_reason"]
         for k, v in extra.items():
             if k not in ("last_checked", "available", "consecutive_failures"):
                 record[k] = v
-        self._save_health()
+        if persist:
+            self._save_health()
 
     def bulk_update_availability(self, updates: dict[str, dict[str, Any]]) -> None:
         """批量更新可用状态。"""

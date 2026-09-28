@@ -18,6 +18,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -26,6 +27,11 @@ from pathlib import Path
 from typing import Any
 
 from engine_registry import EngineRegistry, get_registry, update_availability
+
+# scripts/ 入路径（net_proxy 出口需要；append 不抢占子技能同名模块的优先级）
+_ROOT_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+if _ROOT_SCRIPTS.exists() and str(_ROOT_SCRIPTS) not in sys.path:
+    sys.path.append(str(_ROOT_SCRIPTS))
 
 logger = logging.getLogger("local_search.health_check")
 if not logger.handlers:
@@ -41,6 +47,21 @@ ANTI_BOT_MARKERS = [
 
 # HTTP 状态码分组
 RETRYABLE_STATUS = {429, 503, 502, 504}
+
+# 自适应 TTL 上限（秒）
+_MAX_HEALTH_TTL_S = 3600.0
+
+
+def _effective_ttl(rec: dict[str, Any], base_ttl_s: float) -> float:
+    """连续成功 → 探测间隔指数放宽（×2^min(streak,3)，硬上限 60min）。
+
+    探针不是免费的：HTTP canary 是直连上游的真实请求（最坏 8s 墙钟，且
+    每 5min 对 baidu/sogou/360 这类激进反爬源发一次固定「test」查询，纯增
+    封号风险）。稳定可用的引擎不需要高频确认；任何一次失败 consecutive_ok
+    归零，立即回到基准 TTL。
+    """
+    streak = int(rec.get("consecutive_ok", 0) or 0)
+    return min(base_ttl_s * (2 ** min(max(streak, 0), 3)), _MAX_HEALTH_TTL_S)
 
 
 def _now() -> float:
@@ -97,9 +118,19 @@ def _fetch_probe(
     req_headers.setdefault("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 
     req = urllib.request.Request(url, headers=req_headers, method=method)
+    # 出口统一走 net_proxy.open_url（与 search_v3._fetch 同语义）：裸 urlopen
+    # 不认 argo 在 config.yaml network.proxy 里配置的 url/rules——「必须经代理
+    # 才能出网」的环境里探针全部连不上，所有 HTTP 引擎被判 unavailable，
+    # fast/budget 路由随后被静默清空，症状与「源挂了」完全一样（主仓
+    # issue #13 同形态，13 个模块已修，这里是漏网的一个）。scripts/ 不在
+    # 路径（独立打包形态）时回退裸 urlopen，行为与改动前一致。
+    try:
+        from net_proxy import open_url
+    except ImportError:
+        open_url = urllib.request.urlopen  # type: ignore[assignment]
     t0 = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with open_url(req, timeout=timeout) as resp:
             raw = resp.read()
             try:
                 text = raw.decode("utf-8", errors="replace")
@@ -305,12 +336,12 @@ def run_health_check(
     # TTL 检查：在有效期内直接复用缓存。
     # 按引擎名逐一比对（此前 cached.values() 里的 dict 与 enabled 的 str 比较
     # 恒 False → all(空) 恒 True → 健康状态永不刷新），任一引擎记录缺失或
-    # 过期即重新探针。
+    # 过期即重新探针。TTL 按连续成功自适应放宽（_effective_ttl）。
     cached = reg._health
 
     def _recent(name: str) -> bool:
         rec = cached.get(name)
-        return bool(rec) and (now - rec.get("last_checked", 0)) < ttl_minutes * 60
+        return bool(rec) and (now - rec.get("last_checked", 0)) < _effective_ttl(rec, ttl_minutes * 60)
 
     all_recent = bool(enabled) and all(_recent(n) for n in enabled)
     if all_recent:
@@ -343,7 +374,11 @@ def run_health_check(
             update_data["success_rate"] = 1.0
         else:
             update_data["success_rate"] = 0.0
-        reg.update_availability(name, final_available, **update_data)
+        # persist=False：一轮 N 个引擎收成 1 次落盘（此前每引擎全文件重写一次）
+        reg.update_availability(name, final_available, persist=False, **update_data)
+
+    if reports:
+        reg._save_health()
 
     return reports
 
@@ -367,7 +402,9 @@ def get_available_engines(
 
         def _recent(name: str) -> bool:
             rec = cached.get(name)
-            return bool(rec) and (now - rec.get("last_checked", 0)) < ttl
+            # TTL 按连续成功自适应放宽：稳定引擎最多放宽到 60min，
+            # 探针墙钟与对反爬源的 canary 流量随之下降一个量级。
+            return bool(rec) and (now - rec.get("last_checked", 0)) < _effective_ttl(rec, ttl)
 
         # 逐引擎名比对新鲜度（此前 dict in list[str] 恒 False → 恒命中，
         # 健康状态永不刷新）；任一缺失/过期即触发检查。

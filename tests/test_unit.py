@@ -492,11 +492,15 @@ class TestLocalSearchRegistry(unittest.TestCase):
         self.assertIn("available", eng)
 
     def test_update_availability(self):
-        reg = EngineRegistry()
-        reg.update_availability("local_test_engine", False, fail_reason="unit_test")
-        self.assertFalse(reg.is_available("local_test_engine"))
-        reg.update_availability("local_test_engine", True)
-        self.assertTrue(reg.is_available("local_test_engine"))
+        # 隔离到临时健康文件：此前写真实 ~/.cache/unified-search/
+        # local_search_health.json，生产健康文件里长期留着 local_test_engine
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            reg = EngineRegistry(health_state_path=Path(td) / "health.json")
+            reg.update_availability("local_test_engine", False, fail_reason="unit_test")
+            self.assertFalse(reg.is_available("local_test_engine"))
+            reg.update_availability("local_test_engine", True)
+            self.assertTrue(reg.is_available("local_test_engine"))
 
 
 class TestLocalSearchHealthCheck(unittest.TestCase):
