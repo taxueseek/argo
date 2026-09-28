@@ -271,10 +271,15 @@ def maybe_sync_backends() -> int:
     script = SOURCE / "scripts" / "sync_backends.py"
     if not script.exists():
         return 0
-    r = subprocess.run([sys.executable, str(script)], cwd=str(SOURCE))
+    # timeout（2026-09-29 补）：sync_backends 是纯本地文件操作，正常秒回；
+    # 但无 timeout 的 subprocess 一旦被挂住（NFS/锁/杀软扫描），本命令会
+    # 无限期卡死。60s 对本地脚本是极宽裕的上界。
+    r = subprocess.run([sys.executable, str(script)], cwd=str(SOURCE), timeout=60)
     if r.returncode != 0:
         return r.returncode
-    return subprocess.run([sys.executable, str(script), "--check"], cwd=str(SOURCE)).returncode
+    return subprocess.run(
+        [sys.executable, str(script), "--check"], cwd=str(SOURCE),
+        timeout=60).returncode
 
 
 def main(argv: list[str] | None = None) -> int:

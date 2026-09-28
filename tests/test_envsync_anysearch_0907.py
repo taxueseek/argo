@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import time
@@ -242,6 +243,17 @@ class TestZhihuGlobalUtilization(unittest.TestCase):
     → 自家主域永远轮不上（37 天仅 53 次）。修复：zh 查询下 zhihu_content
     固定 [zhihu, zhihu_global] 成对、learner 过滤豁免；news_realtime 接入 #2。
     """
+
+    def setUp(self):
+        # 自备密钥（2026-09-29）：zhihu_global 无密钥不可路由，成对断言
+        # 无从谈起——此前依赖开发者 ~/.config/argo/env 的真密钥，本机绿、
+        # CI/干净机器红（conftest 已把 ARGO_ENV_FILE 隔离）
+        self._env = patch.dict(
+            os.environ, {"ARGO_ZHIHU_ACCESS_SECRET": "test-secret"})
+        self._env.start()
+
+    def tearDown(self):
+        self._env.stop()
 
     def test_zh_opinion_pair(self):
         d = _isolated_route("怎么看待 AI 编程工具取代程序员")

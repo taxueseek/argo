@@ -83,14 +83,16 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "_redact_secrets fallback 加基本脱敏（Bearer token + key=value）；"
               "2026-09-28 +2：_detect_anti_bot head 区按需 lower（性能优化）"),
     "scripts/cache.py": (
-        1375, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
+        1377, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行；+3=2026-09-27 退化写入守卫的两处"
               "调用点与一行 import——判定逻辑本身已拆到 cache_guard.py，本文件"
               "只剩调用，不再是「准入策略混在存储实现里」的状态；"
               "2026-09-27 +9：sqlite3 延迟导入（_get_sqlite3 模式）+ L1 100→500；"
               "−1=2026-09-27 引擎级垂直域维度（--domain/--sub_domain）并入缓存键，"
               "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点；"
-              "2026-09-28 +2：normalize_query 加 @lru_cache 装饰器（性能优化）"),
+              "2026-09-28 +2：normalize_query 加 @lru_cache 装饰器（性能优化）；"
+              "2026-09-29 +2：失败态写入守卫调用点（判据在 cache_guard.py，"
+              "治「配好 key 仍回放 45s 前的失败」——issue #12 续发同类）"),
     "scripts/http_client.py": (
         1027, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
               "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）；"
@@ -99,9 +101,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "同日 +12：POST curl fallback 补 resolve_proxy（POST 代理缝隙）+ "
               "Set-Cookie 解析失败 debug 留痕（最高频静默点）"),
     "scripts/search_rank.py": (
-        1021, "RRF 融合 + minhash 去重 + 五维重排；"
+        1018, "RRF 融合 + minhash 去重 + 五维重排；"
               "2026-09-27 +18：_weight_cache/_rel_factor_cache 加 TTL+大小限制（_evict_cache）；"
-              "2026-09-28 +4：语言调整失败不写 _weight_cache（防 30s 固化降级权重）"),
+              "2026-09-28 +4：语言调整失败不写 _weight_cache（防 30s 固化降级权重）；"
+              "2026-09-29 −3：RRF 加权开关收编到 env_flag（第五套真值表消亡，"
+              "try/except 双路径与本地真值表一并删除）"),
     "scripts/job.py": (
         1186, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "

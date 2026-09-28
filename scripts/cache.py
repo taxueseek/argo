@@ -43,7 +43,7 @@ except ImportError:
 
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths
-from cache_guard import assert_not_degraded  # 退化写入守卫（2026-09-27 拆出）
+from cache_guard import assert_not_degraded, assert_not_failed_state  # 写入守卫（2026-09-27 拆出；失败态守卫 2026-09-29 增补）
 from cache_key_vdom import cache_key_vdom  # 引擎级垂直域维度（--domain/--sub_domain）
 from cli_io import dumps
 from except_sets import IO_BENIGN, SHAPE_BENIGN
@@ -1057,6 +1057,8 @@ class SearchCache:
         assert_results_cacheable(result_list, context="SearchCache.set")
         # 退化守卫：上游抖动返回的残次品不得固化（见 is_degraded_results）
         assert_not_degraded(result_list, context="SearchCache.set")
+        # 失败态守卫（2026-09-29）：缺密钥/熔断/鉴权/配额且无有效结果不写负缓存
+        assert_not_failed_state(results, context="SearchCache.set")
         is_empty = isinstance(result_list, list) and len(result_list) == 0
         key = self._key(query, engine, max_results, domain, mode, depth, kind="combo")
         if is_empty:

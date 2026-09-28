@@ -501,10 +501,13 @@ def _attach_evidence_loop(report: dict[str, Any], collection: dict[str, Any]) ->
             ),
         }
     except Exception as e:
+        # fail-open 必须可见（与 search_output 证据门控同款修正）：被跳过的是
+        # 高后果研究的 fetch_required/pending_fetch 提示。debug 级在默认
+        # WARNING 下永不输出，静默跳过的门控比没有门控更危险。
         import logging
-        logging.getLogger("unified_search").debug(
-            f"研究证据门控跳过: {type(e).__name__}"
-        )
+        logging.getLogger("unified_search").warning(
+            "研究证据门控跳过: %s（fetch_required/pending_fetch 本次不可用）",
+            type(e).__name__)
 
 
 def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,

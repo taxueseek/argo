@@ -1880,7 +1880,7 @@ def _build_people_daily_engine(spec: dict[str, Any]) -> Any:
                 continue
             ts = str(r.get("displayTime") or "").strip()
             published = ""
-            if ts.isdigit():
+            if ts.isdigit() and ts.isascii():  # isascii：'²'.isdigit()=True 但 int 崩
                 published = time.strftime("%Y-%m-%d", time.localtime(int(ts) / 1000))
             content = _strip_hl(r.get("content"))[:280]
             out.append({

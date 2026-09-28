@@ -694,7 +694,7 @@ class HttpClient:
             lines = output.rsplit("\n", 2)
             if len(lines) >= 2:
                 text = lines[0] if len(lines) == 2 else "\n".join(lines[:-2])
-                status = int(lines[-2]) if lines[-2].isdigit() else 0
+                status = int(lines[-2]) if lines[-2].isdigit() and lines[-2].isascii() else 0
                 final_url = lines[-1]
             else:
                 text = output
@@ -943,7 +943,7 @@ class HttpClient:
             lines = output.rsplit("\n", 2)
             if len(lines) >= 2:
                 text = lines[0] if len(lines) == 2 else "\n".join(lines[:-2])
-                status = int(lines[-2]) if lines[-2].isdigit() else 0
+                status = int(lines[-2]) if lines[-2].isdigit() and lines[-2].isascii() else 0
             else:
                 text, status = output, 0
             return {"status": status, "headers": {}, "text": text, "url": url,

@@ -224,6 +224,10 @@ if not logger.handlers:
 
 
 # 「未知引擎」警告按名字每进程只报一次。
+# 有界（2026-09-29）：键可能来自用户/路由输入，长驻 MCP server 收到大量
+# 非常规引擎名时，无界集合会随进程寿命线性增长。超限即整体清空——去重是
+# best-effort，丢一轮去重只多几行重复警告，远比无界增长便宜。
+_UNKNOWN_ENGINE_WARNED_MAX = 256
 _unknown_engine_warned: set[str] = set()
 
 
@@ -237,6 +241,8 @@ def _warn_unknown_engine(engine: str) -> None:
     """
     if engine in _unknown_engine_warned:
         return
+    if len(_unknown_engine_warned) >= _UNKNOWN_ENGINE_WARNED_MAX:
+        _unknown_engine_warned.clear()
     _unknown_engine_warned.add(engine)
     logger.warning(
         "未知引擎: %s（registry 查无此名：拼写错误，或该源未随本版发布）", engine)

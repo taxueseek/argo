@@ -60,9 +60,10 @@ _total_idle = 0
 
 
 def _pool_enabled() -> bool:
-    import os
-    return os.environ.get("ARGO_HTTP_POOL", "1").strip().lower() not in (
-        "0", "false", "no", "off")
+    from engine_env import env_flag
+    # 收编到 env_flag（2026-09-29）：统一真值表——n/disable/disabled/none
+    # 从「开」变「关」（方向是修复），且开关写进 ~/.config/argo/env 后生效
+    return env_flag("ARGO_HTTP_POOL", default=True)
 
 
 def _default_port(scheme: str) -> int:

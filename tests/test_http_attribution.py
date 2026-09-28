@@ -22,6 +22,7 @@
 
 import ast
 import io
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -340,7 +341,10 @@ class TestQuotaExhaustedVisibility:
         import engine_status
         marks = {"bocha_ai": {"reason": 'HTTP 403: {"message":"no quota"}',
                               "until": 9999999999.0}}
-        with patch.object(engine_status, "_quota_exhausted_marks", return_value=marks):
+        # 自备密钥（2026-09-29）：bocha_ai 无密钥时状态机先判 missing_key，
+        # 配额分支根本走不到——此前依赖开发者 env 文件里的真密钥
+        with patch.dict(os.environ, {"ARGO_BOCHA_API_KEY": "test-key"}), \
+             patch.object(engine_status, "_quota_exhausted_marks", return_value=marks):
             row = engine_status.engine_detail("bocha_ai")
         assert row["status"] == "quota_exhausted", \
             f"配额耗尽仍显示 {row['status']}（应为 quota_exhausted）"

@@ -416,7 +416,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_WOLFRAM_APPID` | wolfram appid | 见 references/operations.md 与模块 docstring |
 | `ARGO_XHS_TIMEOUT` | xhs timeout | 见 references/operations.md 与模块 docstring |
 
-### API 密钥（值放 ~/.config/argo/env）（17）
+### API 密钥（值放 ~/.config/argo/env）（20）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -431,11 +431,14 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_GITHUB_TOKEN` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_METASO_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_OCTEN_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_PARALLEL_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_QWEATHER_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_SELTZ_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_TAVILY_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_TINYFISH_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_WEB_SEARCH_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_WEREAD_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_YDC_API_KEY` | 对应引擎/服务的凭据（you.com） | 缺密钥=该源跳过或降级 |
 | `ARGO_ZHIHU_ACCESS_SECRET` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 
 ### 行为调参（7）

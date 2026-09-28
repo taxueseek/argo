@@ -24,6 +24,7 @@ import urllib.request
 from typing import Any
 
 from engines_base import safe_search, http_open, mcp_error_of as _mcp_error_of
+from engine_env import get_env
 
 logger = logging.getLogger("unified_search.engines")
 
@@ -33,7 +34,11 @@ _PARALLEL_URL = "https://api.parallel.ai/v1/search"
 
 
 def _parallel_key() -> str:
-    return os.environ.get("PARALLEL_API_KEY", "")
+    # get_env 候选链（2026-09-29，issue #12 同类）：文档推 ARGO_ 前缀名、
+    # 老集成留裸名，两套都必须认。此前的裸 os.environ.get 只认裸名——
+    # 用户按文档配好 ARGO_PARALLEL_API_KEY 后状态层报 ready、执行层取到
+    # 空串，恒 0 结果且失败被 L2 负缓存回放（见 cache_guard 失败态守卫）。
+    return get_env(["ARGO_PARALLEL_API_KEY", "PARALLEL_API_KEY"])
 
 
 def _parallel_mode(query: str, depth: str) -> str:
@@ -199,7 +204,8 @@ _SELTZ_URL = "https://api.seltz.ai/v1/search"
 
 
 def _seltz_key() -> str:
-    return os.environ.get("SELTZ_API_KEY", "")
+    # get_env 候选链（2026-09-29，issue #12 同类，同 _parallel_key）
+    return get_env(["ARGO_SELTZ_API_KEY", "SELTZ_API_KEY"])
 
 
 _SELTZ_SCOPES = ("news", "wikipedia", "people", "companies")
@@ -273,7 +279,8 @@ _YOU_URL = "https://ydc-index.io/v1/search"
 
 
 def _you_key() -> str:
-    return os.environ.get("YDC_API_KEY", "")
+    # get_env 候选链（2026-09-29，issue #12 同类，同 _parallel_key）
+    return get_env(["ARGO_YDC_API_KEY", "YDC_API_KEY"])
 
 
 def _you_freshness(query: str) -> str:

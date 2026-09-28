@@ -32,6 +32,18 @@ def _log(message: str) -> None:
     logging.getLogger("unified_search").debug(message)
 
 
+def _warn(message: str) -> None:
+    """默认可见的告警出口：fail-open 类降级必须让用户与运维看见。
+
+    与 _log 的分工：_log 是 debug 级（默认 WARNING 下永不输出，用于追迹）；
+    本函数用于「门控跳过了但调用方必须知道」的路径——engine_dispatch:377
+    早就为同款「静默回退让慢源修复失明」付过代价。同样模块级不留 logging
+    绑定（CPython 编译期局部名陷阱见 search_entry._log 的 docstring）。
+    """
+    import logging
+    logging.getLogger("unified_search").warning(message)
+
+
 _AGENT_RESULT_FIELDS = (
     "title", "url", "snippet", "source", "score", "ref",
     "published_at", "fetch_suggested", "full_text_url",
@@ -498,7 +510,19 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
         except Exception as e:
             _log(f"不可取源筛选跳过: {type(e).__name__}")
     except Exception as e:
-        _log(f"证据门控跳过: {type(e).__name__}")
+        # fail-open 必须可见：被跳过的是高后果域的 fetch_required/evidence_loop
+        # （金融/医疗/法律的「先核验再下结论」提示）。_log 是 debug 级——全仓
+        # 从未把 unified_search 调离默认 WARNING，即默认永不输出；而
+        # engine_dispatch:377 早就为同款「静默回退让修复失明」付过代价。
+        # 这里双通道留痕：warning 日志 + limitations（随答案到达调用方）。
+        _warn(f"证据门控跳过: {type(e).__name__}"
+              "（fetch_required/evidence_loop 本次不可用）")
+        try:
+            result.setdefault("limitations", []).append(
+                f"证据门控本次跳过（{type(e).__name__}）：fetch_required/"
+                "evidence_loop 不可用，高后果域结论请自行核验")
+        except Exception:
+            pass
 
     # 域过滤（后置，引擎无关）：融合排序之后裁剪，sources 与 results 保持一致。
     # 裁剪导致不足 n 条是调用方过滤条件的诚实结果，不回填。

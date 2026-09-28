@@ -158,6 +158,7 @@ def fetch_status(status_id: str, timeout: int = 10) -> list[dict[str, Any]]:
         f"{FXTWITTER_BASE}/2/status/{status_id}",
         f"{FXTWITTER_BASE}/status/{status_id}",
     ]
+    last_err: Exception | None = None
     for url in endpoints:
         try:
             body, _ = _http_get_with_retry(url, timeout=timeout, max_retries=2)
@@ -172,8 +173,13 @@ def fetch_status(status_id: str, timeout: int = 10) -> list[dict[str, Any]]:
             result = _status_to_result(item if isinstance(item, dict) else {}, rank=0)
             if result:
                 return [result]
-        except Exception:
+        except Exception as e:
+            last_err = e
             continue
+    if last_err is not None:
+        # 全部端点异常 ≠ 「没有这条推文」：带 error 浮上来（同 search_fxtwitter）
+        return [{"error": f"twitter {type(last_err).__name__}: {last_err}",
+                 "source": "twitter"}]
     return []
 
 
@@ -192,8 +198,12 @@ def search_fxtwitter(query: str, n: int = 5, timeout: int = 10) -> list[dict[str
     try:
         body, _ = _http_get_with_retry(url, timeout=timeout, max_retries=2)
         data = json.loads(body.decode("utf-8"))
-    except Exception:
-        return []
+    except Exception as e:
+        # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」
+        # （mcp_handlers 的 err=None 设计依赖引擎抛异常或返 error 占位，
+        # 见 tests/test_regression_p0p1.py「零结果应以 errors 提示」契约）。
+        # 对齐 zhihu_engine 范式：失败必须带着 error 字段浮上来。
+        return [{"error": f"twitter {type(e).__name__}: {e}", "source": "twitter"}]
 
     if not isinstance(data, dict):
         return []

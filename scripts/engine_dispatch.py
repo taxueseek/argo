@@ -26,7 +26,7 @@ import time
 import threading
 from typing import Any, Callable
 
-from cache_guard import attempt_cache_write
+from cache_guard import attempt_cache_write, is_state_failure_outcome  # 失败态判据：配置/状态类失败不写负缓存（2026-09-29）
 from time_utils import is_time_capable
 from query_signals import (
     cumulative_sufficient,
@@ -460,15 +460,23 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 breaker.set_negative(query, eng, status=outcome["status"])
             else:
                 breaker.record_failure(eng, kind="error", attribution=_attr)
-                breaker.set_negative(query, eng, status=outcome["status"])
+                # 配置/状态类失败（缺密钥/熔断/鉴权/配额）不写负缓存：它们
+                # 换个环境就能好，把「此刻没配对」固化成「这个查询没答案」
+                # 正是 cache_guard.FailedStateCacheRejected 要防的同一类
+                # 事故（issue #12 同构：配好 key 仍回放失败）。熔断计数保留
+                # ——引擎确实不健康，只是这个查询不该被负缓存连坐。
+                if not is_state_failure_outcome(outcome):
+                    breaker.set_negative(query, eng, status=outcome["status"])
 
-        # 写 per-engine 缓存。守卫拒绝（登录态 / 退化）只该跳过这次写入：
+        # 写 per-engine 缓存。守卫拒绝（登录态 / 退化 / 失败态）只该跳过这次写入：
         # 异常不接的话会被 _daemon_start 的兜底 except 接走，把一次**成功**的
         # 引擎调用改写成 status=error、结果清空，还按 kind=error 记账进熔断器
         # ——健康引擎被自己刚交出的结果推向 auto-disable（2026-09-27 实锤）。
         # 空结果同样要写（短 TTL 负缓存，配合熔断的 set_negative）；TTL 的
         # 空/非空分支由 cache.set_engine 内部处理，这里只决定写什么。
-        if not skip_cache:
+        # 配置/状态类失败（缺密钥/熔断/鉴权/配额）连空负缓存也不写：配好
+        # 密钥后 45s 内仍要回放 {"results": []}，与 combo 层同款事故。
+        if not skip_cache and not is_state_failure_outcome(outcome):
             attempt_cache_write(
                 lambda: cache.set_engine(
                     query, eng, max_results, goods if goods else [],

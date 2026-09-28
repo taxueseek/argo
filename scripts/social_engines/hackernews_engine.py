@@ -43,8 +43,12 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
     url = f"{HN_API}?{params}"
     try:
         data = json.loads(_http_get(url).decode("utf-8"))
-    except Exception:
-        return []
+    except Exception as e:
+        # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」
+        # （mcp_handlers 的 err=None 设计依赖引擎抛异常或返 error 占位，
+        # 见 tests/test_regression_p0p1.py「零结果应以 errors 提示」契约）。
+        # 对齐 zhihu_engine 范式：失败必须带着 error 字段浮上来。
+        return [{"error": f"hackernews {type(e).__name__}: {e}", "source": "hackernews"}]
 
     results: list[dict[str, Any]] = []
     for h in (data.get("hits") or []):

@@ -44,18 +44,102 @@ class DegradedCacheRejected(ValueError):
     """退化结果（低相关/查询词回声）禁止写入公共 SearchCache。"""
 
 
+class FailedStateCacheRejected(ValueError):
+    """配置/状态类失败（缺密钥/熔断/鉴权/配额）且无有效结果：不写负缓存。
+
+    与退化守卫的分工：退化拦「搜到了但内容是垃圾」；本守卫拦「根本没搜成、
+    且换个人/等一会/改个配置就能好」。把后者缓存下来，等于把「argo 此刻
+    没配对」固化成「这个查询没有答案」——实测形态（2026-09-28）：
+    `--engine parallel` 缺 key → L2 落 {"results": [], "ttl": 45}，用户按
+    文档配好 PARALLEL_API_KEY 后同一查询仍 cached=true 并回放
+    「PARALLEL_API_KEY 未设置」，与 issue #12 报告人的体验逐字同构。
+    """
+
+
+# 配置/状态类失败的状态名（engine_dispatch.classify_engine_outcome 词汇表）。
+# 网络类失败（timeout/blocked/rate-limited/no-results）刻意不收——它们中
+# 确实混有「真的没有」，负缓存是既有设计（EMPTY_RESULT_TTL），等一会重试
+# 由 TTL 自然兜底。本类的共同点：**换环境就能好**，缓存它没有信息量。
+_STATE_FAIL_STATUSES = frozenset({
+    "skipped-missing-env", "skipped-circuit-open", "auth-failed",
+    "quota-exhausted",
+})
+
+# builder 路径漏到 status="error" 的缺密钥形态：路由层 env 拦截覆盖不到
+# 自定义 required_env 的引擎（search.py:192-209 docstring 自认的缺口），
+# issue #12 的 parallel/seltz/you 就读裸名——状态层 env_ready=True、执行层
+# 取不到值。按 detail 文本兜底识别。
+_MISSING_ENV_DETAIL_KEYWORDS = (
+    "未设置", "api_key", "api key", "apikey", "环境变量",
+)
+
+
+def is_state_failure_outcome(outcome: Any) -> bool:
+    """单引擎结局是否「配置/状态类失败」（可修复，不该负缓存）。"""
+    if not isinstance(outcome, dict):
+        return False
+    status = str(outcome.get("status") or "")
+    if status in _STATE_FAIL_STATUSES:
+        return True
+    if status == "error":
+        detail = str(outcome.get("detail") or "").lower()
+        return any(k in detail for k in _MISSING_ENV_DETAIL_KEYWORDS)
+    return False
+
+
+def failed_state_reason(payload: object) -> str | None:
+    """载荷是否「整体没搜成且原因可修复」——是则返回理由（否则 None）。
+
+    判据：**没有任何有效结果**、且**至少一个**引擎结局是配置/状态类失败。
+    两条边界的理由：
+
+      - 有有效结果时不拦：个别引擎的配置失败不毒化整批（照常缓存）；
+      - 「至少一个」而不是「全部」：缓存命中会**原样回放 engine_outcomes**
+        并由 _collect_errors 重建 errors——混合场景里那条「未设置」会在
+        用户配好 key 后继续重放 45s，与单引擎形态同构。连带的代价只是
+        别的引擎少一份 45s 负缓存（重试一次超时引擎本就无妨）。
+
+    网络类失败单独出现时不拦（见 _STATE_FAIL_STATUSES 注释）。
+    """
+    if not isinstance(payload, dict):
+        return None
+    results = payload.get("results")
+    if isinstance(results, list) and any(
+            isinstance(r, dict) and "error" not in r for r in results):
+        return None
+    outcomes = payload.get("engine_outcomes")
+    if isinstance(outcomes, dict):
+        outcomes = [outcomes]  # 单引擎直写形态（CLI --engine 路径）
+    if not isinstance(outcomes, list) or not outcomes:
+        return None
+    failed = [o for o in outcomes if is_state_failure_outcome(o)]
+    if failed:
+        kinds = sorted({str(o.get("status") or "?") for o in failed
+                        if isinstance(o, dict)})
+        return (f"{len(failed)}/{len(outcomes)} 个引擎为配置/状态类失败"
+                f"（{'/'.join(kinds)}）且无有效结果，不写负缓存")
+    return None
+
+
+def assert_not_failed_state(payload: object, *, context: str) -> None:
+    """配置/状态类失败硬拒绝：宁可下次重打，也不把「没配对」固化成「没答案」。"""
+    reason = failed_state_reason(payload)
+    if reason:
+        raise FailedStateCacheRejected(f"{context}: {reason}")
+
+
 def cache_write_rejections() -> tuple[type[Exception], ...]:
-    """写入守卫会抛的全部异常类：退化（本模块）+ 登录态（cache.py）。
+    """写入守卫会抛的全部异常类：退化 + 失败态（本模块）+ 登录态（cache.py）。
 
     登录态那一个只能函数级取：cache.py 模块级 import 本模块，反向 import
-    会成环。取不到（cache 被换掉/裁掉）时只留退化守卫——少认一种异常最多
+    会成环。取不到（cache 被换掉/裁掉）时只留本模块守卫——少认一种异常最多
     让那一路退回旧行为，不该反过来让调用方炸掉。
     """
     try:
         from cache import LoginCacheRejected
     except OPT_IMPORT:
-        return (DegradedCacheRejected,)
-    return (DegradedCacheRejected, LoginCacheRejected)
+        return (DegradedCacheRejected, FailedStateCacheRejected)
+    return (DegradedCacheRejected, FailedStateCacheRejected, LoginCacheRejected)
 
 
 def attempt_cache_write(write: Callable[[], Any], *,

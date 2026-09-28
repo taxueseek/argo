@@ -49,6 +49,7 @@ def _log(message: str) -> None:
     import logging
     logging.getLogger("unified_search").debug(message)
 
+from bounded_run import run_bounded
 from cache_guard import attempt_cache_write
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
@@ -517,9 +518,22 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                 enabled_set = None
 
             def _recovery_executor(rq: str, rengines: list[str]) -> list[dict[str, Any]]:
-                """恢复执行器：串行跑候选引擎，取首个非空。跳过缓存避免污染。"""
-                out: list[dict[str, Any]] = []
-                for eng in rengines:
+                """恢复执行器：对冲竞速跑候选引擎，取首个非空。跳过缓存避免污染。
+
+                并行形态（2026-09-29）：原为严格串行——域查询零结果时 recovery
+                段占 process_ms 的 79–86%（实测中位 906ms；「黄金价格」2019ms、
+                「比特币行情」1989ms），是体感「有时特别慢」的直接原因。改为
+                「起步间隔 = grace 的有界并发」（bounded_run.run_bounded 的
+                stagger 语义，与 dispatch 串行路径同一套对冲哲学，见
+                engine_dispatch._run_engines_bounded）：首引擎先跑，grace 内
+                交付仍只付一次调用，超时才补发下一匹；任一引擎交付非空即收工。
+                grace 复用 hooks.primary_grace_s（标定依据见 search._PRIMARY_GRACE_S），
+                不新增开关面。总等待上限 = grace×(n-1) + timeout + 1s ≤ 串行版
+                n×timeout，最坏情况也不慢于改造前。消融：把 primary_grace 调到
+                大于引擎超时上限即完全退回严格串行（与 ARGO_SERIAL_STAGGER_S
+                同思路）。daemon 线程不 join，卡住的 HTTP 读拖不垮止损。
+                """
+                def _fire(eng: str) -> list[dict[str, Any]]:
                     # 记下真正发出的调用：恢复段走的不是 dispatch，若不单独记账，
                     # 漏斗会算出「routed 2 → called 2 → returned 5」这种自相矛盾的
                     # 账（实测「python 怎么读csv」），而这正是最需要被看见的路径。
@@ -544,14 +558,35 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                     # 而 quota_batch.add 的全仓唯一常规入口在 dispatch 的
                     # _run_one 里——恢复链不走那条路，不在这里补一行，
                     # 这批消耗就落在本地账本之外（见下方 flush 处注释）。
+                    # add 是 list.append（GIL 下原子），对冲线程并发调用安全。
                     quota_batch.add(eng, bool(goods))
                     if goods:
                         for r in goods:
                             r.setdefault("_engine", eng)
                             r.setdefault("_recovered", True)
-                        out.extend(goods)
-                        break
-                return out
+                    return goods
+
+                if len(rengines) <= 1:
+                    return _fire(rengines[0]) if rengines else []
+                grace = max(0.0, float(hooks.primary_grace_s or 0.0))
+                wait_s = grace * (len(rengines) - 1) \
+                    + max(1.0, float(timeout)) + 1.0
+
+                def _enough(finished: list[tuple[str, Any]]) -> bool:
+                    # 任一引擎交付非空即收工：不再起排队中的引擎（省调用），
+                    # 已在跑的归 unfinished（daemon，结果丢弃但配额已如实记）。
+                    return any(isinstance(v, list) and v for _i, v in finished)
+
+                finished, _unfinished = run_bounded(
+                    rengines, _fire, wait_s, max_workers=3,
+                    enough=_enough, stagger_s=grace)
+                # finished 按完成先后排列：首个非空即「最快非空」。与串行版
+                # 「首个非空」的差别只在来源引擎——恢复候选都过 run_recovery
+                # 的 query-signal 门，质量由它把关。
+                for _item, value in finished:
+                    if isinstance(value, list) and value:
+                        return value
+                return []
 
             rec_results, rec_result = run_recovery(
                 query, tried, _recovery_executor,

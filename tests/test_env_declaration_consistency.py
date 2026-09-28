@@ -38,7 +38,8 @@ if SCRIPTS_DIR not in sys.path:
 
 from config import load_config  # noqa: E402
 from engine_env import (  # noqa: E402
-    KNOWN_ENV_ALIASES, required_env_for, get_env, missing_env_for,
+    KNOWN_ENV_ALIASES, PLACEHOLDER_ALIASES, required_env_for, get_env,
+    missing_env_for,
 )
 
 # 密钥类变量名的形态：结尾为这些后缀
@@ -56,11 +57,24 @@ def _builders_module_path() -> str:
 
 
 def _builder_env_reads(engine_id: str) -> set[str]:
-    """返回某引擎 builder 及其调用的本地 helper 直读的环境变量名。
+    """返回某引擎 builder 及其调用的本地 helper 直读的环境变量名（名集合）。"""
+    return set(_builder_env_reads_kind(engine_id))
+
+
+def _builder_env_reads_kind(engine_id: str) -> dict[str, bool]:
+    """同 _builder_env_reads，但值区分**读取方式是否变体感知**。
+
+    为什么需要这个区分（2026-09-29，issue #12 续发事故）：状态层
+    `missing_env_for` 对所有声明名都走 `get_env(candidates)` 候选链——
+    用户配 ARGO_X 或裸 X 任一都算 ready。builder 若裸读
+    `os.environ.get("X")`，则「声明⊆读取」仍成立（X 确实被读了），
+    forward 测试全绿，但用户按文档配 ARGO_X 后执行层取到空串——
+    状态说谎的反方向。故反向测试的判据不是「读没读」，而是
+    「是否变体感知地读」：get_env/env_flag 是（单名也会经 _name_variants
+    展开）；os.environ.get/os.getenv/os.environ[] 不是。
 
     解析路径：engines.py 的 _BUILDERS[engine_id] → 取函数名 →
-    在该函数所在模块的 AST 里定位它 → 收集 os.environ.get("X") /
-    os.environ["X"] / os.getenv("X") / get_env("X") 的常量参数。
+    在该函数所在模块的 AST 里定位它 → 收集常量参数（含 get_env 列表形态）。
 
     **必须跟随本地 helper 调用**（实测教训）：`_build_you_engine` 本身不读
     密钥，它调用同模块的 `_you_key()` 才读 `YDC_API_KEY`。首版扫描只看
@@ -71,10 +85,10 @@ def _builder_env_reads(engine_id: str) -> set[str]:
 
     fn = getattr(eng_mod, "_BUILDERS", {}).get(engine_id)
     if fn is None:
-        return set()
+        return {}
     fn_name = getattr(fn, "__name__", "")
     if not fn_name:
-        return set()
+        return {}
 
     # 定位包含该函数的模块文件
     mod_file = None
@@ -93,12 +107,12 @@ def _builder_env_reads(engine_id: str) -> set[str]:
             mod_file = path
             break
     if not mod_file:
-        return set()
+        return {}
 
     try:
         tree = ast.parse(open(mod_file, encoding="utf-8").read())
     except (OSError, SyntaxError):
-        return set()
+        return {}
 
     # 收集**模块顶层**函数（供传递闭包解析）。
     # 关键：不能用 ast.walk 收集全部函数——`_engine` 这类嵌套函数名在各个
@@ -109,31 +123,43 @@ def _builder_env_reads(engine_id: str) -> set[str]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             funcs[node.name] = node
 
-    found: set[str] = set()
+    found: dict[str, bool] = {}
     visited: set[str] = set()
 
-    def _collect(node: ast.AST) -> set[str]:
+    def _collect(node: ast.AST) -> dict[str, bool]:
         """收集某函数体内的密钥读取（含其嵌套函数，因为它们同属一个 builder）。"""
-        reads: set[str] = set()
+        reads: dict[str, bool] = {}
 
-        def _record(call: ast.Call) -> None:
-            if call.args and isinstance(call.args[0], ast.Constant) \
-                    and isinstance(call.args[0].value, str):
-                reads.add(call.args[0].value)
+        def _record(call: ast.Call, aware: bool) -> None:
+            if not call.args:
+                return
+            a0 = call.args[0]
+            consts: list[ast.AST] = []
+            if isinstance(a0, ast.Constant):
+                consts = [a0]
+            elif isinstance(a0, (ast.List, ast.Tuple)):
+                # get_env(["ARGO_X", "X"]) 候选链写法：列表整体可变体感知
+                consts = list(a0.elts)
+            for c in consts:
+                if isinstance(c, ast.Constant) and isinstance(c.value, str):
+                    # 任一入口变体感知即视为该名被变体感知地读取
+                    reads[c.value] = reads.get(c.value, False) or aware
 
         for sub in ast.walk(node):
             if isinstance(sub, ast.Call):
                 f = sub.func
                 if isinstance(f, ast.Attribute) and f.attr in ("get", "getenv"):
-                    _record(sub)
-                elif isinstance(f, ast.Name) and f.id in ("getenv", "get_env"):
-                    _record(sub)
+                    _record(sub, aware=False)  # os.environ.get / os.getenv：裸读
+                elif isinstance(f, ast.Name) and f.id == "getenv":
+                    _record(sub, aware=False)
+                elif isinstance(f, ast.Name) and f.id in ("get_env", "env_flag"):
+                    _record(sub, aware=True)  # 候选链/单名展开：变体感知
             elif isinstance(sub, ast.Subscript):
                 v = sub.value
                 if (isinstance(v, ast.Attribute) and v.attr == "environ"
                         and isinstance(sub.slice, ast.Constant)
                         and isinstance(sub.slice.value, str)):
-                    reads.add(sub.slice.value)
+                    reads[sub.slice.value] = reads.get(sub.slice.value, False)
         return reads
 
     def _resolve(fname: str) -> None:
@@ -141,7 +167,8 @@ def _builder_env_reads(engine_id: str) -> set[str]:
             return
         visited.add(fname)
         node = funcs[fname]
-        found.update(_collect(node))
+        for name, aware in _collect(node).items():
+            found[name] = found.get(name, False) or aware
         # 传递：仅跟随**顶层**函数调用（顶层函数才可能是共享 helper）
         for sub in ast.walk(node):
             if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load) \
@@ -212,6 +239,29 @@ def _candidate_engines() -> list[tuple[str, dict]]:
     return [(k, v) for k, v in engs.items() if isinstance(v, dict)]
 
 
+def _spec_placeholder_names(spec: dict) -> set[str]:
+    """spec 里 {NAME} 占位符引用的环境变量名。
+
+    声明式 HTTP 引擎（无 Python builder）的取密钥路径：config.yaml 的
+    headers/params 写 `X-API-Key: "{ARGO_KEENABLE_API_KEY}"`，请求构建时
+    由 engines_base.expand_placeholders 展开——这就是真实消费点。
+    """
+    out: set[str] = set()
+
+    def _walk(v) -> None:
+        if isinstance(v, str):
+            out.update(re.findall(r"\{([A-Z][A-Z0-9_]*)\}", v))
+        elif isinstance(v, dict):
+            for x in v.values():
+                _walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                _walk(x)
+
+    _walk(spec)
+    return out
+
+
 class TestEnvDeclarationConsistency:
     """builder 读取的密钥必须已声明，否则状态会误报 ready。"""
 
@@ -235,6 +285,64 @@ class TestEnvDeclarationConsistency:
             + "\n  ".join(offenders)
             + "\n修法：在 config.yaml 对应引擎下加 required_env，"
               "或把密钥名加入 KNOWN_ENV_ALIASES。"
+        )
+
+    def test_declared_secrets_are_read_by_builder(self):
+        """反向契约（2026-09-29 新增）：声明了的密钥，必须被**变体感知地**消费。
+
+        原测试只拦「读了但没声明」；issue #12 的续发事故是反方向——
+        config 声明 `PARALLEL_API_KEY`（状态层经候选链连 ARGO_ 名也认），
+        builder 却裸读 `os.environ.get("PARALLEL_API_KEY")`：用户按文档配
+        ARGO_PARALLEL_API_KEY 后状态报 ready、执行层取空串，恒 0 结果，
+        失败还被 L2 负缓存回放。「任一形式即算声明」的旧判据从设计上放过
+        了这个方向，故补本测试。
+
+        消费路径有三条（覆盖任一即算读到）：
+          1. builder 闭包内 **get_env/env_flag** 的读取（单名也会经
+             _name_variants 展开为候选链，与状态层同源）；
+          2. spec 里的 {NAME} 占位符（声明式 HTTP 引擎路径，展开时经
+             PLACEHOLDER_ALIASES 变体感知）；
+          3. 停用引擎跳过——不可路由即无「状态说谎」路径。
+        裸 os.environ.get/os.getenv 只覆盖它写的那一个名字：声明名的另一
+        个变体仍在 uncovered 集合里，正是要被抓的形态。
+        """
+        offenders: list[str] = []
+        for engine_id, spec in _candidate_engines():
+            declared = {n for n in _declared_names(engine_id, spec)
+                        if _is_secret(n)}
+            if not declared:
+                continue
+            if not spec.get("enabled", True):
+                continue
+
+            def _variants(n: str) -> set[str]:
+                return {n, n[len("ARGO_"):] if n.startswith("ARGO_")
+                        else f"ARGO_{n}"}
+
+            covered: set[str] = set()
+            raw_only: set[str] = set()
+            reads_kind = _builder_env_reads_kind(engine_id)
+            for name, aware in reads_kind.items():
+                if aware:
+                    covered |= _variants(name)
+                elif _is_secret(name):
+                    raw_only.add(name)  # 裸读只覆盖写到的这一个名字
+            for n in _spec_placeholder_names(spec):
+                for cand in [n] + list(PLACEHOLDER_ALIASES.get(n, [])):
+                    covered |= _variants(cand)
+            unread = declared - covered - raw_only
+            if unread:
+                offenders.append(
+                    f"{engine_id}: 声明了 {sorted(unread)} 但无变体感知的消费"
+                    f"路径（builder get_env 读取 "
+                    f"{sorted(n for n, a in reads_kind.items() if a and _is_secret(n)) or '无'}，"
+                    f"裸读 {sorted(raw_only) or '无'}，"
+                    f"spec 占位符 {sorted(_spec_placeholder_names(spec)) or '无'}）")
+        assert not offenders, (
+            "以下引擎的状态层会误报 ready（声明的密钥没有变体感知的消费路径）：\n  "
+            + "\n  ".join(offenders)
+            + "\n修法：builder 改走 get_env([\"ARGO_<NAME>\", \"<NAME>\"]) "
+              "候选链（见 engine_env._name_variants），与状态层同源。"
         )
 
     def test_no_callable_state_lies_about_secret(self):

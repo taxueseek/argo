@@ -75,10 +75,17 @@ _LOCALHOST_NAMES = {"localhost", "localhost.localdomain", "ip6-localhost"}
 
 
 def allow_private() -> bool:
-    """是否显式放行私有地址（ARGO_ALLOW_PRIVATE_URLS=1）。"""
-    return os.environ.get("ARGO_ALLOW_PRIVATE_URLS", "").strip() in {
-        "1", "true", "yes",
-    }
+    """是否显式放行私有地址（ARGO_ALLOW_PRIVATE_URLS=1）。
+
+    收编到 env_flag（2026-09-29）：授权位必须 expand=False + strict=True
+    （见 env_flag docstring——别名展开落在授权位上等于授权扩张，「非关即开」
+    会让任何拼错的值放行 SSRF）。此前裸读三值表：不读 env 文件、只认
+    1/true/yes，且整个逃过静态门禁的授权位检查（门禁只匹配 env_flag 调用
+    形状；同批已升级为按 ARGO_ALLOW_ 名字匹配，裸读即报红）。
+    """
+    from engine_env import env_flag
+    return env_flag("ARGO_ALLOW_PRIVATE_URLS", default=False,
+                    expand=False, strict=True)
 
 
 def is_private_ip(ip_str: str) -> bool:

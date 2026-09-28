@@ -25,8 +25,9 @@ _DEFAULT_WAIT_TIMEOUT_S = 60.0
 
 
 def _enabled() -> bool:
-    raw = (os.environ.get("ARGO_TOOL_CALL_COALESCE") or "").strip().lower()
-    return raw not in {"0", "false", "off", "no"}
+    from engine_env import env_flag
+    # 收编到 env_flag（2026-09-29）：同 conn_pool——统一真值表 + env 文件可配
+    return env_flag("ARGO_TOOL_CALL_COALESCE", default=True)
 
 
 class SingleFlightCoalescer:

@@ -30,6 +30,14 @@ os.environ["ARGO_ROUTE_CACHE"] = "0"
 _STATE_DIR = tempfile.mkdtemp(prefix="argo-test-state-")
 os.environ["ARGO_STATE_DIR"] = _STATE_DIR
 
+# 密钥文件隔离（2026-09-29）：get_env 在 os.environ 之后会热读
+# ~/.config/argo/env——开发者机器上的真实密钥会渗进测试：未配 key 的
+# 「必须显式报错」用例（seltz/you/parallel 等）拿到真 key 后静默通过，
+# 而 CI 上同样是红的——方向相反的假绿/假红。与 ARGO_STATE_DIR 同一理由：
+# 测试不得读取开发者的真实配置。指向临时目录里一个不存在的文件 = 空 env
+# 文件；需要验证 env 文件行为的测试自行显式设置 ARGO_ENV_FILE。
+os.environ["ARGO_ENV_FILE"] = os.path.join(_STATE_DIR, "nonexistent-env")
+
 
 # HTTP 连接池（conn_pool）是**进程级**可变状态：某个用例期间建立的空闲连接
 # 会被后续用例复用，改变它们看到的网络形态。实测（2026-09-27）：

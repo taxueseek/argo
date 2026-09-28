@@ -32,6 +32,7 @@ import sys
 import time
 from urllib.parse import urlparse
 from cli_io import dumps
+from engine_env import get_env
 
 _SELTZ_ANSWER_URL = "https://api.seltz.ai/v1/answer"
 _SELTZ_SCOPES = ("news", "wikipedia", "people", "companies")
@@ -63,7 +64,7 @@ def seltz_answer(query: str, timeout: float = 40.0, *,
         return None, f"未知 scope {scope!r}（可选：{'/'.join(_SELTZ_SCOPES)}）"
     if model and model not in _SELTZ_MODELS:
         return None, f"未知 model {model!r}（可选：{'/'.join(_SELTZ_MODELS)}）"
-    key = os.environ.get("SELTZ_API_KEY", "")
+    key = get_env(["ARGO_SELTZ_API_KEY", "SELTZ_API_KEY"])
     if not key:
         return None, "SELTZ_API_KEY 未设置（写入 ~/.config/argo/env 后重试）"
     body: dict = {"query": query}

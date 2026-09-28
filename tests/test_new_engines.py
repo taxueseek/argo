@@ -294,6 +294,10 @@ class TestMultiEngineAndFallback(unittest.TestCase):
         with (
             patch("search.engine_search", side_effect=fake),
             patch("circuit_breaker.get_breaker", return_value=_AllowAllBreaker()),
+            # 自备密钥（2026-09-29）：execute_search 会按 env 就绪过滤引擎，
+            # bocha 无密钥不可路由——此前依赖开发者 ~/.config/argo/env 的真
+            # 密钥，本机绿、CI/干净机器红（conftest 已隔离 env 文件）
+            patch.dict(os.environ, {"ARGO_BOCHA_API_KEY": "test-key"}),
         ):
             return execute_search(
                 query,

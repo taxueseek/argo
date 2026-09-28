@@ -61,7 +61,10 @@ _last_check: float = 0.0
 def should_reload(min_interval: float = 1.0) -> bool:
     """距上次检查超过 min_interval 才真正 stat 一轮；指纹变化返回 True。"""
     global _last_fingerprint, _last_check
-    if os.environ.get("ARGO_NO_AUTORELOAD", "").strip() in ("1", "true", "yes"):
+    from engine_env import env_flag
+    # 收编到 env_flag（2026-09-29）：反向开关，极性不变（设了就不重载）；
+    # 此前的三值表不认 on/y/t，写进 env 文件也不生效
+    if env_flag("ARGO_NO_AUTORELOAD", default=False):
         return False
     now = time.monotonic()
     if now - _last_check < min_interval:

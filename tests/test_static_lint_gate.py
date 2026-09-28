@@ -504,6 +504,32 @@ def _authorization_flags_are_explicit(paths: list[Path]) -> list[str]:
                 problems.append(
                     f"{_rel(path)}:{node.lineno} 授权开关 {first.value} 未写明 "
                     f"{'、'.join(missing)}——授权只能认字面名与明确真值")
+        # 裸读授权位（2026-09-29 升级）：ARGO_ALLOW_* 只允许经
+        # env_flag(expand=False, strict=True) 读取。判据从「调用名匹配」
+        # 升级为「名字匹配」——此前 url_safety.allow_private 裸读三值表，
+        # 门禁只认 env_flag 调用形状，直读整个逃检；而授权位逃检意味着
+        # SSRF 放行这类位可能被任意拼错的值打开，且不读 env 文件。
+        for sub in ast.walk(tree):
+            names: list[str] = []
+            if isinstance(sub, ast.Call):
+                f = sub.func
+                if (isinstance(f, ast.Attribute) and f.attr in ("get", "getenv")
+                        and sub.args
+                        and isinstance(sub.args[0], ast.Constant)
+                        and isinstance(sub.args[0].value, str)):
+                    names = [sub.args[0].value]
+            elif (isinstance(sub, ast.Subscript)
+                    and isinstance(sub.value, ast.Attribute)
+                    and sub.value.attr == "environ"
+                    and isinstance(sub.slice, ast.Constant)
+                    and isinstance(sub.slice.value, str)):
+                names = [sub.slice.value]
+            for nm in names:
+                if nm.startswith("ARGO_ALLOW_"):
+                    problems.append(
+                        f"{_rel(path)}:{sub.lineno} 授权开关 {nm} 被裸读"
+                        f"（os.environ/getenv）——授权位只能经 "
+                        f"env_flag(..., expand=False, strict=True) 读取")
     return problems
 
 
@@ -826,6 +852,34 @@ class TestStaticLintGate(unittest.TestCase):
             problems = _authorization_flags_are_explicit([bad])
         self.assertEqual(len(problems), 2, f"造错样本没被抓住：{problems}")
         self.assertTrue(all("ARGO_ALLOW_RECOMPUTE" in p for p in problems))
+
+    def test_gate_has_teeth_authorization_direct_read_banned(self):
+        """裸读 ARGO_ALLOW_*（os.environ/getenv/下标）必须被抓住。
+
+        2026-09-29 升级的动因：url_safety.allow_private 裸读三值表，
+        旧判据只匹配 env_flag 调用形状，直读整个逃检——授权位逃检比
+        漏写 expand/strict 更危险（连「必须显式」这关都没有）。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            bad = Path(td) / "bad_direct.py"
+            bad.write_text(
+                "import os\n"
+                "from engine_env import env_flag\n\n"
+                "def a():\n"
+                "    return os.environ.get('ARGO_ALLOW_PRIVATE_URLS', '') in {'1'}\n\n"
+                "def b():\n"
+                "    return os.getenv('ARGO_ALLOW_PRIVATE_URLS')\n\n"
+                "def c():\n"
+                "    return os.environ['ARGO_ALLOW_PRIVATE_URLS']\n\n"
+                "def ok_capability():\n"
+                "    return os.environ.get('ARGO_HTTP_POOL', '1')\n\n"
+                "def ok_auth():\n"
+                "    return env_flag('ARGO_ALLOW_RECOMPUTE', default=False,\n"
+                "                    expand=False, strict=True)\n",
+                encoding="utf-8")
+            problems = _authorization_flags_are_explicit([bad])
+        self.assertEqual(len(problems), 3, f"裸读授权位没被抓住：{problems}")
+        self.assertTrue(all("被裸读" in p for p in problems))
 
     def test_no_shadowed_reexports(self):
         """门面模块不得既转出又本地定义同名符号（静默遮蔽实现）。"""

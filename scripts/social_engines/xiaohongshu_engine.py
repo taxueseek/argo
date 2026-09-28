@@ -36,8 +36,11 @@ def search(query: str, n: int = 5) -> list[dict]:
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_xhs_output(result.stdout, n)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        # CLI 未安装/超时不是「平台 0 结果」：带 error 浮上来，与社交引擎
+        # 统一范式一致（zhihu_engine 范式，mcp_handlers 的 err=None 设计
+        # 依赖引擎抛异常或返 error 占位）。
+        return [{"error": f"xhs CLI {type(e).__name__}", "source": "xiaohongshu"}]
     return []
 
 

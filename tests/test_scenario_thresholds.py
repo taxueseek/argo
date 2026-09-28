@@ -59,6 +59,10 @@ def cold_routing():
         mp.setattr(engine_admission, "DEFAULT_ADMISSION_DIR", tmp / "admission")
         mp.setattr(circuit_breaker, "get_breaker",
                    lambda: CircuitBreaker(state_path=str(tmp / "breaker.json")))
+        # 自备密钥（2026-09-29）：场景契约按「密钥已配置」标定（如
+        # S_react_rsc 的 octen），此前默默消费开发者 ~/.config/argo/env
+        # 的真密钥——本机绿、CI/干净机器红（conftest 已隔离 env 文件）
+        mp.setenv("ARGO_OCTEN_API_KEY", "test-key")
         yield
 
 

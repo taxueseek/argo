@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -225,6 +226,77 @@ class TestRecoveryTimeWindowPropagation(unittest.TestCase):
             since_iso, _, _, _ = search_mod._normalize_time_window("7d", None)
             self.assertEqual(kwargs.get("since"), since_iso)
             self.assertEqual(kwargs.get("until"), "2026-08-05")
+
+
+# ── 4b. recovery 执行器对冲竞速（2026-09-29 并行化回归守卫）────────────────────
+
+class TestRecoveryHedgedParallel(unittest.TestCase):
+    """恢复执行器的对冲语义：首引擎慢则宽限窗后补发，快且合格则只付一次调用。
+
+    背景：原为严格串行——域查询零结果时 recovery 占 process_ms 的 79–86%
+    （实测中位 906ms，「黄金价格」2019ms）。现复用 bounded_run.run_bounded
+    的 stagger（与 dispatch 串行路径同一套对冲哲学）。这两条用例锁住
+    「延迟收益」与「成本回退」两个方向，防止并行化退化成无脑全发。
+    """
+
+    def _capture_executor(self, latencies, results):
+        """跑一次主流程捕获恢复执行器；engine_search 按 latencies 延时返回。"""
+        captured: dict = {}
+        calls: list[str] = []
+
+        def fake_run_recovery(query, tried, executor, **kwargs):
+            captured["executor"] = executor
+
+            class _FakeResult:
+                def to_dict(self):
+                    return {"triggered": True, "recovered": True,
+                            "level_used": "L3", "strategy_used": "switch_engine",
+                            "steps_tried": [], "final_query": query,
+                            "note": "test"}
+
+            return [], _FakeResult()
+
+        def fake_engine_search(q, eng, **kwargs):
+            calls.append(eng)
+            time.sleep(latencies.get(eng, 0.05))
+            return results.get(eng, [])
+
+        decision = {"domain": "general", "engine": "auto",
+                    "engines_combo": ["octen"],
+                    "engines_fallback": ["e1", "e2"]}
+        with patch.object(search_mod, "engine_search",
+                          side_effect=fake_engine_search), \
+             patch.object(search_mod, "_PRIMARY_GRACE_S", 0.2), \
+             patch("recovery.run_recovery", side_effect=fake_run_recovery):
+            search_mod.execute_search(
+                "测试查询", decision, max_results=5, timeout=5, depth="fast",
+                cache=SearchCache(db_path=":memory:"), skip_cache=True,
+                mode="fast", sort="relevance")
+        self.assertIn("executor", captured)
+        return captured["executor"], calls
+
+    def test_slow_primary_hedges_backup(self):
+        ex, _ = self._capture_executor(
+            latencies={"e1": 1.0, "e2": 0.05},
+            results={"e1": [], "e2": [{"title": "t", "url": "https://x.com"}]})
+        t0 = time.monotonic()
+        out = ex("测试查询", ["e1", "e2"])
+        dt = time.monotonic() - t0
+        self.assertTrue(out, "对冲后应拿到 e2 的结果")
+        self.assertEqual(out[0]["_engine"], "e2")
+        self.assertTrue(out[0].get("_recovered"), "恢复结果应带 _recovered 标记")
+        # 串行将 ≥1.05s；对冲后 ≈ grace(0.2)+0.05 ≈ 0.25s，留足余量防慢机误判
+        self.assertLess(dt, 0.8, f"对冲未生效：实际耗时 {dt:.2f}s")
+
+    def test_fast_primary_costs_single_call(self):
+        ex, calls = self._capture_executor(
+            latencies={"e1": 0.05, "e2": 0.05},
+            results={"e1": [{"title": "t", "url": "https://x.com"}], "e2": []})
+        calls.clear()
+        out = ex("测试查询", ["e1", "e2"])
+        self.assertTrue(out)
+        self.assertEqual(out[0]["_engine"], "e1")
+        self.assertEqual(calls, ["e1"], "grace 内交付不应补发备用引擎")
 
 
 # ── 5. CLI 解析器尊重 n ──────────────────────────────────────────────────────

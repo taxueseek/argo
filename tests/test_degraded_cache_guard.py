@@ -137,9 +137,10 @@ class TestAttemptCacheWrite:
         with pytest.raises(RuntimeError):
             attempt_cache_write(_boom, context="t")
 
-    def test_rejection_tuple_covers_both_guards(self):
+    def test_rejection_tuple_covers_all_guards(self):
         names = {c.__name__ for c in cache_write_rejections()}
-        assert names == {"DegradedCacheRejected", "LoginCacheRejected"}
+        assert names == {"DegradedCacheRejected", "FailedStateCacheRejected",
+                         "LoginCacheRejected"}
 
 
 class TestRejectionDoesNotKillTheQuery:

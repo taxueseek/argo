@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 import shutil
 import time
@@ -23,9 +22,9 @@ from typing import Any, Callable
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
-# logging 延迟导入：config.py 的 import 链实测 31ms，其中 logging 占 13ms。
-# _logger 仅 1 处 warning 使用，模块级导入会让所有 import config 的路径白付。
-# 延迟到首次调用时 import，--list-engines / --help 等路径省 13ms。
+# logging 延迟导入（已实施）：config.py 的 import 链实测 23ms，其中 logging 占 ~10ms。
+# 全文件仅 1 处 warning 使用（routable_only 过滤降级留痕），在该函数内 import，
+# 模块级导入会让所有 import config 的路径白付 ~10ms/次。
 # shutil 保留模块级：仅 5ms，且测试用 patch.object(config_mod.shutil, ...) 依赖它。
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"

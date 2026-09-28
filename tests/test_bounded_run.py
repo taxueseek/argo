@@ -148,5 +148,91 @@ class TestNoAutoJoiningTimeout(unittest.TestCase):
             "请改用 bounded_run.run_bounded：" + ", ".join(offenders))
 
 
+class TestRunBoundedStagger(unittest.TestCase):
+    """stagger_s 的对冲语义：首任务先跑，宽限窗内交付只付一次调用。
+
+    锁住三条不变式：
+      1. 首任务慢 → 宽限窗后才补发（对冲），不是立即全发、也不是死等；
+      2. 首任务快且合格 → 备用任务根本不启动（成本回退）；
+      3. 首任务快但空手 → 立即补发（没有可对冲的对象，等满窗纯属浪费）。
+    """
+
+    def test_slow_primary_gets_hedged_after_grace(self):
+        calls: list[str] = []
+
+        def worker(x):
+            calls.append(x)
+            if x == "slow":
+                time.sleep(0.6)
+                return []
+            time.sleep(0.05)
+            return [f"hit-{x}"]
+
+        t0 = time.monotonic()
+        finished, unfinished = run_bounded(
+            ["slow", "fast"], worker, 3.0, max_workers=3,
+            enough=lambda fin: any(isinstance(v, list) and v for _, v in fin),
+            stagger_s=0.2)
+        dt = time.monotonic() - t0
+        # 对冲后 ≈ grace + 快任务时长（0.25s），而非串行和（0.65s）
+        self.assertLess(dt, 0.5, f"对冲未生效：实际耗时 {dt:.2f}s")
+        self.assertGreaterEqual(dt, 0.2, "备用任务不应早于宽限窗启动")
+        self.assertEqual(sorted(calls), ["fast", "slow"])
+        hits = [v for _, v in finished if isinstance(v, list) and v]
+        self.assertEqual(hits, [["hit-fast"]])
+
+    def test_fast_primary_costs_single_call(self):
+        calls: list[str] = []
+
+        def worker(x):
+            calls.append(x)
+            time.sleep(0.05)
+            return [f"hit-{x}"]
+
+        t0 = time.monotonic()
+        finished, _ = run_bounded(
+            ["a", "b"], worker, 3.0, max_workers=3,
+            enough=lambda fin: any(isinstance(v, list) and v for _, v in fin),
+            stagger_s=0.3)
+        dt = time.monotonic() - t0
+        self.assertEqual(calls, ["a"], "grace 内交付不应补发备用任务")
+        self.assertLess(dt, 0.25)
+
+    def test_empty_primary_falls_through_immediately(self):
+        calls: list[str] = []
+
+        def worker(x):
+            calls.append(x)
+            time.sleep(0.05)
+            return [] if x == "a" else [f"hit-{x}"]
+
+        t0 = time.monotonic()
+        finished, _ = run_bounded(
+            ["a", "b"], worker, 3.0, max_workers=3,
+            enough=lambda fin: any(isinstance(v, list) and v for _, v in fin),
+            stagger_s=0.3)
+        dt = time.monotonic() - t0
+        # 首任务 0.05s 空手返回：备用任务应立即接上，不等满 0.3s 宽限窗
+        self.assertEqual(sorted(calls), ["a", "b"])
+        self.assertLess(dt, 0.2, f"空手首任务后仍等了宽限窗：{dt:.2f}s")
+        hits = [v for _, v in finished if isinstance(v, list) and v]
+        self.assertEqual(hits, [["hit-b"]])
+
+    def test_stagger_zero_keeps_legacy_immediate_parallel(self):
+        # stagger_s=0（默认）：行为与改造前完全一致——立即填满并发位
+        started: list[float] = []
+        t0 = time.monotonic()
+
+        def worker(x):
+            started.append(time.monotonic() - t0)
+            time.sleep(0.1)
+            return x
+
+        run_bounded(["a", "b", "c"], worker, 3.0, max_workers=3)
+        self.assertEqual(len(started), 3)
+        for s in started:
+            self.assertLess(s, 0.05, "stagger=0 时应立即并发启动")
+
+
 if __name__ == "__main__":
     unittest.main()

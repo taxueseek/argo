@@ -221,8 +221,8 @@ def invalidate_engine_weight_cache() -> None:
 def _rrf_weighted_default() -> bool:
     """RRF 是否默认按引擎加权（WG-RRF）。
 
-    逃生开关 `ARGO_RRF_WEIGHTED=0`（或 off/no/false）退回**经典 RRF**：
-    Claude Shannon 原文那版，各引擎同位次等权。
+    逃生开关 `ARGO_RRF_WEIGHTED=0`（或 off/no/false/n/disable/disabled/
+    none）退回**经典 RRF**：Claude Shannon 原文那版，各引擎同位次等权。
 
     为什么需要它：加权版把「权威源提权、社交源降权」的领域先验编进了融合层，
     这在多数查询上是净收益，但它**改变了跨引擎的相对次序**——实测同一组
@@ -235,14 +235,11 @@ def _rrf_weighted_default() -> bool:
     ARGO_MINHASH_DEDUPE / ARGO_FETCH_JINA），且 CLI 与 MCP 两种宿主都能
     在不改代码的前提下切换。
     """
-    try:
-        from engine_env import get_env
-        v = get_env("ARGO_RRF_WEIGHTED")
-    except Exception:
-        v = os.environ.get("ARGO_RRF_WEIGHTED")
-    if v is None or str(v).strip() == "":
-        return True
-    return str(v).strip().lower() not in ("0", "off", "no", "false", "disable", "disabled")
+    # 收编到 env_flag（2026-09-29）：此前这里是全仓第五套真值表（多认
+    # disable/disabled、少认 n/on/y/t），且 get_env 失败时回落裸
+    # os.environ 的分支两条路径两份语义。统一后全仓一处判据。
+    from engine_env import env_flag
+    return env_flag("ARGO_RRF_WEIGHTED", default=True)
 
 
 def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,

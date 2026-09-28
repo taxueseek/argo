@@ -56,8 +56,12 @@ def search(query: str, n: int = 5) -> list[dict]:
         body, _ = _http_get_with_retry(url, headers, timeout=10, max_retries=2)
         data = json.loads(body.decode("utf-8"))
         return _parse_weibo_response(data, n)
-    except Exception:
-        return []
+    except Exception as e:
+        # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」
+        # （mcp_handlers 的 err=None 设计依赖引擎抛异常或返 error 占位，
+        # 见 tests/test_regression_p0p1.py「零结果应以 errors 提示」契约）。
+        # 对齐 zhihu_engine 范式：失败必须带着 error 字段浮上来。
+        return [{"error": f"weibo {type(e).__name__}: {e}", "source": "weibo"}]
 
 
 def _parse_weibo_response(data: dict, n: int) -> list[dict]:

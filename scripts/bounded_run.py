@@ -53,6 +53,7 @@ def run_bounded(
     max_workers: int = 3,
     *,
     enough: Callable[[list[tuple[I, Any]]], bool] | None = None,
+    stagger_s: float = 0.0,
     poll: float = 0.01,
 ) -> tuple[list[tuple[I, Any]], list[I]]:
     """并发执行 ``worker(item)``，总等待不超过 ``wait_s`` 秒。
@@ -66,11 +67,19 @@ def run_bounded(
 
     ``enough(finished)`` 返回 True 时提前收尾：不再启动排队中的剩余任务，已在跑的
     任务归入 unfinished。``max_workers`` 限制同时在跑的任务数。
+
+    ``stagger_s`` 起步间隔（秒），单调：0 = 不节流（立即填满并发位）；值越大越接近
+    严格串行（大于单任务超时上限即完全退回串行）。仅在**有任务在跑**时节制——
+    对冲语义（首任务先跑，宽限窗内交付就只付一次调用），而非无条件串行化；在跑
+    任务数为 0 时立即补发（前一个已返回，没有可对冲的对象，等满窗纯属浪费）。
+    engine_dispatch 的 hedged race 与 search_pipeline 的恢复链是同一哲学的两个
+    配置：改这里的起步语义，两边同时生效。
     """
     queue = list(items)
     running: list[tuple[threading.Thread, I, dict]] = []
     finished: list[tuple[I, Any]] = []
     deadline = time.monotonic() + max(0.0, float(wait_s))
+    last_start: float | None = None
 
     def _start(item: I) -> None:
         holder: dict = {}
@@ -90,7 +99,11 @@ def run_bounded(
             break
         # 按并发上限补启动排队任务
         while queue and len(running) < max(1, int(max_workers)):
+            if (stagger_s > 0 and running and last_start is not None
+                    and (time.monotonic() - last_start) < stagger_s):
+                break  # 起步节流：等满 stagger 再补发（对冲）
             _start(queue.pop(0))
+            last_start = time.monotonic()
         progressed = False
         for entry in list(running):
             th, item, holder = entry

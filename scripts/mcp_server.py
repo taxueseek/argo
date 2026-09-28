@@ -154,8 +154,14 @@ if __name__ == "__main__":
     try:
         from engine_env import sync_envfile_to_environ
         sync_envfile_to_environ()
-    except Exception:
-        pass
+    except Exception as e:
+        # 静默 pass 的代价：env 文件同步失败（权限/格式/IO）时，所有需密钥
+        # 的引擎在此长驻进程里静默返回空——正是 engine_env 注释反复警惕的
+        # 「装了没通电」形态。失败不阻断启动，但必须可见。
+        import logging
+        logging.getLogger("unified_search").warning(
+            "env 文件同步失败（%s）：依赖密钥的引擎可能静默返回空——"
+            "请检查 ~/.config/argo/env 的权限与格式", e)
     # 未知旗标显式报错（exit 2）：此前任何拼错的 flag 都静默落进 stdio 模式
     # ——stdio 挂着等 stdin，调用方看到的是「卡死」而不是「参数错了」。
     _skip = 0

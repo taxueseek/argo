@@ -503,8 +503,12 @@ def main():
                     "verified_count": gate["verified_count"],
                     "pending_count": gate["pending_count"],
                 }
-            except Exception:
-                pass
+            except Exception as _ge:
+                # 内层 pass 会把 evidence_loop 从 --json 输出里静默抹掉，
+                # 调用方无从得知门控汇总已缺失。与上方 verify reorder 同款：
+                # 打到 stderr，不打断主流程。
+                print(f"  [evidence_loop refresh skipped] {type(_ge).__name__}",
+                      file=sys.stderr)
             if not args.json_output:
                 rs = v.get("revision_summary") or {}
                 print(

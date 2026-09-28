@@ -90,7 +90,9 @@ def _fetch_robots_txt(host: str, timeout: float) -> str | None:
 
 def _get_parser(scheme: str, host: str, timeout: float) -> RobotFileParser | None:
     """返回带缓存的域解析器；拿不到 robots 返回 None。"""
-    now = time.time()
+    # monotonic（2026-09-29）：缓存仅在进程内，时钟回拨会让 TTL 判据漂移
+    # （墙钟属于跨进程持久层的语义，见 circuit_breaker 的同类注释）。
+    now = time.monotonic()
     key = (scheme, host)
     with _lock:
         cached = _cache.get(key)

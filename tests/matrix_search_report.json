@@ -491,7 +491,7 @@
     {
       "name": "route:R_en_usstock",
       "status": "PASS",
-      "detail": "domain=us_stock eng=finviz combo=['finviz', 'exa'] lang=en",
+      "detail": "domain=us_stock eng=finviz combo=['finviz', 'anysearch'] lang=en",
       "meta": {
         "id": "R_en_usstock",
         "q": "AAPL stock price",
@@ -501,7 +501,7 @@
         "engine": "finviz",
         "combo": [
           "finviz",
-          "exa"
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -617,7 +617,7 @@
     {
       "name": "route:R_en_macro",
       "status": "PASS",
-      "detail": "domain=macro_data eng=fred combo=['fred', 'worldbank'] lang=en",
+      "detail": "domain=macro_data eng=fred combo=['fred', 'nbs_stats'] lang=en",
       "meta": {
         "id": "R_en_macro",
         "q": "US CPI",
@@ -627,7 +627,7 @@
         "engine": "fred",
         "combo": [
           "fred",
-          "worldbank"
+          "nbs_stats"
         ],
         "primary_lang": "en"
       }
@@ -731,7 +731,7 @@
     {
       "name": "route:R_ja_film_kana",
       "status": "PASS",
-      "detail": "domain=film_search eng=imdb combo=['imdb', 'anysearch', 'douban_movie', 'itunes', 'local_bing'] lang=ja",
+      "detail": "domain=film_search eng=imdb combo=['imdb', 'anysearch', 'douban_movie', 'itunes', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_film_kana",
         "q": "宮崎駿 アニメ 映画",
@@ -744,7 +744,8 @@
           "anysearch",
           "douban_movie",
           "itunes",
-          "local_bing"
+          "local_bing",
+          "hatena_bookmark"
         ],
         "primary_lang": "ja"
       }
@@ -873,7 +874,7 @@
     {
       "name": "route:R_ja_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openf1', 'local_bing'] lang=ja",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openf1', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_sports",
         "q": "メッシ クラブ",
@@ -886,7 +887,8 @@
           "anysearch",
           "jolpica",
           "openf1",
-          "local_bing"
+          "local_bing",
+          "hatena_bookmark"
         ],
         "primary_lang": "ja"
       }
@@ -915,7 +917,7 @@
     {
       "name": "route:R_zh_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikidata'] lang=zh",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_geo",
         "q": "埃菲尔铁塔在哪",
@@ -925,7 +927,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "wikidata"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -933,7 +935,7 @@
     {
       "name": "route:R_en_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikidata'] lang=en",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=en",
       "meta": {
         "id": "R_en_geo",
         "q": "where is Eiffel Tower",
@@ -943,7 +945,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "wikidata"
+          "wikipedia"
         ],
         "primary_lang": "en"
       }
@@ -951,7 +953,7 @@
     {
       "name": "route:R_zh_geo2",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikidata'] lang=zh",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_geo2",
         "q": "黄河 流经省份",
@@ -961,7 +963,7 @@
         "engine": "local_openstreetmap",
         "combo": [
           "local_openstreetmap",
-          "wikidata"
+          "wikipedia"
         ],
         "primary_lang": "zh"
       }
@@ -969,7 +971,7 @@
     {
       "name": "route:R_ja_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'anysearch', 'local_bing'] lang=ja",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'anysearch', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_geo",
         "q": "エッフェル塔 どこ",
@@ -980,7 +982,8 @@
         "combo": [
           "local_openstreetmap",
           "anysearch",
-          "local_bing"
+          "local_bing",
+          "hatena_bookmark"
         ],
         "primary_lang": "ja"
       }
@@ -988,7 +991,7 @@
     {
       "name": "route:R_zh_org",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike', 'wikipedia', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia', 'baidu_baike', 'zh_wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_org",
         "q": "国务院职能",
@@ -998,8 +1001,8 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "baidu_baike",
           "wikipedia",
+          "baidu_baike",
           "zh_wikipedia"
         ],
         "primary_lang": "zh"
@@ -1048,7 +1051,7 @@
     {
       "name": "route:R_zh_org2",
       "status": "PASS",
-      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'baidu_baike', 'wikipedia', 'zh_wikipedia'] lang=zh",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia', 'baidu_baike', 'zh_wikipedia'] lang=zh",
       "meta": {
         "id": "R_zh_org2",
         "q": "清华大学 创办年份",
@@ -1058,8 +1061,8 @@
         "engine": "wikidata",
         "combo": [
           "wikidata",
-          "baidu_baike",
           "wikipedia",
+          "baidu_baike",
           "zh_wikipedia"
         ],
         "primary_lang": "zh"
@@ -1146,7 +1149,7 @@
     {
       "name": "route:R_ja_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'weather_cn', 'anysearch', 'weather', 'local_bing'] lang=ja",
+      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'weather_cn', 'anysearch', 'weather', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_weather",
         "q": "東京の天気",
@@ -1159,7 +1162,8 @@
           "weather_cn",
           "anysearch",
           "weather",
-          "local_bing"
+          "local_bing",
+          "hatena_bookmark"
         ],
         "primary_lang": "ja"
       }
@@ -1167,7 +1171,7 @@
     {
       "name": "route:R_en_academic",
       "status": "PASS",
-      "detail": "domain=academic eng=arxiv combo=['arxiv', 'openreview', 'local_pubmed', 'core'] lang=en",
+      "detail": "domain=academic eng=arxiv combo=['arxiv', 'local_pubmed', 'core'] lang=en",
       "meta": {
         "id": "R_en_academic",
         "q": "transformer attention paper",
@@ -1177,7 +1181,6 @@
         "engine": "arxiv",
         "combo": [
           "arxiv",
-          "openreview",
           "local_pubmed",
           "core"
         ],
@@ -1241,7 +1244,7 @@
     {
       "name": "route:R_zh_package",
       "status": "PASS",
-      "detail": "domain=package_search eng=pypi combo=['pypi', 'crates'] lang=en",
+      "detail": "domain=package_search eng=pypi combo=['pypi', 'npm'] lang=en",
       "meta": {
         "id": "R_zh_package",
         "q": "requests pypi",
@@ -1251,7 +1254,7 @@
         "engine": "pypi",
         "combo": [
           "pypi",
-          "crates"
+          "npm"
         ],
         "primary_lang": "en"
       }
@@ -1295,7 +1298,7 @@
     {
       "name": "route:R_ja_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=qiita combo=['qiita', 'anysearch', 'local_bing'] lang=ja",
+      "detail": "domain=general_search eng=qiita combo=['qiita', 'anysearch', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_gen",
         "q": "アニメ おすすめ",
@@ -1306,7 +1309,8 @@
         "combo": [
           "qiita",
           "anysearch",
-          "local_bing"
+          "local_bing",
+          "hatena_bookmark"
         ],
         "primary_lang": "ja"
       }
@@ -1353,17 +1357,17 @@
     {
       "name": "route:R_ar_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=arabic",
+      "detail": "domain=world_news eng=anysearch combo=['anysearch', 'aljazeera'] lang=arabic",
       "meta": {
         "id": "R_ar_gen",
         "q": "أخبار التكنولوجيا",
         "scenario": "general",
         "lang": "arabic",
-        "domain": "general_search",
+        "domain": "world_news",
         "engine": "anysearch",
         "combo": [
           "anysearch",
-          "local_bing"
+          "aljazeera"
         ],
         "primary_lang": "arabic"
       }
@@ -1407,7 +1411,7 @@
     {
       "name": "route:R_zh_gen",
       "status": "PASS",
-      "detail": "domain=chinese_tech_deep eng=octen combo=['octen', 'parallel'] lang=zh",
+      "detail": "domain=chinese_tech_deep eng=octen combo=['octen', 'juejin'] lang=zh",
       "meta": {
         "id": "R_zh_gen",
         "q": "如何学习机器学习",
@@ -1417,7 +1421,7 @@
         "engine": "octen",
         "combo": [
           "octen",
-          "parallel"
+          "juejin"
         ],
         "primary_lang": "zh"
       }
@@ -1515,17 +1519,17 @@
     {
       "name": "route:N_en_history",
       "status": "PASS",
-      "detail": "domain=general_search eng=duckduckgo combo=['duckduckgo', 'anysearch'] lang=en",
+      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
       "meta": {
         "id": "N_en_history",
         "q": "who invented the printing press",
         "scenario": "negative",
         "lang": "en",
         "domain": "general_search",
-        "engine": "duckduckgo",
+        "engine": "anysearch",
         "combo": [
-          "duckduckgo",
-          "anysearch"
+          "anysearch",
+          "local_bing"
         ],
         "primary_lang": "en"
       }
@@ -1533,17 +1537,17 @@
     {
       "name": "route:N_en_garden",
       "status": "PASS",
-      "detail": "domain=general_search eng=duckduckgo combo=['duckduckgo', 'anysearch'] lang=en",
+      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
       "meta": {
         "id": "N_en_garden",
         "q": "how often should I water tomato plants",
         "scenario": "negative",
         "lang": "en",
         "domain": "general_search",
-        "engine": "duckduckgo",
+        "engine": "anysearch",
         "combo": [
-          "duckduckgo",
-          "anysearch"
+          "anysearch",
+          "local_bing"
         ],
         "primary_lang": "en"
       }
@@ -1602,22 +1606,22 @@
     {
       "name": "rec_cross:アニメ おすすめ",
       "status": "PASS",
-      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+      "detail": "engines='anysearch,local_bing,wikipedia'"
     },
     {
       "name": "rec_cross:한국 영화",
       "status": "PASS",
-      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+      "detail": "engines='anysearch,local_bing,wikipedia'"
     },
     {
       "name": "rec_cross:如何写爬虫",
       "status": "PASS",
-      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+      "detail": "engines='anysearch,local_bing,wikipedia'"
     },
     {
       "name": "rec_cross:Как дела",
       "status": "PASS",
-      "detail": "engines='duckduckgo,anysearch,wikipedia'"
+      "detail": "engines='anysearch,local_bing,wikipedia'"
     },
     {
       "name": "rec_cross:hello world",
@@ -1642,7 +1646,7 @@
     {
       "name": "rec_baseline_zh",
       "status": "PASS",
-      "detail": "local_bing,anysearch,duckduckgo"
+      "detail": "local_bing,anysearch,bocha"
     },
     {
       "name": "rec_baseline_skip",
@@ -1655,7 +1659,7 @@
       "detail": "got=web_general"
     },
     {
-      "name": "family:duckduckgo",
+      "name": "family:bocha",
       "status": "PASS",
       "detail": "got=web_general"
     },
@@ -1832,7 +1836,7 @@
     {
       "name": "reach:summary",
       "status": "PASS",
-      "detail": "死源 0 个: 无；声明 explicit_only 8 个: doi, gdelt, opencitations, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall"
+      "detail": "死源 0 个: 无；声明 explicit_only 14 个: bing_rss, datagov_uk, doi, ecosia, gdelt, opencitations, qwant, tineye, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall, zbmath"
     }
   ]
 }
