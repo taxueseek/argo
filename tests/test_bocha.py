@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""博查引擎测试 — web-search 解析修复 + freshness 动态化 + ai-search 模态卡。
+"""博查引擎测试 — web-search 解析修复 + freshness 动态化 + ai-search webpage 通道。
 
 覆盖（全部离线，mock urlopen，无需真实 API）：
   1. bocha 专用解析：data.webPages.value 嵌套路径正确提取 name/url/summary/siteName/date
   2. freshness 动态化：周级词 → oneWeek、日级词 → oneDay、普通词 → noLimit
-  3. bocha_ai 模态卡：webpage message → 标准结果；模态卡 message → card 结果；
-     image message 跳过；空内容 message 跳过
+  3. bocha_ai webpage 通道：webpage message → 标准结果；
+     非 webpage 消息（模态卡/image/未知类型/空内容）一律跳过
+     —— 垂直结构化模态卡特化已于 2026-09-28 移除（博查配额 403 期间功能
+     不可达，且无 url 卡行会被 SERP 过滤闸吞掉）；历史实现见 git。
   4. 无 key 时显式返回错误项（不静默、不抛异常）
 
 运行：
@@ -147,18 +149,15 @@ class TestBochaAiEngine(unittest.TestCase):
         self.assertEqual(results[0]["source"], "bocha_ai")
         self.assertNotIn("card_type", results[0])
 
-    def test_modal_card_message_to_card_result(self):
+    def test_non_webpage_messages_skipped(self):
+        """模态卡 message 一律跳过（卡特化已移除）：不再产出无 url 的卡行
+        ——这类行会被 SERP 过滤闸吞掉（is_serp_or_jump_url 对空 url 为 True），
+        与其产出来就被扔，不如不产。"""
         results = self._run([
             {"content_type": "weather", "content": json.dumps(
                 {"city": "北京", "temp": "24", "condition": "多云", "humidity": "55%"})},
         ])
-        self.assertEqual(len(results), 1)
-        r = results[0]
-        self.assertEqual(r["card_type"], "weather")
-        self.assertIn("city: 北京", r["snippet"])
-        self.assertEqual(r["card_data"]["temp"], "24")
-        self.assertIn("天气", r["title"])
-        self.assertEqual(r["score"], 1.0)
+        self.assertEqual(results, [])
 
     def test_image_and_empty_messages_skipped(self):
         results = self._run([
@@ -167,14 +166,14 @@ class TestBochaAiEngine(unittest.TestCase):
         ])
         self.assertEqual(results, [])
 
-    def test_mixed_messages_order_preserved(self):
+    def test_mixed_messages_only_webpage_survives(self):
         results = self._run([
             {"content_type": "webpage", "content": json.dumps({"value": [_WEB_PAGE]})},
             {"content_type": "stock", "content": json.dumps({"name": "贵州茅台", "price": "1480.00"})},
         ])
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["title"], "北京天气预报-中国天气网")
-        self.assertEqual(results[1]["card_type"], "stock")
+        self.assertNotIn("card_type", results[0])
 
     def test_missing_key_returns_error_item(self):
         os.environ.pop("BOCHA_API_KEY", None)

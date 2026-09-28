@@ -50,7 +50,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
         2924, "源声明构建器（数据表性质，逐源一段），拆开只是把同一张表切成多份；"
               "2026-09-27 −3：百度百科相关度门与化学 token 改用 cjk_tokens 共享切分"),
     "scripts/engines_builders_cn.py": (
-        2319, "中文源声明构建器，逐源一段（数据表性质）；按语言/领域切只会把同一张表切碎"),
+        2283, "中文源声明构建器，逐源一段（数据表性质）；按语言/领域切只会把同一张表切碎；"
+              "2026-09-28 −36：bocha_ai 模态卡特化移除（_BOCHA_CARD_NAMES 类型表/"
+              "_flatten_card helper/卡分支，非 webpage 消息一律跳过）"),
     "scripts/engines_builders_batch9.py": (
         1468, "批次九的源声明构建器，逐源一段；与既有构建器同形，拆开不减少概念"),
     "scripts/engines_builders_intl.py": (

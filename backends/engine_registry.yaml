@@ -203,7 +203,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: 博查 AI 搜索（统一语义识别 + 垂直结构化模态卡：天气/股票/汇率/油价/火车/万年历/贵金属/星座/医疗等）
+  desc: 博查 AI 搜索（ai-search 端点网页结果直连）
 - name: brave
   tier: T1
   type: http

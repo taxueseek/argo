@@ -151,7 +151,7 @@
     "priority": 9
   },
   "bocha_ai": {
-    "label": "博查AI搜索（模态卡）",
+    "label": "博查AI搜索",
     "qps": 5,
     "limit": 10000,
     "period": "month",

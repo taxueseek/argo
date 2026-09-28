@@ -414,7 +414,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 |---|---|---|---|---|---|---|
 | `open_meteo` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 全球天气（城市/地名 → 坐标 → 当前天气，免认证） |
 | `opensky` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 全球 ADS-B 实时航班（主要都会区 bbox，免 key） |
-| `bocha_ai` | 需自备密钥 | 低价计费 | 10000/月 | ARGO_BOCHA_API_KEY | 域 modal_card | 博查 AI 搜索（统一语义识别 + 垂直结构化模态卡：天气/股票/汇率/油价/火车/万年历/贵金属/星座/医疗等） |
+| `bocha_ai` | 需自备密钥 | 低价计费 | 10000/月 | ARGO_BOCHA_API_KEY | 域 modal_card | 博查 AI 搜索（ai-search 端点网页结果直连） |
 | `wolframalpha` | 已停用 | 免费 | 不限 | ARGO_WOLFRAM_APPID | 已停用 | WolframAlpha 计算知识引擎 |
 
 ### 化学 / 药学（3）

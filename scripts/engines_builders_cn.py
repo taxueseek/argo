@@ -1370,42 +1370,17 @@ def _build_bocha_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-# ── 博查 AI Search 引擎（垂直结构化模态卡）──────────────────────────────────────
-
-_BOCHA_CARD_NAMES: dict[str, str] = {
-    "weather": "天气", "baike": "百科", "medical": "医疗", "almanac": "万年历",
-    "train": "火车票", "constellation": "星座运势", "precious_metal": "贵金属",
-    "exchange_rate": "汇率", "oil_price": "油价", "phone": "手机", "stock": "股票",
-    "auto": "汽车", "calendar": "日历", "movie": "电影", "hotel": "酒店",
-    "restaurant": "餐厅", "scenic": "景点", "company": "企业", "news": "新闻",
-    "knowledge": "百科", "image": "图片",
-}
-
-
-def _flatten_card(data: Any, depth: int = 0) -> str:
-    """模态卡结构化数据 → 可读单行（嵌套最多两层，长内容截断）。"""
-    if not isinstance(data, dict):
-        return str(data)
-    if depth > 2:
-        return json.dumps(data, ensure_ascii=False)[:500]
-    parts = []
-    for k, v in data.items():
-        if isinstance(v, dict):
-            parts.append(_flatten_card(v, depth + 1))
-        elif isinstance(v, list):
-            sub = [_flatten_card(x, depth + 1) if isinstance(x, dict) else str(x) for x in v[:3]]
-            parts.append(f"{k}: {'; '.join(sub)}")
-        elif v is not None and str(v) != "":
-            parts.append(f"{k}: {v}")
-    return " | ".join(parts)[:500]
-
+# ── 博查 AI Search 引擎 ─────────────────────────────────────────────────────
 
 def _build_bocha_ai_engine(spec: dict[str, Any]) -> Any:
-    """博查 AI Search：统一语义识别 + 垂直结构化模态卡。
+    """博查 AI Search：网页结果直连（ai-search 端点的 webpage 通道）。
 
-    在网页结果基础上，额外返回天气/股票/汇率/油价/火车/万年历/医疗等
-    几十种垂直领域的结构化模态卡。card_type 标注模态类型，
-    card_data 保留原始结构化 JSON（供精确消费），snippet 为可读扁平化摘要。
+    历史版本还解析该端点的垂直结构化模态卡（天气/股票/汇率等，url 为空 +
+    card_type 标注）——2026-09-28 移除：博查配额 403 期间该功能本就不可达，
+    且无 url 的卡行会被 SERP 过滤闸整体吞掉（is_serp_or_jump_url 对空 url
+    返回 True），形成「产出来就被扔」的静默浪费。要接回时参考 git 历史
+    （本函数旧版 + search_rank 仍保留的 card_type 感知键），并先解决
+    「无 url 卡行如何过 SERP 过滤」的豁免判据。
     """
     timeout = spec.get("timeout", 12)
 
@@ -1448,20 +1423,9 @@ def _build_bocha_ai_engine(spec: dict[str, Any]) -> Any:
                     it = _bocha_web_item(item)
                     it["source"] = "bocha_ai"
                     results.append(it)
-            elif ct == "image" or not parsed:
-                continue
             else:
-                card_name = _BOCHA_CARD_NAMES.get(ct, ct)
-                flat = _flatten_card(parsed)
-                results.append({
-                    "title": f"{card_name}（结构化数据卡）" if _BOCHA_CARD_NAMES.get(ct) else f"[{ct}]",
-                    "url": "",
-                    "snippet": flat[:300],
-                    "source": "bocha_ai",
-                    "score": rank_score(1.0, _rk4),
-                    "card_type": ct,
-                    "card_data": parsed,
-                })
+                # 非 webpage 消息一律跳过（模态卡特化已移除，见 docstring）
+                continue
         return results
     return _engine
 
