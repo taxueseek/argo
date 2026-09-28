@@ -5,7 +5,7 @@ import sys, os, time, json
 LOG = os.path.expanduser("~/.kimi/argo_diag.log")
 PID = os.getpid()
 
-with open(LOG, "a") as log:
+with open(LOG, "a", encoding="utf-8", errors="replace") as log:  # argv 可含中文查询，GBK locale 下会炸
     log.write(f"\n=== PID={PID} START {time.strftime('%H:%M:%S')} ===\n")
     log.write(f"args: {sys.argv}\n")
     log.write(f"python: {sys.executable}\n")

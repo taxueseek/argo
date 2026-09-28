@@ -169,6 +169,7 @@ def _check_cli_engine(engine_name: str, spec: dict[str, Any],
         result = subprocess.run(
             [cli_cmd, "--help"],
             capture_output=True, text=True, timeout=min(timeout, 5),
+            encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
         )
         ok = result.returncode == 0
         if not ok:

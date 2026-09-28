@@ -750,6 +750,8 @@ def _run_cli_engine(spec: dict[str, Any], query: str, n: int, timeout: float,
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",  # Windows GBK locale 下 UTF-8 输出会解码崩
+                errors="replace",
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:

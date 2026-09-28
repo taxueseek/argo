@@ -287,6 +287,8 @@ def search(query: str, n: int = 5) -> list[dict]:
             ["tw", "search", query, "--limit", str(n), "--json"],
             capture_output=True,
             text=True,
+            encoding="utf-8",  # Windows GBK locale 下 UTF-8 输出会解码崩
+            errors="replace",
             timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():

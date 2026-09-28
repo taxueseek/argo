@@ -164,7 +164,8 @@ def run_ego(js_script: str, timeout: int = DEFAULT_TIMEOUT) -> dict:
     """执行 ego-browser nodejs -e 脚本，返回 {ok, payload, error}。"""
     cmd = [EGO_BIN, "nodejs", "-e", js_script]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                              encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return {
             "ok": False,

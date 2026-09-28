@@ -155,7 +155,8 @@ def run_one(ev):
     cmd = [sys.executable, str(SEEK), "--exclude", "eval_seek.py"] + ev["args"]
     start = time.time()
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
+                              encoding="utf-8", errors="replace")
     except subprocess.TimeoutExpired:
         return ev["name"], ["超时 60s"], 60000, -1
     elapsed = int((time.time() - start) * 1000)

@@ -40,6 +40,8 @@ def ego_available() -> dict[str, Any]:
             [EGO_BIN, "--version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",  # Windows GBK locale 下 UTF-8 输出会解码崩
+            errors="replace",
             timeout=PROBE_TIMEOUT,
         )
         ver = (proc.stdout or proc.stderr or "").strip().splitlines()[:3]
@@ -106,6 +108,8 @@ def _try_start_webbridge() -> None:
             [start_bin, "start"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
         )
     except (OSError, subprocess.TimeoutExpired):

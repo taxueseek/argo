@@ -540,7 +540,7 @@ def _identity_load() -> None:
         return
     _identity_loaded = True
     try:
-        with open(_IDENTITY_PATH) as f:
+        with open(_IDENTITY_PATH, encoding="utf-8") as f:  # 写侧 atomic_write_text 恒 UTF-8，读侧同编码
             raw = json.load(f)
         now = time.time()
         mem: dict[str, float] = {}

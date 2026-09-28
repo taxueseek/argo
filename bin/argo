@@ -108,7 +108,8 @@ def _resolve_launcher(argv: list[str]) -> str:
     """
     try:
         r = subprocess.run(argv + ["-c", "import sys; print(sys.executable)"],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           encoding="utf-8", errors="replace")
     except Exception:
         return ""
     if r.returncode != 0:
@@ -273,7 +274,7 @@ def _version():
     """
     try:
         import json
-        with open(os.path.join(ARGO_HOME, "package.json")) as f:
+        with open(os.path.join(ARGO_HOME, "package.json"), encoding="utf-8") as f:
             return "argo " + str(json.load(f).get("version") or "unknown")
     except Exception:
         return "argo unknown（package.json 不可读）"
@@ -436,7 +437,8 @@ def main():
             search_path = os.path.join(SCRIPTS, "search.py")
             search_cmd = [py, search_path, query, "--json",
                           "--mode", "fast", "--max-results", "10"]
-            result = subprocess.run(search_cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(search_cmd, capture_output=True, text=True, timeout=30,
+                                    encoding="utf-8", errors="replace")
             if result.returncode != 0:
                 print(result.stderr, file=sys.stderr)
                 sys.exit(result.returncode)
@@ -446,7 +448,8 @@ def main():
             # 管道模式：stdin → evidence（内容已读出，用 input= 转发给子进程）
             evidence_args = defaults + rest
             proc = subprocess.run([py, path] + evidence_args, input=stdin_text,
-                                  capture_output=True, text=True, timeout=60)
+                                  capture_output=True, text=True, timeout=60,
+                                  encoding="utf-8", errors="replace")
             print(proc.stdout, end="")
             if proc.stderr:
                 print(proc.stderr, file=sys.stderr)

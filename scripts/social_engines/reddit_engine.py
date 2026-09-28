@@ -93,7 +93,8 @@ def search(query: str, n: int = 5) -> list[dict]:
     try:
         result = subprocess.run(
             ["rdt", "search", query, "--limit", str(n), "--json"],
-            capture_output=True, text=True, timeout=10
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_rdt_json(result.stdout, n)

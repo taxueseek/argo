@@ -31,7 +31,8 @@ def search(query: str, n: int = 5) -> list[dict]:
     try:
         result = subprocess.run(
             ["xhs", "search", query],
-            capture_output=True, text=True, timeout=_subprocess_timeout()
+            capture_output=True, text=True, timeout=_subprocess_timeout(),
+            encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_xhs_output(result.stdout, n)
