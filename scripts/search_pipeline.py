@@ -54,6 +54,7 @@ from cache_guard import attempt_cache_write
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
 from variant_recall import augment_with_variants
+from phrase_filter import apply_phrase_filter, extract_phrases
 from except_sets import OPT_IMPORT, SHAPE_BENIGN
 from search_output import _collect_errors, _slow_query_ttl, build_funnel
 from search_rank import (
@@ -340,6 +341,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     else:
         merged = []
 
+    merged, _phrase_dropped = apply_phrase_filter(merged, extract_phrases(query))  # Step 3 短语精确过滤（仅查询含引号短语时触发）
     # ── D6：macro_data 域证据下限（事实核查防单源）─────────────────────
     # deep 研究场景下结果 <2 条说明结构化源未覆盖该查询：追加通用保底引擎
     # 补证据，避免「单引擎单结果」被事实核查 / 融合阶段当作答案；补搜结果
