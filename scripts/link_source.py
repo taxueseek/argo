@@ -226,7 +226,7 @@ def link_one(target: Path, *, dry_run: bool, force: bool) -> int:
             r = subprocess.run(
                 ["cmd", "/c", "mklink", "/J", str(target), str(source)],
                 capture_output=True, text=True,
-                encoding="utf-8", errors="replace",
+                encoding="utf-8", errors="replace", timeout=30,
             )
             # junction 不是 symlink（is_symlink() 为 False，_hops_to_source 会
             # 把它当普通目录），此处按「解析后是否等于来源」独立判定。

@@ -100,10 +100,13 @@ python3 scripts/search.py "查询词" \
   "dispatch": {                     // 引擎调度这一段单独展开
     "wall_ms": 394, "engines_run": 1, "engine_sum_ms": 365,
     "parallel_efficiency": 0.93,    // 引擎各自耗时之和 ÷ 墙钟。多数值大 = 并行有效
-    // useful_ms + wasted_ms ≡ wall_ms：前者是最后一个有效引擎完成的时刻（答案
-    // 从这一刻起已在手里），后者是此后还在等的那段。分开看才知道「慢」是源真的
-    // 慢，还是答案早就有、我们在白等一个不会来的源。
-    "useful_ms": 394, "wasted_ms": 0, "early_stopped": true
+    // useful_ms：最后一个有效引擎完成的时刻（答案从这一刻起已在手里）。
+    // wasted_ms：**被编排主动弃置的引擎已经花掉的墙钟之和**——早停收工时仍在
+    //   跑、结果被扔掉的那部分。它不拖住返回，所以 useful+wasted 不再等于
+    //   wall（早停时函数当刻就返回，被弃置的线程还在后台跑）。数值大说明对冲
+    //   排得太靠前 / tail_grace 太宽 / 并发上限太小，三者都可直接调。
+    //   仍被等到超时的引擎**不算**浪费：那是引擎不健康，看 engine_latency 与熔断。
+    "useful_ms": 394, "wasted_ms": 143, "early_stopped": true
   },
   "import_ms": 49.4,                // 加载模块占的时间
   "overhead_ms": 61.5,              // 除各阶段外的开销（import + 解析参数 + 收尾）
@@ -374,7 +377,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 
 ## 功能开关总表（`ARGO_*`，唯一事实=源码扫描）
 
-> 77 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
+> 85 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
 ### 能力开关（34）

@@ -51,7 +51,7 @@ python3 scripts/research.py "复杂问题" --json            # 取证包（扩�
 | 参数 | 说明 |
 |------|------|
 | `--engine <name>` | 强制引擎（anysearch/byted/bocha/exa/tavily/eastmoney/zhihu/arxiv/pypi/mdn/hackernews/v2ex/redskill…，全量见 `--list-engines`） |
-| `--local-first` | 本地零成本聚合优先（local_search 32 引擎） |
+| `--local-first` | 本地零成本聚合优先（local_search 29 引擎，27 默认启用） |
 | `--include-local` / `--no-local` | 本机文件命中（source=local_files，score 0.9/0.7）：fast/budget 默认开，auto/deep 显式 |
 | `--mode fast|auto|deep|budget` | fast 免费优先 / auto 成本感知（默认）/ deep 质量优先 / budget 配额控制 |
 | `--explain` | 解释路由决策（含 TF-IDF 分数） |
@@ -118,7 +118,7 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 | 场景 | 读什么 |
 |------|--------|
 | MCP 工具全清单 / 多客户端注入 / DSH 插件接入 / 配额·TinyFish / 子技能 / 本地打通 / 工程纪律 | `references/operations.md` |
-| **使用指南**：全命令、参数、74 开关总表、输出体积陷阱、日志反馈 | `references/usage.md` |
+| **使用指南**：全命令、参数、85 开关总表、输出体积陷阱、日志反馈 | `references/usage.md` |
 | 深度研究协议：约定、工作包、取证包 vs 判断稿、达标检查 | `references/research-protocol.md` |
 | 约定 / 工作包 / 判断稿模板 | `references/research-templates.md` |
 | 引擎全景：垂直域/社交/学术/本地引擎表 + 路由规则 | `references/engines.md` |

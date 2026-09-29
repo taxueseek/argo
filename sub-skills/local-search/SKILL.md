@@ -1,7 +1,7 @@
 ---
 name: local-search
 parent: argo
-description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 29 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --sub-skill local-search 或 --local-first 调用。
+description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 29 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --local-first 调用。
 version: 1.1.0
 ---
 
@@ -15,7 +15,7 @@ Local Search 是 argo 的「零成本兜底适配器」，用于：
 
 ### 设计原则
 
-- **不单独响应触发词**：仅作为 argo 的子能力，由 `--sub-skill local-search` / `--local-first` 调用。
+- **不单独响应触发词**：仅作为 argo 的子能力，由 `--local-first` 调用。
 - **输出与主 skill 同 schema**：`results[]` / `engines_used` / `errors` / `elapsed_ms`，可直接进 evidence 与 RRF。
 - **`local_X` 与主清单的 `X` 是别名，不是备份**：`local_arxiv`/`local_crossref`/`local_semantic_scholar`/`local_github`/`local_npm`/`local_wikipedia`/`local_stackoverflow`/`local_google_news` 与主清单同名项**打同一个上游端点**（主清单走官方 API、这里走免密钥直取），不存在「API 挂了抓取版兜底」。同上游同格式由 `tests/test_local_search_registry.py` 锁定。
 
@@ -67,7 +67,6 @@ python3 sub-skills/local-search/local_search_adapter.py "query" \
   --engine local_bing,local_baidu,local_duckduckgo
 
 # 由 argo 调用
-python3 scripts/search.py "query" --sub-skill local-search
 python3 scripts/search.py "query" --local-first --mode fast
 ```
 

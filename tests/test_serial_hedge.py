@@ -217,51 +217,77 @@ class TestSerialHedgeKillsDeadPrimary(SerialHedgeBase):
 
 
 class TestWastedBookkeeping(unittest.TestCase):
-    """墙钟分解必须自洽：useful + wasted ≡ wall_dispatch。
+    """wasted_ms = 被编排主动弃置的引擎已经花掉的墙钟。
 
-    改造前的 wasted 是「所有非 ok 引擎的 latency 之和」——它不是时间量，
-    并行时必然大于墙钟（实测「世界杯 2026 主办国」wasted 2847ms >
-    dispatch wall 2313ms）。上一轮的优化盘点正是据此写下「调度不用动」，
-    所以这条门不只是数字好看：它是「下一轮还能不能相信这个数」的前提。
+    口径换过两次，两次都是因为「好看但不指向动作」被否：
+      ① 「所有非 ok 引擎的 latency 之和」——不是时间量，并行时必然大于墙钟
+         （实测「世界杯 2026 主办国」wasted 2847ms > dispatch 2313ms）。上一轮
+         的优化盘点正是据此写下「调度不用动」。
+      ② 「wall - useful」——有界并发下是恒等式：触发早停的引擎自己就是最后
+         完成的那个，返回当刻 wall == useful，于是**恒为 0**（实测每轮皆 0）。
+         空转的仪表比没有仪表更糟：它让人以为调度无浪费可调。
+
+    现在这个口径既算得清（数据本来就存在于 _settle_pending 的 lat_ms），
+    也指向具体动作：数值大 = hedge 排得太靠前 / tail_grace 给得太宽 /
+    并发上限太小，任一条都能直接改。
     """
 
-    def test_useful_plus_wasted_equals_wall(self):
-        def fake(_q, eng):
-            if eng == "slow_winner":
-                time.sleep(0.30)
+    def _dispatch(self, engines, parallel=True, depth="fast", mode="fast",
+                  grace=0.2):
+        def _spy(q, eng, **kw):
+            if eng.startswith("slow_winner"):
+                # 必须**跨过对冲的起步间隔**才会补发 hedge，否则获胜引擎在
+                # hedge 还没起跑时就返回——那是「早停、未弃置」，不是弃置。
+                time.sleep(grace + 0.2)
                 return [{"title": QUERY + " x", "snippet": "s",
                          "url": "https://a.com/1"}]
+            time.sleep(3.0)   # hedge 已起跑，获胜时仍在跑 → 会被弃置
             return []
 
-        calls: list[str] = []
-
-        def _spy(q, eng, **kw):
-            calls.append(eng)
-            return fake(q, eng)
-
         cache = SearchCache(db_path=":memory:")
-        decision = {"engines_combo": ["slow_winner", "empty_second"],
-                    "engines": ["slow_winner", "empty_second"],
-                    "parallel": False, "domain": "macro_data",
-                    "engine": "slow_winner", "early_stop_min_results": 1,
+        decision = {"engines_combo": list(engines), "engines": list(engines),
+                    "parallel": parallel, "domain": "macro_data",
+                    "engine": engines[0], "early_stop_min_results": 1,
                     "no_early_stop": False}
         with ExitStack() as stack:
             for p in (patch("search.engine_search", side_effect=_spy),
                       patch("circuit_breaker.get_breaker",
                             return_value=_AllowAllBreaker()),
-                      patch("quota.get_quota_manager", return_value=MagicMock())):
+                      patch("quota.get_quota_manager", return_value=MagicMock()),
+                      # 显式钉住对冲起步间隔：本类断言的是「弃置发生时 wasted>0」，
+                      # 若吃环境里的真实 grace 值，前序用例改过它就会让本用例
+                      # 静默退化成「早停但没弃置」——一次靠运气通过的测试等于没测。
+                      patch.object(search, "_PRIMARY_GRACE_S", grace)):
                 stack.enter_context(p)
             out = execute_search(QUERY, decision, max_results=5, timeout=10,
-                                 depth="fast", cache=cache, skip_cache=True,
-                                 mode="fast", timing=StageTiming())
-        d = out["timing"]["dispatch"]
+                                 depth=depth, cache=cache, skip_cache=True,
+                                 mode=mode, timing=StageTiming())
+        return out["timing"]["dispatch"]
+
+    def test_wasted_counts_abandoned_engines(self):
+        """核心断言：早停真的弃置了陪跑引擎时，wasted 必须大于 0。
+
+        旧口径下这一轮恒为 0——所以它在未修代码上失败，红灯有意义。
+        """
+        d = self._dispatch(["slow_winner", "hedge_b"])
         for key in ("wall_ms", "useful_ms", "wasted_ms"):
             self.assertIn(key, d, f"缺字段 {key}")
-        self.assertEqual(d["useful_ms"] + d["wasted_ms"], d["wall_ms"],
-                         f"墙钟分解不自洽：{d}")
-        self.assertGreaterEqual(d["useful_ms"], 0)
-        self.assertLessEqual(d["wasted_ms"], d["wall_ms"],
-                             "wasted 不能大于墙钟——它现在只表示「答案就绪后还在等」")
+        self.assertTrue(d.get("early_stopped"), f"本该早停：{d}")
+        self.assertGreater(d["wasted_ms"], 0,
+                           f"弃置了引擎却报 wasted=0——仪表失明：{d}")
+
+    def test_wasted_zero_when_nothing_abandoned(self):
+        """无弃置时必须是 0——证明上一条不是「恒 > 0」的空门。"""
+        d = self._dispatch(["slow_winner"], mode="deep")
+        self.assertEqual(d["wasted_ms"], 0, f"单引擎无弃置却报浪费：{d}")
+
+    def test_wasted_is_nonnegative_and_bounded(self):
+        """wasted 仍必须是有限非负值（不再是墙钟差，但也不能乱跳）。"""
+        d = self._dispatch(["slow_winner", "hedge_b"])
+        self.assertGreaterEqual(d["wasted_ms"], 0)
+        self.assertLess(d["wasted_ms"], 60_000, f"wasted 离谱：{d}")
+        self.assertLessEqual(d["useful_ms"], d["wall_ms"],
+                             "useful 不得超过墙钟")
 
 
 if __name__ == "__main__":

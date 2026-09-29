@@ -56,6 +56,33 @@ _QUOTA_ERROR_KEYWORDS = ("quota", "10406")
 # 没有交出任何可用结果。wasted 记账与 timing 可观测面共用这张表。
 _CONTRIBUTING_STATUS = frozenset({"ok", "ok-cached", "partial"})
 
+# 并发上限的兜底值 = 原硬编码的 3。配置缺失 / 非法 / 读不到时用它，
+# 保证「接上配置」这件事不会改变任何既有环境下的行为。
+_DEFAULT_MAX_PARALLEL = 3
+# deep 模式要多铺几个源，值得付更高并发；其余模式沿用默认值。
+_DEEP_MAX_PARALLEL = 5
+
+
+def _max_parallel_engines(*, depth: str | None = None) -> int:
+    """一轮编排内最多同时跑几个引擎。
+
+    唯一来源是 config.yaml 的 `execution.max_parallel_engines`——此前这个键
+    只在 config.py 的默认值与 config.yaml 里出现，**全仓没有任何读取点**，
+    调度用的是 engine_dispatch 里写死的 3：改配置不生效，且没有任何提示。
+    调参的人只会得出「改了没用」的结论，不会想到代码没读它。
+
+    deep 模式不受配置限制（深研要证据覆盖，优先墙钟），但仍保底 1。
+    """
+    if depth == "deep":
+        return _DEEP_MAX_PARALLEL
+    try:
+        from config import get_execution_config
+        n = int(get_execution_config().get("max_parallel_engines",
+                                           _DEFAULT_MAX_PARALLEL))
+    except Exception:
+        return _DEFAULT_MAX_PARALLEL
+    return n if n >= 1 else _DEFAULT_MAX_PARALLEL
+
 # 拦截页特征词（唯一来源）：error 文本里出现即判 blocked。HTML 引擎的反爬
 # 命中没有 error 文本（静默空结果），走 engines_base 的归因寄存器；
 # 这张表兜住「error 结果里带拦截页字样」的可见路径。
@@ -500,6 +527,12 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
 
     engine_done_ms: dict[str, float] = {}
     contributed_ms: list[float] = []
+    # 被编排主动**弃置**的引擎（早停收工时仍在跑的）已经花掉的墙钟。
+    # 这些时间既没换来结果、也没拖住返回（函数当刻就返回了），此前只把
+    # lat_ms 记进 engine_latency 就丢掉——「答案就绪后还在等」这个口径在
+    # 有界并发下恒为 0（最后完成的引擎就是触发早停的那个，wall==useful），
+    # 仪表盘因此永远显示 0，无法据此调 tail_grace / hedge / 并发上限。
+    abandoned_ms: list[float] = []
     # 配额批次的构造在调用方：flush 必须发生在**最后一个 _ingest 之后**，
     # 而那个点在融合后的 D6 补搜里（本模块之外）。在这里另建一个实例，
     # 调用方 flush 到的就是空批次——补搜引擎的记账永远落不了盘。
@@ -581,6 +614,9 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 if status == "cancelled":
                     # 空列表而非 error 条目：error 条目会被学习器当失败、
                     # 被 _collect_errors 当错误文本收进 errors[]
+                    # 弃置的引擎白花的墙钟计入 wasted（见 abandoned_ms）：
+                    # 它是「调度多花了多少」的量，不是「多等了多久」。
+                    abandoned_ms.append(lat_ms)
                     _ingest(eng, [],
                             classify_outcome(eng, [], lat_ms, "cancelled"),
                             lat_ms)
@@ -640,7 +676,11 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         last_start: float | None = None
         while (queue or pending) and _now() < deadline:
             started = False
-            max_concurrency = 3  # 可配置：deep 模式可提高到 5-8
+            # 并发上限。此前是写死的 3，而 config.yaml 的
+            # execution.max_parallel_engines **从来没被任何代码读过**——
+            # 改配置等于没改，是「看着生效、其实没生效」最难查的一类。
+            # 兜底 3 是原硬编码值：配置缺失或非法时行为与从前逐位一致。
+            max_concurrency = _max_parallel_engines(depth=depth)
             while queue and len(pending) < max_concurrency:
                 if gate is not None and _now() >= gate:
                     break  # 预算耗尽：不再起新引擎（既有 fast 契约）
@@ -790,19 +830,30 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
 
     budget_total_ms = int(budget_s * 1000) if budget_s is not None else None
     # 墙钟账：`useful_ms` = 最后一个有效贡献引擎完成的时刻（答案从这一刻起
-    # 就已经在手里了），`wasted_ms` = 之后还在等的那段。
+    # 就已经在手里了）。`wasted_ms` 见下方口径说明。
     #
     # 此前的 wasted 是「所有非 ok 引擎的 latency 之和」——它根本不是时间量：
     # 并行时必然大于墙钟（实测「世界杯 2026 主办国」wasted 2847ms > dispatch
     # 2313ms），而且把「引擎如实返回了 0 条」也算成浪费。两个已知代价：
     # ① 上一轮的优化盘点据此写下「早停与 hedge race 记账诚实、调度不用动」，
     #    而实测调度是最大的单一浪费源；② 读者无法从它推出任何行动。
-    # 现在两者相加恒等于墙钟，且 wasted 只表示一件事：**答案就绪后还在等**。
+    #
+    # 再往后改成 `wall - useful`（useful = 最后一个**贡献结果**的引擎的完成
+    # 时刻），并宣称口径是「答案就绪后还在等」。但有界并发下这仍是恒等式：
+    # 触发早停的引擎自己就是最后完成的那个，返回当刻 wall == useful，于是
+    # wasted 永远是 0——实测每轮皆 0。空转的仪表比没有仪表更糟：它让人以为
+    # 调度无浪费可调，于是谁都不会去调 tail_grace / hedge / 并发上限。
+    #
+    # 现在的口径：**被编排主动弃置的引擎已经花掉的墙钟之和**。
+    # 这些时间确实白花（没换来结果、也没拖住返回），是唯一既能算清、
+    # 又能指向具体动作的量；与 wall 无关（弃置不阻塞返回），故不再保证
+    # useful + wasted == wall。仍被等待的超时引擎不算浪费——那是引擎不健康，
+    # 在 engine_latency / 熔断里已可见。
     wall_ms = int((_now() - _budget_base) * 1000)
     useful_ms = int(min(max(contributed_ms), wall_ms)) if contributed_ms else 0
     return DispatchResult(
         raw_results, engine_outcomes, engine_latency,
-        wall_ms - useful_ms, early_stopped, _run_one, _ingest,
+        int(sum(abandoned_ms)), early_stopped, _run_one, _ingest,
         budget_used_ms=wall_ms,
         budget_total_ms=budget_total_ms,
         useful_ms=useful_ms,

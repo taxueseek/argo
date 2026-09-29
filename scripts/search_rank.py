@@ -866,9 +866,13 @@ def _apply_consensus_and_sort(merged: list[dict[str, Any]],
     共识合计被放大 ~19%（1.08×1.10），2026-09-13 移除（金标 18 条对拍
     无序位回归）。共识的排序影响由 ① 表达，可观测面由 `consensus_engines`
     与 evidence selection 的 `selection` 字段表达。
+
+    max_results 在**这里**夹到非负：负数切片 `[: -3]` 从尾部砍 3 条（10 条给
+    7 条，比不传的默认 5 条还多）。CLI 层给可读报错，但 MCP/库调用绕开
+    argparse，兜底必须落在这个切片点。
     """
     merged.sort(key=lambda r: abs(r.get("score", 0) or 0), reverse=True)
-    return merged[:max_results]
+    return merged[:max(0, int(max_results or 0))]
 
 
 def _attach_selection_signals(merged: list[dict[str, Any]], mode: str,

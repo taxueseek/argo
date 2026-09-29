@@ -85,6 +85,23 @@ def _window_arg(value: str) -> str:
     return value
 
 
+def _max_results_arg(value: str) -> int:
+    """argparse 的 `type=`：条数必须为非负整数。
+
+    负数不是「取前 N 条」而是「从尾部砍掉 |N| 条」——`merged[: -3]` 在 10 条
+    结果上返回 7 条，比不传 -n 的默认 5 条还多，与「限制条数」的语义正好相反。
+    0 保留为合法（显式要空结果），只拒负数。
+    """
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"条数必须是整数，收到 {value!r}") from None
+    if n < 0:
+        raise argparse.ArgumentTypeError(
+            f"条数不能为负（收到 {n}）：负数会从尾部截断，返回比不指定时更多的结果")
+    return n
+
+
 def build_parser() -> argparse.ArgumentParser:
     """构造 CLI 参数解析器。
 
@@ -105,7 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("query", nargs="?")
     parser.add_argument("--engine", "-e", default="auto")
-    parser.add_argument("--max-results", "-n", type=int, default=5)
+    parser.add_argument("--max-results", "-n", type=_max_results_arg, default=5)
     parser.add_argument("--depth", "-d", default="fast",
                         choices=["fast", "balanced", "deep"])
     # --no-cache 与 ARGO_NO_CACHE 合并成一个判据。此前只有 flag：用户照文档

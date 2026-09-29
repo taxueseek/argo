@@ -2,7 +2,7 @@
 """local_search_adapter.py — local-search 兼容入口
 
 保留原 adapter 接口，内部委托 search_v3.search_engines 执行。
-unified-search 可通过 --sub-skill local-search 或 --local-first 调用本入口。
+unified-search 可通过 --local-first 调用本入口。
 """
 
 from __future__ import annotations
