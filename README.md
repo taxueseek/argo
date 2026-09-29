@@ -325,7 +325,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 
 **6. 时间能力（时间窗 + 方向排序）**
 
-要搜「最近几天刚发布的内容」，用 `--since 7d` 这类时间窗框住发布时间范围，判断新旧不再靠猜。支持引擎（如 `realtime_index`，免 Key 实时索引源，结果自带发布时间）把窗口下推给数据源；其余引擎的融合结果会按 `published_at` 最后再剔除明确超窗的条目（宽松策略，无时间字段的保留），返回包带 `time_filtered` 统计，CLI 与 MCP 均支持。`--since 7d` 与「7 天前的绝对日期」等价、共享缓存；`--until 2026-08-01` 含当天。配合 `--sort newest|oldest` 按发布时间重排——找最新动态用 `newest`，找最早出处用 `oldest`。
+要搜「最近几天刚发布的内容」，用 `--since 7d` 这类时间窗框住发布时间范围，判断新旧不再靠猜。支持引擎（如 `realtime_index`，免 Key 实时索引源、需自装 CLI，结果自带发布时间）把窗口下推给数据源；其余引擎的融合结果会按 `published_at` 最后再剔除明确超窗的条目（宽松策略，无时间字段的保留），返回包带 `time_filtered` 统计，CLI 与 MCP 均支持。`--since 7d` 与「7 天前的绝对日期」等价、共享缓存；`--until 2026-08-01` 含当天。配合 `--sort newest|oldest` 按发布时间重排——找最新动态用 `newest`，找最早出处用 `oldest`。
 
 ### 能力入口速查
 
@@ -343,7 +343,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | 截图 / PDF | 页面截图、PDF 结构化提取 | `argo_screenshot` / `argo_pdf` |
 | 站点爬取 | 列表页批量抓取 | `argo_crawl` |
 | 社交与舆情 | 微博 / 小红书 / B 站 / Reddit / X 等 | `argo_social_search` |
-| 实时索引搜索 | 免 Key 实时索引源，结果带发布时间，适合「最近几天有什么新东西」 | `--engine realtime_index` |
+| 实时索引搜索 | 免 Key 实时索引源，结果带发布时间，适合「最近几天有什么新东西」。**需自装 `realtime-index` CLI**（未安装时该源停用，见 ENGINE_CATALOG 已停用清单；多数查询走其他源不受影响） | `--engine realtime_index` |
 | 时间窗过滤 | `--since` / `--until`（`7d` 或 `2026-08-01`）限定发布时间范围；支持引擎下推 + 融合后过滤（`time_filtered`），CLI 与 MCP 均支持 | `--since 7d` |
 | 时间方向排序 | `--sort newest\|oldest` 按发布时间重排（最新动态 / 最早出处） | `--sort oldest` |
 | 登录态专业搜索 | 知乎 / 小红书等登录墙正文、JS 渲染页、登录站点接口直取 | `sub-skills/ego-search/scripts/ego_search.py`（默认关闭，见下） |
@@ -360,7 +360,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 ### 当前大致能力（v2.8.9）
 
 - **输出减重与漏斗归因（v2.8.9 新增）**：默认输出 −66%（同一段结果不再重复三遍，`--envelope` 开完整版）；六格漏斗（路由→调用→返回→去重→过滤→保留）让「搜到 0 条」能定位塌在哪一层；阶段耗时账拆出过滤与恢复，慢在哪不再被指错方向
-- **DSH 插件工具原生化（v2.8.5 新增）**：`argo_search` / `argo_fetch` 原生一等工具默认可用（CLI 单发，不依赖 MCP 连接）；schema 由 `gen_native_tools.py` 从 `mcp_tools.py` 唯一来源生成（漂移检查测试把关）；`nativeTools` 配置可按需启用全部 13 个工具（`argo_research` 除外）
+- **DSH 插件工具原生化（v2.8.5 新增）**：`argo_search` / `argo_fetch` 原生一等工具默认可用（CLI 单发，不依赖 MCP 连接）；schema 由 `gen_native_tools.py` 从 `mcp_tools.py` 唯一来源生成（漂移检查测试把关）；`nativeTools` 配置可按需启用全部 18 个工具（`argo_research` 除外）
 - **MCP 默认关闭（v2.8.5 变更）**：三形态接入——MCP 按需挂载（profile patch）/ 原生工具（默认入口）/ 原生 web_search seam；平时零常驻 token 开销
 - **Windows 全平台兼容（v2.8.5 增强，社区贡献）**：临时路径走 `tempfile.gettempdir()`；解析映射显式 UTF-8（根治 GBK 静默失效）；解释器运行时解析（python3 → python → sys.executable）；symlink 无权限退化 junction；PowerShell 一键安装 `install.ps1`；`--spotlight` 无 mdfind 自动退化 rg
 - **配额自愈完整链路（v2.8.5 新增）**：HTTP 200 业务错误封套识别（火山/知乎风格）；远端配额耗尽自动标记 → 路由全模式排除 → 备用源接管 → 周期边界自愈回归；配额/鉴权错误不毒化自适应分数与熔断
@@ -469,7 +469,7 @@ python3 scripts/search.py "同一查询" --json | \
   python3 scripts/evidence.py "同一查询" --stdin --json
 ```
 
-### MCP 工具一览（12）
+### MCP 工具一览（19）
 
 | 工具 | 用途 |
 |------|------|

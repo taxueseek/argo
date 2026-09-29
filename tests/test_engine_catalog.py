@@ -159,3 +159,22 @@ def test_explicit_only_not_also_auto_routed():
         auto |= set(d.get("engines_combo") or [])
     conflict = sorted(declared & auto)
     assert not conflict, f"既声明 explicit_only 又在自动路径上: {conflict}"
+
+
+def test_disabled_engines_declare_reason():
+    """停用的引擎必须写 disabled_reason（2026-09-29）。
+
+    实锤：72fd95a 源治理轮一次性关停 6 个引擎，config 里只有 enabled:false
+    没有原因——下一个人看到「这个源为什么关着」无从查起，重开与否变成
+    拍脑袋。数据层的「静默失败」：停用不写理由，与代码里吞异常同类。
+    本测试让「停用不写原因」变成可见失败。
+    """
+    from config import load_config
+
+    engines = load_config().get("engines") or {}
+    silent = [name for name, spec in engines.items()
+              if isinstance(spec, dict) and spec.get("enabled") is False
+              and not str(spec.get("disabled_reason") or "").strip()]
+    assert not silent, (
+        f"以下引擎 enabled:false 但未写 disabled_reason：{silent}\n"
+        "修法：在 config.yaml 对应引擎下补 disabled_reason（停用原因 + 重开条件）")

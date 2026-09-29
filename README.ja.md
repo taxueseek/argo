@@ -222,7 +222,7 @@ Python が特殊なパスのとき：`export ARGO_PYTHON=/path/to/python3`（npx
 DeepSeek Harness では 2 通り：
 
 ```bash
-# A：mcp__argo__* ツール 12 個（メインパッケージ bundle、MCP 全量と同じ）
+# A：mcp__argo__* ツール 19 個（メインパッケージ bundle、MCP 全量と同じ）
 dsh plugin --profile web add "github:taxueseek/argo"
 
 # B：検索ツール + wide_research 並列研究オーケストレーション（サブパッケージ）
@@ -571,7 +571,7 @@ argo/
 
 ### v2.8.5：DSH プラグインツールのネイティブ化 + MCP 既定オフ + Windows 対応
 
-- **プラグインツールのネイティブ化**：`argo_search` / `argo_fetch` がネイティブの一等ツールとして登録され、MCP 接続なしで既定使用可能；スキーマは唯一の来源 `mcp_tools.py` から自動生成され、両側で零ドリフト；`argo_research` 以外の 13 ツールは `nativeTools` で随時有効化可能
+- **プラグインツールのネイティブ化**：`argo_search` / `argo_fetch` がネイティブの一等ツールとして登録され、MCP 接続なしで既定使用可能；スキーマは唯一の来源 `mcp_tools.py` から自動生成され、両側で零ドリフト；`argo_research` 以外の 18 ツールは `nativeTools` で随時有効化可能
 - **MCP 既定オフ**：3 形態の接続（随時マウントの MCP / 既定入口のネイティブツール / web_search seam）；普段は常駐トークン消費ゼロ、14 ツール全量が必要なときは profile patch 1 枚で開く
 - **Windows 互換**（コミュニティ PR #11）：一時パスはシステム temp、GBK エンコード修正、`python3`/`python` の実行時解決、symlink は権限なしで junction にフォールバック、PowerShell 一括インストール `install.ps1` を追加
 - **クォータ自己修復**：HTTP 200 に隠れたリモートクォータ枯渇を検出し、ルーティングがそのエンジンを除外してバックアップ源へ切替、次クォータ期間で自動復帰

@@ -90,6 +90,27 @@ class TestUsageDocSwitches(unittest.TestCase):
         self.assertEqual(code_vars - table_vars, set(),
                          f"代码有但总表未收录（表是唯一事实）：{code_vars - table_vars}")
 
+    def test_switch_group_headers_match_row_counts(self):
+        """分组标题的计数必须等于该组实际行数（2026-09-29）。
+
+        实测漂移：「能力开关（30）」实际 33 行——新增开关只改了表格忘了
+        标题，而标题数字不在双向锁定射程内（门禁只查集合成员）。计数是
+        给人看的第一眼承诺，错它比少一行更难察觉（读者会以为自己看漏了）。
+        """
+        m = re.search(r"## 功能开关总表.*?(?=\n## |\Z)", USAGE, re.S)
+        self.assertIsNotNone(m, "usage.md 缺「功能开关总表」节")
+        bad = []
+        for sec in re.split(r"\n### ", m.group(0))[1:]:
+            title = sec.split("\n")[0]
+            hm = re.match(r"(.+?)（(\d+)）", title)
+            if not hm:
+                continue
+            rows = re.findall(r"^\| `ARGO_[A-Z_0-9]+`", sec, re.M)
+            if int(hm.group(2)) != len(rows):
+                bad.append(f"{hm.group(1)}：标注 {hm.group(2)}，实际 {len(rows)}")
+        self.assertEqual(bad, [], "分组标题计数与实际行数不符：\n  "
+                         + "\n  ".join(bad))
+
 
 if __name__ == "__main__":
     unittest.main()

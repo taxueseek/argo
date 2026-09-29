@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import sys
 import time
@@ -28,6 +29,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from cli_io import dumps  # noqa: E402
+from route_policy import _VERTICAL_NEW_SOURCE  # noqa: E402  垂直域新专源加槽的权威名单
 
 
 class Checker:
@@ -48,6 +50,39 @@ class Checker:
         print(f"  {mark} {name}" + (f" — {detail}" if detail else ""))
 
 
+def _cold_routing_state(fn):
+    """离线路由门禁跑在干净状态上（2026-09-29）。
+
+    路由形态应由**配置**决定，不是本机历史：真实状态目录里的熔断
+    auto-disable / 准入记录会让同一份 config 在不同机器上选出不同 combo
+    （实测：本机 local_openstreetmap 被 auto_disabled，geo 查询落到
+    wikipedia；干净状态下它是首选——同一份代码两种结果）。门禁要锁
+    「配置决定的形态」，与 test_scenario_thresholds 的 cold_routing
+    fixture 同一理由。pytest 接线后还有 conftest 的状态目录隔离兜底。
+    """
+    @functools.wraps(fn)
+    def _inner(*a, **kw):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        import circuit_breaker
+        import engine_admission
+
+        tmp = Path(tempfile.mkdtemp(prefix="argo-regression-"))
+        with patch.object(
+                engine_admission, "DEFAULT_ADMISSION_DIR",
+                tmp / "admission"), \
+             patch.object(
+                 circuit_breaker, "get_breaker",
+                 lambda: circuit_breaker.CircuitBreaker(
+                     state_path=str(tmp / "breaker.json"))):
+            return fn(*a, **kw)
+
+    return _inner
+
+
+@_cold_routing_state
 def run_offline(c: Checker) -> None:
     print("\n== offline: engine_policy ==")
     from engine_policy import (
@@ -143,11 +178,16 @@ def run_offline(c: Checker) -> None:
             ok_d and ok_e,
             detail=f"domain={got_d} engine={got_e} combo={combo}",
         )
-        # daily 预算：fast depth 最多 2（答案域意图裁剪可能为 1）
+        # daily 预算：fast depth 基础 2；垂直域新专源加槽后最多 4。
+        # 2026-09-13 批次九起 route_policy._new_source_budget_extra 给垂直域
+        # （影视/体育/组织/媒体等，见 _VERTICAL_NEW_SOURCE）的声明新专源加槽，
+        # fast 档上限 +2——len=4 是设计行为。旧 expectation「一律 ≤2」写于
+        # 2026-08-04，对加槽域是陈旧预期（2026-09-28 审查第七轮记录在案）。
+        cap = 4 if domain in _VERTICAL_NEW_SOURCE else 2
         c.check(
             f"budget:{q}",
-            len(combo) <= 2,
-            detail=f"len={len(combo)} combo={combo}",
+            len(combo) <= cap,
+            detail=f"len={len(combo)} cap={cap} combo={combo}",
         )
         # research_only 不进日常
         c.check(

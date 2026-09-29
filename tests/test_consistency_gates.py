@@ -270,14 +270,79 @@ class TestDocNumbersMatchCode:
         assert not problems, "README 徽章与真源不一致：\n  " + "\n  ".join(problems)
 
     def test_mcp_tool_count_matches_docs(self):
+        """MCP 工具数与 native 工具数在所有对外文件里对账（5 语全覆盖）。
+
+        2026-09-29 扩展：旧判据只查 4 个文件的中文「N 个 MCP 工具」一种形态，
+        5 语 README 正文/表格里的 7 处计数（12/13/14 vs 真值 19/18）整个逃检；
+        徽章门禁只校验徽章 URL。「同一数字在 7 处文案里各写一份、且分散在
+        门禁没列进来的文件」从 6e9de59（工具面补齐至 19）起存在了 3 个文档
+        周期没人发现——判据从「指定文件」扩到「全部 README × 全语态」。
+        """
+        from mcp_tools import TOOLS
+        n_mcp = len(TOOLS)
+        # native = MCP 全量减 research（gen_native_tools 的排除规则见其 docstring）
+        n_native = n_mcp - 1
+        readmes = ("README.md", "README.en.md", "README.es.md",
+                   "README.ja.md", "README.ko.md")
+        targets = (("package.json", "cordis.patch.yml", "SKILL.md",
+                    "packages/dsh-plugin/package.json") + readmes)
+        # MCP 工具数的多语态（顺序即优先级；数字必须紧贴形态，防误捕版本号）
+        mcp_patterns = [
+            r"(\d+)\s*个?\s*MCP\s*工具",          # zh：19 个 MCP 工具
+            r"MCP\s*工具一览（(\d+)）",            # zh：表格标题
+            r"(\d+)\s*MCP\s*tools",               # en
+            r"(\d+)\s*herramientas\s*MCP",        # es
+            r"(\d+)\s*herramientas\s*mcp__",      # es：安装段 A 行
+            r"ツール\s*(\d+)\s*個",               # ja
+            r"MCP\s*ツール\s*(\d+)",              # ja
+            r"도구\s*(\d+)개",                    # ko
+            r"MCP\s*도구\s*(\d+)",                # ko
+        ]
+        # native 工具数的多语态（上下文都带 nativeTools/原生/네이티브）
+        native_patterns = [
+            r"全部\s*(\d+)\s*个工具",              # zh
+            r"all\s*(\d+)\s*tools",               # en
+            r"las\s*(\d+)\s*herramientas",        # es
+            r"以外の\s*(\d+)\s*ツール",           # ja
+            r"제외한\s*(\d+)\s*개?\s*도구",        # ko
+        ]
+        for rel in targets:
+            text = (SKILL_DIR / rel).read_text(encoding="utf-8")
+            for pat in mcp_patterns:
+                for c in re.findall(pat, text):
+                    assert int(c) == n_mcp, \
+                        f"{rel} 写 {c} 个 MCP 工具（/{pat}/），实际 {n_mcp}"
+            for pat in native_patterns:
+                for c in re.findall(pat, text):
+                    assert int(c) == n_native, \
+                        f"{rel} 写 {c} 个 native 工具（/{pat}/），实际 {n_native}"
+
+    def test_gate_has_teeth_tool_count_scan(self):
+        """自检：造一个写错计数的 README，多语态扫描必须抓住。"""
+        import tempfile
+
         from mcp_tools import TOOLS
         n = len(TOOLS)
-        for rel in ("package.json", "cordis.patch.yml", "SKILL.md",
-                    "packages/dsh-plugin/package.json"):
-            text = (SKILL_DIR / rel).read_text(encoding="utf-8")
-            claimed = re.findall(r"(\d+)\s*个?\s*MCP\s*工具", text)
-            for c in claimed:
-                assert int(c) == n, f"{rel} 写 {c} 个 MCP 工具，实际 {n}"
+        with tempfile.TemporaryDirectory() as td:
+            bad = SKILL_DIR / "README.zz.md"
+            try:
+                bad.write_text(
+                    "- **12 MCP tools**: x\n"
+                    "# A: 12 herramientas mcp__argo__*\n"
+                    "ツール 12 個\n"
+                    "도구 12개\n",
+                    encoding="utf-8")
+                text = bad.read_text(encoding="utf-8")
+                caught = 0
+                for pat in (r"(\d+)\s*MCP\s*tools",
+                            r"(\d+)\s*herramientas\s*mcp__",
+                            r"ツール\s*(\d+)\s*個", r"도구\s*(\d+)개"):
+                    for c in re.findall(pat, text):
+                        if int(c) != n:
+                            caught += 1
+                assert caught == 4, f"多语态扫描漏抓：只抓住 {caught}/4"
+            finally:
+                bad.unlink(missing_ok=True)
 
     def test_package_description_source_count(self):
         """package.json 的 description 是对外第一句承诺，此前写 175 个源。"""

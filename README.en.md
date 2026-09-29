@@ -296,7 +296,7 @@ python3 scripts/search.py --list-engines
 - **Structured search upgrades (new in v2.8.4)**: query normalize + variants + complexity gate; social-syntax first; TF-IDF keeps looking after dropping a Chinese engine; `--include-local`
 - **Keenable (new in v2.8.4)**: extra general web engine (L1 declarative HTTP, free trial, `ARGO_KEENABLE_API_KEY`)
 - **259 sources (225 usable with no key), 93 domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml` + `engines/specs/*.yaml`)
-- **14 MCP tools**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute, WeChat article full text, job aggregation
+- **19 MCP tools** (aligned with the CLI surface): search, research, evidence, clarify, fetch, screenshot, PDF, social sentiment, local file search, site crawl, local preview, recompute, WeChat article full text, job aggregation, structured extraction, URL batch preflight, direct answer, web change watch, DOI citation entries
 - **Multilingual search**: Chinese, English, Japanese, Korean, Cyrillic, Thai, Arabic, Hebrew, Greek, Devanagari, …; routing and engine params follow language; non-Chinese queries avoid Chinese-only sources (Zhihu / Sogou WeChat / A-share snapshots, etc.)
 - **Vertical recovery gates**: empty-result recovery will not “leak” pypi / npm / flash news into film or sports
 - **Faster daily, fuller research**: `engine_policy` tiers—tight daily combo, open long-tail for deep / research
@@ -529,7 +529,7 @@ argo/
 
 ### v2.8.5: native DSH plugin tools + MCP off by default + Windows support
 
-- **Native plugin tools**: `argo_search` / `argo_fetch` register as first-class native tools, available by default without an MCP connection; schemas are generated from the single source of truth (`mcp_tools.py`), zero drift; all 13 tools (except `argo_research`) can be enabled via `nativeTools`
+- **Native plugin tools**: `argo_search` / `argo_fetch` register as first-class native tools, available by default without an MCP connection; schemas are generated from the single source of truth (`mcp_tools.py`), zero drift; all 18 tools (except `argo_research`) can be enabled via `nativeTools`
 - **MCP off by default**: three plugin shapes (on-demand MCP / native tools as the default entry / web_search seam); zero standing token cost, and one profile patch opens the full 14-tool surface
 - **Windows compatibility** (community PR #11): system temp paths, GBK encoding fix, runtime interpreter resolution (`python3`/`python`), symlink falls back to junction, new PowerShell installer `install.ps1`
 - **Quota self-healing**: remote quota exhaustion hidden in HTTP 200 envelopes is detected; routing excludes that engine and switches to backup sources, returning automatically at the next quota period

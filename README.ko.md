@@ -222,7 +222,7 @@ npx -y github:taxueseek/argo
 DeepSeek Harness에는 두 가지 설치:
 
 ```bash
-# A: mcp__argo__* 도구 12개 (메인 패키지 bundle, MCP 전량과 동일)
+# A: mcp__argo__* 도구 19개 (메인 패키지 bundle, MCP 전량과 동일)
 dsh plugin --profile web add "github:taxueseek/argo"
 
 # B: 검색 도구 + wide_research 병렬 연구 오케스트레이션 (서브패키지)
@@ -338,7 +338,7 @@ python3 scripts/search.py --list-engines
 - **구조화 검색 강화 (v2.8.4 신규)**: 쿼리 정규화 + 변체 + 복잡도 게이트; 소셜 문법 우선; TF-IDF는 중국어 엔진을 버린 뒤에도 후보를 봄; `--include-local`
 - **Keenable (v2.8.4 신규)**: 일반 웹 검색 엔진 추가 (L1 선언적 HTTP, 무료 체험, `ARGO_KEENABLE_API_KEY`)
 - **259 소스, 93 도메인** (225 무설정): 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
-- **MCP 도구 12개**: search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute
+- **MCP 도구 19개**(CLI 기능 면과 동일): search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute, 위챗 공식전 원문, 채용 집계, 구조화 추출, URL 일괄 사전점검, 직답, 웹 변화 관찰, DOI 인용 항목
 - **다국어 검색**: 중국어, 영어, 일본어, 한국어, 키릴, 태국어, 아랍어, 히브리어, 그리스어, 데바나가리, …; 라우팅과 엔진 파라미터가 언어를 따름; 비중국어 쿼리는 중국어 전용 소스 회피 (Zhihu / Sogou WeChat / A주 스냅샷 등)
 - **수직 복구 게이트**: 빈 결과 복구 시 영화·스포츠에 pypi / npm / 속보 등이 「새지」 않음
 - **일상은 빠르게, 연구는 넓게**: `engine_policy` 티어—일상 콤보는 타이트, deep / research는 롱테일 개방
@@ -571,8 +571,8 @@ argo/
 
 ### v2.8.5: DSH 플러그인 도구 네이티브화 + MCP 기본 끔 + Windows 호환
 
-- **플러그인 도구 네이티브화**: `argo_search` / `argo_fetch`가 1급 네이티브 도구로 등록되어 MCP 연결 없이 기본 사용 가능; 스키마는 단일 진원 `mcp_tools.py`에서 자동 생성되어 양쪽 모두 드리프트 없음; `argo_research`를 제외한 13개 도구를 `nativeTools`로 수시 활성화 가능
-- **MCP 기본 끔**: 3가지 접속 형태(수요 시 마운트 MCP / 기본 진입 네이티브 도구 / web_search seam); 평소 상주 토큰 비용 0, 14개 도구 전체가 필요하면 profile patch 한 장으로 엶
+- **플러그인 도구 네이티브화**: `argo_search` / `argo_fetch`가 1급 네이티브 도구로 등록되어 MCP 연결 없이 기본 사용 가능; 스키마는 단일 진원 `mcp_tools.py`에서 자동 생성되어 양쪽 모두 드리프트 없음; `argo_research`를 제외한 18개 도구를 `nativeTools`로 수시 활성화 가능
+- **MCP 기본 끔**: 3가지 접속 형태(수요 시 마운트 MCP / 기본 진입 네이티브 도구 / web_search seam); 평소 상주 토큰 비용 0, 19개 도구 전체가 필요하면 profile patch 한 장으로 엶
 - **Windows 호환**(커뮤니티 PR #11): 임시 경로는 시스템 temp, GBK 인코딩 수정, `python3`/`python` 런타임 해석, symlink는 권한 없으면 junction으로 폴백, PowerShell 일괄 설치 `install.ps1` 추가
 - **쿼터 자가 치유**: HTTP 200에 숨은 원격 쿼터 고갈을 감지하고, 라우팅이 해당 엔진을 제외해 백업 소스로 전환, 다음 쿼터 주기에 자동 복귀
 - **페치 전역 deadline**: `ARGO_FETCH_DEADLINE_S`(기본 60s)로 폴백 사슬 총 시간 상한; 429/503 정지 시그널 존중; tinyfish 렌더링 + `.md` 변형 프로브

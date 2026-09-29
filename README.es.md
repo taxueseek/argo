@@ -222,7 +222,7 @@ Ruta de Python inusual: `export ARGO_PYTHON=/path/to/python3` (solo lo lee la en
 Dos caminos dentro de DeepSeek Harness:
 
 ```bash
-# A: 12 herramientas mcp__argo__* (bundle del paquete principal, igual que el MCP completo)
+# A: 19 herramientas mcp__argo__* (bundle del paquete principal, igual que el MCP completo)
 dsh plugin --profile web add "github:taxueseek/argo"
 
 # B: herramientas de búsqueda + orquestación wide_research (subpaquete)
@@ -338,7 +338,7 @@ python3 scripts/search.py --list-engines
 - **Mejoras de búsqueda estructurada (nuevo en v2.8.4)**: normalización + variantes + puerta de complejidad; sintaxis social primero; TF-IDF sigue mirando tras descartar un motor chino; `--include-local`
 - **Keenable (nuevo en v2.8.4)**: motor web general extra (HTTP declarativo L1, prueba gratis, `ARGO_KEENABLE_API_KEY`)
 - **259 fuentes, 93 dominios** (225 sin clave): web general + finanzas / macro / cine / deportes / geo / orgs / media / química / academia / código (fuente de verdad: `config.yaml`)
-- **12 herramientas MCP**: search, research, evidence, clarify, fetch, screenshot, PDF, social, archivos locales, crawl, preview local, recompute
+- **19 herramientas MCP** (alineadas con la superficie CLI): search, research, evidence, clarify, fetch, screenshot, PDF, social, archivos locales, crawl, preview local, recompute, texto completo de artículos WeChat, agregación de empleo, extracción estructurada, preflight de URLs por lotes, respuesta directa, observación de cambios web, entradas de cita DOI
 - **Búsqueda multilingüe**: chino, inglés, japonés, coreano, cirílico, tailandés, árabe, hebreo, griego, devanagari, …; el enrutamiento y los params de motor siguen el idioma; consultas no chinas evitan fuentes solo en chino (Zhihu / Sogou WeChat / snapshots A-share, etc.)
 - **Compuertas de recuperación vertical**: la recuperación de vacío no «filtra» pypi / npm / flash news a cine o deportes
 - **Más rápido en el día a día, más completo en investigación**: tiers `engine_policy`—combo diario apretado, long-tail abierto para deep / research
@@ -571,8 +571,8 @@ argo/
 
 ### v2.8.5: herramientas nativas del plugin DSH + MCP apagado por defecto + compatibilidad con Windows
 
-- **Herramientas nativas del plugin**: `argo_search` / `argo_fetch` se registran como herramientas nativas de primera clase, disponibles por defecto sin conexión MCP; los esquemas se generan desde la única fuente de verdad (`mcp_tools.py`), sin deriva; las 13 herramientas (salvo `argo_research`) se activan a demanda vía `nativeTools`
-- **MCP apagado por defecto**: tres formas de conexión (MCP a demanda / herramientas nativas como entrada por defecto / web_search seam); coste de token residente cero, y un profile patch abre la superficie completa de 14 herramientas
+- **Herramientas nativas del plugin**: `argo_search` / `argo_fetch` se registran como herramientas nativas de primera clase, disponibles por defecto sin conexión MCP; los esquemas se generan desde la única fuente de verdad (`mcp_tools.py`), sin deriva; las 18 herramientas (salvo `argo_research`) se activan a demanda vía `nativeTools`
+- **MCP apagado por defecto**: tres formas de conexión (MCP a demanda / herramientas nativas como entrada por defecto / web_search seam); coste de token residente cero, y un profile patch abre la superficie completa de 19 herramientas
 - **Compatibilidad con Windows** (PR #11 de la comunidad): rutas temporales del sistema, arreglo de codificación GBK, resolución de intérprete en runtime (`python3`/`python`), symlink recurre a junction sin permisos, nuevo instalador PowerShell `install.ps1`
 - **Autocuración de cuotas**: el agotamiento de cuota remota oculto en HTTP 200 se detecta; el enrutamiento excluye ese motor y pasa a fuentes de respaldo, y vuelve automáticamente en el siguiente periodo
 - **Deadline global de fetch**: `ARGO_FETCH_DEADLINE_S` (60s por defecto) acota la cadena de respaldo; respeta señales de parada 429/503; renderizado tinyfish + sondas de variante `.md`

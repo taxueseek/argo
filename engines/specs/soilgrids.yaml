@@ -11,6 +11,7 @@
 engine_id: soilgrids
 type: soilgrids
 enabled: false
+disabled_reason: 72fd95a 源治理轮批量停用，未单独评估；土壤数据查询占比低，重开前需实测对比
 cost_tier: free
 timeout: 25
 canary_query: "amsterdam"

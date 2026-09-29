@@ -215,6 +215,12 @@ def tool_exists(name: str) -> bool:
     return shutil.which(name) is not None
 
 
+# 搜索器未显式传超时时的默认上限（秒，与 run() 的历史默认一致）。
+# H2 之后进程内调用方会显式传更紧的 time_budget（防挂死占死单线程
+# executor——子进程可硬杀，线程不可杀）。
+_RUN_DEFAULT_TIMEOUT_S = 30.0
+
+
 def truncate(text: str, n: int = 120) -> str:
     text = text.strip()
     return text if len(text) <= n else text[: n - 1] + "…"
@@ -256,7 +262,9 @@ def _apply_noise_floor(rows, root, max_results):
 
 
 def rg_search(patterns, path, excludes, exts, context, count, max_results,
-              fixed, raw_query="", dots=False, drop_noise=True):
+              fixed, raw_query="", dots=False, drop_noise=True, timeout=None):
+    timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
+
     def build(fixed, drop_noise=True):
         cmd = ["rg", "--line-number", "--no-heading", "-i", "--color", "never"]
         if dots:

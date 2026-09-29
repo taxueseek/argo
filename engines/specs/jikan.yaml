@@ -10,6 +10,7 @@
 engine_id: jikan
 type: jikan
 enabled: false
+disabled_reason: builder 逻辑已验证正确，待检索端点恢复后把 enabled 改回 true（见文件头注释）；重开前需实测端点可用性
 cost_tier: free
 timeout: 20
 canary_query: "naruto"

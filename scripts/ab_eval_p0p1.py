@@ -45,7 +45,9 @@ def main():
     cases = [
         ("pytest fixtures", None, {"eastmoney", "bilibili", "twitter", "weibo"}),
         ("React hooks tutorial", None, {"eastmoney", "bilibili", "twitter", "weibo"}),
-        ("贵州茅台股价", "eastmoney", set()),
+        # 2026-09-29：贵州茅台首选漂移到 sina_quote（09-21 路由拆分后 A 股行情
+        # 源的偏好变化，worktree 基线一致；regression_p0p1 同批更新）
+        ("贵州茅台股价", "sina_quote", set()),
         ("基金净值", "eastmoney", set()),
         ("transformer attention paper", None, {"eastmoney", "bilibili"}),
     ]
@@ -99,14 +101,22 @@ def main():
 
     # ── 6. 端到端冷/热 ─────────────────────────────────────────────────────
     section("6. 端到端搜索（冷/热 + outcomes）")
-    q = "Python dataclasses tutorial"
+    # 唯一查询（2026-09-29）：避开往轮遗留的 L2 条目——陈旧条目会让 r1 的
+    # 「冷」不冷（直接命中旧缓存），reranker/early_stopped 检查失去意义。
+    # 时间戳后缀不影响路由（TF-IDF 对英文技术句仍落 english_tech 族）。
+    q = f"Python dataclasses tutorial {int(time.time())}"
     # 确保路由不进东财
     d = route_query(q, mode="fast")
     check("e2e_route_not_em", d["engine"] != "eastmoney", d["engine"])
 
-    # 冷启动强制 miss → 写缓存 → 热命中（避免旧 L2 污染 reranker/early_stopped 检查）
+    # 冷启动强制 miss → 写缓存 → 热命中。
+    # 注意（2026-09-29 修正）：原写法 r1 用 skip_cache=True，但 finalize 的
+    # `if not skip_cache` 同时管读写——r1 什么都不写，r2 必然 miss，
+    # e2e_warm_cached 从设计上就不可能过（实测 r2=False r3=True 的
+    # 「怪象」根源在此，不是产品缺陷）。改为 r1 正常写入（唯一查询已保证
+    # 它是真冷启动），r2/r3 命中同一条目。
     t0 = time.time()
-    r1 = super_search(q, n=3, mode="fast", depth="fast", skip_cache=True, timeout=12)
+    r1 = super_search(q, n=3, mode="fast", depth="fast", skip_cache=False, timeout=12)
     cold = int((time.time() - t0) * 1000)
     t1 = time.time()
     r2 = super_search(q, n=3, mode="fast", depth="fast", skip_cache=False, timeout=12)

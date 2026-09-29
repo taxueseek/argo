@@ -1757,6 +1757,7 @@ engines:
     url: https://api.bochaai.com/v1/ai-search
   brave:
     enabled: false
+    disabled_reason: 72fd95a 源治理轮批量停用；需 API key，通用网页能力与免密钥源重叠，重开前需实测对比
     label: Brave
     cost_tier: low
     coverage:
@@ -2704,6 +2705,7 @@ engines:
     type: doaj
   europeana:
     enabled: false
+    disabled_reason: 72fd95a 源治理轮批量停用；官方 demo key 限额严、欧洲文化遗产覆盖窄，重开需自备 key 并实测
     label: Europeana 欧洲文化遗产
     cost_tier: free
     family: knowledge
@@ -2846,6 +2848,7 @@ engines:
     body:
       query: '{query}'
     enabled: false
+    disabled_reason: 72fd95a 源治理轮批量停用；需 API key 且通用网页能力与 anysearch/bocha 重叠，重开前需实测对比
     label: Felo AI搜索
     cost_tier: paid
     qps: 1
@@ -2897,6 +2900,7 @@ engines:
       search_size: '{n}'
       source: web
     enabled: false
+    disabled_reason: 72fd95a 源治理轮批量停用，未单独评估；秘塔密钥计费政策待查清（docs-local/国内搜索API候选_2026-09-16），重开前需实测
     label: 秘塔
     cost_tier: low
     coverage:
@@ -2939,6 +2943,7 @@ engines:
       User-Agent: argo-search/2.5 (mailto:unified-search@local)
   searxng:
     enabled: false
+    disabled_reason: 已用内嵌本地引擎替代外挂 SearXNG 主路径（自包含部署，少一个外部依赖）；重开需评估实例可用性与稳定性
     label: SearXNG
     cost_tier: free
     coverage:
@@ -3039,6 +3044,7 @@ engines:
     url: https://en.wikipedia.org/w/api.php
   wolframalpha:
     enabled: false
+    disabled_reason: 72fd95a 源治理轮批量停用；需 APPID，计算类查询占比低，重开前需实测对比
     label: WolframAlpha
     cost_tier: free
     coverage:
@@ -3527,6 +3533,7 @@ engines:
   local_goodreads:
     type: html
     enabled: false
+    disabled_reason: 72fd95a 源治理轮批量停用；本地 HTML 源结构不稳定、图书查询占比低，重开前需实测
     label: Goodreads本地
     cost_tier: free
     qps: 2

@@ -13,6 +13,7 @@
 engine_id: realtime_index
 type: cli
 enabled: true
+disabled_reason: 运行时按 realtime-index CLI 是否存在翻转（config._validate_engine_paths）；未安装 CLI 时等效停用，装好后无需改代码自动启用
 cost_tier: free
 label: 实时索引搜索
 desc: 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤）
