@@ -26,6 +26,7 @@
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _VARIANT_MAX_QUERIES = 2
@@ -71,9 +72,17 @@ def variant_recall_wave(req: Any, engine_search: Any) -> list[list[dict[str, Any
     base = req.retrieval_query
     if not base:
         return []
-    # [1:] 去掉归一化主词本身，只留衍生变体；去空、去与主串相同者
-    variants = [v for v in retrieval_variants(base, max_n=_VARIANT_MAX_QUERIES + 1)[1:]
-                if v and v != base]
+    # 变体池 = retrieval_variants（归一化/拆型号/同义）+ structural_variants（错误裸
+    # token/复合词短语）；合并去重、去主串，取前 _VARIANT_MAX_QUERIES 个（成本受控）。
+    pool = (retrieval_variants(base, max_n=_VARIANT_MAX_QUERIES + 1)[1:]
+            + structural_variants(base))
+    seen: set[str] = set()
+    variants: list[str] = []
+    for v in pool:
+        k = v.strip().lower()
+        if v and v != base and k not in seen:
+            seen.add(k)
+            variants.append(v)
     if not variants:
         return []
     engines = (req.engines[:_VARIANT_MAX_ENGINES] if len(req.engines) > _VARIANT_MAX_ENGINES
@@ -101,6 +110,37 @@ def variant_recall_wave(req: Any, engine_search: Any) -> list[list[dict[str, Any
             if goods:
                 extra.append(goods)
     return extra
+
+
+# 结构信号变体（无词典、纯形状识别）——补 retrieval_variants 覆盖不到的两类：
+#   1. 错误/异常裸 token：从 "Rust error[E0499]" 提取 "E0499"（解错页在 issue tracker）；
+#   2. 复合词短语：给连字符/snake_case 词加引号（"sqlite-vec"），迫使精确匹配。
+# 刻意窄匹配：错误码只认 E\d{3,5}/ERR_*/XxxError 形状，不碰 HTTPS/NGINX 等全大写普通词。
+_ERR_SHAPE = re.compile(r"\b(E\d{3,5}|ERR_[A-Z0-9_]+|[A-Z][A-Za-z]*Error)\b")
+_COMPOUND_SHAPE = re.compile(r"\b[A-Za-z][A-Za-z0-9]*[-_][A-Za-z0-9][A-Za-z0-9_-]*\b")
+
+
+def structural_variants(query: str, max_n: int = _VARIANT_MAX_QUERIES) -> list[str]:
+    """结构信号变体：错误裸 token + 复合词引号短语。无词典、零依赖、确定性。"""
+    if not query or not isinstance(query, str):
+        return []
+    out: list[str] = []
+    for m in _ERR_SHAPE.finditer(query):
+        tok = m.group(1)
+        if tok and tok.lower() != query.lower():
+            out.append(tok)
+    for m in _COMPOUND_SHAPE.finditer(query):
+        tok = m.group(0)
+        if ("-" in tok or "_" in tok) and f'"{tok}"' not in out:
+            out.append(f'"{tok}"')
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for v in out:
+        k = v.lower()
+        if k not in seen:
+            seen.add(k)
+            uniq.append(v)
+    return uniq[:max_n]
 
 
 def augment_with_variants(req: Any, engine_search: Any, clean_lists: list,

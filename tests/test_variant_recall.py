@@ -112,3 +112,32 @@ def test_variant_recall_error_entries_are_dropped():
     extra = variant_recall_wave(_mk_req(), mixed)
     for lst in extra:
         assert all("error" not in r for r in lst)  # error 条目被剔除
+
+
+# ── 3. Step 2 结构信号变体 ───────────────────────────────────────────────────
+
+def test_structural_variants_error_code_and_compound():
+    from variant_recall import structural_variants
+    vs = structural_variants("Rust error[E0499] sqlite-vec benchmark")
+    assert "E0499" in vs           # 错误裸 token
+    assert '"sqlite-vec"' in vs    # 复合词引号短语
+
+
+def test_structural_variants_no_false_positive():
+    from variant_recall import structural_variants
+    # HTTPS/NGINX 全大写普通词、useState 驼峰、纯词，都不该产变体（窄匹配）
+    assert structural_variants("useState hook HTTPS NGINX") == []
+    assert structural_variants("hello world") == []
+
+
+def test_variant_recall_pool_includes_structural():
+    # 集成：错误码 query 的变体池含结构信号变体，并被用于召回
+    from variant_recall import variant_recall_wave
+    calls: list[str] = []
+
+    def fake(q, eng, **kw):
+        calls.append(q)
+        return [{"title": f"r-{q}", "url": f"https://x/{q}/{eng}", "snippet": "s", "_engine": eng}]
+
+    variant_recall_wave(_mk_req(retrieval_query="Rust error[E0499] compile"), fake)
+    assert "E0499" in calls, calls  # 结构信号变体进入召回
