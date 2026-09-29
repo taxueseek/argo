@@ -273,8 +273,22 @@ def pick_alternative_engines(tried: list[str], engines_fallback: list[str] | Non
         if _try_add(eng):
             return picks
 
-    # 2) 同族垂直（如 knowledge 补 wikidata；sports 补其它体育源）
-    for eng in engines_fallback or []:
+    # 2) 同族垂直（如 knowledge 补 wikidata；sports 补其它体育源）。候选 = 域声明
+    #    engines_fallback + family_candidates 按已试族从全注册表激活的启用源（含
+    #    「单跑可用但域 combo 选不中」的孤儿源）——family_candidates 正是设计为此的
+    #    「能力族×语言×模式」单一取源口，此处首次接线。仍过 _engine_family 同族门 +
+    #    _try_add 安全门（_recovery_engine_allowed）。family_candidates 不可用时退回
+    #    engines_fallback（失败安全，不影响原有恢复链）。
+    _same_fam: list[str] = list(engines_fallback or [])
+    try:
+        from engine_families import family_candidates
+        for _fam in tried_families:
+            for _e in family_candidates(_fam, "*", enabled=enabled):
+                if _e not in _same_fam:
+                    _same_fam.append(_e)
+    except Exception:
+        pass
+    for eng in _same_fam:
         if _engine_family(eng) in tried_families and _try_add(eng):
             return picks
 
