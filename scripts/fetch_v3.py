@@ -355,6 +355,21 @@ def _llms_txt_url(url: str) -> str | None:
     return f"{parsed.scheme}://{parsed.netloc}/llms.txt"
 
 
+# llms-full.txt（llms.txt v2 规范伴生文件）明确禁用（2026-09-29）：全站
+# 正文合并成单文件，实测最大站点千万 token 量级——一次抓取撑爆 agent 上
+# 下文窗口且无索引结构。守卫让「以后有人按规范补探测」直接踩刹车。
+_BANNED_AI_VARIANTS = frozenset({"llms-full.txt"})
+
+
+def _is_banned_ai_variant(url: str) -> bool:
+    """候选 URL 是否指向禁用的 AI 变体（按路径末段判，防查询串伪装）。"""
+    try:
+        path = urlparse(url).path
+    except Exception:
+        return False
+    return path.rstrip("/").rsplit("/", 1)[-1] in _BANNED_AI_VARIANTS
+
+
 def _ai_variant_candidates(url: str) -> list[tuple[str, str]]:
     """第零级探测候选清单（按优先序）：页面 .md 直出 → 站点根 llms.txt。"""
     out: list[tuple[str, str]] = []
@@ -364,7 +379,8 @@ def _ai_variant_candidates(url: str) -> list[tuple[str, str]]:
     llms = _llms_txt_url(url)
     if llms:
         out.append((llms, "llms_txt"))
-    return out
+    # token 炸弹守卫：全站合并类变体永不进候选（见 _BANNED_AI_VARIANTS）
+    return [(u, k) for u, k in out if not _is_banned_ai_variant(u)]
 
 
 def _negotiated_markdown(resp: dict) -> str | None:

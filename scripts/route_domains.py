@@ -160,6 +160,19 @@ def _get_compiled_domains(domains: list[dict[str, Any]]) -> list[dict[str, Any]]
     return _compiled_domains
 
 
+def warm_compiled_domains() -> None:
+    """全量预编译域正则（长驻进程的后台预热入口，如 MCP initialize 后）。
+
+    match_domains 懒编译让「扫到哪个域才编译哪个域」；长驻进程在这里一次
+    付清全部域的编译税，首包 tools/call 不再带路由冷启动。失败静默——
+    懒编译与全量回退都会自愈，预热是纯优化。
+    """
+    try:
+        _get_compiled_domains(get_domains())
+    except Exception:
+        pass
+
+
 def _rule_sources(domain: dict[str, Any]) -> list[str]:
     """参与指纹的全部规则源（新增字段必须加进来，否则编辑它不会让缓存失效）。"""
     out: list[str] = []

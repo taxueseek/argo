@@ -300,3 +300,25 @@ def test_without_need_html_md_variant_still_used(monkeypatch):
     out = fetch_v3.fetch_v3("https://example.com/doc", need_html=False,
                             skip_cache=True)
     assert out["fetch_method"] == "md_variant"
+
+
+def test_llms_full_txt_filtered():
+    """llms-full.txt 类全站合并变体永不进探测候选（token 炸弹守卫）。
+
+    2026-09-29：llms.txt v2 规范的伴生文件 llms-full.txt 是「全站正文合并
+    成单文件」形态，实测最大站点千万 token 量级——一次抓取撑爆上下文窗口
+    且无索引结构。守卫锁的是「以后有人按规范补探测」这个改动：候选出口
+    统一过滤，本测试保证过滤逻辑活着。
+    """
+    from fetch_v3 import _ai_variant_candidates, _is_banned_ai_variant
+
+    assert _is_banned_ai_variant("https://x.dev/llms-full.txt")
+    assert _is_banned_ai_variant("https://x.dev/llms-full.txt/")
+    assert not _is_banned_ai_variant("https://x.dev/llms.txt")
+    assert not _is_banned_ai_variant("https://x.dev/llms.txt.md")
+    # 站点根 URL 的候选清单：只允许 .md 与 llms.txt
+    cands = _ai_variant_candidates("https://x.dev/")
+    kinds = [k for _u, k in cands]
+    assert "llms_txt" in kinds
+    for u, _k in cands:
+        assert "llms-full" not in u

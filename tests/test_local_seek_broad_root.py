@@ -121,7 +121,10 @@ class TestRunLocalSeekGuard(unittest.TestCase):
              mock.patch.object(sp, "run",
                                side_effect=sp.TimeoutExpired("cmd", 3)):
             try:
-                hits = ls._run_local_seek("q", 5)
+                # 唯一 query（2026-09-29）：H2 进程内化后本函数前半段有
+                # 进程内 + 落盘两级缓存，固定 query 会被同套件其他用例的
+                # 落盘条目提前命中（返回非空），断言随之漂移
+                hits = ls._run_local_seek(f"timeout-probe-{os.getpid()}-{id(self)}", 5)
             except sp.TimeoutExpired:
                 self.fail("TimeoutExpired 冒泡了：本地命中不应让整次搜索承担异常")
             self.assertEqual(hits, [])

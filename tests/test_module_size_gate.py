@@ -68,10 +68,16 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "工作区未提交、当日仍在增长 1600→1604）——上限随工作区现值登记，"
               "随该工作正式提交后由其转正或回调"),
     "scripts/fetch_v3.py": (
-        1795, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
+        1811, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
               "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）；"
-              "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰"),
+              "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰；"
+              "2026-09-29 +10：llms-full.txt token 炸弹守卫（候选出口过滤）"),
+    "scripts/mcp_handlers.py": (
+        1008, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
+              "2026-09-29 +8：661e0f1（H2 seek 进程内化）带入的增量，"
+              "并行会话未登记即合入——本行补登记；拆分候选：surface 五工具"
+              "已拆出（mcp_handlers_surface），剩余是分发表与粘合层"),
     "scripts/engines_base.py": (
         1509, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
               "2026-09-26 +42：SERP 垃圾守卫接线（守卫本体独立在 serp_guard.py，此处只留"
