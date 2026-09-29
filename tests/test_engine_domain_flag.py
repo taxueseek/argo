@@ -65,18 +65,24 @@ class TestEngineDomainFlag(unittest.TestCase):
         os.environ["ARGO_STATE_DIR"] = tempfile.mkdtemp()
         calls, fake = _capture()
         S.engine_search = fake
-        for _ in range(2):
-            S.super_search("iso-probe-query", engine="anysearch", n=3,
-                           engine_domain="finance")
+        # 第 1 次同 domain：记录请求数。注意：Step 1/2 的 multi-query 变体召回会在
+        # 召回不足时追加 engine_search 调用，故首次请求数未必为 1——这里只把它当基线。
+        S.super_search("iso-probe-query", engine="anysearch", n=3,
+                       engine_domain="finance")
+        after_first = len(calls)
+        # 同 domain 重复 → 命中 combo 缓存，整个 execute_search 提前返回，
+        # 连变体召回都不触发，calls 不应增长。
+        S.super_search("iso-probe-query", engine="anysearch", n=3,
+                       engine_domain="finance")
         self.assertEqual(
-            len(calls), 1,
-            "同 domain 重复查询应命中缓存，只发一次请求")
+            len(calls), after_first,
+            "同 domain 重复查询应命中缓存，不再发请求")
 
         # 换 domain → 必须重新发请求
         S.super_search("iso-probe-query", engine="anysearch", n=3,
                        engine_domain="tech")
-        self.assertEqual(len(calls), 2,
-                         "不同 --domain 不该复用同一份缓存")
+        self.assertGreater(len(calls), after_first,
+                           "不同 --domain 不该复用同一份缓存")
 
     def test_cli_parses_and_forwards(self) -> None:
         """CLI 入口确实把两个开关接到 super_search（防止再断在 argparse 之后）。"""
