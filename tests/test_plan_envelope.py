@@ -291,7 +291,7 @@ class TestSuperSearchGates(unittest.TestCase):
         # 仅测 plan 挂载：mock collect 太重，直接测 build_plan + deep_research 字段
         # 用极短 timeout + 允许空结果
         report = deep_research(
-            "unit test topic argo",
+            "Python asyncio tutorial",
             num_sub_queries=1,
             max_results=1,
             timeout=1,

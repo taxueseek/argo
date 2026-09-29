@@ -154,7 +154,27 @@ def build_patterns(query: str, exact: bool = False):
     if pos < len(query):
         tokens.append(query[pos:])
     if not any(CJK_RE.fullmatch(t) for t in tokens):
-        return [query], is_literal(query)
+        # 非 CJK 查询：整句精确 + 分词 OR，与中文分支同逻辑。
+        # 此前直接 return [query] 整句化，英文多词查询（如 "Python asyncio
+        # tutorial"）变成单一固定字符串，rg 按整句匹配 → 0 命中。
+        # 分词后 rg 按 OR 匹配，能命中包含任一词的文件。
+        parts = []
+        for t in tokens:
+            if CJK_RE.fullmatch(t) and len(t) >= 3:
+                parts.append(t)
+                for i in range(len(t) - 1):
+                    parts.append(t[i:i + 2])
+            elif t.strip():
+                # 非 CJK token 按空格分词（英文多词查询的关键修复）
+                for word in t.strip().split():
+                    if word:
+                        parts.append(word)
+        seen, out = set(), []
+        for p in parts:
+            if p not in seen:
+                seen.add(p)
+                out.append(p)
+        return out, all(is_literal(p) for p in out)
     parts = []
     for t in tokens:
         if CJK_RE.fullmatch(t) and len(t) >= 3:

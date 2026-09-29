@@ -253,7 +253,14 @@ def seek_query_payload(query: str, target: str, max_n: int,
     if exact:
         argv.append("--exact")
     text, rc = mod.run_query(argv, time_budget=time_budget)
-    if rc != 0 or not text.strip():
+    if rc != 0:
+        # rc=1 是「搜了没命中」，不是「真失败」——区分两者避免子进程回退
+        # 把同一搜索再跑一遍（实测 787ms vs 命中路径 12ms，双跑税 ~775ms）。
+        # 无命中返回空结果（不回退）；真失败返回 None（调用方回退子进程）。
+        if rc == 1 and not text.strip():
+            return {"results": [], "total": 0}
+        return None
+    if not text.strip():
         return None
     return json.loads(text)
 

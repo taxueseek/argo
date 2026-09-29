@@ -87,8 +87,8 @@ export const NATIVE_TOOLS = {
         },
         "include_local": {
           "type": "boolean",
-          "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认关）",
-          "default": false
+          "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认开）",
+          "default": true
         },
         "summary": {
           "type": "boolean",

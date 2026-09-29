@@ -44,7 +44,7 @@ TOOLS = [
                 "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前", "default": "relevance"},
                 "include_domains": {"type": "array", "items": {"type": "string"}, "description": "仅保留这些域名（含子域），如 [\"github.com\"]", "default": []},
                 "exclude_domains": {"type": "array", "items": {"type": "string"}, "description": "排除这些域名（含子域），如 [\"pinterest.com\"]", "default": []},
-                "include_local": {"type": "boolean", "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认关）", "default": False},
+                "include_local": {"type": "boolean", "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认开）", "default": True},
                 "summary": {"type": "boolean", "description": "精简输出：截断摘要、去掉重字段，省 token", "default": True},
             },
             "required": ["query"],
