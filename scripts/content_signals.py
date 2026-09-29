@@ -626,18 +626,92 @@ def score_template_repetition(content: str) -> dict:
 # ── 6. 整合入口 ─────────────────────────────────────────────────────
 
 def analyze_fetch_result(url: str, html: str, content: str, metadata: dict | None = None) -> dict:
-    """综合所有信号返回完整质量信封。"""
+    """综合所有信号返回完整质量信封。
+
+    2026-09-29 新增：集成证据分层（evidence_tier）和来源账本（source_ledger），
+    用于量化内容来源的可信度和新鲜度风险。
+    """
     metadata = metadata or {}
     title = metadata.get("title", "")
+
+    # 基础信号
+    source_info = classify_source(url)
+    quality_info = compute_content_quality(content, title)
+
+    # 证据分层
+    try:
+        from evidence_tier import assess_evidence_tier
+        has_date = bool(metadata.get("published_time") or metadata.get("modified_time"))
+        has_author = bool(metadata.get("author"))
+        has_citation = bool(re.search(r"(https?://|参考文献|references|资料来源)", content or "", re.IGNORECASE))
+        evidence = assess_evidence_tier(
+            url=url,
+            source_type=source_info.get("source_type", "unknown"),
+            is_official=source_info.get("is_official", False),
+            has_date=has_date,
+            has_author=has_author,
+            has_citation=has_citation,
+            content=content,
+        )
+        evidence_result = {
+            "tier": evidence.tier,
+            "tier_weight": evidence.tier_weight,
+            "notes": evidence.notes,
+        }
+    except ImportError:
+        evidence_result = {"tier": "unknown", "tier_weight": 0.0, "notes": []}
+
+    # 来源账本
+    try:
+        from source_ledger import SourceLedger, create_source_record
+        ledger = SourceLedger()
+        record = create_source_record(
+            url=url,
+            publisher=source_info.get("source_type", ""),
+            fetch_success=True,
+            http_status=200,
+            title=title,
+            content=content,
+            confidence_tier=evidence_result.get("tier", "D"),
+        )
+        ledger.add_source(record)
+        ledger_result = {
+            "freshness_risk": ledger.get_freshness_risk(url),
+            "access_risk": ledger.get_access_risk(url),
+            "overall_risk": ledger.get_overall_risk(url),
+        }
+    except ImportError:
+        ledger_result = {"freshness_risk": 0.0, "access_risk": 0.0, "overall_risk": 0.0}
+
+    # 文体特征检测（2026-09-29）
+    try:
+        from stylometry_detector import StylometryDetector
+        stylometry = StylometryDetector().score(content)
+    except ImportError:
+        stylometry = {"score": 0.0, "features": {}, "is_suspicious": False}
+
+    # 突发性检测（2026-09-29）
+    try:
+        from burstiness_detector import BurstinessDetector
+        burstiness = BurstinessDetector().score(content)
+    except ImportError:
+        burstiness = {"score": 0.0, "burstiness": {}, "is_suspicious": False}
+
     return {
-        "source": classify_source(url),
+        "source": source_info,
         "freshness": compute_freshness(metadata),
         "page_type": detect_page_type(html, url),
-        "quality": compute_content_quality(content, title),
+        "quality": quality_info,
         # SEO/低质信号（2026-09-27）：只在有正文时才有意义，故随主信封一起算
         "clickbait": score_clickbait(title),
         "title_body": score_title_body_consistency(title, content),
         "template": score_template_repetition(content),
+        # 证据分层 + 来源账本（2026-09-29）
+        "evidence_tier": evidence_result,
+        "source_ledger": ledger_result,
+        # 文体特征 + 突发性检测（2026-09-29）
+        "stylometry": stylometry,
+        "burstiness": burstiness,
     }
 
 
