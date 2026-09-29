@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-259-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -619,6 +619,12 @@ argo/
 
 ## 最近更新
 
+### v2.9.1：内容质量优化 + 对抗内容农场 + 适配最新版本
+
+- **更干净**：优化了内容质量评估，提升了对抗内容农场的能力——搜索结果里低质、批量生成的内容会被更有效地识别和过滤
+- **更兼容**：适配了最新版本，确保与当前环境无缝协作
+- **更稳定**：本地搜索新增自身安装树守卫，避免搜索结果被自身源码污染
+
 ### v2.8.9：输出减重 + 检索更全更快 + 外媒与核查源 5 个
 
 - **更省**：默认输出 −66%（同一段结果不再重复写三遍）；重复查询 −30%（路由决策缓存）；慢网轮等待 −36%（主源卡过 0.8 秒自动补发备选源）
@@ -666,6 +672,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.9.1** | **内容质量优化 + 对抗内容农场 + 适配最新版本**：优化内容质量评估，提升对低质批量生成内容的识别与过滤能力；适配最新版本确保无缝协作；本地搜索新增自身安装树守卫，避免结果被自身源码污染。 |
 | **v2.8.9** | **输出减重 + 检索更全更快 + 5 个外媒与核查源**：默认输出 15.5KB→5.2KB（−66%，同一份结果不再写三遍，`--envelope` 可开完整版）；路由决策缓存让重复查询 −30%；慢网轮 dispatch −36%（串行域主源超 0.8s 自动补发备选源）；取数链路五轮优化（召回 +35%、抓取时延 −30%、长尾 P90 −8%）+ 正文结构还原（标题/列表/表格保真 0/6→6/6）+ 中文质量分偏差修复；新增卫报 / France 24 / 德国之声 / FactCheck.org / Full Fact 五个免密钥源（232→237、开箱 194→198、域 90→92），gdelt 死源下线；六处「看起来对、量起来错」的自洽缺陷修复 + 六格漏斗归因 + 离线重跑对比工具（`scripts/replay_eval.py`）+ 部署形态门禁与场景阈值契约。详见 [发布说明](docs/RELEASE_NOTES_v2.8.9.md) |
 | **v2.8.8** | **真实用户报障修复（#12 密钥别名静默失效、#13 抓取链不走代理）+ 全面提速 + 搜索源 218 → 232**：统一出口调度（`ARGO_PROXY` / 按域规则 / 标准代理变量，全程尊重 `NO_PROXY`）；16 处密钥读取统一走别名链；命令冷启动 2.1s→0.55s、配置跨进程缓存 50–82ms→16–18ms、QPP 平坦分早停、`--list-engines --detail` 瘦身 152KB→51KB；新增直答 `argo answer` 与网页观察 `argo watch`，14 个免密钥源（国内热榜与生活 / 安全漏洞 / 学术开放获取 / 技能目录 / Agent 搜索），69 引擎补归类（`web_general` 兜底 41%→20%，新增 security 领域）；三平台惯例路径（`argo paths` 自省）+ Python 3.9 + 有界并发让超时真正生效；search.py 拆模块 3351→2526 行、相关性回归金标 22 引擎、静态缺陷与输出契约门禁。详见 [发布说明](docs/RELEASE_NOTES_v2.8.8.md) |
 | **v2.8.7** | **218 源 / 89 域 + 取信技巧三通道 + 路由触发纪律 + macro 零结果修复**：批次七/八/九累计 50 个新源（法条/标准/安全情报/学术/新闻/文娱/能源交通/法律政务），stackexchange 与 doi 引擎；抓取链第零级 llms.txt 与 `.md` 直出探测、新增 r.jina.ai 阅读器级；`--engine` 逗号多引擎修复、tfidf 计算方式与 route_reason、负向路由控制矩阵、排序金标与融合增益消融检查；中国宏观查询国家统计局前置、全域零结果恢复链放行 L3、救援引擎如实记账。详见 [发布说明](docs/RELEASE_NOTES_v2.8.7.md) |

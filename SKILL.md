@@ -1,7 +1,7 @@
 ---
 name: argo
 description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。覆盖意图：搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合。多语言检测与跨语言回退；259 个源（225 个免密钥开箱可用）TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；recovery 防污染。CLI：search|research|fetch|crawl|extract|article|job|evidence|clarify|preflight|answer|watch|cite|mcp。
-version: 2.9.0
+version: 2.9.1
 triggers:
   - 搜索
   - 查一下
@@ -24,7 +24,7 @@ triggers:
   - research
 ---
 
-# Argo v2.9.0 — 统一搜索与证据核验
+# Argo v2.9.1 — 统一搜索与证据核验
 
 > 不止「帮你搜到」，还要「帮你核到」：高后果问题标 `fetch_required`、结果标
 > `fetch_suggested`，`--verify` 核验正文并回填证据分。变更日志见 `docs/RELEASE_NOTES_v2.8.*.md`。
