@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 # 本机文件命中子进程超时（秒）。**必须显著小于 fast/auto 的总预算**：
@@ -50,6 +51,65 @@ _LOCAL_SEEK_CACHE_MAX = 64
 # H2：seek 模块按解析后真实路径缓存（importlib 显式文件定位，不占通用
 # 模块名、不污染 sys.path），进程内只加载一次（实测 0.5ms）。
 _SEEK_MODULE_CACHE: dict[str, Any] = {}
+
+# H3：跨进程落盘缓存。CLI 每次新进程，进程内缓存救不了 CLI 重复查询；
+# 落盘缓存让 TTL 内的重复查询（同 query+dir+max）零成本。陈旧语义与
+# 进程内缓存一致（300s TTL——文件不频繁修改场景可接受）。写侧原子替换
+# + 全异常吞掉：缓存永不破坏搜索。
+_SEEK_DISK_CACHE_MAX = 64
+
+
+def _seek_disk_cache_path() -> Path:
+    try:
+        import argo_paths
+        return Path(argo_paths.state_path("local_seek_cache.json"))
+    except Exception:
+        return Path(os.path.expanduser(
+            "~/.cache/unified-search/local_seek_cache.json"))
+
+
+def _seek_disk_cache_get(key: str) -> list[dict[str, Any]] | None:
+    try:
+        p = _seek_disk_cache_path()
+        if not p.is_file():
+            return None
+        with p.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        rec = data.get(key) if isinstance(data, dict) else None
+        if not isinstance(rec, dict):
+            return None
+        if time.time() - rec.get("ts", 0) >= _LOCAL_SEEK_TTL_S:
+            return None
+        results = rec.get("results")
+        return results if isinstance(results, list) else None
+    except Exception:
+        return None
+
+
+def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
+    try:
+        p = _seek_disk_cache_path()
+        now = time.time()
+        try:
+            with p.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            data = data if isinstance(data, dict) else {}
+        except Exception:
+            data = {}  # 损坏文件：整表重建（缓存可牺牲，搜索不可牺牲）
+        data = {k: v for k, v in data.items()
+                if isinstance(v, dict) and now - v.get("ts", 0) < _LOCAL_SEEK_TTL_S}
+        data[key] = {"ts": now, "results": results}
+        if len(data) > _SEEK_DISK_CACHE_MAX:
+            for k in sorted(data, key=lambda k: data[k].get("ts", 0)
+                            )[:len(data) - _SEEK_DISK_CACHE_MAX]:
+                data.pop(k, None)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, p)  # 原子替换：并发写不会留下半截文件
+    except Exception:
+        pass
 
 
 def _is_broad_local_root(path: str) -> bool:
@@ -119,6 +179,15 @@ def _run_local_seek(query: str, max_n: int = 5,
     if cached is not None and time.time() - cached[0] < _LOCAL_SEEK_TTL_S:
         return cached[1]
 
+    # H3：跨进程落盘缓存（CLI 每次新进程，进程内缓存救不了 CLI 重复查询；
+    # MCP 常驻进程通常在内存层就命中，落盘层对它是兜底）。命中后回填内存层。
+    disk_hit = _seek_disk_cache_get(cache_key)
+    if disk_hit is not None:
+        if len(_LOCAL_SEEK_CACHE) >= _LOCAL_SEEK_CACHE_MAX:
+            _LOCAL_SEEK_CACHE.clear()
+        _LOCAL_SEEK_CACHE[cache_key] = (time.time(), disk_hit)
+        return disk_hit
+
     # 安装感知 + 唯一来源：委托 seek_locator 统一发现 local-seek/scripts/seek.py
     # （打包子技能优先，ARGO_LOCAL_SEEK_PATH / ARGO_LOCAL_SEEK_ROOTS 承载自定义/遗留）。
     # 不硬编码 ~/.agents/skills|~/.claude/skills 主机路径（SKILL.md 明令禁止）。
@@ -142,7 +211,9 @@ def _run_local_seek(query: str, max_n: int = 5,
         payload = _seek_query_subprocess(seek_py, query, target, max_n)
     if payload is None:
         return []
-    return _payload_to_hits(payload, max_n, cache_key)
+    out = _payload_to_hits(payload, max_n, cache_key)
+    _seek_disk_cache_put(cache_key, out)  # H3：写穿到落盘层
+    return out
 
 
 def _load_seek_module(seek_py: str):

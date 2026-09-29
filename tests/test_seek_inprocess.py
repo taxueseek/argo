@@ -33,7 +33,10 @@ SCRIPTS = ROOT / "scripts"
 
 
 @pytest.fixture(autouse=True)
-def _clean_caches():
+def _clean_caches(tmp_path, monkeypatch):
+    # 隔离进程内与落盘两层缓存（测试不得写生产缓存文件）
+    monkeypatch.setattr(local_seek, "_seek_disk_cache_path",
+                        lambda: tmp_path / "local_seek_cache.json")
     local_seek._LOCAL_SEEK_CACHE.clear()
     yield
     local_seek._LOCAL_SEEK_CACHE.clear()

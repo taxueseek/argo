@@ -66,7 +66,11 @@ def _fake_seek_run(mode: str):
 
 
 @pytest.fixture(autouse=True)
-def _clean_cache():
+def _clean_cache(tmp_path, monkeypatch):
+    # 隔离进程内与落盘两层缓存：测试写入真实落盘缓存会污染生产文件
+    #（与 test_unit 污染健康文件同类事故），且跨用例互相串结果。
+    monkeypatch.setattr(local_seek, "_seek_disk_cache_path",
+                        lambda: tmp_path / "local_seek_cache.json")
     local_seek._LOCAL_SEEK_CACHE.clear()
     yield
     local_seek._LOCAL_SEEK_CACHE.clear()
@@ -74,14 +78,20 @@ def _clean_cache():
 
 @pytest.fixture()
 def _fake_seeker(monkeypatch):
+    """H2 后的桩缝隙：进程内调用直接走 seek 模块的 run_query。
+
+    （此前 mock 子进程 run——H2 进程内化后该路径只在失败回退时才走，
+    继续 mock 它会被真实进程内搜索短路。）
+    """
     def _install(mode: str):
-        monkeypatch.setattr(local_seek.os.path, "isfile", lambda p: True)
-        import seek_locator
-        monkeypatch.setattr(seek_locator, "resolve_seek_py", lambda: "/fake/seek.py")
-        monkeypatch.setattr(local_seek.subprocess if hasattr(local_seek, "subprocess")
-                            else subprocess, "run", _fake_seek_run(mode))
-        # local_seek 内部是 `import subprocess as _sp`，patch 模块属性即可
-        monkeypatch.setattr(subprocess, "run", _fake_seek_run(mode))
+        payload = json.dumps({
+            "query": "q", "engine": "rg", "mode": mode, "count": 1,
+            "results": [{"path": "/tmp/proj/a.py", "line": 3,
+                         "snippet": "def main():", "mtime": "2026-09-29 10:00:00"}],
+        }, ensure_ascii=False)
+        mod = local_seek._load_seek_module(str(
+            ROOT / "sub-skills" / "local-seek" / "scripts" / "seek.py"))
+        monkeypatch.setattr(mod, "run_query", lambda *a, **k: (payload, 0))
     return _install
 
 
