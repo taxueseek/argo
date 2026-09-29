@@ -183,7 +183,7 @@ def test_periodic_sweep_reclaims_disk(small_limit, monkeypatch):
     文件要到检查点才反映新大小。不先检查点就量会看到「VACUUM 没生效」的
     假象（本用例第一版就是这么误报的）。
     """
-    monkeypatch.setattr(cache.SQLiteCache, "_RECLAIM_MIN_BYTES", 64 * 1024)
+    monkeypatch.setattr(cache.SQLiteCache, "_RECLAIM_FREE_RATIO", 0.05)
     sc = cache.SQLiteCache(db_path=small_limit, ttl=99999)
     payload = _payload(small_limit)
 

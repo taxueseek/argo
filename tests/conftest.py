@@ -12,12 +12,25 @@ HttpClient 接入后这些 mock 不再生效。默认回退 urllib 路径，保�
 在这里设一次即可覆盖所有遵循该约定的模块。
 """
 
+import atexit
 import os
+import shutil
 import tempfile
 
 import pytest
 
 os.environ.setdefault("ARGO_ENGINE_HTTP_CLIENT", "0")
+
+# 会话级临时根：tests/ 里 30+ 处 `tempfile.mkdtemp` 都不自行清理（各自的用例
+# 只关心目录内容、不管善后），逐处补 cleanup 既易漏——新增用例会再漏——也难
+# 维持。这里把 `tempfile.tempdir` 与 `TMPDIR` 一并指向会话目录：本进程所有
+# mkdtemp/mkstemp、以及测试 spawn 出的子进程里新建的临时目录，都收在同一个
+# 根下，退出时一次 rmtree 清干净。**一处修改覆盖整类泄漏**（实测本机曾积
+# 1135 个 `argo-*` 残留目录 / ~40MB，且每跑一次测试只增不减）。
+_SESSION_TMP = tempfile.mkdtemp(prefix="argo-test-session-")
+tempfile.tempdir = _SESSION_TMP
+os.environ["TMPDIR"] = _SESSION_TMP
+atexit.register(shutil.rmtree, _SESSION_TMP, ignore_errors=True)
 
 # 路由决策缓存默认关闭，理由与上面的 HTTP_CLIENT 同类：它是跨进程的持久缓存，
 # 而本会话的状态目录**整轮共享**——于是「A 用例路由过 Q」会把决策留给「B 用例

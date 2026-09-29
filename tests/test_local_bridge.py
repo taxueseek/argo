@@ -120,7 +120,9 @@ class TestRunLocalSeek(unittest.TestCase):
              patch("subprocess.run", return_value=_R()) as mr, \
              patch("os.path.exists", return_value=True):
             # _run_local_seek 内 SCRIPT_DIR 定位 seek.py 走 os.path.exists 分支
-            hits = S._run_local_seek("q", max_n=5)
+            # 显式给 search_dir：本用例在仓库内跑，cwd 落在 argo 自身安装树内，
+            # 会被 _local_seek_dir 守卫跳过；而本用例测的是**解析**，与范围无关。
+            hits = S._run_local_seek("q", max_n=5, search_dir="/tmp/proj")
         self.assertEqual(len(hits), 2)
         self.assertEqual(hits[0]["source"], "local_files")
         self.assertTrue(hits[0]["url"].endswith("#3"))

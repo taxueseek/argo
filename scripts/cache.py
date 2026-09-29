@@ -557,8 +557,8 @@ class SQLiteCache:
     # 走索引），放进每次 set() 的热路径会白付约 6ms/次；稳态下每小时一次足够
     # 把库压在低位。
     _EXPIRY_SWEEP_INTERVAL_S = 3600.0
-    # 定期清扫后是否 VACUUM 的门槛：空闲页到这个量才值得付一次整库重写。
-    _RECLAIM_MIN_BYTES = 4 * 1024 * 1024
+    # VACUUM 门槛：空闲页占比超过它才付一次整库重写（固定字节门槛两头都不对）。
+    _RECLAIM_FREE_RATIO = 0.2
 
     def _expiry_sweep_due(self, conn) -> bool:
         try:
@@ -635,8 +635,8 @@ class SQLiteCache:
 
             # 删行不会让文件变小：页进 freelist，文件停在高水位。不回收的话
             # 稳态下会留着一整块「只有空闲页」的库——实测线上 10.1MB 文件里
-            # 活数据只有 0.12MB。空闲页不够多就不付 VACUUM 的整库重写代价。
-            if self._free_bytes(conn) >= self._RECLAIM_MIN_BYTES:
+            # 活数据只有 0.12MB。判据用空闲页占比而非固定字节：小库才会回收。
+            if self._free_bytes(conn) > self._RECLAIM_FREE_RATIO * (page_bytes or 1):
                 conn.execute("VACUUM")
 
     @staticmethod

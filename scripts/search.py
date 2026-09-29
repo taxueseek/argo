@@ -209,24 +209,6 @@ def _missing_env_for(eng: str) -> list[str]:
         return []
 
 
-
-
-def _record_quota(engine: str, success: bool) -> None:
-    """单条配额记账（真实打网后写）；失败静默。
-
-    注意：当前**无调用方**——批量路径统一走 `_QuotaBatch`（把同一次搜索的
-    N 条合成一次写入文件）。保留它是因为 CLI 单条兜底语义仍在契约里
-    （references/operations.md 的配额一节描述了单条形态），删掉会让下一轮
-    审查误以为「这里还有一条活跃记账路径」而不敢动批量那一侧。新代码不要
-    调用本函数。
-    """
-    try:
-        from quota import get_quota_manager
-        get_quota_manager().record(engine, success=success)
-    except Exception:  # 侧信道：记账失败不得影响搜索主流程（规则见 except_sets）
-        pass
-
-
 # 结局分类（状态码表 / 配额与拦截关键词 / classify_engine_outcome）已随编排段
 # 搬到 engine_dispatch；这里只导入仍需在 search 内部用到的两个名字：
 # classify_engine_outcome 供下面的 run_dispatch 注入，配额关键词供自适应
@@ -239,11 +221,23 @@ from engine_dispatch import (  # noqa: E402
 )
 from local_seek import _run_local_seek, _LOCAL_SEEK_TIMEOUT_S  # noqa: E402
 
+
 # 缓存命中路径的 include-local 宽限窗（秒）：主结果命中缓存时墙钟已极小
 # （~25ms），为本地命中等满 _LOCAL_SEEK_TIMEOUT_S 会把快路径拖成慢路径
 # （实测 cached 查询 111~138ms vs --no-local 55ms）。宽限覆盖 seek 的常规
 # 60~140ms；超窗的慢 seek 本次不并入——本地命中缺席总好过拖垮快路径。
-_LOCAL_SEEK_GRACE_S = 0.25
+def _local_seek_grace_s() -> float:
+    """本地搜索宽限窗（秒），允许环境变量覆盖。"""
+    try:
+        raw = os.environ.get("ARGO_LOCAL_SEEK_GRACE_S")
+        if raw is not None and raw.strip() != "":
+            return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        pass
+    return 0.25
+
+
+_LOCAL_SEEK_GRACE_S = _local_seek_grace_s()
 
 # include-local 的本地搜索 worker：模块级单例。此前每次调用新建
 # ThreadPoolExecutor 且从不 shutdown——CLI 一次性进程无感，常驻 MCP server

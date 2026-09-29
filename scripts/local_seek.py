@@ -6,9 +6,10 @@ search.py 的 _run_local_seek 调用点改为从本模块导入。
 
 三个边界（2026-09-27 实测补齐，此前会拖垮整次搜索）：
 
-1. **宽泛根直接不查**（见 `_local_seek_dir`）：cwd 是 home 或根目录时
-   返回 None 并跳过。这是 22.6 s 事故的根因修复，「显式传 --path」
-   解决不了（子进程继承 cwd，显式传与默认等价）。
+1. **宽泛根 / 自身安装树直接不查**（见 `_local_seek_dir`）：cwd 是 home、
+    根目录，或落在 argo 自身安装树内时返回 None 并跳过。前者是 22.6 s 事故
+    的根因修复（「显式传 --path」解决不了：子进程继承 cwd，显式传与默认
+    等价）；后者治「常驻 MCP 进程 cwd = 技能目录」导致结果被自身源码污染。
 2. **超时从 20 s 收到 _LOCAL_SEEK_TIMEOUT_S**。本地命中是增强项，不是
    主结果；它的等待上限必须显著小于用户对一次搜索的耐心。
 3. **TimeoutExpired 必须在这里吞掉**。此前没有 try，该异常一路冒泡到
@@ -40,6 +41,14 @@ _BROAD_LOCAL_ROOTS = ("/", "/tmp", "/private/tmp", "/var", "/usr", "/System",
 # Windows 盘符根（C:\ / C:/ / C:）：与上面清单同义，但形态是「字母+冒号」，
 # 用模式判而不用枚举（盘符有 26 个）。
 _WIN_DRIVE_ROOT_RE = re.compile(r"^[A-Za-z]:[\\/]?$")
+
+# argo 自身安装树的根。常驻 MCP 进程的 cwd 就是它（宿主在技能目录里启动
+# 服务），而 `--include-local`（fast/budget 默认开）按 cwd 取范围——于是
+# 每次搜索都把本项目自己的源码与测试当作「本机命中」拼进结果。实测一次
+# 查询 10 条里 5 条是 `tests/*.py`，score 0.9。它不是「宽泛根」而是
+# 「自己的树」：对任何真实查询都只是噪声，故与宽泛根同等跳过。要搜本机
+# 文件仍可 cd 到目标目录，或用 local-seek 的 seek.py --path <目录>。
+_OWN_INSTALL_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 # 本地文件命中缓存：key = (query, max_n, target) → (写入时间, 结果列表)。
 # 文件修改后 TTL 内可能返回旧结果，对本地文件搜索可接受（文件不频繁修改）。
@@ -136,8 +145,17 @@ def _is_broad_local_root(path: str) -> bool:
     return False
 
 
+def _is_own_install_root(path: str) -> bool:
+    """path 是否落在 argo 自身安装树内（含其根目录本身）。"""
+    try:
+        real = os.path.realpath(path)
+    except OSError:
+        return False
+    return real == _OWN_INSTALL_ROOT or real.startswith(_OWN_INSTALL_ROOT + os.sep)
+
+
 def _local_seek_dir() -> str | None:
-    """本地检索的适用范围；宽泛根返回 None（调用方据此跳过本地命中）。
+    """本地检索的适用范围；宽泛根或自身安装树返回 None（据此跳过本地命中）。
 
     宁可返回 None 也不返回一个「象征性收窄」的路径：本地命中是增强项，
     在范围不合理时**不产出**比产出噪音 + 20 s 等待更符合用户预期。
@@ -146,7 +164,7 @@ def _local_seek_dir() -> str | None:
     那条路径不受此守卫影响。
     """
     cwd = os.getcwd()
-    if _is_broad_local_root(cwd):
+    if _is_broad_local_root(cwd) or _is_own_install_root(cwd):
         return None
     return cwd
 
@@ -168,7 +186,8 @@ def _run_local_seek(query: str, max_n: int = 5,
         # 占位「结果」又会污染 results（它只是个说明，不是命中），所以
         # 说明走 stderr：与 CLI 既有的 include-local 异常提示同一条通道。
         sys.stderr.write(
-            "  [include-local] 当前目录过宽（home / 根目录），本地检索会扫全盘，已跳过；"
+            "  [include-local] 当前目录不适合本地检索（home / 根目录过宽，或位于 argo "
+            "自身安装树内——只会命中自身源码），已跳过；"
             "要搜本机文件请 cd 到目标目录后重试，或用 local-seek 的 seek.py --path <目录>\n")
         return []
 

@@ -81,7 +81,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # db_path 由 argo_paths 唯一来源派生，不再字面量拼 ~/.cache/unified-search。
     # 无 ARGO_STATE_DIR 时展开结果与历史默认一致，存量缓存不失效。
     "cache": {"enabled": True, "db_path": str(argo_paths.db_path()), "ttl": 3600, "max_size_mb": 200},
-    "execution": {"default_timeout": 8, "parallel_timeout": 6, "max_parallel_engines": 3, "retry_count": 0},
+    "execution": {"default_timeout": 8, "max_parallel_engines": 3, "retry_count": 0},
     "budget": {
         "fast": {"max_cost_per_query": 0.0, "allow_paid": False},
         "auto": {"max_cost_per_query": 0.01, "allow_paid": True},

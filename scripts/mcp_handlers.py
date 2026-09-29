@@ -379,14 +379,13 @@ def _warm_core_async() -> None:
         try:
             _lazy_cached("search")
             _get_cache()
-            # 路由域正则全量预热（2026-09-29）：match_domains 懒编译后，
-            # 长驻进程的首次 search 仍要付「扫到域」的编译税；这里一次付清，
-            # 首包 tools/call 不再带路由冷启动。失败不影响主路径——懒编译
-            # 与全量回退都会自愈。
+            # 路由域正则全量预热（2026-09-29）：match_domains 懒编译后，长驻
+            # 进程的首次 search 仍要付「扫到域」的编译税；这里一次付清，首包
+            # tools/call 不再带路由冷启动。唯一来源在 route_domains——曾在此
+            # 内联复刻同一句，使 warm_compiled_domains 成了没人调的死函数。
             try:
-                from config import get_domains
-                from route_domains import _get_compiled_domains
-                _get_compiled_domains(get_domains())
+                from route_domains import warm_compiled_domains
+                warm_compiled_domains()
             except Exception:
                 pass
             ms = int((__import__("time").time() - t0) * 1000)

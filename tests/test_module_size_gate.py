@@ -74,9 +74,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰；"
               "2026-09-29 +10：llms-full.txt token 炸弹守卫（候选出口过滤）"),
     "scripts/mcp_handlers.py": (
-        1008, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
+        1007, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
               "2026-09-29 +8：661e0f1（H2 seek 进程内化）带入的增量，"
-              "并行会话未登记即合入——本行补登记；拆分候选：surface 五工具"
+              "并行会话未登记即合入——本行补登记；同日 −1：路由预热改调 "
+              "route_domains.warm_compiled_domains（原在此内联复刻同一句，"
+              "使它成了无人调用的死函数）；拆分候选：surface 五工具"
               "已拆出（mcp_handlers_surface），剩余是分发表与粘合层"),
     "scripts/engines_base.py": (
         1509, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"

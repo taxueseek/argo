@@ -4893,9 +4893,11 @@ engines:
 execution:
   default_timeout: 8
   max_parallel_engines: 3
-  parallel_timeout: 6
   retry_count: 1
-  retry_on_empty: true
+  # 已移除 parallel_timeout / retry_on_empty：全仓无读取点，是「配了不生效」的
+  # 假承诺（2026-09-29 实测，与 max_parallel_engines 同属一类）。DEFAULT_CONFIG
+  # 里重述同名键**不算**读取点——正是它掩盖了这两处的死配置。要让空结果重试或
+  # 并行阶段独立超时真生效，先接线再登记；门禁见 tests/test_execution_config_liveness.py。
   # 单引擎墙钟硬预算（秒）：含该引擎全部重试尝试，超预算即停、由编排层切备选源。
   # 背景：重试会叠乘（引擎级 × HTTP 级 × 超时），anysearch 曾因此跑出 31s
   # （retry_count=1 → 2 次 × max_retries=1 → 2 次 × 8s = 32s 最坏）。

@@ -74,7 +74,24 @@ class TestLocalSeekDirGuard(unittest.TestCase):
 
     def test_subdir_of_broad_root_is_allowed(self):
         """宽泛根的子目录是合法范围（如 /System/Library 之外的普通子目录）。"""
-        d = "/Users/example/.agents/skills/argo"
+        d = "/Users/example/projects/deep/sub"
+        self.assertEqual(self._at(d), d)
+
+    def test_own_install_root_is_skipped(self):
+        """argo 自身安装树必须跳过。
+
+        常驻 MCP 进程的 cwd 就是安装根（宿主在技能目录里启动服务），
+        不跳过则每次搜索都把本项目自己的源码/测试当本地命中拼进结果——
+        实测一次查询 10 条里 5 条是 tests/*.py，score 0.9。
+        """
+        root = ls._OWN_INSTALL_ROOT
+        self.assertIsNone(self._at(root), "安装根必须跳过")
+        self.assertIsNone(self._at(os.path.join(root, "tests")),
+                          "安装树内子目录同样只可能命中自身源码")
+
+    def test_own_install_lookalike_is_allowed(self):
+        """前缀同名但不是同一棵树（'.../argo-other'）不得误伤。"""
+        d = ls._OWN_INSTALL_ROOT + "-other/proj"
         self.assertEqual(self._at(d), d)
 
 
