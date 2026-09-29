@@ -53,6 +53,7 @@ from bounded_run import run_bounded
 from cache_guard import attempt_cache_write
 from engine_dispatch import _QUOTA_ERROR_KEYWORDS
 from engine_env import env_flag
+from variant_recall import augment_with_variants
 from except_sets import OPT_IMPORT, SHAPE_BENIGN
 from search_output import _collect_errors, _slow_query_ttl, build_funnel
 from search_rank import (
@@ -322,6 +323,10 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         except Exception as _e2:  # 兜底是最后一道保底，失败不得反噬主流程
             import logging as _lg2
             _lg2.getLogger("unified_search.search").debug(f"噪声门兜底跳过: {_e2}")
+
+    # ── multi-query 变体召回波（Step 1，本体在 variant_recall.py）───────────
+    # 主 query 召回不足时用变体补召回，rrf_merge 按多 query 共识加权；隔离 + 失败安全。
+    clean_lists = augment_with_variants(req, engine_search, clean_lists, max_results)
 
     if len(clean_lists) > 1:
         merged = rrf_merge(clean_lists, lang=_q_lang_for_fusion)
