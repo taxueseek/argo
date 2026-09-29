@@ -297,12 +297,12 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
     cmd, err = build(fixed, drop_noise=drop_noise)
     if err:
         return [], err
-    proc = run(cmd)
+    proc = run(cmd, timeout=timeout)
     if (proc is not None and proc.returncode == 2 and not fixed
             and "regex parse error" in (proc.stderr or "")):
         # regex 解析失败（如按字面意图输入 interface{}、foo.bar），回退固定字符串
         cmd2, _ = build(True, drop_noise=drop_noise)
-        proc = run(cmd2)
+        proc = run(cmd2, timeout=timeout)
     if proc is None or proc.returncode not in (0, 1, 2):
         return [], "rg 执行失败"
     if proc.returncode == 1:
@@ -472,7 +472,8 @@ def _merge_dedup(a: list, b: list, limit: int) -> list:
     return out
 
 
-def fd_search(query, path, exts, max_results, dots=False):
+def fd_search(query, path, exts, max_results, dots=False, timeout=None):
+    timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
     cmd = ["fd", "-i", "-t", "f", "--color", "never"]
     if dots:
         cmd += ["-H", "-L"]  # -H 进以 . 开头的目录、-L 跟软链，和 rg 的两个开关对应
@@ -482,7 +483,7 @@ def fd_search(query, path, exts, max_results, dots=False):
         for e in exts:
             cmd += ["-e", e]
     cmd += [query, str(path)]
-    proc = run(cmd)
+    proc = run(cmd, timeout=timeout)
     if proc is None or proc.returncode not in (0, 1):
         return [], "fd 执行失败"
     out = [(p, 0, "") for p in proc.stdout.splitlines()[:max_results]]
@@ -503,7 +504,8 @@ def resolve_grep():
 
 
 def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
-                max_results, fixed, raw_query="", dots=False):
+                max_results, fixed, raw_query="", dots=False, timeout=None):
+    timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
     def build(fixed):
         # grep 本来就会进以 . 开头的目录，差别在软链：-r 遇到软链目录不进，-R 才跟。
         # 但 macOS 自带的 grep 连 -R 也不进软链目录（实测），所以这一路只在没装 rg 时用。
@@ -533,11 +535,11 @@ def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
     cmd, err = build(fixed)
     if err:
         return [], err
-    proc = run(cmd)
+    proc = run(cmd, timeout=timeout)
     if (proc is not None and proc.returncode == 2 and not fixed
             and "grep:" in (proc.stderr or "")):
         cmd2, _ = build(True)
-        proc = run(cmd2)
+        proc = run(cmd2, timeout=timeout)
     if proc is None or proc.returncode not in (0, 1, 2):
         return [], "grep 执行失败"
     # 返回码 1 不等于「没搜到」：macOS 自带的 grep 跟随软链时，会一边输出结果
@@ -565,12 +567,13 @@ def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
     return out, None
 
 
-def mdfind_search(query, path, max_results):
+def mdfind_search(query, path, max_results, timeout=None):
+    timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
     cmd = ["mdfind"]
     if path and str(path) != ".":
         cmd += ["-onlyin", str(Path(path).expanduser())]
     cmd += [query]
-    proc = run(cmd)
+    proc = run(cmd, timeout=timeout)
     if proc is None:
         return [], "mdfind 执行失败"
     out = [(p, 0, "") for p in proc.stdout.splitlines()[:max_results]]
@@ -861,7 +864,8 @@ def git_blame(path, line):
     return f"local-seek: {p.name} 第 {line} 行\n{proc.stdout.strip()}", 0
 
 
-def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results):
+def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results,
+                       timeout=None):
     """rg 缺失时的 grep 保底（目录内/全盘共用）。
 
     返回 (results, err, mode)；rg 与 grep 都不可用时 results=None 且 err
@@ -875,21 +879,30 @@ def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results)
     if not args.exact and len(patterns) > 1:
         results, err = grep_search(grep_exe, [args.query], path, excludes, exts,
                                    args.context, args.count, max_results,
-                                   is_literal(args.query), dots=dots)
+                                   is_literal(args.query), dots=dots, timeout=timeout)
         if not results and not err:
             results, err = grep_search(grep_exe, patterns, path, excludes, exts,
                                        args.context, args.count, max_results,
-                                       fixed, dots=dots)
+                                       fixed, dots=dots, timeout=timeout)
             if results:
                 mode += "+扩展"
     else:
         results, err = grep_search(grep_exe, patterns, path, excludes, exts,
                                    args.context, args.count, max_results, fixed,
-                                   dots=dots)
+                                   dots=dots, timeout=timeout)
     return results, err, mode
 
 
-def main():
+def run_query(argv=None, time_budget=None) -> tuple[str, int]:
+    """执行一次 seek 查询，返回 (输出文本, 退出码)。
+
+    H2（2026-09-29）：从 main() 重构出的**进程内可调用核心**——CLI 壳与
+    include-local / MCP argo_local_search 的进程内调用共用同一实现（单一
+    来源），CLI 行为逐字节不变（main 只负责 print + exit code）。
+    time_budget：下传给各搜索器内部子进程（rg/fd/grep/mdfind）的超时上限；
+    None = 沿用 30s 历史默认。进程内调用必须传紧值——子进程可硬杀，线程
+    不可杀，不传会让挂死的 rg 占死单线程 executor。
+    """
     ap = argparse.ArgumentParser(prog="seek", description="本地高效搜索统一入口")
     ap.add_argument("query", nargs="?", help="搜索查询词")
     ap.add_argument("--path", default=".", help="搜索目录（默认当前目录）")
@@ -924,41 +937,32 @@ def main():
     ap.add_argument("--git-blame", default="", metavar="N",
                     help="输出文件第 N 行的 blame 信息（文件路径为位置参数）")
     ap.add_argument("--domains", action="store_true", help="列出知识域与排除规则")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     # 知识域展示模式
     if args.domains:
         if DOMAINS_FILE.exists():
-            print(DOMAINS_FILE.read_text(encoding="utf-8"))
-        else:
-            print("未找到 config/domains.yaml，使用内置默认规则")
-        return
+            return DOMAINS_FILE.read_text(encoding="utf-8"), 0
+        return "未找到 config/domains.yaml，使用内置默认规则", 0
 
     # 文件结构 / 按行读取模式（文件路径优先取位置参数，否则取 --path）
     if args.outline or args.lines:
         target = args.query or str(args.path)
         if args.lines:
-            msg, rc = read_lines(target, args.lines)
-        else:
-            msg, rc = outline_file(target)
-        print(msg)
-        return rc
+            return read_lines(target, args.lines)
+        return outline_file(target)
 
     # git 联动模式：查文件提交历史 / 单行归属
     if args.git_log or args.git_blame:
         target = args.query or str(args.path)
         if args.git_blame:
-            msg, rc = git_blame(target, args.git_blame)
-        else:
-            msg, rc = git_log(target)
-        print(msg)
-        return rc
+            return git_blame(target, args.git_blame)
+        return git_log(target)
 
     # 结构搜索模式：按语义规则检索（裸except/空catch/装饰函数等）
     if args.structural:
         if not args.query:
-            ap.print_help()
-            return
+            return ap.format_help(), 0
         start = time.time()
         results, err = structural_search(args.query, Path(args.path).expanduser(),
                                          load_excludes() + args.exclude,
@@ -966,23 +970,18 @@ def main():
         elapsed = int((time.time() - start) * 1000)
         results = filter_by_mtime(results, args.since, args.until)
         if err:
-            print(f"local-seek: {err}")
-            return 1
+            return f"local-seek: {err}", 1
         if not results:
-            print(f"local-seek: 未找到匹配（rg-structural · {args.path} · {elapsed}ms）")
-            return 1
+            return f"local-seek: 未找到匹配（rg-structural · {args.path} · {elapsed}ms）", 1
         if args.json:
-            print(to_json(results, "rg-structural", "structural", args.scope,
-                          args.path, elapsed, args.query,
-                          since=args.since, until=args.until))
-        else:
-            print(format_output(results, "rg-structural", "structural",
-                                args.path, elapsed, args.query, len(results)))
-        return 0
+            return to_json(results, "rg-structural", "structural", args.scope,
+                           args.path, elapsed, args.query,
+                           since=args.since, until=args.until), 0
+        return format_output(results, "rg-structural", "structural",
+                             args.path, elapsed, args.query, len(results)), 0
 
     if not args.query:
-        ap.print_help()
-        return
+        return ap.format_help(), 0
 
     max_results = args.max or 30
     excludes = load_excludes() + args.exclude
@@ -1015,10 +1014,11 @@ def main():
         if tool_exists("mdfind"):
             engine, mode = "mdfind", "deep"
             results, err = mdfind_search(args.query, None if args.spotlight else path,
-                                         max_results)
+                                         max_results, timeout=time_budget)
         else:
             results, err, gmode = _run_grep_fallback(
-                args, patterns, fixed, path, excludes, exts, max_results)
+                args, patterns, fixed, path, excludes, exts, max_results,
+                timeout=time_budget)
             if results is None:
                 engine, mode = "none", "fast"
             else:
@@ -1028,7 +1028,8 @@ def main():
         # 源码内容，会把「工具缺失」伪装成「搜索结论」（实测搜 argo 自身
         # 符号返回 24 条外部陈旧副本、漏掉正主，还报「未找到匹配」）。
         results, err, gmode = _run_grep_fallback(
-            args, patterns, fixed, path, excludes, exts, max_results)
+            args, patterns, fixed, path, excludes, exts, max_results,
+            timeout=time_budget)
         if results is None:
             engine, mode = "none", "fast"
         else:
@@ -1036,19 +1037,22 @@ def main():
     elif args.filename:
         engine, mode = "fd", "fast"
         if tool_exists("fd"):
-            results, err = fd_search(args.query, path, exts, max_results, args.dot)
+            results, err = fd_search(args.query, path, exts, max_results, args.dot,
+                                     timeout=time_budget)
             # 拼音首字母补充：中文查询 → 双查拼音缩写（「新建夹」↔ xjj）。
             # 先窄后宽：仅原结果 <3 且中文 ≥2 字时做（单字「新」→'x' 太宽泛，会引入噪音）
             if not err and len(results or []) < 3:
                 _cjk_len = sum(1 for c in args.query if "\u4e00" <= c <= "\u9fff")
                 q_py = pinyin_initials(args.query)
                 if _cjk_len >= 2 and q_py and q_py.lower() != args.query.strip().lower():
-                    py_res, py_err = fd_search(q_py, path, exts, max_results, args.dot)
+                    py_res, py_err = fd_search(q_py, path, exts, max_results, args.dot,
+                                               timeout=time_budget)
                     if not py_err and py_res:
                         results = _merge_dedup(results or [], py_res, max_results)
             # 拼音缩写反推：结果少且疑似缩写（xjj）→ 枚举候选按拼音首字母过滤
             if not err and (not results or len(results) < 3) and _looks_like_pinyin_abbrev(args.query):
-                all_res, all_err = fd_search("", path, exts, 3000, args.dot)
+                all_res, all_err = fd_search("", path, exts, 3000, args.dot,
+                                             timeout=time_budget)
                 if not all_err and all_res:
                     py_hits = [it for it in all_res if _file_pinyin_bonus(it[0], args.query) > 0]
                     if py_hits:
@@ -1063,18 +1067,20 @@ def main():
             results, err = rg_search([args.query], path, excludes, exts,
                                      args.context, args.count, max_results,
                                      is_literal(args.query), args.query, args.dot,
-                                     drop_noise=_dn)
+                                     drop_noise=_dn, timeout=time_budget)
             if not results and not err:
                 results, err = rg_search(patterns, path, excludes, exts,
                                          args.context, args.count, max_results,
-                                         fixed, args.query, args.dot, drop_noise=_dn)
+                                         fixed, args.query, args.dot, drop_noise=_dn,
+                                         timeout=time_budget)
                 if results:
                     mode += "+扩展"
         else:
             results, err = rg_search(patterns, path, excludes, exts,
                                      args.context, args.count, max_results,
                                      fixed, args.query, args.dot,
-                                     drop_noise=not args.include_noise)
+                                     drop_noise=not args.include_noise,
+                                     timeout=time_budget)
 
     # 注：噪声档**只降权不排除**（见 _apply_noise_floor），所以这里没有
     # 「搜不到就回落重搜」的分支——噪声内容始终在结果池里，只是排在真源之后。
@@ -1089,19 +1095,23 @@ def main():
         results = _rank_path_results(results, args.query)
 
     if err:
-        print(f"local-seek: {err}")
-        return 1
+        return f"local-seek: {err}", 1
     if not results:
-        print(f"local-seek: 未找到匹配（{engine} · {path} · {elapsed}ms）")
-        return 1
+        return f"local-seek: 未找到匹配（{engine} · {path} · {elapsed}ms）", 1
 
     if args.json:
-        print(to_json(results, engine, mode, scope, path, elapsed, args.query,
-                      since=args.since, until=args.until))
-    else:
-        print(format_output(results, engine, mode, path, elapsed, args.query,
-                            len(results)))
-    return 0
+        return to_json(results, engine, mode, scope, path, elapsed, args.query,
+                       since=args.since, until=args.until), 0
+    return format_output(results, engine, mode, path, elapsed, args.query,
+                         len(results)), 0
+
+
+def main(argv=None):
+    """CLI 薄壳：print + exit code（进程内调用方直接用 run_query）。"""
+    text, rc = run_query(argv)
+    if text:
+        print(text)
+    return rc
 
 
 if __name__ == "__main__":

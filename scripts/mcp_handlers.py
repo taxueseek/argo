@@ -625,27 +625,39 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 # 与「查询确实无命中」在外部看起来一样，排查时无从下手。
                 sys.stderr.write(
                     f"[argo-mcp] local_search 宽泛根守卫不可用（{type(e).__name__}），fail-open\n")
-            seek_py = _seek_py()
-            cmd = [sys.executable, seek_py, query, "--path", path, "--json",
-                   "--max", str(max_results)]
-            if exact:
-                cmd.append("--exact")
+            # H2（2026-09-29）：进程内直调 seek.run_query——常驻 MCP server 免
+            # 每次调用的解释器启动（实测省 30-110ms/次）；time_budget 沿用
+            # 显式调用上界 15s（下传给内部 rg/fd 子进程）。任何失败回退下方
+            # 子进程路径：能力不回退，只是慢。
+            payload = None
             try:
-                # 子进程是我们的 seek_py：显式 UTF-8 双向（Windows 默认 GBK，中文
-                # query 的 JSON 输出会 mojibake/解码崩）；超时 15 s 是显式调用上界
-                proc = subprocess.run(
-                    cmd, capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=15,
-                    env={**os.environ, "PYTHONUTF8": "1"})
-            except Exception as e:
-                return _local_err(f"本地搜索执行失败: {e}")
-            if proc.returncode != 0:
-                msg = (proc.stdout or proc.stderr or "").strip() or "本地搜索无结果"
-                return _local_err(msg)
-            try:
-                payload = json.loads(proc.stdout)
+                from local_seek import seek_query_payload
+                payload = seek_query_payload(query, os.path.expanduser(path),
+                                             max_results, exact=exact, time_budget=15)
             except Exception:
-                return _local_err("本地搜索输出解析失败")
+                payload = None
+            if payload is None:
+                seek_py = _seek_py()
+                cmd = [sys.executable, seek_py, query, "--path", path, "--json",
+                       "--max", str(max_results)]
+                if exact:
+                    cmd.append("--exact")
+                try:
+                    # 子进程是我们的 seek_py：显式 UTF-8 双向（Windows 默认 GBK，中文
+                    # query 的 JSON 输出会 mojibake/解码崩）；超时 15 s 是显式调用上界
+                    proc = subprocess.run(
+                        cmd, capture_output=True, text=True,
+                        encoding="utf-8", errors="replace", timeout=15,
+                        env={**os.environ, "PYTHONUTF8": "1"})
+                except Exception as e:
+                    return _local_err(f"本地搜索执行失败: {e}")
+                if proc.returncode != 0:
+                    msg = (proc.stdout or proc.stderr or "").strip() or "本地搜索无结果"
+                    return _local_err(msg)
+                try:
+                    payload = json.loads(proc.stdout)
+                except Exception:
+                    return _local_err("本地搜索输出解析失败")
             mode = payload.get("mode", "fast")
             score = 0.9 if mode == "fast" else 0.7  # 精确命中 0.9，扩展召回 0.7
             results = []

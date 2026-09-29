@@ -47,6 +47,10 @@ _LOCAL_SEEK_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _LOCAL_SEEK_TTL_S = 300.0
 _LOCAL_SEEK_CACHE_MAX = 64
 
+# H2：seek 模块按解析后真实路径缓存（importlib 显式文件定位，不占通用
+# 模块名、不污染 sys.path），进程内只加载一次（实测 0.5ms）。
+_SEEK_MODULE_CACHE: dict[str, Any] = {}
+
 
 def _is_broad_local_root(path: str) -> bool:
     """path 是否是「不能当作本地检索范围」的宽泛根。
@@ -89,16 +93,13 @@ def _local_seek_dir() -> str | None:
 
 def _run_local_seek(query: str, max_n: int = 5,
                     search_dir: str | None = None) -> list[dict[str, Any]]:
-    """本机文件命中（--include-local 用）：调 local-seek 子技能，JSON 并入。
-
-    本机文件命中：调 local-seek 子技能，JSON 并入（source=local_files）。
+    """本机文件命中（include-local 用）：进程内调 seek.run_query，JSON 并入。
 
     fast/budget 模式下由 super_search 自动调用（_resolve_include_local），
     auto/deep 需显式 --include-local / MCP include_local。评分与
     MCP argo_local_search 同口径（0.9 精确 / 0.7 扩展）。
+    进程内失败回退子进程形态（_seek_query_subprocess），能力不回退。
     """
-    import subprocess as _sp
-
     target = search_dir or _local_seek_dir()
     if not target:
         # 宽泛根：不查，但必须留下可归因的痕迹（docstring 第 1 条）。
@@ -125,6 +126,71 @@ def _run_local_seek(query: str, max_n: int = 5,
     seek_py = resolve_seek_py()
     if not seek_py or not os.path.isfile(seek_py):
         return []
+
+    # H2（2026-09-29）：进程内直调 seek.run_query——省掉子进程解释器启动
+    # （实测 30-110ms/次，子进程总成本 60-140ms vs 进程内 ~30ms，落点即 rg
+    # 本体）。seek 模块 stdlib-only，import 实测 0.5ms；time_budget 下传到
+    # 内部 rg/fd 子进程（子进程可硬杀，线程不可杀——不传会占死单线程 executor）。
+    # 进程内失败（模块加载/执行异常）回退子进程路径：能力不回退，只是慢。
+    payload = None
+    try:
+        payload = seek_query_payload(query, target, max_n,
+                                     time_budget=_LOCAL_SEEK_TIMEOUT_S)
+    except Exception:
+        payload = None
+    if payload is None:
+        payload = _seek_query_subprocess(seek_py, query, target, max_n)
+    if payload is None:
+        return []
+    return _payload_to_hits(payload, max_n, cache_key)
+
+
+def _load_seek_module(seek_py: str):
+    """按解析后真实路径加载 seek 模块（importlib 显式文件定位，不污染
+    sys.path、不占通用模块名），按路径缓存——ARGO_LOCAL_SEEK_PATH 指向
+    不同文件时各自独立加载。失败返回 None。"""
+    mod = _SEEK_MODULE_CACHE.get(seek_py)
+    if mod is not None:
+        return mod
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("argo_seek_impl", seek_py)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _SEEK_MODULE_CACHE[seek_py] = mod
+    return mod
+
+
+def seek_query_payload(query: str, target: str, max_n: int,
+                       exact: bool = False, time_budget: float | None = None
+                       ) -> dict[str, Any] | None:
+    """H2 公共入口：进程内调 seek.run_query 取 JSON payload。
+
+    include-local（_run_local_seek）与 MCP argo_local_search 共用——两条
+    调用路径同一实现（单一来源）。失败/无匹配返回 None，调用方自行回退
+    （子进程形态或直接报无结果）。
+    """
+    from seek_locator import resolve_seek_py
+    seek_py = resolve_seek_py()
+    if not seek_py or not os.path.isfile(seek_py):
+        return None
+    mod = _load_seek_module(seek_py)
+    if mod is None:
+        return None
+    argv = [query, "--json", "--max", str(max(max_n, 1)), "--path", target]
+    if exact:
+        argv.append("--exact")
+    text, rc = mod.run_query(argv, time_budget=time_budget)
+    if rc != 0 or not text.strip():
+        return None
+    return json.loads(text)
+
+
+def _seek_query_subprocess(seek_py: str, query: str, target: str,
+                           max_n: int) -> dict[str, Any] | None:
+    """子进程形态取 payload（H2 前的唯一路径，现为进程内失败的回退）。"""
+    import subprocess as _sp
     cmd = [sys.executable, seek_py, query, "--json", "--max", str(max(max_n, 1)),
            "--path", target]
     try:
@@ -134,19 +200,22 @@ def _run_local_seek(query: str, max_n: int = 5,
             env={**os.environ, "PYTHONUTF8": "1"},  # 子进程是自家 seek.py，双向显式 UTF-8
         )
     except _sp.TimeoutExpired:
-        return []  # 本地命中是增强项：超时即弃，不冒泡（docstring 第 2、3 条）
+        return None  # 本地命中是增强项：超时即弃，不冒泡（docstring 第 2、3 条）
     except OSError:
-        return []  # 解释器/脚本不可执行等环境问题：同样不该拖垮主搜索
+        return None  # 解释器/脚本不可执行等环境问题：同样不该拖垮主搜索
     if r.returncode != 0 or not r.stdout.strip():
-        return []
+        return None
     try:
-        payload = json.loads(r.stdout)
+        return json.loads(r.stdout)
     except ValueError:
-        return []
+        return None
+
+
+def _payload_to_hits(payload: dict[str, Any], max_n: int,
+                     cache_key: str) -> list[dict[str, Any]]:
+    """seek payload → include-local 结果条目（评分与 MCP argo_local_search
+    同口径：0.9 精确命中 / 0.7 扩展召回），并写入进程内缓存。"""
     hits = payload.get("results") or payload.get("files") or []
-    # 评分与 MCP argo_local_search 同口径（0.9 精确命中 / 0.7 扩展召回）：
-    # 此前 CLI 路径恒 0.0——同一能力两套语义，且任何按分排序/过滤的下游
-    # 都会把本地命中沉底。
     seek_mode = payload.get("mode", "fast")
     hit_score = 0.9 if seek_mode == "fast" else 0.7
     out = []
