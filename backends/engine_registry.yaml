@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-09-28'
+last_updated: '2026-09-30'
 engines:
 - name: aljazeera
   tier: T1
@@ -2439,6 +2439,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: 360 搜索（so.com/s HTML 解析），中文通用网页
+- name: sogou_weixin_browser
+  tier: T1
+  type: cli
+  coverage:
+  - chinese
+  - wechat
+  - article
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 搜狗微信搜索·浏览器兜底通道（ego-browser 真实会话，HTTP 车道被反爬时保底；中间链会话内解析为微信真实链接）
 - name: soilgrids
   tier: T1
   type: soilgrids

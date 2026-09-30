@@ -1950,6 +1950,16 @@
     "cost_tier": "free",
     "priority": 20
   },
+  "sogou_weixin_browser": {
+    "label": "sogou_weixin_browser",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "soilgrids": {
     "label": "soilgrids",
     "qps": 2,

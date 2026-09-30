@@ -40,6 +40,7 @@ domains:
 - desc: 微信公众号文章搜索
   engines_combo:
   - wechat_sogou
+  - sogou_weixin_browser
   - anysearch
   fallback: anysearch
   name: wechat_search

@@ -1,0 +1,30 @@
+# 搜狗微信搜索·浏览器兜底通道（ego-browser）
+# 定位：HTTP 快车道 wechat_sogou（spec 在 config.yaml wechat_search 路由）被
+# 搜狗反爬墙拦截（302 antispiderwall）时的域内兜底——借 ego-browser 驱动用户
+# 默认浏览器的真实会话拉取同源结果页，指纹与 cookie 连续，2026-09-30 实测
+# 连查无风控（对比：raw curl 第 2 次查询即被墙）。只挂在 wechat_search 路由
+# 的 engines_combo 里（primary 之后、anysearch 之前），不进任何通用池。
+# 实现：scripts/sogou_weixin_browser.py（纯标准库；空间复用+文件锁+最小间隔；
+# 中间链在浏览器会话内解析为 mp.weixin.qq.com 真实链接，语义与 HTTP 车道对齐）
+# 验证：
+#   python3 scripts/engine_validate.py --engine sogou_weixin_browser --stage all --admit
+#   python3 scripts/search.py "公众号 石墨化" --engine sogou_weixin_browser --json
+
+engine_id: sogou_weixin_browser
+type: cli
+enabled: true
+cost_tier: free
+cmd:
+- python3
+- scripts/sogou_weixin_browser.py
+search_args:
+- '{query}'
+- --n
+- '{n}'
+output_format: yaml
+timeout: 75
+canary_query: "人工智能"
+desc: "搜狗微信搜索·浏览器兜底通道（ego-browser 真实会话，HTTP 车道被反爬时保底；中间链会话内解析为微信真实链接）"
+coverage: [chinese, wechat, article]
+recommended: false
+family: web_general

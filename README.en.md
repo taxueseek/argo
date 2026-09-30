@@ -25,7 +25,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-259-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-260-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
@@ -60,7 +60,7 @@
 4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (219 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> v2.9.1 ships all of the above: 259 sources, 93 domains, 225 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> v2.9.1 ships all of the above: 260 sources, 93 domains, 226 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
@@ -295,7 +295,7 @@ python3 scripts/search.py --list-engines
 - **One-command MCP inject (new in v2.8.4)**: `argo mcp inject` for Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo; source `mcp/clients.yaml`)
 - **Structured search upgrades (new in v2.8.4)**: query normalize + variants + complexity gate; social-syntax first; TF-IDF keeps looking after dropping a Chinese engine; `--include-local`
 - **Keenable (new in v2.8.4)**: extra general web engine (L1 declarative HTTP, free trial, `ARGO_KEENABLE_API_KEY`)
-- **259 sources (225 usable with no key), 93 domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml` + `engines/specs/*.yaml`)
+- **260 sources (226 usable with no key), 93 domains**: general web + finance / macro / film / sports / geo / orgs / media / chemistry / academic / code (source of truth: `config.yaml` + `engines/specs/*.yaml`)
 - **19 MCP tools** (aligned with the CLI surface): search, research, evidence, clarify, fetch, screenshot, PDF, social sentiment, local file search, site crawl, local preview, recompute, WeChat article full text, job aggregation, structured extraction, URL batch preflight, direct answer, web change watch, DOI citation entries
 - **Multilingual search**: Chinese, English, Japanese, Korean, Cyrillic, Thai, Arabic, Hebrew, Greek, Devanagari, …; routing and engine params follow language; non-Chinese queries avoid Chinese-only sources (Zhihu / Sogou WeChat / A-share snapshots, etc.)
 - **Vertical recovery gates**: empty-result recovery will not “leak” pypi / npm / flash news into film or sports
@@ -305,7 +305,7 @@ python3 scripts/search.py --list-engines
 
 ## Engines & routing
 
-Config currently has **259** sources (**225** usable with no key) and **93** domains (see `config.yaml` and `--list-engines`).
+Config currently has **260** sources (**226** usable with no key) and **93** domains (see `config.yaml` and `--list-engines`).
 
 ### Direct & vertical (excerpt)
 
