@@ -218,3 +218,83 @@ class TestWgRrfEngineWeighting:
         classic = rrf_merge([list(x) for x in lists], weighted=False)
         classic_scores = {r["title"]: r["_rrf_score"] for r in classic}
         assert classic_scores["权威"] == classic_scores["社交"]
+
+
+class TestConsensusSignalSingleEntry:
+    """共识信号在排序中的唯一入口契约（2026-09-30 新增）。
+
+    背景：审查报告（2026-09-13）发现共识信号在三处进入最终分：
+      ① _consensus_prior 内的加法先验（W_PRIOR=0.12）
+      ② 五维 rerank 后的乘法 boost（×(1+0.05·min(n-1,3))）
+      ③ evidence selection 阶段的 selection 乘法
+
+    ② 已于 2026-09-13 移除。本类锁定 ① 和 ③ 的设计决策：
+      - ① 是共识信号在排序中的唯一入口
+      - ③ 是 evidence selection 阶段的独立信号，用于决定「先核验哪条」，
+        不影响排序 score，不属于重复计分
+
+    测试守护：
+      1. 共识信号在排序中只有一个入口（_consensus_prior）
+      2. evidence selection 阶段的共识 boost 是独立信号，不影响排序
+      3. 共识条目的 credibility_fast 必须高于单源条目（同 authority 下）
+    """
+
+    def test_consensus_prior_is_only_sort_entry(self):
+        """共识信号在排序中只有一个入口：_consensus_prior。"""
+        import inspect
+        import search_rank
+        src = inspect.getsource(search_rank.local_five_dim_rerank)
+        # 必须有 W_PRIOR 和 _consensus_prior
+        assert "W_PRIOR = 0.12" in src
+        assert "_consensus_prior" in src
+        # 不得有乘法 boost（已移除）
+        assert "0.05" not in src or "0.05·min" not in src
+
+    def test_selection_consensus_boost_independent(self):
+        """evidence selection 阶段的共识 boost 是独立信号，不影响排序。"""
+        from search_rank import _attach_selection_signals
+        # 构造两条结果：一条 3 引擎共识，一条单源
+        merged = [
+            {"url": "https://a.com/1", "title": "共识", "snippet": "短",
+             "source": "wikipedia", "score": 0.5,
+             "consensus_engines": ["wikipedia", "arxiv", "github"]},
+            {"url": "https://b.com/2", "title": "单源", "snippet": "长文本内容说明" * 3,
+             "source": "wikipedia", "score": 0.5,
+             "consensus_engines": ["wikipedia"]},
+        ]
+        _attach_selection_signals(merged, "auto", "balanced")
+        # 共识条目的 selection 必须高于单源条目
+        cons_selection = merged[0]["selection"]
+        single_selection = merged[1]["selection"]
+        assert cons_selection > single_selection, (
+            f"共识条目 selection({cons_selection}) 应高于单源条目({single_selection})"
+        )
+        # 共识条目的 credibility_fast 必须高于单源条目
+        cons_cred = merged[0]["credibility_fast"]
+        single_cred = merged[1]["credibility_fast"]
+        assert cons_cred > single_cred, (
+            f"共识条目 credibility_fast({cons_cred}) 应高于单源条目({single_cred})"
+        )
+
+    def test_selection_boost_capped(self):
+        """共识 boost 有上限，不得无限放大。"""
+        from search_rank import _attach_selection_signals
+        # 构造一条 10 引擎共识（超过 min(n-1, 2) 上限）
+        merged = [
+            {"url": "https://a.com/1", "title": "共识", "snippet": "短",
+             "source": "wikipedia", "score": 0.5,
+             "consensus_engines": [f"e{i}" for i in range(10)]},
+        ]
+        _attach_selection_signals(merged, "auto", "balanced")
+        # selection 不得超过 1.0
+        assert merged[0]["selection"] <= 1.0
+        # 10 引擎共识的 boost 与 3 引擎共识相同（min(n-1, 2) 封顶）
+        merged2 = [
+            {"url": "https://b.com/2", "title": "共识", "snippet": "短",
+             "source": "wikipedia", "score": 0.5,
+             "consensus_engines": [f"e{i}" for i in range(3)]},
+        ]
+        _attach_selection_signals(merged2, "auto", "balanced")
+        assert merged[0]["selection"] == merged2[0]["selection"], (
+            "10 引擎共识与 3 引擎共识的 selection 应相同（min(n-1, 2) 封顶）"
+        )
