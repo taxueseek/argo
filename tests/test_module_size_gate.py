@@ -124,7 +124,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "（1 行代码 + 3 行注释：负数切片从尾部截，10 条给 7 条，"
               "且 MCP/库调用绕开 argparse，兜底必须落在切片点）"),
     "scripts/search_pipeline.py": (
-        1001, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+        1000, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
               "2026-09-30 +2：恢复链与变体召回补透传 --domain/--sub_domain"
               "（用户域约束此前被两条辅路旁路）+ variant_recalled/phrase_dropped"
               " 观测补账（变体条目不进漏斗 returned 口径，不补账会出现"

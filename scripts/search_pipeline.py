@@ -231,7 +231,6 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     breaker = req.breaker
     raw_results = run.raw_results
     engine_outcomes = run.engine_outcomes
-    engine_outcomes = run.engine_outcomes
     merged = run.merged
 
     # 融合输入派生（原先在 execute_search 里，属于加工的第一步）

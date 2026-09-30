@@ -180,6 +180,23 @@ def test_variant_passes_domain_kwargs(monkeypatch):
     assert captured.get("sub_domain") == "cn"
 
 
+def test_variant_whitespace_filtered(monkeypatch):
+    """09-30 复核补遗：上游归一被绕过时，空白变体不得进入引擎查询。"""
+    import variant_recall as vr
+    import query_enhance
+    monkeypatch.setattr(query_enhance, "retrieval_variants",
+                        lambda base, max_n=3: [base, "  ", "alpha real one"])
+    captured = []
+
+    def fake_search(q, eng, **kw):
+        captured.append(q)
+        return [{"url": "u", "title": "t"}]
+
+    vr.variant_recall_wave(_Req("alpha beta"), fake_search)
+    assert captured, "前置：变体波应发起查询"
+    assert all(q.strip() for q in captured), f"空白变体进入引擎查询：{captured}"
+
+
 # ── 9. recovery L3 透传 mode ─────────────────────────────────────────────────
 
 def test_recovery_l3_mode_passthrough(monkeypatch):

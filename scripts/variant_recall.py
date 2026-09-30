@@ -91,7 +91,7 @@ def variant_recall_wave(req: Any, engine_search: Any) -> list[list[dict[str, Any
     variants: list[str] = []
     for v in pool:
         k = v.strip().lower()
-        if v and v != base and k not in seen:
+        if v.strip() and v != base and k not in seen:
             seen.add(k)
             variants.append(v)
     if not variants:
