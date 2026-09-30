@@ -77,3 +77,12 @@ clients:
     url_key: url
     transport: null
     detect: [.cline, .cursor/mcp.json]
+
+  - id: workbuddy
+    name: WorkBuddy
+    config_path: .workbuddy/mcp.json
+    servers_key: mcpServers
+    format: json
+    url_key: url
+    transport: null
+    detect: [.workbuddy]
