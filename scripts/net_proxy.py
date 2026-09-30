@@ -45,6 +45,45 @@ _cfg_cache: dict[str, Any] | None = None
 _cfg_stamp: float | None = None
 
 
+def _argo_env(name: str) -> str:
+    """读 argo 级环境变量：**统一经 engine_env**（os.environ 优先，env 文件保底）。
+
+    为什么不能直读 `os.environ`：argo 的配置源是 env 文件（`ARGO_ENV_FILE` 或
+    平台配置根 `.../argo/env`，见 engine_env._envfile_paths），而
+    `sync_envfile_to_environ()` **只在 MCP server 启动时调用**，CLI 路径不同步。
+    直读 os.environ 的后果是「写在 env 文件里的代理开关在 CLI 下静默失效」——
+    实测：env 文件里写 ARGO_PROXY / ARGO_GDELT_PROXY，engine_env.get_env 读得到、
+    本模块读不到。同仓的 engines_base._resolve（引擎 spec 的 {VAR} 展开）早已走
+    engine_env，本模块此前是唯一的例外。
+
+    失败安全：engine_env 不可用时退回 os.environ，行为与改造前一致。
+    """
+    try:
+        from engine_env import get_env
+        return str(get_env(name, "") or "").strip()
+    except Exception:
+        return os.environ.get(name, "").strip()
+
+
+def _interp_env(value: str) -> str | None:
+    """配置里的代理值 → 实际代理 URL；None 表示直连。
+
+    三条语义（与 rules / 全局 url 共用，取值口径只有这一处）：
+      - `"direct"`            → None（强制直连）
+      - `"${VAR}"`            → env 值；**未设置或也写成 "direct"** → None
+      - 其它字面量             → 原样作为代理 URL
+
+    与 `{VAR}`（引擎 spec 占位符，缺失时替换为空串）刻意区分：这里的「未设置」
+    语义是「不设代理」而不是「空代理」——空串会让 urllib 把请求打到一个畸形代理上。
+    """
+    v = value.strip()
+    if v.startswith("${") and v.endswith("}"):
+        # env 值同样过一遍 direct 判定：否则 ARGO_X=direct 会被当成
+        # 代理字面量 "direct" 发给 urllib（畸形代理，请求必挂）
+        v = _argo_env(v[2:-1])
+    return None if v.lower() == "direct" else (v or None)
+
+
 def _network_cfg() -> dict[str, Any]:
     """读 config.yaml 的 network.proxy 段；config 不可用时按空配置处理。"""
     global _cfg_cache, _cfg_stamp
@@ -88,18 +127,19 @@ def resolve_proxy(url: str, override: str | None = None,
     for domain, val in (cfg.get("rules") or {}).items():
         d = str(domain).lower().strip()
         if d and (host == d or host.endswith("." + d)):
-            v = str(val).strip()
-            return None if v.lower() == "direct" else v
+            # ${VAR} 插值：把「本机代理端口」这类环境相关值交给 env 层，
+            # 未设置即直连（详见 _interp_env）
+            return _interp_env(str(val))
 
-    # 3) argo 全局 env
-    argo = os.environ.get("ARGO_PROXY", "").strip()
+    # 3) argo 全局 env（经 engine_env：env 文件里的开关同样生效）
+    argo = _argo_env("ARGO_PROXY")
     if argo:
         return None if argo.lower() == "direct" else argo
 
-    # 4) argo 全局 config
+    # 4) argo 全局 config（同样支持 ${VAR}，与 rules 同语义）
     cu = str(cfg.get("url") or "").strip()
     if cu:
-        return None if cu.lower() == "direct" else cu
+        return _interp_env(cu)
 
     # 5) 标准环境变量（含 NO_PROXY 尊重；getproxies 已处理大小写变体）
     if not include_standard_env:

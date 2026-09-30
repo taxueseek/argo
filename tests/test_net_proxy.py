@@ -8,6 +8,7 @@ issue #13（2026-09-14）：http_client 直用 http.client，不认标准代理�
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 import http.client
@@ -209,6 +210,98 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
                           side_effect=AssertionError("不该重复接管标准环境变量")):
             self.assertIsNone(
                 net_proxy.resolve_proxy("https://example.com", include_standard_env=False))
+
+
+class TestEnvFileDrivesNetworkLayer(unittest.TestCase):
+    """环境层必须真正驱动出口调度（2026-09-30 修复的失效开关）。
+
+    argo 的配置源是 env 文件（ARGO_ENV_FILE / 平台配置根 .../argo/env），但
+    `sync_envfile_to_environ()` 只在 MCP server 启动时调用，CLI 路径不同步。
+    本模块此前直读 `os.environ`，于是**写在 env 文件里的代理开关在 CLI 下静默
+    失效**——实测 ARGO_PROXY / ARGO_GDELT_PROXY 在 env 文件里 engine_env 读得到、
+    net_proxy 读不到。同仓 engines_base._resolve（引擎 spec 的 {VAR} 展开）早已
+    走 engine_env，net_proxy 是唯一的例外。
+
+    本类锁死「env 文件里的值同样生效」，并覆盖 ${VAR} 的三条语义。
+    """
+
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self._envfile = Path(self._tmp.name) / "env"
+        self._envfile.write_text(
+            "ARGO_PROXY=http://127.0.0.1:9998\n"
+            "ARGO_GDELT_PROXY=http://127.0.0.1:9999\n"
+            "ARGO_TEST_DIRECT=direct\n",
+            encoding="utf-8")
+        # 清掉 os.environ 与 engine_env 的 envfile 缓存，确保只从文件取值
+        p = patch.dict("os.environ", {"ARGO_ENV_FILE": str(self._envfile)})
+        p.start()
+        self.addCleanup(p.stop)
+        self.addCleanup(self._tmp.cleanup)
+        import engine_env
+        engine_env.reset_envfile_cache()
+        self.addCleanup(engine_env.reset_envfile_cache)
+        self._cfg_patch = patch.object(net_proxy, "_network_cfg",
+                                       return_value=_cfg())
+        self._cfg_patch.start()
+        self.addCleanup(self._cfg_patch.stop)
+
+    def _without(self, *names):
+        """确保这些名字不在 os.environ（只留 env 文件作为来源）。"""
+        for n in names:
+            os.environ.pop(n, None)
+
+    def test_argo_proxy_from_env_file(self):
+        self._without("ARGO_PROXY")
+        self.assertEqual(net_proxy.resolve_proxy("https://bochaai.com"),
+                         "http://127.0.0.1:9998")
+
+    def test_rules_placeholder_from_env_file(self):
+        self._without("ARGO_GDELT_PROXY")
+        with patch.object(net_proxy, "_network_cfg",
+                          return_value=_cfg(rules={"gdeltproject.org": "${ARGO_GDELT_PROXY}"})):
+            self.assertEqual(
+                net_proxy.resolve_proxy("https://api.gdeltproject.org/api/v2/doc/doc"),
+                "http://127.0.0.1:9999")
+
+    def test_placeholder_unset_is_direct(self):
+        """未设置 = 不设代理（None），不是空代理。"""
+        with patch.object(net_proxy, "_network_cfg",
+                          return_value=_cfg(rules={"x.com": "${ARGO_NO_SUCH_VAR}"})):
+            self.assertIsNone(net_proxy.resolve_proxy("https://x.com/a"))
+
+    def test_placeholder_resolving_to_direct_is_direct(self):
+        """env 值本身写成 direct 时也必须是直连，不能当代理字面量发出去。"""
+        self._without("ARGO_TEST_DIRECT")
+        with patch.object(net_proxy, "_network_cfg",
+                          return_value=_cfg(rules={"x.com": "${ARGO_TEST_DIRECT}"})):
+            self.assertIsNone(net_proxy.resolve_proxy("https://x.com/a"))
+
+    def test_global_url_supports_placeholder(self):
+        """全局 url 与 rules 同语义（此前只有 rules 支持 ${VAR}）。
+
+        必须先把 ARGO_PROXY 从 env 文件里去掉：按文档优先级它**应该**盖过
+        config url（优先级 3 > 4），留着它测到的会是上一级，测不到本项。
+        """
+        self._without("ARGO_GLOBAL_PROXY")
+        self._envfile.write_text("ARGO_GLOBAL_PROXY=http://127.0.0.1:7000\n",
+                                 encoding="utf-8")
+        import engine_env
+        engine_env.reset_envfile_cache()
+        with patch.object(net_proxy, "_network_cfg",
+                          return_value=_cfg(url="${ARGO_GLOBAL_PROXY}")):
+            self.assertEqual(net_proxy.resolve_proxy("https://example.com/z"),
+                             "http://127.0.0.1:7000")
+
+    def test_envfile_failure_falls_back_to_os_environ(self):
+        """engine_env 不可用时退回 os.environ（行为与改造前一致，不阻断出口）。"""
+        self._without("ARGO_PROXY")
+        os.environ["ARGO_PROXY"] = "http://127.0.0.1:7777"
+        self.addCleanup(os.environ.pop, "ARGO_PROXY", None)
+        with patch.dict(sys.modules, {"engine_env": None}):
+            self.assertEqual(net_proxy._argo_env("ARGO_PROXY"),
+                             "http://127.0.0.1:7777")
 
 
 if __name__ == "__main__":
