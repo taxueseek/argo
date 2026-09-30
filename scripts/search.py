@@ -381,8 +381,15 @@ _FAST_TOTAL_BUDGET_S = 6.0
 #
 # 取 10.0 = 用户明确的体感阈值，也 ≥ execution.default_timeout(8s)，不截断
 # 正常查询（实测中位 4s、p75 8s，绝大多数早已 early-stop 完成），只砍极端尾部。
-# deep 仍不设预算：研究场景宁可等待，截断会丢证据（与 fast 的成本优先相反）。
 _AUTO_TOTAL_BUDGET_S = 10.0
+
+# deep 的总墙钟预算（秒）。此前 deep 不设预算——「研究场景宁可等待」；但
+# 2026-09-30 实测这句被一个慢源架空：mode=deep → budget_s=None → deadline=inf，
+# firecrawl（声明 timeout=20）单源拖尾 6.5s，dispatch 7338ms 全在等它，期间
+# 其他 8 个引擎早已交付。15.0 = 覆盖 deep 正常 p50（实测 ~7s）与 p90，只截
+# 20s 级的病态拖尾；已完成引擎的证据一条不丢（budget 只管「还等不等」）。
+# execution.deep_budget_s 可覆盖（0 = 恢复无界，回滚无侵入）。
+_DEEP_TOTAL_BUDGET_S = 15.0
 
 # 首选引擎的独占宽限窗（秒）：在这个时间内完成且合格就免掉 hedge、只付 1 次
 # 调用；窗口内没完成就补发下一个引擎并行赛跑。
@@ -452,6 +459,20 @@ def _serial_stagger() -> float:
     return _PRIMARY_GRACE_S
 
 
+def _deep_budget_s() -> float | None:
+    """deep 总墙钟预算：常量默认 + execution.deep_budget_s 覆盖。
+
+    0 / 负数 = 恢复无界（回滚无侵入的逃生门）；非法值回落常量。
+    与 fast/auto 同一种取法：常量默认、**按值传进 engine_dispatch**，
+    不在调度模块里重新解析配置（原因见 _serial_stagger 注释）。
+    """
+    try:
+        raw = float(get_execution_config().get("deep_budget_s", _DEEP_TOTAL_BUDGET_S))
+        return raw if raw > 0 else None
+    except (TypeError, ValueError):
+        return _DEEP_TOTAL_BUDGET_S
+
+
 # 单引擎墙钟硬预算（秒）：含该引擎的**全部**重试尝试，超预算即停、不再发起
 # 新尝试，由调度层切备选源。
 #
@@ -497,6 +518,7 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
         per_engine_budget_s=_PER_ENGINE_BUDGET_S,
         fast_budget_s=_FAST_TOTAL_BUDGET_S,
         auto_budget_s=_AUTO_TOTAL_BUDGET_S,
+        deep_budget_s=_deep_budget_s(),
         primary_grace_s=_PRIMARY_GRACE_S,
         straggler_grace_s=_straggler_grace(),
         serial_stagger_s=_serial_stagger(),

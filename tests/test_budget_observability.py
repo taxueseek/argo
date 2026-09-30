@@ -102,14 +102,40 @@ class TestBudgetObservability(unittest.TestCase):
         self.assertLess(wall, 2.0, "慢次引擎不应拖住进程")
 
     def test_deep_mode_has_no_budget_key(self):
-        """deep 无总预算：键缺席即「无预算」信号，不伪造 total。"""
+        """deep 预算语义（2026-09-30 起 deep 也有 15s 总预算）：
+        timing.budget 必须如实报 {used, total=15000}——「无预算」曾是
+        deep 的契约，但它被一个 timeout=20 的慢源架空（实测单查询 12s+
+        全在等 firecrawl），改成有界但只截病态拖尾；测试改为锁「键存在
+        且 total 正确、不早停语义不变」。"""
         def fake(_q, eng):
             time.sleep(0.02)
             return _good(eng)
 
         out, _, _ = self._execute(
             self._decision(["a", "b"]), fake, mode="deep")
-        self.assertIsNone(out["timing"].get("budget"))
+        budget = out["timing"].get("budget")
+        self.assertIsNotNone(budget)
+        self.assertEqual(budget["total_ms"], 15000)
+        self.assertLess(budget["used_ms"], 15000)
+
+    def test_deep_budget_escape_hatch(self):
+        """execution.deep_budget_s=0 恢复无界（回滚无侵入）：budget 键缺席。
+
+        _deep_budget_s 是按值传参链（search → hooks → dispatch），这里 patch
+        search.get_execution_config——它是 execute_search 实际读的名字。
+        """
+        def fake(_q, eng):
+            time.sleep(0.02)
+            return _good(eng)
+
+        real = search.get_execution_config
+        with patch.object(search, "get_execution_config",
+                          side_effect=lambda *a, **k:
+                              {**real(), "deep_budget_s": 0}):
+            out, _, _ = self._execute(
+                self._decision(["a", "b"]), fake, mode="deep")
+        self.assertIsNone(out["timing"].get("budget"),
+                          "deep_budget_s=0 时 deep 必须恢复无界（budget 键缺席）")
 
     def test_agent_strip_keeps_budget(self):
         """--fields agent 剥遥测但留 timing：预算可见性必须活下来。"""

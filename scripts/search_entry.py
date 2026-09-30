@@ -77,6 +77,7 @@ class _SearchHooks:
     primary_grace_s: float
     straggler_grace_s: float
     serial_stagger_s: float
+    deep_budget_s: float | None = None
 
 
 @dataclass(frozen=True)
@@ -329,6 +330,7 @@ def dispatch(req: _SearchRequest, run: _SearchRun, hooks: _SearchHooks) -> _Sear
         per_engine_budget_s=hooks.per_engine_budget_s,
         fast_budget_s=hooks.fast_budget_s,
         auto_budget_s=hooks.auto_budget_s,
+        deep_budget_s=hooks.deep_budget_s,
         primary_grace_s=hooks.primary_grace_s,
         straggler_grace_s=hooks.straggler_grace_s,
         serial_stagger_s=hooks.serial_stagger_s,

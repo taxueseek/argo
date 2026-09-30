@@ -190,6 +190,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                  per_engine_budget_s: float,
                  fast_budget_s: float,
                  auto_budget_s: float,
+                 deep_budget_s: float | None = None,
                  primary_grace_s: float,
                  straggler_grace_s: float = 1.5,
                  serial_stagger_s: float = 0.8,
@@ -548,10 +549,18 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
     allow_early = mode in ("fast", "auto", "budget") and depth != "deep"
 
     # 总墙钟预算：deadline 之后不再起新引擎、不再等待慢线程。
-    # fast 6s（成本优先）/ auto·budget 10s（质量优先但有界）/ deep 不设预算。
+    # fast 6s（成本优先）/ auto·budget 10s（质量优先但有界）。
+    # deep 此前不设预算（研究场景宁可等待），但 2026-09-30 实测它被一个慢源
+    # 独占：firecrawl 声明 timeout=20，单查询 dispatch 7338ms 里 6470ms 在等它，
+    # 而 wave 判据早已认定「累计够用」——「宁可等待」的本意是**不早停**，
+    # 不是「让最慢的那个源定义墙钟」。给 deep 也上预算（search._DEEP_TOTAL_BUDGET_S，
+    # 默认 15s，execution.deep_budget_s 可覆盖）：只约束「还等不等/还起不起」，
+    # 已完成引擎的证据一条不丢，正常 deep 查询（p50 7s）完全无感。
     budget_s = {"fast": fast_budget_s,
                  "auto": auto_budget_s,
                  "budget": auto_budget_s}.get(mode)
+    if budget_s is None and mode == "deep" and deep_budget_s:
+        budget_s = deep_budget_s
     _deadline = _budget_base + (budget_s if budget_s is not None else float("inf"))
 
     early_min = decision.get("early_stop_min_results")
