@@ -2943,7 +2943,7 @@ engines:
       User-Agent: argo-search/2.5 (mailto:unified-search@local)
   searxng:
     enabled: false
-    disabled_reason: 已用内嵌本地引擎替代外挂 SearXNG 主路径（自包含部署，少一个外部依赖）；重开需评估实例可用性与稳定性
+    disabled_reason: 已用内嵌本地引擎替代外挂 SearXNG 主路径（自包含部署，少一个外部依赖）；重开需自备 SearXNG 实例并把 ARGO_SEARXNG_URL 指向它
     label: SearXNG
     cost_tier: free
     coverage:
@@ -2954,7 +2954,11 @@ engines:
     query_param: q
     timeout: 10
     type: http
-    url: http://127.0.0.1:8888/search
+    # 外挂实例地址随设备而异（主机 / 端口 / 是否 Docker 各不同），写死本机端口
+    # 会在别人机器上静默指向一个不存在的服务——与 gdelt 那处硬编码代理同类。
+    # 走引擎 spec 既有的 {VAR} 占位符（engines_base._resolve 经 engine_env 解析，
+    # os.environ 优先 + env 文件保底）：未配置时该源不可用，不会假装能用。
+    url: "{SEARXNG_URL}"
   semantic_scholar:
     enabled: true
     label: Semantic Scholar
@@ -3000,6 +3004,7 @@ engines:
     type: http
     url: https://api.tavily.com/search
   uapi:
+    qps: 2
     body:
       count: '{n}'
       query: '{query}'
@@ -3107,6 +3112,7 @@ engines:
     desc: 搜狗微信搜索引擎（公众号文章，免登录，中间链自动解析为微信真实链接可引用；fast 跳过解析）
     timeout: 10
   twitter:
+    qps: 2
     type: cli
     # timeout 声明（2026-09-10 核查）：该引擎内部已有**广谱重试**
     # （429 + URLError/OSError，最多 3 次带指数退避，见 _http_get_with_retry）。
@@ -3132,6 +3138,7 @@ engines:
     - bin: tw
       fix: 安装 twitter-cli（`pipx install twitter-cli` 或 npm i -g twitter-cli），完成后确保 `tw` 在 PATH 上
   reddit:
+    qps: 2
     type: cli
     # timeout 声明（2026-09-10 核查）：该引擎内部已有**广谱重试**
     # （429 + URLError/OSError，最多 3 次带指数退避，见 _http_get_with_retry）。
@@ -3583,6 +3590,7 @@ engines:
       url_template: https://www.openstreetmap.org/{osm_type}/{osm_id}
     url: https://nominatim.openstreetmap.org/search
   xiaohongshu:
+    qps: 2
     type: cli
     label: 小红书
     enabled: true
@@ -3603,6 +3611,7 @@ engines:
     - bin: xhs
       fix: 安装小红书 CLI（`npm i -g xiaohongshu-cli`，或见项目 README），随后执行 `xhs login` 完成登录
   bilibili:
+    qps: 2
     type: cli
     # timeout 声明（2026-09-10 核查）：该引擎内部已有**广谱重试**
     # （429 + URLError/OSError，最多 3 次带指数退避，见 _http_get_with_retry）。
@@ -3623,6 +3632,7 @@ engines:
     - '{n}'
     env: {}
   weibo:
+    qps: 2
     type: cli
     # timeout 声明（2026-09-10 核查）：该引擎内部已有**广谱重试**
     # （429 + URLError/OSError，最多 3 次带指数退避，见 _http_get_with_retry）。
@@ -4963,6 +4973,7 @@ network:
     # 触发后冷却以分钟计），argo 的真直连路径对它 TLS 握手超时（_ssl.c 实测
     # 10s 打穿），curl 经 Clash TUN 分流可达但慢（14s）——显式指定本机代理
     # 端口最稳（2026-09-17 的「死源」下线判定=429 连发+握手超时两根因叠加）。
-    # 其他环境按本机代理端口改写。
+    # 其他环境设置 ARGO_GDELT_PROXY 指向本机代理；未设置时自动直连，
+    # 避免硬编码端口在无代理环境下每次白烧 TLS 握手超时。
     rules:
-      "gdeltproject.org": "http://127.0.0.1:7897"
+      "gdeltproject.org": "${ARGO_GDELT_PROXY}"
