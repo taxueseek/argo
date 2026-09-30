@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 260 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **收录 261 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
 - **开箱可用 226 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 21 个**：`bocha`、`bocha_ai`、`byted`、`em_miaoxiang`、`exa`、`keenable`、`octen`、`parallel`、`qweather`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
-- **已停用 10 个**：`brave`、`europeana`、`felo`、`jikan`、`local_goodreads`、`metaso`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 14 个**：`bing_rss`、`datagov_uk`、`doi`、`ecosia`、`gdelt`、`opencitations`、`qwant`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **已停用 11 个**：`brave`、`europeana`、`felo`、`jikan`、`local_goodreads`、`metaso`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
+- **显式专用 15 个**：`bing_rss`、`datagov_uk`、`doi`、`ecosia`、`gdelt`、`opencitations`、`qwant`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 247 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 13 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 248 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 13 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 13 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -305,6 +305,23 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `seltz` | 需自备密钥 | 按调用计费 | 20000/月 | SELTZ_API_KEY | 语义画像命中 | Seltz 搜索（英文主力，news 语料；结果带发布日期与正文摘录；中文无召回价值已用 langs 排除） |
 | `tinyfish_news` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时新闻搜索（免费，含 publisher 与发布日期） |
 
+### 热榜（12）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `baidu_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 百度热搜（实时热搜榜，HTML 解析，免认证） |
+| `bilibili_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | B站热搜（search/square 热搜词，免认证） |
+| `douyin_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 抖音热榜（iesdouyin word_list JSON，免认证） |
+| `dw_news` | 可直接用 | 免费 | 不限 | — | 域 intl_news_flash | 德国之声英语版 RSS（德语区/欧洲公共广播视角，条目数最多的一档） |
+| `france24` | 可直接用 | 免费 | 不限 | — | 域 intl_news_flash | France 24 英语版 RSS（法语区一手的国际新闻实时流，免 key） |
+| `guardian_rss` | 可直接用 | 免费 | 不限 | — | 域 intl_news_flash | 卫报世界版 RSS（一手国际新闻实时流；摘要密度最高的一档，免 key） |
+| `ths_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending、域 ths_hot_search | 同花顺热点（当日强势股+题材归因，独家能力） |
+| `toutiao_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 今日头条热榜（hot-board JSON，免认证） |
+| `weibo_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 微博热搜榜（side/hotSearch JSON，免登录，需 Referer） |
+| `zhihu_hot_app` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 知乎热榜匿名通道（App JSON，免密钥；开放平台 hot_list 的免费替代） |
+| `x_trending` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X (Twitter) Trending 全球热榜（ego-browser 浏览器通道，带分类与排名；显式调用） |
+| `zhihu_hot` | 需自备密钥 | 免费 | 100/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 hot_trending、域 zhihu_hot_list | 知乎开放平台热榜 hot_list（日配额约 100；需 ZHIHU_ACCESS_SECRET；原 zhihu skill 迁入） |
+
 ### 法律判例（11）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -320,22 +337,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `openstd` | 可直接用 | 免费 | 不限 | — | 域 standards | 国家标准全文公开系统（GB 全文预览入口，HTML 解析，免认证） |
 | `std_samr` | 可直接用 | 免费 | 不限 | — | 域 standards | 全国标准信息公共服务平台（国标检索，标准号/状态/日期，免认证） |
 | `wenshu` | 可直接用 | 免费 | 不限 | — | 域 law_text、域 legal、域 wenshu_query | 中国裁判文书网（反爬较强，尽力而为） |
-
-### 热榜（11）
-
-| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
-|---|---|---|---|---|---|---|
-| `baidu_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 百度热搜（实时热搜榜，HTML 解析，免认证） |
-| `bilibili_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | B站热搜（search/square 热搜词，免认证） |
-| `douyin_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 抖音热榜（iesdouyin word_list JSON，免认证） |
-| `dw_news` | 可直接用 | 免费 | 不限 | — | 域 intl_news_flash | 德国之声英语版 RSS（德语区/欧洲公共广播视角，条目数最多的一档） |
-| `france24` | 可直接用 | 免费 | 不限 | — | 域 intl_news_flash | France 24 英语版 RSS（法语区一手的国际新闻实时流，免 key） |
-| `guardian_rss` | 可直接用 | 免费 | 不限 | — | 域 intl_news_flash | 卫报世界版 RSS（一手国际新闻实时流；摘要密度最高的一档，免 key） |
-| `ths_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending、域 ths_hot_search | 同花顺热点（当日强势股+题材归因，独家能力） |
-| `toutiao_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 今日头条热榜（hot-board JSON，免认证） |
-| `weibo_hot` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 微博热搜榜（side/hotSearch JSON，免登录，需 Referer） |
-| `zhihu_hot_app` | 可直接用 | 免费 | 不限 | — | 域 hot_trending | 知乎热榜匿名通道（App JSON，免密钥；开放平台 hot_list 的免费替代） |
-| `zhihu_hot` | 需自备密钥 | 免费 | 100/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 hot_trending、域 zhihu_hot_list | 知乎开放平台热榜 hot_list（日配额约 100；需 ZHIHU_ACCESS_SECRET；原 zhihu skill 迁入） |
 
 ### 地球 / 空间（10）
 
@@ -387,9 +388,9 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `eurostat` | 可直接用 | 免费 | 不限 | — | 域 macro_data | 欧盟统计局宏观数据（EU 国家 GDP/人均GDP/失业率/人口，ec.europa.eu SDMX 免认证） |
 | `fred` | 可直接用 | 免费 | 不限 | — | 域 macro_data | FRED 宏观时序数据（CPI/失业率/国债收益率/GDP/M2，免认证） |
 | `fx_rate` | 可直接用 | 免费 | 不限 | — | 域 macro_data | 实时汇率（open.er-api.com 免认证） |
-| `nbs_stats` | 可直接用 | 免费 | 不限 | — | 域 macro_data | 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证） |
 | `un_comtrade` | 可直接用 | 免费 | 不限 | — | 域 trade_stats | UN Comtrade 双边贸易（国家+HS 码+年份+流向；preview 免 key） |
 | `worldbank` | 可直接用 | 免费 | 不限 | — | 域 macro_data | 世界银行宏观指标（GDP/通胀/失业/人口，api.worldbank.org 免认证） |
+| `nbs_stats` | 已停用 | 免费 | 不限 | — | 域 macro_data | 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证） |
 
 ### security（4）
 
@@ -549,7 +550,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 260 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 261 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

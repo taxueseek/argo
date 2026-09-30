@@ -452,10 +452,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang/mkt
                 if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                     v = _lang_param(k, query) or v
-                resolved_v = _resolve(str(v), query, n, **kwargs)
-                # 跳过未解析的占位符（CLI 未传该参数时 {xxx} 保留字面量）
-                if resolved_v and "{" not in resolved_v:
-                    parts.append(f"{k}={up.quote(resolved_v)}")
+                parts.append(f"{k}={up.quote(_resolve(str(v), query, n, **kwargs))}")
             if parts:
                 separator = "&" if "?" in resolved_url else "?"
                 full_url = resolved_url + separator + "&".join(parts)

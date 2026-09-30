@@ -1,0 +1,34 @@
+# X (Twitter) Trending 热榜（ego-browser，免 Key，独家源）
+# 定位：X 全球趋势榜是别处拿不到的独家热点源（科技/娱乐/全球趋势分类带排名）。
+# 借 ego-browser 驱动用户默认浏览器抓取 x.com/explore/tabs/trending 渲染结果，
+# 复用浏览器 profile 的 cookie 与指纹，避开匿名请求的 X 风控。
+# 与 sogou_weixin_browser 同族但**零状态文件**：不持久化 task space、不加锁，
+# 每次调用自建空间抓完即走（X 的登录态在 profile 层，冷空间实测同样可取数）。
+# 路由：explicit_only —— 本引擎会在用户浏览器开标签页，不进自动路由，
+# 只等显式调用（需要时 --engine x_trending）。
+# 验证：
+#   python3 scripts/engine_validate.py --engine x_trending --stage all --admit
+#   python3 scripts/search.py "热榜" --engine x_trending --json
+
+engine_id: x_trending
+type: cli
+enabled: true
+cost_tier: free
+explicit_only: true
+cmd:
+- python3
+- scripts/x_trending.py
+search_args:
+- '{query}'
+- --n
+- '{n}'
+output_format: yaml
+timeout: 60
+canary_query: "热榜"
+desc: "X (Twitter) Trending 全球热榜（ego-browser 浏览器通道，带分类与排名；显式调用）"
+coverage: [general, social, trending]
+recommended: false
+family: hot_trending
+# 热榜是「固定榜单」而非「与查询词面匹配的文档集」：canary 与结果无词面交集，
+# 相关性门不适用（同 weather 的数据型源口径）。
+relevance_check: false

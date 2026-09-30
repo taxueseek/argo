@@ -1810,7 +1810,7 @@ engines:
   - macro
   latency_ms: 2000
   cost: free
-  status: ok
+  status: disabled
   recommended: true
   explicit_only: false
   desc: 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证）
@@ -3099,6 +3099,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: WoRMS 海洋物种权威命名（分类学标准，免认证）
+- name: x_trending
+  tier: T1
+  type: cli
+  coverage:
+  - general
+  - social
+  - trending
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: X (Twitter) Trending 全球热榜（ego-browser 浏览器通道，带分类与排名；显式调用）
 - name: xiaohongshu
   tier: T1
   type: cli

@@ -26,6 +26,21 @@ from unittest.mock import MagicMock, patch
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
+
+def _nbs_stats_enabled() -> bool:
+    """nbs_stats 上游停用时（WAF + V2 端点 404，2026-09-30）跳过其前置断言；
+    重开后自动恢复覆盖，不删测试。"""
+    try:
+        import yaml
+        cfg = yaml.safe_load(
+            (SCRIPT_DIR.parent / "config.yaml").read_text(encoding="utf-8"))
+        return bool((cfg.get("engines") or {}).get("nbs_stats", {}).get("enabled", True))
+    except Exception:
+        return True
+
+
+NBS_STATS_ENABLED = _nbs_stats_enabled()
+
 from route import route_query  # noqa: E402
 from search import execute_search  # noqa: E402
 from cache import SearchCache  # noqa: E402
@@ -62,6 +77,7 @@ class _AllowAllBreaker:
 class TestChinaMacroPromotion(unittest.TestCase):
     """修①：中国宏观词 → nbs_stats 前置。"""
 
+    @unittest.skipUnless(NBS_STATS_ENABLED, "nbs_stats 已停用（上游 WAF/端点变更，2026-09-30）")
     def test_nbs_stats_first_for_china_macro(self):
         d = route_query("中国 2025 年 GDP 总量", mode="auto", depth="fast")
         self.assertEqual(d.get("domain"), "macro_data")

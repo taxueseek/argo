@@ -2548,5 +2548,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "x_trending": {
+    "label": "x_trending",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

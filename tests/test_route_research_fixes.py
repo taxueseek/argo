@@ -13,6 +13,20 @@ SCRIPT_DIR = SKILL_DIR / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 
+def _nbs_stats_enabled() -> bool:
+    """nbs_stats 上游停用时（WAF + V2 端点 404，2026-09-30）跳过其前置断言；
+    重开后自动恢复覆盖，不删测试。"""
+    try:
+        import yaml
+        cfg = yaml.safe_load((SKILL_DIR / "config.yaml").read_text(encoding="utf-8"))
+        return bool((cfg.get("engines") or {}).get("nbs_stats", {}).get("enabled", True))
+    except Exception:
+        return True
+
+
+NBS_STATS_ENABLED = _nbs_stats_enabled()
+
+
 class TestRouteHealthFallbackConsistency(unittest.TestCase):
     """route 的健康检查 fallback（health_probe）必须与主路径同语义：
     只对 local_* 引擎做健康判定，非 local 引擎无条件保留。"""
@@ -145,6 +159,7 @@ class TestMacroDataWorldbankPriority(unittest.TestCase):
                 f"{q} 应 worldbank 优先（FRED 无该国数据）",
             )
 
+    @unittest.skipUnless(NBS_STATS_ENABLED, "nbs_stats 已停用（上游 WAF/端点变更，2026-09-30）")
     def test_china_macro_query_prefers_nbs_stats(self):
         """2026-09-14 计算方式演化：中国宏观查询 nbs_stats（国家统计局）前置——
         本国权威源且最新年份比 worldbank 全（worldbank 有 1-2 年滞后，

@@ -2075,6 +2075,7 @@ engines:
     type: worldbank
   nbs_stats:
     enabled: false
+    disabled_reason: "上游 data.stats.gov.cn 站点被 WAF 拦截（403）且 V2 API 端点全 404（2026-09-30 实测），取不到数据；重开条件：统计站恢复可用接口，或改走 ego-browser 浏览器通道"
     label: 国家统计局
     cost_tier: free
     qps: 2

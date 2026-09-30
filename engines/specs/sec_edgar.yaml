@@ -17,10 +17,13 @@ url: https://efts.sec.gov/LATEST/search-index
 timeout: 15
 query_param: q
 extra_params:
+  # forms 默认 10-K：年报是这一源最常被问的表单类型，不传也给出可用结果。
+  # 其余三个参数 CLI 暂无开关（ciks=公司 CIK、startdt/enddt=申报日期窗），
+  # 留空即不下发有效过滤——需要时先把开关接进 search_cli 再填占位符。
   forms: "10-K"
-  ciks: "{ciks}"
-  startdt: "{startdt}"
-  enddt: "{enddt}"
+  ciks: ""
+  startdt: ""
+  enddt: ""
 canary_query: "apple"
 desc: "SEC EDGAR 美国证监会官方全文检索（公司/财报/申报，免认证）"
 coverage: [finance, us_stock, legal, company]

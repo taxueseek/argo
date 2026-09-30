@@ -2470,6 +2470,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "x_trending": {
+    "label": "x_trending",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "xiaohongshu": {
     "label": "小红书",
     "qps": 2,
