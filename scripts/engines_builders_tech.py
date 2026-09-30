@@ -206,8 +206,8 @@ def _build_exa_engine(spec: dict[str, Any]) -> Any:
                         "snippet": snippet,
                         "source": "exa",
                         # type:auto 模式不返回 score 字段（恒 0 会被 RRF 埋没），
-                        # 无 score 时给固定基线分
-                        "score": r.get("score") or 0.75,
+                        # 无 score 时给固定基线分；并叠加位次衰减
+                        "score": rank_score(r.get("score") or 0.75, len(results)),
                     })
                 return results
         except Exception as e:
@@ -725,7 +725,7 @@ def _build_github_engine(spec: dict[str, Any]) -> Any:
                 r = _gh_code_result(item)
                 if r:
                     results.append(r)
-        return results
+        return [dict(r, score=rank_score(r.get("score", 0.7), i)) for i, r in enumerate(results)]
     return _engine
 
 

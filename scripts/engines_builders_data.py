@@ -1021,14 +1021,13 @@ def _build_octen_engine(spec: dict[str, Any]) -> Any:
                                 if len(results) >= n:
                                     return results
                 else:
-                    # 标准搜索
                     for r in items.get("results", [])[:n]:
                         results.append({
                             "title": r.get("title", ""),
                             "url": r.get("url", ""),
                             "snippet": r.get("highlight", "")[:300],
                             "source": "octen",
-                            "score": r.get("score", 0.5),
+                            "score": rank_score(r.get("score") or 0.5, len(results)),
                         })
 
                 # 如果结果太少，补充 quick 数据源的查询（不走 broad 保底）

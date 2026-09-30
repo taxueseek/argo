@@ -1256,7 +1256,7 @@ def _parse_generic(data: dict[str, Any], engine_name: str = "?",
         )
         if isinstance(snippet, list):
             snippet = snippet[0] if snippet else ""
-        score = i.get("score", i.get("relevance_score", 0.5))
+        score = rank_score(i.get("score") or i.get("relevance_score") or 0.5, len(results))
         results.append({
             "title": str(title)[:200],
             "url": str(url),
