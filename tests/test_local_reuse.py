@@ -31,13 +31,20 @@ class TestLocalBodyIndex(unittest.TestCase):
     """搜索结果里的「本地已有正文」标注。"""
 
     def setUp(self):
+        # 恢复而非 pop：conftest 把 ARGO_STATE_DIR 指到会话隔离目录，
+        # tearDown 一旦 pop 掉，本文件之后跑的测试会回落到真实用户缓存
+        # （2026-09-30 实锤：污染生产 cache.db + 顺序依赖假红）。
+        self._prev_state = os.environ.get("ARGO_STATE_DIR")
         os.environ["ARGO_STATE_DIR"] = tempfile.mkdtemp(prefix="argo-lb-")
         os.environ["ARGO_FULLTEXT_DIR"] = tempfile.mkdtemp(prefix="argo-lbft-")
         self.c = SearchCache()
 
     def tearDown(self):
-        for k in ("ARGO_STATE_DIR", "ARGO_FULLTEXT_DIR"):
-            os.environ.pop(k, None)
+        os.environ.pop("ARGO_FULLTEXT_DIR", None)
+        if self._prev_state is None:
+            os.environ.pop("ARGO_STATE_DIR", None)
+        else:
+            os.environ["ARGO_STATE_DIR"] = self._prev_state
 
     def test_empty_for_unknown_urls(self):
         self.assertEqual(self.c.local_status(["https://never.example/x"]), {})
@@ -145,11 +152,16 @@ class TestEvidenceSharesFetchEntry(unittest.TestCase):
     """消融后的存储契约：证据分是正文条目的子键，不是独立 kind。"""
 
     def setUp(self):
+        # 同上：恢复 conftest 的会话隔离目录，不 pop（pop 泄漏到真实用户缓存）
+        self._prev_state = os.environ.get("ARGO_STATE_DIR")
         os.environ["ARGO_STATE_DIR"] = tempfile.mkdtemp(prefix="argo-ev-")
         self.c = SearchCache()
 
     def tearDown(self):
-        os.environ.pop("ARGO_STATE_DIR", None)
+        if self._prev_state is None:
+            os.environ.pop("ARGO_STATE_DIR", None)
+        else:
+            os.environ["ARGO_STATE_DIR"] = self._prev_state
 
     def test_evidence_requires_body(self):
         """没有正文就不写证据，避免留下「正文为空却标记已核验」的 URL。"""

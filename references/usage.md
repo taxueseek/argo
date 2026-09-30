@@ -16,7 +16,8 @@
 | `argo extract` | 结构化提取（表格/Meta/JSON-LD） |
 | `argo article` | 公众号文章全文（标题/正文/图片） |
 | `argo screenshot` | 网页截图（`--full-page`/`--output`） |
-| `argo pdf` | PDF 正文提取（`--pages`/`--password`） |
+| `argo pdf` | PDF 正文提取（`--pages`/`--password`，`--outline`/`--section` 分节读取） |
+| `argo paper` | arXiv 论文深读（`--outline`/`--section`/`--latex`/`--cited-by`） |
 | `argo answer` | 直答（Seltz 带引用合成答案） |
 | `argo watch` | 网页变化监控（add/check/list/remove） |
 | `argo job` | 招聘多平台聚合 |
@@ -219,6 +220,10 @@ argo screenshot "https://example.com" [--full-page] [--output /tmp/page.png]
 
 ```bash
 argo pdf "https://example.com/paper.pdf" [--pages "1-5"] [--password "secret"]   # 支持本地路径
+argo paper "1706.03762" --outline          # 分节大纲（先看 id）
+argo paper "1706.03762" --section 2        # 读单节（缓存后秒回）
+argo paper "1706.03762" --latex            # LaTeX 源精读（公式级）
+argo paper "1706.03762" --cited-by 10      # 引文图（S2，配 key 更稳）
 ```
 
 ## 证据流程字段语义（v2.8.0）

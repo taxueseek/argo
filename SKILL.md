@@ -82,13 +82,14 @@ python3 scripts/clarify.py "有歧义的查询" --json
 ```
 
 
-### 抓取三工具（`bin/argo` 入口）
+### 抓取族（`bin/argo` 入口）
 
 ```bash
 argo fetch "https://example.com" [--focus "关键词"] [--use-browser]
 # 降级链顺序与各级条件见 references/usage.md
-argo screenshot "https://example.com" [--full-page] [--output /tmp/page.png]
+argo screenshot "https://example.com" [--full-page]
 argo pdf "https://example.com/paper.pdf" [--pages "1-5"] [--password "secret"]
+argo paper "1706.03762"  # 论文深读
 argo answer "query" [--scope <语料>]   # 直答，语料见 references/usage.md
 argo watch add|check|list|remove   # 观察模式：快照+变化检测（check --json 供 cron）
 ```
