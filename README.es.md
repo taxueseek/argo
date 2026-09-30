@@ -29,7 +29,7 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **Este repositorio es parte del conjunto de plugins DeepSeek Harness de taxueseek** — hermanos: [dsh-files](https://github.com/taxueseek/dsh-files) (enviar archivos, leer documentos) · [dsh-snippets](https://github.com/taxueseek/dsh-snippets) (favoritos de snippets) · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck) (chequeo de solo lectura) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) (auditoría de seguridad de plugins) · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) (ingeniería inversa de prompts e imágenes multi-proveedor) — todos los plugins en el [perfil](https://github.com/taxueseek)
+> **Este repositorio es parte del conjunto de plugins DeepSeek Harness de taxueseek** ([dsh-files](https://github.com/taxueseek/dsh-files) 39★). Serie de habilidades del mismo autor: [session-digger](https://github.com/taxueseek/session-digger) 29★ · [fund-investment-guide](https://github.com/taxueseek/fund-investment-guide) 21★ · [taxueskills](https://github.com/taxueseek/taxueskills) 23★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 12★
 
 ## Por qué supera a la búsqueda del modelo, la búsqueda IA y el metasearch
 

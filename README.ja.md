@@ -29,7 +29,7 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **これは taxueseek の DeepSeek Harness プラグイン群のひとつ**。仲間たち：[dsh-files](https://github.com/taxueseek/dsh-files)（ファイル送信・ドキュメント読取） · [dsh-snippets](https://github.com/taxueseek/dsh-snippets)（スニペットお気に入り） · [dsh-healthcheck](https://github.com/taxueseek/dsh-healthcheck)（読み取り専用ヘルスチェック） · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（プラグインセキュリティ監査） · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（プロンプト逆引き＆マルチプロバイダー画像生成）—— 全プラグインは[プロフィール](https://github.com/taxueseek)へ
+> **これは taxueseek の DeepSeek Harness プラグイン群のひとつ**（[dsh-files](https://github.com/taxueseek/dsh-files) 39★）。同作者のスキルシリーズ：[session-digger](https://github.com/taxueseek/session-digger) 29★ · [fund-investment-guide](https://github.com/taxueseek/fund-investment-guide) 21★ · [taxueskills](https://github.com/taxueseek/taxueskills) 23★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 12★
 
 ## モデル内蔵検索 / AI 検索 / 横断検索より強い点
 
