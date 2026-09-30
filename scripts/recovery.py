@@ -248,7 +248,7 @@ def _recovery_engine_allowed(eng: str, tried_families: set[str]) -> bool:
 
 def pick_alternative_engines(tried: list[str], engines_fallback: list[str] | None,
                              enabled: set[str] | None = None,
-                             max_n: int = 2) -> list[str]:
+                             max_n: int = 2, mode: str = "auto") -> list[str]:
     """L3：挑选未尝试过的备选引擎。
 
     优先通用免费组合（anysearch/ddg/bing/wiki），再同族垂直，再路由 fallback。
@@ -282,8 +282,8 @@ def pick_alternative_engines(tried: list[str], engines_fallback: list[str] | Non
     _same_fam: list[str] = list(engines_fallback or [])
     try:
         from engine_families import family_candidates
-        for _fam in tried_families:
-            for _e in family_candidates(_fam, "*", enabled=enabled):
+        for _fam in sorted(tried_families):  # set 迭代序不定，候选顺序必须确定
+            for _e in family_candidates(_fam, "*", enabled=enabled, mode=mode):
                 if _e not in _same_fam:
                     _same_fam.append(_e)
     except Exception:
@@ -461,7 +461,7 @@ def build_recovery_plan(query: str, tried_engines: list[str],
             reason="同义词替换重试"))
 
     # L3 换引擎
-    alt = pick_alternative_engines(tried_engines, engines_fallback, enabled)
+    alt = pick_alternative_engines(tried_engines, engines_fallback, enabled, mode=mode)
     if alt:
         steps.append(RecoveryStep(
             level="L3", strategy="switch_engine", query=relaxed or query,
@@ -493,7 +493,7 @@ def build_recovery_plan(query: str, tried_engines: list[str],
         if trans and trans.lower() != query.lower():
             trans_engines = pick_alternative_engines(
                 [], engines_fallback,
-                enabled, max_n=2) or ["duckduckgo", "wikipedia"]
+                enabled, max_n=2, mode=mode) or ["duckduckgo", "wikipedia"]
             steps.append(RecoveryStep(
                 level="L4", strategy="translate", query=trans,
                 engines=trans_engines, reason="中英互译启发式重试"))

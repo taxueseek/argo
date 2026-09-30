@@ -94,7 +94,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "_redact_secrets fallback 加基本脱敏（Bearer token + key=value）；"
               "2026-09-28 +2：_detect_anti_bot head 区按需 lower（性能优化）"),
     "scripts/cache.py": (
-        1377, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
+        1382, "结果缓存 + 路由软命中 + 指纹，正在按「键/存储/命中策略」三段考虑"
               "（+1=except_sets 具名异常导入行；+3=2026-09-27 退化写入守卫的两处"
               "调用点与一行 import——判定逻辑本身已拆到 cache_guard.py，本文件"
               "只剩调用，不再是「准入策略混在存储实现里」的状态；"
@@ -103,7 +103,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "摊键逻辑拆到 cache_key_vdom.py，本文件只留调用点；"
               "2026-09-28 +2：normalize_query 加 @lru_cache 装饰器（性能优化）；"
               "2026-09-29 +2：失败态写入守卫调用点（判据在 cache_guard.py，"
-              "治「配好 key 仍回放 45s 前的失败」——issue #12 续发同类）"),
+              "治「配好 key 仍回放 45s 前的失败」——issue #12 续发同类）；"
+              "2026-09-30 +5：per-engine 层补负缓存不覆盖好条目守卫（同族 combo "
+              "2026-09-19 修复）+ 自适应 TTL 按层取帽（硬帽层不超帽、无帽层 2×、"
+              "日末延长不压缩）"),
     "scripts/http_client.py": (
         1027, "HTTP 客户端（UA 轮换 + Cookie 积累 + 重试 + 主机节流）；"
               "2026-09-27 +8：host throttle buckets 加 LRU 淘汰（100 个上限）；"
@@ -120,6 +123,13 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-29 +4：_apply_consensus_and_sort 夹非负 max_results"
               "（1 行代码 + 3 行注释：负数切片从尾部截，10 条给 7 条，"
               "且 MCP/库调用绕开 argparse，兜底必须落在切片点）"),
+    "scripts/search_pipeline.py": (
+        1001, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+              "2026-09-30 +2：恢复链与变体召回补透传 --domain/--sub_domain"
+              "（用户域约束此前被两条辅路旁路）+ variant_recalled/phrase_dropped"
+              " 观测补账（变体条目不进漏斗 returned 口径，不补账会出现"
+              "「deduped > returned」的矛盾账）；拆分候选：恢复执行器"
+              "_recovery_executor 可独立成 recovery_runner"),
     "scripts/job.py": (
         1186, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "

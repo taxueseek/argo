@@ -66,6 +66,8 @@ _SEEK_MODULE_CACHE: dict[str, Any] = {}
 # 进程内缓存一致（300s TTL——文件不频繁修改场景可接受）。写侧原子替换
 # + 全异常吞掉：缓存永不破坏搜索。
 _SEEK_DISK_CACHE_MAX = 64
+# 条目形状版本：跨版本改 results 条目字段时，TTL 内的旧形状条目按 miss 处理
+_SEEK_DISK_SCHEMA = 1
 
 
 def _seek_disk_cache_path() -> Path:
@@ -87,10 +89,15 @@ def _seek_disk_cache_get(key: str) -> list[dict[str, Any]] | None:
         rec = data.get(key) if isinstance(data, dict) else None
         if not isinstance(rec, dict):
             return None
+        if rec.get("v") != _SEEK_DISK_SCHEMA:
+            return None
         if time.time() - rec.get("ts", 0) >= _LOCAL_SEEK_TTL_S:
             return None
         results = rec.get("results")
-        return results if isinstance(results, list) else None
+        if not isinstance(results, list):
+            return None
+        # 返回拷贝：缓存持有所有权，调用方就地改写（_engine 标记等）不得污染缓存
+        return [dict(r) if isinstance(r, dict) else r for r in results]
     except Exception:
         return None
 
@@ -107,16 +114,20 @@ def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
             data = {}  # 损坏文件：整表重建（缓存可牺牲，搜索不可牺牲）
         data = {k: v for k, v in data.items()
                 if isinstance(v, dict) and now - v.get("ts", 0) < _LOCAL_SEEK_TTL_S}
-        data[key] = {"ts": now, "results": results}
+        data[key] = {"v": _SEEK_DISK_SCHEMA, "ts": now, "results": results}
         if len(data) > _SEEK_DISK_CACHE_MAX:
             for k in sorted(data, key=lambda k: data[k].get("ts", 0)
                             )[:len(data) - _SEEK_DISK_CACHE_MAX]:
                 data.pop(k, None)
         p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
-        with tmp.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp, p)  # 原子替换：并发写不会留下半截文件
+        try:
+            import argo_paths
+            argo_paths.atomic_write_json(p, data, indent=None)  # mkstemp 唯一 tmp，失败自清理
+        except (ImportError, AttributeError, OSError):
+            tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+            with tmp.open("w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, p)  # 原子替换：并发写不会留下半截文件
     except Exception:
         pass
 

@@ -1256,7 +1256,7 @@ def _parse_generic(data: dict[str, Any], engine_name: str = "?",
         )
         if isinstance(snippet, list):
             snippet = snippet[0] if snippet else ""
-        score = rank_score(i.get("score") or i.get("relevance_score") or 0.5, len(results))
+        score = rank_score(next((v for v in (i.get("score"), i.get("relevance_score")) if v not in (None, "")), 0.5), len(results))  # 哨兵判空：显式 0 分不得膨胀成 0.5
         results.append({
             "title": str(title)[:200],
             "url": str(url),

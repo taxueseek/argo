@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # 仅注解引用（ParseResult/HTTPConnection）；运行时按需惰性导入
@@ -65,12 +66,17 @@ def _argo_env(name: str) -> str:
         return os.environ.get(name, "").strip()
 
 
+# 内嵌 env 引用（http://${HOST}:7890）；整值形式 "${VAR}" 不走它（单独分支）
+_ENV_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+
 def _interp_env(value: str) -> str | None:
     """配置里的代理值 → 实际代理 URL；None 表示直连。
 
     三条语义（与 rules / 全局 url 共用，取值口径只有这一处）：
       - `"direct"`            → None（强制直连）
       - `"${VAR}"`            → env 值；**未设置或也写成 "direct"** → None
+      - 内嵌 `"http://${VAR}:7890"` → 逐个替换；任一变量未设置或为 direct → None
       - 其它字面量             → 原样作为代理 URL
 
     与 `{VAR}`（引擎 spec 占位符，缺失时替换为空串）刻意区分：这里的「未设置」
@@ -81,6 +87,19 @@ def _interp_env(value: str) -> str | None:
         # env 值同样过一遍 direct 判定：否则 ARGO_X=direct 会被当成
         # 代理字面量 "direct" 发给 urllib（畸形代理，请求必挂）
         v = _argo_env(v[2:-1])
+    elif "${" in v:
+        missing = False
+
+        def _sub(m: "re.Match[str]") -> str:
+            nonlocal missing
+            val = _argo_env(m.group(1)).strip()
+            if not val or val.lower() == "direct":
+                missing = True
+            return val
+
+        v = _ENV_REF_RE.sub(_sub, v)
+        if missing:
+            return None
     return None if v.lower() == "direct" else (v or None)
 
 

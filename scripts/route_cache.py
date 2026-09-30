@@ -42,6 +42,9 @@ _ROUTE_CACHE_SCHEMA = 1
 # 而指纹盖不住的那点排序漂移在一小时内不构成路由错误，放宽到 1 h。
 _ROUTE_CACHE_TTL_S = 3600.0
 _ROUTE_CACHE_MAX_ENTRIES = 200
+# 体积帽：条数帽管不住单条大小（engines_fallback 大清单的 decision 可达数十 KB），
+# 200 条 × 大条目能把缓存文件顶到无界。超限从最旧丢到帽内。
+_ROUTE_CACHE_MAX_BYTES = 409_600
 
 # _route_cache_read 的进程内解析缓存：(mtime_ns, size) -> entries。None = 未缓存。
 # 声明在此而非函数内，是为了让「这个模块有一个可变全局」这件事在阅读时可见。
@@ -157,6 +160,16 @@ def _route_cache_prune(entries: dict[str, Any]) -> dict[str, Any]:
         newest = sorted(fresh.items(),
                         key=lambda kv: float(kv[1].get("ts") or 0), reverse=True)
         fresh = dict(newest[:_ROUTE_CACHE_MAX_ENTRIES])
+    # 体积帽：从最旧开始丢，直到序列化体积进帽（条数帽管不住单条大小）
+    try:
+        import json
+        while fresh and len(json.dumps(
+                {"entries": fresh}, ensure_ascii=False).encode("utf-8")
+        ) > _ROUTE_CACHE_MAX_BYTES:
+            oldest = min(fresh, key=lambda k: float(fresh[k].get("ts") or 0))
+            fresh.pop(oldest, None)
+    except (TypeError, ValueError):
+        pass
     return fresh
 
 

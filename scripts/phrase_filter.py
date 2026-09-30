@@ -21,11 +21,21 @@ from typing import Any
 # 引号内 ≥2 字符的短语（单字符无区分度，不纳入）
 _QUOTED = re.compile(r'"([^"]{2,})"')
 
+# 短语匹配折叠：-/_ 视作空白（"GPT 5" 应命中 "GPT-5"，防正确结果被误剔），
+# 连续空白压成单格。两侧同折叠，语义与「宁可放过」的保守设计一致。
+_FOLD_TRANS = str.maketrans({"-": " ", "_": " "})
+
+
+def _fold(s: str) -> str:
+    return re.sub(r"\s+", " ", s.lower().translate(_FOLD_TRANS)).strip()
+
 
 def extract_phrases(query: str) -> list[str]:
     """提取 query 里的引号短语（去首尾空白、去重、保序）。无则空列表。"""
     if not query or not isinstance(query, str):
         return []
+    # 中文输入法产出的全角引号按半角处理（query 未经 normalize_query，原样到达这里）
+    query = query.replace("\u201c", '"').replace("\u201d", '"')
     out: list[str] = []
     seen: set[str] = set()
     for m in _QUOTED.finditer(query):
@@ -45,10 +55,10 @@ def apply_phrase_filter(results: list[dict[str, Any]],
     """
     if not phrases or not results:
         return results, 0
-    pl = [p.lower() for p in phrases]
+    pl = [p for p in (_fold(p) for p in phrases) if p]
     kept = []
     for r in results:
-        text = f"{r.get('title', '')} {r.get('snippet', '')}".lower()
+        text = _fold(f"{r.get('title', '')} {r.get('snippet', '')}")
         if any(p in text for p in pl):
             kept.append(r)
     if not kept:

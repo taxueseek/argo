@@ -1111,8 +1111,10 @@ class SearchCache:
                     for r in rs[:5]
                 )
             if _fp(old_results) == _fp(result_list):
-                # 稳定 → 延长（上限为 base 的 2 倍，不超域上限）
-                return min(base_ttl * 2, self.resolve_ttl(domain, query=query) * 2)
+                cap = {"financial": 300, "news": 600, "realtime": REALTIME_TTL_CAP}.get(
+                    DOMAIN_TIER_MAP.get(domain, "general"))
+                # 稳定 → 延长 2×base；有硬帽层不超帽、不反向压缩日末延长；无帽层直接 2×
+                return min(base_ttl * 2, max(base_ttl, cap)) if cap else base_ttl * 2
             return base_ttl
         except SHAPE_BENIGN:
             return base_ttl
@@ -1141,12 +1143,15 @@ class SearchCache:
         assert_results_cacheable(results, context="SearchCache.set_engine")
         assert_not_degraded(results, context="SearchCache.set_engine")
         is_empty = not results
+        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
+                        since=since, until=until, **vdom)
+        if is_empty and self._l2.has_live(key):
+            # 瞬时空结果不得覆盖同键仍有寿命的好条目（同族：combo 层 2026-09-19 修复）
+            return
         if is_empty:
             effective_ttl = EMPTY_RESULT_TTL if ttl is None else min(ttl, EMPTY_RESULT_TTL)
         else:
             effective_ttl = self._resolve_effective_ttl(domain, ttl, query=query)
-        key = self._key(query, engine, max_results, domain, mode, depth, kind="engine",
-                        since=since, until=until, **vdom)
         self._write(key, query, engine, max_results, {"results": results}, domain,
                     effective_ttl, mode=mode, depth=depth)
 

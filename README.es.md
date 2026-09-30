@@ -60,7 +60,7 @@
 4. **El ecosistema libre basta.** APIs abiertas de gobiernos/academia/estándares/seguridad + motores sin clave cubren la mayoría de dominios (221 sin clave).
 5. **Calidad medible.** Pisos golden de ranking, gates de ablación de fusión y controles negativos de enrutamiento.
 
-> v2.8.9 lo implementa todo: 259 fuentes, 93 dominios, 225 sin clave.
+> v2.9.1 lo implementa todo: 259 fuentes, 93 dominios, 225 sin clave.
 
 ---
 
@@ -347,7 +347,7 @@ python3 scripts/search.py --list-engines
 
 ## Motores y enrutamiento
 
-La config tiene ahora unos **253** fuentes y **93** dominios (ver `config.yaml` y `--list-engines`).
+La config tiene ahora unos **259** fuentes y **93** dominios (ver `config.yaml` y `--list-engines`).
 
 ### Directos y verticales (extracto)
 

@@ -904,7 +904,7 @@ def _attach_selection_signals(merged: list[dict[str, Any]], mode: str,
             if len(cons) >= 2 and not auth.get("is_serp"):
                 selection = min(1.0, selection * (1.0 + 0.1 * min(len(cons) - 1, 2)))
             absorption = dens["absorption_score"]
-            orig = float(r.get("score", 0.5) or 0.5)
+            orig = float(next((v for v in (r.get("score"),) if v not in (None, "")), 0.5))  # 哨兵判空：显式 0 分不得膨胀成 0.5
             r["authority"] = auth["score"]
             r["authority_tier"] = auth["tier"]
             r["freshness"] = fresh["score"]

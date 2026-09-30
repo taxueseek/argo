@@ -78,7 +78,6 @@ from search_rank import (  # noqa: E402
     _attach_selection_signals,
     _bigrams,
     _canonical_url,
-    _consensus_prior,
     _content_sig,
     _content_similarity,
     _distinct_data_rows,

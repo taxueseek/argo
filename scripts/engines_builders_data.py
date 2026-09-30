@@ -1027,7 +1027,7 @@ def _build_octen_engine(spec: dict[str, Any]) -> Any:
                             "url": r.get("url", ""),
                             "snippet": r.get("highlight", "")[:300],
                             "source": "octen",
-                            "score": rank_score(r.get("score") or 0.5, len(results)),
+                            "score": rank_score(next((v for v in (r.get("score"),) if v not in (None, "")), 0.5), len(results)),  # 哨兵判空：显式 0 分不得膨胀成 0.5
                         })
 
                 # 如果结果太少，补充 quick 数据源的查询（不走 broad 保底）

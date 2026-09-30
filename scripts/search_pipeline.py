@@ -327,7 +327,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
 
     # ── multi-query 变体召回波（Step 1，本体在 variant_recall.py）───────────
     # 主 query 召回不足时用变体补召回，rrf_merge 按多 query 共识加权；隔离 + 失败安全。
-    clean_lists = augment_with_variants(req, engine_search, clean_lists, max_results)
+    clean_lists, _variant_recalled = augment_with_variants(req, engine_search, clean_lists, max_results)
 
     if len(clean_lists) > 1:
         merged = rrf_merge(clean_lists, lang=_q_lang_for_fusion)
@@ -541,6 +541,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                 同思路）。daemon 线程不 join，卡住的 HTTP 读拖不垮止损。
                 """
                 def _fire(eng: str) -> list[dict[str, Any]]:
+                    _dk = {k: v for k in ("domain", "sub_domain") if (v := getattr(req, "engine_" + k, None))}
                     # 记下真正发出的调用：恢复段走的不是 dispatch，若不单独记账，
                     # 漏斗会算出「routed 2 → called 2 → returned 5」这种自相矛盾的
                     # 账（实测「python 怎么读csv」），而这正是最需要被看见的路径。
@@ -553,7 +554,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
                         res = engine_search(rq, eng, n=max_results,
                                             timeout=timeout, depth=depth, mode=mode,
                                             since=since_iso, until=until_iso,
-                                            skip_cache=skip_cache)
+                                            skip_cache=skip_cache, **_dk)
                     except Exception as e:
                         import sys
                         sys.stderr.write(
@@ -734,6 +735,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         "noise_dropped": _noise_dropped,
         "funnel": funnel,
     }
+    result_payload.update(variant_recalled=_variant_recalled, phrase_dropped=_phrase_dropped)  # 观测补账：均不在漏斗 returned 口径内
 
     return replace(
         run,

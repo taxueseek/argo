@@ -32,6 +32,9 @@ from typing import Any
 _VARIANT_MAX_QUERIES = 2
 _VARIANT_MAX_ENGINES = 2
 _VARIANT_TIMEOUT_CAP_S = 6.0
+# 波级总预算（秒）：per-call 超时盖不住 2×2 串行累计（最坏 4×6s=24s），而主调度
+# 的 auto 预算不含这段追加——必须自设总闸。超线即停，已拿到的部分照常并入。
+_WAVE_BUDGET_S = 8.0
 
 
 def should_variant_recall(req: Any, clean_lists: list, max_results: int) -> bool:
@@ -56,7 +59,15 @@ def should_variant_recall(req: Any, clean_lists: list, max_results: int) -> bool
         pass  # env_flag 不可用时按默认开启，不阻断搜索
     if req.mode in ("fast", "budget"):
         return False
-    return sum(len(c) for c in clean_lists) < max_results
+    # 答案型域 route 会下发 early_stop_min_results（1-2 行快照即完整答案）：
+    # 完整性判据按它算，否则这类域每次搜索都白付变体调用。
+    need = max_results
+    dec = getattr(req, "decision", None)
+    if isinstance(dec, dict):
+        m = dec.get("early_stop_min_results")
+        if isinstance(m, int) and 0 < m <= max_results:
+            need = m
+    return sum(len(c) for c in clean_lists) < need
 
 
 def variant_recall_wave(req: Any, engine_search: Any) -> list[list[dict[str, Any]]]:
@@ -93,14 +104,30 @@ def variant_recall_wave(req: Any, engine_search: Any) -> list[list[dict[str, Any
         timeout = min(float(req.eff_timeout or _VARIANT_TIMEOUT_CAP_S), _VARIANT_TIMEOUT_CAP_S)
     except (TypeError, ValueError):
         timeout = _VARIANT_TIMEOUT_CAP_S
+    import time as _time
+    deadline = _time.monotonic() + _WAVE_BUDGET_S
+    # CLI --domain / --sub_domain 的引擎入参照主路径（engine_dispatch 同口径）透传，
+    # 否则用户的域约束被变体旁路。
+    dom_kwargs: dict[str, str] = {}
+    _d = getattr(req, "engine_domain", None)
+    _sd = getattr(req, "engine_sub_domain", None)
+    if _d:
+        dom_kwargs["domain"] = _d
+    if _sd:
+        dom_kwargs["sub_domain"] = _sd
     extra: list[list[dict[str, Any]]] = []
     for v in variants[:_VARIANT_MAX_QUERIES]:
+        if _time.monotonic() > deadline:
+            break
         for eng in engines:
+            if _time.monotonic() > deadline:
+                break
             try:
                 res = engine_search(
                     v, eng, n=req.max_results, timeout=timeout,
                     depth=req.depth, mode=req.mode,
                     since=req.since_iso, until=req.until_iso, skip_cache=True,
+                    **dom_kwargs,
                 )
             except Exception:
                 continue  # 单条变体/单引擎失败不影响主结果
@@ -144,15 +171,18 @@ def structural_variants(query: str, max_n: int = _VARIANT_MAX_QUERIES) -> list[s
 
 
 def augment_with_variants(req: Any, engine_search: Any, clean_lists: list,
-                          max_results: int) -> list:
-    """按 gate 决定是否补变体召回，返回（可能扩充的）clean_lists。
+                          max_results: int) -> tuple[list, int]:
+    """按 gate 决定是否补变体召回；返回 (clean_lists, 变体补回条数)。
 
     失败安全：任何异常都原样返回入参 clean_lists，绝不影响主 query 融合。
+    补回条数单列：变体条目不进漏斗 returned 口径，调用方拿它做观测补账。
     """
     if not should_variant_recall(req, clean_lists, max_results):
-        return clean_lists
+        return clean_lists, 0
     try:
         extra = variant_recall_wave(req, engine_search)
     except Exception:
-        return clean_lists
-    return clean_lists + extra if extra else clean_lists
+        return clean_lists, 0
+    if not extra:
+        return clean_lists, 0
+    return clean_lists + extra, sum(len(c) for c in extra)

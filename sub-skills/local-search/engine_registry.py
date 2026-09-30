@@ -11,6 +11,7 @@ import functools
 import json
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,11 @@ if not logger.handlers:
 SKILL_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = SKILL_DIR / "config.yaml"
 PARSE_MAPS_PATH = SKILL_DIR / "parse_maps.yaml"
+
+# 健康条目陈旧线（与 _load_health/_save_health 共用）：30 天未探针的记录对路由
+# 已无参考价值，读入与写回两侧都要过滤——长驻进程的内存快照是全量写回的，
+# 只在读取侧过滤，两天后一次保存就会把 31 天的陈旧条目复活。
+_HEALTH_STALE_S = 30 * 86400
 
 # 领域分类（与 config.yaml 中 engines[*].category 对应）
 DEFAULT_CATEGORIES = [
@@ -108,7 +114,7 @@ class EngineRegistry:
                 # 陈旧条目清理（2026-09-29）：健康文件此前只增不减——实测
                 # 有条目 49 天未刷新、还有测试引擎名残留。30 天未探针的记录
                 # 对路由已无参考价值（引擎配置都可能换过），读入时丢弃。
-                cutoff = time.time() - 30 * 86400
+                cutoff = time.time() - _HEALTH_STALE_S
                 return {k: v for k, v in data.items()
                         if isinstance(v, dict) and v.get("last_checked", 0) >= cutoff}
         except Exception as e:
@@ -117,9 +123,24 @@ class EngineRegistry:
 
     def _save_health(self) -> None:
         try:
+            # 写回前套用与 _load_health 相同的陈旧过滤：内存快照是全量写回的，
+            # 不过滤会让 30 天未刷新的条目复活并覆盖他进程新写的条目。
+            cutoff = time.time() - _HEALTH_STALE_S
+            payload = {k: v for k, v in self._health.items()
+                       if isinstance(v, dict) and v.get("last_checked", 0) >= cutoff}
             self.health_state_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.health_state_path.open("w", encoding="utf-8") as f:
-                json.dump(self._health, f, ensure_ascii=False, indent=2)
+            try:
+                _root_scripts = SKILL_DIR.parents[1] / "scripts"
+                if str(_root_scripts) not in sys.path:
+                    sys.path.append(str(_root_scripts))
+                from argo_paths import atomic_write_json
+                atomic_write_json(self.health_state_path, payload)
+            except ImportError:
+                tmp = self.health_state_path.with_name(
+                    self.health_state_path.name + f".{os.getpid()}.tmp")
+                with tmp.open("w", encoding="utf-8") as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+                os.replace(tmp, self.health_state_path)
         except Exception as e:
             logger.warning(f"保存健康状态失败: {e}")
 

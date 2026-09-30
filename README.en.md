@@ -60,7 +60,7 @@
 4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (219 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> v2.8.9 ships all of the above: 255 sources, 93 domains, 219 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> v2.9.1 ships all of the above: 259 sources, 93 domains, 225 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
