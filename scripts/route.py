@@ -828,13 +828,14 @@ def route_query(query: str, engine_override: str = "auto",
     # 主路径与两条回退路径共用同一结果，杜绝各路径逻辑漂移
     lang_engines = _select_language_engines(features)
     cfg = load_config()
-    # 仅启用且 env 就绪、未 blocked 的引擎。不包 try/except TypeError——那是
-    # get_engines 还不收 routable_only 时的兼容层，如今是死代码，只会在签名被
-    # 改坏时静默回退「全量引擎」（契约见 test_engine_catalog 的签名用例）。
-    enabled = set(get_engines(cfg, routable_only=True).keys())
+    # 仅启用且 env 就绪、未 blocked 的引擎。不传 cfg：get_engines 内部
+    # load_config()（mtime 记忆化），只有不带 config 的调用走 routable
+    # memo（真实环境全量过滤 13ms/次，连调多次成主热点；2026-09-30 修）。
+    # 不包 try/except TypeError：兼容层死代码，改坏签名须显式报错。
+    enabled = set(get_engines(routable_only=True).keys())
     # 若过滤过狠导致空集，回退到 enabled 全集（避免完全不可用）
     if not enabled:
-        enabled = set(get_engines(cfg).keys())
+        enabled = set(get_engines().keys())
 
     # 预算模式过滤可用引擎
     quota_mgr = get_quota_manager()

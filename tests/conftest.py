@@ -39,6 +39,14 @@ atexit.register(shutil.rmtree, _SESSION_TMP, ignore_errors=True)
 # tests/test_route_cache.py 显式打开开关验证。
 os.environ["ARGO_ROUTE_CACHE"] = "0"
 
+# routable memo 同理关闭（2026-09-30）：它是进程内 1s 时窗缓存，而全量套件的
+# 状态目录整轮共享——A 用例改引擎可用性（ENABLE/DISABLE 开关、准入拉黑）后
+# 时窗内的 B 用例会拿到脏路由集，实测导致 zhihu_hot/scenario_thresholds 等
+# 6 个路由形态用例串味失败。ARGO_ADMISSION_TTL_S=0 是 get_engines 侧同一
+# 语义层的既有旋钮，memo 随 admission 缓存一并关闭，回退逐次精确过滤；
+# memo 自身的行为由 tests/test_routable_memo.py 显式开启旋钮验证。
+os.environ.setdefault("ARGO_ADMISSION_TTL_S", "0")
+
 # 状态目录隔离（必须在任何 argo 模块 import 前设置）
 _STATE_DIR = tempfile.mkdtemp(prefix="argo-test-state-")
 os.environ["ARGO_STATE_DIR"] = _STATE_DIR

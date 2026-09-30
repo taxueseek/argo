@@ -137,10 +137,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/matrix_search_eval.py": (
         1103, "离线路由矩阵（138 条检查项），用例表占多数"),
     "scripts/route.py": (
-        1008, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+        1009, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
               "2026-09-28 拆出 Bangs 解析（route_bangs.py，−26 行）后登记；"
               "同日 +2：breaker.status 读失败 debug 留痕（fail-open 语义不变）；"
-              "下一刀：_route_by_domain（268 行垂直域主判定）独立成模块"),
+              "2026-09-30 +1：routable memo 接线（get_engines 不传 cfg，"
+              "route 热路径 2.9×）；下一刀：_route_by_domain 独立成模块"),
 }
 
 

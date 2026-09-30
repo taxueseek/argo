@@ -481,6 +481,36 @@ def last_load_error() -> str | None:
 
 # ── 类型化访问接口 ─────────────────────────────────────────────────────────────
 
+# routable_only 过滤结果的进程内记忆化。背景（2026-09-30 route 回归修复）：
+# route_query 每 query 连调 get_engines(routable_only=True) 多次（主路径一次、
+# 语言引擎回退可能再一次），每次对全部引擎逐个跑 env_ready/is_blocked——
+# cProfile 实测 50 query 触发 ~12k 次 env_ready + ~12k 次 is_blocked，占 route
+# 耗时约一半，基准捕获回归 6.5→8.8 ms/query。过滤结果的输入只有四类：
+# config 内容、env 文件（密钥）、进程内 ENABLE/DISABLE 开关、admission 文件。
+# 前三类已有现成签名/时刻可查，admission 读缓存默认 1s TTL——于是把 memo
+# 时窗也定在 1s：进程内其他写路径改 admission（如熔断拉黑）最迟 1s 反映，
+# 与底层读缓存同一口径，不引入新的陈旧度。
+#
+# 失效/关闭语义：
+#   - 键不匹配（config 改写 / env 文件变 / 开关变 / 跨时窗）→ 重算；
+#   - ARGO_ADMISSION_TTL_S=0（admission 缓存关闭）→ memo 一并关闭，
+#     同一旋钮控制同一语义层的两处缓存，无侵入回滚；
+#   - 显式传 config 的调用方不走 memo——那类调用方（契约测试、自定义配置）
+#   - 明确要「这份 config 的精确过滤」，memo 键里没有它的位置。
+# memo 值浅拷贝返回：route 只读，但防御调用方就地改写污染缓存。
+_routable_memo: tuple[tuple, float, dict[str, dict[str, Any]]] | None = None
+
+
+def _routable_memo_key(envfile_sig: tuple, stamp: float) -> tuple:
+    """memo 失效键：config 综合 mtime + env 文件签名 + 进程内引擎开关。"""
+    return (
+        stamp,
+        envfile_sig,
+        os.environ.get("ARGO_ENABLE_ENGINES", ""),
+        os.environ.get("ARGO_DISABLE_ENGINES", ""),
+    )
+
+
 def get_engines(config: dict[str, Any] | None = None,
                 *,
                 routable_only: bool = False) -> dict[str, dict[str, Any]]:
@@ -490,6 +520,10 @@ def get_engines(config: dict[str, Any] | None = None,
       - ARGO_ENABLE/DISABLE_ENGINES
       - 缺 API Key
       - admission blocked
+
+    不带 config 调用时结果按 1s 时窗记忆化（键含 config_stamp / env 文件
+    签名 / 进程内引擎开关，详见 _routable_memo 注释）；显式传 config 则
+    逐次精确过滤。ARGO_ADMISSION_TTL_S=0 时 memo 一并关闭。
     """
     cfg = config if config is not None else load_config()
     engines = cfg.get("engines", {})
@@ -497,17 +531,40 @@ def get_engines(config: dict[str, Any] | None = None,
     if not routable_only:
         return result
     try:
-        from engine_env import is_engine_allowed_by_env, env_ready
-        from engine_admission import is_blocked
+        from engine_env import is_engine_allowed_by_env, env_ready, _envfile_sig  # noqa: F401
+        from engine_admission import is_blocked  # noqa: F401
+        ttl = _admission_ttl_mirror()
     except ImportError as e:
         # 单机可选依赖（engine_env / engine_admission）缺失时按历史语义返回
         # 未过滤集，但**必须留痕**：静默返回意味着 blocked 与 env 未就绪的
         # 引擎重新可路由，是最难查的一类故障。注意这里与上面两处不同——
         # 上面两处是同一仓内的死回退（已删），这里是真会发生的降级（保留）。
+        # 守卫必须在一切过滤路径（含 _routable_filter）之前：拆函数时把守卫
+        # 留在原调用点，显式 config 路径就会裸抛 ModuleNotFoundError。
         import logging
         logging.getLogger("unified_search.config").warning(
             "routable_only 过滤不可用（%s），本次返回未过滤引擎集", e)
         return result
+    if config is not None:
+        return _routable_filter(result)
+    global _routable_memo
+    if ttl <= 0:
+        return _routable_filter(result)  # 同一旋钮关 memo：回滚无侵入
+    now = time.monotonic()
+    key = _routable_memo_key(_envfile_sig, config_stamp())
+    if _routable_memo is not None:
+        m_key, m_at, m_val = _routable_memo
+        if m_key == key and now - m_at < 1.0:
+            return dict(m_val)
+    filtered = _routable_filter(result)
+    _routable_memo = (key, now, filtered)
+    return dict(filtered)
+
+
+def _routable_filter(result: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """逐引擎可路由过滤（env 白黑名单 → 密钥就绪 → 未被准入拉黑）。"""
+    from engine_env import is_engine_allowed_by_env, env_ready
+    from engine_admission import is_blocked
     filtered: dict[str, dict[str, Any]] = {}
     for name, spec in result.items():
         if not is_engine_allowed_by_env(name):
@@ -518,6 +575,19 @@ def get_engines(config: dict[str, Any] | None = None,
             continue
         filtered[name] = spec
     return filtered
+
+
+def _admission_ttl_mirror() -> float:
+    """读 admission 读缓存 TTL（ARGO_ADMISSION_TTL_S），import 失败回落 1.0。
+
+    config 不 import engine_env 顶层（依赖方向：engine 层引用 config，反过来
+    会在 import 期成环），这里函数内窄 import；拿不到就按默认 1.0 走 memo。
+    """
+    try:
+        from engine_admission import _admission_ttl
+        return _admission_ttl()
+    except Exception:
+        return 1.0
 
 
 def get_domains(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
