@@ -284,5 +284,111 @@ class TestAdmissionReadCache(unittest.TestCase):
                       "fresh 读之后缓存没回填，后续读又去读盘")
 
 
+class TestAdmissionExistsSet(unittest.TestCase):
+    """存在集合短路：无记录的引擎不得触发文件读（IO 形状门禁）。
+
+    2026-10-01 实测：261 引擎只有 99 份准入记录，全量清单/route 扫描逐引擎
+    open，62% 注定 ENOENT。本机 SSD 全扫描 2.8ms 无感，但慢 IO 环境（沙箱/
+    CI/网络盘）单次 syscall 可放大到毫秒级（同一清单在沙箱实测 4s+）。修复后
+    文件读次数应随**记录数**走，而不是引擎数——这条门禁锁的就是那个形状，
+    谁把 O(记录数) 改回 O(引擎数)，这里必红。锁四件事：
+      1. 混合目录里扫 N 个引擎，文件读次数 == 有记录的引擎数（红绿主断言）；
+      2. TTL 内第二轮扫描零读；
+      3. 写入后立即可见（读己所写，不等 TTL）；
+      4. TTL=0 与目录切换时集合不得越界（退回逐次精确读）。
+    """
+
+    def setUp(self):
+        import engine_admission as m
+        self.mod = m
+        self._tmp = tempfile.TemporaryDirectory()
+        self._old_dir = m.DEFAULT_ADMISSION_DIR
+        m.DEFAULT_ADMISSION_DIR = Path(self._tmp.name)
+        self._saved_ttl = os.environ.get("ARGO_ADMISSION_TTL_S")
+        os.environ["ARGO_ADMISSION_TTL_S"] = "1"
+        m._admission_read_cache.clear()
+        m._admission_dir_set_cache.clear()
+        # load_admission 只经 _read_admission_file 触碰磁盘，包一层计数即可。
+        # 不用 sys.addaudithook：审计钩子挂上就摘不掉，会污染整个测试会话。
+        self._orig_read = m._read_admission_file
+        self.counter = {"n": 0}
+
+        def counting(path):
+            self.counter["n"] += 1
+            return self._orig_read(path)
+
+        m._read_admission_file = counting
+
+    def tearDown(self):
+        self.mod._read_admission_file = self._orig_read
+        self.mod._admission_read_cache.clear()
+        self.mod._admission_dir_set_cache.clear()
+        self.mod.DEFAULT_ADMISSION_DIR = self._old_dir
+        if self._saved_ttl is None:
+            os.environ.pop("ARGO_ADMISSION_TTL_S", None)
+        else:
+            os.environ["ARGO_ADMISSION_TTL_S"] = self._saved_ttl
+        self._tmp.cleanup()
+
+    def test_missing_records_do_not_open_files(self):
+        m = self.mod
+        have = [f"set_e{i}" for i in range(5)]
+        for e in have:
+            m.save_admission(e, {"stages_passed": ["health"]})
+        ids = have + [f"set_x{i}" for i in range(7)]  # 12 引擎 5 记录，7 个必扑空
+        for e in ids:
+            m.load_admission(e)
+        self.assertEqual(
+            self.counter["n"], len(have),
+            "无记录引擎触发了文件读——存在集合短路失效，IO 又回到 O(引擎数)",
+        )
+        self.counter["n"] = 0
+        for e in ids:
+            m.load_admission(e)
+        self.assertEqual(self.counter["n"], 0, "TTL 内第二轮扫描不应有任何文件读")
+
+    def test_saved_record_visible_without_waiting_ttl(self):
+        """先扫出「无记录」再写入：必须立即可见（读己所写）。"""
+        m = self.mod
+        self.assertIsNone(m.load_admission("set_late"))
+        m.save_admission("set_late", {"stages_passed": ["health"]})
+        self.assertIsNotNone(
+            m.load_admission("set_late"),
+            "写入后仍按「无记录」短路——存在集合没跟上写入",
+        )
+
+    def test_ttl_zero_disables_set(self):
+        """TTL=0（全量套件的默认）：退回逐次精确读，每个引擎都真实读一次。"""
+        m = self.mod
+        have = [f"set_t{i}" for i in range(3)]
+        for e in have:
+            m.save_admission(e, {"stages_passed": ["health"]})
+        os.environ["ARGO_ADMISSION_TTL_S"] = "0"
+        m._admission_read_cache.clear()
+        m._admission_dir_set_cache.clear()
+        ids = have + ["set_t_missing"]
+        for e in ids:
+            m.load_admission(e)
+        self.assertEqual(
+            self.counter["n"], len(ids),
+            "TTL=0 必须逐次读盘（旧语义逐位一致），存在集合不得擅自生效",
+        )
+
+    def test_dir_switch_does_not_reuse_stale_set(self):
+        """状态目录切换（测试常规手段）：集合按目录隔离，A 目录的「无记录」不得带进 B。"""
+        m = self.mod
+        self.assertIsNone(m.load_admission("set_moved"))  # 在空目录 A 扫出「无记录」
+        second = tempfile.TemporaryDirectory()
+        try:
+            m.DEFAULT_ADMISSION_DIR = Path(second.name)
+            m.save_admission("set_moved", {"stages_passed": ["health"]})
+            self.assertIsNotNone(
+                m.load_admission("set_moved"),
+                "切换目录后仍沿用旧目录的存在集合",
+            )
+        finally:
+            second.cleanup()
+
+
 if __name__ == "__main__":
     unittest.main()

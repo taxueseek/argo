@@ -47,9 +47,13 @@ def admission_dir() -> Path:
     return d
 
 
+def _admission_stem(engine_id: str) -> str:
+    """engine_id → 记录文件名（去 .json）。读写共用一处转义，不得各写各的。"""
+    return engine_id.replace("/", "_").replace("..", "_")
+
+
 def admission_path(engine_id: str) -> Path:
-    safe = engine_id.replace("/", "_").replace("..", "_")
-    return admission_dir() / f"{safe}.json"
+    return admission_dir() / f"{_admission_stem(engine_id)}.json"
 
 
 def _read_path(engine_id: str) -> Path:
@@ -59,8 +63,7 @@ def _read_path(engine_id: str) -> Path:
     admission_path 每次都 mkdir(parents=True)，一次搜索因此多出约两百次
     路径查询。写记录（save_admission 等）仍走 admission_path 确保目录存在。
     """
-    safe = engine_id.replace("/", "_").replace("..", "_")
-    return DEFAULT_ADMISSION_DIR / f"{safe}.json"
+    return DEFAULT_ADMISSION_DIR / f"{_admission_stem(engine_id)}.json"
 
 
 def _now_iso() -> str:
@@ -147,6 +150,48 @@ def _read_admission_file(path: Path) -> dict[str, Any] | None:
         return None
 
 
+# 存在集合：一次 scandir 回答「哪些引擎有记录」，替代逐引擎 open 探测。
+# 动机（2026-10-01 实测）：261 引擎只有 99 份记录，全量清单/route 扫描的
+# 261 次准入 open 里 162 次注定 ENOENT（62%）——本机 SSD 全扫描 2.8ms 无感，
+# 但慢 IO 环境（沙箱/CI/网络盘）单次 syscall 可放大到毫秒级，同一清单 4s+。
+# 集合只回答「有没有」，记录内容仍走读缓存逐条读：集合内引擎的读取行为与
+# 旧实现逐位一致，减少的只有注定扑空的那部分 open。
+#
+# 语义与读缓存同一条 TTL（_admission_ttl，ARGO_ADMISSION_TTL_S=0 一并关闭、
+# 回到逐次精确读）：窗口内别的进程新建/删除记录最多晚 TTL 秒可见，与读缓存
+# 的跨进程新鲜度同一口径。键按目录字符串——状态目录可被测试在进程内切换，
+# A 目录扫出的「无记录」不得带进 B 目录。写路径 save_admission 写完即把本
+# 引擎并入集合：同进程读己所写不等 TTL。load_admission_fresh 不走集合——
+# 读-改-写必须看到磁盘真相，绕过一切记忆。
+_admission_dir_set_cache: dict[str, tuple[float, frozenset[str]]] = {}
+
+
+def _admission_exists_set() -> frozenset[str]:
+    """有记录的引擎文件名（去 .json）集合，按 TTL 重扫目录。"""
+    key = str(DEFAULT_ADMISSION_DIR)
+    now = time.monotonic()
+    hit = _admission_dir_set_cache.get(key)
+    if hit is not None and now - hit[0] < _admission_ttl():
+        return hit[1]
+    try:
+        stems = frozenset(
+            entry.name[: -len(".json")]
+            for entry in os.scandir(DEFAULT_ADMISSION_DIR)
+            if entry.name.endswith(".json")
+        )
+    except OSError:
+        stems = frozenset()
+    _admission_dir_set_cache[key] = (now, stems)
+    return stems
+
+
+def _admission_dir_set_add(dir_key: str, stem: str) -> None:
+    """把刚写入的记录并入已缓存的集合；无缓存则不动（下次扫描自然包含）。"""
+    hit = _admission_dir_set_cache.get(dir_key)
+    if hit is not None:
+        _admission_dir_set_cache[dir_key] = (hit[0], hit[1] | {stem})
+
+
 def load_admission(engine_id: str) -> dict[str, Any] | None:
     """读一份准入记录（带进程内 TTL 缓存，见 _admission_read_cache）。
 
@@ -162,6 +207,11 @@ def load_admission(engine_id: str) -> dict[str, Any] | None:
         hit = _admission_read_cache.get(str(path))
         if hit is not None and now - hit[0] < ttl:
             return hit[1]
+        # 存在集合短路：目录里没有这个引擎的记录，连 open 都不做（62% 注定
+        # 扑空的那部分）。扑空结果与旧实现一样进读缓存，同 TTL 新鲜度。
+        if _admission_stem(engine_id) not in _admission_exists_set():
+            _admission_read_cache[str(path)] = (now, None)
+            return None
     data = _read_admission_file(path)
     if ttl > 0:
         _admission_read_cache[str(path)] = (now, data)
@@ -198,6 +248,8 @@ def save_admission(engine_id: str, record: dict[str, Any]) -> dict[str, Any]:
     path.write_text(dumps_pretty(out), encoding="utf-8")
     # 写完即失效：缓存与文件是一对状态，只更新一半会让本进程读到自己没写的旧值
     _admission_read_cache.pop(str(path), None)
+    # 存在集合同步并入：新记录不等 TTL 就可读（读己所写）
+    _admission_dir_set_add(str(path.parent), path.stem)
     return out
 
 
