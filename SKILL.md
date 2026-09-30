@@ -101,7 +101,7 @@ argo watch add|check|list|remove   # 观察模式：快照+变化检测（check 
 4. **社交帖**：叙事/舆情，不进事实真值
 5. **深度研究**：先读 `references/research-protocol.md`；有决策含义就交工作包，不要靠扩词充问题树；`quality_gate_results.passed=false` 必须降级表述
 6. **引用**：讲给用户的事实带 URL 出处，日常档也要带（URL 在 `results[].url`，零成本）
-7. **上下文纪律**：Agent 搜索用 `--json --fields agent`、按需 `-n`（超 10 无收益）；要来源追溯或归档才加 `--envelope`（别与 `--fields agent` 同给，会静默失效）；结果异常少看 `funnel`（六格阶段计数，哪格归零即塌陷点），慢查询看 `timing.dispatch` 的 `useful_ms`/`wasted_ms`（答案就绪 / 之后还在等，二者之和即墙钟）；查引擎状态用 `--list-engines --detail --engine <名>`（单引擎全量 ~0.9 KB）；不带 `--engine` 默认给分组摘要 ~2.5 KB，逐条全量加 `--all`（~54 KB）（MCP 注入面见 `references/operations.md`）
+7. **上下文纪律**：Agent 搜索用 `--json --fields agent`、按需 `-n`（超 10 无收益）；要来源追溯或归档才加 `--envelope`（别与 `--fields agent` 同给，会静默失效）；结果异常少看 `funnel`（六格阶段计数，哪格归零即塌陷点），慢查询看 `timing.dispatch` 的 `useful_ms`/`wasted_ms`（口径见 `references/usage.md`）；查引擎状态用 `--list-engines --detail --engine <名>`（单引擎全量 ~0.9 KB）；不带 `--engine` 默认给分组摘要 ~2.5 KB，逐条全量加 `--all`（~54 KB）（MCP 注入面见 `references/operations.md`）
 
 ## 证据流程（v2.8.0）
 
