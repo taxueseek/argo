@@ -145,6 +145,9 @@ def test_every_rule_compiles_and_survives_compilation():
         ("weather_query", "气候变化 极端天气 2026"),
         ("geo_places", "在哪里 查看 报错 日志"),
         ("geo_places", "图片 位置 居中 CSS"),
+        # academic unless（2026-09-30）：裸 GPT/BERT 子串不再把产品语境抢进论文域
+        ("academic", "chatgpt 使用技巧"),
+        ("academic", "如何用 GPT 写周报"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -161,7 +164,7 @@ def test_unless_has_a_negative_case(domain_name, query):
 
 def test_unless_declared_domains_are_covered_by_negative_cases():
     """声明了 unless 的域，必须在上面的反例表里出现（新增域时别忘配反例）。"""
-    covered = {"weather_query", "geo_places"}
+    covered = {"weather_query", "geo_places", "academic"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

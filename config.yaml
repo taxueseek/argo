@@ -1169,7 +1169,15 @@ domains:
   # bocha+anysearch），biorxiv/openreview 这些已实现的源永远轮不上。
   - (?i)(论文|\bpaper\b|预印本|preprint|arXiv|bioRxiv|medRxiv|DOI|引用|citation|学术|文献|期刊|学报|综述|同行评议|影响因子|openalex|crossref|europe pmc|dblp|PubMed|知网|万方|维普)
   - \b\d{4}\.\d{4,5}\b
-  - (?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)
+  # 2026-09-30：模型名词表拆成独立条目并挂 unless。此前裸 (?i)...|BERT|GPT)
+  # 是子串匹配，「chatgpt 使用技巧」「如何用 GPT 写周报」「gpt-5 发布」这类
+  # 高频日常查询全被抢进学术论文域（实测返回 GPT-4 论文而非使用技巧）。
+  # unless 与 weather 域同构：日常使用/对比/产品语境只否决**这一条**触发词，
+  # 「GPT 训练方法 综述」等真论文语境不受影响（其它条目照常命中）。
+  # 注意 unless 是子串语义，写「对比|vs」会误伤「BERT vs GPT 对比实验」——
+  # 学术对比通常带论文词（综述/实验/论文），由第 1 条兜住，这里只拦产品语境。
+  - match: '(?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)'
+    unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙)'
   - (?i)(論文|ジャーナル|学会誌|査読|研究論文|プレプリント)
   primary: arxiv
 - desc: 技术深度研究
