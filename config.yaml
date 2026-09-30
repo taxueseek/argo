@@ -2074,7 +2074,7 @@ engines:
     timeout: 12
     type: worldbank
   nbs_stats:
-    enabled: true
+    enabled: false
     label: 国家统计局
     cost_tier: free
     qps: 2
