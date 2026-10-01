@@ -244,7 +244,7 @@ def gate_results(results: list[dict[str, Any]],
         is_serp_url = False
         if url:
             try:
-                from evidence import is_serp_or_jump_url
+                from serp_guard import is_serp_or_jump_url
                 is_serp_url = is_serp_or_jump_url(url)
             except Exception:  # pragma: no cover
                 is_serp_url = False

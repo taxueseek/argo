@@ -385,10 +385,10 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _funnel_deduped = len(merged)
     if merged:
         try:
-            from evidence import is_serp_or_jump_url as _is_serp
+            from serp_guard import is_serp_or_jump_url as _is_serp  # 轻依赖，锁见 test_hotpath_import_lint.py
             merged = [r for r in merged if not _is_serp(r.get("url", ""))]
         except ImportError:
-            pass  # evidence 不可用时跳过（本地五维 rerank 已对 SERP 降权）
+            pass  # serp_guard 不可用时跳过（本地五维 rerank 已对 SERP 降权）
 
     # ── minhash 近重复去重（结果级，RRF 后 / SERP 后）─────────────────────
     # max_keep 与下方放宽截断同源：去重只需要保证「前 N 条非重复」正确，

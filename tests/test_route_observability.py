@@ -162,8 +162,12 @@ class TestUnknownEngineIsReported(unittest.TestCase):
         src = (SCRIPT_DIR / "search.py").read_text(encoding="utf-8")
         self.assertIn("_unknown_requested(engine)", src,
                       "判据没有接进 super_search——未注册引擎又会静默空结果")
-        self.assertIn("[] if local_first else", src,
+        self.assertIn("not local_first", src,
                       "local-first 短路丢了：本地聚合本来就不走 web 引擎点名")
+        self.assertIn('engine != "auto"', src,
+                      "import 必须收进非 auto 分支：auto 下判据恒返 []，"
+                      "无条件 import engines 会把引擎构建栈拖进每次搜索"
+                      "（含缓存命中，实测 ~115ms；见 test_hotpath_import_lint.py）")
         self.assertIn("unknown engine name(s) requested", src,
                       "局限声明没接上，调用方看不到降级原因")
 

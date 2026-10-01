@@ -857,10 +857,16 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     # 那是**响应契约**，与执行/调度无关。
     # 显式点名的引擎里查无此名者：随结果一起报出来（判据见
     # unknown_requested_engines）。局限声明走既有通道 extra_lim，错误行在
-    # 成形之后追加——errors 是执行层写的，这里只做「请求级事实」的补充，
+    # 成形之后追加——errors 是执行层的账，这里只做「请求级事实」的补充，
     # 不去改执行层的账（两份账混写会互相覆盖）。
-    from engines import unknown_requested_engines as _unknown_requested
-    _unknown_engines = [] if local_first else _unknown_requested(engine)
+    # import 收进真会用到判定的分支：engine 为 auto（默认）时判据函数恒返
+    # []，而 import engines 会把整只引擎构建栈（连带 urllib/http/xml/email，
+    # 2026-10-01 实测 ~115ms）拖进每次搜索——含缓存命中。红绿锁：
+    # tests/test_hotpath_import_lint.py
+    _unknown_engines: list[str] = []
+    if not local_first and engine and engine != "auto":
+        from engines import unknown_requested_engines as _unknown_requested
+        _unknown_engines = _unknown_requested(engine)
     if _unknown_engines:
         extra_lim.append(
             "unknown engine name(s) requested: "
