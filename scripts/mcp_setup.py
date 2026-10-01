@@ -206,8 +206,11 @@ def _toml_block(client: dict[str, Any], entry: dict[str, Any]) -> str:
     lines.append(f"args = [{args_repr}]")
     env = entry.get("env") or {}
     if env:
-        for k, v in env.items():
-            lines.append(f'env = {{ {k} = "{_toml_escape(v)}" }}')
+        # TOML 同键重复定义非法：此前每个键各写一行 `env = {...}`，一个键时
+        # 侥幸合法，第二个键起整份配置解析失败（潜伏雷，2026-10-02 锁定）。
+        # 全部键合并进一个内联表。
+        pairs = ", ".join(f'{k} = "{_toml_escape(v)}"' for k, v in env.items())
+        lines.append(f"env = {{ {pairs} }}")
     return "\n".join(lines)
 
 

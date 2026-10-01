@@ -116,6 +116,21 @@ class TestTomlInjectRemove(TestMcpSetupBase):
         with self.assertRaises(ValueError):
             ms._inject_toml(client, entry)
 
+    def test_toml_multi_env_single_inline_table(self):
+        """多个 env 键必须合并进一个内联表。
+
+        TOML 同键重复定义非法：旧实现每个 env 键各写一行 `env = {...}`，
+        一个键时侥幸合法，第二个键起 codex 配置直接解析失败（潜伏雷）。
+        """
+        client = {"id": "codex", "config_path": ".codex/config.toml",
+                  "servers_key": "mcp_servers", "format": "toml"}
+        entry = {"command": "python3", "args": ["mcp_server.py"],
+                 "env": {"PYTHONIOENCODING": "utf-8", "ARGO_STATE_DIR": "/x"}}
+        block = ms._toml_block(client, entry)
+        self.assertEqual(block.count("env = {"), 1, "env 内联表必须只有一行")
+        self.assertIn("PYTHONIOENCODING", block)
+        self.assertIn("ARGO_STATE_DIR", block)
+
     def test_toml_remove_no_marker_returns_none(self):
         cfg = Path(self.tmp) / ".codex" / "config.toml"
         cfg.parent.mkdir(parents=True)

@@ -56,7 +56,13 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
 
     elif method == "tools/call":
         tool_name = params.get("name", "")
-        arguments = params.get("arguments", {})
+        arguments = params.get("arguments")
+        if not isinstance(arguments, dict):
+            # 宿主可能发 "arguments": null / 字符串（实测：AttributeError 逃到
+            # run_stdio 兜底 except，响应 -32000 且 id 打成 null，宿主无法
+            # 对账）。MCP 规范里 arguments 是 object，畸形一律按空对象走
+            # 正常缺参校验。
+            arguments = {}
         return execute_tool(tool_name, arguments)
 
     elif method == "ping":
@@ -80,6 +86,9 @@ def run_stdio():
     sys.stderr.flush()
 
     while True:
+        # 每轮先归零：兜底 except 发错误响应时带本轮 id——若沿用上一轮残值，
+        # 会把错误对账到不相干的请求上（解析失败轮则保持 null）
+        request_id = None
         try:
             # 代码/配置热生效：循环顶部 = 上一个响应已 flush、无在途工作，
             # 此刻 execv 最安全。stdio fd 跨 exec 继承，客户端连接不断；
@@ -150,7 +159,7 @@ def run_stdio():
             sys.stderr.flush()
             break
         except Exception as e:
-            _send_error(None, -32000, f"Internal error: {e}")
+            _send_error(request_id, -32000, f"Internal error: {e}")
 
 
 def _send_response(response: dict):

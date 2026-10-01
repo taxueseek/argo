@@ -23,11 +23,15 @@ REQUIRED_EXTRA = {"ARGO_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
 
 
 def _launch_names() -> set[str]:
+    """从 mcp_launch.sh 提取透传名单。
+
+    2026-10-02 起名单收敛到单一变量 `_ARGO_PASSTHROUGH_KEYS`（launchctl
+    print 批量路径与 getenv 回退路径共用同一份，防两处漂移）。
+    """
     s = (ROOT / "scripts" / "mcp_launch.sh").read_text(encoding="utf-8")
-    m = re.search(r"for k in (.*?); do", s, re.S)
-    assert m, "mcp_launch.sh 未找到 for k in 透传循环"
-    body = m.group(1).replace("\\\n", " ")
-    return set(re.findall(r"[A-Z][A-Z0-9_]*", body))
+    m = re.search(r'_ARGO_PASSTHROUGH_KEYS="(.*?)"', s, re.S)
+    assert m, "mcp_launch.sh 未找到 _ARGO_PASSTHROUGH_KEYS 透传名单"
+    return set(re.findall(r"[A-Z][A-Z0-9_]*", m.group(1)))
 
 
 class TestLaunchPassthroughAlignment(unittest.TestCase):
