@@ -132,6 +132,15 @@ def _normalize_domain(url: str) -> str:
     return host
 
 
+def _query_has_param(query: str, name: str) -> bool:
+    """query 参数名完整匹配：只在开头或 & 后出现才算。
+
+    子串匹配会把百度网盘分享的 ?pwd=x 连坐进 wd=（pwd 恰以 wd= 结尾，
+    实测误杀）——参数名只可能出现在 query 开头或 & 之后。
+    """
+    return query.startswith(name + "=") or ("&" + name + "=") in query
+
+
 def is_serp_or_jump_url(url: str) -> bool:
     """是否为搜索引擎结果页 / 跳转壳（不可当信源正文）。"""
     if not url:
@@ -177,7 +186,12 @@ def is_serp_or_jump_url(url: str) -> bool:
         for m in serp_hosts
     )
     if _hit:
-        if path in ("", "/", "/s", "/web", "/search") or path.startswith("/s") \
-                or "link" in path or "search" in path or "q=" in query or "wd=" in query:
+        # path 只精确比较：此前 `path.startswith("/s")` 会把 pan.baidu.com/s/<id>
+        # 网盘分享正文链连坐误杀（实测；中文资源类查询的常见结果）。SERP 的
+        # path 恰为 /s，上方精确元组已覆盖，不需要前缀匹配。query 参数走
+        # _query_has_param 完整匹配（?pwd= 不再喂进 wd=）。
+        if path in ("", "/", "/s", "/web", "/search") \
+                or "link" in path or "search" in path \
+                or _query_has_param(query, "q") or _query_has_param(query, "wd"):
             return True
     return False

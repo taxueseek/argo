@@ -153,5 +153,39 @@ class TestTwoStageCredibility(unittest.TestCase):
         self.assertGreaterEqual(auth["score"], 0.85)
 
 
+class TestCnPortalAuthorityParity(unittest.TestCase):
+    """主流门户不得被压进「内容农场」档（09-26 审查第 7 项，最后一项 P0）。
+
+    evidence_tier.py 的 B 级「知名第三方」名单含 163.com / sohu.com /
+    sina.com.cn；AUTHORITY_TIERS 却把这三者压在 Tier 4（0.4-0.55）——
+    两份名单自相矛盾，中文主流媒体被系统性降权。现在归入 Tier 3；
+    k.sina.com.cn（聚合/博客通道）留在 Tier 4。
+    """
+
+    def test_cn_portals_not_in_farm_tier(self):
+        for url in (
+            "https://www.163.com/news/abc.html",
+            "https://news.sina.com.cn/c/2026-10-01/doc-abc.shtml",
+            "https://www.sohu.com/a/123456_789",
+        ):
+            with self.subTest(url=url):
+                auth = score_authority(url)
+                self.assertGreaterEqual(
+                    auth["score"], 0.6,
+                    f"{url} authority={auth['score']}，仍被当低质源压分",
+                )
+
+    def test_sina_farm_channel_stays_low(self):
+        auth = score_authority("https://k.sina.com.cn/article_123.html")
+        self.assertLessEqual(auth["score"], 0.6)
+
+    def test_longest_suffix_wins_for_sina(self):
+        """k.sina.com.cn 必须匹配自己的表项而不是父域 sina.com.cn。"""
+        k_auth = score_authority("https://k.sina.com.cn/article_123.html")
+        parent_auth = score_authority(
+            "https://news.sina.com.cn/c/2026-10-01/doc-abc.shtml")
+        self.assertLess(k_auth["score"], parent_auth["score"])
+
+
 if __name__ == "__main__":
     unittest.main()

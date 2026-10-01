@@ -80,9 +80,13 @@ AUTHORITY_TIERS = {
     "wikipedia.org": 0.75, "baike.baidu.com": 0.7,
     "linkedin.com": 0.65, "twitter.com": 0.45, "x.com": 0.45,
     "reddit.com": 0.55,
+    # 主流门户：与 evidence_tier.py B 级「知名第三方」同口径（163/sohu/sina
+    # 都在 B 级名单里）。此前压在下方「内容农场」档 0.4-0.55，两份名单
+    # 自相矛盾，中文主流媒体被系统性降权（09-26 审查第 7 项，十项 P0 的
+    # 最后一项，2026-10-02 归位）。k.sina.com.cn 是聚合/博客通道，留 Tier 4。
+    "163.com": 0.65, "sohu.com": 0.65, "sina.com.cn": 0.65,
 
     # Tier 4: 内容农场/低质
-    "sohu.com": 0.4, "163.com": 0.45, "sina.com.cn": 0.55,
     "k.sina.com.cn": 0.55, "baijiahao.baidu.com": 0.35,
     "zhuanlan.zhihu.com": 0.7, "toutiao.com": 0.4, "weixin.qq.com": 0.5,
     "guba.eastmoney.com": 0.35,

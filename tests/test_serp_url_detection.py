@@ -55,6 +55,10 @@ class TestSerpDetectionCoversAllCcTldsAndEntrypoints(unittest.TestCase):
         "https://news.yahoo.co.jp/articles/2026/abc",   # 真文章，不是结果页
         "https://blog.google.co.jp/products/nexus",     # 真文章，不是 /search
         "https://gigazine.net/news/20260924-google-heir/",
+        # 网盘分享正文链：host 后缀命中 baidu.com，但 path 是 /s/<id>——
+        # 曾被 path.startswith("/s") 连坐误杀（中文资源类查询的常见结果）；
+        # 百度 SERP 的 path 恰为 /s，精确元组已覆盖
+        "https://pan.baidu.com/s/1abcDEF-xyz?pwd=x",
     ]
 
     def test_result_pages_are_dropped(self):
