@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。覆盖意图：搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合。多语言检测与跨语言回退；261 个源（226 个免密钥开箱可用）TF-IDF 路由 + RRF；影视/体育/地理/组织/媒体/金融/宏观/化学等垂直源；recovery 防污染。CLI：search|research|fetch|crawl|extract|article|job|evidence|clarify|preflight|answer|watch|cite|mcp。
+description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。当需要搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合时使用；支持影视/体育/金融/宏观/学术等垂直域与多语言查询。
 version: 2.9.1
 triggers:
   - 搜索
@@ -24,10 +24,10 @@ triggers:
   - research
 ---
 
-# Argo v2.9.1 — 统一搜索与证据核验
+# Argo — 统一搜索与证据核验
 
 > 不止「帮你搜到」，还要「帮你核到」：高后果问题标 `fetch_required`、结果标
-> `fetch_suggested`，`--verify` 核验正文并回填证据分。变更日志见 `docs/RELEASE_NOTES_v2.8.*.md`。
+> `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 261 个源、226 个免密钥开箱可用。
 
 ## 快速上手
 
@@ -38,9 +38,8 @@ python3 scripts/search.py "查询词" --verify 3            # 核验 top-3 并�
 python3 scripts/research.py "复杂问题" --json            # 取证包（扩词或多工作包 → dossier）
 ```
 
-默认不附归档用的 candidates/sources（同一批结果的重复投影），一次 5 条约 5.6 KB；
-`--fields agent` 再剥遥测只留答案；要来源追溯或归档才加 `--envelope`（`--archive`
-自动带上）。
+默认不附归档用的 candidates/sources；`--fields agent` 再剥遥测只留答案；
+要来源追溯或归档才加 `--envelope`（`--archive` 自动带上）。
 
 深度研究只此一条。机器产出**取证包（dossier）**：来源、覆盖、缺口、是否达标，不是判断稿。Agent 先读 `references/research-protocol.md`（含多轨道「广泛研究」节），写出工作包再取证；判断按事实/推断/建议写。不要另装「专业深度研究」skill。
 
@@ -102,14 +101,22 @@ argo watch add|check|list|remove   # 观察模式：快照+变化检测（check 
 4. **社交帖**：叙事/舆情，不进事实真值
 5. **深度研究**：先读 `references/research-protocol.md`；有决策含义就交工作包，不要靠扩词充问题树；`quality_gate_results.passed=false` 必须降级表述
 6. **引用**：讲给用户的事实带 URL 出处，日常档也要带（URL 在 `results[].url`，零成本）
-7. **上下文纪律**：Agent 搜索用 `--json --fields agent`、按需 `-n`（超 10 无收益）；要来源追溯或归档才加 `--envelope`（别与 `--fields agent` 同给，会静默失效）；结果异常少看 `funnel`（六格阶段计数，哪格归零即塌陷点），慢查询看 `timing.dispatch` 的 `useful_ms`/`wasted_ms`（口径见 `references/usage.md`）；查引擎状态用 `--list-engines --detail --engine <名>`（单引擎全量 ~0.9 KB）；不带 `--engine` 默认给分组摘要 ~2.5 KB，逐条全量加 `--all`（~54 KB）（MCP 注入面见 `references/operations.md`）
+7. **上下文纪律**：Agent 搜索用 `--json --fields agent`、按需 `-n`；要来源追溯或归档才加 `--envelope`；查引擎状态用 `--list-engines --detail --engine <名>`（单引擎 ~0.9 KB）。踩坑记录见下方 Gotchas
 
-## 证据流程（v2.8.0）
+## Gotchas
 
+撞过才知道的坑；踩到新坑加一行，口径细节见 `references/usage.md`。
+
+- **`--envelope` 与 `--fields agent` 别同给**：后者会把 envelope 的增量剥成 0 字节——以为拿到了 provenance、实际没有。要 provenance 就去掉 `--fields agent`。
+- **结果异常少**：看 `funnel` 六格阶段计数，哪格归零即塌陷点。
+- **慢查询**：看 `timing.dispatch` 的 `useful_ms`/`wasted_ms`，区分「等答案」与「白等」。
+- **`--list-engines` 别直接 `--all`**：全量 ~54 KB 会灌爆版面；默认摘要 ~2.5 KB 够用。
+- **`-n` 超 10 无收益**。
+
+## 证据流程
 
 ```bash
-python3 scripts/search.py "贵州茅台股价" --verify 3
-# [verify] 核验 3 条，improved=2 unchanged=1 degraded=0 mean_delta=0.18
+python3 scripts/search.py "贵州茅台股价" --verify 3   # 核验 top-3 并回填证据分
 ```
 
 ## 按需读取（低频操作细节）
@@ -127,5 +134,6 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 | 架构：文件结构、证据流水线、量化公式、输出 JSON Schema、内容质量信号 | `references/architecture.md` |
 | MCP 多客户端注入详解 | `docs/MCP_SETUP.md` |
 | **搜索源使用文档**：全量清单（费用 / 密钥 / 状态 / 域组合）+ 特别能力 + 打开方式 | `docs/ENGINE_CATALOG.md`（生成，勿手改） |
+
 
 > 工程纪律（每个事实只定义一处：代码看本仓库、引擎声明看 config.yaml、宿主入口用 link_source.py 建软链、新增源流程）见 `references/operations.md` 末尾。
