@@ -1,17 +1,17 @@
 {
   "summary": {
-    "ok": 10,
-    "fail": 2,
+    "ok": 9,
+    "fail": 3,
     "warn": 1,
     "by_status": {
-      "PASS": 10,
-      "FAIL": 2,
+      "PASS": 9,
+      "FAIL": 3,
       "WARN": 1
     },
     "by_section": {
       "live": {
-        "PASS": 10,
-        "FAIL": 2,
+        "PASS": 9,
+        "FAIL": 3,
         "WARN": 1
       }
     },
@@ -20,9 +20,9 @@
     "live_summary": {
       "n": 13,
       "domain_acc": 1.0,
-      "engine_acc": 1.0,
-      "selection_hit": 0.7692307692307693,
-      "domain_and_hit": 0.7692307692307693,
+      "engine_acc": 0.9230769230769231,
+      "selection_hit": 0.6923076923076923,
+      "domain_and_hit": 0.6923076923076923,
       "pollute_n": 0
     },
     "live_rows": [
@@ -36,9 +36,9 @@
         "domain": "film_search",
         "engine": "imdb",
         "n": 5,
-        "ms": 806,
+        "ms": 896,
         "gold_matched": "inception",
-        "top1": "Inception",
+        "top1": "Backrooms: Inception",
         "recovery": null
       },
       {
@@ -51,7 +51,7 @@
         "domain": "film_search",
         "engine": "imdb",
         "n": 2,
-        "ms": 2178,
+        "ms": 2374,
         "gold_matched": "shawshank",
         "top1": "《肖申克的救赎》：主演访谈",
         "recovery": null
@@ -66,9 +66,9 @@
         "domain": "sports_search",
         "engine": "thesportsdb",
         "n": 5,
-        "ms": 6768,
+        "ms": 5540,
         "gold_matched": "",
-        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "top1": "1. FC Union Berlin vs Eintracht Frankfurt 比分 3-3",
         "recovery": null
       },
       {
@@ -81,9 +81,9 @@
         "domain": "sports_search",
         "engine": "thesportsdb",
         "n": 5,
-        "ms": 3401,
+        "ms": 4833,
         "gold_matched": "",
-        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "top1": "1. FC Union Berlin vs Eintracht Frankfurt 比分 3-3",
         "recovery": null
       },
       {
@@ -96,9 +96,9 @@
         "domain": "media_search",
         "engine": "itunes",
         "n": 5,
-        "ms": 1662,
+        "ms": 1990,
         "gold_matched": "周杰倫",
-        "top1": "周熙杰",
+        "top1": "周杰",
         "recovery": null
       },
       {
@@ -111,7 +111,7 @@
         "domain": "media_search",
         "engine": "itunes",
         "n": 5,
-        "ms": 573,
+        "ms": 519,
         "gold_matched": "taylor",
         "top1": "Taylor Swift (Bonus Track Version)",
         "recovery": null
@@ -126,29 +126,29 @@
         "domain": "org_entity",
         "engine": "wikidata",
         "n": 5,
-        "ms": 581,
+        "ms": 1037,
         "gold_matched": "nasa",
-        "top1": "NASA WorldWind",
+        "top1": "NASA Distinguished Service Medal",
         "recovery": null
       },
       {
         "id": "L_en_geo",
         "q": "where is Eiffel Tower",
         "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
+        "eng_ok": false,
+        "hit": false,
         "pollute": [],
         "domain": "geo_places",
-        "engine": "local_openstreetmap",
-        "n": 5,
-        "ms": 3461,
-        "gold_matched": "eiffel",
-        "top1": "Eiffel Tower Information, Tips and History",
+        "engine": "wikipedia",
+        "n": 0,
+        "ms": 2822,
+        "gold_matched": "",
+        "top1": null,
         "recovery": {
           "triggered": true,
-          "recovered": true,
-          "level_used": "L3",
-          "strategy_used": "switch_engine",
+          "recovered": false,
+          "level_used": null,
+          "strategy_used": null,
           "steps_tried": [
             {
               "level": "L3",
@@ -158,11 +158,11 @@
                 "anysearch",
                 "local_bing"
               ],
-              "outcome": "10 results"
+              "outcome": "0 results"
             }
           ],
           "final_query": "where is Eiffel Tower",
-          "note": "经 L3/switch_engine 恢复成功"
+          "note": "所有恢复策略均无结果"
         }
       },
       {
@@ -175,9 +175,9 @@
         "domain": "stock_query",
         "engine": "sina_quote",
         "n": 1,
-        "ms": 6079,
+        "ms": 564,
         "gold_matched": "茅台",
-        "top1": "贵州茅台 1237.000 ↓-1.14%",
+        "top1": "贵州茅台 1258.620 ↑+1.86%",
         "recovery": null
       },
       {
@@ -190,7 +190,7 @@
         "domain": "chem_search",
         "engine": "pubchem",
         "n": 5,
-        "ms": 2441,
+        "ms": 2094,
         "gold_matched": "阿司匹林",
         "top1": "氯吡格雷联合阿司匹林急诊治疗急性心肌梗死的临床效果",
         "recovery": null
@@ -205,7 +205,7 @@
         "domain": "general_search",
         "engine": "qiita",
         "n": 0,
-        "ms": 798,
+        "ms": 2157,
         "gold_matched": "",
         "top1": null,
         "recovery": {
@@ -228,9 +228,9 @@
         "domain": "film_search",
         "engine": "imdb",
         "n": 5,
-        "ms": 2880,
+        "ms": 2924,
         "gold_matched": "영화",
-        "top1": "뭐 볼까 고민하지 말자. 한국 영화 추천 100선",
+        "top1": "개인적인 2024년 영화 베스트 10 - 한국영화 부문",
         "recovery": null
       },
       {
@@ -243,7 +243,7 @@
         "domain": "english_tech",
         "engine": "octen",
         "n": 5,
-        "ms": 1351,
+        "ms": 975,
         "gold_matched": "python",
         "top1": "6 способов запустить скрипт на Python",
         "recovery": null
@@ -254,7 +254,7 @@
     {
       "name": "live:L_en_film",
       "status": "PASS",
-      "detail": "dom=film_search eng=imdb n=5 ms=806 hit=True gold='inception' pollute=[] used=['imdb'] rec=None",
+      "detail": "dom=film_search eng=imdb n=5 ms=896 hit=True gold='inception' pollute=[] used=['imdb'] rec=None",
       "meta": {
         "id": "L_en_film",
         "q": "Inception movie director",
@@ -267,9 +267,9 @@
         "domain": "film_search",
         "engine": "imdb",
         "n": 5,
-        "ms": 806,
+        "ms": 896,
         "gold_matched": "inception",
-        "top1": "Inception",
+        "top1": "Backrooms: Inception",
         "sources": [
           "imdb",
           "imdb",
@@ -283,7 +283,7 @@
     {
       "name": "live:L_zh_film",
       "status": "PASS",
-      "detail": "dom=film_search eng=imdb n=2 ms=2178 hit=True gold='shawshank' pollute=[] used=['imdb', 'itunes', 'douban_movie', 'tvmaze'] rec=None",
+      "detail": "dom=film_search eng=imdb n=2 ms=2374 hit=True gold='shawshank' pollute=[] used=['imdb', 'douban_movie', 'itunes', 'tvmaze'] rec=None",
       "meta": {
         "id": "L_zh_film",
         "q": "肖申克的救赎 主演",
@@ -296,7 +296,7 @@
         "domain": "film_search",
         "engine": "imdb",
         "n": 2,
-        "ms": 2178,
+        "ms": 2374,
         "gold_matched": "shawshank",
         "top1": "《肖申克的救赎》：主演访谈",
         "sources": [
@@ -309,7 +309,7 @@
     {
       "name": "live:L_en_sports",
       "status": "FAIL",
-      "detail": "dom=sports_search eng=thesportsdb n=5 ms=6768 hit=False gold='' pollute=[] used=['jolpica', 'thesportsdb', 'openf1', 'openligadb'] rec=None",
+      "detail": "dom=sports_search eng=thesportsdb n=5 ms=5540 hit=False gold='' pollute=[] used=['jolpica', 'thesportsdb', 'openligadb', 'openf1'] rec=None",
       "meta": {
         "id": "L_en_sports",
         "q": "Cristiano Ronaldo club",
@@ -322,12 +322,12 @@
         "domain": "sports_search",
         "engine": "thesportsdb",
         "n": 5,
-        "ms": 6768,
+        "ms": 5540,
         "gold_matched": "",
-        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "top1": "1. FC Union Berlin vs Eintracht Frankfurt 比分 3-3",
         "sources": [
-          "jolpica",
           "openligadb",
+          "openf1",
           "jolpica",
           "jolpica",
           "jolpica"
@@ -338,7 +338,7 @@
     {
       "name": "live:L_zh_sports",
       "status": "FAIL",
-      "detail": "dom=sports_search eng=thesportsdb n=5 ms=3401 hit=False gold='' pollute=[] used=['jolpica', 'thesportsdb', 'openligadb', 'openf1'] rec=None",
+      "detail": "dom=sports_search eng=thesportsdb n=5 ms=4833 hit=False gold='' pollute=[] used=['jolpica', 'thesportsdb', 'openligadb', 'openf1'] rec=None",
       "meta": {
         "id": "L_zh_sports",
         "q": "库里 球队",
@@ -351,13 +351,13 @@
         "domain": "sports_search",
         "engine": "thesportsdb",
         "n": 5,
-        "ms": 3401,
+        "ms": 4833,
         "gold_matched": "",
-        "top1": "F1 2026 车手积分榜 · P1 Andrea Kimi Antonelli",
+        "top1": "1. FC Union Berlin vs Eintracht Frankfurt 比分 3-3",
         "sources": [
-          "jolpica",
           "openligadb",
           "jolpica",
+          "openf1",
           "jolpica",
           "jolpica"
         ],
@@ -367,7 +367,7 @@
     {
       "name": "live:L_zh_media",
       "status": "PASS",
-      "detail": "dom=media_search eng=itunes n=5 ms=1662 hit=True gold='周杰倫' pollute=[] used=['itunes', 'musicbrainz'] rec=None",
+      "detail": "dom=media_search eng=itunes n=5 ms=1990 hit=True gold='周杰倫' pollute=[] used=['itunes', 'musicbrainz'] rec=None",
       "meta": {
         "id": "L_zh_media",
         "q": "周杰伦 专辑",
@@ -380,9 +380,9 @@
         "domain": "media_search",
         "engine": "itunes",
         "n": 5,
-        "ms": 1662,
+        "ms": 1990,
         "gold_matched": "周杰倫",
-        "top1": "周熙杰",
+        "top1": "周杰",
         "sources": [
           "musicbrainz",
           "musicbrainz",
@@ -396,7 +396,7 @@
     {
       "name": "live:L_en_media",
       "status": "PASS",
-      "detail": "dom=media_search eng=itunes n=5 ms=573 hit=True gold='taylor' pollute=[] used=['itunes'] rec=None",
+      "detail": "dom=media_search eng=itunes n=5 ms=519 hit=True gold='taylor' pollute=[] used=['itunes'] rec=None",
       "meta": {
         "id": "L_en_media",
         "q": "Taylor Swift album",
@@ -409,7 +409,7 @@
         "domain": "media_search",
         "engine": "itunes",
         "n": 5,
-        "ms": 573,
+        "ms": 519,
         "gold_matched": "taylor",
         "top1": "Taylor Swift (Bonus Track Version)",
         "sources": [
@@ -425,7 +425,7 @@
     {
       "name": "live:L_en_org",
       "status": "PASS",
-      "detail": "dom=org_entity eng=wikidata n=5 ms=581 hit=True gold='nasa' pollute=[] used=['wikidata'] rec=None",
+      "detail": "dom=org_entity eng=wikidata n=5 ms=1037 hit=True gold='nasa' pollute=[] used=['wikidata', 'wikipedia'] rec=None",
       "meta": {
         "id": "L_en_org",
         "q": "NASA founding year",
@@ -438,9 +438,9 @@
         "domain": "org_entity",
         "engine": "wikidata",
         "n": 5,
-        "ms": 581,
+        "ms": 1037,
         "gold_matched": "nasa",
-        "top1": "NASA WorldWind",
+        "top1": "NASA Distinguished Service Medal",
         "sources": [
           "wikidata",
           "wikidata",
@@ -453,35 +453,29 @@
     },
     {
       "name": "live:L_en_geo",
-      "status": "PASS",
-      "detail": "dom=geo_places eng=local_openstreetmap n=5 ms=3461 hit=True gold='eiffel' pollute=[] used=['wikipedia', 'local_openstreetmap', 'anysearch'] rec={'triggered': True, 'recovered': True, 'level_used': 'L3', 'strategy_used': 'switch_engine', 'steps_tried': [{'level': 'L3', 'strategy': 'switch_engine', 'query': 'where is Eiffel Tower', 'engines': ['anysearch', 'local_bing'], 'outcome': '10 results'}], 'final_query': 'where is Eiffel Tower', 'note': '经 L3/switch_engine 恢复成功'}",
+      "status": "FAIL",
+      "detail": "dom=geo_places eng=wikipedia n=0 ms=2822 hit=False gold='' pollute=[] used=['wikipedia'] rec={'triggered': True, 'recovered': False, 'level_used': None, 'strategy_used': None, 'steps_tried': [{'level': 'L3', 'strategy': 'switch_engine', 'query': 'where is Eiffel Tower', 'engines': ['anysearch', 'local_bing'], 'outcome': '0 results'}], 'final_query': 'where is Eiffel Tower', 'note': '所有恢复策略均无结果'}",
       "meta": {
         "id": "L_en_geo",
         "q": "where is Eiffel Tower",
         "scenario": "geo",
         "lang": "en",
         "dom_ok": true,
-        "eng_ok": true,
-        "hit": true,
+        "eng_ok": false,
+        "hit": false,
         "pollute": [],
         "domain": "geo_places",
-        "engine": "local_openstreetmap",
-        "n": 5,
-        "ms": 3461,
-        "gold_matched": "eiffel",
-        "top1": "Eiffel Tower Information, Tips and History",
-        "sources": [
-          "anysearch",
-          "anysearch",
-          "anysearch",
-          "anysearch",
-          "anysearch"
-        ],
+        "engine": "wikipedia",
+        "n": 0,
+        "ms": 2822,
+        "gold_matched": "",
+        "top1": null,
+        "sources": [],
         "recovery": {
           "triggered": true,
-          "recovered": true,
-          "level_used": "L3",
-          "strategy_used": "switch_engine",
+          "recovered": false,
+          "level_used": null,
+          "strategy_used": null,
           "steps_tried": [
             {
               "level": "L3",
@@ -491,18 +485,18 @@
                 "anysearch",
                 "local_bing"
               ],
-              "outcome": "10 results"
+              "outcome": "0 results"
             }
           ],
           "final_query": "where is Eiffel Tower",
-          "note": "经 L3/switch_engine 恢复成功"
+          "note": "所有恢复策略均无结果"
         }
       }
     },
     {
       "name": "live:L_zh_stock",
       "status": "PASS",
-      "detail": "dom=stock_query eng=sina_quote n=1 ms=6079 hit=True gold='茅台' pollute=[] used=['eastmoney', 'sina_quote'] rec=None",
+      "detail": "dom=stock_query eng=sina_quote n=1 ms=564 hit=True gold='茅台' pollute=[] used=['sina_quote'] rec=None",
       "meta": {
         "id": "L_zh_stock",
         "q": "贵州茅台股价",
@@ -515,9 +509,9 @@
         "domain": "stock_query",
         "engine": "sina_quote",
         "n": 1,
-        "ms": 6079,
+        "ms": 564,
         "gold_matched": "茅台",
-        "top1": "贵州茅台 1237.000 ↓-1.14%",
+        "top1": "贵州茅台 1258.620 ↑+1.86%",
         "sources": [
           "sina_quote"
         ],
@@ -527,7 +521,7 @@
     {
       "name": "live:L_zh_chem",
       "status": "PASS",
-      "detail": "dom=chem_search eng=pubchem n=5 ms=2441 hit=True gold='阿司匹林' pollute=[] used=['openalex', 'pubchem'] rec=None",
+      "detail": "dom=chem_search eng=pubchem n=5 ms=2094 hit=True gold='阿司匹林' pollute=[] used=['openalex', 'pubchem'] rec=None",
       "meta": {
         "id": "L_zh_chem",
         "q": "阿司匹林 分子式",
@@ -540,7 +534,7 @@
         "domain": "chem_search",
         "engine": "pubchem",
         "n": 5,
-        "ms": 2441,
+        "ms": 2094,
         "gold_matched": "阿司匹林",
         "top1": "氯吡格雷联合阿司匹林急诊治疗急性心肌梗死的临床效果",
         "sources": [
@@ -556,7 +550,7 @@
     {
       "name": "live:L_ja_gen",
       "status": "WARN",
-      "detail": "dom=general_search eng=qiita n=0 ms=798 hit=False gold='' pollute=[] used=['qiita'] rec={'triggered': True, 'recovered': False, 'level_used': None, 'strategy_used': None, 'steps_tried': [], 'final_query': 'アニメ おすすめ', 'note': '无可用恢复策略'}",
+      "detail": "dom=general_search eng=qiita n=0 ms=2157 hit=False gold='' pollute=[] used=['qiita', 'anysearch', 'local_bing', 'wikipedia'] rec={'triggered': True, 'recovered': False, 'level_used': None, 'strategy_used': None, 'steps_tried': [], 'final_query': 'アニメ おすすめ', 'note': '无可用恢复策略'}",
       "meta": {
         "id": "L_ja_gen",
         "q": "アニメ おすすめ",
@@ -569,7 +563,7 @@
         "domain": "general_search",
         "engine": "qiita",
         "n": 0,
-        "ms": 798,
+        "ms": 2157,
         "gold_matched": "",
         "top1": null,
         "sources": [],
@@ -587,7 +581,7 @@
     {
       "name": "live:L_ko_gen",
       "status": "PASS",
-      "detail": "dom=film_search eng=imdb n=5 ms=2880 hit=True gold='영화' pollute=[] used=['imdb', 'anysearch'] rec=None",
+      "detail": "dom=film_search eng=imdb n=5 ms=2924 hit=True gold='영화' pollute=[] used=['imdb', 'anysearch'] rec=None",
       "meta": {
         "id": "L_ko_gen",
         "q": "한국 영화 추천",
@@ -600,9 +594,9 @@
         "domain": "film_search",
         "engine": "imdb",
         "n": 5,
-        "ms": 2880,
+        "ms": 2924,
         "gold_matched": "영화",
-        "top1": "뭐 볼까 고민하지 말자. 한국 영화 추천 100선",
+        "top1": "개인적인 2024년 영화 베스트 10 - 한국영화 부문",
         "sources": [
           "anysearch",
           "anysearch",
@@ -616,7 +610,7 @@
     {
       "name": "live:L_cyr_gen",
       "status": "PASS",
-      "detail": "dom=english_tech eng=octen n=5 ms=1351 hit=True gold='python' pollute=[] used=['octen', 'anysearch'] rec=None",
+      "detail": "dom=english_tech eng=octen n=5 ms=975 hit=True gold='python' pollute=[] used=['octen', 'anysearch'] rec=None",
       "meta": {
         "id": "L_cyr_gen",
         "q": "Как написать скрипт python",
@@ -629,7 +623,7 @@
         "domain": "english_tech",
         "engine": "octen",
         "n": 5,
-        "ms": 1351,
+        "ms": 975,
         "gold_matched": "python",
         "top1": "6 способов запустить скрипт на Python",
         "sources": [

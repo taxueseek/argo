@@ -509,17 +509,17 @@
     {
       "name": "route:R_zh_macro",
       "status": "PASS",
-      "detail": "domain=macro_data eng=nbs_stats combo=['nbs_stats', 'worldbank'] lang=zh",
+      "detail": "domain=macro_data eng=worldbank combo=['worldbank', 'fred'] lang=zh",
       "meta": {
         "id": "R_zh_macro",
         "q": "中国 GDP",
         "scenario": "macro",
         "lang": "zh",
         "domain": "macro_data",
-        "engine": "nbs_stats",
+        "engine": "worldbank",
         "combo": [
-          "nbs_stats",
-          "worldbank"
+          "worldbank",
+          "fred"
         ],
         "primary_lang": "zh"
       }
@@ -617,7 +617,7 @@
     {
       "name": "route:R_en_macro",
       "status": "PASS",
-      "detail": "domain=macro_data eng=fred combo=['fred', 'nbs_stats'] lang=en",
+      "detail": "domain=macro_data eng=fred combo=['fred', 'worldbank'] lang=en",
       "meta": {
         "id": "R_en_macro",
         "q": "US CPI",
@@ -627,7 +627,7 @@
         "engine": "fred",
         "combo": [
           "fred",
-          "nbs_stats"
+          "worldbank"
         ],
         "primary_lang": "en"
       }
@@ -774,7 +774,7 @@
     {
       "name": "route:R_zh_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=zh",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=zh",
       "meta": {
         "id": "R_zh_sports",
         "q": "梅西 俱乐部",
@@ -785,8 +785,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openf1",
-          "openligadb"
+          "openligadb",
+          "openf1"
         ],
         "primary_lang": "zh"
       }
@@ -794,7 +794,7 @@
     {
       "name": "route:R_en_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=en",
       "meta": {
         "id": "R_en_sports",
         "q": "LeBron James team",
@@ -805,8 +805,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openf1",
-          "openligadb"
+          "openligadb",
+          "openf1"
         ],
         "primary_lang": "en"
       }
@@ -814,7 +814,7 @@
     {
       "name": "route:R_en_sports2",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=en",
       "meta": {
         "id": "R_en_sports2",
         "q": "Cristiano Ronaldo club",
@@ -825,8 +825,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openf1",
-          "openligadb"
+          "openligadb",
+          "openf1"
         ],
         "primary_lang": "en"
       }
@@ -834,7 +834,7 @@
     {
       "name": "route:R_zh_sports2",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=zh",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=zh",
       "meta": {
         "id": "R_zh_sports2",
         "q": "库里 球队",
@@ -845,8 +845,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openf1",
-          "openligadb"
+          "openligadb",
+          "openf1"
         ],
         "primary_lang": "zh"
       }
@@ -854,7 +854,7 @@
     {
       "name": "route:R_en_wc",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=en",
       "meta": {
         "id": "R_en_wc",
         "q": "World Cup 2022 winner",
@@ -865,8 +865,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openf1",
-          "openligadb"
+          "openligadb",
+          "openf1"
         ],
         "primary_lang": "en"
       }
@@ -874,7 +874,7 @@
     {
       "name": "route:R_ja_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openf1', 'local_bing', 'hatena_bookmark'] lang=ja",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openligadb', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_sports",
         "q": "メッシ クラブ",
@@ -886,7 +886,7 @@
           "thesportsdb",
           "anysearch",
           "jolpica",
-          "openf1",
+          "openligadb",
           "local_bing",
           "hatena_bookmark"
         ],
@@ -896,7 +896,7 @@
     {
       "name": "route:R_ko_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openf1', 'local_bing'] lang=ko",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openligadb', 'local_bing'] lang=ko",
       "meta": {
         "id": "R_ko_sports",
         "q": "손흥민 팀",
@@ -908,7 +908,7 @@
           "thesportsdb",
           "anysearch",
           "jolpica",
-          "openf1",
+          "openligadb",
           "local_bing"
         ],
         "primary_lang": "ko"
@@ -1244,7 +1244,7 @@
     {
       "name": "route:R_zh_package",
       "status": "PASS",
-      "detail": "domain=package_search eng=pypi combo=['pypi', 'npm'] lang=en",
+      "detail": "domain=package_search eng=pypi combo=['pypi', 'github'] lang=en",
       "meta": {
         "id": "R_zh_package",
         "q": "requests pypi",
@@ -1254,7 +1254,7 @@
         "engine": "pypi",
         "combo": [
           "pypi",
-          "npm"
+          "github"
         ],
         "primary_lang": "en"
       }
@@ -1411,7 +1411,7 @@
     {
       "name": "route:R_zh_gen",
       "status": "PASS",
-      "detail": "domain=chinese_tech_deep eng=octen combo=['octen', 'juejin'] lang=zh",
+      "detail": "domain=chinese_tech_deep eng=octen combo=['octen', 'parallel'] lang=zh",
       "meta": {
         "id": "R_zh_gen",
         "q": "如何学习机器学习",
@@ -1421,7 +1421,7 @@
         "engine": "octen",
         "combo": [
           "octen",
-          "juejin"
+          "parallel"
         ],
         "primary_lang": "zh"
       }
@@ -1836,7 +1836,7 @@
     {
       "name": "reach:summary",
       "status": "PASS",
-      "detail": "死源 0 个: 无；声明 explicit_only 14 个: bing_rss, datagov_uk, doi, ecosia, gdelt, opencitations, qwant, tineye, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall, zbmath"
+      "detail": "死源 0 个: 无；声明 explicit_only 15 个: bing_rss, datagov_uk, doi, ecosia, gdelt, opencitations, qwant, tineye, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall, x_trending, zbmath"
     }
   ]
 }
