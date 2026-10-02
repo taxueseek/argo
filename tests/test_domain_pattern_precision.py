@@ -62,6 +62,14 @@ SUBSTRING_ACCIDENTS = [
     ("중국 산업 정책", "geo_places"),                            # 산 ⊂ 산업
     ("부산 맛집", "geo_places"),                                 # 산 ⊂ 부산
     ("국경일 휴무", "geo_places"),                               # 국경 ⊂ 국경일
+    # 拉丁缩写无词边界事故（2026-10-02）：sports_search 首个
+    # pattern 的 (NBA|CBA|WNBA|NFL|NHL|MLB|MLS) 是裸 alternation，
+    # 拉丁缩写作为子串撞进普通词——yuanbao 含 nba、nbalive 含
+    # nba。通用中文查询被抢进体育域，4 个慢体育源 6.4s 且结果
+    # 全部无关。修复：拉丁缩写加 (?<![a-z0-9])/(?![a-z0-9])
+    # 守卫（\b 在 CJK 边界不成立，会误伤「看NBA视频」）。
+    ("腾讯元宝 yuanbao.com URL 参数 搜索", "sports_search"),  # nba ⊂ yuanbao
+    ("nbalive 直播 源", "sports_search"),                           # nba ⊂ nbalive
 ]
 
 
@@ -123,6 +131,9 @@ LEGITIMATE_ROUTES = [
     ("沪深300 基金净值", "fund_query"),
     ("财联社 电报 快讯", "cls_telegraph_search"),
     ("NBA 球队 排名", "sports_search"),
+    ("看NBA视频 集锦", "sports_search"),                  # CJK 邻接拉丁无词边界
+    ("MLB 季后赛 赛程", "sports_search"),
+    ("杭州亚运会 场馆", "sports_search"),                      # 亚运会词条（2026-10-02 补）
     ("周杰伦 新歌 专辑", "media_search"),
     ("电影 主演 是谁", "film_search"),
     ("北京 地铁 时刻表", "transport_rt"),

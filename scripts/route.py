@@ -140,6 +140,10 @@ from route_combo import (  # noqa: E402
     intent_squeeze,
     geo_lang_must_keep,
     breaker_filter,
+    engine_is_dead,
+    build_refill_pool,
+    backfill_after_breaker,
+    select_tfidf_best,
 )
 from route_policy import (  # noqa: E402
     _VERTICAL_NEW_SOURCE,
@@ -499,14 +503,18 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
     if domain.get("name") in _VERTICAL_KEEP:
         p = domain.get("primary")
         # modal_card 可在缺 key（不在 enabled）时仍 must_keep，避免 budget 再裁
-        if p and p not in must_keep and (p in enabled or _pure_combo):
+        # primary 受死源地板约束（engine_is_dead，与 GEC 同口径）：
+        # 死源进 must_keep 会被策略层强制补回 combo，撤销 GEC 地板过滤
+        if p and p not in must_keep and (p in enabled or _pure_combo) \
+                and not engine_is_dead(p):
             must_keep.append(p)
         # modal_card 整 combo 保底（bocha_ai 无配额时 bocha 必须在位）
         if domain.get("name") == "modal_card":
             for e in domain.get("engines_combo") or []:
                 if e not in must_keep and (e in enabled or _pure_combo):
                     must_keep.append(e)
-        elif p and p in enabled and p not in must_keep:
+        elif (p and p in enabled and p not in must_keep
+                and not engine_is_dead(p)):
             must_keep.append(p)
         if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
             if "local_openstreetmap" not in must_keep:
@@ -514,6 +522,10 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
 
     if not _pure_combo:
         must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))
+    # 回填池快照（2026-10-02）：策略前候选，熔断摘除
+    # 预算内槽位时按次序补回（见 backfill_after_breaker）
+    pre_policy_pool = build_refill_pool(engines_combo, mode,
+                                          depth, context)
     engines_combo = _apply_policy_with_new_source_slots(
         domain, engines_combo,
         mode=mode, depth=depth, context=context,
@@ -569,9 +581,11 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
         is_catch_all=is_catch_all, enabled=enabled)
     if _strong:
         confidence = 0.9
-    # D4：统一熔断统一处理——语言/geo/次域/TF-IDF 追加的引擎也可能处于熔断态
-    engines_combo = breaker_filter(engines_combo, enabled, features=features,
-                                   query=query, skip_aux=_pure_combo)  # 收口
+    # 熔断统一处理 + 槽位回填（2026-10-02，回填逻辑与
+    # 判据见 backfill_after_breaker docstring）
+    engines_combo = backfill_after_breaker(
+        engines_combo, enabled, features=features, query=query,
+        skip_aux=_pure_combo, refill_pool=pre_policy_pool)
     # budget 截断后保持一致 parallel，避免短 combo 仍开多余并行
     # research 语境例外：子查询跑满 combo（no_early_stop），串行会拖垮
     # 整条研究管线，强制并行
@@ -854,10 +868,6 @@ def route_query(query: str, engine_override: str = "auto",
     secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))
 
-    SOCIAL_ENGINES = {
-        "twitter", "reddit", "xiaohongshu", "bilibili", "weibo",
-        "zhihu", "hackernews", "v2ex",
-    }
     tfidf_best = None
     tfidf_best_score = 0.0
     tfidf_scores: list = []
@@ -868,38 +878,12 @@ def route_query(query: str, engine_override: str = "auto",
             # 经模块属性访问：未导入时由 __getattr__ 延迟导入，测试打桩
             # patch("route.semantic_route") 也走这里。直接写全局名会
             # NameError 被 try 吞掉，语义路由静默失效（ruff F821 抓的即此）
+            # 选源四道门（社交信号 / 分数地板 / 语言可达 / 死源地板）
+            # 见 select_tfidf_best docstring
             _semantic_route = sys.modules[__name__].semantic_route
-            tfidf_scores = _semantic_route(query, top_k=3)
-            for cand, score, _ in tfidf_scores:
-                social_ok = True
-                if cand in SOCIAL_ENGINES:
-                    ql = query.lower()
-                    social_signals = (
-                        "微博", "小红书", "推特", "twitter", "reddit", "舆情",
-                        "讨论", "网友", "评论", "b站", "bilibili", "抖音",
-                    )
-                    social_ok = any(s in ql for s in social_signals)
-                if score < TFIDF_MIN_SCORE:
-                    # 分数降序：后续候选分更低，整条 TF-IDF 分支作废
-                    break
-                if not social_ok:
-                    # 社交引擎候选但查询无社交信号：跳过看下一个候选
-                    continue
-                # ja/ko 查询：候选若是中文内容/政策引擎（gov_policy/百科等），
-                # 对日/韩用户无关（返回中文站），丢弃让通用 anysearch 主导。
-                # 丢弃当前候选后继续看下一个（2026-08 修复：旧逻辑只看 top-1，
-                # 丢弃后不检查 top-2/3，可能错失 anysearch 等合格候选）。
-                # 语言可达性门（对所有查询生效，不再只限 ja/ko）：引擎声明的
-                # 语言能力不含查询语言且非语言中立（"*"）时，TF-IDF 前置注入
-                # 不得把它顶到首位。实测缺陷：中文法条查询「刑法 判例 司法解释」
-                # 与 kor_law（langs=["ko"]）的文档共享汉字而命中，被注进 legal
-                # 域首位——一个中文法条查询优先去打了韩国判例库。
-                _ql = features.get("primary_lang") or ""
-                if _ql and not lang_allows(cand, _ql, _specs_snapshot().get(cand)):
-                    continue
-                tfidf_best = cand
-                tfidf_best_score = score
-                break
+            tfidf_best, tfidf_best_score, tfidf_scores = select_tfidf_best(
+                query, features, _specs_snapshot(), _semantic_route,
+                min_score=TFIDF_MIN_SCORE)
         except ImportError:
             pass
         except Exception as e:

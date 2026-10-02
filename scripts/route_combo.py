@@ -16,7 +16,9 @@ from typing import Any
 
 from config import get_engines
 from quota import get_quota_manager
-from route_lang import _enabled_local_engines, _get_registry, _lang_must_keep
+from route_lang import (_enabled_local_engines, _filter_lang_bound_family,
+                        _get_registry, _lang_must_keep, _specs_snapshot,
+                        lang_allows)
 
 # 自适应学习器（可选依赖）：按历史成败微调同族引擎的次序。
 # 从 route.py 搬来这里：它是 _get_engines_combo 的私有状态，放在 route.py 会让
@@ -33,6 +35,13 @@ from route_lang import _enabled_local_engines, _get_registry, _lang_must_keep
 # `_UNRESOLVED` 哨兵而非 None：测试用 `patch("route_combo._adaptive_learner",
 # None)` 隔离学习器干扰，None 必须是「已解析且没有」的合法值，不能与
 # 「还没解析」共用同一个值。
+# 垂直保护的分数地板（2026-10-02）：自适应分低于此值的引擎
+# 是「已被证明失败」（无数据引擎为中性 0.5），不再受垂直保护、
+# primary 豁免与 must_keep 庇护。取值依据：learner 分数 = 成功率×
+# 延迟因子×质量，0.15 对应长期近乎全败（实测 thesportsdb 0.084、
+# 近期 12/13 次失败）。route.py 的 must_keep 组装也导入此常量。
+_VERTICAL_FLOOR = 0.15
+
 _UNRESOLVED: Any = object()
 _adaptive_learner: Any = _UNRESOLVED
 
@@ -84,6 +93,27 @@ def _general_fallback(enabled: set[str]) -> list[str]:
     return ["local_search"] + [e for e in GENERAL_FREE_FALLBACK if e in enabled]
 
 
+def _breaker_blocked(engine_id: str) -> bool:
+    """单引擎熔断判定：disabled / open 且冷却未过 → True（剔除）。
+
+    half_open 保留探测资格（与 _get_engines_combo 内熔断感知过滤
+    同一语义）。状态读取失败 ≠ 熔断：fail-open 返回 False，留痕与
+    _filter_breaker_blocked 既有口径一致（017b01a 姊妹形状）。
+    """
+    try:
+        from circuit_breaker import get_breaker
+        st = get_breaker().status(engine_id)
+    except Exception as _exc:
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"breaker.status 读取失败，按健康处理: {_exc!r}")
+        return False
+    state = st.get("state")
+    if state == "disabled":
+        return True
+    return state == "open" and int(st.get("cooldown_remain") or 0) > 0
+
+
 def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:
     """剔除确定熔断态引擎（disabled / open 且冷却未过），与 _get_engines_combo
     内的熔断感知过滤同一语义（half_open 保留探测资格）。
@@ -93,28 +123,144 @@ def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:
     """
     if not engine_list:
         return engine_list
+    return [e for e in engine_list if not _breaker_blocked(e)]
+
+
+def engine_is_dead(engine_id: str) -> bool:
+    """死源判定：自适应分 <_VERTICAL_FLOOR（已被证明失败）。
+
+    学习器未加载或读取失败 → False（fail-open：无数据引擎是
+    中性 0.5，不应被误判为死源）。GEC 过滤、route.py 的
+    must_keep 与 TF-IDF 注入三处共用同一判据（2026-10-02
+    抽取，此前三处各写一遍）。
+    """
+    learner = _get_learner()
+    if learner is None:
+        return False
     try:
-        from circuit_breaker import get_breaker
-        breaker = get_breaker()
+        return learner.get_score(engine_id) < _VERTICAL_FLOOR
     except Exception:
-        return engine_list
-    out = []
-    for e in engine_list:
-        try:
-            st = breaker.status(e)
-            st_state = st.get("state")
-            if st_state == "disabled":
+        return False
+
+
+def build_refill_pool(engines_combo: list[str], mode: str,
+                      depth: str, context: str) -> list[str]:
+    """槽位回填池快照：策略（预算截断 + must_keep 腾位）之前的
+    候选，已过 GEC 的准入/配额/语言过滤。
+
+    research 语境外的 research_only 源不进池——与
+    filter_combo_by_policy 的 tier 过滤同口径，避免回填把
+    策略裁掉的垂直研究源悄悄塞回通用 combo。
+    """
+    pool = list(engines_combo)
+    try:
+        from engine_policy import _tier_lookup, is_research_context
+        if not is_research_context(mode=mode, depth=depth,
+                                   context=context):
+            _tier_of = _tier_lookup()
+            pool = [e for e in pool if _tier_of(e) != "research_only"]
+    except ImportError:
+        pass
+    return pool
+
+
+def backfill_after_breaker(combo: list[str], enabled: set[str],
+                           features: dict | None = None,
+                           query: str = "", skip_aux: bool = False,
+                           refill_pool: list[str] | None = None
+                           ) -> list[str]:
+    """breaker_filter + 熔断槽位回填（combo 定稿的最后一道）。
+
+    先走 breaker_filter（熔断摘除 + 语言补充 + 空回退），再把
+    熔断摘除让掉的预算内槽位从 refill_pool 按序补回：候选须在
+    enabled、非熔断、语言边界合规（与 _filter_lang_bound_family
+    同口径——池是策略前快照，语言摘除发生在策略之后，回填不得
+    撤销语言摘除）、且不在 combo。补到摘除前长度为止；池耗尽
+    则保持短 combo（fail-open）。
+
+    实测根因（2026-10-02）：中文地名查询触发 geo must_keep
+    挤掉次引擎（腾位），geo 位引擎随后又因熔断 disabled 被
+    摘除——两头损失叠加后 combo 只剩 anysearch 单引擎，丧失
+    对冲与早停多样性（anysearch 延迟 1.6-6s 且波动大）。
+    """
+    target_len = len(combo)
+    combo = breaker_filter(combo, enabled, features=features,
+                           query=query, skip_aux=skip_aux)
+    if refill_pool and len(combo) < target_len:
+        for cand in refill_pool:
+            if len(combo) >= target_len:
+                break
+            if cand in combo or cand not in enabled:
                 continue
-            if st_state == "open" and int(st.get("cooldown_remain") or 0) > 0:
+            if _breaker_blocked(cand):
                 continue
-        except Exception as _exc:
-            # 熔断状态读取失败 ≠ 未熔断：fail-open 保留，但必须留痕——
-            # 此前静默 pass 让「读失败」与「健康」不可区分（017b01a 姊妹形状）
-            import logging
-            logging.getLogger("unified_search").debug(
-                f"breaker.status 读取失败，按健康处理: {_exc!r}")
-        out.append(e)
-    return out
+            if _filter_lang_bound_family(
+                    [cand], features, _specs_snapshot(), query) != [cand]:
+                continue
+            combo.append(cand)
+    return combo
+
+
+def select_tfidf_best(query: str,
+                      features: dict | None,
+                      specs: dict | None,
+                      semantic_route,
+                      min_score: float = 0.12
+                      ) -> tuple[str | None, float, list]:
+    """TF-IDF 语义路由选源：返回 (最佳引擎, 分数, 候选表)。
+
+    从 route.py 抽取（2026-10-02）：候选表按分数降序，
+    首个通过四道门的候选当选——
+      ① 社交引擎须查询带社交信号（否则跳过看下一个）；
+      ② 分数 <min_score → 整条分支作废（后续分更低）；
+      ③ 语言可达性门：引擎声明的语言能力不含查询语言
+         且非语言中立（"*"）时不得顶到首位（实测中文
+         法条查询「刑法 判例 司法解释」与 kor_law 共享
+         汉字而命中，被注进 legal 域首位）；
+      ④ 死源地板（engine_is_dead）：语义最相关也不得
+         顶到首位——实测 thesportsdb 0.084 仍是「NBA
+         总决赛」类查询的第一候选，注入后撤销 GEC 地板
+         过滤并占 wave-1 竞速首位，白等它的单引擎超时。
+
+    semantic_route 由调用方传入：route.py 经模块属性
+    访问解析（测试打桩 patch("route.semantic_route")
+    的契约不变）。
+    """
+    social_engines = {
+        "twitter", "reddit", "xiaohongshu", "bilibili", "weibo",
+        "zhihu", "hackernews", "v2ex",
+    }
+    tfidf_best: str | None = None
+    tfidf_best_score = 0.0
+    tfidf_scores: list = semantic_route(query, top_k=3)
+    for cand, score, _ in tfidf_scores:
+        social_ok = True
+        if cand in social_engines:
+            ql = query.lower()
+            social_signals = (
+                "微博", "小红书", "推特", "twitter", "reddit", "舆情",
+                "讨论", "网友", "评论", "b站", "bilibili", "抖音",
+            )
+            social_ok = any(s in ql for s in social_signals)
+        if score < min_score:
+            # 分数降序：后续候选分更低，整条 TF-IDF 分支作废
+            break
+        if not social_ok:
+            # 社交引擎候选但查询无社交信号：跳过看下一个候选
+            continue
+        # ja/ko 查询：候选若是中文内容/政策引擎（gov_policy/百科等），
+        # 对日/韩用户无关（返回中文站），丢弃让通用 anysearch 主导。
+        # 丢弃当前候选后继续看下一个（2026-08 修复：旧逻辑只看 top-1，
+        # 丢弃后不检查 top-2/3，可能错失 anysearch 等合格候选）。
+        _ql = (features or {}).get("primary_lang") or ""
+        if _ql and not lang_allows(cand, _ql, (specs or {}).get(cand)):
+            continue
+        if engine_is_dead(cand):
+            continue
+        tfidf_best = cand
+        tfidf_best_score = score
+        break
+    return tfidf_best, tfidf_best_score, tfidf_scores
 
 
 def _maybe_add_geo_engine(engine_list: list[str], features: dict | None,
@@ -315,7 +461,17 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     primary = domain.get("primary")
     domain_name = domain.get("name")
     protect: set[str] = set()
-    if primary:
+    # primary 保护同样受分数地板约束（2026-10-02，与下方学习器
+    # 过滤、route.py must_keep 组装同一 _VERTICAL_FLOOR 口径）：
+    # 已被证明失败的 primary（实测 thesportsdb 0.084、近期
+    # 12/13 次失败）不进 protect——此前这行无条件豁免让它躲过
+    # 学习器过滤，每次垂直查询白等它的单引擎超时（2.5-3.5s）。
+    # 保护的本意是防新源无历史分被饿死（无数据引擎为中性
+    # 0.5），不是保死源；分数回升后自动回归。它仍是域声明
+    # 成员与 fallback，自动进入恢复链 L3 兜底。
+    if primary and (
+            _adaptive_learner is None
+            or _adaptive_learner.get_score(primary) >= _VERTICAL_FLOOR):
         protect.add(primary)
     # 仅 modal_card 整 combo 免 cost 裁剪（结构化路径不可被 anysearch 顶替）
     if domain_name == "modal_card":
@@ -333,11 +489,23 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     # 自适应学习过滤（保留主引擎 + 垂直域 combo 成员不被误杀）
     if _adaptive_learner is not None and len(filtered) > 1:
         original = filtered[:]
+        # 分数地板：垂直保护与 primary 豁免都不庇护「已被证明失败」
+        # 的引擎（自适应分 <_VERTICAL_FLOOR）。无数据引擎是中性
+        # 0.5、不会落进这个区间——落到这里的是有失败历史且近乎
+        # 全败的源（实测 thesportsdb 0.084、近期 12/13 次失败）：
+        # 保护的本意是防新源无历史分被饿死，不是保死源；否则每次
+        # 垂直查询都白等它的单引擎超时（2.5-3.5s）。分数回升后
+        # 自动回归 combo，且它仍是域 fallback（恢复链 L3 候选）。
         if domain_name in _VERTICAL_PROTECT:
-            protect = set(original) | protect
+            protect = {e for e in original
+                       if _adaptive_learner.get_score(e) >= _VERTICAL_FLOOR
+                       } | protect
         filtered = [
             e for e in filtered
-            if e in protect or e == primary or _adaptive_learner.get_score(e) >= 0.3
+            if e in protect
+            or (e == primary
+                and _adaptive_learner.get_score(e) >= _VERTICAL_FLOOR)
+            or _adaptive_learner.get_score(e) >= 0.3
         ]
         if not filtered:
             filtered = original

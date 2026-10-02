@@ -781,7 +781,15 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             # 「总墙钟预算」对并行路径同样成立
             w2_wait = min(net_timeout + 2,
                           max(0.1, _deadline - _now()))
-            if _run_engines_bounded(rest, w2_wait, stop=_cumulative_stop):
+            # wave-2 同样接尾宽（2026-10-02，与 wave-1/串行同一
+            # straggler_grace_s 旋钮）：质量守卫拒绝早停但已有
+            # 可交付结果时，等待上限 = 首个合格结果 + 尾宽，而非
+            # 一路等到 net_timeout+2——实测垂直域第 3+ 引擎常为
+            # 慢源/死源（体育 5-10s、学术 6-9s 的长尾主要来自
+            # 这段空等）。守卫本身不被绕过：累计充分性仍按原判据
+            # 判定，尾宽只约束「拒绝早停后的最长空等」。
+            if _run_engines_bounded(rest, w2_wait, stop=_cumulative_stop,
+                                        tail_grace_s=straggler_grace_s):
                 early_stopped = True
     elif parallel and to_run:
         # 全量并行（depth=deep，或 mode 不在 fast/auto/budget 内）：没有早停判据，
