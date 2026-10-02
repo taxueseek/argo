@@ -303,10 +303,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--save-baseline", metavar="PATH",
                         help="结果（含环境 meta）写入 PATH，作为 --compare 的基线")
     parser.add_argument("--compare", metavar="PATH",
-                        help="与基线对比：route/serial/parallel 中位数回归 >15%% 时退出码 1")
+                        help="与基线对比：route/serial/parallel 的 min 回归超过阈值时退出码 1")
+    parser.add_argument("--threshold", type=float, default=15.0,
+                        help="回归判定阈值百分比（默认 15）。同机自比（roundtrip "
+                             "测试）在套件满载/Spotlight 重索引下 min-of-5 仍会被"
+                             "持续背景负载推过 15%%——那是「不误报」用例的假阳性，"
+                             "不是被测代码回归，自比用例放宽到 30；真回归存在性由 "
+                             "test_compare_catches_real_regression 以 10× 延迟锁定")
     args = parser.parse_args(argv)
-    if args.runs < 1 or args.engine_delay <= 0:
-        parser.error("--runs 必须 >= 1，--engine-delay 必须 > 0")
+    if args.runs < 1 or args.engine_delay <= 0 or args.threshold <= 0:
+        parser.error("--runs 必须 >= 1，--engine-delay 必须 > 0，--threshold 必须 > 0")
 
     # 状态隔离必须早于任何状态模块 import。基准走真实 execute_search 的学习
     # 记录路径，不隔离就把 benchmark_a/b/c 写进生产 adaptive.db 与 quota.json
@@ -334,11 +340,14 @@ def main(argv: list[str] | None = None) -> int:
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
-    # 与基线对比：三个 min（best-of）回归 >15% 记 REGRESSION，整体退出码 1。
+    # 与基线对比：三个 min（best-of）回归超阈值记 REGRESSION，整体退出码 1。
     # 估计量选 min 而非 median（2026-09-30 实测）：CPU 微基准的噪声只增不减，
     # median-of-3 对单侧噪声敏感——套件负载下 median 实测波动 ~20%，单独就击穿
     # 15% 阈值造成假阳性回归告警；min 是 best-of 估计量（timeit 同款），同样
     # 数据实测波动 ~8%，余量充足。中位数仍随基线落盘供展示，不再用于判定。
+    # 阈值本身可调（--threshold，默认 15 不变）：min 挡的是单侧尖峰，
+    # 挡不住持续背景负载把 5 个样本整体抬高——2026-10-03 roundtrip 第三次
+    # 假阳性后把阈值从判定逻辑里拆出来成旗标，自比用例放宽（见 help 文本）。
     regressions: list[str] = []
     if args.compare:
         import json
@@ -354,11 +363,11 @@ def main(argv: list[str] | None = None) -> int:
             if not b:
                 continue
             delta = (c - b) / b * 100.0
-            hit = c > b * 1.15
+            hit = c > b * (1.0 + args.threshold / 100.0)
             if hit:
                 regressions.append(f"{section}.{key}")
             print(f"compare {section}.{key}: {b:.1f} → {c:.1f} ms "
-                  f"({delta:+.1f}%){'  [REGRESSION >15%]' if hit else ''}")
+                  f"({delta:+.1f}%){'  [REGRESSION >' + str(args.threshold) + '%]' if hit else ''}")
         if regressions:
             print(f"性能回归: {', '.join(regressions)}")
 

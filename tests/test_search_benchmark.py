@@ -86,6 +86,12 @@ def test_save_baseline_and_compare_roundtrip(tmp_path):
     阈值造成假阳性（本测试曾在全量套件里红过，修复后隔离复跑仍有
     +9.6%~+16.9% 的漂移）；min 实测 ~8%。runs=3 保留：样本数影响所有段，
     min 的稳健性已足够。
+
+    2026-10-03 第三次假阳性（min-of-5 也压不住）：min 挡单侧尖峰，挡不住
+    持续背景负载（如套件刚跑完的 Spotlight 重索引）把 5 个样本整体抬高。
+    估计量/样本数两条路都试过了，这次换机制轴：自比用例放宽到 30%——
+    它验证的是「同参不误报」这个性质，不是校准 15% 工艺位；10× 真回归的
+    存在性仍由 test_compare_catches_real_regression 在默认阈值下锁定。
     """
     base = tmp_path / "baseline.json"
     # --runs 5（2026-09-30）：min 估计量下样本越多越稳，5 次后套件满载
@@ -97,6 +103,7 @@ def test_save_baseline_and_compare_roundtrip(tmp_path):
     assert "env" in payload and "python" in payload["env"], \
         "基线必须带环境 meta（跨机器漂移归因用）"
     rc2 = search_benchmark.main(["--runs", "5", "--engine-delay", "0.05",
+                                 "--threshold", "30",
                                  "--compare", str(base)])
     assert rc2 == 0, "同机同参不得误报回归"
 
