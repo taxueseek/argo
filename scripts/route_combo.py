@@ -201,6 +201,28 @@ def backfill_after_breaker(combo: list[str], enabled: set[str],
     return combo
 
 
+# TF-IDF「强证据」线：超过它语义推荐才可领队（catch-all 覆写与 TF-IDF 分支
+# 同一条线）。0.12~0.15 是弱证据——推荐引擎只作辅源跟跑，通用保底领队；
+# 否则营养库接「餐厅推荐」这类低分错配会占 primary 位（实测 usda 0.145）。
+TFIDF_STRONG_SCORE = 0.15
+
+
+def tfidf_lead_combo(tfidf_best: str | None, tfidf_best_score: float,
+                     enabled: set[str]) -> list[str]:
+    """TF-IDF 分支的初始 combo：强证据推荐领队 + anysearch 对冲。
+
+    弱证据（≤TFIDF_STRONG_SCORE）时反过来：通用保底领队，推荐引擎殿后
+    作辅源——仍在 combo 里并行竞速，能力不减，只是不再占 primary 位
+    （含 primary 宽限/充分性判定对它的偏袒）。
+    """
+    lead = [tfidf_best] if tfidf_best and tfidf_best_score > TFIDF_STRONG_SCORE else []
+    if "anysearch" in enabled:
+        lead.append("anysearch")
+    if tfidf_best and tfidf_best not in lead:
+        lead.append(tfidf_best)
+    return [e for e in lead if e in enabled]
+
+
 def select_tfidf_best(query: str,
                       features: dict | None,
                       specs: dict | None,

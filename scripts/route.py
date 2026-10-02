@@ -143,7 +143,7 @@ from route_combo import (  # noqa: E402
     engine_is_dead,
     build_refill_pool,
     backfill_after_breaker,
-    select_tfidf_best,
+    select_tfidf_best, tfidf_lead_combo, TFIDF_STRONG_SCORE,
 )
 from route_policy import (  # noqa: E402
     _VERTICAL_NEW_SOURCE,
@@ -326,7 +326,7 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # 三条分支共享的输入。逐个传参要 11~14 个形参——那是把「谁在调用」变成「参数
 # 摆法」的噪声；用只读上下文传递，分支函数体才能逐字搬运（可验证）。
 
-# TF-IDF 语义路由的最低采纳分（原先藏在 route_query 体内，三条分支都要读它）。
+# TF-IDF 语义路由的最低采纳分（「强证据」线 TFIDF_STRONG_SCORE 在 route_combo）。
 TFIDF_MIN_SCORE = 0.12
 
 
@@ -434,13 +434,13 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
     elif tfidf_best and tfidf_best != engines_combo[0]:
         confidence = 0.8
         # catch-all 域 + TF-IDF 高置信度推荐 → 注入推荐引擎到首位
-        if is_catch_all and tfidf_best_score > 0.15 and tfidf_best in enabled:
+        if is_catch_all and tfidf_best_score > TFIDF_STRONG_SCORE and tfidf_best in enabled:
             engines_combo = [tfidf_best] + [e for e in engines_combo if e != tfidf_best]
             confidence = 0.85
     else:
         confidence = 0.9
         # catch-all 域 + TF-IDF 推荐但不在 combo 中 → 前置
-        if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in enabled:
+        if is_catch_all and tfidf_best and tfidf_best_score > TFIDF_STRONG_SCORE and tfidf_best in enabled:
             engines_combo.insert(0, tfidf_best)
             confidence = 0.8
 
@@ -612,7 +612,7 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
         reason=(
             f"{_feature_labels(features)} → 命中域 [{domain.get('name', '?')}]"
             + (f" [TF-IDF→{tfidf_best}]" if tfidf_best else "")
-            + (" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > 0.15 and tfidf_best in engines_combo else "")
+            + (" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > TFIDF_STRONG_SCORE and tfidf_best in engines_combo else "")
             + (f" [boost={engines_boost}]" if engines_boost else "")
             + f" → {_engine_display(engines_combo[0])}"
         ),
@@ -645,10 +645,8 @@ def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
     tfidf_scores = ctx.tfidf_scores
     _done = ctx.done
     domain = None  # 能走到这里说明没有域命中（含兜底域）
-    engines_combo = [tfidf_best]
-    if "anysearch" in enabled and "anysearch" not in engines_combo:
-        engines_combo.append("anysearch")
-    engines_combo = [e for e in engines_combo if e in enabled]
+    # 弱证据推荐只作辅源跟跑、通用保底领队；强证据维持推荐领队（route_combo）
+    engines_combo = tfidf_lead_combo(tfidf_best, tfidf_best_score, enabled)
     # 🔑 展开 local_search → 子引擎
     engines_combo = _expand_local_search(engines_combo, features)
     # 🔑 为中文/学术查询追加本地引擎
@@ -697,8 +695,9 @@ def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
         engines=engines_combo,
         engines_combo=engines_combo,
         reason=(
-            f"TF-IDF 语义路由 → {_engine_display(engines_combo[0])}"
-            f" (score={tfidf_best_score:.3f}, 正则未命中)"
+            (f"TF-IDF 语义路由 → {_engine_display(engines_combo[0])}" if tfidf_best == engines_combo[0]
+             else f"TF-IDF 低分辅源 → {_engine_display(tfidf_best)}（通用保底领队）")
+            + f" (score={tfidf_best_score:.3f}, 正则未命中)"
             + (f" [boost={engines_boost}]" if engines_boost else "")
         ),
         confidence=0.85, features=features, domain="general_search",
