@@ -279,7 +279,11 @@ def _status_line(client: dict[str, Any]) -> str:
     name = client["name"]
     installed = detect(client)
     configured = _entry_present(client)
-    state = "已配置" if configured else ("已安装" if installed else "未安装")
+    # 标签自明（2026-10-02）：光说「已安装」分不清装的是宿主应用还是
+    # argo 已注入——「已安装」恒指宿主存在而 argo 未注入
+    state = ("已配置（argo 已注入）" if configured
+             else "已安装（argo 未注入）" if installed
+             else "未安装")
     return f"  {id_:<12} {name:<14} {state}"
 
 

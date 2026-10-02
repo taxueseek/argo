@@ -493,6 +493,29 @@ def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
         return default
 
 
+class _InvalidParam(Exception):
+    """工具参数类型/取值非法：外层转 -32602（区别于引擎内部故障的 -32000）。
+
+    刻意不继承 ValueError：工具分支里的 `except ValueError`（接 URL/解析
+    错误的）不能把参数错误半路截胡——实测 argo_article 就这样把它包成
+    了无错误码的裸 error。参数错误要活着到达 execute_tool 的专属 handler。
+    """
+
+
+def _int_param(arguments: dict[str, Any], key: str, default: int) -> int:
+    """数值参数严格校验：非整数显式 -32602，不静默回默认。
+
+    此前裸 `int(arguments.get("timeout", N))` 遇 "10s" 直接 ValueError，
+    被兜底 except 包成 -32000 内部错误——调用方看不出是参数给错了。
+    与 _required 缺参 -32602 同一契约：参数级错误走参数级错误码。
+    """
+    value = arguments.get(key, default)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise _InvalidParam(f"{key} 必须是整数，收到 {value!r}")
+
+
 def _cap_extract_output(output: dict[str, Any]) -> dict[str, Any]:
     """argo_fetch mode=extract 的输出上限（防大页表格撑爆上下文）。
 
@@ -575,7 +598,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 engine=arguments.get("engine", "auto"),
                 n=arguments.get("max_results", 5),
                 skip_cache=_env_bool("ARGO_MCP_SKIP_CACHE", _env_bool("ARGO_NO_CACHE", False) or bool(arguments.get("skip_cache", False))),  # ARGO_NO_CACHE（CLI 等价 --no-cache）也覆盖 MCP：任一为真即跳过，显式传参优先
-                timeout=_env_int("ARGO_MCP_TIMEOUT", int(arguments.get("timeout", 10))),
+                timeout=_env_int("ARGO_MCP_TIMEOUT", _int_param(arguments, "timeout", 10)),
                 depth=arguments.get("depth", "fast"),
                 mode=arguments.get("mode", "auto"),
                 since=arguments.get("since"),
@@ -679,7 +702,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         elif name == "argo_local_read":
             # 白名单本地文本预览（非联网）：分析本地数据/研究成果用；没配置就不放行
             raw_path = str(arguments.get("path", "")).strip()
-            max_chars = max(200, min(int(arguments.get("max_chars", 4000) or 4000), 20000))
+            max_chars = max(200, min(_int_param(arguments, "max_chars", 4000), 20000))
             line_start = arguments.get("line_start")
             line_end = arguments.get("line_end")
             if not raw_path:
@@ -841,7 +864,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             # 夹取与 schema 同计算方式（max_pages 1..50，max_depth 1..5）
             max_pages = _clamp_int(arguments.get("max_pages", 10), 10, 1, 50)
             max_depth = _clamp_int(arguments.get("max_depth", 2), 2, 1, 5)
-            timeout = _env_int("ARGO_MCP_TIMEOUT_CRAWL", int(arguments.get("timeout", 8)))
+            timeout = _env_int("ARGO_MCP_TIMEOUT_CRAWL", _int_param(arguments, "timeout", 8))
             if strategy == "sitemap":
                 result = crawl_mod.crawl_sitemap(arguments["url"], max_pages=max_pages, timeout=timeout)
             else:
@@ -856,11 +879,11 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 emode = arguments.get("extract_mode", "all")
                 # 与 schema 同计算方式（默认 8000，500..50000）；禁止硬编码 50000
                 # 把调用方 bound 顶掉——那是「上限字段被内部魔法数覆盖」一类 bug。
-                max_chars = _clamp_int(arguments.get("max_chars", 8000), 8000, 500, 50000)
+                max_chars = _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000)
                 fetch_result = fetch_mod.fetch_page_v3(
                     arguments["url"], max_chars=max_chars,
                     timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH",
-                                     int(arguments.get("timeout", 15))), raw=True)
+                                     _int_param(arguments, "timeout", 15)), raw=True)
                 if not fetch_result["success"]:
                     return {
                         "content": [{"type": "text", "text": _dumps({"error": fetch_result.get("error", "fetch failed")})}],
@@ -884,8 +907,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             result = fetch_v3_mod.fetch_v3(
                 url=arguments["url"],
                 max_chars=fetch_v3_mod._focus_fetch_chars(
-                    arguments.get("max_chars", 8000), focus_query),
-                timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", int(arguments.get("timeout", 15))),
+                    _int_param(arguments, "max_chars", 8000), focus_query),
+                timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", _int_param(arguments, "timeout", 15)),
                 use_browser_fallback=True,
                 force_browser=arguments.get("use_browser", False),
             )
@@ -895,13 +918,13 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 # 两处各写一份的代价是语义静默分叉（CLI 侧曾整个漏掉该参数）。
                 focus_mod = _lazy_cached("focus_extract")
                 focus_mod.apply_focus(result, focus_query,
-                                      max_chars=arguments.get("max_chars", 8000))
+                                      max_chars=_int_param(arguments, "max_chars", 8000))
                 if not result.get("focus_applied"):
                     # 正文过短、BM25 无从裁剪：如实标注，不谎报已省 token
                     result["focus_note"] = "内容未达聚焦阈值，返回全文"
             # 默认截断 content 以控 token
             if arguments.get("summary", True) and isinstance(result.get("content"), str):
-                max_c = int(arguments.get("max_chars", 8000))
+                max_c = _int_param(arguments, "max_chars", 8000)
                 if len(result["content"]) > max_c:
                     result["content"] = result["content"][:max_c]
                     result["truncated"] = True
@@ -949,14 +972,14 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 out = article_mod.fetch_article(
                     arguments["url"],
                     timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH",
-                                     int(arguments.get("timeout", 30))),
+                                     _int_param(arguments, "timeout", 30)),
                 )
             except ValueError as e:
                 # URL 不合规格式：可行动错误（仅支持 mp.weixin.qq.com）
                 return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
                         "isError": True}
             if out.get("ok"):
-                max_c = int(arguments.get("max_chars", 20000))
+                max_c = _int_param(arguments, "max_chars", 20000)
                 if len(out.get("content", "")) > max_c:
                     out["content"] = out["content"][:max_c]
                     out["truncated"] = True
@@ -999,6 +1022,15 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 "isError": True,
             }
 
+    except _InvalidParam as e:
+        # 参数级错误走 -32602：与 _required 缺参同契约，调用方能分辨
+        # 「参数给错了」和「引擎内部坏了」（后者才是 -32000）
+        return {
+            "content": [{"type": "text",
+                         "text": _dumps({"error": {"code": -32602,
+                                                   "message": f"Invalid parameter: {e}"}})}],
+            "isError": True,
+        }
     except Exception as e:
         return {
             "content": [{"type": "text", "text": _dumps({"error": {"code": -32000, "message": f"{type(e).__name__}: {e}"}})}],

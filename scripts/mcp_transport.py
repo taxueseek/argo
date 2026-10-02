@@ -161,6 +161,13 @@ def run_stdio():
         except Exception as e:
             _send_error(request_id, -32000, f"Internal error: {e}")
 
+    # EOF/中断后硬退：在途引擎线程（社会搜并行池，非 daemon）会让解释器
+    # 退出时的 atexit join 拖到引擎内部超时（实测最长 ~15s）——宿主侧表现
+    # 为「会话已关、argo 进程残留」。此刻响应已全部 flush，盘上状态
+    # （quota/缓存/熔断）都是处理期间同步落盘的，直接硬退，不做任何 join。
+    sys.stdout.flush()
+    os._exit(0)
+
 
 def _send_response(response: dict):
     """发送 MCP 响应，根据客户端请求格式自动选择。紧凑 separators 省传输体积。"""

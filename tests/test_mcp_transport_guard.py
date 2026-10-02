@@ -70,5 +70,34 @@ class TestToolsCallArgumentsGuard:
         assert _error_code(resp) == -32601, resp
 
 
+class TestEofHardExit:
+    """EOF 后必须硬退：在途引擎线程（社会搜并行池，非 daemon）会让解释器
+    退出时的 atexit join 拖到引擎内部超时（实测最长 ~15s），宿主侧表现为
+    「会话已关、argo 进程残留」。run_stdio 退出点直接 os._exit(0)——
+    响应已全部 flush，盘上状态（quota/缓存/熔断）都是处理期间同步落盘的。
+    """
+
+    def test_eof_hard_exits_despite_live_worker(self, monkeypatch):
+        import io
+        import os as _os
+        import sys
+        import threading
+
+        exited = []
+        monkeypatch.setattr(_os, "_exit", lambda code=0: exited.append(code))
+
+        # 模拟一个仍在跑的非 daemon 线程（在途引擎调用）
+        gate = threading.Event()
+        worker = threading.Thread(target=gate.wait)
+        worker.start()
+
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"")))
+        mcp_transport.run_stdio()  # 旧实现：正常 return，exited 保持为空
+
+        gate.set()
+        worker.join()
+        assert exited == [0], "EOF 后未硬退——在途线程会拖住进程退出最长 ~15s"
+
+
 if __name__ == "__main__":
     import unittest  # noqa: F401  — pytest 收集，保留 main 以便单独直跑

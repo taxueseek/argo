@@ -75,12 +75,15 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰；"
               "2026-09-29 +10：llms-full.txt token 炸弹守卫（候选出口过滤）"),
     "scripts/mcp_handlers.py": (
-        1007, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
+        1039, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
               "2026-09-29 +8：661e0f1（H2 seek 进程内化）带入的增量，"
               "并行会话未登记即合入——本行补登记；同日 −1：路由预热改调 "
               "route_domains.warm_compiled_domains（原在此内联复刻同一句，"
               "使它成了无人调用的死函数）；拆分候选：surface 五工具"
-              "已拆出（mcp_handlers_surface），剩余是分发表与粘合层"),
+              "已拆出（mcp_handlers_surface），剩余是分发表与粘合层；"
+              "2026-10-03 +32：数值参数守卫收口（_InvalidParam/_int_param "
+              "助手 + timeout×5 与 max_chars×6 共 11 处裸 int() 转换，"
+              "非法类型显式 -32602，测试 test_mcp_param_guard.py 锁行为）"),
     "scripts/engines_base.py": (
         1509, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
               "2026-09-26 +42：SERP 垃圾守卫接线（守卫本体独立在 serp_guard.py，此处只留"
@@ -137,7 +140,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/matrix_search_eval.py": (
         1103, "离线路由矩阵（138 条检查项），用例表占多数"),
     "scripts/route.py": (
-        993, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+        992, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
               "2026-09-28 拆出 Bangs 解析（route_bangs.py，−26 行）后登记；"
               "同日 +2：breaker.status 读失败 debug 留痕（fail-open 语义不变）；"
               "2026-09-30 +1：routable memo 接线（get_engines 不传 cfg，"
@@ -145,7 +148,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-02 −16：死源地板/熔断槽位回填/TF-IDF 选源循环"
               "抽到 route_combo（engine_is_dead、build_refill_pool、"
               "backfill_after_breaker、select_tfidf_best 四助手，"
-              "route.py 三处死源判定各写一遍的重复随之消除）"),
+              "route.py 三处死源判定各写一遍的重复随之消除）；"
+              "2026-10-03 −1：TF-IDF 弱证据辅源化——tfidf_lead_combo"
+              "进 route_combo，route.py 只留调用点与 reason 分叉"),
 }
 
 
