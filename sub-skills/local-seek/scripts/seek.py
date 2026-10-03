@@ -153,28 +153,10 @@ def build_patterns(query: str, exact: bool = False):
         pos = m.end()
     if pos < len(query):
         tokens.append(query[pos:])
-    if not any(CJK_RE.fullmatch(t) for t in tokens):
-        # 非 CJK 查询：整句精确 + 分词 OR，与中文分支同逻辑。
-        # 此前直接 return [query] 整句化，英文多词查询（如 "Python asyncio
-        # tutorial"）变成单一固定字符串，rg 按整句匹配 → 0 命中。
-        # 分词后 rg 按 OR 匹配，能命中包含任一词的文件。
-        parts = []
-        for t in tokens:
-            if CJK_RE.fullmatch(t) and len(t) >= 3:
-                parts.append(t)
-                for i in range(len(t) - 1):
-                    parts.append(t[i:i + 2])
-            elif t.strip():
-                # 非 CJK token 按空格分词（英文多词查询的关键修复）
-                for word in t.strip().split():
-                    if word:
-                        parts.append(word)
-        seen, out = set(), []
-        for p in parts:
-            if p not in seen:
-                seen.add(p)
-                out.append(p)
-        return out, all(is_literal(p) for p in out)
+    # 统一构建（中英混排同一条路径）：CJK 段 ≥3 字补 2-gram 放宽；非 CJK 段
+    # 按空格拆词。此前混排查询（如「性能 asyncio tutorial」）走中文分支时英文
+    # 段整段化，退回「固定短语匹配」，单词条目全部漏掉——eb0ed38 只修了纯英文
+    # 分支，2026-10-03 两条分支合并后混排随之修复。
     parts = []
     for t in tokens:
         if CJK_RE.fullmatch(t) and len(t) >= 3:
@@ -182,8 +164,9 @@ def build_patterns(query: str, exact: bool = False):
             for i in range(len(t) - 1):
                 parts.append(t[i:i + 2])
         elif t.strip():
-            # 剥掉非中文段首尾空白，跳过纯空白 token（否则空格会成噪音 pattern）
-            parts.append(t.strip())
+            for word in t.strip().split():
+                if word:
+                    parts.append(word)
     seen, out = set(), []
     for p in parts:
         if p not in seen:
@@ -282,7 +265,8 @@ def _apply_noise_floor(rows, root, max_results):
 
 
 def rg_search(patterns, path, excludes, exts, context, count, max_results,
-              fixed, raw_query="", dots=False, drop_noise=True, timeout=None):
+              fixed, raw_query="", dots=False, drop_noise=True, timeout=None,
+              since_ts=None, until_ts=None):
     timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
 
     def build(fixed, drop_noise=True):
@@ -339,7 +323,8 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
         for line in proc.stdout.splitlines():
             if ":" in line:
                 fp, _, n = line.rpartition(":")
-                counts.append((fp, int(n) if n.isdigit() else 0, ""))
+                if _in_time_window(fp, since_ts, until_ts):
+                    counts.append((fp, int(n) if n.isdigit() else 0, ""))
         counts.sort(key=lambda t: t[1], reverse=True)
         return _apply_noise_floor(counts, path, max_results) if drop_noise \
             else counts[:max_results], None
@@ -353,7 +338,9 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
         m = re.match(r"^(.*?):(\d+):(.*)$", line)
         if m:
             fp, ln, txt = m.group(1), int(m.group(2)), m.group(3)
-            out.append((fp, ln, truncate(txt)))
+            # 时间窗在入池前过滤：窗外行不占上界名额（先截断后过滤会漏报）
+            if _in_time_window(fp, since_ts, until_ts):
+                out.append((fp, ln, truncate(txt)))
         if len(out) >= cap:
             break
     if drop_noise:
@@ -492,7 +479,8 @@ def _merge_dedup(a: list, b: list, limit: int) -> list:
     return out
 
 
-def fd_search(query, path, exts, max_results, dots=False, timeout=None):
+def fd_search(query, path, exts, max_results, dots=False, timeout=None,
+              since_ts=None, until_ts=None):
     timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
     cmd = ["fd", "-i", "-t", "f", "--color", "never"]
     if dots:
@@ -506,8 +494,10 @@ def fd_search(query, path, exts, max_results, dots=False, timeout=None):
     proc = run(cmd, timeout=timeout)
     if proc is None or proc.returncode not in (0, 1):
         return [], "fd 执行失败"
-    out = [(p, 0, "") for p in proc.stdout.splitlines()[:max_results]]
-    return out, None
+    # 时间窗在截断前过滤（先截后滤会漏报，与 rg 路径同理）
+    lines = [p for p in proc.stdout.splitlines()
+             if _in_time_window(p, since_ts, until_ts)]
+    return [(p, 0, "") for p in lines[:max_results]], None
 
 
 def resolve_grep():
@@ -524,7 +514,8 @@ def resolve_grep():
 
 
 def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
-                max_results, fixed, raw_query="", dots=False, timeout=None):
+                max_results, fixed, raw_query="", dots=False, timeout=None,
+                since_ts=None, until_ts=None):
     timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
     def build(fixed):
         # grep 本来就会进以 . 开头的目录，差别在软链：-r 遇到软链目录不进，-R 才跟。
@@ -573,7 +564,7 @@ def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
                 fp, _, n = line.rpartition(":")
                 # grep -c 会把没有命中的文件也列出来，写成 file:0。这种不算命中，
                 # 丢掉；这样和 rg --count-matches 只列命中的文件保持一致。
-                if n.isdigit() and int(n) > 0:
+                if n.isdigit() and int(n) > 0 and _in_time_window(fp, since_ts, until_ts):
                     out.append((fp, int(n), ""))
             if len(out) >= max_results:
                 break
@@ -581,13 +572,15 @@ def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
             m = re.match(r"^(.*?):(\d+):(.*)$", line)
             if m:
                 fp, ln, txt = m.group(1), int(m.group(2)), m.group(3)
-                out.append((fp, ln, truncate(txt)))
+                if _in_time_window(fp, since_ts, until_ts):
+                    out.append((fp, ln, truncate(txt)))
             if len(out) >= max_results:
                 break
     return out, None
 
 
-def mdfind_search(query, path, max_results, timeout=None):
+def mdfind_search(query, path, max_results, timeout=None,
+                  since_ts=None, until_ts=None):
     timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
     cmd = ["mdfind"]
     if path and str(path) != ".":
@@ -596,8 +589,10 @@ def mdfind_search(query, path, max_results, timeout=None):
     proc = run(cmd, timeout=timeout)
     if proc is None:
         return [], "mdfind 执行失败"
-    out = [(p, 0, "") for p in proc.stdout.splitlines()[:max_results]]
-    return out, None
+    # 时间窗在截断前过滤（先截后滤会漏报，与 rg 路径同理）
+    lines = [p for p in proc.stdout.splitlines()
+             if _in_time_window(p, since_ts, until_ts)]
+    return [(p, 0, "") for p in lines[:max_results]], None
 
 
 def format_output(results, engine, mode, path, elapsed_ms, query, total):
@@ -668,27 +663,34 @@ def _file_mtime(fp: str) -> str | None:
         return None
 
 
+def _in_time_window(fp: str, since_ts: float | None, until_ts: float | None) -> bool:
+    """单个文件是否落在 [since_ts, until_ts] 时间窗内（None = 该侧不限）。"""
+    if not since_ts and not until_ts:
+        return True
+    try:
+        mt = os.path.getmtime(fp)
+    except OSError:
+        return False
+    if since_ts and mt < since_ts:
+        return False
+    if until_ts and mt > until_ts:
+        return False
+    return True
+
+
 def filter_by_mtime(results, since: str | None, until: str | None):
     """时间窗过滤：仅保留文件 mtime 落在 [since, until] 内的命中。
 
-    rg / fd / mdfind / structural 全部经此统一出口；时间窗查询下
-    文件已消失等 IO 异常条目剔除（与 local-search 无日期剔除同理）。
+    这是**兜底出口**（structural 等未下传时间戳的路径用）。主过滤在各搜索器
+    **截断之前**完成（since_ts/until_ts 参数）——「先截 max 条再过滤」会系统性
+    漏报（2026-10-03 实测：20 个新命中只报出 8 个，旧文件占满了截断池）。
+    时间窗查询下文件已消失等 IO 异常条目剔除（与 local-search 无日期剔除同理）。
     """
     since_ts, until_ts = parse_time(since), parse_time(until)
     if not since_ts and not until_ts:
         return results
-    out = []
-    for fp, ln, txt in results:
-        try:
-            mt = os.path.getmtime(fp)
-        except OSError:
-            continue
-        if since_ts and mt < since_ts:
-            continue
-        if until_ts and mt > until_ts:
-            continue
-        out.append((fp, ln, txt))
-    return out
+    return [(fp, ln, txt) for fp, ln, txt in results
+            if _in_time_window(fp, since_ts, until_ts)]
 
 
 _OUTLINE_RULES = {
@@ -821,7 +823,8 @@ for _key, _rule in STRUCTURAL_RULES.items():
         _STRUCT_ALIAS[_a] = _key
 
 
-def structural_search(rule_name, path, excludes, max_results, dots=False):
+def structural_search(rule_name, path, excludes, max_results, dots=False,
+                      timeout=None):
     """结构搜索：按语义规则（空 catch/裸 except/未包装错误/装饰函数等）检索。
     零安装实现：rg -U 多行 + 语言感知 pattern；本机装 ast-grep 后可升级为 AST 精确匹配。"""
     key = _STRUCT_ALIAS.get(rule_name.strip().lower())
@@ -838,7 +841,9 @@ def structural_search(rule_name, path, excludes, max_results, dots=False):
         for e in exts:
             cmd += ["-g", f"*.{e}"]
         cmd += ["-e", pat, str(path)]
-        proc = run(cmd)
+        # timeout 与其他搜索器同源：H2 后进程内调用传紧预算，缺省走 30s。
+        # 此前漏下传，MCP 进程内调用可被挂满 30s 占死单线程 executor。
+        proc = run(cmd, timeout=timeout)
         if proc is None:
             continue
         if proc.returncode == 1:
@@ -856,12 +861,13 @@ def structural_search(rule_name, path, excludes, max_results, dots=False):
     return results, None
 
 
-def git_log(path, n=10):
+def git_log(path, n=10, timeout=None):
     """输出文件的最近提交历史（git log --oneline）。"""
     p = Path(path).expanduser()
     if not p.is_file():
         return f"local-seek: {path} 不是文件", 1
-    proc = run(["git", "-C", str(p.parent), "log", "--oneline", f"-{n}", "--", p.name])
+    proc = run(["git", "-C", str(p.parent), "log", "--oneline", f"-{n}", "--", p.name],
+               timeout=timeout)
     if proc is None:
         return "local-seek: git 执行失败", 1
     if proc.returncode == 128 or (proc.returncode == 0 and not proc.stdout.strip()):
@@ -873,19 +879,20 @@ def git_log(path, n=10):
     return "\n".join([f"local-seek: {p.name} 最近 {len(lines)} 条提交"] + lines), 0
 
 
-def git_blame(path, line):
+def git_blame(path, line, timeout=None):
     """输出文件第 N 行的 blame 信息（谁在哪个提交改的）。"""
     p = Path(path).expanduser()
     if not p.is_file():
         return f"local-seek: {path} 不是文件", 1
-    proc = run(["git", "-C", str(p.parent), "blame", "-L", f"{line},{line}", "--", p.name])
+    proc = run(["git", "-C", str(p.parent), "blame", "-L", f"{line},{line}", "--", p.name],
+               timeout=timeout)
     if proc is None or proc.returncode != 0:
         return f"local-seek: git blame 失败（{p.name} 可能在 git 仓库外或行号无效）", 1
     return f"local-seek: {p.name} 第 {line} 行\n{proc.stdout.strip()}", 0
 
 
 def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results,
-                       timeout=None):
+                       timeout=None, since_ts=None, until_ts=None):
     """rg 缺失时的 grep 保底（目录内/全盘共用）。
 
     返回 (results, err, mode)；rg 与 grep 都不可用时 results=None 且 err
@@ -899,17 +906,20 @@ def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results,
     if not args.exact and len(patterns) > 1:
         results, err = grep_search(grep_exe, [args.query], path, excludes, exts,
                                    args.context, args.count, max_results,
-                                   is_literal(args.query), dots=dots, timeout=timeout)
+                                   is_literal(args.query), dots=dots, timeout=timeout,
+                                   since_ts=since_ts, until_ts=until_ts)
         if not results and not err:
             results, err = grep_search(grep_exe, patterns, path, excludes, exts,
                                        args.context, args.count, max_results,
-                                       fixed, dots=dots, timeout=timeout)
+                                       fixed, dots=dots, timeout=timeout,
+                                       since_ts=since_ts, until_ts=until_ts)
             if results:
                 mode += "+扩展"
     else:
         results, err = grep_search(grep_exe, patterns, path, excludes, exts,
                                    args.context, args.count, max_results, fixed,
-                                   dots=dots, timeout=timeout)
+                                   dots=dots, timeout=timeout,
+                                   since_ts=since_ts, until_ts=until_ts)
     return results, err, mode
 
 
@@ -976,8 +986,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     if args.git_log or args.git_blame:
         target = args.query or str(args.path)
         if args.git_blame:
-            return git_blame(target, args.git_blame)
-        return git_log(target)
+            return git_blame(target, args.git_blame, timeout=time_budget)
+        return git_log(target, timeout=time_budget)
 
     # 结构搜索模式：按语义规则检索（裸except/空catch/装饰函数等）
     if args.structural:
@@ -986,7 +996,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
         start = time.time()
         results, err = structural_search(args.query, Path(args.path).expanduser(),
                                          load_excludes() + args.exclude,
-                                         args.max or 30, args.dot)
+                                         args.max or 30, args.dot,
+                                         timeout=time_budget)
         elapsed = int((time.time() - start) * 1000)
         results = filter_by_mtime(results, args.since, args.until)
         if err:
@@ -1012,33 +1023,41 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
         scope = "all"
     # doc 场景补充文档扩展名
     if scope == "doc" and not exts:
-        exts = sorted(DOC_EXTS - {"txt", "md", "json", "yaml", "yml", "log"})
-        # 文档全文主要走 rg；pdf 等二进制走 Spotlight 文件名/内容索引
+        # 文本档（md/txt/html…）rg 直接搜全文；pdf/docx 等二进制 rg 搜不出
+        # 内容，那是 --spotlight（Spotlight 内容索引）的职责。此前把 md/txt
+        # 从 exts 里减掉，恰好漏掉最常搜的笔记（2026-10-03 实测：--scope doc
+        # 搜 md 零命中，doc 场景等于虚设）。
+        exts = sorted(DOC_EXTS)
         scope = "code"
         if not tool_exists("rg"):
             scope = "all"
 
     path = Path(args.path).expanduser()
     if not path.exists():
-        print(f"local-seek: 目录不存在 {path}")
-        return 1
+        # 返回 (text, rc) 而非直接 print：run_query 是进程内可调用核心，
+        # main 只负责 print。此前在这里 print + 裸 return 1，违反契约，
+        # MCP/include-local 等进程内调用方解包 (text, rc) 直接 TypeError。
+        return f"local-seek: 目录不存在 {path}", 1
 
     engine = "rg"
     mode = "fast"
     start = time.time()
     results, err = [], None
     patterns, fixed = build_patterns(args.query, args.exact)
+    # 时间窗时间戳只解析一次，下传各搜索器在**截断前**过滤
+    since_ts, until_ts = parse_time(args.since), parse_time(args.until)
 
     if scope == "all":
         # 全盘搜索：mdfind 优先（rg/grep 扫全盘太慢），缺 mdfind 退 grep
         if tool_exists("mdfind"):
             engine, mode = "mdfind", "deep"
             results, err = mdfind_search(args.query, None if args.spotlight else path,
-                                         max_results, timeout=time_budget)
+                                         max_results, timeout=time_budget,
+                                         since_ts=since_ts, until_ts=until_ts)
         else:
             results, err, gmode = _run_grep_fallback(
                 args, patterns, fixed, path, excludes, exts, max_results,
-                timeout=time_budget)
+                timeout=time_budget, since_ts=since_ts, until_ts=until_ts)
             if results is None:
                 engine, mode = "none", "fast"
             else:
@@ -1049,7 +1068,7 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
         # 符号返回 24 条外部陈旧副本、漏掉正主，还报「未找到匹配」）。
         results, err, gmode = _run_grep_fallback(
             args, patterns, fixed, path, excludes, exts, max_results,
-            timeout=time_budget)
+            timeout=time_budget, since_ts=since_ts, until_ts=until_ts)
         if results is None:
             engine, mode = "none", "fast"
         else:
@@ -1058,7 +1077,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
         engine, mode = "fd", "fast"
         if tool_exists("fd"):
             results, err = fd_search(args.query, path, exts, max_results, args.dot,
-                                     timeout=time_budget)
+                                     timeout=time_budget,
+                                     since_ts=since_ts, until_ts=until_ts)
             # 拼音首字母补充：中文查询 → 双查拼音缩写（「新建夹」↔ xjj）。
             # 先窄后宽：仅原结果 <3 且中文 ≥2 字时做（单字「新」→'x' 太宽泛，会引入噪音）
             if not err and len(results or []) < 3:
@@ -1066,13 +1086,15 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                 q_py = pinyin_initials(args.query)
                 if _cjk_len >= 2 and q_py and q_py.lower() != args.query.strip().lower():
                     py_res, py_err = fd_search(q_py, path, exts, max_results, args.dot,
-                                               timeout=time_budget)
+                                               timeout=time_budget,
+                                               since_ts=since_ts, until_ts=until_ts)
                     if not py_err and py_res:
                         results = _merge_dedup(results or [], py_res, max_results)
             # 拼音缩写反推：结果少且疑似缩写（xjj）→ 枚举候选按拼音首字母过滤
             if not err and (not results or len(results) < 3) and _looks_like_pinyin_abbrev(args.query):
                 all_res, all_err = fd_search("", path, exts, 3000, args.dot,
-                                             timeout=time_budget)
+                                             timeout=time_budget,
+                                             since_ts=since_ts, until_ts=until_ts)
                 if not all_err and all_res:
                     py_hits = [it for it in all_res if _file_pinyin_bonus(it[0], args.query) > 0]
                     if py_hits:
@@ -1087,12 +1109,14 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
             results, err = rg_search([args.query], path, excludes, exts,
                                      args.context, args.count, max_results,
                                      is_literal(args.query), args.query, args.dot,
-                                     drop_noise=_dn, timeout=time_budget)
+                                     drop_noise=_dn, timeout=time_budget,
+                                     since_ts=since_ts, until_ts=until_ts)
             if not results and not err:
                 results, err = rg_search(patterns, path, excludes, exts,
                                          args.context, args.count, max_results,
                                          fixed, args.query, args.dot, drop_noise=_dn,
-                                         timeout=time_budget)
+                                         timeout=time_budget,
+                                         since_ts=since_ts, until_ts=until_ts)
                 if results:
                     mode += "+扩展"
         else:
@@ -1100,7 +1124,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                                      args.context, args.count, max_results,
                                      fixed, args.query, args.dot,
                                      drop_noise=not args.include_noise,
-                                     timeout=time_budget)
+                                     timeout=time_budget,
+                                     since_ts=since_ts, until_ts=until_ts)
 
     # 注：噪声档**只降权不排除**（见 _apply_noise_floor），所以这里没有
     # 「搜不到就回落重搜」的分支——噪声内容始终在结果池里，只是排在真源之后。

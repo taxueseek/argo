@@ -32,7 +32,6 @@ from pathlib import Path
 SEEK = Path(__file__).resolve().parent / "seek.py"
 CORPUS = str(Path.home() / ".agents" / "skills")
 LOCAL_SEEK = str(Path.home() / ".agents" / "skills" / "argo" / "sub-skills" / "local-seek")
-README = str(Path.home() / ".agents" / "skills" / "README.md")
 
 EVALS = [
     {
@@ -82,10 +81,13 @@ EVALS = [
         "elapsed_lt": 2000,
     },
     {
-        "name": "PCRE2提示",
+        "name": "PCRE2可用-lookbehind",
+        # 2026-10-03 改判：pcre2 探测已换成 rg --version features 判据，
+        # 本机 rg 15.0.0 带 +pcre2，look-around 不再被拒绝，查询正常执行。
+        # 旧期望（rc=1 + 「未编译 PCRE2」）基于已修复的 returncode 探测 bug。
         "args": ["(?<=x)y", "--path", CORPUS, "--max", "2"],
-        "expect_rc": 1,
-        "expect_msg": "未编译 PCRE2",
+        "expect_rc": 0,
+        "elapsed_lt": 2000,
     },
     {
         "name": "outline-结构",
@@ -123,23 +125,34 @@ EVALS = [
     },
     {
         "name": "git-log",
-        "args": ["--git-log", README],
-        "expect_msg": "提交",
+        # 夹具从 README.md（已被删除）换成 SEEK：seek.py 在 argo 仓内有提交历史
+        "args": ["--git-log", str(SEEK)],
+        "expect_msg": "最近",
     },
     {
         "name": "git-blame",
-        "args": ["--git-blame", "1", README],
+        "args": ["--git-blame", "1", str(SEEK)],
         "expect_msg": "第 1 行",
     },
     {
-        "name": "git-非仓库文件",
-        "args": ["--git-log", str(Path.home() / ".agents" / "skills" / "argo" / "sub-skills" / "local-seek" / "scripts" / "seek.py")],
+        "name": "git-无提交历史",
+        # home 本身是 git 仓，~/.taxue/whisper.md 在仓内但从未提交：
+        # log 空输出 rc=0 + rev-parse 成功 → 「无提交历史」分支
+        "args": ["--git-log", str(Path.home() / ".taxue" / "whisper.md")],
         "expect_msg": "无提交历史",
     },
     {
         "name": "count-分布",
         "args": ["html", "--path", CORPUS, "--count", "--max", "3"],
         "expect_msg": "命中",
+    },
+    {
+        "name": "doc场景含md",
+        # 2026-10-03 回归守卫：--scope doc 曾把 md/txt 从 exts 减掉，
+        # 文档场景恰好漏掉最常搜的笔记（本地目录里只有 md，修复前 rc=1）
+        "args": ["结构", "--scope", "doc", "--path", LOCAL_SEEK, "--max", "3"],
+        "expect_rc": 0,
+        "expect_hit": [".md"],
     },
     {
         "name": "无命中提示",
@@ -151,8 +164,11 @@ EVALS = [
 
 
 def run_one(ev):
-    # 注入 --exclude eval_seek.py：排除评估脚本自身（它含测试词，会自污染语料）
-    cmd = [sys.executable, str(SEEK), "--exclude", "eval_seek.py"] + ev["args"]
+    # 自污染防护：eval_seek.py（夹具词宿主）与 tests/（回归测试同样引用
+    # 夹具词——2026-10-03 实测 test_regression_20261003.py 一入库就让
+    # 「无命中」类用例翻红）都从语料中排除。
+    cmd = [sys.executable, str(SEEK), "--exclude", "eval_seek.py",
+           "--exclude", "tests/"] + ev["args"]
     start = time.time()
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
