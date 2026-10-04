@@ -62,7 +62,7 @@ class FailedStateCacheRejected(ValueError):
 # 由 TTL 自然兜底。本类的共同点：**换环境就能好**，缓存它没有信息量。
 _STATE_FAIL_STATUSES = frozenset({
     "skipped-missing-env", "skipped-circuit-open", "auth-failed",
-    "quota-exhausted",
+    "quota-exhausted", "skipped-quota-exhausted",
 })
 
 # builder 路径漏到 status="error" 的缺密钥形态：路由层 env 拦截覆盖不到

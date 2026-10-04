@@ -204,6 +204,17 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
     engine_outcomes: list[dict[str, Any]] = []
     engine_latency: dict[str, int] = {}
 
+    # 远端配额耗尽快照（route_combo 的 F7 已在 combo 层排除 hard-down
+    # 引擎；本快照供下方 per-engine 闸口兜底主路由/恢复链/显式 engine=
+    # 路径）。一次性取快照：per-engine 闸口只做集合查询，不再逐引擎
+    # 走配额管理器的热读锁。fail-open：读取失败按「无耗尽」处理，
+    # 交由执行层把配额错误暴露出来（与 route_combo 同口径）。
+    try:
+        from quota import get_quota_manager
+        _exhausted_marks = get_quota_manager().remote_exhausted_marks()
+    except Exception:
+        _exhausted_marks = {}
+
     exec_cfg = get_execution_config_fn()
     retry_count = exec_cfg.get("retry_count", 0)
     # 单引擎墙钟预算：config `execution.per_engine_budget_s` 可覆盖。
@@ -348,6 +359,27 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         eng_since = since_iso if is_time_capable(eng) else None
         eng_until = until_iso if is_time_capable(eng) else None
 
+        # 远端配额耗尽：配额状态机已标记的引擎不参与调用。
+        # route_combo 的 F7 只覆盖 combo 路由；主路由（TF-IDF）/
+        # 恢复链 / 显式 engine= 都不经那里，耗尽引擎被路由即白烧
+        # 一次往返并触发恢复链（实测 bocha 403「not enough money」：
+        # 单轮 ~0.9s 引擎调用 + ~1.7s 恢复 = ~2.6s 纯浪费，占基线
+        # 总时长 63%）。early-return 与熔断/缺密钥同形；skip 状态的
+        # 下游记账由 ingest 段同名分支处理（不计失败、不负缓存、
+        # 不重标记——标记只由真 403 现场写，避免滑动延长冷却窗口）。
+        if eng in _exhausted_marks:
+            lat = int((_now() - t_eng) * 1000)
+            outcome = classify_outcome(
+                eng, [], lat, status_hint="skipped-quota-exhausted")
+            _mark = _exhausted_marks.get(eng) or {}
+            _until = float(_mark.get("until") or 0)
+            _until_s = (time.strftime("%m-%d %H:%M", time.localtime(_until))
+                        if _until else "未知")
+            outcome["detail"] = (
+                f"远端配额耗尽，跳过调用（自愈至 {_until_s}）："
+                f"{str(_mark.get('reason') or '')[:80]}")
+            return eng, [], outcome, lat
+
         # 熔断
         if breaker is not None:
             allowed, reason = breaker.allow(eng)
@@ -475,6 +507,13 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 # 配额问题不是引擎健康问题，停用交给配额状态机（上面已记账）；
                 # 但归因必须留下——「为什么不行」正是这一支的可观测缺口。
                 breaker.record_note(eng, _attr)
+            elif outcome["status"] == "skipped-quota-exhausted":
+                # 配额耗尽引擎的跳过：与 quota-exhausted 同语义
+                # （配额不是引擎健康问题，不计失败、不负缓存），
+                # 但不重标记——标记只由真 403 现场写，否则 skip
+                # 会以 now 重置 until、滑动延长冷却窗口，破坏
+                # quota.mark_remote_exhausted 的周期边界自愈。
+                pass
             elif outcome["status"] == "no-results":
                 breaker.record_failure(eng, kind="empty", attribution=_attr)
                 breaker.set_negative(query, eng, status="no-results")
