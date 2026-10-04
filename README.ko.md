@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -545,6 +545,12 @@ argo/
 ---
 
 ## 최근 업데이트
+
+### v2.9.2: DSH 0.2.1-alpha.1 호환 검증 + 라우팅/가드 수정 + js-run 서브 스킬
+
+- **호환성**: DSH 플러그인을 최신 DSH 0.2.1-alpha.1에서 실측 검증 — 네이티브 퍼스트클래스 도구 / web_search seam / wide_research 삼형태 모두 정상 작동; `argo mcp inject`에 WorkBuddy를 추가해 7번째 호스트까지 지원
+- **정확성**: TF-IDF 약증거 보조 소스 강등, 죽은 소스 플로어 + 서킷 브레이커 슬롯 재충전, 쿼터 소진 엔진 격리, serp_guard 오탐 수정
+- **속도와 안정성**: engines/evidence 지연 임포트(import량 −50%), 어드미션 존재 집합 단락(open 261 → 99), MCP 진입/수치 인자 가드; 신규 서브 스킬 `sub-skills/js-run`(브라우저 없이 웹 JS 실행, P50 ≈ 1ms)
 
 ### v2.8.9: 출력 경량화 + 더 빠르고 풍부한 검색 + 해외 미디어 및 팩트체크 소스 5개
 

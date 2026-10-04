@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -62,7 +62,7 @@ Agent 干活的量级变了，检索的玩法跟着变了四件事，每一件 A
 4. **免费开放生态够用了。** 政府、学术、标准、安全机构的开放 API + 免 key 引擎，已经能覆盖大多数领域（221 个免配置源）；稀缺免费额度（firecrawl 1000 credits/月、stackexchange 300 次/天）做了「日常补位、关键顶上」的分层，订阅墙不是唯一解。
 5. **检索质量从「感觉」到「度量」。** 排序有金标（MRR/nDCG 地板）、融合有增益消融检查、路由有负向控制矩阵——「这版比上版好吗」从此是数字问题，不是玄学。
 
-> v2.9.1 把以上全部落地：261 个源、93 个领域、226 个免配置开箱。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
+> v2.9.2 把以上全部落地：261 个源、93 个领域、226 个免配置开箱。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
 
 ---
 
@@ -155,7 +155,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**以 GitHub 为唯一安装来源**（`npx github:taxueseek/argo` 或 `install.sh` / `install.ps1`），当前推荐 **v2.9.1**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
+任选一种即可。**以 GitHub 为唯一安装来源**（`npx github:taxueseek/argo` 或 `install.sh` / `install.ps1`），当前推荐 **v2.9.2**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -219,14 +219,14 @@ npx -y github:taxueseek/argo
 在 DeepSeek Harness 里一行安装（两种装法）：
 
 ```bash
-# 装法 A：14 个 mcp__argo__* 工具（主包自带 bundle，与 MCP 全量相同）
+# 装法 A：19 个 mcp__argo__* 工具（主包自带 bundle，与 MCP 全量相同）
 dsh plugin --profile web add "github:taxueseek/argo"
 
 # 装法 B：搜索工具 + wide_research 并行研究调度（子包）
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
 ```
 
-重启 `dsh web` 后生效。包结构见 `packages/dsh-plugin/`；同 id `mcp-argo` / `wide-research` 可在用户层 `cordis.patch.yml` 覆盖。装法 B 的 `wide_research` 模块只存在于子包依赖树，主包 patch 不引用它，避免只装主包时 Cordis 解析失败。
+重启 `dsh web` 后生效。包结构见 `packages/dsh-plugin/`；同 id `mcp-argo` / `wide-research` 可在用户层 `cordis.patch.yml` 覆盖。装法 B 的 `wide_research` 模块只存在于子包依赖树，主包 patch 不引用它，避免只装主包时 Cordis 解析失败。已在最新版 DSH 0.2.1-alpha.1 实测：三形态接入（原生一等工具 / web_search seam / wide_research）均可正常启用。
 
 ### 依赖清单（通俗版）
 
@@ -357,8 +357,10 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.9.1）
+### 当前大致能力（v2.9.2）
 
+- **DSH 0.2.1-alpha.1 适配验证（v2.9.2 新增）**：DSH 插件三形态（原生一等工具 / web_search seam / wide_research）在最新版 DSH 实测启用；`argo mcp inject` 新增 WorkBuddy，一键注入覆盖到第 7 宿主
+- **js-run 子技能（v2.9.2 新增）**：不开浏览器执行「环境探测 + 纯计算」型网页 JS（V8 沙箱 + 环境垫片，单次上下文 P50 ≈ 1ms），补 curl_cffi 取数与浏览器渲染之间的「算」车道
 - **输出减重与漏斗归因（v2.8.9 新增）**：默认输出 −66%（同一段结果不再重复三遍，`--envelope` 开完整版）；六格漏斗（路由→调用→返回→去重→过滤→保留）让「搜到 0 条」能定位塌在哪一层；阶段耗时账拆出过滤与恢复，慢在哪不再被指错方向
 - **DSH 插件工具原生化（v2.8.5 新增）**：`argo_search` / `argo_fetch` 原生一等工具默认可用（CLI 单发，不依赖 MCP 连接）；schema 由 `gen_native_tools.py` 从 `mcp_tools.py` 唯一来源生成（漂移检查测试把关）；`nativeTools` 配置可按需启用全部 18 个工具（`argo_research` 除外）
 - **MCP 默认关闭（v2.8.5 变更）**：三形态接入——MCP 按需挂载（profile patch）/ 原生工具（默认入口）/ 原生 web_search seam；平时零常驻 token 开销
@@ -366,7 +368,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 - **配额自愈完整链路（v2.8.5 新增）**：HTTP 200 业务错误封套识别（火山/知乎风格）；远端配额耗尽自动标记 → 路由全模式排除 → 备用源接管 → 周期边界自愈回归；配额/鉴权错误不毒化自适应分数与熔断
 - **抓取全局 deadline（v2.8.5 新增）**：`ARGO_FETCH_DEADLINE_S`（默认 60s）封顶降级链总耗时；429/503 停止信号；tinyfish 渲染层（`TINYFISH_API_KEY`）+ `{url}.md` 变体探测；移动 UA 首发身份记忆
 - **本地数据融合（v2.8.4 新增，深度研究 L1）**：工作包可带 `file_inputs`（本地一手数据白名单入账，登记 sha256/来源记录）与 `recompute`（可复算执行器，受限子进程安全重算，重算值与检索数字冲突触发 `recompute_conflict`）；dossier 输出 `local_sources`，本地一手计入一手命中（防 `no_sources` 假阴性）
-- **多客户端 MCP 一键接入（v2.8.4 新增）**：`argo mcp inject` 一键给 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline 注入 argo MCP（原子写 + 备份 + 可逆，客户端来源 `mcp/clients.yaml`）
+- **多客户端 MCP 一键接入（v2.8.4 新增）**：`argo mcp inject` 一键给 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline / WorkBuddy 注入 argo MCP（原子写 + 备份 + 可逆，客户端来源 `mcp/clients.yaml`）
 - **结构化搜索增强（v2.8.4 新增）**：查询归一化（全角→半角、点号版本拆斜杠）+ 检索变体 + 复杂度门控（低复杂度查询不放行高价多轮）；social 域语法优先（from:/subreddit:/lang: 命中提前）+ TF-IDF 检索修复（丢弃中文引擎后继续看 top-2/3）；`--include-local` 本机命中并入（默认关）
 - **Keenable（v2.8.4 新增）**：接入通用网页搜索引擎（L1 声明式 HTTP，免费体验期，`ARGO_KEENABLE_API_KEY`）
 
@@ -380,7 +382,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 - **求职搜索 v3（v2.8.0 升级）**：`argo job` 结构化字段 + 增量监控 + 指纹去重，新增 Ashby ATS 免 Key 后端与北京高校就业源
 - **天气双源并行（v2.8.0 升级）**：wttr.in + Open-Meteo 双源，地理编码 + 空气质量，问天气不落空
 - **通用搜索增强（v2.8.0 新增）**：Parallel 搜索（长文摘录、多路召回）与 You.com（网页+新闻合并、时效动态化），无 Key 优雅降级
-- **259 个搜索源（226 个免密钥开箱可用）、93 个业务域**：通用网页 + 金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等（来源：`config.yaml` 与 `engines/specs/*.yaml`）。**逐源清单（费用 / 密钥 / 状态 / 域组合 / 特别能力）见 [搜索源使用文档](docs/ENGINE_CATALOG.md)**，该文档由脚本从声明生成、有检查防漂移；选源判断与语义分工见 `references/engines.md`
+- **261 个搜索源（226 个免密钥开箱可用）、93 个业务域**：通用网页 + 金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等（来源：`config.yaml` 与 `engines/specs/*.yaml`）。**逐源清单（费用 / 密钥 / 状态 / 域组合 / 特别能力）见 [搜索源使用文档](docs/ENGINE_CATALOG.md)**，该文档由脚本从声明生成、有检查防漂移；选源判断与语义分工见 `references/engines.md`
 - **双层缓存**：内存 LRU + SQLite 持久化，时效性弱的内容不重复打 API；登录态结果单独隔离，不污染公共缓存
 - **为 Agent 节省 Token**：MCP 响应可紧凑裁剪、snippet 可控，输出为精简 JSON 而非整页文本
 - **19 个 MCP 工具**（与 CLI 能力面对齐）：搜索、研究、证据、消歧、抓取、截图、PDF、社交舆情、本地文件搜索、站点爬取、本地预览、可复算、公众号文章全文、招聘聚合、结构化提取、URL 批量预检、直答、网页变化监控、DOI 引用条目
@@ -397,7 +399,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 
 ## 引擎与路由
 
-当前配置 **259** 个源（**225** 个免密钥开箱可用）、**93** 个业务域（以 `config.yaml` 与 `--list-engines` 为准）。
+当前配置 **261** 个源（**226** 个免密钥开箱可用）、**93** 个业务域（以 `config.yaml` 与 `--list-engines` 为准）。
 
 ### 直连与垂类（节选）
 
@@ -619,6 +621,14 @@ argo/
 
 ## 最近更新
 
+### v2.9.2：DSH 0.2.1-alpha.1 适配验证 + 路由与守卫一批修复 + js-run 子技能
+
+- **更兼容**：DSH 插件已在最新版 DSH 0.2.1-alpha.1 实测启用，原生一等工具 / web_search seam / wide_research 三形态照常工作；`argo mcp inject` 新增 WorkBuddy，一键注入覆盖到第 7 宿主
+- **更准**：TF-IDF 弱证据辅源化（低分语义推荐不再抢占主路由）；死源地板 + 熔断槽位回填；配额耗尽引擎与主路由 / 恢复链隔离；serp_guard 修复网盘分享链连坐误杀、主流门户权威分归位
+- **更快**：engines / evidence 全栈惰性导入（默认路径 import 量 −50%）；准入存在集合短路（open 次数 261 → 99）
+- **更稳**：MCP 入口守卫与数值参数守卫收口（null arguments、TOML 多 env 键、timeout / max_chars 共 11 处裸 `int()` 换类型守卫）；local-seek 四类假阴性收口（v1.4.0）
+- **新增**：`sub-skills/js-run` 子技能（v0 骨架）——不开浏览器跑「环境探测 + 纯计算」型网页 JS，单次上下文 P50 ≈ 1ms
+
 ### v2.9.1：内容质量优化 + 对抗内容农场 + 适配最新版本
 
 - **更干净**：优化了内容质量评估，提升了对抗内容农场的能力——搜索结果里低质、批量生成的内容会被更有效地识别和过滤
@@ -680,6 +690,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.9.2** | **DSH 0.2.1-alpha.1 适配验证 + 路由/守卫一批修复 + js-run 子技能**：DSH 插件三形态在最新版 DSH 0.2.1-alpha.1 实测启用；`argo mcp inject` 补 WorkBuddy 覆盖到第 7 宿主；TF-IDF 弱证据辅源化、死源地板 + 熔断槽位回填、配额耗尽引擎路由隔离、serp_guard 连坐误杀修复；engines/evidence 惰性导入（import −50%）与准入存在集合短路（open 261→99）；MCP 入口与数值参数守卫收口；新增 js-run 子技能（无浏览器跑网页 JS，P50 ≈1ms）。 |
 | **v2.9.1** | **内容质量优化 + 对抗内容农场 + 适配最新版本**：优化内容质量评估，提升对低质批量生成内容的识别与过滤能力；适配最新版本确保无缝协作；本地搜索新增自身安装树守卫，避免结果被自身源码污染。 |
 | **v2.9.0** | **搜索源优化 + 插件与 CLI 持平 + 多语言小语种**：搜索源 237→253（免配置 198→219），新增 14 个小语种新闻源、CORE 全文源、TinEye 反搜图、Bing RSS 等；百度与搜狗修活；CLI 18 命令与 MCP 19 工具一一对应；导入链 −79%、重排序 33ms→1.5ms、缓存命中率大幅提升；配额写路径跨进程安全修复；新增 `argo stats` 本地使用日志。详见 [发布说明](docs/RELEASE_NOTES_v2.9.0.md) |
 | **v2.8.9** | **输出减重 + 检索更全更快 + 5 个外媒与核查源**：默认输出 15.5KB→5.2KB（−66%，同一份结果不再写三遍，`--envelope` 可开完整版）；路由决策缓存让重复查询 −30%；慢网轮 dispatch −36%（串行域主源超 0.8s 自动补发备选源）；取数链路五轮优化（召回 +35%、抓取时延 −30%、长尾 P90 −8%）+ 正文结构还原（标题/列表/表格保真 0/6→6/6）+ 中文质量分偏差修复；新增卫报 / France 24 / 德国之声 / FactCheck.org / Full Fact 五个免密钥源（232→237、开箱 194→198、域 90→92），gdelt 死源下线；六处「看起来对、量起来错」的自洽缺陷修复 + 六格漏斗归因 + 离线重跑对比工具（`scripts/replay_eval.py`）+ 部署形态门禁与场景阈值契约。详见 [发布说明](docs/RELEASE_NOTES_v2.8.9.md) |

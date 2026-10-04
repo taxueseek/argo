@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -60,7 +60,7 @@
 4. **El ecosistema libre basta.** APIs abiertas de gobiernos/academia/estándares/seguridad + motores sin clave cubren la mayoría de dominios (221 sin clave).
 5. **Calidad medible.** Pisos golden de ranking, gates de ablación de fusión y controles negativos de enrutamiento.
 
-> v2.9.1 lo implementa todo: 261 fuentes, 93 dominios, 226 sin clave.
+> v2.9.2 lo implementa todo: 261 fuentes, 93 dominios, 226 sin clave.
 
 ---
 
@@ -545,6 +545,12 @@ argo/
 ---
 
 ## Actualizaciones recientes
+
+### v2.9.2: compatibilidad verificada con DSH 0.2.1-alpha.1 + correcciones de enrutamiento/guardas + sub-skill js-run
+
+- **Más compatible**: el plugin de DSH está verificado en el último DSH 0.2.1-alpha.1 — herramientas nativas de primera clase / web_search seam / wide_research funcionan en las tres formas; `argo mcp inject` añade WorkBuddy, cubriendo el 7.º host
+- **Más preciso**: degradación de evidencia débil TF-IDF a fuentes auxiliares, piso de fuentes muertas + relleno de slots del breaker, aislamiento de motores con cuota agotada, corrección de falsos positivos de serp_guard
+- **Más rápido y robusto**: importaciones diferidas de engines/evidence (volumen de import −50%), cortocircuito del conjunto de existencia en admisión (open 261 → 99), guardas de entrada/argumentos numéricos de MCP; nueva sub-skill `sub-skills/js-run` (ejecuta JS web sin navegador, P50 ≈ 1ms)
 
 ### v2.8.9: salida más ligera + recuperación más rica y rápida + 5 fuentes internacionales y de verificación
 

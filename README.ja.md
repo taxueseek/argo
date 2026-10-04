@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -60,7 +60,7 @@
 4. **無料オープン生態系で足りる。** 政府・学術・標準・セキュリティの公開 API とキーレス エンジンで大部分をカバー（219 ソースが無設定）。
 5. **品質は測定可能。** ランキング金標・融合利得アブレーション・負のルーティング制御。
 
-> v2.9.1 はこの全てを実装：261 ソース / 93 ドメイン / 226 無設定。
+> v2.9.2 はこの全てを実装：261 ソース / 93 ドメイン / 226 無設定。
 
 ---
 
@@ -545,6 +545,12 @@ argo/
 ---
 
 ## 最近の更新
+
+### v2.9.2：DSH 0.2.1-alpha.1 の適合検証 + ルーティング/ガード修正 + js-run サブスキル
+
+- **互換性**：DSH プラグインを最新の DSH 0.2.1-alpha.1 で実検証 — ネイティブ第一級ツール / web_search seam / wide_research の三形態がすべて動作；`argo mcp inject` に WorkBuddy を追加し、7 番目のホストまで対応
+- **精度**：TF-IDF 弱証拠の補助源降格、死源フロア + サーキットブレーカー枠の再充填、 quota 枯渇エンジンの分離、serp_guard の誤検知修正
+- **速度と安定性**：engines/evidence の遅延インポート（import 量 −50%）、アドミッション存在集合ショートカート（open 261 → 99）、MCP 入口/数値引数ガード；新サブスキル `sub-skills/js-run`（ブラウザなしでウェブ JS を実行、P50 ≈ 1ms）
 
 ### v2.8.9：出力スリム化 + 検索の高速・充実化 + 海外メディアとファクトチェック源 5 個
 

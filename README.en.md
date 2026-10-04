@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -60,7 +60,7 @@
 4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (219 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> v2.9.1 ships all of the above: 261 sources, 93 domains, 226 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> v2.9.2 ships all of the above: 261 sources, 93 domains, 226 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
@@ -517,6 +517,12 @@ argo/
 - **More robust**: platform-conventional paths on all three OSes (new `argo paths` introspection), Python 3.9 supported, silent degradations now reported; see [release notes](docs/RELEASE_NOTES_v2.8.8.md)
 
 ## Recent updates
+
+### v2.9.2: DSH 0.2.1-alpha.1 compatibility verified + routing/guard fixes + js-run sub-skill
+
+- **More compatible**: the DSH plugin is verified on the latest DSH 0.2.1-alpha.1 — native first-class tools / web_search seam / wide_research all work; `argo mcp inject` adds WorkBuddy, covering a 7th host
+- **More accurate**: TF-IDF weak-evidence demotion to auxiliary sources, dead-source floor + breaker slot backfill, quota-exhausted engine isolation, serp_guard false-positive fixes
+- **Faster & more robust**: lazy imports for engines/evidence (import volume −50%), admission existence-set short-circuit (open calls 261 → 99), MCP entry/numeric-argument guards; new `sub-skills/js-run` sub-skill (browser-free JS execution, P50 ≈ 1ms)
 
 ### v2.8.7: sources expanded to 218 + a batch of fixes
 
