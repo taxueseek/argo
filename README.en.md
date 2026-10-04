@@ -502,20 +502,6 @@ argo/
 
 ---
 
-### v2.8.9: output slimming + richer, faster retrieval + 5 international & fact-check sources
-
-- **Leaner**: default output −66% (the same results are no longer written three times); repeated queries −30% (routing decision cache); slow-network waits −36% (a fallback source fires automatically once the primary stalls past 0.8s)
-- **Richer**: recall +35%, fetch latency −30%; body-structure fidelity 0/6 → 6/6 (headings, lists and tables no longer flattened); Chinese content no longer systematically scored as low-quality
-- **New**: sources 232 → 237 (keyless 194 → 198, all free — The Guardian, France 24, DW, plus fact-checkers FactCheck.org / Full Fact covering US & UK claims); dead source gdelt retired
-- **More trustworthy**: six bookkeeping defects where the numbers contradicted each other are fixed; a six-stage funnel pinpoints where a zero-result search collapsed; an offline replay tool makes change effects verifiable the same day. See [release notes](docs/RELEASE_NOTES_v2.8.9.md)
-
-### v2.8.8: real-user fixes + across-the-board speedups + 232 sources
-
-- **Fixes**: engines silently returning nothing when keys were set under the documented recommended names (#12); fetch chain ignoring proxies so proxy-required sites like GitHub always failed (#13) — now `ARGO_PROXY`, per-domain config rules and standard proxy env vars all work, with `NO_PROXY` respected
-- **Faster**: command cold start 2.1s → 0.55s; cross-process config cache 50–82ms → 16–18ms; every search reports per-stage timings and budget spend, so "where is it slow" needs no guessing (`--no-timing` to disable)
-- **New**: sources 218 → 232 (keyless out-of-the-box 184 → 194, all key-free: CN trending boards, security advisories, open-access scholarship, skill directories, agent search), `argo answer` (cited direct answers), `argo watch` (webpage change watching), CLI/MCP tool surfaces aligned
-- **More robust**: platform-conventional paths on all three OSes (new `argo paths` introspection), Python 3.9 supported, silent degradations now reported; see [release notes](docs/RELEASE_NOTES_v2.8.8.md)
-
 ## Recent updates
 
 ### v2.9.2: DSH 0.2.1-alpha.1 compatibility verified + routing/guard fixes + js-run sub-skill
@@ -523,6 +509,34 @@ argo/
 - **More compatible**: the DSH plugin is verified on the latest DSH 0.2.1-alpha.1 — native first-class tools / web_search seam / wide_research all work; `argo mcp inject` adds WorkBuddy, covering a 7th host
 - **More accurate**: TF-IDF weak-evidence demotion to auxiliary sources, dead-source floor + breaker slot backfill, quota-exhausted engine isolation, serp_guard false-positive fixes
 - **Faster & more robust**: lazy imports for engines/evidence (import volume −50%), admission existence-set short-circuit (open calls 261 → 99), MCP entry/numeric-argument guards; new `sub-skills/js-run` sub-skill (browser-free JS execution, P50 ≈ 1ms)
+
+### v2.9.1: content-quality optimization + content-farm resistance + latest-environment compatibility
+
+- **Cleaner**: improved content-quality assessment and stronger resistance to content farms — low-quality, bulk-generated content in results is identified and filtered more effectively
+- **More compatible**: adapted to the latest host environment for seamless operation
+- **More stable**: local search now guards against its own install tree, so results are no longer polluted by argo's own source files
+
+### v2.9.0: source optimization + plugin/CLI parity + minor languages
+
+- **Broader**: sources 237 → 253 (keyless 198 → 219), adding 14 minor-language local news sources, the CORE open-access full-text source, TinEye reverse image search, a stable Bing RSS outlet, and more; the evergreen Baidu and Sogou sources were revived
+- **More aligned**: 18 CLI commands map one-to-one to 19 MCP tools — plugin and CLI search capabilities are fully at parity for the first time
+- **More languages**: 14 minor-language sources (Thai/Arabic/Hebrew/Greek/Hindi/Vietnamese/Turkish/Indonesian, etc.), matched automatically by query language
+- **Faster**: import chain −79%, rerank at n=200 33ms → 1.5ms, cache hit rate from ~60% to almost no misses
+- **More trustworthy**: cross-process safety fix on the quota write path, early-stop results no longer mislabeled as timeouts, and `argo stats` gives search quality its own ledger
+
+### v2.8.9: slimmer output + richer and faster retrieval + 5 international media and fact-check sources
+
+- **Leaner**: default output −66% (the same results are no longer written three times); repeated queries −30% (routing-decision cache); slow-network waits −36% (backup sources auto-dispatched when the primary stalls past 0.8s)
+- **Richer**: recall +35%, fetch latency −30%; body-structure fidelity 0/6 → 6/6 (headings, lists and tables no longer flattened); Chinese content no longer systematically judged low-quality
+- **New**: sources 232 → 237 (keyless 194 → 198, all free — The Guardian, France 24, DW, fact-checkers FactCheck.org / Full Fact in US and UK editions); dead source gdelt retired
+- **More trustworthy**: six bookkeeping defects where numbers contradicted each other fixed; the six-stage funnel shows which layer a "0 results" collapse happened in; offline replay tools verify changes same-day; see [release notes](docs/RELEASE_NOTES_v2.8.9.md)
+
+### v2.8.8: real-user bug fixes + across-the-board speedups + 232 sources
+
+- **Fixes**: engines silently returning nothing after a key was configured under its recommended name (#12); the fetch chain bypassed proxies so GitHub etc. always failed (#13) — `ARGO_PROXY`, config per-domain rules and standard proxy environment variables now all work, and `NO_PROXY` is respected
+- **Faster**: CLI cold start 2.1s → 0.55s; cross-process config cache 50–82ms → 16–18ms; every search reports per-stage timing and a budget bill, so there is no guessing where it is slow (`--no-timing` to disable)
+- **New**: sources 218 → 232 (keyless 184 → 194, all keyless: domestic trending boards, security vulnerabilities, open-access scholarship, skill directories, agent search), `argo answer` direct answers, `argo watch` page watching, CLI/MCP tool-surface alignment
+- **More robust**: platform-conventional paths on all three OSes (new `argo paths` introspection), Python 3.9 supported, silent degradations now reported; see [release notes](docs/RELEASE_NOTES_v2.8.8.md)
 
 ### v2.8.7: sources expanded to 218 + a batch of fixes
 
@@ -557,6 +571,9 @@ argo/
 
 | Version | Notes |
 |---------|-------|
+| **v2.9.2** | **DSH 0.2.1-alpha.1 compatibility verified + routing/guard fixes + js-run sub-skill**: the DSH plugin's three forms verified enabled on the latest DSH 0.2.1-alpha.1; `argo mcp inject` adds WorkBuddy, covering a 7th host; TF-IDF weak-evidence demotion to auxiliary sources, dead-source floor + breaker slot backfill, quota-exhausted engine routing isolation, serp_guard collateral false-positive fixes; engines/evidence lazy imports (import −50%) and admission existence-set short-circuit (open 261→99); MCP entry and numeric-argument guards tightened; new js-run sub-skill (browser-free web JS, P50 ≈1ms). |
+| **v2.9.1** | **Content-quality optimization + content-farm resistance + latest-version adaptation**: improved content-quality assessment with better identification and filtering of low-quality bulk-generated content; adapted to the latest version for seamless operation; local search gained a self-install-tree guard so results are not polluted by argo's own source. |
+| **v2.9.0** | **Source optimization + plugin/CLI parity + minor languages**: sources 237→253 (keyless 198→219), adding 14 minor-language news sources, the CORE full-text source, TinEye reverse image search, Bing RSS and more; Baidu and Sogou revived; 18 CLI commands map one-to-one to 19 MCP tools; import chain −79%, rerank 33ms→1.5ms, cache hit rate greatly improved; cross-process quota write-path safety fix; new `argo stats` local usage ledger. See [release notes](docs/RELEASE_NOTES_v2.9.0.md) |
 | **v2.8.9** | **Output slimming + richer, faster retrieval + 5 international & fact-check sources**: default output 15.5KB→5.2KB (−66%, `--envelope` restores the full envelope); routing decision cache cuts repeated queries −30%; slow-network dispatch −36% (serial domains auto-hedge past 0.8s); five-round fetch-chain overhaul (recall +35%, fetch latency −30%, long-tail P90 −8%) + body structure restoration (headings/lists/tables fidelity 0/6→6/6) + CJK quality-score fix; new keyless sources Guardian RSS / France 24 / DW / FactCheck.org / Full Fact (232→237, keyless 194→198, domains 90→92), dead gdelt retired; six self-consistency defects fixed + six-stage funnel attribution + offline replay tool (`scripts/replay_eval.py`) + post-policy deployment gates & scenario-threshold contracts. See [release notes](docs/RELEASE_NOTES_v2.8.9.md) |
 | **v2.8.8** | **Real-user fixes (#12 key-alias silence, #13 proxy-less fetch) + across-the-board speedups + sources 218 → 232**: unified egress dispatch (`ARGO_PROXY` / per-domain rules / standard proxy env, `NO_PROXY` respected); 16 key-read sites unified on the alias chain; command cold start 2.1s→0.55s, cross-process config cache 50–82ms→16–18ms, QPP flatness-gated early stop, `--list-engines --detail` slimmed 152KB→51KB; new `argo answer` (cited direct answers) and `argo watch` (webpage change watching), 14 keyless sources (CN trending & lifestyle / security advisories / open-access scholarship / skill directories / agent search), 69 engines re-classified (`web_general` fallback share 41%→20%, new security domain); platform-conventional paths (`argo paths`) + Python 3.9 + bounded concurrency making timeouts real; search.py split into modules 3351→2526 lines, relevance golden over 22 engines, static-defect & output-contract gates. See [release notes](docs/RELEASE_NOTES_v2.8.8.md) |
 | **v2.8.7** | **218 sources / 89 domains + three fetch direct-out channels + routing trigger discipline + macro zero-result fix**: 50 new sources across batches 7/8/9 (statutes, standards, security intel, academia, news, entertainment, energy/transport, legal), stackexchange & doi engines; fetch chain level-0 llms.txt and `.md` variant probing plus r.jina.ai reader level; `--engine` comma-list fix, tfidf scope & route_reason, negative routing-control matrix, ranking golden & fusion-ablation gates; China macro queries promote national statistics first, zero-result recovery unlocks L3, rescue engines recorded. See [release notes](docs/RELEASE_NOTES_v2.8.7.md) |
@@ -569,6 +586,9 @@ argo/
 | **v2.7.3** | Engine-layer HttpClient; TF-IDF activates 25 verticals; 70-domain TTL; bilingual verticals. See [release notes](docs/RELEASE_NOTES_v2.7.3.md) |
 | **v2.7.2** | Logged-in professional search (ego-search, off by default); JA/KO no longer mix Chinese engines. See [release notes](docs/RELEASE_NOTES_v2.7.2.md) |
 | **v2.7.1** | SSRF hardening + routing health-state fix. See [release notes](docs/RELEASE_NOTES_v2.7.1.md) |
+| **v2.7.0** | **Vertical structured modal cards**: built-in `bocha` / `bocha_ai` native engines; the `modal_card` domain recognizes real-time cards in one place — train tickets / fuel prices / precious metals / perpetual calendar / horoscope / phone lookup / vehicles / hospital registration, etc.; fixed a `bocha` web-parsing defect. See [release notes](docs/RELEASE_NOTES_v2.7.0.md) |
+| **v2.6.2** | Merged independent improvement lines: network-environment awareness / weighted RRF + semantic cache / adaptive engine disabling / content safety + query variants / three major vertical engines / ja-ko domain routing completion; includes the v2.6.1 routing fix. See [release notes](docs/RELEASE_NOTES_v2.6.2.md) |
+| **v2.6.1** | v2.6.0 fix release: routing collateral-damage fix (`capital of` no longer grabs fact_check); version sync. See [release notes](docs/RELEASE_NOTES_v2.6.1.md) |
 | **v2.6.0** | **Multilingual search** (detect / engine params / cross-lang fallback); film·sports·geo·org·media verticals; recovery anti-pollution; capability families + matrix regression; ~120+ sources. See [release notes](docs/RELEASE_NOTES_v2.6.0.md) |
 | **v2.5.1** | Thicker finance/macro/chemistry answer sources; engine tiers + combo budget; [v2.5.1 notes](docs/RELEASE_NOTES_v2.5.1.md) |
 | **v2.5.0** | Install script + npx; rewrite decoupled from routing; hot-path cache; compact MCP |
