@@ -13,7 +13,6 @@ from __future__ import annotations
 import contextlib
 import inspect
 import json
-import logging
 import re
 import sys
 import time
@@ -216,11 +215,23 @@ from engines_builders_batch11 import (  # noqa: F401
     _build_wikimedia_commons_engine,
 )
 
-logger = logging.getLogger("unified_search.engines")
 
-if not logger.handlers:
-    logger.setLevel(logging.WARNING)
-    logger.addHandler(logging.StreamHandler(sys.stderr))
+
+class _LazyLogger:
+    """延迟创建 logger，避免 import logging 的重量级 import 链（traceback→dataclasses→inspect）。"""
+    _logger = None
+
+    def __getattr__(self, name: str):
+        if _LazyLogger._logger is None:
+            import logging
+            _LazyLogger._logger = logging.getLogger("unified_search.engines")
+            if not _LazyLogger._logger.handlers:
+                _LazyLogger._logger.setLevel(logging.WARNING)
+                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
+        return getattr(_LazyLogger._logger, name)
+
+
+logger = _LazyLogger()
 
 
 # 「未知引擎」警告按名字每进程只报一次。

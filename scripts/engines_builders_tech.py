@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 import re
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -20,7 +20,18 @@ from engines_base import (safe_search, _run, _resolve, _get_path, _coerce_field,
                           _http_get_raw, mcp_error_of as _mcp_error_of, http_open)
 from engine_env import get_env
 
-logger = logging.getLogger("unified_search.engines")
+
+class _LazyLogger:
+    _logger = None
+    def __getattr__(self, name):
+        if _LazyLogger._logger is None:
+            import logging
+            _LazyLogger._logger = logging.getLogger("unified_search.engines")
+            if not _LazyLogger._logger.handlers:
+                _LazyLogger._logger.setLevel(logging.WARNING)
+                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
+        return getattr(_LazyLogger._logger, name)
+logger = _LazyLogger()
 
 # ── Exa 专用引擎 ──────────────────────────────────────────────────────────────
 

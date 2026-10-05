@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import json
-import logging
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,7 +27,22 @@ from engines_base import (
     http_open,
 )
 
-logger = logging.getLogger("unified_search.engines")
+
+class _LazyLogger:
+    """延迟创建 logger，避免 import logging 的重量级 import 链（traceback→dataclasses→inspect）。"""
+    _logger = None
+
+    def __getattr__(self, name: str):
+        if _LazyLogger._logger is None:
+            import logging
+            _LazyLogger._logger = logging.getLogger("unified_search.engines")
+            if not _LazyLogger._logger.handlers:
+                _LazyLogger._logger.setLevel(logging.WARNING)
+                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
+        return getattr(_LazyLogger._logger, name)
+
+
+logger = _LazyLogger()
 
 _UA = "argo-search/2.9 (+batch11; wikimedia_commons)"
 _API = "https://commons.wikimedia.org/w/api.php"

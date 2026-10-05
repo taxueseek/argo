@@ -179,7 +179,9 @@ def build_sources(results: list[Any] | None) -> list[dict[str, Any]]:
     规则：
       - ref 与列表序号一致，从 1 起
       - 无 URL 的条目跳过（不占号？——保留占位会错位；跳过并重编号）
-      - 字段齐全便于 Agent/归档复用，不伪造 metrics
+      - 只保留 ref/url/engine 三个字段，title/snippet/score 不重复——
+        消费方通过 ref 回查 results[ref-1] 获取完整数据（2026-10-05 A2：
+        引用式视图，默认档体积 -38%，消除三份副本漂移的风险）
     """
     sources: list[dict[str, Any]] = []
     ref = 0
@@ -192,11 +194,8 @@ def build_sources(results: list[Any] | None) -> list[dict[str, Any]]:
         ref += 1
         sources.append({
             "ref": ref,
-            "title": (r.get("title") or "")[:160],
             "url": url,
             "engine": r.get("source") or r.get("_engine") or r.get("engine"),
-            "score": r.get("score"),
-            "snippet": ((r.get("snippet") or "")[:160] or None),
         })
     return sources
 
@@ -292,19 +291,24 @@ def format_text_output(results: dict[str, Any]) -> str:
             lines.append(f"      (score={score_s})")
 
     # 底部相关信源（传统搜索引擎形态）
+    # sources 只保留 ref/url/engine（A2 引用式），title 从 results 回查
     if sources:
         lines.append("")
         lines.append("── 相关信源 ──")
+        _results_list = results.get("results") or []
         for s in sources:
             if not isinstance(s, dict):
                 continue
             ref = s.get("ref", "?")
             eng = s.get("engine") or ""
-            title = (s.get("title") or "")[:60]
             url = s.get("url") or ""
             eng_s = f" · {eng}" if eng else ""
-            if title:
-                lines.append(f"  [{ref}] {title}{eng_s}")
+            # 通过 ref 回查 results 获取 title（A2：sources 不再重复 title）
+            _title = ""
+            if isinstance(ref, int) and 1 <= ref <= len(_results_list):
+                _title = (_results_list[ref - 1].get("title") or "")[:60]
+            if _title:
+                lines.append(f"  [{ref}] {_title}{eng_s}")
                 if url:
                     lines.append(f"      {url}")
             elif url:

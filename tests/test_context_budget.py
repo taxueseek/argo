@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 # 冻结集：改动这些集合 = 改动 agent 每次调用的上下文成本，必须有意识
-SOURCES_FIELDS = {"ref", "title", "url", "engine", "score", "snippet"}
+SOURCES_FIELDS = {"ref", "url", "engine"}
 CANDIDATE_FIELDS = {
     "candidate_id", "query", "platform", "backend", "rank", "title", "url",
     "canonical_url", "snippet", "author", "published_at", "language",
@@ -52,7 +52,7 @@ _FIVE_RESULTS = [
 ]
 
 # 预算阈值：留 ~30% 余量，超了说明输出层在悄悄变胖
-BUDGET_SOURCES_BYTES = 1200
+BUDGET_SOURCES_BYTES = 400
 BUDGET_CANDIDATES_BYTES = 6500
 BUDGET_SKILL_MD_BYTES = 7600
 

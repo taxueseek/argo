@@ -38,7 +38,7 @@ python3 scripts/search.py "查询词" --verify 3            # 核验 top-3 并�
 python3 scripts/research.py "复杂问题" --json            # 取证包（扩词或多工作包 → dossier）
 ```
 
-默认不附归档用的 candidates/sources；`--fields agent` 再剥遥测只留答案；
+默认不附归档用的 candidates/sources；`--fields agent` 剥遥测只留答案（Agent 消费档，~4.3 KB）；
 要来源追溯或归档才加 `--envelope`（`--archive` 自动带上）。
 
 深度研究只此一条。机器产出**取证包（dossier）**：来源、覆盖、缺口、是否达标，不是判断稿。Agent 先读 `references/research-protocol.md`（含多轨道「广泛研究」节），写出工作包再取证；判断按事实/推断/建议写。不要另装「专业深度研究」skill。

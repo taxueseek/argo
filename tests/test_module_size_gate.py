@@ -61,13 +61,15 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-29 +19：open_meteo 多 place forecast 并行化（串行 9.28s → "
               "3.9-5.1s，bounded_run 有界并发 + 保序）"),
     "scripts/engines_builders_tech.py": (
-        1604, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
+        1615, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
               "2026-09-26 批次十增强净增 +402：sov2ex 一级全文来源（v2ex 就地升级）、"
               "tineye/bing_rss 新引擎、exa 免 key 匿名通道——与原逐源一段同性质，"
               "拆出只会把同一张表切碎（新引擎的下一站是 batch 模块）；"
               "2026-09-28 并行会话进行中的搜狗微信中间链解析 WIP（+96 行起，"
               "工作区未提交、当日仍在增长 1600→1604）——上限随工作区现值登记，"
-              "随该工作正式提交后由其转正或回调"),
+              "随该工作正式提交后由其转正或回调；"
+              "2026-10-05 A1 惰性 logging 导入（+11）：模块级 import logging 改"
+              "_LazyLogger 代理类，省 ~10ms/次冷启动"),
     "scripts/fetch_v3.py": (
         1811, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
