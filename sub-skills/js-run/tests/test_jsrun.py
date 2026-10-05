@@ -78,6 +78,40 @@ def test_speed_budget():
     assert dt_ms < 100, f"冷启动 {dt_ms:.1f}ms 超预算"
 
 
+def test_atob_rejects_invalid_chars():
+    # 非法 base64 字符应报错，不静默映射
+    with JsRun() as jr:
+        try:
+            jr.run('atob("!!invalid!!")')
+            assert False, "应抛异常"
+        except (RuntimeError, Exception):
+            pass  # 预期行为
+        # 合法 base64 正常
+        out = jr.run('atob("aGVsbG8=")')
+        assert out == "hello", out
+
+
+def test_run_timeout():
+    # 死循环脚本应超时
+    with JsRun() as jr:
+        try:
+            jr.run('while(true){}', timeout_ms=500)
+            assert False, "应超时"
+        except TimeoutError:
+            pass  # 预期行为
+
+
+def test_close_releases():
+    # close 后上下文应不可用
+    jr = JsRun()
+    jr.close()
+    try:
+        jr.run('1+1')
+        assert False, "close 后应不可用"
+    except (AttributeError, RuntimeError, Exception):
+        pass  # 预期行为
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

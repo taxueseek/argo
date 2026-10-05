@@ -1041,6 +1041,78 @@ def _tinyfish_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> di
     return _render_tinyfish.fetch(url, max_chars=max_chars, timeout=timeout)
 
 
+# ─── 第一级E：V8 JS 执行（js-run 轻量车道）─────────────────────────────────
+
+def _jsrun_enabled() -> bool:
+    """js-run 车道开关：ARGO_FETCH_JSRUN=0 关闭，默认开启。"""
+    return env_flag("ARGO_FETCH_JSRUN")
+
+
+def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
+                           timeout: float = 8.0) -> dict:
+    """用 js-run 执行挑战页 JS，尝试获取 clearance cookie 后重试请求。
+
+    只处理「环境探测 + 纯计算」型挑战脚本（v0 面）。失败时返回空结果，
+    由调用方降级到 tinyfish/CDP。
+    """
+    import re as _re
+
+    # 提取 <script> 内容（挑战页的通行证计算脚本）
+    scripts = _re.findall(r'<script[^>]*>(.*?)</script>', html, _re.DOTALL | _re.IGNORECASE)
+    if not scripts:
+        return {}
+
+    # 只取含环境探测/计算特征的脚本（过滤掉统计/广告等无关脚本）
+    challenge_scripts = []
+    for s in scripts:
+        if _re.search(r'navigator|document\.cookie|btoa|atob|setTimeout|__INITIAL_STATE__|challenge', s, _re.IGNORECASE):
+            challenge_scripts.append(s)
+    if not challenge_scripts:
+        return {}
+
+    try:
+        _skill_dir = Path(__file__).parent.parent / "sub-skills" / "js-run" / "scripts"
+        if str(_skill_dir) not in sys.path:
+            sys.path.insert(0, str(_skill_dir))
+        from jsrun import JsRun
+    except (ImportError, OSError):
+        return {}
+
+    try:
+        with JsRun() as jr:
+            for script in challenge_scripts:
+                try:
+                    jr.run(script, timeout_ms=3000)
+                except Exception:
+                    continue
+            # 推进逻辑时间（挑战脚本常用 setTimeout 延迟发通行证）
+            jr.advance(5000)
+            cookie = jr.get_cookie()
+
+        if not cookie or len(cookie) < 10:
+            return {}
+
+        # 用 clearance cookie 重试原请求
+        from http_client import HttpClient
+        client = HttpClient(timeout=timeout)
+        resp = client.get(url, extra_headers={"Cookie": cookie})
+        if resp.get("status") == 200 and len((resp.get("text") or "").strip()) >= 100:
+            return {
+                "url": url,
+                "content": resp["text"][:max_chars],
+                "html": "",
+                "title": "",
+                "length": len(resp["text"]),
+                "success": True,
+                "error": None,
+                "fetch_method": "jsrun_challenge",
+                "jsrun_cookie": cookie[:100],
+            }
+    except Exception:
+        pass
+    return {}
+
+
 # ─── 第二级：Chrome CDP 浏览器 ───────────────────────────────────────────────
 
 def _browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
@@ -1535,7 +1607,17 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
 
                 # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）；预算耗尽不再升级
                 if use_browser_fallback and _needs_browser(result) and _budget_left() > 0:
-                    if _tinyfish_enabled() and not need_html:
+                    # js-run 轻量车道：挑战页先试 V8 算通行证（毫秒级），失败再降级
+                    if _jsrun_enabled() and not need_html and result.get("html"):
+                        jr = _jsrun_challenge_fetch(
+                            url, result["html"], max_chars,
+                            _level_timeout(min(timeout, 5.0)))
+                        if jr.get("success"):
+                            jr["http_fallback"] = True
+                            result = jr
+                    # tinyfish 免费渲染（返回 clean Markdown，含 JS 执行）优先于本地 Chrome；
+                    # 只产 markdown 无 raw html，爬取（need_html）跳过，失败自动回退。
+                    if result.get("fetch_method") != "jsrun_challenge" and _tinyfish_enabled() and not need_html:
                         # tinyfish 免费渲染（返回 clean Markdown，含 JS 执行）优先于本地 Chrome；
                         # 只产 markdown 无 raw html，爬取（need_html）跳过，失败自动回退。
                         tf = _tinyfish_fetch(url, max_chars,

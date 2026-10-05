@@ -116,10 +116,21 @@
   }
   function atob(s) {
     var clean = String(s).replace(/=+$/, ""), out = [];
+    for (var i = 0; i < clean.length; i++) {
+      if (B64.indexOf(clean[i]) === -1) throw new Error("jsrun atob: 非法 base64 字符");
+    }
     for (var i = 0; i < clean.length; i += 4) {
-      var n = (B64.indexOf(clean[i]) << 18) | (B64.indexOf(clean[i + 1]) << 16) |
-              ((B64.indexOf(clean[i + 2]) + 64 || 0) << 8) | (B64.indexOf(clean[i + 3]) + 64 || 0);
-      out.push(String.fromCharCode((n >> 16) & 255, (n >> 8) & 255, n & 255));
+      var c0 = B64.indexOf(clean[i]);
+      var c1 = B64.indexOf(clean[i + 1]);
+      var c2 = B64.indexOf(clean[i + 2]);
+      var c3 = B64.indexOf(clean[i + 3]);
+      var has2 = c2 !== -1, has3 = c3 !== -1;
+      if (!has2) c2 = 0;
+      if (!has3) c3 = 0;
+      var n = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
+      out.push(String.fromCharCode((n >> 16) & 255));
+      if (has2) out.push(String.fromCharCode((n >> 8) & 255));
+      if (has3) out.push(String.fromCharCode(n & 255));
     }
     return out.join("");
   }

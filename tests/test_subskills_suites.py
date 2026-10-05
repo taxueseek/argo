@@ -37,3 +37,8 @@ def test_ego_search_suite():
 def test_local_seek_suite():
     r = _run_suite("local-seek")
     assert r.returncode == 0, f"local-seek 套件失败：\n{r.stdout[-3000:]}"
+
+
+def test_jsrun_suite():
+    r = _run_suite("js-run")
+    assert r.returncode == 0, f"js-run 套件失败：\n{r.stdout[-3000:]}"

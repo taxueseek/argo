@@ -35,6 +35,8 @@ def _to_py(v):
         return None if v is JSUndefined else v
     if isinstance(v, _abc.Mapping):
         return {k: _to_py(val) for k, val in v.items()}
+    if isinstance(v, (bytes, bytearray)):
+        return v  # bytes 保持原样，不转 list[int]
     if isinstance(v, _abc.Sequence):
         return [_to_py(x) for x in v]
     return v  # 函数等不可转换对象原样交还
@@ -52,13 +54,32 @@ class JsRun:
         self._ctx.eval(f"var __jsrun_env__ = {env}; var __jsrun_entropy__ = '{entropy}';")
         self._ctx.eval(_SHIM_PATH.read_text(encoding="utf-8"))
 
-    def run(self, source: str) -> object:
+    def run(self, source: str, timeout_ms: int = 5000) -> object:
         """执行 JS 脚本，返回完成值（递归转 Python 容器）。
 
         直接走 mini-racer 的脚本求值：顶层 var 声明与 window 赋值跨 run()
         持久（挑战脚本普遍依赖这个），脚本完成值即返回值（IIFE 结果能透出）。
+        timeout_ms: 执行超时（毫秒），超时抛 TimeoutError。
         """
-        return _to_py(self._ctx.eval(source))
+        import signal
+
+        if timeout_ms <= 0:
+            return _to_py(self._ctx.eval(source))
+
+        def _handler(signum, frame):
+            raise TimeoutError(f"js-run 执行超时（{timeout_ms}ms）")
+
+        old_handler = signal.signal(signal.SIGALRM, _handler)
+        signal.setitimer(signal.ITIMER_REAL, timeout_ms / 1000)
+        try:
+            return _to_py(self._ctx.eval(source))
+        except TimeoutError:
+            raise
+        except Exception as e:
+            raise RuntimeError(f"js-run 执行失败: {e}") from e
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, old_handler)
 
     def eval_raw(self, source: str):
         """不经 JSON 包装的原始求值（拿标量用）。"""
@@ -75,7 +96,13 @@ class JsRun:
         return self._ctx.eval("document.cookie")
 
     def close(self) -> None:
-        self._ctx = None
+        """释放 V8 上下文。"""
+        if self._ctx is not None:
+            try:
+                self._ctx.close()  # mini-racer 支持显式关闭
+            except (AttributeError, Exception):
+                pass  # 旧版本不支持时靠 GC
+            self._ctx = None
 
     def __enter__(self) -> "JsRun":
         return self
