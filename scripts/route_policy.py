@@ -92,6 +92,20 @@ def _new_source_budget_extra(
     """
     if not domain or not engines_combo:
         return 0
+
+    # 学术域固定加成：该域有 11+ 个引擎（arxiv/openreview/biorxiv/openalex/
+    # crossref/europepmc/dblp/semantic_scholar/local_pubmed/core/cinii），
+    # auto 模式 budget=3 只够前 3 个，后 8 个永远轮不到。学术搜索需要多源
+    # 交叉验证才严谨，固定 +3 让 budget 达到 6，覆盖到 semantic_scholar。
+    if domain.get("name") == "academic":
+        try:
+            from engine_policy import combo_budget
+            base = combo_budget(mode=mode, depth=depth, context=context)
+            if base is not None:
+                return min(3, max(0, 6 - base))
+        except Exception:
+            pass
+
     pending = [
         e for e in _VERTICAL_NEW_SOURCE.get(domain.get("name"), ())
         if e in engines_combo and e in enabled
