@@ -1182,7 +1182,7 @@ domains:
   # 「GPT 训练方法 综述」等真论文语境不受影响（其它条目照常命中）。
   # 注意 unless 是子串语义，写「对比|vs」会误伤「BERT vs GPT 对比实验」——
   # 学术对比通常带论文词（综述/实验/论文），由第 1 条兜住，这里只拦产品语境。
-  - match: '(?i)(transformer|attention\s+mechanism|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)'
+  - match: '(?i)(transformer|attention|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)'
     unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙)'
   - (?i)(論文|ジャーナル|学会誌|査読|研究論文|プレプリント)
   primary: arxiv

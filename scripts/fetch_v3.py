@@ -197,7 +197,12 @@ def _needs_browser(result: dict) -> bool:
     if not result.get("success"):
         return True
     content = result.get("content", "")
-    if not content or len(content.strip()) < 100:
+    # 有效文本长度：去所有空白（含换行/制表/空格）后判断。
+    # 原实现用 content.strip() 只去首尾空白，对「首尾有文字、中间全空白」
+    # 的 JS 渲染壳页（如 quotes.toscrape.com/js 返回 119 字符但有效文本
+    # 仅 16 字符）会误判为「内容足够」而不升级浏览器。
+    import re as _re
+    if not content or len(_re.sub(r'\s+', '', content)) < 100:
         return True
     if result.get("fetch_method") in _MARKDOWN_METHODS:
         return bool(_CF_STRONG.search(content))
