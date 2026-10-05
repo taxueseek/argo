@@ -62,6 +62,7 @@ import argo_paths as _paths
 from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
 from engine_env import env_flag  # 布尔开关统一判断（见 env_flag 的说明）
 from cli_io import dumps
+from fetch_jsrun import _jsrun_challenge_fetch, _jsrun_enabled  # js-run 轻量车道（拆出独立模块）
 
 
 # ─── 内容提取器（复用 fetch.py 的逻辑，增强版）──────────────────────────────
@@ -1046,96 +1047,6 @@ def _tinyfish_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> di
     return _render_tinyfish.fetch(url, max_chars=max_chars, timeout=timeout)
 
 
-# ─── 第一级E：V8 JS 执行（js-run 轻量车道）─────────────────────────────────
-
-def _jsrun_enabled() -> bool:
-    """js-run 车道开关：ARGO_FETCH_JSRUN=0 关闭，默认开启。"""
-    return env_flag("ARGO_FETCH_JSRUN")
-
-
-def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
-                           timeout: float = 8.0) -> dict:
-    """用 js-run 执行挑战页 JS，尝试获取 clearance cookie 后重试请求。
-
-    只处理「环境探测 + 纯计算」型挑战脚本（v0 面）。失败时返回空结果，
-    由调用方降级到 tinyfish/CDP。
-
-    重试请求用 curl_cffi Chrome 指纹 impersonate（站点按 TLS 指纹风控，
-    裸 Python 指纹被静默拦截）。退避重试 3 次（5s/10s/15s）。
-    """
-    import re as _re
-    import time as _time
-
-    # 提取 <script> 内容（挑战页的通行证计算脚本）
-    scripts = _re.findall(r'<script[^>]*>(.*?)</script>', html, _re.DOTALL | _re.IGNORECASE)
-    if not scripts:
-        return {}
-
-    # 只取含环境探测/计算特征的脚本（过滤掉统计/广告等无关脚本）
-    challenge_scripts = []
-    for s in scripts:
-        if _re.search(r'navigator|document\.cookie|btoa|atob|setTimeout|__INITIAL_STATE__|challenge', s, _re.IGNORECASE):
-            challenge_scripts.append(s)
-    if not challenge_scripts:
-        return {}
-
-    try:
-        _skill_dir = Path(__file__).parent.parent / "sub-skills" / "js-run" / "scripts"
-        if str(_skill_dir) not in sys.path:
-            sys.path.insert(0, str(_skill_dir))
-        from jsrun import JsRun
-    except (ImportError, OSError):
-        return {}
-
-    try:
-        with JsRun() as jr:
-            for script in challenge_scripts:
-                try:
-                    jr.run(script, timeout_ms=3000)
-                except Exception:
-                    continue
-            # 推进逻辑时间（挑战脚本常用 setTimeout 延迟发通行证）
-            jr.advance(5000)
-            cookie = jr.get_cookie()
-
-        if not cookie or len(cookie) < 10:
-            return {}
-
-        # 用 clearance cookie 重试原请求（curl_cffi Chrome 指纹 + 退避重试）
-        from curl_cffi import requests as _cr
-
-        session = _cr.Session(impersonate="chrome")
-        last_err = ""
-        for attempt in range(1, 4):
-            try:
-                resp = session.get(
-                    url,
-                    headers={"Cookie": cookie},
-                    timeout=timeout,
-                )
-                if resp.status_code == 200 and len(resp.text.strip()) >= 100:
-                    return {
-                        "url": url,
-                        "content": resp.text[:max_chars],
-                        "html": "",
-                        "title": "",
-                        "length": len(resp.text),
-                        "success": True,
-                        "error": None,
-                        "fetch_method": "jsrun_challenge",
-                        "jsrun_cookie": cookie[:100],
-                    }
-                last_err = f"HTTP {resp.status_code}, {len(resp.text)} 字节"
-            except Exception as e:
-                last_err = str(e)[:200]
-            if attempt < 3:
-                _time.sleep(5 * attempt)  # 5s, 10s
-        return {}
-    except Exception:
-        pass
-    return {}
-
-
 # ─── 第二级：Chrome CDP 浏览器 ───────────────────────────────────────────────
 
 def _browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
@@ -1355,7 +1266,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
              actions: list[dict] | None = None,
              force_browser: bool = False,
              skip_cache: bool = False,
-             need_html: bool = False) -> dict:
+             need_html: bool = False,
+             deadline_s: float | None = None) -> dict:
     """多级抓取降级链主函数（逐级升级，受全局 deadline 约束）。
 
     执行顺序：
@@ -1370,7 +1282,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
       第二级B：Wayback 快照 + Chrome CDP 浏览器（自动降级或 actions 触发）
       第三级：质量评估（content_ok/page_type/quality_score）
 
-    全局 deadline：单次 fetch_v3 总耗时上限 = ARGO_FETCH_DEADLINE_S（默认 60，
+    全局 deadline：单次 fetch_v3 总耗时上限 = deadline_s 参数（调用方显式
+    预算，如 verify 核验档）；未传时读 ARGO_FETCH_DEADLINE_S（默认 60，
     可设 0 关闭）。降级是「延迟换成功率」的交易，延迟必须有一等公民约束——
     逐级独立超时的加法无上限（8+8+8+12+8+15≈59s+），会击穿 MCP 客户端
     工具超时。每级升级前检查剩余预算，耗尽即停链返回当前最优结果
@@ -1463,11 +1376,13 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
         result = _browser_fetch(url, max_chars, timeout=15.0, actions=actions)
     else:
         # 全局 deadline：所有降级升级动作共用的总预算（秒）。
-        # ARGO_FETCH_DEADLINE_S=0 关闭；默认 60s（MCP 客户端工具超时的安全下限）。
-        try:
-            deadline_s = float(os.environ.get("ARGO_FETCH_DEADLINE_S", "60") or 60)
-        except ValueError:
-            deadline_s = 60.0
+        # 调用方显式传 deadline_s 优先；未传时读 ARGO_FETCH_DEADLINE_S
+        # （默认 60，MCP 客户端工具超时的安全下限；=0 关闭）。
+        if deadline_s is None:
+            try:
+                deadline_s = float(os.environ.get("ARGO_FETCH_DEADLINE_S", "60") or 60)
+            except ValueError:
+                deadline_s = 60.0
         t_chain0 = time.monotonic()
         deadline_hit = {"flag": False}
 
@@ -1511,14 +1426,9 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                  and (_mobile_first_host(url) or _identity_is_mobile(host)))
         result = None
         # AI 友好变体探测（{url}.md 直出 / 站点根 llms.txt）**排在主请求之后**。
-        #
-        # 早先它排在最前面，理由是「命中即省下整条反爬链」；接上内容协商之后
-        # 这个理由不再成立：协商折在主请求里、不额外花一次往返，而探测无论
-        # 命中与否都要先付一次串行请求。实测未命中的站点因此白等 571–1,246 ms
-        # （MDN 1,246 / mintlify 719 / astro 571），而它们占多数。
-        # 现在改为：主请求先走，只在它没能拿到 Markdown 时才回探变体——
-        # 已知的 .md 专有站点（bun / nextjs / ai-sdk / nodejs 这类协商不覆盖的）
-        # 仍能拿到，其余站点少一次往返。
+        # 协商折在主请求里不额外花往返，而探测无论命中与否都要先付一次串行
+        # 请求（实测未命中白等 571–1,246 ms）。主请求先走，只在没拿到 Markdown
+        # 时才回探变体——已知的 .md 专有站点仍能拿到，其余站点少一次往返。
         if result is None:
             # 第一级：客户端形态分流型站点（如抖音）直接以移动端 UA 首发——
             # 桌面 UA 首发会触发风控并连坐后续移动请求，顺序不可颠倒。
@@ -1533,16 +1443,9 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                                      allow_markdown=not need_html)
 
             # 主请求未得到 Markdown → 回探 AI 友好变体。
-            # 门控站（抖音一类）跳过：少一次主机触碰，保住单次直连窗口
-            # （实测 .md 探测会触发连坐限速）。
-            #
-            # need_html 一并关掉这条：它和 tinyfish/jina/Parallel 是同一类
-            # 「只产 markdown」的通道，而上面 docstring 已把「跳过只产
-            # markdown 的通道」写进 need_html 的契约。漏在这里的后果实测过
-            # （2026-09-19）：extract 传 need_html=True 抓 bun.sh/docs 这类
-            # 站点，结果被 .md 变体替换、html 字段为空，extract.py 再拿
-            # markdown 去跑表格/Meta/JSON-LD 正则 → 三项全空却 success=True，
-            # 正是 docstring 自己警告的「开关看着接上了、结果永远为空」。
+            # 门控站（抖音一类）跳过：少一次主机触碰，保住单次直连窗口。
+            # need_html 一并关掉：它和 tinyfish/jina/Parallel 同类（只产 markdown），
+            # 漏在这里会让 extract 拿到空 html 却 success=True（2026-09-19 实测）。
             if (result is not None and not gated and not need_html
                     and _md_variant_enabled() and _md_variant_wanted(result)):
                 md = _md_variant_fetch(url, max_chars, timeout)
@@ -1726,11 +1629,8 @@ def fetch_page_v3(url: str, max_chars: int = 3000,
 
 
 # ─── 聚焦提取（--focus：BM25 段落聚焦，省 token）──────────────────────────────
-# 语义来源在 focus_extract.apply_focus（CLI 与 MCP 的 argo_fetch 共用同一份
-# 裁剪契约），此处只做接线。历史 bug：文档（SKILL.md / references/usage.md）
-# 一直写着 `argo fetch URL --focus 关键词`，但本文件的 CLI 没有该参数，
-# 调用方拿到的是 argparse 的 unrecognized arguments——文档承诺的能力只在
-# MCP 侧存在。加了参数还不够，两处必须走同一实现，否则迟早再次分叉。
+# 语义来源在 focus_extract.apply_focus（CLI 与 MCP 共用同一份裁剪契约），
+# 此处只做接线——两处必须走同一实现，否则迟早再次分叉。
 
 def _focus_fetch_chars(max_chars: int, query: str) -> int:
     """聚焦场景的抓取额度（契约在 focus_extract，此处只做容错接线）。"""
@@ -1767,9 +1667,8 @@ def _read_archived(url: str) -> str | None:
 def _full_view(url: str, args) -> dict:
     """取全文视图：优先用存档（本地、零延迟），没有存档才按全量重新抓一次。
 
-    存在的意义：Agent 的上下文放不下整篇，但结论可能落在被裁掉的那一段。
-    有了这条通道，「先看 8,000 字摘要、需要时再翻全文」才成立——否则想复核
-    就只能重新联网抓一遍，而截断发生过的页面往往连抓法都不一样。
+    存在的意义：Agent 上下文放不下整篇，但结论可能落在被裁掉的那一段。
+    有了这条通道，「先看 8,000 字摘要、需要时再翻全文」才成立。
     """
     from_archive = True
     text = _read_archived(url)

@@ -379,11 +379,16 @@ def verify_results(results: list[dict[str, Any]],
                    fetch_fn: Callable[..., dict[str, Any]] | None = None,
                    top_k: int = 3,
                    max_chars: int = 8000,
-                   timeout: float = 8.0) -> dict[str, Any]:
+                   timeout: float = 4.0) -> dict[str, Any]:
     """对 top_k 未核验结果显式 fetch，回填证据分并产出 evidence_revision 分布。
 
     不进热路径：调用方（CLI --verify / research --verify）显式触发。
     已核验（有证据缓存）的结果跳过，不重复打网。
+
+    默认走核验快道：核验只需要「正文存在性 + 吸收分」，不需要全文渲染——
+    关掉浏览器兜底（Wayback/CDP 最慢两级）并用 8s deadline 硬顶单 URL
+    （此前吃 60s 全局默认，冷查询实测 8.7s 全在慢 URL 的降级链上）。
+    拿不到正文照旧标 pending，核验语义不变；要完整降级链可显式传 fetch_fn。
 
     返回：
       - verified: [{url, title, pre_absorption, post_absorption, delta, content_ok, fetch_method}]
@@ -394,7 +399,11 @@ def verify_results(results: list[dict[str, Any]],
     if fetch_fn is None:
         try:
             from fetch_v3 import fetch_v3
-            fetch_fn = fetch_v3
+
+            def _verify_fetch(url: str, max_chars: int, timeout: float) -> dict:
+                return fetch_v3(url, max_chars=max_chars, timeout=timeout,
+                                use_browser_fallback=False, deadline_s=8.0)
+            fetch_fn = _verify_fetch
         except ImportError as e:  # pragma: no cover
             return {"error": f"fetch_v3 不可用: {e}", "verified": [],
                     "revision_summary": {}, "pending": [], "skipped_cached": 0}
