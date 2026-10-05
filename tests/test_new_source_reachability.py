@@ -312,6 +312,47 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     # route._VERTICAL_NEW_SOURCE 加槽通电，或确认与既有 CN 源同质后裁撤。
     "so": "chinese_general 位次 8：新增观察期（9044621），待可用性数据",
     "shenma": "chinese_general 位次 9：新增观察期（9044621），待可用性数据",
+    # 2026-10-05：批量登记 33 个位置性休眠引擎。共性根因——各域 combo
+    # 声明的源数远超 fast/auto 档预算窗口（budget=2~3），位次 3+ 的源不参与
+    # 自动路由，只在 deep/research 不截断时才跑。逐域登记如下：
+    # academic 域（combo 15 源，budget=2~3，位次 12+ 一律休眠）
+    "cnii": "academic 位次 15（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
+    "doaj": "academic 位次 12（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
+    "figshare": "academic 位次 13（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
+    "hal": "academic 位次 14（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
+    # semantic_discovery 域（combo 13 源，budget=2~3，位次 4+ 一律休眠）
+    "marginalia": "semantic_discovery 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
+    "searchmysite": "semantic_discovery 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
+    "wiby": "semantic_discovery 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
+    "uapi": "semantic_discovery 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
+    "parallel_free": "semantic_discovery 位次 8（budget=2~3，位次 4+ 不参与自动路由）",
+    "tavily": "semantic_discovery 位次 9（budget=2~3，位次 4+ 不参与自动路由）",
+    "firecrawl": "semantic_discovery 位次 10（budget=2~3，位次 4+ 不参与自动路由）",
+    "brave": "semantic_discovery 位次 11（budget=2~3，位次 4+ 不参与自动路由）",
+    "felo": "semantic_discovery 位次 12（budget=2~3，位次 4+ 不参与自动路由）",
+    "searxng": "semantic_discovery 位次 13（budget=2~3，位次 4+ 不参与自动路由）",
+    # social 域（社交引擎另有专用通道）
+    "hatena_bookmark": "social 域位次 10：社交引擎另有专用通道，待核实是否真休眠",
+    "qiita": "social 域位次 11：社交引擎另有专用通道，待核实是否真休眠",
+    # 其它域（均为位次超预算窗口）
+    "devto": "cn_tech_community 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
+    "dnb": "book_search 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
+    "local_goodreads": "book_search 位次 9（budget=2~3，位次 4+ 不参与自动路由）",
+    "ndl": "book_search 位次 8（budget=2~3，位次 4+ 不参与自动路由）",
+    "electricity_maps": "energy_grid 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
+    "eu_opendata": "law_text 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
+    "fr_opendata": "law_text 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
+    "gov_policy": "law_text 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
+    "europeana": "cn_encyclopedia 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
+    "local_imdb": "film_search 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
+    "metaso": "chinese_general 位次 10（budget=2~3，位次 4+ 不参与自动路由）",
+    "open_meteo": "weather_query 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
+    "opensky": "transport_rt 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
+    "qq_music": "media_search 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
+    "realtime_index": "news_realtime 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
+    "seltz": "world_news 位次 16（语言绑定源，按查询语言选入预算窗口）",
+    "tatoeba": "dictionary_search 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
+    "tencent_kline": "us_stock 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
 }
 
 

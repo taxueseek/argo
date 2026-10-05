@@ -180,7 +180,13 @@ def _feature_labels(features: dict[str, Any]) -> str:
     # 阈值语义保持不变：cr>0.6 记中文、0.1~0.6 的混合查询不记语言标签——
     # 这次只修「cr<0.1 却断言是英文」那一条，不改变中英混合的既有形态。
     cr = features.get("chinese_ratio", 0)
-    if cr > 0.6:
+    primary = features.get("primary_lang")
+    if primary and primary not in ("en", "latin", "mixed", "other"):
+        # detect_language 给了明确非英语语种，以它为准。
+        # 日语汉字查询（如「人工知能 論文」）cr>0.6 但 detect_language 正确
+        # 返回 ja——用 cr 二分把它标成「中文」会把排障引向错误方向。
+        labels.append(_lang_label(primary) or "中文")
+    elif cr > 0.6:
         labels.append("中文")
     elif cr < 0.1:
         labels.append(_lang_label(features.get("primary_lang")) or "英文")
@@ -544,14 +550,19 @@ def _lang_must_keep(features: dict | None, enabled: set[str],
                     query: str = "") -> list[str]:
     """返回语言相关的 must_keep 引擎。
 
-    两档判据，优先级从高到低：
+    三档判据，优先级从高到低：
 
     1. **语言绑定的本地源**（world_news 族中匹配查询语言的成员）。这类源是
        该语言的唯一一手通道，而通用 SERP（local_bing）只是二手转述——韩语
        新闻查询被 budget 裁到 2 位时，该保的是韩联社。没有它，本地语言源
        接进来也永远进不了预算窗口（实测：ko 查询 combo 被裁成
        [anysearch, local_bing]，yna 在窗口外）。
-    2. 日/韩的通用本地引擎（yandex/google/bing）。专用源默认 disabled 时
+    2. **语言独占源**（_LANG_EXCLUSIVE_ENGINES，如 cinii=ja）。这类源是
+       该语言在垂直域（如学术）的唯一通道，排在 combo 末位时会被 budget
+       裁掉——实测日语学术查询「人工知能 論论文」cinii 在位次 7，auto/balanced
+       budget=3 下永远不可达。与 world_news 同理：没有它，该语言的垂直域
+       等于没源可用。
+    3. 日/韩的通用本地引擎（yandex/google/bing）。专用源默认 disabled 时
        落到 local_bing；多语言结果质量仍靠 engines_base 动态 setlang。
     """
     if not features or not enabled:
@@ -564,6 +575,12 @@ def _lang_must_keep(features: dict | None, enabled: set[str],
                  and lang_allows(e, lang, None)]
         if bound:
             return bound[:1]
+    if combo and lang:
+        exclusive = [e for e in combo if e in enabled
+                     and e in _LANG_EXCLUSIVE_ENGINES
+                     and lang_allows(e, lang, None)]
+        if exclusive:
+            return exclusive
     preferred = _LANG_PREFERRED_ENGINES.get(lang, [])
     for eng in preferred:
         if eng in enabled:
