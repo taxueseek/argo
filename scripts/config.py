@@ -15,7 +15,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -25,7 +24,10 @@ from typing import Any, Callable
 # logging 延迟导入（已实施）：config.py 的 import 链实测 23ms，其中 logging 占 ~10ms。
 # 全文件仅 1 处 warning 使用（routable_only 过滤降级留痕），在该函数内 import，
 # 模块级导入会让所有 import config 的路径白付 ~10ms/次。
-# shutil 保留模块级：仅 5ms，且测试用 patch.object(config_mod.shutil, ...) 依赖它。
+# shutil 同样惰性化：唯一用点是 _validate_engine_paths 的 shutil.which（裸命令
+# PATH 探测），模块级 import 会让每个进程（含纯缓存命中的搜索）白付 ~3ms，
+# 且拖着 zlib/bz2/lzma。测试对 patch.object(config_mod.shutil, ...) 的依赖
+# 由模块 __getattr__ 保持（见文件末尾）——惰性导入与可打桩性不再二选一。
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # 外置引擎声明目录：engines/*.yaml（不含 plugins/、templates/、_ 前缀）
@@ -184,6 +186,7 @@ def _validate_engine_paths(config: dict[str, Any]) -> dict[str, Any]:
         if cmd_path.exists():
             continue
         # 裸命令（如 PATH 中的可执行文件）：用 shutil.which 查 PATH，查不到才禁用
+        import shutil  # 惰性导入：见顶部注释；__getattr__ 保持 config_mod.shutil 可打桩
         if not (shutil.which(cmd_path_str) or shutil.which(cmd_path.name)):
             spec["enabled"] = False
     return config
@@ -783,3 +786,18 @@ def _cli():
 
 if __name__ == "__main__":
     _cli()
+
+
+def __getattr__(name: str) -> Any:
+    """惰性属性：`config.shutil` 不再常驻，但保持可被 patch.object 打桩。
+
+    PEP 562：模块 __getattr__ 只在属性缺失时触发。测试的
+    `patch.object(config_mod.shutil, "which", ...)` 解析 config_mod.shutil 时
+    由此导入真实 shutil 模块并返回；patch 落在 shutil 模块对象的 which 属性上，
+    函数级 `import shutil` 的用点（_validate_engine_paths）看到同一模块对象，
+    打桩语义与模块级导入时完全一致。
+    """
+    if name == "shutil":
+        import shutil
+        return shutil
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

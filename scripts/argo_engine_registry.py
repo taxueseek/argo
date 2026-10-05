@@ -81,11 +81,11 @@ class EngineRegistry:
 
     def _save_health(self):
         try:
-            HEALTH_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-            HEALTH_STATE_PATH.write_text(
-                json.dumps(self._health, ensure_ascii=False, separators=(",", ":")),
-                encoding="utf-8",
-            )
+            # 原子写收编（此前 write_text 直写）：截断即写帧内崩溃会让整个
+            # 健康门状态丢失——"全体失忆"。同族事故已在
+            # sub-skills/local-search/engine_registry 与 local_seek 修过两例，
+            # 这是漏网的第三例；mkstemp 唯一 tmp + os.replace，失败自清理。
+            _paths.atomic_write_json(HEALTH_STATE_PATH, self._health, indent=None)
         except Exception:
             pass
 

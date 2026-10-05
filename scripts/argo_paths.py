@@ -24,7 +24,6 @@ import contextlib
 import json
 import os
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -619,6 +618,9 @@ def atomic_write_text(path: Path, text: str, *, mode: int | None = None) -> None
     rename 语义），失败路径只清理自己的 tmp。`mode` 非空时对最终文件
     收紧权限（密钥类配置写 0600）。
     """
+    import tempfile  # 延迟导入：tempfile→shutil→random 子树实测 ~6ms，
+    # 纯缓存命中的搜索一次原子写都不做，没理由为它每次进程启动都付这笔钱
+    # （与 config.py 的惰性 logging 同一范式；_check_lock_roundtrip 已在用）。
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
@@ -695,6 +697,7 @@ def isolate_state_dir(tag: str = "argo-dev") -> Path:
     circuit_breaker.json 里混进 190 个 `eng_<8hex>` 夹具条目、`probe…`、
     `bad` 等测试引擎，熔断统计被稀释，且这些脏条目永久留在生产状态里。
     """
+    import tempfile  # 延迟导入（同 atomic_write_text）：隔离状态目录才需要
     d = Path(tempfile.mkdtemp(prefix=f"{tag}-state-"))
     os.environ[ENV_STATE_DIR] = str(d)
     return d

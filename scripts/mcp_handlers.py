@@ -8,7 +8,6 @@ schema 来源在 mcp_tools.py；JSON-RPC 帧处理在 mcp_transport.py。
 
 from __future__ import annotations
 
-import concurrent.futures
 import functools
 import importlib
 import importlib.util
@@ -16,7 +15,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import threading
 import cli_io
 from typing import Any
@@ -444,6 +442,7 @@ def _search_social_platforms(
             return platform, [], f"{platform}: {str(e)[:100]}"
 
     workers = min(max(len(platforms), 1), 4)
+    import concurrent.futures  # 惰性导入：py3.14 的它模块级导入 dataclasses→inspect（~5.5ms），social-sentiment 分支外每次 MCP 调用都白付
     ex = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
     futs = {ex.submit(_one, p): p for p in platforms}
     try:
@@ -935,6 +934,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         elif name == "argo_screenshot":
             import time as _time
+            import tempfile  # 惰性导入：仅 screenshot 分支需要，否则每次 MCP 调用白付 tempfile→shutil→random ~6ms
             output = arguments.get("output_path") or os.path.join(
                 tempfile.gettempdir(), f"argo_screenshot_{int(_time.time())}.png")
             full_page = arguments.get("full_page", False)

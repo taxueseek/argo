@@ -105,3 +105,71 @@ def test_cache_hit_path_pulls_no_heavy_imports():
         "unknown_requested_engines 调用点与 evidence_loop 的 "
         "is_serp_or_jump_url 调用点）"
     )
+
+
+# ── 2026-10-05 扩容：stdlib 重模块子进程探针（锁模块级 import 链）────────────
+#
+# 既有 HEAVY_TOP 探针用 builtins.__import__ hook，有两个盲区：
+#   1. importlib.import_module 走 C API，hook 看不见（mcp_handlers 的
+#      _lazy_cached 正是这条路径）；
+#   2. 只覆盖函数内 import——模块级 import 在 `import search` 时就已完成，
+#      hook 装晚了根本看不见。
+# 改用子进程 + sys.modules 全量对账：CLI（import search）与 MCP（import
+# mcp_server）两条入口的**模块级链条**不得出现下列重 stdlib 模块。MCP 每次
+# 工具调用都 spawn 新 python，这条线锁的是每次进程启动全付的固定开销。
+#
+# 锁定集合与登记项（2026-10-05 实测基线，改动需同步此处注释）：
+#   tempfile/shutil/random —— argo_paths·mcp_handlers·config 三处下沉后已出链
+#   argparse/gettext       —— CLI 解析期才需要（search_cli.build_parser 运行时
+#                             建 parser）；import search 与 MCP 链均不经过
+#   登记不锁（Plan B）      —— dataclasses/inspect：search_entry 等 5 文件 7 个
+#                             @dataclass 仍拖 ~5.5ms；转换涉及 _SearchRun 的
+#                             field(default_factory)，单独一轮做
+#   登记不锁（语义必需）    —— hashlib：config 内容摘要缓存键每次加载都算，
+#                             动它=改缓存失效语义（09-17 已判不动）
+
+import subprocess  # noqa: E402
+
+import pytest  # noqa: E402
+
+HEAVY_STDLIB = frozenset({
+    "tempfile",   # → shutil → random 子树 ~6ms
+    "shutil",     # → zlib/bz2/lzma
+    "random",
+    "argparse",   # → gettext ~2ms
+    "gettext",
+})
+
+PROBE_ENTRIES = ("search", "mcp_server")
+
+
+def _modules_after_import(entry: str) -> set[str]:
+    """子进程导入 entry，回传其 sys.modules 全集。"""
+    code = (
+        f"import sys; sys.path.insert(0, {str(SCRIPTS)!r})\n"
+        f"import {entry}\n"
+        "print('ARGOPROBE:' + ','.join(sorted(sys.modules)))\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True, text=True, timeout=60, cwd=str(ROOT),
+    )
+    line = [l for l in out.stdout.splitlines() if l.startswith("ARGOPROBE:")]
+    assert out.returncode == 0 and line, f"探针子进程失败: {out.stderr[-400:]}"
+    return set(line[0][len("ARGOPROBE:"):].split(","))
+
+
+@pytest.mark.parametrize("entry", PROBE_ENTRIES)
+def test_entry_modules_do_not_pull_heavy_stdlib(entry: str):
+    """CLI/MCP 入口的模块级链条不得拉入 tempfile/shutil/random/argparse 家族。
+
+    任何人把重 stdlib 模块放回顶层导入——无论直接 import 还是经由
+    importlib C API——这里立刻变红，不必再靠人肉 importtime 巡查。
+    修法参 argo_paths.atomic_write_text 与 mcp_handlers 的 screenshot 分支：
+    下沉到真正用到它的函数内。
+    """
+    dragged = sorted(HEAVY_STDLIB & _modules_after_import(entry))
+    assert not dragged, (
+        f"{entry} 的模块级 import 链拖入重 stdlib 模块 {dragged}："
+        "每次进程启动白付的固定开销"
+    )
