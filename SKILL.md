@@ -106,19 +106,13 @@ argo watch add|check|list|remove   # 观察模式：快照+变化检测（check 
 
 ## Gotchas
 
-撞过才知道的坑；踩到新坑加一行，口径细节见 `references/usage.md`。
+踩到新坑加一行，口径见 `references/usage.md`。
 
 - **`--envelope` 与 `--fields agent` 别同给**：后者会把 envelope 的增量剥成 0 字节——以为拿到了 provenance、实际没有。要 provenance 就去掉 `--fields agent`。
 - **结果异常少**：看 `funnel` 六格阶段计数，哪格归零即塌陷点。
 - **慢查询**：看 `timing.dispatch` 的 `useful_ms`/`wasted_ms`，区分「等答案」与「白等」。
 - **`--list-engines` 别直接 `--all`**：全量 ~54 KB 会灌爆版面；默认摘要 ~2.5 KB 够用。
 - **`-n` 超 10 无收益**。
-
-## 证据流程
-
-```bash
-python3 scripts/search.py "贵州茅台股价" --verify 3   # 核验 top-3 并回填证据分
-```
 
 ## 按需读取（低频操作细节）
 

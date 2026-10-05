@@ -490,12 +490,13 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时 | server 层接管，模型不可见 |
 | `ARGO_MCP_TOOLS` | tools/list 注入范围（core 三件套/all/逗号名单） | server 层接管，模型不可见 |
 
-### 抓取降级链分级开关（7）
+### 抓取降级链分级开关（8）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
 | `ARGO_FETCH_IMPERSONATE` | fetch 降级链单级启停 | 默认自动降级 |
 | `ARGO_FETCH_JINA` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_FETCH_JSRUN` | js-run 车道（V8 沙箱跑挑战页 JS）启停 | 默认开启；=0 关闭 |
 | `ARGO_FETCH_MD_NEGOTIATE` | fetch 降级链单级启停 | 默认自动降级 |
 | `ARGO_FETCH_MD_VARIANT` | fetch 降级链单级启停 | 默认自动降级 |
 | `ARGO_FETCH_MOBILE` | fetch 降级链单级启停 | 默认自动降级 |

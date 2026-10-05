@@ -95,7 +95,7 @@ class TestEngineDomainFlag(unittest.TestCase):
 
         import search_cli
         cli_src = inspect.getsource(search_cli)
-        self.assertIn("engine_domain=args.domain", cli_src,
+        self.assertIn("engine_domain=engine_domain", cli_src,
                       "search_cli 未把 --domain 转发给 super_search")
         self.assertIn("engine_sub_domain=args.sub_domain", cli_src)
 
