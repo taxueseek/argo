@@ -1271,6 +1271,11 @@ def search_engines(
 
     budget = total_budget if total_budget is not None else (timeout or 30)
     ex = ThreadPoolExecutor(max_workers=min(len(engines), max_parallel))
+    # 够数早停：fast/auto 下已收结果 ≥ n 且 ≥2 引擎完成时不再等慢引擎。
+    # 实测 ddgs bing 慢后端可拖 7s+，而次快引擎 4.5s 已给足 n 条——等最慢
+    # 引擎的边际收益低于墙钟成本；≥2 引擎是保底，防止单引擎同源结果早停
+    # 损失 RRF 跨引擎共识。deep/budget 仍收满（质量优先/配额契约不变）。
+    enough = mode in ("fast", "auto")
     try:
         futures = {ex.submit(_task, name): name for name in engines}
         try:
@@ -1286,6 +1291,8 @@ def search_engines(
                         errors.append(err)
                 except Exception as e:
                     errors.append(f"{name}: {e}")
+                if enough and len(all_results) >= n and len(engines_used) >= 2:
+                    break
         except (TimeoutError, FutureTimeoutError):
             # 整体超时（如 ddgs 慢后端 > budget）：保留已完成引擎的结果，
             # 未完成的标记 timeout 记入 errors，不整链崩溃（与主技能同构）。

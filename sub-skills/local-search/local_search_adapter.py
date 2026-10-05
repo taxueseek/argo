@@ -29,7 +29,8 @@ def main():
     parser.add_argument("--engine", "-e", default="", help="引擎名，多个用逗号分隔")
     parser.add_argument("--n", type=int, default=5, help="每引擎结果数")
     parser.add_argument("--timeout", "-t", type=float, default=None, help="超时秒数")
-    parser.add_argument("--max-parallel", type=int, default=5)
+    # None = 以 config 的 max_parallel_engines 为真源（与主链进程内路径同口径）
+    parser.add_argument("--max-parallel", type=int, default=None)
     parser.add_argument("--no-cache", action="store_true", help="跳过缓存")
     parser.add_argument("--mode", default="fast", choices=["fast", "auto", "deep", "budget"],
                         help="unified-search 模式透传")

@@ -344,7 +344,11 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
                 import search_v3
             res = search_v3.search_engines(
                 query, engines=None, n=n, timeout=float(timeout),
-                max_parallel=5, skip_cache=bool(kwargs.get("skip_cache", False)),
+                # None = 读子技能 config 的 max_parallel_engines（此前硬编码 5，
+                # config 调并发对主链路径不生效）；预算=单引擎超时，local-first
+                # 是「快」语义，墙钟不吃 30s 历史默认。
+                max_parallel=None, total_budget=float(timeout),
+                skip_cache=bool(kwargs.get("skip_cache", False)),
                 mode=mode,
                 since=kwargs.get("since"), until=kwargs.get("until"),
                 sort=kwargs.get("sort"),

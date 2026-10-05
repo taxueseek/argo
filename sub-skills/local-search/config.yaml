@@ -4,7 +4,9 @@
 settings:
   default_timeout: 8
   default_results: 5
-  max_parallel_engines: 5
+  # 27 个启用引擎 ÷ 12 ≈ 3 波串发（此前 5 并发 6 波，长尾实测可到 7s）；
+  # ddgs 免费源瞬时 12 并发有熔断器兜底。
+  max_parallel_engines: 12
   user_agent: "Mozilla/5.0 (compatible; unified-search-local/1.0.1; +https://local)"
   health_check:
     canary_query: "test"
