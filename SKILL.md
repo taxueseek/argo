@@ -55,6 +55,7 @@ python3 scripts/research.py "复杂问题" --json            # 取证包（扩�
 | `--mode fast|auto|deep|budget` | fast 免费优先 / auto 成本感知（默认）/ deep 质量优先 / budget 配额控制 |
 | `--explain` | 解释路由决策（含 TF-IDF 分数） |
 | `--no-cache` / `--depth fast|balanced|deep` | 跳过缓存 / 搜索深度 |
+| `--academic-deep` | 学术多源模式：自动设置 depth=deep + domain=academic，禁用 early-stop 让所有学术源参与（arxiv/openalex/local_pubmed/core 等），适合深度研究场景 |
 | `--since 7d|2026-08-01` `--until` `--sort relevance|newest|oldest` | 时间窗过滤 + 时间排序 |
 | `--verify [N]` | 对 top-N 未核验结果 fetch 正文，回填证据分（URL→证据分缓存，同 URL 二次搜索自动复用） |
 | `--domain` `--sub_domain` | 垂直域 / 子域限定 |

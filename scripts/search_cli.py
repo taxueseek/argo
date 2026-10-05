@@ -125,6 +125,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-results", "-n", type=_max_results_arg, default=5)
     parser.add_argument("--depth", "-d", default="fast",
                         choices=["fast", "balanced", "deep"])
+    parser.add_argument("--academic-deep", action="store_true",
+                        help="学术多源模式：自动设置 depth=deep + domain=academic，"
+                             "禁用 early-stop 让所有学术源参与（arxiv/openalex/"
+                             "local_pubmed/core 等），适合深度研究场景")
     # --no-cache 与 ARGO_NO_CACHE 合并成一个判据。此前只有 flag：用户照文档
     # 设 ARGO_NO_CACHE=1 却静默拿到缓存结果（cached=true、0 ms）——开关看着
     # 生效、其实没生效，是最难查的一类问题。走 engine_env.env_flag 这一个
@@ -428,6 +432,14 @@ def main():
     # 想重新引入时先读这三条：任何「预热」都必须证明它预热的正是 route 会在
     # 同一进程、同一路径上付的那一笔，否则只是把支出提前，不是省下。
     # 回归守卫见 tests/test_plan_a_optimizations.py::TestNoUnconditionalPrewarm。
+    # --academic-deep：学术多源模式，自动设置 depth=deep + domain=academic
+    if args.academic_deep:
+        depth = "deep"
+        engine_domain = "academic"
+    else:
+        depth = args.depth
+        engine_domain = args.domain or None
+
     results = super_search(
         query=args.query,
         engine=args.engine,
@@ -435,7 +447,7 @@ def main():
         explain=args.explain,
         skip_cache=args.no_cache,
         timeout=args.timeout,
-        depth=args.depth,
+        depth=depth,
         mode=args.mode,
         local_first=args.local_first,
         input_kind=args.input_kind,
@@ -447,7 +459,7 @@ def main():
         sort=args.sort,
         include_domains=[d for d in args.include_domains.split(",") if d.strip()] or None,
         exclude_domains=[d for d in args.exclude_domains.split(",") if d.strip()] or None,
-        engine_domain=args.domain or None,
+        engine_domain=engine_domain,
         engine_sub_domain=args.sub_domain or None,
         timing=_timing,
         # 三态：--include-local 强制开 / --no-local 强制关 / 都不给 = None
