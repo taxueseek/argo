@@ -112,7 +112,7 @@ class TestSafeStatePath(unittest.TestCase):
             swb._safe_state_path("/Users/evil/other.json")
 
     def test_accepts_default_and_tmp(self):
-        self.assertTrue(swb._safe_state_path(swb.STATE_PATH))
+        self.assertTrue(swb._safe_state_path(swb._state_path()))
         with tempfile.TemporaryDirectory() as td:
             self.assertTrue(swb._safe_state_path(str(Path(td) / "s.json")))
 
@@ -121,7 +121,8 @@ class TestMain(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.state = str(Path(self.tmp.name) / "sogou_state.json")
-        patcher = patch.object(swb, "STATE_PATH", self.state)
+        # 状态路径已是函数（ARGO_STATE_DIR 隔离态跟随），patch 解析函数本身
+        patcher = patch.object(swb, "_state_path", lambda: self.state)
         patcher.start()
         self.addCleanup(patcher.stop)
 

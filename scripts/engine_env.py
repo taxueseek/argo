@@ -519,3 +519,16 @@ def env_status_for(engine_id: str, spec: dict[str, Any] | None = None) -> dict[s
         "env_ready": len(missing) == 0,
         "allowed_by_env": is_engine_allowed_by_env(engine_id),
     }
+
+
+# ── CLI 入口的 env 文件自动同步 ──────────────────────────────────────────────
+# MCP server 在入口显式调 sync_envfile_to_environ()；CLI 的 scripts/*.py 此前
+# 没有任何同步点，导致约 22 处 os.environ 直读的 ARGO_* 开关在 CLI 下不认
+# env 文件（net_proxy.py 头注记录的「MCP 同步、CLI 不同步」分裂）。放在模块
+# 加载时一次性幂等同步：import 本模块的 CLI 入口即被覆盖，子进程经 environ
+# 继承同样受益。os.environ 已有值永远优先——显式覆盖与测试注入不受影响；
+# 与 get_env 的热读语义同源，只是把同一份数据提前灌进 environ。
+try:
+    sync_envfile_to_environ()
+except Exception:
+    pass  # env 文件缺失/损坏时静默走 os.environ 现状，不阻塞 import

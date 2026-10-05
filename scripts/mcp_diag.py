@@ -2,7 +2,10 @@
 """诊断版 MCP 服务器——记录所有 stdin 到日志"""
 import sys, os, time, json
 
-LOG = os.path.expanduser("~/.kimi/argo_diag.log")
+# 与 env 文件同目录（~/.config/argo 家族）；此前误写 ~/.kimi/（Kimi CLI 家目录）
+_DIAG_DIR = os.path.expanduser("~/.config/argo")
+os.makedirs(_DIAG_DIR, exist_ok=True)
+LOG = os.path.join(_DIAG_DIR, "argo_diag.log")
 PID = os.getpid()
 
 with open(LOG, "a", encoding="utf-8", errors="replace") as log:  # argv 可含中文查询，GBK locale 下会炸

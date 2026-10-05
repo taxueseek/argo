@@ -14,7 +14,7 @@ weixin.sogou.com 结果页：指纹与 cookie 连续，2026-09-30 实测连查�
   - account 字段 CLI 解析器（_parse_yaml_output）不保留，折进 snippet 头部
     「公众号「X」 」前缀，信息不丢
 
-会话复用：task space 与 page 持久化在状态文件 STATE_PATH，跨调用复用同一
+会话复用：task space 与 page 持久化在状态文件 _state_path()，跨调用复用同一
 浏览器页——保持指纹与 cookie 连续性正是本通道的降反爬手段，故刻意不走
 task.finish()（ego-browser「默认关闭空间」之例外：结果必须留在浏览器里供
 下一轮复用）。Ego Lite 重启后空间失效则自动新建。文件锁串行化并发调用；
@@ -44,7 +44,17 @@ import time
 from datetime import datetime
 from urllib.parse import quote
 
-STATE_PATH = os.path.expanduser("~/.config/argo/sogou_weixin_browser.json")
+def _state_path() -> str:
+    """登录态文件路径：ARGO_STATE_DIR 显式隔离时跟随，否则维持历史位置。
+
+    存量优先：默认仍用 ~/.config/argo/（老用户登录态原地复用，不静默搬家）；
+    测试/多实例隔离设 ARGO_STATE_DIR 后登录态随状态根走，互不共享。
+    """
+    override = os.environ.get("ARGO_STATE_DIR", "").strip()
+    if override:
+        return os.path.join(os.path.expanduser(override),
+                            "sogou_weixin_browser.json")
+    return os.path.expanduser("~/.config/argo/sogou_weixin_browser.json")
 DEFAULT_MIN_INTERVAL = 6.0     # 调用间最小间隔（秒），贴近域族节流量级
 MIN_INTERVAL_CAP = 20.0        # 补睡封顶：状态漂移时不至于睡死
 JS_RESULT_WAIT_S = 15          # 浏览器内等结果/判反爬的墙钟
@@ -183,10 +193,14 @@ def _safe_state_path(p: str) -> str:
     norm = os.path.normpath(os.path.abspath(os.path.expanduser(p)))
     if ".." in norm.split(os.sep):
         raise ValueError(f"state 路径不允许包含 ..：{p}")
-    allowed_roots = (
+    allowed_roots = [
         os.path.realpath(os.path.expanduser("~/.config/argo")),
         os.path.realpath(tempfile.gettempdir()),
-    )
+    ]
+    # ARGO_STATE_DIR 隔离态：状态根也是合法落点（与 _state_path 的解析对齐）
+    _override = os.environ.get("ARGO_STATE_DIR", "").strip()
+    if _override:
+        allowed_roots.append(os.path.realpath(os.path.expanduser(_override)))
     rp = os.path.realpath(norm)
     if not any(rp == root or rp.startswith(root + os.sep) for root in allowed_roots):
         raise ValueError(f"state 路径必须在 {' 或 '.join(allowed_roots)} 之内：{p}")
@@ -217,7 +231,7 @@ def main(argv: list | None = None) -> int:
     ap.add_argument("--min-interval", type=float, default=DEFAULT_MIN_INTERVAL)
     args = ap.parse_args(argv)
     try:
-        state_path = _safe_state_path(STATE_PATH)
+        state_path = _safe_state_path(_state_path())
     except ValueError as e:
         print(f"sogou_weixin_browser: {e}", file=sys.stderr)
         return 1
