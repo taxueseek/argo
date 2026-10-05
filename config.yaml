@@ -165,6 +165,7 @@ domains:
   - seeking_alpha
   - anysearch
   - eastmoney
+  - tencent_kline
   fallback: anysearch
   name: us_stock
   parallel: true
@@ -397,6 +398,7 @@ domains:
   - energy_charts
   - carbon_intensity
   - anysearch
+  - electricity_maps
   fallback: anysearch
   name: energy_grid
   primary: energy_charts
@@ -410,6 +412,7 @@ domains:
   - gbfs_nyc
   - train
   - anysearch
+  - opensky
   fallback: anysearch
   name: transport_rt
   primary: gbfs_nyc
@@ -504,6 +507,9 @@ domains:
   - anysearch
   - gov_regulations
   - wenshu
+  - eu_opendata
+  - fr_opendata
+  - gov_policy
   fallback: gov_regulations
   name: law_text
   parallel: true
@@ -576,6 +582,7 @@ domains:
   - byted
   - weather_cn
   - weather
+  - open_meteo
   fallback: qweather
   name: weather_query
   parallel: false
@@ -751,6 +758,7 @@ domains:
   - v2ex
   - sspai
   - csdn
+  - devto
   fallback: juejin
   name: cn_tech_community
   parallel: true
@@ -851,6 +859,7 @@ domains:
   - baidu_baike
   - zh_wikipedia
   - wikidata
+  - europeana
   fallback: baidu_baike
   name: cn_encyclopedia
   parallel: true
@@ -863,6 +872,7 @@ domains:
   - free_dictionary
   - wikipedia
   - zdic
+  - tatoeba
   fallback: wikipedia
   name: dictionary_search
   parallel: false
@@ -890,6 +900,9 @@ domains:
   - gutenberg
   - anysearch
   - k10plus
+  - dnb
+  - ndl
+  - local_goodreads
   fallback: anysearch
   name: book_search
   parallel: true
@@ -912,6 +925,7 @@ domains:
   - wikipedia
   - wikidata
   - tvmaze
+  - local_imdb
   fallback: imdb
   name: film_search
   parallel: true
@@ -1061,6 +1075,7 @@ domains:
   - netease_music
   - deezer
   - listenbrainz
+  - qq_music
   fallback: itunes
   name: media_search
   parallel: true
@@ -1166,6 +1181,10 @@ domains:
   - europepmc
   - dblp
   - semantic_scholar
+  - doaj
+  - figshare
+  - hal
+  - cnii
   fallback: openalex
   name: academic
   parallel: true
@@ -1215,6 +1234,17 @@ domains:
   engines_combo:
   - exa
   - anysearch
+  - lieu
+  - marginalia
+  - searchmysite
+  - wiby
+  - uapi
+  - parallel_free
+  - tavily
+  - firecrawl
+  - brave
+  - felo
+  - searxng
   fallback: anysearch
   name: semantic_discovery
   parallel: false
@@ -1253,6 +1283,7 @@ domains:
   engines_combo:
   - wikipedia
   - byted
+  - wolframalpha
   fallback: wikipedia
   name: fact_check
   parallel: true
@@ -1303,6 +1334,7 @@ domains:
   - hurriyet
   - ynet
   - ct24
+  - seltz
   fallback: anysearch
   name: world_news
   parallel: true
@@ -1331,6 +1363,7 @@ domains:
   - google_news
   - octen
   - you
+  - realtime_index
   fallback: byted
   name: news_realtime
   parallel: true
@@ -1390,6 +1423,7 @@ domains:
   - local_search
   - so
   - shenma
+  - metaso
   fallback: byted
   name: chinese_general
   parallel: true
@@ -1471,6 +1505,8 @@ domains:
   - reddit
   - xiaohongshu
   - weibo
+  - hatena_bookmark
+  - qiita
   # fallback 原为 zhihu（与 primary 相同，形同虚设）；anysearch 作通用 web 兜底，
   # 平台源全军覆没时（如 zhihu 缺密钥被踢）仍有相关结果
   fallback: anysearch
