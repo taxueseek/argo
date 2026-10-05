@@ -1054,8 +1054,12 @@ def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
 
     只处理「环境探测 + 纯计算」型挑战脚本（v0 面）。失败时返回空结果，
     由调用方降级到 tinyfish/CDP。
+
+    重试请求用 curl_cffi Chrome 指纹 impersonate（站点按 TLS 指纹风控，
+    裸 Python 指纹被静默拦截）。退避重试 3 次（5s/10s/15s）。
     """
     import re as _re
+    import time as _time
 
     # 提取 <script> 内容（挑战页的通行证计算脚本）
     scripts = _re.findall(r'<script[^>]*>(.*?)</script>', html, _re.DOTALL | _re.IGNORECASE)
@@ -1092,22 +1096,36 @@ def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
         if not cookie or len(cookie) < 10:
             return {}
 
-        # 用 clearance cookie 重试原请求
-        from http_client import HttpClient
-        client = HttpClient(timeout=timeout)
-        resp = client.get(url, extra_headers={"Cookie": cookie})
-        if resp.get("status") == 200 and len((resp.get("text") or "").strip()) >= 100:
-            return {
-                "url": url,
-                "content": resp["text"][:max_chars],
-                "html": "",
-                "title": "",
-                "length": len(resp["text"]),
-                "success": True,
-                "error": None,
-                "fetch_method": "jsrun_challenge",
-                "jsrun_cookie": cookie[:100],
-            }
+        # 用 clearance cookie 重试原请求（curl_cffi Chrome 指纹 + 退避重试）
+        from curl_cffi import requests as _cr
+
+        session = _cr.Session(impersonate="chrome")
+        last_err = ""
+        for attempt in range(1, 4):
+            try:
+                resp = session.get(
+                    url,
+                    headers={"Cookie": cookie},
+                    timeout=timeout,
+                )
+                if resp.status_code == 200 and len(resp.text.strip()) >= 100:
+                    return {
+                        "url": url,
+                        "content": resp.text[:max_chars],
+                        "html": "",
+                        "title": "",
+                        "length": len(resp.text),
+                        "success": True,
+                        "error": None,
+                        "fetch_method": "jsrun_challenge",
+                        "jsrun_cookie": cookie[:100],
+                    }
+                last_err = f"HTTP {resp.status_code}, {len(resp.text)} 字节"
+            except Exception as e:
+                last_err = str(e)[:200]
+            if attempt < 3:
+                _time.sleep(5 * attempt)  # 5s, 10s
+        return {}
     except Exception:
         pass
     return {}
