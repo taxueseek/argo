@@ -523,7 +523,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时 | server 层接管，模型不可见 |
 | `ARGO_MCP_TOOLS` | tools/list 注入范围（core 三件套/all/逗号名单） | server 层接管，模型不可见 |
 
-### 抓取降级链分级开关（8）
+### 抓取降级链分级开关（9）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -535,6 +535,20 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_FETCH_MOBILE` | fetch 降级链单级启停 | 默认自动降级 |
 | `ARGO_FETCH_PARALLEL` | fetch 降级链单级启停 | 默认自动降级 |
 | `ARGO_FETCH_TINYFISH` | fetch 降级链单级启停 | 默认自动降级 |
+| `ARGO_AUTH_FETCH`（别名 `ARGO_FETCH_AUTH`） | 登录态车道（站点有 `argo auth` profile 时跳过匿名链直进浏览器）启停 | 默认开启；=0 关闭。不影响 auth 子命令本身 |
+
+### argo auth — 浏览器登录态（A2，2026-10）
+
+```bash
+argo auth login "https://example.com"   # 开可见窗口登录/扫码一次，回终端按 Enter 保存
+argo auth status                        # 已登录站点清单（--json 可供脚本消费）
+argo auth logout "example.com"          # 删除该站 profile（Chrome 占用时拒绝并提示）
+```
+
+- profile 是 argo 自持的独立 Chromium profile（状态根 `browser-profiles/<site>/`，**不是你的主 Chrome**）。
+- cookie 只存 Chrome 自身加密存储（macOS Keychain），argo 全程不读取、不导出 cookie 值；抓取由浏览器页面内带凭证发请求，argo 只收响应体。
+- 登录态抓取结果标 `login_state_used: true` / `cache_eligible: false`：不进公共缓存、envelope 记为 authenticated 可见性。
+- 未登录站点零行为变化（不破默认路径）；批量爬取（`use_browser_fallback=False` 调用方）也不走登录态车道。
 
 ## 监控与取证命令（v2.9.0 补齐，MCP 同步有 argo_watch/argo_preflight/argo_cite）
 

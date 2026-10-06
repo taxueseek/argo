@@ -1048,53 +1048,10 @@ def _tinyfish_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> di
 
 
 # ─── 第二级：Chrome CDP 浏览器 ───────────────────────────────────────────────
-
-def _browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
-                   actions: list[dict] | None = None) -> dict:
-    """使用 Chrome CDP 驱动抓取（支持页面交互）。"""
-    try:
-        from chrome_cdp import ChromeCDP
-    except ImportError:
-        return _make_result(url, "", 0, "browser", ok=False,
-                            error="chrome_cdp not available")
-
-    try:
-        cdp = ChromeCDP(auto_start=True)
-    except Exception as e:
-        return _make_result(url, "", 0, "browser", ok=False,
-                            error=f"Chrome failed to start: {str(e)[:100]}")
-
-    try:
-        # 导航
-        cdp.navigate(url, wait_until="networkidle")
-
-        # 执行页面交互序列（Hound actions 等价能力）
-        if actions:
-            cdp.execute_actions(actions)
-
-        # 提取内容
-        html = cdp.get_html()
-        text = cdp.get_text()
-        title = cdp.get_title()
-
-        return {
-            "url": url,
-            "content": text[:max_chars] if text else "",
-            "html": html[:max_chars * 2] if html else "",
-            "title": title or "",
-            "length": len(text) if text else 0,
-            "success": bool(text),
-            "error": None if text else "empty content",
-            "fetch_method": "chrome_cdp",
-        }
-    except Exception as e:
-        return _make_result(url, "", 0, "browser", ok=False,
-                            error=f"CDP error: {str(e)[:100]}")
-    finally:
-        try:
-            cdp.stop()
-        except Exception:
-            pass
+# 实现拆在 fetch_browser（渲染 + actions + 登录态 profile 车道，A2）：
+# fetch_v3 在模块体量门禁的祖父清单里，只能减不能增。保留 `_browser_fetch`
+# 名字绑定（存量测试 monkeypatch 的是这个名字）。
+from fetch_browser import browser_fetch as _browser_fetch
 
 
 # ─── 第三级：质量评估 ─────────────────────────────────────────────────────────
@@ -1280,6 +1237,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
       第一级D：Parallel 免费 MCP web_fetch（keyless 免费层，仅公网 URL，markdown-only）
       第二级A：tinyfish 直连渲染（markdown-only，需 TINYFISH_API_KEY；need_html 或开关关闭时跳过）
       第二级B：Wayback 快照 + Chrome CDP 浏览器（自动降级或 actions 触发）
+      登录态车道：站点有 argo auth 持久 profile 时跳过匿名链直进浏览器
+                （结果标 login_state_used，不读写 URL 缓存；ARGO_AUTH_FETCH=0 关闭）
       第三级：质量评估（content_ok/page_type/quality_score）
 
     全局 deadline：单次 fetch_v3 总耗时上限 = deadline_s 参数（调用方显式
@@ -1325,6 +1284,21 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             return _strip_html_unless_needed(result, need_html)
     except ImportError:
         pass
+
+    # 登录态车道（A2）：站点有 argo auth 持久 profile → 跳过匿名链直进浏览器。
+    # 匿名 HTTP 对已登录站只会拿到「登出态」内容——那是成功的假象，比失败更糟。
+    # 判断本体在 browser_auth（含开关与 use_browser_fallback=False 让路）；
+    # 未认证时零改动，不破默认路径。
+    auth_profile = None
+    try:
+        from browser_auth import auth_profile_for_fetch
+        auth_profile = auth_profile_for_fetch(
+            url, allow_browser_lane=use_browser_fallback)
+    except Exception:
+        auth_profile = None
+    if auth_profile:
+        force_browser = True
+        skip_cache = True
 
     # 有 actions → 强制浏览器模式，且不读缓存
     if actions:
@@ -1373,7 +1347,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             pass
 
     if force_browser:
-        result = _browser_fetch(url, max_chars, timeout=15.0, actions=actions)
+        result = _browser_fetch(url, max_chars, timeout=15.0, actions=actions,
+                                auth_profile=auth_profile)
     else:
         # 全局 deadline：所有降级升级动作共用的总预算（秒）。
         # 调用方显式传 deadline_s 优先；未传时读 ARGO_FETCH_DEADLINE_S

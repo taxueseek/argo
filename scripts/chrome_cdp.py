@@ -247,6 +247,45 @@ class _CDPSession:
         _ws_handshake(self._sock, ws_path, host)
         self._msg_id = 0
         self._pending: dict[int, str] = {}  # id -> 已收数据
+        # 事件帧分发：send() 等响应的路上经过的事件帧转交订阅者
+        # （真 networkidle 依赖此通道统计 Network in-flight；此前事件帧
+        # 直接丢弃，navigate 的 networkidle 只能退化成 readyState 轮询）
+        self._event_handlers: list = []
+
+    def on_event(self, cb) -> None:
+        """订阅 CDP 事件帧：cb(method, params)。异常只吞不抛（观察者不能反过来打断命令路）。"""
+        self._event_handlers.append(cb)
+
+    def _dispatch(self, msg: dict) -> None:
+        method = msg.get("method")
+        params = msg.get("params") or {}
+        for cb in self._event_handlers:
+            try:
+                cb(method, params)
+            except Exception:
+                pass
+
+    def pump(self, duration: float = 0.2) -> None:
+        """只读事件 duration 秒并分发（无挂起命令时的观察窗口）。
+
+        期间出现的响应帧（无对应挂起命令）静默丢弃——所有 send() 都同步
+        吃掉自己的响应，剩下的只可能是迟到者。
+        """
+        deadline = time.time() + duration
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            text = _ws_recv(self._sock, timeout=min(0.1, remaining))
+            if text is None:
+                continue
+            try:
+                msg = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            if "id" in msg:
+                continue
+            self._dispatch(msg)
 
     def send(self, method: str, params: dict | None = None) -> dict | None:
         """发送 CDP 命令并等待对应 id 的响应。
@@ -273,8 +312,9 @@ class _CDPSession:
                 msg = json.loads(text)
             except json.JSONDecodeError:
                 continue
-            # 事件帧（无 id）→ 忽略继续
+            # 事件帧（无 id）→ 分发给订阅者后继续等响应
             if "id" not in msg:
+                self._dispatch(msg)
                 continue
             if msg.get("id") == msg_id:
                 if "error" in msg:
@@ -292,15 +332,22 @@ class _CDPSession:
 # ─── Chrome 进程管理 ─────────────────────────────────────────────────────────
 
 class _ChromeProcess:
-    """启动/管理 headless Chrome 进程。"""
+    """启动/管理 Chrome 进程（默认 headless；可带持久 profile / 可见窗口）。"""
 
-    def __init__(self, port: int = 0, chrome_path: str | None = None):
+    def __init__(self, port: int = 0, chrome_path: str | None = None,
+                 headless: bool = True, user_data_dir: str | None = None,
+                 start_url: str = "about:blank"):
         self.port = port or self._find_free_port()
         self.chrome_path = chrome_path or self._find_chrome()
+        self.headless = headless
         self._proc: subprocess.Popen | None = None
+        # 持久 profile（browser_auth 登录态车道）由调用方传入并负责生命周期；
+        # 临时 profile 仍是「每次冷启、启动前清残骸」的一次性语义。
+        self._persistent = user_data_dir is not None
         # 跨平台：/tmp 在 Windows 不存在，统一用系统临时目录
-        self._user_data_dir = os.path.join(
+        self._user_data_dir = user_data_dir or os.path.join(
             tempfile.gettempdir(), f"argo_chrome_{self.port}")
+        self._start_url = start_url
 
     @staticmethod
     def _find_free_port() -> int:
@@ -346,15 +393,17 @@ class _ChromeProcess:
         raise FileNotFoundError("Chrome not found. Install Chrome/Edge or set CHROME_PATH / chrome_path.")
 
     def start(self) -> None:
-        """启动 headless Chrome with remote debugging。"""
+        """启动 Chrome with remote debugging（headless 由 self.headless 决定）。"""
         import shutil
-        # 清理旧 profile（避免 Hangouts 这类背景页）
-        if os.path.isdir(self._user_data_dir):
+        # 清理旧 profile（避免 Hangouts 这类背景页）。持久 profile（登录态）
+        # 是要保命的数据，绝不 rmtree——那是 browser_auth 的 logout 才能做的事。
+        if not self._persistent and os.path.isdir(self._user_data_dir):
             shutil.rmtree(self._user_data_dir, ignore_errors=True)
 
-        cmd = [
-            self.chrome_path,
-            "--headless=new",
+        cmd = [self.chrome_path]
+        if self.headless:
+            cmd.append("--headless=new")
+        cmd += [
             "--no-sandbox",
             "--disable-gpu",
             "--disable-dev-shm-usage",
@@ -368,7 +417,7 @@ class _ChromeProcess:
             f"--remote-debugging-port={self.port}",
             f"--user-data-dir={self._user_data_dir}",
             "--window-size=1280,800",
-            "about:blank",
+            self._start_url,
         ]
         self._proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
@@ -411,6 +460,42 @@ class _ChromeProcess:
         self.stop()
 
 
+# ─── 真 networkidle 判据（纯逻辑，独立可测）─────────────────────────────────
+
+class NetworkIdleTracker:
+    """消费 CDP Network/Page 事件，维护 in-flight 计数，回答「网络静默了吗」。
+
+    口径：
+    - requestWillBeSent +1；**带 redirectResponse 时不加**——重定向是同一次
+      in-flight 的改道，原请求不会再来 loadingFinished，改道请求接着飞，
+      照加必泄漏（计数只涨不跌，networkidle 永不达成）。
+    - loadingFinished / loadingFailed 各 -1；下限钳 0（attach 晚了会错过
+      requestWillBeSent，只有 finished 事件到达时不许把计数打成负数）。
+    - Page.loadEventFired 置 load 位；idle = 无在途请求 且（load 已发 或
+      readyState 已 complete）。
+    """
+
+    def __init__(self):
+        self.inflight = 0
+        self.load_fired = False
+
+    def feed(self, method: str | None, params: dict) -> None:
+        if method == "Network.requestWillBeSent":
+            if not params.get("redirectResponse"):
+                self.inflight += 1
+        elif method in ("Network.loadingFinished", "Network.loadingFailed"):
+            self.inflight = max(0, self.inflight - 1)
+        elif method == "Page.loadEventFired":
+            self.load_fired = True
+
+    def idle(self, ready_state: str | None) -> bool:
+        if self.inflight > 0:
+            return False
+        if self.load_fired:
+            return True
+        return ready_state == "complete"
+
+
 # ─── 主 API ──────────────────────────────────────────────────────────────────
 
 class ChromeCDP:
@@ -431,10 +516,14 @@ class ChromeCDP:
     """
 
     def __init__(self, port: int = 0, chrome_path: str | None = None,
-                 auto_start: bool = True):
-        self._chrome = _ChromeProcess(port=port, chrome_path=chrome_path)
+                 auto_start: bool = True, user_data_dir: str | None = None,
+                 headless: bool = True):
+        self._chrome = _ChromeProcess(port=port, chrome_path=chrome_path,
+                                      headless=headless,
+                                      user_data_dir=user_data_dir)
         self._session: _CDPSession | None = None
         self._target_id: str | None = None
+        self._net: NetworkIdleTracker | None = None
         if auto_start:
             try:
                 self.start()
@@ -464,9 +553,19 @@ class ChromeCDP:
         host_end = ws_url.index("/", scheme_end)
         ws_path = ws_url[host_end:]
         self._session = _CDPSession("localhost", self._chrome.port, ws_path)
-        # 启用 Runtime + Page domain
+        # 启用 Runtime + Page + Network（Network 为真 networkidle 供事件）
         self._session.send("Page.enable")
         self._session.send("Runtime.enable")
+        try:
+            self._session.send("Network.enable")
+        except Exception:
+            pass  # 老内核不认 Network domain：等待策略自动退化，不致命
+        self._net = NetworkIdleTracker()
+        self._session.on_event(self._on_event)
+
+    def _on_event(self, method, params) -> None:
+        if self._net is not None:
+            self._net.feed(method, params)
 
     def stop(self) -> None:
         if self._session:
@@ -482,24 +581,51 @@ class ChromeCDP:
 
     # ── 导航 ──
 
-    def navigate(self, url: str, wait_until: str = "networkidle") -> None:
-        """导航到 URL，可选等待加载状态。"""
+    def navigate(self, url: str, wait_until: str = "networkidle",
+                 timeout: float = 10.0) -> None:
+        """导航到 URL，可选等待加载状态。
+
+        networkidle：CDP Network 事件计数的真等待（在途请求清零 + load 完成再
+        静默 0.5s）；超时按 False 放行——wait 是观察条件不是闸门，SPA 长轮询
+        永不 idle 时不得卡死整条任务（可降级纪律）。
+        """
+        self._net = NetworkIdleTracker()  # 新导航新口径：上一页的计数不带入
         self._session.send("Page.navigate", {"url": url})
         if wait_until == "networkidle":
-            self._wait_network_idle(timeout=10)
+            self._wait_network_idle(timeout=timeout)
         elif wait_until == "load":
-            self.wait_for_event("Page.loadEventFired", timeout=10)
+            self.wait_for_event("Page.loadEventFired", timeout=timeout)
 
-    def _wait_network_idle(self, timeout: float = 10.0) -> None:
-        """简单等待：sleep + 检查 document.readyState。"""
+    def _wait_network_idle(self, timeout: float = 10.0, quiet: float = 0.5) -> bool:
+        """真 networkidle：事件计数 + readyState 兜底，静默 quiet 秒算稳。
+
+        返回是否达成（超时 False 放行）。无事件通道（Network.enable 失败的
+        老内核）时退化为旧的 readyState 轮询语义。
+        """
+        if self._net is None or self._session is None:
+            time.sleep(0.5)
+            return False
         deadline = time.time() + timeout
+        quiet_since: float | None = None
+        last_probe = 0.0
+        ready: str | None = None
         while time.time() < deadline:
-            r = self.evaluate("document.readyState")
-            if r == "complete":
-                # 再等一小段时间让异步请求完成
-                time.sleep(0.5)
-                return
-            time.sleep(0.3)
+            self._session.pump(0.1)
+            now = time.time()
+            if now - last_probe >= 0.5:
+                last_probe = now
+                try:
+                    ready = self.evaluate("document.readyState")
+                except Exception:
+                    ready = None
+            if self._net.idle(ready):
+                if quiet_since is None:
+                    quiet_since = now
+                elif now - quiet_since >= quiet:
+                    return True
+            else:
+                quiet_since = None
+        return False
 
     def wait_for_event(self, event_method: str, timeout: float = 10.0) -> bool:
         """等待特定 CDP 事件。"""
@@ -590,6 +716,42 @@ class ChromeCDP:
         })
         if r and "result" in r:
             val = r["result"].get("value")
+            return val
+        return None
+
+    def fetch_json(self, url: str, method: str = "GET",
+                   headers: dict | None = None, body: str | None = None) -> dict | None:
+        """页面内带凭证 fetch（A2「浏览器代发请求」）。
+
+        cookie 由浏览器按页面域自动附加（credentials: include），argo 只收
+        响应体——cookie 值从头到尾不经过 argo，更不进模型上下文。
+        适用同源接口（或带 CORS 的接口）；返回 {"status": int, "body": str}，
+        页面/网络/超时失败返回 None。只读语义：本方法不给写操作背书。
+        """
+        try:
+            expr = (
+                "(async () => {"
+                f"const r = await fetch({json.dumps(url)},"
+                f"{{method:{json.dumps(method)},"
+                f"credentials:'include',"
+                f"headers:{json.dumps(headers or {'Accept': 'application/json'})},"
+                + (f"body:{json.dumps(body)}," if body is not None else "")
+                + "});"
+                "const t = await r.text();"
+                "return {status:r.status, body:t};"
+                "})()"
+            )
+            r = self._session.send("Runtime.evaluate", {
+                "expression": expr,
+                "awaitPromise": True,
+                "returnByValue": True,
+            })
+        except Exception:
+            return None
+        if not r or "error" in r or r.get("exceptionDetails"):
+            return None
+        val = (r.get("result") or {}).get("value")
+        if isinstance(val, dict) and "status" in val and "body" in val:
             return val
         return None
 

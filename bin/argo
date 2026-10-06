@@ -297,6 +297,7 @@ Usage:
   argo extract   "url"            结构化提取（表格/Meta/JSON-LD）
   argo article   "url"            微信公众号文章全文抓取（标题/正文/图片）
   argo screenshot "url"           网页截图（--full-page 整页 / --output 指定路径）
+  argo auth      {{login|status|logout}}  浏览器登录态（自持持久 profile；登录一次抓取带会话）
   argo pdf       "url"            PDF 正文提取（--pages 1-5 / --password 口令）
   argo paper     "arxiv-id"       论文深读（--outline/--section/--latex/--cited-by）
   argo tweet     "<url|id>"       X 帖子完整打包（正文+串/引用/转发+媒体；--out 落盘）
@@ -395,8 +396,12 @@ def main():
         "tweet":      ("tweet.py",      []),
         # answer/watch：MCP 工具面 2026-09-26 补齐（argo_answer/argo_watch），
         # CLI 与 MCP 能力面自此一一对应
-        "answer":    ("answer.py",     ["--json"]),
+        "answer":    ("answer.py",    ["--json"]),
         "watch":     ("watch.py",      []),
+        # auth：浏览器登录态（A2，持久 profile）。login 开可见窗口扫码/登录一次，
+        # 抓取链对已登录站点自动带会话；cookie 由 Chrome 自持加密，argo 不读取。
+        # 不进 MCP 工具面：登录是用户的一次性交互动作，不是模型该调的工具。
+        "auth":      ("browser_auth.py", []),
         "job":       ("job.py",        []),
         "preflight": ("batch_probe.py", []),
         "mcp":       ("mcp_setup.py",  []),
