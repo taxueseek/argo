@@ -26,14 +26,21 @@
 即 weibo/reddit/bilibili/twitter 内部最多 3 次尝试带指数退避 —— 与 anysearch
 同构，故都应声明 timeout。
 
-而 local_search / xiaohongshu 内部**无重试**，不应声明。
+而 local_search / xiaohongshu 情况不同（2026-10-06 重新裁定，二分改三分）：
+  · local_search 是**自带调度的聚合引擎**（sub-skills/local-search search_v3：
+    内部自管多引擎并发、per-cli 重试与 total_budget 墙钟）——应声明 timeout。
+    外层引擎级重试对它意味着重跑整个多引擎聚合（贵且无意义），内部预算已兜
+    住墙钟；声明 ≥8s 还带来 fast/auto 档 6s 收紧帽（方案 A 的本意）。
+  · xiaohongshu 内部**无重试**，不应声明（声明会关掉外层重试，2026-10-06
+    实锤方案 A 补 timeout=10 违反本策略，已回退为不声明）。
 
 ## 本文件锁定
 
   1. 有内部重试的引擎必须声明 timeout（防叠乘）
-  2. 无内部重试的引擎**不得**被误声明（防成功率下降）—— 以用检查把意图写下来
-  3. `execution.per_engine_budget_s` 可配置、非法值安全回落
-  4. 预算常量与 default_timeout 的合理关系
+  2. 自带调度的聚合引擎必须声明 timeout（防外层重跑整个聚合）
+  3. 无内部重试的引擎**不得**被误声明（防成功率下降）—— 以用检查把意图写下来
+  4. `execution.per_engine_budget_s` 可配置、非法值安全回落
+  5. 预算常量与 default_timeout 的合理关系
 """
 
 from __future__ import annotations
@@ -52,9 +59,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from config import load_config  # noqa: E402
 import search  # noqa: E402
 
-# ── 分组：按「内部是否有广谱重试」划分（实测确认）──────────────────────
+# ── 分组：按「内部重试/调度形态」三分（实测确认）──────────────────────────
 HAS_INTERNAL_RETRY = ("weibo", "reddit", "bilibili", "twitter", "anysearch")
-NO_INTERNAL_RETRY = ("local_search", "xiaohongshu")
+# 自带调度的聚合引擎：内部自管预算/重试/共识，声明 timeout 换取收紧帽，
+# 外层重试不再叠加（重跑整个聚合无意义）
+SELF_SCHEDULED = ("local_search",)
+NO_INTERNAL_RETRY = ("xiaohongshu",)
 
 # 内部重试的特征：共用 _http_get_with_retry（429 + URLError 双分支）
 _RETRY_SIGNS = (
@@ -123,6 +133,17 @@ class TestRetryPolicyConsistency:
                 f"{eng} 被列为「无内部重试」但源码出现重试特征；"
                 f"若已加重试，应声明 timeout 消除叠乘")
 
+    def test_self_scheduled_group_really_self_schedules(self):
+        """SELF_SCHEDULED 组的源码必须真的自带调度/预算机制（防分组过时）。"""
+        signs = ("total_budget", "_RETRY_FAST_S", "max_parallel")
+        for eng in SELF_SCHEDULED:
+            src = _engine_source(eng)
+            assert src, f"{eng} 源码未解析到（分组过时或路径解析失效）"
+            hits = sum(1 for s in signs if s in src)
+            assert hits >= 2, (
+                f"{eng} 被列为「自带调度」但源码未见预算/重试特征（{hits}/3）；"
+                f"若实现已变，需重新评估分组")
+
     def test_anysearch_builder_has_no_http_retry(self):
         """anysearch 的 HTTP 级重试已移除（max_retries=0）。"""
         src = (ROOT / "scripts" / "engines_builders_tech.py").read_text(encoding="utf-8")
@@ -131,19 +152,20 @@ class TestRetryPolicyConsistency:
 
 
 class TestTimeoutDeclaration:
-    """声明策略：有内部重试的必须声明；无内部重试的不应声明。"""
+    """声明策略：有内部重试/自带调度的必须声明；无内部重试的不应声明。"""
 
     def test_retry_engines_declare_timeout(self):
         cfg = load_config(force=True)
         engines = cfg.get("engines") or {}
         missing = []
-        for eng in HAS_INTERNAL_RETRY:
+        for eng in (*HAS_INTERNAL_RETRY, *SELF_SCHEDULED):
             spec = engines.get(eng) or {}
             to = spec.get("timeout")
             if not (isinstance(to, (int, float)) and to >= 8):
                 missing.append(f"{eng}(timeout={to})")
         assert not missing, (
-            "以下引擎内部有广谱重试但未声明 timeout>=8 → 会与引擎级重试叠乘：\n  "
+            "以下引擎内部有重试/自带调度但未声明 timeout>=8 "
+            "（会与引擎级重试叠乘 / 失去收紧帽）：\n  "
             + "\n  ".join(missing))
 
     def test_no_retry_engines_not_declared(self):
