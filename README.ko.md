@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.3-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-264-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -60,7 +60,7 @@
 4. **무료 오픈 생태계로 충분.** 정부·학술·표준·보안 공개 API와 키리스 엔진이 대부분 도메인을 커버 (무설정 225개).
 5. **품질은 측정 가능.** 랭킹 골든 플로어, 융합 이득 어블레이션 게이트, 음의 라우팅 제어.
 
-> v2.8.9은 이 모두를 구현: 264 소스 / 94 도메인 / 229 무설정.
+> v2.9.3은 이 모두를 구현: 264 소스 / 94 도메인 / 229 무설정.
 
 ---
 
@@ -153,7 +153,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. **설치 진원은 GitHub뿐입니다**(`npx github:taxueseek/argo` 또는 `install.sh`); 현재 권장 **v2.8.9**. **`npm install argo-search`는 쓰지 마세요** — npm 레지스트리 사본은 **비공식 낡은 v1.0.1**(이 저장소가 아님, 기능 부족, 갱신 안 됨). 이 패키지는 `private: true`로 npm 오배포를 막습니다.
+경로를 고르면 됩니다. **설치 진원은 GitHub뿐입니다**(`npx github:taxueseek/argo` 또는 `install.sh`); 현재 권장 **v2.9.3**. **`npm install argo-search`는 쓰지 마세요** — npm 레지스트리 사본은 **비공식 낡은 v1.0.1**(이 저장소가 아님, 기능 부족, 갱신 안 됨). 이 패키지는 `private: true`로 npm 오배포를 막습니다.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -331,13 +331,19 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.8.9)
+### 대략적인 능력 세트 (v2.9.3)
 
+- **X 게시물 완전 패키징 `argo tweet`(v2.9.3 신규)**: 한 번의 명령으로 지정 게시물의 전문·스레드/인용/리포스트·인터랙션 데이터를 패키징; 기본은 텍스트만, `--out`으로 4파일 세트(post.md/raw.json/manifest.json/CHECKLIST.md), `--media`로 이미지/동영상 필요 시 다운로드; 실패 원인은 산출물에 가시화
+- **브라우저 로그인 상태 레인 `argo auth`(v2.9.3 신규)**: `argo auth login/status/logout`가 사이트별 영구 브라우저 프로필을 유지 — QR을 한 번 스캔하면 로그인 필수 페이지도 가져올 수 있음; 쿠키는 Chrome 자체 암호화 저장소에만 보관되며 argo가 읽지 않음; 로그인 상태 결과에는 `login_state_used`를 붙여 공유 캐시에서 제외(`ARGO_AUTH_FETCH`로 활성화)
+- **중국어 로컬 체인 품질 + 속도(v2.9.3 신규)**: Sogou/Baidu 리다이렉트 껍질을 세션 없이 실제 URL로 해석해 보존 결과를 1→5건으로; 컨센서스 유예 적응화 — 충분히 전달한 첫 엔진으로 방출, 영어 디스패치 ~3.0s→2.2-2.5s
+- **철도 환승·경유 조회(v2.9.3 신규)**: 12306 검색이 환승·경유 일정에 대응, 후보 퍼널의 10→1 압축을 실제대로 10→10으로 수정; 학술 검색은 `--academic-deep` 원플래그로 멀티소스 심층
+- **라우팅 확장 및 인텐트 게이트 수정(v2.9.3 신규)**: 도메인 참조 없는 43개 엔진을 해당 도메인에 배선, 키 불필요 금융 소스 3건 추가; "튜토리얼"류 쿼리가 인텐트 게이트로 단일 엔진에 오잠기지 않음
+- **로컬 능력 가속화(v2.9.3 신규)**: 로컬 이미지 핑거프린트 매칭 77k장 158ms→3.9ms(기본 비활성, `ARGO_LOCAL_IMAGE=1`로 활성화); 에이전트 소비 자동 슬림화, MCP 호출당 고정 오버헤드 −32%
 - **로컬 데이터 융합 (v2.8.4 신규)**: 연구 작업 패키지에 `file_inputs`(로컬 1차 데이터, sha256/혈통 등기) + `recompute`(샌드박스 재계산); dossier가 `local_sources` 출력
 - **MCP 한 줄 주입 (v2.8.4 신규)**: `argo mcp inject`로 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (원자 쓰기 + 백업 + 가역; 진원 `mcp/clients.yaml`)
 - **구조화 검색 강화 (v2.8.4 신규)**: 쿼리 정규화 + 변체 + 복잡도 게이트; 소셜 문법 우선; TF-IDF는 중국어 엔진을 버린 뒤에도 후보를 봄; `--include-local`
 - **Keenable (v2.8.4 신규)**: 일반 웹 검색 엔진 추가 (L1 선언적 HTTP, 무료 체험, `ARGO_KEENABLE_API_KEY`)
-- **261 소스, 93 도메인** (226 무설정): 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
+- **264 소스, 94 도메인** (229 무설정): 일반 웹 + 금융 / 매크로 / 영화 / 스포츠 / 지리 / 조직 / 미디어 / 화학 / 학술 / 코드 (진원: `config.yaml`)
 - **MCP 도구 19개**(CLI 기능 면과 동일): search, research, evidence, clarify, fetch, screenshot, PDF, social, local files, crawl, local preview, recompute, 위챗 공식전 원문, 채용 집계, 구조화 추출, URL 일괄 사전점검, 직답, 웹 변화 관찰, DOI 인용 항목
 - **다국어 검색**: 중국어, 영어, 일본어, 한국어, 키릴, 태국어, 아랍어, 히브리어, 그리스어, 데바나가리, …; 라우팅과 엔진 파라미터가 언어를 따름; 비중국어 쿼리는 중국어 전용 소스 회피 (Zhihu / Sogou WeChat / A주 스냅샷 등)
 - **수직 복구 게이트**: 빈 결과 복구 시 영화·스포츠에 pypi / npm / 속보 등이 「새지」 않음
@@ -546,6 +552,15 @@ argo/
 
 ## 최근 업데이트
 
+### v2.9.3: X 게시물 완전 패키징 + 브라우저 로그인 상태 레인 + 로컬 체인 품질·속도 수정
+
+- **신규**: `argo tweet` — 한 번의 명령으로 지정 X 게시물의 전문·스레드/인용/리포스트·인터랙션 데이터를 패키징; 기본은 텍스트만, `--out`으로 4파일 세트(post.md/raw.json/manifest.json/CHECKLIST.md), `--media`로 이미지/동영상 필요 시 다운로드; 실패 원인은 산출물에 가시화
+- **신규**: `argo auth` 브라우저 로그인 상태 레인 — `login/status/logout`으로 사이트별 영구 브라우저 프로필 관리; QR을 한 번 스캔하면 로그인 필수 페이지도 가져올 수 있음; 쿠키는 Chrome 자체 암호화 저장소에만 보관되며 argo가 읽지 않고, 로그인 상태 결과에는 `login_state_used`를 붙여 공유 캐시에서 제외(`ARGO_AUTH_FETCH`로 활성화)
+- **정확성**: 중국어 로컬 체인이 Sogou/Baidu 리다이렉트 껍질을 세션 없이 실제 URL로 해석(보존 결과 1→5건); 인텐트 게이트 오잠금 수정("튜토리얼"류 쿼리가 단일 엔진에 고정되지 않음); 철도 테이블 행 식별 URL로 후보 퍼널 압축(10→1)을 실제대로 10→10으로 수정
+- **속도**: 컨센서스 유예 적응화(충분히 전달한 첫 엔진으로 방출; 영어 디스패치 ~3.0s→2.2-2.5s); 로컬 롱테일 조기 중단; 로컬 이미지 핑거프린트를 mmap 행렬곱으로(77k장 158ms→3.9ms, 기본 비활성 `ARGO_LOCAL_IMAGE=1`); 에이전트 소비 자동 슬림화 + markdown 콘텐츠 협상, MCP 호출당 고정 오버헤드 −32%
+- **소스**: 도메인 참조 없는 43개 엔진을 각 도메인에 배선; route_lang 언어 라우팅; 키 불필요 금융 소스 3건 추가; `--academic-deep` 원플래그 학술 멀티소스; 철도 환승·경유 조회
+- **안정성**: js-run을 fetch 체인 첫 번째 레인으로 접선(Chrome 핑거프린트 재시도); jsrun 세션 누수와 백오프 예산 수정; 타임아웃 조임(redskill 60→15s)과 선언 정책 삼분할
+
 ### v2.9.2: DSH 0.2.1-alpha.1 호환 검증 + 라우팅/가드 수정 + js-run 서브 스킬
 
 - **호환성**: DSH 플러그인을 최신 DSH 0.2.1-alpha.1에서 실측 검증 — 네이티브 퍼스트클래스 도구 / web_search seam / wide_research 삼형태 모두 정상 작동; `argo mcp inject`에 WorkBuddy를 추가해 7번째 호스트까지 지원
@@ -613,6 +628,7 @@ argo/
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.9.3** | **X 게시물 완전 패키징 + 브라우저 로그인 상태 레인 + 로컬 체인 품질·속도 수정**: 신규 `argo tweet`(전문/스레드/인용/리포스트/미디어를 필요에 따라 패키징, `--out` 4파일 세트); 신규 `argo auth` 브라우저 로그인 상태 레인(사이트별 영구 프로필, 쿠키는 Chrome의 암호화 저장소에만, 로그인 상태 결과는 공유 캐시 제외); 중국어 로컬 체인이 Sogou/Baidu 리다이렉트 껍질을 세션 없이 해석(보존 1→5) + 컨센서스 유예 적응화(영어 디스패치 ~3.0s→2.2-2.5s); js-run을 fetch 체인 첫 레인으로 접선(Chrome 핑거프린트 재시도); 철도 환승·경유 조회(퍼널 10→1을 실제대로 10→10으로 수정); `--academic-deep` 원플래그 학술 심층; 43개 엔진 도메인 배선 + 키 불필요 금융 소스 3건 + 인텐트 게이트 오잠금 수정; 로컬 이미지 핑거프린트 158ms→3.9ms; 에이전트 소비 슬림화(MCP 고정 오버헤드 −32%). |
 | **v2.9.2** | **DSH 0.2.1-alpha.1 호환 검증 + 라우팅/가드 수정 일괄 + js-run 서브 스킬**: DSH 플러그인 삼형태를 최신 DSH 0.2.1-alpha.1에서 실측 검증; `argo mcp inject`에 WorkBuddy를 추가해 7번째 호스트까지 지원; TF-IDF 약증거 보조 소스 강등, 죽은 소스 플로어 + 서킷 브레이커 슬롯 재충전, 쿼터 소진 엔진 라우팅 격리, serp_guard 연쇄 오탐 수정; engines/evidence 지연 임포트(import량 −50%)와 어드미션 존재 집합 단락(open 261→99); MCP 진입·수치 인자 가드 수습; js-run 서브 스킬 신규(브라우저 없이 웹 JS, P50 ≈1ms). |
 | **v2.9.1** | **콘텐츠 품질 최적화 + 콘텐츠 팜 대응 + 최신 버전 적응**: 콘텐츠 품질 평가를 최적화하여 저품질 대량 생성 콘텐츠 식별·필터링 능력 향상; 최신 버전에 적응해 원활한 협업 보장; 로컬 검색에 자체 설치 트리 가드를 추가해 결과가 자체 소스로 오염되지 않도록 방지. |
 | **v2.9.0** | **소스 최적화 + 플러그인과 CLI 대등 + 다국어 소수 언어**: 소스 237→253(무설정 198→219). 14개 소수 언어 뉴스 소스, CORE 전문 소스, TinEye 역방향 이미지 검색, Bing RSS 등 추가; 바이두·소고우 부활; CLI 18개 명령과 MCP 19개 도구 일대일 대응; 임포트 체인 −79%, 재랭킹 33ms→1.5ms, 캐시 적중률 대폭 향상; 쿼터 쓰기 경로 프로세스 간 안전 수정; `argo stats` 로컬 사용 로그 신규 추가. 자세히는 [릴리스 노트](docs/RELEASE_NOTES_v2.9.0.md) |

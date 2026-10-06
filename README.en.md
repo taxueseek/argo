@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.3-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-264-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -60,7 +60,7 @@
 4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (219 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> v2.9.2 ships all of the above: 264 sources, 94 domains, 229 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> v2.9.3 ships all of the above: 264 sources, 94 domains, 229 keyless. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
@@ -153,7 +153,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **GitHub is the only install source of truth** (`npx github:taxueseek/argo` or `install.sh`); current recommendation **v2.8.9**. **Do not `npm install argo-search`** — the npm registry copy is an **unofficial stale v1.0.1** (not this repo, incomplete, not updated). This package sets `private: true` so it is not published to npm by mistake.
+Pick any path. **GitHub is the only install source of truth** (`npx github:taxueseek/argo` or `install.sh`); current recommendation **v2.9.3**. **Do not `npm install argo-search`** — the npm registry copy is an **unofficial stale v1.0.1** (not this repo, incomplete, not updated). This package sets `private: true` so it is not published to npm by mistake.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -289,8 +289,14 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.8.9)
+### Rough capability set (v2.9.3)
 
+- **Full X post packaging, `argo tweet` (new in v2.9.3)**: one command packs a given post's full text, thread/quote/repost context and engagement data; text-only by default, `--out` writes a 4-file bundle (post.md/raw.json/manifest.json/CHECKLIST.md), `--media` downloads images/videos on demand; failure reasons surface in the artifacts
+- **Browser login-state lane, `argo auth` (new in v2.9.3)**: `argo auth login/status/logout` keeps a persistent browser profile per site — scan the QR code once and login-required pages become fetchable; cookies stay in Chrome's own encrypted storage and never touch argo; login-state results are flagged `login_state_used` and excluded from the shared cache (enable with `ARGO_AUTH_FETCH`)
+- **Chinese local-chain quality + speed (new in v2.9.3)**: Sogou/Baidu redirect shells resolve to real URLs without a session, lifting kept results from 1 to 5; consensus grace adapts — the first engine delivering enough releases the wait, English dispatch ~3.0s→2.2-2.5s
+- **Rail transfer/stopover queries (new in v2.9.3)**: 12306 lookups cover transfer and multi-leg itineraries, with the candidate funnel fixed from 10→1 compression to a faithful 10→10; academic search gains a one-flag `--academic-deep` multi-source mode
+- **Routing expansion & intent-gate fix (new in v2.9.3)**: 43 engines without domain references wired into their domains, 3 new keyless finance sources; "tutorial"-style queries no longer get locked onto one engine by the intent gate
+- **Local capability speedups (new in v2.9.3)**: local image fingerprint matching 158ms→3.9ms across 77k images (off by default, `ARGO_LOCAL_IMAGE=1` to enable); automatic agent-consumption slimming, MCP per-call fixed overhead −32%
 - **Local data fusion (new in v2.8.4)**: research work packages take `file_inputs` (first-hand local data; sha256/lineage registered) + `recompute` (sandboxed recalc); dossier emits `local_sources`
 - **One-command MCP inject (new in v2.8.4)**: `argo mcp inject` for Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (atomic write + backup + undo; source `mcp/clients.yaml`)
 - **Structured search upgrades (new in v2.8.4)**: query normalize + variants + complexity gate; social-syntax first; TF-IDF keeps looking after dropping a Chinese engine; `--include-local`
@@ -504,6 +510,15 @@ argo/
 
 ## Recent updates
 
+### v2.9.3: full X post packaging + browser login-state lane + local-chain quality/speed fixes
+
+- **New**: `argo tweet` — one command packs a given X post's full text, thread/quote/repost context and engagement data; text-only by default, `--out` writes a 4-file bundle (post.md/raw.json/manifest.json/CHECKLIST.md), `--media` downloads images/videos on demand; failure reasons surface in the artifacts
+- **New**: `argo auth` browser login-state lane — `login/status/logout` manages a persistent per-site browser profile; scan the QR once and login-required pages become fetchable; cookies stay in Chrome's own encrypted storage (argo never reads or exports them), login-state results are flagged `login_state_used` and excluded from the shared cache (enable with `ARGO_AUTH_FETCH`)
+- **More accurate**: the Chinese local chain resolves Sogou/Baidu redirect shells into real URLs without a session (kept results 1→5); intent-gate false-lock fixed ("tutorial"-style queries no longer pinned to one engine); rail table-row identity URLs fix the candidate funnel compression (10→1 → faithful 10→10)
+- **Faster**: adaptive consensus grace (the first engine delivering enough releases the wait; English dispatch ~3.0s→2.2-2.5s); local long-tail early-stop; local image fingerprints via mmap matrix dot product (77k images 158ms→3.9ms, off by default with `ARGO_LOCAL_IMAGE=1`); automatic agent-consumption slimming + markdown content negotiation, MCP per-call fixed overhead −32%
+- **More sources**: 43 engines without domain references wired into their domains; route_lang language routing; 3 new keyless finance sources; `--academic-deep` one-flag academic multi-source; rail transfer/stopover queries
+- **More robust**: js-run wired in as the fetch chain's first lane (Chrome-fingerprint retries); jsrun session-leak and backoff-budget fixes; timeouts tightened (redskill 60→15s) with the declaration policy split into three groups
+
 ### v2.9.2: DSH 0.2.1-alpha.1 compatibility verified + routing/guard fixes + js-run sub-skill
 
 - **More compatible**: the DSH plugin is verified on the latest DSH 0.2.1-alpha.1 — native first-class tools / web_search seam / wide_research all work; `argo mcp inject` adds WorkBuddy, covering a 7th host
@@ -571,6 +586,7 @@ argo/
 
 | Version | Notes |
 |---------|-------|
+| **v2.9.3** | **Full X post packaging + browser login-state lane + local-chain quality/speed fixes**: new `argo tweet` (full text/thread/quotes/reposts/media packed on demand, `--out` 4-file bundle); new `argo auth` browser login-state lane (persistent per-site profile, cookies stay in Chrome's encrypted storage, login-state results excluded from the shared cache); Chinese local chain resolves Sogou/Baidu redirect shells session-free (kept 1→5) + adaptive consensus grace (English dispatch ~3.0s→2.2-2.5s); js-run wired as the fetch chain's first lane (Chrome-fingerprint retries); rail transfer/stopover queries (funnel 10→1 fixed to a faithful 10→10); `--academic-deep` one-flag academic deep-dive; 43 engines wired into domains + 3 keyless finance sources + intent-gate false-lock fix; local image fingerprints 158ms→3.9ms; agent-consumption slimming (MCP fixed overhead −32%). |
 | **v2.9.2** | **DSH 0.2.1-alpha.1 compatibility verified + routing/guard fixes + js-run sub-skill**: the DSH plugin's three forms verified enabled on the latest DSH 0.2.1-alpha.1; `argo mcp inject` adds WorkBuddy, covering a 7th host; TF-IDF weak-evidence demotion to auxiliary sources, dead-source floor + breaker slot backfill, quota-exhausted engine routing isolation, serp_guard collateral false-positive fixes; engines/evidence lazy imports (import −50%) and admission existence-set short-circuit (open 261→99); MCP entry and numeric-argument guards tightened; new js-run sub-skill (browser-free web JS, P50 ≈1ms). |
 | **v2.9.1** | **Content-quality optimization + content-farm resistance + latest-version adaptation**: improved content-quality assessment with better identification and filtering of low-quality bulk-generated content; adapted to the latest version for seamless operation; local search gained a self-install-tree guard so results are not polluted by argo's own source. |
 | **v2.9.0** | **Source optimization + plugin/CLI parity + minor languages**: sources 237→253 (keyless 198→219), adding 14 minor-language news sources, the CORE full-text source, TinEye reverse image search, Bing RSS and more; Baidu and Sogou revived; 18 CLI commands map one-to-one to 19 MCP tools; import chain −79%, rerank 33ms→1.5ms, cache hit rate greatly improved; cross-process quota write-path safety fix; new `argo stats` local usage ledger. See [release notes](docs/RELEASE_NOTES_v2.9.0.md) |

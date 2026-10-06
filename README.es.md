@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.3-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-264-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -60,7 +60,7 @@
 4. **El ecosistema libre basta.** APIs abiertas de gobiernos/academia/estándares/seguridad + motores sin clave cubren la mayoría de dominios (221 sin clave).
 5. **Calidad medible.** Pisos golden de ranking, gates de ablación de fusión y controles negativos de enrutamiento.
 
-> v2.9.2 lo implementa todo: 264 fuentes, 94 dominios, 229 sin clave.
+> v2.9.3 lo implementa todo: 264 fuentes, 94 dominios, 229 sin clave.
 
 ---
 
@@ -153,7 +153,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.8.9**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
+Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.9.3**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -331,8 +331,14 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.8.9)
+### Conjunto aproximado de capacidades (v2.9.3)
 
+- **Empaquetado completo de posts de X, `argo tweet` (nuevo en v2.9.3)**: un comando empaqueta el texto completo, hilo/citas/retweets e interacciones de un post dado; por defecto solo texto, `--out` escribe el paquete de 4 archivos (post.md/raw.json/manifest.json/CHECKLIST.md), `--media` descarga imágenes/vídeos bajo demanda; los motivos de fallo quedan visibles en los artefactos
+- **Carril de estado de sesión del navegador, `argo auth` (nuevo en v2.9.3)**: `argo auth login/status/logout` mantiene un perfil de navegador persistente por sitio — escanea el QR una vez y las páginas que exigen sesión se vuelven accesibles; las cookies solo viven en el almacenamiento cifrado del propio Chrome, los resultados con sesión se marcan `login_state_used` y quedan excluidos de la caché compartida (activar con `ARGO_AUTH_FETCH`)
+- **Calidad + velocidad de la cadena local china (nuevo en v2.9.3)**: las shells de redirección de Sogou/Baidu se resuelven en URLs reales sin sesión, elevando los resultados conservados de 1 a 5; gracia de consenso adaptativa (el primer motor que entrega suficiente libera la espera), despacho en inglés ~3.0s→2.2-2.5s
+- **Consultas ferroviarias con transbordo/escala (nuevo en v2.9.3)**: las búsquedas en 12306 cubren transbordos e itinerarios con escala, con el embudo de candidatos corregido de compresión 10→1 a un fiel 10→10; la búsqueda académica gana el modo multi-fuente `--academic-deep` con una sola bandera
+- **Expansión de enrutamiento y corrección de la puerta de intención (nuevo en v2.9.3)**: 43 motores sin referencia de dominio conectados a sus dominios, 3 nuevas fuentes financieras sin clave; las consultas tipo "tutorial" ya no quedan bloqueadas en un solo motor por la puerta de intención
+- **Aceleraciones locales (nuevo en v2.9.3)**: coincidencia de huellas de imagen local 158ms→3.9ms sobre 77k imágenes (apagada por defecto, `ARGO_LOCAL_IMAGE=1` para activar); adelgazamiento automático del consumo por agentes, overhead fijo por llamada MCP −32%
 - **Fusión de datos locales (nuevo en v2.8.4)**: work packages de investigación con `file_inputs` (datos locales de primera mano; se registra sha256/linaje) + `recompute` (recálculo en sandbox); el dossier emite `local_sources`
 - **Inyección MCP de un comando (nuevo en v2.8.4)**: `argo mcp inject` para Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline (escritura atómica + backup + deshacer; fuente `mcp/clients.yaml`)
 - **Mejoras de búsqueda estructurada (nuevo en v2.8.4)**: normalización + variantes + puerta de complejidad; sintaxis social primero; TF-IDF sigue mirando tras descartar un motor chino; `--include-local`
@@ -546,6 +552,15 @@ argo/
 
 ## Actualizaciones recientes
 
+### v2.9.3: empaquetado completo de posts de X + carril de estado de sesión del navegador + calidad/velocidad de la cadena local
+
+- **Nuevo**: `argo tweet` — un comando empaqueta el texto completo, hilo/citas/retweets e interacciones de un post de X; por defecto solo texto, `--out` escribe el paquete de 4 archivos (post.md/raw.json/manifest.json/CHECKLIST.md), `--media` descarga imágenes/vídeos bajo demanda; los motivos de fallo quedan visibles en los artefactos
+- **Nuevo**: carril de estado de sesión del navegador `argo auth` — `login/status/logout` gestiona un perfil de navegador persistente por sitio; escanea el QR una vez y las páginas que exigen sesión se vuelven accesibles; las cookies solo viven en el almacenamiento cifrado del propio Chrome (argo no las lee ni las exporta), los resultados con sesión se marcan `login_state_used` y quedan excluidos de la caché compartida (activar con `ARGO_AUTH_FETCH`)
+- **Más preciso**: la cadena local china resuelve las shells de redirección de Sogou/Baidu en URLs reales sin sesión (resultados conservados 1→5); corregido el bloqueo falso de la puerta de intención (las consultas tipo "tutorial" ya no quedan fijadas a un solo motor); URLs de identidad de fila ferroviaria corrigen la compresión del embudo de candidatos (10→1 → fiel 10→10)
+- **Más rápido**: gracia de consenso adaptativa (el primer motor que entrega suficiente libera la espera; despacho en inglés ~3.0s→2.2-2.5s); parada temprana de cola larga local; huellas de imagen local vía producto matricial mmap (77k imágenes 158ms→3.9ms, apagado por defecto con `ARGO_LOCAL_IMAGE=1`); adelgazamiento automático del consumo por agentes + negociación de contenido markdown, overhead fijo por llamada MCP −32%
+- **Más fuentes**: 43 motores sin referencia de dominio conectados a sus dominios; route_lang de enrutamiento por idioma; 3 nuevas fuentes financieras sin clave; `--academic-deep` multi-fuente académica con una bandera; consultas ferroviarias con transbordo/escala
+- **Más robusto**: js-run integrado como primer carril de la cadena de fetch (reintentos con huella Chrome); fugas de sesión jsrun y presupuesto de backoff corregidos; timeouts ajustados (redskill 60→15s) con la política de declaración dividida en tres grupos
+
 ### v2.9.2: compatibilidad verificada con DSH 0.2.1-alpha.1 + correcciones de enrutamiento/guardas + sub-skill js-run
 
 - **Más compatible**: el plugin de DSH está verificado en el último DSH 0.2.1-alpha.1 — herramientas nativas de primera clase / web_search seam / wide_research funcionan en las tres formas; `argo mcp inject` añade WorkBuddy, cubriendo el 7.º host
@@ -613,6 +628,7 @@ argo/
 
 | Versión | Notas |
 |---------|-------|
+| **v2.9.3** | **Empaquetado completo de posts de X + carril de estado de sesión del navegador + calidad/velocidad de la cadena local**: nuevo `argo tweet` (texto completo/hilo/citas/retweets/medios empaquetados bajo demanda, paquete de 4 archivos con `--out`); nuevo carril de sesión de navegador `argo auth` (perfil persistente por sitio, cookies solo en el almacenamiento cifrado de Chrome, resultados con sesión excluidos de la caché compartida); la cadena local china resuelve shells de Sogou/Baidu sin sesión (conservados 1→5) + gracia de consenso adaptativa (despacho en inglés ~3.0s→2.2-2.5s); js-run como primer carril de la cadena de fetch (reintentos con huella Chrome); consultas ferroviarias con transbordo/escala (embudo 10→1 corregido a un fiel 10→10); `--academic-deep` búsqueda académica profunda con una bandera; 43 motores conectados a dominios + 3 fuentes financieras sin clave + corrección del bloqueo falso de intención; huellas de imagen local 158ms→3.9ms; adelgazamiento del consumo por agentes (overhead fijo MCP −32%). |
 | **v2.9.2** | **Compatibilidad verificada con DSH 0.2.1-alpha.1 + tanda de correcciones de enrutamiento/guardas + sub-skill js-run**: las tres formas del plugin DSH verificadas en el último DSH 0.2.1-alpha.1; `argo mcp inject` añade WorkBuddy, cubriendo el 7.º host; degradación de evidencia débil TF-IDF a fuentes auxiliares, piso de fuentes muertas + relleno de slots del breaker, aislamiento de enrutamiento de motores con cuota agotada, corrección de falsos positivos en cascada de serp_guard; importaciones diferidas de engines/evidence (import −50%) y cortocircuito del conjunto de existencia en admisión (open 261→99); guardas de entrada MCP y de argumentos numéricos cerradas; nueva sub-skill js-run (JS web sin navegador, P50 ≈1ms). |
 | **v2.9.1** | **Optimización de calidad de contenido + resistencia a granjas de contenido + adaptación a la última versión**: evaluación de calidad de contenido mejorada, con mayor capacidad de identificar y filtrar contenido de baja calidad generado en masa; adaptación a la última versión para una colaboración sin fisuras; la búsqueda local añade una guarda de su propio árbol de instalación para evitar que los resultados se contaminen con su propio código fuente. |
 | **v2.9.0** | **Optimización de fuentes + paridad plugin/CLI + lenguas minoritarias**: fuentes 237→253 (sin clave 198→219); se añaden 14 fuentes de noticias en lenguas minoritarias, la fuente de texto completo CORE, TinEye de búsqueda inversa de imágenes, Bing RSS y más; Baidu y Sogou revividas; 18 comandos CLI corresponden uno a uno con 19 herramientas MCP; cadena de importación −79%, rerank 33ms→1.5ms, aciertos de caché notablemente mejorados; corrección de seguridad entre procesos en la ruta de escritura de cuotas; nuevo registro de uso local `argo stats`. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.0.md) |

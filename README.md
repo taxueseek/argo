@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.3-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-264-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -62,7 +62,7 @@ Agent 干活的量级变了，检索的玩法跟着变了四件事，每一件 A
 4. **免费开放生态够用了。** 政府、学术、标准、安全机构的开放 API + 免 key 引擎，已经能覆盖大多数领域（221 个免配置源）；稀缺免费额度（firecrawl 1000 credits/月、stackexchange 300 次/天）做了「日常补位、关键顶上」的分层，订阅墙不是唯一解。
 5. **检索质量从「感觉」到「度量」。** 排序有金标（MRR/nDCG 地板）、融合有增益消融检查、路由有负向控制矩阵——「这版比上版好吗」从此是数字问题，不是玄学。
 
-> v2.9.2 把以上全部落地：264 个源、94 个领域、229 个免配置开箱。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
+> v2.9.3 把以上全部落地：264 个源、94 个领域、229 个免配置开箱。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
 
 ---
 
@@ -155,7 +155,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**以 GitHub 为唯一安装来源**（`npx github:taxueseek/argo` 或 `install.sh` / `install.ps1`），当前推荐 **v2.9.2**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
+任选一种即可。**以 GitHub 为唯一安装来源**（`npx github:taxueseek/argo` 或 `install.sh` / `install.ps1`），当前推荐 **v2.9.3**。**请勿用 `npm install argo-search`**——npm registry 上那份是**非官方陈旧版 v1.0.1**（非本仓库维护，功能残缺、不随本项目更新）。本包 `package.json` 已设 `private: true` 防止误发布到 npm registry。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -357,8 +357,14 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.9.2）
+### 当前大致能力（v2.9.3）
 
+- **X 帖子完整打包 `argo tweet`（v2.9.3 新增）**：一条命令打包指定 X 帖子的正文、串/引用/转发与互动数据；默认纯文本，`--out` 落四件套（post.md/raw.json/manifest.json/CHECKLIST.md），`--media` 才下载图片/视频；主帖失败原因随产物可见
+- **浏览器登录态车道 `argo auth`（v2.9.3 新增）**：`argo auth login/status/logout` 自持站点持久浏览器 profile，扫码一次即可抓取需登录页面；cookie 只存 Chrome 自身加密存储，登录态结果标记 `login_state_used` 并拒绝入公共缓存（`ARGO_AUTH_FETCH` 开启）
+- **本地中文链质速双修（v2.9.3 新增）**：搜狗/百度跳转壳无会话解析成真实直链，保留结果 1→5 条；共识宽限自适应（首引擎交足即放行），英文分发 ~3.0s→2.2-2.5s
+- **火车票中转+经停（v2.9.3 新增）**：12306 查询扩展中转/经停方案，候补漏斗 10→1 压缩修为如实 10→10；学术搜索 `--academic-deep` 一键多源深挖
+- **路由扩容与意图门修复（v2.9.3 新增）**：43 个无域引用引擎接入对应领域，新增 3 个零 key 金融源；「教程」类查询不再被意图门误锁单引擎
+- **本地能力提速（v2.9.3 新增）**：本地图片指纹 77k 张 158ms→3.9ms（默认关，`ARGO_LOCAL_IMAGE=1` 启用）；agent 消费自动瘦身，MCP 每调用固定开销 −32%
 - **DSH 0.2.1-alpha.1 适配验证（v2.9.2 新增）**：DSH 插件三形态（原生一等工具 / web_search seam / wide_research）在最新版 DSH 实测启用；`argo mcp inject` 新增 WorkBuddy，一键注入覆盖到第 7 宿主
 - **js-run 子技能（v2.9.2 新增）**：不开浏览器执行「环境探测 + 纯计算」型网页 JS（V8 沙箱 + 环境垫片，单次上下文 P50 ≈ 1ms），补 curl_cffi 取数与浏览器渲染之间的「算」车道
 - **输出减重与漏斗归因（v2.8.9 新增）**：默认输出 −66%（同一段结果不再重复三遍，`--envelope` 开完整版）；六格漏斗（路由→调用→返回→去重→过滤→保留）让「搜到 0 条」能定位塌在哪一层；阶段耗时账拆出过滤与恢复，慢在哪不再被指错方向
@@ -621,6 +627,15 @@ argo/
 
 ## 最近更新
 
+### v2.9.3：X 帖子完整打包 + 浏览器登录态车道 + 本地链质速双修
+
+- **新增**：`argo tweet`——一条命令打包 X 帖子正文、串/引用/转发与互动数据；默认纯文本不下载媒体，`--out` 落四件套（post.md/raw.json/manifest.json/CHECKLIST.md），`--media` 按需下载图片/视频；主帖失败原因随产物可见不静默
+- **新增**：`argo auth` 浏览器登录态车道——`login/status/logout` 管理站点持久浏览器 profile，扫码一次即可抓取需登录页面；cookie 只存 Chrome 自身加密存储、argo 不读取不导出，登录态结果标记 `login_state_used` 并拒绝入公共缓存（`ARGO_AUTH_FETCH` 开启）
+- **更准**：本地中文链搜狗/百度跳转壳无会话解析成真实直链（保留结果 1→5 条）；意图门误锁修复（「教程」类查询不再被锁死单引擎）；火车票表格行身份 URL 治漏斗压缩（候补 10→1 修为如实 10→10）
+- **更快**：共识宽限自适应（首引擎交足即放行，英文分发 ~3.0s→2.2-2.5s）；本地长尾够数早停；本地图片指纹 mmap 矩阵点积（77k 张 158ms→3.9ms，默认关 `ARGO_LOCAL_IMAGE=1`）；agent 消费自动瘦身 + markdown 内容协商，MCP 每调用固定开销 −32%
+- **更多源**：43 个无域引用引擎接入对应领域；route_lang 语言路由；3 个零 key 金融源；`--academic-deep` 一键学术多源深挖；火车票中转+经停查询
+- **更稳**：js-run 车道接入 fetch 链第一级（重试带 Chrome 指纹）；jsrun Session 泄漏与退避预算修复；超时收紧（redskill 60→15s）与声明策略三分组收口
+
 ### v2.9.2：DSH 0.2.1-alpha.1 适配验证 + 路由与守卫一批修复 + js-run 子技能
 
 - **更兼容**：DSH 插件已在最新版 DSH 0.2.1-alpha.1 实测启用，原生一等工具 / web_search seam / wide_research 三形态照常工作；`argo mcp inject` 新增 WorkBuddy，一键注入覆盖到第 7 宿主
@@ -690,6 +705,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.9.3** | **X 帖子完整打包 + 浏览器登录态车道 + 本地链质速双修**：新增 `argo tweet`（正文/串/引用/转发/媒体按需打包，`--out` 四件套）；新增 `argo auth` 浏览器登录态车道（站点持久 profile，cookie 只存 Chrome 加密存储，登录态结果不入公共缓存）；本地中文链搜狗/百度跳转壳无会话解析（保留 1→5 条）+ 共识宽限自适应（英文分发 ~3.0s→2.2-2.5s）；js-run 接入 fetch 链第一级（Chrome 指纹重试）；火车票中转+经停（漏斗 10→1 修为如实 10→10）；`--academic-deep` 一键学术深挖；43 引擎领域接线 + 3 零 key 金融源 + 意图门误锁修复；本地图片指纹 158ms→3.9ms；agent 消费瘦身（MCP 固定开销 −32%）。 |
 | **v2.9.2** | **DSH 0.2.1-alpha.1 适配验证 + 路由/守卫一批修复 + js-run 子技能**：DSH 插件三形态在最新版 DSH 0.2.1-alpha.1 实测启用；`argo mcp inject` 补 WorkBuddy 覆盖到第 7 宿主；TF-IDF 弱证据辅源化、死源地板 + 熔断槽位回填、配额耗尽引擎路由隔离、serp_guard 连坐误杀修复；engines/evidence 惰性导入（import −50%）与准入存在集合短路（open 261→99）；MCP 入口与数值参数守卫收口；新增 js-run 子技能（无浏览器跑网页 JS，P50 ≈1ms）。 |
 | **v2.9.1** | **内容质量优化 + 对抗内容农场 + 适配最新版本**：优化内容质量评估，提升对低质批量生成内容的识别与过滤能力；适配最新版本确保无缝协作；本地搜索新增自身安装树守卫，避免结果被自身源码污染。 |
 | **v2.9.0** | **搜索源优化 + 插件与 CLI 持平 + 多语言小语种**：搜索源 237→253（免配置 198→219），新增 14 个小语种新闻源、CORE 全文源、TinEye 反搜图、Bing RSS 等；百度与搜狗修活；CLI 18 命令与 MCP 19 工具一一对应；导入链 −79%、重排序 33ms→1.5ms、缓存命中率大幅提升；配额写路径跨进程安全修复；新增 `argo stats` 本地使用日志。详见 [发布说明](docs/RELEASE_NOTES_v2.9.0.md) |
