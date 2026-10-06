@@ -43,18 +43,21 @@ def _fake_browser_fetch(url, max_chars=8000, timeout=15.0, actions=None,
 
 def test_fetch_authed_site_forces_browser_and_skips_cache(authed_env, monkeypatch):
     import fetch_v3
+    import cache as cache_mod
     rec = MagicMock(side_effect=_fake_browser_fetch)
     monkeypatch.setattr(fetch_v3, "_browser_fetch", rec)
-    cache_cls = MagicMock()
-    with patch.dict(sys.modules, {"cache": MagicMock(SearchCache=cache_cls)}):
-        out = fetch_v3.fetch_v3("https://www.example.com/page",
-                                use_browser_fallback=True, deadline_s=1)
+    # 直接 patch 真 cache 模块属性（不要动 sys.modules——会污染同进程
+    # 后续 import cache 的模块，test_consistency_gates 的派生件校验被殃及）
+    cache_spy = MagicMock()
+    monkeypatch.setattr(cache_mod, "SearchCache", cache_spy)
+    out = fetch_v3.fetch_v3("https://www.example.com/page",
+                            use_browser_fallback=True, deadline_s=1)
     rec.assert_called_once()
     kwargs = rec.call_args.kwargs
     assert kwargs.get("auth_profile") == authed_env, "登录态必须传到浏览器层"
     # 强制浏览器：匿名链（Wayback/tinyfish/jina…）不应被触碰 → 只此一次调用
     assert kwargs.get("actions") is None
-    cache_cls.assert_not_called(), "登录态车道不得读写 URL 缓存"
+    cache_spy.assert_not_called(), "登录态车道不得读写 URL 缓存"
     assert out.get("cached") is False
 
 

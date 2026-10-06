@@ -1292,8 +1292,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
     auth_profile = None
     try:
         from browser_auth import auth_profile_for_fetch
-        auth_profile = auth_profile_for_fetch(
-            url, allow_browser_lane=use_browser_fallback)
+        auth_profile = auth_profile_for_fetch(url, allow_browser_lane=use_browser_fallback)
     except Exception:
         auth_profile = None
     if auth_profile:
@@ -1743,7 +1742,8 @@ if __name__ == "__main__":
                                   "is_official", "length", "url") if k in r}
     # 截断必须可见：只给 8,000 字却不说明「还有多少没给」，调用方会当全文用
     for k in ("truncated", "full_length", "full_text_path", "total_length",
-              "offset", "full_source", "final_url"):
+              "offset", "full_source", "final_url",
+              "login_state_used", "cache_eligible"):
         if k in r:
             summary[k] = r[k]
     if focus_requested:
