@@ -1011,6 +1011,35 @@ def _parse_cli_output(stdout: str, engine_name: str) -> tuple[list[dict[str, Any
     return results, ""
 
 
+def _resolve_redirect_results(results: list[dict[str, Any]], n: int,
+                              engine_timeout: float) -> list[dict[str, Any]]:
+    """解析结果里的跳转壳 URL（resolve_redirects 声明即契约，与 engines_base
+    同名同义）；解不开的丢弃——不可核验的跳转壳不进结果，主链 serp_guard
+    对它们本来就是整批判死（2026-10-06 实测：中文链 returned 10 → kept 1，
+    9 条全是搜狗 /link）。批量并行、有界；解析器不可用时维持原样（fail-open）。
+    """
+    try:
+        from jump_resolver import is_jump_url, resolve_jump_urls
+    except ImportError:
+        return results
+    suspects = [r for r in results[:n] if is_jump_url(str(r.get("url") or ""))]
+    if not suspects:
+        return results
+    resolved = resolve_jump_urls(
+        [str(r.get("url") or "") for r in suspects],
+        timeout=min(2.5, max(1.0, engine_timeout / 2)))
+    kept: list[dict[str, Any]] = []
+    for r in results[:n]:
+        u = str(r.get("url") or "")
+        real = resolved.get(u)
+        if real:
+            r["url"] = real
+        elif is_jump_url(u):
+            continue
+        kept.append(r)
+    return kept
+
+
 def _search_one(engine_name: str, query: str, n: int = 5,
                 timeout: float | None = None,
                 since: str | None = None, until: str | None = None) -> tuple[list[dict[str, Any]], str]:
@@ -1106,6 +1135,11 @@ def _search_one(engine_name: str, query: str, n: int = 5,
         results = _parse_json(engine_name, text, maps)
     else:
         results = []
+
+    # 跳转链落点解析：仅 spec 声明 resolve_redirects 的引擎（搜狗/百度），
+    # 在时间窗过滤前做——后续去重/融合拿到的直接是真实正文 URL。
+    if results and spec.get("resolve_redirects"):
+        results = _resolve_redirect_results(results, n, to)
 
     # 时间窗过滤（通用保底）：URL 参数下推之外的引擎同样受益，
     # 仅保留 published_at 落在 [since, until] 内的结果；
@@ -1320,6 +1354,8 @@ def search_engines(
                 if enough and len(all_results) >= n:
                     if len(engines_used) >= 2:
                         break  # 双引擎共识达成
+                    if len(all_results) >= 2 * n:
+                        break  # 单引擎已给足 2n：共识边际价值低于宽限墙钟（自适应免宽限）
                     if enough_at is None:
                         enough_at = now
                     elif now - enough_at >= _CONSENSUS_GRACE_S:

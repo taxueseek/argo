@@ -71,3 +71,18 @@ def test_no_early_stop_in_deep_mode(monkeypatch):
     elapsed = time.time() - t0
     assert elapsed >= 1.0, "deep 模式不应早停"
     assert set(out["engines_used"]) == {"fast", "slow"}
+
+
+def test_abundant_first_engine_skips_grace(monkeypatch):
+    """自适应免宽限（2026-10-06）：首引擎给足 2n 条时共识边际价值低于
+    宽限墙钟，立即放行——3s 慢引擎不该被等哪怕 1s。"""
+    _patch_search_one(monkeypatch,
+                      delays={"rich": 0.05, "slow": 3.0},
+                      counts={"rich": 12, "slow": 5})
+    t0 = time.time()
+    out = search_v3.search_engines(
+        "测试", engines=["rich", "slow"], n=5, skip_cache=True, mode="auto")
+    elapsed = time.time() - t0
+    assert elapsed < 1.0, f"2n 免宽限未生效：实耗 {elapsed:.2f}s"
+    assert "rich" in out["engines_used"]
+    assert "slow" not in out["engines_used"]

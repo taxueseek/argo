@@ -127,6 +127,10 @@ engines:
     method: GET
     timeout: 8
     format: html
+    # 结果链接走 baidu.com/link 跳转壳：与主链 baidu 引擎同契约（engines_base
+    # 同名同义），不解析会在主链 serp_guard 整批被杀。解不开的按不可核验
+    # 信源丢弃。
+    resolve_redirects: true
     extra_params:
       ie: utf-8
 
@@ -139,6 +143,10 @@ engines:
     method: GET
     timeout: 8
     format: html
+    # 结果链接走 sogou.com/link 会话型跳转壳：Chrome 指纹下是 200 小页 +
+    # window.location.replace(真实URL)，可无会话解析（2026-10-06 实测）；
+    # 不解析会在主链 serp_guard 整批被杀（returned 10 → kept 1 的根因）。
+    resolve_redirects: true
 
   local_360:
     type: html
@@ -150,6 +158,8 @@ engines:
     method: GET
     timeout: 8
     format: html
+    # 不声明 resolve_redirects（2026-10-06 实测）：so.com/link 需 QiHoo GUID
+    # cookie 链，chrome131 指纹直连仍 400，声明了只会把结果整条丢弃。
     extra_params:
       ie: utf-8
 
