@@ -215,14 +215,23 @@ def _social_domain_first(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 # ── 阶段 3：点查域意图门 ──────────────────────────────────────────────────────
 
-# 面查信号：查询在研究/排障/对比一个主题，而非定位一个对象
+# 面查信号：查询在研究/排障/对比/学用一个主题，而非定位一个对象
 _DIFFUSE_SIGNAL_RE = re.compile(
     r"(?i)\b(issue|bug|regression|reinstall|stale|not.?work|broken|crash"
     r"|how (to|does|do)|why (is|does|do)|difference|vs\.?)\b"
     r"|报错|失效|不生效|不更新|出错|排查|区别|对比"
+    # 学用类信号（2026-10-06 补）：实体名只是教程/文档的上下文，不是查询目标。
+    # 「claude code mcp tutorial」（4 token）被 ai_model 锁死返回模型规格——
+    # 阈值从 5 降到 4 后这类查询进意图门，靠这组词判定让位。
+    r"|\b(tutorial|guide|documentation|docs|getting started|how to use)\b"
+    r"|教程|文档|指南|怎么用|如何用|入门|上手|使用说明|用法"
 )
-# 长主题句门槛：去重 token 少于此值不设卡（短查询大概率是点查）
-_INTENT_MIN_TOKENS = 5
+# 长主题句门槛：去重 token 少于此值不设卡（短查询大概率是点查）。
+# 5 → 4（2026-10-06）：4 token 的「claude code mcp tutorial」不过门，
+# 实体名（Claude）+ 主题词（tutorial）被 ai_model 锁死，返回模型规格
+# 还进了 L2 缓存。4 token 已足够构成主题句式；真点查（"GPT-4o pricing"）
+# 普遍 ≤3 token，且 4 token 点查有意图词豁免保护。
+_INTENT_MIN_TOKENS = 4
 
 
 def _intent_gate(hits: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:

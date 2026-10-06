@@ -62,12 +62,23 @@ CATEGORY_PRIORITY = {
     "academic": ["local_arxiv", "local_semantic_scholar", "local_crossref", "local_pubmed"],
     "code": ["local_github", "local_stackoverflow", "local_gitlab", "local_npm"],
     "news": ["local_bing_news", "local_google_news", "local_duckduckgo_news"],
-    "chinese": ["local_baidu", "local_sogou", "local_360", "local_bing", "local_duckduckgo"],
-    "japanese": ["local_yandex", "local_bing", "local_duckduckgo"],
-    "korean": ["local_bing", "local_duckduckgo"],  # google 直连已随可达性门下线
+    # chinese 与主路径 route_combo._select_sub_engines 中文支对齐（2026-10-06 实测）：
+    # baidu 直连 0 结果移出；sogou（~1s 相关）/360（~1s）实测可用；yandex 殿后。
+    "chinese": ["local_sogou", "local_360", "local_yandex", "local_bing", "local_duckduckgo"],
+    # ja：yandex 实测覆盖最好；bing text 后端已被 ddgs 9.14.4 移除（auto 降级）
+    "japanese": ["local_yandex", "local_duckduckgo", "local_bing"],
+    # ko 同 ja
+    "korean": ["local_yandex", "local_duckduckgo"],
     "reference": ["local_wikipedia", "local_wiktionary", "local_wikiquote"],
     "vertical": ["local_openstreetmap", "local_imdb", "local_goodreads"],
-    "web_general": ["local_bing", "local_brave", "local_yahoo", "local_duckduckgo"],
+    # web_general 顺序 = 实测可用性（2026-10-06 重排）：
+    # ddgs 9.14.4 起 text 后端仅 brave/duckduckgo/google/grokipedia/
+    # mojeek/startpage/wikipedia/yahoo/yandex——没有 bing，local_bing 的
+    # `-b bing` 已静默降级 auto（1.6-6s 随机波动，拖早停第二引擎的尾），
+    # 故移出 web_general（chinese 域仍保留作第 4 备选）。
+    # brave 对真实查询稳定 0 结果；yandex 是唯一稳定后端（~1.9s）置首，
+    # ddg/yahoo 次之（限流时 1s 级快速失败，不拖墙钟）。
+    "web_general": ["local_yandex", "local_duckduckgo", "local_yahoo", "local_brave", "local_bing"],
 }
 
 

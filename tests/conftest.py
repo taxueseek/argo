@@ -39,6 +39,11 @@ atexit.register(shutil.rmtree, _SESSION_TMP, ignore_errors=True)
 # tests/test_route_cache.py 显式打开开关验证。
 os.environ["ARGO_ROUTE_CACHE"] = "0"
 
+# usage_log 同理（2026-10-06）：测试发出的真实查询（如「测试查询」类 canary）
+# 曾写入生产 usage_log/query.jsonl，污染用量统计与延迟分布基准。同一命令关掉；
+# usage_log 自身行为由 tests/test_usage_log.py 显式开启验证。
+os.environ.setdefault("ARGO_USAGE_LOG", "0")
+
 # routable memo 同理关闭（2026-09-30）：它是进程内 1s 时窗缓存，而全量套件的
 # 状态目录整轮共享——A 用例改引擎可用性（ENABLE/DISABLE 开关、准入拉黑）后
 # 时窗内的 B 用例会拿到脏路由集，实测导致 zhihu_hot/scenario_thresholds 等

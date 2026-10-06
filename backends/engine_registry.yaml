@@ -968,6 +968,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: France 24 英语版 RSS（法语区一手的国际新闻实时流，免 key）
+- name: frankfurter
+  tier: T1
+  type: frankfurter
+  coverage:
+  - macro
+  - finance
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: Frankfurter ECB 官方参考汇率（免认证，2026-10-06 接入）
 - name: fred
   tier: T1
   type: fred
@@ -2341,6 +2353,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: SearXNG 直连（已废弃，由 T3 替代）
+- name: sec_companyfacts
+  tier: T1
+  type: sec_companyfacts
+  coverage:
+  - finance
+  - us_stock
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: SEC XBRL companyfacts 年度结构化财务（营收/净利/资产/EPS，免认证）
 - name: sec_edgar
   tier: T1
   type: http
@@ -3123,6 +3147,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: 小红书
+- name: yahoo_finance
+  tier: T1
+  type: yahoo_finance
+  coverage:
+  - finance
+  - us_stock
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Yahoo Finance 美股代码解析+实时行情（search/chart 免认证，2026-10-06 接入）
 - name: yna
   tier: T1
   type: rss_feed

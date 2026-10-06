@@ -100,7 +100,7 @@ class TestDomainFallbackCandidates(unittest.TestCase):
         fb = d.get("engines_fallback") or []
         self.assertTrue(fb, "域路由必须给出恢复候选（零结果时的子弹）")
         declared = {"fred", "worldbank", "nbs_stats", "eurostat",
-                    "fx_rate", "anysearch"}
+                    "fx_rate", "frankfurter", "anysearch"}
         self.assertTrue(
             set(fb[:4]) <= declared,
             f"候选前段应为域声明成员，实际 {fb[:4]}")

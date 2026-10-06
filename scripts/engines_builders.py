@@ -81,6 +81,12 @@ from engines_builders_batch12 import (
     _build_so_engine,
     _build_shenma_engine,
 )
+
+from engines_builders_batch13 import (
+    _build_yahoo_finance_engine,
+    _build_sec_companyfacts_engine,
+    _build_frankfurter_engine,
+)
 from engines_builders_data import (
     _build_open_library_engine,
     _build_weread_engine,
@@ -224,6 +230,9 @@ __all__ = [
     "_build_juejin_engine",
     "_build_models_dev_engine",
     "_build_finviz_engine",
+    "_build_yahoo_finance_engine",
+    "_build_sec_companyfacts_engine",
+    "_build_frankfurter_engine",
     "_build_seeking_alpha_engine",
     "_build_qweather_engine",
     "_build_wenshu_engine",

@@ -2554,5 +2554,23 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "yahoo_finance": {
+    "label": "Yahoo Finance",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "sec_companyfacts": {
+    "label": "SEC 结构化财务",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "frankfurter": {
+    "label": "Frankfurter(ECB)",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

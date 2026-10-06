@@ -263,6 +263,11 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     "obis": "待接线：species_search 位次 4（iplant 接入后顺延；既有债务，非本次引入）",
     "cleveland": "art_museum 同质重复备份（与 artic 同能力，故意不加槽）",
     "cn_ai_news": "待接线：chinese_tech_deep 位次 4",
+    # 2026-10-06：macro_data 位次 6（fast 档 budget=2，位次 5+ 不参与自动
+    # 路由）。汇率主路径由 fx_rate（位次 5，同窗口外但历史更久）承担；
+    # frankfurter 的价值口径是 ECB 官方参考价，走 macro_data 零结果恢复链
+    # （test_domain_zero_result_recovery 锁定 fb[:4] 含它）与 deep/research。
+    "frankfurter": "macro_data 位次 6：ECB 官方汇率口径，走零结果恢复链/deep 档（FX 主路径是 fx_rate）",
     # 2026-09-16：academic 域接入 openreview/biorxiv 后，原第 3 位的 crossref
     # 被推到第 5 位因而休眠。这与 dblp/europepmc 是同一笔账：academic 的
     # combo 有 8 个源，而 fast 档 budget=2（must_keep 腾位后实际只留 2 个），

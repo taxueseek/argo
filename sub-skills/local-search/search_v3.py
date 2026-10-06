@@ -26,6 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from datetime import datetime, timedelta
@@ -660,6 +661,12 @@ _CLI_RETRIES = 1
 # 第二次挂满 8s 超时 = 12.1s；本判据把这类尾部砍回单次（~4s）。
 _RETRY_FAST_S = 2.5
 
+# 第二引擎共识宽限（秒，2026-10-06）：够数早停从「死等 ≥2 引擎」改为
+# 「先等 1s 收共识，宽限到点放行」。语义与实测依据见 search_engines 内
+# 注释。轮询粒度 0.25s：宽限是时间到点判定，不需要更细。
+_CONSENSUS_GRACE_S = 1.0
+_CONSENSUS_POLL_S = 0.25
+
 
 def _since_to_ddgs_timelimit(since: str | None, until: str | None) -> str | None:
     """Convert since/until to ddgs timelimit argument.
@@ -1271,27 +1278,58 @@ def search_engines(
 
     budget = total_budget if total_budget is not None else (timeout or 30)
     ex = ThreadPoolExecutor(max_workers=min(len(engines), max_parallel))
-    # 够数早停：fast/auto 下已收结果 ≥ n 且 ≥2 引擎完成时不再等慢引擎。
-    # 实测 ddgs bing 慢后端可拖 7s+，而次快引擎 4.5s 已给足 n 条——等最慢
-    # 引擎的边际收益低于墙钟成本；≥2 引擎是保底，防止单引擎同源结果早停
-    # 损失 RRF 跨引擎共识。deep/budget 仍收满（质量优先/配额契约不变）。
+    # 够数早停：fast/auto 下已收结果 ≥ n 时不再干等慢引擎。
+    # 旧规则：≥n 且 ≥2 引擎有结果才停——第二引擎是 ddgs 慢后端时最坏拖
+    # 6s+（2026-10-06 实测 pg vacuum 4.0s：yandex 1.9s 已给足 5 条，
+    # 死等 yahoo 4s 才收双引擎共识）。
+    # 新规则（共识宽限）：够数后先等 _CONSENSUS_GRACE_S 收第二引擎共识；
+    # 宽限到点仍够数即放行。yandex 实测 1.9s 是最快可靠后端，1s 宽限
+    # 覆盖正常第二引擎到达窗口；单引擎放行仅在「其余引擎全部慢性子」时
+    # 发生，此时等下去的边际共识收益低于墙钟成本。
+    # deep/budget 仍收满（质量优先/配额契约不变）。
     enough = mode in ("fast", "auto")
     try:
         futures = {ex.submit(_task, name): name for name in engines}
         try:
-            # Python 3.11 起 concurrent.futures.TimeoutError 才并入内置
-            # TimeoutError；3.9/3.10 是两个类，只写 except TimeoutError
-            # 会让整体预算在老解释器上永不生效（异常穿透聚合层）。
-            for fut in as_completed(futures, timeout=budget):
-                name = futures[fut]
-                try:
-                    _, res, err = fut.result()
-                    _collect(name, res)
-                    if err:
-                        errors.append(err)
-                except Exception as e:
-                    errors.append(f"{name}: {e}")
-                if enough and len(all_results) >= n and len(engines_used) >= 2:
+            # 轮询取代 as_completed：宽限是「时间到点即放行」而非「下一个
+            # 完成事件才检查」——后者在慢引擎未完成时永远等不到检查时机，
+            # 宽限形同虚设（实测场景 yahoo 4s 完成才触发判定，墙钟不变）。
+            pending = set(futures)
+            enough_at: float | None = None
+            while pending:
+                # Python 3.11 起 concurrent.futures.TimeoutError 才并入
+                # 内置 TimeoutError；3.9/3.10 是两个类，只写 except
+                # TimeoutError 会让整体预算在老解释器上永不生效（异常
+                # 穿透聚合层）。wait() 不因超时抛异常，这里显式判预算。
+                done, pending = concurrent.futures.wait(
+                    pending, timeout=_CONSENSUS_POLL_S,
+                    return_when=concurrent.futures.FIRST_COMPLETED)
+                for fut in done:
+                    name = futures[fut]
+                    try:
+                        _, res, err = fut.result()
+                        _collect(name, res)
+                        if err:
+                            errors.append(err)
+                    except Exception as e:
+                        errors.append(f"{name}: {e}")
+                now = time.time()
+                # 够数共识判定（fast/auto）：与预算判定相互独立——曾把
+                # 预算检查放进够数分支，结果不足 n 时预算永不生效
+                # （test_total_budget_returns_before_slow_engine 红线）。
+                if enough and len(all_results) >= n:
+                    if len(engines_used) >= 2:
+                        break  # 双引擎共识达成
+                    if enough_at is None:
+                        enough_at = now
+                    elif now - enough_at >= _CONSENSUS_GRACE_S:
+                        break  # 宽限到点：够数放行，不等慢引擎
+                if now - t0_all >= budget:
+                    # 预算到点（含总预算）：同旧 as_completed(timeout)
+                    # 语义，未完成引擎记 timeout。
+                    for fut2 in pending:
+                        fut2.cancel()
+                        errors.append(f"{futures[fut2]}: timeout")
                     break
         except (TimeoutError, FutureTimeoutError):
             # 整体超时（如 ddgs 慢后端 > budget）：保留已完成引擎的结果，

@@ -25,7 +25,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-264-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
@@ -60,7 +60,7 @@
 4. **無料オープン生態系で足りる。** 政府・学術・標準・セキュリティの公開 API とキーレス エンジンで大部分をカバー（219 ソースが無設定）。
 5. **品質は測定可能。** ランキング金標・融合利得アブレーション・負のルーティング制御。
 
-> v2.9.2 はこの全てを実装：261 ソース / 93 ドメイン / 226 無設定。
+> v2.9.2 はこの全てを実装：264 ソース / 94 ドメイン / 229 無設定。
 
 ---
 

@@ -27,7 +27,7 @@ triggers:
 # Argo — 统一搜索与证据核验
 
 > 不止「帮你搜到」，还要「帮你核到」：高后果问题标 `fetch_required`、结果标
-> `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 261 个源、226 个免密钥开箱可用。
+> `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 264 个源、229 个免密钥开箱可用。
 
 ## 快速上手
 

@@ -155,6 +155,17 @@ domains:
   - (?i)(sec\s+filing|edgar|form\s+10-?[kq]|proxy\s+statement)
   - (招股书|财报申报|年报申报|季报申报|证券申报|申报文件)
   primary: sec_edgar
+- desc: 美股结构化财务（SEC XBRL companyfacts：营收/净利/资产/EPS 年度值）
+  engines_combo:
+  - sec_companyfacts
+  - anysearch
+  fallback: anysearch
+  name: us_fundamentals
+  parallel: false
+  patterns:
+  - (?i)(营收|营业收入|净利润|净利|利润|财务数据|财务指标|annual\s+revenue|revenue|net\s+income|earnings|financials|fundamentals|balance\s+sheet|资产负债表|现金流|cash\s+flow|\bEPS\b|每股收益|总资产|总负债|毛利)
+  primary: sec_companyfacts
+
 - desc: 美股筛选/分析（Finviz + Seeking Alpha；须排在 stock_query 前，避免「美股/ticker」被 A 股域吸走）
   # 通用兜底源必须留在前 2 位（combo_budget=2，见 security_search 注）。
   # finviz/seeking_alpha 皆为英文窄源，中文问法（「英伟达 财报」）两源皆 0；
@@ -162,6 +173,7 @@ domains:
   engines_combo:
   - finviz
   - exa
+  - yahoo_finance
   - seeking_alpha
   - anysearch
   - eastmoney
@@ -206,6 +218,7 @@ domains:
   - nbs_stats
   - eurostat
   - fx_rate
+  - frankfurter
   - anysearch
   fallback: anysearch
   name: macro_data
@@ -750,7 +763,10 @@ domains:
   - (?i)(模型|model).{0,24}(价格|pricing|多少钱|上下文|context|token|支持视觉|vision|能力|对比|免费|开源)
   - (?i)(API price|pricing|context window|token limit|vision model|tool call)
   # 点查域意图豁免词（语义见 route_domains.intent_required）
-  intent_required: '(?i)(价格|pricing|上下文|context window|token limit|vision|多模态|免费|开源|多少钱)'
+  # 扩展（2026-10-06）：意图门 token 门槛降到 4 后，4 token 的真点查
+  # （「claude opus 4.5 模型」「claude api 定价」）需要意图词兜底不被误伤；
+  # 学用类查询由 _DIFFUSE_SIGNAL_RE 的教程/文档/指南等词拦回，不受影响。
+  intent_required: '(?i)(价格|定价|报价|pricing|多少钱|上下文|context window|token limit|vision|多模态|免费|开源|模型|model|参数|规格|版本|订阅|\bapi\b)'
   primary: models_dev
 - desc: 中文技术社区文章（掘金 + V2EX + 少数派 + CSDN）
   engines_combo:
@@ -3656,8 +3672,11 @@ engines:
     - '{query}'
     - -n
     - '{n}'
-    timeout: 10
     env: {}
+    # 不声明 timeout（2026-10-06 回归策略门禁）：本引擎内部无重试，声明 ≥8s
+    # 会按 search._engine_retries 约定关掉外层重试（execution.retry_count=1），
+    # 一次失败即弃、成功率下降。不声明时单次尝试吃 default_timeout=8s。
+    # 若将来脚本内加了重试，应同时声明 timeout 并更新 test_timeout_declaration_policy 分组。
     # 后端依赖（实测：脚本内 subprocess 调 `xhs`，本机缺失时状态曾误报 ready，
     # 调用后白等并静默返回 0 条）。另需 `xhs login` 取得登录态 cookie，
     # 属运行时授权而非依赖——缺失时结果为空并带 login_state 标记。
@@ -4660,6 +4679,72 @@ engines:
     - us_stock
     desc: Finviz 美股快照（HTML，免认证）
     timeout: 10
+  yahoo_finance:
+    type: yahoo_finance
+    enabled: true
+    label: Yahoo Finance
+    cost_tier: free
+    qps: 2
+    priority: 56
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - us_stock
+    family: finance_market
+    recommended: true
+    desc: "Yahoo Finance 美股代码解析+实时行情（search/chart 免认证，2026-10-06 接入）"
+    timeout: 10
+    canary_query: AAPL
+    quality_queries:
+    - query: AAPL
+    - query: NVIDIA
+    - query: Tesla stock
+  sec_companyfacts:
+    type: sec_companyfacts
+    enabled: true
+    label: SEC 结构化财务
+    cost_tier: free
+    qps: 5
+    priority: 60
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - finance
+    - us_stock
+    family: finance_market
+    recommended: true
+    desc: "SEC XBRL companyfacts 年度结构化财务（营收/净利/资产/EPS，免认证）"
+    timeout: 15
+    canary_query: AAPL revenue
+    quality_queries:
+    - query: AAPL revenue
+    - query: MSFT net income
+    - query: NVDA total assets
+  frankfurter:
+    type: frankfurter
+    enabled: true
+    label: Frankfurter(ECB)
+    cost_tier: free
+    qps: 3
+    priority: 50
+    period: second
+    cost_per_call: 0.0
+    cost_unit: free
+    coverage:
+    - macro
+    - finance
+    family: finance_market
+    recommended: false
+    desc: "Frankfurter ECB 官方参考汇率（免认证，2026-10-06 接入）"
+    timeout: 8
+    canary_query: 美元 人民币 汇率
+    quality_queries:
+    - query: 美元 人民币 汇率
+    - query: USD to EUR exchange rate
+
   seeking_alpha:
     type: seeking_alpha
     enabled: true

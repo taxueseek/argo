@@ -182,12 +182,17 @@ def _parse_success(engine_name: str, text: str, fmt: str, registry: EngineRegist
 
 
 def _check_cli_engine(engine_name: str, spec: dict[str, Any],
-                      timeout: float = 8) -> dict[str, Any]:
-    """CLI 引擎健康探针：校验可执行文件存在且能启动（--help）。
+                      timeout: float = 8,
+                      canary_query: str = "test", n: int = 1) -> dict[str, Any]:
+    """CLI 引擎健康探针：跑一次真实 canary 查询，校验「能出结果」。
 
-    cli 引擎 spec 无 url，走 HTTP 探针必然判 unavailable；此处改为探测
-    cli_command 本身。搜索失败由执行层的熔断器记录，健康探针只保证
-    「可执行文件可用」这一前置条件。
+    2026-10-06 修复假阳性：此前只跑 `ddgs --help`——二进制存在即判
+    available。ddgs 9.14.4 移除 bing text 后端、brave/yahoo 对真实查询
+    稳定 0 结果后，`--help` 全绿而搜索全灭，死引擎反复混入组合（本地
+    兜底链 4.5-8.3s 的结构性成因之一）。探针与搜索同路径（复用
+    search_v3._run_cli_engine），canary 拿不到 ≥1 条结果即失败。
+    代价：一次真实查询的墙钟（仅健康记录过期时发生，TTL 5min 起）。
+    search_v3 不可导入时退化为 --help 探测（fail-open，不崩探针链）。
     """
     cli_cmd = spec.get("cli_command", "")
     if not cli_cmd:
@@ -204,23 +209,42 @@ def _check_cli_engine(engine_name: str, spec: dict[str, Any],
     import subprocess
     t0 = time.time()
     fail_reason = None
+    ok = False
+    text_sample = ""
     try:
-        result = subprocess.run(
-            [cli_cmd, "--help"],
-            capture_output=True, text=True, timeout=min(timeout, 5),
-            encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
-        )
-        ok = result.returncode == 0
-        if not ok:
-            fail_reason = f"cli_exit_{result.returncode}"
+        try:
+            from search_v3 import _run_cli_engine  # 同目录，探针与搜索同路径
+        except ImportError:
+            _run_cli_engine = None  # type: ignore[assignment]
+        if _run_cli_engine is not None:
+            results, err = _run_cli_engine(spec, canary_query, n,
+                                           min(timeout, 8))
+            ok = bool(results)
+            if not ok:
+                fail_reason = (err or "no_results")[:120]
+                text_sample = (err or "")[:300]
+        else:
+            # 退化路径：search_v3 不可用，只验证可执行（fail-open）。
+            # 真正的搜索失败由执行层熔断器记录。
+            result = subprocess.run(
+                [cli_cmd, "--help"],
+                capture_output=True, text=True, timeout=min(timeout, 5),
+                encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
+            )
+            ok = result.returncode == 0
+            if not ok:
+                fail_reason = f"cli_exit_{result.returncode}"
     except subprocess.TimeoutExpired:
         ok, fail_reason = False, "cli_timeout"
     except FileNotFoundError:
         ok, fail_reason = False, "cli_not_found"
+    except Exception as e:  # 探针自身失败不判引擎死（fail-open）：记为软失败
+        ok, fail_reason = False, f"probe_error:{e}"[:120]
     return {
-        "name": engine_name, "url": "", "status": 0 if ok else None,
-        "latency_ms": round((time.time() - t0) * 1000, 2), "parse_ok": True,
-        "text_sample": "", "fail_reason": fail_reason, "available": ok,
+        "name": engine_name, "url": "", "status": 200 if ok else None,
+        "latency_ms": round((time.time() - t0) * 1000, 2),
+        "parse_ok": ok, "text_sample": text_sample,
+        "fail_reason": fail_reason, "available": ok,
     }
 
 
@@ -241,7 +265,8 @@ def check_engine(
 
     # cli 引擎无 HTTP 端点，走 CLI 探针而非 URL 探针
     if spec.get("type") == "cli":
-        return _check_cli_engine(engine_name, spec, timeout=timeout)
+        return _check_cli_engine(engine_name, spec, timeout=timeout,
+                                 canary_query=canary_query, n=n)
 
     url, headers = _build_canary_url(spec, canary_query, n)
     method = spec.get("method", "GET")
@@ -407,9 +432,16 @@ def get_available_engines(
             return bool(rec) and (now - rec.get("last_checked", 0)) < _effective_ttl(rec, ttl)
 
         # 逐引擎名比对新鲜度（此前 dict in list[str] 恒 False → 恒命中，
-        # 健康状态永不刷新）；任一缺失/过期即触发检查。
-        if engine_names and all(_recent(n) for n in engine_names):
+        # 健康状态永不刷新）。
+        # 2026-10-06：只探**过期**的引擎——此前 all() 判全新鲜，任一过期即
+        # 全量重探，稳定引擎（TTL 放宽到 60min）被反复拖进探针浪；探针浪
+        # 实测 ~2-4.5s（yahoo 慢空），全量重探把它加到每次调用路径上。
+        # 注意 engine_names 在上方已保证非空（None → 全量启用列表）。
+        stale = [n for n in engine_names if not _recent(n)]
+        if not stale:
             return [n for n in engine_names if reg.is_available(n)]
+        run_health_check(registry=reg, engine_names=stale)
+        return [n for n in engine_names if reg.is_available(n)]
     run_health_check(registry=reg, engine_names=engine_names)
     return [n for n in engine_names if reg.is_available(n)]
 

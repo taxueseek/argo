@@ -25,7 +25,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.2-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-261-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-264-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
@@ -60,7 +60,7 @@
 4. **무료 오픈 생태계로 충분.** 정부·학술·표준·보안 공개 API와 키리스 엔진이 대부분 도메인을 커버 (무설정 225개).
 5. **품질은 측정 가능.** 랭킹 골든 플로어, 융합 이득 어블레이션 게이트, 음의 라우팅 제어.
 
-> v2.8.9은 이 모두를 구현: 261 소스 / 93 도메인 / 226 무설정.
+> v2.8.9은 이 모두를 구현: 264 소스 / 94 도메인 / 229 무설정.
 
 ---
 
