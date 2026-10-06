@@ -167,7 +167,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `rfc_editor` | 可直接用 | 免费 | 不限 | — | 域 rfc_search | RFC/互联网标准文档检索（datatracker.ietf.org 免认证） |
 | `skillsmp` | 可直接用 | 免费 | 不限 | — | 域 skill_search | SkillsMP Agent 技能聚合目录（200万+ 开源技能独立索引，免费 keyless REST API，stars 排序） |
 | `steam` | 可直接用 | 免费 | 不限 | — | 域 game_search | Steam 商店搜索（免认证） |
-| `train` | 可直接用 | 免费 | 不限 | — | 域 modal_card、域 transport_rt | 火车余票查询（免 Key：12306 官方接口，车次时刻+余票） |
+| `train` | 可直接用 | 免费 | 不限 | — | 域 modal_card、域 transport_rt | 火车余票/中转/经停查询（免 Key：12306 官方接口） |
 | `urban_dictionary` | 可直接用 | 免费 | 不限 | — | 域 meme_slang、语义画像命中 | Urban Dictionary（英文俚语定义与例句，官方 API） |
 | `weather` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 天气查询（免 Key：wttr.in 主用 + Open-Meteo 兜底，当前+未来预报） |
 | `weather_cn` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 中国天气网城市实况（城市联想取 cityid → sk JSON，免认证，两步） |

@@ -1538,7 +1538,7 @@ engines:
     - chinese
     - skill
     desc: 小红书 REDSkill 排行榜与全量技能检索（47650 技能，data.json 本地缓存，免认证）
-    timeout: 60
+    timeout: 15
     cmd:
     - python3
     - scripts/redskill/redskill_engine.py
@@ -1701,6 +1701,7 @@ engines:
     - --mode
     - '{mode}'
     - --json
+    timeout: 10
     env: {}
   anysearch:
     type: anysearch
@@ -2272,7 +2273,7 @@ engines:
     - archive
     - web
     desc: Wayback Machine CDX 历史快照检索（web.archive.org 免认证）
-    timeout: 20
+    timeout: 10
     type: wayback_cdx
   usgs:
     enabled: true
@@ -3655,6 +3656,7 @@ engines:
     - '{query}'
     - -n
     - '{n}'
+    timeout: 10
     env: {}
     # 后端依赖（实测：脚本内 subprocess 调 `xhs`，本机缺失时状态曾误报 ready，
     # 调用后白等并静默返回 0 条）。另需 `xhs login` 取得登录态 cookie，
@@ -3851,7 +3853,7 @@ engines:
     - image
     - reverse_image
     desc: TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力）
-    timeout: 20
+    timeout: 10
   bing_rss:
     type: bing_rss
     enabled: true
