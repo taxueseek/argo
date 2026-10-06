@@ -299,6 +299,7 @@ Usage:
   argo screenshot "url"           网页截图（--full-page 整页 / --output 指定路径）
   argo pdf       "url"            PDF 正文提取（--pages 1-5 / --password 口令）
   argo paper     "arxiv-id"       论文深读（--outline/--section/--latex/--cited-by）
+  argo tweet     "<url|id>"       X 帖子完整打包（正文+串/引用/转发+媒体；--out 落盘）
   argo answer    "query"          直答（Seltz 带引用合成答案，置信口径=引用计数）
   argo watch     {{add|check|list|remove}}  观察模式（网页快照与变化检测，cron 可用）
   argo job       "query"          招聘岗位多平台聚合（BOSS/猎聘/智联/前程无忧/597/今日招聘）
@@ -389,6 +390,9 @@ def main():
         "screenshot": ("screenshot.py", []),
         "pdf":        ("pdf_extract.py", []),
         "paper":      ("paper.py",      []),
+        # tweet：X 帖子完整打包（搜索用 argo search；这里是「给定链接吸收整份内容」）。
+        # 与 paper/article 同类：站点专用结构化提取各占一个子命令，不进搜索契约。
+        "tweet":      ("tweet.py",      []),
         # answer/watch：MCP 工具面 2026-09-26 补齐（argo_answer/argo_watch），
         # CLI 与 MCP 能力面自此一一对应
         "answer":    ("answer.py",     ["--json"]),

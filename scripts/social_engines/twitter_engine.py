@@ -20,29 +20,22 @@ import json
 import re
 import subprocess
 import sys
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any
 
 # 出口调度唯一入口（issue #13 同类修复）：urlopen 不认 config.yaml 的
 # network.proxy，裸用会在「必须经代理才能出网」的环境里整源连不上。
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from net_proxy import open_url  # noqa: E402
+from fxtwitter_api import extract_status_id as _fx_extract_status_id  # noqa: E402
+from fxtwitter_api import http_get as _fx_http_get  # noqa: E402
 
 FXTWITTER_BASE = "https://api.fxtwitter.com"
 USER_AGENT = "argo-search/1.0 (+https://github.com/taxueseek/argo; fxtwitter)"
 
-# 推文 URL / snowflake id
-# URL 中允许短历史 ID（如 jack/status/20）；纯数字查询要求 snowflake 长度以免误伤
-_TWEET_URL_RE = re.compile(
-    r"(?:https?://)?(?:www\.)?(?:twitter\.com|x\.com|fxtwitter\.com|fixupx\.com)"
-    r"/(?:i/web/status|[^/\s]+/status)/(\d{1,25})",
-    re.I,
-)
-_STATUS_ID_RE = re.compile(r"^\s*(\d{10,25})\s*$")
+# 推文 URL / snowflake id 的解析与 HTTP 出口统一收在 fxtwitter_api（打包器
+# tweet.py 用的是同一份）；本模块只保留「引擎侧阈值」——纯数字要求 ≥10 位，
+# 见 _extract_status_id。此前这里自带一份正则，与打包器那份迟早漂移。
 
 
 def _http_get_with_retry(
@@ -51,44 +44,25 @@ def _http_get_with_retry(
     timeout: int = 10,
     max_retries: int = 2,
 ) -> tuple[bytes, int]:
-    """带重试的 HTTP GET，尊重 429 + Retry-After。仅 stdlib。"""
-    hdrs = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/json",
-    }
-    if headers:
-        hdrs.update(headers)
+    """带重试的 HTTP GET（实现唯一在 fxtwitter_api.http_get）。
 
-    for attempt in range(max_retries + 1):
-        try:
-            req = urllib.request.Request(url, headers=hdrs)
-            with open_url(req, timeout=timeout) as resp:
-                return resp.read(), resp.status
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt < max_retries:
-                retry_after = int(e.headers.get("Retry-After", "5"))
-                time.sleep(min(retry_after, 30))
-                continue
-            raise
-        except (urllib.error.URLError, OSError):
-            if attempt < max_retries:
-                time.sleep(2 ** attempt + 0.5)
-                continue
-            raise
+    保留本名与签名：既有测试 patch 的正是 `tw._http_get_with_retry`，薄壳让
+    patch 语义不变；同时引擎与打包器共用同一份「重试 + 代理 + SSRF 守卫」纪律，
+    不再各写一遍。
+    """
+    return _fx_http_get(url, headers=headers, timeout=timeout,
+                        max_retries=max_retries)
     return b"", 0
 
 
 def _extract_status_id(query: str) -> str | None:
-    """从查询中提取推文 ID（URL 或纯数字）。"""
-    if not query:
-        return None
-    m = _TWEET_URL_RE.search(query)
-    if m:
-        return m.group(1)
-    m = _STATUS_ID_RE.match(query)
-    if m:
-        return m.group(1)
-    return None
+    """从查询中提取推文 ID（URL 或纯数字）。
+
+    解析器唯一实现在 fxtwitter_api.extract_status_id；这里只固定搜索侧的阈值
+    min_digits=10——`argo search "20"` 里的 20 可能是页码或数量，不该当推文 ID；
+    而 `argo tweet "20"` 是用户显式给的 ID（那边传 1）。
+    """
+    return _fx_extract_status_id(query or "", min_digits=10)
 
 
 def _status_to_result(item: dict[str, Any], rank: int = 0) -> dict[str, Any] | None:

@@ -3,7 +3,7 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（18 个，唯一事实=bin/argo 分发表）
+## 命令总览（21 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
@@ -18,6 +18,7 @@
 | `argo screenshot` | 网页截图（`--full-page`/`--output`） |
 | `argo pdf` | PDF 正文提取（`--pages`/`--password`，`--outline`/`--section` 分节读取） |
 | `argo paper` | arXiv 论文深读（`--outline`/`--section`/`--latex`/`--cited-by`） |
+| `argo tweet` | X 帖子完整打包（正文全文+串/引用/转发+媒体，`--out` 落盘） |
 | `argo answer` | 直答（Seltz 带引用合成答案） |
 | `argo watch` | 网页变化监控（add/check/list/remove） |
 | `argo job` | 招聘多平台聚合 |
@@ -26,6 +27,7 @@
 | `argo mcp` | 多客户端 MCP 注入/诊断/还原 |
 | `argo paths` | 路径自省与状态目录自检 |
 | `argo stats` | 使用日志与反馈状态（本地使用日志只读出口） |
+| `argo local-image` | 本地图片检索（Vision 索引；默认关，见「图片检索」节） |
 
 > SKILL.md 只留核心命令；本页是参数大全与输出字段说明。
 
@@ -225,6 +227,25 @@ argo paper "1706.03762" --section 2        # 读单节（缓存后秒回）
 argo paper "1706.03762" --latex            # LaTeX 源精读（公式级）
 argo paper "1706.03762" --cited-by 10      # 引文图（S2，配 key 更稳）
 ```
+
+### argo_tweet
+
+给定推文 URL 或 ID，把**整份内容**吸收到本地。`argo search` 负责**发现**推文（把推文压成一条结果参与融合），本命令负责**吸收**——同一条推文，搜索给「一行」，打包给「整份」。
+
+```bash
+argo tweet "https://x.com/jack/status/20"                  # 正文全文打到 stdout
+argo tweet "20" --json                                     # 结构化 JSON（全文+媒体 URL+互动+串/引用）
+argo tweet "20" --out ./tweets/20                          # 落盘四件套
+argo tweet "20" --out ./tweets/20 --media                  # 再下载图片/视频
+argo tweet "20" --mode thread|conversation|quotes|reposts  # 串 / 对话 / 引用 / 转发
+argo tweet "20" --with-quotes --with-reposts --limit 50    # 在主 mode 上叠加分区
+```
+
+- **按需采用**：默认只拉正文与结构、**不下载媒体**（媒体只记 URL）；`--out DIR` 才落盘，`--media` 才下载。
+- **四件套**（`--out`）：`post.md`（可读正文 + 本地媒体相对路径）、`raw.json`（上游原始响应）、`manifest.json`（媒体清单/计数/路径）、`CHECKLIST.md`（PASS/PARTIAL 校验表，媒体部分失败标 PARTIAL 但仍交付）。
+- **媒体下载**：图片直链 + 视频按 `--video-quality max|min|720` 选 mp4（跳过 m3u8）；每跳都过 SSRF 守卫（拒内网/保留地址）并走代理配置。
+- **零 Key、不碰 Cookie/登录态**；上游 FxTwitter（`api.fxtwitter.com`，备镜像 `api.fixupx.com`）。
+- **与 fetch 的分工**：`argo fetch` 是通用网页正文（抓 x.com 页面会经第三方 reader，无结构、无媒体）；X 的完整结构化数据只有本命令拿得到。
 
 ## 证据流程字段语义（v2.8.0）
 

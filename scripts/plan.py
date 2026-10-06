@@ -190,10 +190,16 @@ def build_plan(
         suggested = ["argo_fetch", "argo_pdf"]
         extra_limits: list[str] = []
         if _is_single_tweet(target):
-            suggested.insert(0, "argo_search(engine=twitter_syndication)")
+            # 两条免登录通道分工：`argo tweet` 吸收整份内容（正文全文 + 串/引用/
+            # 转发 + 可选媒体下载），twitter_syndication 只要一条轻量结果。
+            # 只提 argo_fetch 会让人以为得靠浏览器/登录才拿得到。
+            suggested.insert(0, "argo_tweet")
+            suggested.insert(1, "argo_search(engine=twitter_syndication)")
             extra_limits.append(
-                "Single tweet: the twitter_syndication channel fetches it without login "
-                "(argo_search with engine=twitter_syndication, query = tweet URL or ID)."
+                "Single tweet: `argo tweet <url|id>` packages it fully without login "
+                "(full text, thread/quotes/reposts, optional --media download); "
+                "argo_search with engine=twitter_syndication returns a lightweight "
+                "single-post result."
             )
         return {
             "schema_version": "1.0",

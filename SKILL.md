@@ -86,12 +86,13 @@ python3 scripts/clarify.py "有歧义的查询" --json
 
 ```bash
 argo fetch "https://example.com" [--focus "关键词"] [--use-browser]
-# 降级链顺序与各级条件见 references/usage.md
+# 降级链见 references/usage.md
 argo screenshot "https://example.com" [--full-page]
 argo pdf "https://example.com/paper.pdf" [--pages "1-5"] [--password "secret"]
 argo paper "1706.03762"  # 论文深读
-argo answer "query" [--scope <语料>]   # 直答，语料见 references/usage.md
-argo watch add|check|list|remove   # 观察模式：快照+变化检测（check --json 供 cron）
+argo tweet "<x-url|id>"  # X 帖子打包（正文+串/引用/转发+媒体）
+argo answer "query" [--scope <语料>]   # 直答（语料见 usage.md）
+argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 ```
 
 ## Agent 执行纪律
