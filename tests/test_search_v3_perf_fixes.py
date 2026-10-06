@@ -19,6 +19,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -32,11 +33,18 @@ import search_v3  # noqa: E402
 from local_health_check import _check_cli_engine  # noqa: E402
 
 
+def _recent_iso_t(days_ago: int = 1) -> str:
+    """窗内测试样例必须相对当前时间生成：写死日期会被 7d 窗随日历推出
+    窗外，测试在毫无代码改动的某天集体变红（2026-10-06 实锤两例）。"""
+    return (datetime.now(timezone.utc) - timedelta(days=days_ago)) \
+        .replace(microsecond=0).isoformat()
+
+
 # ── 1. 时间窗日期归一化 ────────────────────────────────────────────────────────
 
 def test_apply_time_window_accepts_iso_t_dates():
     """带时间的 ISO 串此前直接 ValueError（引擎结果全损），现在正常过滤。"""
-    rs = [{"title": "a", "published_at": "2026-09-28T15:30:11+00:00"}]
+    rs = [{"title": "a", "published_at": _recent_iso_t()}]
     assert len(search_v3._apply_time_window(rs, "7d", None)) == 1
 
 
@@ -76,7 +84,7 @@ def test_cli_success_path_applies_time_window(monkeypatch):
 def test_cli_success_path_keeps_in_window_results(monkeypatch):
     def fake_cli(spec, query, n, timeout, since=None, until=None):
         return [{"title": "fresh", "url": "https://n.example.com/2",
-                 "published_at": "2026-09-28T10:00:00+00:00",
+                 "published_at": _recent_iso_t(),
                  "source": "local_ddgs_news"}], ""
 
     monkeypatch.setattr(search_v3, "_run_cli_engine", fake_cli)

@@ -21,14 +21,18 @@ def _jsrun_enabled() -> bool:
 
 
 def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
-                           timeout: float = 8.0) -> dict:
+                           timeout: float = 8.0,
+                           backoff_budget_s: float | None = None) -> dict:
     """用 js-run 执行挑战页 JS，尝试获取 clearance cookie 后重试请求。
 
     只处理「环境探测 + 纯计算」型挑战脚本（v0 面）。失败时返回空结果，
     由调用方降级到 tinyfish/CDP。
 
     重试请求用 curl_cffi Chrome 指纹 impersonate（站点按 TLS 指纹风控，
-    裸 Python 指纹被静默拦截）。退避重试 3 次（5s/10s/15s）。
+    裸 Python 指纹被静默拦截）。退避重试 3 次（间隔 5s/10s）。
+    `backoff_budget_s`（秒）给整段重试设墙钟上界：传入时退避睡眠与后续
+    尝试都不得越过它——此前 sleep(5)+sleep(10) 不受链级预算约束，cookie
+    拿到而三连败时可在 fetch 链内部多耗 ~30s（2026-10-06 审查定位）。
     """
     import re as _re
     import time as _time
@@ -71,33 +75,48 @@ def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
         # 用 clearance cookie 重试原请求（curl_cffi Chrome 指纹 + 退避重试）
         from curl_cffi import requests as _cr
 
+        # 退避墙钟上界：到点不再发起后续尝试、睡眠也不越过（见 docstring）
+        _bo_deadline = (_time.monotonic() + backoff_budget_s
+                        if backoff_budget_s is not None and backoff_budget_s > 0
+                        else None)
         session = _cr.Session(impersonate="chrome")
-        last_err = ""
-        for attempt in range(1, 4):
-            try:
-                resp = session.get(
-                    url,
-                    headers={"Cookie": cookie},
-                    timeout=timeout,
-                )
-                if resp.status_code == 200 and len(resp.text.strip()) >= 100:
-                    return {
-                        "url": url,
-                        "content": resp.text[:max_chars],
-                        "html": "",
-                        "title": "",
-                        "length": len(resp.text),
-                        "success": True,
-                        "error": None,
-                        "fetch_method": "jsrun_challenge",
-                        "jsrun_cookie": cookie[:100],
-                    }
-                last_err = f"HTTP {resp.status_code}, {len(resp.text)} 字节"
-            except Exception as e:
-                last_err = str(e)[:200]
-            if attempt < 3:
-                _time.sleep(5 * attempt)  # 5s, 10s
-        return {}
+        try:
+            last_err = ""
+            for attempt in range(1, 4):
+                if _bo_deadline is not None and _time.monotonic() >= _bo_deadline:
+                    break
+                try:
+                    resp = session.get(
+                        url,
+                        headers={"Cookie": cookie},
+                        timeout=timeout,
+                    )
+                    if resp.status_code == 200 and len(resp.text.strip()) >= 100:
+                        return {
+                            "url": url,
+                            "content": resp.text[:max_chars],
+                            "html": "",
+                            "title": "",
+                            "length": len(resp.text),
+                            "success": True,
+                            "error": None,
+                            "fetch_method": "jsrun_challenge",
+                            "jsrun_cookie": cookie[:100],
+                        }
+                    last_err = f"HTTP {resp.status_code}, {len(resp.text)} 字节"
+                except Exception as e:
+                    last_err = str(e)[:200]
+                if attempt < 3:
+                    _sleep = 5 * attempt  # 5s, 10s
+                    if _bo_deadline is not None:
+                        _sleep = min(_sleep, _bo_deadline - _time.monotonic())
+                    if _sleep <= 0:
+                        break
+                    _time.sleep(_sleep)
+            return {}
+        finally:
+            # curl 句柄随 Session 持有：MCP 常驻进程里不关会逐次累积
+            session.close()
     except Exception:
         pass
     return {}

@@ -1533,11 +1533,12 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
 
                 # 第三级：浏览器降级（HTTP 失败或疑似 CF/JS 壳）；预算耗尽不再升级
                 if use_browser_fallback and _needs_browser(result) and _budget_left() > 0:
-                    # js-run 轻量车道：挑战页先试 V8 算通行证（毫秒级），失败再降级
+                    # js-run 轻量车道：挑战页先试 V8 算通行证；退避预算随链级 deadline
                     if _jsrun_enabled() and not need_html and result.get("html"):
+                        _bo = min(15.0, _budget_left()) if deadline_s > 0 else None
                         jr = _jsrun_challenge_fetch(
                             url, result["html"], max_chars,
-                            _level_timeout(min(timeout, 5.0)))
+                            _level_timeout(min(timeout, 5.0)), backoff_budget_s=_bo)
                         if jr.get("success"):
                             jr["http_fallback"] = True
                             result = jr

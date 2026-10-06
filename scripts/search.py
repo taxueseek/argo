@@ -771,9 +771,11 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
 
     # include-local 等待预算（H1，2026-09-29）：deadline 跨两个等待点共享
     #（此处的预等待 + 下方 shape_response 的合并等待），总预算不叠加。
-    # 主结果命中缓存时收窄到宽限窗 _LOCAL_SEEK_GRACE_S。
+    # 主结果命中缓存时收窄到宽限窗（_local_seek_grace_s() 调用时取值：
+    # 模块级常量只在 import 时读 env，MCP 常驻进程里改 ARGO_LOCAL_SEEK_GRACE_S
+    # 不生效——与 _straggler_grace()/_serial_stagger() 同一原则）。
     _local_wait_cached = isinstance(result, dict) and bool(result.get("cached"))
-    _local_deadline = time.monotonic() + (_LOCAL_SEEK_GRACE_S if _local_wait_cached
+    _local_deadline = time.monotonic() + (_local_seek_grace_s() if _local_wait_cached
                                           else _LOCAL_SEEK_TIMEOUT_S)
     # 主搜索完成后，本地搜索应已就绪；若未完成则等待剩余预算
     if _local_seek_future is not None:

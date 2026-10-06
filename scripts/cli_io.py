@@ -127,8 +127,9 @@ def stdout_is_tty() -> bool:
     """stdout 是否是终端（人类消费）。
 
     Agent 消费场景（管道/重定向/capture_output）下 stdout 不是 tty，
-    此时可自动启用 --fields agent 瘦身。与 stdin_is_piped 同构：
-    用 os.fstat 而非 isatty()，避免 isatty 在非标准 fd 下的歧义。
+    此时可自动启用 --fields agent 瘦身。判据是 os.isatty(fileno())——
+    直接问内核「是不是终端」；与 stdin_is_piped 同构的是 fail-safe 结构：
+    fd 取不到时这里当终端（不瘦身），那边当没数据。
     """
     try:
         return os.isatty(sys.stdout.fileno())
