@@ -39,7 +39,6 @@ _TWEET_URL_RE = re.compile(
     r"/(?:i/web/status|[^/\s]+/status)/(\d{1,25})",
     re.I,
 )
-_HANDLE_RE = re.compile(r"^@?([A-Za-z0-9_]{1,15})$")
 _STATUS_ID_RE = re.compile(r"^\d{1,25}$")
 
 
@@ -70,19 +69,6 @@ def extract_status_id(text: str, *, min_digits: int = 1) -> str | None:
     if _STATUS_ID_RE.match(s) and len(s) >= min_digits:
         return s
     return None
-
-
-def extract_handle(text: str) -> str | None:
-    """从主页 URL 或 @handle 取用户名（排除 i/home/search 等保留路径）。"""
-    s = (text or "").strip()
-    m = re.search(
-        r"(?:https?://)?(?:www\.)?(?:twitter\.com|x\.com)/([A-Za-z0-9_]{1,15})/?$",
-        s, re.I)
-    if m and m.group(1).lower() not in {
-            "i", "home", "search", "explore", "settings"}:
-        return m.group(1)
-    m = _HANDLE_RE.match(s)
-    return m.group(1) if m else None
 
 
 def http_get(url: str, *, headers: dict[str, str] | None = None,
