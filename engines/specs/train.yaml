@@ -1,17 +1,23 @@
-# 火车余票查询（免 Key）
-# 数据源: 12306 官方接口（init 取会话 Cookie → queryG 查余票），免 Key 两步会话
-# 能力: 按自然语言查询词（"上海到北京" / "北京→上海 后天 G"）查询车次时刻与余票
+# 火车余票/中转/经停查询（免 Key）
+# 数据源: 12306 官方接口（init 取会话 Cookie → queryG 查余票 / lcquery 查中转 /
+#         queryTrainInfo 查经停），免 Key，查询路径运行时解析跟随官方改版
+# 能力: 自然语言查询车次时刻与余票（"上海到北京 后天 G"）、中转换乘方案
+#         （"北京到拉萨 中转"，可「经西宁」指定换乘站）、全程经停（"G2 经停"）
+# 输出: 行 URL 带查询身份参数（train_code/first_train_no 等）——表格行不共享
+#         裸 URL，避免被 URL 去重折叠成一条（fred/worldbank 时序引擎同款约定）
 # 实现: scripts/train.py（纯标准库，站点表 station_name.js 解析 + 7 天缓存，输出结构化 YAML）
 # 验证:
 #   python3 scripts/engine_validate.py --engine train --stage all --admit
 #   python3 scripts/search.py "上海到北京高铁" --engine train --json
+#   python3 scripts/search.py "北京到拉萨 中转" --engine train --json
+#   python3 scripts/search.py "G2 经停" --engine train --json
 
 engine_id: train
 type: cli
 enabled: true
 cost_tier: free
 label: 火车余票
-desc: 火车余票查询（免 Key：12306 官方接口，车次时刻+余票）
+desc: 火车余票/中转/经停查询（免 Key：12306 官方接口）
 canary_query: "北京到上海"
 cmd:
 - python3
@@ -23,3 +29,9 @@ search_args:
 output_format: yaml
 timeout: 20
 family: misc_vertical
+# 质量门禁自述查询集：通用英文探针（Python asyncio 等）会被当站名解析，
+# 必然 rc=2——垂直引擎按 engine_validate 的设计自述适用集，标准不降
+quality_queries:
+- {id: tickets_zh, query: "上海到北京 高铁", category: travel}
+- {id: transfer_zh, query: "北京到上海 中转", category: travel}
+- {id: route_zh, query: "G2 经停", category: travel}

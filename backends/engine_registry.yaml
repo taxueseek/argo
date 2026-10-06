@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-09-30'
+last_updated: '2026-10-06'
 engines:
 - name: aljazeera
   tier: T1
@@ -2705,7 +2705,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: 火车余票查询（免 Key：12306 官方接口，车次时刻+余票）
+  desc: 火车余票/中转/经停查询（免 Key：12306 官方接口）
 - name: tvmaze
   tier: T1
   type: tvmaze
