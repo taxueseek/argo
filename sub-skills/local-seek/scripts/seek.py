@@ -46,7 +46,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from itertools import islice
 from pathlib import Path
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
@@ -229,19 +228,41 @@ def truncate(text: str, n: int = 120) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
-def _is_noise_path(fp: str, root: str) -> bool:
+def _norm_root(root, cwd: str) -> str:
+    """搜索根归一化成绝对、无冗余分隔符的字符串（纯字符串运算，零 syscall）。"""
+    return os.path.normpath(root if os.path.isabs(root) else os.path.join(cwd, root))
+
+
+def _is_noise_path(fp: str, root: str, root_abs: str | None = None,
+                   cwd: str | None = None) -> bool:
     """该命中是否落在噪声档目录（相对**搜索根**判定）。
 
     为什么必须相对搜索根：直接对整条路径做分段匹配是错的——搜索根自己叫
     `tests/` 或含 `2026-` 时（本工作区正是如此），整棵树都会被判成噪声。
     rg 的 -g glob 犯的正是这个错（`**/tests/**` 会匹配路径里任意一段），
     所以降权放到 Python 层做，不交给 glob。
+
+    性能（2026-10-06）：原实现每行都做
+    `Path(fp).resolve().relative_to(Path(root).resolve())`。`resolve()` 对每个
+    路径段 lstat、还反复 getcwd；实测 `--count` 扫 8930 个文件时它独占
+    1.52s / 1.91s（80%），内含 3.5 万次 getcwd、10 万次 lstat。改为纯字符串
+    归一化：根只归一化一次，命中路径用 normpath 做前缀比较，全程零 syscall。
+    不在根之下（软链/越界）时退回整条路径判定，与原 `Path(fp).parts` 一致。
     """
-    try:
-        rel = Path(fp).resolve().relative_to(Path(root).resolve())
-    except (ValueError, OSError):
-        rel = Path(fp)          # 不在根之下（软链/越界）时退回整条判定
-    parts = rel.parts
+    if cwd is None:
+        cwd = os.getcwd()
+    if root_abs is None:
+        root_abs = _norm_root(root, cwd)
+    afp = os.path.normpath(fp if os.path.isabs(fp) else os.path.join(cwd, fp))
+    if afp == root_abs:
+        return False
+    prefix = root_abs + os.sep
+    if afp.startswith(prefix):
+        parts = afp[len(prefix):].split(os.sep)
+    elif os.path.isabs(fp):
+        parts = afp.split(os.sep)   # 绝对但不在根下：退回整条绝对路径
+    else:
+        parts = fp.split(os.sep)    # 相对但不在根下：退回原始相对路径
     if not parts:
         return False
     for p in parts[:-1]:         # 最后一段是文件名，不参与目录判定
@@ -258,9 +279,18 @@ def _apply_noise_floor(rows, root, max_results):
 
     不是排除：真源不足 max_results 时用噪声档补满，保证「有结果总比没结果好」，
     也保证搜第三方仓里的内容仍然可达。
+
+    根与 cwd 只解析一次、每行只判一次（原实现对每行判两遍，还把根重复
+    resolve 两遍——见 _is_noise_path 的性能注记）。
     """
-    clean = [r for r in rows if not _is_noise_path(r[0], root)]
-    noisy = [r for r in rows if _is_noise_path(r[0], root)]
+    try:
+        cwd = os.getcwd()
+    except OSError:
+        cwd = "."
+    root_abs = _norm_root(root, cwd)
+    clean, noisy = [], []
+    for r in rows:
+        (noisy if _is_noise_path(r[0], root, root_abs, cwd) else clean).append(r)
     return (clean + noisy)[:max_results]
 
 
@@ -745,7 +775,7 @@ def outline_file(path):
 
 
 def read_lines(path, spec):
-    """按行读取文件（惰性，不加载全文）。返回 (输出文本, 退出码)。"""
+    """按行读取文件（单遍流式，不加载全文）。返回 (输出文本, 退出码)。"""
     m = re.fullmatch(r"(\d+)-(\d+)", spec)
     if not m:
         return "local-seek: --lines 格式应为 N-M（如 10-20）", 1
@@ -755,20 +785,22 @@ def read_lines(path, spec):
     p = Path(path)
     if not p.is_file():
         return f"local-seek: {path} 不是文件", 1
+    # 单遍流式读取：边数总行数边收集目标区间。原实现先 open 数行、再 open
+    # 读区间，同一文件开两遍——大文件时 IO 翻倍（2026-10-06 收口）。
+    picked, total = [], 0
     try:
-        f = open(p, encoding="utf-8", errors="replace")
+        with open(p, encoding="utf-8", errors="replace") as f:
+            for i, ln in enumerate(f, 1):
+                total = i
+                if a <= i <= b:
+                    picked.append(f"{i}: {ln.rstrip()}")
     except OSError as e:
         return f"local-seek: 读取失败 {e}", 1
-    with f:
-        total = sum(1 for _ in f)
     if a > total:
         return f"local-seek: {p.name} 只有 {total} 行，请求从 {a} 行开始", 1
     end = min(b, total)
     out = [f"local-seek: {p.name} 第 {a}-{end} 行 / 共 {total} 行"]
-    with open(p, encoding="utf-8", errors="replace") as f:
-        for i, ln in enumerate(islice(f, a - 1, end), start=a):
-            out.append(f"{i}: {ln.rstrip()}")
-    return "\n".join(out), 0
+    return "\n".join(out + picked), 0
 
 
 STRUCTURAL_RULES = {
