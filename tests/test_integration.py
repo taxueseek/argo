@@ -20,7 +20,7 @@ class TestEndToEnd(unittest.TestCase):
         """调用 search.py CLI。学术/多引擎 miss 常需 20–40s，默认超时 60s。"""
         cmd = [sys.executable, str(SCRIPT_DIR / "search.py"), query,
                "--engine", engine, "--mode", mode, "--json", "-n", "2",
-               "--timeout", "8"]
+               "--timeout", "8", "--fields", "full"]
         if no_cache:
             cmd.append("--no-cache")
         try:

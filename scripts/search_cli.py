@@ -202,10 +202,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="不附加阶段耗时（省几百字节上下文）",
     )
     parser.add_argument(
-        "--fields", choices=("full", "agent"), default="full",
-        help="JSON 字段档位：full=全量（默认）；agent=只留答案内容（剥观测标量"
+        "--fields", choices=("full", "agent"), default=None,
+        help="JSON 字段档位：full=全量；agent=只留答案内容（剥观测标量"
              "与 null 键，每条 result 留 title/url/snippet/source/score 等；"
-             "fetch_required 保留），配合 --no-envelope 供 Agent 消费",)
+             "fetch_required 保留）。默认 None=自动：stdout 非 tty 时"
+             "启用 agent 档（Agent 消费），否则 full",)
     parser.add_argument(
         "--archive",
         action="store_true",
@@ -574,11 +575,16 @@ def main():
 
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}
-        if args.fields == "agent":
-            # 静默白开：_strip_for_agent 会把 candidates/coverage 全剥掉，实测
-            # --envelope 在 agent 档下的增量是 0 字节（envelope 单独 19KB，叠加后
-            # 与纯 agent 档逐字节相同）。调用方会以为拿到了 provenance、实际没有，
-            # 所以这里明确告知，而不是让它默默失效。
+        # Agent 消费自动瘦身：stdout 非 tty（管道/Agent 调用）且未显式指定
+        # --fields 时，自动启用 agent 档。实测输出从 15.4KB → 4.3KB
+        # （-72%），token 消耗从 ~3863 → ~1086。显式 --fields full/agent 可覆盖。
+        from cli_io import stdout_is_tty
+        _auto_agent = (
+            not stdout_is_tty()
+            and args.fields is None
+            and not args.envelope
+        )
+        if args.fields == "agent" or _auto_agent:
             if args.envelope:
                 print(
                     "  [warning] --envelope 与 --fields agent 同时给时 envelope 会被"
