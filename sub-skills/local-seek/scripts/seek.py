@@ -38,6 +38,7 @@
 from __future__ import annotations
 
 import argparse
+import heapq
 import json
 import os
 import re
@@ -355,24 +356,29 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
                 fp, _, n = line.rpartition(":")
                 if _in_time_window(fp, since_ts, until_ts):
                     counts.append((fp, int(n) if n.isdigit() else 0, ""))
-        counts.sort(key=lambda t: t[1], reverse=True)
+        # 并列计数按路径升序决出稳定次序：sort 稳定 + rg 发射序不定的组合，
+        # 会让并列文件在两次运行里顺序不同
+        counts.sort(key=lambda t: (-t[1], t[0]))
         return _apply_noise_floor(counts, path, max_results) if drop_noise \
             else counts[:max_results], None
     out = []
-    # 提前截断：rg 的输出是「文件内按行序」，直接 break 会砍掉后面文件里的
-    # 命中，而这些文件可能才是真源（噪声档过滤要看到全量才能排序）。故先
-    # 收满一个**上界**再交给 _apply_noise_floor 排序截断。上界取 max_results
-    # 的 4 倍并设下限，保证「真源排在前面」这个目标有素材可用。
+    # 上界池 + **确定性选择**：rg 并行遍历的发射序不稳定，「先到先得」截断
+    # 拿到的是任意的 cap 条——同一查询两次跑、命中集与排序都不同（v1.4.1
+    # 审计遗留，2026-10-06 定性修复）。rg 的全量输出反正已被
+    # subprocess.run 缓冲，此前的 break 从来省不下 rg 的墙钟；改用有界堆
+    # 选 (路径,行号,内容) 最小的 cap 条：与发射序无关、内存 O(cap)、单遍
+    # 流式，池子天然按路径有序，噪声档分层（clean+noisy 保序）随之确定。
+    # 超大仓高频词 >cap 时稳定呈现路径序最前的 cap 个——无内容相关性
+    # 排序可用的前提下，这是可复现的口径。
     cap = max(max_results, min(max_results * 4, 400))
-    for line in proc.stdout.splitlines():
-        m = re.match(r"^(.*?):(\d+):(.*)$", line)
-        if m:
-            fp, ln, txt = m.group(1), int(m.group(2)), m.group(3)
-            # 时间窗在入池前过滤：窗外行不占上界名额（先截断后过滤会漏报）
-            if _in_time_window(fp, since_ts, until_ts):
-                out.append((fp, ln, truncate(txt)))
-        if len(out) >= cap:
-            break
+    candidates = (
+        (m.group(1), int(m.group(2)), truncate(m.group(3)))
+        for line in proc.stdout.splitlines()
+        if (m := re.match(r"^(.*?):(\d+):(.*)$", line))
+        # 时间窗在入池前过滤：窗外行不占上界名额（先截断后过滤会漏报）
+        and _in_time_window(m.group(1), since_ts, until_ts)
+    )
+    out = heapq.nsmallest(cap, candidates, key=lambda t: (t[0], t[1], t[2]))
     if drop_noise:
         out = _apply_noise_floor(out, path, max_results)
     else:
@@ -587,26 +593,26 @@ def grep_search(grep_exe, patterns, path, excludes, exts, context, count,
     # 一边返回 1（实测输出了 3972 行，返回码仍是 1）。输出为空才算真的没搜到。
     if proc.returncode == 1 and not proc.stdout.strip():
         return [], None
-    out = []
-    for line in proc.stdout.splitlines():
-        if count:
+    # 确定性选择与 rg 路径同款（grep/fd 同样并行发射序不定）
+    if count:
+        counts = []
+        for line in proc.stdout.splitlines():
             if ":" in line:
                 fp, _, n = line.rpartition(":")
                 # grep -c 会把没有命中的文件也列出来，写成 file:0。这种不算命中，
                 # 丢掉；这样和 rg --count-matches 只列命中的文件保持一致。
                 if n.isdigit() and int(n) > 0 and _in_time_window(fp, since_ts, until_ts):
-                    out.append((fp, int(n), ""))
-            if len(out) >= max_results:
-                break
-        else:
-            m = re.match(r"^(.*?):(\d+):(.*)$", line)
-            if m:
-                fp, ln, txt = m.group(1), int(m.group(2)), m.group(3)
-                if _in_time_window(fp, since_ts, until_ts):
-                    out.append((fp, ln, truncate(txt)))
-            if len(out) >= max_results:
-                break
-    return out, None
+                    counts.append((fp, int(n), ""))
+        counts.sort(key=lambda t: (-t[1], t[0]))
+        return counts[:max_results], None
+    candidates = (
+        (m.group(1), int(m.group(2)), truncate(m.group(3)))
+        for line in proc.stdout.splitlines()
+        if (m := re.match(r"^(.*?):(\d+):(.*)$", line))
+        and _in_time_window(m.group(1), since_ts, until_ts)
+    )
+    return heapq.nsmallest(max_results, candidates,
+                           key=lambda t: (t[0], t[1], t[2])), None
 
 
 def mdfind_search(query, path, max_results, timeout=None,
