@@ -55,14 +55,23 @@ def conn():
 
 
 def _put(conn, path, *, mtime=1.0, size=100, inode=1,
-         labels=None, ocr="", fp=None, dim=768):
+         labels=None, ocr="", dim=768):
+    """插一行元数据；指纹另走 _set_fps（2026-10-06 起指纹存 fp.npy，不在这张表）。"""
     conn.execute(
-        "INSERT OR REPLACE INTO images "
-        "(path,mtime,size,width,height,inode,labels,ocr,fp,fp_dim,indexed_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT OR REPLACE INTO images (path,mtime,size,width,height,inode,labels,ocr,fp_slot,fp_dim,indexed_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (path, mtime, size, 800, 600, inode,
          json.dumps(labels or [], ensure_ascii=False), ocr,
-         fp, dim, 0.0))
+         None, dim, 0.0))
+    conn.commit()
+
+
+def _set_fps(conn, mapping, dim=768):
+    """把 {路径: float32 字节} 写成 fp.npy 并回填 fp_slot（模拟建库产物）。"""
+    pairs = [(p, numpy.frombuffer(b, dtype="<f4")) for p, b in mapping.items()]
+    slots = li._write_fp_matrix(li._db_file(conn), pairs, dim)
+    conn.execute("UPDATE images SET fp_slot = NULL")
+    conn.executemany("UPDATE images SET fp_slot = ? WHERE path = ?",
+                     [(s, p) for p, s in slots.items()])
     conn.commit()
 
 
@@ -183,9 +192,9 @@ class TestFingerprintSearch:
         return (v / numpy.linalg.norm(v)).tobytes()
 
     def test_identical_vector_scores_one(self, conn):
-        fp = self._fp(1)
-        _put(conn, "/img/a.png", fp=fp)
-        _put(conn, "/img/b.png", fp=self._fp(2))
+        _put(conn, "/img/a.png")
+        _put(conn, "/img/b.png")
+        _set_fps(conn, {"/img/a.png": self._fp(1), "/img/b.png": self._fp(2)})
         res = li.search_local(conn, "", limit=5, similar_to="/img/a.png")
         assert res[0]["path"] == "/img/a.png"
         assert res[0]["score"] == pytest.approx(1.0, abs=1e-3)
@@ -197,16 +206,27 @@ class TestFingerprintSearch:
         assert res == []
 
     def test_rows_without_fp_skipped(self, conn):
-        _put(conn, "/img/a.png", fp=self._fp(1))
-        _put(conn, "/img/nofp.png", fp=None)
+        _put(conn, "/img/a.png")
+        _put(conn, "/img/nofp.png")
+        _set_fps(conn, {"/img/a.png": self._fp(1)})
         res = li.search_local(conn, "", limit=5, similar_to="/img/a.png")
         assert all(r["path"] != "/img/nofp.png" for r in res)
 
-    def test_cosine_handles_zero_vector(self):
-        """零向量（解码失败的占位）不得造成除零崩溃。"""
-        z = numpy.zeros(4, dtype="<f4")
-        v = numpy.ones(4, dtype="<f4")
-        assert li._cosine(z, v) == 0.0
+    def test_zero_vector_query_returns_empty(self, conn):
+        """零向量（解码失败的占位）不得造成除零崩溃——返回空即可。"""
+        _put(conn, "/img/a.png")
+        _set_fps(conn, {"/img/a.png": numpy.zeros(768, dtype="<f4").tobytes()})
+        assert li.search_local(conn, "", limit=5, similar_to="/img/a.png") == []
+
+    def test_matrix_l2_normalized_on_write(self, conn):
+        """写入时即归一化——这是「检索端点积即余弦」的前提（50 倍提速的基础）。"""
+        _put(conn, "/img/a.png")
+        raw = (numpy.arange(768, dtype="<f4") + 1.0).tobytes()
+        _set_fps(conn, {"/img/a.png": raw})
+        mat = li._load_fp_matrix(li._db_file(conn))
+        assert mat is not None
+        row0 = numpy.asarray(mat[0])
+        assert float(numpy.linalg.norm(row0)) == pytest.approx(1.0, abs=1e-4)
 
 
 # ── 拼图 ──────────────────────────────────────────────────────────────────
@@ -358,8 +378,9 @@ class TestWalkImages:
 
 class TestStats:
     def test_counts(self, conn):
-        _put(conn, "/a.png", fp=b"\0" * (768 * 4), ocr="文字")
-        _put(conn, "/b.png", fp=None)
+        _put(conn, "/a.png", ocr="文字")
+        _put(conn, "/b.png")
+        _set_fps(conn, {"/a.png": numpy.ones(768, dtype="<f4").tobytes()})
         st = li.stats(conn)
         assert st["indexed"] == 2
         assert st["with_fingerprint"] == 1
@@ -368,3 +389,99 @@ class TestStats:
     def test_empty_db(self, conn):
         st = li.stats(conn)
         assert st["indexed"] == 0 and st["with_fingerprint"] == 0
+
+
+# ── 指纹矩阵：迁移与一致性（2026-10-06 指纹移出 SQLite）─────────────────────
+
+class TestFpMatrixMigration:
+    """旧库（指纹存 fp BLOB 列）打开时自动迁移到 fp.npy，不丢指纹。"""
+
+    def _make_legacy_db(self, path):
+        c = sqlite3.connect(path)
+        c.execute(
+            "CREATE TABLE images (path TEXT PRIMARY KEY, mtime REAL, size INTEGER, "
+            "width INTEGER, height INTEGER, inode INTEGER, labels TEXT, ocr TEXT, "
+            "fp BLOB, fp_dim INTEGER, indexed_at REAL)")
+        c.execute("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT)")
+        v = numpy.random.default_rng(7).standard_normal(768).astype("<f4")
+        v = v / numpy.linalg.norm(v)
+        c.execute(
+            "INSERT INTO images (path,mtime,size,width,height,inode,labels,ocr,fp,fp_dim,indexed_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            ("/old/a.png", 1.0, 10, 8, 6, 1, "[]", "旧库文字", v.tobytes(), 768, 0.0))
+        c.commit()
+        c.close()
+
+    def test_legacy_blob_migrated_to_matrix(self, tmp_path):
+        db = str(tmp_path / "legacy.db")
+        self._make_legacy_db(db)
+        conn = li.open_db(db)
+        try:
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(images)")}
+            assert "fp_slot" in cols, "迁移未补 fp_slot 列"
+            mat = li._load_fp_matrix(db)
+            assert mat is not None and mat.shape == (1, 768), "旧 BLOB 未搬进矩阵"
+            row = conn.execute("SELECT fp_slot FROM images WHERE path = ?",
+                               ("/old/a.png",)).fetchone()
+            assert row["fp_slot"] == 0
+            # 迁移后以图搜图可用，自匹配为 1
+            res = li._search_by_fingerprint(conn, "/old/a.png", limit=3)
+            assert res and res[0]["path"] == "/old/a.png"
+            assert res[0]["score"] == pytest.approx(1.0, abs=1e-3)
+            assert li.stats(conn)["with_fingerprint"] == 1
+        finally:
+            conn.close()
+
+
+class TestFpMatrixConsistency:
+    """index_paths 结束后 fp.npy 必须与 images 表严格对齐（派生件语义）。"""
+
+    def _mk(self, d, name, color):
+        Image = pytest.importorskip("PIL.Image")
+        p = os.path.join(str(d), name)
+        Image.new("RGB", (32, 32), color).save(p)
+        return p
+
+    def test_matrix_matches_table_after_incremental(self, tmp_path):
+        db = str(tmp_path / "idx.db")
+        conn = li.open_db(db)
+        try:
+            d = tmp_path / "imgs"
+            d.mkdir()
+            self._mk(d, "a.png", (10, 0, 0))
+            self._mk(d, "b.png", (0, 10, 0))
+            li.index_paths(conn, [str(d)])
+            m1 = li._load_fp_matrix(db)
+            assert m1 is not None and m1.shape[0] == 2
+
+            # 删一张、加一张，再增量：矩阵必须跟着表走
+            os.unlink(os.path.join(str(d), "a.png"))
+            self._mk(d, "c.png", (0, 0, 10))
+            li.index_paths(conn, [str(d)])
+
+            rows = list(conn.execute(
+                "SELECT path, fp_slot FROM images WHERE fp_slot IS NOT NULL"))
+            m2 = li._load_fp_matrix(db)
+            assert m2 is not None
+            assert m2.shape[0] == len(rows), "矩阵行数与有指纹的行数必须一致"
+            slots = sorted(r["fp_slot"] for r in rows)
+            assert slots == list(range(len(rows))), "slot 必须稠密（0..n-1）"
+        finally:
+            conn.close()
+
+    def test_matrix_rebuilt_when_file_deleted(self, tmp_path):
+        """fp.npy 被删后下一次 index 自动重建（它是派生件，可随时删）。"""
+        db = str(tmp_path / "idx.db")
+        conn = li.open_db(db)
+        try:
+            d = tmp_path / "imgs"
+            d.mkdir()
+            self._mk(d, "a.png", (10, 0, 0))
+            li.index_paths(conn, [str(d)])
+            li._fp_path(db).unlink()
+            assert li._load_fp_matrix(db) is None
+            li.index_paths(conn, [str(d)])
+            m = li._load_fp_matrix(db)
+            assert m is not None and m.shape[0] == 1
+        finally:
+            conn.close()

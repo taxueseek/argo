@@ -304,7 +304,7 @@ Usage:
   argo job       "query"          招聘岗位多平台聚合（BOSS/猎聘/智联/前程无忧/597/今日招聘）
   argo preflight "url1 url2 ..."  批量 URL 预检（登录墙/已死/已归档分类，--probe 联网探测）
   argo cite "doi" [doi...]         DOI → 引用条目（GB/T 7714/顺序编码/APA/BibTeX，--style 可选）
-  argo local-image index [目录...]  本地图片建库（Vision：图中文字+标签+特征指纹）
+  argo local-image index [目录...]  本地图片建库（Vision；默认关，需 ARGO_LOCAL_IMAGE=1）
   argo local-image search "词"      搜本地图片（--similar-to 给图找相似；--sheet 出联络表）
   argo local-image stats            索引概况
   argo mcp       {{status|inject|undo}}   多客户端 MCP 一键注入/诊断/还原

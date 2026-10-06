@@ -63,8 +63,8 @@ python3 scripts/research.py "复杂问题" --json            # 取证包（扩�
 ### 图片检索
 
 网络图走 `search`（`image_search` 域自动命中）；本地素材走 `argo local-image`
-（Vision 索引：图中文字 + 分类标签 + 特征指纹；`--similar-to` 找相似图，
-`--sheet` 出联络表交多模态模型判断）。用法与字段见 `references/usage.md`。
+（Vision 索引 + `--similar-to` 找相似图 + `--sheet` 出联络表交多模态模型判断）。
+**本地图默认关闭**，需 `ARGO_LOCAL_IMAGE=1`；详见 `references/usage.md`。
 
 ### 增强三工具
 

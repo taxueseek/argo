@@ -36,15 +36,30 @@
 `SEMANTIC_BACKENDS` 留出可插拔位，需要时再挂 CLIP，接口不变。不为了少数
 场景让所有安装背上 GB 级依赖。
 
-## 存储
+## 存储：SQLite 存元数据，指纹单独一个 .npy
 
-单文件 SQLite（默认 ~/.cache/argo-image/index.db）。选 SQLite 而不是 pickle +
-npy：增量更新要按路径判定「已索引/新增/消失」，这是关系查询；而且指纹用
-BLOB 存、标签用可检索文本存，同一张表里就够，不需要两套文件同步。
+`index.db`（SQLite）只放元数据：路径 / mtime / 尺寸 / 标签 / OCR / `fp_slot`。
+768 维指纹另存同目录的 `fp.npy`——一个连续的 float32 矩阵，检索时 mmap 只读、
+一次矩阵点积出全部相似度。
 
-为什么不做向量索引（FAISS/hnswlib）：实测本机 7.7 万张图，768 维 float32
-全量装入约 236MB，矩阵乘法比较 2-3ms/次——暴力检索已经够快。FAISS 的价值
+为什么指纹不留在 SQLite BLOB 里（2026-10-06 实测）：
+  旧实现把指纹按行取成 7.7 万个 BLOB，再在 Python 里**逐行** frombuffer +
+  两次 `np.linalg.norm` + 点积——7.7 万张约 180ms。换成连续矩阵后一次
+  `M @ q` 走 BLAS，7.7 万张约 3.7ms（快约 50 倍）。代价是检索要的是「一整块
+  连续内存」，SQLite 给不了，只有文件 mmap 能给。
+  指纹在**写入时**就 L2 归一化，检索端只归一化查询向量——点积即余弦，
+  不再逐行算范数。
+
+`fp.npy` 是派生件：每次 `index` 结束都按当前 `images` 表重建（新/更新的用本次
+探测结果，未变的从旧矩阵按 `fp_slot` 搬），所以它永远与 SQLite 一致，删了也能
+从零重建。指纹用 float32 存：7.7 万张约 226MB，占原图总量（~4.3GB）约 5%。
+
+为什么仍不做向量索引（FAISS/hnswlib）：连续矩阵点积已 3.7ms，FAISS 的价值
 在千万级，这里是几十万级，引入它是为不存在的规模付费。
+
+索引默认落在 `~/.cache/unified-search/argo-image/`（`ARGO_IMAGE_DB` 可换）。
+
+本能力**默认关闭**：需 `ARGO_LOCAL_IMAGE=1` 才可执行（见 main() 的开关判定）。
 """
 
 from __future__ import annotations
@@ -95,12 +110,13 @@ CREATE TABLE IF NOT EXISTS images (
     inode       INTEGER,
     labels      TEXT,      -- JSON: [{"id":..,"conf":..}]
     ocr         TEXT,      -- 换行连接的 OCR 文本
-    fp          BLOB,      -- 768 * float32
+    fp_slot     INTEGER,   -- 指纹在 fp.npy 里的行号（NULL=无指纹）
     fp_dim      INTEGER,
     indexed_at  REAL
 );
 CREATE INDEX IF NOT EXISTS idx_images_inode ON images(inode);
 CREATE INDEX IF NOT EXISTS idx_images_mtime ON images(mtime);
+CREATE INDEX IF NOT EXISTS idx_images_fp_slot ON images(fp_slot);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 """
 
@@ -138,11 +154,29 @@ def vision_available() -> bool:
     return shutil.which("swiftc") is not None
 
 
+_ENABLE_ENV = "ARGO_LOCAL_IMAGE"
+
+
+def local_image_enabled() -> bool:
+    """本能力默认关闭：需 `ARGO_LOCAL_IMAGE=1` 显式开启（见模块 docstring）。
+
+    为什么默认关：它要 macOS + swiftc 编译辅助、要 numpy，还要先建一份
+    ~226MB/7.7 万张 的指纹索引才可用——对绝大多数安装是纯负担。默认关 = 不建库、
+    不占资源；要用的人显式打开一次。
+    """
+    return os.environ.get(_ENABLE_ENV, "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
 def open_db(db_path: Path | str | None = None) -> sqlite3.Connection:
     p = Path(db_path).expanduser() if db_path else DEFAULT_DB
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(p), timeout=30)
     conn.row_factory = sqlite3.Row
+    # 迁移必须前置于 executescript：新 schema 会在 fp_slot 上建索引，而旧表
+    # 还没有这一列——先跑 CREATE INDEX 会直接报「no such column: fp_slot」。
+    # _migrate_fp_column 对全新库（连 images 表都没有）直接返回，不影响首建。
+    _migrate_fp_column(conn, p)
     conn.executescript(_SCHEMA)
     return conn
 
@@ -227,7 +261,7 @@ def _run_probe(paths: list[Path], *, parallel: int = 4,
 
 
 def _decode_fp(b64: str, dim: int) -> bytes | None:
-    """base64 float32 → bytes（存 BLOB，检索时用 numpy 解）。"""
+    """base64 float32 → bytes（写入前解码，随即进 fp.npy）。"""
     if not b64:
         return None
     try:
@@ -235,6 +269,140 @@ def _decode_fp(b64: str, dim: int) -> bytes | None:
     except Exception:
         return None
     return raw if len(raw) == dim * 4 else None
+
+
+def _fp_path(db_path) -> Path:
+    """指纹矩阵文件：与 index.db 同目录的 fp.npy（派生件，可随时重建）。"""
+    return Path(db_path).expanduser().parent / "fp.npy"
+
+
+def _db_file(conn: sqlite3.Connection) -> Path:
+    """当前连接主库的文件路径（指纹矩阵与它同目录）。"""
+    try:
+        row = conn.execute("PRAGMA database_list").fetchone()
+    except sqlite3.Error:
+        return DEFAULT_DB
+    f = row["file"] if row is not None else ""
+    return Path(f) if f else DEFAULT_DB
+
+
+def _unit(vec):
+    """L2 归一化（写入时归一，检索端点积即余弦）。零向量原样返回。"""
+    import numpy as np
+    v = np.asarray(vec, dtype="<f4")
+    n = float(np.linalg.norm(v))
+    return v if n == 0.0 else (v / n)
+
+
+def _load_fp_matrix(db_path):
+    """mmap 只读加载指纹矩阵；不存在/损坏返回 None。
+
+    mmap 是这一步的关键：检索端拿到的是一块连续只读内存，`M @ q` 直接走
+    BLAS，无需把 7.7 万个 BLOB 逐行读进 Python（那正是旧实现的瓶颈）。
+    """
+    import numpy as np
+    p = _fp_path(db_path)
+    if not p.exists():
+        return None
+    try:
+        return np.load(p, mmap_mode="r")
+    except (OSError, ValueError):
+        return None
+
+
+def _write_fp_matrix(db_path, pairs, dim) -> dict:
+    """把 (路径, 向量) 序列写成连续 fp.npy，返回 {路径: 行号}。
+
+    只收「有向量且维度匹配」的行；写入前 L2 归一化。原子写（.tmp → replace），
+    避免检索端 mmap 到写了一半的文件。
+    """
+    import numpy as np
+    out = _fp_path(db_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    items = [(p, v) for p, v in pairs if v is not None and v.shape[0] == dim]
+    if not items:
+        try:
+            out.unlink()
+        except OSError:
+            pass
+        return {}
+    tmp = out.with_name(out.name + ".tmp")
+    mm = np.lib.format.open_memmap(tmp, mode="w+", dtype="<f4",
+                                   shape=(len(items), dim))
+    slots: dict[str, int] = {}
+    for i, (p, v) in enumerate(items):
+        mm[i] = _unit(v)
+        slots[p] = i
+    mm.flush()
+    del mm
+    os.replace(tmp, out)
+    return slots
+
+
+def _rebuild_fp(conn, db_path, fresh, old_slots, old_mat) -> int:
+    """按当前 images 表重建 fp.npy，并回填 fp_slot；返回写入行数。
+
+    顺序取 rowid（稳定）。本次新/更新过的行用 fresh 里的向量；未变的行从旧
+    矩阵按 fp_slot 原样搬（不重算）。这是「指纹矩阵永远与 SQLite 一致」的
+    唯一实现点——所以 fp.npy 可以随时删除，下次索引自动重建。
+    """
+    rows = list(conn.execute("SELECT path FROM images ORDER BY rowid"))
+    dim = None
+    for v in fresh.values():
+        if v is not None:
+            dim = int(v.shape[0])
+            break
+    if dim is None and old_mat is not None:
+        dim = int(old_mat.shape[1])
+    pairs = []
+    for r in rows:
+        p = r["path"]
+        v = fresh.get(p)
+        if v is None and old_mat is not None:
+            s = old_slots.get(p)
+            if s is not None and 0 <= s < old_mat.shape[0]:
+                v = old_mat[s]
+        pairs.append((p, v))
+    slots = _write_fp_matrix(db_path, pairs, dim) if dim else {}
+    conn.execute("UPDATE images SET fp_slot = NULL")
+    if slots:
+        conn.executemany("UPDATE images SET fp_slot = ? WHERE path = ?",
+                         [(s, p) for p, s in slots.items()])
+    conn.commit()
+    return len(slots)
+
+
+def _migrate_fp_column(conn, db_path) -> None:
+    """旧库（指纹存 fp BLOB 列）→ 指纹矩阵（一次性）。
+
+    2026-10-06 起指纹移出 SQLite。旧库只补 fp_slot 列并把 BLOB 搬进矩阵，
+    不 DROP 旧列——SQLite 老版本不支持 DROP COLUMN，且留着的 NULL 列不占空间。
+    """
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(images)")}
+    if "fp" not in cols or "fp_slot" in cols:
+        return
+    conn.execute("ALTER TABLE images ADD COLUMN fp_slot INTEGER")
+    rows = [(r["path"], r["fp"], r["fp_dim"])
+            for r in conn.execute("SELECT path, fp, fp_dim FROM images")]
+    dim = None
+    for _p, blob, d in rows:
+        if blob and d:
+            dim = int(d)
+            break
+    if dim is None:
+        conn.commit()
+        return
+    import numpy as np
+    pairs = []
+    for p, blob, d in rows:
+        if not blob or int(d or 0) != dim:
+            pairs.append((p, None))
+            continue
+        pairs.append((p, np.frombuffer(blob, dtype="<f4")))
+    slots = _write_fp_matrix(db_path, pairs, dim)
+    conn.executemany("UPDATE images SET fp_slot = ? WHERE path = ?",
+                     [(s, p) for p, s in slots.items()])
+    conn.commit()
 
 
 def index_paths(
@@ -264,6 +432,18 @@ def index_paths(
         files = files[:max_images]
     stat = {"total": len(files), "new": 0, "updated": 0, "unchanged": 0,
             "gone": 0, "failed": 0}
+
+    # 指纹矩阵与旧 slot：未变的行从旧矩阵搬指纹，不重算。矩阵丢失时无法复用
+    # 旧指纹，退化为全量重算（否则未变行的指纹会被静默清空——那是静默数据损坏）。
+    db_path = _db_file(conn)
+    old_slots: dict[str, int] = {}
+    for row in conn.execute("SELECT path, fp_slot FROM images"):
+        if row["fp_slot"] is not None:
+            old_slots[row["path"]] = row["fp_slot"]
+    old_mat = _load_fp_matrix(db_path)
+    if incremental and old_slots and old_mat is None:
+        incremental = False
+        old_slots = {}
 
     existing: dict[str, tuple[float, int, int]] = {}
     if incremental:
@@ -316,52 +496,60 @@ def index_paths(
         conn.commit()
         stat["gone"] = len(gone)
 
-    if not todo:
-        return stat
+    fresh: dict[str, Any] = {}
+    if todo:
+        from PIL import Image  # 只在真正索引时才需要 Pillow
 
-    from PIL import Image  # 只在真正索引时才需要 Pillow
+        done = 0
+        for i in range(0, len(todo), batch):
+            chunk = todo[i:i + batch]
+            recs = _run_probe(chunk, parallel=parallel)
+            rows = []
+            by_path = {r.get("path"): r for r in recs if isinstance(r, dict)}
+            for p in chunk:
+                sp = str(p)
+                rec = by_path.get(sp)
+                if not rec or not rec.get("ok"):
+                    stat["failed"] += 1
+                    continue
+                try:
+                    st = p.stat()
+                except OSError:
+                    stat["failed"] += 1
+                    continue
+                # 尺寸：Vision 不返回像素尺寸，用 Pillow 读（只读头部，不解码）
+                w = h = None
+                try:
+                    with Image.open(p) as im:
+                        w, h = im.size
+                except Exception:
+                    pass
+                labels = rec.get("labels") or []
+                ocr = "\n".join(rec.get("ocr") or [])
+                blob = _decode_fp(rec.get("fp") or "", int(rec.get("fp_dim") or 0))
+                if blob:
+                    import numpy as np
+                    fresh[sp] = np.frombuffer(blob, dtype="<f4")
+                # fp_slot 先写 NULL，末尾 _rebuild_fp 统一回填
+                rows.append((
+                    sp, st.st_mtime, st.st_size, w, h, st.st_ino,
+                    json.dumps(labels, ensure_ascii=False), ocr, None,
+                    rec.get("fp_dim"), time.time(),
+                ))
+            if rows:
+                conn.executemany(
+                    "INSERT OR REPLACE INTO images "
+                    "(path,mtime,size,width,height,inode,labels,ocr,fp_slot,fp_dim,indexed_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
+                conn.commit()
+            done += len(chunk)
+            if on_progress:
+                on_progress(done, len(todo))
 
-    done = 0
-    for i in range(0, len(todo), batch):
-        chunk = todo[i:i + batch]
-        recs = _run_probe(chunk, parallel=parallel)
-        rows = []
-        by_path = {r.get("path"): r for r in recs if isinstance(r, dict)}
-        for p in chunk:
-            sp = str(p)
-            rec = by_path.get(sp)
-            if not rec or not rec.get("ok"):
-                stat["failed"] += 1
-                continue
-            try:
-                st = p.stat()
-            except OSError:
-                stat["failed"] += 1
-                continue
-            # 尺寸：Vision 不返回像素尺寸，用 Pillow 读（只读头部，不解码）
-            w = h = None
-            try:
-                with Image.open(p) as im:
-                    w, h = im.size
-            except Exception:
-                pass
-            labels = rec.get("labels") or []
-            ocr = "\n".join(rec.get("ocr") or [])
-            fp = _decode_fp(rec.get("fp") or "", int(rec.get("fp_dim") or 0))
-            rows.append((
-                sp, st.st_mtime, st.st_size, w, h, st.st_ino,
-                json.dumps(labels, ensure_ascii=False), ocr, fp,
-                rec.get("fp_dim"), time.time(),
-            ))
-        if rows:
-            conn.executemany(
-                "INSERT OR REPLACE INTO images "
-                "(path,mtime,size,width,height,inode,labels,ocr,fp,fp_dim,indexed_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
-            conn.commit()
-        done += len(chunk)
-        if on_progress:
-            on_progress(done, len(todo))
+    # 指纹矩阵重建：把 fp.npy 对齐到当前 images 表。没有变化（todo 空、无 gone）
+    # 且矩阵在位时跳过——避免每次 no-op 增量都白写 226MB。
+    if todo or stat["gone"] or not _fp_path(db_path).exists():
+        _rebuild_fp(conn, db_path, fresh, old_slots, old_mat)
     return stat
 
 
@@ -510,55 +698,62 @@ def search_local(
     return out
 
 
-def _load_fp_blob(val: Any) -> Any:
-    import numpy as np
-    if val is None:
-        return None
-    return np.frombuffer(val, dtype="<f4")
-
-
-def _cosine(a: Any, b: Any) -> float:
-    """余弦相似度。指纹已是归一化向量（同源模型），点积即余弦；
-    但为稳妥仍做一次范数归一（跨模型/版本混用时不至于失真）。"""
-    import numpy as np
-    na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
-    if na == 0 or nb == 0:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
-
-
 def _search_by_fingerprint(conn: sqlite3.Connection, image_path: str,
                            *, limit: int = 30) -> list[dict[str, Any]]:
-    """以图找相似：路径先在库里，直接用指纹；不在则现算一次。"""
+    """以图找相似：mmap 指纹矩阵，一次矩阵点积出全部相似度。
+
+    旧实现把每行指纹从 BLOB 取出来，逐行 `frombuffer` + 两次 `np.linalg.norm`
+    + 点积——7.7 万张约 180ms。现在矩阵已连续 mmap、行内向量写入时即归一，
+    查询向量归一后一次矩阵点积走 BLAS，7.7 万张约 3.7ms（快约 50 倍）。
+    """
+    import numpy as np
+    mat = _load_fp_matrix(_db_file(conn))
+    if mat is None or mat.shape[0] == 0:
+        return []
+    dim = int(mat.shape[1])
+
     target = str(Path(image_path).expanduser())
-    row = conn.execute("SELECT fp, fp_dim FROM images WHERE path = ?",
+    row = conn.execute("SELECT fp_slot FROM images WHERE path = ?",
                        (target,)).fetchone()
-    blob = row["fp"] if row else None
-    if not blob:
+    qv = None
+    if row is not None and row["fp_slot"] is not None \
+            and 0 <= row["fp_slot"] < mat.shape[0]:
+        qv = np.array(mat[row["fp_slot"]], dtype="<f4")
+    if qv is None:
         recs = _run_probe([Path(target)])
         if not recs or not recs[0].get("ok"):
             return []
         blob = _decode_fp(recs[0].get("fp") or "", int(recs[0].get("fp_dim") or 0))
         if not blob:
             return []
-    qv = _load_fp_blob(blob)
-    if qv is None:
+        qv = np.frombuffer(blob, dtype="<f4")
+    if qv.shape[0] != dim:
         return []
+    norm = float(np.linalg.norm(qv))
+    if norm == 0.0:
+        return []
+    qv = qv / norm
 
+    sims = mat @ qv                       # 一次 BLAS 点积 = 全部行的余弦
+    k = min(max(1, int(limit)), int(sims.shape[0]))
+    idx = np.argpartition(-sims, k - 1)[:k]
+    idx = idx[np.argsort(-sims[idx])]
+
+    # slot → 路径：只查命中的 k 行，逐条点查（fp_slot 已建索引，<1ms）。
+    # 不用 IN (?,?,?) 动态拼占位符——那种写法会被安全扫描判成注入。
     out: list[dict[str, Any]] = []
-    for r in conn.execute("SELECT * FROM images WHERE fp IS NOT NULL"):
-        v = _load_fp_blob(r["fp"])
-        if v is None or v.shape != qv.shape:
+    for i in idx:
+        slot = int(i)
+        r = conn.execute("SELECT path, width, height, size, mtime FROM images WHERE fp_slot = ?", (slot,)).fetchone()
+        if r is None:
             continue
-        sim = _cosine(qv, v)
         out.append({
             "path": r["path"],
             "name": os.path.basename(r["path"]),
-            "score": round(sim, 4),
+            "score": round(float(sims[slot]), 4),
             "width": r["width"], "height": r["height"],
             "size": r["size"], "mtime": r["mtime"],
         })
-    out.sort(key=lambda x: -x["score"])
     return out[:max(1, int(limit))]
 
 
@@ -624,7 +819,7 @@ def stats(conn: sqlite3.Connection) -> dict[str, Any]:
     """索引概况（给用户看「建到哪了/有多少能搜」）。"""
     row = conn.execute(
         "SELECT COUNT(*) n, "
-        "SUM(CASE WHEN fp IS NOT NULL THEN 1 ELSE 0 END) with_fp, "
+        "SUM(CASE WHEN fp_slot IS NOT NULL THEN 1 ELSE 0 END) with_fp, "
         "SUM(CASE WHEN ocr IS NOT NULL AND ocr != '' THEN 1 ELSE 0 END) with_ocr, "
         "SUM(size) bytes FROM images").fetchone()
     n = row["n"] or 0
@@ -681,6 +876,13 @@ def main(argv: list[str] | None = None) -> int:
 
     args = ap.parse_args(argv)
     db = args.db or DEFAULT_DB
+
+    # 默认关闭：本能力要 macOS+swiftc+numpy 且先建 ~226MB 索引，对多数安装是
+    # 纯负担。--help 已在 parse_args 内退出，不会走到这里。
+    if not local_image_enabled():
+        print(f"本地图片检索默认关闭。启用：export {_ENABLE_ENV}=1"
+              f"（或写入 ~/.config/argo/env）", file=sys.stderr)
+        return 2
 
     if args.cmd == "index":
         if not vision_available():
