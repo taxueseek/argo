@@ -67,6 +67,9 @@
     "!**/*.pyc",
     "!sub-skills/**/__pycache__/**",
     "!sub-skills/**/*.pyc",
+    "!sub-skills/**/tests/**",
+    "!sub-skills/**/references/**",
+    "!assets/readme/*.webp",
     "!data/jobs"
   ],
   "dsh": {

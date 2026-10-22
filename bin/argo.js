@@ -45,9 +45,37 @@ const env = { ...process.env, PYTHONUTF8: process.env.PYTHONUTF8 || '1' };
 
 const argv = process.argv.slice(2);
 
+// 快速参数与帮助支持
+if (argv[0] === '-v' || argv[0] === '--version') {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    console.log(pkg.version);
+  } catch (_) {
+    console.log('2.9.7');
+  }
+  process.exit(0);
+}
+
+if (argv[0] === '-h' || argv[0] === '--help') {
+  console.log(`Argo Search — 专为 Agent 打造的统一搜索与证据核验工具
+
+用法:
+  argo-search                         启动 MCP Stdio 服务（默认）
+  argo-search mcp                     显式启动 MCP Stdio 服务
+  argo-search call <tool> [json-args] CLI 单发调用指定 MCP 工具
+  argo-search -v, --version           查看当前版本
+  argo-search -h, --help              查看本帮助信息
+
+环境依赖:
+  需要 Python 3.9+ 及 PyYAML。
+  无配置零门槛运行推荐: uvx argo-search argo-mcp
+`);
+  process.exit(0);
+}
+
 // 子命令分发：`argo-search call <tool> '<json-args>'` —— CLI 单发，与 stdio
 // 服务共用 mcp_server.py --call / execute_tool 入口（同引擎同压缩），供 DSH
-// 原生工具等调用方免 MCP 帧协议复用；无子命令保持原行为：启动 stdio 服务。
+// 原生工具等调用方免 MCP 帧协议复用；无子命令或 'mcp' 保持原行为：启动 stdio 服务。
 if (argv[0] === 'call') {
   const tool = argv[1];
   if (!tool) {
@@ -66,7 +94,9 @@ if (argv[0] === 'call') {
     process.exit(exitCodeOf(code, signal));
   });
 } else {
-  const proc = spawn(PYTHON, [SCRIPT], {
+  // 'mcp' 子命令作为 stdio 服务的显式别名，去除该前导参数
+  const forwardedArgs = argv[0] === 'mcp' ? argv.slice(1) : argv;
+  const proc = spawn(PYTHON, [SCRIPT, ...forwardedArgs], {
     stdio: ['pipe', 'pipe', 'inherit'],
     env,
   });
@@ -77,6 +107,7 @@ if (argv[0] === 'call') {
   proc.on('error', (err) => {
     console.error(`argo-search: 无法启动 Python (${PYTHON}): ${err.message}`);
     console.error('请确认已安装 Python 3.9+，并已执行: pip install pyyaml');
+    console.error('或使用无需预装环境的现代包管理工具: uvx argo-search argo-mcp');
     process.exit(1);
   });
 

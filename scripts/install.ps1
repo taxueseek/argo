@@ -77,6 +77,15 @@ if (Test-Path (Join-Path $InstallDir ".git")) {
     Write-Host "==> 克隆仓库…"
     New-Item -ItemType Directory -Force -Path (Split-Path $InstallDir) | Out-Null
     git clone --depth 1 --branch $Branch $Repo $InstallDir
+    if ($LASTEXITCODE -ne 0 -and $Repo -like "*github.com*") {
+        $MirrorRepo = "https://ghfast.top/" + $Repo
+        Write-Host "[warn] 直连 GitHub 失败，尝试加速镜像: $MirrorRepo …"
+        git clone --depth 1 --branch $Branch $MirrorRepo $InstallDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "克隆失败。若处于受限网络环境，可尝试手动克隆或设置 ARGO_REPO 环境变量。"
+            exit 1
+        }
+    }
 }
 
 # 供应链加固：固定 commit 校验（ARGO_PIN），与 install.sh 对齐
@@ -94,11 +103,20 @@ if ($Pin) {
 if (-not $SkipPip) {
     Write-Host "==> 安装依赖 (PyYAML)…"
     & $script:py -m pip install pyyaml
+    if ($LASTEXITCODE -ne 0) {
+        & $script:py -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pyyaml
+    }
     if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 PyYAML 失败，可手动: pip install pyyaml" }
     Write-Host "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
     & $script:py -m pip install curl_cffi
+    if ($LASTEXITCODE -ne 0) {
+        & $script:py -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple curl_cffi
+    }
     if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 curl_cffi 失败（可选依赖）" }
     & $script:py -m pip install rapidfuzz
+    if ($LASTEXITCODE -ne 0) {
+        & $script:py -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple rapidfuzz
+    }
     if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 rapidfuzz 失败（可选依赖，缺失时去重回退纯 minhash）" }
 }
 
