@@ -1,10 +1,10 @@
 {
   "summary": {
-    "ok": 138,
+    "ok": 194,
     "fail": 0,
     "warn": 1,
     "by_status": {
-      "PASS": 138,
+      "PASS": 194,
       "FAIL": 0,
       "WARN": 1
     },
@@ -25,7 +25,7 @@
         "WARN": 0
       },
       "route": {
-        "PASS": 59,
+        "PASS": 115,
         "FAIL": 0,
         "WARN": 0
       },
@@ -132,16 +132,16 @@
     },
     "route_by_scenario": {
       "finance": {
-        "ok": 4,
-        "n": 4
+        "ok": 11,
+        "n": 11
       },
       "macro": {
         "ok": 3,
         "n": 3
       },
       "tech": {
-        "ok": 7,
-        "n": 7
+        "ok": 13,
+        "n": 13
       },
       "film": {
         "ok": 5,
@@ -156,20 +156,24 @@
         "n": 4
       },
       "org": {
-        "ok": 4,
-        "n": 4
+        "ok": 5,
+        "n": 5
       },
-      "media": {
+      "company": {
         "ok": 2,
         "n": 2
       },
+      "media": {
+        "ok": 10,
+        "n": 10
+      },
       "weather": {
-        "ok": 3,
-        "n": 3
+        "ok": 4,
+        "n": 4
       },
       "academic": {
-        "ok": 1,
-        "n": 1
+        "ok": 7,
+        "n": 7
       },
       "chem": {
         "ok": 1,
@@ -180,26 +184,46 @@
         "n": 1
       },
       "code": {
-        "ok": 1,
-        "n": 1
+        "ok": 4,
+        "n": 4
       },
       "general": {
-        "ok": 10,
-        "n": 10
+        "ok": 11,
+        "n": 11
       },
       "negative": {
         "ok": 6,
         "n": 6
+      },
+      "factcheck": {
+        "ok": 2,
+        "n": 2
+      },
+      "science": {
+        "ok": 3,
+        "n": 3
+      },
+      "news": {
+        "ok": 5,
+        "n": 5
+      },
+      "community": {
+        "ok": 6,
+        "n": 6
+      },
+      "legal": {
+        "ok": 5,
+        "n": 5
       }
     },
     "route_by_lang": {
       "zh": {
-        "ok": 18,
-        "n": 18
+        "ok": 69,
+        "n": 69
       },
       "en": {
-        "ok": 27,
-        "n": 27
+        "ok": 32,
+        "n": 32
       },
       "ja": {
         "ok": 6,
@@ -473,7 +497,7 @@
     {
       "name": "route:R_zh_stock",
       "status": "PASS",
-      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'eastmoney'] lang=zh",
+      "detail": "domain=stock_query eng=sina_quote combo=['sina_quote', 'tencent_quote'] lang=zh",
       "meta": {
         "id": "R_zh_stock",
         "q": "贵州茅台股价",
@@ -483,7 +507,7 @@
         "engine": "sina_quote",
         "combo": [
           "sina_quote",
-          "eastmoney"
+          "tencent_quote"
         ],
         "primary_lang": "zh"
       }
@@ -491,7 +515,7 @@
     {
       "name": "route:R_en_usstock",
       "status": "PASS",
-      "detail": "domain=us_stock eng=finviz combo=['finviz', 'anysearch'] lang=en",
+      "detail": "domain=us_stock eng=finviz combo=['finviz', 'exa'] lang=en",
       "meta": {
         "id": "R_en_usstock",
         "q": "AAPL stock price",
@@ -501,7 +525,7 @@
         "engine": "finviz",
         "combo": [
           "finviz",
-          "anysearch"
+          "exa"
         ],
         "primary_lang": "en"
       }
@@ -774,7 +798,7 @@
     {
       "name": "route:R_zh_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=zh",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=zh",
       "meta": {
         "id": "R_zh_sports",
         "q": "梅西 俱乐部",
@@ -785,8 +809,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openligadb",
-          "openf1"
+          "openf1",
+          "openligadb"
         ],
         "primary_lang": "zh"
       }
@@ -794,7 +818,7 @@
     {
       "name": "route:R_en_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=en",
       "meta": {
         "id": "R_en_sports",
         "q": "LeBron James team",
@@ -805,8 +829,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openligadb",
-          "openf1"
+          "openf1",
+          "openligadb"
         ],
         "primary_lang": "en"
       }
@@ -814,7 +838,7 @@
     {
       "name": "route:R_en_sports2",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=en",
       "meta": {
         "id": "R_en_sports2",
         "q": "Cristiano Ronaldo club",
@@ -825,8 +849,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openligadb",
-          "openf1"
+          "openf1",
+          "openligadb"
         ],
         "primary_lang": "en"
       }
@@ -834,7 +858,7 @@
     {
       "name": "route:R_zh_sports2",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=zh",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=zh",
       "meta": {
         "id": "R_zh_sports2",
         "q": "库里 球队",
@@ -845,8 +869,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openligadb",
-          "openf1"
+          "openf1",
+          "openligadb"
         ],
         "primary_lang": "zh"
       }
@@ -854,7 +878,7 @@
     {
       "name": "route:R_en_wc",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openligadb', 'openf1'] lang=en",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'jolpica', 'openf1', 'openligadb'] lang=en",
       "meta": {
         "id": "R_en_wc",
         "q": "World Cup 2022 winner",
@@ -865,8 +889,8 @@
         "combo": [
           "thesportsdb",
           "jolpica",
-          "openligadb",
-          "openf1"
+          "openf1",
+          "openligadb"
         ],
         "primary_lang": "en"
       }
@@ -874,7 +898,7 @@
     {
       "name": "route:R_ja_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openligadb', 'local_bing', 'hatena_bookmark'] lang=ja",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openf1', 'local_bing', 'hatena_bookmark'] lang=ja",
       "meta": {
         "id": "R_ja_sports",
         "q": "メッシ クラブ",
@@ -886,7 +910,7 @@
           "thesportsdb",
           "anysearch",
           "jolpica",
-          "openligadb",
+          "openf1",
           "local_bing",
           "hatena_bookmark"
         ],
@@ -896,7 +920,7 @@
     {
       "name": "route:R_ko_sports",
       "status": "PASS",
-      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openligadb', 'local_bing'] lang=ko",
+      "detail": "domain=sports_search eng=thesportsdb combo=['thesportsdb', 'anysearch', 'jolpica', 'openf1', 'local_bing'] lang=ko",
       "meta": {
         "id": "R_ko_sports",
         "q": "손흥민 팀",
@@ -908,7 +932,7 @@
           "thesportsdb",
           "anysearch",
           "jolpica",
-          "openligadb",
+          "openf1",
           "local_bing"
         ],
         "primary_lang": "ko"
@@ -935,7 +959,7 @@
     {
       "name": "route:R_en_geo",
       "status": "PASS",
-      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap', 'wikipedia'] lang=en",
+      "detail": "domain=geo_places eng=local_openstreetmap combo=['local_openstreetmap'] lang=en",
       "meta": {
         "id": "R_en_geo",
         "q": "where is Eiffel Tower",
@@ -944,8 +968,7 @@
         "domain": "geo_places",
         "engine": "local_openstreetmap",
         "combo": [
-          "local_openstreetmap",
-          "wikipedia"
+          "local_openstreetmap"
         ],
         "primary_lang": "en"
       }
@@ -1069,6 +1092,62 @@
       }
     },
     {
+      "name": "route:R_zh_org_hq",
+      "status": "PASS",
+      "detail": "domain=org_entity eng=wikidata combo=['wikidata', 'wikipedia', 'baidu_baike', 'local_openstreetmap'] lang=zh",
+      "meta": {
+        "id": "R_zh_org_hq",
+        "q": "华为 总部在哪",
+        "scenario": "org",
+        "lang": "zh",
+        "domain": "org_entity",
+        "engine": "wikidata",
+        "combo": [
+          "wikidata",
+          "wikipedia",
+          "baidu_baike",
+          "local_openstreetmap"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_zh_company_shareholder",
+      "status": "PASS",
+      "detail": "domain=company_search eng=opencorporates combo=['opencorporates', 'yuanbao'] lang=zh",
+      "meta": {
+        "id": "R_zh_company_shareholder",
+        "q": "长亭科技 股东 持股比例",
+        "scenario": "company",
+        "lang": "zh",
+        "domain": "company_search",
+        "engine": "opencorporates",
+        "combo": [
+          "opencorporates",
+          "yuanbao"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_zh_company_regcap",
+      "status": "PASS",
+      "detail": "domain=company_search eng=opencorporates combo=['opencorporates', 'yuanbao'] lang=zh",
+      "meta": {
+        "id": "R_zh_company_regcap",
+        "q": "字节跳动 注册资本 变更",
+        "scenario": "company",
+        "lang": "zh",
+        "domain": "company_search",
+        "engine": "opencorporates",
+        "combo": [
+          "opencorporates",
+          "yuanbao"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
       "name": "route:R_en_media",
       "status": "PASS",
       "detail": "domain=media_search eng=itunes combo=['itunes', 'musicbrainz', 'netease_music', 'deezer'] lang=en",
@@ -1111,7 +1190,7 @@
     {
       "name": "route:R_zh_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'weather_cn', 'weather', 'local_openstreetmap'] lang=zh",
+      "detail": "domain=weather_query eng=open_meteo combo=['open_meteo', 'byted', 'weather_cn', 'local_openstreetmap'] lang=zh",
       "meta": {
         "id": "R_zh_weather",
         "q": "北京 天气",
@@ -1121,8 +1200,8 @@
         "engine": "open_meteo",
         "combo": [
           "open_meteo",
+          "byted",
           "weather_cn",
-          "weather",
           "local_openstreetmap"
         ],
         "primary_lang": "zh"
@@ -1131,15 +1210,16 @@
     {
       "name": "route:R_en_weather",
       "status": "PASS",
-      "detail": "domain=weather_query eng=weather_cn combo=['weather_cn', 'weather'] lang=en",
+      "detail": "domain=weather_query eng=byted combo=['byted', 'weather_cn', 'weather'] lang=en",
       "meta": {
         "id": "R_en_weather",
         "q": "weather Tokyo",
         "scenario": "weather",
         "lang": "en",
         "domain": "weather_query",
-        "engine": "weather_cn",
+        "engine": "byted",
         "combo": [
+          "byted",
           "weather_cn",
           "weather"
         ],
@@ -1171,7 +1251,7 @@
     {
       "name": "route:R_en_academic",
       "status": "PASS",
-      "detail": "domain=academic eng=arxiv combo=['arxiv', 'local_pubmed', 'core'] lang=en",
+      "detail": "domain=academic eng=arxiv combo=['arxiv', 'openreview', 'local_pubmed', 'core'] lang=en",
       "meta": {
         "id": "R_en_academic",
         "q": "transformer attention paper",
@@ -1181,6 +1261,7 @@
         "engine": "arxiv",
         "combo": [
           "arxiv",
+          "openreview",
           "local_pubmed",
           "core"
         ],
@@ -1244,7 +1325,7 @@
     {
       "name": "route:R_zh_package",
       "status": "PASS",
-      "detail": "domain=package_search eng=pypi combo=['pypi', 'github'] lang=en",
+      "detail": "domain=package_search eng=pypi combo=['pypi', 'npm'] lang=en",
       "meta": {
         "id": "R_zh_package",
         "q": "requests pypi",
@@ -1254,7 +1335,7 @@
         "engine": "pypi",
         "combo": [
           "pypi",
-          "github"
+          "npm"
         ],
         "primary_lang": "en"
       }
@@ -1262,17 +1343,17 @@
     {
       "name": "route:R_en_pkg_diffuse",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=en",
       "meta": {
         "id": "R_en_pkg_diffuse",
         "q": "pnpm file: directory dependency no content hash reinstall",
         "scenario": "tech",
         "lang": "en",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -1280,7 +1361,7 @@
     {
       "name": "route:R_en_model_diffuse",
       "status": "PASS",
-      "detail": "domain=general_search eng=github combo=['github', 'anysearch'] lang=en",
+      "detail": "domain=general_search eng=github combo=['github', 'octen'] lang=en",
       "meta": {
         "id": "R_en_model_diffuse",
         "q": "DeepSeek Harness DSH 插件开发",
@@ -1290,7 +1371,7 @@
         "engine": "github",
         "combo": [
           "github",
-          "anysearch"
+          "octen"
         ],
         "primary_lang": "en"
       }
@@ -1339,17 +1420,17 @@
     {
       "name": "route:R_cyr_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=cyrillic",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=cyrillic",
       "meta": {
         "id": "R_cyr_gen",
         "q": "Как написать скрипт",
         "scenario": "general",
         "lang": "cyrillic",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "cyrillic"
       }
@@ -1375,17 +1456,17 @@
     {
       "name": "route:R_th_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=thai",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=thai",
       "meta": {
         "id": "R_th_gen",
         "q": "อากาศ กรุงเทพ",
         "scenario": "general",
         "lang": "thai",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "thai"
       }
@@ -1393,17 +1474,17 @@
     {
       "name": "route:R_en_gen",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=en",
       "meta": {
         "id": "R_en_gen",
         "q": "hello world",
         "scenario": "general",
         "lang": "en",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -1411,17 +1492,17 @@
     {
       "name": "route:R_zh_gen",
       "status": "PASS",
-      "detail": "domain=chinese_tech_deep eng=octen combo=['octen', 'parallel'] lang=zh",
+      "detail": "domain=chinese_tech_deep eng=byted combo=['byted', 'octen'] lang=zh",
       "meta": {
         "id": "R_zh_gen",
         "q": "如何学习机器学习",
         "scenario": "general",
         "lang": "zh",
         "domain": "chinese_tech_deep",
-        "engine": "octen",
+        "engine": "byted",
         "combo": [
-          "octen",
-          "parallel"
+          "byted",
+          "octen"
         ],
         "primary_lang": "zh"
       }
@@ -1429,17 +1510,17 @@
     {
       "name": "route:R_en_tech_nodomain",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=en",
       "meta": {
         "id": "R_en_tech_nodomain",
         "q": "Crawl4AI pruning content filter extraction",
         "scenario": "general",
         "lang": "en",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -1465,16 +1546,16 @@
     {
       "name": "route:R_zh_food",
       "status": "PASS",
-      "detail": "domain=chinese_general eng=anysearch combo=['anysearch', 'local_openstreetmap'] lang=zh",
+      "detail": "domain=chinese_general eng=bocha combo=['bocha', 'local_openstreetmap'] lang=zh",
       "meta": {
         "id": "R_zh_food",
         "q": "附近好吃的本帮菜馆",
         "scenario": "general",
         "lang": "zh",
         "domain": "chinese_general",
-        "engine": "anysearch",
+        "engine": "bocha",
         "combo": [
-          "anysearch",
+          "bocha",
           "local_openstreetmap"
         ],
         "primary_lang": "zh"
@@ -1501,17 +1582,17 @@
     {
       "name": "route:N_zh_cooking",
       "status": "PASS",
-      "detail": "domain=chinese_general eng=anysearch combo=['anysearch', 'octen'] lang=zh",
+      "detail": "domain=chinese_general eng=bocha combo=['bocha', 'yuanbao'] lang=zh",
       "meta": {
         "id": "N_zh_cooking",
         "q": "怎么把排骨炖得软烂",
         "scenario": "negative",
         "lang": "zh",
         "domain": "chinese_general",
-        "engine": "anysearch",
+        "engine": "bocha",
         "combo": [
-          "anysearch",
-          "octen"
+          "bocha",
+          "yuanbao"
         ],
         "primary_lang": "zh"
       }
@@ -1519,17 +1600,17 @@
     {
       "name": "route:N_en_history",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=en",
       "meta": {
         "id": "N_en_history",
         "q": "who invented the printing press",
         "scenario": "negative",
         "lang": "en",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -1537,17 +1618,17 @@
     {
       "name": "route:N_en_garden",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=en",
       "meta": {
         "id": "N_en_garden",
         "q": "how often should I water tomato plants",
         "scenario": "negative",
         "lang": "en",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
@@ -1555,17 +1636,17 @@
     {
       "name": "route:N_zh_health",
       "status": "PASS",
-      "detail": "domain=chinese_general eng=anysearch combo=['anysearch', 'octen'] lang=zh",
+      "detail": "domain=chinese_general eng=bocha combo=['bocha', 'yuanbao'] lang=zh",
       "meta": {
         "id": "N_zh_health",
         "q": "深蹲膝盖疼怎么恢复",
         "scenario": "negative",
         "lang": "zh",
         "domain": "chinese_general",
-        "engine": "anysearch",
+        "engine": "bocha",
         "combo": [
-          "anysearch",
-          "octen"
+          "bocha",
+          "yuanbao"
         ],
         "primary_lang": "zh"
       }
@@ -1573,35 +1654,1002 @@
     {
       "name": "route:N_en_hobby",
       "status": "PASS",
-      "detail": "domain=general_search eng=anysearch combo=['anysearch', 'local_bing'] lang=en",
+      "detail": "domain=general_search eng=octen combo=['octen', 'anysearch'] lang=en",
       "meta": {
         "id": "N_en_hobby",
         "q": "best wood for beginner woodworking",
         "scenario": "negative",
         "lang": "en",
         "domain": "general_search",
-        "engine": "anysearch",
+        "engine": "octen",
         "combo": [
-          "anysearch",
-          "local_bing"
+          "octen",
+          "anysearch"
         ],
         "primary_lang": "en"
       }
     },
     {
+      "name": "route:R_ai_model",
+      "status": "PASS",
+      "detail": "domain=ai_model eng=models_dev combo=['models_dev', 'anysearch'] lang=en",
+      "meta": {
+        "id": "R_ai_model",
+        "q": "models.dev claude 价格 上下文",
+        "scenario": "tech",
+        "lang": "en",
+        "domain": "ai_model",
+        "engine": "models_dev",
+        "combo": [
+          "models_dev",
+          "anysearch"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_aviation_weather",
+      "status": "PASS",
+      "detail": "domain=aviation_weather eng=aviation_weather combo=['aviation_weather', 'local_openstreetmap'] lang=zh",
+      "meta": {
+        "id": "R_aviation_weather",
+        "q": "北京首都机场 航空气象 METAR",
+        "scenario": "weather",
+        "lang": "zh",
+        "domain": "aviation_weather",
+        "engine": "aviation_weather",
+        "combo": [
+          "aviation_weather",
+          "local_openstreetmap"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_chinese_tech_deep",
+      "status": "PASS",
+      "detail": "domain=chinese_tech_deep eng=byted combo=['byted', 'octen'] lang=zh",
+      "meta": {
+        "id": "R_chinese_tech_deep",
+        "q": "中文 编程 算法 架构 深度对比",
+        "scenario": "tech",
+        "lang": "zh",
+        "domain": "chinese_tech_deep",
+        "engine": "byted",
+        "combo": [
+          "byted",
+          "octen"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_claim_check",
+      "status": "PASS",
+      "detail": "domain=claim_check eng=factcheck_org combo=['factcheck_org', 'full_fact'] lang=zh",
+      "meta": {
+        "id": "R_claim_check",
+        "q": "辟谣 传言 事实核查",
+        "scenario": "factcheck",
+        "lang": "zh",
+        "domain": "claim_check",
+        "engine": "factcheck_org",
+        "combo": [
+          "factcheck_org",
+          "full_fact"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_cn_encyclopedia",
+      "status": "PASS",
+      "detail": "domain=cn_encyclopedia eng=baidu_baike combo=['baidu_baike', 'zh_wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_cn_encyclopedia",
+        "q": "长征 百度百科 词条解释",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "cn_encyclopedia",
+        "engine": "baidu_baike",
+        "combo": [
+          "baidu_baike",
+          "zh_wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_cn_tech_community",
+      "status": "PASS",
+      "detail": "domain=cn_tech_community eng=juejin combo=['juejin', 'v2ex', 'sspai', 'csdn'] lang=zh",
+      "meta": {
+        "id": "R_cn_tech_community",
+        "q": "掘金 前端文章 技术博客",
+        "scenario": "tech",
+        "lang": "zh",
+        "domain": "cn_tech_community",
+        "engine": "juejin",
+        "combo": [
+          "juejin",
+          "v2ex",
+          "sspai",
+          "csdn"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_code_search",
+      "status": "PASS",
+      "detail": "domain=code_search eng=github combo=['github', 'mdn'] lang=zh",
+      "meta": {
+        "id": "R_code_search",
+        "q": "github 代码 实现 用法",
+        "scenario": "code",
+        "lang": "zh",
+        "domain": "code_search",
+        "engine": "github",
+        "combo": [
+          "github",
+          "mdn"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_crypto_search",
+      "status": "PASS",
+      "detail": "domain=crypto_search eng=coingecko combo=['coingecko', 'defillama'] lang=zh",
+      "meta": {
+        "id": "R_crypto_search",
+        "q": "比特币 以太坊 加密货币 价格",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "crypto_search",
+        "engine": "coingecko",
+        "combo": [
+          "coingecko",
+          "defillama"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_dataset_search",
+      "status": "PASS",
+      "detail": "domain=dataset_search eng=figshare combo=['figshare', 'datacite', 'zenodo'] lang=zh",
+      "meta": {
+        "id": "R_dataset_search",
+        "q": "科研数据集 开放数据 下载",
+        "scenario": "academic",
+        "lang": "zh",
+        "domain": "dataset_search",
+        "engine": "figshare",
+        "combo": [
+          "figshare",
+          "datacite",
+          "zenodo"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_dictionary_search",
+      "status": "PASS",
+      "detail": "domain=dictionary_search eng=free_dictionary combo=['free_dictionary', 'wikipedia'] lang=zh",
+      "meta": {
+        "id": "R_dictionary_search",
+        "q": "英文单词 词典 意思",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "dictionary_search",
+        "engine": "free_dictionary",
+        "combo": [
+          "free_dictionary",
+          "wikipedia"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_earth_science",
+      "status": "PASS",
+      "detail": "domain=earth_science eng=usgs combo=['usgs', 'gdacs'] lang=zh",
+      "meta": {
+        "id": "R_earth_science",
+        "q": "地震 震级 余震 震中",
+        "scenario": "science",
+        "lang": "zh",
+        "domain": "earth_science",
+        "engine": "usgs",
+        "combo": [
+          "usgs",
+          "gdacs"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_em_news_search",
+      "status": "PASS",
+      "detail": "domain=em_news_search eng=em_global_news combo=['em_global_news', 'cls_telegraph'] lang=zh",
+      "meta": {
+        "id": "R_em_news_search",
+        "q": "东财 全球资讯 市场",
+        "scenario": "news",
+        "lang": "zh",
+        "domain": "em_news_search",
+        "engine": "em_global_news",
+        "combo": [
+          "em_global_news",
+          "cls_telegraph"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_energy_grid",
+      "status": "PASS",
+      "detail": "domain=energy_grid eng=electricity_maps combo=['electricity_maps', 'energy_charts', 'carbon_intensity'] lang=zh",
+      "meta": {
+        "id": "R_energy_grid",
+        "q": "电网 发电结构 发电量",
+        "scenario": "science",
+        "lang": "zh",
+        "domain": "energy_grid",
+        "engine": "electricity_maps",
+        "combo": [
+          "electricity_maps",
+          "energy_charts",
+          "carbon_intensity"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_entity_search",
+      "status": "PASS",
+      "detail": "domain=entity_search eng=wikidata combo=['wikidata', 'baidu_baike'] lang=zh",
+      "meta": {
+        "id": "R_entity_search",
+        "q": "维基数据 知识图谱 实体查询",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "entity_search",
+        "engine": "wikidata",
+        "combo": [
+          "wikidata",
+          "baidu_baike"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_fact_check",
+      "status": "PASS",
+      "detail": "domain=fact_check eng=wikipedia combo=['wikipedia', 'byted'] lang=zh",
+      "meta": {
+        "id": "R_fact_check",
+        "q": "长江 长度 是多少",
+        "scenario": "factcheck",
+        "lang": "zh",
+        "domain": "fact_check",
+        "engine": "wikipedia",
+        "combo": [
+          "wikipedia",
+          "byted"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_futures_market",
+      "status": "PASS",
+      "detail": "domain=futures_market eng=shfe combo=['shfe', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_futures_market",
+        "q": "沪铜 期货 行情",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "futures_market",
+        "engine": "shfe",
+        "combo": [
+          "shfe",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_fx_query",
+      "status": "PASS",
+      "detail": "domain=fx_query eng=fx_rate combo=['fx_rate', 'cfets'] lang=zh",
+      "meta": {
+        "id": "R_fx_query",
+        "q": "人民币 汇率 中间价",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "fx_query",
+        "engine": "fx_rate",
+        "combo": [
+          "fx_rate",
+          "cfets"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_game_search",
+      "status": "PASS",
+      "detail": "domain=game_search eng=steam combo=['steam', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_game_search",
+        "q": "steam 游戏推荐 好玩的游戏",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "game_search",
+        "engine": "steam",
+        "combo": [
+          "steam",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_global_event",
+      "status": "PASS",
+      "detail": "domain=global_event eng=google_news combo=['google_news', 'em_global_news'] lang=zh",
+      "meta": {
+        "id": "R_global_event",
+        "q": "国际事件 地缘政治 局势",
+        "scenario": "news",
+        "lang": "zh",
+        "domain": "global_event",
+        "engine": "google_news",
+        "combo": [
+          "google_news",
+          "em_global_news"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_hk_filings",
+      "status": "PASS",
+      "detail": "domain=hk_filings eng=hkex combo=['hkex', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_hk_filings",
+        "q": "港股 港交所 披露易 公告",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "hk_filings",
+        "engine": "hkex",
+        "combo": [
+          "hkex",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_hot_trending",
+      "status": "PASS",
+      "detail": "domain=hot_trending eng=weibo combo=['weibo', 'baidu_hot', 'toutiao_hot', 'weibo_hot', 'douyin_hot'] lang=zh",
+      "meta": {
+        "id": "R_hot_trending",
+        "q": "微博热搜 今日热搜",
+        "scenario": "community",
+        "lang": "zh",
+        "domain": "hot_trending",
+        "engine": "weibo",
+        "combo": [
+          "weibo",
+          "baidu_hot",
+          "toutiao_hot",
+          "weibo_hot",
+          "douyin_hot"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_image_search",
+      "status": "PASS",
+      "detail": "domain=image_search eng=openverse combo=['openverse', 'wikimedia_commons'] lang=zh",
+      "meta": {
+        "id": "R_image_search",
+        "q": "雪景 壁纸 图片",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "image_search",
+        "engine": "openverse",
+        "combo": [
+          "openverse",
+          "wikimedia_commons"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_intl_news_flash",
+      "status": "PASS",
+      "detail": "domain=intl_news_flash eng=guardian_rss combo=['guardian_rss', 'france24', 'dw_news'] lang=zh",
+      "meta": {
+        "id": "R_intl_news_flash",
+        "q": "国际新闻 外媒 国际要闻",
+        "scenario": "news",
+        "lang": "zh",
+        "domain": "intl_news_flash",
+        "engine": "guardian_rss",
+        "combo": [
+          "guardian_rss",
+          "france24",
+          "dw_news"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_japan_law",
+      "status": "PASS",
+      "detail": "domain=japan_law eng=egov_law combo=['egov_law', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_japan_law",
+        "q": "日本 法令 民法 条文",
+        "scenario": "legal",
+        "lang": "zh",
+        "domain": "japan_law",
+        "engine": "egov_law",
+        "combo": [
+          "egov_law",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_kor_law",
+      "status": "PASS",
+      "detail": "domain=kor_law eng=kor_law combo=['kor_law', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_kor_law",
+        "q": "韩国 法令 民法 条文",
+        "scenario": "legal",
+        "lang": "zh",
+        "domain": "kor_law",
+        "engine": "kor_law",
+        "combo": [
+          "kor_law",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_law_text",
+      "status": "PASS",
+      "detail": "domain=law_text eng=flk_law combo=['flk_law', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_law_text",
+        "q": "法条 法律条文 全文",
+        "scenario": "legal",
+        "lang": "zh",
+        "domain": "law_text",
+        "engine": "flk_law",
+        "combo": [
+          "flk_law",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_legal",
+      "status": "PASS",
+      "detail": "domain=legal eng=anysearch combo=['anysearch', 'byted'] lang=zh",
+      "meta": {
+        "id": "R_legal",
+        "q": "刑法 司法解释 判例",
+        "scenario": "legal",
+        "lang": "zh",
+        "domain": "legal",
+        "engine": "anysearch",
+        "combo": [
+          "anysearch",
+          "byted"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_meme_slang",
+      "status": "PASS",
+      "detail": "domain=meme_slang eng=itotii combo=['itotii', 'urban_dictionary'] lang=zh",
+      "meta": {
+        "id": "R_meme_slang",
+        "q": "网络梗 流行语 黑话",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "meme_slang",
+        "engine": "itotii",
+        "combo": [
+          "itotii",
+          "urban_dictionary"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_ml_models",
+      "status": "PASS",
+      "detail": "domain=ml_models eng=huggingface combo=['huggingface', 'github'] lang=zh",
+      "meta": {
+        "id": "R_ml_models",
+        "q": "huggingface 预训练模型 开源模型",
+        "scenario": "tech",
+        "lang": "zh",
+        "domain": "ml_models",
+        "engine": "huggingface",
+        "combo": [
+          "huggingface",
+          "github"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_news_realtime",
+      "status": "PASS",
+      "detail": "domain=news_realtime eng=byted combo=['byted', 'zhihu_global'] lang=zh",
+      "meta": {
+        "id": "R_news_realtime",
+        "q": "最新新闻 今天发生 突发",
+        "scenario": "news",
+        "lang": "zh",
+        "domain": "news_realtime",
+        "engine": "byted",
+        "combo": [
+          "byted",
+          "zhihu_global"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_outbreak_health",
+      "status": "PASS",
+      "detail": "domain=outbreak_health eng=who_don combo=['who_don', 'who_gho'] lang=zh",
+      "meta": {
+        "id": "R_outbreak_health",
+        "q": "疫情 暴发 流行病 通报",
+        "scenario": "science",
+        "lang": "zh",
+        "domain": "outbreak_health",
+        "engine": "who_don",
+        "combo": [
+          "who_don",
+          "who_gho"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_patent_search",
+      "status": "PASS",
+      "detail": "domain=patent_search eng=google_patents combo=['google_patents', 'semantic_scholar'] lang=zh",
+      "meta": {
+        "id": "R_patent_search",
+        "q": "专利 权利要求 技术方案",
+        "scenario": "academic",
+        "lang": "zh",
+        "domain": "patent_search",
+        "engine": "google_patents",
+        "combo": [
+          "google_patents",
+          "semantic_scholar"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_prediction_market",
+      "status": "PASS",
+      "detail": "domain=prediction_market eng=polymarket combo=['polymarket', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_prediction_market",
+        "q": "预测市场 事件合约",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "prediction_market",
+        "engine": "polymarket",
+        "combo": [
+          "polymarket",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_protein_search",
+      "status": "PASS",
+      "detail": "domain=protein_search eng=uniprot combo=['uniprot', 'local_bing'] lang=zh",
+      "meta": {
+        "id": "R_protein_search",
+        "q": "蛋白质 基因 氨基酸序列",
+        "scenario": "academic",
+        "lang": "zh",
+        "domain": "protein_search",
+        "engine": "uniprot",
+        "combo": [
+          "uniprot",
+          "local_bing"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_redskill_search",
+      "status": "PASS",
+      "detail": "domain=redskill_search eng=redskill combo=['redskill', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_redskill_search",
+        "q": "小红书 技能 排行榜",
+        "scenario": "community",
+        "lang": "zh",
+        "domain": "redskill_search",
+        "engine": "redskill",
+        "combo": [
+          "redskill",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_scholar_search",
+      "status": "PASS",
+      "detail": "domain=scholar_search eng=doaj combo=['doaj', 'google_scholar', 'arxiv'] lang=zh",
+      "meta": {
+        "id": "R_scholar_search",
+        "q": "google scholar 学术论文 期刊",
+        "scenario": "academic",
+        "lang": "zh",
+        "domain": "scholar_search",
+        "engine": "doaj",
+        "combo": [
+          "doaj",
+          "google_scholar",
+          "arxiv"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_sec_filings",
+      "status": "PASS",
+      "detail": "domain=sec_filings eng=sec_edgar combo=['sec_edgar', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_sec_filings",
+        "q": "SEC EDGAR 招股书 财报申报",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "sec_filings",
+        "engine": "sec_edgar",
+        "combo": [
+          "sec_edgar",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_semantic_discovery",
+      "status": "PASS",
+      "detail": "domain=semantic_discovery eng=exa combo=['exa', 'anysearch'] lang=en",
+      "meta": {
+        "id": "R_semantic_discovery",
+        "q": "discover landscape ecosystem emerging",
+        "scenario": "tech",
+        "lang": "en",
+        "domain": "semantic_discovery",
+        "engine": "exa",
+        "combo": [
+          "exa",
+          "anysearch"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_shopping",
+      "status": "PASS",
+      "detail": "domain=shopping eng=zhihu combo=['zhihu', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_shopping",
+        "q": "购物 评测 推荐 踩坑",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "shopping",
+        "engine": "zhihu",
+        "combo": [
+          "zhihu",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_skill_search",
+      "status": "PASS",
+      "detail": "domain=skill_search eng=skillsmp combo=['skillsmp', 'clawhub'] lang=en",
+      "meta": {
+        "id": "R_skill_search",
+        "q": "agent skills 市场 目录",
+        "scenario": "community",
+        "lang": "en",
+        "domain": "skill_search",
+        "engine": "skillsmp",
+        "combo": [
+          "skillsmp",
+          "clawhub"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_species_search",
+      "status": "PASS",
+      "detail": "domain=species_search eng=gbif combo=['gbif', 'iplant', 'obis', 'worms'] lang=zh",
+      "meta": {
+        "id": "R_species_search",
+        "q": "物种 学名 生物分类 拉丁名",
+        "scenario": "academic",
+        "lang": "zh",
+        "domain": "species_search",
+        "engine": "gbif",
+        "combo": [
+          "gbif",
+          "iplant",
+          "obis",
+          "worms"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_stackoverflow_search",
+      "status": "PASS",
+      "detail": "domain=stackoverflow_search eng=local_stackoverflow combo=['local_stackoverflow', 'stackoverflow', 'stackexchange'] lang=zh",
+      "meta": {
+        "id": "R_stackoverflow_search",
+        "q": "stackoverflow 编程问题 代码问题",
+        "scenario": "code",
+        "lang": "zh",
+        "domain": "stackoverflow_search",
+        "engine": "local_stackoverflow",
+        "combo": [
+          "local_stackoverflow",
+          "stackoverflow",
+          "stackexchange"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_standards",
+      "status": "PASS",
+      "detail": "domain=standards eng=std_samr combo=['std_samr', 'openstd'] lang=zh",
+      "meta": {
+        "id": "R_standards",
+        "q": "国家标准 国标 标准号",
+        "scenario": "academic",
+        "lang": "zh",
+        "domain": "standards",
+        "engine": "std_samr",
+        "combo": [
+          "std_samr",
+          "openstd"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_tech_deep",
+      "status": "PASS",
+      "detail": "domain=tech_deep eng=arxiv combo=['arxiv', 'semantic_scholar'] lang=zh",
+      "meta": {
+        "id": "R_tech_deep",
+        "q": "deep dive 架构 实践",
+        "scenario": "tech",
+        "lang": "zh",
+        "domain": "tech_deep",
+        "engine": "arxiv",
+        "combo": [
+          "arxiv",
+          "semantic_scholar"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_us_fundamentals",
+      "status": "PASS",
+      "detail": "domain=us_fundamentals eng=sec_companyfacts combo=['sec_companyfacts', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_us_fundamentals",
+        "q": "营收 净利润 财务数据 苹果",
+        "scenario": "finance",
+        "lang": "zh",
+        "domain": "us_fundamentals",
+        "engine": "sec_companyfacts",
+        "combo": [
+          "sec_companyfacts",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_us_legal",
+      "status": "PASS",
+      "detail": "domain=us_legal eng=federal_register combo=['federal_register', 'anysearch'] lang=en",
+      "meta": {
+        "id": "R_us_legal",
+        "q": "supreme court 判例 precedent",
+        "scenario": "legal",
+        "lang": "en",
+        "domain": "us_legal",
+        "engine": "federal_register",
+        "combo": [
+          "federal_register",
+          "anysearch"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_web_archive",
+      "status": "PASS",
+      "detail": "domain=web_archive eng=wikipedia combo=['wikipedia', 'local_bing'] lang=zh",
+      "meta": {
+        "id": "R_web_archive",
+        "q": "网页快照 历史网页 wayback",
+        "scenario": "general",
+        "lang": "zh",
+        "domain": "web_archive",
+        "engine": "wikipedia",
+        "combo": [
+          "wikipedia",
+          "local_bing"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_web_docs",
+      "status": "PASS",
+      "detail": "domain=web_docs eng=mdn combo=['mdn', 'stackoverflow'] lang=en",
+      "meta": {
+        "id": "R_web_docs",
+        "q": "mozilla developer fetch 属性",
+        "scenario": "code",
+        "lang": "en",
+        "domain": "web_docs",
+        "engine": "mdn",
+        "combo": [
+          "mdn",
+          "stackoverflow"
+        ],
+        "primary_lang": "en"
+      }
+    },
+    {
+      "name": "route:R_wechat_search",
+      "status": "PASS",
+      "detail": "domain=wechat_search eng=local_sogou combo=['local_sogou', 'wechat_sogou', 'sogou_weixin_browser'] lang=zh",
+      "meta": {
+        "id": "R_wechat_search",
+        "q": "微信公众号 文章 搜狗微信",
+        "scenario": "community",
+        "lang": "zh",
+        "domain": "wechat_search",
+        "engine": "local_sogou",
+        "combo": [
+          "local_sogou",
+          "wechat_sogou",
+          "sogou_weixin_browser"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_world_news",
+      "status": "PASS",
+      "detail": "domain=world_news eng=anysearch combo=['anysearch', 'seltz'] lang=zh",
+      "meta": {
+        "id": "R_world_news",
+        "q": "noticias 国际 新闻",
+        "scenario": "news",
+        "lang": "zh",
+        "domain": "world_news",
+        "engine": "anysearch",
+        "combo": [
+          "anysearch",
+          "seltz"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_zhihu_content",
+      "status": "PASS",
+      "detail": "domain=zhihu_content eng=zhihu combo=['zhihu', 'zhihu_global'] lang=zh",
+      "meta": {
+        "id": "R_zhihu_content",
+        "q": "知乎 怎么看待 如何评价",
+        "scenario": "media",
+        "lang": "zh",
+        "domain": "zhihu_content",
+        "engine": "zhihu",
+        "combo": [
+          "zhihu",
+          "zhihu_global"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_zhihu_hot_list",
+      "status": "PASS",
+      "detail": "domain=zhihu_hot_list eng=zhihu_hot combo=['zhihu_hot', 'zhihu'] lang=zh",
+      "meta": {
+        "id": "R_zhihu_hot_list",
+        "q": "知乎热榜 知乎热搜",
+        "scenario": "community",
+        "lang": "zh",
+        "domain": "zhihu_hot_list",
+        "engine": "zhihu_hot",
+        "combo": [
+          "zhihu_hot",
+          "zhihu"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_zhihu_user_data",
+      "status": "PASS",
+      "detail": "domain=zhihu_user_data eng=zhihu_user combo=['zhihu_user', 'local_bing'] lang=zh",
+      "meta": {
+        "id": "R_zhihu_user_data",
+        "q": "我的知乎 我的创作 收藏",
+        "scenario": "community",
+        "lang": "zh",
+        "domain": "zhihu_user_data",
+        "engine": "zhihu_user",
+        "combo": [
+          "zhihu_user",
+          "local_bing"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
       "name": "rec_l3_no_pollute_film",
       "status": "PASS",
-      "detail": "['anysearch', 'local_bing']"
+      "detail": "['octen', 'anysearch']"
     },
     {
       "name": "rec_l3_no_pollute_sports",
       "status": "PASS",
-      "detail": "['anysearch', 'local_bing']"
+      "detail": "['octen', 'anysearch']"
     },
     {
       "name": "rec_l3_same_family_ok",
       "status": "PASS",
-      "detail": "['anysearch', 'local_bing']"
+      "detail": "['octen', 'anysearch']"
     },
     {
       "name": "rec_cross:アニメ おすすめ",
@@ -1836,7 +2884,7 @@
     {
       "name": "reach:summary",
       "status": "PASS",
-      "detail": "死源 0 个: 无；声明 explicit_only 15 个: bing_rss, datagov_uk, doi, ecosia, gdelt, opencitations, qwant, tineye, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall, x_trending, zbmath"
+      "detail": "死源 0 个: 无；声明 explicit_only 16 个: bing_rss, datagov_uk, deepseek_search, doi, ecosia, gdelt, opencitations, qwant, tineye, tinyfish, tinyfish_news, tinyfish_paper, twitter_syndication, unpaywall, x_trending, zbmath"
     }
   ]
 }

@@ -37,26 +37,27 @@ if str(SCRIPTS) not in __import__("sys").path:
 from config import load_config  # noqa: E402
 import matrix_search_eval as mse  # noqa: E402
 
-# 债务清单：暂无路由用例的域（2026-10-22 登记）。
+# 债务清单：暂无路由用例的域。
 # 清单是「检查当前已知集合」而非「检查它们都对」——新增域若落进来，必须
 # 显式决定是补用例还是登记，不允许静默增长（同 _NARROW_TOP2_DEBT 的语义）。
-# 注意：`local_*` 六个域是 local-search 子技能的兜底域，触发词与主清单重叠，
-# 优先级最低，但仍登记在册以免被认为「已覆盖」。
+#
+# 2026-10-22：53 个域已补用例（ROUTE_MATRIX 的「域覆盖」段），从清单移除。
+# 余下 9 个分两类，都不是「忘了补」，加用例反而会引入假绿：
+#
+# 【一】local_* 六个域——设计上不进自动路由。chinese_general 的 `[一-鿿]`
+#   catch-all 排在它们之前（config.yaml 1545 行 vs 1555 行起），任何中文查询
+#   都被 catch-all 截走；这六个域是 local-search 子技能的零成本兜底层，靠
+#   `--local-first` 显式启用（见 sub-skills/local-search/SKILL.md）。
+#
+# 【二】触发词被更强域覆盖的三个域——域冲突，要先修域设计才谈得上有用例：
+#   - jin10_flash  ← cls_telegraph_search 的 patterns 含「财经快讯/市场快讯/快讯」
+#   - wenshu_query ← legal 的 patterns 含「裁判文书」，且 legal 排在其前面
+#   - v2ex_search  ← social 的 patterns 含 `v2ex`，且 route_domains._social_domain_first
+#                   会把 social 提到命中列表首位（实测「v2ex 技术社区」落 social）
 _NO_CASE_DEBT = {
-    "ai_model", "aviation_weather", "chinese_tech_deep", "claim_check", "cn_encyclopedia",
-    "cn_tech_community", "code_search", "crypto_search", "dataset_search",
-    "dictionary_search", "earth_science", "em_news_search", "energy_grid",
-    "entity_search", "fact_check", "futures_market", "fx_query", "game_search",
-    "global_event", "hk_filings", "hot_trending", "image_search",
-    "intl_news_flash", "japan_law", "jin10_flash", "kor_law", "law_text",
-    "legal", "local_academic", "local_chinese", "local_code", "local_general",
-    "local_news", "local_reference", "meme_slang", "ml_models", "news_realtime",
-    "outbreak_health", "patent_search", "prediction_market", "protein_search",
-    "redskill_search", "scholar_search", "sec_filings", "semantic_discovery",
-    "shopping", "skill_search", "species_search", "stackoverflow_search",
-    "standards", "tech_deep", "us_fundamentals", "us_legal", "v2ex_search",
-    "web_archive", "web_docs", "wechat_search", "wenshu_query", "world_news",
-    "zhihu_content", "zhihu_hot_list", "zhihu_user_data",
+    "local_academic", "local_chinese", "local_code", "local_general",
+    "local_news", "local_reference",
+    "jin10_flash", "wenshu_query", "v2ex_search",
 }
 
 

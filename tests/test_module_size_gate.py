@@ -272,12 +272,14 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "
               "ARGO_MCPJOBS_DIR 显式覆盖（原硬编码 ~/.cache）"),
     "scripts/matrix_search_eval.py": (
-        1120, "离线路由矩阵（138 条检查项），用例表占多数；"
+        1179, "离线路由矩阵（191 条检查项），用例表占多数；"
               "2026-10-10 +2：入口状态隔离（真实搜索路径会写生产状态，实测夹具"
               "引擎已混入 circuit_breaker/usage_log），接 argo_paths.isolate_state_dir；"
               "2026-10-22 +15：补 company_search 场景 3 条用例（此前该域零用例，"
               "「中国企业股权/工商信息」被路由到本域却无中文能力的问题长期无人"
-              "发现）+ 华为总部用例（钉住 geo_places 让位修复）"),
+              "发现）+ 华为总部用例（钉住 geo_places 让位修复）；"
+              "2026-10-22 +53：补 53 个零用例域的「域覆盖」段（每域一条，lang 取"
+              "路由实测 primary_lang）——零用例 = 路由回归无人挡"),
     "scripts/route.py": (
         1008, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
               "2026-10-17 +10：lang_override 参数（查询操作符 lang: 的入口，"

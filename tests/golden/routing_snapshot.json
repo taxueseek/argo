@@ -200,6 +200,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "SEC EDGAR 招股书 财报申报",
+   "domain": "sec_filings",
+   "kind": "tfidf",
+   "engines": [
+    "sec_edgar",
+    "anysearch"
+   ],
+   "expect": "sec_filings",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "Taylor Swift album",
    "domain": "media_search",
    "kind": "regex",
@@ -236,6 +248,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "agent skills 市场 目录",
+   "domain": "skill_search",
+   "kind": "regex",
+   "engines": [
+    "skillsmp",
+    "clawhub"
+   ],
+   "expect": "skill_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "best wood for beginner woodworking",
    "domain": "general_search",
    "kind": "tfidf",
@@ -244,6 +268,30 @@
     "anysearch"
    ],
    "expect": null,
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "deep dive 架构 实践",
+   "domain": "tech_deep",
+   "kind": "tfidf",
+   "engines": [
+    "arxiv",
+    "semantic_scholar"
+   ],
+   "expect": "tech_deep",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "discover landscape ecosystem emerging",
+   "domain": "semantic_discovery",
+   "kind": "regex",
+   "engines": [
+    "exa",
+    "anysearch"
+   ],
+   "expect": "semantic_discovery",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
@@ -258,6 +306,30 @@
    "expect": null,
    "forbid": "chem_search",
    "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
+   "query": "github 代码 实现 用法",
+   "domain": "code_search",
+   "kind": "tfidf",
+   "engines": [
+    "github",
+    "mdn"
+   ],
+   "expect": "code_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "google scholar 学术论文 期刊",
+   "domain": "scholar_search",
+   "kind": "tfidf",
+   "engines": [
+    "doaj",
+    "google_scholar"
+   ],
+   "expect": "scholar_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "hello world",
@@ -308,6 +380,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "huggingface 预训练模型 开源模型",
+   "domain": "ml_models",
+   "kind": "tfidf",
+   "engines": [
+    "huggingface",
+    "github"
+   ],
+   "expect": "ml_models",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "log4j 漏洞 CVSS",
    "domain": "security_search",
    "kind": "regex",
@@ -316,6 +400,18 @@
     "anysearch"
    ],
    "expect": "security_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "models.dev claude 价格 上下文",
+   "domain": "ai_model",
+   "kind": "tfidf",
+   "engines": [
+    "models_dev",
+    "anysearch"
+   ],
+   "expect": "ai_model",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
@@ -330,6 +426,18 @@
    "expect": null,
    "forbid": "art_museum",
    "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
+   "query": "mozilla developer fetch 属性",
+   "domain": "web_docs",
+   "kind": "tfidf",
+   "engines": [
+    "mdn",
+    "stackoverflow"
+   ],
+   "expect": "web_docs",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "nbalive 直播 源",
@@ -366,6 +474,18 @@
    "expect": null,
    "forbid": "medical",
    "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
+   "query": "noticias 国际 新闻",
+   "domain": "world_news",
+   "kind": "tfidf",
+   "engines": [
+    "anysearch",
+    "seltz"
+   ],
+   "expect": "world_news",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "npm express 弃用",
@@ -450,6 +570,42 @@
    "expect": null,
    "forbid": "astro_space",
    "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
+   "query": "stackoverflow 编程问题 代码问题",
+   "domain": "stackoverflow_search",
+   "kind": "tfidf",
+   "engines": [
+    "local_stackoverflow",
+    "stackoverflow"
+   ],
+   "expect": "stackoverflow_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "steam 游戏推荐 好玩的游戏",
+   "domain": "game_search",
+   "kind": "tfidf",
+   "engines": [
+    "steam",
+    "anysearch"
+   ],
+   "expect": "game_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "supreme court 判例 precedent",
+   "domain": "us_legal",
+   "kind": "regex",
+   "engines": [
+    "federal_register",
+    "anysearch"
+   ],
+   "expect": "us_legal",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "technique for reducing latency",
@@ -655,6 +811,30 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "专利 权利要求 技术方案",
+   "domain": "patent_search",
+   "kind": "regex",
+   "engines": [
+    "google_patents",
+    "semantic_scholar"
+   ],
+   "expect": "patent_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "东财 全球资讯 市场",
+   "domain": "em_news_search",
+   "kind": "regex",
+   "engines": [
+    "em_global_news",
+    "cls_telegraph"
+   ],
+   "expect": "em_news_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "中国 8541 2023 进出口",
    "domain": "trade_stats",
    "kind": "tfidf",
@@ -679,6 +859,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "中文 编程 算法 架构 深度对比",
+   "domain": "chinese_tech_deep",
+   "kind": "tfidf",
+   "engines": [
+    "byted",
+    "octen"
+   ],
+   "expect": "chinese_tech_deep",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "临床指南 糖尿病",
    "domain": "medical",
    "kind": "tfidf",
@@ -689,6 +881,30 @@
    "expect": "medical",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "人民币 汇率 中间价",
+   "domain": "fx_query",
+   "kind": "tfidf",
+   "engines": [
+    "fx_rate",
+    "cfets"
+   ],
+   "expect": "fx_query",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "刑法 司法解释 判例",
+   "domain": "legal",
+   "kind": "regex",
+   "engines": [
+    "anysearch",
+    "byted"
+   ],
+   "expect": "legal",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "北京 今天 天气",
@@ -723,6 +939,18 @@
     "byted"
    ],
    "expect": "weather_query",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "北京首都机场 航空气象 METAR",
+   "domain": "aviation_weather",
+   "kind": "tfidf",
+   "engines": [
+    "aviation_weather",
+    "local_openstreetmap"
+   ],
+   "expect": "aviation_weather",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
@@ -787,6 +1015,42 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "国家标准 国标 标准号",
+   "domain": "standards",
+   "kind": "tfidf",
+   "engines": [
+    "std_samr",
+    "openstd"
+   ],
+   "expect": "standards",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "国际事件 地缘政治 局势",
+   "domain": "global_event",
+   "kind": "tfidf",
+   "engines": [
+    "google_news",
+    "em_global_news"
+   ],
+   "expect": "global_event",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "国际新闻 外媒 国际要闻",
+   "domain": "intl_news_flash",
+   "kind": "regex",
+   "engines": [
+    "guardian_rss",
+    "france24"
+   ],
+   "expect": "intl_news_flash",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "土壤 重金属 检测",
    "domain": "soil_agri",
    "kind": "tfidf",
@@ -797,6 +1061,18 @@
    "expect": "soil_agri",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "地震 震级 余震 震中",
+   "domain": "earth_science",
+   "kind": "tfidf",
+   "engines": [
+    "usgs",
+    "gdacs"
+   ],
+   "expect": "earth_science",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "埃菲尔铁塔 位置",
@@ -906,6 +1182,18 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "小红书 技能 排行榜",
+   "domain": "redskill_search",
+   "kind": "tfidf",
+   "engines": [
+    "redskill",
+    "anysearch"
+   ],
+   "expect": "redskill_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "川菜 做法",
    "domain": "chinese_general",
    "kind": "regex",
@@ -930,6 +1218,30 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "微信公众号 文章 搜狗微信",
+   "domain": "wechat_search",
+   "kind": "tfidf",
+   "engines": [
+    "local_sogou",
+    "wechat_sogou"
+   ],
+   "expect": "wechat_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "微博热搜 今日热搜",
+   "domain": "hot_trending",
+   "kind": "tfidf",
+   "engines": [
+    "weibo",
+    "baidu_hot"
+   ],
+   "expect": "hot_trending",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "怎么把排骨炖得软烂",
    "domain": "chinese_general",
    "kind": "regex",
@@ -938,6 +1250,54 @@
     "yuanbao"
    ],
    "expect": null,
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "我的知乎 我的创作 收藏",
+   "domain": "zhihu_user_data",
+   "kind": "tfidf",
+   "engines": [
+    "zhihu_user",
+    "local_bing"
+   ],
+   "expect": "zhihu_user_data",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "掘金 前端文章 技术博客",
+   "domain": "cn_tech_community",
+   "kind": "tfidf",
+   "engines": [
+    "juejin",
+    "v2ex"
+   ],
+   "expect": "cn_tech_community",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "日本 法令 民法 条文",
+   "domain": "japan_law",
+   "kind": "tfidf",
+   "engines": [
+    "egov_law",
+    "anysearch"
+   ],
+   "expect": "japan_law",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "最新新闻 今天发生 突发",
+   "domain": "news_realtime",
+   "kind": "tfidf",
+   "engines": [
+    "byted",
+    "zhihu_global"
+   ],
+   "expect": "news_realtime",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
@@ -1002,6 +1362,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "比特币 以太坊 加密货币 价格",
+   "domain": "crypto_search",
+   "kind": "tfidf",
+   "engines": [
+    "coingecko",
+    "defillama"
+   ],
+   "expect": "crypto_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "沪深300 基金净值",
    "domain": "fund_query",
    "kind": "tfidf",
@@ -1024,6 +1396,30 @@
    "expect": "fund_query",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "沪铜 期货 行情",
+   "domain": "futures_market",
+   "kind": "tfidf",
+   "engines": [
+    "shfe",
+    "anysearch"
+   ],
+   "expect": "futures_market",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "法条 法律条文 全文",
+   "domain": "law_text",
+   "kind": "tfidf",
+   "engines": [
+    "flk_law",
+    "anysearch"
+   ],
+   "expect": "law_text",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "深度学习 paper 论文",
@@ -1062,6 +1458,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "港股 港交所 披露易 公告",
+   "domain": "hk_filings",
+   "kind": "tfidf",
+   "engines": [
+    "hkex",
+    "anysearch"
+   ],
+   "expect": "hk_filings",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "火影忍者 番剧 声优",
    "domain": "anime_encyclopedia",
    "kind": "tfidf",
@@ -1072,6 +1480,18 @@
    "expect": "anime_encyclopedia",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "物种 学名 生物分类 拉丁名",
+   "domain": "species_search",
+   "kind": "regex",
+   "engines": [
+    "gbif",
+    "iplant"
+   ],
+   "expect": "species_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "电影 主演 是谁",
@@ -1086,6 +1506,30 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "电网 发电结构 发电量",
+   "domain": "energy_grid",
+   "kind": "tfidf",
+   "engines": [
+    "electricity_maps",
+    "energy_charts"
+   ],
+   "expect": "energy_grid",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "疫情 暴发 流行病 通报",
+   "domain": "outbreak_health",
+   "kind": "tfidf",
+   "engines": [
+    "who_don",
+    "who_gho"
+   ],
+   "expect": "outbreak_health",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "看NBA视频 集锦",
    "domain": "sports_search",
    "kind": "tfidf",
@@ -1098,6 +1542,42 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "知乎 怎么看待 如何评价",
+   "domain": "zhihu_content",
+   "kind": "tfidf",
+   "engines": [
+    "zhihu",
+    "zhihu_global"
+   ],
+   "expect": "zhihu_content",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "知乎热榜 知乎热搜",
+   "domain": "zhihu_hot_list",
+   "kind": "tfidf",
+   "engines": [
+    "zhihu_hot",
+    "zhihu"
+   ],
+   "expect": "zhihu_hot_list",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "科研数据集 开放数据 下载",
+   "domain": "dataset_search",
+   "kind": "tfidf",
+   "engines": [
+    "figshare",
+    "datacite"
+   ],
+   "expect": "dataset_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "糖尿病 症状 用药",
    "domain": "medical",
    "kind": "regex",
@@ -1108,6 +1588,42 @@
    "expect": "medical",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "维基数据 知识图谱 实体查询",
+   "domain": "entity_search",
+   "kind": "tfidf",
+   "engines": [
+    "wikidata",
+    "baidu_baike"
+   ],
+   "expect": "entity_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "网络梗 流行语 黑话",
+   "domain": "meme_slang",
+   "kind": "tfidf",
+   "engines": [
+    "itotii",
+    "urban_dictionary"
+   ],
+   "expect": "meme_slang",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "网页快照 历史网页 wayback",
+   "domain": "web_archive",
+   "kind": "tfidf",
+   "engines": [
+    "wikipedia",
+    "local_bing"
+   ],
+   "expect": "web_archive",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "肖申克的救赎 主演",
@@ -1132,6 +1648,18 @@
    "expect": null,
    "forbid": "sports_search",
    "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
+   "query": "英文单词 词典 意思",
+   "domain": "dictionary_search",
+   "kind": "tfidf",
+   "engines": [
+    "free_dictionary",
+    "wikipedia"
+   ],
+   "expect": "dictionary_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "苹果股价 行情",
@@ -1170,6 +1698,30 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "营收 净利润 财务数据 苹果",
+   "domain": "us_fundamentals",
+   "kind": "tfidf",
+   "engines": [
+    "sec_companyfacts",
+    "anysearch"
+   ],
+   "expect": "us_fundamentals",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "蛋白质 基因 氨基酸序列",
+   "domain": "protein_search",
+   "kind": "tfidf",
+   "engines": [
+    "uniprot",
+    "local_bing"
+   ],
+   "expect": "protein_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "财联社 快讯",
    "domain": "cls_telegraph_search",
    "kind": "regex",
@@ -1192,6 +1744,18 @@
    "expect": "cls_telegraph_search",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "购物 评测 推荐 踩坑",
+   "domain": "shopping",
+   "kind": "tfidf",
+   "engines": [
+    "zhihu",
+    "anysearch"
+   ],
+   "expect": "shopping",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
   },
   {
    "query": "贵州茅台股价",
@@ -1218,6 +1782,18 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "辟谣 传言 事实核查",
+   "domain": "claim_check",
+   "kind": "tfidf",
+   "engines": [
+    "factcheck_org",
+    "full_fact"
+   ],
+   "expect": "claim_check",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "长亭科技 股东 持股比例",
    "domain": "company_search",
    "kind": "tfidf",
@@ -1226,6 +1802,30 @@
     "yuanbao"
    ],
    "expect": "company_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "长征 百度百科 词条解释",
+   "domain": "cn_encyclopedia",
+   "kind": "tfidf",
+   "engines": [
+    "baidu_baike",
+    "zh_wikipedia"
+   ],
+   "expect": "cn_encyclopedia",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "长江 长度 是多少",
+   "domain": "fact_check",
+   "kind": "tfidf",
+   "engines": [
+    "wikipedia",
+    "byted"
+   ],
+   "expect": "fact_check",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
@@ -1250,6 +1850,42 @@
     "local_openstreetmap"
    ],
    "expect": "chinese_general",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "雪景 壁纸 图片",
+   "domain": "image_search",
+   "kind": "tfidf",
+   "engines": [
+    "openverse",
+    "wikimedia_commons"
+   ],
+   "expect": "image_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "韩国 法令 民法 条文",
+   "domain": "kor_law",
+   "kind": "tfidf",
+   "engines": [
+    "kor_law",
+    "anysearch"
+   ],
+   "expect": "kor_law",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "预测市场 事件合约",
+   "domain": "prediction_market",
+   "kind": "regex",
+   "engines": [
+    "polymarket",
+    "anysearch"
+   ],
+   "expect": "prediction_market",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
