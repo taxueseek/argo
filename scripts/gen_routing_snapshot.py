@@ -29,8 +29,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
+
+# 与 tests/conftest.py 对齐：快照对账必须**确定性**。默认状态目录
+# （~/.cache/unified-search）含本机历史（学习器分数 / 熔断器计数 / 配额），
+# 会让「生成时的路由」与「pytest 里的路由」不一致——实测 2026-10-22
+# 「settlement 结算 周期」在两种环境下分别是 regex 与 tfidf，门禁稳定假红
+# （单独跑 --check 通过、pytest 里 3/3 红，根因就是两边状态目录不同）。
+# 隔离到临时目录后两边都从空状态出发，逐条一致。调用方显式设置
+# ARGO_STATE_DIR 时尊重之（便于复现某个具体状态）。
+os.environ.setdefault("ARGO_STATE_DIR", tempfile.mkdtemp(prefix="argo-snapshot-"))
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"

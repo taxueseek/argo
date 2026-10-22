@@ -254,6 +254,21 @@ ROUTE_MATRIX: list[dict[str, Any]] = [
      "domain": "org_entity", "primary": "wikidata", "scenario": "org"},
     {"id": "R_zh_org2", "q": "清华大学 创办年份", "lang": "zh",
      "domain": "org_entity", "primary": "wikidata", "scenario": "org"},
+    # 中文企业总部不是地理问题（2026-10-22 修：geo_places 的方位词 unless 增补
+    # 「总部|母公司|子公司|注册地|办公地」后落到本域；此前落 geo_places，用 OSM+维基
+    # 只拿到广汽/新凯来/五粮液等无关结果）
+    {"id": "R_zh_org_hq", "q": "华为 总部在哪", "lang": "zh",
+     "domain": "org_entity", "primary": "wikidata", "scenario": "org"},
+
+    # ── 企业/工商（company_search）──
+    # 2026-10-22 补：此前 ROUTE_MATRIX 无本域用例，导致「中国企业股权/工商信息」
+    # 被路由到本域、而该域 combo 只有国际法人库（gleif/opencorporates）+ 百科的
+    # 问题长期无人发现——实测「长亭科技 股东 持股比例」返回 5 条同名「XX科技
+    # 有限公司」干扰。元宝进 combo 第 1 位后（a5a46ad）才具中文交付能力。
+    {"id": "R_zh_company_shareholder", "q": "长亭科技 股东 持股比例", "lang": "zh",
+     "domain": "company_search", "primary": "opencorporates", "scenario": "company"},
+    {"id": "R_zh_company_regcap", "q": "字节跳动 注册资本 变更", "lang": "zh",
+     "domain": "company_search", "primary": "opencorporates", "scenario": "company"},
 
     # ── 媒体/音乐 ──
     {"id": "R_en_media", "q": "Taylor Swift album", "lang": "en",
