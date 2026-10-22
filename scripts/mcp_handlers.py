@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""mcp_handlers.py — MCP 工具执行逻辑（P2-4 拆分自 mcp_server.py）。
+"""mcp_handlers.py — MCP 工具执行逻辑与集中分发。
 
-路径引导、延迟导入缓存、结果压缩、14 个工具的 execute_tool 分派、
-后台预热（含 local-seek 模块导入预热，为进程内调用铺路）。
-schema 来源在 mcp_tools.py；JSON-RPC 帧处理在 mcp_transport.py。
+路径引导、延迟导入缓存、参数守卫与 19 个工具的 execute_tool 分派。
+架构解耦：
+  - mcp_compact.py   结果裁剪与紧凑压缩协议
+  - mcp_local.py     本地文件检索、受限预览与可复算沙箱
+  - mcp_warm.py      核心后台预热、连接池预建与社交抓取并发编排
+  - mcp_handlers_surface.py 表面五工具分发
+  - mcp_tools.py     工具 schema 唯一真源
+  - mcp_transport.py JSON-RPC 帧协议与 stdio 传输
 """
 
 from __future__ import annotations
@@ -19,19 +24,37 @@ import threading
 import cli_io
 from typing import Any
 
+from mcp_compact import (
+    _cap_extract_output,
+    _compact_research_result,
+    _compact_search_result,
+    _trim_snippet,
+)
+from mcp_local import (
+    _LOCAL_READ_ALLOWED_EXTS,
+    _local_read_preview,
+    _local_read_whitelist,
+    _seek_py,
+    handle_local_read,
+    handle_local_search,
+    handle_recompute,
+)
+from mcp_warm import (
+    _prewarm_anysearch_connection,
+    _resolve_research_profile as _warm_resolve_research_profile,
+    _search_social_platforms as _warm_search_social_platforms,
+    _warm_core_async as _warm_core_async_impl,
+)
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ARGO_DIR = os.path.dirname(SCRIPT_DIR)  # argo 根目录
 sys.path.insert(0, SCRIPT_DIR)
-# 子技能目录，供 sub-skills/local-search/ 等模块本地导入。
-# append 而非 insert(0)：sub-skills 下的顶层模块（health_check 等）不得
-# 劫持 scripts/ 下同名模块的解析（否则 route 的健康检查分支会静默漂移）。
 SUB_SKILLS_DIR = os.path.join(ARGO_DIR, "sub-skills")
 if os.path.isdir(SUB_SKILLS_DIR):
     for sub in os.listdir(SUB_SKILLS_DIR):
         sub_path = os.path.join(SUB_SKILLS_DIR, sub)
         if os.path.isdir(sub_path) and sub_path not in sys.path:
             sys.path.append(sub_path)
-# 切换 CWD 到 argo 根目录，确保相对路径和子进程 work
 os.chdir(ARGO_DIR)
 
 # 启动日志（写入 stderr，不影响 stdio 通信）
@@ -39,88 +62,7 @@ sys.stderr.write("[argo-mcp] starting (lazy imports enabled)\n")
 sys.stderr.flush()
 
 _cache_instance = None
-_warm_started = False
 _module_cache: dict[str, Any] = {}
-
-
-
-
-_LOCAL_READ_ALLOWED_EXTS = {
-    ".md", ".txt", ".csv", ".tsv", ".json", ".yaml", ".yml", ".log",
-    ".py", ".js", ".ts", ".html", ".xml", ".rst", ".ipynb",
-}
-
-
-def _local_read_whitelist() -> list[str]:
-    """白名单目录：ARGO_LOCAL_READ_DIRS（逗号分隔）；没配置就返回空，不放行。"""
-    raw = (os.environ.get("ARGO_LOCAL_READ_DIRS") or "").strip()
-    if not raw:
-        return []
-    return [os.path.realpath(os.path.expanduser(d))
-            for d in raw.split(",") if d.strip()]
-
-
-def _local_read_preview(
-    path: str,
-    max_chars: int = 4000,
-    line_start: int | None = None,
-    line_end: int | None = None,
-) -> tuple[str, dict[str, Any]]:
-    """白名单内文本文件预览（行窗口或字符截断）；越权/二进制拒绝。"""
-    root = os.path.realpath(os.path.expanduser(path))
-    allowed = _local_read_whitelist()
-    if not allowed:
-        raise PermissionError(
-            "本地读取未配置白名单：设 ARGO_LOCAL_READ_DIRS=目录1,目录2（没配置就不放行）"
-        )
-    if not any(root == d or root.startswith(d + os.sep) for d in allowed):
-        raise PermissionError(f"路径不在白名单目录内: {path}")
-    if not os.path.isfile(root):
-        raise FileNotFoundError(f"文件不存在: {path}")
-    ext = os.path.splitext(root)[1].lower()
-    if ext not in _LOCAL_READ_ALLOWED_EXTS:
-        raise PermissionError(f"仅支持文本类文件预览（{ext} 不支持；pdf 走其他路径）")
-    size = os.path.getsize(root)
-    if size > 4 * 1024 * 1024:
-        raise PermissionError("文件超过 4MB，拒绝预览（请缩小范围或改用搜索）")
-
-    with open(root, encoding="utf-8", errors="replace") as f:
-        full = f.read()
-    # total_lines 语义是「整个文件的总行数」，必须从全文计——历史上曾从
-    # 切片/截断后的 content 数换行，行窗口分支会把「共 50 行」报成「共 3 行」。
-    # 注意尾巴：文件以换行结尾时不能再 +1，否则 50 行会被报成 51 行。
-    total_lines = full.count("\n") + (1 if full and not full.endswith("\n") else 0)
-    if line_start is not None or line_end is not None:
-        start = max(1, int(line_start or 1))
-        end = int(line_end) if line_end else start + 200
-        lines = full.splitlines(keepends=True)[(start - 1): end]
-        content = "".join(lines)
-        lines_slice = (start, start + len(lines) - 1)
-    else:
-        content = full
-        lines_slice = None
-
-    truncated = len(content) > max_chars
-    if truncated:
-        content = content[:max_chars]
-    return content, {
-        "path": root,
-        "chars": len(content),
-        "lines": (lines_slice[1] - lines_slice[0] + 1) if lines_slice else None,
-        "total_lines": total_lines,
-        "is_preview": truncated or lines_slice is not None,
-    }
-
-
-def _seek_py() -> str:
-    """定位 local-seek 的 seek.py（安装感知、唯一来源，见 seek_locator）。
-
-    local-seek 已于 2026-08-05 收编为 argo 子技能，标准位置是打包的
-    SUB_SKILLS_DIR/local-seek；自定义/遗留位置由 ARGO_LOCAL_SEEK_PATH 或
-    ARGO_LOCAL_SEEK_ROOTS 承载（不再硬编码 ~/.agents/skills 等主机路径）。
-    委托 seek_locator，避免与 search.py 各自维护一套发现逻辑而漂移。"""
-    from seek_locator import resolve_seek_py  # 延迟导入：mcp_handlers 常被早拉入
-    return resolve_seek_py()
 
 
 def _lazy_import(module_name: str):
@@ -146,12 +88,7 @@ def _get_cache():
 
 
 def _dumps(obj: Any, pretty: bool = False) -> str:
-    """MCP 的 JSON 序列化：复用 CLI stdout 的同一套计算方式（cli_io 是唯一来源）。
-
-    两边此前各写一份实现（这里 separators=(",", ":")、CLI 侧各写 indent=2），
-    同一份载荷两套格式——计算方式分叉后没人会发现「MCP 紧凑、CLI 美化」这件事本身
-    就是不一致。合并后只留一个来源；`pretty=True` 仍供人读场景使用。
-    """
+    """MCP 的 JSON 序列化：复用 CLI stdout 的同一套计算方式（cli_io 是唯一来源）。"""
     return cli_io.dumps_pretty(obj) if pretty else cli_io.dumps(obj)
 
 
@@ -165,323 +102,21 @@ def _ok(payload: Any, pretty: bool = False) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": _dumps(payload, pretty=pretty)}]}
 
 
-def _trim_snippet(text: Any, n: int = 120) -> str | None:
-    if not text:
-        return None
-    s = str(text)
-    return s if len(s) <= n else s[:n]
-
-
-def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dict[str, Any]:
-    """去掉 MCP 热路径用不到的重字段，缩小首包。"""
-    snip_n = 80 if summary else 160
-    out: dict[str, Any] = {
-        "query": result.get("query"),
-        "engine": result.get("engine"),
-        "engines_used": result.get("engines_used") or result.get("engines"),
-        "count": result.get("count"),
-        "elapsed_ms": result.get("elapsed_ms"),
-        "cached": result.get("cached"),
-        "mode": result.get("mode"),
-        "depth": result.get("depth"),
-        "execution_tier": result.get("execution_tier"),
-        "input_kind": result.get("input_kind"),
-        "login_hint": result.get("login_hint"),
-    }
-    results = []
-    for r in result.get("results") or []:
-        if not isinstance(r, dict):
-            continue
-        item = {
-            "title": r.get("title"),
-            "url": r.get("url"),
-            "snippet": _trim_snippet(r.get("snippet"), snip_n),
-            "source": r.get("source"),
-            "score": r.get("score"),
-        }
-        # 保留发布时间维度（仅引擎输出该字段时，避免空字段噪音）
-        if r.get("published_at"):
-            item["published_at"] = r["published_at"]
-        # 顶包标记：recovery 替换了引擎原结果时透传，供上层识别结果已被代答
-        if r.get("_recovered"):
-            item["recovered"] = r["_recovered"]
-        # 保留快评，丢掉大块 meta
-        for k in ("selection", "absorption", "credibility_fast", "evidence_flags"):
-            if k in r:
-                item[k] = r[k]
-        # 证据完整链路 P0：保留核验信号（仅存在时，避免空字段噪音）
-        for k in ("fetch_suggested", "has_fetched_evidence", "post_fetch_absorption"):
-            if r.get(k) is not None:
-                item[k] = r[k]
-        results.append(item)
-    out["results"] = results
-    # 证据完整链路 P0：顶层门控信号（轻量 4 字段，供 Agent 判断「能否下结论」）
-    if result.get("fetch_required") is not None:
-        out["fetch_required"] = result["fetch_required"]
-    el = result.get("evidence_loop")
-    if isinstance(el, dict):
-        out["evidence_loop"] = {
-            "suggested": el.get("suggested") or [],
-            "verified_count": el.get("verified_count") or 0,
-            "pending_count": el.get("pending_count") or 0,
-        }
-    # 引擎可观测性：精简版 engine_outcomes（engine/status/latency，去掉 detail）
-    # 让 Agent 能看到「哪个引擎失败、为什么类别」，不占大体积
-    outcomes = result.get("engine_outcomes") or []
-    if outcomes:
-        out["engine_outcomes"] = [
-            {
-                "engine": o.get("engine"),
-                "status": o.get("status"),
-                "latency_ms": o.get("latency_ms"),
-                "results_count": o.get("results_count"),
-            }
-            for o in outcomes
-            if isinstance(o, dict)
-        ][:12]
-        wasted = result.get("wasted_engine_ms")
-        if wasted:
-            out["wasted_engine_ms"] = wasted
-    if result.get("early_stopped"):
-        out["early_stopped"] = True
-    if result.get("minhash_removed"):
-        out["minhash_removed"] = result.get("minhash_removed")
-    from search_output import decorate_compact_payload as _decorate
-    _decorate(out, result)
-    if result.get("domain_filter"):
-        out["domain_filter"] = result["domain_filter"]
-    if result.get("rank_method"):
-        out["rank_method"] = result.get("rank_method")
-    if result.get("reranker"):
-        out["reranker"] = result.get("reranker")
-    lp = result.get("lang_pref")
-    if isinstance(lp, dict):
-        out["lang_pref"] = {
-            "query_lang": lp.get("query_lang"),
-            "system_lang": lp.get("system_lang"),
-            "habit_lang": lp.get("habit_lang"),
-            "prefer_langs": lp.get("prefer_langs"),
-            "engine_lang": lp.get("engine_lang"),
-        }
-    rec = result.get("recovery")
-    if isinstance(rec, dict) and rec.get("triggered"):
-        out["recovery"] = {
-            "recovered": rec.get("recovered"),
-            "level_used": rec.get("level_used"),
-            "strategy_used": rec.get("strategy_used"),
-            "note": rec.get("note"),
-        }
-    return out
-
-
-def _compact_research_result(report: dict[str, Any], summary: bool = False) -> dict[str, Any]:
-    """研究包：只保留 Agent 写作需要的字段，砍掉子查询原始 dumps。"""
-    snip_n = 100 if summary else 160
-    keys = (
-        "query", "query_original", "execution_tier", "topic_profile", "topic_profile_key",
-        "discipline", "quality_gates", "report_sections", "source_grades", "disclaimer",
-        "academic_discipline", "engines_used", "source_distribution", "elapsed_ms",
-        "sub_query_count", "total_sources", "gaps", "mode", "sub_queries",
-        "engines_priority", "vertical_engines", "fetch_required",
-        "kind", "conclusion_cap", "quality_gate_results", "work_packages",
-        "work_package_stages", "protocol",
-    )
-    out: dict[str, Any] = {k: report[k] for k in keys if k in report and report[k] is not None}
-
-    # 证据完整链路 P0：研究包门控（pending_fetch 截断到 5 条，保留可编程核验信号）
-    el = report.get("evidence_loop")
-    if isinstance(el, dict):
-        out["evidence_loop"] = {
-            "high_consequence_domain": el.get("high_consequence_domain"),
-            "pending_fetch": (el.get("pending_fetch") or [])[:5],
-            "verified_count": el.get("verified_count") or 0,
-            "pending_count": el.get("pending_count") or 0,
-        }
-    if isinstance(report.get("verify"), dict):
-        v = report["verify"]
-        out["verify"] = {
-            "revision_summary": v.get("revision_summary") or {},
-            "pending": (v.get("pending") or [])[:5],
-        }
-
-    findings = []
-    for kf in report.get("key_findings") or []:
-        if not isinstance(kf, dict):
-            continue
-        top = dict(kf.get("top_result") or {})
-        if top.get("snippet"):
-            top["snippet"] = _trim_snippet(top.get("snippet"), snip_n)
-        findings.append({
-            "aspect": kf.get("aspect"),
-            "strategy": kf.get("strategy"),
-            "top_result": top,
-            "result_count": kf.get("result_count"),
-            "citation_refs": kf.get("citation_refs"),
-        })
-    out["key_findings"] = findings
-
-    sources = []
-    for s in report.get("sources") or report.get("citations") or []:
-        if not isinstance(s, dict) or not s.get("url"):
-            continue
-        sources.append({
-            "ref": s.get("ref") or s.get("id"),
-            "title": s.get("title"),
-            "url": s.get("url"),
-            "engine": s.get("engine") or s.get("source"),
-            "snippet": _trim_snippet(s.get("snippet"), snip_n),
-        })
-        if summary and len(sources) >= 10:
-            break
-    out["sources"] = sources
-    if not summary:
-        out["citations"] = report.get("citations") or sources
-        # 交叉引用截断
-        crs = report.get("cross_references") or []
-        out["cross_references"] = crs[:5]
-    # 覆盖度 / 验证记录 / 盲区（科研方法论增强）
-    if report.get("coverage_map"):
-        out["coverage_map"] = report["coverage_map"]
-    if report.get("verification_records"):
-        out["verification_records"] = report["verification_records"][:12]
-    if report.get("blind_spots"):
-        out["blind_spots"] = report["blind_spots"][:8]
-    return out
-
-
-def _prewarm_anysearch_connection() -> None:
-    """在 warm 线程里预建 anysearch 的隧道连接（2026-10-18）。
-
-    为什么放在 MCP 而不是 CLI 启动：实测 cli 路径上没有任何窗口——引擎在
-    117–140ms 就借连接，而经代理的 TLS 握手要 320–970ms，预连接总是慢一步
-    （对拍见 docs-local；强行预连接反而多付一次握手）。MCP 是长驻进程，
-    initialize 之后的 warm 与用户第一次 tools/call 之间通常有整秒级间隔，
-    这批固定成本正好藏在里面。
-
-    只做 anysearch：它是 general 域主力**POST** 引擎，也是当前唯一每次都
-    走 _do_post 的域；失败静默（离线/代理不可用/池关闭都不影响服务）。
-    """
-    if os.environ.get("ARGO_NO_PREWARM", "").strip() not in ("", "0"):
-        return
-    try:
-        import urllib.parse
-        from conn_pool import (give_back, key_for, stats as pool_stats)
-        from net_proxy import open_connection, resolve_proxy
-        if not pool_stats().get("enabled"):
-            return
-        url = "https://api.anysearch.com/mcp"
-        parsed = urllib.parse.urlparse(url)
-        proxy_url = resolve_proxy(url)
-        conn, _via = open_connection(parsed, 8.0, proxy_url)
-        # open_connection 返回的是**未连接**的 HTTPSConnection（懒连接），
-        # 必须显式 connect；否则还进池的只是个空壳，_sock_alive 会直接丢弃。
-        conn.connect()
-        give_back(key_for(parsed, proxy_url), conn)
-    except Exception as e:
-        sys.stderr.write(f"[argo-mcp] prewarm-skip: {type(e).__name__}: {e}\n")
-
-
 def _warm_core_async() -> None:
     """initialize 后后台预热 search+cache，摊平首次 tools/call 延迟。"""
-    global _warm_started
-    if _warm_started:
-        return
-    _warm_started = True
-
-    def _run() -> None:
-        t0 = __import__("time").time()
-        try:
-            _lazy_cached("search")
-            _get_cache()
-            # 路由域正则全量预热（2026-09-29）：match_domains 懒编译后，长驻
-            # 进程的首次 search 仍要付「扫到域」的编译税；这里一次付清，首包
-            # tools/call 不再带路由冷启动。唯一来源在 route_domains——曾在此
-            # 内联复刻同一句，使 warm_compiled_domains 成了没人调的死函数。
-            try:
-                from route_domains import warm_compiled_domains
-                warm_compiled_domains()
-            except Exception:
-                pass
-            # 连接预热排在模块预热之后：先把 search/route 的导入税付掉，
-            # 再付 TLS。两段都在同一个 daemon 线程里串行，互不抢占首包。
-            _prewarm_anysearch_connection()
-            ms = int((__import__("time").time() - t0) * 1000)
-            sys.stderr.write(f"[argo-mcp] warm-core ok {ms}ms\n")
-        except Exception as e:
-            sys.stderr.write(f"[argo-mcp] warm-core fail: {type(e).__name__}: {e}\n")
-        sys.stderr.flush()
-
-    threading.Thread(target=_run, name="argo-mcp-warm", daemon=True).start()
+    _warm_core_async_impl(_lazy_cached, _get_cache)
 
 
 def _resolve_research_profile(arguments: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     """解析 topic profile；全部在 argo 内，不加载外部 skill。"""
-    try:
-        profiles = _lazy_cached("topic_research_profiles")
-    except Exception:
-        return None, None
-    topic = arguments.get("topic")
-    key = None
-    if topic:
-        prof = profiles.get_profile(str(topic))
-        if prof:
-            # 归一化 key
-            raw = str(topic).strip()
-            key = profiles.ALIASES.get(raw) or profiles.ALIASES.get(raw.lower()) or raw.lower()
-            return prof, key
-        return None, None
-    if arguments.get("auto_topic", True):
-        key = profiles.detect_topic_from_query(arguments.get("query") or "")
-        if key:
-            return profiles.get_profile(key), key
-    return None, None
+    return _warm_resolve_research_profile(arguments, _lazy_cached)
 
 
 def _search_social_platforms(
     platforms: list[str], query: str, n: int, timeout: float = 20.0,
 ) -> tuple[dict[str, list], list[str], list[str]]:
-    """并行抓取多社交平台（MCP 热路径）。
-
-    timeout 秒后放弃未完成平台、返回已完成部分（不抛错），
-    避免单平台卡死拖垮整次搜索；超时平台以空结果 + errors 提示可观测。
-    """
-    platform_results: dict[str, list] = {}
-    errors: list[str] = []
-    engines_used: list[str] = []
-
-    def _one(platform: str) -> tuple[str, list, str | None]:
-        module_name = platform.replace("-", "_") + "_engine"
-        try:
-            # 走 _lazy_cached，复用进程内模块缓存，避免重复 importlib 解析
-            mod = _lazy_cached(f"social_engines.{module_name}")
-            return platform, mod.search(query, n=n), None
-        except ImportError:
-            return platform, [], f"Platform {platform} not available (module social_engines.{module_name})"
-        except Exception as e:
-            return platform, [], f"{platform}: {str(e)[:100]}"
-
-    workers = min(max(len(platforms), 1), 4)
-    import concurrent.futures  # 惰性导入：py3.14 的它模块级导入 dataclasses→inspect（~5.5ms），social-sentiment 分支外每次 MCP 调用都白付
-    ex = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
-    futs = {ex.submit(_one, p): p for p in platforms}
-    try:
-        for fut in concurrent.futures.as_completed(futs, timeout=timeout):
-            platform, results, err = fut.result()
-            platform_results[platform] = results
-            if err:
-                errors.append(err)
-            elif results is not None:
-                engines_used.append(platform)
-    except concurrent.futures.TimeoutError:
-        for fut, platform in futs.items():
-            if not fut.done():
-                fut.cancel()
-                platform_results[platform] = []
-                errors.append(f"{platform}: timeout (>{timeout}s)")
-    finally:
-        # 不等待未完成平台，让卡住的线程自生自灭（各引擎内部有 10-15s 保底超时）
-        ex.shutdown(wait=False, cancel_futures=True)
-    return platform_results, engines_used, errors
+    """并行抓取多社交平台（MCP 热路径）。"""
+    return _warm_search_social_platforms(platforms, query, n, timeout=timeout, lazy_cached_fn=_lazy_cached)
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -512,64 +147,16 @@ def _clamp_int(value: Any, default: int, lo: int, hi: int) -> int:
 
 
 class _InvalidParam(Exception):
-    """工具参数类型/取值非法：外层转 -32602（区别于引擎内部故障的 -32000）。
-
-    刻意不继承 ValueError：工具分支里的 `except ValueError`（接 URL/解析
-    错误的）不能把参数错误半路截胡——实测 argo_article 就这样把它包成
-    了无错误码的裸 error。参数错误要活着到达 execute_tool 的专属 handler。
-    """
+    """工具参数类型/取值非法：外层转 -32602（区别于引擎内部故障的 -32000）。"""
 
 
 def _int_param(arguments: dict[str, Any], key: str, default: int) -> int:
-    """数值参数严格校验：非整数显式 -32602，不静默回默认。
-
-    此前裸 `int(arguments.get("timeout", N))` 遇 "10s" 直接 ValueError，
-    被兜底 except 包成 -32000 内部错误——调用方看不出是参数给错了。
-    与 _required 缺参 -32602 同一契约：参数级错误走参数级错误码。
-    """
+    """数值参数严格校验：非整数显式 -32602，不静默回默认。"""
     value = arguments.get(key, default)
     try:
         return int(value)
     except (TypeError, ValueError):
         raise _InvalidParam(f"{key} 必须是整数，收到 {value!r}")
-
-
-def _cap_extract_output(output: dict[str, Any]) -> dict[str, Any]:
-    """argo_fetch mode=extract 的输出上限（防大页表格撑爆上下文）。
-
-    结构级裁剪保持 JSON 可解析：表格数量/单元格、metadata 值、jsonld
-    条目体积分别设上限，超限截断并打标记。
-    """
-    tables = output.get("tables")
-    if isinstance(tables, list):
-        if len(tables) > 12:
-            output["tables"] = tables[:12]
-            output["tables_truncated"] = True
-        for t in output["tables"]:
-            if isinstance(t, list):
-                for i, row in enumerate(t):
-                    if isinstance(row, list):
-                        t[i] = [str(c)[:300] if c is not None else "" for c in row]
-    meta = output.get("metadata")
-    if isinstance(meta, dict):
-        output["metadata"] = {k: str(v)[:500] for k, v in meta.items()}
-    jsonld = output.get("jsonld")
-    if isinstance(jsonld, list):
-        capped = []
-        for entry in jsonld:
-            try:
-                text = json.dumps(entry, ensure_ascii=False)
-            except (TypeError, ValueError):
-                continue
-            if len(text) > 4000:
-                capped.append({"_clipped": True, "preview": text[:4000]})
-            else:
-                capped.append(entry)
-        if len(capped) > 8:
-            capped = capped[:8]
-            output["jsonld_truncated"] = True
-        output["jsonld"] = capped
-    return output
 
 
 def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -582,7 +169,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """
     pretty = _env_bool("ARGO_MCP_PRETTY", bool(arguments.get("pretty", False)))
     try:
-        # 必填参数验证：缺参数时返回清晰错误，而非 KeyError → -32000
         _required = {
             "argo_search": ("query",),
             "argo_research": ("query",),
@@ -607,23 +193,20 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                                  }})}],
                     "isError": True,
                 }
+
         if name == "argo_search":
             search_mod = _lazy_cached("search")
-            # MCP 默认 envelope=False：减 candidates/coverage 构造开销；
-            # 紧凑序列化仍由 _compact_search_result 负责
             result = search_mod.super_search(
                 query=arguments["query"],
                 engine=arguments.get("engine", "auto"),
                 n=arguments.get("max_results", 5),
-                skip_cache=_env_bool("ARGO_MCP_SKIP_CACHE", _env_bool("ARGO_NO_CACHE", False) or bool(arguments.get("skip_cache", False))),  # ARGO_NO_CACHE（CLI 等价 --no-cache）也覆盖 MCP：任一为真即跳过，显式传参优先
+                skip_cache=_env_bool("ARGO_MCP_SKIP_CACHE", _env_bool("ARGO_NO_CACHE", False) or bool(arguments.get("skip_cache", False))),
                 timeout=_env_int("ARGO_MCP_TIMEOUT", _int_param(arguments, "timeout", 10)),
                 depth=arguments.get("depth", "fast"),
                 mode=arguments.get("mode", "auto"),
                 since=arguments.get("since"),
                 until=arguments.get("until"),
                 sort=arguments.get("sort", "relevance"),
-                # 缺省 True（2026-09-29 扶正）：本机文件命中默认并入对话搜索；
-                # 显式 false 可关。安全垫：宽根守卫 + 3s 子进程超时 + 并行提交。
                 include_local=bool(arguments.get("include_local", True)),
                 include_domains=arguments.get("include_domains") or None,
                 exclude_domains=arguments.get("exclude_domains") or None,
@@ -631,7 +214,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 envelope=False,
                 context="search",
             )
-            # 默认精简；pretty 且 summary=false 时返回接近全量
             summary = arguments.get("summary", True)
             if summary or not pretty:
                 payload = _compact_search_result(result, summary=bool(summary))
@@ -640,142 +222,22 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return _ok(payload, pretty=pretty)
 
         elif name == "argo_local_search":
-            # 本地文件搜索：封装 local-seek 的 seek.py（搜本机文件/记录，非联网）
-            query = str(arguments.get("query", "")).strip()
-
-            def _local_err(msg: str) -> dict:
-                return _ok({"query": query, "engine": "local_files", "count": 0, "results": [],
-                            "errors": [msg]}, pretty=pretty)
-
-            if not query:
-                return _local_err("query 不能为空")
-            path = str(arguments.get("path", "~"))
-            max_results = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
-            exact = bool(arguments.get("exact", False))
-            # 宽泛根守卫（与 CLI --include-local 同判据）：缺省 ~ 会对整个 home
-            # 跑 rg，实测 30 s 后报错（CLI 22.6 s 事故同形态）。判据唯一来源是
-            # local_seek._is_broad_local_root——它 2026-09-28 从 search.py 拆出后
-            # 这里还在调旧家，AttributeError 被 fail-open 吞掉，守卫整条失效
-            # （实测 home 路径一路跑到 15s 子进程超时）。
-            try:
-                if _lazy_cached("local_seek")._is_broad_local_root(os.path.expanduser(path)):
-                    return _local_err("路径过宽（home / 根目录），扫全盘既慢又失准，已拒绝；请传具体目录")
-            except Exception as e:
-                # 守卫不可用 fail-open：按原行为继续，但必须留痕——静默跳过守卫
-                # 与「查询确实无命中」在外部看起来一样，排查时无从下手。
-                sys.stderr.write(
-                    f"[argo-mcp] local_search 宽泛根守卫不可用（{type(e).__name__}），fail-open\n")
-            # H2（2026-09-29）：进程内直调 seek.run_query——常驻 MCP server 免
-            # 每次调用的解释器启动（实测省 30-110ms/次）；time_budget 沿用
-            # 显式调用上界 15s（下传给内部 rg/fd 子进程）。任何失败回退下方
-            # 子进程路径：能力不回退，只是慢。
-            payload = None
-            try:
-                from local_seek import seek_query_payload
-                payload = seek_query_payload(query, os.path.expanduser(path),
-                                             max_results, exact=exact, time_budget=15)
-            except Exception:
-                payload = None
-            if payload is None:
-                seek_py = _seek_py()
-                cmd = [sys.executable, seek_py, query, "--path", path, "--json",
-                       "--max", str(max_results)]
-                if exact:
-                    cmd.append("--exact")
-                try:
-                    # 子进程是我们的 seek_py：显式 UTF-8 双向（Windows 默认 GBK，中文
-                    # query 的 JSON 输出会 mojibake/解码崩）；超时 15 s 是显式调用上界
-                    proc = subprocess.run(
-                        cmd, capture_output=True, text=True,
-                        encoding="utf-8", errors="replace", timeout=15,
-                        env={**os.environ, "PYTHONUTF8": "1"})
-                except Exception as e:
-                    return _local_err(f"本地搜索执行失败: {e}")
-                if proc.returncode != 0:
-                    msg = (proc.stdout or proc.stderr or "").strip() or "本地搜索无结果"
-                    return _local_err(msg)
-                try:
-                    payload = json.loads(proc.stdout)
-                except Exception:
-                    return _local_err("本地搜索输出解析失败")
-            mode = payload.get("mode", "fast")
-            score = 0.9 if mode == "fast" else 0.7  # 精确命中 0.9，扩展召回 0.7
-            results = []
-            for r in payload.get("results") or []:
-                abspath = os.path.abspath(r.get("path", ""))
-                line = r.get("line") or 0
-                results.append({
-                    "title": abspath,
-                    "url": f"file://{abspath}" + (f"#L{line}" if line else ""),
-                    "snippet": _trim_snippet(r.get("snippet"), 120),
-                    "source": "local_files", "score": score,
-                })
-            return _ok({
-                "query": query, "engine": "local_files", "engines_used": ["local_files"],
-                "count": len(results), "elapsed_ms": payload.get("elapsed_ms"),
-                "cached": False, "mode": mode, "depth": None,
-                "results": results, "errors": [],
-            }, pretty=pretty)
+            return handle_local_search(
+                arguments, pretty=pretty, ok_fn=_ok,
+                clamp_int_fn=_clamp_int, lazy_cached_fn=_lazy_cached,
+            )
 
         elif name == "argo_local_read":
-            # 白名单本地文本预览（非联网）：分析本地数据/研究成果用；没配置就不放行
-            raw_path = str(arguments.get("path", "")).strip()
-            max_chars = max(200, min(_int_param(arguments, "max_chars", 4000), 20000))
-            line_start = arguments.get("line_start")
-            line_end = arguments.get("line_end")
-            if not raw_path:
-                return _ok({"path": "", "content": "", "errors": ["path 不能为空"]}, pretty=pretty)
-            try:
-                content, meta = _local_read_preview(
-                    raw_path, max_chars=max_chars,
-                    line_start=line_start, line_end=line_end,
-                )
-            except Exception as e:
-                return _ok({"path": raw_path, "content": "",
-                            "errors": [str(e)]}, pretty=pretty)
-            return _ok({
-                "path": meta["path"],
-                "content": content,
-                "chars": meta["chars"],
-                "lines": meta["lines"],
-                "total_lines": meta["total_lines"],
-                "is_preview": meta["is_preview"],
-                "errors": [],
-            }, pretty=pretty)
+            return handle_local_read(
+                arguments, pretty=pretty, ok_fn=_ok,
+                int_param_fn=_int_param,
+            )
 
         elif name == "argo_recompute":
-            # 可复算执行器（默认拒绝）：受限子进程运行计算脚本，验证数值。
-            # 默认拒绝（allow_exec=false / ARGO_ALLOW_RECOMPUTE 未设），返回 skipped_reason。
-            script = str(arguments.get("script", "")).strip()
-            inputs_raw = arguments.get("file_inputs")
-            inputs = []
-            if isinstance(inputs_raw, str) and inputs_raw.strip():
-                try:
-                    inputs = json.loads(inputs_raw)
-                except ValueError:
-                    inputs = []
-            elif isinstance(inputs_raw, list):
-                inputs = inputs_raw
-            elif inputs_raw:
-                try:
-                    inputs = json.loads(inputs_raw)
-                except (ValueError, TypeError):
-                    inputs = []
-            timeout_s = _clamp_int(arguments.get("timeout_s", 30), 30, 1, 120)
-            max_mem_mb = _clamp_int(arguments.get("max_mem_mb", 512), 512, 64, 4096)
-            allow_exec = bool(arguments.get("allow_exec", False))
-            if not script:
-                return _ok({"ok": False, "skipped_reason": "script 为空"}, pretty=pretty)
-            try:
-                from recompute import run_recompute
-                result = run_recompute(
-                    script, inputs or None,
-                    timeout_s=timeout_s, max_mem_mb=max_mem_mb,
-                    allow_exec=allow_exec,
-                )
-            except Exception as e:
-                result = {"ok": False, "skipped_reason": f"执行器异常: {e}"}
-            return _ok(result, pretty=pretty)
+            return handle_recompute(
+                arguments, pretty=pretty, ok_fn=_ok,
+                clamp_int_fn=_clamp_int,
+            )
 
         elif name == "argo_research":
             research_mod = _lazy_cached("research")
@@ -826,11 +288,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
             platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
             query = arguments["query"]
-            # 边界夹取与 schema（1..20）同计算方式：客户端越界值不放大平台请求
             n = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
             platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
             if arguments.get("mode", "text") == "sentiment":
-                # 舆情聚合逻辑下沉在 research.aggregate_social_sentiment
                 research_mod = _lazy_cached("research")
                 output = research_mod.aggregate_social_sentiment(
                     query=query, platforms=platforms, platform_results=platform_results,
@@ -879,7 +339,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         elif name == "argo_crawl":
             crawl_mod = _lazy_cached("crawl")
             strategy = arguments.get("strategy", "bfs")
-            # 夹取与 schema 同计算方式（max_pages 1..50，max_depth 1..5）
             max_pages = _clamp_int(arguments.get("max_pages", 10), 10, 1, 50)
             max_depth = _clamp_int(arguments.get("max_depth", 2), 2, 1, 5)
             timeout = _env_int("ARGO_MCP_TIMEOUT_CRAWL", _int_param(arguments, "timeout", 8))
@@ -891,12 +350,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         elif name == "argo_fetch":
             if arguments.get("mode", "text") == "extract":
-                # 结构化提取（原 argo_extract）：raw fetch + tables/meta/jsonld
                 extract_mod = _lazy_cached("extract")
                 fetch_mod = _lazy_cached("fetch_v3")
                 emode = arguments.get("extract_mode", "all")
-                # 与 schema 同计算方式（默认 8000，500..50000）；禁止硬编码 50000
-                # 把调用方 bound 顶掉——那是「上限字段被内部魔法数覆盖」一类 bug。
                 max_chars = _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000)
                 fetch_result = fetch_mod.fetch_page_v3(
                     arguments["url"], max_chars=max_chars,
@@ -920,8 +376,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
             focus_query = arguments.get("focus")
             fetch_v3_mod = _lazy_cached("fetch_v3")
-            # 聚焦时按放大额度抓取，否则 focus 只能在文档头部选段；
-            # 额度契约与 CLI 同源（focus_extract.focus_fetch_chars）。
             result = fetch_v3_mod.fetch_v3(
                 url=arguments["url"],
                 max_chars=fetch_v3_mod._focus_fetch_chars(
@@ -931,22 +385,16 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 force_browser=arguments.get("use_browser", False),
             )
             if focus_query and result.get("success"):
-                # 裁剪契约唯一来源在 focus_extract.apply_focus（CLI 的
-                # `argo fetch --focus` 走同一函数），此处不再自写一套：
-                # 两处各写一份的代价是语义静默分叉（CLI 侧曾整个漏掉该参数）。
                 focus_mod = _lazy_cached("focus_extract")
                 focus_mod.apply_focus(result, focus_query,
                                       max_chars=_int_param(arguments, "max_chars", 8000))
                 if not result.get("focus_applied"):
-                    # 正文过短、BM25 无从裁剪：如实标注，不谎报已省 token
                     result["focus_note"] = "内容未达聚焦阈值，返回全文"
-            # 默认截断 content 以控 token
             if arguments.get("summary", True) and isinstance(result.get("content"), str):
                 max_c = _int_param(arguments, "max_chars", 8000)
                 if len(result["content"]) > max_c:
                     result["content"] = result["content"][:max_c]
                     result["truncated"] = True
-            # 双保险：fetch_v3 公共返回已剥 html；这里再剥一次，防其他入口漏
             if isinstance(result, dict):
                 result.pop("html", None)
                 if not arguments.get("include_links", False):
@@ -955,14 +403,12 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
         elif name == "argo_screenshot":
             import time as _time
-            import tempfile  # 惰性导入：仅 screenshot 分支需要，否则每次 MCP 调用白付 tempfile→shutil→random ~6ms
+            import tempfile
             output = arguments.get("output_path") or os.path.join(
                 tempfile.gettempdir(), f"argo_screenshot_{int(_time.time())}.png")
             full_page = arguments.get("full_page", False)
             try:
                 cdp_mod = _lazy_cached("chrome_cdp")
-                # with 上下文：无论 navigate/screenshot 成功或抛异常，
-                # __exit__ 都会 stop() 回收 Chrome 进程与临时目录
                 with cdp_mod.ChromeCDP(auto_start=True) as cdp:
                     cdp.navigate(arguments["url"])
                     path = cdp.screenshot(output, full_page=full_page)
@@ -996,7 +442,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                                      _int_param(arguments, "timeout", 30)),
                 )
             except ValueError as e:
-                # URL 不合规格式：可行动错误（仅支持 mp.weixin.qq.com）
                 return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
                         "isError": True}
             if out.get("ok"):
@@ -1012,8 +457,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 out = job_mod.search(
                     arguments["query"],
                     city=arguments.get("city", ""),
-                    # 夹取与 schema 同计算方式（num 1..20，fetch_detail 0..10）：
-                    # 六平台并发 × 越界条数会同时放大请求量与返回体积
                     num=_clamp_int(arguments.get("num", 5), 5, 1, 20),
                     platforms=arguments.get("platforms", ""),
                     loose=bool(arguments.get("loose", False)),
@@ -1024,18 +467,12 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                         "isError": True}
             return _ok(out, pretty=pretty)
 
-        # 2026-09-26 补齐 CLI 面的五工具（extract/preflight/answer/watch/cite）
-        # 独立成模块：本文件涨破 1000 行硬上限，门禁要求拆分（route_* 先例）
         surface = _lazy_cached("mcp_handlers_surface")
         surface_result = surface.handle_surface_tool(name, arguments, pretty=pretty)
         if surface_result is not None:
-            # 约定：surface 分支已返回完整 result（_ok 产物或 isError 形态），
-            # 不再二次包装
             return surface_result
 
         else:
-            # 未知工具走 isError 形态（与其他工具级错误同契约）：裸 {"error":...}
-            # 会被 transport 包成成功 result，客户端无法区分错误与正常输出
             return {
                 "content": [{"type": "text",
                              "text": _dumps({"error": {"code": -32601,
@@ -1044,8 +481,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             }
 
     except _InvalidParam as e:
-        # 参数级错误走 -32602：与 _required 缺参同契约，调用方能分辨
-        # 「参数给错了」和「引擎内部坏了」（后者才是 -32000）
         return {
             "content": [{"type": "text",
                          "text": _dumps({"error": {"code": -32602,
@@ -1057,4 +492,3 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             "content": [{"type": "text", "text": _dumps({"error": {"code": -32000, "message": f"{type(e).__name__}: {e}"}})}],
             "isError": True
         }
-
