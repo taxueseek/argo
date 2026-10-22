@@ -234,11 +234,20 @@ def drop_shell_urls(results: list) -> list:
 # 识别并拦截低质搬运镜像、机翻爬虫站及流水线批量 AI 假稿。
 
 _FARM_CONNECTORS = ("首先", "其次", "然后", "接下来", "最后", "综上所述")
-_FARM_AI_PHRASES = ("业内人士表示", "专家分析", "消费者认为", "看完这篇你就懂了", "建议收藏", "综上所述")
+_FARM_AI_PHRASES = ("业内人士表示", "专家分析", "消费者认为", "看完这篇你就懂了",
+                    "看完你就懂了", "建议收藏", "综上所述")
 
 
 def is_content_farm(url: str = "", title: str = "", snippet: str = "") -> bool:
-    """判定某条目是否属于内容农场 / 机翻爬虫 / 批量流水线 AI 废话。"""
+    """判定某条目是否属于内容农场 / 机翻爬虫 / 批量流水线 AI 废话。
+
+    2026-10-23 接线前用 5 条正例 + 4 条边界标定，修正两处：
+      - 序数连接词单独出现**不判农场**：正常安装指南同样含「首先/其次/然后/
+        接下来/最后」（实测 5 个），旧判据 `hit_conn >= 4` 把它误杀了。现在
+        要求同时出现 ≥1 个 AI 套话（流水线稿的伴生特征）。
+      - 「自费 N 元实测」不再要求标题带「最新」：实测真实的虚假实测标题是
+        「自费5000元实测10款耳机」，不带「最新」，旧判据漏召。
+    """
     if not guard_enabled():
         return False
     cfg = _load_cn_source_types()
@@ -259,7 +268,7 @@ def is_content_farm(url: str = "", title: str = "", snippet: str = "") -> bool:
     # 标题模式：虚假实测 / 利益诱饵 + 年份刷新
     t = (title or "").strip()
     if t:
-        if re.search(r"自费\s*\d+\s*元实测.*最新", t):
+        if re.search(r"自费\s*\d+\s*元?实测", t):
             return True
         if re.search(r"\d{4}\s*最新推荐\s*\d+\s*款.*看完这篇你就懂了", t):
             return True
@@ -269,7 +278,7 @@ def is_content_farm(url: str = "", title: str = "", snippet: str = "") -> bool:
     if body:
         hit_conn = sum(1 for w in _FARM_CONNECTORS if w in body)
         hit_ai = sum(1 for w in _FARM_AI_PHRASES if w in body)
-        if hit_conn >= 4:
+        if hit_conn >= 4 and hit_ai >= 1:
             return True
         if hit_ai >= 2 and hit_conn >= 1:
             return True

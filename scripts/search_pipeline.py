@@ -388,8 +388,8 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _funnel_deduped = len(merged)
     if merged:
         try:
-            from serp_guard import is_serp_or_jump_url as _is_serp  # 轻依赖，锁见 test_hotpath_import_lint.py
-            merged = [r for r in merged if not _is_serp(r.get("url", ""))]
+            from serp_guard import is_unusable_url as _is_unusable  # SERP + 内容农场，标定见 test_content_farm_guard.py
+            merged = [r for r in merged if not _is_unusable(r.get("url", ""), r.get("title", ""), r.get("snippet", ""))]
         except ImportError:
             pass  # serp_guard 不可用时跳过（本地五维 rerank 已对 SERP 降权）
 
