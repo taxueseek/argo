@@ -32,7 +32,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "check": "node --check dsh/index.js && node --check dsh/client.js",
+    "check": "node --check dsh/index.js && node --check dsh/runner.js && node --check dsh/wide-research.js && node --check dsh/diagnostics.js && node --check dsh/client.js",
     "test": "node --test test/*.test.js"
   }
 }
