@@ -122,7 +122,7 @@ class BM25:
 
 
 def _phrase_proximity_bonus(query: str, title: str, snippet: str) -> float:
-    """词邻近度与短语连续匹配加成（Min-Span Proximity）。
+    """词邻近度与短语连续匹配加成（归一化为 0.0~1.0）。
 
     当完整查询短语在标题或摘要逐字紧密出现时给予增益，提升复合词精准命中率。
     """
@@ -131,12 +131,11 @@ def _phrase_proximity_bonus(query: str, title: str, snippet: str) -> float:
         return 0.0
     t_low = (title or "").lower()
     s_low = (snippet or "").lower()
-    bonus = 0.0
     if q_low in t_low:
-        bonus += 0.15  # 标题完整覆盖查询短语
-    elif q_low in s_low:
-        bonus += 0.08  # 摘要完整覆盖查询短语
-    return bonus
+        return 1.0  # 标题完整覆盖查询短语
+    if q_low in s_low:
+        return 0.5  # 摘要完整覆盖查询短语
+    return 0.0
 
 
 
@@ -176,9 +175,9 @@ def rerank(by_engine: dict[str, list[dict[str, Any]]], query: str,
     for (eng, idx, r), bm in zip(flat, raw):
         bm25_norm = (bm / max_raw) if max_raw > 0 else 0.0
         prior_norm = _position_prior(idx) / _PRIOR_BASE
-        prox_bonus = _phrase_proximity_bonus(query, r.get("title", ""), r.get("snippet", ""))
-        final_score = round(min(w_bm25 * bm25_norm + (1.0 - w_bm25) * prior_norm + prox_bonus, 1.0), 3)
-        r["score"] = final_score
+        prox_val = _phrase_proximity_bonus(query, r.get("title", ""), r.get("snippet", ""))
+        rel_score = min(bm25_norm * 0.80 + prox_val * 0.20, 1.0) if bm25_norm > 0 else 0.0
+        r["score"] = round(w_bm25 * rel_score + (1.0 - w_bm25) * prior_norm, 3)
 
     for eng in by_engine:
         by_engine[eng].sort(
