@@ -121,14 +121,7 @@ def handle_local_search(
         payload = None
 
     if payload is None:
-        # 兼容测试 patch mcp_handlers._seek_py
-        seek_py_resolver = _seek_py
-        try:
-            import mcp_handlers
-            seek_py_resolver = getattr(mcp_handlers, "_seek_py", _seek_py)
-        except Exception:
-            pass
-        seek_py = seek_py_resolver()
+        seek_py = _seek_py()
 
         cmd = [sys.executable, seek_py, query, "--path", path, "--json",
                "--max", str(max_results)]

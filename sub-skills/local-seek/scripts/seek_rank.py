@@ -82,6 +82,7 @@ _TOPIC_PRIOR_WEIGHT = 1.2
 # 量级与一个中频词元命中相当，够翻二元组的歧义、翻不了多词全覆盖行。
 _PHRASE_BONUS = 3.0
 _PHRASE_BONUS_CAP = 6.0
+_NAME_PHRASE_BONUS = 4.0  # 文件名直接命中查询短语时的定位加成
 
 
 def _split_camel(run: str) -> list[str]:
@@ -178,9 +179,12 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
                 total += w * qtf * (sat + _DELTA) * idf
         total += _TOPIC_PRIOR_WEIGHT * math.log1p(file_hits[rows[i][0]])
         if phrases:
-            low = (rows[i][2] or "").lower()
-            hits = sum(1 for ph in phrases if ph in low)
-            total += min(hits, 2) * _PHRASE_BONUS
+            low_line = (rows[i][2] or "").lower()
+            fp_low = (rows[i][0] or "").lower()
+            name_low = fp_low.rpartition("/")[2] or fp_low
+            name_hits = sum(1 for ph in phrases if ph in name_low)
+            line_hits = sum(1 for ph in phrases if ph in low_line)
+            total += min(name_hits, 2) * _NAME_PHRASE_BONUS + min(line_hits, 2) * _PHRASE_BONUS
         if boost_fn is not None:
             try:
                 total += boost_fn(rows[i][0])

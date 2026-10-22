@@ -43,6 +43,7 @@ _CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 
 _K1 = 1.5
 _B = 0.75
+_DELTA = 0.5          # BM25+ 下界 (Lv & Zhai 2011)：长文档命中词保底，消除过惩罚
 # 混合权重：BM25 侧。位次先验占 1 - _W_BM25。
 _W_BM25 = 0.6
 # 旧位次衰减口径（max(0.7 - idx*0.05, 0.1)）——先验的归一化基准。
@@ -79,9 +80,10 @@ class BM25:
     引擎的 5 条结果上稳定得多——「含查询词的文档有多罕见」是跨源问题。
     """
 
-    def __init__(self, docs: list[list[str]], k1: float = _K1, b: float = _B):
+    def __init__(self, docs: list[list[str]], k1: float = _K1, b: float = _B, delta: float = _DELTA):
         self.k1 = k1
         self.b = b
+        self.delta = delta
         self.n_docs = len(docs)
         self.doc_len = [len(d) for d in docs]
         self.avgdl = (sum(self.doc_len) / self.n_docs) if self.n_docs else 0.0
@@ -113,8 +115,29 @@ class BM25:
             f = self.tf.get(t, {}).get(doc_idx, 0)
             if not f:
                 continue
-            total += self.idf(t) * (f * (self.k1 + 1.0)) / (f + denom_norm)
+            sat = (f * (self.k1 + 1.0)) / (f + denom_norm)
+            # BM25+ 饱和项下界增益（Lv & Zhai 2011）
+            total += self.idf(t) * (sat + self.delta)
         return total
+
+
+def _phrase_proximity_bonus(query: str, title: str, snippet: str) -> float:
+    """词邻近度与短语连续匹配加成（Min-Span Proximity）。
+
+    当完整查询短语在标题或摘要逐字紧密出现时给予增益，提升复合词精准命中率。
+    """
+    q_low = (query or "").lower().strip()
+    if not q_low or len(q_low) < 2:
+        return 0.0
+    t_low = (title or "").lower()
+    s_low = (snippet or "").lower()
+    bonus = 0.0
+    if q_low in t_low:
+        bonus += 0.15  # 标题完整覆盖查询短语
+    elif q_low in s_low:
+        bonus += 0.08  # 摘要完整覆盖查询短语
+    return bonus
+
 
 
 def _doc_text(r: dict[str, Any]) -> str:
@@ -153,7 +176,9 @@ def rerank(by_engine: dict[str, list[dict[str, Any]]], query: str,
     for (eng, idx, r), bm in zip(flat, raw):
         bm25_norm = (bm / max_raw) if max_raw > 0 else 0.0
         prior_norm = _position_prior(idx) / _PRIOR_BASE
-        r["score"] = round(w_bm25 * bm25_norm + (1.0 - w_bm25) * prior_norm, 3)
+        prox_bonus = _phrase_proximity_bonus(query, r.get("title", ""), r.get("snippet", ""))
+        final_score = round(min(w_bm25 * bm25_norm + (1.0 - w_bm25) * prior_norm + prox_bonus, 1.0), 3)
+        r["score"] = final_score
 
     for eng in by_engine:
         by_engine[eng].sort(

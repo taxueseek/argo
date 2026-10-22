@@ -30,6 +30,7 @@ for p in (ROOT / "sub-skills" / "local-search", ROOT / "scripts"):
         sys.path.insert(0, str(p))
 
 import search_v3  # noqa: E402
+import cli_runner  # noqa: E402  （2026-10-22 拆出的执行器，_RETRY_FAST_S 的读取处）
 from local_health_check import _check_cli_engine  # noqa: E402
 
 
@@ -163,7 +164,10 @@ def test_slow_empty_result_not_retried(monkeypatch):
     import shutil as _shutil
     monkeypatch.setattr(_shutil, "which", lambda cmd: "/usr/bin/ddgs")
     monkeypatch.setattr(search_v3.subprocess, "run", fake_run)
-    monkeypatch.setattr(search_v3, "_RETRY_FAST_S", 0.0)
+    # 打桩在读取处：_RETRY_FAST_S 与重试循环随 71d009d 的模块解耦搬到了
+    # cli_runner，search_v3 只剩 import 转出（打在那里是空操作 → 阈值仍是
+    # 2.5s，立即返回的空结果被判为「快失败」而重试，断言 2 != 1）。
+    monkeypatch.setattr(cli_runner, "_RETRY_FAST_S", 0.0)
     results, err = search_v3._run_cli_engine(
         {"cli_command": "ddgs", "cli_args": ["text", "-q", "{query}"],
          "key": "k"}, "q", 5, 8)

@@ -165,7 +165,9 @@ class TestArgoLocalSearchScopeGuard(unittest.TestCase):
         import os
         import tempfile
         narrow = tempfile.mkdtemp(prefix="argo-narrow-")
-        with patch("mcp_handlers._seek_py", return_value="/nonexistent-seek.py"):
+        # 打桩打在读取处：`_seek_py` 的实现随 ace93d6 的模块解耦搬到了
+        # mcp_local，mcp_handlers 只剩 import 转出（打在那里是空操作）。
+        with patch("mcp_local._seek_py", return_value="/nonexistent-seek.py"):
             result = mcp_handlers.execute_tool(
                 "argo_local_search", {"query": "x", "path": narrow})
         payload = _payload(result)

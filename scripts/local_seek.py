@@ -151,6 +151,37 @@ def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
         pass
 
 
+# 本地代码/工程/配置意图正则模式
+_LOCAL_INTENT_PATTERN = re.compile(
+    r"(?i)(?:\b(?:def|class|function|fn|import|export|const|var|struct|enum)\b|"
+    r"\.(?:py|js|ts|json|yaml|yml|md|rs|go|c|cpp|h|sh|sql)\b|"
+    r"(?:readme|config|package\.json|cargo\.toml|dockerfile|makefile)|"
+    r"(?:本工程|本项目|代码库|本地文件|架构实现|函数|方法|源码|接口定义))"
+)
+
+
+def has_local_code_intent(query: str) -> bool:
+    """是否包含本地工程/代码/配置检索意图。"""
+    if not query:
+        return False
+    return bool(_LOCAL_INTENT_PATTERN.search(query))
+
+
+def resolve_include_local(include_local: bool | None, mode: str, query: str = "") -> bool:
+    """include-local 三态解析：True/False 显式，None=自动。
+
+    自适应感知：除 fast/budget 模式外，当查询具有明显的本地代码/文件特征
+    且处于非宽泛根项目目录时，自动开启本地命中。
+    """
+    if include_local is not None:
+        return bool(include_local)
+    if mode in ("fast", "budget"):
+        return True
+    if has_local_code_intent(query) and _local_seek_dir() is not None:
+        return True
+    return False
+
+
 def _is_broad_local_root(path: str) -> bool:
     """path 是否是「不能当作本地检索范围」的宽泛根。
 
