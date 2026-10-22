@@ -46,6 +46,26 @@ window.__ModuleLoader__.load({
         tabKeys: '密钥',
         tabResearch: '研究',
         tabAdvanced: '高级',
+        tabDashboard: '看板',
+        dashboardTitle: '运行监控与健康态看板',
+        dashboardHint: '实时监控常驻 MCP 连接池、上游搜索源拓扑与额度状态，提供一键预设与快速调优。',
+        poolTitle: '常驻 MCP 连接池监控',
+        poolStatusHealthy: '就绪（正常）',
+        presetTitle: '工作流快速预设',
+        presetHint: '一键对齐常用工作场景的并发与引擎策略，免去逐项手动调优。',
+        presetFast: '极速日常',
+        presetFastDesc: '免密免费源优先，关闭 TF-IDF 重排与数值交叉比对，超低延迟',
+        presetStandard: '平衡生产（推荐）',
+        presetStandardDesc: '开启 TF-IDF 重排、数值交叉核验、主流付费源，标准超时',
+        presetDeep: '深度调研',
+        presetDeepDesc: '激活更多取证工具、对冲自适应宽限、语义证据层、更大并发',
+        presetApplied: '已应用预设：',
+        matrixTitle: '核心引擎拓扑与覆盖全景',
+        matrixHint: '当前可用引擎的接入层级与角色分工。带免密标识的引擎无需密钥即可直接使用。',
+        matrixConfigured: '密钥已就绪',
+        matrixKeyless: '免密层可用',
+        matrixPending: '待配密钥',
+        searchFilterPlaceholder: '输入关键词快速筛选...',
         summary: 'Argo · web_search {search} · web_fetch {fetch} · 原生工具 {tools} 个 · 研究 {workers}/{max}',
         accessTitle: '接入方式',
         searchSeam: '宿主 web_search 走 argo',
@@ -141,6 +161,26 @@ window.__ModuleLoader__.load({
         tabKeys: 'Keys',
         tabResearch: 'Research',
         tabAdvanced: 'Advanced',
+        tabDashboard: 'Dashboard',
+        dashboardTitle: 'Runtime Monitoring & Health Dashboard',
+        dashboardHint: 'Real-time overview of the resident MCP connection pool, upstream search engine matrix, and quick workflow presets.',
+        poolTitle: 'Resident MCP Pool Monitoring',
+        poolStatusHealthy: 'Ready (Healthy)',
+        presetTitle: 'Workflow Presets',
+        presetHint: 'One-click presets tailored for common research and search workflows.',
+        presetFast: 'Fast & Free',
+        presetFastDesc: 'Keyless & free sources, disable rerank & crosscheck for lowest latency',
+        presetStandard: 'Balanced (Recommended)',
+        presetStandardDesc: 'TF-IDF rerank, numeric crosscheck, mainstream paid sources, standard timeouts',
+        presetDeep: 'Deep Research',
+        presetDeepDesc: 'Full forensic tools, adaptive hedge grace, semantic evidence layer, max concurrency',
+        presetApplied: 'Preset applied:',
+        matrixTitle: 'Core Engine Topology & Coverage',
+        matrixHint: 'Access tiers and roles of available engines. Keyless engines work without an API key.',
+        matrixConfigured: 'Key Ready',
+        matrixKeyless: 'Keyless Ready',
+        matrixPending: 'Key Required',
+        searchFilterPlaceholder: 'Filter by keyword or engine...',
         summary: 'Argo · web_search {search} · web_fetch {fetch} · {tools} native tools · research {workers}/{max}',
         accessTitle: 'Access',
         searchSeam: 'Route host web_search to argo',
@@ -264,6 +304,18 @@ window.__ModuleLoader__.load({
       { ref: 'WOLFRAM_APPID', zh: 'Wolfram Alpha', en: 'Wolfram Alpha' },
       { ref: 'QWEATHER_KEY', zh: '和风天气', en: 'QWeather' },
       { ref: 'UNPAYWALL_EMAIL', zh: 'Unpaywall 邮箱（非密钥）', en: 'Unpaywall email (not secret)' },
+    ];
+
+    const CORE_ENGINES = [
+      { id: 'deepseek', nameZh: 'DeepSeek 搜索', nameEn: 'DeepSeek Search', roleZh: '通用搜索 / 官方对齐', roleEn: 'General / Official Seam', ref: 'DEEPSEEK_API_KEY', keyless: false },
+      { id: 'yuanbao', nameZh: '腾讯元宝', nameEn: 'Tencent Yuanbao', roleZh: '中文对冲主力', roleEn: 'Chinese General Primary', ref: 'ARGO_YUANBAO_API_KEY', keyless: false },
+      { id: 'tavily', nameZh: 'Tavily Search', nameEn: 'Tavily Search', roleZh: 'AI 知识增强检索', roleEn: 'AI Knowledge Retrieval', ref: 'TAVILY_API_KEY', keyless: false },
+      { id: 'exa', nameZh: 'Exa Neural', nameEn: 'Exa Neural', roleZh: '神经语义精准搜索', roleEn: 'Neural Semantic Search', ref: 'EXA_API_KEY', keyless: false },
+      { id: 'brave', nameZh: 'Brave Search', nameEn: 'Brave Search', roleZh: '独立全球 Web 索引', roleEn: 'Independent Global Index', ref: 'BRAVE_API_KEY', keyless: true },
+      { id: 'bocha', nameZh: '博查 Bocha', nameEn: 'Bocha', roleZh: '垂直多源聚合', roleEn: 'Vertical Multi-source', ref: 'BOCHA_API_KEY', keyless: false },
+      { id: 'jina', nameZh: 'Jina Reader', nameEn: 'Jina Reader', roleZh: '正文高保真提取', roleEn: 'Article Text Extraction', ref: '', keyless: true },
+      { id: 'tinyfish', nameZh: 'TinyFish', nameEn: 'TinyFish', roleZh: '无头渲染抓取兜底', roleEn: 'Headless Render Fallback', ref: 'TINYFISH_API_KEY', keyless: true },
+      { id: 'zhihu', nameZh: '知乎 Zhihu', nameEn: 'Zhihu', roleZh: '中文专业问答舆情', roleEn: 'Professional Q&A / Social', ref: 'ZHIHU_ACCESS_SECRET', keyless: true },
     ];
 
     // argo 引擎开关（argoEnv 的 KEY=VALUE 行）。与 index.js 的 ARGO_ENV_SPECS
@@ -404,6 +456,43 @@ window.__ModuleLoader__.load({
       actions: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
       switchWrap: { display: 'flex', alignItems: 'center', gap: 8 },
       divider: { height: '.5px', background: 'var(--dsw-alias-border-l2, #eee)', margin: '2px 0' },
+      metricGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 },
+      metricCard: {
+        display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
+        borderRadius: 10, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
+        background: 'var(--dsw-alias-bg-layer-2, #f8fafc)',
+      },
+      metricLabel: { fontSize: 11, fontWeight: 500, color: 'var(--dsw-alias-label-tertiary, #7b818b)', textTransform: 'uppercase', letterSpacing: '0.04em' },
+      metricValue: { fontSize: 18, fontWeight: 600, lineHeight: '22px', color: 'var(--dsw-alias-label-primary, #1f2328)' },
+      metricSub: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-secondary, #4b5563)' },
+      presetGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 },
+      presetCard: (active) => ({
+        display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
+        borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+        border: active ? '1.5px solid var(--dsw-alias-state-business-primary, #3b6ef6)' : '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
+        background: active ? 'var(--dsw-alias-bg-layer-1, #fff)' : 'var(--dsw-alias-settings-card-fill, #fff)',
+        boxShadow: active ? '0 1px 3px rgba(59, 110, 246, 0.12)' : 'none',
+      }),
+      matrixGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 },
+      matrixCard: {
+        display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px',
+        borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
+        background: 'var(--dsw-alias-bg-layer-1, #fff)',
+      },
+      badge: (color) => ({
+        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+        borderRadius: 999, fontSize: 10, fontWeight: 500, lineHeight: '14px',
+        background: color === 'green' ? 'rgba(46, 160, 67, 0.12)' : (color === 'blue' ? 'rgba(59, 110, 246, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
+        color: color === 'green' ? '#2da44e' : (color === 'blue' ? '#3b6ef6' : '#64748b'),
+        border: '.5px solid ' + (color === 'green' ? '#2da44e' : (color === 'blue' ? '#3b6ef6' : '#64748b')),
+      }),
+      filterInput: {
+        width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 12, lineHeight: '18px',
+        padding: '6px 10px', borderRadius: 8,
+        border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)',
+        background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit',
+        marginBottom: 8,
+      },
     };
 
     function asString(value, fallback) {
@@ -512,7 +601,7 @@ window.__ModuleLoader__.load({
       const initialLang = locale && locale.getSnapshot && locale.getSnapshot().active === 'en' ? 'en' : 'zh';
       const [lang, setLang] = useState(initialLang);
 
-      const [tab, setTab] = useState('access');
+      const [tab, setTab] = useState('dashboard');
       const [draft, setDraft] = useState(() => toDraft(value));
       const [busy, setBusy] = useState('');
       const [message, setMessage] = useState('');
@@ -526,6 +615,8 @@ window.__ModuleLoader__.load({
       // argoEnv 引擎开关：bool 类即时写；num/str/list 类走草稿 + 分组保存。
       const [envDraft, setEnvDraft] = useState({});
       const [envBusy, setEnvBusy] = useState('');
+      const [engineFilter, setEngineFilter] = useState('');
+      const [keyFilter, setKeyFilter] = useState('');
 
       const dirty = useRef(new Set());
       // 读-改-写共享配置字段（keyRefs / nativeTools / argoEnv）时读实时快照，
@@ -808,6 +899,54 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const applyPreset = async (type) => {
+        if (disabled) return;
+        setBusy('preset');
+        try {
+          const map = envMap();
+          const ops = [];
+          if (type === 'fast') {
+            map.ARGO_TFIDF_RERANK = '0';
+            map.ARGO_NUMBER_CROSSCHECK = '0';
+            map.ARGO_PAID_SEARCH = 'off';
+            map.ARGO_ADAPTIVE_GRACE = '1';
+            map.ARGO_SERIAL_STAGGER_S = '0.5';
+            ops.push({ op: 'set', path: ['searchTimeoutMs'], value: 15000 });
+            ops.push({ op: 'set', path: ['fetchTimeoutMs'], value: 15000 });
+          } else if (type === 'standard') {
+            map.ARGO_TFIDF_RERANK = '1';
+            map.ARGO_NUMBER_CROSSCHECK = '1';
+            map.ARGO_MINHASH_DEDUPE = '1';
+            map.ARGO_PAID_SEARCH = 'auto';
+            map.ARGO_ADAPTIVE_GRACE = '1';
+            map.ARGO_SERIAL_STAGGER_S = '0.8';
+            ops.push({ op: 'set', path: ['searchTimeoutMs'], value: 30000 });
+            ops.push({ op: 'set', path: ['fetchTimeoutMs'], value: 25000 });
+          } else if (type === 'deep') {
+            map.ARGO_TFIDF_RERANK = '1';
+            map.ARGO_NUMBER_CROSSCHECK = '1';
+            map.ARGO_MINHASH_DEDUPE = '1';
+            map.ARGO_SEMANTIC_EVIDENCE = '1';
+            map.ARGO_ADAPTIVE_GRACE = '1';
+            map.ARGO_PAID_SEARCH = 'auto';
+            ops.push({ op: 'set', path: ['searchTimeoutMs'], value: 45000 });
+            ops.push({ op: 'set', path: ['fetchTimeoutMs'], value: 35000 });
+            ops.push({ op: 'set', path: ['nativeTimeoutMs'], value: 60000 });
+          }
+          const envLines = Object.keys(map)
+            .filter((name) => ENV_NAMES.has(name))
+            .map((name) => `${name}=${map[name]}`);
+          ops.push({ op: 'set', path: ['argoEnv'], value: envLines });
+          const ok = await props.mutate(ops);
+          const presetName = type === 'fast' ? t('presetFast') : (type === 'standard' ? t('presetStandard') : t('presetDeep'));
+          report(ok, ok ? `${t('presetApplied')} ${presetName}` : t('refused'));
+        } catch (cause) {
+          report(false, cause && cause.message ? cause.message : String(cause));
+        } finally {
+          setBusy('');
+        }
+      };
+
       if (props.view === 'summary') {
         const summary = t('summary')
           .replace('{search}', value.searchProviderEnabled !== false ? t('on') : t('off'))
@@ -926,6 +1065,95 @@ window.__ModuleLoader__.load({
 
       const panel = [];
 
+      if (tab === 'dashboard') {
+        const configuredKeyCount = Object.values(credentials).filter((c) => c && c.configured).length;
+        const keylessEngineCount = CORE_ENGINES.filter((e) => e.keyless).length;
+        const seamSearchOn = value.searchProviderEnabled !== false;
+        const seamFetchOn = value.fetchProviderEnabled !== false;
+        const activeToolCount = asArray(value.nativeTools).length;
+        const poolConcurrency = asNumber(value.searchConcurrency, DEFAULTS.searchConcurrency);
+        const poolIdleMs = asNumber(value.searchIdleMs, DEFAULTS.searchIdleMs);
+
+        panel.push(h('div', { key: 'metrics', style: S.metricGrid }, [
+          h('div', { key: 'pool', style: S.metricCard }, [
+            h('span', { key: 'l', style: S.metricLabel }, t('poolTitle')),
+            h('div', { key: 'v', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
+              h('span', { key: 'dot', style: S.dot(true) }),
+              h('span', { key: 'val', style: S.metricValue }, `${poolConcurrency} 并发`),
+            ]),
+            h('span', { key: 's', style: S.metricSub }, `${t('poolStatusHealthy')} · 保活 ${poolIdleMs / 1000}s`),
+          ]),
+          h('div', { key: 'seam', style: S.metricCard }, [
+            h('span', { key: 'l', style: S.metricLabel }, t('accessTitle')),
+            h('span', { key: 'val', style: S.metricValue }, seamSearchOn && seamFetchOn ? '双路接管' : (seamSearchOn || seamFetchOn ? '单路接管' : '未接管')),
+            h('span', { key: 's', style: S.metricSub }, `Search: ${seamSearchOn ? 'ON' : 'OFF'} · Fetch: ${seamFetchOn ? 'ON' : 'OFF'}`),
+          ]),
+          h('div', { key: 'tools', style: S.metricCard }, [
+            h('span', { key: 'l', style: S.metricLabel }, t('toolsTitle')),
+            h('span', { key: 'val', style: S.metricValue }, `${activeToolCount} / ${TOOLS.length}`),
+            h('span', { key: 's', style: S.metricSub }, '已就绪原生 MCP 工具'),
+          ]),
+          h('div', { key: 'keys', style: S.metricCard }, [
+            h('span', { key: 'l', style: S.metricLabel }, t('keysTitle')),
+            h('span', { key: 'val', style: S.metricValue }, `${configuredKeyCount} 配置 · ${keylessEngineCount} 免密`),
+            h('span', { key: 's', style: S.metricSub }, '覆盖全局多源引擎'),
+          ]),
+        ]));
+
+        panel.push(h(Card, { key: 'presets', title: t('presetTitle'), hint: t('presetHint') }, [
+          h('div', { key: 'grid', style: S.presetGrid }, [
+            h('div', {
+              key: 'fast',
+              style: S.presetCard(false),
+              onClick: () => { void applyPreset('fast'); },
+            }, [
+              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
+                h('span', { key: 'title', style: S.label }, t('presetFast')),
+                h('span', { key: 'badge', style: S.badge('blue') }, '15s 超时'),
+              ]),
+              h('span', { key: 'd', style: S.sub }, t('presetFastDesc')),
+            ]),
+            h('div', {
+              key: 'standard',
+              style: S.presetCard(true),
+              onClick: () => { void applyPreset('standard'); },
+            }, [
+              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
+                h('span', { key: 'title', style: S.label }, t('presetStandard')),
+                h('span', { key: 'badge', style: S.badge('green') }, '标准生产'),
+              ]),
+              h('span', { key: 'd', style: S.sub }, t('presetStandardDesc')),
+            ]),
+            h('div', {
+              key: 'deep',
+              style: S.presetCard(false),
+              onClick: () => { void applyPreset('deep'); },
+            }, [
+              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
+                h('span', { key: 'title', style: S.label }, t('presetDeep')),
+                h('span', { key: 'badge', style: S.badge('blue') }, '深度核验'),
+              ]),
+              h('span', { key: 'd', style: S.sub }, t('presetDeepDesc')),
+            ]),
+          ]),
+        ]));
+
+        panel.push(h(Card, { key: 'matrix', title: t('matrixTitle'), hint: t('matrixHint') }, [
+          h('div', { key: 'grid', style: S.matrixGrid }, CORE_ENGINES.map((engine) => {
+            const hasKey = engine.ref && credentials[engine.ref] && credentials[engine.ref].configured;
+            const badgeType = hasKey ? 'green' : (engine.keyless ? 'blue' : 'gray');
+            const badgeText = hasKey ? t('matrixConfigured') : (engine.keyless ? t('matrixKeyless') : t('matrixPending'));
+            return h('div', { key: engine.id, style: S.matrixCard }, [
+              h('div', { key: 'h', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 } }, [
+                h('span', { key: 'n', style: S.label }, lang === 'en' ? engine.nameEn : engine.nameZh),
+                h('span', { key: 'b', style: S.badge(badgeType) }, badgeText),
+              ]),
+              h('span', { key: 'r', style: S.sub }, lang === 'en' ? engine.roleEn : engine.roleZh),
+            ]);
+          })),
+        ]));
+      }
+
       if (tab === 'access') {
         panel.push(h(Card, { key: 'seam', title: t('accessTitle') }, [
           h(Switch, {
@@ -1033,8 +1261,30 @@ window.__ModuleLoader__.load({
         const groups = ['cache', 'fetch', 'semantic', 'engines', 'net', 'local', 'paid', 'misc'];
         const groupTitle = (group) => t('group' + group.charAt(0).toUpperCase() + group.slice(1));
         panel.push(h('p', { key: 'hint', style: S.hint }, t('enginesHint')));
+        panel.push(h('input', {
+          key: 'filter',
+          type: 'text',
+          style: S.filterInput,
+          placeholder: t('searchFilterPlaceholder'),
+          value: engineFilter,
+          onChange: (event) => setEngineFilter(event.target.value),
+        }));
+        const query = engineFilter.trim().toLowerCase();
         for (const group of groups) {
-          const specs = ENGINE_TOGGLES.filter((spec) => spec.group === group);
+          let specs = ENGINE_TOGGLES.filter((spec) => spec.group === group);
+          if (query) {
+            const groupNameMatch = group.toLowerCase().includes(query) || groupTitle(group).toLowerCase().includes(query);
+            if (!groupNameMatch) {
+              specs = specs.filter((spec) => {
+                const name = spec.name.toLowerCase();
+                const zh = (spec.zh || '').toLowerCase();
+                const en = (spec.en || '').toLowerCase();
+                const hintZh = (spec.hintZh || '').toLowerCase();
+                const hintEn = (spec.hintEn || '').toLowerCase();
+                return name.includes(query) || zh.includes(query) || en.includes(query) || hintZh.includes(query) || hintEn.includes(query);
+              });
+            }
+          }
           if (specs.length === 0) continue;
           const bools = specs.filter((spec) => spec.kind === 'bool');
           const fields = specs.filter((spec) => spec.kind !== 'bool');
@@ -1104,10 +1354,22 @@ window.__ModuleLoader__.load({
       }
 
       if (tab === 'keys') {
+        const query = keyFilter.trim().toLowerCase();
+        const displayKeys = query
+          ? KEYS.filter((entry) => entry.ref.toLowerCase().includes(query) || (entry.zh && entry.zh.toLowerCase().includes(query)) || (entry.en && entry.en.toLowerCase().includes(query)))
+          : visibleKeys;
         panel.push(h(Card, { key: 'keys', title: t('keysTitle'), hint: t('keysHint') }, [
-          h('span', { key: 'l', style: S.label }, t('commonKeys')),
-          ...visibleKeys.map(keyRow),
-          h('div', { key: 'a', style: S.actions }, [
+          h('input', {
+            key: 'filter',
+            type: 'text',
+            style: S.filterInput,
+            placeholder: t('searchFilterPlaceholder'),
+            value: keyFilter,
+            onChange: (event) => setKeyFilter(event.target.value),
+          }),
+          h('span', { key: 'l', style: S.label }, query ? t('keysTitle') : t('commonKeys')),
+          ...displayKeys.map(keyRow),
+          query ? null : h('div', { key: 'a', style: S.actions }, [
             h('button', {
               key: 'more',
               type: 'button',
@@ -1204,6 +1466,7 @@ window.__ModuleLoader__.load({
           h('p', { key: 'i', style: S.hint }, t('intro')),
         ]),
         h('div', { key: 'tabs', style: S.tabs }, [
+          tabButton('dashboard', t('tabDashboard')),
           tabButton('access', t('tabAccess')),
           tabButton('tools', t('tabTools')),
           tabButton('engines', t('tabEngines')),

@@ -237,7 +237,7 @@ test('ArgoPanel renders every tab without undefined references', () => {
     locale: { getSnapshot: () => ({ active: 'zh' }), subscribe: () => () => {} },
     view: 'page',
   }
-  for (const tab of ['access', 'tools', 'engines', 'keys', 'research', 'advanced']) {
+  for (const tab of ['dashboard', 'access', 'tools', 'engines', 'keys', 'research', 'advanced']) {
     reset()
     hooks.length = 0
     hooks[1] = tab // tab 是 ArgoPanel 的第 2 个 useState
@@ -352,4 +352,55 @@ test('engines tab renders a control for every ENGINE_TOGGLES switch (no invisibl
     missing, [],
     `这些开关定义了但面板上没有控件（分组未进渲染清单？）：${missing.join(', ')}`,
   )
+})
+
+test('dashboard tab renders metrics, workflow presets, and engine topology matrix', () => {
+  const definition = loadBundle()
+  const { react, hooks, reset } = statefulReact()
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error(`unexpected require: ${id}`)
+  })
+  const props = {
+    useArgoForm: (select) => select({
+      status: 'ready',
+      writable: true,
+      value: { nativeTools: ['argo_search'], keyRefs: ['DEEPSEEK_API_KEY'], argoEnv: [] },
+    }),
+    set: async () => true,
+    mutate: async () => true,
+    credentials: {
+      describe: async () => ({ ok: true, value: { DEEPSEEK_API_KEY: { configured: true } } }),
+      set: async () => ({ ok: true }),
+      unset: async () => ({ ok: true }),
+    },
+    remote: { $on: () => () => {} },
+    locale: { getSnapshot: () => ({ active: 'zh' }), subscribe: () => () => {} },
+    view: 'page',
+  }
+  reset()
+  hooks.length = 0
+  hooks[1] = 'dashboard'
+  const flat = []
+  const walk = (node) => {
+    if (node === null || node === undefined) return
+    if (Array.isArray(node)) { node.forEach(walk); return }
+    if (typeof node !== 'object') return
+    flat.push(node)
+    if (typeof node.type === 'function') {
+      const nextProps = { ...node.props }
+      if (node.children && node.children.length > 0) {
+        nextProps.children = node.children.length === 1 ? node.children[0] : node.children
+      }
+      walk(node.type(nextProps))
+      return
+    }
+    ;(node.children || []).forEach(walk)
+  }
+  walk(mod.ArgoPanel(props))
+  const sections = flat.filter((node) => node.type === 'section')
+  assert.ok(sections.length >= 2, `dashboard tab 应渲染预设和矩阵卡，实际 ${sections.length}`)
+  assert.ok(flat.some((node) => node.props && node.props.key === 'metrics'), 'dashboard 应包含 KPI 指标卡')
+  assert.ok(flat.some((node) => node.props && node.props.key === 'presets'), 'dashboard 应包含工作流预设')
+  assert.ok(flat.some((node) => node.props && node.props.key === 'matrix'), 'dashboard 应包含核心引擎拓扑矩阵')
 })
