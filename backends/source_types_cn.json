@@ -30,12 +30,38 @@
     "zhuanlan.zhihu.com": 0.65,
     "www.zhihu.com": 0.90
   },
+  "content_farm_markers": [
+    "ctolib.com",
+    "coder.work",
+    "voidcn.com",
+    "it1352.com",
+    "oommake.com",
+    "py4u.net",
+    "wenku.zone",
+    "chinadmd.com",
+    "biquge",
+    "99lib.net",
+    "shubaow.net",
+    "jb51.cc",
+    "kafan.cn",
+    "yiidian.com"
+  ],
+  "content_farm_url_patterns": [
+    "/tag/",
+    "/tags/",
+    "/label/",
+    "/zt/",
+    "/zhuanti/"
+  ],
   "demote_domains": {
     "maigoo.com": {"score": 0.28, "class": "commercial_recommendation", "reason": "商业品牌榜单"},
     "chinapp.com": {"score": 0.28, "class": "commercial_recommendation", "reason": "加盟/品牌网"},
     "cnpp.cn": {"score": 0.28, "class": "commercial_recommendation", "reason": "十大品牌网类"},
     "canyin88.com": {"score": 0.35, "class": "commercial_recommendation", "reason": "行业加盟倾向"},
-    "xiuxianshipin.com": {"score": 0.3, "class": "commercial_recommendation", "reason": "加盟内容"}
+    "xiuxianshipin.com": {"score": 0.3, "class": "commercial_recommendation", "reason": "加盟内容"},
+    "jb51.net": {"score": 0.35, "class": "aggregated_tech", "reason": "SEO爬虫抓取聚合"},
+    "pc6.com": {"score": 0.25, "class": "download_portal", "reason": "软件下载引流壳"},
+    "onlinedown.net": {"score": 0.25, "class": "download_portal", "reason": "软件下载引流壳"}
   },
   "serp_host_markers": [
     "baidu.com",

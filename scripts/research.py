@@ -518,7 +518,8 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
                   route_strategy: str | None = None,
                   work_packages: Any = None,
                   allow_recompute: bool = False,
-                  broaden: bool = False) -> dict[str, Any]:
+                  broaden: bool = False,
+                  cross_lingual_trace: bool = False) -> dict[str, Any]:
     """执行取证。有工作包则按依赖分阶段；否则扩词检索。产出 dossier。"""
     import time as _time
     _deadline = _time.time() + timeout * 3
@@ -569,36 +570,49 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
             route_strategy=route_strategy,
         )
 
-    # --broaden: 来源不足时自动追加英文/学术方向补充搜索
-    if broaden and not packages:
-        all_urls: set[str] = set()
-        for sr in collection["sub_results"]:
-            for r in sr.get("results", []):
-                url = r.get("url") or r.get("canonical_url")
-                if url:
-                    all_urls.add(url)
-        if len(all_urls) < 15:
-            broaden_subs = [
-                {"query": f"{query} 论文 学术", "intent": "学术补充", "strategy": "academic"},
-                {"query": f"{query} research paper", "intent": "英文学术补充", "strategy": "english_focused"},
-            ]
+    # ── 跨语言长程搜索与溯源链路（Cross-Lingual Long-Range Trace & Pivot）──
+    trace_report: dict[str, Any] | None = None
+    try:
+        from cross_lingual_trace import (
+            assess_cross_lingual_need,
+            build_cross_lingual_trace_queries,
+            synthesize_cross_lingual_evidence,
+        )
+        assess = assess_cross_lingual_need(
+            original_query,
+            collection.get("merged_results", []),
+            domain=(profile or {}).get("key") or "",
+            force_trace=bool(cross_lingual_trace or broaden),
+        )
+        should_trace = cross_lingual_trace or (not packages and (broaden or assess["needed"]))
+        if should_trace and _time.time() < _deadline:
+            trace_subs = []
+            for t_lang in assess.get("target_langs", ["en"])[:2]:
+                trace_subs.extend(build_cross_lingual_trace_queries(original_query, target_lang=t_lang))
             existing_queries = {sq["query"] for sq in sub_queries}
-            broaden_subs = [sq for sq in broaden_subs if sq["query"] not in existing_queries]
-            if broaden_subs:
-                broaden_collection = collect_sources(
-                    broaden_subs, max_results, timeout, depth, mode,
+            trace_subs = [sq for sq in trace_subs if sq["query"] not in existing_queries]
+            if trace_subs:
+                trace_collection = collect_sources(
+                    trace_subs, max_results, timeout, depth, mode,
                     engines_priority=engines_priority or None,
                     profile=profile, budget=budget, route_strategy=route_strategy,
                 )
-                collection["sub_results"].extend(broaden_collection["sub_results"])
-                sub_queries.extend(broaden_subs)
-                # 重新融合：把所有 sub_results 的 results 合并进 merged_results
+                collection["sub_results"].extend(trace_collection["sub_results"])
+                sub_queries.extend(trace_subs)
+                trace_report = synthesize_cross_lingual_evidence(
+                    collection.get("merged_results", []),
+                    trace_collection.get("merged_results", []),
+                    original_query,
+                )
                 result_lists = [sr["results"] for sr in collection["sub_results"] if sr.get("results")]
                 if len(result_lists) > 1:
                     from search_rank import rrf_merge
                     collection["merged_results"] = rrf_merge(result_lists)[:max_results * 3]
                 elif result_lists:
                     collection["merged_results"] = result_lists[0]
+    except Exception as _trace_err:
+        import logging
+        logging.getLogger("unified_search").warning("跨语言长程溯源跳过: %s", _trace_err)
 
     gaps = identify_gaps(collection["sub_results"], original_query)
     source_grades = (profile or {}).get("source_grades") if profile else None
@@ -669,6 +683,8 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
         plan_info, rewrite_result,
     )
     _attach_evidence_loop(report, collection)
+    if trace_report is not None:
+        report["cross_lingual_trace"] = trace_report
     report["quality_gate_results"] = evaluate_dossier_gates(report)
     report["conclusion_cap"] = report["quality_gate_results"]["conclusion_cap"]
     return report

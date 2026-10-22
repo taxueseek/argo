@@ -256,12 +256,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 max_results = arguments.get("max_results")
                 depth = arguments.get("depth")
                 if profile:
-                    if num_sub is None:
-                        num_sub = profile.get("sub_queries", 4)
-                    if max_results is None:
-                        max_results = profile.get("max_results", 5)
-                    if depth is None:
-                        depth = profile.get("depth", "balanced")
+                    num_sub = num_sub if num_sub is not None else profile.get("sub_queries", 4)
+                    max_results = max_results if max_results is not None else profile.get("max_results", 5)
+                    depth = depth if depth is not None else profile.get("depth", "balanced")
                 result = research_mod.deep_research(
                     query=arguments["query"],
                     num_sub_queries=int(num_sub or 4),
@@ -271,6 +268,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     profile=profile,
                     work_packages=arguments.get("work_packages"),
                     allow_recompute=bool(arguments.get("allow_recompute", False)),
+                    cross_lingual_trace=bool(arguments.get("cross_lingual_trace", False)),
                 )
                 if profile and profile_key:
                     result["topic_profile"] = profile.get("name")

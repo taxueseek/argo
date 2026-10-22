@@ -8,10 +8,32 @@ XML 命名空间解析与 JSON 字典路径提取。无网络 IO。
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 import urllib.parse
 import xml.etree.ElementTree as ET
 from typing import Any
+
+# 尝试连接主仓 serp_guard 内容农场判定
+_SPAM_CHECKER = None
+try:
+    _SCRIPTS_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+    if _SCRIPTS_PATH not in sys.path:
+        sys.path.insert(0, _SCRIPTS_PATH)
+    from serp_guard import is_content_farm as _SPAM_CHECKER
+except Exception:
+    _SPAM_CHECKER = None
+
+
+def _is_spam_entry(url: str, title: str = "", snippet: str = "") -> bool:
+    if _SPAM_CHECKER is not None:
+        try:
+            return bool(_SPAM_CHECKER(url, title, snippet))
+        except Exception:
+            return False
+    return False
+
 
 
 def _select_with_bs4(soup: Any, selector: str):
@@ -69,6 +91,8 @@ def _fallback_extract(html: str, engine_name: str, base: str,
                 href = urllib.parse.urljoin(base, href)
             except Exception:
                 pass
+        if _is_spam_entry(href, title, snippet):
+            continue
         candidates.append((title[:200], href[:500], snippet))
         if len(candidates) >= max_items * 3:
             break
@@ -133,6 +157,9 @@ def _parse_html(engine_name: str, html: str, spec: dict[str, Any],
 
             if url and url.startswith("/"):
                 url = urllib.parse.urljoin(base, url)
+
+            if _is_spam_entry(url, title, snippet):
+                continue
 
             score = max(default_score - idx * 0.05, 0.1)
             results.append({

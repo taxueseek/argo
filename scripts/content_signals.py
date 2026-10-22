@@ -492,9 +492,16 @@ def score_clickbait(title: str) -> dict:
         score += 0.08
         hits.append("year_prefix")
     # 利益承诺：「看完…你就会」「建议收藏」「一篇搞懂」
-    if re.search(r"(看完|建议收藏|建议收藏|一篇(?:讲|说|搞懂)|全解析|必看|建议收藏)", t):
+    if re.search(r"(看完|建议收藏|一篇(?:讲|说|搞懂)|全解析|必看)", t):
         score += 0.10
         hits.append("benefit_promise")
+    # 虚假实测 / 承诺尾钩
+    if re.search(r"自费\s*\d+\s*元?实测", t):
+        score += 0.25
+        hits.append("fake_testimony")
+    if re.search(r"看完.*(?:你就懂了|你就会)", t):
+        score += 0.15
+        hits.append("clickbait_promise")
 
     # 标点：仅在已有命中时作**放大器**（PACLIC 的误杀教训）
     if score > 0:
@@ -595,13 +602,27 @@ def score_template_repetition(content: str) -> dict:
     这里是接入点，且标定集能立刻给出 before/after。
     """
     text = (content or "").strip()
-    if len(text) < 120:
+    # ── 序数连接词与流水线套话检测（对抗现代批量模板/AI农场）──
+    connectors = ("首先", "其次", "然后", "接下来", "最后", "综上所述")
+    hit_conn = sum(1 for w in connectors if w in text)
+    ai_phrases = ("业内人士表示", "专家分析", "消费者认为", "数据显示", "有望成为")
+    hit_ai = sum(1 for w in ai_phrases if w in text)
+    conn_boost = 0.0
+    if hit_conn >= 4:
+        conn_boost = 0.85
+    elif hit_conn >= 3 and hit_ai >= 1:
+        conn_boost = 0.80
+    elif hit_ai >= 3:
+        conn_boost = 0.78
+
+    if len(text) < 120 and conn_boost == 0.0:
         return {"score": 0.0, "templates": 0, "sentences": 0, "repetition": 0.0}
     # 分句：中英标点 + 换行
     sents = [s.strip() for s in re.split(r"[。！？!?；;\n]+", text) if len(s.strip()) >= 6]
     if len(sents) < 4:
-        return {"score": 0.0, "templates": len(sents), "sentences": len(sents),
-                "repetition": 0.0}
+        base_rep = conn_boost
+        return {"score": round(base_rep, 3), "templates": len(sents), "sentences": len(sents),
+                "repetition": round(base_rep, 3)}
     sigs: list[str] = []
     for s in sents:
         head = s[:2]
@@ -610,7 +631,7 @@ def score_template_repetition(content: str) -> dict:
         bucket = "S" if len(s) < 25 else ("M" if len(s) < 60 else "L")
         sigs.append(f"{head}|{tail}|{bucket}")
     uniq = len(set(sigs))
-    repetition = 1.0 - uniq / len(sigs)
+    repetition = max(1.0 - uniq / len(sigs), conn_boost)
     return {
         "score": round(min(repetition, 1.0), 3),
         "templates": uniq,

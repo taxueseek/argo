@@ -237,6 +237,37 @@ export function normalizeTracks(value, maximum) {
   return result
 }
 
+export function buildCrossLingualTracks(question, maximum = 4) {
+  const q = String(question || '').trim()
+  const hasTracing = /(?:溯源|起源|出处|最初|源头|提出者|发明|草案|历史沿革|origin|provenance|root cause|first proposed|specification|rfc|cve)/i.test(q)
+  const tracks = []
+  tracks.push({
+    id: 'track-primary-lang',
+    title: '原语言背景与核心定义',
+    question: `${q} 背景 定义 现状`,
+    rationale: 'Primary language overview and conceptual framing.',
+    depends_on: [],
+  })
+  if (hasTracing || tracks.length < maximum) {
+    tracks.push({
+      id: 'track-origin-trace',
+      title: '源头出处与权威一手规范长程溯源',
+      question: `${q} original paper inception specification first proposed RFC official repository`,
+      rationale: 'Cross-lingual long-range tracing for primary sources, papers, or official specifications.',
+      depends_on: ['track-primary-lang'],
+    })
+    tracks.push({
+      id: 'track-cross-reconciliation',
+      title: '多语言证据交叉对账与互补验证',
+      question: `${q} milestone benchmark evaluation comparison timeline`,
+      rationale: 'Cross-lingual reconciliation of evidence, timeline differences, and complementary facts.',
+      depends_on: ['track-origin-trace'],
+    })
+  }
+  return tracks.slice(0, maximum)
+}
+
+
 export function stageTracks(tracks) {
   const byId = new Map(tracks.map(track => [track.id, track]))
   const warnings = []
@@ -446,6 +477,17 @@ export function evaluateGates(output) {
   if (caveats.length + unanswered.length >= Math.max(3, Math.ceil(sources.length / 2))) {
     warnings.push({ id: 'high_uncertainty', detail: `${caveats.length} caveats and ${unanswered.length} unanswered questions exceed the evidence threshold.` })
   }
+
+  // 对抗内容农场与低质聚合镜像
+  const farmMarkers = ['ctolib.com', 'coder.work', 'voidcn.com', 'it1352.com', 'oommake.com', 'py4u.net', 'wenku.zone', 'chinadmd.com', 'jb51.net', 'pc6.com', 'onlinedown.net']
+  const farmHits = sources.filter(s => {
+    const u = String(s.url || '').toLowerCase()
+    return farmMarkers.some(m => u.includes(m))
+  })
+  if (farmHits.length > 0 && farmHits.length >= Math.ceil(sources.length / 2)) {
+    warnings.push({ id: 'content_farm_dominant', detail: `${farmHits.length} sources originate from content farms or SEO scraper mirrors; evidence quality severely degraded.` })
+  }
+
 
   const recomputedValues = output.recomputedValues || []
   const recomputeExpected = output.recomputeExpected === true

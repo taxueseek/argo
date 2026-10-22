@@ -113,6 +113,40 @@ def normalize_tracks(raw: Any, maximum: int = 9) -> list[dict[str, Any]]:
     return out
 
 
+def build_cross_lingual_tracks(question: str, maximum: int = 4) -> list[dict[str, Any]]:
+    """为溯源与多语言任务自动构建分阶段跨语言长程轨道。"""
+    q = (question or "").strip()
+    has_tracing = bool(re.search(
+        r"(?:溯源|起源|出处|最初|源头|提出者|发明|草案|历史沿革|origin|provenance|root cause|first proposed|specification|rfc|cve)",
+        q, re.I
+    ))
+    tracks = []
+    tracks.append({
+        "id": "track-primary-lang",
+        "title": "原语言背景与核心定义",
+        "question": f"{q} 背景 定义 现状",
+        "rationale": "Primary language overview and conceptual framing.",
+        "depends_on": [],
+    })
+    if has_tracing or len(tracks) < maximum:
+        tracks.append({
+            "id": "track-origin-trace",
+            "title": "源头出处与权威一手规范长程溯源",
+            "question": f"{q} original paper inception specification first proposed RFC official repository",
+            "rationale": "Cross-lingual long-range tracing for primary sources, papers, or official specifications.",
+            "depends_on": ["track-primary-lang"],
+        })
+        tracks.append({
+            "id": "track-cross-reconciliation",
+            "title": "多语言证据交叉对账与互补验证",
+            "question": f"{q} milestone benchmark evaluation comparison timeline",
+            "rationale": "Cross-lingual reconciliation of evidence, timeline differences, and complementary facts.",
+            "depends_on": ["track-origin-trace"],
+        })
+    return tracks[:maximum]
+
+
+
 def stage_tracks(tracks: list[dict[str, Any]]) -> tuple[list[list[dict[str, Any]]], list[str]]:
     """轨道分层。work package 的分层逻辑与轨道同构：id/question/depends_on。"""
     packages = [
@@ -255,6 +289,17 @@ def evaluate_gates(
     if len(caveats) + len(unanswered) >= max(3, (len(sources) + 1) // 2):
         warnings.append({"id": "high_uncertainty",
                          "detail": f"{len(caveats)} caveats and {len(unanswered)} unanswered questions exceed the evidence threshold."})
+
+    # 内容农场与镜像站占优检查
+    farm_markers = ("ctolib.com", "coder.work", "voidcn.com", "it1352.com", "oommake.com", "py4u.net",
+                    "wenku.zone", "chinadmd.com", "jb51.net", "pc6.com", "onlinedown.net")
+    farm_hits = [s for s in sources if any(m in str(s.get("url", "")).lower() for m in farm_markers)]
+    if farm_hits and len(farm_hits) >= (len(sources) + 1) // 2:
+        warnings.append({
+            "id": "content_farm_dominant",
+            "detail": f"{len(farm_hits)} sources originate from content farms or SEO scraper mirrors; evidence quality severely degraded.",
+        })
+
     cap = "low" if failures else ("medium" if warnings else "high")
     return {"passed": not failures, "conclusion_cap": cap, "failures": failures, "warnings": warnings}
 

@@ -226,3 +226,79 @@ def drop_shell_urls(results: list) -> list:
             continue
         kept.append(r)
     return kept
+
+
+# ── 内容农场与 AI 机翻垃圾站判定（2026-10-23）─────────────────────────────
+#
+# 依据 source_types_cn.json 的 content_farm_markers 与结构化特征模式，
+# 识别并拦截低质搬运镜像、机翻爬虫站及流水线批量 AI 假稿。
+
+_FARM_CONNECTORS = ("首先", "其次", "然后", "接下来", "最后", "综上所述")
+_FARM_AI_PHRASES = ("业内人士表示", "专家分析", "消费者认为", "看完这篇你就懂了", "建议收藏", "综上所述")
+
+
+def is_content_farm(url: str = "", title: str = "", snippet: str = "") -> bool:
+    """判定某条目是否属于内容农场 / 机翻爬虫 / 批量流水线 AI 废话。"""
+    if not guard_enabled():
+        return False
+    cfg = _load_cn_source_types()
+    host = _normalize_domain(url)
+    host_bare = host[4:] if host.startswith("www.") else host
+    farm_markers = tuple(cfg.get("content_farm_markers") or ())
+    if any(host_bare == m or host == m or host_bare.endswith("." + m) or host.endswith("." + m)
+           for m in farm_markers):
+        return True
+
+    low_url = (url or "").lower()
+    for pat in cfg.get("content_farm_url_patterns") or []:
+        if pat.lower() in low_url:
+            # 仅在非白名单顶级域下生效
+            if any(host.endswith(tld) for tld in (".top", ".xyz", ".site", ".cc", ".icu", ".work")):
+                return True
+
+    # 标题模式：虚假实测 / 利益诱饵 + 年份刷新
+    t = (title or "").strip()
+    if t:
+        if re.search(r"自费\s*\d+\s*元实测.*最新", t):
+            return True
+        if re.search(r"\d{4}\s*最新推荐\s*\d+\s*款.*看完这篇你就懂了", t):
+            return True
+
+    # 摘要/正文模式：高度僵化的模板流水线
+    body = f"{t} {snippet or ''}".strip()
+    if body:
+        hit_conn = sum(1 for w in _FARM_CONNECTORS if w in body)
+        hit_ai = sum(1 for w in _FARM_AI_PHRASES if w in body)
+        if hit_conn >= 4:
+            return True
+        if hit_ai >= 2 and hit_conn >= 1:
+            return True
+        if hit_ai >= 3:
+            return True
+
+    return False
+
+
+def is_unusable_url(url: str, title: str = "", snippet: str = "") -> bool:
+    """是否为不可作为信源引用的条目（SERP壳 或 确凿内容农场）。"""
+    if is_serp_or_jump_url(url):
+        return True
+    return is_content_farm(url, title, snippet)
+
+
+def filter_content_farms(results: list) -> list:
+    """过滤结果列表里的内容农场条目。"""
+    if not results or not guard_enabled():
+        return results or []
+    kept = []
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        u = r.get("url") or ""
+        t = r.get("title") or ""
+        s = r.get("snippet") or ""
+        if is_content_farm(u, t, s):
+            continue
+        kept.append(r)
+    return kept
+

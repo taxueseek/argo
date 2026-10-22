@@ -131,7 +131,7 @@ def _compact_research_result(report: dict[str, Any], summary: bool = False) -> d
         "sub_query_count", "total_sources", "gaps", "mode", "sub_queries",
         "engines_priority", "vertical_engines", "fetch_required",
         "kind", "conclusion_cap", "quality_gate_results", "work_packages",
-        "work_package_stages", "protocol",
+        "work_package_stages", "protocol", "cross_lingual_trace",
     )
     out: dict[str, Any] = {k: report[k] for k in keys if k in report and report[k] is not None}
 

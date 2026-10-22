@@ -106,7 +106,8 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-06 A2 登录态车道 +11（auth_profile 判定与传参），"
               "同日浏览器档整级拆出 fetch_browser.py −36"),
     "scripts/mcp_handlers.py": (
-        494, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
+        492, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
+             "2026-10-23 支持跨语言长程溯源并精简参数映射（494 → 492）；"
              "2026-10-22 解耦优化（-566 行）：结果压缩抽离至 mcp_compact.py、"
              "本地文件系统与沙箱读取抽离至 mcp_local.py、预热与社交抓取抽离至 mcp_warm.py，"
              "上限 1060 → 494，已回落至 1000 行硬上限内；"
