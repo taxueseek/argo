@@ -230,9 +230,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-16 +1：_content_sig 末尾接 normalize_title_suffix 剥站后缀"
               "（跨站同文对差异几乎全在结尾后缀，零依赖；归一化逻辑在 rank_signals）"),
     "scripts/search_pipeline.py": (
-        1076, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
-              "2026-10-19 −24：自适应学习循环改用 cache_guard.should_record_adaptive "
-              "统一状态态过滤 + learner.batch() 单事务批量提交，上限 1101 → 1077；"
+        933, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+             "2026-10-22 解耦优化（-143 行）：恢复执行器 _recovery_executor 与 "
+             "L3 换引擎策略独立拆入 recovery_runner.py，上限 1076 → 933，回落至 1000 行内；"
+             "2026-10-19 −24：自适应学习循环改用 cache_guard.should_record_adaptive "
+             "统一状态态过滤 + learner.batch() 单事务批量提交，上限 1101 → 1077；"
               "2026-10-17 +3：finalize 的 cache.set 透传 recovered 标记（恢复成功"
               "批次整批退化时降级短 TTL 写入，判据与常量在 cache_guard，存储侧"
               "改动在 cache.SearchCache.set）；"

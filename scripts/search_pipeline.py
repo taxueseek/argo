@@ -516,176 +516,33 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     except OPT_IMPORT + SHAPE_BENIGN:  # 守卫不可用不设卡（fail-open）
         _echo_triggered = False
     if not merged or _echo_triggered:
-        # ── 恢复链 L0：early-stop 误判时补跑被跳过的同域引擎 ──
-        # （同域优先于 L3 换跨域引擎；实现在 recovery_l0）。死线 = 用户
-        # 声明的整体超时扣掉 dispatch 已耗墙钟——补跑不得把总时长推出
-        # 用户预算（语义见 recovery_l0 模块 docstring 的死线约束）。
-        try:
-            import time as _time
-            from recovery_l0 import maybe_retry_skipped
-            try:
-                _l0_deadline = _time.monotonic() + max(
-                    0.0, float(req.timeout or 0)
-                    - float(run.budget_used_ms or 0) / 1000.0)
-            except (TypeError, ValueError):
-                _l0_deadline = None
-            _l0_merged, _l0_info = maybe_retry_skipped(
-                run.early_stopped, engines_combo, raw_results,
-                available_engines, query, _run_one, _ingest,
-                max_results, _emit_usage, deadline=_l0_deadline)
-        except SHAPE_BENIGN:
-            _l0_merged, _l0_info = [], None
-        if _l0_merged and _l0_info:
-            recovery_info = _l0_info
-            merged = _l0_merged
-    if not merged or _echo_triggered:
-        try:
-            from recovery import run_recovery
-            tried = list(raw_results.keys()) or list(engines)
-            fallback_engines = decision.get("engines_fallback") or []
-            # 域路由零结果：恢复链放行 L3 换引擎。复杂度门此前把简单查询
-            # 压到 L2——L3 被禁 + 全域零结果 = 域命中查询无解（实测
-            # macro_data「中国GDP」零结果、恢复链空转）。engines_fallback
-            # 里是路由的定向保底声明（域未试成员优先），代价可控。
-            rec_level = _max_rec_level
-            if _echo_triggered:
-                # 退化是「引擎选错了」而非「查询写得不好」：L1 放宽 / L2 换词
-                # 都救不了「上游把整句当单词查」，必须换引擎（L3）。
-                rec_level = "L3"
-            elif fallback_engines and decision.get("domain") not in (
-                    None, "", "general", "general_search") \
-                    and (rec_level is None or rec_level < "L3"):
-                rec_level = "L3"
-            try:
-                enabled_set = set(available_engines())
-            except Exception:
-                enabled_set = None
-
-            def _recovery_executor(rq: str, rengines: list[str]) -> list[dict[str, Any]]:
-                """恢复执行器：对冲竞速跑候选引擎，取首个非空。跳过缓存避免污染。
-
-                并行形态（2026-09-29）：原为严格串行——域查询零结果时 recovery
-                段占 process_ms 的 79–86%（实测中位 906ms；「黄金价格」2019ms、
-                「比特币行情」1989ms），是体感「有时特别慢」的直接原因。改为
-                「起步间隔 = grace 的有界并发」（bounded_run.run_bounded 的
-                stagger 语义，与 dispatch 串行路径同一套对冲哲学，见
-                engine_dispatch._run_engines_bounded）：首引擎先跑，grace 内
-                交付仍只付一次调用，超时才补发下一匹；任一引擎交付非空即收工。
-                grace 复用 hooks.primary_grace_s（标定依据见 search._PRIMARY_GRACE_S），
-                不新增开关面。总等待上限 = grace×(n-1) + timeout + 1s ≤ 串行版
-                n×timeout，最坏情况也不慢于改造前。消融：把 primary_grace 调到
-                大于引擎超时上限即完全退回严格串行（与 ARGO_SERIAL_STAGGER_S
-                同思路）。daemon 线程不 join，卡住的 HTTP 读拖不垮止损。
-                """
-                def _fire(eng: str) -> list[dict[str, Any]]:
-                    _dk = {k: v for k in ("domain", "sub_domain") if (v := getattr(req, "engine_" + k, None))}
-                    # 记下真正发出的调用：恢复段走的不是 dispatch，若不单独记账，
-                    # 漏斗会算出「routed 2 → called 2 → returned 5」这种自相矛盾的
-                    # 账（实测「python 怎么读csv」），而这正是最需要被看见的路径。
-                    _recovery_engines.add(eng)
-                    try:
-                        # 恢复路径同样携带时间窗，避免恢复时丢弃用户约束；
-                        # --no-cache 也要透传：本函数的契约是「跳过缓存避免污染」，
-                        # 不透传会让恢复段既读到用户明确拒绝的旧缓存，又把自己的
-                        # 临时查询写进缓存（dispatch 那条路径是透传的，两处不一致）。
-                        res = engine_search(rq, eng, n=max_results,
-                                            timeout=timeout, depth=depth, mode=mode,
-                                            since=since_iso, until=until_iso,
-                                            skip_cache=skip_cache, **_dk)
-                    except Exception as e:
-                        import sys
-                        sys.stderr.write(
-                            f"[recovery] 恢复链异常（{type(e).__name__}）: {e}\n")
-                        res = []
-                    goods = [r for r in (res or [])
-                             if isinstance(r, dict) and "error" not in r]
-                    # 恢复段同样进配额账：它真的打了引擎（engine_search），
-                    # 而 quota_batch.add 的全仓唯一常规入口在 dispatch 的
-                    # _run_one 里——恢复链不走那条路，不在这里补一行，
-                    # 这批消耗就落在本地账本之外（见下方 flush 处注释）。
-                    # add 是 list.append（GIL 下原子），对冲线程并发调用安全。
-                    quota_batch.add(eng, bool(goods))
-                    if goods:
-                        for r in goods:
-                            r.setdefault("_engine", eng)
-                            r.setdefault("_recovered", True)
-                        # 回声不算「恢复成功」（判据与理由见
-                        # postprocess_signals.drop_echo_items）：不拦则 L1 放宽
-                        # 查询后收工，L3 换引擎永不执行。
-                        try:
-                            from postprocess_signals import drop_echo_items as _drop_echo
-                            goods = _drop_echo(goods, rq)
-                        except OPT_IMPORT + SHAPE_BENIGN:
-                            pass
-                    return goods
-
-                if len(rengines) <= 1:
-                    return _fire(rengines[0]) if rengines else []
-                grace = max(0.0, float(hooks.primary_grace_s or 0.0))
-                wait_s = grace * (len(rengines) - 1) \
-                    + max(1.0, float(timeout)) + 1.0
-
-                def _enough(finished: list[tuple[str, Any]]) -> bool:
-                    # 任一引擎交付非空即收工：不再起排队中的引擎（省调用），
-                    # 已在跑的归 unfinished（daemon，结果丢弃但配额已如实记）。
-                    return any(isinstance(v, list) and v for _i, v in finished)
-
-                finished, _unfinished = run_bounded(
-                    rengines, _fire, wait_s, max_workers=3,
-                    enough=_enough, stagger_s=grace)
-                # finished 按完成先后排列：首个非空即「最快非空」。与串行版
-                # 「首个非空」的差别只在来源引擎——恢复候选都过 run_recovery
-                # 的 query-signal 门，质量由它把关。
-                for _item, value in finished:
-                    if isinstance(value, list) and value:
-                        return value
-                return []
-
-            rec_results, rec_result = run_recovery(
-                query, tried, _recovery_executor,
-                engines_fallback=fallback_engines, enabled=enabled_set, mode=mode,
-                max_level=rec_level)
-            recovery_info = rec_result.to_dict()
-            # P2-6：恢复使用日志——query 截断脱敏，只记概览不记明细
-            if _emit_usage is not None:
-                try:
-                    _emit_usage("recovery", {
-                        "query": (query[:60] if query else query),
-                        "triggered": recovery_info.get("triggered"),
-                        "recovered": recovery_info.get("recovered"),
-                        "level_used": recovery_info.get("level_used"),
-                        "strategy_used": recovery_info.get("strategy_used"),
-                        "steps_tried": len(recovery_info.get("steps_tried") or []),
-                        "final_query": (recovery_info.get("final_query") or "")[:60],
-                        "note": recovery_info.get("note", ""),
-                    })
-                except SHAPE_BENIGN:  # 使用日志记录失败不影响恢复结果本身
-                    pass
-            if rec_results:
-                # 恢复结果复检壳口径：主链的壳过滤跑在恢复链之前，恢复产出
-                # 是唯一可能把壳带回最终输出的入口（唯一出口在
-                # serp_guard.drop_shell_urls，L0/L3/充分性三处共用）。
-                try:
-                    from recovery_l0 import finalize_l3_results
-                    merged = finalize_l3_results(rec_results, max_results)
-                except ImportError:
-                    merged = deduplicate_by_url(rec_results)[:max_results]
-                # 恢复引擎按引擎分组记回 raw_results：engines_used 此前不含
-                # 救援引擎（provenance 断链，实测恢复成功后 engines_used 仍
-                # 只列原 combo），自适应学习也看不到恢复成功信号。
-                _rec_by_eng: dict[str, list] = {}
-                for r in merged:
-                    eng = r.get("_engine") or r.get("source") or ""
-                    if eng:
-                        r.setdefault("consensus_engines", [eng])
-                        _rec_by_eng.setdefault(eng, []).append(r)
-                for _eng, _lst in _rec_by_eng.items():
-                    raw_results.setdefault(_eng, _lst)
-        except ImportError:
-            pass  # recovery 模块不可用
-        except Exception as e:
-            _log(
-                f"错误恢复跳过: {type(e).__name__}")
+        from recovery_runner import run_pipeline_recovery
+        _dk = {k: v for k in ("domain", "sub_domain") if (v := getattr(req, "engine_" + k, None))}
+        merged, _rec_info = run_pipeline_recovery(
+            query=query,
+            merged=merged,
+            raw_results=raw_results,
+            decision=decision,
+            engines=engines,
+            available_engines_fn=available_engines,
+            max_results=max_results,
+            max_rec_level=_max_rec_level,
+            echo_triggered=_echo_triggered,
+            primary_grace_s=float(hooks.primary_grace_s or 0.0),
+            timeout=timeout,
+            depth=depth,
+            mode=mode,
+            since_iso=since_iso,
+            until_iso=until_iso,
+            skip_cache=skip_cache,
+            quota_batch=quota_batch,
+            engine_search_fn=engine_search,
+            emit_usage_fn=_emit_usage,
+            recovery_engines_set=_recovery_engines,
+            engine_domain_extra=_dk,
+        )
+        if _rec_info:
+            recovery_info = _rec_info
 
     # 配额记账落盘：整批一次写入文件（同一次搜索的 N 个引擎合并为一次写）。
     # 位置是契约：必须在**最后一个 quota add 点**之后。D6 补搜走后，
