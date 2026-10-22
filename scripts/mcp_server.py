@@ -137,18 +137,17 @@ def call_mode(tool: str, payload: str) -> int:
 
 # ── 入口 ──────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
     # Windows GBK 防线（PEP 540）：非 UTF-8 模式直接跑本文件时，重新以
     # -X utf8 启动自己，保证中文 JSON 读取与 stderr 输出不因控制台编码崩。
     if not sys.flags.utf8_mode and os.name == "nt":
         import subprocess as _sp
         _rc = _sp.run(
-            [sys.executable, "-X", "utf8", __file__, *sys.argv[1:]],
+            [sys.executable, "-X", "utf8", __file__, *args],
             env={**os.environ, "PYTHONUTF8": "1"},
         ).returncode
-        # 子进程的退出码就是本进程的退出码：无条件 sys.exit(0) 会把失败
-        # 伪装成成功，调用方（DSH 原生工具/脚本）据此渲染必然说谎
-        sys.exit(_rc)
+        return _rc
     # env 文件 → os.environ 同步（只填缺失，不覆盖已有值）：非 mcp_launch.sh
     # 启动（直跑本文件/裸宿主直连）时密钥仍能到位，读取方零改动
     try:
@@ -165,7 +164,7 @@ if __name__ == "__main__":
     # 未知旗标显式报错（exit 2）：此前任何拼错的 flag 都静默落进 stdio 模式
     # ——stdio 挂着等 stdin，调用方看到的是「卡死」而不是「参数错了」。
     _skip = 0
-    for _a in sys.argv[1:]:
+    for _a in args:
         if _skip:
             _skip -= 1
             continue
@@ -174,16 +173,22 @@ if __name__ == "__main__":
             continue
         if _a.startswith("-") and _a != "--test":
             print(_dumps({"error": f"未知参数: {_a}（支持 --test / --call <tool> [json]；无参数 = stdio 服务）"}))
-            sys.exit(2)
-    if "--test" in sys.argv:
+            return 2
+    if "--test" in args:
         test_mode()
-    elif "--call" in sys.argv:
-        _i = sys.argv.index("--call")
-        _tool = sys.argv[_i + 1] if len(sys.argv) > _i + 1 else ""
+        return 0
+    elif "--call" in args:
+        _i = args.index("--call")
+        _tool = args[_i + 1] if len(args) > _i + 1 else ""
         if not _tool:
             print(_dumps({"error": "usage: mcp_server.py --call <tool> [json-args]"}))
-            sys.exit(2)
-        _payload = sys.argv[_i + 2] if len(sys.argv) > _i + 2 else "{}"
-        sys.exit(call_mode(_tool, _payload))
+            return 2
+        _payload = args[_i + 2] if len(args) > _i + 2 else "{}"
+        return call_mode(_tool, _payload)
     else:
         run_stdio()
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

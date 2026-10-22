@@ -103,4 +103,6 @@ argo mcp undo --all    # 精确移除 entry；无 entry 从备份回滚
 - [x] 无 entry undo：从备份回滚。
 - [x] `atomic_write` 0600 权限。
 - [x] `--dry-run` 不写盘。
-- [x] 单测 `tests/test_mcp_setup.py`（12 例）全过。
+- [x] 单测 `tests/test_mcp_setup.py`（15 例）全过。
+- [x] 客户端矩阵补全：Claude Code、Claude Desktop、Cursor、Windsurf、Codex、Zed、Roo Code、Cline、OpenCode、WorkBuddy。
+- [x] 跨平台声明支持：针对 macOS / Windows / Linux 支持 `config_path_*` 与 `detect_*` 平台适配。

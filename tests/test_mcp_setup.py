@@ -174,5 +174,36 @@ class TestAtomicWrite(TestMcpSetupBase):
         self.assertEqual(mode, 0o600)
 
 
+class TestPlatformAndNewClients(TestMcpSetupBase):
+    def test_load_all_clients_from_yaml(self):
+        clients = ms.load_clients()
+        ids = {c["id"] for c in clients}
+        self.assertIn("claude-desktop", ids)
+        self.assertIn("zed", ids)
+        self.assertIn("roo-code", ids)
+
+    def test_platform_specific_config_path_resolution(self):
+        client = {
+            "id": "mock-multi-os",
+            "name": "Mock",
+            "config_path": "fallback/cfg.json",
+            "config_path_darwin": "Library/Mock/cfg.json",
+            "config_path_win32": "AppData/Roaming/Mock/cfg.json",
+            "config_path_linux": ".config/Mock/cfg.json",
+            "servers_key": "mcpServers",
+            "format": "json",
+        }
+        old_plat = sys.platform
+        try:
+            sys.platform = "darwin"
+            self.assertEqual(ms._client_config_path(client), "Library/Mock/cfg.json")
+            sys.platform = "win32"
+            self.assertEqual(ms._client_config_path(client), "AppData/Roaming/Mock/cfg.json")
+            sys.platform = "linux"
+            self.assertEqual(ms._client_config_path(client), ".config/Mock/cfg.json")
+        finally:
+            sys.platform = old_plat
+
+
 if __name__ == "__main__":
     unittest.main()

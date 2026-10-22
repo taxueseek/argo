@@ -16,21 +16,48 @@ macOS / Linux 直接跑。Windows 用 PowerShell：
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.ps1 | iex"
 ```
 
-### 方式二：npx 即用即走
+### 方式二：uvx / pip 即用即走（免配环境，自动隔离）
+
+```bash
+# 启动 MCP 服务
+uvx argo-search argo-mcp
+
+# 或全局安装 CLI
+pip install argo-search
+```
+
+### 方式三：npx 即用即走
 
 ```bash
 npx -y github:taxueseek/argo
 ```
 
-需要 Node.js 18+ 和 Python 3.9+，首次需 `pip3 install pyyaml`。
+需要 Node.js 18+ 和 Python 3.9+。
 
-### 方式三：DSH 插件
+### 方式四：DSH 插件
 
 ```bash
 dsh plugin --profile web add "github:taxueseek/argo"
 ```
 
 装完重启 `dsh web` 生效。
+
+### 方式五：MCP 客户端直接填入（免预装）
+
+直接在客户端配置文件中填入：
+
+```json
+{
+  "mcpServers": {
+    "argo": {
+      "command": "uvx",
+      "args": ["argo-search", "argo-mcp"]
+    }
+  }
+}
+```
+已支持一键探测与自动配置的客户端：Claude Code、Claude Desktop、Cursor、Windsurf、Codex、Zed、Roo Code、Cline、OpenCode、WorkBuddy。
+本地克隆后也可直接执行：`python3 scripts/mcp_setup.py inject --all`。
 
 ## 能力速查
 

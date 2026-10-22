@@ -1,5 +1,38 @@
-# 这里只放测试与门禁配置，不是打包声明。
-# 分发形态仍是 npm（package.json）+ 整树脚本，变更版本号请改 package.json。
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "argo-search"
+version = "2.9.7"
+description = "专为 AI Agent 打造的统一搜索、网页提取与证据核验工具与 MCP 服务"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+keywords = ["mcp", "mcp-server", "search", "web-search", "agent", "llm", "claude", "cursor"]
+authors = [
+    { name = "taxueseek" }
+]
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+fast = [
+    "curl_cffi>=0.7.0",
+    "rapidfuzz>=3.0.0",
+]
+
+[project.scripts]
+argo = "bin.argo:main"
+argo-search = "bin.argo:main"
+argo-mcp = "scripts.mcp_server:main"
+
+[tool.setuptools]
+packages = ["bin", "scripts"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.json", "*.sh", "*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

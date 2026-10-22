@@ -72,3 +72,35 @@ clients:
     servers_key: mcpServers
     format: json
     detect: [.workbuddy]
+
+  - id: claude-desktop
+    name: Claude Desktop
+    config_path: Library/Application Support/Claude/claude_desktop_config.json
+    config_path_darwin: Library/Application Support/Claude/claude_desktop_config.json
+    config_path_win32: AppData/Roaming/Claude/claude_desktop_config.json
+    config_path_linux: .config/Claude/claude_desktop_config.json
+    servers_key: mcpServers
+    format: json
+    detect_darwin: [Library/Application Support/Claude]
+    detect_win32: [AppData/Roaming/Claude]
+    detect_linux: [.config/Claude]
+
+  - id: zed
+    name: Zed
+    config_path: .config/zed/settings.json
+    servers_key: context_servers
+    format: json
+    detect: [.config/zed]
+
+  - id: roo-code
+    name: Roo Code
+    config_path: Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json
+    config_path_darwin: Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json
+    config_path_win32: AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json
+    config_path_linux: .config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/cline_mcp_settings.json
+    servers_key: mcpServers
+    format: json
+    detect_darwin: [Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline]
+    detect_win32: [AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline]
+    detect_linux: [.config/Code/User/globalStorage/rooveterinaryinc.roo-cline]
+

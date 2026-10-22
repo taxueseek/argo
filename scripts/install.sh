@@ -104,7 +104,19 @@ elif [[ -d "$INSTALL_DIR" ]] && [[ -f "$INSTALL_DIR/scripts/search.py" ]]; then
 else
   echo "==> 克隆仓库…"
   mkdir -p "$(dirname "$INSTALL_DIR")"
-  git clone --depth 1 --branch "$BRANCH" "$REPO" "$INSTALL_DIR"
+  if ! git clone --depth 1 --branch "$BRANCH" "$REPO" "$INSTALL_DIR"; then
+    if [[ "$REPO" == *"github.com"* ]]; then
+      MIRROR_REPO="https://ghfast.top/${REPO}"
+      echo "[warn] 从 GitHub 直连克隆失败，尝试加速镜像: $MIRROR_REPO …"
+      if ! git clone --depth 1 --branch "$BRANCH" "$MIRROR_REPO" "$INSTALL_DIR"; then
+        echo "!! 克隆失败。若处于受限网络环境，可尝试手动克隆或设置 ARGO_REPO 环境变量。" >&2
+        exit 1
+      fi
+    else
+      echo "!! 克隆失败，请检查网络连接。" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # 供应链加固：校验 HEAD 与预期 commit 一致（ARGO_PIN 固定）
@@ -122,13 +134,16 @@ if [[ "$SKIP_PIP" != "1" ]]; then
   echo "==> 安装依赖 (PyYAML)…"
   python3 -m pip install --user -q pyyaml 2>/dev/null \
     || python3 -m pip install -q pyyaml 2>/dev/null \
+    || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple pyyaml 2>/dev/null \
     || echo "[warn] pip 安装 PyYAML 失败，可手动: pip install pyyaml"
   echo "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
   python3 -m pip install --user -q curl_cffi 2>/dev/null \
     || python3 -m pip install -q curl_cffi 2>/dev/null \
+    || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple curl_cffi 2>/dev/null \
     || echo "[warn] pip 安装 curl_cffi 失败（可选依赖）。需要反爬 TLS 指纹伪造时手动: pip install curl_cffi"
   python3 -m pip install --user -q rapidfuzz 2>/dev/null \
     || python3 -m pip install -q rapidfuzz 2>/dev/null \
+    || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple rapidfuzz 2>/dev/null \
     || echo "[warn] pip 安装 rapidfuzz 失败（可选依赖）。缺失时去重回退纯 minhash，需要模糊近重复复核时手动: pip install rapidfuzz"
 fi
 

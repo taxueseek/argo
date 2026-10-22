@@ -87,12 +87,36 @@ def _resolve(path_str: str) -> Path:
     return p
 
 
+def _client_config_path(client: dict[str, Any]) -> str:
+    """获取当前操作系统对应的配置文件路径声明。"""
+    plat = sys.platform
+    if plat == "darwin" and "config_path_darwin" in client:
+        return client["config_path_darwin"]
+    if plat == "win32" and "config_path_win32" in client:
+        return client["config_path_win32"]
+    if plat.startswith("linux") and "config_path_linux" in client:
+        return client["config_path_linux"]
+    return client.get("config_path", "")
+
+
+def _client_detects(client: dict[str, Any]) -> list[str]:
+    """获取当前操作系统对应的客户端探测路径列表。"""
+    plat = sys.platform
+    if plat == "darwin" and "detect_darwin" in client:
+        return client["detect_darwin"]
+    if plat == "win32" and "detect_win32" in client:
+        return client["detect_win32"]
+    if plat.startswith("linux") and "detect_linux" in client:
+        return client["detect_linux"]
+    return client.get("detect") or []
+
+
 def detect(client: dict[str, Any]) -> bool:
     """客户端是否已安装（detect 路径任一存在）。无 detect 字段则看 config_path 父目录。"""
-    detects = client.get("detect") or []
+    detects = _client_detects(client)
     if detects:
         return any(_resolve(d).exists() for d in detects)
-    return _resolve(client["config_path"]).parent.exists()
+    return _resolve(_client_config_path(client)).parent.exists()
 
 
 # ── MCP 命令模板 ────────────────────────────────────────────────────────
@@ -168,7 +192,7 @@ def _json_read(path: Path) -> dict[str, Any]:
 
 def _inject_json(client: dict[str, Any], entry: dict[str, Any]) -> str:
     """JSON 客户端注入：合并 entry，保留未改动子树。"""
-    path = _resolve(client["config_path"])
+    path = _resolve(_client_config_path(client))
     config = _json_read(path)
     servers_key = client["servers_key"]
     if not isinstance(config.get(servers_key), dict):
@@ -179,7 +203,7 @@ def _inject_json(client: dict[str, Any], entry: dict[str, Any]) -> str:
 
 def _remove_json(client: dict[str, Any]) -> str | None:
     """JSON 客户端移除 argo entry。返回新内容；无 entry 返回 None。"""
-    path = _resolve(client["config_path"])
+    path = _resolve(_client_config_path(client))
     if not path.exists():
         return None
     config = _json_read(path)
@@ -216,7 +240,7 @@ def _toml_block(client: dict[str, Any], entry: dict[str, Any]) -> str:
 
 def _inject_toml(client: dict[str, Any], entry: dict[str, Any]) -> str:
     """TOML 客户端注入：行级 append section。已存在则报错（不覆盖，避免破坏）。"""
-    path = _resolve(client["config_path"])
+    path = _resolve(_client_config_path(client))
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     servers_key = client["servers_key"]
     marker = f"[{servers_key}.{ENTRY_NAME}]"
@@ -232,7 +256,7 @@ def _inject_toml(client: dict[str, Any], entry: dict[str, Any]) -> str:
 
 def _remove_toml(client: dict[str, Any]) -> str | None:
     """TOML 客户端移除：删除 [mcp_servers.argo] section。"""
-    path = _resolve(client["config_path"])
+    path = _resolve(_client_config_path(client))
     if not path.exists():
         return None
     text = path.read_text(encoding="utf-8")
@@ -260,7 +284,7 @@ def _remove_toml(client: dict[str, Any]) -> str | None:
 # ── 诊断 ────────────────────────────────────────────────────────────────
 
 def _entry_present(client: dict[str, Any]) -> bool:
-    path = _resolve(client["config_path"])
+    path = _resolve(_client_config_path(client))
     if not path.exists():
         return False
     fmt = client.get("format", "json")
@@ -322,7 +346,7 @@ def cmd_inject(clients: list[dict[str, Any]], flags: list[str], dry_run: bool) -
         return
     print(f"将注入 {', '.join(c['name'] for c in targets)} ...\n")
     for c in targets:
-        path = _resolve(c["config_path"])
+        path = _resolve(_client_config_path(c))
         fmt = c.get("format", "json")
         entry = _mcp_command(c)
         try:
@@ -348,7 +372,7 @@ def cmd_undo(clients: list[dict[str, Any]], flags: list[str], dry_run: bool) -> 
         return
     print(f"将还原 {', '.join(c['name'] for c in targets)} ...\n")
     for c in targets:
-        path = _resolve(c["config_path"])
+        path = _resolve(_client_config_path(c))
         fmt = c.get("format", "json")
         try:
             if dry_run:
