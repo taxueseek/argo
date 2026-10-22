@@ -272,7 +272,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "
               "ARGO_MCPJOBS_DIR 显式覆盖（原硬编码 ~/.cache）"),
     "scripts/matrix_search_eval.py": (
-        1179, "离线路由矩阵（191 条检查项），用例表占多数；"
+        1187, "离线路由矩阵（194 条检查项），用例表占多数；"
               "2026-10-10 +2：入口状态隔离（真实搜索路径会写生产状态，实测夹具"
               "引擎已混入 circuit_breaker/usage_log），接 argo_paths.isolate_state_dir；"
               "2026-10-22 +15：补 company_search 场景 3 条用例（此前该域零用例，"

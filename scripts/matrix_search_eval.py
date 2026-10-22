@@ -458,6 +458,14 @@ ROUTE_MATRIX: list[dict[str, Any]] = [
     {"id": "R_zhihu_content", "q": "知乎 怎么看待 如何评价", "lang": "zh", "domain": "zhihu_content", "primary": "zhihu", "scenario": "media"},
     {"id": "R_zhihu_hot_list", "q": "知乎热榜 知乎热搜", "lang": "zh", "domain": "zhihu_hot_list", "primary": "zhihu_hot", "scenario": "community"},
     {"id": "R_zhihu_user_data", "q": "我的知乎 我的创作 收藏", "lang": "zh", "domain": "zhihu_user_data", "primary": "zhihu_user", "scenario": "community"},
+
+    # ── 域冲突让位修复（2026-10-22）────────────────────────────────────────
+    # 这三个域的触发词此前被更宽泛的域覆盖，无法通过自动路由命中（因此曾登记在
+    # test_route_matrix_coverage 的 _NO_CASE_DEBT 里）。在宽泛侧加 unless 让位后
+    # 各补一条钉住；宽泛侧的真查询锁在 test_domain_pattern_precision 的既有用例。
+    {"id": "R_jin10_flash", "q": "金十 7x24 快讯", "lang": "zh", "domain": "jin10_flash", "primary": "jin10", "scenario": "news"},
+    {"id": "R_v2ex_search", "q": "v2ex 技术社区", "lang": "zh", "domain": "v2ex_search", "primary": "v2ex", "scenario": "code"},
+    {"id": "R_wenshu_query", "q": "裁判文书 判决书", "lang": "zh", "domain": "wenshu_query", "primary": "wenshu", "scenario": "legal"},
 ]
 
 

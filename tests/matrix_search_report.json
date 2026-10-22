@@ -1,10 +1,10 @@
 {
   "summary": {
-    "ok": 194,
+    "ok": 197,
     "fail": 0,
     "warn": 1,
     "by_status": {
-      "PASS": 194,
+      "PASS": 197,
       "FAIL": 0,
       "WARN": 1
     },
@@ -25,7 +25,7 @@
         "WARN": 0
       },
       "route": {
-        "PASS": 115,
+        "PASS": 118,
         "FAIL": 0,
         "WARN": 0
       },
@@ -184,8 +184,8 @@
         "n": 1
       },
       "code": {
-        "ok": 4,
-        "n": 4
+        "ok": 5,
+        "n": 5
       },
       "general": {
         "ok": 11,
@@ -204,22 +204,22 @@
         "n": 3
       },
       "news": {
-        "ok": 5,
-        "n": 5
+        "ok": 6,
+        "n": 6
       },
       "community": {
         "ok": 6,
         "n": 6
       },
       "legal": {
-        "ok": 5,
-        "n": 5
+        "ok": 6,
+        "n": 6
       }
     },
     "route_by_lang": {
       "zh": {
-        "ok": 69,
-        "n": 69
+        "ok": 72,
+        "n": 72
       },
       "en": {
         "ok": 32,
@@ -2632,6 +2632,60 @@
         "combo": [
           "zhihu_user",
           "local_bing"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_jin10_flash",
+      "status": "PASS",
+      "detail": "domain=jin10_flash eng=jin10 combo=['jin10', 'cls_telegraph'] lang=zh",
+      "meta": {
+        "id": "R_jin10_flash",
+        "q": "金十 7x24 快讯",
+        "scenario": "news",
+        "lang": "zh",
+        "domain": "jin10_flash",
+        "engine": "jin10",
+        "combo": [
+          "jin10",
+          "cls_telegraph"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_v2ex_search",
+      "status": "PASS",
+      "detail": "domain=v2ex_search eng=v2ex combo=['v2ex', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_v2ex_search",
+        "q": "v2ex 技术社区",
+        "scenario": "code",
+        "lang": "zh",
+        "domain": "v2ex_search",
+        "engine": "v2ex",
+        "combo": [
+          "v2ex",
+          "anysearch"
+        ],
+        "primary_lang": "zh"
+      }
+    },
+    {
+      "name": "route:R_wenshu_query",
+      "status": "PASS",
+      "detail": "domain=wenshu_query eng=wenshu combo=['wenshu', 'anysearch'] lang=zh",
+      "meta": {
+        "id": "R_wenshu_query",
+        "q": "裁判文书 判决书",
+        "scenario": "legal",
+        "lang": "zh",
+        "domain": "wenshu_query",
+        "engine": "wenshu",
+        "combo": [
+          "wenshu",
+          "anysearch"
         ],
         "primary_lang": "zh"
       }

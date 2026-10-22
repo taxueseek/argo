@@ -121,7 +121,11 @@ domains:
   name: cls_telegraph_search
   parallel: false
   patterns:
-  - (?i)(财联社|cls\.cn|财联社电报|电报快讯|电报原文|快讯|财经快讯)
+  # 「金十」让位给 jin10_flash（2026-10-22）：本域 patterns 含「快讯/财经快讯」，
+  # 与 jin10_flash 的触发词重叠——实测「金十 7x24 快讯」被本域截走（用财联社
+  # +金十双源去搜金十快讯）。unless 后落到 jin10_flash，财联社本域查询不受影响。
+  - match: '(?i)(财联社|cls\.cn|财联社电报|电报快讯|电报原文|快讯|财经快讯)'
+    unless: '(?i)(金十|jin10)'
   primary: cls_telegraph
 - desc: 东财全球资讯
   engines_combo:
@@ -131,7 +135,11 @@ domains:
   name: em_news_search
   parallel: false
   patterns:
-  - (?i)(东财资讯|全球资讯|7x24|财经快讯|市场快讯)
+  # 「金十」让位给 jin10_flash（2026-10-22）：本域 patterns 含 `7x24`，jin10_flash
+  # 的触发词含「金十|7x24快讯」，两域重叠——实测「金十 7x24 快讯」被本域截走。
+  # 让位后落到 jin10_flash；东财本域查询（东财资讯/全球资讯）不受影响。
+  - match: '(?i)(东财资讯|全球资讯|7x24|财经快讯|市场快讯)'
+    unless: '(?i)(金十|jin10)'
   - (?i)(eastmoney news|global news|financial news)
   primary: em_global_news
 - desc: 基金筛选/基金数据
@@ -857,7 +865,11 @@ domains:
   name: legal
   parallel: true
   patterns:
-  - (?i)(刑法|民法|司法解释|判例|法规|裁判文书|案由|案号|法院判决)
+  # 「裁判文书/判决书/裁定书」让位给 wenshu_query（2026-10-22）：本域 patterns 含
+  # 「裁判文书」，且本域排在 wenshu_query 之前（857 vs 867 行）——实测
+  # 「裁判文书 判决书」落本域用 anysearch/byted 搜，而 wenshu 才是裁判文书权威源。
+  - match: '(?i)(刑法|民法|司法解释|判例|法规|裁判文书|案由|案号|法院判决)'
+    unless: '(?i)(裁判文书|判决书|裁定书|wenshu|court\.gov)'
   primary: anysearch
 - desc: 裁判文书检索
   engines_combo:
@@ -1633,7 +1645,11 @@ domains:
   name: social
   parallel: true
   patterns:
-  - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|v2ex|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
+  # `v2ex` 让位给 v2ex_search（2026-10-22）：本域 patterns 含 v2ex，且
+  # route_domains._social_domain_first 会把 social 提到命中列表首位——实测
+  # 「v2ex 技术社区」落本域用 hackernews 搜（HackerNews 里确有一批 V2EX 讨论帖，
+  # 但那是转载不是社区本身），而 v2ex_search 才是垂直域。从 patterns 移除 v2ex。
+  - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   - (?i)(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)
   primary: zhihu

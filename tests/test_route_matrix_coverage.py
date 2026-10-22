@@ -42,22 +42,21 @@ import matrix_search_eval as mse  # noqa: E402
 # 显式决定是补用例还是登记，不允许静默增长（同 _NARROW_TOP2_DEBT 的语义）。
 #
 # 2026-10-22：53 个域已补用例（ROUTE_MATRIX 的「域覆盖」段），从清单移除。
-# 余下 9 个分两类，都不是「忘了补」，加用例反而会引入假绿：
+# 余下 6 个都是 local_*，不是「忘了补」，加用例反而会引入假绿：
 #
-# 【一】local_* 六个域——设计上不进自动路由。chinese_general 的 `[一-鿿]`
-#   catch-all 排在它们之前（config.yaml 1545 行 vs 1555 行起），任何中文查询
-#   都被 catch-all 截走；这六个域是 local-search 子技能的零成本兜底层，靠
-#   `--local-first` 显式启用（见 sub-skills/local-search/SKILL.md）。
+# local_* 六个域——设计上不进自动路由。chinese_general 的 `[一-鿿]`
+# catch-all 排在它们之前（config.yaml 1545 行 vs 1555 行起），任何中文查询
+# 都被 catch-all 截走；这六个域是 local-search 子技能的零成本兜底层，靠
+# `--local-first` 显式启用（见 sub-skills/local-search/SKILL.md）。
 #
-# 【二】触发词被更强域覆盖的三个域——域冲突，要先修域设计才谈得上有用例：
-#   - jin10_flash  ← cls_telegraph_search 的 patterns 含「财经快讯/市场快讯/快讯」
-#   - wenshu_query ← legal 的 patterns 含「裁判文书」，且 legal 排在其前面
-#   - v2ex_search  ← social 的 patterns 含 `v2ex`，且 route_domains._social_domain_first
-#                   会把 social 提到命中列表首位（实测「v2ex 技术社区」落 social）
+# 【已修·2026-10-22 晚】原登记的三个域冲突（jin10_flash / wenshu_query /
+# v2ex_search，触发词被更宽泛的域覆盖）已在宽泛侧让位并各补一条用例，从本
+# 清单移除。让位点：cls_telegraph_search + em_news_search 排除「金十」、
+# legal 排除「裁判文书/判决书/裁定书」、social 的 patterns 移除 `v2ex`
+# （social 有 route_domains._social_domain_first 提权，必须从 patterns 侧移除）。
 _NO_CASE_DEBT = {
     "local_academic", "local_chinese", "local_code", "local_general",
     "local_news", "local_reference",
-    "jin10_flash", "wenshu_query", "v2ex_search",
 }
 
 

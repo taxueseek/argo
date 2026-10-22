@@ -154,6 +154,13 @@ def test_every_rule_compiles_and_survives_compilation():
         ("org_entity", "AI搜索产品经理 岗位要求 职责"),
         # fx_query unless（2026-10-16）：外汇储备是宏观存量概念，不进汇率牌价域
         ("fx_query", "外汇储备 最新 数据"),
+        # cls_telegraph_search / em_news_search unless（2026-10-22）：两域 patterns
+        # 都含快讯类词（前者「快讯/财经快讯」、后者「7x24/财经快讯」），与
+        # jin10_flash 重叠——「金十」让位后落到 jin10_flash
+        ("cls_telegraph_search", "金十 7x24 快讯"),
+        ("em_news_search", "金十 7x24 快讯"),
+        # legal unless（2026-10-22）：「裁判文书/判决书/裁定书」让位给 wenshu_query
+        ("legal", "裁判文书 判决书"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -171,7 +178,7 @@ def test_unless_has_a_negative_case(domain_name, query):
 def test_unless_declared_domains_are_covered_by_negative_cases():
     """声明了 unless 的域，必须在上面的反例表里出现（新增域时别忘配反例）。"""
     covered = {"weather_query", "geo_places", "academic", "fund_query", "org_entity",
-               "fx_query"}
+               "fx_query", "cls_telegraph_search", "em_news_search", "legal"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

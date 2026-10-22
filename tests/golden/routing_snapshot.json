@@ -632,6 +632,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "v2ex 技术社区",
+   "domain": "v2ex_search",
+   "kind": "tfidf",
+   "engines": [
+    "v2ex",
+    "anysearch"
+   ],
+   "expect": "v2ex_search",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "weather Tokyo",
    "domain": "weather_query",
    "kind": "tfidf",
@@ -1722,6 +1734,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "裁判文书 判决书",
+   "domain": "wenshu_query",
+   "kind": "tfidf",
+   "engines": [
+    "wenshu",
+    "anysearch"
+   ],
+   "expect": "wenshu_query",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "财联社 快讯",
    "domain": "cls_telegraph_search",
    "kind": "regex",
@@ -1790,6 +1814,18 @@
     "full_fact"
    ],
    "expect": "claim_check",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "金十 7x24 快讯",
+   "domain": "jin10_flash",
+   "kind": "tfidf",
+   "engines": [
+    "jin10",
+    "cls_telegraph"
+   ],
+   "expect": "jin10_flash",
    "forbid": null,
    "src": "ROUTE_MATRIX"
   },
