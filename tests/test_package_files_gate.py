@@ -190,5 +190,24 @@ class TestPackedTarballIfPresent(unittest.TestCase):
         self.assertEqual(leaks, [], f"打包产物含具体主机路径：{leaks[:3]}")
 
 
+class TestPypiEntrypoints(unittest.TestCase):
+    """PyPI 入口必须指向真实存在的模块，且 wheel 带上运行树。"""
+
+    def test_entrypoints_point_to_existing_modules(self):
+        pyproject = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn('argo = "argo_search.cli:main"', pyproject)
+        self.assertIn('argo-search = "argo_search.cli:main"', pyproject)
+        self.assertIn('argo-mcp = "argo_search.mcp:main"', pyproject)
+        self.assertNotIn("bin.argo:main", pyproject,
+                         "bin/argo 是无扩展名脚本，不能当 Python 模块入口")
+        self.assertTrue((REPO / "argo_search" / "cli.py").is_file())
+        self.assertTrue((REPO / "argo_search" / "mcp.py").is_file())
+
+    def test_manifest_ships_runtime_tree(self):
+        manifest = (REPO / "MANIFEST.in").read_text(encoding="utf-8")
+        self.assertIn("recursive-include argo_search/_data *", manifest,
+                      "wheel 必须带上 config/engines/sub-skills 运行树")
+
+
 if __name__ == "__main__":
     unittest.main()

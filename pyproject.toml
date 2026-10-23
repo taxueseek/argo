@@ -24,15 +24,13 @@ fast = [
 ]
 
 [project.scripts]
-argo = "bin.argo:main"
-argo-search = "bin.argo:main"
-argo-mcp = "scripts.mcp_server:main"
+argo = "argo_search.cli:main"
+argo-search = "argo_search.cli:main"
+argo-mcp = "argo_search.mcp:main"
 
 [tool.setuptools]
-packages = ["bin", "scripts"]
-
-[tool.setuptools.package-data]
-"*" = ["*.yaml", "*.yml", "*.json", "*.sh", "*.md"]
+packages = ["argo_search"]
+include-package-data = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

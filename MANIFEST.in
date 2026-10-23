@@ -1,0 +1,4 @@
+# wheel 的完整运行树由 scripts/build_release_assets.sh 在构建前复制到
+# argo_search/_data；这里保证 sdist/wheel 都带上它。
+recursive-include argo_search/_data *
+include README.md SKILL.md LICENSE package.json pyproject.toml

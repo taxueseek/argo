@@ -13,6 +13,9 @@ config.local.yaml
 *.bak
 *.before-*
 dist/
+build/
+*.egg-info/
+argo_search/_data/
 scripts/data/
 .trash/
 *.tgz

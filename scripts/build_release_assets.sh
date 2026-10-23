@@ -33,16 +33,22 @@ find "$STAGE_DIR/sub-skills" -type d -name "__pycache__" -exec rm -rf {} + 2>/de
 TARBALL="$DIST_DIR/argo-v$VERSION.tar.gz"
 echo "--> 生成源码压缩包: $TARBALL"
 tar -czf "$TARBALL" -C "$DIST_DIR" "argo-$VERSION"
-rm -rf "$STAGE_DIR"
 
-# 3. 如果环境已安装 build 模块，打出标准 Python wheel
+# 3. 如果环境已安装 build 模块，打出标准 Python wheel。
+# wheel 的运行树来自 staging：构建前复制到 argo_search/_data，构建后清理。
+# 这样 pip/uvx 安装后 console script 仍能找到 config/engines/sub-skills。
 if python3 -c 'import build' 2>/dev/null; then
     echo "--> 构建 Python Wheel 与 Sdist..."
+    PKG_DATA="$ROOT_DIR/argo_search/_data"
+    rm -rf "$PKG_DATA"
+    cp -r "$STAGE_DIR" "$PKG_DATA"
     python3 -m build --outdir "$DIST_DIR"
+    rm -rf "$PKG_DATA"
 elif python3 -c 'import setuptools, wheel' 2>/dev/null; then
     echo "--> 使用 setuptools 构建 Wheel..."
     python3 setup.py bdist_wheel --dist-dir "$DIST_DIR" 2>/dev/null || true
 fi
+rm -rf "$STAGE_DIR"
 
 # 4. 生成 SHA256 校验和清单
 echo "--> 计算 SHA256 校验和..."
