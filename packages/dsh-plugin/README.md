@@ -101,8 +101,8 @@ argo 的 `deepseek_search` 引擎（官方 `api.deepseek.com/v1/tools/search`，
 
 | argo-dsh | DSH Harness | 说明 |
 |----------|-------------|------|
-| 2.9.7（当前） | 0.2.1-rc.2（当前，运行中） | 自带设置页（接入 / 工具 / API 密钥 / 研究 / 高级）；双栈入口 `startActivation({provider, label, request, signal, delivery})`；rc.2 移除 `toolFilter` 启动期字段后由插件内 tool guard 阻止 worker 嵌套调用 `wide_research`；`wide_research` 端到端实测通过（planner → 2 worker → synthesis，passed=true / 14 sources） |
-| 2.9.7（当前） | 0.2.1-alpha.1（实测，兼容） | 旧宿主走 `start(provider, request)` 分支，`toolFilter` 启动期字段仍认；该分支由插件单测覆盖，未在 alpha.x 上重跑端到端 |
+| 2.9.8（当前） | 0.2.1-rc.2（当前，运行中） | 自带设置页（接入 / 工具 / API 密钥 / 研究 / 高级）；双栈入口 `startActivation({provider, label, request, signal, delivery})`；rc.2 移除 `toolFilter` 启动期字段后由插件内 tool guard 阻止 worker 嵌套调用 `wide_research`；`wide_research` 端到端实测通过（planner → 2 worker → synthesis，passed=true / 14 sources） |
+| 2.9.7（上一版，兼容） | 0.2.1-alpha.1（实测，兼容） | 旧宿主走 `start(provider, request)` 分支，`toolFilter` 启动期字段仍认；该分支由插件单测覆盖，未在 alpha.x 上重跑端到端 |
 | 2.9.2 | 0.2.1-alpha.1（实测） | 上一轮适配验证基线；rc.2 的新入口与 tool guard 自 2.9.4 起进入 |
 
 低于 0.2.1 的 Harness 未做验证，不保证可用。

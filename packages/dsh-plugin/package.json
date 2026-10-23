@@ -1,6 +1,6 @@
 {
   "name": "@taxueseek/argo-dsh",
-  "version": "2.9.7",
+  "version": "2.9.8",
   "description": "Argo 阿尔戈 — DSH plugin：argo 原生搜索/抓取工具 + web_search seam + wide_research 编排；自带设置页（接入/工具/API 密钥/研究/高级）；argo MCP 19 工具全量面按需挂载。安装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"",
   "license": "Apache-2.0",
   "type": "module",

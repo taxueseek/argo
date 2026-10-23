@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.7-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.8-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-272-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -277,7 +277,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.9.7**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
+Elige cualquier camino. **GitHub es la única fuente de verdad de instalación** (`npx github:taxueseek/argo` o `install.sh`); recomendación actual **v2.9.8**. **No uses `npm install argo-search`** — la copia del registro npm es un **v1.0.1 no oficial y obsoleto** (no es este repo, incompleto, no se actualiza). Este paquete pone `private: true` para no publicarse en npm por error.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -460,13 +460,15 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.9.7)
+### Conjunto aproximado de capacidades (v2.9.8)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 272 fuentes, 235 sin clave, 97 dominios.
 
 Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
 Las últimas versiones arreglaron cada una una clase de problemas.
+
+v2.9.8 es una versión de precisión de enrutado y cierre del ciclo de feedback. Los tres problemas del issue #18 —«latest» enviado a noticias en tiempo real, people_daily devolviendo su feed por defecto cuando no hay coincidencia, y local_bing coincidiendo solo con «2026»— se reprodujeron y corrigieron. Al reproducir consultas reales por la misma vía se acotaron 16 clases más de falsos disparadores: «nieve» dentro de nombres de marca, «Volcano Engine» dentro de nombres de producto, «iconos» en diagnóstico de UI, «código» dentro de campos mercantiles/financieros y «tipo de cambio» dentro de consultas de código/bibliotecas. Una puerta de cobertura SERP y la validación cruzada CJK evitan que «devolvió algo» cuente como «es relevante». Gracias a @wpp666 por la reproducción y el diagnóstico.
 
 v2.9.7 arregló tres problemas antiguos. Cuando una IA dentro de un huésped DSH pedía leer una URL, el huésped usaba su propio capturador, así que redirecciones de enlaces cortos y páginas de desafío JS fallaban de forma estructural mientras la cadena de fetch de argo se quedaba sin uso; esta versión pasa las lecturas del huésped por argo, y esas páginas van de fallar a funcionar, sin cambios en las páginas estáticas. El pool de candidatos de enrutado contenía 18 motores de solo-uso-explícito, y si alguno se auto-seleccionaba el único motor de pago te facturaba en silencio; el pool está limpio ya, y usarlos requiere decirlo. Cada éxito de motor tomaba antes un bloqueo de fichero y reescribía el estado del breaker en disco; los motores sanos ahora cuestan cero E/S de ficheros y la contabilidad multi-motor se confirma en una sola transacción. La licencia también pasó de MIT a Apache-2.0, más cómoda para uso comercial.
 
@@ -715,6 +717,7 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 
 | Versión | Notas |
 |---------|-------|
+| **v2.9.8** | **Auditoría de precisión de enrutado + fixes de issue #18/#19 + aislamiento de estado en tests**: reproducción de consultas reales y acotado de 16 clases de falsos disparadores (marcas, productos, campos, subcadenas ASCII); puerta de cobertura SERP y validación cruzada CJK; ledger nocturno con log vacío, feed por defecto de people_daily y guardia de caché corregidos; estado adaptive/breaker aislado por test. Gracias a @wpp666 por la reproducción y el diagnóstico. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.8.md). |
 | **v2.9.7** | **Consolidación de arquitectura + seam web_fetch DSH + License a Apache-2.0**: MIT → Apache 2.0; el fetch del huésped pasa por argo (redirect shells, desafíos JS); 18 motores de invocación explícita fuera del pool, para que el modo auto no facture por error. |
 | **v2.9.6** | **Motor DeepSeek Search + contrato de operadores de consulta + agrupación de conexiones + puerta de instantáneas de enrutado**: `deepseek_search` nuevo y activo por defecto (se omite sin clave): 445-510 ms con `--since`/`--until`; conexiones agrupadas ahorran 320-561 ms; `site:` y `lang:` filtran de verdad. |
 | **v2.9.5** | **Dominio dedicado de tipo de cambio + deduplicación de dos capas + corrección de falsa penalización + aislamiento de daemon por checkout**: `fx_query` nuevo: USD/CNY responde en 675 ms con tipo al contado y noticia del día, antes 1,4 s de enciclopedia; la deduplicación suma sufijos de sitio y `ARGO_DEDUP_FUZZY` opcional. |

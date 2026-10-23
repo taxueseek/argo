@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.7-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.9.8-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-272-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -277,7 +277,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **GitHub is the only install source of truth** (`npx github:taxueseek/argo` or `install.sh`); current recommendation **v2.9.7**. **Do not `npm install argo-search`** — the npm registry copy is an **unofficial stale v1.0.1** (not this repo, incomplete, not updated). This package sets `private: true` so it is not published to npm by mistake.
+Pick any path. **GitHub is the only install source of truth** (`npx github:taxueseek/argo` or `install.sh`); current recommendation **v2.9.8**. **Do not `npm install argo-search`** — the npm registry copy is an **unofficial stale v1.0.1** (not this repo, incomplete, not updated). This package sets `private: true` so it is not published to npm by mistake.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -418,13 +418,15 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.9.7)
+### Rough capability set (v2.9.8)
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **272 sources (235 usable with no key), 97 domains**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
+
+v2.9.8 is a routing-precision and feedback-loop release. The three problems in issue #18 — "latest" being routed into realtime news, people_daily returning its default feed when nothing matches, and local_bing matching only "2026" — were all reproduced and fixed. Replaying real queries along the same lines tightened 16 more classes of false triggers: "snow" inside brand names, "Volcano Engine" inside product names, UI-troubleshooting "icons", "code" inside business/finance field names, and "exchange rate" inside code/library queries. A SERP coverage gate and CJK cross-validation now stop "it returned something" from counting as "it is relevant". Thanks to @wpp666 for the reproduction and diagnosis.
 
 v2.9.7 fixed three long-standing ones. When an AI inside a DSH host asked to read a URL, the host used its own fetcher, so short-link redirects and JS challenge pages often failed outright while argo's fetch chain sat unused; this release wires the host's reads through argo, and those pages go from failing to succeeding, with static pages unchanged. The routing candidate pool used to hold 18 explicit-only engines, and if one was ever auto-selected the only paid engine would quietly bill you; the pool is clean now, and using them requires saying so. Every engine success used to take a file lock and rewrite breaker state on disk; healthy engines now cost zero file I/O, and multi-engine accounting commits in one transaction. The license also moved from MIT to Apache-2.0, which sits easier with commercial users.
 
@@ -673,6 +675,7 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 
 | Version | Notes |
 |---------|-------|
+| **v2.9.8** | **Routing precision audit + issue #18/#19 fixes + test-state isolation**: replayed real queries and tightened 16 classes of false triggers (brand/product names, field names, ASCII substrings); added the SERP coverage gate and CJK cross-validation; fixed the empty-log nightly ledger, people_daily default feed, and cached-result guarding; isolated adaptive/breaker state per test. Thanks to @wpp666 for the reproduction and diagnosis. See [release notes](docs/RELEASE_NOTES_v2.9.8.md). |
 | **v2.9.7** | **Architecture consolidation + DSH web_fetch seam + License to Apache-2.0**: MIT → Apache License 2.0. Host web_fetch now flows through argo's fetch chain (HTTP first, browser upgrade on JS challenges), and explicit-only engines leave the routing pool so auto mode cannot bill them by accident. |
 | **v2.9.6** | **DeepSeek Search engine + query operator contract + transport connection pooling + routing snapshot gate**: New `deepseek_search` engine, on by default (445-510ms; skipped without a key). Query operators (`site:`, `-term`, `lang:`, `after:`, `before:`) share one contract with real post-filtering; POST pooling saves 320-561ms per request. |
 | **v2.9.5** | **FX-rate dedicated domain + two-layer dedup + ranking false-kill fix + per-checkout daemon isolation**: New `fx_query` domain answers rate and parity questions in 675ms. Dedup gains site-suffix normalization plus an optional fuzzy check (`ARGO_DEDUP_FUZZY`), and a separator false-kill is fixed. |

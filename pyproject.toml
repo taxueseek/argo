@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "argo-search"
-version = "2.9.7"
+version = "2.9.8"
 description = "专为 AI Agent 打造的统一搜索、网页提取与证据核验工具与 MCP 服务"
 readme = "README.md"
 requires-python = ">=3.9"

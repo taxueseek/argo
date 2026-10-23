@@ -51,7 +51,7 @@ if (argv[0] === '-v' || argv[0] === '--version') {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
     console.log(pkg.version);
   } catch (_) {
-    console.log('2.9.7');
+    console.log('2.9.8');
   }
   process.exit(0);
 }
