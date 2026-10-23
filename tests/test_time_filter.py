@@ -462,13 +462,21 @@ class TestCliEngineRetry(unittest.TestCase):
           - 装了 ddgs 的机器 → 必然通过，但走的是真 which 判定，
             被 stub 的那条路径其实一次都没执行。
         两头都不再验证被测行为，所以这里显式钉住，装与不装都测同一件事。
+
+        打桩位置必须在 `cli_runner`：`_run_cli_engine` 在 71d009d 模块解耦后
+        搬到了 cli_runner，search_v3 只剩一个薄包装。patch
+        `search_v3._check_cli_available` 改的是转出副本，函数体读的仍是
+        cli_runner 的全局，本机装了 ddgs 时假绿、CI 没装时红。
         """
-        sv3 = self.search_v3
-        self._orig_check_cli_available = sv3._check_cli_available
-        sv3._check_cli_available = lambda cmd: True
+        import cli_runner
+
+        self._orig_check_cli_available = cli_runner._check_cli_available
+        cli_runner._check_cli_available = lambda cmd: True
 
     def tearDown(self):
-        self.search_v3._check_cli_available = self._orig_check_cli_available
+        import cli_runner
+
+        cli_runner._check_cli_available = self._orig_check_cli_available
 
     def _spec(self, name="local_yahoo"):
         spec = self.search_v3.get_registry().get_engine(name)

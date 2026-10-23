@@ -34,6 +34,18 @@ import cli_runner  # noqa: E402  （2026-10-22 拆出的执行器，_RETRY_FAST_
 from local_health_check import _check_cli_engine  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _cli_available(monkeypatch):
+    """CLI 可用性统一钉在 cli_runner（`_run_cli_engine` 的真正宿主）。
+
+    这些用例测的是重试/超时/解析，与机器上装没装 ddgs 无关。只 patch
+    shutil.which 不够：`_check_cli_available` 有 TTL 缓存，前一个用例把
+    ddgs 缓存成 False 后，后面的 which 打桩不会生效。直接替换判定函数，
+    本机与 CI 走同一条被测路径。
+    """
+    monkeypatch.setattr(cli_runner, "_check_cli_available", lambda cmd: True)
+
+
 def _recent_iso_t(days_ago: int = 1) -> str:
     """窗内测试样例必须相对当前时间生成：写死日期会被 7d 窗随日历推出
     窗外，测试在毫无代码改动的某天集体变红（2026-10-06 实锤两例）。"""
