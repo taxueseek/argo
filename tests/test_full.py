@@ -17,6 +17,11 @@ from cache import SearchCache
 from route import route_query
 
 
+# 自适应/熔断隔离在 tests/conftest.py 的 autouse fixture 里统一处理：
+# 本文件真跑 super_search 会写引擎成绩，不能外溢到后续路由用例。
+
+
+
 # ── 引擎层测试 ─────────────────────────────────────────────────────────────────
 
 class TestEngines(unittest.TestCase):

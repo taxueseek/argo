@@ -66,6 +66,12 @@ _NON_US_COUNTRIES: dict[str, str] = {
     name: code for name, code in WORLDBANK_COUNTRIES.items() if code != "USA"
 }
 
+# 美国子集：给「统计局/国内」这类中国语境别名做前置排除。
+# 同一张主表派生，避免「美国 统计局」被当成中国口径。
+_US_COUNTRIES: dict[str, str] = {
+    name: code for name, code in WORLDBANK_COUNTRIES.items() if code == "USA"
+}
+
 
 def is_foreign_macro_query(query: str) -> bool:
     """查询是否明确指向非美国国家/地区。
@@ -78,5 +84,14 @@ def is_foreign_macro_query(query: str) -> bool:
     英文词——实测 `focus on growth`、`consensus 预测`、`business survey`
     全被判成「外国宏观查询」，FRED 因而被无谓地排除。同一个概念（国家词识别）
     在同一模块里有两套行为不同的实现，正是这类漏判的来源。
+
+    补充（2026-10-23）：「国家统计局」「国内」「我国」是明确的中国语境，
+    但不在国家名表里。实测「国家统计局 一季度 GDP」因此没让位，FRED 领队
+    返回美国 GDP。这几个词只指向中国，直接判为 foreign（非美国）。
+    但「美国 统计局」「美国国内 CPI」同时含美国词，必须先排除美国口径。
     """
+    q = query or ""
+    if (not match_country(q, _US_COUNTRIES)
+            and any(term in q for term in ("国家统计局", "统计局", "国内", "我国"))):
+        return True
     return bool(match_country(query, _NON_US_COUNTRIES))

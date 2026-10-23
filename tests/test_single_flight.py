@@ -113,12 +113,21 @@ class TestBucketN(unittest.TestCase):
 class TestEnginesCoalesce(unittest.TestCase):
     def test_concurrent_same_call_single_execution(self):
         from engines import search as engine_search
+        from single_flight import engine_coalescer
 
         calls = []
+        co = engine_coalescer()
+        base_coalesced = co.coalesced
 
         def fake_fn(query, n, timeout, depth="fast", mode="fast", **kw):
             calls.append((query, n))
-            time.sleep(0.2)  # 给四个线程留出真正重叠的窗口
+            # 不靠固定 sleep 赌「另外三个线程已经进来了」：CI 负载高时 0.2s
+            # 也可能只跑到两个线程。leader 在这里等 followers 真正完成注册
+            # （coalescer 的 coalesced 计数），把「同一窗口内并发」变成确定
+            # 事实；超时 5s 后照常返回，让失败的用例自己报 2 != 1。
+            deadline = time.time() + 5.0
+            while co.coalesced - base_coalesced < 3 and time.time() < deadline:
+                time.sleep(0.005)
             return [{"title": f"t{i}", "url": f"https://x/{i}", "snippet": "s"}
                     for i in range(n)]
 

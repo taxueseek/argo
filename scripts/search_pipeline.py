@@ -58,6 +58,7 @@ from except_sets import OPT_IMPORT, SHAPE_BENIGN
 from postprocess_signals import apply_tfidf_polish, detect_number_conflict
 from search_attribution import usage_log_attribution, is_synthetic_run
 from search_output import _collect_errors, _slow_query_ttl, build_funnel
+from serp_kill_log import clean_engine_lists
 from search_rank import (
     _LANG_SCRIPT,
     _RERANK_DEGRADED_STATUSES,
@@ -237,16 +238,8 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     merged = run.merged
 
     # 融合输入派生（原先在 execute_search 里，属于加工的第一步）
-    valid_lists = [
-        res for res in raw_results.values()
-        if res and any(isinstance(r, dict) and "error" not in r for r in res)
-    ]
-    # 去掉 error-only 列表中的 error 条目
-    clean_lists = []
-    for res in valid_lists:
-        clean = [r for r in res if isinstance(r, dict) and "error" not in r]
-        if clean:
-            clean_lists.append(clean)
+    # 去 error 与 SERP 守卫同源：缓存命中的结果也要过同一道门（issue #18）。
+    clean_lists = clean_engine_lists(raw_results, query)
 
     # 查询主语言：噪声门与语言能力加权共用同一个判定（唯一来源，
     # 避免两处各自算导致行为漂移）。

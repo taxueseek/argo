@@ -370,6 +370,26 @@ def _age_to_score(age_years: int, year: int, precise: bool) -> tuple[float, str]
 
 # ── 交叉验证 ──────────────────────────────────────────────────────────────────
 
+# 单条结果至少覆盖 20% 的 query 单元才算「与查询相关」。与 serp_guard 的
+# SERP 覆盖率门同量级，但两处判据独立：这里回答「这批结果里几条在答这题」，
+# serp_guard 回答「这一页 SERP 是不是整体答非所问」。
+_RELEVANCE_MIN_COVERAGE = 0.2
+
+
+def _relevance_units(text: str) -> set[str]:
+    """查询/结果 → 相关性比对单元（CJK 二元组 + 小写拉丁数字词）。
+
+    复用 rank_signals.relevance_units，避免再维护第三套分词口径。
+    import 放在函数内：evidence 不是搜索热路径，但 rank_signals 较重，
+    模块级导入会让所有 evidence 调用方一起付启动成本。
+    """
+    try:
+        from rank_signals import relevance_units
+        return set(relevance_units(text or ""))
+    except ImportError:
+        return {(text or "").lower()}
+
+
 def cross_validate(results: list[dict[str, Any]], query: str) -> dict[str, Any]:
     """多来源交叉验证。"""
     if len(results) < 2:
@@ -399,11 +419,19 @@ def cross_validate(results: list[dict[str, Any]], query: str) -> dict[str, Any]:
         if not is_serp_or_jump_url(url):
             content_domains.add(domain)
 
-    query_words = set(query.lower().split())
+    # 旧口径 `any(w in text for w in query.lower().split())` 在中文查询上
+    # 两个方向都错：无空格中文被当成一个整词，结果里永远不会出现整句，
+    # 真实相关也报 0/N；反过来，结果只要带「2026」这类年份就被算作相关，
+    # 年份表垃圾页也能过。改用 CJK 二元组覆盖率（issue #18 的「0/N」信号
+    # 只有在这个口径下才可信）。
+    q_units = _relevance_units(query)
     content_matches = 0
     for r in results:
-        text = f"{r.get('title', '')} {r.get('snippet', '')}".lower()
-        if any(w in text for w in query_words if len(w) > 1):
+        text = f"{r.get('title', '')} {r.get('snippet', '')}"
+        if not q_units:
+            continue
+        hit = q_units & _relevance_units(text)
+        if len(hit) / len(q_units) >= _RELEVANCE_MIN_COVERAGE:
             content_matches += 1
 
     match_ratio = content_matches / max(len(results), 1)

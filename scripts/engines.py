@@ -857,6 +857,15 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
     except Exception:
         results = []
     results = results or []
+    # SERP 相关度守卫统一在引擎执行出口判定。放在 builder 里会漏掉
+    # people_daily 这类模糊搜索 API：它匹配不到时回整页默认 feed，形态是
+    # 正常结果，只有按 query 覆盖率才判得出来（issue #18 复现 A）。
+    # builder 已经判过垃圾的 local_* 这里拿到空列表，按早退语义不重复记账。
+    try:
+        from serp_kill_log import serp_guard_apply
+        results = serp_guard_apply(engine, query, results)
+    except ImportError:
+        pass
     # 桶化后可能多于请求数：调用方按请求 n 截断语义由 execute_search 融合层负责；
     # 此处保留全量（缓存键按 eff_n 存，命中时同样可截）。
     return results

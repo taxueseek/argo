@@ -29,7 +29,19 @@ from search_attribution import aggregate_slow_engines  # noqa: E402
 def _query_summary(n: int) -> dict:
     rows = usage_log.tail("query", n)
     if not rows:
-        return {"samples": 0}
+        # 空日志（CI 全新 runner / 首次安装）也要给稳定的字段形状：夜间账本
+        # 直接读 avg_elapsed_ms，此前这里只回 {"samples": 0}，工作流每次
+        # 首次跑必炸 KeyError（issue #19）。指标用 None 而不是 0：0ms 会被
+        # 画成一条假曲线，None 才表示「没有样本」；调用方按 samples 判断。
+        return {
+            "samples": 0,
+            "result_rate": None,
+            "avg_elapsed_ms": None,
+            "recovered": 0,
+            "top_engines": [],
+            "slowest_engines": [],
+            "recent": [],
+        }
     counts = [r.get("count", 0) for r in rows]
     lat = [r.get("elapsed_ms") for r in rows if isinstance(r.get("elapsed_ms"), (int, float))]
     engines: Counter = Counter()

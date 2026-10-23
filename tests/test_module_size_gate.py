@@ -231,7 +231,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-16 +1：_content_sig 末尾接 normalize_title_suffix 剥站后缀"
               "（跨站同文对差异几乎全在结尾后缀，零依赖；归一化逻辑在 rank_signals）"),
     "scripts/search_pipeline.py": (
-        933, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+        926, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+             "2026-10-23 −8：融合输入改 serp_kill_log.clean_engine_lists"
+             "（守卫同时覆盖缓存命中，issue #18），上限 933 → 926；"
              "2026-10-22 解耦优化（-143 行）：恢复执行器 _recovery_executor 与 "
              "L3 换引擎策略独立拆入 recovery_runner.py，上限 1076 → 933，回落至 1000 行内；"
              "2026-10-19 −24：自适应学习循环改用 cache_guard.should_record_adaptive "

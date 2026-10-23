@@ -150,7 +150,7 @@ domains:
   name: fund_query
   parallel: false
   patterns:
-  - match: '(?i)(基金净值|基金排行|基金经理|公募基金|私募基金|公募|私募|选基|买基金|基金定投|基金收益|基金持仓)'
+  - match: '(?i)(基金净值|基金排行|基金经理|公募基金|私募基金|公募|私募|选基|买基金|基金定投|基金收益|基金持仓|基金代码|基金份额代码)'
     unless: '(?i)(管理办法|条例|法规|规定|征求意见|证监会令|逐条解读|政策解读|立方米|平米)'
   - (?i)\b(ETF|LOF|FOF)\b
   primary: eastmoney
@@ -266,12 +266,17 @@ domains:
   name: fx_query
   parallel: true
   patterns:
-  - 中间价|牌价|汇率|外币兑换|换汇
+  - match: '(?i)(中间价|牌价|汇率|外币兑换|换汇)'
+    # 代码语境里的「汇率/中间价」是在问库或接口，不是要今天的牌价。
+    # 实测「示例金融库 开源 接口 汇率 中间价 python github」被 fx_query
+    # 抢走，只返回一条 USD/CNY 中间价，用户要的库文档一条没有。
+    unless: '(?i)(python|github|api|接口|库|数据源|代码|开源|pip|npm|教程|安装)'
   - (?i)(exchange\s+rate|fx\s+rate|currency\s+rate|usd\s*/?\s*cny|usdcny|cny\s*/?\s*usd|\bcnh\b|offshore\s+yuan)
   - 离岸人民币|在岸人民币|离岸美元
   - (人民币|美元|欧元|英镑|日元|港币|港元|加元|澳元|瑞郎|新加坡元).{0,6}(升值|贬值|买入价|卖出价|钞买价|汇买价|中间价|走势)
   - (人民币|美元|欧元|英镑|日元|港币|港元|加元|澳元|瑞郎|新加坡元)\s*[/／兑対]\s*(人民币|美元|欧元|英镑|日元|港币|港元|加元|澳元|瑞郎|新加坡元)
-  - {match: 外汇, unless: 储备}
+  - match: '(?i)外汇'
+    unless: '(?i)(储备|python|github|api|接口|库|数据源|代码|开源)'
   primary: fx_rate
   early_stop_min_results: 3
   # 源保底分（score_floors）：汇率快照是「答案型」结果（标题是数字而非网页，
@@ -417,6 +422,10 @@ domains:
   # 裸 CVE 此前不认：第一条要求写成完整的 CVE-2024-1234，于是「CVE 漏洞」
   # 这种最自然的说法一个域都不命中，掉进通用兜底、nvd 选不上。
   - (?i)\bCVE(-|\b)
+  # 裸「漏洞/vulnerability」是最自然的说法，此前只收「漏洞+公告/情报/扫描…」，
+  # 实测「示例包 漏洞」掉进通用兜底、「示例 python package
+  # vulnerability」被 code_search 的 package 抢走。
+  - (?i)(漏洞|vulnerabilit(y|ies)|security\s+(issue|flaw|bug))
   - (?i)(安全漏洞|漏洞公告|漏洞情报|漏洞利用|漏洞评分|漏洞扫描|漏洞修复|CVSS|CVE|NVD|安全通告|zero.?day|零日漏洞|0day)
   - (?i)(security (advisory|vulnerability|bulletin)|cisa kev)
   - (?i)(在野利用|已被利用|\bkev\b|exploited in the wild)
@@ -457,6 +466,9 @@ domains:
   patterns:
   - (?i)(进出口|贸易额|双边贸易|贸易数据|进口额|出口额|comtrade)
   - (?i)(进口|出口|import|export).{0,12}\bHS?\s?\d{4}\b
+  # 海关商品编码是贸易统计字段，不是代码搜索；但裸「商品编码」也常指零售
+  # SKU，必须带海关/HS/关税语境才收，避免反向误伤。
+  - (?i)(HS\s*代码|HS\s*code|海关(商品)?编码|海关商品代码|(?:海关|HS|进出口|关税|贸易).{0,10}(商品编码|商品代码))
   primary: un_comtrade
 
 - desc: 天文/空间天气/卫星（Kp 指数、太阳活动区、卫星目录与 TLE 轨道根数）
@@ -611,7 +623,11 @@ domains:
   name: art_museum
   parallel: true
   patterns:
-  - (博物馆|馆藏|藏品|美术馆|文物|艺术品|雕塑|名画|油画|画作|画家|谁画的)
+  - (博物馆|藏品|美术馆|文物|艺术品|雕塑|名画|油画|画作|画家|谁画的)
+  # 「馆藏」在图书馆/电子书语境里不是博物馆意图。实测「图书馆 馆藏 电子全文」
+  # 被锁进 art_museum，Met Museum 源返回艺术史论文。
+  - match: '(?i)馆藏'
+    unless: '(?i)(图书馆|电子书|电子全文|书目|馆藏目录|馆藏查询|pdf|试读|ss\s*号)'
   - (?i)(met museum|museum collection|art collection|painting|sculpture|van gogh|\bmonet\b|picasso|vermeer)
   primary: met_museum
 
@@ -641,7 +657,7 @@ domains:
   name: financial_news
   parallel: true
   patterns:
-  - (?i)(研报|财报|公告|财经|宏观|央行政策|降息|加息|CPI|GDP|PMI)
+  - (?i)(研报|财报|公告|财经|宏观|央行政策|降准|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings report|annual report|announcement)
   primary: em_miaoxiang
   # 源保底分：cninfo 是官方公告源（标题是「年报」而非网页，token 覆盖低）
@@ -680,14 +696,11 @@ domains:
     unless: '(?i)(气候变化|极端天气|全球变暖|天气趋势|天气研究|天气影响|天气对)'
   # 日韩天气触发词（修复「東京の天気」「서울 날씨」漏召）
   - (?i)(天気|気温|予報|何度)
-  # 「雨/雪」此前裸放在上一条日文模式里，而这两个字在中文里**同时是图片词**
-  # （雪景/雨景/雪花/大雪壁纸）。实测代价：`雪景 壁纸`、`雨景 摄影`、
-  # `雪花 插画`、`壁纸 雪山`、`帮我找几张雪山壁纸` 全部被抢进 weather_query，
-  # 返回天气网和必应网页结果——图片需求一条图都拿不到。含「雪/雨」的中文
-  # 图片查询是高频场景（壁纸、摄影、插画），不是边缘 case。
-  # 与 geo_places 同法加让位表：出现图片/摄影语境时让位给 image_search，
-  # 其余情况仍按天气处理（「明天会下雪吗」照旧命中天气）。
-  - match: '(?i)(雨|雪)'
+  # 裸「雨/雪」在中文里大量作为构词成分出现（雪原、雪松、电动车…），
+  # 不是天气意图。2026-10-23 回放实测：「雪原 开源 投研 搜索工具」被判进
+  # weather_query，天气源返回「雪原…当前 14°C 晴」。改为只收明确的天气说法；
+  # 「明天会下雪吗」仍命中「下雪」，「雪景 壁纸」仍由 image_search 接。
+  - match: '(?i)(下雨|下雪|降雨|降雪|雨夹雪|暴雨|大雨|小雨|中雨|大雪|小雪|中雪|阵雨|雷阵雨|雨量|雪量|雨天|雪天|有雨|有雪)'
     unless: '(?i)(图片|壁纸|照片|图库|素材|插画|头像|背景图|桌面|png|jpg|海报|摄影|写真|剧照|表情|雪花|雪景|雨景|wallpaper|photo|image|picture|illustration|poster)'
   - (?i)(날씨|기온|온도|예보|몇\s*도)
   early_stop_min_results: 1
@@ -701,7 +714,7 @@ domains:
   name: modal_card
   parallel: false
   patterns:
-  - (?i)(火车票|高铁|动车|车次|火车时刻|高铁票价|高铁时刻)
+  - (?i)(火车票|高铁|(?<!电)动车|车次|火车时刻|高铁票价|高铁时刻)
   - (?i)(油价|今日油价|加油价格|成品油|柴油价格|汽油价格)
   - (?i)(金价|银价|黄金价格|铂金|钯金|贵金属行情|今日金价|今日银价)
   - (?i)(黄历|万年历|宜忌|农历查询|老黄历|吉日|黄道吉日)
@@ -982,7 +995,12 @@ domains:
   name: anime_encyclopedia
   parallel: false
   patterns:
-  - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|日本动画|新番动画|动画番剧|动画推荐|看动画|galgame|vtuber|虚拟主播|东方project|型月|(?-i:\bFate\b))
+  - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|日本动画|新番动画|动画番剧|动画推荐|看动画|galgame|vtuber|虚拟主播|东方project|(?-i:\bFate\b))
+  # 「型月」是 Type-Moon 专名，但在无空格中文里是「大模型月报」的子串：
+  # 实测「AI大模型月报 2026年8月」被锁进 anime_encyclopedia，萌娘百科返回
+  # 一款 2009 年的太空战略游戏。单独的型月查询仍保留。
+  - match: '(?i)型月'
+    unless: '(?i)(大模型|模型月报)'
   primary: moegirl
 - desc: 书籍/图书搜索（微信读书 + 豆瓣读书 + Open Library + Gutenberg）
   engines_combo:
@@ -1057,7 +1075,7 @@ domains:
   # 结果无关）。CJK 触发词不受影响，另补「亚运会」词条（此前漏配，
   # 「杭州亚运会场馆」落不进体育域）。
   - (?i:(?<![a-z0-9])(NBA|CBA|WNBA|NFL|NHL|MLB|MLS)(?![a-z0-9]))|(?i:(英超|西甲|德甲|意甲|法甲|中超|欧冠|亚冠|世界杯|欧洲杯|美洲杯|奥运会|残奥会|世锦赛|大奖赛|亚运会))
-  - (?i)(足球|篮球|网球|排球|乒乓球|羽毛球|棒球|橄榄球|高尔夫|F1|一级方程式|马拉松|田径|游泳|拳击|UFC|电竞战队)
+  - (?i)(足球|篮球|网球|排球|乒乓球|羽毛球|棒球|橄榄球|高尔夫|(?<![a-z0-9])F1(?![a-z0-9])|一级方程式|马拉松|田径|游泳|拳击|(?<![a-z0-9])UFC(?![a-z0-9])|电竞战队)
   - (?i)(决赛|半决赛|季后赛|总冠军|MVP|得分王|金靴|金球奖|转会|俱乐部|联赛|进球|助攻|夺冠|卫冕|球员|守门员|前锋|后卫)
   # 中英球队/效力语境（修复「库里 球队」「LeBron James team」「Ronaldo club」漏召）
   - (?i)(球队|球星|球会|球衣|队名|队史|效力于|效力|主教练|得分手)
@@ -1097,7 +1115,11 @@ domains:
   # 尽调词排除同因）。让位后落到 entity_search（其 patterns 含「总部在哪」）。
   - match: '(?i)(在哪里|在哪儿|在哪|位于|坐落|位置|坐标|经纬度|海拔|发源地|入海口|交汇|毗邻|接壤|边境|首都|省会|直辖市|地标|名胜|景点)'
     unless: '(?i)(报错|错误|日志|失败|异常|配置|设置|安装|修改|代码|接口|参数|文档|教程|图片|元素|居中|对齐|偏移|样式|布局|按钮|窗口|表格|控件|调整|总部|母公司|子公司|注册地|办公地)'
-  - (?i)(山脉|河流|湖泊|海洋|岛屿|半岛|沙漠|高原|盆地|峡谷|海峡|运河|瀑布|火山|冰川|赤道|经线|纬线|时区)
+  - match: '(?i)(山脉|河流|湖泊|海洋|岛屿|半岛|沙漠|高原|盆地|峡谷|海峡|运河|瀑布|火山|冰川|赤道|经线|纬线|时区)'
+    # 「火山引擎」是云产品，不是火山地貌。2026-10-23 回放实测：
+    # 「某云产品 官方 指南 火山引擎」被锁进 geo_places，主源
+    # local_openstreetmap 对产品名答非所问。
+    unless: '(?i)(火山(引擎|云|翻译|方舟)|volcengine|volcano\s+engine)'
   # 水系/行政区划事实（修复「黄河 流经省份」漏召）
   - (?i)(流经|途经|贯穿|横跨|流域|水系|汇入|注入|源头|入海|几省|省份|省区|行政区划|发源于)
   - (?i)(地理|地图|方位|东南西北|几公里|多远|距离.*多远|openstreetmap|nominatim|geonames)
@@ -1153,7 +1175,7 @@ domains:
   # 实控人/融资/股权）都不应命中本域——前者是招聘文案，后者 wikidata 无中国
   # 民企股东数据（实测 1.8s 只拿到两字「公司」）。
   - match: '(?i)(股份有限公司|有限公司|集团|控股|总部|成立于|创立于|创办于|创始人|CEO|董事长|市值|子公司|母公司)'
-    unless: '(?i)(岗位|职位|招聘|薪资|待遇|面试|简历|JD|工作内容|任职要求|岗位要求|股东|持股|实控人|融资|股权|注册资本|工商登记)'
+    unless: '(?i)(岗位|职位|招聘|薪资|待遇|面试|简历|JD|工作内容|任职要求|岗位要求|股东|持股|实控人|融资|股权|注册资本|工商登记|统一社会信用代码|社会信用代码|信用代码|法定代表人|经营范围|注册号|企业信息|工商信息)'
   - (?i)(创办年份|成立年份|创立年份|建校年份|成立时间|创办时间|创立时间|建校时间|何时成立|何时创办|何时创立)
   - (?i)(大学|学院|研究所|科学院|研究院).{0,12}(创办|成立|创立|建校)
   - (?i)\b([A-Z][A-Za-z0-9&.\- ]{1,40}\s+(Inc\.?|LLC|Ltd\.?|Corp\.?|Co\.|GmbH|S\.A\.|PLC))\b
@@ -1202,8 +1224,18 @@ domains:
   # 收「摄影作品/摄影图」这类带结果的写法。
   # 同理收「海报/封面图/图标/字体图」——实测 `vintage poster` 落
   # general_search、`海报` 落 chinese_general，都是明确的图片需求被截走。
-  - (?i)(图片|壁纸|照片|图库|素材|插画|无版权|免费图片|头像|背景图|表情图|png|jpg 图片|壁纸下载|摄影作品|摄影图|写真|剧照|雨景|雪景|夜景|风景照|风光照|海报|封面图|图标|logo 图|贴图|素材图|配图)
-  - (?i)\b(wallpaper|photo|image|picture|illustration|stock photo|free image|poster|icon set|clip ?art|thumbnail|artwork)\b
+  - (?i)(图片|壁纸|照片|图库|素材|插画|无版权|免费图片|头像|背景图|表情图|png|jpg 图片|壁纸下载|摄影作品|摄影图|写真|剧照|雨景|雪景|夜景|风景照|风光照|海报|封面图|logo 图|贴图|素材图|配图)
+  # 「图标」在 UI 排障句里指的是菜单栏/状态栏控件（图标不显示、图标消失），
+  # 不是找图需求。2026-10-23 回放实测：「菜单栏 第三方 图标 不显示 消失」
+  # 被锁进 image_search，主源 Openverse 返回图库结果。
+  - match: '(?i)图标'
+    unless: '(?i)(菜单栏|状态栏|工具栏|任务栏|dock|favicon|应用图标|app\s+icon|不显示|消失|丢失|missing|disappear|not\s+show|图标满|图标太多)'
+  # 单独的 image/picture 在技术任务句里是「处理图片」而非「找图」：
+  # 实测「PDF extract text image」被 image_search 接走。收窄到
+  # image/picture 这一条，wallpaper/photo/poster 等明确的找图词不受影响。
+  - match: '(?i)\b(image|picture)\b'
+    unless: '(?i)(extract|ocr|pdf|text|代码|python|api|库|命令|脚本|转换|识别|提取)'
+  - (?i)\b(wallpaper|photo|illustration|stock photo|free image|poster|icon set|clip ?art|thumbnail|artwork)\b
   primary: openverse
   # 版权优先：要「能合法用」的图时 openverse 带许可标注，ddgs 全网图多数
   # 无授权信息。两条并行取回后由合并层按需取舍，而不是先跑一条再补另一条
@@ -1307,7 +1339,9 @@ domains:
   # 注意 unless 是子串语义，写「对比|vs」会误伤「BERT vs GPT 对比实验」——
   # 学术对比通常带论文词（综述/实验/论文），由第 1 条兜住，这里只拦产品语境。
   - match: '(?i)(transformer|attention|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)'
-    unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙)'
+    # 「工程实践/博客/案例」是产品与经验文章语境，不是论文。实测「GPT
+    # 工程实践 清理死代码」被 academic 接走，arXiv 返回 AI 教育论文。
+    unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙|工程实践|实践|博客|文章|官方博客|公司|团队|案例)'
   - (?i)(論文|ジャーナル|学会誌|査読|研究論文|プレプリント)
   primary: arxiv
 - desc: 技术深度研究
@@ -1370,8 +1404,23 @@ domains:
   name: code_search
   parallel: true
   patterns:
-  - (?i)(github|source code|代码|源码|开源|函数|实现|用法|snippet)
-  - (?i)\b(API|api)\b|\b(repo|repository|library|package|npm|pip|cargo)\b
+  # 裸「开源」太宽：品牌/产品句（「雪原 开源 投研 搜索工具」）也会
+  # 命中，GitHub 慢源要 7s 且只回一条。只收「开源项目/代码/仓库/库/软件/
+  # 框架」这类明确指向代码仓库的说法；有 github/源码 的查询仍走本域。
+  - (?i)(github|source code|源码|开源\s*(项目|代码|仓库|库|软件|框架)|函数|实现|用法|snippet)
+  # 「统一社会信用代码」是工商登记字段，不是代码搜索。拆出「代码」单条，
+  # 让 company_search（更靠后）能接到这类查询。
+  - match: '(?i)(代码)'
+    # 「代码」在文章/工程实践句里是主题词，不是找仓库。实测「示例公司 官方
+    # 博客 … 维护代码库 … 死代码」被 code_search 接走，GitHub 返回 OpenGL
+    # 和 MDN 的 sidebarAction。让位给 chinese_tech_deep 的中文技术组合。
+    unless: '(?i)(统一社会信用代码|社会信用代码|信用代码|区划代码|行政代码|邮政编码|股票代码|证券代码|基金代码|基金份额代码|商品代码|HS\s*代码|海关编码|商品编码|验证码|信用卡|安全码|CVV|官方博客|博客|文章|工程实践|实践|维护|重构|死代码|屎山|清理|经验|案例|周报|月报)'
+  - (?i)\b(repo|repository|library|package|npm|pip|cargo)\b
+  # API 在「A vs B / 对比 / 区别」句里要的是概念解释，不是代码仓库：
+  # 实测「kubernetes ingress vs gateway api」被 code_search 接走，GitHub 回
+  # 两个示例仓、MDN 回 502/504 错误页。让位给 english_tech 的通用组合。
+  - match: '(?i)\b(API|api)\b'
+    unless: '(?i)(\bvs\b|\bversus\b|\bcompare\b|\bcomparison\b|\bdifference\b|对比|区别|差异)'
   - (?i)\b(example|examples|example\s+code)\b
   primary: github
 - desc: 网络梗/流行语/俚语/黑话
@@ -1477,7 +1526,12 @@ domains:
   parallel: true
   patterns:
   - (?i)(最新新闻|最新进展|今天发生|突发|breaking)
-  - (?i)\b(news|latest)\b
+  # `latest` 单独出现不足以判实时新闻：软件/技术查询（latest version、
+  # AI agent framework 2026 latest）会被误路由到这里，combo 只有新闻源。
+  # 只保留明确的新闻搭配（latest on/about/in、latest news/headlines/
+  # developments/events）；版本语义的 latest 让位给技术/通用域（issue #18）。
+  - (?i)\bnews\b
+  - (?i)\blatest\s+(?:on|about|in|news|headlines?|developments?|events?)\b
   primary: byted
 - desc: 中文技术深挖（先于英文技术域/中文通用域；要求含中文）
   engines_combo:
@@ -1490,8 +1544,13 @@ domains:
   name: chinese_tech_deep
   parallel: true
   patterns:
-  - (?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南|原理|底层|综述|深入|深挖|架构设计|实现|用法)
-  - (?i)[一-鿿].*(Rust|Python|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|AI编程|LLM|大模型|量子|神经网络|机器学习|深度学习)
+  - match: '(?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南|原理|底层|综述|深入|深挖|架构设计|实现|用法)'
+    unless: '(?i)(统一社会信用代码|社会信用代码|信用代码|区划代码|行政代码|邮政编码)'
+  # 拉丁语言名必须有字母数字边界：裸 alternation 会让 Go 命中 argo、让
+  # Java 命中 JavaScript（顺序靠前会截断）。实测「重启后 django 自检」被
+  # 「Go ⊂ argo」锁进本域。
+  - (?i)[一-鿿].*(?<![a-zA-Z0-9])(Rust|Python|Golang|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|LLMs?)(?![a-zA-Z0-9])
+  - (?i)[一-鿿].*(AI编程|大模型|量子|神经网络|机器学习|深度学习)
   primary: byted
 - desc: 英文技术通用（octen 主搜，低延迟；anysearch #2 作 hedged 救援；先于 catch-all）
   engines_combo:

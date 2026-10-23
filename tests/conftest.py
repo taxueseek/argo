@@ -104,6 +104,40 @@ def _isolate_conn_pool():
     conn_pool.clear()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_adaptive_and_breaker(tmp_path_factory, monkeypatch):
+    """自适应成绩与熔断状态都是**跨用例共享的进程级/磁盘状态**。
+
+    实测（2026-10-23）：`test_full.py` 等真跑 super_search 的用例会把
+    local_bing 的低分写进共享 adaptive 库；几十个用例之后，这个分数足以
+    把它挤出路由 combo，表现为 test_multilingual / test_route_golden 只在
+    全量套件里红、单跑全绿。熔断状态同理（状态目录整轮共享）。
+
+    每个用例换一份临时 adaptive.db / circuit_breaker.json，并清掉模块级
+    单例；`route_combo` 也缓存了 learner，必须一并回到未解析哨兵。
+    临时目录用 tmp_path_factory 另开，**不能复用用例自己的 tmp_path**——
+    「基准跑完不得留文件」一类断言会把它当成被测代码的残留。
+    """
+    try:
+        import adaptive
+        import circuit_breaker
+        import route_combo
+    except ImportError:
+        yield
+        return
+    state_dir = tmp_path_factory.mktemp("engine-state")
+    monkeypatch.setattr(adaptive, "DB_PATH", state_dir / "adaptive.db")
+    adaptive._learner = None
+    route_combo._adaptive_learner = route_combo._UNRESOLVED
+    _old_breaker = circuit_breaker._breaker
+    circuit_breaker._breaker = circuit_breaker.CircuitBreaker(
+        state_path=str(state_dir / "circuit_breaker.json"))
+    yield
+    adaptive._learner = None
+    route_combo._adaptive_learner = route_combo._UNRESOLVED
+    circuit_breaker._breaker = _old_breaker
+
+
 @pytest.fixture
 def allow_fake_hosts(monkeypatch):
     """让「假域名」不再真的走 DNS：`docs.example.com` 这类地址在本地可能被

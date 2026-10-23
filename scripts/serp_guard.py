@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""serp_guard — HTML SERP 垃圾结果守卫（判定规则单点）。
+"""serp_guard — SERP / 模糊搜索结果的垃圾结果守卫（判定规则单点）。
 
 事故背景（dsh-free-search issue #38/#35 同款事故，argo 的 local_* 引擎同样
 暴露）：html 引擎解析的是无 API 的网页 SERP，上游偶发把缓存 SERP / 与查询
-完全无关的结果页当正常页返回，解析层照常抽出标题摘要，垃圾条目静默混进
-聚合，调用方把「答非所问」当成「网上没有」——失败伪装成功是红线，这类
-混入是它的隐形变体。
+完全无关的结果页当正常页返回；模糊搜索 API（people_daily 的 isFuzzy=True）
+匹配不到时则回整页默认 feed。两种形态都是「答非所问但看起来正常」，解析层
+照常抽出标题摘要，垃圾条目静默混进聚合，调用方把「答非所问」当成「网上
+没有」——失败伪装成功是红线，这类混入是它的隐形变体。
 
 裁决口径（全部量化，无模糊地带）：
 
@@ -16,7 +17,13 @@
   2. results 只取前 5 条；每条取 title+snippet。URL 不参与：缓存/跳转
      链接的 URL 常回显 query 参数（uddg=、q=），会正好把垃圾页放行，
      标题+摘要才是「这页在答什么」的信号。
-  3. 前 5 条全部与 query token 零交集 → 整页判垃圾（True）。
+  3. 前 5 条里没有任何一条覆盖 query token 的 20% → 整页判垃圾（True）。
+     只判「有没有一个词命中」不够：实测「2026年新能源汽车销量数据」经
+     local_bing 返回的五条全是 2026 年节假日/维基页面，只命中「2026」一个
+     数字 token，旧判据（有交集即放行）把整页垃圾放了过去，而核心词
+     「新能源汽车销量数据」全部缺席。覆盖率 1/9 远低于门槛。
+     中文查询在存在 CJK 二元组时**不把纯数字 token 计入分母**：年份是最
+     容易被无关页面顺带命中的词，不能拿它当相关性证据。
 
 为什么调用方对判垃圾应整页丢弃而不是过滤后返回幸存者：前 5 条全无关说明
 这一页整体答非所问（缓存页/错路由），幸存的一两条是同一页的噪声，过滤
@@ -43,6 +50,7 @@ from urllib.parse import urlparse
 _RUN_RE = re.compile(r"[\u4e00-\u9fff]+|[a-z0-9]+")
 _GUARD_WINDOW = 5      # 只看前 5 条：SERP 的「答非所问」看头部即可下结论
 _MIN_QUERY_TOKENS = 2  # query token 少于此数 → 无裁决权，恒不拦
+_MIN_COVERAGE = 0.2    # 单条结果至少要覆盖 20% 的 query token 才算「在答这题」
 _SWITCH_ENV = "ARGO_SERP_GUARD"
 
 
@@ -69,6 +77,20 @@ def _result_text(item: object) -> str:
     return f"{item.get('title') or ''} {item.get('snippet') or ''}"
 
 
+def _query_tokens(query: str) -> set[str]:
+    """query token；中文查询里纯数字不参与（年份不是相关性证据）。
+
+    有 CJK 二元组说明查询主体是中文短语，此时「2026」这类数字是最容易被
+    无关页面顺带命中的 token（节假日表、维基年表都带年份），留在分母里会
+    把覆盖率算高、把垃圾页放行。纯拉丁查询（如「2026 GDP」）没有这个问题，
+    数字是有信息的，照常保留。
+    """
+    tokens = _extract_tokens(query)
+    if any("\u4e00" <= ch <= "\u9fff" for tok in tokens for ch in tok):
+        tokens = {tok for tok in tokens if not tok.isdigit()}
+    return tokens
+
+
 def is_junk_serp(query: str, results: list[dict]) -> bool:
     """判一页 SERP 结果是否整体答非所问（口径见模块 docstring）。
 
@@ -77,7 +99,7 @@ def is_junk_serp(query: str, results: list[dict]) -> bool:
     """
     if not guard_enabled():
         return False
-    q_tokens = _extract_tokens(query if isinstance(query, str) else "")
+    q_tokens = _query_tokens(query if isinstance(query, str) else "")
     if len(q_tokens) < _MIN_QUERY_TOKENS:
         return False
     if not isinstance(results, list):
@@ -86,7 +108,8 @@ def is_junk_serp(query: str, results: list[dict]) -> bool:
     if not head:
         return False
     for item in head:
-        if _extract_tokens(_result_text(item)) & q_tokens:
+        hit = _extract_tokens(_result_text(item)) & q_tokens
+        if len(hit) / len(q_tokens) >= _MIN_COVERAGE:
             return False
     return True
 

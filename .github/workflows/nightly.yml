@@ -94,20 +94,33 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
       - name: 导出指标
+        id: metrics
         run: |
           python bin/argo stats > stats.json
           python - <<'PY'
           import json
+          import os
+
           d = json.load(open("stats.json"))["query"]
-          rows = [
-              {"name": "avg_elapsed_ms", "unit": "ms", "value": d["avg_elapsed_ms"]},
-              {"name": "result_rate", "unit": "ratio", "value": round(d["result_rate"] * 100, 2)},
-          ]
+          samples = int(d.get("samples") or 0)
+          rows = []
+          # 全新 runner 没有使用日志：samples=0 时指标为 None（不是 0）。
+          # 空数据不喂给 benchmark-action——0ms 会被画成一条比真实值好得多
+          # 的假曲线，也会让下游以为「今天变快了」。没有样本就不记点。
+          if samples and d.get("avg_elapsed_ms") is not None:
+              rows = [
+                  {"name": "avg_elapsed_ms", "unit": "ms", "value": d["avg_elapsed_ms"]},
+                  {"name": "result_rate", "unit": "ratio",
+                   "value": round((d.get("result_rate") or 0) * 100, 2)},
+              ]
           open("bench.json", "w").write(json.dumps(rows))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"samples={samples}\n")
           PY
       # 首次启用曲线：仓库里要有 gh-pages 分支（或把 auto-push 打开）。
       # 现在只产出报告，不让夜间任务因为缺分支而红。
       - uses: benchmark-action/github-action-benchmark@v1
+        if: steps.metrics.outputs.samples != '0'
         with:
           tool: customSmallerIsBetter
           output-file-path: bench.json

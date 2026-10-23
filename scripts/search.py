@@ -930,8 +930,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         from serp_kill_log import drain_serp_guard_kills
         for _kill in drain_serp_guard_kills():
             result.setdefault("errors", []).append(
-                f"serp_guard: {_kill['engine']} 整页判垃圾被拦下"
-                f"（{_kill['results']} 条，疑似 SERP/跳转壳占比高）——"
+                f"serp_guard: {_kill['engine']} 头部结果均未覆盖 20% 查询词，"
+                f"整页按答非所问丢弃（{_kill['results']} 条）——"
                 "如需复核可设 ARGO_SERP_GUARD=0 重跑")
     except ImportError:
         pass

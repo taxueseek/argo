@@ -161,6 +161,18 @@ def test_every_rule_compiles_and_survives_compilation():
         ("em_news_search", "金十 7x24 快讯"),
         # legal unless（2026-10-22）：「裁判文书/判决书/裁定书」让位给 wenshu_query
         ("legal", "裁判文书 判决书"),
+        # anime_encyclopedia unless（2026-10-23）：「型月」是 Type-Moon 专名，
+        # 但裸子串会命中「大模型月报」
+        ("anime_encyclopedia", "AI大模型月报 2026年8月 汇总 博客园"),
+        # art_museum unless（2026-10-23）：「馆藏」在图书馆/电子书语境里
+        # 不是博物馆意图
+        ("art_museum", "图书馆 馆藏 电子全文 查询"),
+        # chinese_tech_deep unless（2026-10-23）：统一社会信用代码是工商字段
+        ("chinese_tech_deep", "统一社会信用代码 查询"),
+        # code_search unless（2026-10-23）：同上，代码域不接工商登记字段
+        ("code_search", "统一社会信用代码 查询"),
+        # image_search unless（2026-10-23）：菜单栏图标排障不是找图
+        ("image_search", "菜单栏图标不显示"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -178,7 +190,9 @@ def test_unless_has_a_negative_case(domain_name, query):
 def test_unless_declared_domains_are_covered_by_negative_cases():
     """声明了 unless 的域，必须在上面的反例表里出现（新增域时别忘配反例）。"""
     covered = {"weather_query", "geo_places", "academic", "fund_query", "org_entity",
-               "fx_query", "cls_telegraph_search", "em_news_search", "legal"}
+               "fx_query", "cls_telegraph_search", "em_news_search", "legal",
+               "anime_encyclopedia", "art_museum", "chinese_tech_deep",
+               "code_search", "image_search"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

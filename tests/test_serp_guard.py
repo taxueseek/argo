@@ -126,6 +126,56 @@ class TestBoundaries:
         assert is_junk_serp("quantum computing tutorial", [{"url": "https://x.com"}]) is True
 
 
+class TestCoverageThreshold:
+    """覆盖率门：只命中年份/一个高频词不算「在答这题」。"""
+
+    # issue #18 复现 B 的真实返回：查询问新能源汽车销量，返回全是 2026 年
+    # 节假日/维基/经济数据页，只命中「2026」和偶尔一个「数据」。
+    YEAR_ONLY = [
+        {"title": "2026年前三季度经济数据_中国政府网", "snippet": "2026经济数据、GDP、CPI。"},
+        {"title": "2026 - Wikipedia", "snippet": "2026 (MMXXVI) is the current year."},
+        {"title": "2026年国际足联世界杯_百度百科", "snippet": "2026年美加墨世界杯。"},
+        {"title": "2026中国节假日安排", "snippet": "元旦、春节、清明。"},
+        {"title": "2026年 - 维基百科", "snippet": "7月21日非盟峰会。"},
+    ]
+
+    def test_year_only_pollution_blocked(self):
+        assert is_junk_serp("2026年新能源汽车销量数据", self.YEAR_ONLY) is True
+
+    def test_relevant_2026_result_kept(self):
+        related = [{"title": "2026年新能源汽车销量数据出炉", "snippet": "全年销量同比增长。"}]
+        assert is_junk_serp("2026年新能源汽车销量数据", related) is False
+
+    def test_partial_topic_match_kept(self):
+        """命中核心话题（汽车/销量）即可，不要求逐字覆盖整个查询。"""
+        related = [{"title": "2026年新能源汽车销量", "snippet": "销量数据。"}]
+        assert is_junk_serp("2026年新能源汽车销量数据", related) is False
+
+    def test_numeric_token_kept_for_latin_query(self):
+        """纯拉丁查询里的数字有信息（如「2026 gdp」），不适用中文剔除规则。"""
+        related = [{"title": "2026 GDP forecast", "snippet": "World Bank outlook."}]
+        assert is_junk_serp("2026 gdp", related) is False
+
+
+class TestCachedResultsGuard:
+    """缓存命中的结果不走 engines.search，融合前必须再过同一道门。"""
+
+    def test_cached_junk_dropped_but_good_engine_kept(self):
+        from serp_kill_log import clean_engine_lists
+        raw = {
+            "local_bing": TestCoverageThreshold.YEAR_ONLY,
+            "you": [{"title": "2026年新能源汽车销量数据 - 中汽协",
+                     "snippet": "全年销量数据出炉", "source": "you"}],
+        }
+        lists = clean_engine_lists(raw, "2026年新能源汽车销量数据")
+        assert len(lists) == 1
+        assert lists[0][0]["source"] == "you"
+
+    def test_none_and_error_lists_are_skipped(self):
+        from serp_kill_log import clean_engine_lists
+        assert clean_engine_lists({"a": None, "b": [], "c": [{"error": "x"}]}, "q") == []
+
+
 class TestKillSwitch:
     """ARGO_SERP_GUARD=0 整体关闭；其余取值（含未设置）均开启。"""
 
@@ -145,7 +195,7 @@ class TestEnginesBaseWiring:
 
     def test_frozen_engine_set(self):
         assert engines_base.SERP_GUARD_ENGINES == frozenset({
-            "local_bing", "local_baidu", "local_sogou",
+            "local_bing", "local_baidu", "local_sogou", "people_daily",
         })
 
     def test_member_engine_junk_dropped(self):
@@ -222,3 +272,38 @@ class TestFullEngineChain:
         html = _serp_html([(r["title"], "https://j.example.com/a", r["snippet"]) for r in JUNK_EN])
         out = self._run(bing_engine, monkeypatch, html, "quantum computing tutorial")
         assert len(out) == 5
+
+
+class TestPeopleDailyWiring:
+    """people_daily 的 isFuzzy=True 在无匹配时回默认 feed（issue #18 复现 A）。"""
+
+    FEED = [
+        {"title": "百年银幕之旅 新书《电影之城 光影百年》发布",
+         "snippet": "上海电影百年回顾。", "url": "http://sh.people.com.cn/a.html"},
+        {"title": "学习手记 | 饮水思源 勿忘老区",
+         "snippet": "红军长征胜利90周年。", "url": "http://politics.people.com.cn/b.html"},
+    ]
+
+    @staticmethod
+    def _search(monkeypatch, records):
+        """在引擎执行出口测：守卫统一挂在 engines.search，而不是各 builder。"""
+        import engines as E
+
+        def fake_fn(query, n, timeout, depth="fast", mode="fast", **kw):
+            return [dict(r) for r in records]
+
+        monkeypatch.setattr(E, "get_registry", lambda: {"people_daily": fake_fn})
+        return E.search
+
+    def test_default_feed_dropped(self, monkeypatch):
+        search = self._search(monkeypatch, self.FEED)
+        assert search("dsh plugin market dshmarket latest version", "people_daily",
+                      n=5, timeout=1) == []
+
+    def test_relevant_records_kept(self, monkeypatch):
+        search = self._search(monkeypatch, [
+            {"title": "人工智能大会开幕", "snippet": "人工智能技术进展。",
+             "url": "http://x.people.com.cn/c.html", "source": "people_daily"},
+        ])
+        out = search("人工智能", "people_daily", n=5, timeout=1)
+        assert len(out) == 1 and out[0]["source"] == "people_daily"

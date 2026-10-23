@@ -16,9 +16,11 @@ import threading
 from typing import Any
 
 # 判定规则与逃生门（ARGO_SERP_GUARD=0）在 serp_guard 单点；这里只登记
-# 哪些引擎接了守卫（解析上游 HTML 页最易被缓存 SERP 静默命中）。
+# 哪些引擎接了守卫（解析上游 HTML 页 / 模糊搜索接口最易被缓存 SERP 或
+# 默认 feed 静默命中）。people_daily 的 isFuzzy=True 在匹配不到时返回整页
+# 最新 feed（issue #18 复现 A），与 local_* 同属「答非所问但形态正常」。
 SERP_GUARD_ENGINES = frozenset({
-    "local_bing", "local_baidu", "local_sogou",
+    "local_bing", "local_baidu", "local_sogou", "people_daily",
 })
 
 # 进程级 + 锁。并发搜索下 drain 可能拿到彼此的条目——条目只含引擎名与
@@ -49,3 +51,24 @@ def drain_serp_guard_kills() -> list[dict[str, Any]]:
         kills = list(_KILLS)
         _KILLS.clear()
         return kills
+
+
+def clean_engine_lists(raw_results: dict[str, list[Any]],
+                       query: str) -> list[list[dict[str, Any]]]:
+    """raw_results{engine → results} → 去 error + SERP 守卫后的非空列表。
+
+    守卫必须同时覆盖缓存命中：per-engine 缓存走 engine_dispatch，不经过
+    engines.search，旧条目里的默认 feed/垃圾 SERP 会以 `ok-cached` 直接
+    返回（issue #18 的 14ms 复现）。融合前按引擎整页判定一次，缓存与网络
+    两条路径就收敛到同一口径；engines.search 里的守卫保留，因为它还要
+    阻止垃圾结果影响早停判定。
+    """
+    out: list[list[dict[str, Any]]] = []
+    for eng, res in (raw_results or {}).items():
+        goods = [r for r in (res or []) if isinstance(r, dict) and "error" not in r]
+        if not goods:
+            continue
+        goods = serp_guard_apply(eng, query, goods)
+        if goods:
+            out.append(goods)
+    return out
