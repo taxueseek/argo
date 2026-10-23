@@ -153,3 +153,18 @@ def test_extras_reuses_cached_venv_but_self_heals():
     assert ".venv/bin/python -c" in text, "缺依赖探针：缓存坏了会整轮红"
     assert "steps.deps.outputs.ready != 'true'" in raw, "探针结论没接到安装步骤的 if"
     assert "rm -rf .venv" in text, "旧 venv 失效时必须重建"
+
+
+def test_release_uses_versioned_notes_when_present():
+    """发布正文优先用 docs/RELEASE_NOTES_<tag>.md。
+
+    为什么锁：`generate_release_notes: true` 只按 PR/commit 作者生成正文，
+    issue 报告者的致谢不会出现；版本化发布说明里写了署名，必须让它进
+    Release 正文，而不是只躺在仓库里。
+    """
+    doc = _load("release.yml")
+    assert doc["jobs"]["publish-release"], "release.yml 解析后没有作业"
+    raw = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    assert "docs/RELEASE_NOTES_${tag}.md" in raw
+    assert "body_path: ${{ steps.notes.outputs.path }}" in raw
+    assert "generate_release_notes: false" in raw

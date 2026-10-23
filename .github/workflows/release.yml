@@ -39,9 +39,34 @@ jobs:
         run: |
           bash scripts/build_release_assets.sh
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Resolve release notes
+        id: notes
         if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          notes="docs/RELEASE_NOTES_${tag}.md"
+          if [ -f "$notes" ]; then
+            echo "path=$notes" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 有版本化发布说明时以它为准：正文里的致谢（issue 报告者）不会出现在
+      # GitHub 自动生成的 notes 里——后者只按 PR/commit 作者生成。
+      - name: Create GitHub Release (versioned notes)
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') && steps.notes.outputs.found == 'true'
+        with:
+          files: |
+            dist/*
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: false
+
+      # 没有同名发布说明时保持旧行为。
+      - name: Create GitHub Release (generated notes)
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') && steps.notes.outputs.found != 'true'
         with:
           files: |
             dist/*
