@@ -183,7 +183,9 @@ def test_crawl_bfs_parallel(tmp_path, monkeypatch):
                 "content_len": 50}
 
     monkeypatch.setattr(crawl, "_crawl_fetch", fake_fetch)
+    # interval=0：本用例验的是 frontier 的并发能力，同主机礼貌间隔由
+    # test_crawl_policy 单独锁定；默认 1s 会把两次请求错开成串行。
     r = crawl.crawl_bfs("http://example.com", max_pages=4, max_depth=1,
-                        timeout=3)
+                        timeout=3, interval=0)
     assert len(r["pages"]) >= 1
     assert active["max"] > 1, "frontier 应并行抓取（修复前串行 max=1）"

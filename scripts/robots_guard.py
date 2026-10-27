@@ -241,6 +241,32 @@ def robots_blocked(url: str, timeout: float = 5.0) -> bool:
         return False  # 解析异常 → 放行
 
 
+def crawl_delay(url: str, timeout: float = 5.0) -> float | None:
+    """robots.txt 为该站声明的 Crawl-delay（秒）；没有声明或取不到返回 None。
+
+    只取通配 UA 的声明：本技能 UA 轮换，具体 UA 的 delay 会漏掉 `User-agent: *`。
+    与 robots_blocked 共用同一个解析器缓存，不会为此多抓一次 robots.txt。
+    """
+    if not _robots_enabled():
+        return None
+    scheme, host = _domain_key(url)
+    if not host:
+        return None
+    rp = _get_parser(scheme, host, timeout)
+    if rp is None:
+        return None
+    try:
+        value = rp.crawl_delay("*")
+    except Exception:
+        return None
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # ─── 测试辅助 ────────────────────────────────────────────────────────────────
 
 def clear_cache() -> None:

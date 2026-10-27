@@ -104,7 +104,9 @@ def test_crawl_bfs_discovers_links_from_html(monkeypatch):
                 "html": "<html><a href='/a'>A</a><a href='/b'>B</a></html>",
                 "url": url,
             }
-        return {"success": True, "content": "leaf", "html": "", "url": url}
+        # 正文必须各不相同：crawl 现在按正文哈希去重，两页都返回 "leaf" 会被
+        # 当成同一页（本用例要验的是链接发现，不是去重行为）。
+        return {"success": True, "content": f"leaf {url}", "html": "", "url": url}
 
     monkeypatch.setattr(crawl_mod, "fetch_page", fake_fetch)
     r = crawl_mod.crawl_bfs("http://example.com/", max_pages=3, max_depth=1)

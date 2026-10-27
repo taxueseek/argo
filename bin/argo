@@ -559,7 +559,7 @@ Usage:
   argo evidence  "query"          可信度评估（自动搜索 → 评分，或 pipe 搜索结果）
   argo clarify   "query"          意图消歧（歧义检测+意图分类+路由建议）
   argo fetch     "url"            抓取单页正文（多级降级：HTTP 内容协商→md 变体回探→TLS 指纹→jina→Parallel→浏览器；--full 读全文存档）
-  argo crawl     "url"            站点爬取（sitemap/BFS，多页抓取）
+  argo crawl     "url"            站点爬取（BFS/sitemap；--query BM25 聚焦 / --full 全文 / --scope auto|path|domain）
   argo extract   "url"            结构化提取（表格/Meta/JSON-LD）
   argo article   "url"            微信公众号文章全文抓取（标题/正文/图片）
   argo wx        "url"            微信文章多级降级抓取（HTTP→CDP→搜狗；推荐）
