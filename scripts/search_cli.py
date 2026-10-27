@@ -102,6 +102,17 @@ def _max_results_arg(value: str) -> int:
     return n
 
 
+def _non_negative_int(value: str) -> int:
+    """argparse 的 `type=`：时长等非负整数（负值不是「不限」，是坏输入）。"""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"必须是整数，收到 {value!r}") from None
+    if n < 0:
+        raise argparse.ArgumentTypeError(f"不能为负（收到 {n}）")
+    return n
+
+
 def build_parser() -> argparse.ArgumentParser:
     """构造 CLI 参数解析器。
 
@@ -159,6 +170,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sort", default="relevance",
                         choices=["relevance", "oldest", "newest"],
                         help="时间排序：relevance=相关度（默认）, oldest=最早在前（溯源）, newest=最新在前")
+    parser.add_argument("--video", action="store_true",
+                        help="只搜视频源（B 站 + anysearch），并只保留视频结果；"
+                             "不带此开关时视频源只按显式意图路由进入 combo")
+    parser.add_argument("--min-duration", type=_non_negative_int, default=None,
+                        metavar="SEC",
+                        help="视频最短时长（秒）；B 站下推 duration 档位，"
+                             "其他源按已返回的时长字段后过滤，时长未知的保留")
+    parser.add_argument("--max-duration", type=_non_negative_int, default=None,
+                        metavar="SEC",
+                        help="视频最长时长（秒）；语义同 --min-duration")
     parser.add_argument("--include-domains", default="",
                         help="仅保留这些域名（含子域），逗号分隔，如 github.com,arxiv.org")
     parser.add_argument("--exclude-domains", default="",
@@ -438,6 +459,9 @@ def main():
 
     if not args.query:
         parser.error("必须提供搜索关键词")
+    if (args.min_duration is not None and args.max_duration is not None
+            and args.min_duration > args.max_duration):
+        parser.error("--min-duration 不能大于 --max-duration")
 
     # envelope 默认**关**，要时显式开（--envelope / --archive）。
     #
@@ -499,6 +523,9 @@ def main():
         since=args.since,
         until=args.until,
         sort=args.sort,
+        video_only=args.video,
+        min_duration=args.min_duration,
+        max_duration=args.max_duration,
         include_domains=[d for d in args.include_domains.split(",") if d.strip()] or None,
         exclude_domains=[d for d in args.exclude_domains.split(",") if d.strip()] or None,
         engine_domain=engine_domain,

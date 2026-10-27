@@ -260,6 +260,10 @@ CLI_PASSTHROUGH_FIELDS = (
     "image", "thumbnail", "width", "height", "duration", "provider",
     "image_url", "image_license", "image_license_url",
     "image_width", "image_height", "image_commercial_ok",
+    # 视频引擎（B 站）把时长/UP 主/播放量/弹幕放在 social_meta 里；不在这份
+    # 白名单里就会被解析层整块丢掉，下游只能看到 content_type=web_page 和
+    # 全 null 的 metrics（2026-10-27 实测 13 条视频候选元数据全丢的根因）。
+    "social_meta",
 )
 
 

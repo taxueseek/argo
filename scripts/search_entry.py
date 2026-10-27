@@ -209,6 +209,15 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
         cache_engine_key += f"|since={since_iso}"
     if until_iso and time_aware:
         cache_engine_key += f"|until={until_iso}"
+    # 视频模式与时长过滤进缓存键：--video 与 auto 的结果集不同（前者强制
+    # 只留视频），--min-duration 也会改变最终条数；不隔离就会把未过滤的
+    # 旧结果当成带条件的答案发回去。
+    if (decision or {}).get("video_only"):
+        cache_engine_key += "|video=1"
+    _min_d = (decision or {}).get("min_duration")
+    _max_d = (decision or {}).get("max_duration")
+    if _min_d is not None or _max_d is not None:
+        cache_engine_key += f"|dur={_min_d or 0}-{_max_d or 0}"
 
     if on_progress:
         on_progress(Stage.ROUTING, {"domain": domain, "engine": engine_label, "engines": engines})

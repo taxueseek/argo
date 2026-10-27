@@ -82,7 +82,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
-| `anysearch` | 可直接用 | 免费 | 1000/天 | — | 域 ai_model、域 book_search、域 chinese_general、域 claim_check、域 code_search、域 crypto_search、域 dataset_search、域 dsh_plugin_search、域 earth_science、域 energy_grid、域 english_tech、域 financial_news、域 fund_query、域 futures_market、域 fx_query、域 game_search、域 hackernews_search、域 hk_filings、域 image_search、域 japan_law、域 kor_law、域 law_text、域 legal、域 lifecycle_search、域 local_code、域 local_general、域 macro_data、域 medical、域 meme_slang、域 outbreak_health、域 package_intel、域 prediction_market、域 redskill_search、域 rfc_search、域 sec_filings、域 security_search、域 semantic_discovery、域 shopping、域 skill_search、域 soil_agri、域 sports_search、域 stackoverflow_search、域 stock_query、域 ths_hot_search、域 trade_stats、域 transport_rt、域 us_fundamentals、域 us_legal、域 us_stock、域 v2ex_search、域 vehicle_data、域 wechat_search、域 wenshu_query、域 world_news、域 zhihu_content、深度研究 boost、语义画像命中、通用兜底链 | 通用搜索主力，进程内 JSON-RPC（HttpClient），零 token |
+| `anysearch` | 可直接用 | 免费 | 1000/天 | — | 域 ai_model、域 book_search、域 chinese_general、域 claim_check、域 code_search、域 crypto_search、域 dataset_search、域 dsh_plugin_search、域 earth_science、域 energy_grid、域 english_tech、域 financial_news、域 fund_query、域 futures_market、域 fx_query、域 game_search、域 hackernews_search、域 hk_filings、域 image_search、域 japan_law、域 kor_law、域 law_text、域 legal、域 lifecycle_search、域 local_code、域 local_general、域 macro_data、域 medical、域 meme_slang、域 outbreak_health、域 package_intel、域 prediction_market、域 redskill_search、域 rfc_search、域 sec_filings、域 security_search、域 semantic_discovery、域 shopping、域 skill_search、域 soil_agri、域 sports_search、域 stackoverflow_search、域 stock_query、域 ths_hot_search、域 trade_stats、域 transport_rt、域 us_fundamentals、域 us_legal、域 us_stock、域 v2ex_search、域 vehicle_data、域 video、域 wechat_search、域 wenshu_query、域 world_news、域 zhihu_content、深度研究 boost、语义画像命中、通用兜底链 | 通用搜索主力，进程内 JSON-RPC（HttpClient），零 token |
 | `exa` | 可直接用 | 按调用计费 | 1000/月 | — | 域 english_tech、域 semantic_discovery、域 us_stock、深度研究 boost | Exa 语义搜索（embedding 匹配 + 内容摘要，新户 $20 赠金 + 每月 $10 赠金） |
 | `firecrawl` | 可直接用 | 免费 | 1000/月 | — | 域 semantic_discovery、通用兜底链 | Firecrawl 云搜索（search+全文markdown，JS渲染/学术/PDF垂直，keyless 免费层 1000 credits/月） |
 | `keenable_free` | 可直接用 | 免费 | 不限 | — | 通用兜底链 | Keenable 官方免 key 匿名通道（通用网页搜索，无需注册） |
@@ -244,7 +244,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
-| `bilibili` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | B站 |
+| `bilibili` | 可直接用 | 免费 | 不限 | — | 域 social、域 video、语义画像命中 | B站 |
 | `csdn` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community | CSDN 搜索（so.csdn.net v3 JSON，免认证；标题与摘要的高亮标签、URL 追踪参数在引擎内清洗） |
 | `fxtwitter` | 可直接用 | 免费 | 不限 | — | 域 social | FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据） |
 | `hackernews` | 可直接用 | 免费 | 不限 | — | 域 hackernews_search、域 social | Hacker News（Algolia API，科技新闻+讨论） |
@@ -467,7 +467,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 六、分发域清单（自动生成）
 
-共 98 个业务域；命中即按域内的组合取源（多意图时按配置顺序取，窄意图域排在宽泛域之前）。自己看某个域为什么选这些源，看 `config.yaml` 的 `domains` 段。
+共 99 个业务域；命中即按域内的组合取源（多意图时按配置顺序取，窄意图域排在宽泛域之前）。自己看某个域为什么选这些源，看 `config.yaml` 的 `domains` 段。
 
 | 域 | 主源 | 组合 |
 |---|---|---|
@@ -561,6 +561,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `chinese_tech_deep` | `byted` | `byted`、`octen`、`juejin`、`cn_ai_news`、`parallel` |
 | `english_tech` | `octen` | `octen`、`anysearch`、`exa`、`keenable` |
 | `company_search` | `opencorporates` | `yuanbao`、`gleif`、`opencorporates`、`cninfo`、`baidu_baike` |
+| `video` | `bilibili` | `bilibili`、`anysearch` |
 | `chinese_general` | `bocha` | `bocha`、`yuanbao`、`byted`、`octen`、`anysearch`、`zhihu_global`、`wechat_sogou`、`local_search`、`so`、`shenma`、`metaso` |
 | `local_chinese` | `local_search` | `local_search`、`bocha` |
 | `local_news` | `local_search` | `local_search`、`byted` |

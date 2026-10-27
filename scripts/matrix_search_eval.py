@@ -219,6 +219,12 @@ ROUTE_MATRIX: list[dict[str, Any]] = [
     {"id": "R_ko_film", "q": "기생충 영화 감독", "lang": "ko",
      "domain": "film_search", "primary": "imdb", "scenario": "film", "soft": True},
 
+    # ── 视频（2026-10-27 新增域）──
+    # 显式「视频」意图必须落到 video 域；泛化的「视频生成模型」由
+    # chinese_tech_deep 接管（见 test_domain_rule_schema 的反例表）。
+    {"id": "R_zh_video_recipe", "q": "红烧肉 做法 视频", "lang": "zh",
+     "domain": "video", "primary": "bilibili", "scenario": "video"},
+
     # ── 体育 ──
     {"id": "R_zh_sports", "q": "梅西 俱乐部", "lang": "zh",
      "domain": "sports_search", "primary": "thesportsdb", "scenario": "sports"},

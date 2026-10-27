@@ -22,6 +22,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+from video_meta import VIDEO_PLATFORMS, parse_duration_seconds
+
 _TZ_CN = timezone(timedelta(hours=8))
 
 # 技能目录源（engines/specs/*.yaml 里声明 `coverage: skill` 的那些，加上走
@@ -79,6 +81,20 @@ def _platform_of(url: str, source: str) -> str:
         return "weibo"
     if "youtube.com" in host or "youtu.be" in host:
         return "youtube"
+    if "douyin.com" in host:
+        return "douyin"
+    if "kuaishou.com" in host:
+        return "kuaishou"
+    if "vimeo.com" in host:
+        return "vimeo"
+    if "v.qq.com" in host:
+        return "tencent_video"
+    if "youku.com" in host:
+        return "youku"
+    if "iqiyi.com" in host:
+        return "iqiyi"
+    if "ixigua.com" in host or "xigua.com" in host:
+        return "xigua"
     if host in {"x.com", "twitter.com"} or host.endswith(".x.com"):
         return "x"
     if "mp.weixin.qq.com" in host:
@@ -150,12 +166,28 @@ def result_to_candidate(
     platform = _platform_of(url, source)
     canon = canonicalize_url(url) or url
     social = item.get("social_meta") if isinstance(item.get("social_meta"), dict) else {}
+    duration_seconds = parse_duration_seconds(social.get("duration")) if social else None
+    if duration_seconds is None:
+        duration_seconds = parse_duration_seconds(item.get("duration"))
+    if social.get("content_type") == "video" or platform in VIDEO_PLATFORMS:
+        content_type = "video"
+    elif social:
+        content_type = "social_post"
+    else:
+        content_type = "web_page"
     metrics = {
-        "likes": social.get("likes") if social else None,
+        "likes": next(
+            (social[k] for k in ("likes", "like_count") if social.get(k) is not None),
+            None),
         "comments": social.get("comments") if social else None,
         "collects": social.get("collects") if social else None,
         "shares": social.get("shares") or social.get("retweets"),
-        "views": social.get("views") or social.get("play"),
+        # B 站引擎的字段名是 play_count；旧写法只认 views/play，实测播放量
+        # 恒为 null，与「统一 engagement 口径」的目标相反。
+        "views": next(
+            (social[k] for k in ("views", "play", "play_count")
+             if social.get(k) is not None),
+            None),
     }
     # 明确后端给了 0 才保留 0；否则 null
     for k, v in list(metrics.items()):
@@ -181,7 +213,8 @@ def result_to_candidate(
         "snippet": (item.get("snippet") or "")[:300],
         "author": social.get("author") if social else None,
         "published_at": item.get("published_at") or social.get("published_at"),
-        "content_type": "social_post" if social else "web_page",
+        "content_type": content_type,
+        "duration_seconds": duration_seconds,
         "language": None,
         "metrics": metrics,
         "access": {

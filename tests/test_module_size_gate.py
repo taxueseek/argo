@@ -92,7 +92,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "_LazyLogger 代理类，省 ~10ms/次冷启动；"
               "2026-10-14 7ca2f22 移除 OSV/CISA KEV 代码段（−261）"),
     "scripts/fetch_v3.py": (
-        1812, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
+        1836, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
               "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）；"
               "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰；"
@@ -108,7 +108,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-26 +8：urllib 兜底车道接 charset_decode 统一解码入口"
               "（GBK 老站不再满屏 U+FFFD，实测 zol/4399/pconline 三站归零）；"
               "2026-10-27 飞书认证直取前置层挂载 +27 已随功能撤出回撤"
-              "（revert 01971bc，上限 1839 → 1812）"),
+              "（revert 01971bc，上限 1839 → 1812）；"
+              "2026-10-27 +24：视频页前置分支（平台 API 提取，本体在 "
+              "video_fetch.py；此处只留接线与 content_ok/page_type 覆盖）"),
     "scripts/mcp_handlers.py": (
         492, "MCP 工具 handler 分发（19 工具 → CLI 模块）；"
              "2026-10-23 支持跨语言长程溯源并精简参数映射（494 → 492）；"
@@ -180,7 +182,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-27 登录墙页面类型接线 +7 已随飞书功能撤出回撤"
               "（revert 01971bc，上限 1380 → 1373）"),
     "scripts/engine_dispatch.py": (
-        990, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+        998, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+              "2026-10-27 +8：视频时长条件经 decision 下发（_engine_domain_kwargs "
+              "只加 min/max_duration 两个非空键，不新增函数签名层）；"
               "2026-10-26 −1：重试前把归因寄存器只读快照交给 "
               "is_retryable_failure（静默失败源不再跑满 3 次），同时把 "
               "_NOTE_STATUS 映射表收口到 engine_failure（唯一真源）——两笔净减 1 行，"
@@ -258,7 +262,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "dsh_hub=1.15，单行带行尾注释，理由指向 config.yaml 的 "
               "dsh_plugin_search.score_floors）；上限 997 → 998"),
     "scripts/search_pipeline.py": (
-        944, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+        982, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+             "2026-10-27 +39：--video/--min-duration 后置过滤（判据与过滤本体在 "
+             "video_meta.py，此处只留调用点、跳过恢复链与过滤账输出；"
+             "过滤前移到池截断之前，避免视频候选被 top-N 截掉），"
+             "上限 943 → 982 随动登记；"
              "2026-10-25 +18：run.stranded 字段 + finalize 末尾交 tail_completion"
              "后台收割（早停弃置交付不丢，ARGO_TAIL_COMPLETE_S 控制），"
              "上限 926 → 944 随动登记；"
@@ -310,7 +318,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "
               "ARGO_MCPJOBS_DIR 显式覆盖（原硬编码 ~/.cache）"),
     "scripts/matrix_search_eval.py": (
-        1307, "离线路由矩阵（194 条检查项），用例表占多数；"
+        1313, "离线路由矩阵（194 条检查项），用例表占多数；"
+              "2026-10-27 +8：新增 video 域路由用例（R_zh_video_recipe，"
+              "视频意图回归保护）；"
               "2026-10-27 +4：覆盖地板/语言门落地后，R_en_tech_nodomain 的 "
               "primary_any 补 parallel_free（英文通用领队）并注明契约；"
               "2026-10-27 +4：R_en_tech_nodomain 的 primary_any 随 9f50a12 通用池"

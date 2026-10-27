@@ -433,6 +433,27 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     except OPT_IMPORT + SHAPE_BENIGN:  # 软排序增强，任何失败按「不排序」处理
         pass
 
+    # ── 视频模式/时长过滤（--video / --min-duration）──
+    # 必须在 _pool_limit 截断之前：--video 的候选池同时混着 anysearch 的
+    # 网页结果，若先截 top-N 再过滤，B 站结果可能整批落在池外（实测
+    # --video --min-duration 600 时 6 条 B 站结果在过滤前就被截掉，只剩
+    # 1 条 YouTube）。先过滤再截断，池里才都是候选视频。
+    video_filtered = 0
+    duration_filtered = 0
+    duration_unknown = 0
+    _video_only = bool((decision or {}).get("video_only"))
+    _min_d = (decision or {}).get("min_duration")
+    _max_d = (decision or {}).get("max_duration")
+    if merged and (_video_only or _min_d is not None or _max_d is not None):
+        from video_meta import filter_duration, filter_video_results
+        if _video_only:
+            merged, video_filtered = filter_video_results(merged)
+        if _min_d is not None or _max_d is not None:
+            merged, duration_filtered, duration_unknown = filter_duration(
+                merged, _min_d, _max_d)
+        _log(f"视频过滤：非视频 {video_filtered}，时长不符 {duration_filtered}，"
+             f"时长未知保留 {duration_unknown}")
+
     # 放宽截断：rerank 阶段看到 _pool_limit 条，最终输出再截断 max_results
     merged = merged[:_pool_limit]
 
@@ -511,7 +532,11 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         _echo_triggered = _echo_needed(merged, query)
     except OPT_IMPORT + SHAPE_BENIGN:  # 守卫不可用不设卡（fail-open）
         _echo_triggered = False
-    if not merged or _echo_triggered:
+    # 视频/时长模式不做恢复链：恢复链会跨域补搜普通网页，补进来的结果要么
+    # 被 video_only 过滤掉（白付一轮网络），要么绕过时长过滤（把已筛掉的
+    # 长/短视频重新带回来）。0 条就直接返回空，条件由调用方自己放宽。
+    _video_scope = (_video_only or _min_d is not None or _max_d is not None)
+    if (not merged or _echo_triggered) and not _video_scope:
         from recovery_runner import run_pipeline_recovery
         _dk = {k: v for k in ("domain", "sub_domain") if (v := getattr(req, "engine_" + k, None))}
         merged, _rec_info = run_pipeline_recovery(
@@ -671,6 +696,14 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         "noise_dropped": _noise_dropped,
         "funnel": funnel,
     }
+    # 只有真的用了视频/时长过滤才输出这三个账；普通搜索不塞无意义的 0
+    # （输出契约：不适用就整个键缺席）。
+    if _video_only or _min_d is not None or _max_d is not None:
+        result_payload.update(
+            video_filtered=video_filtered,
+            duration_filtered=duration_filtered,
+            duration_unknown=duration_unknown,
+        )
     if _site_include or _site_exclude:
         result_payload["site_filter"] = {
             "sites": _site_include, "exclude_sites": _site_exclude,
@@ -914,6 +947,11 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
     if result_payload.get("site_filter") is not None:
         out["site_filter"] = result_payload["site_filter"]
         out["site_filtered"] = result_payload.get("site_filtered", 0)
+    # 视频/时长过滤账：用于解释「--min-duration 后为什么只剩 N 条」，
+    # duration_unknown 明确告诉调用方有多少条没有时长、未被严格过滤。
+    for _key in ("video_filtered", "duration_filtered", "duration_unknown"):
+        if _key in result_payload:
+            out[_key] = result_payload[_key]
     if lang_pref_info is not None:
         out["lang_pref"] = lang_pref_info
     if timing is not None:

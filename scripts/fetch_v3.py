@@ -1265,6 +1265,29 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
     # URL 优化（Reddit 重写、追踪参数清理）
     url = _optimize_url(url)
 
+    # 视频页走平台 API，不走 HTML 正文链：B 站/YouTube 的播放页正文不在
+    # HTML 里（实测只抓到推荐位/页脚），通用链会把「0 字正文」当抓取失败。
+    # need_html/actions/force_browser 是调用方的显式抓取意图，出现时让路。
+    if not need_html and not actions and not force_browser:
+        try:
+            from video_fetch import fetch_video
+            _video = fetch_video(url, max_chars=max_chars, timeout=timeout)
+        except Exception:
+            _video = None
+        if _video is not None:
+            # quality 评估会按正文长度重算 content_ok；视频的「有内容」判据
+            # 是简介/字幕，不是长度，故先存声明值再恢复。
+            _declared_ok = _video.get("content_ok")
+            try:
+                _video = _assess_quality(_video)
+            except Exception:
+                pass
+            _video["content_ok"] = bool(_declared_ok)
+            _video["page_type"] = "video"
+            _video["source_type"] = "video"
+            _video["cached"] = False
+            return _strip_html_unless_needed(_video, need_html)
+
     # robots.txt 尊重（合规检查）：被禁路径直接拒绝，抓取失败放行
     try:
         from robots_guard import robots_blocked
@@ -1756,7 +1779,8 @@ if __name__ == "__main__":
     # 输出摘要
     summary = {k: r[k] for k in ("success", "fetch_method", "content_ok",
                                   "quality_score", "page_type", "source_type",
-                                  "is_official", "length", "url") if k in r}
+                                  "is_official", "length", "url",
+                                  "video_meta") if k in r}
     # 截断必须可见：只给 8,000 字却不说明「还有多少没给」，调用方会当全文用
     for k in ("truncated", "full_length", "full_text_path", "total_length",
               "offset", "full_source", "final_url",

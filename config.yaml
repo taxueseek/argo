@@ -1706,6 +1706,26 @@ domains:
   - (?i)\b(company\s*registration|incorporation|registered\s+number|business\s+registry|company\s+search|corporate\s+records)\b
   - (?i)(会社|法人|登記|기업|법인|등록)
   primary: opencorporates
+- desc: 视频内容搜索（B站为主，anysearch 兜底；显式视频意图才触发）
+  # 2026-10-27 新增。只收「明确要看视频」的查询：视频教程/B站/YouTube/
+  # 结尾的「视频」，以及短视频/长视频。泛词「教程」「运营」不进来，否则
+  # 大量文本教程会被锁进只有两个视频源的 combo，结果面反而变窄。
+  # 位置必须排在 chinese_general 之前：后者 patterns 是任意汉字，先命中就
+  # 把视频查询吃掉了（实测「红烧肉 做法 视频」此前路由到元宝+anysearch）。
+  engines_combo:
+  - bilibili
+  - anysearch
+  fallback: anysearch
+  name: video
+  parallel: true
+  no_early_stop: true
+  patterns:
+  - '(?i)(视频教程|视频讲解|视频版|视频攻略|视频测评|视频评测|开箱视频|测评视频|横评视频|视频合集|看视频|找视频|求视频)'
+  - '(?i)(b站|bilibili|youtube|油管|抖音视频|快手视频|西瓜视频)'
+  - '(?i)(视频\s*$)'
+  - match: '(?i)(短视频|中视频|长视频)'
+    unless: '(?i)(运营|营销|变现|涨粉|算法|推荐机制|商业|投放|广告|行业|报告|数据|趋势|平台|生态)'
+  primary: bilibili
 - desc: 中文通用搜索（octen #3 作 bocha/byted 弱结果时的多语言救援；yuanbao #2 为权威源对冲）
   # yuanbao 放第 2 位（2026-10-21）：它不是「备选」而是**对冲位**。当月实测
   # bocha/octen 报 403（账户余额不足）、byted 报 10406（免费额度耗尽），三个
@@ -4013,6 +4033,18 @@ engines:
     - '{query}'
     - -n
     - '{n}'
+    # 不带 --json 时引擎输出人读文本，通用解析只认 ### / URL / 摘要三行，
+    # social_meta（时长/UP 主/播放量）在解析前就不存在了。2026-10-27 实测：
+    # 补 --json 之前 envelope 里 13 条视频候选的元数据全为空。
+    - --json
+    # 时长条件由 engine_dispatch 按 decision 下发；引擎未收到时不追加参数。
+    filter_args:
+      min_duration:
+      - --min-duration
+      - '{min_duration}'
+      max_duration:
+      - --max-duration
+      - '{max_duration}'
     env: {}
   weibo:
     qps: 2

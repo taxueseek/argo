@@ -563,6 +563,9 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  since: str | None = None,
                  until: str | None = None,
                  sort: str = "relevance",
+                 video_only: bool = False,
+                 min_duration: int | None = None,
+                 max_duration: int | None = None,
                  include_local: bool | None = None,
                  include_domains: list[str] | None = None,
                  exclude_domains: list[str] | None = None,
@@ -735,7 +738,10 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     from route import route_query_cached
 
     _op_langs = (decision_operators or {}).get("langs") or None
-    if local_first:
+    if video_only and not local_first and engine == "auto":
+        from video_route import video_decision
+        decision = video_decision(min_duration, max_duration)
+    elif local_first:
         _tk_route = _tick(timing)
         decision = route_query_cached(
             original_query, engine_override="local_search", mode=mode,
@@ -751,6 +757,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             lang_override=_op_langs,
         )
         _tock(timing, "route", _tk_route)
+    decision.update(video_only=video_only, min_duration=min_duration,
+                    max_duration=max_duration)
     if decision_operators:
         decision["operators"] = decision_operators
     if context == "research":

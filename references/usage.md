@@ -524,10 +524,10 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 
 ## 功能开关总表（`ARGO_*`，唯一事实=源码扫描）
 
-> 119 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
+> 120 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
-### 能力开关（40）
+### 能力开关（41）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -569,6 +569,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_SERP_GUARD` | ('SERP 垃圾结果守卫', '默认开；=0 关闭') | 见 references/operations.md 与模块 docstring |
 | `ARGO_USAGE_LOG` | ('本地使用日志（JSONL 流，stats 数据源）', '默认开；=0 整体关闭') | 见 references/operations.md 与模块 docstring |
 | `ARGO_UNPAYWALL_EMAIL` | unpaywall email | 见 references/operations.md 与模块 docstring |
+| `ARGO_VIDEO_ASR_CMD` | ('视频转写兜底命令模板', '默认空=不转写；命令含 {url} 或自动追加 URL') | 仅 video_fetch.py 使用；shlex.split 执行、不走 shell |
 | `ARGO_WOLFRAM_APPID` | wolfram appid | 见 references/operations.md 与模块 docstring |
 | `ARGO_XHS_TIMEOUT` | xhs timeout | 见 references/operations.md 与模块 docstring |
 

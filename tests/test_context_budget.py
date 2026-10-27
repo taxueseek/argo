@@ -38,8 +38,8 @@ SOURCES_FIELDS = {"ref", "url", "engine"}
 CANDIDATE_FIELDS = {
     "candidate_id", "query", "platform", "backend", "rank", "title", "url",
     "canonical_url", "snippet", "author", "published_at", "language",
-    "content_type", "access", "metrics", "provenance", "verification",
-    "limitations",
+    "content_type", "duration_seconds", "access", "metrics", "provenance",
+    "verification", "limitations",
 }
 
 # 合成样本：5 条典型结果，序列化后不得越线（字节）

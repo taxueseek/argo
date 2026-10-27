@@ -1770,6 +1770,18 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "红烧肉 做法 视频",
+   "domain": "video",
+   "kind": "tfidf",
+   "engines": [
+    "bilibili",
+    "anysearch"
+   ],
+   "expect": "video",
+   "forbid": null,
+   "src": "ROUTE_MATRIX"
+  },
+  {
    "query": "纽约 共享单车 站点",
    "domain": "transport_rt",
    "kind": "tfidf",

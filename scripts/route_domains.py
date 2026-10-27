@@ -323,7 +323,10 @@ def _social_domain_first(hits: list[dict[str, Any]]) -> list[dict[str, Any]]:
     idx_first_social = hits.index(social[0])
     # 「热搜/热榜」是比泛 social 更具体的意图：查询里带微博/抖音这类平台名时，
     # social 会被提前，把 hot_trending 顶掉——用户问的是榜单，不是社交帖子。
-    _SPECIFIC_BEFORE_SOCIAL = ("redskill_search", "zhihu_user_data", "hot_trending")
+    # video 同理：「抖音视频 红烧肉」要的是视频，不是社交帖子；2026-10-27
+    # 加 video 域时一并登记，否则 social 提权会把它压回第二位。
+    _SPECIFIC_BEFORE_SOCIAL = ("redskill_search", "zhihu_user_data",
+                               "hot_trending", "video")
     idx_specific = next(
         (i for i, h in enumerate(hits)
          if h.get("name") in _SPECIFIC_BEFORE_SOCIAL), None

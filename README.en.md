@@ -210,7 +210,7 @@ All four forms run the same Python code underneath; CLI and MCP tools map one to
 4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (240 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> All five are already shipped across the v2.9.x line: 277 sources, 98 domains, 240 keyless out of the box. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> All five are already shipped across the v2.9.x line: 277 sources, 99 domains, 240 keyless out of the box. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
@@ -425,7 +425,7 @@ python3 scripts/search.py --list-engines
 
 ### Rough capability set (v2.9.9)
 
-What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **277 sources (240 usable with no key), 98 domains**.
+What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **277 sources (240 usable with no key), 99 domains**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
@@ -450,7 +450,7 @@ Per-version detail lives in "Recent updates"; release notes for each version are
 
 ## Engines & routing
 
-Config currently has **277** sources (**240** usable with no key) and **98** domains (see `config.yaml` and `--list-engines`).
+Config currently has **277** sources (**240** usable with no key) and **99** domains (see `config.yaml` and `--list-engines`).
 
 ### Direct & vertical (excerpt)
 
