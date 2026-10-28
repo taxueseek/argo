@@ -29,7 +29,9 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **이 저장소는 taxueseek의 DeepSeek Harness 플러그인 라인업 중 하나**입니다（[dsh-files](https://github.com/taxueseek/dsh-files) 39★）. 같은 저자 스킬 시리즈: [session-digger](https://github.com/taxueseek/session-digger) 29★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 21★ · [taxueskills](https://github.com/taxueseek/taxueskills) 23★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 12★
+> **taxueseek 스킬 시리즈의 하나**로, 「검색과 심층 리서치」를 담당합니다. 같은 시리즈 스킬: [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★(AI 풍미 제거 글쓰기) · [session-digger](https://github.com/taxueseek/session-digger) 33★(환경 간 세션 마이닝) · [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★(투자 분석) · [taxueskills](https://github.com/taxueseek/taxueskills) 24★(taxue 의사결정 시스템) · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★(크리에이티브 일러스트 스타일).
+>
+> Argo는 DeepSeek Harness 플러그인으로도 동작하며 명령 한 줄로 설치됩니다(아래 "DSH 플러그인" 참조). 같은 저자의 DSH 플러그인 정수: [dsh-files](https://github.com/taxueseek/dsh-files) 41★(폴더 업로드 + 문서 파싱) · [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 7★(플러그인 업그레이드 어댑터) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★(설치 전 감사).
 
 # Argo 아르고: 에이전트를 위한 검색과 심층 리서치 도구
 

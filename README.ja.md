@@ -29,7 +29,9 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **これは taxueseek の DeepSeek Harness プラグイン群のひとつ**（[dsh-files](https://github.com/taxueseek/dsh-files) 39★）。同作者のスキルシリーズ：[session-digger](https://github.com/taxueseek/session-digger) 29★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 21★ · [taxueskills](https://github.com/taxueseek/taxueskills) 23★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 12★
+> **taxueseek スキルシリーズのひとつ**で、「検索と深掘り調査」を担います。同シリーズのスキル：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★（AI 臭の除去と書き直し）· [session-digger](https://github.com/taxueseek/session-digger) 33★（環境横断のセッション挖掘）· [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★（投資分析）· [taxueskills](https://github.com/taxueseek/taxueskills) 24★（taxue 意思決定システム）· [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★（クリエイティブ插画スタイル）。
+>
+> Argo は DeepSeek Harness プラグインとしても動作し、ワンコマンドで導入できます（下記「DSH プラグイン」参照）。同作者の DSH プラグイン佳作：[dsh-files](https://github.com/taxueseek/dsh-files) 41★（フォルダアップロード + ドキュメント解析）· [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 7★（プラグインアップグレードアダプタ）· [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★（導入前監査）。
 
 # Argo アルゴ：Agent のための検索と深掘り調査ツール
 

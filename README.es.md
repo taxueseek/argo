@@ -29,7 +29,9 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **Este repositorio es parte del conjunto de plugins DeepSeek Harness de taxueseek** ([dsh-files](https://github.com/taxueseek/dsh-files) 39★). Serie de habilidades del mismo autor: [session-digger](https://github.com/taxueseek/session-digger) 29★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 21★ · [taxueskills](https://github.com/taxueseek/taxueskills) 23★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 12★
+> **Parte de la serie de skills de taxueseek**, que cubre búsqueda e investigación profunda. Otras skills de la serie: [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★ (eliminación de tono IA) · [session-digger](https://github.com/taxueseek/session-digger) 33★ (minería de sesiones multi-entorno) · [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★ (análisis de inversión) · [taxueskills](https://github.com/taxueseek/taxueskills) 24★ (el sistema de decisión taxue) · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★ (estilos de ilustración creativa).
+>
+> Argo también es un plugin de DeepSeek Harness, instalado con un solo comando (ver "DSH Plugin" abajo). Mejores plugins DSH del mismo autor: [dsh-files](https://github.com/taxueseek/dsh-files) 41★ (subida de carpetas + parseo de documentos) · [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 7★ (adaptador de actualización de plugins) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★ (auditoría pre-instalación).
 
 # Argo: búsqueda e investigación profunda para agentes
 

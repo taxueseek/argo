@@ -29,7 +29,9 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **这是踏雪寻仙 DeepSeek Harness 插件系列的一员**（[dsh-files](https://github.com/taxueseek/dsh-files) 39★ · [dsh-models](https://github.com/taxueseek/dsh-models) 模型选择 + 子代理路由 + 推理层级）。同作者完整技能系列：[session-digger](https://github.com/taxueseek/session-digger) 29★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 21★ · [taxueskills](https://github.com/taxueseek/taxueskills) 23★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 12★
+> **taxueseek 系列 skill 的一员**，负责「搜索与深度研究」。同系列技能：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★（去 AI 味写作）· [session-digger](https://github.com/taxueseek/session-digger) 33★（跨环境会话挖掘）· [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★（投资分析）· [taxueskills](https://github.com/taxueseek/taxueskills) 24★（踏雪决策系统）· [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★（创意风格插画）。
+>
+> Argo 同时是 DeepSeek Harness 插件，一行命令装好（见下文「DSH 插件」）。同作者的 DSH 插件精品：[dsh-files](https://github.com/taxueseek/dsh-files) 41★（文件夹上传 + 文档解析）· [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 7★（插件升级适配）· [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★（装前审计）。
 
 # Argo 阿尔戈：给 Agent 用的搜索与深度研究工具
 
