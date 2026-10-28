@@ -5,13 +5,13 @@
       "name": "argo-zcode",
       "source": "./argo-zcode",
       "version": "2.9.9",
-      "description": "Unified search, web fetching, and evidence verification over 278 sources, powered by the argo CLI.",
+      "description": "Unified search, web fetching, and evidence verification over 279 sources, powered by the argo CLI.",
       "displayName": "Argo 阿尔戈",
       "displayName_i18n": {
         "zh-CN": "Argo 阿尔戈"
       },
       "description_i18n": {
-        "zh-CN": "统一搜索、抓取与证据核验（278 源）"
+        "zh-CN": "统一搜索、抓取与证据核验（279 源）"
       }
     }
   ]
