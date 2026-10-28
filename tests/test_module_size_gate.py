@@ -47,9 +47,10 @@ HARD_LIMIT = 1000
 # 现在不拆——「以后再拆」不算理由，要写清楚卡在哪（缺锁、缺测试、边界不清）。
 GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_data.py": (
-        2923, "源声明构建器（数据表性质，逐源一段），拆开只是把同一张表切成多份；"
+        2930, "源声明构建器（数据表性质，逐源一段），拆开只是把同一张表切成多份；"
               "2026-09-27 −3：百度百科相关度门与化学 token 改用 cjk_tokens 共享切分；"
-              "2026-09-30 −1：octen/tavily 常量分叠加位次衰减后注释收敛"),
+              "2026-09-30 −1：octen/tavily 常量分叠加位次衰减后注释收敛；"
+              "2026-10-28 +7：finviz 端点随上游 301 迁移注释、opencorporates api_token 支持"),
     "scripts/engines_builders_cn.py": (
         2283, "中文源声明构建器，逐源一段（数据表性质）；按语言/领域切只会把同一张表切碎；"
               "2026-09-28 −36：bocha_ai 模态卡特化移除（_BOCHA_CARD_NAMES 类型表/"
@@ -130,9 +131,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
              "connection，initialize 后把代理 TLS 藏进首包前的空闲期；CLI 侧实测"
              "无窗口故不改 bin/argo），上限 1039 → 1074 随动登记"),
     "scripts/engines_base.py": (
-        1533, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+        1549, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
               "2026-10-26 +12：peek_failure_note——调度层重试前只读归因、"
               "不清寄存器（pop 仍留给 _run_one 写 outcome/熔断），上限 1521 → 1533；"
+              "2026-10-28 +16：_apply_url_kind 行级戳（issue #29 口径 B），"
+              "声明式/自定义 parser/CLI 桥三条产出路径统一出口，未拆因三条路径本就共用此处；"
               "2026-10-17 +13：通用 HTML 解析器接入 jump_resolver 的离线跳转"
               "还原（Bing ck/a 的 u=a1<base64url>），不发网络请求；"
               "2026-10-17 +7：http_open 错误体归因读加 KeyError 兜底——3.9 的 "
@@ -262,7 +265,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "dsh_hub=1.15，单行带行尾注释，理由指向 config.yaml 的 "
               "dsh_plugin_search.score_floors）；上限 997 → 998"),
     "scripts/search_pipeline.py": (
-        982, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+        984, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+             "2026-10-28 +2：SERP 过滤闸改条目级入口 is_unusable_row"
+             "（issue #29 口径 B，url_kind: none 豁免空 url 判壳页），"
+             "上限 982 → 984 随动登记；"
              "2026-10-27 +39：--video/--min-duration 后置过滤（判据与过滤本体在 "
              "video_meta.py，此处只留调用点、跳过恢复链与过滤账输出；"
              "过滤前移到池截断之前，避免视频候选被 top-N 截掉），"
