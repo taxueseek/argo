@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.9-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -145,7 +145,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.9.9; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.10.0; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -280,7 +280,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.9.9**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.10.0**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -465,13 +465,15 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.9.9)
+### Conjunto aproximado de capacidades (v2.10.0)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 284 fuentes, 241 sin clave, 99 dominios.
 
 Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
 Las últimas versiones arreglaron cada una una clase de problemas.
+
+v2.10.0 amplía la superficie de capacidades. Las fuentes pasan de 272 a 284: cinco niveles de Metaso (académico, biblioteca, imagen, vídeo, pódcast), registros de Sciverse, ciencias sociales chinas de NCPSSD, más tres catálogos de plugins de DSH y dos índices de skills, que por primera vez traen recuento de instalaciones. El vídeo funciona de extremo a extremo, de la consulta a la captura: dominio video con --video, filtros de duración, subtítulos de Bilibili al capturar y timedtext de YouTube. La cadena de rastreo estrena control de frontera y ritmo cortés —límite por host, retroceso ante 429— y watch separa ruido de cambio sustantivo. La selección general usa orden medido, las consultas generales en inglés llevan cobertura condicional de DeepSeek y los cuerpos pasan por un decodificador único con JSON-LD. El instalador toma la vía venv, así que los entornos PEP 668 ya no se quedan sin dependencias.
 
 v2.9.9 es una versión de seguridad en profundidad y calidad de entrega. El motor de seguridad de contenido puntuaba pero no detenía: una página de inyección de alto riesgo entraba tal cual en la tubería. Ahora todo lo que supera el umbral de riesgo se aísla, el texto limpio sustituye al original y no llega a la puntuación de evidencia. La salida de red gana dos capas de defensa: las redirecciones se validan salto a salto y la dirección resuelta se fija a la conexión, cerrando la ventana de reencadernación DNS. En el despacho, los resultados de motores lentos abandonados por la parada temprana ya no se tiran: se recolectan en segundo plano, se entregan como siempre si terminan dentro de la ventana de gracia y su rendimiento real por fin llega al aprendiz. Un barrido de seis familias de escenarios reales acotó cinco clases de enrutado erróneo: consultas financieras de A-share, diligencia debida / facturación / búsqueda de empresa por persona, práctica legal civil, prospectos de medicamentos y guías de escritura de papers caen donde deben. Novedades: `argo engine add` conecta un motor nuevo en un paso, y la página de ajustes de DSH estrena una tarjeta de observación de rutas con combos de herramientas recomendadas.
 
@@ -694,6 +696,14 @@ argo/
 
 Solo las tres versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.10.0: 284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo
+
+- **272 → 284 fuentes**: cinco niveles de Metaso (académico/biblioteca/imagen/vídeo/pódcast, todos de uso explícito), registros de Sciverse (filtro por año/revista/autor/materia), NCPSSD de ciencias sociales en chino (puente CLI), más tres catálogos de plugins de DSH y dos índices de skills con recuento de instalaciones
+- **Un carril de vídeo de extremo a extremo**: nuevo dominio `video` y `--video` para forzar el enrutado, filtros `--min-duration`/`--max-duration`; al obtener se toman descripción y subtítulos de Bilibili, oEmbed/timedtext de YouTube, con `ARGO_VIDEO_ASR_CMD` opcional como respaldo
+- **Control de calidad de frontera del rastreo**: canonicalización de URL y filtro de recursos, deduplicación por hash del cuerpo, ritmo por host con retroceso exponencial ante 429, Crawl-delay de robots; el diff por bloques de `argo watch` separa ruido de cambio sustantivo. Medido: 10 páginas en 12,1 s, 2000 caracteres de cuerpo (antes 500)
+- **Selección de fuentes y coste**: la capa general usa orden medido con suelo de cobertura y puerta de idioma (issue #23); la cobertura de DeepSeek queda segunda en consultas generales en inglés (`ARGO_PAID_HEDGE_DEFER` la baja); se rellenan los niveles de autoridad y entra la parada temprana por autoridad
+- **Instalable y publicable**: el instalador toma la vía venv con autodetección de `.venv`; nuevo `release_check.py` de consistencia de publicación y el manifiesto de MCP Registry `server.json`
+
 ### v2.9.9: seguridad en profundidad + los resultados de fuentes lentas ya no se descartan + cinco clases de enrutado erróneo cerradas
 
 - **El texto de alto riesgo ya no llega al contexto**: el motor de seguridad de contenido pasa de «solo puntuar» a «aislar + sustitución limpia»; el texto con `risk_score ≥ 0.5` se reemplaza por su versión limpia y queda fuera de la puntuación de evidencia. Activado por defecto; `ARGO_CONTENT_RISK_GATE=0` para anularlo en emergencia
@@ -712,20 +722,13 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 - **Capa de configuración local `config.local.yaml`**: los ajustes de esta máquina ya no se escriben en la configuración pública
 - **Nueva sección «Engines» en la página de ajustes de DSH**: los 28 interruptores de comportamiento de argo salen de las variables de entorno y pasan al panel
 
-### v2.9.7: consolidación de arquitectura + el host delega la obtención de páginas en argo + License pasa a Apache-2.0
-
-- **Cambio de License**: MIT → Apache License 2.0. Se explicita la concesión de patentes; lo demás no cambia
-- **Las páginas que el host no podía obtener ahora sí se obtienen**: acortadores, actualizaciones de protocolo, redirect shells y páginas con desafío de JS pasan por la cadena de fetch de argo (HTTP primero, con escalada automática a un navegador cuando el sitio se resiste). Activado por defecto; se desactiva con `fetchProviderEnabled`
-- **El modo auto ya no llama por error a motores de pago**: los 18 motores exclusivos de invocación explícita salen del pool de candidatos de enrutado y solo se usan si se nombran con `--engine`
-- **Una clave nueva recupera el siguiente salto**: los motores con cuota agotada ya no esperan a que venza su ventana de recuperación, y la caché de enrutado se recalcula
-- **Ejecutar JS desde crawl / research / MCP ya no se cae**
-
 ---
 
 ## Historial de cambios
 
 | Versión | Notas |
 |---------|-------|
+| **v2.10.0** | **284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo**: cinco niveles de Metaso, Sciverse, NCPSSD y cinco fuentes de DSH/índices de skills; dominio `video` con `--video`/`--min-duration`/`--max-duration`, subtítulos de Bilibili y timedtext de YouTube con ASR opcional; control de frontera del rastreo y diff de ruido en `argo watch`; selección general medida con cobertura de DeepSeek en inglés y parada temprana por autoridad; instalador con venv. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **Seguridad en profundidad + los resultados de fuentes lentas ya no se descartan + cinco clases de enrutado erróneo cerradas**: texto de alto riesgo aislado con sustitución limpia (fuera de la puntuación de evidencia), validación de redirecciones salto a salto y fijación contra reencadernación DNS; las fuentes lentas abandonadas por la parada temprana se recolectan en segundo plano (`ARGO_TAIL_COMPLETE_S`) y registran su puntuación real; un barrido de seis familias de escenarios reales cierra el enrutado erróneo de academia/finanzas/empresas/legal/farma; además `argo engine add` en un paso, aprendizaje por cubos de escenario y el paquete de plugin ZCode. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.9.md). |
 | **v2.9.8** | **Auditoría de precisión de enrutado + fixes de issue #18/#19 + aislamiento de estado en tests**: reproducción de consultas reales y acotado de 16 clases de falsos disparadores (marcas, productos, campos, subcadenas ASCII); puerta de cobertura SERP y validación cruzada CJK; ledger nocturno con log vacío, feed por defecto de people_daily y guardia de caché corregidos; estado adaptive/breaker aislado por test. Gracias a @wpp666 por la reproducción y el diagnóstico. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.8.md). |
 | **v2.9.7** | **Consolidación de arquitectura + seam web_fetch DSH + License a Apache-2.0**: MIT → Apache 2.0; el fetch del huésped pasa por argo (redirect shells, desafíos JS); 18 motores de invocación explícita fuera del pool, para que el modo auto no facture por error. |

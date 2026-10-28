@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.9-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -145,7 +145,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 방식 1: 원클릭 스크립트(로컬 장기 사용 권장)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 방식 2: npm / npx(지원됨, 현재 2.9.9, tag마다 배포·버전 고정)
+# 방식 2: npm / npx(지원됨, 현재 2.10.0, tag마다 배포·버전 고정)
 npm install -g argo-search       # CLI 전역 설치
 npx -y argo-search               # 또는 설치 없이 즉시 사용
 npx -y github:taxueseek/argo     # main 최신 커밋을 따라가려면 이 명령
@@ -280,7 +280,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.9.9**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
+경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.10.0**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -465,13 +465,15 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.9.9)
+### 대략적인 능력 세트 (v2.10.0)
 
 Argo가 하는 일을 한 줄로 말하면, 질문을 도메인과 언어로 알맞은 소스에 보내고, 돌아온 결과를 신뢰도로 줄세워, 에이전트에는 줄세우고 검증할 수 있는 재료를 넘긴다. 검색·긁기·증거 확인·로컬 파일 검색은 같은 파이프라인을 흐르고, 19개 MCP 도구는 CLI 명령과 일대일로 대응하므로 어떤 형태로 설치해도 능력이 빠지지 않는다. 단독 명령도 몇 개 있다: argo tweet은 X 게시물을 묶고, argo auth는 로그인 상태를 관리하며, argo job은 채용 정보를 모은다. 전체 소스의 비용·키·상태는 docs/ENGINE_CATALOG.md에 있다: 284 소스, 241 무설정, 99 도메인.
 
 DSH 플러그인으로 설치하면 이 능력들이 호스트의 네이티브 도구가 된다. 고빈도 검색과 긁기는 기본으로 켜져 있고, 롱테일 포렌식은 설정 페이지에서 필요에 따라 체크하며, argo 본체의 28개 동작 스위치(캐시, 재순위, 중복 제거, 가드, 프록시, TTL 등)는 환경 변수에서 패널로 옮겨졌다. 키는 호스트 凭证库에 들어가고, 평문은 표시되지 않으며, 모든 변경은 저장 즉시 적용된다.
 
 최근 몇 판이 각자 한 부류의 문제를 고쳤다.
+
+v2.10.0이 넓힌 것은 능력 면이다. 소스는 272에서 284로. 메타소 다섯 등급(학술·문고·이미지·영상·팟캐스트), Sciverse 외국어 서지, NCPSSD 중국어 사회과학에 더해 DSH 플러그인 카탈로그 3종과 스킬 색인 2종. 스킬 계열 소스는 처음으로 설치 수를 갖는다. 영상은 검색에서 가져오기까지 한 줄로 통한다: video 영역과 --video, 길이 필터, 가져올 때 B 站 자막과 YouTube timedtext. 크롤은 프론티어 품질 관리와 예절 간격을 다시 썼고, 호스트별 제한과 429 백오프, watch의 차이는 노이즈와 실질 변경을 가른다. 범용 층 소스 선택은 실측 순서가 되었고, 영어 범용 쿼리에는 DeepSeek 조건부 헤지, 응답 본문은 통일 디코딩과 JSON-LD. 설치기는 venv 주경로가 되어 PEP 668 환경에서도 의존성이 빠진 채 끝나지 않는다.
 
 v2.9.9는 보안과 제공 품질의 판이다. 콘텐츠 보안 엔진은 채점만 하고 막지 않아 고위험 주입 페이지가 그대로 컨텍스트에 들어갔다. 이제 임계값을 넘으면 격리하고, 세척된 본문으로 갈아치우며, 증거 점수에도 들어가지 않는다. 네트워크 출구에는 두 겹의 방어가 더해졌다. 리다이렉트는 홉마다 검증하고, DNS 해석 결과는 해당 연결에 못 박는다. 디스패치 쪽에서는 조기 중단으로 버려진 느린 엔진의 결과를 더 이상 버리지 않는다. 백그라운드에서 회수하고, 유예 시간 안에 끝나면 평소처럼 제공하며 학습기에 실제 성적을 기록한다. 라우팅은 여섯 부류의 실전 시나리오 스캔으로 다섯 부류의 오라우팅을 거뒀다. A주 금융 쿼리, 기업 듀딜리전스/개표/사람으로 회사 찾기, 민사 실무, 약 설명서, 논문 작성 하우투가 제자리를 찾는다. 이번 판에 argo engine add로 새 엔진을 한 단계에 붙일 수 있고, DSH 설정 페이지에는 라우팅 관측 카드와 도구 추천 조합이 생겼다.
 
@@ -694,6 +696,14 @@ argo/
 
 최근 세 버전만 싣습니다. 전체 이력은 [변경 이력](#변경-이력), 각 버전의 상세는 [Releases](https://github.com/taxueseek/argo/releases)에서 볼 수 있습니다.
 
+### v2.10.0: 소스 284개 + 영상 검색과 가져오기 + 크롤 프론티어 품질 관리
+
+- **소스 272→284**: 메타소 다섯 등급(학술/문고/이미지/영상/팟캐스트, 모두 명시 전용), Sciverse 외국어 서지(연도/저널/저자/분야 필터), NCPSSD 중국어 사회과학(CLI 브리지), 그리고 DSH 플러그인 카탈로그 3종과 스킬 색인 2종(설치 수 포함)
+- **영상 레인을 끝까지**: `video` 영역과 `--video` 강제 라우팅, `--min-duration`/`--max-duration` 길이 필터. 가져올 때 B 站 소개와 자막, YouTube oEmbed/timedtext, 선택적 `ARGO_VIDEO_ASR_CMD` 폴백
+- **크롤 프론티어 품질 관리**: URL 정규화와 자산 필터, 본문 해시 중복 제거, 호스트별 간격과 429 지수 백오프, robots Crawl-delay. `argo watch`의 블록 diff는 노이즈와 실질 변경을 나눈다. 실측 10페이지 12.1초, 본문 2000자(기존 500)
+- **소스 선택과 비용**: 범용 층은 실측 순서 + 커버리지 바닥 + 언어 게이트(issue #23). 영어 범용 쿼리는 DeepSeek 헤지를 두 번째에 상주(`ARGO_PAID_HEDGE_DEFER`로 내릴 수 있음), 권위 등급 보충과 권위 조기 종료
+- **설치되고 배포된다**: 설치기는 venv 주경로 + `.venv` 자동 탐지. 새로 `release_check.py` 릴리스 일관성 사전 점검과 MCP Registry 매니페스트 `server.json`
+
 ### v2.9.9: 다층 보안 + 느린 소스 결과를 버리지 않음 + 오라우팅 다섯 부류 수습
 
 - **고위험 본문은 컨텍스트에 들어가지 않습니다**: 콘텐츠 보안 엔진이 「채점만」에서 「격리+세척 치환」으로 올라갑니다. `risk_score ≥ 0.5` 본문은 세척본으로 대체되고 증거 점수에서 제외됩니다. 기본 활성, `ARGO_CONTENT_RISK_GATE=0`로 비상 해제
@@ -712,20 +722,13 @@ argo/
 - **로컬 설정 오버레이 `config.local.yaml`**: 이 머신의 조정 값이 공개 설정에 더 이상 기록되지 않습니다
 - **DSH 설정 페이지에 엔진 섹션 추가**: argo 본체의 28개 동작 스위치를 환경 변수에서 패널로 옮겼습니다
 
-### v2.9.7: 아키텍처 수렴 + 호스트 페이지 가져오기를 argo로 + License를 Apache-2.0으로
-
-- **License 변경**: MIT → Apache License 2.0. 특허 허여를 명시한 것이며 사용 방식은 그대로입니다
-- **호스트가 못 가져오던 페이지를 이제 가져옵니다**: 단축 링크 이동, 프로토콜 상향, 리다이렉트 껍질, Cloudflare / JS 챌린지 페이지를 argo의 가져오기 체인이 처리합니다(HTTP 우선, 막히면 브라우저로 자동 승격). 기본 활성, `fetchProviderEnabled`로 끌 수 있습니다
-- **auto 모드가 유료 엔진을 잘못 호출하지 않습니다**: 명시 지정 전용 엔진 18개를 라우팅 후보 풀에서 빼고, `--engine`으로 지목할 때만 씁니다
-- **새 키로 바꾸면 다음 홉에서 복구**: 쿼터를 소진한 엔진이 복구를 기다리지 않으며 라우팅 캐시도 다시 계산됩니다
-- **crawl / research / MCP에서 JS를 실행해도 죽지 않습니다**
-
 ---
 
 ## 변경 이력
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.10.0** | **소스 284개 + 영상 검색과 가져오기 + 크롤 프론티어 품질 관리**: 메타소 다섯 등급, Sciverse, NCPSSD, DSH/스킬 색인 5종 추가. `video` 영역과 `--video`/`--min-duration`/`--max-duration`, B 站 자막과 YouTube timedtext, 선택적 ASR. 크롤 프론티어 품질 관리와 `argo watch` 노이즈 diff. 범용 소스 선택 실측 순서 + DeepSeek 영어 헤지 + 권위 조기 종료. 설치기 venv화. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **다층 보안 + 느린 소스 결과를 버리지 않음 + 오라우팅 다섯 부류 수습**: 고위험 본문 격리+세척 치환(증거 점수 제외), 리다이렉트 홉별 검증과 DNS 리바인딩 차단. 조기 중단으로 버려진 느린 소스는 백그라운드 회수(`ARGO_TAIL_COMPLETE_S`)로 실제 성적을 학습기에 기록. 여섯 부류 실전 시나리오 스캔으로 학술/금융/기업/법률/의약 오라우팅을 수습. `argo engine add` 한 단계 연결, 시나리오 버킷 학습, ZCode 플러그인 패키지. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.9.9.md). |
 | **v2.9.8** | **라우팅 정밀도 감사 + issue #18/#19 수정 + 테스트 상태 격리**: 실제 쿼리 재생으로 16개 클래스 오탐(브랜드/제품명, 필드명, ASCII 부분 문자열)을 좁히고, SERP 커버리지 게이트와 CJK 교차 검증을 추가했습니다. nightly 빈 로그, people_daily 기본 feed, 캐시 적중 가드를 고쳤고, adaptive/breaker 상태를 테스트별로 격리했습니다. 재현과 진단을 도와준 @wpp666에게 감사합니다. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.9.8.md). |
 | **v2.9.7** | **아키텍처 수렴 + DSH web_fetch 심 + License Apache-2.0으로**: MIT에서 Apache License 2.0으로 바뀌었고, 호스트 web_fetch가 argo 가져오기 체인을 흐릅니다. auto 모드는 명시 지정 전용 엔진 18개를 후보 풀에서 제외합니다. |

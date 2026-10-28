@@ -370,6 +370,10 @@ COUNT_RULES: dict[str, list[tuple[str, str]]] = {
          "**{total} 个源，{usable} 个免密钥开箱可用。**"),
         (r"目前 (?P<total>\d+) 个源（(?P<usable>\d+) 个免密钥开箱可用）、(?P<domains>\d+) 个业务域",
          "目前 {total} 个源（{usable} 个免密钥开箱可用）、{domains} 个业务域"),
+        (r"（(?P<usable>\d+) 个免配置源）", "（{usable} 个免配置源）"),
+        (r"在 v2\.9\.x 系列里全部落地：(?P<total>\d+) 个源、(?P<domains>\d+) 个领域、"
+         r"(?P<usable>\d+) 个免配置开箱",
+         "在 v2.9.x 系列里全部落地：{total} 个源、{domains} 个领域、{usable} 个免配置开箱"),
         (r"当前配置 \*\*(?P<total>\d+)\*\* 个源（\*\*(?P<usable>\d+)\*\* 个免密钥开箱可用）、\*\*(?P<domains>\d+)\*\* 个业务域",
          "当前配置 **{total}** 个源（**{usable}** 个免密钥开箱可用）、**{domains}** 个业务域"),
         (r"搜索、抓取、核验、本机文件检索走同一条管线，(?P<tools>\d+) 个 MCP 工具和 CLI 命令一一对应",
@@ -489,6 +493,10 @@ COUNT_RULES: dict[str, list[tuple[str, str]]] = {
         (r"收录 (?P<total>\d+) 个源、(?P<usable>\d+) 个免密钥可用",
          "收录 {total} 个源、{usable} 个免密钥可用"),
         (r"（(?P<total>\d+) 源、(?P<usable>\d+) 免密钥）", "（{total} 源、{usable} 免密钥）"),
+    ],
+    "server.json": [
+        (r'"description": "Metasearch (?P<total>\d+) sources',
+         '"description": "Metasearch {total} sources'),
     ],
 }
 

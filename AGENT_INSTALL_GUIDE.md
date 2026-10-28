@@ -1,6 +1,6 @@
 # Argo Agent 安装与阅读指南
 
-本文档面向 AI Agent（Claude Code、Cursor、Kimi、Grok Build 等），提供 Argo 的安装、配置与能力速查。人类用户建议先读 [README_开头改写版.md](README_开头改写版.md)。
+本文档面向 AI Agent（Claude Code、Cursor、Kimi、Grok Build 等），提供 Argo 的安装、配置与能力速查。人类用户建议先读 [README.md](README.md)。
 
 ## 安装
 
@@ -16,7 +16,7 @@ macOS / Linux 直接跑。Windows 用 PowerShell：
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.ps1 | iex"
 ```
 
-### 方式二：npm / npx（已支持，当前 2.9.9）
+### 方式二：npm / npx（已支持，当前 2.10.0）
 
 ```bash
 npm install -g argo-search    # 全局安装 CLI
@@ -24,30 +24,18 @@ npx -y argo-search            # 或即用即走，不装
 npx -y github:taxueseek/argo  # 要跟 main 最新提交时用这条
 ```
 
-需要 Node.js 18+ 和 Python 3.9+。npm 上的 `argo-search` 由本仓库发布，当前版本 2.9.9，按 tag 更新。
+需要 Node.js 18+ 和 Python 3.9+。npm 上的 `argo-search` 由本仓库发布，当前版本 2.10.0，按 tag 更新。
 
-### 方式三：uvx / pip（尚未上线）
-
-> PyPI 上还没有 `argo-search`，下面两条命令执行会报找不到包。等包上传后再用，现阶段请走方式一或方式二。
+### 方式三：DSH 插件
 
 ```bash
-# 启动 MCP 服务
-uvx argo-search argo-mcp
-
-# 或全局安装 CLI
-pip install argo-search
-```
-
-### 方式四：DSH 插件
-
-```bash
-dsh plugin --profile web add argo-search                   # npm 发布版，当前 2.9.9
+dsh plugin --profile web add argo-search                   # npm 发布版，当前 2.10.0
 dsh plugin --profile web add "github:taxueseek/argo"       # GitHub main
 ```
 
 装完重启 `dsh web` 生效。
 
-### 方式五：MCP 客户端直接填入（免预装）
+### 方式四：MCP 客户端直接填入（免预装）
 
 直接在客户端配置文件中填入：
 
@@ -61,7 +49,6 @@ dsh plugin --profile web add "github:taxueseek/argo"       # GitHub main
   }
 }
 ```
-PyPI 上传后也可换成 `"command": "uvx", "args": ["argo-search", "argo-mcp"]`，目前那张包还不存在，先用 npx。
 已支持一键探测与自动配置的客户端：Claude Code、Claude Desktop、Cursor、Windsurf、Codex、Zed、Roo Code、Cline、OpenCode、WorkBuddy。
 本地克隆后也可直接执行：`python3 scripts/mcp_setup.py inject --all`。
 
@@ -162,4 +149,4 @@ python3 ~/.local/share/argo/scripts/health_check.py --all
 2. **搜索结果页 / 跳转链**：不要当正文信源
 3. **社交帖**：当舆情与叙事，不当事实真值
 4. **CLI 退出码恒 0**（含断网）：成败判断走 JSON 的 `status` / `errors` 字段
-5. **npm 安装已支持**：`argo-search` 由本仓库发布，最新版本 2.9.9，可放心 `npm install -g argo-search` 或 `npx -y argo-search`；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。PyPI 目前尚未上传，`uvx argo-search` / `pip install argo-search` 暂时不可用
+5. **npm 安装已支持**：`argo-search` 由本仓库发布，最新版本 2.10.0，可放心 `npm install -g argo-search` 或 `npx -y argo-search`；registry 上更早的 v1.0.1 是历史版本，不要锁定到它

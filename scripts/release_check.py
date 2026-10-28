@@ -3,16 +3,17 @@
 
 ## 为什么要这道预检
 
-版本号散在 11 处声明（pyproject / package.json / dsh 插件包 / 插件市场清单 /
-argo_search.__version__ / SKILL.md 前置字段 + 五语 README 的徽标），外加
-五语 README 的发布记录行、docs/RELEASE_NOTES_v<ver>.md 与 package.json 的
-files 白名单（带版本号的文件名，漏改就是 npm 包里静默缺文件）。历史上
-v2.9.8 漏过 README「最近更新」条目、版本号清单靠人肉逐处核对——每次发版
-三十到四十分钟，且漏改不一定当场发现（npm 包发出去了才看到 README 还是旧版）。
+版本号散在 16 处声明（pyproject / package.json / dsh 插件包 / 插件市场清单 /
+MCP Registry 清单 / ZCode 插件清单 / argo_search.__version__ / SKILL.md 前置
+字段 / MCP 与面板源码常量 + 五语 README 的徽标），外加五语 README 的发布记录
+行、docs/RELEASE_NOTES_v<ver>.md 与 package.json 的 files 白名单（带版本号的
+文件名，漏改就是 npm 包里静默缺文件）。历史上 v2.9.8 漏过 README「最近更新」
+条目、版本号清单靠人肉逐处核对——每次发版三十到四十分钟，且漏改不一定当场
+发现（npm 包发出去了才看到 README 还是旧版）。
 
 ## 检什么（全部是结构化事实，不做散文匹配）
 
-1. 六处机器声明与 pyproject.toml 的 version 完全一致；
+1. 十一处机器声明与 pyproject.toml 的 version 完全一致；
 2. 五语 README 的徽标 `badge/version-<v>-` 与发布表行 `| **v<v>** |` 都在；
 3. `docs/RELEASE_NOTES_v<v>.md` 存在；
 4. package.json 的 files 白名单包含当前发布说明，且**盘上每份**发布说明都在
@@ -37,12 +38,23 @@ import re
 import sys
 from pathlib import Path
 
-# 六处机器声明的相对路径（顺序即报错输出顺序）
+# 十一处机器声明的相对路径（顺序即报错输出顺序）
 JSON_DECLS = (
     "package.json",
     "packages/dsh-plugin/package.json",
+    "server.json",
+    "packages/argo-zcode/.zcode-plugin/plugin.json",
 )
 README_LANGS = ("README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.es.md")
+
+# 源码里的版本常量（正则取，避免 import 副作用）
+SRC_DECLS = (
+    ("scripts/mcp_transport.py", r'ARGO_MCP_VERSION\s*=\s*"([^"]+)"'),
+    ("packages/argo-zcode/server/panel_server.mjs",
+     r'SERVER_INFO\s*=\s*\{[^}]*version:\s*"([^"]+)"'),
+    ("packages/argo-zcode/ui/panel.html",
+     r'new App\(\{\s*name:\s*"argo-panel",\s*version:\s*"([^"]+)"'),
+)
 
 
 def _read(root: Path, rel: str) -> str:
@@ -101,6 +113,28 @@ def check(root: Path) -> list[str]:
                         f"packages/marketplace.json[{plugin.get('name')}]: {got} ≠ {ver}")
         except (OSError, ValueError) as e:
             problems.append(f"packages/marketplace.json: 读取失败（{e}）")
+
+    # 2b) MCP Registry 清单（packages[] 每条的版本也要对上）
+    text = _safe_read(root, "server.json", problems)
+    if text is not None:
+        try:
+            for pkg in json.loads(text).get("packages") or []:
+                got = str(pkg.get("version") or "")
+                if got != ver:
+                    problems.append(
+                        f"server.json[{pkg.get('identifier')}]: {got} ≠ {ver}")
+        except ValueError as e:
+            problems.append(f"server.json: JSON 解析失败（{e}）")
+
+    # 2c) 源码常量（MCP 握手自报版本、ZCode 面板版本）
+    for rel, pat in SRC_DECLS:
+        if not (root / rel).is_file():
+            continue
+        m = re.search(pat, _read(root, rel))
+        if not m:
+            problems.append(f"{rel}: 找不到版本声明")
+        elif m.group(1) != ver:
+            problems.append(f"{rel}: {m.group(1)} ≠ {ver}")
 
     # 3) Python 包内声明（MCP/库调用方读它）
     text = _safe_read(root, "argo_search/__init__.py", problems)
@@ -167,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"  !! {p}", file=sys.stderr)
         return 1
-    print(f"release_check: v{ver} 一致（6 处声明 + 五语 README + 发布说明与白名单）")
+    print(f"release_check: v{ver} 一致（11 处机器声明 + 五语 README + 发布说明与白名单）")
     return 0
 
 

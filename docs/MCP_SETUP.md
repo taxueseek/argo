@@ -2,7 +2,7 @@
 
 > 状态：已实施（2026-08-26）。目标：让 argo 的 MCP 工具（argo_search/argo_fetch/argo_research 等）能被
 > 主流 AI 客户端一键接入，无需手动贴 JSON。客户端描述声明式化（改客户端不改代码），写入安全可逆。
-> `tools/list` 默认三件套（search/fetch/local_search）；全量 14 个设环境变量 `ARGO_MCP_TOOLS=all`。
+> `tools/list` 默认三件套（search/fetch/local_search）；全量 19 个设环境变量 `ARGO_MCP_TOOLS=all`。
 
 ## 0. 背景与问题重定义
 

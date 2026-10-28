@@ -44,6 +44,23 @@ def _write_fixture(root: Path, ver: str = "9.9.9", drift: dict | None = None) ->
     (root / "packages/marketplace.json").write_text(json.dumps({
         "plugins": [{"name": "argo-zcode", "version": v("packages/marketplace.json")}],
     }), encoding="utf-8")
+    (root / "server.json").write_text(json.dumps({
+        "name": "io.github.taxueseek/argo",
+        "version": v("server.json"),
+        "packages": [{
+            "registryType": "npm",
+            "identifier": "argo-search",
+            "version": drift.get("server.json#packages", v("server.json")),
+        }],
+    }), encoding="utf-8")
+    (root / "packages/argo-zcode/.zcode-plugin").mkdir(parents=True)
+    (root / "packages/argo-zcode/.zcode-plugin/plugin.json").write_text(json.dumps({
+        "name": "argo-zcode",
+        "version": v("packages/argo-zcode/.zcode-plugin/plugin.json"),
+    }), encoding="utf-8")
+    (root / "scripts").mkdir()
+    (root / "scripts/mcp_transport.py").write_text(
+        f'ARGO_MCP_VERSION = "{v("scripts/mcp_transport.py")}"\n', encoding="utf-8")
     (root / "argo_search").mkdir()
     (root / "argo_search/__init__.py").write_text(
         f'__version__ = "{v("argo_search/__init__.py")}"\n', encoding="utf-8")
@@ -69,6 +86,25 @@ class TestReleaseConsistency(unittest.TestCase):
             problems = release_check.check(root)
         self.assertTrue(any("package.json" in p and "9.9.8" in p for p in problems),
                         problems)
+
+    def test_server_json_package_version_drift_is_reported(self):
+        """MCP 注册清单只改顶层版本、漏改 packages[] 时也要点名。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_fixture(root, drift={"server.json#packages": "9.9.8"})
+            problems = release_check.check(root)
+        self.assertTrue(
+            any("server.json[argo-search]" in p and "9.9.8" in p for p in problems),
+            problems)
+
+    def test_mcp_transport_version_drift_is_reported(self):
+        """MCP 握手自报版本（历史漂移点）漏改时要点名。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_fixture(root, drift={"scripts/mcp_transport.py": "9.9.8"})
+            problems = release_check.check(root)
+        self.assertTrue(
+            any("mcp_transport.py" in p and "9.9.8" in p for p in problems), problems)
 
     def test_missing_readme_badge_is_reported(self):
         with tempfile.TemporaryDirectory() as tmp:

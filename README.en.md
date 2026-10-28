@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.9.9-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -145,7 +145,7 @@ Zero config works. Three ways to install, pick your habit:
 # Option 1: install script (recommended for long-term local use)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Option 2: npm / npx (supported, currently 2.9.9; released per tag, version pinned)
+# Option 2: npm / npx (supported, currently 2.10.0; released per tag, version pinned)
 npm install -g argo-search       # install the CLI globally
 npx -y argo-search               # or run it without installing
 npx -y github:taxueseek/argo     # use this to follow the latest commit on main
@@ -280,7 +280,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **npm install is supported, current version 2.9.9**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
+Pick any path. **npm install is supported, current version 2.10.0**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -423,13 +423,15 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.9.9)
+### Rough capability set (v2.10.0)
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **284 sources (241 usable with no key), 99 domains**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
+
+v2.10.0 widens the capability surface. Sources grow from 272 to 284: five Metaso tiers (scholar, library, image, video, podcast), Sciverse records, NCPSSD Chinese social science, plus three DSH plugin catalogs and two skill indexes — the skill sources carry install counts for the first time. Video works end to end, from query to fetch: a new video domain with --video, duration filters, Bilibili subtitles on fetch and YouTube timedtext. The crawl chain gained frontier quality control and polite pacing — per-host rate limits, 429 backoff — and watch now separates noise from substantive change. General source selection uses measured ordering, English general queries get a conditional DeepSeek hedge, and response bodies go through one decoder with JSON-LD. The installer takes the venv path, so PEP 668 environments no longer end up without their dependencies.
 
 v2.9.9 is a security-and-delivery-quality release. The content-security engine used to score web content but not stop it: a high-risk injection page went straight into the pipeline. Now anything over the risk threshold is quarantined, the cleaned text replaces the original, and it never reaches the evidence score. The network egress gains two layers of defense: redirects are validated hop by hop, and the resolved address is pinned to the connection, closing the DNS-rebinding window. On the dispatch side, results from slow engines abandoned by early-stop are no longer thrown away: they are collected in the background, delivered as usual if they finish within the grace window, and their real performance finally reaches the learner. A six-family scan of real-world scenarios tightened five classes of mis-routing: A-share financial queries, corporate due-diligence / invoicing / person-to-company lookups, civil-law practice, drug leaflets and paper-writing how-tos all land where they should. New this round: `argo engine add` wires a new engine up in one step, and the DSH settings page gains a route-observation card with tool recommendation combos.
 
@@ -652,6 +654,14 @@ argo/
 
 Only the three most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.10.0: 284 sources + video search and fetch + crawl frontier quality control
+
+- **272 → 284 sources**: five Metaso tiers (scholar/library/image/video/podcast, all explicit-only), Sciverse records (filter by year/journal/author/subject), NCPSSD Chinese social science (CLI bridge), plus three DSH plugin catalogs and two skill indexes with install counts
+- **A video lane end to end**: new `video` domain and `--video` to force routing, `--min-duration`/`--max-duration` filters; fetching pulls Bilibili descriptions and subtitles, YouTube oEmbed/timedtext, optional `ARGO_VIDEO_ASR_CMD` fallback
+- **Crawl frontier quality control**: URL canonicalization and asset filtering, body-hash dedupe, per-host pacing with 429 exponential backoff, robots Crawl-delay; `argo watch` block-level diff separates noise from substantive change. Measured: 10 pages in 12.1s, 2000 characters of body text (was 500)
+- **Source selection and cost**: general pool now uses measured ordering with a coverage floor and language gate (issue #23); the DeepSeek hedge stays second for English general queries (`ARGO_PAID_HEDGE_DEFER` moves it down); authority levels are backfilled and authority early-stop is in
+- **Installable and releasable**: the installer takes the venv path with `.venv` auto-discovery; new `release_check.py` release-consistency precheck and the MCP Registry manifest `server.json`
+
 ### v2.9.9: security in depth + slow-source results no longer dropped + five mis-routing classes closed
 
 - **High-risk page text can no longer reach the context**: the content-security engine upgrades from "score only" to "quarantine + clean replacement"; text with `risk_score ≥ 0.5` is replaced by its cleaned version and excluded from the evidence score. On by default; `ARGO_CONTENT_RISK_GATE=0` for an emergency override
@@ -670,20 +680,13 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 - **Local config overlay `config.local.yaml`**: machine-local tuning is no longer written into the public config
 - **A new "Engines" section on the DSH settings page**: argo's 28 behaviour switches move out of environment variables and into the panel
 
-### v2.9.7: architecture consolidation + host web fetching handed to argo + License moved to Apache-2.0
-
-- **License change**: MIT → Apache License 2.0. The patent grant is now explicit; nothing else changes
-- **Pages the host could not fetch now succeed**: short-link redirects, protocol upgrades, redirect shells and Cloudflare / JS challenge pages go through argo's fetch chain (HTTP first, auto-escalating to a browser when a site pushes back). On by default; turn it off with `fetchProviderEnabled`
-- **Auto mode no longer calls paid engines by accident**: the 18 explicit-only engines are removed from the routing candidate pool and are reached only when named with `--engine`
-- **A new key recovers on the next hop**: quota-exhausted engines no longer wait for their recovery window, and the routing cache is recomputed
-- **Running JS from crawl / research / MCP no longer crashes**
-
 ---
 
 ## Changelog
 
 | Version | Notes |
 |---------|-------|
+| **v2.10.0** | **284 sources + video search and fetch + crawl frontier quality control**: five Metaso tiers, Sciverse, NCPSSD and five DSH/skill index sources; a `video` domain with `--video`/`--min-duration`/`--max-duration`, Bilibili subtitles and YouTube timedtext with optional ASR; crawl frontier quality control and noisy-diff `argo watch`; measured general source selection with the DeepSeek English hedge and authority early-stop; venv-based installer. See [release notes](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **Security in depth + slow-source results no longer dropped + five mis-routing classes closed**: high-risk text quarantined with cleaned replacement (excluded from the evidence score), hop-by-hop redirect validation and DNS-rebinding pinning; slow engines abandoned by early-stop are collected in the background (`ARGO_TAIL_COMPLETE_S`) and their real scores recorded; a six-family real-scenario scan closes academic/finance/corporate/legal/pharma mis-routing; plus `argo engine add` one-step onboarding, bucketed scenario learning, and the ZCode plugin package. See [release notes](docs/RELEASE_NOTES_v2.9.9.md). |
 | **v2.9.8** | **Routing precision audit + issue #18/#19 fixes + test-state isolation**: replayed real queries and tightened 16 classes of false triggers (brand/product names, field names, ASCII substrings); added the SERP coverage gate and CJK cross-validation; fixed the empty-log nightly ledger, people_daily default feed, and cached-result guarding; isolated adaptive/breaker state per test. Thanks to @wpp666 for the reproduction and diagnosis. See [release notes](docs/RELEASE_NOTES_v2.9.8.md). |
 | **v2.9.7** | **Architecture consolidation + DSH web_fetch seam + License to Apache-2.0**: MIT → Apache License 2.0. Host web_fetch now flows through argo's fetch chain (HTTP first, browser upgrade on JS challenges), and explicit-only engines leave the routing pool so auto mode cannot bill them by accident. |

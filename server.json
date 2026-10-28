@@ -2,31 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.taxueseek/argo",
   "title": "Argo",
-  "description": "Metasearch 277 sources, fetch pages and PDFs, verify evidence with citations.",
+  "description": "Metasearch 284 sources, fetch pages and PDFs, verify evidence with citations.",
   "repository": {
     "url": "https://github.com/taxueseek/argo",
     "source": "github"
   },
-  "version": "2.9.9",
+  "version": "2.10.0",
   "packages": [
     {
-      "registryType": "pypi",
+      "registryType": "npm",
       "identifier": "argo-search",
-      "version": "2.9.9",
-      "runtimeHint": "uvx",
-      "runtimeArguments": [
-        {
-          "type": "named",
-          "name": "--from",
-          "value": "argo-search"
-        }
-      ],
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "argo-mcp"
-        }
-      ],
+      "version": "2.10.0",
+      "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
       }

@@ -51,7 +51,7 @@ if (argv[0] === '-v' || argv[0] === '--version') {
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
     console.log(pkg.version);
   } catch (_) {
-    console.log('2.9.9');
+    console.log('unknown');
   }
   process.exit(0);
 }
@@ -68,7 +68,7 @@ if (argv[0] === '-h' || argv[0] === '--help') {
 
 环境依赖:
   需要 Python 3.9+ 及 PyYAML。
-  无配置零门槛运行推荐: uvx argo-search argo-mcp
+  零门槛即用即走: npx -y argo-search
 `);
   process.exit(0);
 }
@@ -107,7 +107,7 @@ if (argv[0] === 'call') {
   proc.on('error', (err) => {
     console.error(`argo-search: 无法启动 Python (${PYTHON}): ${err.message}`);
     console.error('请确认已安装 Python 3.9+，并已执行: pip install pyyaml');
-    console.error('或使用无需预装环境的现代包管理工具: uvx argo-search argo-mcp');
+    console.error('或改用即用即走的方式: npx -y argo-search（同样需要 Python 3.9+ 与 PyYAML）');
     process.exit(1);
   });
 

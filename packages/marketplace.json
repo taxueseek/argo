@@ -4,7 +4,7 @@
     {
       "name": "argo-zcode",
       "source": "./argo-zcode",
-      "version": "2.9.9",
+      "version": "2.10.0",
       "description": "Unified search, web fetching, and evidence verification over 284 sources, powered by the argo CLI.",
       "displayName": "Argo 阿尔戈",
       "displayName_i18n": {

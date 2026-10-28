@@ -18,7 +18,7 @@ const PLUGIN_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const SERVER_ROOT = join(PLUGIN_ROOT, "server");
 const PANEL_URI = "ui://argo/panel.html";
 const PANEL_MIME = "text/html;profile=mcp-app";
-const SERVER_INFO = { name: "argo-panel", version: "2.9.9" };
+const SERVER_INFO = { name: "argo-panel", version: "2.10.0" };
 
 // ── JSON-RPC over stdio（换行分帧）───────────────────────────────────────────
 
