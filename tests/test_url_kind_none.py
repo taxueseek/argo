@@ -97,6 +97,7 @@ class TestCustomParserPath(unittest.TestCase):
 class TestCliPath(unittest.TestCase):
     def test_cli_items_without_url_kept(self):
         code = ("import sys,json;"
+                "sys.stdout.reconfigure(encoding='utf-8');"
                 "json.dump([{'title':'题录甲'},{'title':'题录乙','url':'https://real/2'}],sys.stdout)")
         spec = {"_name": "fake_cli", "cmd": ["python3", "-c", code],
                 "search_args": [], "timeout": 10, "url_kind": "none"}
