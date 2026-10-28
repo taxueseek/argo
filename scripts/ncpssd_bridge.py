@@ -14,8 +14,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import urllib.parse
 import urllib.request
+import urllib.parse
+
+from net_proxy import open_url  # 代理感知出口：不认 network.proxy 的直连在代理环境必挂（issue #13 同类）
 
 ENDPOINT = "https://www.ncpssd.cn/searchHandler/search"
 SORT = "synUpdateType|DESC,date|DESC,ik_subject|DESC,id|DESC"
@@ -61,7 +63,7 @@ def fetch(word: str, count: int, timeout: float = 20.0) -> list[dict]:
         "customShowCondition": word,
     }).encode("utf-8")
     req = urllib.request.Request(ENDPOINT, data=body, headers=HEADERS, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with open_url(req, timeout=timeout) as resp:
         payload = json.loads(resp.read().decode("utf-8", "replace"))
     rows = ((payload.get("data") or {}).get("rows")) or []
     items: list[dict] = []
