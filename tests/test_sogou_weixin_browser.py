@@ -140,9 +140,18 @@ class TestMain(unittest.TestCase):
             m.stderr = ""
             return m
 
+        # 只换 swb 眼里的 time 模块，不动全局：patch 全局 time.sleep 会把测试进程
+        # 其他线程的轮询 sleep 一并记进 sleeps，末尾全等断言在 CI 上随机爆
+        class _SwbTime:
+            def sleep(self, seconds):
+                sleeps.append(seconds)
+
+            def __getattr__(self, name):
+                return getattr(time, name)
+
         with patch.object(swb.shutil, "which", return_value=which), \
              patch.object(swb.subprocess, "run", side_effect=fake_run) as run_mock, \
-             patch.object(swb.time, "sleep", side_effect=sleeps.append):
+             patch.object(swb, "time", _SwbTime()):
             code = swb.main(argv)
         return code, run_mock, sleeps
 
