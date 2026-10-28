@@ -8,9 +8,9 @@
 
 - **收录 284 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
 - **开箱可用 241 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
-- **需自备密钥 28 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`parallel`、`qweather`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
+- **需自备密钥 29 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`parallel`、`qweather`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
-- **已停用 12 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`metaso`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
+- **已停用 11 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
 - **显式专用 23 个**：`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`qwant`、`sciverse`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
@@ -116,7 +116,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `ecosia` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页 |
 | `felo` | 已停用 | 付费 | 不限 | ARGO_FELO_API_KEY | 域 semantic_discovery、语义画像命中 | Felo AI 搜索 API |
 | `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
-| `metaso` | 已停用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
+| `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
 | `parallel` | 需自备密钥 | 按调用计费 | 不限 | PARALLEL_API_KEY | 域 chinese_tech_deep | Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch） |
 | `qwant` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页 |

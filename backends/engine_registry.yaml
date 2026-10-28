@@ -1880,7 +1880,7 @@ engines:
   - general
   latency_ms: 2000
   cost: api
-  status: disabled
+  status: ok
   recommended: true
   explicit_only: false
   desc: 秘塔搜索 API（中文 AI 搜索）
