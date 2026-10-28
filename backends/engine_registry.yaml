@@ -1960,6 +1960,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: 国家统计局分省/全国宏观数据（GDP/CPI/PPI/人口，data.stats.gov.cn V2 免认证）
+- name: ncpssd
+  tier: T1
+  type: cli
+  coverage:
+  - chinese
+  - academic
+  - paper
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: NCPSSD（国家哲学社会科学文献中心）——中文期刊/集刊题录与摘要，命中常带全文 PDF 直链（表单 POST 经 CLI 桥）
 - name: ndl
   tier: T1
   type: ndl

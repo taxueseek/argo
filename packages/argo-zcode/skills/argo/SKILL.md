@@ -1,11 +1,11 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验（278 源、240 免密钥）。当需要搜索/查一下/搜一下/核实/查证/可信度/抓取/爬取/深度研究/论文/舆情/公众号/招聘/search for/look up/fact check/fetch/crawl/research 时使用；支持影视/体育/金融/宏观/学术等垂直域与多语言查询。依赖本机已装 argo CLI。
+description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验（278 源、241 免密钥）。当需要搜索/查一下/搜一下/核实/查证/可信度/抓取/爬取/深度研究/论文/舆情/公众号/招聘/search for/look up/fact check/fetch/crawl/research 时使用；支持影视/体育/金融/宏观/学术等垂直域与多语言查询。依赖本机已装 argo CLI。
 ---
 
 # Argo — 统一搜索与证据核验
 
-> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 278 个源、240 个免密钥可用；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 自动跳过）。
+> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 278 个源、241 个免密钥可用；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 自动跳过）。
 
 前置依赖：本机已装 argo CLI（`which argo` 确认；未装见 https://github.com/taxueseek/argo 的安装说明）。
 

@@ -1,0 +1,40 @@
+# NCPSSD（国家哲学社会科学文献中心）—— 中文社科期刊文献检索。
+#
+# 是什么：国社科文献中心检索页背后的表单接口（上游自述 2000+ 期刊、930 万+ 篇），
+# 能拿到题录 + 作者/刊名/年卷期页 + 摘要，多数条目另带一份 PDF 直链。
+# 覆盖边界：**只有中文社科文献**（期刊论文为主）；题录与摘要取自上游检索响应，
+# PDF 是上游返回的直链、可下载性随上游策略变化；不含外文文献与古籍。
+# 接口形态：上游只吃表单 POST（GET 返回 HTML、空体 POST 被 WAF 拒），argo 的
+# 声明式 http 引擎不发这种请求，故走 CLI 桥 scripts/ncpssd_bridge.py 代发并转成 items。
+# 计费：免费（无 key）。
+# 稳定面：端点与参数由检索页逆向所得，无公开 API 文档、站点也无 robots 声明，
+# 上游改版即可能失效；因此 explicit_only: true —— 不参与自动路由，只在显式点名时调用。
+# 验证：python3 scripts/engine_validate.py --engine ncpssd --stage all --admit
+#   python3 scripts/search.py "唯物史观" --engine ncpssd --json
+engine_id: ncpssd
+type: cli
+enabled: true
+explicit_only: true
+cost_tier: free
+canary_query: "唯物史观"
+relevance_check: true
+label: 国家哲学社会科学文献中心（中文期刊题录+全文PDF）
+desc: NCPSSD（国家哲学社会科学文献中心）——中文期刊/集刊题录与摘要，命中常带全文 PDF 直链（表单 POST 经 CLI 桥）
+coverage: [chinese, academic, paper]
+# 质量门禁自述查询集：默认质量集是英文通用探针，打在纯中文源上会与结果零词面交集，
+# 被相关性判据封顶 0.3 判 fail（实测）；按「引擎声明自己的适用集」的既有做法给中文社科查询。
+quality_queries:
+  - query: "唯物史观"
+  - query: "中国式现代化"
+  - query: "乡村振兴"
+  - query: "数字经济"
+  - query: "社会保障"
+cmd:
+  - python3
+  - scripts/ncpssd_bridge.py
+search_args:
+  - "{query}"
+  - "-n"
+  - "{n}"
+output_format: yaml
+timeout: 25

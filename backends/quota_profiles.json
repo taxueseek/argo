@@ -1560,6 +1560,16 @@
     "cost_tier": "free",
     "priority": 6
   },
+  "ncpssd": {
+    "label": "国家哲学社会科学文献中心（中文期刊题录+全文PDF）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "ndl": {
     "label": "NDL 日本国立国会图书馆",
     "qps": 2,

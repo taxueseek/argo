@@ -8,8 +8,8 @@
   },
   "description": "Unified search, web fetching, and evidence verification over 278 sources, powered by the argo CLI.",
   "description_i18n": {
-    "en": "Unified search, web fetching, and evidence verification over 278 sources (240 keyless). Deep research, academic, social listening, WeChat articles, job aggregation, and local retrieval, powered by the argo CLI.",
-    "zh-CN": "统一搜索、网页抓取与证据核验：278 个源、240 个免密钥可用，覆盖深度研究、学术、舆情、公众号、招聘聚合与本地检索。不止搜到，还要核到。基于 argo CLI。"
+    "en": "Unified search, web fetching, and evidence verification over 278 sources (241 keyless). Deep research, academic, social listening, WeChat articles, job aggregation, and local retrieval, powered by the argo CLI.",
+    "zh-CN": "统一搜索、网页抓取与证据核验：278 个源、241 个免密钥可用，覆盖深度研究、学术、舆情、公众号、招聘聚合与本地检索。不止搜到，还要核到。基于 argo CLI。"
   },
   "author": {
     "name": "taxueseek",
