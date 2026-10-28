@@ -1,0 +1,49 @@
+# 秘塔 AI 搜索 · 文档档（官方 API，scope: document）
+#
+# 上游：POST https://metaso.cn/api/v1/search，scope=document。返回 documents[]：
+#   title/link/snippet/score/position/authors（无 date 字段，发布时间拿不到）。
+#
+# 这是引用价值最高的一档：link 直接指向文档本体（实测命中 ccj.pku.edu.cn 的
+#   期刊 PDF 直链、wmarxism.fudan.edu.cn 的复旦《当代国外马克思主义评论》PDF），
+#   snippet 是正文片段而非题录摘要，可先读片段再决定是否抓全文。代价是同一篇
+#   文献可能出现多条（不同切入片段/不同镜像），去重交给调用方与上游。
+#
+# 计费与显式调用纪律同 metaso.yaml（按次 0.03 元；固定 size: 20 同价取满；
+#   explicit_only 不进自动路由）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine metaso_doc --stage all --admit --write-doc
+
+engine_id: metaso_doc
+type: http
+enabled: true
+explicit_only: true
+cost_tier: low
+method: POST
+url: https://metaso.cn/api/v1/search
+timeout: 15
+canary_query: "马克思 异化"
+label: 秘塔文档（原文）
+family: academic
+priority: 59
+cost_per_call: 0.03
+cost_unit: cny
+required_env:
+  - ARGO_METASO_API_KEY
+
+headers:
+  Authorization: Bearer {ARGO_METASO_API_KEY}
+  Content-Type: application/json
+
+body:
+  q: "{query}"
+  scope: document
+  size: 20
+
+output_map:
+  items: documents
+  item_title: title
+  item_url: link
+  item_summary: snippet
+
+coverage: [academic, paper, document, chinese]

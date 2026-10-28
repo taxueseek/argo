@@ -1,0 +1,65 @@
+# 秘塔 AI 搜索 · 图片档（官方 API）
+#
+# 上游与鉴权同 metaso.yaml：POST https://metaso.cn/api/v1/search，鉴权头
+#   Authorization: Bearer {ARGO_METASO_API_KEY}。计价按次扣积分，与返回条数无关
+#   （实测 size=3 与 size=20 同价），故 size 固定取满，条数裁剪交给调用方 n。
+#
+# 结果形态：images[] —— title/score/position/imageUrl/imageWidth/imageHeight。
+#   三处与图库类源（openverse / wikimedia_commons）不同，用前须知：
+#   - **无许可字段**：上游不给授权信息，argo 这边按「未判定」处理，不是
+#     「不可商用」；用在要发布的稿子里之前必须自行核对来源权利。
+#   - **无来源页**：只有图床直链（实测命中百科类 CDN），没有可溯源的详情页。
+#     url 槽仍必须给：SERP 过滤闸对空 url 返回 True（scripts/serp_guard.py:144-147），
+#     无 url 的条目会在漏斗 filtered 一格被整批吞掉（实测本档返回 3 条 → 管线输出
+#     0 条）；对图片档，图片直链本身就是调用方可直接使用的交付物，故 url 取它。
+#   - **无日期**：字段里没有时间，不参与 --since/--until 过滤。
+#   score 是 low/mid/high 这类字符串（非数值），透传到 upstream_score。
+#
+# 路由形态：explicit_only —— 只经 `argo search --engine metaso_image` 显式调用。
+#   image_search 域的 engines_combo 是显式列表（不是按 coverage/family 自动
+#   收录），要让它参与该域的自动图片检索得改 config.yaml；本档不动 config.yaml，
+#   是否接线由维护者定。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine metaso_image --stage all --admit --write-doc
+
+engine_id: metaso_image
+type: http
+enabled: true
+explicit_only: true
+cost_tier: low
+method: POST
+url: https://metaso.cn/api/v1/search
+timeout: 15
+canary_query: "雪山"
+label: 秘塔搜索（图片）
+family: misc_vertical
+priority: 34
+cost_per_call: 0.03
+cost_unit: cny
+required_env:
+  - ARGO_METASO_API_KEY
+
+headers:
+  Authorization: Bearer {ARGO_METASO_API_KEY}
+  Content-Type: application/json
+
+body:
+  q: "{query}"
+  scope: image
+  size: 20
+
+output_map:
+  items: images
+  item_title: title
+  item_url: imageUrl
+  item_image: imageUrl
+  item_image_width: imageWidth
+  item_image_height: imageHeight
+  item_upstream_score: score
+
+coverage: [image, media, web]
+
+quality_queries:
+  - query: "雪山"
+  - query: "vintage poster"

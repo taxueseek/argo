@@ -2661,8 +2661,38 @@
     "boost_keywords": {},
     "boost_combos": {}
   },
+  "metaso_doc": {
+    "label": "秘塔文档（原文）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
   "ncpssd": {
     "label": "国家哲学社会科学文献中心（中文期刊题录+全文PDF）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "metaso_image": {
+    "label": "秘塔搜索（图片）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "metaso_podcast": {
+    "label": "秘塔搜索（播客）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "metaso_scholar": {
+    "label": "秘塔学术（题录）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "metaso_video": {
+    "label": "秘塔搜索（视频）",
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}

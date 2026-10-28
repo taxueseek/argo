@@ -1500,6 +1500,56 @@
     "cost_tier": "low",
     "priority": 50
   },
+  "metaso_doc": {
+    "label": "秘塔文档（原文）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.03,
+    "cost_unit": "cny",
+    "cost_tier": "low",
+    "priority": 59
+  },
+  "metaso_image": {
+    "label": "秘塔搜索（图片）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.03,
+    "cost_unit": "cny",
+    "cost_tier": "low",
+    "priority": 34
+  },
+  "metaso_podcast": {
+    "label": "秘塔搜索（播客）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.03,
+    "cost_unit": "cny",
+    "cost_tier": "low",
+    "priority": 32
+  },
+  "metaso_scholar": {
+    "label": "秘塔学术（题录）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.03,
+    "cost_unit": "cny",
+    "cost_tier": "low",
+    "priority": 58
+  },
+  "metaso_video": {
+    "label": "秘塔搜索（视频）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.03,
+    "cost_unit": "cny",
+    "cost_tier": "low",
+    "priority": 33
+  },
   "models_dev": {
     "label": "models.dev",
     "qps": 1,

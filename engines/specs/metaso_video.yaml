@@ -1,0 +1,62 @@
+# 秘塔 AI 搜索 · 视频档（官方 API）
+#
+# 上游与鉴权同 metaso.yaml：POST https://metaso.cn/api/v1/search，鉴权头
+#   Authorization: Bearer {ARGO_METASO_API_KEY}。计价按次扣积分，与返回条数无关
+#   （实测 size=3 与 size=20 同价），故 size 固定取满，条数裁剪交给调用方 n。
+#
+# 结果形态：videos[] —— title/link/score/snippet/position/authors/date/duration/
+#   coverImage。四处用前须知：
+#   - date 是 ISO（YYYY-MM-DD），但 metaso 家族未列入 scripts/time_utils.py 的
+#     TIME_CAPABLE_ENGINES，published_at 只作展示透传，--since/--until 不生效。
+#   - duration 是秒数字符串，output_map 无对应槽位，不透传。
+#   - coverImage 是图床直链（实测为 http 而非 https），映射到 item_image 供结果
+#     卡展示；上游不给授权信息，与 metaso_image 同为「许可未判定」。
+#   - authors 是数组，output_map 无数组槽位，不透传。
+#   score 是 low/medium/high 这类字符串（非数值），透传到 upstream_score。
+#
+# 路由形态：explicit_only —— 只经 `argo search --engine metaso_video` 显式调用，
+#   不参与任何域的自动选择。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine metaso_video --stage all --admit --write-doc
+
+engine_id: metaso_video
+type: http
+enabled: true
+explicit_only: true
+cost_tier: low
+method: POST
+url: https://metaso.cn/api/v1/search
+timeout: 15
+canary_query: "人工智能"
+label: 秘塔搜索（视频）
+family: misc_vertical
+priority: 33
+cost_per_call: 0.03
+cost_unit: cny
+required_env:
+  - ARGO_METASO_API_KEY
+
+headers:
+  Authorization: Bearer {ARGO_METASO_API_KEY}
+  Content-Type: application/json
+
+body:
+  q: "{query}"
+  scope: video
+  size: 20
+
+output_map:
+  items: videos
+  item_title: title
+  item_url: link
+  item_summary: snippet
+  item_published_at: date
+  item_image: coverImage
+  item_upstream_score: score
+
+coverage: [tv, media, entertainment]
+
+quality_queries:
+  - query: "人工智能"
+  - query: "纪录片"

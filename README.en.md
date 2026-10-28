@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme/hero.svg" width="100%" alt="Argo: search and deep research for agents — 279 search sources, routing by domain and language, absorbable evidence output">
+  <img src="assets/readme/hero.svg" width="100%" alt="Argo: search and deep research for agents — 282 search sources, routing by domain and language, absorbable evidence output">
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.9-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-279-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-282-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
@@ -35,7 +35,7 @@
 
 ## What it is
 
-**Argo is a search and deep-research tool that lives inside your agent, and can also pull information from the relevant web pages. It connects to 279 search sources across 99 business domains, and also covers basic local file search. Among open-source search projects, its search capability is exceptionally strong.**
+**Argo is a search and deep-research tool that lives inside your agent, and can also pull information from the relevant web pages. It connects to 282 search sources across 98 business domains, and also covers basic local file search. Among open-source search projects, its search capability is exceptionally strong.**
 
 API keys are optional and improve quality (keyed sources are usually better; unkeyed ones are skipped automatically), with free engines and local engines as an automatic fallback. It covers 18 languages including Chinese, English, Japanese and Korean, and supports vertical scenarios such as finance, academia, film, sports, code and macro data.
 
@@ -123,7 +123,7 @@ Saving takes effect immediately (all volatile config): the native tool set is re
 
 ## Core strengths
 
-**279 sources, 241 keyless and ready out of the box.** Runs without any API key; free and local engines fall back automatically. Keyed sources are usually better, and unkeyed ones are skipped automatically. One install covers every scenario.
+**282 sources, 240 keyless and ready out of the box.** Runs without any API key; free and local engines fall back automatically. Keyed sources are usually better, and unkeyed ones are skipped automatically. One install covers every scenario.
 
 **Local and web search in one.** This is a capability only Argo has. Local file search is built on the same tools developers use daily, rg and mdfind: code symbols, filenames, document text and file structure. Flip one switch and local hits join the same web search results, labelled with the local file as the source. When you remember writing something six months ago but forget where, this beats digging through folders.
 
@@ -207,10 +207,10 @@ All four forms run the same Python code underneath; CLI and MCP tools map one to
 1. **From links to evidence.** Agents need structured material they can rank, verify and fit in context — Argo returns credibility-decomposed JSON, not SERP lists.
 2. **Context is the first cost.** A single page scrape can burn 10k+ tokens; Argo's agent profile is ~3.7KB per call, with field sets and byte budgets pinned by gates.
 3. **Sites now prepare content for AI.** llms.txt and `.md` direct-out are spreading across major doc sites — Argo's fetch chain probes them at level 0, with an r.jina.ai reader fallback.
-4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (241 keyless sources).
+4. **The free/open ecosystem is enough.** Government, academic, standards and security open APIs plus keyless engines cover most domains (240 keyless sources).
 5. **Quality is measurable.** Ranking golden floors, fusion-ablation gates and negative routing controls — "is this version better" is now a number, not a vibe.
 
-> All five are already shipped across the v2.9.x line: 279 sources, 99 domains, 241 keyless out of the box. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
+> All five are already shipped across the v2.9.x line: 282 sources, 98 domains, 240 keyless out of the box. Details in [docs/为什么选择argo.md](docs/为什么选择argo.md).
 
 ---
 
@@ -425,7 +425,7 @@ python3 scripts/search.py --list-engines
 
 ### Rough capability set (v2.9.9)
 
-What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **279 sources (241 usable with no key), 99 domains**.
+What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **282 sources (240 usable with no key), 98 domains**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
@@ -450,7 +450,7 @@ Per-version detail lives in "Recent updates"; release notes for each version are
 
 ## Engines & routing
 
-Config currently has **279** sources (**241** usable with no key) and **99** domains (see `config.yaml` and `--list-engines`).
+Config currently has **282** sources (**240** usable with no key) and **98** domains (see `config.yaml` and `--list-engines`).
 
 ### Direct & vertical (excerpt)
 

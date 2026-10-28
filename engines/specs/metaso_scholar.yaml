@@ -1,0 +1,57 @@
+# 秘塔 AI 搜索 · 学术档（官方 API，scope: scholar）
+#
+# 上游：POST https://metaso.cn/api/v1/search，scope=scholar。返回 scholars[]：
+#   title/link/snippet/score/position/date(ISO YYYY-MM-DD)/authors(部分条目)。
+#
+# 这是什么通道：题录聚合，不是库内检索。中文条目落在
+#   s.wanfangdata.com.cn（link 是万方检索页 URL，snippet 常为空，无 authors）
+#   www.cqvip.com（有 authors + date + snippet）
+#   英文条目落在 doi.org / semanticscholar.org。知网题录 2024-08 起已从秘塔
+#   下线（知网侵权告知函后官方公告「不再收录知网文献的题录及摘要数据」），
+#   因此本档覆盖万方 + 维普，不含 CNKI。链接为二次检索入口，核对原文需再
+#   一步跳转——要直接可读的原文直链用 metaso_doc。
+#
+# 网页端学术模式的「中文库/英文库 + 北大核心/中科院分区/JCR/SCIE/EI」筛选
+#   在开放 API 侧没有对应参数（scope 之外的筛选参数上游未公开），本档拿不到
+#   分区/核心级别。
+#
+# 计费与显式调用纪律同 metaso.yaml（按次 0.03 元；固定 size: 20 同价取满；
+#   explicit_only 不进自动路由）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine metaso_scholar --stage all --admit --write-doc
+
+engine_id: metaso_scholar
+type: http
+enabled: true
+explicit_only: true
+cost_tier: low
+method: POST
+url: https://metaso.cn/api/v1/search
+timeout: 15
+canary_query: "唯物史观"
+label: 秘塔学术（题录）
+family: academic
+priority: 58
+cost_per_call: 0.03
+cost_unit: cny
+required_env:
+  - ARGO_METASO_API_KEY
+
+headers:
+  Authorization: Bearer {ARGO_METASO_API_KEY}
+  Content-Type: application/json
+
+body:
+  q: "{query}"
+  scope: scholar
+  size: 20
+
+output_map:
+  items: scholars
+  item_title: title
+  item_url: link
+  item_summary: snippet
+  item_published_at: date
+
+coverage: [academic, paper, chinese]

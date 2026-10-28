@@ -1884,6 +1884,71 @@ engines:
   recommended: true
   explicit_only: false
   desc: 秘塔搜索 API（中文 AI 搜索）
+- name: metaso_doc
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - paper
+  - document
+  - chinese
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 秘塔文档（原文）（http）
+- name: metaso_image
+  tier: T1
+  type: http
+  coverage:
+  - image
+  - media
+  - web
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 秘塔搜索（图片）（http）
+- name: metaso_podcast
+  tier: T1
+  type: http
+  coverage:
+  - media
+  - culture
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 秘塔搜索（播客）（http）
+- name: metaso_scholar
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - paper
+  - chinese
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 秘塔学术（题录）（http）
+- name: metaso_video
+  tier: T1
+  type: http
+  coverage:
+  - tv
+  - media
+  - entertainment
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 秘塔搜索（视频）（http）
 - name: models_dev
   tier: T1
   type: models_dev
