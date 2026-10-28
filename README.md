@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme/hero.svg" width="100%" alt="Argo 阿尔戈：给 Agent 用的搜索与深度研究工具，277 个搜索源，按域按语言选路，输出可吸收的证据">
+  <img src="assets/readme/hero.svg" width="100%" alt="Argo 阿尔戈：给 Agent 用的搜索与深度研究工具，278 个搜索源，按域按语言选路，输出可吸收的证据">
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.9.9-informational">
-  <img alt="engines" src="https://img.shields.io/badge/engines-277-orange">
+  <img alt="engines" src="https://img.shields.io/badge/engines-278-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
@@ -35,7 +35,7 @@
 
 ## 这是什么
 
-**Argo 是一个装在 Agent 里的搜索与深度研究工具，也可以获取相关网页的信息。背后连着 277 个搜索源，覆盖 99 个业务领域，同时支持本地文件的基础搜索能力。在开源搜索项目里，具备非常强大的搜索能力。**
+**Argo 是一个装在 Agent 里的搜索与深度研究工具，也可以获取相关网页的信息。背后连着 278 个搜索源，覆盖 98 个业务领域，同时支持本地文件的基础搜索能力。在开源搜索项目里，具备非常强大的搜索能力。**
 
 支持配置 API Key 提升搜索质量（配了 Key 的源质量通常更好，没配则自动跳过），也支持免费引擎和本地引擎自动保底。覆盖中英日韩等 18 种语言，支持金融、学术、影视、体育、代码、宏观等垂直场景。
 
@@ -123,7 +123,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 
 ## 核心优势
 
-**277 个源，240 个免密钥开箱可用。** 不配任何 API Key 就能跑，免费引擎和本地引擎自动保底。配了 Key 的源质量通常更好，没配则自动跳过。一次安装，全场景可用。
+**278 个源，240 个免密钥开箱可用。** 不配任何 API Key 就能跑，免费引擎和本地引擎自动保底。配了 Key 的源质量通常更好，没配则自动跳过。一次安装，全场景可用。
 
 **本地搜索 + 联网搜索一体。** 这是 Argo 独一份的能力。本机文件搜索底层是 rg、mdfind 那套开发者日常工具，搜代码符号、文件名、文档全文、文件结构。加一个开关，本机命中会并进同一次网络搜索结果里，结果上标着来源是本机文件。写东西时记得自己半年前记过一段话但忘了在哪，用这个搜比翻文件夹快。
 
@@ -212,7 +212,7 @@ Agent 干活的量级变了，检索的玩法跟着变了五件事，每一件 A
 4. **免费开放生态够用了。** 政府、学术、标准、安全机构的开放 API + 免 key 引擎，已经能覆盖大多数领域（240 个免配置源）；稀缺免费额度（firecrawl 1000 credits/月、stackexchange 300 次/天）做了「日常补位、关键顶上」的分层，订阅墙不是唯一解。
 5. **检索质量从「感觉」到「度量」。** 排序有金标（MRR/nDCG 地板）、融合有增益消融检查、路由有负向控制矩阵——「这版比上版好吗」从此是数字问题，不是玄学。
 
-> 以上五项已经在 v2.9.x 系列里全部落地：277 个源、99 个领域、240 个免配置开箱。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
+> 以上五项已经在 v2.9.x 系列里全部落地：277 个源、98 个领域、240 个免配置开箱。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
 
 ---
 
@@ -435,7 +435,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 
 **1. 通用搜索 + 垂直搜索，双管齐下**
 
-日常问题走通用网页搜索；一问到行情、影视、体育、宏观这类「有标准答案」的问题，自动切到垂直源直接给答案，而不是扔给你一堆链接。目前 277 个源（240 个免密钥开箱可用）、99 个业务域，金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等都有专门的路。
+日常问题走通用网页搜索；一问到行情、影视、体育、宏观这类「有标准答案」的问题，自动切到垂直源直接给答案，而不是扔给你一堆链接。目前 278 个源（240 个免密钥开箱可用）、98 个业务域，金融 / 宏观 / 影视 / 体育 / 地理 / 组织 / 媒体 / 化学 / 学术 / 代码等都有专门的路。
 
 **2. 缓存：不重复花冤枉钱**
 
@@ -523,7 +523,7 @@ v2.9.4 修的是显式选引擎的场景。用 --engine X 指定引擎时，缓�
 
 ## 引擎与路由
 
-当前配置 **277** 个源（**240** 个免密钥开箱可用）、**99** 个业务域（以 `config.yaml` 与 `--list-engines` 为准）。
+当前配置 **278** 个源（**240** 个免密钥开箱可用）、**98** 个业务域（以 `config.yaml` 与 `--list-engines` 为准）。
 
 ### 直连与垂类（节选）
 
@@ -876,6 +876,3 @@ Apache License 2.0 © 2026 [taxueseek](https://github.com/taxueseek)
 invest-cli 通过 `info`（`invest-cli info <词> --engine eastmoney`）与 `intent macro` 直接复用 argo 的财经 / 宏观 / 资讯取数，用于环节配额、低成本、多源数据，与 invest-cli 的结构化数据层（Wind / 盈米 / 东财 / yfinance / 天天基金）协同。
 
 > 最新版已完成 argo 数据与 invest 系列技能（v2.0.5）的集成。
-
-
-<!-- mcp-name: io.github.taxueseek/argo -->

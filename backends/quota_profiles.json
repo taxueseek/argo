@@ -1950,6 +1950,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "sciverse": {
+    "label": "Sciverse（题录）",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "api",
+    "priority": 56
+  },
   "searchmysite": {
     "label": "SearchMySite 个人站索引",
     "qps": 2,

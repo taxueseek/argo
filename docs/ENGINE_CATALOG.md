@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 277 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **收录 278 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
 - **开箱可用 240 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
-- **需自备密钥 22 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`octen`、`parallel`、`qweather`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
+- **需自备密钥 23 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`octen`、`parallel`、`qweather`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 12 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`metaso`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 16 个**：`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`opencitations`、`qwant`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 17 个**：`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`opencitations`、`qwant`、`sciverse`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -27,7 +27,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 二、费用与密钥：哪些白用、哪些要钱
 
 - **免费档 262 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 13 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
-- **计费档 15 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
+- **计费档 16 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
 |---|---|---|---|
@@ -41,6 +41,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `exa` | 按调用计费 | 是 | — |
 | `octen` | 按调用计费 | 是 | ARGO_OCTEN_API_KEY |
 | `parallel` | 按调用计费 | 是 | PARALLEL_API_KEY |
+| `sciverse` | 按调用计费 | 否，仅显式调用 | ARGO_SCIVERSE_API_TOKEN |
 | `seltz` | 按调用计费 | 是 | SELTZ_API_KEY |
 | `tavily` | 按调用计费 | 是 | ARGO_TAVILY_API_KEY |
 | `you` | 按调用计费 | 是 | YDC_API_KEY |
@@ -157,7 +158,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
 | `tineye` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力） |
 
-### 学术文献（27）
+### 学术文献（28）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -185,6 +186,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `zenodo` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | Zenodo 科研数据集搜索（CERN 托管，免认证，DOI 可引用） |
 | `doi` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | DOI 内容协商（doi.org 官方解析器，Accept 头直出 CSL JSON 结构化元数据，keyless 免 key 免限次，查询词传裸 DOI） |
 | `opencitations` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | OpenCitations 引用计数（DOI → 被引次数，免 key 无限次；查询词传裸 DOI） |
+| `sciverse` | 需自备密钥 + 显式专用 | 按调用计费 | 不限 | ARGO_SCIVERSE_API_TOKEN | 显式调用（--engine） | Sciverse（题录） |
 | `tinyfish_paper` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 学术论文搜索（免费，含作者/发表处/年份/被引/pdf_url） |
 | `unpaywall` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_UNPAYWALL_EMAIL | 显式调用（--engine） | Unpaywall 开放获取定位（DOI → 是否有合法免费全文及链接；需 ARGO_UNPAYWALL_EMAIL） |
 | `zbmath` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | zbMATH Open 数学文献索引（含 MSC 分类号，免 key） |
@@ -574,7 +576,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 277 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 278 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

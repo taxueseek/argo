@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-10-27'
+last_updated: '2026-10-28'
 engines:
 - name: aljazeera
   tier: T1
@@ -2450,6 +2450,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: 卫星目录（SatNOGS DB，NORAD ID/发射信息，免认证）
+- name: sciverse
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - paper
+  - english
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: Sciverse（题录）（http）
 - name: searchmysite
   tier: T1
   type: searchmysite

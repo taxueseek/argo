@@ -2654,5 +2654,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "sciverse": {
+    "label": "Sciverse（题录）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

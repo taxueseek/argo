@@ -1,0 +1,72 @@
+# Sciverse · 学术题录检索（官方 HTTP API，POST /meta-search，需 token）
+#
+# 上游：OpenDataLab / MinerU（上海人工智能实验室）的科研数据基座，
+#   base https://api.sciverse.space，鉴权头 Authorization: Bearer <token>。
+# 契约取自官方 Python SDK sciverse 0.14.3 源码（client.py:155-182 的
+#   search_papers 与 client.py:34-101 的 _to_backend_payload），本档不依赖 SDK。
+#
+# 本档给什么：结构化元数据——title / author / abstract / 刊名 / 年份 /
+#   subjects / doi / citation_count，另带 unique_id（引用关系查询用）与
+#   is_content_accessible（该条是否真有全文）。
+# 本档不给什么：证据句与页码——argo 条目放不下偏移量与页码，要证据句用技能 sciverse 的 sv.py；读正文要拿
+#   doc_id 走 GET /content，本档不做。
+#
+# 覆盖边界：外文（英/德/法）文献为主；中文只有海外中国学与开放获取刊物
+#   （Hanspub / MDPI / Asiatische Studien 之类），**不含 CNKI / 万方 / CSSCI
+#   中文核心**，古籍与 PhilPapers 也不覆盖。
+#
+# 年份粒度：上游只给 publication_published_year（四位年份，无月日），下面
+#   published_at 映出来就是「2023」这样的串；本引擎也不在 argo 的
+#   TIME_CAPABLE_ENGINES 里，--since/--until 对它不生效。
+#
+# 计费：官方未公布单价，故声明 cost_tier: api（按调用计）而不写免费；在价格
+#   与额度核实之前用 explicit_only 把它挡在域 combo 之外，避免「自动花钱却
+#   算不出花了多少」。
+#
+# key 名与官方 SDK 对齐（SDK 还认 ~/.sciverse/credentials.json，走本档要写进
+#   环境变量）：ARGO_SCIVERSE_API_TOKEN 或 SCIVERSE_API_TOKEN。
+#
+# 实测（2026-10-28，带 token）：engine_validate --stage all --admit 通过
+#   （health + quality，q=1.0）；argo_search 有结果，url 由 doi 经 url_template
+#   生成。无 token 时 health 门按设计 skipped，不算失败。
+#   注意 published_at 是四位年份字符串（上游只给年，无月日）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine sciverse --stage all --admit --write-doc
+
+engine_id: sciverse
+type: http
+enabled: true
+explicit_only: true
+cost_tier: api
+method: POST
+url: https://api.sciverse.space/meta-search
+timeout: 20
+canary_query: "Kant transcendental deduction objectivity"
+label: Sciverse（题录）
+family: academic
+priority: 56
+required_env:
+  - [ARGO_SCIVERSE_API_TOKEN, SCIVERSE_API_TOKEN]
+
+headers:
+  Authorization: Bearer {SCIVERSE_API_TOKEN}
+  Content-Type: application/json
+
+body:
+  query: "{query}"
+  page: 1
+  page_size: 20
+  freshness_boost: MILD
+
+output_map:
+  items: results
+  item_title: title
+  item_url: doi
+  item_summary: abstract
+  item_published_at: publication_published_year
+  item_upstream_authority: publication_venue_name_unified
+  item_upstream_score: citation_count
+  url_template: "https://doi.org/{doi}"
+
+coverage: [academic, paper, english]
