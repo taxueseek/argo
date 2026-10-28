@@ -84,7 +84,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 状态含义：**可直接用** = 自动路由会用上；**需自配密钥 / 需装后端工具** = 配好后即可用；**被上游封锁** = 源站当前拒绝；**已停用** = 配置层面关闭。
 
-### 全网搜索（39）
+### 全网搜索（38）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -117,7 +117,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `felo` | 已停用 | 付费 | 不限 | ARGO_FELO_API_KEY | 域 semantic_discovery、语义画像命中 | Felo AI 搜索 API |
 | `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `metaso` | 已停用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
-| `ncpssd` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | NCPSSD（国家哲学社会科学文献中心）——中文期刊/集刊题录与摘要，命中常带全文 PDF 直链（表单 POST 经 CLI 桥） |
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
 | `parallel` | 需自备密钥 | 按调用计费 | 不限 | PARALLEL_API_KEY | 域 chinese_tech_deep | Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch） |
 | `qwant` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页 |
@@ -167,7 +166,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
 | `tineye` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力） |
 
-### 学术文献（30）
+### 学术文献（31）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -196,6 +195,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `doi` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | DOI 内容协商（doi.org 官方解析器，Accept 头直出 CSL JSON 结构化元数据，keyless 免 key 免限次，查询词传裸 DOI） |
 | `metaso_doc` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔文档（原文） |
 | `metaso_scholar` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔学术（题录） |
+| `ncpssd` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | NCPSSD（国家哲学社会科学文献中心）——中文期刊/集刊题录与摘要，命中常带全文 PDF 直链（表单 POST 经 CLI 桥） |
 | `opencitations` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | OpenCitations 引用计数（DOI → 被引次数，免 key 无限次；查询词传裸 DOI） |
 | `sciverse` | 需自备密钥 + 显式专用 | 按调用计费 | 不限 | ARGO_SCIVERSE_API_TOKEN | 显式调用（--engine） | Sciverse（题录） |
 | `tinyfish_paper` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 学术论文搜索（免费，含作者/发表处/年份/被引/pdf_url） |

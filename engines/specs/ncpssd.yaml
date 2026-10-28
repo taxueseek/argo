@@ -20,6 +20,7 @@ canary_query: "唯物史观"
 relevance_check: true
 label: 国家哲学社会科学文献中心（中文期刊题录+全文PDF）
 desc: NCPSSD（国家哲学社会科学文献中心）——中文期刊/集刊题录与摘要，命中常带全文 PDF 直链（表单 POST 经 CLI 桥）
+family: academic
 coverage: [chinese, academic, paper]
 # 质量门禁自述查询集：默认质量集是英文通用探针，打在纯中文源上会与结果零词面交集，
 # 被相关性判据封顶 0.3 判 fail（实测）；按「引擎声明自己的适用集」的既有做法给中文社科查询。
