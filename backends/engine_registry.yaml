@@ -2215,7 +2215,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: OpenCorporates 全球公司注册（尽调/反欺诈，免认证）
+  desc: OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token）
 - name: openf1
   tier: T1
   type: openf1

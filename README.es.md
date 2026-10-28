@@ -125,7 +125,7 @@ Guardar surte efecto de inmediato (todo es configuración volátil): el conjunto
 
 ## Ventajas principales
 
-**284 fuentes, 241 disponibles sin clave desde el primer momento.** Funciona sin configurar ninguna clave API: los motores gratuitos y locales actúan como red de seguridad. Las fuentes con clave suelen ofrecer mejor calidad; si no hay clave, se omiten. Una instalación y cubres todos los escenarios.
+**284 fuentes, 240 disponibles sin clave desde el primer momento.** Funciona sin configurar ninguna clave API: los motores gratuitos y locales actúan como red de seguridad. Las fuentes con clave suelen ofrecer mejor calidad; si no hay clave, se omiten. Una instalación y cubres todos los escenarios.
 
 **Búsqueda local y búsqueda web en una sola pieza.** Es una capacidad que solo tiene Argo. La búsqueda de archivos locales se apoya en las herramientas que los desarrolladores usan a diario, como rg y mdfind, y busca símbolos de código, nombres de archivo, texto completo de documentos y estructura de archivos. Con un interruptor, los aciertos locales se integran en la misma búsqueda web, marcados como archivos de la máquina. Cuando escribes y recuerdas que hace medio año anotaste algo pero no dónde, esto es más rápido que navegar carpetas.
 
@@ -212,7 +212,7 @@ Las cuatro formas comparten el mismo código Python por debajo; la CLI y las her
 4. **El ecosistema libre basta.** APIs abiertas de gobiernos/academia/estándares/seguridad + motores sin clave cubren la mayoría de dominios (240 sin clave).
 5. **Calidad medible.** Pisos golden de ranking, gates de ablación de fusión y controles negativos de enrutamiento.
 
-> Los cinco puntos ya están implementados en la serie v2.9.x: 284 fuentes, 99 dominios, 241 sin clave.
+> Los cinco puntos ya están implementados en la serie v2.9.x: 284 fuentes, 99 dominios, 240 sin clave.
 
 ---
 
@@ -469,7 +469,7 @@ python3 scripts/search.py --list-engines
 
 ### Conjunto aproximado de capacidades (v2.10.0)
 
-Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 284 fuentes, 241 sin clave, 99 dominios.
+Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 284 fuentes, 240 sin clave, 99 dominios.
 
 Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
@@ -496,7 +496,7 @@ El detalle por versión está en «Actualizaciones recientes»; las notas de cad
 
 ## Motores y enrutamiento
 
-La config tiene ahora **284** fuentes (**241** sin clave) y **99** dominios (ver `config.yaml` y `--list-engines`).
+La config tiene ahora **284** fuentes (**240** sin clave) y **99** dominios (ver `config.yaml` y `--list-engines`).
 
 ### Directos y verticales (extracto)
 

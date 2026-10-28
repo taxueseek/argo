@@ -7,8 +7,8 @@
 ## 一、总量与口径
 
 - **收录 284 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 241 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
-- **需自备密钥 29 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`parallel`、`qweather`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
+- **开箱可用 240 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **需自备密钥 30 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 11 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
 - **显式专用 23 个**：`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`qwant`、`sciverse`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 263 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 13 个要自备密钥（免费额度）：em_miaoxiang、keenable、qweather、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 263 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 14 个要自备密钥（免费额度）：em_miaoxiang、keenable、opencorporates、qweather、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 21 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -242,7 +242,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_wiktionary` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Wiktionary本地 |
 | `moegirl` | 可直接用 | 免费 | 不限 | — | 域 anime_encyclopedia、语义画像命中 | 萌娘百科（zh.moegirl.org.cn 搜索页 HTML 解析，免认证） |
 | `ndl` | 可直接用 | 免费 | 不限 | — | 域 book_search、语义画像命中 | 全日本出版物书目总汇（OpenSearch RSS） |
-| `opencorporates` | 可直接用 | 免费 | 不限 | — | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，免认证） |
 | `ror` | 可直接用 | 免费 | 不限 | — | 域 org_entity | ROR 研究机构标识（含域名映射，免认证） |
 | `stackexchange` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search | StackExchange API 族（StackOverflow 等 180+ 问答站结构化检索，匿名 300/天/IP，免费 key 可提额 10000/天） |
 | `tatoeba` | 可直接用 | 免费 | 不限 | — | 域 dictionary_search、语义画像命中 | 400+ 语言对真实句子语料（翻译/语言学习） |
@@ -252,6 +251,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `zdic` | 可直接用 | 免费 | 不限 | — | 域 dictionary_search | 汉典（中文字词典：字义/音韵/字源，HTML 解析，免认证） |
 | `zh_wikipedia` | 可直接用 | 免费 | 不限 | — | 域 anime_encyclopedia、域 cn_encyclopedia、域 entity_search、域 geo_places、域 org_entity、域 sports_search | 中文维基百科（MediaWiki API，与 en.wikipedia 同构） |
 | `europeana` | 已停用 | 免费 | 不限 | — | 域 cn_encyclopedia、语义画像命中 | 欧洲 27 国文化遗产聚合（官方公开 demo key） |
+| `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
 
 ### 社区 UGC（16）
 

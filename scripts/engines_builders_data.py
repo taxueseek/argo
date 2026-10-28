@@ -669,10 +669,12 @@ def _build_models_dev_engine(spec: dict[str, Any]) -> Any:
 # ── Finviz 美股筛选引擎（HTML 抓取）─────────────────────────────────────────────
 
 def _build_finviz_engine(spec: dict[str, Any]) -> Any:
-    """Finviz 个股快照（finviz.com/quote.ashx?t=TICKER）
+    """Finviz 个股快照（finviz.com/stock?t=TICKER）
 
     从 snapshot 表格提取：公司名、行业、市值、PE、价格、涨跌幅。
     query 视为 ticker（大写）；非纯字母时取首个字母 token 作 ticker。
+    （2026-10-28：旧地址 /quote.ashx 全站 301 到 /stock，http_open 不跟随重定向，
+    端点随之切换；新页 snapshot 表结构与解析器兼容，实测 AAPL 全字段命中。）
     """
     timeout = spec.get("timeout", 10)
 
@@ -683,7 +685,7 @@ def _build_finviz_engine(spec: dict[str, Any]) -> Any:
         if not m:
             return []
         ticker = m.group(0).upper()
-        url = f"https://finviz.com/quote.ashx?t={ticker}"
+        url = f"https://finviz.com/stock?t={ticker}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -2552,12 +2554,16 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
 # ── OpenCorporates 全球公司注册 ──────────────────────────────────────────────
 
 def _build_opencorporates_engine(spec: dict[str, Any]) -> Any:
-    """OpenCorporates 全球公司注册（api.opencorporates.com/v0.4/companies/search，免认证）。
+    """OpenCorporates 全球公司注册（api.opencorporates.com/v0.4/companies/search）。
 
     公司尽调/反欺诈：公司名、注册号、司法辖区、成立日期、状态。
     argo 现有引擎无公司注册数据源，这是尽调类查询的核心空白。
+    （2026-10-28：匿名请求已被上游全面拒 401，API 需 api_token；直连实测确认。
+    支持 ARGO_OPENCORPORATES_API_TOKEN / OPENCORPORATES_API_TOKEN 双别名，
+    spec required_env 已声明，无 token 时被 env 门自动跳过而非报错。）
     """
     timeout = spec.get("timeout", 10)
+    _token = get_env(["ARGO_OPENCORPORATES_API_TOKEN", "OPENCORPORATES_API_TOKEN"]) or ""
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -2569,6 +2575,7 @@ def _build_opencorporates_engine(spec: dict[str, Any]) -> Any:
         url = (
             "https://api.opencorporates.com/v0.4/companies/search"
             f"?q={urllib.parse.quote(q2)}&per_page={min(n, 10)}"
+            + (f"&api_token={urllib.parse.quote(_token)}" if _token else "")
         )
         headers = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
         try:
