@@ -876,3 +876,6 @@ Apache License 2.0 © 2026 [taxueseek](https://github.com/taxueseek)
 invest-cli 通过 `info`（`invest-cli info <词> --engine eastmoney`）与 `intent macro` 直接复用 argo 的财经 / 宏观 / 资讯取数，用于环节配额、低成本、多源数据，与 invest-cli 的结构化数据层（Wind / 盈米 / 东财 / yfinance / 天天基金）协同。
 
 > 最新版已完成 argo 数据与 invest 系列技能（v2.0.5）的集成。
+
+
+<!-- mcp-name: io.github.taxueseek/argo -->
