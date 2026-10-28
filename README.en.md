@@ -35,7 +35,7 @@
 
 ## What it is
 
-**Argo is a search and deep-research tool that lives inside your agent, and can also pull information from the relevant web pages. It connects to 277 search sources across 98 business domains, and also covers basic local file search. Among open-source search projects, its search capability is exceptionally strong.**
+**Argo is a search and deep-research tool that lives inside your agent, and can also pull information from the relevant web pages. It connects to 277 search sources across 99 business domains, and also covers basic local file search. Among open-source search projects, its search capability is exceptionally strong.**
 
 API keys are optional and improve quality (keyed sources are usually better; unkeyed ones are skipped automatically), with free engines and local engines as an automatic fallback. It covers 18 languages including Chinese, English, Japanese and Korean, and supports vertical scenarios such as finance, academia, film, sports, code and macro data.
 
