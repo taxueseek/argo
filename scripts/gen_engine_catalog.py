@@ -7,16 +7,19 @@ config.yaml / engines/specs/*.yaml / quota_profiles.json / engine_env 四处，
 实际 14 个」「文档说 150+ 引擎、分不清收录与可用」）。这里的做法是：
 文档从**运行时同一批函数**取事实，`--check` 比对磁盘上的文档，
 `tests/test_engine_catalog.py` 把 `--check` 挂进检查——文档改不动也漂不掉。
+同一批数字还要露在五种语言的 README、徽章与包描述里，那几处也一起校正
+（`sync_counts()`）：源数、免密钥数、业务域数、MCP 工具数、版本号都只看真源。
 
 用法：
-  python3 scripts/gen_engine_catalog.py            # 生成/覆盖文档
-  python3 scripts/gen_engine_catalog.py --check    # 只校验，过期退出码 1
+  python3 scripts/gen_engine_catalog.py            # 生成/覆盖文档并校正计数
+  python3 scripts/gen_engine_catalog.py --check    # 只校验，过期或不一致退出码 1
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -339,6 +342,202 @@ def _names(rows: list[dict[str, Any]]) -> str:
     return "、".join(f"`{r['engine_id']}`" for r in rows) if rows else "无"
 
 
+# ── 对外计数：五语 README、徽章与包描述 ────────────────────────────────
+# 源数、免密钥数、业务域数、MCP 工具数散落在五种语言与四个包描述里，
+# 发布时靠手改必然漏：2026-10 的基线里中文写「覆盖 97 个业务领域」、
+# 日文写「97 の業務ドメイン」、韩文还停在「272개의 검색 소스」、西班牙文
+# 写「235 disponibles」，四处彼此矛盾。这里让文档生成器顺带把数字校正
+# 到真源（catalog 的收录/开箱可用行、config 的域清单、mcp_tools 的工具表、
+# SKILL.md 的版本号），`--check` 一并校验——改了引擎却忘了改 README 会红。
+#
+# 规则里只锚定「整句模板」，不做全局数字替换：发布说明里的历史数字
+# （如「218 → 220 fuentes」「fuentes 237→253」）是事实，不能跟着变。
+COUNT_RULES: dict[str, list[tuple[str, str]]] = {
+    "README.md": [
+        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
+        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
+        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
+        (r'(?P<pre>alt="Argo 阿尔戈：[^"]*?，)(?P<total>\d+)(?P<post> 个搜索源，)',
+         "{pre}{total}{post}"),
+        (r"背后连着 (?P<total>\d+) 个搜索源，覆盖 (?P<domains>\d+) 个业务领域",
+         "背后连着 {total} 个搜索源，覆盖 {domains} 个业务领域"),
+        (r"另有 1 个 `wide_research` 并行研究和 (?P<tools>\d+) 个 MCP 工具按需开启",
+         "另有 1 个 `wide_research` 并行研究和 {tools} 个 MCP 工具按需开启"),
+        # 这句原本写死「其余 271 个源不受影响」，可它说的其实是「缺 key 时哪些源
+        # 停用」，算不出发版数减几——去掉数字，只说事实（其余源不受影响）。
+        (r"其余 (?P<n>\d+) 个源不受影响", "其余源不受影响"),
+        (r"\*\*(?P<total>\d+) 个源，(?P<usable>\d+) 个免密钥开箱可用。\*\*",
+         "**{total} 个源，{usable} 个免密钥开箱可用。**"),
+        (r"目前 (?P<total>\d+) 个源（(?P<usable>\d+) 个免密钥开箱可用）、(?P<domains>\d+) 个业务域",
+         "目前 {total} 个源（{usable} 个免密钥开箱可用）、{domains} 个业务域"),
+        (r"当前配置 \*\*(?P<total>\d+)\*\* 个源（\*\*(?P<usable>\d+)\*\* 个免密钥开箱可用）、\*\*(?P<domains>\d+)\*\* 个业务域",
+         "当前配置 **{total}** 个源（**{usable}** 个免密钥开箱可用）、**{domains}** 个业务域"),
+        (r"搜索、抓取、核验、本机文件检索走同一条管线，(?P<tools>\d+) 个 MCP 工具和 CLI 命令一一对应",
+         "搜索、抓取、核验、本机文件检索走同一条管线，{tools} 个 MCP 工具和 CLI 命令一一对应"),
+    ],
+    "README.en.md": [
+        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
+        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
+        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
+        (r'(?P<pre>alt="Argo: search and deep research for agents — )(?P<total>\d+)(?P<post> search sources,)',
+         "{pre}{total}{post}"),
+        (r"It connects to (?P<total>\d+) search sources across (?P<domains>\d+) business domains",
+         "It connects to {total} search sources across {domains} business domains"),
+        (r"and (?P<tools>\d+) MCP tools you can enable on demand",
+         "and {tools} MCP tools you can enable on demand"),
+        (r"and the other (?P<n>\d+) sources are unaffected", "and the other sources are unaffected"),
+        (r"\*\*(?P<total>\d+) sources, (?P<usable>\d+) keyless and ready out of the box\.\*\*",
+         "**{total} sources, {usable} keyless and ready out of the box.**"),
+        (r"\((?P<usable>\d+) keyless sources\)", "({usable} keyless sources)"),
+        (r"All five are already shipped across the v2\.9\.x line: (?P<total>\d+) sources, "
+         r"(?P<domains>\d+) domains, (?P<usable>\d+) keyless out of the box",
+         "All five are already shipped across the v2.9.x line: {total} sources, "
+         "{domains} domains, {usable} keyless out of the box"),
+        (r"the (?P<tools>\d+) MCP tools map one-to-one onto CLI commands",
+         "the {tools} MCP tools map one-to-one onto CLI commands"),
+        (r"\*\*(?P<total>\d+) sources \((?P<usable>\d+) usable with no key\), "
+         r"(?P<domains>\d+) domains\*\*",
+         "**{total} sources ({usable} usable with no key), {domains} domains**"),
+        (r"Config currently has \*\*(?P<total>\d+)\*\* sources \(\*\*(?P<usable>\d+)\*\* usable "
+         r"with no key\) and \*\*(?P<domains>\d+)\*\* domains",
+         "Config currently has **{total}** sources (**{usable}** usable with no key) "
+         "and **{domains}** domains"),
+    ],
+    "README.es.md": [
+        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
+        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
+        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
+        (r"(?P<pre>alt=\"Argo: búsqueda e investigación profunda para agentes, )(?P<total>\d+)(?P<post> fuentes de búsqueda,)",
+         "{pre}{total}{post}"),
+        (r"Detrás tiene (?P<total>\d+) fuentes de búsqueda que cubren (?P<domains>\d+) dominios de negocio",
+         "Detrás tiene {total} fuentes de búsqueda que cubren {domains} dominios de negocio"),
+        (r"Además hay 1 `wide_research` de investigación en paralelo y (?P<tools>\d+) herramientas MCP",
+         "Además hay 1 `wide_research` de investigación en paralelo y {tools} herramientas MCP"),
+        (r"y las otras (?P<n>\d+) fuentes no se ven afectadas", "y las demás fuentes no se ven afectadas"),
+        (r"\*\*(?P<total>\d+) fuentes, (?P<usable>\d+) disponibles sin clave desde el primer momento\.\*\*",
+         "**{total} fuentes, {usable} disponibles sin clave desde el primer momento.**"),
+        (r"Los cinco puntos ya están implementados en la serie v2\.9\.x: "
+         r"(?P<total>\d+) fuentes, (?P<domains>\d+) dominios, (?P<usable>\d+) sin clave",
+         "Los cinco puntos ya están implementados en la serie v2.9.x: "
+         "{total} fuentes, {domains} dominios, {usable} sin clave"),
+        (r"(?P<tools>\d+) herramientas MCP se corresponden una a una",
+         "{tools} herramientas MCP se corresponden una a una"),
+        (r"docs/ENGINE_CATALOG\.md: (?P<total>\d+) fuentes, (?P<usable>\d+) sin clave, (?P<domains>\d+) dominios",
+         "docs/ENGINE_CATALOG.md: {total} fuentes, {usable} sin clave, {domains} dominios"),
+        (r"La config tiene ahora \*\*(?P<total>\d+)\*\* fuentes \(\*\*(?P<usable>\d+)\*\* sin clave\) "
+         r"y \*\*(?P<domains>\d+)\*\* dominios",
+         "La config tiene ahora **{total}** fuentes (**{usable}** sin clave) y **{domains}** dominios"),
+    ],
+    "README.ja.md": [
+        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
+        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
+        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
+        (r"(?P<pre>alt=\"Argo アルゴ：[^\"]*?、)(?P<total>\d+)(?P<post> の検索ソース、)", "{pre}{total}{post}"),
+        (r"背後には (?P<total>\d+) の検索ソースがあり、(?P<domains>\d+) の業務ドメイン",
+         "背後には {total} の検索ソースがあり、{domains} の業務ドメイン"),
+        (r"(?P<tools>\d+) 個の MCP ツール", "{tools} 個の MCP ツール"),
+        (r"\*\*(?P<total>\d+) のソース、うち (?P<usable>\d+) はキー不要ですぐ使える。\*\*",
+         "**{total} のソース、うち {usable} はキー不要ですぐ使える。**"),
+        (r"（(?P<usable>\d+) ソースが無設定）", "（{usable} ソースが無設定）"),
+        (r"v2\.9\.x 系で全て実装済み：(?P<total>\d+) ソース / (?P<domains>\d+) ドメイン / (?P<usable>\d+) 無設定",
+         "v2.9.x 系で全て実装済み：{total} ソース / {domains} ドメイン / {usable} 無設定"),
+        (r"ENGINE_CATALOG\.md に清单されている：(?P<total>\d+) ソース、(?P<usable>\d+) 無設定、"
+         r"(?P<domains>\d+) ドメイン",
+         "ENGINE_CATALOG.md に清单されている：{total} ソース、{usable} 無設定、{domains} ドメイン"),
+        (r"設定上は \*\*(?P<total>\d+)\*\* ソース（うち \*\*(?P<usable>\d+)\*\* はキー不要）、"
+         r"\*\*(?P<domains>\d+)\*\* ドメイン",
+         "設定上は **{total}** ソース（うち **{usable}** はキー不要）、**{domains}** ドメイン"),
+    ],
+    "README.ko.md": [
+        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
+        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
+        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
+        (r"뒤에는 (?P<total>\d+)개의 검색 소스가 있고 (?P<domains>\d+)개 업무 영역",
+         "뒤에는 {total}개의 검색 소스가 있고 {domains}개 업무 영역"),
+        (r"(?P<tools>\d+)개의 MCP 도구", "{tools}개의 MCP 도구"),
+        (r"\*\*(?P<total>\d+)개 소스, 그중 (?P<usable>\d+)개는 키 없이 바로 사용\.\*\*",
+         "**{total}개 소스, 그중 {usable}개는 키 없이 바로 사용.**"),
+        (r"\(무설정 (?P<usable>\d+)개\)", "(무설정 {usable}개)"),
+        (r"v2\.9\.x 계열에서 모두 구현되었습니다: (?P<total>\d+) 소스 / (?P<domains>\d+) 도메인 / "
+         r"(?P<usable>\d+) 무설정",
+         "v2.9.x 계열에서 모두 구현되었습니다: {total} 소스 / {domains} 도메인 / {usable} 무설정"),
+        (r"ENGINE_CATALOG\.md에 있다: (?P<total>\d+) 소스, (?P<usable>\d+) 무설정, (?P<domains>\d+) 도메인",
+         "ENGINE_CATALOG.md에 있다: {total} 소스, {usable} 무설정, {domains} 도메인"),
+        (r"설정에는 현재 \*\*(?P<total>\d+)\*\* 소스\(\*\*(?P<usable>\d+)\*\*개는 키 불필요\)와 "
+         r"\*\*(?P<domains>\d+)\*\* 도메인",
+         "설정에는 현재 **{total}** 소스(**{usable}**개는 키 불필요)와 **{domains}** 도메인"),
+    ],
+    "SKILL.md": [
+        (r"收录 (?P<total>\d+) 个源、(?P<usable>\d+) 免密钥", "收录 {total} 个源、{usable} 免密钥"),
+    ],
+    "package.json": [
+        (r"(?P<total>\d+) 个源（(?P<usable>\d+) 个免密钥开箱可用）",
+         "{total} 个源（{usable} 个免密钥开箱可用）"),
+        (r"(?P<tools>\d+) 个 MCP 工具（与 CLI 能力面对齐）", "{tools} 个 MCP 工具（与 CLI 能力面对齐）"),
+    ],
+    "packages/marketplace.json": [
+        (r"over (?P<total>\d+) sources", "over {total} sources"),
+        (r"（(?P<total>\d+) 源）", "（{total} 源）"),
+    ],
+    "packages/argo-zcode/.zcode-plugin/plugin.json": [
+        (r"over (?P<total>\d+) sources \((?P<usable>\d+) keyless\)",
+         "over {total} sources ({usable} keyless)"),
+        (r"over (?P<total>\d+) sources(?! \()", "over {total} sources"),
+        (r"(?P<total>\d+) 个源、(?P<usable>\d+) 个免密钥可用", "{total} 个源、{usable} 个免密钥可用"),
+    ],
+    "packages/argo-zcode/skills/argo/SKILL.md": [
+        (r"收录 (?P<total>\d+) 个源、(?P<usable>\d+) 个免密钥可用",
+         "收录 {total} 个源、{usable} 个免密钥可用"),
+        (r"（(?P<total>\d+) 源、(?P<usable>\d+) 免密钥）", "（{total} 源、{usable} 免密钥）"),
+    ],
+}
+
+
+def _count_truth() -> dict[str, str]:
+    """对外计数的唯一真源：catalog 分档 + config 域表 + mcp_tools 工具表 + 版本号。"""
+    from config import get_domains, load_config  # noqa: PLC0415  (与运行时同源)
+    from mcp_tools import TOOLS  # noqa: PLC0415
+
+    rows = _collect()["rows"]
+    total = len(rows)
+    # 与 render() 里「开箱可用」同一口径：enabled 且不挑密钥、不挑后端工具。
+    usable = sum(1 for row in rows if row["enabled"] and not row["required_env"] and not row["requires"])
+    version = re.search(r"^version:\s*(\S+)", (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8"), re.M)
+    if version is None:
+        raise SystemExit("SKILL.md 缺 version 行，无法同步徽章")
+    return {
+        "total": str(total),
+        "usable": str(usable),
+        "domains": str(len(get_domains(load_config()))),
+        "tools": str(len(TOOLS)),
+        "version": version.group(1),
+    }
+
+
+def sync_counts(write: bool) -> list[str]:
+    """把 README / 徽章 / 包描述里的计数校正到真源，返回有差异的文件。"""
+    truth = _count_truth()
+    stale: list[str] = []
+    for rel, rules in COUNT_RULES.items():
+        path = SKILL_DIR / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        fixed = text
+        for pattern, template in rules:
+            # 具名组只提供 pre/post 这类字面片段，数字一律用真源里的 total/usable…
+            fixed = re.sub(
+                pattern,
+                lambda m, t=template: t.format(**{**m.groupdict(), **truth}),
+                fixed,
+            )
+        if fixed != text:
+            stale.append(rel)
+            if write:
+                path.write_text(fixed, encoding="utf-8", newline="\n")
+    return stale
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="生成搜索源使用文档")
     ap.add_argument("--check", action="store_true", help="只校验文档是否过期")
@@ -352,11 +551,20 @@ def main() -> int:
             print("❌ 搜索源文档已过期，重新生成：python3 scripts/gen_engine_catalog.py",
                   file=sys.stderr)
             return 1
+        stale = sync_counts(write=False)
+        if stale:
+            print("❌ 以下文件的计数与引擎真源不一致：", file=sys.stderr)
+            for rel in stale:
+                print(f"   - {rel}", file=sys.stderr)
+            print("   重新生成：python3 scripts/gen_engine_catalog.py", file=sys.stderr)
+            return 1
         print(f"✅ 搜索源文档与当前引擎声明一致（{len(_collect()['rows'])} 个源）")
         return 0
     DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
     DOC_PATH.write_text(text, encoding="utf-8")
     print(f"已生成 {DOC_PATH.relative_to(SKILL_DIR)}（{len(_collect()['rows'])} 个源）")
+    for rel in sync_counts(write=True):
+        print(f"已校正计数：{rel}")
     return 0
 
 

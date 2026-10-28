@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme/hero.svg" width="100%" alt="Argo: search and deep research for agents — 272 search sources, routing by domain and language, absorbable evidence output">
+  <img src="assets/readme/hero.svg" width="100%" alt="Argo: search and deep research for agents — 277 search sources, routing by domain and language, absorbable evidence output">
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@
 
 ## What it is
 
-**Argo is a search and deep-research tool that lives inside your agent, and can also pull information from the relevant web pages. It connects to 272 search sources across 97 business domains, and also covers basic local file search. Among open-source search projects, its search capability is exceptionally strong.**
+**Argo is a search and deep-research tool that lives inside your agent, and can also pull information from the relevant web pages. It connects to 277 search sources across 98 business domains, and also covers basic local file search. Among open-source search projects, its search capability is exceptionally strong.**
 
 API keys are optional and improve quality (keyed sources are usually better; unkeyed ones are skipped automatically), with free engines and local engines as an automatic fallback. It covers 18 languages including Chinese, English, Japanese and Korean, and supports vertical scenarios such as finance, academia, film, sports, code and macro data.
 
@@ -106,7 +106,7 @@ Saving takes effect immediately (all volatile config): the native tool set is re
 
 **Key security**: keys are written to the DSH credential store (the same place as the Models page) — never into plugin config, never logged, never echoed. Credential resolution priority is **stored file layer > startup env > project .env > home .env**: saving in the panel (or the Models page) overrides older startup-env values, and the argo subprocess picks up the new key on the next new connection; Clear only deletes the credential-store value, so keys supplied by env vars or `.env` reappear. The settings page is only a write entry for the credential domain — reads are still performed by the host on every call.
 
-**DeepSeek official key, supplied natively**: argo's `deepseek_search` engine (the official `api.deepseek.com/v1/tools/search`, whose results carry authority levels / rerank scores / publish times) **shares one key with DSH's official search backend**. The plugin obtains it through DSH's native credential seam, so no manual configuration is needed: resolution is `ctx.get('credentials').resolve('DEEPSEEK_API_KEY')`, resolved per call — after rotating the key on the web Models page the next new connection uses it, with no plugin restart. The plugin never reads key files, never writes to disk, never logs; the key value reaches the argo subprocess env in memory only, and no output or error message contains it. On older hosts without a credentials service it silently skips: that engine is disabled for lack of a key, and the other 263 sources are unaffected.
+**DeepSeek official key, supplied natively**: argo's `deepseek_search` engine (the official `api.deepseek.com/v1/tools/search`, whose results carry authority levels / rerank scores / publish times) **shares one key with DSH's official search backend**. The plugin obtains it through DSH's native credential seam, so no manual configuration is needed: resolution is `ctx.get('credentials').resolve('DEEPSEEK_API_KEY')`, resolved per call — after rotating the key on the web Models page the next new connection uses it, with no plugin restart. The plugin never reads key files, never writes to disk, never logs; the key value reaches the argo subprocess env in memory only, and no output or error message contains it. On older hosts without a credentials service it silently skips: that engine is disabled for lack of a key, and the other sources are unaffected.
 
 **The web seam pin is required reading** (a missing pin breaks `web_fetch`): the host `dsh-web` provider selection rule is "configured id wins; if none is configured and exactly one is available, pick it; **if more than one is available, fail with `WEB_PROVIDER_AMBIGUOUS`**". The web profile ships an official http fetch provider by default (keyless, always available), and this bundle registers another — so without a pin there are two available and **`web_fetch` breaks entirely** (same for `web_search` if the profile has another search provider). Any profile with the web seam enabled must therefore specify explicitly on the web service line:
 
