@@ -3279,11 +3279,11 @@ engines:
     url: https://api.github.com/search/repositories
   metaso:
     body:
-      query: '{query}'
-      search_size: '{n}'
-      source: web
+      q: '{query}'
+      scope: webpage
+      size: 20
     enabled: false
-    disabled_reason: 72fd95a 源治理轮批量停用，未单独评估；秘塔密钥计费政策待查清（docs-local/国内搜索API候选_2026-09-16），重开前需实测
+    disabled_reason: 端点与参数已修正为官方开放搜索 v1（旧地址 /api/open/search 与参数名 query 都不可用）；实测计费 3 积分/次（0.03 元/次，与返回条数无关，见 #25）。仍停用：本条目在 chinese_general 域 engines_combo 内，启用即随该域自动路由并按次扣费；是否启用、是否撤出 combo，由维护者定
     label: 秘塔
     cost_tier: low
     coverage:
@@ -3294,9 +3294,9 @@ engines:
       Authorization: Bearer {METASO_API_KEY}
       Content-Type: application/json
     method: POST
-    timeout: 10
+    timeout: 15
     type: http
-    url: https://metaso.cn/api/open/search
+    url: https://metaso.cn/api/v1/search
   openalex:
     enabled: true
     label: OpenAlex
