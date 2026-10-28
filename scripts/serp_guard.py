@@ -318,6 +318,17 @@ def is_unusable_url(url: str, title: str = "", snippet: str = "") -> bool:
     return is_content_farm(url, title, snippet)
 
 
+def is_unusable_row(row: dict) -> bool:
+    """条目级闸（issue #29 口径 B）：spec 声明 url_kind: none 的条目不以 url 为
+    身份，空 url 不判壳页；一旦有 url，SERP 判据照走；内容农场判据恒走。"""
+    if row.get("url_kind") == "none":
+        url = row.get("url", "")
+        if url and is_serp_or_jump_url(url):
+            return True
+        return is_content_farm(url, row.get("title", ""), row.get("snippet", ""))
+    return is_unusable_url(row.get("url", ""), row.get("title", ""), row.get("snippet", ""))
+
+
 def filter_content_farms(results: list) -> list:
     """过滤结果列表里的内容农场条目。"""
     if not results or not guard_enabled():

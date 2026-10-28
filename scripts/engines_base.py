@@ -406,8 +406,10 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
                 args += _resolve(tmpl, query, n, mode=mode, **kwargs)
         env = os.environ.copy()
         env.update(env_overrides)
-        return _parse_text_output(_run(cmd + args, timeout=timeout, engine_name=spec.get("_name", "cli")),
-                                  spec.get("_name", "cli"), output_format=output_format, n=n)
+        return _apply_url_kind(
+            _parse_text_output(_run(cmd + args, timeout=timeout, engine_name=spec.get("_name", "cli")),
+                               spec.get("_name", "cli"), output_format=output_format, n=n),
+            spec)
     return _engine
 
 
@@ -761,6 +763,18 @@ def _normalize_epoch(value: Any) -> str:
         return text
 
 
+def _apply_url_kind(rows: list[dict[str, Any]], spec: dict) -> list[dict[str, Any]]:
+    """声明式 spec 的 url_kind 落到行上（issue #29 口径 B）：none = 本档条目不以
+    url 为身份，缺 url 的条目不按壳页整批吞。spec 未声明时行上不出现该字段。"""
+    kind = spec.get("url_kind")
+    if not kind:
+        return rows
+    for r in rows:
+        if isinstance(r, dict):
+            r.setdefault("url_kind", kind)
+    return rows
+
+
 def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                         output_map: dict, spec: dict) -> list[dict[str, Any]]:
     """HTTP 引擎响应体解析（GET/POST 共用）。"""
@@ -781,7 +795,7 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
     # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）
     custom = _CUSTOM_JSON_PARSERS.get(eng)
     if custom:
-        return _ensure_engine_source(custom(data), eng)[:limit]
+        return _apply_url_kind(_ensure_engine_source(custom(data), eng)[:limit], spec)
     if output_map:
         items_path = output_map.get("items", "")
         # 根节点即为数组时（HF / dev.to / polymarket），items 用 "."
@@ -826,9 +840,11 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
         # 自定义 builder、通用兜底），只覆盖一条会让契约对一半结果生效。
         finalize_image_fields(parsed, _lic or "")
         # preserve_source（声明式 spec）：保留 API 返回的真实来源标注
-        return _ensure_engine_source(
-            parsed, eng, preserve=bool(spec.get("preserve_source"))
-        )[:limit]
+        return _apply_url_kind(
+            _ensure_engine_source(
+                parsed, eng, preserve=bool(spec.get("preserve_source"))
+            )[:limit],
+            spec)
     if isinstance(data, list):
         return _ensure_engine_source(
             _parse_generic({"results": data}, eng, limit), eng

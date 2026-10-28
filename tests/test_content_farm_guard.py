@@ -105,12 +105,14 @@ def test_escape_hatch_disables_farm_detection(monkeypatch):
 
 
 def test_pipeline_imports_the_wired_entry():
-    """接线回归：search_pipeline 必须 import is_unusable_url（而不是只管 SERP 的旧入口）。
+    """接线回归：search_pipeline 必须 import is_unusable_row（条目级闸，含农场判定）。
 
     这条钉的是「实现好了但没接线」这个形态——2026-10-23 之前
     is_unusable_url 全仓零调用，判定写好了也等于没写。
+    2026-10-28 升级为 is_unusable_row：issue #29 口径 B（url_kind: none 只豁免
+    空 url 判壳页），农场判定不豁免。
     """
     src = (SCRIPTS / "search_pipeline.py").read_text(encoding="utf-8")
-    assert "is_unusable_url" in src, "search_pipeline 未接线内容农场过滤"
+    assert "is_unusable_row" in src, "search_pipeline 未接线条目级内容农场过滤"
     assert "is_serp_or_jump_url as _is_serp" not in src, \
         "仍在使用只管 SERP 的旧入口，内容农场判定被绕过"

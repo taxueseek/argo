@@ -384,8 +384,10 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _funnel_deduped = len(merged)
     if merged:
         try:
-            from serp_guard import is_unusable_url as _is_unusable  # SERP + 内容农场，标定见 test_content_farm_guard.py
-            merged = [r for r in merged if not _is_unusable(r.get("url", ""), r.get("title", ""), r.get("snippet", ""))]
+            from serp_guard import is_unusable_row as _is_unusable_row  # SERP + 内容农场，标定见 test_content_farm_guard.py
+            # url_kind: none（issue #29 口径 B）：spec 显式声明条目不以 url 为身份，
+            # 缺 url 的题录/语义片段不再被当壳页整批吞
+            merged = [r for r in merged if not _is_unusable_row(r)]
         except ImportError:
             pass  # serp_guard 不可用时跳过（本地五维 rerank 已对 SERP 降权）
 

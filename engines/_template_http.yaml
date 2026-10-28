@@ -35,3 +35,5 @@ output_map:
   item_url: url
   item_summary: snippet
   # item_source: source
+  # 上游条目没有链接（题录/语义片段）时声明本档不以 url 为身份（issue #29 口径 B）：
+  # url_kind: none

@@ -39,3 +39,6 @@ search_args:
   - "{n}"
 output_format: yaml
 timeout: 25
+# 无 PDF 直链的条目只有题录（标题/作者/刊名/年卷期页），按 issue #29 口径 B 声明
+# 本档条目不以 url 为身份：缺 url 不再被 SERP 闸当壳页整批吞（见 serp_guard.is_unusable_row）。
+url_kind: none
