@@ -74,7 +74,7 @@
 <script type="module">
 import { App } from "./vendor/ext-apps.mjs";
 
-const app = new App({ name: "argo-panel", version: "2.10.0" });
+const app = new App({ name: "argo-panel", version: "2.10.1" });
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

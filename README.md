@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -147,7 +147,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方式一：一键脚本（推荐本机长期用）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方式二：npm / npx（已支持，当前 2.10.0；按 tag 发布，版本固定）
+# 方式二：npm / npx（已支持，当前 2.10.1；按 tag 发布，版本固定）
 npm install -g argo-search      # 全局安装 CLI
 npx -y argo-search              # 或即用即走，不装
 npx -y github:taxueseek/argo    # 要跟 main 最新提交时用这条
@@ -284,7 +284,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**npm 安装已支持，当前版本 2.10.0**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
+任选一种即可。**npm 安装已支持，当前版本 2.10.1**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -498,13 +498,15 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.10.0）
+### 当前大致能力（v2.10.1）
 
 Argo 干的事，一句话能说完：把一个问题按领域和语言分给合适的源，取回结果后按可信度排个序，交回给 Agent 的是能排序、能复核的材料。搜索、抓取、核验、本机文件检索走同一条管线，19 个 MCP 工具和 CLI 命令一一对应，装哪种形态都不缺能力。另有几个单点命令随用随取：argo tweet 打包 X 帖子，argo auth 管登录态，argo job 聚合招聘信息。
 
 装成 DSH 插件后，这些能力直接变成宿主的原生工具：高频的搜索与抓取默认就开，长尾取证能力在设置页里按需勾选，argo 本体的 28 个行为开关（缓存、重排、去重、守卫、代理、TTL 等）也从环境变量搬进了面板。密钥写进宿主凭证库，明文不回显，改完即生效。
 
 最近几个版本各修了一类问题。
+
+v2.10.1 聚焦路由精度收口与社区缺陷修复。引入声明式商业意图否决宏 @commercial_market，消除医药商业与研报查询（市场规模、集采、销售额等）误入 UniProt 生信库的假命中（#34.1）；视频模式接入 parallel_free 免 Key 通道并附加 site:youtube.com，剥除 YouTube 语言/分享参数防重复（#34.3）；消除 local-seek 零命中双跑税，工具缺失抛结构化告警并优先走 SQLite FTS5 标准库索引（#34.4）；支持无外链声明式源 url_kind: none 并加强空占位符死链守卫（#29）；修复 engine_status 对未注册引擎误报为 ready 并透传 disabled_reason；解耦夜间漂移门并杜绝基线自动滚降（#35）。
 
 v2.10.0 扩的是能力面。源从 272 增到 284：秘塔五档（学术、文库、图片、视频、播客）、Sciverse 外文题录、NCPSSD 中文社科，加上 DSH 插件目录三源与技能索引两源，技能类源第一次带安装量。视频从查询到抓取一条线走通：新增 video 域与 --video，按时长筛，抓取时 B 站取字幕、YouTube 取 timedtext。抓取链重写了前沿质控与礼貌节奏，同主机限速、429 退避，watch 的差异判断能分清噪声与实质改动。通用层选源改为实测排序，英文通用查询接入 DeepSeek 条件对冲；响应体统一解码并补上 JSON-LD。安装器改走 venv 主路，PEP 668 环境下不再装完仍缺依赖。
 
@@ -777,6 +779,15 @@ argo/
 
 只列最近三个版本。完整历史见[版本记录](#版本记录)，逐版详情见 [Releases](https://github.com/taxueseek/argo/releases)。
 
+### v2.10.1：路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复
+
+- **商业意图否决宏 `@commercial_market`**：为 `protein_search`、`chem_search`、`medical` 声明商业意图让位，医药商业查询不再误入生信/化学/临床库（#34.1）
+- **海外视频与 YouTube 去重**：`video` 域与 `--video` 接入 `parallel_free` 免 Key 通道，附加 `site:youtube.com` 并自动剥除 `vl`/`si` 追踪参数（#34.3）
+- **消除本机检索零命中双跑税**：修复零命中状态判断并写入缓存，Windows 缺 `rg`/`grep` 时透传结构化 `warnings[]` 告警并优先走 SQLite FTS5（#34.4）
+- **无外链源与空占位符死链守卫**：支持 spec 声明 `url_kind: none`（首个落地 `sciverse.yaml`），`_format_url_template` 拦截空占位符防构造裸前缀死链（#29）
+- **引擎状态自洽与孤儿清理**：未注册引擎正确返回 `status="unknown", enabled=False` 并透传 `disabled_reason`，清理遗留的 `_cisa_kev` / `_osv` 孤儿 spec（#29、#34.6）
+- **夜间漂移门解耦**：结果体积漂移降为信息项，移除夜间自动覆盖基线并推 `main` 的步骤，防温水煮青蛙与分支污染（#35）
+
 ### v2.10.0：源到 284 + 视频检索与抓取 + 抓取前沿质控
 
 - **源 272→284**：秘塔五档（学术/文库/图片/视频/播客，均显式专用）、Sciverse 外文题录（年份/期刊/作者/学科可筛）、NCPSSD 中文社科（CLI 桥），加上 DSH 插件目录三源与技能索引两源（带安装量）
@@ -809,6 +820,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.10.1** | **路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复**：引入声明式否决宏 `@commercial_market` 消除医药商业误路由；接入 `parallel_free` 海外视频通道并归一化 YouTube URL；消除 local-seek 零命中双跑税与工具缺失静默；支持无外链源 `url_kind: none` 与空占位符死链守卫；引擎状态自洽；解耦夜间漂移门。详见 [发布说明](docs/RELEASE_NOTES_v2.10.1.md) |
 | **v2.10.0** | **源到 284 + 视频检索与抓取 + 抓取前沿质控**：新增秘塔五档、Sciverse、NCPSSD 与 DSH/技能索引五源；`video` 域与 `--video`/`--min-duration`/`--max-duration`，B 站字幕与 YouTube timedtext、可选 ASR；crawl 前沿质控与 `argo watch` 噪声 diff；通用选源实测排序 + DeepSeek 英文对冲 + 权威早停；安装器 venv 化。详见 [发布说明](docs/RELEASE_NOTES_v2.10.0.md) |
 | **v2.9.9** | **安全纵深 + 慢源交付不丢 + 五类误路由收口**：高风险正文隔离+清洗替换（不进证据分）、逐跳重定向校验与 DNS 重绑定封堵；早停弃置的慢源转后台收割（`ARGO_TAIL_COMPLETE_S`），学习器记真实成绩；六族真实场景扫描收口学术/财务/企业/法律/医药误路由；`argo engine add` 一键接引擎、场景分桶学习、ZCode 插件包。详见 [发布说明](docs/RELEASE_NOTES_v2.9.9.md) |
 | **v2.9.8** | **路由精度审计 + issue #18/#19 修复 + 测试态隔离**：回放真实查询收窄 16 类误触发（品牌名/产品名/字段名/ASCII 子串），SERP 覆盖率门与 CJK 交叉验证落地；nightly 空日志、people_daily 默认 feed、缓存命中守卫一并收口；全量测试按用例隔离 adaptive/熔断状态。感谢 @wpp666 的复现与定位。详见 [发布说明](docs/RELEASE_NOTES_v2.9.8.md) |

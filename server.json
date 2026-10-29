@@ -7,12 +7,12 @@
     "url": "https://github.com/taxueseek/argo",
     "source": "github"
   },
-  "version": "2.10.0",
+  "version": "2.10.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "argo-search",
-      "version": "2.10.0",
+      "version": "2.10.1",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

@@ -6,4 +6,4 @@ PyPI/uvx 安装的是这个包；真正的运行树在 ``argo_search/_data`` 下
 ``argo-mcp`` 仍能找到完整的 config/engines/sub-skills 树。
 """
 
-__version__ = "2.10.0"
+__version__ = "2.10.1"

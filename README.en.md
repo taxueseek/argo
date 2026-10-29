@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -147,7 +147,7 @@ Zero config works. Three ways to install, pick your habit:
 # Option 1: install script (recommended for long-term local use)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Option 2: npm / npx (supported, currently 2.10.0; released per tag, version pinned)
+# Option 2: npm / npx (supported, currently 2.10.1; released per tag, version pinned)
 npm install -g argo-search       # install the CLI globally
 npx -y argo-search               # or run it without installing
 npx -y github:taxueseek/argo     # use this to follow the latest commit on main
@@ -282,7 +282,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **npm install is supported, current version 2.10.0**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
+Pick any path. **npm install is supported, current version 2.10.1**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -425,13 +425,15 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.10.0)
+### Rough capability set (v2.10.1)
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **284 sources (240 usable with no key), 99 domains**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
+
+v2.10.1 focuses on routing precision consolidation and community issue fixes. It introduces the declarative @commercial_market intent exclusion macro to prevent pharma commercial queries (market size, volume-based procurement, revenue) from falsely hijacking bioinformatics databases like UniProt (#34.1); adds a keyless overseas video lane via parallel_free with site:youtube.com and strips YouTube tracking params (#34.3); eliminates the local-seek zero-match double-run tax, surfacing missing-tool warnings and prioritizing SQLite FTS5 (#34.4); adds url_kind: none support for URL-less specs and guards against empty placeholder bare prefix dead links (#29); fixes engine_status unknown engine reporting and cleans up orphan specs (#29, #34.6); and decouples the nightly drift gate by removing automatic baseline auto-commits (#35).
 
 v2.10.0 widens the capability surface. Sources grow from 272 to 284: five Metaso tiers (scholar, library, image, video, podcast), Sciverse records, NCPSSD Chinese social science, plus three DSH plugin catalogs and two skill indexes — the skill sources carry install counts for the first time. Video works end to end, from query to fetch: a new video domain with --video, duration filters, Bilibili subtitles on fetch and YouTube timedtext. The crawl chain gained frontier quality control and polite pacing — per-host rate limits, 429 backoff — and watch now separates noise from substantive change. General source selection uses measured ordering, English general queries get a conditional DeepSeek hedge, and response bodies go through one decoder with JSON-LD. The installer takes the venv path, so PEP 668 environments no longer end up without their dependencies.
 
@@ -656,6 +658,15 @@ argo/
 
 Only the three most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.10.1: Routing precision consolidation + commercial intent macro + overseas video lane + community fixes
+
+- **Commercial intent macro `@commercial_market`**: applied across `protein_search`, `chem_search`, and `medical` so pharma commercial queries yield to general search (#34.1)
+- **Overseas video lane & YouTube dedup**: `video` domain and `--video` integrate keyless `parallel_free` with `site:youtube.com` and strip `vl`/`si` tracking params (#34.3)
+- **Eliminate local-seek zero-match double-run tax**: fixed zero-hit status to cache cleanly, surface structured `warnings[]` when `rg`/`grep` are missing, and prioritize stdlib SQLite FTS5 (#34.4)
+- **URL-less spec support & placeholder dead link guard**: specs can declare `url_kind: none` (first applied to `sciverse.yaml`), and `_format_url_template` stops building bare prefix links (#29)
+- **Engine status consistency & orphan cleanup**: unknown engines report `status="unknown", enabled=False`, expose `disabled_reason`, and orphan `_cisa_kev` / `_osv` specs are removed (#29, #34.6)
+- **Decouple nightly drift gate**: output size growth demoted to informational, removing automatic nightly baseline pushes to `main` (#35)
+
 ### v2.10.0: 284 sources + video search and fetch + crawl frontier quality control
 
 - **272 → 284 sources**: five Metaso tiers (scholar/library/image/video/podcast, all explicit-only), Sciverse records (filter by year/journal/author/subject), NCPSSD Chinese social science (CLI bridge), plus three DSH plugin catalogs and two skill indexes with install counts
@@ -688,6 +699,7 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 
 | Version | Notes |
 |---------|-------|
+| **v2.10.1** | **Routing precision consolidation + commercial intent macro + overseas video lane + community fixes**: added `@commercial_market` macro across pharma domains; keyless overseas video via `parallel_free` + YouTube dedup; fixed local-seek zero-match double-run tax and missing-tool warnings; `url_kind: none` spec support and dead link guards; engine status consistency; decoupled nightly drift baseline. See [release notes](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **284 sources + video search and fetch + crawl frontier quality control**: five Metaso tiers, Sciverse, NCPSSD and five DSH/skill index sources; a `video` domain with `--video`/`--min-duration`/`--max-duration`, Bilibili subtitles and YouTube timedtext with optional ASR; crawl frontier quality control and noisy-diff `argo watch`; measured general source selection with the DeepSeek English hedge and authority early-stop; venv-based installer. See [release notes](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **Security in depth + slow-source results no longer dropped + five mis-routing classes closed**: high-risk text quarantined with cleaned replacement (excluded from the evidence score), hop-by-hop redirect validation and DNS-rebinding pinning; slow engines abandoned by early-stop are collected in the background (`ARGO_TAIL_COMPLETE_S`) and their real scores recorded; a six-family real-scenario scan closes academic/finance/corporate/legal/pharma mis-routing; plus `argo engine add` one-step onboarding, bucketed scenario learning, and the ZCode plugin package. See [release notes](docs/RELEASE_NOTES_v2.9.9.md). |
 | **v2.9.8** | **Routing precision audit + issue #18/#19 fixes + test-state isolation**: replayed real queries and tightened 16 classes of false triggers (brand/product names, field names, ASCII substrings); added the SERP coverage gate and CJK cross-validation; fixed the empty-log nightly ledger, people_daily default feed, and cached-result guarding; isolated adaptive/breaker state per test. Thanks to @wpp666 for the reproduction and diagnosis. See [release notes](docs/RELEASE_NOTES_v2.9.8.md). |

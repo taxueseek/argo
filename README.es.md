@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -147,7 +147,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.10.0; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.10.1; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -282,7 +282,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.10.0**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.10.1**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -467,13 +467,15 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.10.0)
+### Conjunto aproximado de capacidades (v2.10.1)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 284 fuentes, 240 sin clave, 99 dominios.
 
 Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
 Las últimas versiones arreglaron cada una una clase de problemas.
+
+v2.10.1 se enfoca en la consolidación de la precisión del enrutado y correcciones de problemas de la comunidad. Introduce la macro declarativa de exclusión @commercial_market para evitar que consultas comerciales de farma (tamaño de mercado, compras públicas, ingresos) secuestren bases de datos bioinformáticas como UniProt (#34.1); añade un carril de vídeo en el extranjero sin clave mediante parallel_free con site:youtube.com y elimina los parámetros de rastreo de YouTube (#34.3); elimina el impuesto de doble ejecución en cero coincidencias de local-seek, emitiendo avisos estructurados y priorizando SQLite FTS5 (#34.4); añade soporte para url_kind: none en especificaciones sin URL y evita enlaces muertos con prefijos vacíos (#29); corrige el estado de motores no registrados a unknown con disabled_reason y limpia especificaciones huérfanas (#29, #34.6); y desacopla el gate de deriva nocturno eliminando confirmaciones automáticas de línea base (#35).
 
 v2.10.0 amplía la superficie de capacidades. Las fuentes pasan de 272 a 284: cinco niveles de Metaso (académico, biblioteca, imagen, vídeo, pódcast), registros de Sciverse, ciencias sociales chinas de NCPSSD, más tres catálogos de plugins de DSH y dos índices de skills, que por primera vez traen recuento de instalaciones. El vídeo funciona de extremo a extremo, de la consulta a la captura: dominio video con --video, filtros de duración, subtítulos de Bilibili al capturar y timedtext de YouTube. La cadena de rastreo estrena control de frontera y ritmo cortés —límite por host, retroceso ante 429— y watch separa ruido de cambio sustantivo. La selección general usa orden medido, las consultas generales en inglés llevan cobertura condicional de DeepSeek y los cuerpos pasan por un decodificador único con JSON-LD. El instalador toma la vía venv, así que los entornos PEP 668 ya no se quedan sin dependencias.
 
@@ -698,6 +700,15 @@ argo/
 
 Solo las tres versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.10.1: Consolidación de precisión de enrutado + macro de intención comercial + carril de vídeo en el extranjero + correcciones comunitarias
+
+- **Macro de intención comercial `@commercial_market`**: aplicada en `protein_search`, `chem_search` y `medical` para que las consultas comerciales cedan el paso a la búsqueda general (#34.1)
+- **Carril de vídeo en el extranjero y deduplicación de YouTube**: el dominio `video` y `--video` integran `parallel_free` sin clave con `site:youtube.com` y limpian los parámetros de rastreo `vl`/`si` (#34.3)
+- **Eliminación del impuesto de doble ejecución en local-seek con cero coincidencias**: estado sin resultados cacheable de forma limpia, avisos estructurados `warnings[]` al faltar `rg`/`grep`, y prioridad para SQLite FTS5 (#34.4)
+- **Soporte de especificaciones sin URL y guarda de enlaces muertos con marcador**: soporte para declarar `url_kind: none` (aplicado primero a `sciverse.yaml`), y `_format_url_template` ya no construye enlaces con prefijos vacíos (#29)
+- **Consistencia en el estado de motores y limpieza de huérfanos**: motores desconocidos reportan `status="unknown", enabled=False`, exponen `disabled_reason`, y se eliminan las especificaciones huérfanas `_cisa_kev` y `_osv` (#29, #34.6)
+- **Desacople del gate de deriva nocturno**: el crecimiento del tamaño de salida pasa a ser informativo, eliminando los commits automáticos nocturnos de línea base en `main` (#35)
+
 ### v2.10.0: 284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo
 
 - **272 → 284 fuentes**: cinco niveles de Metaso (académico/biblioteca/imagen/vídeo/pódcast, todos de uso explícito), registros de Sciverse (filtro por año/revista/autor/materia), NCPSSD de ciencias sociales en chino (puente CLI), más tres catálogos de plugins de DSH y dos índices de skills con recuento de instalaciones
@@ -730,6 +741,7 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 
 | Versión | Notas |
 |---------|-------|
+| **v2.10.1** | **Consolidación de precisión de enrutado + macro comercial + vídeo extranjero + correcciones**: macro `@commercial_market` en farma; vídeo en el extranjero con `parallel_free` y desduplicación de YouTube; eliminación de doble ejecución en local-seek; soporte de `url_kind: none` y guardas de enlaces muertos; estado coherente de motores; desacople de deriva nocturna. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo**: cinco niveles de Metaso, Sciverse, NCPSSD y cinco fuentes de DSH/índices de skills; dominio `video` con `--video`/`--min-duration`/`--max-duration`, subtítulos de Bilibili y timedtext de YouTube con ASR opcional; control de frontera del rastreo y diff de ruido en `argo watch`; selección general medida con cobertura de DeepSeek en inglés y parada temprana por autoridad; instalador con venv. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **Seguridad en profundidad + los resultados de fuentes lentas ya no se descartan + cinco clases de enrutado erróneo cerradas**: texto de alto riesgo aislado con sustitución limpia (fuera de la puntuación de evidencia), validación de redirecciones salto a salto y fijación contra reencadernación DNS; las fuentes lentas abandonadas por la parada temprana se recolectan en segundo plano (`ARGO_TAIL_COMPLETE_S`) y registran su puntuación real; un barrido de seis familias de escenarios reales cierra el enrutado erróneo de academia/finanzas/empresas/legal/farma; además `argo engine add` en un paso, aprendizaje por cubos de escenario y el paquete de plugin ZCode. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.9.md). |
 | **v2.9.8** | **Auditoría de precisión de enrutado + fixes de issue #18/#19 + aislamiento de estado en tests**: reproducción de consultas reales y acotado de 16 clases de falsos disparadores (marcas, productos, campos, subcadenas ASCII); puerta de cobertura SERP y validación cruzada CJK; ledger nocturno con log vacío, feed por defecto de people_daily y guardia de caché corregidos; estado adaptive/breaker aislado por test. Gracias a @wpp666 por la reproducción y el diagnóstico. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.8.md). |

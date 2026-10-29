@@ -24,7 +24,7 @@
 <p align="center">
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -147,7 +147,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方法 1：ワンコマンドスクリプト（本機で長期利用に推奨）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方法 2：npm / npx（対応済み、現在 2.10.0。tag ごとに公開、バージョン固定）
+# 方法 2：npm / npx（対応済み、現在 2.10.1。tag ごとに公開、バージョン固定）
 npm install -g argo-search       # CLI をグローバルインストール
 npx -y argo-search               # またはインストールせず即時利用
 npx -y github:taxueseek/argo     # main の最新コミットに追従したい場合
@@ -282,7 +282,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.10.0**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
+どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.10.1**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -467,13 +467,15 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.10.0）
+### 現時点の能力概要（v2.10.1）
 
 Argo のやることを一行で言うと、質問を領域と言語で適切なソースに振り分け、返ってきた結果を信頼度で並べ、エージェントには並べ替えられ検証できる素材を渡す。検索・取得・証拠確認・ローカルファイル検索は同じパイプラインを流れ、19 個の MCP ツールは CLI コマンドと一対一で対応するので、どの形态で入れても能力は欠けない。単独コマンドもいくつかある：argo tweet は X 投稿をまとめ、argo auth はログイン状态を管理し、argo job は採用情報を集約する。全ソースの費用・键・状态は docs/ENGINE_CATALOG.md に清单されている：284 ソース、240 無設定、99 ドメイン。
 
 DSH プラグインとして入れると、これらの能力は宿主のネイティブツールになる。高頻度の検索と取得は既定でオン、長尾フォレンジックは設定ページで必要に応じてチェック、argo 本体の 28 個の挙動スイッチ（キャッシュ、再順位、重複除去、ガード、プロキシ、TTL など）は環境変数からパネルへ移った。キーは宿主の凭证库に入り、平文は表示されず、変更は保存即有効。
 
 最近数版が、それぞれ一类の問題を直した。
+
+v2.10.1 はルーティング精度の収口とコミュニティ報告の修正に注力しました。宣言的意図拒否マクロ @commercial_market を導入し、医薬ビジネスや市場調査クエリ（市場規模、集採、売上高など）が UniProt 等のバイオDBへ誤流入する問題を解消（#34.1）；動画モードでキー不要の parallel_free を接続し site:youtube.com を付加、YouTube の追跡パラメータを除去（#34.3）；local-seek のゼロ一致ダブルラン税を解消し、ツール欠落警告を構造化・SQLite FTS5 を優先（#34.4）；URL なし宣言型ソース url_kind: none と空プレースホルダ死リンク防止（#29）；未登録エンジンの ready 誤判定を unknown に修正し disabled_reason を透過；夜間ドリフトゲートを分離し自動コミットを廃止（#35）。
 
 v2.10.0 が広げたのは能力面です。ソースは 272 から 284 へ。秘塔の五档（学術・文庫・画像・動画・ポッドキャスト）、Sciverse の外国語書誌、NCPSSD の中国語社会科学に加え、DSH プラグインカタログ 3 件とスキル索引 2 件。スキル系のソースは初めてインストール数を持ちます。動画は検索から取得まで一気通貫：video 域と --video、長さフィルタ、取得時は B 站の字幕と YouTube の timedtext。クロール側はフロンティア品質管理と礼儀正しい間隔を書き直し、ホストごとの制限と 429 バックオフ、watch の差分はノイズと実質変更を分けます。汎用層のソース選択は実測順になり、英語の汎用クエリには DeepSeek の条件付きヘッジ、レスポンス本文は統一デコードと JSON-LD。インストーラは venv 主経路になり、PEP 668 環境でも依存が欠けたままになりません。
 
@@ -698,6 +700,15 @@ argo/
 
 直近 3 バージョンのみを載せています。完全な履歴は[更新履歴](#更新履歴)、各版の詳細は [Releases](https://github.com/taxueseek/argo/releases) を参照してください。
 
+### v2.10.1：ルーティング精度収口 + 商業意図マクロ + 海外動画レーン + 課題修正
+
+- **商業意図拒否マクロ `@commercial_market`**：`protein_search`、`chem_search`、`medical` に適用し、医薬市場クエリがバイオ/化学DBへ誤判定されるのを防止（#34.1）
+- **海外動画レーンと YouTube 重複排除**：`video` 域と `--video` に `parallel_free` を接続し `site:youtube.com` を付加、`vl`/`si` 追跡パラメータを除去（#34.3）
+- **local-seek ゼロ一致ダブルラン税の解消**：ゼロ一致を正常キャッシュし、Windows で `rg`/`grep` 欠落時に構造化 `warnings[]` を通知・SQLite FTS5 を優先（#34.4）
+- **URL なし宣言型ソースと空プレースホルダ死リンク防止**：spec の `url_kind: none` 宣言に対応（`sciverse.yaml`）、`_format_url_template` の空リンク生成を防止（#29）
+- **エンジン状態の整合性と孤児 spec 整理**：未登録エンジンを `status="unknown", enabled=False` に修正、`disabled_reason` を透過、`_cisa_kev` / `_osv` を削除（#29、#34.6）
+- **夜間ドリフトゲートの分離**：結果サイズ増加を情報扱いに緩和し、夜間に `main` へベースラインを自動プッシュする手順を撤廃（#35）
+
 ### v2.10.0：ソース 284 件 + 動画検索と取得 + クロールのフロンティア品質管理
 
 - **ソース 272→284**：秘塔の五档（学術/文庫/画像/動画/ポッドキャスト、いずれも明示専用）、Sciverse の外国語書誌（年/誌/著者/分野で絞れる）、NCPSSD の中国語社会科学（CLI ブリッジ）、さらに DSH プラグインカタログ 3 件とスキル索引 2 件（インストール数付き）
@@ -730,6 +741,7 @@ argo/
 
 | 版 | 内容 |
 |----|------|
+| **v2.10.1** | **ルーティング精度収口 + 商業意図マクロ + 海外動画レーン + 課題修正**：宣言的拒否マクロ `@commercial_market` の導入；`parallel_free` による海外動画レーンと YouTube URL 正規化；local-seek のゼロ一致ダブルラン解消と警告透過；URL なしソース `url_kind: none` と死リンク防止；エンジン状態整合性；夜間ドリフトゲート分離。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.1.md)。 |
 | **v2.10.0** | **ソース 284 件 + 動画検索と取得 + クロールのフロンティア品質管理**：秘塔の五档、Sciverse、NCPSSD、DSH/スキル索引の 5 件を追加。`video` 域と `--video`/`--min-duration`/`--max-duration`、B 站字幕と YouTube timedtext、任意の ASR。クロールのフロンティア品質管理と `argo watch` のノイズ差分。汎用ソース選択の実測順 + DeepSeek 英語ヘッジ + 権威アーリーストップ。インストーラの venv 化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.0.md)。 |
 | **v2.9.9** | **多層セキュリティ + 遅いソースの成果を捨てない + 誤ルーティング五類の収口**：高リスク本文の隔離＋洗浄差し替え（証拠スコアから除外）、リダイレクトのホップごと検証と DNS リバインディング封鎖。早期停止で打ち切られた遅いソースはバックグラウンド回収（`ARGO_TAIL_COMPLETE_S`）で実績を学習器に記録。六族の実シナリオ走査で学術/財務/企業/法律/医薬の誤ルーティングを収口。`argo engine add` の一段階接続、シナリオ別バケット学習、ZCode プラグインパッケージ。詳細は [リリースノート](docs/RELEASE_NOTES_v2.9.9.md)。 |
 | **v2.9.8** | **ルーティング精度監査 + issue #18/#19 修正 + テスト状態の隔離**：実クエリ再生で 16 クラスの誤発火（ブランド名・製品名・フィールド名・ASCII 部分文字列）を絞り込み、SERP カバレッジゲートと CJK クロス検証を追加。nightly の空ログ、people_daily の既定 feed、キャッシュ命中ガードを修正し、adaptive/breaker 状態をテストごとに隔離。再現と特定に協力してくれた @wpp666 に感謝。詳細は [リリースノート](docs/RELEASE_NOTES_v2.9.8.md)。 |
