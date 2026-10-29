@@ -18,10 +18,12 @@
  *      （searchProviderEnabled: false 时注册但不可选）
  */
 
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NATIVE_TOOLS as NATIVE_TOOL_SPECS } from './native-tools.mjs'
+
+const require = createRequire(import.meta.url)
 
 import {
   DEFAULTS,
@@ -84,9 +86,7 @@ try {
  */
 function resolvePluginVersion() {
   try {
-    const here = dirname(fileURLToPath(import.meta.url))
-    const raw = readFileSync(join(here, '..', 'package.json'), 'utf8')
-    const parsed = JSON.parse(raw)
+    const parsed = require('../package.json')
     if (typeof parsed?.version === 'string' && parsed.version !== '') return parsed.version
   } catch { /* 打包裁剪/权限异常：回退，不阻断插件加载 */ }
   return RUNNER_PLUGIN_VERSION || '0.0.0-unknown'
@@ -95,7 +95,7 @@ function resolvePluginVersion() {
 export const PLUGIN_VERSION = resolvePluginVersion()
 
 export const name = 'wide-research'
-export const inject = ['tools', 'subagents', 'systemPrompt']
+export const inject = ['tools', 'subagents', 'systemPrompt', 'web']
 
 const MCP_CHILD_TOOLS = Object.keys(NATIVE_TOOL_SPECS).map(name => `mcp__argo__${name}`)
 const DEFAULT_CHILD_TOOLS = Object.freeze([
@@ -453,10 +453,10 @@ export function apply(ctx, providedConfig = {}) {
   const nativeRegistrations = new Map()
   // 路由观测推送：原生工具执行后读 argo 使用日志，经 remote 事件推给设置面板。
   // 失败静默（诊断是增值，不是依赖）；无 remote 事件总线时跳过。
-  const emitRouteHealth = () => {
+  const emitRouteHealth = async () => {
     try {
       if (!ctx.remote || typeof ctx.remote.$emit !== 'function') return
-      const data = getRouteHealth()
+      const data = await getRouteHealth()
       if (Array.isArray(data.samples) && data.samples.length > 0) {
         ctx.remote.$emit('route-health/updated', data)
       }

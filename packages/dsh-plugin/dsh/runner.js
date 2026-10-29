@@ -8,18 +8,18 @@
  */
 
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { NATIVE_TOOLS as NATIVE_TOOL_SPECS } from './native-tools.mjs'
 
+const require = createRequire(import.meta.url)
+
 function resolvePluginVersion() {
   try {
-    const here = dirname(fileURLToPath(import.meta.url))
-    const raw = readFileSync(join(here, '..', 'package.json'), 'utf8')
-    const parsed = JSON.parse(raw)
-    if (typeof parsed?.version === 'string' && parsed.version !== '') return parsed.version
+    const pkg = require('../package.json')
+    if (typeof pkg?.version === 'string' && pkg.version !== '') return pkg.version
   } catch { /* 打包裁剪/权限异常：回退，不阻断插件加载 */ }
   return '0.0.0-unknown'
 }

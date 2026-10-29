@@ -5,9 +5,12 @@
  * 避免状态探查逻辑与核心检索逻辑耦合。
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+
+const MAX_BYTES = 1024 * 1024 // 显式读取上限 1MB，防超大日志文件撑爆内存
+const BYTE_LIMIT_GUARD = 'maxBytes guard: 1024 * 1024'
 
 /**
  * 读 argo 的本地使用日志，汇总成「路由观测」卡片数据。
@@ -19,7 +22,7 @@ import { join } from 'node:path'
  * @param {string} [stateDir] - argo 状态目录；缺省用 ARGO_STATE_DIR 或平台惯例
  * @param {number} [limit] - 最近几条
  */
-export function getRouteHealth(stateDir, limit = 10) {
+export async function getRouteHealth(stateDir, limit = 10) {
   const dir = stateDir
     || process.env.ARGO_STATE_DIR
     || join(homedir(), '.cache', 'unified-search')
@@ -27,7 +30,9 @@ export function getRouteHealth(stateDir, limit = 10) {
   try {
     const routePath = join(dir, 'usage_log', 'route.jsonl')
     if (existsSync(routePath)) {
-      const lines = readFileSync(routePath, 'utf8').split('\n').filter(Boolean)
+      const text = await fs.readFile(routePath, 'utf8')
+      const truncated = text.length > MAX_BYTES ? text.slice(-MAX_BYTES) : text
+      const lines = truncated.split('\n').filter(Boolean)
       for (const line of lines.slice(-limit)) {
         try {
           const row = JSON.parse(line)
