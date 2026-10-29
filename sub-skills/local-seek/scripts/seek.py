@@ -1172,15 +1172,30 @@ def git_blame(path, line, timeout=None):
 
 def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results,
                        timeout=None, since_ts=None, until_ts=None):
-    """rg 缺失时的 grep 保底（目录内/全盘共用）。
+    """rg 缺失时的 FTS5 / grep 保底（目录内/全盘共用）。
 
-    返回 (results, err, mode)；rg 与 grep 都不可用时 results=None 且 err
-    说明缺什么——调用方必须把「工具缺失」与「未找到匹配」区分开。
+    返回 (results, err, mode)；FTS5 索引命中时优先走标准库 sqlite3（免外部工具），
+    rg 与 grep 都不可用且无 FTS5 索引时 results=None 且 err 说明缺什么——
+    调用方必须把「工具缺失」与「未找到匹配」区分开。
     """
+    dots = getattr(args, "dot", False)
+    if not exts and not getattr(args, "exclude", None) and not args.count and args.context == 0:
+        try:
+            import seek_fts
+        except ImportError:
+            seek_fts = None
+        if seek_fts is not None and seek_fts.query_suitable(args.query):
+            rows = seek_fts.content_candidates(
+                args.query, path, dots=dots,
+                since_ts=since_ts, until_ts=until_ts)
+            if rows is not None:
+                return _finish_content(
+                    iter(rows), args.query, args.context, args.count,
+                    fixed, path, max_results, not args.include_noise
+                ), None, "fts"
     grep_exe = resolve_grep()
     if not grep_exe:
         return None, "本机无 rg 与 grep 可用，请安装 ripgrep", ""
-    dots = getattr(args, "dot", False)
     mode = "fast"
     if not args.exact and len(patterns) > 1:
         results, err = grep_search(grep_exe, [args.query], path, excludes, exts,

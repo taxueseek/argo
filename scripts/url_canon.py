@@ -47,11 +47,12 @@ TRACKING_PARAMS: frozenset[str] = frozenset({
     "from_source", "from_spmid", "from_spmid2", "vd_source", "unique_k",
     "buvid", "buvid3", "buvid4", "up_id", "seid", "spmid", "timestamp",
     "wxshare", "weibo_id", "share_referer", "share_object_id",
-    # 通用归因
+    # 通用归因与平台语言/分享变体（YouTube vl/si 会把同一视频拆成多条重复 URL）
     "ref", "ref_src", "ref_url", "refer", "referer", "referrer",
     "source", "from", "src", "cmp", "camp", "srsltid",
     "clickid", "click_id", "clicktime", "scid", "scene", "sessionid",
     "trace", "trace_id", "track", "tracking_id", "trk", "trkcampaign",
+    "si", "vl",
 })
 
 # 移动站/AMP 子域前缀（fold_mobile）与 www 前缀（fold_www）分开——

@@ -20,6 +20,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "ADC drug market size 2026",
+   "domain": "general_search",
+   "kind": "tfidf",
+   "engines": [
+    "parallel_free",
+    "firecrawl"
+   ],
+   "expect": null,
+   "forbid": "chem_search",
+   "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
    "query": "Apple Inc headquarters",
    "domain": "org_entity",
    "kind": "regex",
@@ -30,6 +42,18 @@
    "expect": "org_entity",
    "forbid": null,
    "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "BRCA1 基因检测 医保报销 价格",
+   "domain": "chinese_general",
+   "kind": "tfidf",
+   "engines": [
+    "bocha",
+    "yuanbao"
+   ],
+   "expect": null,
+   "forbid": "protein_search",
+   "src": "SUBSTRING_ACCIDENTS"
   },
   {
    "query": "CISA KEV 漏洞",
@@ -60,8 +84,8 @@
    "domain": "general_search",
    "kind": "regex",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": "general_search",
    "forbid": null,
@@ -300,8 +324,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -336,8 +360,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": "chem_search",
@@ -354,6 +378,18 @@
    "expect": "dsh_plugin_search",
    "forbid": null,
    "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "gene therapy market size 2026",
+   "domain": "general_search",
+   "kind": "tfidf",
+   "engines": [
+    "parallel_free",
+    "firecrawl"
+   ],
+   "expect": null,
+   "forbid": "protein_search",
+   "src": "SUBSTRING_ACCIDENTS"
   },
   {
    "query": "github 代码 实现 用法",
@@ -384,8 +420,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -408,8 +444,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -468,8 +504,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": "art_museum",
@@ -552,8 +588,8 @@
    "domain": "general_search",
    "kind": "regex",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -564,8 +600,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": "stock_query",
@@ -612,7 +648,7 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
+    "parallel_free",
     "doaj"
    ],
    "expect": null,
@@ -660,8 +696,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": "hackernews_search",
@@ -719,8 +755,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -731,8 +767,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "yuanbao",
-    "tavily_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": "org_entity",
@@ -977,6 +1013,18 @@
    "expect": "legal",
    "forbid": null,
    "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "创新药物 2026 市场规模",
+   "domain": "chinese_general",
+   "kind": "regex",
+   "engines": [
+    "bocha",
+    "yuanbao"
+   ],
+   "expect": null,
+   "forbid": "medical",
+   "src": "SUBSTRING_ACCIDENTS"
   },
   {
    "query": "劳动合同解除 赔偿 N+1",
@@ -1246,8 +1294,8 @@
    "domain": "company_search",
    "kind": "regex",
    "engines": [
-    "opencorporates",
-    "yuanbao"
+    "yuanbao",
+    "gleif"
    ],
    "expect": "company_search",
    "forbid": null,
@@ -1438,8 +1486,8 @@
    "domain": "company_search",
    "kind": "tfidf",
    "engines": [
-    "opencorporates",
-    "yuanbao"
+    "yuanbao",
+    "gleif"
    ],
    "expect": "company_search",
    "forbid": null,
@@ -1462,8 +1510,8 @@
    "domain": "company_search",
    "kind": "regex",
    "engines": [
-    "opencorporates",
-    "yuanbao"
+    "yuanbao",
+    "gleif"
    ],
    "expect": "company_search",
    "forbid": null,
@@ -1486,8 +1534,8 @@
    "domain": "company_search",
    "kind": "regex",
    "engines": [
-    "opencorporates",
-    "yuanbao"
+    "yuanbao",
+    "gleif"
    ],
    "expect": "company_search",
    "forbid": null,
@@ -1799,7 +1847,7 @@
    "kind": "tfidf",
    "engines": [
     "bilibili",
-    "anysearch"
+    "parallel_free"
    ],
    "expect": "video",
    "forbid": null,
@@ -1912,6 +1960,18 @@
    "expect": "medical",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "药品集采 中选结果 市场份额",
+   "domain": "chinese_general",
+   "kind": "regex",
+   "engines": [
+    "bocha",
+    "yuanbao"
+   ],
+   "expect": null,
+   "forbid": "medical",
+   "src": "SUBSTRING_ACCIDENTS"
   },
   {
    "query": "莫奈 monet 画作",
@@ -2058,6 +2118,18 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "重组胶原蛋白 医美 市场规模",
+   "domain": "chinese_general",
+   "kind": "regex",
+   "engines": [
+    "bocha",
+    "yuanbao"
+   ],
+   "expect": null,
+   "forbid": "protein_search",
+   "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
    "query": "金十 7x24 快讯",
    "domain": "jin10_flash",
    "kind": "tfidf",
@@ -2074,8 +2146,8 @@
    "domain": "company_search",
    "kind": "tfidf",
    "engines": [
-    "opencorporates",
-    "yuanbao"
+    "yuanbao",
+    "gleif"
    ],
    "expect": "company_search",
    "forbid": null,

@@ -209,10 +209,25 @@ class TestVideoRoute(unittest.TestCase):
         d = video_decision(300, 900)
         self.assertEqual(d["domain"], "video")
         self.assertIn("bilibili", d["engines_combo"])
+        self.assertIn("parallel_free", d["engines_combo"])
         self.assertTrue(d["video_only"])
         self.assertEqual(d["min_duration"], 300)
         self.assertEqual(d["max_duration"], 900)
         self.assertEqual(d["engine_request"], "--video")
+
+    def test_parallel_free_appends_youtube_site_in_video_mode(self):
+        import engines
+        captured = []
+
+        def fake_fn(query, n=5, timeout=8, **kwargs):
+            captured.append(query)
+            return [{"title": "Rust video", "url": "https://www.youtube.com/watch?v=abc123", "snippet": "s"}]
+
+        reg = engines.get_registry()
+        with mock.patch.dict(reg, {"parallel_free": fake_fn}):
+            res = engines.search("rust programming tutorial", "parallel_free", 5, 5, video_only=True)
+        self.assertEqual(len(res), 1)
+        self.assertTrue(captured and "site:youtube.com" in captured[0])
 
 
 class TestVideoCli(unittest.TestCase):

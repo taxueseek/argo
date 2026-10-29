@@ -307,6 +307,7 @@ def _summarize_engine_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         blocked.append({
             "engine_id": name,
             "reason": reason,
+            **({"disabled_reason": row["disabled_reason"]} if row.get("disabled_reason") else {}),
             **({"missing_env": row["missing_env"]} if row.get("missing_env") else {}),
             **({"missing_deps": row["missing_deps"]} if row.get("missing_deps") else {}),
             **({"status": row["status"]} if row.get("status") else {}),

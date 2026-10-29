@@ -220,10 +220,26 @@ def _pattern_entries(domain: dict[str, Any]) -> list[Any]:
     return list(patterns) if isinstance(patterns, list) else []
 
 
+# 声明式否决宏（2026-10-29，issue #34.1）：蛋白/化合物/通用医疗词汇在「市场规模/
+# 销售额/集采/医保」等商业研报语境下不是查生信/化学/临床试验库。把公共商业否决集
+# 抽成命名宏 `@commercial_market`，在 config.yaml 的 unless 字段按需引用，消除多域
+# 重复粘贴并保持 `_split_pattern_entry` 单点展开。
+_UNLESS_MACROS: dict[str, str] = {
+    "@commercial_market": (
+        r"(?i)(市场规模|市场份额|销售额|营收|市值|融资|财报|竞争格局|集采|医保|报销|"
+        r"价格|多少钱|商业化|市场预测|行情|股价|龙头股|概念股|"
+        r"market\s+size|market\s+share|sales|revenue|valuation|market\s+forecast|pricing)"
+    ),
+}
+
+
 def _split_pattern_entry(entry: Any) -> tuple[Any, Any]:
-    """触发词条目的两种形态：字符串，或 `{match, unless}`。"""
+    """触发词条目的两种形态：字符串，或 `{match, unless}`（unless 支持 @宏名 展开）。"""
     if isinstance(entry, dict):
-        return entry.get("match"), entry.get("unless")
+        unless = entry.get("unless")
+        if isinstance(unless, str) and unless in _UNLESS_MACROS:
+            unless = _UNLESS_MACROS[unless]
+        return entry.get("match"), unless
     return entry, None
 
 

@@ -47,16 +47,17 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 
 | 参数 | 说明 |
 |------|------|
-| `--engine <name>` | 强制引擎（anysearch/byted/bocha/exa/deepseek_search/tavily/eastmoney/zhihu/arxiv/pypi/mdn/hackernews/v2ex/redskill…，全量见 `--list-engines`） |
+| `--engine <name>` | 强制引擎（anysearch/byted/bocha/exa/deepseek_search/tavily/eastmoney/zhihu/arxiv…，见 `--list-engines`） |
 | `--local-first` | 本地零成本聚合优先（local_search 29 引擎） |
-| `--include-local` / `--no-local` | 本机文件命中（source=local_files，score 0.9/0.7）：fast/budget 默认开，auto/deep 显式 |
-| `--mode fast|auto|deep|budget` | fast 免费优先 / auto 成本感知（默认）/ deep 质量优先 / budget 配额控制 |
-| `--explain` | 解释路由决策（含 TF-IDF 分数） |
-| `--no-cache` / `--depth fast|balanced|deep` | 跳过缓存 / 搜索深度 |
-| `--academic-deep` | 学术多源模式：自动 depth=deep + domain=academic，禁用 early-stop 让所有学术源参与（arxiv/openalex/local_pubmed/core 等） |
+| `--include-local` / `--no-local` | 本机文件命中（source=local_files）：fast/budget 默认开，auto/deep 显式 |
+| `--mode fast|auto|deep|budget` | fast 免费 / auto 成本感知（默认）/ deep 质量 / budget 配额控制 |
+| `--explain` / `--no-cache` | 解释路由决策 / 跳过缓存 |
+| `--depth fast|balanced|deep` | 搜索深度 |
+| `--academic-deep` | 学术多源：depth=deep + domain=academic，禁用早停（arxiv/openalex/local_pubmed/core 等） |
 | `--since 7d|2026-08-01` `--until` `--sort relevance|newest|oldest` | 时间窗过滤 + 时间排序 |
-| `--verify [N]` | 对 top-N 未核验结果 fetch 正文，回填证据分（URL→证据分缓存，同 URL 二次搜索自动复用） |
-| `--domain` `--sub_domain` | 垂直域 / 子域限定 |
+| `--video` `--min-duration SEC` `--max-duration SEC` | 视频模式（B 站 + YouTube）及时长筛选 |
+| `--verify [N]` | 对 top-N 抓正文回填证据分（URL→证据分缓存复用） |
+| `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域限定 / 关本地统计与查询落盘 |
 
 **按场景选引擎**：时事 → deepseek_search，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → skill_search/dsh_plugin_search。口径见 `references/usage.md`。
 

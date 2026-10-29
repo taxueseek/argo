@@ -98,7 +98,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_search` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 local_academic、域 local_chinese、域 local_code、域 local_general、域 local_news、域 local_reference、语义画像命中 | Local Search 聚合 |
 | `local_sogou` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 搜狗本地 |
 | `marginalia` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面，JSON 免认证） |
-| `parallel_free` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、通用兜底链 | Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的 parallel REST 通道分立，作其缺位时的补位） |
+| `parallel_free` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、域 video、通用兜底链 | Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的 parallel REST 通道分立，作其缺位时的补位） |
 | `searchmysite` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | 人工审核准入的个人独立站索引（非商业博客，HTML 解析） |
 | `shenma` | 可直接用 | 免费 | 不限 | — | 域 chinese_general | 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页 |
 | `so` | 可直接用 | 免费 | 不限 | — | 域 chinese_general | 360 搜索（so.com/s HTML 解析），中文通用网页 |
@@ -574,7 +574,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `chinese_tech_deep` | `byted` | `byted`、`octen`、`juejin`、`cn_ai_news`、`parallel` |
 | `english_tech` | `octen` | `octen`、`anysearch`、`exa`、`keenable` |
 | `company_search` | `opencorporates` | `yuanbao`、`gleif`、`opencorporates`、`cninfo`、`baidu_baike` |
-| `video` | `bilibili` | `bilibili`、`anysearch` |
+| `video` | `bilibili` | `bilibili`、`parallel_free`、`anysearch` |
 | `chinese_general` | `bocha` | `bocha`、`yuanbao`、`byted`、`octen`、`anysearch`、`zhihu_global`、`wechat_sogou`、`local_search`、`so`、`shenma`、`metaso` |
 | `local_chinese` | `local_search` | `local_search`、`bocha` |
 | `local_news` | `local_search` | `local_search`、`byted` |

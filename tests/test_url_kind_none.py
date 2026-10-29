@@ -116,6 +116,23 @@ class TestNcpssdSpec(unittest.TestCase):
             (SKILL_DIR / "engines" / "specs" / "ncpssd.yaml").read_text(encoding="utf-8"))
         self.assertEqual(spec.get("url_kind"), "none")
 
+    def test_sciverse_missing_doi_does_not_build_bare_prefix_url(self):
+        import yaml
+        spec = yaml.safe_load(
+            (SKILL_DIR / "engines" / "specs" / "sciverse.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(spec.get("url_kind"), "none")
+        raw = json.dumps({"results": [
+            {"title": "无 DOI 论文", "doi": "", "abstract": "摘要"},
+            {"title": "有 DOI 论文", "doi": "10.1000/xyz", "abstract": "摘要"},
+        ]})
+        rows = eb._parse_http_payload(raw, "json", "sciverse", 5,
+                                      spec["output_map"], spec)
+        self.assertEqual(len(rows), 2)
+        self.assertNotIn("url", rows[0])
+        self.assertEqual(rows[0].get("url_kind"), "none")
+        self.assertFalse(sg.is_unusable_row(rows[0]))
+        self.assertEqual(rows[1].get("url"), "https://doi.org/10.1000/xyz")
+
 
 if __name__ == "__main__":
     unittest.main()

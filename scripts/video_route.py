@@ -17,9 +17,9 @@ from __future__ import annotations
 
 from typing import Any
 
-# config 缺 video 域时的兜底：B 站是当前唯一稳定免费的视频搜索源，
-# anysearch 负责带出 YouTube 等海外视频（无独立 YouTube 引擎时）。
-_FALLBACK = ("bilibili", "anysearch")
+# config 缺 video 域时的兜底：B 站负责中文视频，parallel_free 负责海外/YouTube
+# 视频（免 Key 直连），anysearch 补充国内综合索引。
+_FALLBACK = ("bilibili", "parallel_free", "anysearch")
 
 
 def _video_domain() -> dict[str, Any]:

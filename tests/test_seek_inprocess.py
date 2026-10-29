@@ -145,3 +145,36 @@ def test_seek_query_payload_exact_flag_passthrough():
     payload = local_seek.seek_query_payload("cache_key", str(SCRIPTS), 2,
                                             exact=True)
     assert payload is not None  # --exact 透传不炸
+
+
+def test_run_local_seek_no_match_does_not_rerun_subprocess(monkeypatch):
+    """0 命中时 seek.run_query 返回 ('local-seek: 未找到匹配...', 1)，
+    必须直接产出空结果并写缓存，不得回退子进程二次重跑（消除双跑税）。"""
+    called = []
+    monkeypatch.setattr(local_seek, "_seek_query_subprocess",
+                        lambda *a, **k: called.append(a) or None)
+    hits = local_seek._run_local_seek("zzz_nonexistent_xyz_98765", 3,
+                                      search_dir=str(SCRIPTS), echo=False)
+    assert hits == []
+    assert called == []
+
+
+def test_run_local_seek_surfaces_missing_rg_grep_warning(monkeypatch):
+    """Windows 等无 rg/grep 环境下，seek.run_query 返回工具缺失说明，
+    _run_local_seek 必须把原因写入结构化告警且不无意义重跑子进程。"""
+    seek_py = resolve_seek_py()
+    mod = local_seek._load_seek_module(seek_py)
+    monkeypatch.setattr(
+        mod, "run_query",
+        lambda *a, **k: ("local-seek: 本机无 rg 与 grep 可用，请安装 ripgrep", 1),
+    )
+    called = []
+    monkeypatch.setattr(local_seek, "_seek_query_subprocess",
+                        lambda *a, **k: called.append(a) or None)
+    local_seek.drain_search_warnings()
+    hits = local_seek._run_local_seek("any_query", 3,
+                                      search_dir=str(SCRIPTS), warn=True, echo=False)
+    assert hits == []
+    assert called == []
+    warns = local_seek.drain_search_warnings()
+    assert any("ripgrep" in w for w in warns)

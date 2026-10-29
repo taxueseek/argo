@@ -185,7 +185,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-27 登录墙页面类型接线 +7 已随飞书功能撤出回撤"
               "（revert 01971bc，上限 1380 → 1373）"),
     "scripts/engine_dispatch.py": (
-        998, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+        996, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
               "2026-10-27 +8：视频时长条件经 decision 下发（_engine_domain_kwargs "
               "只加 min/max_duration 两个非空键，不新增函数签名层）；"
               "2026-10-26 −1：重试前把归因寄存器只读快照交给 "

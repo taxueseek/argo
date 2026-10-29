@@ -321,12 +321,13 @@ def _run_local_seek(query: str, max_n: int = 5,
     payload = None
     try:
         payload = seek_query_payload(query, target, max_n,
-                                     time_budget=_LOCAL_SEEK_TIMEOUT_S)
+                                     time_budget=_LOCAL_SEEK_TIMEOUT_S,
+                                     warn=warn, echo=echo)
     except Exception:
         payload = None
     if payload is None:
         payload = _seek_query_subprocess(seek_py, query, target, max_n)
-    if payload is None:
+    if payload is None or payload.get("_error"):
         return []
     out = _payload_to_hits(payload, max_n, cache_key)
     _seek_disk_cache_put(cache_key, out)  # H3：写穿到落盘层
@@ -351,7 +352,8 @@ def _load_seek_module(seek_py: str):
 
 
 def seek_query_payload(query: str, target: str, max_n: int,
-                       exact: bool = False, time_budget: float | None = None
+                       exact: bool = False, time_budget: float | None = None,
+                       warn: bool = False, echo: bool = True
                        ) -> dict[str, Any] | None:
     """H2 公共入口：进程内调 seek.run_query 取 JSON payload。
 
@@ -371,11 +373,19 @@ def seek_query_payload(query: str, target: str, max_n: int,
         argv.append("--exact")
     text, rc = mod.run_query(argv, time_budget=time_budget)
     if rc != 0:
-        # rc=1 是「搜了没命中」，不是「真失败」——区分两者避免子进程回退
-        # 把同一搜索再跑一遍（实测 787ms vs 命中路径 12ms，双跑税 ~775ms）。
-        # 无命中返回空结果（不回退）；真失败返回 None（调用方回退子进程）。
-        if rc == 1 and not text.strip():
+        # rc=1 有两类：
+        # 1) 「未找到匹配」：seek.run_query 返回 "local-seek: 未找到匹配（...）"。
+        #    这是正常零命中，不是进程内异常——返回空结果避免子进程回退把同一搜索
+        #    再跑一遍（消除双跑税），并让 0 命中写入缓存。
+        # 2) 确定性环境/参数错误（如 Windows 缺 rg/grep、目录不存在）：
+        #    子进程重跑结果完全一样；转为结构化告警并停止无意义回退（issue #34.4）。
+        stripped = text.strip()
+        if rc == 1 and (not stripped or "未找到匹配" in stripped):
             return {"results": [], "total": 0}
+        if rc == 1 and stripped.startswith("local-seek:"):
+            if warn:
+                _note_warning(f"  [include-local] {stripped}", echo)
+            return {"results": [], "total": 0, "_error": stripped}
         return None
     if not text.strip():
         return None

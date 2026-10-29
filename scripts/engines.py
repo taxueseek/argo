@@ -801,6 +801,11 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
     # 的签名都不匹配，异常被 except 吞掉，从未生效过（2026-10-18 复核）。
     # 不修它：单次失败就全局压制该引擎 45s，比熔断器「连续两次才打开」更激进，
     # 会在一次网络抖动后误杀健康源。保持单一真源，避免第二套状态。
+    # 视频模式（--video / video_only=True）下，海外免费源 parallel_free 默认给网页，
+    # 附加 site:youtube.com 使其定向召回 YouTube 视频，避免被后续 video_only 滤空（issue #34.3）。
+    video_only = bool(kwargs.pop("video_only", False))
+    if video_only and engine == "parallel_free" and "site:" not in query.lower():
+        query = f"{query} site:youtube.com"
     # 语义型引擎不识别平台结构化语法，剥掉字段只留核心词；透传型保持原 query。
     if engine in _SEMANTIC_ENGINES:
         query = strip_structured(query)

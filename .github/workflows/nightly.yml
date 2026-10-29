@@ -2,10 +2,11 @@ name: nightly
 
 # 夜间三件事，对应 PR 上不该跑的三类成本：
 #   replay —— 用库里已有的录制数据离线重跑整条管线（确定性，1 秒级）
-#   drift  —— 联网重录固定查询集，与滚动基线比「结构回归」（条数地板 /
+#   drift  —— 联网重录固定查询集，与固定基线比「结构回归」（条数地板 /
 #            零结果 / 整条消失）。体积漂移只记录不判：活网换血是常态，
 #            2026-10-28 夜四条查询三条整批换血（issue #35）即误报实证。
-#            绿跑后本次报告自动提交为新基线，明晚与今晚比；红跑不动基线。
+#            基线保持固定锚点，不夜夜自动滚动覆盖（防 5→4→3→2→1 温水煮青蛙与
+#            bot 每日直推 main 污染分支）。
 #   ledger —— argo stats 的时延与命中率落成曲线
 #
 # 为什么不在 PR 上跑：免费源会被 CI 出口 IP 限流或反爬，fork 也拿不到 secret。
@@ -19,7 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # 绿跑后回写滚动基线（github-actions[bot] 直推 main）
+  contents: read
   issues: write
 
 env:
@@ -74,29 +75,6 @@ jobs:
           python scripts/ci_drift_gate.py \
             --baseline tests/golden/drift_baseline_report.json \
             --current drift_report.json
-
-      # 滚动基线：门绿了才把今晚的重录结果提交为新基线，明晚与今晚比。
-      # 源一夜死掉 → 条数跌破地板 → 红、不刷新，等人工修；数值漂移 → 绿
-      # 且刷新，「每周一次无人能修的误报 issue」（#19/#35 这类）就此消失。
-      # [skip ci]：基线回写不触发 ci 工作流，别让 nightly 每晚给 CI 放烟花。
-      - name: 绿跑滚动基线（重录报告覆盖基线文件）
-        if: success()
-        run: |
-          python scripts/replay_eval.py --data "$RUNNER_TEMP"/drift-*.json --json \
-            --save-baseline tests/golden/drift_baseline_report.json > /dev/null
-
-      - name: 提交并推送新基线
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tests/golden/drift_baseline_report.json
-          if git diff --cached --quiet; then
-            echo "报告与基线完全一致，不提交"
-          else
-            git commit -m "chore(drift): 夜间绿跑滚动基线 [skip ci]"
-            git push
-          fi
 
       - uses: actions/upload-artifact@v4
         if: always()

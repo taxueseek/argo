@@ -289,15 +289,11 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         return retry_count
 
     def _engine_domain_kwargs() -> dict[str, Any]:
-        """CLI --domain / --sub_domain / 视频时长 的引擎入参（未给则不下发空键）。
+        """CLI --domain / --sub_domain / 视频时长及模式的引擎入参（未给则不下发空键）。
 
-        刻意**不**并进缓存键：这两个值此前既没进键也没进请求，而任何引擎
-        都可能对同 query 返回不同结果集；先让参数真正生效，键的隔离由
-        engine_domain_key 单独补齐（见下方 cache key 注释）。
-
-        时长也走这里：decision 是唯一贯穿路由到引擎的共享字典，改五层
-        函数签名只为传两个整数不划算。值只在非 None 时下发，避免把
-        min_duration=None 塞进每个引擎的 kwargs。
+        刻意不并进缓存键：这两个值此前既没进键也没进请求，而任何引擎都可能对同 query
+        返回不同结果集；先让参数真正生效，键的隔离由 engine_domain_key 单独补齐。
+        时长与 video_only 走这里：值只在非空时下发，避免塞进每个引擎的 kwargs。
         """
         out: dict[str, Any] = {}
         if engine_domain:
@@ -308,6 +304,8 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             value = (decision or {}).get(key)
             if value is not None:
                 out[key] = value
+        if (decision or {}).get("video_only") or (decision or {}).get("domain") == "video":
+            out["video_only"] = True
         return out
 
     def _exec_engine(eng: str, retries: int | None = None,

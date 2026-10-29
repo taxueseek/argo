@@ -106,8 +106,10 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
                   tiers: dict[str, list[str]] | None = None,
                   adaptive_scores: dict[str, float] | None = None,
                   quota_marks: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+    known = True
     if spec is None:
         specs = _all_engine_specs()
+        known = engine_id in specs
         spec = specs.get(engine_id) or {}
     tiers = tiers if tiers is not None else get_cost_tiers()
     env = env_status_for(engine_id, spec)
@@ -115,7 +117,8 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
     adm = load_admission(engine_id)
     blocked = is_blocked(engine_id)
     admitted = is_admitted(engine_id)
-    config_enabled = bool(spec.get("enabled", True))
+    config_enabled = bool(spec.get("enabled", True)) if known else False
+    disabled_reason = str(spec.get("disabled_reason") or "").strip() if not config_enabled else ""
     allowed = env["allowed_by_env"]
     env_ok = env["env_ready"]
     dep_ok = deps["dep_ready"]
@@ -131,7 +134,8 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
     # （--routable-only 的帮助文案与 available_engines 同一口径）。此前漏判，
     # 旧显式源恰好被 env/dep 门挡住没暴露；toutiao（免 key 免依赖）把它炸出。
     routable = (
-        config_enabled
+        known
+        and config_enabled
         and allowed
         and env_ok
         and dep_ok
@@ -140,7 +144,9 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
         and not bool(spec.get("explicit_only"))
     )
     status = "ready"
-    if not config_enabled:
+    if not known:
+        status = "unknown"
+    elif not config_enabled:
         status = "disabled"
     elif not allowed:
         status = "env_filtered"
@@ -162,7 +168,8 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
     return {
         "engine_id": engine_id,
         "enabled": config_enabled,
-        "type": spec.get("type", "cli"),
+        **({"disabled_reason": disabled_reason} if disabled_reason else {}),
+        "type": spec.get("type", "cli") if known else "unknown",
         "cost_tier": _cost_tier_of(engine_id, tiers),
         "status": status,
         # 设计上不进自动路由（需密钥的付费源 / 输入形态特殊），按 --engine 显式调用；
@@ -224,7 +231,7 @@ def compact_engine_row(row: dict[str, Any]) -> dict[str, Any]:
         "dep_ready": row.get("dep_ready"),
     }
     # 条件性细节：非空才出现（健康源不带这些键，输出不随异常源膨胀）
-    for key in ("missing_env", "missing_deps"):
+    for key in ("missing_env", "missing_deps", "disabled_reason"):
         if row.get(key):
             slim[key] = row[key]
     if row.get("quota_exhausted") and row.get("quota_exhausted_reason"):

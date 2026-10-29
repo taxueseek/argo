@@ -393,8 +393,10 @@ domains:
   name: chem_search
   parallel: false
   patterns:
-  - (化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物分子|结构式|CAS\s*[- ]?\d)
-  - (?i)(chemical\s+formula|molecular\s+weight|iupac|cas\s+number|compound|\bdrug\b|molecule|smiles)
+  - match: '(化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物分子|结构式|CAS\s*[- ]?\d)'
+    unless: '@commercial_market'
+  - match: '(?i)(chemical\s+formula|molecular\s+weight|iupac|cas\s+number|compound|\bdrug\b|molecule|smiles)'
+    unless: '@commercial_market'
   primary: pubchem
   early_stop_min_results: 1
 - desc: 生物物种检索
@@ -430,14 +432,15 @@ domains:
   name: protein_search
   parallel: true
   patterns:
-  - (基因|蛋白|蛋白质|氨基酸序列|结构域|基因组|转录因子|受体蛋白|uniprot)
-  - (?i)\b(protein|gene|genome|amino\s+acid|sequence|uniprot|rcsb|pdb)\b
-  # 2026-10-29（issue #34）：药靶点与蛋白同名时，「市场规模/集采/医保」这类
-  # 商业问题会被基因名模式抢进本域，返回 UniProt 条目（实测「PD-1 抑制剂
-  # 2026 市场规模」→ protein_search）。商业意图词只否决这一条模式，其它
-  # 生信查询照旧命中——unless 的作用域必须与被否决的触发词一样窄。
+  # 2026-10-29（issue #34.1）：蛋白/基因/靶点词与「市场规模/集采/医保/销售额」同现时
+  # 是医药商业与行业研报问题，不应锁进 UniProt/PDB 生信库；统一引用 `@commercial_market`
+  # 声明式否决宏，生信点查（「PD-1 蛋白 结构域 序列」）不受影响。
+  - match: '(基因|蛋白|蛋白质|氨基酸序列|结构域|基因组|转录因子|受体蛋白|uniprot)'
+    unless: '@commercial_market'
+  - match: '(?i)\b(protein|gene|genome|amino\s+acid|sequence|uniprot|rcsb|pdb)\b'
+    unless: '@commercial_market'
   - match: '(?i)\b(p53|tp53|brca1|brca2|egfr|her2|pdl1|pd-1|hemoglobin|insulin|p21)\b'
-    unless: '(?i)(市场规模|市场份额|销售额|营收|市值|融资|财报|竞争格局|集采|医保|商业化|市场预测|market\s+size|market\s+share|sales|revenue|valuation|market\s+forecast)'
+    unless: '@commercial_market'
   primary: uniprot
 - desc: 美国法律判例与联邦法规（CourtListener + Federal Register）
   # 2026-09-16 接入 federal_register：补「美国行政法规原文」这块盲区。
@@ -1016,8 +1019,10 @@ domains:
   parallel: true
   patterns:
   - (?i)(临床试验|clinical trial|nct\d+|clinicaltrials\.gov|openfda|fda 药品|药品说明书|药物标签|drug label|适应症|不良反应)
-  - (?i)(medicine|pharmaceutical|dosage|contraindication|药物|药品|处方药|\botc\b)
-  - (?i)(症状|用药|适应症|临床|临床指南|诊疗指南|医学指南|用药指南|治疗指南|副作用|禁忌|诊断|治疗|病因)
+  - match: '(?i)(medicine|pharmaceutical|dosage|contraindication|药物|药品|处方药|\botc\b)'
+    unless: '@commercial_market'
+  - match: '(?i)(症状|用药|适应症|临床|临床指南|诊疗指南|医学指南|用药指南|治疗指南|副作用|禁忌|诊断|治疗|病因)'
+    unless: '@commercial_market'
   # 2026-10-25 补：药品说明书/用法用量类——实测「某药 说明书 用法用量」被
   # code_search 的「用法」子串抢走（GitHub/MDN 答不了药）。unless 锁软件/
   # 硬件语境的说明书。code_search 同日加了对应药品语境 unless，两处成对。
@@ -1719,6 +1724,7 @@ domains:
   # 把视频查询吃掉了（实测「红烧肉 做法 视频」此前路由到元宝+anysearch）。
   engines_combo:
   - bilibili
+  - parallel_free
   - anysearch
   fallback: anysearch
   name: video

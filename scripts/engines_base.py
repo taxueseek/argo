@@ -27,8 +27,7 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from config import load_config, get_engines
 
-# 图片许可判定 / 字段收尾 / CLI 字段契约收敛都在 image_ops（体积门禁要求，
-# 且同属「引擎输出 → 对外契约」这一层）。转发导入保持调用点不变。
+# 图片许可判定 / 字段收尾 / CLI 字段契约收敛都在 image_ops（转发导入保持调用点不变）。
 from image_ops import (  # noqa: E402
     CLI_PASSTHROUGH_FIELDS as _CLI_PASSTHROUGH_FIELDS,
     _cli_result_row,
@@ -60,8 +59,7 @@ def _get_logger():
 _FAIL_NOTES: dict[str, dict[str, Any]] = {}
 _FAIL_NOTES_LOCK = threading.Lock()
 
-# HTTPError 错误体的读取上限：只用于归因（下游截 400 字符），
-# 无限读会把几十 MB 错误页吃进内存并写进磁盘状态
+# HTTPError 错误体读取上限：只用于归因（下游截 400 字符），防大错误页吃进内存/落盘
 _HTTP_ERROR_BODY_CAP = 64 * 1024
 
 # 归因细节里可能回显凭证（OpenAI 风格 "Incorrect API key: sk-…"），
@@ -322,11 +320,12 @@ def _coerce_field(val: Any, *, max_len: int | None = None) -> str:
 
 
 def _format_url_template(template: str, item: dict) -> str:
-    """支持 {field} 与 {a.b.c} 点分路径的 URL 模板。"""
-    def repl(m: re.Match) -> str:
-        return _coerce_field(_get_path(item, m.group(1)))
+    """支持 {field} 与 {a.b.c} 点分路径的 URL 模板；任一占位为空则返回空串。"""
+    vals = {m.group(1): _coerce_field(_get_path(item, m.group(1))) for m in re.finditer(r"\{([^}]+)\}", template)}
+    if any(not v for v in vals.values()):
+        return ""
     try:
-        return re.sub(r"\{([^}]+)\}", repl, template)
+        return re.sub(r"\{([^}]+)\}", lambda m: vals[m.group(1)], template)
     except Exception:
         return ""
 
@@ -365,7 +364,6 @@ def _make_field_parser(path: str, fields: dict[str, str], url_template: str | No
                 if not ik:
                     continue
                 raw = _get_path(item, ik) if "." in str(ik) else item.get(ik, "")
-                # 兼容顶层点分键名不存在时回退 get
                 if raw in ("", None) and "." not in str(ik):
                     raw = item.get(ik, "")
                 coerced = _coerce_field(raw, max_len=300 if ok == "snippet" else 500)
@@ -375,6 +373,8 @@ def _make_field_parser(path: str, fields: dict[str, str], url_template: str | No
                 built = _format_url_template(url_template, item)
                 if built.startswith(("http://", "https://")):
                     r["url"] = built
+                else:
+                    r.pop("url", None)
             if isinstance(r.get("url"), str) and r["url"].startswith("//"):
                 r["url"] = "https:" + r["url"]
             if r.get("title") or r.get("url"):

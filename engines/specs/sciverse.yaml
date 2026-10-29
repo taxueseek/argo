@@ -38,6 +38,7 @@ engine_id: sciverse
 type: http
 enabled: true
 explicit_only: true
+url_kind: none
 cost_tier: api
 method: POST
 url: https://api.sciverse.space/meta-search
