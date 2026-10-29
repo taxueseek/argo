@@ -195,6 +195,9 @@ def test_every_rule_compiles_and_survives_compilation():
         ("global_event", "foreign policy laptop review"),
         # video unless（2026-10-27）：短视频运营/变现是营销分析，不是找视频
         ("video", "短视频 运营 变现"),
+        # protein_search unless（2026-10-29，issue #34）：PD-1 既是靶点也是蛋白名，
+        # 问市场规模/集采时不能抢进 UniProt
+        ("protein_search", "PD-1 抑制剂 2026 市场规模"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -216,7 +219,7 @@ def test_unless_declared_domains_are_covered_by_negative_cases():
                "anime_encyclopedia", "art_museum", "chinese_tech_deep",
                "code_search", "image_search", "company_search",
                "ai_model", "us_fundamentals", "stock_query", "medical",
-               "global_event", "video"}
+               "global_event", "video", "protein_search"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

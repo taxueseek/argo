@@ -70,6 +70,10 @@ SUBSTRING_ACCIDENTS = [
     # 守卫（\b 在 CJK 边界不成立，会误伤「看NBA视频」）。
     ("腾讯元宝 yuanbao.com URL 参数 搜索", "sports_search"),  # nba ⊂ yuanbao
     ("nbalive 直播 源", "sports_search"),                           # nba ⊂ nbalive
+    # 药靶点与蛋白同名（2026-10-29，issue #34）：基因名模式被商业问题抢中，
+    # 返回 UniProt 蛋白条目。unless 只否决那一条模式，下一条 LEGITIMATE_ROUTES
+    # 锁住生信查询仍然命中。
+    ("PD-1 抑制剂 2026 市场规模", "protein_search"),
 ]
 
 
@@ -158,6 +162,8 @@ LEGITIMATE_ROUTES = [
     ("临床指南 糖尿病", "medical"),
     ("沪深300 基金定投", "fund_query"),
     ("财联社 快讯", "cls_telegraph_search"),
+    # #34 对照面：商业意图词不该连坐生信查询
+    ("PD-1 蛋白 结构域 序列", "protein_search"),
 ]
 
 

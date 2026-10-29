@@ -176,6 +176,30 @@
    "src": "LEGITIMATE_ROUTES"
   },
   {
+   "query": "PD-1 抑制剂 2026 市场规模",
+   "domain": "chinese_general",
+   "kind": "regex",
+   "engines": [
+    "bocha",
+    "yuanbao"
+   ],
+   "expect": null,
+   "forbid": "protein_search",
+   "src": "SUBSTRING_ACCIDENTS"
+  },
+  {
+   "query": "PD-1 蛋白 结构域 序列",
+   "domain": "protein_search",
+   "kind": "tfidf",
+   "engines": [
+    "uniprot",
+    "local_bing"
+   ],
+   "expect": "protein_search",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
+  },
+  {
    "query": "RFC 9110",
    "domain": "rfc_search",
    "kind": "regex",
