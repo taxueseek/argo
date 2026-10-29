@@ -63,6 +63,15 @@
     "pc6.com": {"score": 0.25, "class": "download_portal", "reason": "软件下载引流壳"},
     "onlinedown.net": {"score": 0.25, "class": "download_portal", "reason": "软件下载引流壳"}
   },
+  "demote_domains_unless": {
+    "_doc": "有条件降权：查询命中 unless 语境时不降（法律/司法查询里裁判文书是一手源）。只在调用方传了 query 时生效，无 query 的评分路径保持原表行为。",
+    "wenshu.court.gov.cn": {
+      "score": 0.15,
+      "class": "document_silo",
+      "reason": "裁判文书站：非法律语境下与政策/市场问题无关",
+      "unless": "(法律|法条|法规|判决|裁定|庭审|诉讼|裁判文书|司法解释|判例|案例|司法|court|litigation|lawsuit|statute)"
+    }
+  },
   "serp_host_markers": [
     "baidu.com",
     "sogou.com",

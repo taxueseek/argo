@@ -239,7 +239,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "> 严格猜测链，fetch_v3/article.py 兜底车道同享），curl 车道改收 "
               "bytes 交同一解码入口并补 --compressed；上限 1039 → 1035 随动下调"),
     "scripts/search_rank.py": (
-        998, "RRF 融合 + minhash 去重 + 五维重排；"
+        1000, "RRF 融合 + minhash 去重 + 五维重排；"
+              "2026-10-29 +2：五维重排把 query 传给 score_authority——裁判文书站"
+              "这类有条件降权（demote_domains_unless）必须按提问语境判，"
+              "只传 URL/引擎拿不到 query；上限 998 → 1000；"
               "2026-10-17 口径隔离逻辑拆出 caliber_isolation.py（−79 行）；"
               "2026-10-17 +4：_attach_selection_signals 接 authority_level 离散"
               "等级（DeepSeek 语义 0-4，映射与上游采信逻辑在 rank_signals）+"

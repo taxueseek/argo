@@ -153,6 +153,27 @@ class TestTwoStageCredibility(unittest.TestCase):
         )
         self.assertGreaterEqual(auth["score"], 0.85)
 
+    def test_wenshu_demoted_on_policy_query(self):
+        """#34：裁判文书站对政策/市场查询答非所问，条件降权要压过引擎保底分。"""
+        url = ("https://wenshu.court.gov.cn/website/wenshu/181107ANFZ0BXSK4/"
+               "index.html?docId=x")
+        auth = score_authority(url, "anysearch", "第十一批国家集采 中选结果 执行")
+        self.assertLessEqual(auth["score"], 0.2)
+        self.assertEqual(auth["tier"], "very_low")
+
+    def test_wenshu_keeps_authority_on_legal_query(self):
+        """对照面：法律语境下裁判文书是一手源，不得连坐降权。"""
+        url = ("https://wenshu.court.gov.cn/website/wenshu/181107ANFZ0BXSK4/"
+               "index.html?docId=x")
+        auth = score_authority(url, "anysearch", "裁判文书 判决 检索 方法")
+        self.assertGreaterEqual(auth["score"], 0.9)
+
+    def test_wenshu_without_query_keeps_old_table(self):
+        """无 query 的评分路径（状态展示/研究摘要）保持原表行为。"""
+        url = ("https://wenshu.court.gov.cn/website/wenshu/181107ANFZ0BXSK4/"
+               "index.html?docId=x")
+        self.assertGreaterEqual(score_authority(url, "anysearch")["score"], 0.9)
+
 
 class TestCnPortalAuthorityParity(unittest.TestCase):
     """主流门户不得被压进「内容农场」档（09-26 审查第 7 项，最后一项 P0）。

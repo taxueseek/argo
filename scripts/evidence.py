@@ -152,7 +152,7 @@ from serp_guard import (  # noqa: E402
 
 
 @functools.lru_cache(maxsize=512)
-def _score_authority_cached(url: str, source: str = "") -> tuple:
+def _score_authority_cached(url: str, source: str = "", query: str = "") -> tuple:
     """score_authority 的缓存版本，返回 tuple（lru_cache 要求可哈希返回值）。"""
     if not url:
         return (0.3, "无 URL", "unknown", "", True)
@@ -228,6 +228,24 @@ def _score_authority_cached(url: str, source: str = "") -> tuple:
             else:
                 best_reason += f"（引擎={source}）"
 
+    # 有条件降权（2026-10-29，issue #34）：同一域名在不同查询语境下可信度
+    # 不同——裁判文书站对「集采政策」是答非所问，对「判决书检索」是一手源。
+    # 放在引擎保底分之后做**最终裁决**：否则 anysearch 这类引擎的 0.75 保底
+    # 会把降权分拉回来（实测 0.15 → 0.75，降权形同虚设）。
+    # 只在调用方给了 query 时生效：无 query 的评分路径（状态展示、研究摘要）
+    # 保持原表行为，避免把「没传上下文」误判成「非法律查询」。
+    if query:
+        cond = _load_cn_source_types().get("demote_domains_unless") or {}
+        for d, meta in cond.items():
+            if d.startswith("_"):
+                continue
+            if domain == d or domain.endswith("." + d):
+                unless = meta.get("unless") or ""
+                if not (unless and re.search(unless, query, re.I)):
+                    best_score = float(meta.get("score", 0.3))
+                    best_reason = f"降权：{meta.get('reason', d)}"
+                break
+
     tier = (
         "high" if best_score >= 0.8
         else "medium" if best_score >= 0.6
@@ -238,14 +256,17 @@ def _score_authority_cached(url: str, source: str = "") -> tuple:
     return (best_score, best_reason, tier, domain, bool(is_serp))
 
 
-def score_authority(url: str, source: str = "") -> dict[str, Any]:
+def score_authority(url: str, source: str = "", query: str = "") -> dict[str, Any]:
     """评估 URL 的权威性（Selection 门槛）。
 
-    结果按 (url, source) 做进程内 lru_cache：同一 URL + source 组合在多次
+    结果按 (url, source, query) 做进程内 lru_cache：同一 URL + source 组合在多次
     rerank/selection 中只算一次，避免 search.py 的 local_five_dim_rerank 与
     _attach_selection_signals 对同一 URL 重复评分。
+
+    query 可选：只在有条件降权（demote_domains_unless，如裁判文书站）时需要，
+    无 query 的调用方保持原表行为，缓存也按空 query 各自命中。
     """
-    score, reason, tier, domain, is_serp = _score_authority_cached(url, source)
+    score, reason, tier, domain, is_serp = _score_authority_cached(url, source, query)
     return {
         "score": round(score, 2),
         "reason": reason,
@@ -674,7 +695,7 @@ def compute_credibility(
         title = r.get("title", "") or ""
         snippet = r.get("snippet", "") or ""
 
-        auth = score_authority(url, source)
+        auth = score_authority(url, source, query)
         fresh = score_freshness(r, query_time)
         density = score_evidence_density(snippet, title)
 

@@ -725,7 +725,9 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
                 relevance = max(relevance, fl["relevance"])
         if _has_evidence:
             try:
-                authority = float(score_authority(url, source).get("score", 0.5))
+                # 传 query：有条件降权（如裁判文书站只在法律语境保留高分）要
+                # 看提问本身，而不是只看域名。
+                authority = float(score_authority(url, source, query).get("score", 0.5))
             except Exception:
                 authority = 0.5
             try:
