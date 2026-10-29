@@ -161,6 +161,10 @@ def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
         # limitations/recovery/time_filter_warning 一并剥掉，agent 无从判断
         # 「这批结果能用到什么程度」（2026-09-15 输出契约审查）。
         "limitations", "recovery", "time_filter_warning",
+        # 搜索期告警（issue #34 第 7 条）：--json 管道场景默认走 agent 档，
+        # 告警只在 warnings[] 里——剥掉它等于「静默跳过」再次发生，且调用方
+        # 从 JSON 里永远看不到「本机检索没执行/缺 seek.py」的原因。
+        "warnings",
         # 阶段耗时：默认就带（--no-timing 才没有）。剥掉会让使用者看不到
         # 「这次慢在哪」，也拿不到自己动手优化所需的依据。
         "timing",
@@ -714,6 +718,16 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
                                       sanitize_results_boundary)
         sanitize_results_boundary(result.get("results"))
         result["content_trust"] = CONTENT_TRUST_UNTRUSTED
+    except Exception:
+        pass
+    # 搜索期告警（issue #34 第 7 条）：--json 下告警不能留在 stderr（调用方
+    # 2>&1 合并会破坏 JSON 解析），统一收进响应的 warnings[] 字段。住在
+    # 响应契约层而不是 search.py：所有入口共享同一收口。空账不加键。
+    try:
+        from local_seek import drain_search_warnings
+        warns = [w.strip() for w in drain_search_warnings() if w.strip()]
+        if warns:
+            result.setdefault("warnings", []).extend(warns)
     except Exception:
         pass
     return result

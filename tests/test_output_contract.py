@@ -61,7 +61,7 @@ MUST_SURVIVE = (
 )
 
 # 有情况才在场（值为 None 时省略属合理设计）
-CONDITIONAL = ("recovery", "time_filter_warning")
+CONDITIONAL = ("recovery", "time_filter_warning", "warnings")
 
 _ENVELOPE_GATED_HINT = "build_limitations 在 `if envelope:` 分支内"
 

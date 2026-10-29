@@ -571,6 +571,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                  exclude_domains: list[str] | None = None,
                  engine_domain: str | None = None,
                  engine_sub_domain: str | None = None,
+                 quiet: bool = False,
                  timing: StageTiming | None = None) -> dict[str, Any]:
     """统一搜索便捷入口。
 
@@ -787,7 +788,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     _local_seek_future = None
     if include_local:
         _local_seek_future = _get_local_seek_executor().submit(
-            _run_local_seek, query, n, warn=_local_seek_explicit)
+            _run_local_seek, query, n, warn=_local_seek_explicit,
+            echo=not quiet)
 
     result = execute_search(
         query=search_query, decision=decision, max_results=n,
@@ -921,7 +923,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                     timeout=max(_local_deadline - time.monotonic(), 0))
             except Exception:
                 return []
-        return _run_local_seek(q, max_n, search_dir)
+        return _run_local_seek(q, max_n, search_dir, echo=not quiet)
 
     result = shape_response(_ShapeContext(
         query=query, kind=kind, tier=tier, envelope=envelope, decision=decision,

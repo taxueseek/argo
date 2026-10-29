@@ -378,6 +378,14 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.json_output:
+        # issue #34 第 7 条：引擎 builder 的 logger.warning（如「OCTEN_API_KEY
+        # 未设置」）经 logging 的最后兜底 handler 打到 stderr，调用方一旦
+        # 2>&1 合并就解析失败。JSON 模式只留 ERROR：非致命告警静默，可行动
+        # 的告警走响应里的 warnings[] 字段（见 search.super_search 的 quiet）。
+        import logging
+        logging.disable(logging.WARNING)
+
     if args.list_engines:
         # --engine 兼作清单过滤（`--engine auto` 是搜索默认值，不算过滤）。
         # 全量详细行 2026-09-16 实测 151 KB（runtime/admission 嵌套是大头），
@@ -435,6 +443,15 @@ def main():
             if _wanted:
                 names = [n for n in names if n in set(_wanted)]
             print(dumps(names))
+            # issue #34 第 6 条：本档只回答「有多少个有实现的源」，与
+            # `paths --check` 的 engines=<总收录> 天然不等——差额里是
+            # 停用/缺密钥/别名 spec。以前这层口径差没有任何对外说明，
+            # 被当成计数错误。提示走 stderr，stdout 保持纯 JSON 名单。
+            if not _wanted:
+                print(f"[list-engines] 有实现的源 {len(names)} 个（routes 实际可用数）"
+                      "；总收录与每个不可用项的成因见 --list-engines --detail，"
+                      "逐条全量清单加 --all；paths --check 的 engines= 是总收录口径",
+                      file=sys.stderr)
         return
 
     # 入口级引擎名校验（2026-10-10 方案甲）：无效名字此前只在执行层补 errors，
@@ -538,6 +555,10 @@ def main():
         # 交回 super_search 后自动获得 L1 并行提交（与主搜索同时跑）。
         include_local=(True if args.include_local
                        else (False if args.no_local else None)),
+        # --json 时 stderr 会被调用方 2>&1 合并，非致命告警（缺 key、宽根跳过
+        # 等）一律不进 stderr（issue #34 第 7 条）；可行动的告警随响应
+        # 的 warnings[] 字段返回。
+        quiet=args.json_output,
     )
 
     # 固定开销（import + argparse + 收尾）：缓存命中时它占墙钟大头，而它不出现

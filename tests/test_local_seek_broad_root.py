@@ -153,6 +153,42 @@ class TestRunLocalSeekGuard(unittest.TestCase):
         self.assertGreaterEqual(ls._LOCAL_SEEK_TIMEOUT_S, 1.0,
                                 "太小会让正常目录的正常查询被误杀")
 
+    def test_missing_seek_py_warns_instead_of_silent_empty(self):
+        """issue #34 第 4 条：seek.py 找不到时，显式 --include-local 不能再静默。"""
+        import seek_locator
+        ls.drain_search_warnings()  # 隔离：本用例只看自己产生的告警
+        with mock.patch.object(os, "getcwd", return_value="/Users/example/proj"), \
+             mock.patch.object(seek_locator, "resolve_seek_py", return_value=None):
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                hits = ls._run_local_seek("q", 5)
+        self.assertEqual(hits, [])
+        self.assertIn("seek.py", buf.getvalue(), "缺失原因必须写出来")
+        warns = ls.drain_search_warnings()
+        self.assertTrue(any("seek.py" in w for w in warns),
+                        "告警必须进结构化通道（--json 的 warnings[] 来源）")
+
+    def test_echo_false_keeps_stdout_pipeline_clean(self):
+        """issue #34 第 7 条：--json 模式（echo=False）下告警不进 stderr。"""
+        import seek_locator
+        ls.drain_search_warnings()
+        with mock.patch.object(os, "getcwd", return_value="/Users/example/proj"), \
+             mock.patch.object(seek_locator, "resolve_seek_py", return_value=None):
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                ls._run_local_seek("q", 5, echo=False)
+        self.assertEqual(buf.getvalue(), "",
+                         "stderr 必须干净：调用方 2>&1 合并后要能直接 json.load")
+        self.assertTrue(ls.drain_search_warnings(),
+                        "静默仅指 stderr；结构化告警仍要保留")
+
+    def test_drain_clears_after_read(self):
+        """drain 语义：读一次即清空，避免同一告警重复拼进下一个响应。"""
+        ls.drain_search_warnings()  # 隔离：前面用例的宽根告警可能还挂着
+        ls._note_warning("probe", echo=False)
+        self.assertEqual(ls.drain_search_warnings(), ["probe"])
+        self.assertEqual(ls.drain_search_warnings(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,6 +31,26 @@ from typing import Any
 # 本地命中是尾部增强项，不是主结果，它的等待不配与搜索引擎同等。
 _LOCAL_SEEK_TIMEOUT_S = 3.0
 
+# 搜索期告警（issue #34 第 4/7 条）：--json 模式下 stderr 会被调用方
+# 2>&1 合并，任何中文告警行都会破坏 JSON 解析。告警统一进这个列表，
+# search.py 组装完响应后 drain 并作为 warnings[] 字段随 JSON 返回；
+# 非 --json 调用保持写 stderr 的老行为（echo=True）。
+_SEARCH_WARNINGS: list[str] = []
+
+
+def _note_warning(msg: str, echo: bool = True) -> None:
+    """记录一条搜索期告警；echo=True 时同时写 stderr（人读模式）。"""
+    _SEARCH_WARNINGS.append(msg)
+    if echo:
+        sys.stderr.write(msg + "\n")
+
+
+def drain_search_warnings() -> list[str]:
+    """取出并清空搜索期告警（search.py 在响应组装完后合并进 warnings[]）。"""
+    out = _SEARCH_WARNINGS[:]
+    _SEARCH_WARNINGS.clear()
+    return out
+
 # 「宽泛根」判定：这些目录**不能**当作本地检索范围。
 # 跨平台补齐（2026-09-29）：/mnt（WSL 挂载根）、/cygdrive（Cygwin）——
 # 此前是 macOS 视角清单，Windows/WSL 的等价宽根漏网。
@@ -232,13 +252,17 @@ def _local_seek_dir() -> str | None:
 
 def _run_local_seek(query: str, max_n: int = 5,
                     search_dir: str | None = None,
-                    warn: bool = True) -> list[dict[str, Any]]:
+                    warn: bool = True, echo: bool = True) -> list[dict[str, Any]]:
     """本机文件命中（include-local 用）：进程内调 seek.run_query，JSON 并入。
 
     fast/budget 模式下由 super_search 自动调用（_resolve_include_local），
     auto/deep 需显式 --include-local / MCP include_local。评分与
     MCP argo_local_search 同口径（0.9 精确 / 0.7 扩展）。
     进程内失败回退子进程形态（_seek_query_subprocess），能力不回退。
+
+    echo=False 时告警不写 stderr，只进 drain_search_warnings()——`--json`
+    模式的调用方把 2>&1 合并成管道时，stderr 上的中文行会破坏 JSON 解析
+    （issue #34 第 7 条），告警改为结构化字段随响应返回。
     """
     target = search_dir or _local_seek_dir()
     if not target:
@@ -246,15 +270,16 @@ def _run_local_seek(query: str, max_n: int = 5,
         # 「跳过」与「查了没有」在返回值上都是空列表，但含义完全不同——
         # 静默跳过会让用户以为本地没匹配，而事实是根本没查。返回一个
         # 占位「结果」又会污染 results（它只是个说明，不是命中），所以
-        # 说明走 stderr：与 CLI 既有的 include-local 异常提示同一条通道。
+        # 说明走告警通道（stderr + 响应的 warnings[]）。
         # 只在**显式开启**时提示（warn=False 是 fast/budget 的自动路径）：
         # 自动路径在 home 等宽根下每次 search 都会打印，Agent 会把它当成
         # 输出的一部分，属于噪音而非归因。
         if warn:
-            sys.stderr.write(
+            _note_warning(
                 "  [include-local] 当前目录不适合本地检索（home / 根目录过宽，或位于 argo "
                 "自身安装树内——只会命中自身源码），已跳过；"
-                "要搜本机文件请 cd 到目标目录后重试，或用 local-seek 的 seek.py --path <目录>\n")
+                "要搜本机文件请 cd 到目标目录后重试，或用 local-seek 的 seek.py --path <目录>",
+                echo)
         return []
 
     # 缓存：同 query+target 在 TTL 内直接命中，避免重复冷启动 seek.py 子进程。
@@ -279,6 +304,13 @@ def _run_local_seek(query: str, max_n: int = 5,
     from seek_locator import resolve_seek_py
     seek_py = resolve_seek_py()
     if not seek_py or not os.path.isfile(seek_py):
+        # issue #34 第 4 条：显式 --include-local 时 seek.py 找不到，此前静默
+        # 返回空列表，看起来与「本地没有匹配」一模一样。真正能定位的线索
+        # （装了 local-seek 子技能 / 设 ARGO_LOCAL_SEEK_PATH）必须说出来。
+        if warn:
+            _note_warning(
+                "  [include-local] 未找到 local-seek 的 seek.py（装 local-seek 子技能，"
+                "或设 ARGO_LOCAL_SEEK_PATH 指向 seek.py）；本机文件检索未执行", echo)
         return []
 
     # H2（2026-09-29）：进程内直调 seek.run_query——省掉子进程解释器启动
