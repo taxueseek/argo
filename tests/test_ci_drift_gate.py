@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""漂移阈值的契约：跌多少算跌、什么不算。
+"""漂移门的契约：什么算结构回归、什么只记录。
 
 这些用例锁的是「夜间红了代表什么」。阈值写松了没人知道，写紧了会天天误报，
-所以把边界钉成数字：少 1 条允许、少 2 条报；体积涨 20% 报；新用例不报；
-`save_baseline` 的外层 `report` 键要能穿透。
+所以把边界钉成数字：少 1 条允许、少 2 条报；零结果必报（交付层死了）；
+体积涨再多只进信息项（活网换血是常态，2026-10-28 issue #35 即误报实证）；
+新用例不报；`save_baseline` 的外层 `report` 键要能穿透。
 """
 
 from __future__ import annotations
@@ -45,12 +46,30 @@ def test_two_results_fewer_is_reported():
     assert ci_drift_gate.violations(base, cur) == ["a: 结果 3 条，基线 5 条"]
 
 
-def test_output_growth_beyond_20_percent_is_reported():
-    base = _report([_case("a", size=3000)])
-    cur = _report([_case("a", size=3600)])       # 正好 20%，允许
-    assert ci_drift_gate.violations(base, cur) == []
-    cur = _report([_case("a", size=3601)])
+def test_zero_results_is_structural_even_within_floor_slack():
+    """基线只有 1 条时地板允许掉到 0，但零结果本身就是交付层死亡，必须报。"""
+    base = _report([_case("a", kept=1)])
+    cur = _report([_case("a", kept=0)])
+    bad = ci_drift_gate.violations(base, cur)
+    assert len(bad) == 1 and "零结果" in bad[0]
+
+
+def test_zero_results_without_baseline_is_reported():
+    """新增用例没有基线不算漂移，但零结果例外——录制成功却一条不剩。"""
+    base = _report([])
+    cur = _report([_case("a", kept=0)])
     assert len(ci_drift_gate.violations(base, cur)) == 1
+
+
+def test_output_growth_is_informational_not_regression():
+    """体积涨 20% 只进信息项不退 1：2026-10-28 四查三换血全是外部漂移。"""
+    base = _report([_case("a", size=3000)])
+    assert ci_drift_gate.violations(base, _report([_case("a", size=3600)])) == []
+    assert ci_drift_gate.drift_notes(base, _report([_case("a", size=3600)])) == []
+    cur = _report([_case("a", size=3601)])
+    assert ci_drift_gate.violations(base, cur) == []
+    notes = ci_drift_gate.drift_notes(base, cur)
+    assert len(notes) == 1 and "a" in notes[0] and "20" in notes[0]
 
 
 def test_new_case_without_baseline_is_not_drift():
@@ -95,6 +114,24 @@ def test_violation_exits_1(tmp_path: Path, monkeypatch, capsys):
     assert "a: 结果 1 条" in capsys.readouterr().err
 
 
+def test_real_1028_drift_passes_with_notes(monkeypatch, capsys):
+    """回归锚：issue #35 当晚的真实 artifact 在新门下必须绿——体积破线降为信息项。
+
+    当晚（2026-10-28）三条查询整批换血、asyncio 体积 +32%，旧门退 1 开了
+    issue #35。这份报告固化在 golden 里，锁住「同样的情况以后不再红」。
+    """
+    fixture = (Path(__file__).resolve().parent.parent
+               / "tests" / "golden" / "drift_report_20261028_issue35.json")
+    baseline = (Path(__file__).resolve().parent.parent
+                / "tests" / "golden" / "drift_baseline_report.json")
+    monkeypatch_argv = [
+        "ci_drift_gate.py", "--baseline", str(baseline), "--current", str(fixture)]
+    monkeypatch.setattr(sys, "argv", monkeypatch_argv)
+    assert ci_drift_gate.main() == 0
+    out = capsys.readouterr().out
+    assert "信息项" in out and "asyncio" in out
+
+
 def test_pass_exits_0_and_mentions_missing_as_info(tmp_path: Path, monkeypatch, capsys):
     base = tmp_path / "base.json"
     cur = tmp_path / "cur.json"
@@ -103,4 +140,4 @@ def test_pass_exits_0_and_mentions_missing_as_info(tmp_path: Path, monkeypatch, 
     monkeypatch.setattr(sys, "argv", [
         "ci_drift_gate.py", "--baseline", str(base), "--current", str(cur)])
     assert ci_drift_gate.main() == 0
-    assert "不算漂移" in capsys.readouterr().out
+    assert "不算回归" in capsys.readouterr().out
