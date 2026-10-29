@@ -88,8 +88,14 @@ python3 scripts/search.py "查询词" \
   [--plan-only] [--force-search] [--envelope]\
   [--timing|--no-timing]       # 输出里的阶段耗时，默认开\
   [--archive] [--archive-dir DIR] [--archive-tag TAG] [--archive-note NOTE]\
-  [--verify [TOP_K]]          # 核验 top-K 未核验结果并回填证据分
+  [--verify [TOP_K]]          # 核验 top-K 未核验结果并回填证据分\
+  [--video]                    # 只搜视频源（B站+anysearch）并只留视频结果；中文为主
 ```
+
+**`--json` 与告警**（2026-10-29，issue #34）：`--json` 下缺 key 之类的非致命告警
+不再写 stderr，`2>&1` 合并进管道也不会破坏 JSON 解析；可行动的告警（如
+`--include-local` 找不到 seek.py、cwd 是宽根被跳过）在响应顶层 `warnings[]`
+数组里，没有告警时不出现该键。human 模式行为不变（告警照旧走 stderr）。
 
 **时间窗**：`--since`/`--until` 支持相对值（`7d`）或绝对日期（`2026-08-01`，含当天）；下推到支持时间窗的引擎，任意引擎组合融合后按 `published_at` 保底过滤（`time_filtered: N`）；`--sort newest` 找最新动态、`oldest` 找最早出处。`wayback_cdx` 输出标准 `published_at`（CDX 最早快照）。
 
@@ -173,6 +179,13 @@ python3 scripts/search.py "查询词" \
 ### `--list-engines` 的体积陷阱
 
 `--list-engines` 列名字约 3 KB（2026-09-19 实测 2697 B，可放心用）。
+
+**两种计数口径**（2026-10-29，issue #34）：不带 `--detail` 的名单 = 「有实现的源」
+（本机可实例化；`--routable-only` 进一步收窄到此刻可自动路由）；`paths --check`
+的 `engines=` 是**总收录**（含停用 disabled / 缺密钥 missing_env / 缺依赖
+missing_deps / 配额耗尽 quota_exhausted，以及 `_` 开头的别名 spec）。此前这层
+差额没有任何对外说明，被当成计数错误——现在 plain 名单会往 stderr 打一行口径
+提示，逐项成因看下面的摘要。
 
 **`--detail` 不带过滤 = 分组摘要 ≈2.5 KB**（2026-09-27 起）：答的是「多少个源
 可用、不可用的那些为什么不可用」——计数 + 成因分组 + 只列不可路由项。
@@ -398,6 +411,12 @@ URL 就在 `results[].url` 里（`--fields agent` 也保留），零额外成本
 
 所有抓取结果自动附带：`content_ok`、`page_type`（article/list/forum/qa/docs/js_shell/auth_wall/paywall）、`source_type`（gov/edu/github/news/blog/forum/qa/docs-site/ecommerce）、`is_official`、`is_stale`（>365 天）、`content_age_days`、`quality_score`（0-1：长度 0.2+密度 0.2+结构 0.2+证据密度 0.3+标题 0.1）、`has_numbers/has_definition/has_comparison/has_howto`、`absorption_score`、`selection/credibility_fast`。
 
+## 隐私与本地数据（2026-10-29）
+
+- **使用日志默认开、明文落盘**：`<状态目录>/usage_log/query.jsonl` 逐条记录查询原文、引擎、耗时、结果数（`argo stats` 的唯一数据源，也是 `route`/`recovery` 等流的同目录邻居）。个人机无妨；企业/敏感查询一键关闭：`export ARGO_USAGE_LOG=0`（也接受 `false`，`env_flag` 统一解析）。改位置：`ARGO_USAGE_LOG_DIR=<目录>`。关闭后只是 `argo stats` 没有样本，搜索、路由、缓存全部照常。
+- **密钥**：只从 `~/.config/argo/env`（或 `ARGO_ENV_FILE`）读取；值不回显、不入日志，`paths --check` 只报键名个数。
+- **本机文件检索**：范围 = cwd（home/根目录/argo 安装树自动跳过）；显式 `--include-local` 时「找不到 seek.py」与「宽根跳过」都会给可归因提示，`--json` 下进 `warnings[]`。
+
 ## 子技能细节
 
 ### local-search（本地零成本聚合）
@@ -477,6 +496,8 @@ python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --lines
 - 路由：rg（正文）→ fd（文件名）→ mdfind（Spotlight 全盘保底）；中文「精确优先、2-gram 扩展保底」
 - 扩展：`--structural`（裸 except/空 catch/装饰函数）、`--git-log`/`--git-blame`、`--outline`、`--domains`
 - MCP：`argo_local_search` subprocess 调用 seek.py，包装为 `file://` URL + `source=local_files`
+- `--include-local`（2026-10-29，issue #34）：显式开启时找不到 seek.py（未装子技能且没设 `ARGO_LOCAL_SEEK_PATH`）或 cwd 是宽根/argo 安装树，会给一条可归因提示（`--json` 下进 `warnings[]`），不再静默返回空——「跳过没查」与「查了没有」不再同形。`ARGO_LOCAL_SEEK_ROOTS` 可给多个候选根（os.pathsep 分隔）。
+- 注意命名：`local_search`/`local_bing`/`local_360` 等 `local_` 前缀是**本地化/免 key 镜像通道**（网页），不是本机文件；本机文件只走 `source=local_files`。
 
 ### ego-search（登录态专业搜索）
 
