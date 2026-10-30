@@ -330,6 +330,48 @@ def _sort_results(results: list[dict[str, Any]], sort: str) -> list[dict[str, An
     return sorted(results, key=_key)
 
 
+def _dedup_near_duplicates(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """结果级去重：URL 相同直接合并；同引擎 title+snippet 近同归并。
+
+    rrf_merge 只按 canonical URL 去重且仅在多引擎路径生效，单引擎路径
+    完全没人管（2026-10-30 实测 local_hackernews：同一 Ask HN 被上游各收
+    一份，objectID 不同 URL 必不同，按 URL 永远合并不了）。归并只看同
+    引擎——跨引擎同标题是共识信号，留给 rrf_merge 的 consensus 标注。
+    """
+    def _norm(s: Any) -> str:
+        return re.sub(r"\s+", " ", str(s or "")).strip().lower()
+
+    kept: list[dict[str, Any]] = []
+    seen_url: dict[str, int] = {}
+    seen_text: dict[tuple[str, str, str], int] = {}
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        url = str(r.get("url") or "").strip()
+        if url:
+            key = url.rstrip("/")
+            if key in seen_url:
+                idx = seen_url[key]
+                if float(r.get("score") or 0) > float(kept[idx].get("score") or 0):
+                    kept[idx] = r
+                continue
+            seen_url[key] = len(kept)
+        title = _norm(r.get("title"))[:200]
+        snippet = _norm(r.get("snippet"))[:80]
+        eng = str(r.get("_engine") or r.get("source") or "")
+        if title and snippet:
+            tkey = (eng, title, snippet)
+            if tkey in seen_text:
+                idx = seen_text[tkey]
+                if url and not str(kept[idx].get("url") or "").strip():
+                    kept[idx] = r  # 同文异链：保留有链接的那条
+                    seen_url[url.rstrip("/")] = idx
+                continue
+            seen_text[tkey] = len(kept)
+        kept.append(r)
+    return kept
+
+
 def _fetch(url: str, method: str = "GET", data: bytes | None = None,
            headers: dict[str, str] | None = None, timeout: float = 8,
            user_agent: str = "") -> str:
@@ -965,6 +1007,8 @@ def search_engines(
     else:
         all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
     elapsed = int((time.time() - t0_all) * 1000)
+    # 截断前去重：重复条目挤占 n*len(engines) 配额时，有效结果会被顶掉
+    all_results = _dedup_near_duplicates(all_results)
     final_results = all_results[: n * len(engines)] if engines else all_results[:n]
 
     payload = {

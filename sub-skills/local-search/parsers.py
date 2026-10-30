@@ -303,8 +303,11 @@ def _parse_json(engine_name: str, text: str, maps: dict[str, Any],
         if url_key:
             raw = _get_path(item, url_key)
             url = str(raw or "")[:500]
-        elif url_template:
-            url = _format_url(url_template, item)
+        # url 字段存在但为空（如 HN Algolia 的 comment/Ask HN hit）时回落
+        # 模板——此前 if/elif 互斥，url_key 一旦配置模板兜底即成死代码
+        # （2026-10-30 实测 local_hackernews 全部条目 url 为空）。
+        if not url and url_template:
+            url = _format_url(url_template, item)[:500]
         if snippet_key:
             raw = _get_path(item, snippet_key)
             snippet = str(raw or "")[:300]
