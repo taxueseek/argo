@@ -3,22 +3,136 @@
  * argo-zcode 面板服务（零 npm 依赖，stdio MCP）。
  *
  * 角色：Argo 控制面板的通信后端。设计要点：
- * - tools/list 恒返回空数组：面板管理工具只经页面 callServerTool 受理，
- *   不进模型工具列表、零常驻 token；argo 的 19 个取证工具不在此挂载
- *   （ZCode 下模型走 skill+CLI，见 skills/argo）。
+ * - tools/list 只登记面板自身的工具并标 visibility=["app"]：ZCode 的 MCP App
+ *   桥在转发 callServerTool 前会核对 tools/list，空列表会被直接拒绝；app-only
+ *   标记保证这些工具不进模型上下文。argo 的取证工具不在此挂载（模型走 skill+CLI）。
  * - 引擎清单/开关写入经 py_bridge.py 复用 argo 本体加载器；密钥经 env 文件。
  */
-import { spawn } from "node:child_process";
-import { readFile, writeFile, chmod, stat } from "node:fs/promises";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { readFile, writeFile, chmod, rename, stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PLUGIN_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const SERVER_ROOT = join(PLUGIN_ROOT, "server");
 const PANEL_URI = "ui://argo/panel.html";
 const PANEL_MIME = "text/html;profile=mcp-app";
-const SERVER_INFO = { name: "argo-panel", version: "2.10.1" };
+const SERVER_NAME = "argo-panel";
+const SERVER_INFO = { name: SERVER_NAME, version: "2.10.1" };
+
+// 宿主 resources/read 只回文本，页面里的相对 import 解析不了：vendor 在服务端
+// 内联进同一段脚本后返回。源文件保持可读可 diff，内联只做一次并缓存。
+const PANEL_IMPORT = 'import { App } from "./vendor/ext-apps.mjs";';
+const VENDOR_EXPORT = /export\{([^}]*)\};?\s*$/;
+
+function inlineVendor(vendor) {
+  const tail = VENDOR_EXPORT.exec(vendor);
+  if (!tail) throw err(1, "ui/vendor/ext-apps.mjs 末尾缺少 export 语句，内联规则需更新");
+  const pairs = tail[1]
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const [local, exported = local] = item.split(" as ").map((part) => part.trim());
+      return `${exported}:${local}`;
+    });
+  const body = `${vendor.slice(0, tail.index)}globalThis.__EXT_APPS__={${pairs.join(",")}};`;
+  if (body.toLowerCase().includes("</script")) {
+    throw err(1, "vendor 含 </script>，内联前须转义");
+  }
+  return (
+    "/* ===== vendored @modelcontextprotocol/ext-apps — inlined ===== */\n" +
+    body +
+    "\n/* ===== end vendored sdk ===== */\n" +
+    "const { App } = globalThis.__EXT_APPS__;"
+  );
+}
+
+let cachedPanel = null;
+async function panelHtml() {
+  if (cachedPanel !== null) return cachedPanel;
+  let html = await readFile(join(PLUGIN_ROOT, "ui", "panel.html"), "utf8");
+  if (html.includes(PANEL_IMPORT)) {
+    const vendor = await readFile(join(PLUGIN_ROOT, "ui", "vendor", "ext-apps.mjs"), "utf8");
+    // 替换值必须走函数形式：vendor 里带 $ 的序列会被当成替换模式。
+    html = html.replace(PANEL_IMPORT, () => inlineVendor(vendor));
+  }
+  cachedPanel = html;
+  return html;
+}
+
+// 版本只在插件清单里维护一份：升级时不再和 plugin.json 漂移。
+let cachedVersion = null;
+async function serverVersion() {
+  if (cachedVersion !== null) return cachedVersion;
+  try {
+    const manifest = JSON.parse(
+      await readFile(join(PLUGIN_ROOT, ".zcode-plugin", "plugin.json"), "utf8")
+    );
+    cachedVersion = String(manifest.version || "0.0.0");
+  } catch {
+    cachedVersion = "0.0.0";
+  }
+  return cachedVersion;
+}
+
+// py_bridge 需要一个带 pyyaml 的 Python。宿主 GUI 的 PATH 与终端不一致，
+// 所以按 ARGO_PYTHON → argo 入口 shebang → PATH → 平台常见路径依次探测，
+// 每个候选都实际 import yaml 验证一次。
+let cachedPython = null;
+function argoEntry() {
+  for (const dir of (process.env.PATH || "").split(delimiter)) {
+    if (!dir) continue;
+    for (const name of ["argo", "argo.exe", "argo.cmd"]) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return "";
+}
+
+function shebangPython() {
+  const entry = argoEntry();
+  if (!entry) return "";
+  try {
+    const first = readFileSync(entry, "utf8").split("\n")[0].trim();
+    if (!first.startsWith("#!")) return "";
+    const parts = first.slice(2).trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "";
+    if (parts[0].endsWith("/env") && parts[1]) return parts[1];
+    return parts[0];
+  } catch {
+    return "";
+  }
+}
+
+function resolvePython() {
+  if (cachedPython) return cachedPython;
+  const candidates = [];
+  if (process.env.ARGO_PYTHON) candidates.push(process.env.ARGO_PYTHON);
+  const shebang = shebangPython();
+  if (shebang) candidates.push(shebang);
+  candidates.push("python3", "python");
+  if (process.platform === "darwin") {
+    candidates.push("/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3");
+  }
+  if (process.platform === "win32") candidates.push("py");
+  for (const candidate of candidates) {
+    const probe = spawnSync(
+      candidate,
+      ["-c", "import sys, yaml; sys.stdout.write(sys.version.split()[0])"],
+      { timeout: 5000, encoding: "utf8" }
+    );
+    if (probe.status === 0) {
+      cachedPython = candidate;
+      return candidate;
+    }
+  }
+  cachedPython = process.env.ARGO_PYTHON || "python3";
+  return cachedPython;
+}
 
 // ── JSON-RPC over stdio（换行分帧）───────────────────────────────────────────
 
@@ -74,6 +188,118 @@ function send(obj) {
   process.stdout.write(JSON.stringify(obj) + "\n");
 }
 
+// ZCode 的 MCP App 桥在转发页面 callTool 前会先查 tools/list：工具必须存在且
+// visibility 含 "app"，否则直接拒绝（日志：MCP tool "x" is not available）。
+// 因此不能返回空列表。这里把面板工具标成 app-only：模型侧按 "model" 过滤，
+// 工具面不进模型上下文；visibility 同时写在顶层与 _meta.ui（宿主两种读法都兼容）。
+const PANEL_TOOLS = [
+  {
+    name: "get_panel",
+    title: "读取面板数据",
+    description: "面板专用：引擎状态、密钥归属、运行时元信息。",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    visibility: ["app"],
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  {
+    name: "get_diagnostics",
+    title: "运行诊断",
+    description: "面板专用：版本、路径自检、daemon、预算与文件权限。",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+    visibility: ["app"],
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  {
+    name: "set_engine",
+    title: "切换引擎开关",
+    description: "面板专用：写入 config.local.yaml 的 engines.<name>.enabled。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "引擎 ID" },
+        enabled: { type: "boolean", description: "true 启用，false 停用" },
+      },
+      required: ["name", "enabled"],
+      additionalProperties: false,
+    },
+    visibility: ["app"],
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  {
+    name: "set_env",
+    title: "写入密钥",
+    description: "面板专用：写入 argo env 文件（值不回显）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "全大写环境变量名" },
+        value: { type: "string", description: "密钥值" },
+      },
+      required: ["key", "value"],
+      additionalProperties: false,
+    },
+    visibility: ["app"],
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  {
+    name: "unset_env",
+    title: "清除密钥",
+    description: "面板专用：从 argo env 文件移除指定 key。",
+    inputSchema: {
+      type: "object",
+      properties: { key: { type: "string", description: "全大写环境变量名" } },
+      required: ["key"],
+      additionalProperties: false,
+    },
+    visibility: ["app"],
+    _meta: { ui: { visibility: ["app"] } },
+  },
+  {
+    name: "apply_preset",
+    title: "应用工作流预设",
+    description: "面板专用：一次写入一组 argo 运行时开关（极速 / 平衡 / 深度）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        preset: { type: "string", enum: ["fast", "standard", "deep"], description: "预设名" },
+      },
+      required: ["preset"],
+      additionalProperties: false,
+    },
+    visibility: ["app"],
+    _meta: { ui: { visibility: ["app"] } },
+  },
+];
+
+// 工作流预设：与 DSH 插件同一组 argo 运行时开关，写进同一个 env 文件。
+const PRESETS = {
+  fast: {
+    ARGO_TFIDF_RERANK: "0",
+    ARGO_NUMBER_CROSSCHECK: "0",
+    ARGO_PAID_SEARCH: "off",
+    ARGO_ADAPTIVE_GRACE: "1",
+    ARGO_SERIAL_STAGGER_S: "0.5",
+  },
+  standard: {
+    ARGO_TFIDF_RERANK: "1",
+    ARGO_NUMBER_CROSSCHECK: "1",
+    ARGO_MINHASH_DEDUPE: "1",
+    ARGO_PAID_SEARCH: "auto",
+    ARGO_ADAPTIVE_GRACE: "1",
+    ARGO_SERIAL_STAGGER_S: "0.8",
+  },
+  deep: {
+    ARGO_TFIDF_RERANK: "1",
+    ARGO_NUMBER_CROSSCHECK: "1",
+    ARGO_MINHASH_DEDUPE: "1",
+    ARGO_SEMANTIC_EVIDENCE: "1",
+    ARGO_PAID_SEARCH: "auto",
+    ARGO_ADAPTIVE_GRACE: "1",
+  },
+};
+
 async function handleRequest(msg) {
   switch (msg.method) {
     case "initialize": {
@@ -81,11 +307,11 @@ async function handleRequest(msg) {
       return {
         protocolVersion: p.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {}, resources: {} },
-        serverInfo: SERVER_INFO,
+        serverInfo: { name: SERVER_NAME, version: await serverVersion() },
       };
     }
     case "tools/list":
-      return { tools: [] }; // 模型侧零暴露（设计约束，勿改）
+      return { tools: PANEL_TOOLS };
     case "tools/call":
       return await callPanelTool(msg.params ?? {});
     case "resources/list":
@@ -94,8 +320,7 @@ async function handleRequest(msg) {
       };
     case "resources/read": {
       if (msg.params?.uri !== PANEL_URI) throw err(-32602, `未知资源: ${msg.params?.uri}`);
-      const text = await readFile(join(PLUGIN_ROOT, "ui", "panel.html"), "utf8");
-      return { contents: [{ uri: PANEL_URI, mimeType: PANEL_MIME, text }] };
+      return { contents: [{ uri: PANEL_URI, mimeType: PANEL_MIME, text: await panelHtml() }] };
     }
     case "ping":
       return {};
@@ -119,6 +344,9 @@ async function callPanelTool({ name, arguments: args = {} }) {
       case "get_panel":
         result = await getPanel();
         break;
+      case "get_diagnostics":
+        result = await bridge("diagnostics", [], 40000);
+        break;
       case "set_engine":
         requireString(args.name, "name");
         result = await bridge("set-engine", [String(args.name), args.enabled ? "true" : "false"]);
@@ -133,6 +361,13 @@ async function callPanelTool({ name, arguments: args = {} }) {
       case "unset_env":
         result = await setEnvLine(requireEnvKey(args.key), null);
         break;
+      case "apply_preset": {
+        const preset = String(args.preset || "");
+        const values = PRESETS[preset];
+        if (!values) throw err(-32602, `未知预设: ${preset}`);
+        result = await setEnvLines(values);
+        break;
+      }
       default:
         throw err(-32601, `未知面板工具: ${name}`);
     }
@@ -159,7 +394,7 @@ function requireEnvKey(v) {
 
 function bridge(cmd, cmdArgs = [], timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.env.ARGO_PYTHON || "python3", [join(SERVER_ROOT, "py_bridge.py"), cmd, ...cmdArgs], {
+    const child = spawn(resolvePython(), [join(SERVER_ROOT, "py_bridge.py"), cmd, ...cmdArgs], {
       cwd: SERVER_ROOT,
       env: process.env,
       timeout: timeoutMs,
@@ -184,40 +419,44 @@ function bridge(cmd, cmdArgs = [], timeoutMs = 15000) {
 }
 
 async function getPanel() {
-  const [engines, env] = await Promise.all([
-    bridge("list-engines", [], 30000),
-    readEnvFile().catch(() => ({ path: null, keys: [] })),
-  ]);
-  return {
-    engines: engines.engines,
-    env_file: env.path,
-    configured_keys: env.keys,
-    hint: "引擎开关写入 config.local.yaml（argo 本机覆盖层，深度合并，优先级最高）；密钥写入 env 文件，均即时生效",
-  };
+  // panel-data 一次给全：引擎状态（与 argo --detail 同口径）、密钥归属与来源、
+  // 运行时元信息。密钥值不回传，只回 key 名与来源层。
+  return bridge("panel-data", [], 40000);
 }
 
 // ── env 文件（dotenv 格式行操作；值永不回读展示）────────────────────────────
 
+let cachedEnvPath = null;
 async function envFilePath() {
+  if (cachedEnvPath) return cachedEnvPath;
   const r = await bridge("env-path", [], 10000);
   if (!r.env_file) throw err(1, "argo 未报告 env 文件路径");
-  return r.env_file;
+  cachedEnvPath = r.env_file;
+  return cachedEnvPath;
 }
 
-async function readEnvFile() {
+async function writeAtomic600(path, text) {
+  const tmp = `${path}.tmp.${process.pid}.${Date.now()}`;
+  await writeFile(tmp, text, { encoding: "utf8", mode: 0o600 });
+  await chmod(tmp, 0o600).catch(() => {});
+  await rename(tmp, path);
+}
+
+async function setEnvLines(values) {
   const path = await envFilePath();
-  let text = "";
+  let lines = [];
   try {
-    text = await readFile(path, "utf8");
+    lines = (await readFile(path, "utf8")).split("\n");
   } catch {
-    return { path, keys: [] };
+    lines = ["# argo 引擎密钥唯一真源（勿入库勿分享）"];
   }
-  const keys = [];
-  for (const line of text.split("\n")) {
-    const m = line.match(/^([A-Z][A-Z0-9_]+)=/);
-    if (m) keys.push(m[1]);
-  }
-  return { path, keys };
+  const keys = Object.keys(values);
+  const matchers = keys.map((key) => new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`));
+  const filtered = lines.filter((line) => !matchers.some((matcher) => matcher.test(line)));
+  for (const key of keys) filtered.push(`${key}=${values[key]}`);
+  const text = filtered.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
+  await writeAtomic600(path, text);
+  return { ok: true, path, keys };
 }
 
 async function setEnvLine(key, value) {
@@ -228,10 +467,12 @@ async function setEnvLine(key, value) {
   } catch {
     lines = ["# argo 引擎密钥唯一真源（勿入库勿分享）"];
   }
-  const filtered = lines.filter((l) => !l.startsWith(`${key}=`));
+  // env 文件可能写 `export KEY=...`（历史写法与手工维护都常见）：
+  // 保存/清除必须同口径命中，否则会留下旧行让面板状态与文件内容打架。
+  const matcher = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`);
+  const filtered = lines.filter((l) => !matcher.test(l));
   if (value !== null) filtered.push(`${key}=${value}`);
   const text = filtered.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
-  await writeFile(path, text, { encoding: "utf8", mode: 0o600 });
-  await chmod(path, 0o600).catch(() => {});
+  await writeAtomic600(path, text);
   return { ok: true, key, action: value === null ? "removed" : "set", path };
 }

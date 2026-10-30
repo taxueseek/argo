@@ -1380,3 +1380,46 @@ test('makeNativeTool: WEB_ABORTED from pool is rethrown without falling back to 
   )
   assert.equal(spawned, 0, '主动取消不得回退单发重跑')
 })
+
+test('pool: concurrent callers sharing a single connection coalesce initialize handshake', async () => {
+  stubEnv({ ARGO_STUB_DELAY_MS: '30' })
+  const tool = stubTool({ searchConcurrency: 1, searchIdleMs: 1000 })
+  const [r1, r2] = await Promise.all([
+    tool.execute({ query: 'concurrent-1' }),
+    tool.execute({ query: 'concurrent-2' }),
+  ])
+  assert.equal(tool.output.render({}, r1)[0].text, 'pooled-ok')
+  assert.equal(tool.output.render({}, r2)[0].text, 'pooled-ok')
+  assert.equal(spawnCount(), 1, '并发共享单连接时 initialize 应合并，只启动一个子进程')
+})
+
+test('pool: changing argoEnv evicts idle connection with stale configKey', async () => {
+  stubEnv()
+  const tool1 = makeNativeTool(
+    {
+      searchCommand: process.execPath,
+      searchArgs: [STUB_SERVER],
+      searchConcurrency: 1,
+      searchIdleMs: 5000,
+      argoEnv: ['ARGO_PAID_SEARCH=off'],
+    },
+    'argo_search',
+    { mcpCall: nativeViaMcpPool },
+  )
+  await tool1.execute({ query: 'before-preset' })
+  assert.equal(spawnCount(), 1)
+  const tool2 = makeNativeTool(
+    {
+      searchCommand: process.execPath,
+      searchArgs: [STUB_SERVER],
+      searchConcurrency: 1,
+      searchIdleMs: 5000,
+      argoEnv: ['ARGO_PAID_SEARCH=auto'],
+    },
+    'argo_search',
+    { mcpCall: nativeViaMcpPool },
+  )
+  await tool2.execute({ query: 'after-preset' })
+  assert.equal(spawnCount(), 2, 'argoEnv 变更后空闲旧连接应被淘汰并按新配置重建')
+})
+

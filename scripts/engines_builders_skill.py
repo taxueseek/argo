@@ -15,11 +15,74 @@ Argo 已有的 skillsmp（仓库星数）、clawhub（生态下载量）是另�
 from __future__ import annotations
 
 import json
+import math
+import re
 import urllib.parse
 import urllib.request
 from typing import Any
 
 from engines_base import safe_search, http_open, rank_score
+
+# ── 面向英文技能目录（explainx/skills.sh/skillsmp/clawhub）的轻量中英概念映射 ──
+_ZH_TO_EN_SKILL_TERMS: tuple[tuple[str, str], ...] = (
+    ("架构图", "architecture diagram"),
+    ("流程图", "flowchart diagram"),
+    ("思维导图", "mindmap"),
+    ("时序图", "sequence diagram"),
+    ("画图", "diagram"),
+    ("可视化", "visualization chart"),
+    ("图表", "chart"),
+    ("海报", "poster"),
+    ("浏览器", "browser"),
+    ("自动化", "automation"),
+    ("记忆", "memory"),
+    ("爬虫", "scraper crawl"),
+    ("抓取", "fetch scrape"),
+    ("网页", "web"),
+    ("公众号", "wechat"),
+    ("微信", "wechat"),
+    ("视频", "video"),
+    ("字幕", "caption subtitle"),
+    ("论文", "academic paper"),
+    ("学术", "academic"),
+    ("文献", "literature citation"),
+    ("金融", "finance stock"),
+    ("股票", "stock"),
+    ("审查", "code review"),
+    ("体检", "audit health"),
+    ("调试", "debug"),
+    ("测试", "testing"),
+    ("表格", "spreadsheet excel csv"),
+    ("文档", "document"),
+    ("技能", "skill"),
+)
+
+
+def _normalize_en_catalog_query(query: str) -> str:
+    """将含中文的技能检索词对齐为英文目录可命中的英文查询词（纯英文原样返回）。"""
+    q = (query or "").strip()
+    if not q or q.isascii():
+        return q
+    en_bits: list[str] = re.findall(r"[A-Za-z0-9_+-]{2,}", q)
+    remaining = q
+    for zh, en in _ZH_TO_EN_SKILL_TERMS:
+        if zh in remaining:
+            if en not in en_bits:
+                en_bits.append(en)
+            remaining = remaining.replace(zh, " ")
+    return " ".join(en_bits) if en_bits else q
+
+
+def _skill_rank_score(rank: int, popularity: Any = 0, is_official: bool = False) -> float:
+    """结合上游位次、对数饱和流行度先验 (log10(1+pop)) 与官方标记计算初始分。"""
+    try:
+        pop = max(0, int(popularity or 0))
+    except (TypeError, ValueError):
+        pop = 0
+    pop_bonus = min(0.14, 0.026 * math.log10(1 + pop)) if pop > 0 else 0.0
+    off_bonus = 0.04 if is_official else 0.0
+    base = min(0.92, 0.72 + pop_bonus + off_bonus)
+    return rank_score(base, rank)
 
 # ── explainx.ai（12075 条，安装量 + 分类 + 官方标记）────────────────────────
 _EXPLAINX_URL = "https://explainx.ai/api/skills"
@@ -79,7 +142,7 @@ def _build_explainx_engine(spec: dict[str, Any]) -> Any:
         query: str, n: int = 5, _timeout: float | None = None, **kwargs: Any
     ) -> list[dict[str, Any]]:
         to = _timeout or timeout
-        q = (query or "").strip()
+        q = _normalize_en_catalog_query(query)
         if not q:
             return []
         url = f"{_EXPLAINX_URL}?q={urllib.parse.quote(q)}&limit={max(1, n)}"
@@ -99,11 +162,12 @@ def _build_explainx_engine(spec: dict[str, Any]) -> Any:
             installs = s.get("totalInstalls") or 0
             weekly = s.get("weeklyInstalls")
             category = s.get("category") or ""
+            is_official = bool(s.get("isOfficial"))
             # 安装量是这一源的核心价值，必须出现在摘要里（L1 做不到）
             bits = [f"安装 {installs}"]
             if weekly is not None and weekly != installs:
                 bits.append(f"本周 +{weekly}")
-            if s.get("isOfficial"):
+            if is_official:
                 bits.append("官方")
             summary = " · ".join(bits)
             if category:
@@ -114,17 +178,18 @@ def _build_explainx_engine(spec: dict[str, Any]) -> Any:
                     "url": f"https://github.com/{owner}/{repo}",
                     "snippet": summary,
                     "source": "explainx",
-                    "score": rank_score(0.75, rank),
+                    "score": _skill_rank_score(rank, installs, is_official),
                     # 可验证出处：owner/repo 是「装什么」的权威答案
                     "upstream": f"{owner}/{repo}",
                     "metadata": {
                         "category": category,
                         "totalInstalls": installs,
                         "weeklyInstalls": weekly,
-                        "isOfficial": bool(s.get("isOfficial")),
+                        "isOfficial": is_official,
                     },
                 }
             )
+        results.sort(key=lambda r: -r["score"])
         return results
 
     return _engine
@@ -148,7 +213,7 @@ def _build_skillsmp_engine(spec: dict[str, Any]) -> Any:
         query: str, n: int = 5, _timeout: float | None = None, **kwargs: Any
     ) -> list[dict[str, Any]]:
         to = _timeout or timeout
-        q = (query or "").strip()
+        q = _normalize_en_catalog_query(query)
         if not q:
             return []
         url = (
@@ -180,7 +245,7 @@ def _build_skillsmp_engine(spec: dict[str, Any]) -> Any:
                     "url": url_final,
                     "snippet": summary[:400],
                     "source": "skillsmp",
-                    "score": rank_score(0.75, rank),
+                    "score": _skill_rank_score(rank, stars, False),
                     "published_at": _normalize_epoch(s.get("updatedAt")),
                     "upstream": github or market,
                     "metadata": {
@@ -190,6 +255,7 @@ def _build_skillsmp_engine(spec: dict[str, Any]) -> Any:
                     },
                 }
             )
+        results.sort(key=lambda r: -r["score"])
         return results
 
     return _engine
@@ -211,7 +277,7 @@ def _build_clawhub_engine(spec: dict[str, Any]) -> Any:
         query: str, n: int = 5, _timeout: float | None = None, **kwargs: Any
     ) -> list[dict[str, Any]]:
         to = _timeout or timeout
-        q = (query or "").strip()
+        q = _normalize_en_catalog_query(query)
         if not q:
             return []
         url = f"{_CLAWHUB_URL}?q={urllib.parse.quote(q)}&limit={max(1, n)}"
@@ -240,7 +306,7 @@ def _build_clawhub_engine(spec: dict[str, Any]) -> Any:
                     "url": f"https://clawhub.ai{canonical}",
                     "snippet": summary[:400],
                     "source": "clawhub",
-                    "score": rank_score(0.75, rank),
+                    "score": _skill_rank_score(rank, downloads, official),
                     "published_at": _normalize_epoch(s.get("updatedAt")),
                     # install.reference 是 owner/slug 形式的安装引用
                     "upstream": ((s.get("install") or {}).get("reference")) or "",
@@ -253,6 +319,7 @@ def _build_clawhub_engine(spec: dict[str, Any]) -> Any:
                     },
                 }
             )
+        results.sort(key=lambda r: -r["score"])
         return results
 
     return _engine
@@ -275,7 +342,7 @@ def _build_skills_sh_engine(spec: dict[str, Any]) -> Any:
         query: str, n: int = 5, _timeout: float | None = None, **kwargs: Any
     ) -> list[dict[str, Any]]:
         to = _timeout or timeout
-        q = (query or "").strip()
+        q = _normalize_en_catalog_query(query)
         if not q:
             return []
         url = f"{_SKILLS_SH_URL}?q={urllib.parse.quote(q)}&limit={max(1, n)}"
@@ -300,7 +367,7 @@ def _build_skills_sh_engine(spec: dict[str, Any]) -> Any:
                     "url": f"{_SKILLS_SH_PAGE}{sid}",
                     "snippet": f"安装 {installs} · {source}",
                     "source": "skills_sh",
-                    "score": rank_score(0.75, rank),
+                    "score": _skill_rank_score(rank, installs, False),
                     # 可验证出处：三段式 id 指向技能本身（比市场页更精确）
                     "upstream": sid,
                     "metadata": {
@@ -309,6 +376,7 @@ def _build_skills_sh_engine(spec: dict[str, Any]) -> Any:
                     },
                 }
             )
+        results.sort(key=lambda r: -r["score"])
         return results
 
     return _engine

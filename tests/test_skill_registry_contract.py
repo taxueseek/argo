@@ -193,3 +193,33 @@ class TestAgentViewKeepsUpstream:
         out = search._strip_for_agent(payload)
         assert out["results"][0]["upstream"] == "a/b"
         assert "_elapsed" not in out["results"][0]
+
+
+class TestSkillCatalogPopularityAndZhNormalization:
+    def test_popularity_and_official_prior_beats_zero_install_rank0(self, monkeypatch):
+        """21.6 万安装量的官方技能得分必须高于排在 API 第 0 位的 0 安装玩具克隆。"""
+        import engines_builders_skill as ebs
+        mock_data = {
+            "skills": [
+                {"name": "pdf-toy-clone", "repoOwner": "random", "repoName": "pdf-toy",
+                 "totalInstalls": 0, "isOfficial": False},
+                {"name": "anthropic-pdf", "repoOwner": "anthropics", "repoName": "skills",
+                 "totalInstalls": 216877, "isOfficial": True},
+            ]
+        }
+        monkeypatch.setattr(ebs, "_get_json", lambda url, timeout, engine: mock_data)
+        fn = ebs._build_explainx_engine({"timeout": 5})
+        res = fn("pdf", n=5)
+        assert len(res) == 2
+        assert "anthropic-pdf" in res[0]["title"]
+        assert res[0]["score"] > res[1]["score"]
+
+    def test_zh_query_is_translated_for_english_only_catalogs(self):
+        """英文单语目录（explainx/skills.sh/skillsmp/clawhub）能将中文领域词扩展为英文词。"""
+        import engines_builders_skill as ebs
+        q = ebs._normalize_en_catalog_query("浏览器 自动化")
+        assert "browser" in q
+        assert "automation" in q
+        # 纯英文查询保持原样
+        assert ebs._normalize_en_catalog_query("react pdf") == "react pdf"
+

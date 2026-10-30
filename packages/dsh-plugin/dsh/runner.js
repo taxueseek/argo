@@ -124,9 +124,18 @@ export function dropFromPool(conn) {
   if (index >= 0) mcpPool.splice(index, 1)
 }
 
+function computeConfigKey(options = {}) {
+  const cmd = String(options.command ?? '')
+  const args = Array.isArray(options.args) ? options.args.join('\0') : ''
+  const argoEnv = Array.isArray(options.config?.argoEnv) ? options.config.argoEnv.join('\0') : ''
+  return `${cmd}\0${args}\0${argoEnv}`
+}
+
 export function createMcpConnection(options) {
-  const { command, args, idleMs, env } = options
+  const { command, args, idleMs, env, envResolver } = options
+  const configKey = options.configKey ?? computeConfigKey(options)
   let proc = null
+  let initPromise = null
   let buffer = ''
   let nextId = 1
   let chain = Promise.resolve()
@@ -146,6 +155,7 @@ export function createMcpConnection(options) {
   const close = () => {
     if (disposed) return
     disposed = true
+    initPromise = null
     if (idleTimer !== null) clearTimeout(idleTimer)
     if (proc !== null) {
       try { proc.kill() } catch { /* already gone */ }
@@ -199,44 +209,50 @@ export function createMcpConnection(options) {
   }
 
   const conn = {
-    initialize: async (timeoutMs = 0) => {
-      if (proc !== null) return
-      proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: env ?? process.env })
-      proc.on('error', () => close())
-      proc.on('exit', () => close())
-      proc.stderr.on('data', () => { /* 预热日志忽略 */ })
-      proc.stdout.setEncoding('utf8')
-      proc.stdout.on('data', (chunk) => {
-        buffer += chunk
-        let nl
-        while ((nl = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, nl).trim()
-          buffer = buffer.slice(nl + 1)
-          if (line === '') continue
-          let msg
-          try {
-            msg = JSON.parse(line)
-          } catch {
-            continue
+    configKey,
+    initialize: (timeoutMs = 0) => {
+      if (initPromise !== null) return initPromise
+      initPromise = (async () => {
+        const spawnEnv = env !== undefined ? env : (typeof envResolver === 'function' ? await envResolver() : undefined)
+        if (disposed) throw argoAborted()
+        proc = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: spawnEnv ?? process.env })
+        proc.on('error', () => close())
+        proc.on('exit', () => close())
+        proc.stderr.on('data', () => { /* 预热日志忽略 */ })
+        proc.stdout.setEncoding('utf8')
+        proc.stdout.on('data', (chunk) => {
+          buffer += chunk
+          let nl
+          while ((nl = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, nl).trim()
+            buffer = buffer.slice(nl + 1)
+            if (line === '') continue
+            let msg
+            try {
+              msg = JSON.parse(line)
+            } catch {
+              continue
+            }
+            const entry = pending.get(msg.id)
+            if (entry === undefined) continue
+            pending.delete(msg.id)
+            if (msg.error !== undefined) entry.rej(new Error(msg.error.message ?? 'argo MCP error'))
+            else entry.res(msg.result)
           }
-          const entry = pending.get(msg.id)
-          if (entry === undefined) continue
-          pending.delete(msg.id)
-          if (msg.error !== undefined) entry.rej(new Error(msg.error.message ?? 'argo MCP error'))
-          else entry.res(msg.result)
-        }
-      })
-      await new Promise((res, rej) => {
-        proc.once('spawn', res)
-        proc.once('error', rej)
-      })
-      const init = await send('initialize', {
-        protocolVersion: '2025-06-18',
-        capabilities: {},
-        clientInfo: { name: 'argo-dsh', version: PLUGIN_VERSION }
-      }, timeoutMs)
-      conn.notify('notifications/initialized', {})
-      return init
+        })
+        await new Promise((res, rej) => {
+          proc.once('spawn', res)
+          proc.once('error', rej)
+        })
+        const init = await send('initialize', {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'argo-dsh', version: PLUGIN_VERSION }
+        }, timeoutMs)
+        conn.notify('notifications/initialized', {})
+        return init
+      })()
+      return initPromise
     },
     request: (method, params, timeoutMs = 0) => {
       if (claims > 0) claims -= 1
@@ -285,7 +301,14 @@ export function initializeWithSignal(conn, initMs, signal) {
 export async function acquireMcp(options, signal) {
   const max = Math.max(1, Number(options.max) || DEFAULTS.searchConcurrency)
   const initMs = Math.max(0, Number(options.initMs) || 0)
-  const idle = mcpPool.find(entry => entry.load() === 0)
+  const targetConfigKey = computeConfigKey(options)
+  for (const entry of [...mcpPool]) {
+    if (entry.load() === 0 && entry.configKey !== undefined && entry.configKey !== targetConfigKey) {
+      dropFromPool(entry)
+      entry.close()
+    }
+  }
+  const idle = mcpPool.find(entry => entry.load() === 0 && (entry.configKey === undefined || entry.configKey === targetConfigKey))
   if (idle !== undefined) {
     idle.claim()
     try {
@@ -298,8 +321,11 @@ export async function acquireMcp(options, signal) {
     }
   }
   if (mcpPool.length < max) {
-    const env = await resolveEnv(options)
-    const conn = createMcpConnection({ ...options, env })
+    const conn = createMcpConnection({
+      ...options,
+      envResolver: () => resolveEnv(options),
+      configKey: targetConfigKey,
+    })
     mcpPool.push(conn)
     conn.claim()
     try {

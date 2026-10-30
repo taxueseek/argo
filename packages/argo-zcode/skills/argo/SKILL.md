@@ -47,7 +47,7 @@ argo cite "doi"                     # DOI → 引用条目（GB/T 7714/APA/BibTe
 argo search "q" --list-engines      # 引擎状态（--detail 看单引擎；勿用 --all，~54 KB）
 ```
 
-**按场景选引擎**：时事/时间窗 → deepseek_search，学术 → `--academic-deep`/exa，社交 → anysearch。全命令、参数与 86 开关总表见 argo 本体仓库的 usage.md 文件（`argo search --help` 可速查）。
+**按场景选引擎**：时事/时间窗 → deepseek_search，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → skill_search/dsh_plugin_search。全命令、参数与 86 开关总表见 argo 本体仓库的 usage.md 文件（`argo search --help` 可速查）。
 
 ## Agent 执行纪律
 
