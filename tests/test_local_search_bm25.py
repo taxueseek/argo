@@ -145,6 +145,29 @@ class TestRerankFixesPathology(unittest.TestCase):
         self.assertGreater(scorer.idf("async"), scorer.idf("python"),
                            "池内仅 1 篇含 async、3 篇全含 python——async 必须更稀有")
 
+    def test_phrase_and_proximity_bonus(self):
+        # 完整短语命中的加成高于零碎命中
+        bonus_exact = bm25._phrase_proximity_bonus("python asyncio", "Python asyncio 指南", "")
+        self.assertEqual(bonus_exact, 1.0)
+        # 紧邻跨度多词命中的加成
+        bonus_prox = bm25._phrase_proximity_bonus("python asyncio", "Python 并发机制与 asyncio 模式", "")
+        self.assertGreater(bonus_prox, 0.8)
+
+    def test_domain_prior(self):
+        self.assertGreater(bm25._domain_quality_prior("https://github.com/torvalds/linux"), 0.0)
+        self.assertGreater(bm25._domain_quality_prior("https://docs.python.org/3/library/asyncio.html"), 0.0)
+        self.assertLess(bm25._domain_quality_prior("https://blog.csdn.net/article/123"), 0.0)
+        self.assertEqual(bm25._domain_quality_prior("u1"), 0.0)
+
+    def test_authoritative_domain_overtakes_noise_on_equal_bm25(self):
+        by_engine = {"e1": [
+            {"title": "asyncio 源码解析", "snippet": "并发调度原理", "url": "https://blog.csdn.net/xyz"},
+            {"title": "asyncio 源码解析", "snippet": "并发调度原理", "url": "https://github.com/python/cpython"},
+        ]}
+        bm25.rerank(by_engine, "asyncio 源码")
+        # 权威域在同等词面匹配下排在前位
+        self.assertEqual(by_engine["e1"][0]["url"], "https://github.com/python/cpython")
+
     def test_empty_input(self):
         self.assertEqual(bm25.rerank({}, "x"), {})
         by_engine = {"e1": []}

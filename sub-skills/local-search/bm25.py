@@ -121,30 +121,101 @@ class BM25:
         return total
 
 
+# 权威站点与官方开发者/百科/学术域（白名单适度加成）
+_AUTHORITATIVE_DOMAINS: frozenset[str] = frozenset({
+    "github.com", "gitlab.com", "stackoverflow.com", "wikipedia.org",
+    "arxiv.org", "developer.mozilla.org", "docs.python.org", "python.org",
+    "golang.org", "go.dev", "rust-lang.org", "kernel.org", "w3.org",
+    "learn.microsoft.com", "pypi.org", "npmjs.com", "baike.baidu.com",
+    "zhihu.com", "segmentfault.com", "juejin.cn", "v2ex.com",
+    "nature.com", "science.org", "acm.org", "ieee.org",
+})
+
+# 常见低质采集站/垃圾农场特征（微幅降权）
+_NOISE_DOMAIN_PATTERNS: tuple[str, ...] = (
+    "csdn.net", "jb51.net", "iteye.com",
+)
+
+
+def _domain_quality_prior(url: str) -> float:
+    """基于 URL 域名的先验质量分（-0.3 ~ +0.5）。
+
+    零依赖纯规则：高信噪比技术、百科、学术域给予正向增益，低信噪比/采集站特征适度降权。
+    仅用于在词面相关（BM25 > 0）的前提下微调，不破坏 fail-soft 契约。
+    """
+    if not url or "://" not in url:
+        return 0.0
+    try:
+        domain = url.split("://", 1)[1].split("/", 1)[0].split(":", 1)[0].lower()
+    except Exception:
+        return 0.0
+    for auth in _AUTHORITATIVE_DOMAINS:
+        if domain == auth or domain.endswith("." + auth):
+            return 0.5
+    for noise in _NOISE_DOMAIN_PATTERNS:
+        if noise in domain:
+            return -0.3
+    return 0.0
+
+
+def _url_tokens_text(url: str) -> str:
+    """提取 URL path 中的 slug 词元作为弱辅助匹配信号。"""
+    if not url or "://" not in url:
+        return ""
+    try:
+        path = url.split("://", 1)[1].split("?", 1)[0].split("#", 1)[0]
+        slugs = re.findall(r"[A-Za-z0-9_-]{2,}", path)
+        return " ".join(slugs)
+    except Exception:
+        return ""
+
+
 def _phrase_proximity_bonus(query: str, title: str, snippet: str) -> float:
     """词邻近度与短语连续匹配加成（归一化为 0.0~1.0）。
 
-    当完整查询短语在标题或摘要逐字紧密出现时给予增益，提升复合词精准命中率。
+    当完整查询短语或紧邻词元在标题或摘要逐字紧密出现时给予增益，提升复合词精准命中率。
     """
     q_low = (query or "").lower().strip()
     if not q_low or len(q_low) < 2:
         return 0.0
     t_low = (title or "").lower()
     s_low = (snippet or "").lower()
+
+    # 1. 完整短语匹配优先
     if q_low in t_low:
         return 1.0  # 标题完整覆盖查询短语
     if q_low in s_low:
-        return 0.5  # 摘要完整覆盖查询短语
+        return 0.6  # 摘要完整覆盖查询短语
+
+    # 2. 多词紧邻跨度匹配
+    sub_terms = [t for t in re.split(r"[\s\-_,.:;!?，。！？]+", q_low) if len(t) >= 2]
+    if len(sub_terms) >= 2:
+        if all(st in t_low for st in sub_terms):
+            positions = [t_low.find(st) for st in sub_terms]
+            if max(positions) - min(positions) <= 50:
+                return 0.85
+        if all(st in s_low for st in sub_terms):
+            positions = [s_low.find(st) for st in sub_terms]
+            if max(positions) - min(positions) <= 100:
+                return 0.4
+
     return 0.0
 
 
-
 def _doc_text(r: dict[str, Any]) -> str:
-    """参与相关度计算的文档文本：title 权重高于 snippet——做法是标题
-    拼两遍（TF 加成），不引入第二套字段权重机制。"""
+    """参与相关度计算的文档文本：title 权重高于 snippet。
+    BM25F 近似加权：标题 3 遍，正文 1 遍，URL slug 辅助字段 1 遍。"""
     title = (r.get("title") or "").strip()
     snippet = (r.get("snippet") or "").strip()
-    return f"{title} {title} {snippet}" if title else snippet
+    url_slug = _url_tokens_text(r.get("url") or "")
+    parts = []
+    if title:
+        parts.extend([title, title, title])
+    if snippet:
+        parts.append(snippet)
+    if url_slug:
+        parts.append(url_slug)
+    return " ".join(parts) if parts else ""
 
 
 def rerank(by_engine: dict[str, list[dict[str, Any]]], query: str,
@@ -176,7 +247,8 @@ def rerank(by_engine: dict[str, list[dict[str, Any]]], query: str,
         bm25_norm = (bm / max_raw) if max_raw > 0 else 0.0
         prior_norm = _position_prior(idx) / _PRIOR_BASE
         prox_val = _phrase_proximity_bonus(query, r.get("title", ""), r.get("snippet", ""))
-        rel_score = min(bm25_norm * 0.80 + prox_val * 0.20, 1.0) if bm25_norm > 0 else 0.0
+        domain_val = _domain_quality_prior(r.get("url", ""))
+        rel_score = min(max(bm25_norm * 0.70 + prox_val * 0.18 + domain_val * 0.12, 0.0), 1.0) if bm25_norm > 0 else 0.0
         r["score"] = round(w_bm25 * rel_score + (1.0 - w_bm25) * prior_norm, 3)
 
     for eng in by_engine:

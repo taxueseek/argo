@@ -421,7 +421,7 @@ def _finish_content(candidates, raw_query, context, count, fixed,
 
 def rg_search(patterns, path, excludes, exts, context, count, max_results,
               fixed, raw_query="", dots=False, drop_noise=True, timeout=None,
-              since_ts=None, until_ts=None, fts_ok=True):
+              since_ts=None, until_ts=None, fts_ok=True, symbol=False):
     timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
 
     # FTS5 持久索引快路（opt-in，ARGO_LOCAL_FTS=1，2026-10-10 方案乙）：只在
@@ -463,6 +463,8 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
             else:
                 return None, ("本机 rg 未编译 PCRE2，不支持 look-around/反向引用语法，"
                               "请简化查询（如去掉 (?=、(?! 等结构）")
+        if symbol:
+            cmd.append("-w")
         if count:
             cmd.append("--count-matches")
         elif context > 0:
@@ -1245,6 +1247,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     ap.add_argument("--json", action="store_true", help="JSON 输出")
     ap.add_argument("--max", type=int, default=0, help="最大结果数（默认读配置）")
     ap.add_argument("--exact", action="store_true", help="关闭中文扩展（精确匹配）")
+    ap.add_argument("--symbol", action="store_true",
+                    help="符号/词边界精确匹配（rg -w，过滤子串噪音）")
     ap.add_argument("--exclude", action="append", default=[], metavar="GLOB",
                     help="额外排除 glob（可重复指定，如 --exclude eval_seek.py）")
     ap.add_argument("--since", default=None,
@@ -1338,6 +1342,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     start = time.time()
     results, err = [], None
     patterns, fixed = build_patterns(args.query, args.exact)
+    if args.symbol:
+        patterns, fixed = [args.query], is_literal(args.query)
     # 时间窗时间戳只解析一次，下传各搜索器在**截断前**过滤
     since_ts, until_ts = parse_time(args.since), parse_time(args.until)
 
@@ -1397,9 +1403,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
             err = "fd 未安装：按文件名搜索需要 fd（内容搜索走 rg/grep）"
     else:
         mode = "deep" if (args.context > 0 or args.count) else "fast"
-        # FTS 快路资格：带扩展名过滤或自定义排除时关闭（快路不做 rg 侧 glob 过滤，
-        # 见 rg_search 的 fts_ok 说明）。--scope doc 会自动填 exts，同样走 rg 主路。
-        fts_ok = not exts and not args.exclude
+        # FTS 快路资格：带扩展名过滤、自定义排除或符号搜索时关闭（快路不做 rg 侧 glob 与 -w 过滤）。
+        fts_ok = not exts and not args.exclude and not args.symbol
         if not args.exact and len(patterns) > 1:
             # 中文扩展遵循「先窄后宽」：先精确匹配，命中不足才放宽到扩展词
             _dn = not args.include_noise
@@ -1408,14 +1413,14 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                                      is_literal(args.query), args.query, args.dot,
                                      drop_noise=_dn, timeout=time_budget,
                                      since_ts=since_ts, until_ts=until_ts,
-                                     fts_ok=fts_ok)
+                                     fts_ok=fts_ok, symbol=args.symbol)
             if not results and not err:
                 results, err = rg_search(patterns, path, excludes, exts,
                                          args.context, args.count, max_results,
                                          fixed, args.query, args.dot, drop_noise=_dn,
                                          timeout=time_budget,
                                          since_ts=since_ts, until_ts=until_ts,
-                                         fts_ok=fts_ok)
+                                         fts_ok=fts_ok, symbol=args.symbol)
                 if results:
                     mode += "+扩展"
         else:
@@ -1425,7 +1430,7 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                                      drop_noise=not args.include_noise,
                                      timeout=time_budget,
                                      since_ts=since_ts, until_ts=until_ts,
-                                     fts_ok=fts_ok)
+                                     fts_ok=fts_ok, symbol=args.symbol)
 
     # 注：噪声档**只降权不排除**（见 _apply_noise_floor），所以这里没有
     # 「搜不到就回落重搜」的分支——噪声内容始终在结果池里，只是排在真源之后。

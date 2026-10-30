@@ -30,14 +30,15 @@ description: 本机文件与代码内容搜索（rg/fd/mdfind/grep 统一入口 
 # 以下以 argo 安装根为 cwd；或写死 $ARGO_HOME/sub-skills/local-seek/scripts/seek.py
 python3 sub-skills/local-seek/scripts/seek.py "查询词"                 # 默认：当前目录全文
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes   # 指定目录
-python3 sub-skills/local-seek/scripts/seek.py "词" --path ~/.agents --dot  # 连 . 开头目录与软链一起搜；搜 ~/.agents、~/.zcode 要加（Spotlight 收不到）
-python3 sub-skills/local-seek/scripts/seek.py "词" --path . --include-noise  # repos/、tests/ 等与真源平权（默认排真源之后，仍搜得到）
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --count          # 先数命中，再决定是否深入
+python3 sub-skills/local-seek/scripts/seek.py "词" --path ~/.agents --dot  # 连 . 开头目录与软链一起搜
+python3 sub-skills/local-seek/scripts/seek.py "词" --path . --include-noise  # 噪声目录与真源平权
+python3 sub-skills/local-seek/scripts/seek.py "查询词" --count          # 先数命中数
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --filename       # 按文件名
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --spotlight      # 全盘兜底（PDF/邮件/笔记）
+python3 sub-skills/local-seek/scripts/seek.py "查询词" --spotlight      # 全盘兜底
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --type py,ts
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --json           # 结构化输出
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --exact          # 关闭中文扩展，精确匹配
+python3 sub-skills/local-seek/scripts/seek.py "查询词" --exact          # 精确匹配（关扩展）
+python3 sub-skills/local-seek/scripts/seek.py "符号名" --symbol          # 精确符号/词边界匹配
 python3 sub-skills/local-seek/scripts/seek.py "查询词" --exclude 某文件 # 额外排除（可重复）
 python3 sub-skills/local-seek/scripts/seek.py --outline 文件路径        # 文件结构（def/class/标题/顶层key）
 python3 sub-skills/local-seek/scripts/seek.py --lines 10-50 文件路径    # 按行读取，替代 read_file 全文

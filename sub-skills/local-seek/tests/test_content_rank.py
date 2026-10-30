@@ -182,6 +182,29 @@ class TestFzfV2(unittest.TestCase):
                                 )  # 全等大写版含 case bonus，不小于纯 icase
 
 
+class TestHeadingBoost(unittest.TestCase):
+    """E. Markdown 标题行优先加成。"""
+
+    def test_heading_beats_body_mention(self):
+        rows = [
+            ("docs/guide.md", 50, "在某些配置下可能会使用到 custom_handler 逻辑"),
+            ("docs/guide.md", 10, "## custom_handler 架构详解"),
+        ]
+        ranked = r.rank_rows(rows, "custom_handler")
+        self.assertEqual(ranked[0][1], 10, "标题行应排在正文顺带提及之前")
+
+
+class TestSymbolSearch(unittest.TestCase):
+    """F. --symbol 精确词边界匹配。"""
+
+    def test_symbol_flag_adds_word_boundary(self):
+        with patch.object(s, "run") as mock_run:
+            mock_run.return_value = unittest.mock.MagicMock(returncode=0, stdout="a.py:1:fn foo()\n", stderr="")
+            s.rg_search(["foo"], Path("."), [], [], 0, False, 10, fixed=True, symbol=True)
+            called_cmd = mock_run.call_args[0][0]
+            self.assertIn("-w", called_cmd, "symbol=True 时 rg 命令必须包含 -w 参数")
+
+
 class TestFrecencyWiring(unittest.TestCase):
     """frecency 默认关闭：不启用时不产生任何行为差异。"""
 

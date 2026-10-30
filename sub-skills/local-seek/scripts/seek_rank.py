@@ -84,6 +84,11 @@ _PHRASE_BONUS = 3.0
 _PHRASE_BONUS_CAP = 6.0
 _NAME_PHRASE_BONUS = 4.0  # 文件名直接命中查询短语时的定位加成
 
+# Markdown 标题行（#、##、### 等）主题加成：标题行命中是文章或章节主题的强信号，
+# 显著优先于正文/注释中的偶然提及（零依赖纯正则）。
+_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+.*$")
+_HEADING_BONUS = 3.5
+
 
 def _split_camel(run: str) -> list[str]:
     """驼峰细分：BM25Okapi → bm / 25 / okapi（小写输出；无驼峰则空）。"""
@@ -185,6 +190,10 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
             name_hits = sum(1 for ph in phrases if ph in name_low)
             line_hits = sum(1 for ph in phrases if ph in low_line)
             total += min(name_hits, 2) * _NAME_PHRASE_BONUS + min(line_hits, 2) * _PHRASE_BONUS
+        # 文档标题感知：Markdown 标题行命中词元时追加主题加成
+        raw_line = rows[i][2] or ""
+        if _HEADING_RE.match(raw_line) and f_tf["line"] and any(qt in f_tf["line"] for qt in q_tf):
+            total += _HEADING_BONUS
         if boost_fn is not None:
             try:
                 total += boost_fn(rows[i][0])
