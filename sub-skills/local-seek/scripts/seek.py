@@ -52,6 +52,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from seek_rank import _ZH_EN_ALIASES  # 中英工程词对齐（词源单点在 seek_rank）
+
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 DOMAINS_FILE = CONFIG_DIR / "domains.yaml"
 
@@ -547,9 +549,15 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
     if proc.returncode == 1:
         return [], None  # 无匹配，正常
     if proc.returncode == 2:
-        # regex parse error 已回退，其他错误需要报告（权限不足、路径不存在等）
-        err = (proc.stderr or "").strip()
-        return [], f"rg 错误: {err[:200]}" if err else "rg 执行错误"
+        # 返回码 2 =「有结果，但过程中报了错」（悬空软链 os error 2、权限
+        # 不足等）：rg 跳过出错路径继续搜，stdout 里其余文件的匹配照常有效
+        # ——与 _structural_search 同口径，有结果就放行下方正常解析，不再
+        # 整个放弃（2026-10-31 实测：--dot 搜含悬空软链的 ~/.agents/skills，
+        # 一条「No such file or directory」让整个查询空手而归）。stderr 的
+        # 路径级警告由 rg 自行打印，不进 err——上层 err 非 None 即判失败。
+        if not (proc.stdout or "").strip():
+            err = (proc.stderr or "").strip()
+            return [], f"rg 错误: {err[:200]}" if err else "rg 执行错误"
     if count:
         # 全量收集后按命中数降序取前 N：rg --count-matches 的输出顺序是
         # 目录遍历序，直接截断会让「哪些文件命中最多」系统性答错——
@@ -825,7 +833,11 @@ def fd_search(query, path, exts, max_results, dots=False, timeout=None,
             cmd += ["-e", e]
     cmd += [query, str(path)]
     proc = run(cmd, timeout=timeout)
-    if proc is None or proc.returncode not in (0, 1):
+    if proc is None:
+        return [], "fd 执行失败"
+    # fd 对个别路径出错（悬空软链等）退出码落到 0/1 之外，但 stdout 里其余
+    # 匹配照常有效——有结果就解析，与 rg_search 同口径（2026-10-31）。
+    if proc.returncode not in (0, 1) and not (proc.stdout or "").strip():
         return [], "fd 执行失败"
     # 时间窗在截断前过滤（先截后滤会漏报，与 rg 路径同理）
     lines = [p for p in proc.stdout.splitlines()
@@ -1485,6 +1497,24 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                                      timeout=time_budget,
                                      since_ts=since_ts, until_ts=until_ts,
                                      fts_ok=fts_ok, symbol=args.symbol)
+        # 中英对齐回落（2026-10-31）：alias 只进打分层时纯英文语料连候选池
+        # 都进不了（rg 字面零命中，打分无从发力）；无条件注入检索层又会用
+        # 对齐噪音挤掉既有命中（eval_rank 0.8258→0.7857 实测回退）。折中取
+        # 「先窄后宽」同款语义：原 patterns 空手时才带对齐词元重搜一次。
+        if not results and not err:
+            alias_pats = list(patterns) + [
+                en for p in patterns for en in _ZH_EN_ALIASES.get(p, ())
+                if en not in patterns]
+            if alias_pats != patterns:
+                results, err = rg_search(alias_pats, path, excludes, exts,
+                                         args.context, args.count, max_results,
+                                         fixed, args.query, args.dot,
+                                         drop_noise=not args.include_noise,
+                                         timeout=time_budget,
+                                         since_ts=since_ts, until_ts=until_ts,
+                                         fts_ok=fts_ok, symbol=args.symbol)
+                if results:
+                    mode += "+中英"
 
     # 注：噪声档**只降权不排除**（见 _apply_noise_floor），所以这里没有
     # 「搜不到就回落重搜」的分支——噪声内容始终在结果池里，只是排在真源之后。

@@ -55,6 +55,15 @@ _ZH_TO_EN_SKILL_TERMS: tuple[tuple[str, str], ...] = (
     ("表格", "spreadsheet excel csv"),
     ("文档", "document"),
     ("技能", "skill"),
+    # 通用高频补充（2026-10-31：实测「渲染」查询归一后只剩 remotion，映射盲区）
+    ("渲染", "render"),
+    ("翻译", "translation translate"),
+    ("邮件", "email mail"),
+    ("摘要", "summary summarize"),
+    ("投资", "invest investing"),
+    ("图片", "image"),
+    ("下载", "download"),
+    ("剪辑", "video editing"),
 )
 
 

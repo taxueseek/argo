@@ -220,6 +220,10 @@ class TestSkillCatalogPopularityAndZhNormalization:
         q = ebs._normalize_en_catalog_query("浏览器 自动化")
         assert "browser" in q
         assert "automation" in q
+        # 2026-10-31 补词：通用高频词在场（此前「渲染」归一后只剩无关词）
+        q2 = ebs._normalize_en_catalog_query("渲染视频")
+        assert "render" in q2
+        assert "video" in q2
         # 纯英文查询保持原样
         assert ebs._normalize_en_catalog_query("react pdf") == "react pdf"
 

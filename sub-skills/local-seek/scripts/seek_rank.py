@@ -119,6 +119,21 @@ _ZH_EN_ALIASES: dict[str, tuple[str, ...]] = {
     "\u914d\u7f6e": ("config",),
     "\u56fe\u7247": ("image",),
     "\u95e8\u7981": ("gate",),
+    # 通用工程高频（2026-10-31 补：实测「视频字幕」查 remotion 系列全 miss，
+    # 原表偏 argo 仓工程词，通用词是盲区）
+    "\u6e32\u67d3": ("render",),
+    "\u89c6\u9891": ("video",),
+    "\u5b57\u5e55": ("subtitle", "caption"),
+    "\u7ec4\u4ef6": ("component",),
+    "\u63a5\u53e3": ("interface", "api"),
+    "\u7ebf\u7a0b": ("thread",),
+    "\u5185\u5b58": ("memory",),
+    "\u65e5\u5fd7": ("log", "logging"),
+    "\u90e8\u7f72": ("deploy",),
+    "\u7f51\u7edc": ("network",),
+    "\u4ee3\u7406": ("proxy",),
+    "\u8ba4\u8bc1": ("auth", "token"),
+    "\u6570\u636e\u5e93": ("database", "db"),
 }
 
 # 跨字段协同加成（Minimal Span / Coordination Level）：单条结果的 (name ∪ dir ∪ line) 覆盖越多不同查询词元越优先
