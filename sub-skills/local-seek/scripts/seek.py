@@ -77,8 +77,9 @@ DEFAULT_EXCLUDES = [
 #   「明明有却搜不到」这种更糟的失败模式。
 NOISE_TIER = [
     "repos", "repo", "third_party", "thirdparty", "vendors",
-    "__tests__", "__test__", "testdata", "test_data", "fixtures", "fixture",
-    "__mocks__", "__snapshots__", "e2e", "benchmark", "benchmarks",
+    "__tests__", "__test__", "tests", "test", "testdata", "test_data",
+    "fixtures", "fixture", "__mocks__", "__snapshots__", "e2e",
+    "benchmark", "benchmarks",
     "tmp", "temp", ".tmp", "tmpdir", "archive", "archives", ".trash",
     "2026-*",   # 本工作区的日期归档目录：研究产物，非源码
 ]
@@ -354,35 +355,87 @@ def _rerank_content(rows, raw_query: str, context: int, count: bool,
         return rows
 
 
-def _select_pool(candidates, cap: int, per_file: int = 8) -> list:
-    """有界池的**按文件轮转配额**选择（2026-10-07，方案甲）。
+_POOL_ZH_EN: dict[str, str] = {
+    "\u672c\u5730": "local", "\u641c\u7d22": "search", "\u68c0\u7d22": "seek", "\u7f13\u5b58": "cache",
+    "\u8def\u7531": "route", "\u6392\u5e8f": "rank", "\u91cd\u6392": "rerank", "\u566a\u58f0": "noise",
+    "\u62fc\u97f3": "pinyin", "\u8bc1\u636e": "evidence", "\u6293\u53d6": "fetch", "\u7194\u65ad": "breaker",
+    "\u805a\u5408": "search_engines",
+}
 
-    旧口径 = (路径,行号,内容) 最小的 cap 条：单文件命中几百行的高频词查询
-    会把池位全吃掉，而路径序在后的文件（sub-skills/ 排在 docs/ 之后）一行
-    都进不了池——BM25F 重排只能排池内的东西，池子本身偏了排序再好也白搭。
 
-    现口径：文件按路径序（确定性），每文件最多 per_file 行（取该文件
-    (行号,内容) 最小的几行），轮转填满 cap。命中集无论以什么顺序发射，
-    选出的池逐条一致（test_determinism 契约延续）；多样性换来的代价是
-    「单文件超 per_file 行的深处行」可能落选——对行粒度输出这是可接受的
-    取舍，深层行本就该用 --context / --outline 精读。
+def _select_pool(candidates, cap: int, per_file: int = 8,
+                 raw_query: str = "") -> list:
+    """有界池的**按文件轮转配额 + 词覆盖度优先**选择（2026-10-07 方案甲，2026-10-30 升级）。
+
+    流式阶段按文件收集候选（单文件有界缓冲 32 行，零字符串转换开销）；
+    仅当总候选超 cap 或单文件超 per_file 时，按「行内词元覆盖数 + 路径互补词元数」
+    精选每文件代表行并按文件覆盖度轮转入池。
     """
-    by_file: dict[str, list] = {}
+    raw_by_file: dict[str, list[tuple[int, str]]] = {}
+    buf_limit = max(per_file * 4, 32)
+    total_cands = 0
     for fp, ln, txt in candidates:
-        rows = by_file.setdefault(fp, [])
-        if len(rows) < per_file:
+        total_cands += 1
+        rows = raw_by_file.setdefault(fp, [])
+        if len(rows) < buf_limit:
             rows.append((ln, txt))
-        elif per_file > 1:
-            # 有界保持每文件最小的 per_file 行：与 nsmallest 同语义
+        elif buf_limit > 1:
             largest = max(rows)
             if (ln, txt) < largest:
                 rows[rows.index(largest)] = (ln, txt)
+
+    if not raw_by_file:
+        return []
+
+    # 快路：总候选未超池上限且每文件均未超配额时，直接按基准序返回（零分词开销）
+    if total_cands <= cap and all(len(v) <= per_file for v in raw_by_file.values()):
+        return [(fp, ln, txt) for fp in sorted(raw_by_file) for ln, txt in sorted(raw_by_file[fp])]
+
+    q_terms: list[str] = []
+    if raw_query:
+        pats, _ = build_patterns(raw_query, exact=False)
+        for p in pats:
+            pl = p.lower()
+            if len(pl) >= 2 and pl not in q_terms:
+                q_terms.append(pl)
+            en = _POOL_ZH_EN.get(pl)
+            if en and en not in q_terms:
+                q_terms.append(en)
+        q_terms = q_terms[:8]
+
+    by_file: dict[str, list[tuple[int, str]]] = {}
+    file_cov: dict[str, int] = {}
+    for fp, rows in raw_by_file.items():
+        if not q_terms:
+            rows.sort()
+            by_file[fp] = rows[:per_file]
+            file_cov[fp] = 0
+            continue
+        fp_low = fp.lower()
+        p_mask = 0
+        for idx, qt in enumerate(q_terms):
+            if qt in fp_low:
+                p_mask |= 1 << idx
+        f_mask = p_mask
+        scored: list[tuple[int, int, int, str]] = []
+        for ln, txt in rows:
+            txt_low = (txt or "").lower()
+            l_mask = 0
+            for idx, qt in enumerate(q_terms):
+                if qt in txt_low:
+                    l_mask |= 1 << idx
+            f_mask |= l_mask
+            scored.append((-(p_mask | l_mask).bit_count(), -(l_mask & ~p_mask).bit_count(), ln, txt))
+        scored.sort()
+        by_file[fp] = [(ln, txt) for _, _, ln, txt in scored[:per_file]]
+        file_cov[fp] = f_mask.bit_count()
+
+    ordered_files = sorted(by_file, key=lambda fp: (-file_cov[fp], fp))
     out: list = []
-    # 文件按路径序轮转，各出 1 行填池——池内文件多样性优先于单文件深度
     consumed: dict[str, int] = {fp: 0 for fp in by_file}
     while len(out) < cap:
         progressed = False
-        for fp in sorted(by_file):
+        for fp in ordered_files:
             i = consumed[fp]
             if i < len(by_file[fp]):
                 ln, txt = by_file[fp][i]
@@ -404,9 +457,10 @@ def _finish_content(candidates, raw_query, context, count, fixed,
     排序口径，输出 schema 才能逐位一致。
     """
     cap = max(max_results, min(max_results * 4, 400))
-    if _rerank_wanted(raw_query, context, count, fixed):
+    want_rerank = _rerank_wanted(raw_query, context, count, fixed)
+    if want_rerank:
         cap = max(cap, _POOL_CAP_MAX)  # 重排开启：池子放宽，深行进得了评分视野
-    out = _select_pool(candidates, cap)
+    out = _select_pool(candidates, cap, raw_query=raw_query if want_rerank else "")
     out.sort()  # 基准序 = (路径,行号,内容)：重排关闭时与 2026-10-06 口径逐位一致
     # BM25F 相关度重排（2026-10-07，方案甲）：池子的**选择**口径不变（与发射序
     # 无关），变的只是池内**呈现次序**——基线实测多词查询的 top5 常被配置/

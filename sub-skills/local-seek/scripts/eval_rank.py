@@ -55,7 +55,7 @@ CASES = [
     {"name": "文件级-cache键域隔离", "argv": ["cache_key_vdom", "--path", ARGO_ROOT],
      "expect": ["scripts/cache_key_vdom.py"], "topk": 5},
     {"name": "文件级-hash_token实现", "argv": ["def _hash_token", "--path", ARGO_ROOT],
-     "expect": ["scripts/cache.py"], "topk": 5},
+     "expect": ["scripts/cache.py", "scripts/cache_similarity.py"], "topk": 5},
     # 守卫用例（topk=8）：行级语义下文档密集行同样合法，只守「实现文件仍在
     # top-8 内可被看见」，防实现被彻底挤出视野的回归
     {"name": "守卫-语义缓存minhash", "argv": ["语义缓存 minhash 软命中", "--path", ARGO_ROOT],

@@ -242,13 +242,22 @@ def rerank(by_engine: dict[str, list[dict[str, Any]]], query: str,
     scorer = BM25(docs)
     raw = [scorer.score(q_terms, i) for i in range(len(flat))]
     max_raw = max(raw) if raw else 0.0
+    pos_raw = sorted(x for x in raw if x > 0)
+    pivot = pos_raw[len(pos_raw) // 2] if pos_raw else 1.0
+    max_sat = (max_raw / (max_raw + pivot)) if max_raw > 0 else 1.0
 
     for (eng, idx, r), bm in zip(flat, raw):
-        bm25_norm = (bm / max_raw) if max_raw > 0 else 0.0
+        if bm > 0 and max_raw > 0:
+            # 融合线性比值与连续归一化的 Robertson-Zaragoza 饱和项，抗离群长标题且无断点
+            rel_max = bm / max_raw
+            sat_norm = (bm / (bm + pivot)) / max_sat
+            bm25_norm = 0.65 * rel_max + 0.35 * sat_norm
+        else:
+            bm25_norm = 0.0
         prior_norm = _position_prior(idx) / _PRIOR_BASE
         prox_val = _phrase_proximity_bonus(query, r.get("title", ""), r.get("snippet", ""))
         domain_val = _domain_quality_prior(r.get("url", ""))
-        rel_score = min(max(bm25_norm * 0.70 + prox_val * 0.18 + domain_val * 0.12, 0.0), 1.0) if bm25_norm > 0 else 0.0
+        rel_score = min(max(bm25_norm * 0.72 + prox_val * 0.18 + domain_val * 0.16, 0.0), 1.0) if bm25_norm > 0 else 0.0
         r["score"] = round(w_bm25 * rel_score + (1.0 - w_bm25) * prior_norm, 3)
 
     for eng in by_engine:

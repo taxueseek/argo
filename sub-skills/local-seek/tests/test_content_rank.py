@@ -183,7 +183,7 @@ class TestFzfV2(unittest.TestCase):
 
 
 class TestHeadingBoost(unittest.TestCase):
-    """E. Markdown 标题行优先加成。"""
+    """E. Markdown 标题行优先加成（且不误判代码 # 注释）。"""
 
     def test_heading_beats_body_mention(self):
         rows = [
@@ -192,6 +192,19 @@ class TestHeadingBoost(unittest.TestCase):
         ]
         ranked = r.rank_rows(rows, "custom_handler")
         self.assertEqual(ranked[0][1], 10, "标题行应排在正文顺带提及之前")
+
+    def test_python_comment_not_treated_as_heading_and_def_wins(self):
+        rows = [
+            ("src/handler.py", 5, "# custom_handler 注释说明"),
+            ("src/handler.py", 12, "def custom_handler(req):"),
+        ]
+        ranked = r.rank_rows(rows, "custom_handler")
+        self.assertEqual(ranked[0][1], 12, "函数定义行应排在 Python # 注释行之前")
+
+    def test_row_fields_name_and_dir_not_swapped(self):
+        fields = r._row_fields("sub/pkg/my_module.py", "pass")
+        self.assertIn("module", fields["name"])
+        self.assertIn("pkg", fields["dir"])
 
 
 class TestSymbolSearch(unittest.TestCase):

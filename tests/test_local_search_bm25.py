@@ -168,6 +168,16 @@ class TestRerankFixesPathology(unittest.TestCase):
         # 权威域在同等词面匹配下排在前位
         self.assertEqual(by_engine["e1"][0]["url"], "https://github.com/python/cpython")
 
+    def test_saturation_prevents_outlier_crushing_normal_hits(self):
+        by_engine = {"e1": [
+            {"title": "asyncio asyncio asyncio asyncio asyncio 堆砌标题", "snippet": "asyncio asyncio", "url": "https://a.com/spam"},
+            {"title": "Python asyncio 并发编程指南", "snippet": "详解事件循环与协程调度", "url": "https://docs.python.org/3/library/asyncio.html"},
+            {"title": "无关结果", "snippet": "完全不相关", "url": "https://b.com/none"},
+        ]}
+        bm25.rerank(by_engine, "python asyncio")
+        # 正常高质命中不应被极端词频堆砌压垮，且结合短语与权威域反超堆砌项
+        self.assertEqual(by_engine["e1"][0]["url"], "https://docs.python.org/3/library/asyncio.html")
+
     def test_empty_input(self):
         self.assertEqual(bm25.rerank({}, "x"), {})
         by_engine = {"e1": []}

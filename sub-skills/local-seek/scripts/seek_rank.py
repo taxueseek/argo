@@ -51,8 +51,8 @@ from collections import Counter
 _CJK_RUN = r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+"
 # T1 主切词：字母数字连续串（不含 _ . 等分隔符）+ CJK 连续串
 _RUN_RE = re.compile(r"[A-Za-z0-9]+|" + _CJK_RUN)
-# camelCase 细分：小写/数字段、大写段（后随小写时取「大写+小写尾巴」）
-_CAMEL_RE = re.compile(r"[a-z0-9]+|[A-Z](?=[a-z])[a-z]*|[A-Z]+(?![a-z])")
+# camelCase 与字母数字边界细分：小写段、数字段、驼峰大写段
+_CAMEL_RE = re.compile(r"[a-z]+|[0-9]+|[A-Z](?=[a-z])[a-z]*|[A-Z]+(?![a-z])")
 _CJK_ONLY_RE = re.compile("^" + _CJK_RUN + "$")
 
 # BM25 常数（与 local-search/bm25.py 同口径：Okapi k1=1.5 b=0.75）
@@ -84,17 +84,62 @@ _PHRASE_BONUS = 3.0
 _PHRASE_BONUS_CAP = 6.0
 _NAME_PHRASE_BONUS = 4.0  # 文件名直接命中查询短语时的定位加成
 
-# Markdown 标题行（#、##、### 等）主题加成：标题行命中是文章或章节主题的强信号，
-# 显著优先于正文/注释中的偶然提及（零依赖纯正则）。
+# Markdown 标题行（#、##、### 等）主题加成：仅对 Markdown 文档生效（避免把 Python/Shell/YAML
+# 的顶层 # 注释行误判为章节标题）。
 _HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+.*$")
 _HEADING_BONUS = 3.5
+_MD_EXTS = (".md", ".mdx", ".markdown")
+
+# 代码符号定义行先验（Zoekt / Blackbird 思路，零 AST 依赖）：函数/类/结构体定义或模块常量赋值
+# 命中查询词时显著优先于普通调用行与注释顺带提及。
+_DEF_RE = re.compile(
+    r"^\s*(?:(?:async|pub|export|public|private|protected|static|inline|const)\s+)*"
+    r"(?:def|class|fn|func|struct|interface|enum|type|trait|mod)\s+([A-Za-z_]\w*)"
+    r"|^\s*([A-Za-z_][A-Za-z0-9_]{1,})\s*(?::\s*[^=]+)?=\s*[^=]"
+)
+_DEF_BONUS = 4.5
+_DEF_SYM_BONUS = 3.0
+
+# 轻量中英工程核心概念对齐：中文词元同时匹配英文路径与文件名段（用 unicode 转义避免本文件被 rg 字面扫中自污染）
+_ZH_EN_ALIASES: dict[str, tuple[str, ...]] = {
+    "\u672c\u5730": ("local",),
+    "\u641c\u7d22": ("search", "seek"),
+    "\u68c0\u7d22": ("search", "seek"),
+    "\u805a\u5408": ("search", "v3", "merge"),
+    "\u7f13\u5b58": ("cache",),
+    "\u8bed\u4e49": ("similarity", "semantic"),
+    "\u8def\u7531": ("route", "router"),
+    "\u6392\u5e8f": ("rank", "sort"),
+    "\u91cd\u6392": ("rerank", "rank"),
+    "\u566a\u58f0": ("noise",),
+    "\u62fc\u97f3": ("pinyin",),
+    "\u8bc1\u636e": ("evidence",),
+    "\u6293\u53d6": ("fetch", "crawl"),
+    "\u7194\u65ad": ("breaker", "circuit"),
+    "\u914d\u7f6e": ("config",),
+    "\u56fe\u7247": ("image",),
+    "\u95e8\u7981": ("gate",),
+}
+
+# 跨字段协同加成（Minimal Span / Coordination Level）：单条结果的 (name ∪ dir ∪ line) 覆盖越多不同查询词元越优先
+_ROW_COORD_WEIGHT = 5.0
 
 
 def _split_camel(run: str) -> list[str]:
-    """驼峰细分：BM25Okapi → bm / 25 / okapi（小写输出；无驼峰则空）。"""
-    if run.islower() or run.isdigit():
+    """驼峰与字母数字细分：BM25Okapi → bm / 25 / bm25 / okapi；bm25 → bm / 25。"""
+    if (run.isalpha() and run.islower()) or run.isdigit():
         return []
-    return [m.group(0).lower() for m in _CAMEL_RE.finditer(run)]
+    parts = [m.group(0).lower() for m in _CAMEL_RE.finditer(run)]
+    if len(parts) <= 1:
+        return []
+    out = list(parts)
+    # 相邻「字母段 + 数字段」合并（如 BM25Okapi 产出 bm25，对齐文件名 bm25.py）
+    for i in range(len(parts) - 1):
+        if parts[i].isalpha() and parts[i + 1].isdigit():
+            merged = parts[i] + parts[i + 1]
+            if merged != run.lower():
+                out.append(merged)
+    return out
 
 
 def _tokens(text: str, *, camel: bool = False) -> list[str]:
@@ -116,11 +161,11 @@ def _tokens(text: str, *, camel: bool = False) -> list[str]:
 def _row_fields(fp: str, text: str) -> dict[str, Counter]:
     """一行命中在三字段下的词频表。fp 无目录段时 dir 为空表。"""
     fp = fp.rstrip("/")
-    name, _, dirpart = fp.rpartition("/")
+    dirpart, _, name = fp.rpartition("/")
     fields = {
         "name": Counter(_tokens(name, camel=True)),
         "dir": Counter(_tokens(dirpart, camel=True)),
-        "line": Counter(_tokens(text or "")),
+        "line": Counter(_tokens(text or "", camel=True)),
     }
     return fields
 
@@ -139,6 +184,13 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
     q_tf = Counter(_tokens(raw_query or "", camel=True))
     if not q_tf or not rows:
         return rows
+
+    # 跨语言标识符对齐词元（降权权重 0.65，辅助中文查询命中英文代码路径/符号）
+    q_eff: dict[str, float] = {k: float(v) for k, v in q_tf.items()}
+    for qt in list(q_tf):
+        for en in _ZH_EN_ALIASES.get(qt, ()):
+            if en not in q_eff:
+                q_eff[en] = 0.65
 
     # 逐字短语表：完整 CJK 连续串 + 较长 ASCII 连续串（行文本做子串检查用）
     phrases = [m.group(0).lower()
@@ -165,6 +217,7 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
                 f_df[term] += 1
 
     scores: list[float] = []
+    n_q_primary = max(len(q_tf), 1)
     for i, f_tf in enumerate(row_fields):
         total = 0.0
         for f, w, b in _FIELDS:
@@ -174,7 +227,7 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
             dl = sum(tf_map.values())
             norm = _K1 * (1.0 - b + b * dl / avgdl[f])
             f_df = df[f]
-            for qt, qtf in q_tf.items():
+            for qt, qtf in q_eff.items():
                 tf = tf_map.get(qt)
                 if not tf:
                     continue
@@ -182,24 +235,54 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
                 # BM25+：饱和项加下界 δ（只对命中的词，未命中不送底分）
                 sat = (tf * (_K1 + 1.0)) / (tf + norm)
                 total += w * qtf * (sat + _DELTA) * idf
-        total += _TOPIC_PRIOR_WEIGHT * math.log1p(file_hits[rows[i][0]])
+        fp = rows[i][0]
+        total += _TOPIC_PRIOR_WEIGHT * math.log1p(file_hits[fp])
+        # 单行三字段协同覆盖度（name ∪ dir ∪ line 覆盖了多少查询词/跨语言映射词）
+        row_voc = set(f_tf["name"]) | set(f_tf["dir"]) | set(f_tf["line"])
+        covered = sum(1.0 for qt in q_tf if qt in row_voc or any(
+            en in row_voc for en in _ZH_EN_ALIASES.get(qt, ())))
+        if covered > 1.0:
+            total += _ROW_COORD_WEIGHT * (covered / n_q_primary)
         if phrases:
             low_line = (rows[i][2] or "").lower()
-            fp_low = (rows[i][0] or "").lower()
+            fp_low = (fp or "").lower()
             name_low = fp_low.rpartition("/")[2] or fp_low
             name_hits = sum(1 for ph in phrases if ph in name_low)
             line_hits = sum(1 for ph in phrases if ph in low_line)
             total += min(name_hits, 2) * _NAME_PHRASE_BONUS + min(line_hits, 2) * _PHRASE_BONUS
-        # 文档标题感知：Markdown 标题行命中词元时追加主题加成
+            if line_hits >= 2:
+                hit_pos = [low_line.find(ph) for ph in phrases if ph in low_line]
+                if max(hit_pos) - min(hit_pos) <= 10:
+                    total += 2.5  # 多词紧邻跨度加成（Min-Span Proximity）
         raw_line = rows[i][2] or ""
-        if _HEADING_RE.match(raw_line) and f_tf["line"] and any(qt in f_tf["line"] for qt in q_tf):
-            total += _HEADING_BONUS
+        fp_low = (fp or "").lower()
+        # 文档标题感知：仅对 Markdown 文件生效，避免误奖代码注释
+        if fp_low.endswith(_MD_EXTS) and _HEADING_RE.match(raw_line) and f_tf["line"]:
+            if any(qt in f_tf["line"] for qt in q_eff):
+                total += _HEADING_BONUS
+        # 代码定义行感知：函数/类/常量定义行优先于普通调用与注释
+        m_def = _DEF_RE.match(raw_line)
+        if m_def and f_tf["line"] and any(qt in f_tf["line"] for qt in q_eff):
+            total += _DEF_BONUS
+            sym = (m_def.group(1) or m_def.group(2) or "").lower()
+            if sym and any(qt in sym for qt in q_eff):
+                total += _DEF_SYM_BONUS
         if boost_fn is not None:
             try:
-                total += boost_fn(rows[i][0])
+                total += boost_fn(fp)
             except Exception:
                 pass  # 注入的加成失败不拖累打分本体
         scores.append(total)
+
+    # 同文件多行命中边际递减（第 3 条起温和衰减，防单文件 8 行霸屏 Top-5）
+    by_fp: dict[str, list[int]] = {}
+    for idx, (fp, _ln, _txt) in enumerate(rows):
+        by_fp.setdefault(fp, []).append(idx)
+    for idxs in by_fp.values():
+        if len(idxs) > 2:
+            idxs.sort(key=lambda idx: (-scores[idx], rows[idx][1]))
+            for rank_in_file, idx in enumerate(idxs[2:], start=2):
+                scores[idx] /= (1.0 + 0.35 * (rank_in_file - 1))
 
     order = sorted(range(n_rows),
                    key=lambda i: (-scores[i], rows[i][0], rows[i][1]))
