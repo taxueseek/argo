@@ -60,7 +60,7 @@ _RE_LOCATION = re.compile(
 # 分类 → 默认引擎优先级映射
 CATEGORY_PRIORITY = {
     "academic": ["local_arxiv", "local_semantic_scholar", "local_crossref", "local_pubmed"],
-    "code": ["local_github", "local_stackoverflow", "local_gitlab", "local_npm"],
+    "code": ["local_github", "local_stackoverflow", "local_gitlab", "local_npm", "local_hackernews"],
     "news": ["local_bing_news", "local_google_news", "local_duckduckgo_news"],
     # chinese 与主路径 route_combo._select_sub_engines 中文支对齐（2026-10-06 实测）：
     # baidu 直连 0 结果移出；sogou（~1s 相关）/360（~1s）实测可用；yandex 殿后。

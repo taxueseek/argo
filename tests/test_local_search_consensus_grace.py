@@ -86,3 +86,20 @@ def test_abundant_first_engine_skips_grace(monkeypatch):
     assert elapsed < 1.0, f"2n 免宽限未生效：实耗 {elapsed:.2f}s"
     assert "rich" in out["engines_used"]
     assert "slow" not in out["engines_used"]
+
+
+def test_circuit_breaker_drops_open_engine(monkeypatch):
+    """自动路由下，若引擎处于熔断态，自动跳过并在 engines_dropped 中标记。"""
+    import circuit_breaker
+    cb = circuit_breaker.get_breaker()
+    cb.record_failure("local_sogou", kind="timeout")
+    cb.record_failure("local_sogou", kind="timeout")
+
+    _patch_search_one(monkeypatch, delays={"local_360": 0.05}, counts={"local_360": 5})
+    monkeypatch.setattr(search_v3, "route_query", lambda *args, **kwargs: {
+        "engines": ["local_sogou", "local_360"], "domain": "chinese"
+    })
+
+    out = search_v3.search_engines("测试", engines=None, n=5, skip_cache=True, mode="auto")
+    assert "local_360" in out["engines_used"]
+    assert any("local_sogou(circuit_open" in d for d in out.get("engines_dropped", []))

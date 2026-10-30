@@ -423,3 +423,15 @@ engines:
       addressdetails: 1
     headers:
       User-Agent: unified-search-local/1.0.1
+
+  local_hackernews:
+    type: json
+    enabled: true
+    categories: [code, web_general]
+    url: "https://hn.algolia.com/api/v1/search"
+    query_param: query
+    method: GET
+    timeout: 8
+    format: json
+    extra_params:
+      hitsPerPage: "{n}"

@@ -1,7 +1,7 @@
 ---
 name: local-search
 parent: argo
-description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 29 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --local-first 调用。
+description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 30 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --local-first 调用。
 version: 1.1.0
 ---
 
@@ -19,7 +19,7 @@ Local Search 是 argo 的「零成本兜底适配器」，用于：
 - **输出与主 skill 同 schema**：`results[]` / `engines_used` / `errors` / `elapsed_ms`，可直接进 evidence 与 RRF。
 - **`local_X` 与主清单的 `X` 是别名，不是备份**：`local_arxiv`/`local_crossref`/`local_semantic_scholar`/`local_github`/`local_npm`/`local_wikipedia`/`local_stackoverflow`/`local_google_news` 与主清单同名项**打同一个上游端点**（主清单走官方 API、这里走免密钥直取），不存在「API 挂了抓取版兜底」。同上游同格式由 `tests/test_local_search_registry.py` 锁定。
 
-### 本地引擎列表（29 个，27 个默认启用）
+### 本地引擎列表（30 个，28 个默认启用）
 
 | unified 名称 | 类型 | 默认启用 | 类别 | 说明 |
 |--------------|------|----------|------|------|
@@ -46,6 +46,7 @@ Local Search 是 argo 的「零成本兜底适配器」，用于：
 | local_stackoverflow | json | ✅ | code | StackOverflow 问题 |
 | local_gitlab | json | ✅ | code | GitLab API |
 | local_npm | json | ✅ | code | NPM Registry |
+| local_hackernews | json | ✅ | code/web_general | Hacker News / Algolia API |
 | local_wikipedia | json | ✅ | reference | MediaWiki API（ddgs wikipedia backend 结果过少） |
 | local_wiktionary | json | ✅ | reference | Wiktionary API |
 | local_wikiquote | json | ✅ | reference | Wikiquote API |

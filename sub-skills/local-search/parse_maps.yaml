@@ -180,3 +180,11 @@ json:
     url: null
     snippet: "type"
     url_template: "https://www.openstreetmap.org/{osm_type}/{osm_id}"
+
+  local_hackernews:
+    items: "hits"
+    title: "title"
+    url: "url"
+    snippet: "story_text"
+    url_template: "https://news.ycombinator.com/item?id={objectID}"
+    published_at: "created_at"

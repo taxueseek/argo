@@ -69,6 +69,11 @@ from engine_registry import EngineRegistry, get_registry
 from local_health_check import get_available_engines
 from smart_router import route_query
 
+try:
+    from circuit_breaker import get_breaker as _get_circuit_breaker
+except ImportError:
+    _get_circuit_breaker = None
+
 logger = logging.getLogger("local_search.search_v3")
 if not logger.handlers:
     logger.setLevel(logging.WARNING)
@@ -679,6 +684,7 @@ def search_engines(
     settings = cfg.get("settings", {})
     max_parallel = max_parallel or settings.get("max_parallel_engines", 5)
 
+    is_auto_routed = engines is None
     # 自动路由
     if not engines:
         decision = route_query(query, registry=reg, max_engines=3, require_available=False)
@@ -693,10 +699,26 @@ def search_engines(
     # 被过滤掉的引擎必须上报（engines_dropped）——静默替换会让「我要的三
     # 个引擎」变成「你给的一个引擎」而无人知晓（2026-09-13 审查假设#7）。
     engines_dropped: list[str] = []
+    # 熔断器过滤：自动路由模式下跳过正处于熔断冷却期的引擎
+    if is_auto_routed and _get_circuit_breaker is not None:
+        try:
+            _breaker = _get_circuit_breaker()
+            active_engines: list[str] = []
+            for e in engines:
+                allowed, reason = _breaker.allow(e)
+                if allowed:
+                    active_engines.append(e)
+                else:
+                    engines_dropped.append(f"{e}({reason})")
+            if active_engines:
+                engines = active_engines
+        except Exception as e:
+            logger.debug(f"熔断器过滤跳过: {e}")
+
     if mode in ("fast", "budget"):
         try:
             available = set(get_available_engines(registry=reg, engine_names=engines))
-            engines_dropped = [e for e in engines if e not in available]
+            engines_dropped.extend(e for e in engines if e not in available)
             engines = [e for e in engines if e in available]
         except Exception as e:
             logger.warning(f"可用性检查失败: {e}")
@@ -817,8 +839,16 @@ def search_engines(
         _t, name, holder = entry
         _n, res, err = holder.get("r", (name, [], f"{name}: 线程结束但没有返回值"))
         _collect(_n, res)
+        _cb = _get_circuit_breaker() if _get_circuit_breaker is not None else None
         if err:
             errors.append(err)
+            if _cb is not None:
+                err_low = err.lower()
+                kind = "timeout" if "timeout" in err_low else ("blocked" if ("captcha" in err_low or "429" in err_low) else "error")
+                _cb.record_failure(_n, kind=kind)
+        elif res:
+            if _cb is not None:
+                _cb.record_success(_n)
 
     try:
         enough_at: float | None = None
