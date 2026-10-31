@@ -201,6 +201,14 @@ def test_every_rule_compiles_and_survives_compilation():
         ("protein_search", "重组胶原蛋白 医美 市场规模"),
         ("chem_search", "ADC drug market size 2026"),
         ("medical", "创新药物 2026 市场规模"),
+        # cn_encyclopedia / fact_check unless（2026-10-31 评测基线）：比较决策与
+        # 获奖得主类查询的「…是什么」尾巴不得锁进点查域——百科摘要只有定义行
+        # （实测 4-31 字），fact_check 对 zh 比较题只会给 wikipedia/byted。
+        # 两域共用 @compare_or_award 宏（route_domains._UNLESS_MACROS）。
+        ("cn_encyclopedia", "PostgreSQL 和 MySQL 在高并发写入场景下该怎么选？各自优劣是什么？"),
+        ("cn_encyclopedia", "2026年诺贝尔物理学奖得主是谁？获奖理由是什么？"),
+        ("fact_check", "公务员考试和国企校园招聘的主要区别是什么？"),
+        ("fact_check", "2026年诺贝尔物理学奖得主是谁？获奖理由是什么？"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -222,7 +230,8 @@ def test_unless_declared_domains_are_covered_by_negative_cases():
                "anime_encyclopedia", "art_museum", "chinese_tech_deep",
                "code_search", "image_search", "company_search",
                "ai_model", "us_fundamentals", "stock_query", "medical",
-               "global_event", "video", "protein_search", "chem_search"}
+               "global_event", "video", "protein_search", "chem_search",
+               "cn_encyclopedia", "fact_check"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

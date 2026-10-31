@@ -1074,7 +1074,13 @@ domains:
   parallel: true
   patterns:
   - (?i)(百度百科|baike\.baidu|百科词条|查百科|词条解释)
-  - (?i)(是什么(?!梗)|什么是|简介|定义一下).{0,8}$
+  # 「…是什么？」尾巴会把两类非百科查询整类吃进来（2026-10-31 评测实测）：
+  # 比较决策（「A 和 B 的区别/优劣/怎么选是什么」）与获奖/得主类新闻
+  # （「2026年XX奖得主…获奖理由是什么」）。触发词本身留着的理由：真百科
+  # 点查（「蝴蝶效应是什么」）仍需它；因此用同宽度的 unless 逐例否决，
+  # 显式点名百科的查询仍由上一条触发词接住。
+  - match: '(?i)(是什么(?!梗)|什么是|简介|定义一下).{0,8}$'
+    unless: '@compare_or_award'
   primary: baidu_baike
 - desc: 词典查询（英文 dictionaryapi + 中文汉典 + wikipedia）
   engines_combo:
@@ -1561,7 +1567,10 @@ domains:
   parallel: true
   patterns:
   - (?i)(what is|who is|when did|where is|how many|how much)
-  - (?i)(是什么|是谁|什么时候|在哪里|多少|多少钱)
+  # zh 尾问词与 cn_encyclopedia 的「是什么」尾巴同病：比较题/得主题被锁进
+  # 点查域后只能吃到 wikipedia/byted（2026-10-31 评测实测），共用同一否决宏。
+  - match: '(?i)(是什么|是谁|什么时候|在哪里|多少|多少钱)'
+    unless: '@compare_or_award'
   primary: wikipedia
 - desc: 全球事件/舆情（Google News RSS + 中文财经快讯）
   engines_combo:

@@ -230,6 +230,13 @@ _UNLESS_MACROS: dict[str, str] = {
         r"价格|多少钱|商业化|市场预测|行情|股价|龙头股|概念股|"
         r"market\s+size|market\s+share|sales|revenue|valuation|market\s+forecast|pricing)"
     ),
+    # 比较决策/获奖新闻否决集（2026-10-31 评测基线）：「…是什么」尾部触发词在
+    # cn_encyclopedia 与 fact_check 两处各自存在，把比较题（「A 和 B 的区别/
+    # 优劣/怎么选」）与得主类新闻题整类锁进点查域。共用一份否决词，新增守卫域
+    # 时在 config.yaml 引用 @compare_or_award，不要复制粘贴展开后的正则。
+    "@compare_or_award": (
+        r"(?i)(区别|比较|对比|怎么选|哪个好|优劣|利弊|差异|权衡|\bvs\b|得主|获奖)"
+    ),
 }
 
 
