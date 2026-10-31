@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import functools
+import html as _htmllib
 import io
 import json
 import math
@@ -775,6 +776,13 @@ def _apply_url_kind(rows: list[dict[str, Any]], spec: dict) -> list[dict[str, An
     return rows
 
 
+# 摘要标签卫生（2026-10-31 评测基线 13/64 查询摘要带裸标签）：MediaWiki 类
+# 源的 snippet 字段原生含 <span class="searchmatch"> 等内联高亮标签，声明式
+# 映射直通输出会污染下游阅读与引用。仅当串里确实出现「像标签」的片段才剥，
+# 避免误伤含裸 < 的正文（如 "a < b"：`<` 后非字母不匹配）。
+_TAGISH_RE = re.compile(r"</?[a-zA-Z][^>]{0,160}?>")
+
+
 def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                         output_map: dict, spec: dict) -> list[dict[str, Any]]:
     """HTTP 引擎响应体解析（GET/POST 共用）。"""
@@ -833,8 +841,15 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                 r["published_at"] = _normalize_epoch(r["published_at"])
             if _lic and r.get("image_url"):
                 r.setdefault("image_license", _lic)
-            if isinstance(r.get("snippet"), str) and len(r["snippet"]) > 300:
-                r["snippet"] = r["snippet"][:300]
+            sn = r.get("snippet")
+            if isinstance(sn, str):
+                if _TAGISH_RE.search(sn):
+                    sn = _TAGISH_RE.sub("", sn)
+                if "&" in sn:
+                    sn = _htmllib.unescape(sn)
+                if len(sn) > 300:
+                    sn = sn[:300]
+                r["snippet"] = sn
         # 图片元数据收尾（尺寸转 int / 许可归一 / 商用判据）——落在这个共同
         # 出口而不是各 parser 里：图源有三条产出路径（声明式 output_map、
         # 自定义 builder、通用兜底），只覆盖一条会让契约对一半结果生效。

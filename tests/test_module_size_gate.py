@@ -131,7 +131,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
              "connection，initialize 后把代理 TLS 藏进首包前的空闲期；CLI 侧实测"
              "无窗口故不改 bin/argo），上限 1039 → 1074 随动登记"),
     "scripts/engines_base.py": (
-        1549, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+        1564, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+              "2026-10-31 +15：声明式 output_map 路径摘要标签卫生（_TAGISH_RE 剥"
+              "MediaWiki 类内联高亮 + html.unescape 实体，评测基线 13/64 查询摘要带"
+              "裸标签），上限 1549 → 1564 随动登记；"
               "2026-10-26 +12：peek_failure_note——调度层重试前只读归因、"
               "不清寄存器（pop 仍留给 _run_one 写 outcome/熔断），上限 1521 → 1533；"
               "2026-10-28 +16：_apply_url_kind 行级戳（issue #29 口径 B），"
@@ -268,7 +271,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "dsh_hub=1.15，单行带行尾注释，理由指向 config.yaml 的 "
               "dsh_plugin_search.score_floors）；上限 997 → 998"),
     "scripts/search_pipeline.py": (
-        984, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+        989, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+             "2026-10-31 +5：usage_log 补 top_urls（头部结果 URL 截 5 条×200 字符，"
+             "采纳回放地基——此前账本无法回放「哪条结果被上游采纳」），"
+             "上限 984 → 989 随动登记；"
              "2026-10-28 +2：SERP 过滤闸改条目级入口 is_unusable_row"
              "（issue #29 口径 B，url_kind: none 豁免空 url 判壳页），"
              "上限 982 → 984 随动登记；"
