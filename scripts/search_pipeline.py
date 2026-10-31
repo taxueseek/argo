@@ -892,6 +892,11 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
                 "count": len(merged),
                 "elapsed_ms": round(elapsed),
                 "engines_used": list(raw_results.keys())[:8],
+                # 头部结果 URL（采纳回放地基）：此前账本只有查询与计数，无任何
+                # 结果 URL，「哪条结果被上游采纳、坏例来自哪个链接」无法回放。
+                # 取 merged（此刻已重排、未做时间排序，与默认展示序一致）；
+                # 截 5 条、每条 200 字符，上限与 query 的 60 字符同属账本瘦身纪律。
+                "top_urls": [(r.get("url") or "")[:200] for r in merged[:5] if r.get("url")],
                 **usage_log_attribution(engine_latency, engine_outcomes=engine_outcomes),
                 "errors": len(_collect_errors(raw_results, engine_outcomes)),
                 "recovered": bool(recovery_info.get("recovered")) if recovery_info else False,
