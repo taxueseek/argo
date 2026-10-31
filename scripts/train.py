@@ -131,6 +131,16 @@ def _parse_travel_date(text: str) -> tuple[date | None, str]:
     return None, text
 
 
+# 口语填充词（2026-10-31 评测 fz07 实测）：「杭州到黄山坐高铁最快需要多久？」
+# 拆分后到站段是「黄山坐高铁最快需要多久」，站名匹配必败、整条静默返回空。
+# 只剥多字交通/时长词，不做单字剥离——站名剥字教训（「张家口」→「家口」）
+# 在此同样适用；剥完仍以站名表为准解析，表里没有的站照旧失败。
+_QUERY_FILLER_RE = re.compile(
+    r"坐高铁|坐火车|高铁|火车|列车|动车|最快需要多久|需要多久|最快多久|多久"
+    r"|多长时间|几个小时|几小时|怎么走|时刻表|车次表"
+)
+
+
 def _parse_query(q: str) -> dict | None:
     """从自然语言查询词解析 出发站/到达站/日期/车次类型。
 
@@ -165,6 +175,11 @@ def _parse_query(q: str) -> dict | None:
     # 「高碑店」→「碑店」、「次渠」→「渠」。站名后缀（北京站/上海市）由
     # _resolve_station 统一剥离（它已有 `[市站]$`），这里不必也不该再剥一遍。
     parts = [p.strip(" \t，。！？、") for p in parts if p.strip()]
+    parts = [_QUERY_FILLER_RE.sub(" ", p).strip(" \t，。！？、") for p in parts]
+    # 悬挂字：填充词被车次类型/本剥离先后摘掉后，「坐/的」可能残在段尾
+    # （实测「黄山坐」「黄山北的」）；行尾锚只动段尾，不碰站名内部。
+    parts = [re.sub(r"[坐的]\s*$", "", p).strip() for p in parts]
+    parts = [p for p in parts if p]
     if len(parts) < 2:
         return None
     from_name, to_name = parts[0], parts[1]
