@@ -15,6 +15,7 @@ import sys
 import threading
 
 import serp_kill_log  # noqa: E402  守卫接线+误杀账本（2026-10-10 拆出，stdlib 级轻量）
+import wiki_extract  # noqa: E402  MediaWiki extracts 专用解析（2026-10-31 评测 fe01/fz15）
 import time
 import urllib.error
 from contextlib import contextmanager
@@ -1504,6 +1505,10 @@ _CUSTOM_JSON_PARSERS: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]
     "semantic_scholar": _parse_semantic_scholar,
     "doi": _parse_doi,
     "unpaywall": _parse_unpaywall,
+    # en/zh wikipedia：generator=search + prop=extracts（导语明文），响应的
+    # query.pages 是 pageid 为键的 dict，点路径解析器吃不了，见 wiki_extract
+    "wikipedia": wiki_extract.parse_extracts,
+    "zh_wikipedia": wiki_extract.parse_extracts,
 }
 
 

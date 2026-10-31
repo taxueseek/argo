@@ -131,7 +131,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
              "connection，initialize 后把代理 TLS 藏进首包前的空闲期；CLI 侧实测"
              "无窗口故不改 bin/argo），上限 1039 → 1074 随动登记"),
     "scripts/engines_base.py": (
-        1564, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+        1569, "引擎基类 + HTTP 出口 + 输出映射，与 100+ 源声明的字段契约绑在一起；"
+              "2026-10-31 +5：wikipedia/zh_wikipedia 注册 wiki_extract 专用解析器"
+              "（list=search 匹配碎片 → extracts 导语明文，评测 fe01/fz15），"
+              "解析本体在新模块 wiki_extract.py，上限 1564 → 1569 随动登记；"
               "2026-10-31 +15：声明式 output_map 路径摘要标签卫生（_TAGISH_RE 剥"
               "MediaWiki 类内联高亮 + html.unescape 实体，评测基线 13/64 查询摘要带"
               "裸标签），上限 1549 → 1564 随动登记；"

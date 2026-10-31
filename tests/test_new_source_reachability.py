@@ -336,7 +336,8 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     "searchmysite": "semantic_discovery 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
     "wiby": "semantic_discovery 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
     "uapi": "semantic_discovery 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
-    "parallel_free": "semantic_discovery 位次 8（budget=2~3，位次 4+ 不参与自动路由）",
+    # parallel_free 已撤账（2026-10-31）：通用池选源改造后它进入 lead 组合参与
+    # 自动路由（评测 fe03 实测它作为 general_search 主源出结果），不再是位置性休眠
     "tavily": "semantic_discovery 位次 9（budget=2~3，位次 4+ 不参与自动路由）",
     "firecrawl": "semantic_discovery 位次 10（budget=2~3，位次 4+ 不参与自动路由）",
     "brave": "semantic_discovery 位次 11（budget=2~3，位次 4+ 不参与自动路由）",

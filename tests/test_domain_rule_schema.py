@@ -209,6 +209,12 @@ def test_every_rule_compiles_and_survives_compilation():
         ("cn_encyclopedia", "2026年诺贝尔物理学奖得主是谁？获奖理由是什么？"),
         ("fact_check", "公务员考试和国企校园招聘的主要区别是什么？"),
         ("fact_check", "2026年诺贝尔物理学奖得主是谁？获奖理由是什么？"),
+        # sports_search / org_entity unless（2026-10-31 评测第二轮）：泛职位词
+        # （主教练）遇上国家队语境不进体育域（combo 前两位 thesportsdb 空 +
+        # jolpica 只有 F1，返回 F1 车手积分榜）；机构名遇上政策/实施语境不进
+        # 实体查询域（wikidata/百科给机构条目，接不住「执行到哪一步」）
+        ("sports_search", "中国男足国家队主教练现在是谁？"),
+        ("org_entity", "欧盟 AI Act 目前执行到哪一步了？"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -231,7 +237,7 @@ def test_unless_declared_domains_are_covered_by_negative_cases():
                "code_search", "image_search", "company_search",
                "ai_model", "us_fundamentals", "stock_query", "medical",
                "global_event", "video", "protein_search", "chem_search",
-               "cn_encyclopedia", "fact_check"}
+               "cn_encyclopedia", "fact_check", "sports_search"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

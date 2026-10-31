@@ -1188,7 +1188,12 @@ domains:
   - (?i)(足球|篮球|网球|排球|乒乓球|羽毛球|棒球|橄榄球|高尔夫|(?<![a-z0-9])F1(?![a-z0-9])|一级方程式|马拉松|田径|游泳|拳击|(?<![a-z0-9])UFC(?![a-z0-9])|电竞战队)
   - (?i)(决赛|半决赛|季后赛|总冠军|MVP|得分王|金靴|金球奖|转会|俱乐部|联赛|进球|助攻|夺冠|卫冕|球员|守门员|前锋|后卫)
   # 中英球队/效力语境（修复「库里 球队」「LeBron James team」「Ronaldo club」漏召）
-  - (?i)(球队|球星|球会|球衣|队名|队史|效力于|效力|主教练|得分手)
+  # 主教练/球队泛词触发（评测 n09 实测「中国男足国家队主教练现在是谁」仅靠
+  # 「主教练」命中本域，fast 档 combo_budget=2 只取前两位：thesportsdb 空 +
+  # jolpica 只有 F1，返回 F1 车手积分榜）。国家队语境交给通用池——中文体育
+  # 新闻不在本域源里，本域也接不住。
+  - match: '(?i)(球队|球星|球会|球衣|队名|队史|效力于|效力|主教练|得分手)'
+    unless: '(?i)(国足|男足|女足|男篮|女排|国乒|国羽|国家队)'
   - (?i)\b(team|club|coach|roster|squad|jersey|striker|goalkeeper|midfielder|defender)\b
   - (?i)\b(world\s*cup|olympics?|championship|finals?|playoffs?|league|fixture|matchday|transfer|hat-?trick)\b
   - (?i)\b(soccer|football|basketball|tennis|baseball|cricket|rugby|golf|formula\s*1|formula\s*one)\b
@@ -1270,7 +1275,11 @@ domains:
   patterns:
   # 政府/国际组织
   - (?i)(国务院|中共中央|全国人大|政协|外交部|财政部|发改委|央行|人民银行|最高法院|最高检|省政府|市政府|区政府|县委|市委)
-  - (?i)(联合国|安理会|世贸组织|WTO|UNESCO|IMF|世界银行|欧盟|北约|NATO|东盟|上合组织|G20|G7|非盟|阿盟)
+  # 机构名 + 政策语境（评测 n08 实测「欧盟 AI Act 执行到哪一步」被「欧盟」
+  # 锁进实体查询域，wikidata/百科给的是机构条目而非政策进展）：问法案/条例/
+  # 执行进展时让位，问机构本身（是什么组织/总部在哪）不受影响
+  - match: '(?i)(联合国|安理会|世贸组织|WTO|UNESCO|IMF|世界银行|欧盟|北约|NATO|东盟|上合组织|G20|G7|非盟|阿盟)'
+    unless: '(?i)(政策|法案|条例|执行|实施|生效|进展|签署|谈判)'
   # WHO 必须区分大小写：`(?i)` 下 `who` 会命中英语里最常见的疑问句开头
   # （「who is the CEO of OpenAI」「who wrote the linux kernel」），把整个
   # 疑问句锁死进机构域。机构缩写本就是大写专名，没有需要忽略大小写的理由。
@@ -3439,22 +3448,26 @@ engines:
     - wiki
     - factual
     desc: Wikipedia API（T2 替代）
+    # generator=search + prop=extracts（2026-10-31 评测 fe01/fe14）：list=search
+    # 的 snippet 是匹配碎片，事实性内容（半衰期/年份/数量）大多不在碎片窗口里；
+    # TextExtracts 给正文导语明文，定义与关键数字通常就在首段。query.pages 是
+    # pageid 为键的 dict，解析走 engines_base._CUSTOM_JSON_PARSERS 的专用解析器。
     extra_params:
       action: query
       format: json
-      list: search
-      srlimit: '{n}'
-    output_map:
-      items: query.search
-      item_title: title
-      item_url: title
-      item_summary: snippet
-      url_template: https://en.wikipedia.org/wiki/{title}
+      generator: search
+      gsrlimit: '{n}'
+      prop: extracts|info
+      inprop: url
+      explaintext: 1
+      exintro: 1
+      exchars: 380
+      exlimit: '{n}'
     format: json
     headers:
       User-Agent: argo-search/1.0
     method: GET
-    query_param: srsearch
+    query_param: gsrsearch
     timeout: 8
     type: http
     url: https://en.wikipedia.org/w/api.php
@@ -4164,22 +4177,24 @@ engines:
     - wiki
     - factual
     desc: 中文维基百科（MediaWiki API，与 en.wikipedia 同构）
+    # 与 en.wikipedia 同步切 generator=search + prop=extracts（评测 fe01/fz15，
+    # 匹配碎片换正文导语明文）；解析走 wiki_extract 专用解析器，理由见 en 侧注释
     format: json
     method: GET
-    query_param: srsearch
+    query_param: gsrsearch
     headers:
       User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36
     extra_params:
       action: query
-      list: search
       format: json
-      srlimit: '{n}'
-    output_map:
-      items: query.search
-      item_title: title
-      item_url: title
-      item_summary: snippet
-      url_template: https://zh.wikipedia.org/wiki/{title}
+      generator: search
+      gsrlimit: '{n}'
+      prop: extracts|info
+      inprop: url
+      explaintext: 1
+      exintro: 1
+      exchars: 380
+      exlimit: '{n}'
     timeout: 8
     url: https://zh.wikipedia.org/w/api.php
   baidu_hot:
