@@ -3448,26 +3448,26 @@ engines:
     - wiki
     - factual
     desc: Wikipedia API（T2 替代）
-    # generator=search + prop=extracts（2026-10-31 评测 fe01/fe14）：list=search
-    # 的 snippet 是匹配碎片，事实性内容（半衰期/年份/数量）大多不在碎片窗口里；
-    # TextExtracts 给正文导语明文，定义与关键数字通常就在首段。query.pages 是
-    # pageid 为键的 dict，解析走 engines_base._CUSTOM_JSON_PARSERS 的专用解析器。
+    # 2026-10-31 实测裁决：list=search 匹配碎片 vs prop=extracts 导语明文，
+    # 碎片胜——碎片是「查询定向」的（问句里的 half-life 会被带到 5,730 years
+    # 那句上），导语是「页面通用」的（定义占满前 260 字，具体事实在正文深处）。
+    # 第三轮评测 en citation 1.2→0.95 后回退；标签卫生由 engines_base 统一做。
     extra_params:
       action: query
       format: json
-      generator: search
-      gsrlimit: '{n}'
-      prop: extracts|info
-      inprop: url
-      explaintext: 1
-      exintro: 1
-      exchars: 380
-      exlimit: '{n}'
+      list: search
+      srlimit: '{n}'
+    output_map:
+      items: query.search
+      item_title: title
+      item_url: title
+      item_summary: snippet
+      url_template: https://en.wikipedia.org/wiki/{title}
     format: json
     headers:
       User-Agent: argo-search/1.0
     method: GET
-    query_param: gsrsearch
+    query_param: srsearch
     timeout: 8
     type: http
     url: https://en.wikipedia.org/w/api.php
@@ -4177,24 +4177,24 @@ engines:
     - wiki
     - factual
     desc: 中文维基百科（MediaWiki API，与 en.wikipedia 同构）
-    # 与 en.wikipedia 同步切 generator=search + prop=extracts（评测 fe01/fz15，
-    # 匹配碎片换正文导语明文）；解析走 wiki_extract 专用解析器，理由见 en 侧注释
+    # 与 en.wikipedia 同步保留 list=search 匹配碎片（查询定向）+ engines_base
+    # 统一标签卫生；extracts 导语方案实测回退，裁决理由见 en 侧注释
     format: json
     method: GET
-    query_param: gsrsearch
+    query_param: srsearch
     headers:
       User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36
     extra_params:
       action: query
+      list: search
       format: json
-      generator: search
-      gsrlimit: '{n}'
-      prop: extracts|info
-      inprop: url
-      explaintext: 1
-      exintro: 1
-      exchars: 380
-      exlimit: '{n}'
+      srlimit: '{n}'
+    output_map:
+      items: query.search
+      item_title: title
+      item_url: title
+      item_summary: snippet
+      url_template: https://zh.wikipedia.org/wiki/{title}
     timeout: 8
     url: https://zh.wikipedia.org/w/api.php
   baidu_hot:
