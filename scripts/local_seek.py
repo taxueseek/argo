@@ -335,13 +335,23 @@ def _run_local_seek(query: str, max_n: int = 5,
 
 
 def _load_seek_module(seek_py: str):
-    """按解析后真实路径加载 seek 模块（importlib 显式文件定位，不污染
-    sys.path、不占通用模块名），按路径缓存——ARGO_LOCAL_SEEK_PATH 指向
-    不同文件时各自独立加载。失败返回 None。"""
+    """按解析后真实路径加载 seek 模块（importlib 显式文件定位，不占通用
+    模块名），按路径缓存——ARGO_LOCAL_SEEK_PATH 指向不同文件时各自独立
+    加载。失败返回 None。
+
+    seek.py 模块级有 sibling 导入（from seek_rank import ...），而
+    spec_from_file_location 不像脚本运行那样把文件所在目录放进 sys.path
+    ——干净进程里 exec_module 必 ModuleNotFoundError，进程内路径名存实亡
+    （2026-10-31 实测：CI 与本机 sys.path 污染顺序不同，同一条测试一边绿
+    一边红）。加载前把 seek.py 所在目录补进 sys.path（去重），进程内加载
+    从此确定性可用；模块名仍走 argo_seek_impl，不占通用名。"""
     mod = _SEEK_MODULE_CACHE.get(seek_py)
     if mod is not None:
         return mod
     import importlib.util
+    seek_dir = os.path.dirname(os.path.abspath(seek_py))
+    if seek_dir and seek_dir not in sys.path:
+        sys.path.insert(0, seek_dir)
     spec = importlib.util.spec_from_file_location("argo_seek_impl", seek_py)
     if spec is None or spec.loader is None:
         return None

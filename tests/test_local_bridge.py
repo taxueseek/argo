@@ -94,35 +94,26 @@ class TestLocalReadPreview(unittest.TestCase):
 
 class TestRunLocalSeek(unittest.TestCase):
     def test_parses_seek_output(self):
+        import local_seek
         import search as S
 
-        fake_out = json.dumps({
+        payload = {
             "query": "q", "engine": "rg", "count": 2,
             "results": [
                 {"path": "/tmp/a.md", "line": 3, "snippet": "hit one"},
                 {"path": "/tmp/b.md", "line": 12, "snippet": "hit two"},
             ],
-        })
+        }
 
-        class _R:
-            returncode = 0
-            stdout = fake_out
-            stderr = ""
-
-        with patch.object(S.sys, "executable", "/usr/bin/python3"), \
-             patch.object(S, "sys", S.sys), \
-             patch("search._run_local_seek") as m:
-            # 直接测试解析逻辑：monkeypatch 掉 subprocess 路径后调用真实实现
-            pass
-
-        # 直接用真实实现 + mock subprocess.run
-        with patch.object(S, "sys", S.sys), \
-             patch("subprocess.run", return_value=_R()) as mr, \
-             patch("os.path.exists", return_value=True):
-            # _run_local_seek 内 SCRIPT_DIR 定位 seek.py 走 os.path.exists 分支
-            # 显式给 search_dir：本用例在仓库内跑，cwd 落在 argo 自身安装树内，
-            # 会被 _local_seek_dir 守卫跳过；而本用例测的是**解析**，与范围无关。
-            hits = S._run_local_seek("q", max_n=5, search_dir="/tmp/proj")
+        # 直接测解析本意：patch 进程内取 payload 的入口（seek_query_payload），
+        # 子进程回退与 seek.py 加载都不属于本用例。此前 mock subprocess.run 走
+        # 回退分支，CI 与本机谁先污染 sys.path 决定走哪条路，一边绿一边红
+        # （2026-10-31）。查询串用专属值防落盘/进程内缓存串味；search_dir 显式
+        # 给出：仓库内 cwd 会被 _local_seek_dir 守卫跳过，而本用例与范围无关。
+        local_seek._LOCAL_SEEK_CACHE.clear()
+        with patch.object(local_seek, "seek_query_payload", return_value=payload):
+            hits = S._run_local_seek("q_parse_seek_output", max_n=5,
+                                     search_dir="/tmp/proj")
         self.assertEqual(len(hits), 2)
         self.assertEqual(hits[0]["source"], "local_files")
         self.assertTrue(hits[0]["url"].endswith("#3"))

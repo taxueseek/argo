@@ -277,6 +277,7 @@ class TestArticleRedirectGuard(unittest.TestCase):
 
 class TestLocalSearchSubprocessEncoding(unittest.TestCase):
     def test_encoding_and_utf8_env_injected(self):
+        import local_seek
         import mcp_handlers
         captured: dict = {}
 
@@ -289,7 +290,12 @@ class TestLocalSearchSubprocessEncoding(unittest.TestCase):
             captured.update(kwargs)
             return _FakeProc()
 
-        with patch.object(mcp_handlers.subprocess, "run", _fake_run):
+        # 本用例测的是**子进程编码注入**。进程内路径（seek_query_payload）在
+        # 窄目录上成功返回空 payload 时根本走不到子进程——CI 与本机谁先污染
+        # sys.path 决定走哪条路（2026-10-31）。钉死它返回 None（= 回退子进程），
+        # 被测契约才稳定。
+        with patch.object(local_seek, "seek_query_payload", return_value=None), \
+             patch.object(mcp_handlers.subprocess, "run", _fake_run):
             # 显式给窄路径：缺省 path="~" 自 2026-09-27 起被宽泛根守卫拒绝
             # （不再对 home 全盘 rg），根本到不了子进程——那一条由
             # test_mcp_surface.TestArgoLocalSearchScopeGuard 锁定。
