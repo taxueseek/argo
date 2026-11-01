@@ -73,6 +73,7 @@ def _run_argo(home: str, args, timeout: int = 20):
         proc = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=timeout, shell=use_shell,
+            encoding="utf-8", errors="replace",
         )
         return proc.stdout, proc.stderr, proc.returncode
     except Exception as exc:  # noqa: BLE001 - 桥层只报错不抛出

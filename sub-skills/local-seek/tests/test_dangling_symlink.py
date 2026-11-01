@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -48,6 +49,9 @@ def test_rg_survives_dangling_symlink(corpus_with_dangling_link: Path):
     assert any("b.py" in f for f in files), f"b.py 未命中: {files}"
 
 
+@pytest.mark.skipif(shutil.which("fd") is None,
+                    reason="fd 未安装：--filename 路径不可用（CI 只装 ripgrep，"
+                           "内容搜索的断链容错由上一条用 rg 覆盖）")
 def test_fd_survives_dangling_symlink(corpus_with_dangling_link: Path):
     """--filename 走 fd：同口径不因断链空手而归（fd 按文件名匹配）。"""
     text, rc = s.run_query(["render_util", "--path", str(corpus_with_dangling_link),
