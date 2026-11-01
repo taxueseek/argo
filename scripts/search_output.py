@@ -143,6 +143,49 @@ def _slim_reorder(r: Any) -> dict[str, Any] | None:
     return out or None
 
 
+def _slim_numverify(v: Any) -> dict[str, Any] | None:
+    """numverify 块的 agent 精简版：保 summary + 逐条 verdict/misses。
+
+    why：数值印证是「该不该引用这条的数字」的直接依据（摘要 5999 与原文
+    11999 打架只有这里看得见），checked/hits 细节可由 url 对回 results，
+    不重复携带。
+    """
+    if not isinstance(v, dict):
+        return None
+    out: dict[str, Any] = {}
+    if v.get("summary") is not None:
+        out["summary"] = v["summary"]
+    if v.get("pending"):
+        out["pending"] = v["pending"]
+    rows = []
+    for r in v.get("verified") or []:
+        if not isinstance(r, dict):
+            continue
+        rows.append({k: r[k] for k in ("url", "verdict", "misses", "fetch_method")
+                     if r.get(k) is not None})
+    if rows:
+        out["verified"] = rows
+    return out or None
+
+
+def _slim_verify_with(v: Any) -> dict[str, Any] | None:
+    """verify_with 段的 agent 精简版：核对引擎 + 域级重叠 + 官方簇条数。
+
+    why：核对簇的价值是「一眼可对的第二意见」，Agent 只需要引擎、耗时、
+    重叠域与条数；逐条 title/snippet 与主查重复度高，剥掉（要看全簇走
+    --fields full）。
+    """
+    if not isinstance(v, dict):
+        return None
+    out = {k: v[k] for k in ("engine", "skipped", "elapsed_ms") if v.get(k) is not None}
+    if v.get("overlap") is not None:
+        out["overlap"] = v["overlap"]
+    n = len(v.get("results") or [])
+    if n:
+        out["result_count"] = n
+    return out or None
+
+
 def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
     """--fields agent：输出只留答案内容（P2-2，2026-09-13）。
 
@@ -184,11 +227,16 @@ def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
         # 几秒核验却只看到 verified_count 一个数（2026-10-22 实测）。
         # 值由下方 _slim_verify/_slim_reorder 压缩，不整块照搬。
         "verify", "evidence_reorder",
+        # 数值印证与核对配对（2026-11-01）：同上「花了墙钟换来的」逻辑——
+        # 摘要数字与原文冲突、独立官方核对簇，都是 Agent 引用前的直接依据。
+        "numverify", "numeric_reorder", "verify_with",
     )
     out: dict[str, Any] = {k: payload[k] for k in keep_top
                            if payload.get(k) is not None}
     for _key, _slim in (("verify", _slim_verify),
-                        ("evidence_reorder", _slim_reorder)):
+                        ("evidence_reorder", _slim_reorder),
+                        ("numverify", _slim_numverify),
+                        ("verify_with", _slim_verify_with)):
         if payload.get(_key) is not None:
             _value = _slim(payload[_key])
             if _value is not None:

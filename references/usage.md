@@ -356,6 +356,27 @@ python3 scripts/search.py "贵州茅台股价" --verify 3
 `pending`，已回来的照常回填；`--fields agent` 保留 `verify.revision_summary`、
 `pending` 与逐条 `delta`，不必为了看核验结果放弃精简档。
 
+`--numverify [TOP_K]` 数值印证（默认关）：摘要里的价格/百分比/日期只是线索，
+对含关键数字的 top-K 结果 fetch 原文做数字比对（与 `--verify` 独立：verify 量
+正文吸收分，这里量「摘要数字与原文对不对得上」）：
+
+```bash
+python3 scripts/search.py "iPhone 17 Pro Max 官方价格" --numverify 3
+# [numverify] 核对 3 条，confirmed=1 partial=1 missing=0 unfetchable=1
+```
+
+逐条 `numeric_verification`（verdict/hits/misses）+ `numverify.summary`；
+`missing`（摘要数字原文一个没有，毒内容/文不对题）×0.65 降权、`partial`
+×0.825、`confirmed`/`unfetchable` 不动（拿不到正文不定罪）。实测同一 query
+的摘要里 5999 与 11999 打架、博彩内容挂医院域名——只有数字比对抓得住。
+墙钟同 `ARGO_VERIFY_BUDGET_S`。
+
+`--verify-with [ENGINE]` 核对配对（默认关）：主查之外用第二个引擎跑一次轻量
+核对，独立交付 `verify_with` 段（官方簇 + 与主查的域级重叠），不并入主排序。
+缺省 `auto` 按查询类型选（价格/规格类→exa，规则表见 `scripts/verify_with.py`），
+无规则命中明确报 `skipped: no_rule`；也可点名引擎 `--verify-with tavily`。
+实测价格类 query 主查混转述与旧闻，exa 3s 返回 top-5 全官方域，交叉一眼可对。
+
 以上开关在精简档与 `--fields agent` 档都保留（两档都不会剥掉 `fetch_required`）。
 
 ## argo answer（直答）与 Seltz 语料

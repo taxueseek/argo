@@ -250,6 +250,25 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="TOP_K",
         help="证据核验：对 top-k 未核验结果 fetch 正文、回填证据分、输出 evidence_revision 分布（默认 3）",
     )
+    parser.add_argument(
+        "--numverify",
+        nargs="?",
+        const=3,
+        type=int,
+        default=None,
+        metavar="TOP_K",
+        help="数值印证：对摘要含价格/百分比/日期的 top-k 结果 fetch 原文比对数字，"
+             "对不上者降权（missing 强降、partial 弱降，默认 3）",
+    )
+    parser.add_argument(
+        "--verify-with",
+        nargs="?",
+        const="auto",
+        default=None,
+        metavar="ENGINE",
+        help="核对配对：主查之外用指定引擎跑一次轻量核对，独立交付官方簇与域级"
+             "重叠（缺省 auto=按查询类型选，如价格类→exa；无规则命中则跳过）",
+    )
 
     return parser
 
@@ -350,17 +369,18 @@ def _format_engine_summary(summary: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _merge_verify_timing(timing: dict[str, Any], verify_ms: float) -> None:
-    """把 verify 的墙钟并回 timing 的三个总数，保持互相自洽。
+def _merge_verify_timing(timing: dict[str, Any], verify_ms: float,
+                         stage: str = "verify") -> None:
+    """把后处理（verify/numverify/verify_with）的墙钟并回 timing 三个总数。
 
-    why：verify 发生在主搜索快照之后。此前只并回 stages_ms/process_ms，
+    why：这些后处理发生在主搜索快照之后。此前只并回 stages_ms/process_ms，
     elapsed_ms 仍是主搜索的数（实测 1173 vs 10967），调用方最先读的总账
     比它的分项之和还小 8 倍。三个数必须一起走，否则「这次为什么慢」会被
     带偏到主搜索上。
     """
     total = float(timing.get("stages_ms") or 0) + verify_ms
     timing.setdefault("stages", []).append({
-        "stage": "verify",
+        "stage": stage,
         "ms": round(verify_ms, 1),
         "pct": round(verify_ms * 100.0 / total, 1) if total > 0 else 0.0,
     })
@@ -645,15 +665,77 @@ def main():
         except Exception as e:
             print(f"  [verify error] {type(e).__name__}: {e}", file=sys.stderr)
 
+    # 数值印证切片：--numverify 对摘要含关键数字的 top-k fetch 原文比对，
+    # 冲突者降权（missing 强降/partial 弱降）。与 --verify 独立：verify 量
+    # 「正文吸收分」，这里量「摘要数字与原文对不对得上」——摘要里 5999 与
+    # 11999 打架、毒内容套医院域名讲 iPhone，都只有数字比对抓得住。
+    _t_numverify0 = time.perf_counter()
+    if args.numverify:
+        try:
+            from numeric_verify import numeric_verify_results, reorder_by_numeric
+            nv = numeric_verify_results(results.get("results") or [], args.query,
+                                        top_k=args.numverify)
+            if nv is not None:
+                results["numverify"] = nv
+                try:
+                    nre = reorder_by_numeric(results.get("results") or [])
+                    if nre.get("reordered"):
+                        results["numeric_reorder"] = nre
+                except Exception as _nre:
+                    print(f"  [numverify reorder skipped] {type(_nre).__name__}",
+                          file=sys.stderr)
+                if not args.json_output:
+                    ns = nv.get("summary") or {}
+                    print(f"  [numverify] 核对 {ns.get('checked', 0)} 条，"
+                          f"confirmed={ns.get('confirmed', 0)} partial={ns.get('partial', 0)} "
+                          f"missing={ns.get('missing', 0)} unfetchable={ns.get('unfetchable', 0)}",
+                          file=sys.stderr)
+                    nro = results.get("numeric_reorder") or {}
+                    if nro.get("reordered"):
+                        print(f"  [numverify] 冲突降权：调整 {len(nro.get('adjusted') or [])} 条，"
+                              f"位次变动 {nro.get('moved', 0)} 处", file=sys.stderr)
+        except Exception as e:
+            print(f"  [numverify error] {type(e).__name__}: {e}", file=sys.stderr)
+
+    # 核对配对：--verify-with 按查询类型用第二个引擎跑轻量核对，独立交付
+    # 官方簇与域级重叠（auto=规则表自动选，价格/规格类→exa）。不并入主排序：
+    # 核对簇的价值是给 Agent 一眼可对的第二意见，混排反而稀释。
+    _t_verifywith0 = time.perf_counter()
+    if args.verify_with is not None:
+        try:
+            from verify_with import attach_verify_with
+            vw = attach_verify_with(results, args.query, engine=args.verify_with)
+            results["verify_with"] = vw
+            if not args.json_output:
+                vwe = vw.get("engine")
+                if not vwe:
+                    print(f"  [verify-with] skipped: {vw.get('skipped')}",
+                          file=sys.stderr)
+                else:
+                    ov = (vw.get("overlap") or {})
+                    print(f"  [verify-with] {vwe} {vw.get('elapsed_ms', 0)}ms，"
+                          f"{len(vw.get('results') or [])} 条，"
+                          f"域级重叠 {ov.get('count', 0)}：{', '.join(ov.get('domains') or []) or '无'}",
+                          file=sys.stderr)
+        except Exception as e:
+            print(f"  [verify-with error] {type(e).__name__}: {e}", file=sys.stderr)
+
     # 计时盲区修补（2026-09-29）：--verify 的 top-k fetch 发生在上面计时快照
     # （process_ms 定格处）之后，净增 280–1160ms 完全不进任何账——实测
     # wall 776–1746ms vs process_ms 494–701ms，「这次为什么慢」归因指错
     # 方向。快照后移做不到（verify 是装配后的可选后处理），补一个 stage
     # 并把耗时并回三个总数（stages_ms / process_ms / elapsed_ms），
     # 三者保持自洽（2026-10-22 补 elapsed_ms）。
-    if _timing is not None and "timing" in results and args.verify:
-        _verify_ms = (time.perf_counter() - _t_verify0) * 1000.0
-        _merge_verify_timing(results["timing"], _verify_ms)
+    if _timing is not None and "timing" in results:
+        if args.verify:
+            _verify_ms = (time.perf_counter() - _t_verify0) * 1000.0
+            _merge_verify_timing(results["timing"], _verify_ms)
+        if args.numverify:
+            _numverify_ms = (time.perf_counter() - _t_numverify0) * 1000.0
+            _merge_verify_timing(results["timing"], _numverify_ms, stage="numverify")
+        if args.verify_with is not None:
+            _vw_ms = (time.perf_counter() - _t_verifywith0) * 1000.0
+            _merge_verify_timing(results["timing"], _vw_ms, stage="verify_with")
 
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}
