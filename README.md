@@ -22,6 +22,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
   <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
@@ -883,6 +884,19 @@ Apache License 2.0 © 2026 [taxueseek](https://github.com/taxueseek)
 ---
 
 > 好的搜索不是让你看得更多，是让你更敢下结论——以及知道什么时候还不该下结论。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+    <img alt="Star History Chart" width="560"
+      src="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+  </picture>
+</p>
+
+如果 Argo 帮你下过一次更踏实的结论，[点个 Star](https://github.com/taxueseek/argo/stargazers) 让更多人看到它。
 
 ---
 
