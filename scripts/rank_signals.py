@@ -106,18 +106,62 @@ def relevance_units(text: str) -> list[str]:
     return units
 
 
+_LOW_SPECIFICITY_CHARS = frozenset(
+    "官方面格价推荐怎么选择多少最新实测指南教程对比分析报告规模市场评测网载招岗哪何用行全别样书字"
+)
+_LOW_SPECIFICITY_WORDS = frozenset({
+    "best", "guide", "review", "reviews", "price", "pricing", "tutorial", "official",
+    "vs", "comparison", "download", "free", "salary", "hiring", "cost",
+})
+
+
+def _is_low_specificity_unit(u: str) -> bool:
+    if u in _LOW_SPECIFICITY_WORDS:
+        return True
+    if u.isdigit() and len(u) == 4 and (u.startswith("19") or u.startswith("20")):
+        return True
+    if len(u) >= 2 and all(c in _LOW_SPECIFICITY_CHARS for c in u):
+        return True
+    return False
+
+
 def relevance_v2_enabled() -> bool:
     """相关性算子开关：ARGO_RELEVANCE_V2=0 退回旧单字覆盖率。"""
     return _env_flag("ARGO_RELEVANCE_V2")
 
 
 def _coverage(units: set[str], title: str, snippet: str) -> tuple[float, float]:
-    """返回 (title 覆盖率, snippet 覆盖率)。"""
+    """返回 (title 覆盖率, snippet 覆盖率)。
+
+    支持意图修饰词轻量级降权（IDF/特异度锚点感知）：
+    核心实体/技术锚点赋予全权重 1.0，泛意图修饰单元赋予较低权重 0.35。
+    当查询中存在核心锚点时，若文档完全缺失所有核心锚点（仅命中修饰词），
+    施加 Anchor Gate 惩罚，避免内容农场靠修饰词虚高。
+    """
+    if not units:
+        return 0.0, 0.0
     t_units = set(relevance_units(title))
     s_units = set(relevance_units(snippet))
-    t_cov = len(units & t_units) / len(units) if units else 0.0
-    s_cov = len(units & s_units) / len(units) if units else 0.0
-    return t_cov, s_cov
+
+    anchors = {u for u in units if not _is_low_specificity_unit(u)}
+    if not anchors or len(anchors) == len(units):
+        t_cov = len(units & t_units) / len(units)
+        s_cov = len(units & s_units) / len(units)
+        return t_cov, s_cov
+
+    w_anchor = 1.0
+    w_mod = 0.35
+    total_w = len(anchors) * w_anchor + (len(units) - len(anchors)) * w_mod
+
+    def _calc(doc_set: set[str]) -> float:
+        a_hits = len(anchors & doc_set)
+        m_hits = len((units - anchors) & doc_set)
+        cov = (a_hits * w_anchor + m_hits * w_mod) / total_w
+        if a_hits == 0:
+            cov *= 0.25
+        return min(1.0, cov)
+
+    return _calc(t_units), _calc(s_units)
 
 
 def keyword_density(text: str, units: set[str]) -> float:

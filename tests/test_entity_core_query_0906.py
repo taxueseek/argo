@@ -14,7 +14,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from engines import _entity_core_query, _ENTITY_QUERY_ENGINES  # noqa: E402
+from engines import (  # noqa: E402
+    _ENCYCLOPEDIA_QUERY_ENGINES,
+    _ENTITY_QUERY_ENGINES,
+    _entity_core_query,
+)
 
 
 class TestEntityCoreQuery(unittest.TestCase):
@@ -83,6 +87,19 @@ class TestEntityCoreQuery(unittest.TestCase):
         self.assertEqual(
             _ENTITY_QUERY_ENGINES,
             {"wikidata", "thesportsdb", "local_openstreetmap"})
+        self.assertEqual(
+            _ENCYCLOPEDIA_QUERY_ENGINES,
+            {"wikipedia", "zh_wikipedia", "baidu_baike"})
+
+    def test_commercial_and_intent_modifiers_stripped(self):
+        """百科/实体引擎剥离价格、字数、评测、年份等意图修饰后缀。"""
+        for q, want in [
+            ("Claude API 官方价格", "Claude API"),
+            ("三体 全书 多少字", "三体"),
+            ("DeepSeek R1 评测", "DeepSeek R1"),
+            ("OpenAI headquarters 2025", "OpenAI"),
+        ]:
+            self.assertEqual(_entity_core_query(q), want, q)
 
 
 if __name__ == "__main__":

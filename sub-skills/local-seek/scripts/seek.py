@@ -314,7 +314,7 @@ _ENV_FALSY = ("0", "off", "no", "false", "disable", "disabled")
 
 # 重排开启时的池子上限：评分几百行在毫秒级（seek_rank 单遍计数），而浅池
 # 会让「每文件只轮到 1 行」、文件内最相关的深行进不了评分视野。
-_POOL_CAP_MAX = 400
+_POOL_CAP_MAX = 800
 
 
 def _rerank_wanted(raw_query: str, context: int, count: bool,
@@ -361,8 +361,35 @@ _POOL_ZH_EN: dict[str, str] = {
     "\u672c\u5730": "local", "\u641c\u7d22": "search", "\u68c0\u7d22": "seek", "\u7f13\u5b58": "cache",
     "\u8def\u7531": "route", "\u6392\u5e8f": "rank", "\u91cd\u6392": "rerank", "\u566a\u58f0": "noise",
     "\u62fc\u97f3": "pinyin", "\u8bc1\u636e": "evidence", "\u6293\u53d6": "fetch", "\u7194\u65ad": "breaker",
-    "\u805a\u5408": "search_engines",
+    "\u805a\u5408": "search_engines", "\u5e76\u53d1": "concurrency", "\u9650\u6d41": "ratelimit",
+    "\u8d85\u65f6": "timeout", "\u91cd\u8bd5": "retry", "\u5f02\u6b65": "async", "\u961f\u5217": "queue",
+    "\u7d22\u5f15": "index", "\u5411\u91cf": "vector", "\u6743\u91cd": "weight", "\u9608\u503c": "threshold",
+    "\u5ef6\u8fdf": "latency", "\u541e\u5410": "throughput", "\u6743\u9650": "permission", "\u8ba4\u8bc1": "auth",
+    "\u52a0\u5bc6": "crypto", "\u89e3\u6790": "parse", "\u5e8f\u5217": "serialize", "\u8fdb\u7a0b": "process",
+    "\u7ebf\u7a0b": "thread", "\u9501": "lock", "\u8c03\u5ea6": "dispatch", "\u964d\u7ea7": "fallback",
+    "\u6062\u590d": "recovery", "\u53bb\u91cd": "dedup", "\u65f6\u6548": "freshness", "\u6743\u5a01": "authority",
+    "\u914d\u989d": "quota", "\u95e8\u7981": "gate", "\u6570\u636e": "data", "\u5b9a\u65f6": "schedule",
+    "\u7b56\u7565": "policy", "\u6307\u6807": "metrics", "\u7ec8\u7aef": "cli", "\u63a5\u53e3": "api",
+    "\u6e32\u67d3": "render", "\u89c6\u9891": "video", "\u5b57\u5e55": "subtitle", "\u7ec4\u4ef6": "component",
+    "\u5185\u5b58": "memory", "\u65e5\u5fd7": "log", "\u90e8\u7f72": "deploy", "\u7f51\u7edc": "network",
+    "\u4ee3\u7406": "proxy", "\u6570\u636e\u5e93": "db",
 }
+
+_DEF_LINE_RE = re.compile(
+    r"^\s*(?:(?:async|pub|export|public|private|protected|static|inline|const)\s+)*"
+    r"(?:def|class|fn|func|struct|interface|enum|type|trait|mod)\s+[A-Za-z_]"
+)
+
+
+def _line_buf_key(item: tuple[int, str]) -> tuple[int, int, str]:
+    ln, txt = item
+    if _DEF_LINE_RE.match(txt):
+        pri = 0
+    elif txt.lstrip().startswith(("#", "//", "/*", "*")):
+        pri = 2
+    else:
+        pri = 1
+    return pri, ln, txt
 
 
 def _select_pool(candidates, cap: int, per_file: int = 8,
@@ -382,9 +409,9 @@ def _select_pool(candidates, cap: int, per_file: int = 8,
         if len(rows) < buf_limit:
             rows.append((ln, txt))
         elif buf_limit > 1:
-            largest = max(rows)
-            if (ln, txt) < largest:
-                rows[rows.index(largest)] = (ln, txt)
+            worst = max(rows, key=_line_buf_key)
+            if _line_buf_key((ln, txt)) < _line_buf_key(worst):
+                rows[rows.index(worst)] = (ln, txt)
 
     if not raw_by_file:
         return []

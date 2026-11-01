@@ -575,9 +575,10 @@ _SEMANTIC_ENGINES = frozenset({
 # 统一剥疑问前缀与属性词，保留核心实体。只作用于实体型引擎；通用 web 引擎
 # 不动（属性词对全文检索是有用信号）。
 _ENTITY_QUERY_ENGINES = frozenset({"wikidata", "thesportsdb", "local_openstreetmap"})
+_ENCYCLOPEDIA_QUERY_ENGINES = frozenset({"wikipedia", "zh_wikipedia", "baidu_baike"})
 _ENTITY_Q_PREFIX_RE = re.compile(
     r"(?i)^\s*(where\s+(is|are|was|were)|where'?s|who\s+(is|are|was)|who'?s"
-    r"|what\s+(is|are)|when\s+(was|is|did)|which\s+\w+\s+(is|was)"
+    r"|what\s+(is|are)|when\s+(was|is|did)|which\s+\w+\s+(is|was)|how\s+much\s+(is|are)"
     r"|哪里|在哪[里儿]?|是谁?|是什么|什么时候|哪一[个国年])\s*",
 )
 # 英文属性词带 \b（空格分词下词边界天然成立）；中文属性词不进此表——
@@ -586,16 +587,21 @@ _ENTITY_Q_PREFIX_RE = re.compile(
 _ENTITY_ATTR_RE = re.compile(
     r"(?i)\b(founding year|founded|established|headquarters?|located( in)?"
     r"|population|capital|address|club|team|stadium|league|album|discography"
-    r"|song|movie|film|director|cast)\b",
+    r"|song|movie|film|director|cast|price|pricing|cost|reviews?|tutorial"
+    r"|guide|download|official|comparison|salary|hiring)\b",
 )
 # 中文属性词（含繁体）：只在查询尾部剥离——中文自然语序是实体名在前、
 # 属性词在后；不碰串中，「电影频道」「歌曲排行榜」这类实体名内含属性词，
 # 串中剥离会误伤。长词优先，避免「成立年份」被「成立」截断残留「年份」。
 _ENTITY_ATTR_TAILS = (
-    "成立年份", "成立", "创立", "創立", "总部", "總部", "位置", "球队", "球隊",
-    "俱乐部", "俱樂部", "职能", "職能", "职责", "職責", "专辑", "專輯",
-    "歌曲", "电影", "電影", "导演", "導演", "主演",
+    "成立年份", "官方价格", "市场规模", "成立", "创立", "創立", "总部", "總部",
+    "位置", "球队", "球隊", "俱乐部", "俱樂部", "职能", "職能", "职责", "職責",
+    "专辑", "專輯", "歌曲", "电影", "電影", "导演", "導演", "主演",
+    "多少钱", "多少字", "怎么选", "怎么样", "价格", "價格", "全书", "字数",
+    "万字", "评测", "对比", "推荐", "官网", "官方", "下载", "教程", "指南",
+    "简介", "招聘", "岗位",
 )
+_TRAILING_YEAR_RE = re.compile(r"\s+(?:19\d\d|20[0-3]\d)\s*$")
 
 
 def _entity_core_query(query: str) -> str:
@@ -622,6 +628,11 @@ def _entity_core_query(query: str) -> str:
         if not changed and q.endswith("的") and len(q) > 3:
             q = q[:-1].strip()
             changed = True
+        if not changed:
+            ym = _TRAILING_YEAR_RE.search(q)
+            if ym and ym.start() >= 2 and not q[:ym.start()].strip().isdigit():
+                q = q[:ym.start()].strip()
+                changed = True
     q = re.sub(r"[?？:：，,]+", " ", q)
     q = re.sub(r"\s+", " ", q).strip()
     return q or raw
@@ -809,8 +820,8 @@ def search(query: str, engine: str, n: int = 5, timeout: float = 8, depth: str =
     # 语义型引擎不识别平台结构化语法，剥掉字段只留核心词；透传型保持原 query。
     if engine in _SEMANTIC_ENGINES:
         query = strip_structured(query)
-    elif engine in _ENTITY_QUERY_ENGINES:
-        # 实体型引擎：自然语言句（疑问前缀/属性词）会让实体搜索接口空结果
+    elif engine in _ENTITY_QUERY_ENGINES or engine in _ENCYCLOPEDIA_QUERY_ENGINES:
+        # 实体/百科型引擎：自然语言句（疑问前缀/属性词/价格评测后缀）会让接口空结果
         query = _entity_core_query(query)
     eff_n = bucket_n(engine, n)
 

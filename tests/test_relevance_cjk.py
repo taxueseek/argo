@@ -96,6 +96,15 @@ class TestRelevanceScoring:
         q = self._q()
         assert _score_relevance(q, "完全无关的标题内容", "") == 0.0
 
+    def test_anchor_specificity_weights_protect_core_concept(self):
+        """核心锚点未被命中（仅命中 2026/推荐/评测）必须被 Anchor Gate 深度抑制。"""
+        q = set(_relevance_units("Claude API 官方价格 2026"))
+        # 仅命中泛修饰词 2026/价格/官方
+        junk = _score_relevance(q, "2026 最新官方价格表大全及行情评测", "")
+        # 命中核心锚点 claude api
+        core = _score_relevance(q, "Anthropic Claude API Pricing Model Overview", "")
+        assert core > junk * 2, f"核心实体得分({core}) 应远高于仅命中修饰词的垃圾结果({junk})"
+
     def test_empty_query_returns_neutral(self):
         """空查询返回中性分（既有契约，不得被本次改动破坏）。"""
         assert _score_relevance(set(), "任意标题", "") == 0.5
