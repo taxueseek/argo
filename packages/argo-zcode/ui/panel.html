@@ -5,164 +5,481 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Argo 面板</title>
 <style>
-  :root { color-scheme: light dark; }
+  :root {
+    color-scheme: light dark;
+    --fg: #1a1a1a;
+    --muted: #6b7280;
+    --line: color-mix(in srgb, currentColor 14%, transparent);
+    --fill: color-mix(in srgb, currentColor 5%, transparent);
+    --fill-2: color-mix(in srgb, currentColor 9%, transparent);
+    --accent: #3478f6;
+    --ok: #2f9e44;
+    --warn: #d9820b;
+    --danger: #cc3333;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e8e8e8;
+      --muted: #9aa0a6;
+      --ok: #51cf66;
+      --warn: #ffa94d;
+      --danger: #ff6b6b;
+    }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; font: 13px/1.6 -apple-system, "PingFang SC", sans-serif;
-         background: transparent; color: #1a1a1a; }
-  @media (prefers-color-scheme: dark) { body { color: #e8e8e8; } }
-  h2 { font-size: 14px; margin: 18px 0 8px; }
-  .hint { opacity: .65; font-size: 12px; margin: 0 0 10px; }
-  .row { display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-         border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-         border-radius: 8px; margin-bottom: 6px; background: color-mix(in srgb, currentColor 4%, transparent); }
-  .row .meta { flex: 1; min-width: 0; }
-  .row .name { font-weight: 600; }
-  .row .desc { opacity: .6; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; flex-shrink: 0;
-           border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
-  .badge.paid { color: #c60; border-color: #c60; }
-  .badge.off { opacity: .45; text-decoration: line-through; }
-  .toggle { position: relative; width: 34px; height: 20px; flex-shrink: 0; cursor: pointer; }
-  .toggle input { opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
-  .toggle .knob { position: absolute; inset: 0; border-radius: 10px; background: #8884; transition: .15s; pointer-events: none; }
-  .toggle .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-                         border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #0004; transition: .15s; }
-  .toggle input:checked + .knob { background: #3478f6; }
-  .toggle input:checked + .knob::after { transform: translateX(14px); }
-  input[type=text], input[type=password] { padding: 5px 8px; border-radius: 6px;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    background: transparent; color: inherit; font: inherit; }
-  button { padding: 5px 12px; border-radius: 6px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-           background: transparent; color: inherit; cursor: pointer; font: inherit; }
-  button:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
-  .keyrow { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
-  .keyrow code { flex: 1; font-size: 12px; }
-  .status { font-size: 11px; opacity: .7; margin-top: 4px; min-height: 16px; }
-  .status.err { color: #d33; }
-  #loading { opacity: .6; padding: 24px 0; }
-  .search { width: 100%; margin-bottom: 8px; }
-  details summary { cursor: pointer; opacity: .8; }
+  body { margin: 0; padding: 0 20px 32px; font: 13px/1.55 -apple-system, "PingFang SC", sans-serif;
+         background: transparent; color: var(--fg); }
+  code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  button { font: inherit; color: inherit; }
+
+  .top { display: flex; align-items: center; gap: 12px; padding: 18px 0 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .logo { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+          background: var(--accent); color: #fff; font-weight: 700; font-size: 13px; }
+  h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  .sub { font-size: 11px; color: var(--muted); }
+
+  .btn { padding: 5px 12px; border-radius: 7px; border: 1px solid var(--line);
+         background: transparent; cursor: pointer; }
+  .btn:hover { background: var(--fill); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+  .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+  .btn.small { padding: 3px 9px; font-size: 12px; border-radius: 6px; }
+  .btn[disabled] { opacity: .45; cursor: default; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .tab { padding: 7px 12px 8px; border: 0; background: transparent; cursor: pointer;
+         color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab:hover { color: var(--fg); }
+
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 240px)); gap: 10px; }
+  .metric { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--fill); }
+  .metric .k { font-size: 11px; color: var(--muted); }
+  .metric .v { font-size: 22px; font-weight: 600; margin-top: 2px; }
+  .metric .s { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .card h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+  .card .hint { margin: 0 0 10px; font-size: 11px; color: var(--muted); }
+
+  .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .preset { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+            background: transparent; text-align: left; cursor: pointer; }
+  .preset:hover { background: var(--fill); }
+  .preset.recommended { border-color: var(--accent); }
+  .preset .t { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .preset .name { font-weight: 600; }
+  .preset .d { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; flex-shrink: 0;
+           border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+  .badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+  .badge.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+  .key { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; margin-bottom: 8px; background: var(--fill); }
+  .key-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .key-head .kname { font-weight: 600; }
+  .key-head .kid { font-size: 11px; color: var(--muted); }
+  .key-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .key-actions input { flex: 1 1 200px; min-width: 150px; padding: 5px 9px; border-radius: 6px;
+                       border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; }
+  .key-actions input::placeholder { color: var(--muted); }
+
+  .kv { display: grid; grid-template-columns: 92px 1fr; gap: 4px 12px; font-size: 12px; }
+  .kv .k { color: var(--muted); }
+  .kv .v { overflow-wrap: anywhere; }
+
+  pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--fill);
+        border: 1px solid var(--line); overflow-x: auto; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .toast { position: sticky; top: 8px; z-index: 5; margin: 0 0 10px; padding: 7px 12px; border-radius: 8px;
+           background: color-mix(in srgb, var(--ok) 16%, transparent);
+           border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); font-size: 12px; }
+  .toast.err { background: color-mix(in srgb, var(--danger) 14%, transparent);
+               border-color: color-mix(in srgb, var(--danger) 40%, transparent); color: var(--danger); }
+
+  .empty { padding: 20px 0; color: var(--muted); font-size: 12px; }
+  #loading { padding: 40px 0; color: var(--muted); }
 </style>
 </head>
 <body>
 <div id="loading">正在连接 Argo…</div>
-<div id="main" hidden>
-  <p class="hint" id="envhint"></p>
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">A</span>
+      <div style="min-width:0">
+        <h1>Argo 面板</h1>
+        <div class="sub" id="meta"></div>
+      </div>
+    </div>
+    <button class="btn" id="refresh" type="button">刷新</button>
+  </header>
 
-  <h2>密钥</h2>
-  <p class="hint">写入 argo env 文件（chmod 600），值不回显；清除后环境变量或 .env 提供的同名 key 会重新露出。</p>
-  <div id="keys"></div>
-  <div class="keyrow">
-    <input type="text" id="newkey" placeholder="KEY（如 EXA_API_KEY）" style="flex:1">
-    <input type="password" id="newval" placeholder="值" style="flex:1.4">
-    <button id="addkey">保存</button>
-  </div>
-  <div class="status" id="keystatus"></div>
+  <nav class="tabs" role="tablist" aria-label="面板分区">
+    <button class="tab active" id="tabbtn-dashboard" role="tab" aria-controls="tab-dashboard" aria-selected="true" type="button">看板</button>
+    <button class="tab" id="tabbtn-keys" role="tab" aria-controls="tab-keys" aria-selected="false" type="button">密钥</button>
+    <button class="tab" id="tabbtn-diagnostics" role="tab" aria-controls="tab-diagnostics" aria-selected="false" type="button">诊断</button>
+  </nav>
 
-  <h2>引擎开关</h2>
-  <p class="hint">写入 config.local.yaml（argo 本机覆盖层），即时生效；关闭的引擎不再参与路由。</p>
-  <input type="text" class="search" id="search" placeholder="过滤引擎…">
-  <div id="engines"></div>
-  <div class="status" id="engstatus"></div>
+  <div id="toast" class="toast" role="status" hidden></div>
 
-  <details>
-    <summary>诊断</summary>
-    <div class="status" id="diag" style="white-space:pre-wrap; margin-top:8px"></div>
-  </details>
+  <main>
+    <section id="tab-dashboard" role="tabpanel" aria-labelledby="tabbtn-dashboard"></section>
+    <section id="tab-keys" role="tabpanel" aria-labelledby="tabbtn-keys" hidden></section>
+    <section id="tab-diagnostics" role="tabpanel" aria-labelledby="tabbtn-diagnostics" hidden></section>
+  </main>
 </div>
 
 <script type="module">
 import { App } from "./vendor/ext-apps.mjs";
 
+(async () => {
 const app = new App({ name: "argo-panel", version: "2.10.1" });
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+};
+
+const PRESETS = [
+  {
+    id: "fast",
+    name: "极速日常",
+    badge: "低延迟",
+    desc: "免费源优先，关闭 TF-IDF 重排与数值交叉核验。",
+    recommended: false
+  },
+  {
+    id: "standard",
+    name: "平衡生产",
+    badge: "推荐",
+    desc: "开启 TF-IDF 重排、数值交叉核验与去重，主流付费源参与。",
+    recommended: true
+  },
+  {
+    id: "deep",
+    name: "深度调研",
+    badge: "完整核验",
+    desc: "在平衡档之上开启语义证据层，适合长报告与事实核验。",
+    recommended: false
+  }
+];
+
+const S = { data: null, diag: null, tab: "dashboard", error: "", busy: false };
 
 async function callTool(name, args = {}) {
-  const r = await app.callServerTool({ name, arguments: args });
-  if (r.isError) throw new Error(r.content?.[0]?.text ?? "工具调用失败");
-  return JSON.parse(r.content?.[0]?.text ?? "{}");
+  const result = await app.callServerTool({ name, arguments: args });
+  if (result.isError) throw new Error(result.content?.[0]?.text ?? "工具调用失败");
+  return JSON.parse(result.content?.[0]?.text ?? "{}");
 }
 
-async function refresh() {
-  const data = await callTool("get_panel");
-  $("envhint").textContent = `argo env：${data.env_file ?? "未找到"}`;
-  $("diag").textContent = JSON.stringify({ env_file: data.env_file, keys: data.configured_keys.length, engines: data.engines.length }, null, 2);
-  renderKeys(data.configured_keys);
-  window.__engines = data.engines;
-  renderEngines($("search").value);
+let toastTimer = null;
+function toast(text, isError = false) {
+  const node = $("toast");
+  node.textContent = text;
+  node.className = isError ? "toast err" : "toast";
+  node.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { node.hidden = true; }, 4000);
 }
 
-function renderKeys(keys) {
-  $("keys").innerHTML = keys.map((k) => `
-    <div class="keyrow">
-      <code>${esc(k)}</code>
-      <span class="badge">已配置</span>
-      <button data-unset="${esc(k)}">清除</button>
-    </div>`).join("") || `<p class="hint">（尚无面板写入的 key；凭据库/.env 提供的密钥不在面板显示范围）</p>`;
-  $("keys").querySelectorAll("[data-unset]").forEach((b) =>
-    b.addEventListener("click", async () => {
-      try {
-        await callTool("unset_env", { key: b.dataset.unset });
-        $("keystatus").textContent = `已清除 ${b.dataset.unset}`;
-        await refresh();
-      } catch (e) { $("keystatus").textContent = "清除失败：" + e.message; $("keystatus").className = "status err"; }
-    }));
+function setTab(tab) {
+  S.tab = tab;
+  for (const id of ["dashboard", "keys", "diagnostics"]) {
+    const panel = $("tab-" + id);
+    const button = $("tabbtn-" + id);
+    const active = id === tab;
+    if (panel) panel.hidden = !active;
+    if (button) {
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    }
+  }
+  if (tab === "diagnostics") {
+    renderDiagnostics();
+    return;
+  }
+  if (!S.data) {
+    if (S.error) renderError(S.error);
+    return;
+  }
+  if (tab === "dashboard") renderDashboard();
+  if (tab === "keys") renderKeys();
 }
 
-function renderEngines(filter = "") {
-  const f = filter.trim().toLowerCase();
-  const list = (window.__engines ?? []).filter((e) =>
-    !f || e.name.toLowerCase().includes(f) || e.label.toLowerCase().includes(f));
-  $("engines").innerHTML = list.slice(0, 120).map((e) => `
-    <div class="row">
-      <label class="toggle"><input type="checkbox" data-engine="${esc(e.name)}" ${e.enabled ? "checked" : ""}><span class="knob"></span></label>
-      <div class="meta">
-        <div class="name ${e.enabled ? "" : "off"}">${esc(e.label)} <span style="opacity:.5;font-weight:400">${esc(e.name)}</span></div>
-        <div class="desc">${esc(e.desc)}</div>
-      </div>
-      ${e.explicit_only ? '<span class="badge">显式</span>' : ""}
-      <span class="badge ${e.cost_tier === "free" ? "" : "paid"}">${esc(e.cost_tier ?? "?")}</span>
-    </div>`).join("") + (list.length > 120 ? `<p class="hint">仅显示前 120 条，用上方过滤框收窄。</p>` : "");
-  $("engines").querySelectorAll("[data-engine]").forEach((box) =>
-    box.addEventListener("change", async () => {
-      const name = box.dataset.engine;
-      try {
-        await callTool("set_engine", { name, enabled: box.checked });
-        $("engstatus").textContent = `${name} → ${box.checked ? "启用" : "停用"}（已写覆盖层）`;
-        $("engstatus").className = "status";
-        const e = (window.__engines ?? []).find((x) => x.name === name);
-        if (e) e.enabled = box.checked;
-      } catch (err2) {
-        $("engstatus").textContent = `保存失败：${err2.message}`;
-        $("engstatus").className = "status err";
-        box.checked = !box.checked;
-      }
-    }));
+function renderError(message) {
+  const root = $("tab-" + S.tab);
+  root.replaceChildren();
+  const box = el("div", "card");
+  box.appendChild(el("h2", null, "连接有问题"));
+  box.appendChild(el("p", "hint", message));
+  const retry = el("button", "btn", "重试");
+  retry.type = "button";
+  retry.addEventListener("click", () => { void refresh(); });
+  box.appendChild(retry);
+  root.appendChild(box);
 }
 
-$("search").addEventListener("input", () => renderEngines($("search").value));
-$("addkey").addEventListener("click", async () => {
-  const key = $("newkey").value.trim(), value = $("newval").value;
-  if (!key || !value) { $("keystatus").textContent = "KEY 与值都要填"; $("keystatus").className = "status err"; return; }
+async function refresh(keepScroll = true) {
+  const y = window.scrollY;
   try {
-    await callTool("set_env", { key, value });
-    $("keystatus").textContent = `已保存 ${key}`;
-    $("keystatus").className = "status";
-    $("newkey").value = ""; $("newval").value = "";
-    await refresh();
-  } catch (e) { $("keystatus").textContent = "保存失败：" + e.message; $("keystatus").className = "status err"; }
-});
+    S.data = await callTool("get_panel");
+    S.diag = null;
+    S.error = "";
+    $("meta").textContent = S.data.version ? "v" + S.data.version : "";
+    setTab(S.tab);
+    if (keepScroll) window.scrollTo(0, y);
+  } catch (error) {
+    S.error = error.message;
+    $("meta").textContent = "未连接";
+    renderError(error.message);
+    toast("读取失败：" + error.message, true);
+  }
+}
+
+// ── 看板 ─────────────────────────────────────────────────────────────────────
+
+function renderDashboard() {
+  const root = $("tab-dashboard");
+  root.replaceChildren();
+  if (!S.data) return;
+
+  const keys = S.data.keys || [];
+  const configured = keys.filter((item) => item.configured).length;
+
+  const metrics = el("div", "metrics");
+  const card = el("div", "metric");
+  card.appendChild(el("div", "k", "API 密钥"));
+  card.appendChild(el("div", "v", String(configured)));
+  card.appendChild(el("div", "s", "已配置"));
+  metrics.appendChild(card);
+  root.appendChild(metrics);
+
+  const presets = el("div", "card");
+  presets.appendChild(el("h2", null, "工作流快速预设"));
+  presets.appendChild(el("p", "hint", "一键对齐常用场景的检索策略，改的是 argo 运行时开关，随时可切回。"));
+  const grid = el("div", "presets");
+  for (const preset of PRESETS) {
+    const button = el("button", "preset" + (preset.recommended ? " recommended" : ""));
+    button.type = "button";
+    const head = el("div", "t");
+    head.appendChild(el("span", "name", preset.name));
+    head.appendChild(el("span", "badge " + (preset.recommended ? "ok" : "accent"), preset.badge));
+    button.appendChild(head);
+    button.appendChild(el("div", "d", preset.desc));
+    button.addEventListener("click", () => { void applyPreset(preset); });
+    grid.appendChild(button);
+  }
+  presets.appendChild(grid);
+  root.appendChild(presets);
+
+  const route = el("div", "card");
+  route.appendChild(el("h2", null, "路由观测"));
+  route.appendChild(el("p", "hint", "在终端运行 argo stats 查看最近的路由决策、引擎成功率与配额消耗。"));
+  root.appendChild(route);
+}
+
+async function applyPreset(preset) {
+  if (S.busy) return;
+  S.busy = true;
+  try {
+    await callTool("apply_preset", { preset: preset.id });
+    toast(`${preset.name}已应用`);
+  } catch (error) {
+    toast("应用失败：" + error.message, true);
+  } finally {
+    S.busy = false;
+  }
+}
+
+// ── 密钥 ─────────────────────────────────────────────────────────────────────
+
+function renderKeys() {
+  const root = $("tab-keys");
+  root.replaceChildren();
+  if (!S.data) return;
+
+  const labelOf = (name) => {
+    const engine = (S.data.engines || []).find((entry) => entry.name === name);
+    return engine ? engine.label : name;
+  };
+  const disabled = (name) => {
+    const engine = (S.data.engines || []).find((entry) => entry.name === name);
+    return Boolean(engine && engine.status === "disabled");
+  };
+  const items = S.data.keys || [];
+  const allOff = (item) => item.engines.length > 0 && item.engines.every(disabled);
+  const configured = items.filter((item) => item.configured && !allOff(item));
+  const pending = items.filter((item) => !item.configured && !allOff(item));
+  const off = items.filter(allOff);
+
+  root.appendChild(el("p", "hint", `写入 ${S.data.env_file || "argo env 文件"}，值不回显。`));
+
+  const group = (title, rows) => {
+    if (!rows.length) return;
+    const card = el("div", "card");
+    card.appendChild(el("h2", null, title));
+    for (const item of rows) card.appendChild(keyRow(item, labelOf));
+    root.appendChild(card);
+  };
+  group("已配置", configured);
+  group("待配置", pending);
+  group("已停用", off);
+}
+
+function keyRow(item, labelOf) {
+  const wrap = el("div", "key");
+  const head = el("div", "key-head");
+  head.appendChild(el("span", "kname", labelOf(item.engines[0]) || item.key));
+  head.appendChild(el("code", "kid", item.key));
+  if (item.engines.length > 1) {
+    const others = item.engines.slice(1).map(labelOf);
+    head.appendChild(el("span", "kid", "也用于 " + others.slice(0, 3).join(" / ") + (others.length > 3 ? " 等" : "")));
+  }
+  if (item.configured) head.appendChild(el("span", "badge ok", "已配置"));
+  else head.appendChild(el("span", "badge warn", "未配置"));
+  wrap.appendChild(head);
+
+  const actions = el("div", "key-actions");
+  const field = document.createElement("input");
+  field.type = "password";
+  field.autocomplete = "off";
+  field.spellcheck = false;
+  field.placeholder = item.configured ? "输入新值覆盖（留空不改）" : "粘贴密钥";
+  field.setAttribute("aria-label", item.key + " 的值");
+  actions.appendChild(field);
+
+  const save = el("button", "btn small primary", "保存");
+  save.type = "button";
+  save.addEventListener("click", async () => {
+    const value = field.value;
+    if (!value.trim()) {
+      toast("值不能为空", true);
+      return;
+    }
+    save.disabled = true;
+    try {
+      await callTool("set_env", { key: item.key, value });
+      field.value = "";
+      toast(`${item.key} 已保存`);
+      await refresh();
+    } catch (error) {
+      toast("保存失败：" + error.message, true);
+    } finally {
+      save.disabled = false;
+    }
+  });
+  actions.appendChild(save);
+
+  if (item.configured) {
+    const clear = el("button", "btn small danger", "清除");
+    clear.type = "button";
+    clear.addEventListener("click", async () => {
+      clear.disabled = true;
+      try {
+        await callTool("unset_env", { key: item.key });
+        toast(`${item.key} 已清除`);
+        await refresh();
+      } catch (error) {
+        toast("清除失败：" + error.message, true);
+      } finally {
+        clear.disabled = false;
+      }
+    });
+    actions.appendChild(clear);
+  }
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+// ── 诊断 ─────────────────────────────────────────────────────────────────────
+
+async function loadDiagnostics() {
+  const root = $("tab-diagnostics");
+  try {
+    S.diag = await callTool("get_diagnostics");
+  } catch (error) {
+    root.replaceChildren(el("p", "empty", "检测失败：" + error.message));
+    return;
+  }
+  if (S.tab === "diagnostics") renderDiagnostics();
+}
+
+function renderDiagnostics() {
+  const root = $("tab-diagnostics");
+  root.replaceChildren();
+  if (!S.diag) {
+    root.appendChild(el("p", "empty", "正在检测…"));
+    void loadDiagnostics();
+    return;
+  }
+  const d = S.diag;
+
+  const head = el("div", "toolbar");
+  const again = el("button", "btn", "重新检测");
+  again.type = "button";
+  again.addEventListener("click", () => {
+    S.diag = null;
+    renderDiagnostics();
+  });
+  head.appendChild(again);
+  root.appendChild(head);
+
+  const runtime = el("div", "card");
+  runtime.appendChild(el("h2", null, "基础信息"));
+  const kv = el("div", "kv");
+  const row = (key, value) => {
+    kv.appendChild(el("div", "k", key));
+    kv.appendChild(el("div", "v", value ?? "—"));
+  };
+  row("argo 版本", d.version ? "v" + d.version : "未知");
+  row("argo 解释器", d.argo_python || "未知");
+  row("argo 入口", d.argo_bin);
+  row("配置基线", d.config_base);
+  row("本机覆盖层", (d.config_local || "—") + (d.config_local_exists ? "（存在）" : "（未创建）"));
+  row("env 文件", `${d.env_file || "—"}（权限 ${d.env_mode || (d.platform === "win32" ? "不适用" : "未知")}）`);
+  runtime.appendChild(kv);
+  root.appendChild(runtime);
+
+  const daemon = el("div", "card");
+  daemon.appendChild(el("h2", null, "daemon"));
+  daemon.appendChild(el("pre", null, d.daemon || "未启动"));
+  root.appendChild(daemon);
+
+  const budget = el("div", "card");
+  budget.appendChild(el("h2", null, "额度与预算"));
+  budget.appendChild(el("pre", null, d.budget || "无预算记录"));
+  root.appendChild(budget);
+
+  const paths = el("div", "card");
+  paths.appendChild(el("h2", null, "路径自检"));
+  paths.appendChild(el("p", "hint", d.paths_code === 0 ? "全部通过" : `退出码 ${d.paths_code}`));
+  paths.appendChild(el("pre", null, d.paths_check || "无输出"));
+  root.appendChild(paths);
+}
+
+// ── 启动 ─────────────────────────────────────────────────────────────────────
+
+$("refresh").addEventListener("click", () => { void refresh(); });
+for (const id of ["dashboard", "keys", "diagnostics"]) {
+  $("tabbtn-" + id).addEventListener("click", () => setTab(id));
+}
 
 try {
   await app.connect();
   $("loading").hidden = true;
-  $("main").hidden = false;
-  await refresh();
-} catch (e) {
-  $("loading").textContent = "连接宿主失败：" + e.message;
+  $("app").hidden = false;
+  await refresh(false);
+} catch (error) {
+  $("loading").textContent = "连接宿主失败：" + error.message;
 }
+})();
 </script>
 </body>
 </html>
