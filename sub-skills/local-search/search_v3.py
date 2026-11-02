@@ -69,10 +69,22 @@ from engine_registry import EngineRegistry, get_registry
 from local_health_check import get_available_engines
 from smart_router import route_query
 
-try:
-    from circuit_breaker import get_breaker as _get_circuit_breaker
-except ImportError:
-    _get_circuit_breaker = None
+def _get_circuit_breaker():
+    """**调用期**从 sys.modules 解析熔断器工厂，不在导入期绑死函数对象。
+
+    为什么：本模块在导入期 `from circuit_breaker import get_breaker` 绑定的是
+    那一刻的模块对象；`circuit_breaker.STATE_PATH` 由 ARGO_STATE_DIR 在导入期
+    派生，而测试会用 `sys.modules.pop` 把它重导入（test_argo_paths 的
+    `test_module_paths_under_state_root`）。重导入后 `import circuit_breaker`
+    拿到新模块对象，本模块绑的仍是旧模块的函数——「记录熔断」写新路径、
+    「读取熔断」读旧路径，同一个类对默认路径给出两个答案，表现为全套件红、
+    单跑全绿。运行期解析让两侧永远指向同一个模块对象。
+    """
+    try:
+        import circuit_breaker
+        return circuit_breaker.get_breaker()
+    except Exception:
+        return None
 
 logger = logging.getLogger("local_search.search_v3")
 if not logger.handlers:
