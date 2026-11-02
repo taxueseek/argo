@@ -124,6 +124,26 @@ def _isolate_conn_pool():
 
 
 @pytest.fixture(autouse=True)
+def _restore_argo_env():
+    """ARGO_* 环境变量每用例快照-恢复（2026-11-02）。
+
+    一批用例绕过 monkeypatch 直接写 ``os.environ``（test_seek_locator 三处、
+    test_route_combo_dedupe、test_local_bridge 等），靠手写恢复；漏恢复时
+    同进程后续用例与 subprocess 套件（test_subskills_suites）继承脏环境。
+    实测（2026-11-02）：全量跑一次 3 条 seek 相关用例齐红、连复跑 5 次
+    不复现——正是「单跑全绿、全量偶发」的顺序彩票形态。与 conn_pool /
+    adaptive 同一理由：跨用例共享的进程级状态必须每用例复位。只管 ARGO_*
+    前缀；PATH 的 repo/bin 注入是 conftest 自身要下传给 subprocess 的，
+    不在此层。
+    """
+    snap = {k: v for k, v in os.environ.items() if k.startswith("ARGO_")}
+    yield
+    for k in [k for k in os.environ if k.startswith("ARGO_") and k not in snap]:
+        del os.environ[k]
+    os.environ.update(snap)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_adaptive_and_breaker(tmp_path_factory, monkeypatch):
     """自适应成绩与熔断状态都是**跨用例共享的进程级/磁盘状态**。
 

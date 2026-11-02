@@ -28,6 +28,13 @@ class TestSeekLocator(unittest.TestCase):
         for k in ("ARGO_LOCAL_SEEK_PATH", "ARGO_LOCAL_SEEK_ROOTS"):
             os.environ.pop(k, None)
 
+    def tearDown(self):
+        # 与 setUp 对称：本文件多个用例直接写 os.environ（覆盖自定义路径），
+        # 不恢复会把 /nonexistent/seek.py 之类的脏值残留进主进程，被
+        # subprocess 套件（test_subskills_suites）继承（2026-11-02 实测）。
+        for k in ("ARGO_LOCAL_SEEK_PATH", "ARGO_LOCAL_SEEK_ROOTS"):
+            os.environ.pop(k, None)
+
     def _tmp_file(self):
         d = tempfile.TemporaryDirectory()
         p = Path(d.name) / "seek.py"
