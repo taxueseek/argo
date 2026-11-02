@@ -588,7 +588,9 @@ _ENTITY_ATTR_RE = re.compile(
     r"(?i)\b(founding year|founded|established|headquarters?|located( in)?"
     r"|population|capital|address|club|team|stadium|league|album|discography"
     r"|song|movie|film|director|cast|price|pricing|cost|reviews?|tutorial"
-    r"|guide|download|official|comparison|salary|hiring)\b",
+    r"|guide|download|official|comparison|salary|hiring"
+    r"|revenue|earnings|market cap|market value|net profit|lifespan"
+    r"|feeding|breeding|ingredients|efficacy|dosage|side effects)\b",
 )
 # 中文属性词（含繁体）：只在查询尾部剥离——中文自然语序是实体名在前、
 # 属性词在后；不碰串中，「电影频道」「歌曲排行榜」这类实体名内含属性词，
@@ -600,6 +602,10 @@ _ENTITY_ATTR_TAILS = (
     "多少钱", "多少字", "怎么选", "怎么样", "价格", "價格", "全书", "字数",
     "万字", "评测", "对比", "推荐", "官网", "官方", "下载", "教程", "指南",
     "简介", "招聘", "岗位",
+    # 2026-11-02 补：财报/生物/医药类属性后缀（原表缺失致「贵州茅台 2025年报
+    # 营收」「大熊猫 寿命 怎么养」等查询剥离前后一字不差，实体源仍 0 命中）
+    "净利润", "营收", "市值", "年报", "季报", "财报", "寿命",
+    "怎么养", "饲养", "繁殖", "成分", "功效", "用法", "用量", "副作用",
 )
 _TRAILING_YEAR_RE = re.compile(r"\s+(?:19\d\d|20[0-3]\d)\s*$")
 

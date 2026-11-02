@@ -101,6 +101,19 @@ class TestEntityCoreQuery(unittest.TestCase):
         ]:
             self.assertEqual(_entity_core_query(q), want, q)
 
+    def test_finance_biology_modifiers_stripped(self):
+        """财报/生物/医药类属性后缀剥离（2026-11-02 补表）。
+
+        原表缺这些词，导致「贵州茅台 2025年报 营收」「大熊猫 寿命 怎么养」
+        剥离前后一字不差，实体源仍然 0 命中或返回无关个体词条。
+        """
+        for q, want in [
+            ("贵州茅台 2025年报 营收", "贵州茅台"),
+            ("大熊猫 寿命 怎么养", "大熊猫"),
+            ("英伟达 2025 财报", "英伟达"),
+        ]:
+            self.assertEqual(_entity_core_query(q), want, q)
+
 
 if __name__ == "__main__":
     unittest.main()

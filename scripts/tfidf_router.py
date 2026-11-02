@@ -37,6 +37,14 @@ DOMAIN_PROFILES_PATH = BACKENDS_DIR / "domain_profiles.json"
 
 _TOKEN_PATTERN = re.compile(r"[一-鿿\u3040-\u30ff\uac00-\ud7af]|[a-zA-Z0-9]+")
 
+# 通用搜索泛域（与 route_combo._GENERAL_ENGINES 的 catch-all 部分对齐，但不含
+# arxiv/wikipedia 这类有明确用途的宽域源）：这些引擎的 domain_profiles 文档
+# 覆盖大量通用词，概念向量对它们几乎恒为高值，会挤掉垂直引擎。
+_CATCH_ALL_CONCEPT = frozenset({
+    "anysearch", "byted", "bocha", "octen", "local_search", "zhihu",
+    "wechat_sogou", "uapi", "tavily", "brave", "bocha_ai", "seltz",
+})
+
 
 def tokenize(text: str) -> list[str]:
     """简单分词：中文/日文/韩文单字 + 英文单词，统一小写。
@@ -266,11 +274,16 @@ class SemanticRouter:
         concept_vec = None
         cl = None
         try:
-            from concept_lookup import get_concept_lookup, concept_router_enabled
+            from concept_lookup import (
+                get_concept_lookup,
+                concept_router_enabled,
+                strip_context_dims,
+            )
             if concept_router_enabled():
                 cl = get_concept_lookup()
                 if cl.is_available:
-                    concept_vec = cl.text_vector(query)
+                    # 地名维清零：避免含地名的查询被航空/测绘类引擎凭地名重叠拉高
+                    concept_vec = strip_context_dims(cl.text_vector(query))
         except Exception:
             concept_vec = None
 
@@ -284,16 +297,25 @@ class SemanticRouter:
             eff_sim = sim
             c_sim = 0.0
             if concept_vec is not None and cl is not None:
-                eng_cvec = cl.get_engine_vector(name)
+                eng_cvec = strip_context_dims(cl.get_engine_vector(name))
                 if eng_cvec is not None:
                     c_sim = cl.vector_cosine(concept_vec, eng_cvec)
+                    catch_all = name in _CATCH_ALL_CONCEPT
                     if c_sim >= 0.75:
-                        if sim > 0:
+                        if catch_all:
+                            # 泛域引擎词表覆盖面广，概念相似度易虚高，只作弱辅助；
+                            # 无词面交集时不允许概念单独把它拉上第一
+                            eff_sim = (max(sim, 0.90 * sim + 0.10 * c_sim)
+                                       if sim > 0 else sim)
+                        elif sim > 0:
                             eff_sim = max(sim, 0.70 * sim + 0.30 * c_sim)
                         else:
                             eff_sim = c_sim * 0.50
                     elif sim > 0 and c_sim > 0.40:
-                        eff_sim = max(sim, 0.80 * sim + 0.20 * c_sim)
+                        if catch_all:
+                            eff_sim = max(sim, 0.95 * sim + 0.05 * c_sim)
+                        else:
+                            eff_sim = max(sim, 0.80 * sim + 0.20 * c_sim)
 
             parts = []
             if c_sim >= 0.75 and sim <= 0:

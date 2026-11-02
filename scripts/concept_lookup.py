@@ -26,6 +26,23 @@ ENGINE_VECS_PATH = BACKENDS_DIR / "engine_concept_vectors.json"
 
 _NORM_SCALE = 10000.0
 
+# 地理测绘与地点位置两族（编号须与 scripts/build_concept_table.py 的 CLUSTERS
+# 一致）：43 geography / 44 location_poi。地名在查询里是「定位上下文」而非意图
+# 本身，参与概念相似度会让含地名的查询被航空/测绘类引擎凭地名重叠拉高——实测
+# 「北京旅游攻略」对 opensky 余弦 0.979（两者仅同属 geo_weather 大域、共享 0.2
+# 组内亲和力），而 opensky 是航空交通源，与旅游意图无关。
+# 只清这两维，保留 45 旅游 / 46 天气 / 47 灾害：这些族的词本身就是意图核心
+# （「weather Tokyo」靠 weather 匹配 open_meteo，清零会让天气源反而落选）。
+# 地名匹配交回 boost_keywords 与域规则。
+GEO_DIMS = frozenset({43, 44})
+
+
+def strip_context_dims(vec: list[int] | None) -> list[int] | None:
+    """把地理/天气维清零，只保留意图语义维（地名匹配交给 boost_keywords）。"""
+    if vec is None:
+        return None
+    return [0 if i in GEO_DIMS else v for i, v in enumerate(vec)]
+
 
 class ConceptLookup:
     """零依赖极速概念向量查表器。"""

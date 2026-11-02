@@ -574,7 +574,7 @@
   {
    "query": "npm express 弃用",
    "domain": "package_intel",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "deps_dev",
     "anysearch"
@@ -600,8 +600,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "anysearch",
-    "parallel_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": "stock_query",
@@ -610,7 +610,7 @@
   {
    "query": "python asyncio tutorial",
    "domain": "english_tech",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "octen",
     "deepseek_search"
@@ -945,7 +945,7 @@
   {
    "query": "中国 GDP",
    "domain": "macro_data",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "worldbank",
     "fred"
@@ -1544,7 +1544,7 @@
   {
    "query": "杭州亚运会 场馆",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -2024,7 +2024,7 @@
   {
    "query": "财联社 快讯",
    "domain": "cls_telegraph_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "cls_telegraph",
     "jin10"
@@ -2036,7 +2036,7 @@
   {
    "query": "财联社 电报 快讯",
    "domain": "cls_telegraph_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "cls_telegraph",
     "jin10"

@@ -80,6 +80,32 @@ class TestConceptLookup(unittest.TestCase):
         self.assertIsNone(fake_lookup.get_vector("test"))
         self.assertEqual(fake_lookup.concept_similarity("a", "b"), 0.0)
 
+    def test_geo_dims_stripped_from_concept_routing(self):
+        """地名维（43/44）不参与概念路由，只保留意图语义维。
+
+        地名是定位上下文而非意图，参与相似度会让含地名的查询被航空/测绘类
+        引擎凭地名重叠拉高（实测「北京旅游攻略」对 opensky 余弦 0.979）。
+        """
+        from concept_lookup import GEO_DIMS, strip_context_dims
+        self.assertEqual(GEO_DIMS, {43, 44})
+        stripped = strip_context_dims([1] * 64)
+        self.assertEqual(len(stripped), 64)
+        self.assertTrue(all(stripped[i] == 0 for i in GEO_DIMS))
+        self.assertTrue(all(stripped[i] == 1 for i in range(64) if i not in GEO_DIMS))
+
+    def test_geo_query_not_hijacked_by_geo_engine(self):
+        """含地名的旅游查询不被航空数据源顶到第一；天气查询仍命中专业源。"""
+        import tfidf_router
+        tfidf_router._router = None
+        scores = tfidf_router.get_router().route("北京旅游攻略", top_k=3)
+        self.assertNotEqual(scores[0][0], "opensky",
+                            f"opensky 不应凭地名重叠排第一：{scores}")
+        # 46 维（天气）未清零，天气查询仍应命中 open_meteo
+        tfidf_router._router = None
+        weather = tfidf_router.get_router().route("weather Tokyo", top_k=1)
+        self.assertEqual(weather[0][0], "open_meteo",
+                         f"weather Tokyo 应命中 open_meteo：{weather}")
+
     def test_seek_rank_concept_expansion(self):
         """seek_rank 在有概念表时能够平滑利用概念相似度增强。"""
         rows = [
