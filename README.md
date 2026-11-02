@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方式一：一键脚本（推荐本机长期用）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方式二：npm / npx（已支持，当前 2.10.1；按 tag 发布，版本固定）
+# 方式二：npm / npx（已支持，当前 2.10.2；按 tag 发布，版本固定）
 npm install -g argo-search      # 全局安装 CLI
 npx -y argo-search              # 或即用即走，不装
 npx -y github:taxueseek/argo    # 要跟 main 最新提交时用这条
@@ -285,7 +285,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**npm 安装已支持，当前版本 2.10.1**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
+任选一种即可。**npm 安装已支持，当前版本 2.10.2**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -499,13 +499,15 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.10.1）
+### 当前大致能力（v2.10.2）
 
 Argo 干的事，一句话能说完：把一个问题按领域和语言分给合适的源，取回结果后按可信度排个序，交回给 Agent 的是能排序、能复核的材料。搜索、抓取、核验、本机文件检索走同一条管线，19 个 MCP 工具和 CLI 命令一一对应，装哪种形态都不缺能力。另有几个单点命令随用随取：argo tweet 打包 X 帖子，argo auth 管登录态，argo job 聚合招聘信息。
 
 装成 DSH 插件后，这些能力直接变成宿主的原生工具：高频的搜索与抓取默认就开，长尾取证能力在设置页里按需勾选，argo 本体的 28 个行为开关（缓存、重排、去重、守卫、代理、TTL 等）也从环境变量搬进了面板。密钥写进宿主凭证库，明文不回显，改完即生效。
 
 最近几个版本各修了一类问题。
+
+v2.10.2 聚焦语义路由与测试地基。相关性锚点加权与静态概念向量表落地，新建 13 条人工标注路由集与可执行性门禁，标注定向从 76.9% 收到 100%，原理/详解类查询不再误入学术库、平台攻略类不再误入舆情监听；路由快照 201 条中 123 条（61%）的决策从 tfidf 打分换成 regex/概念直判，命中更快也更可断言；熔断器工厂改调用期解析，同名模块多路径加载不再各持一份熔断状态；摘要标签卫生与口径去重进输出装配；ZCode 面板三页版入库，测试环境 ARGO_* 变量每用例快照恢复堵住偶发顺序污染。概念语义路由默认关，ARGO_CONCEPT_ROUTER=1 开启。
 
 v2.10.1 聚焦路由精度收口与社区缺陷修复。引入声明式商业意图否决宏 @commercial_market，消除医药商业与研报查询（市场规模、集采、销售额等）误入 UniProt 生信库的假命中（#34.1）；视频模式接入 parallel_free 免 Key 通道并附加 site:youtube.com，剥除 YouTube 语言/分享参数防重复（#34.3）；消除 local-seek 零命中双跑税，工具缺失抛结构化告警并优先走 SQLite FTS5 标准库索引（#34.4）；支持无外链声明式源 url_kind: none 并加强空占位符死链守卫（#29）；修复 engine_status 对未注册引擎误报为 ready 并透传 disabled_reason；解耦夜间漂移门并杜绝基线自动滚降（#35）。
 
@@ -780,6 +782,15 @@ argo/
 
 只列最近三个版本。完整历史见[版本记录](#版本记录)，逐版详情见 [Releases](https://github.com/taxueseek/argo/releases)。
 
+### v2.10.2：语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复
+
+- **路由标注定向 76.9%→100%**：新建 13 条人工标注集与可执行性两道门禁，收口「原理/详解类查询误入学术库」「平台攻略类误入舆情监听」两类意图撞车（上一版 3 条失配清零）；路由快照 201 条中 123 条（61%）从 tfidf 打分换 regex/概念直判
+- **零依赖语义路由地基（默认关）**：3104 行静态概念向量表 + 构建器入仓，`ARGO_CONCEPT_ROUTER=1` 开启；零新依赖，随语料积累验证后再评估默认开
+- **熔断器模块别名分裂修复**：工厂改调用期解析，同名模块多路径加载不再各持一份熔断状态；专项回归 116 行锁住
+- **输出装配收口**：摘要标签卫生（剥内联标签与 HTML 实体）与口径去重落地
+- **ZCode 面板三页版入库**：看板/密钥/诊断三 tab（CSS 变量化 + 深色模式），与实机验收交付物对齐
+- **测试环境加固**：`ARGO_*` 环境变量每用例快照恢复，堵脏值经 subprocess 套件传播的全量偶发红
+
 ### v2.10.1：路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复
 
 - **商业意图否决宏 `@commercial_market`**：为 `protein_search`、`chem_search`、`medical` 声明商业意图让位，医药商业查询不再误入生信/化学/临床库（#34.1）
@@ -797,30 +808,11 @@ argo/
 - **选源与成本**：通用层改为实测排序 + 覆盖地板 + 语言门（issue #23），DeepSeek 英文对冲常驻第二位（`ARGO_PAID_HEDGE_DEFER` 可降），权威等级回填与权威早停
 - **装得上、发得出**：安装器 venv 主路 + `.venv` 自动发现；新增 `release_check.py` 发布一致性预检与 MCP Registry 清单 `server.json`
 
-### v2.9.9：安全纵深 + 慢源交付不丢 + 五类误路由收口
-
-- **高风险正文进不了上下文**：内容安全引擎从「只评分」升级为「隔离+清洗替换」，`risk_score ≥ 0.5` 的正文被清洗后正文替换、不进证据分；默认开，`ARGO_CONTENT_RISK_GATE=0` 应急放行
-- **网络出口纵深防御**：重定向逐跳校验（`ARGO_MAX_REDIRECTS`，默认 5）+ 解析即锁定，封堵 DNS 重绑定窗口
-- **早停弃置的慢源交付不再丢**：弃置引擎转后台收割，`ARGO_TAIL_COMPLETE_S`（默认 3s，0=关）内完成即照常交付并记真实成绩，交付去重合并回缓存
-- **五类误路由收口**：A 股财务查询进 `stock_query`、企业尽调/开票/人查公司进 `company_search`、民事实务进 `flk_law`、药品说明书不再被「用法」抢走、论文写作 howto 不再落学术域
-- **`argo engine add`**：新引擎一键接入，spec/env/验证/同步/combo/白名单的人工多步链编排成一步
-- **场景分桶学习 + ZCode 插件包**：路由能区分「引擎在 A 域强、B 域弱」；skill+CLI 直连与零 token 面板进 zcode-plugins
-
-### v2.9.8：路由精度审计 + 腾讯元宝搜索 + 免 key 三源 + 结构化失败清单
-
-- **issue #18/#19 全修**：`latest` 误判实时新闻、人民网默认 feed、local_bing 只命中「2026」、中文交叉验证恒 0、nightly 空日志崩溃；顺线收窄 16 类同构误触发
-- **新增元宝搜索**：中文一手/官方口径源，进中文通用域第 2 位做权威源对冲；key 用 `ARGO_YUANBAO_API_KEY`
-- **免 key 可用面扩三源**：`tavily_free`、`keenable_free`、`exa` 匿名回退，不配 key 也能用
-- **失败能照着处置**：失败按来源与类别给出「可重试/换源/去配 key」，结果带 `meta.uncertainty` 综合可信度
-- **本机配置覆盖层 `config.local.yaml`**：本机调优不再写进公共配置
-- **DSH 设置页新增「引擎」分区**：28 个行为开关从环境变量搬进面板
-
----
-
 ## 版本记录
 
 | 版本 | 说明 |
 |------|------|
+| **v2.10.2** | **语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复**：相关性锚点加权 + 静态概念向量表（`ARGO_CONCEPT_ROUTER=1` 默认关）+ 路由准确率收口，13 条标注集定向 100%、快照 61% 决策换概念直判；熔断器工厂调用期解析消除模块别名分裂；摘要标签卫生与口径去重；ZCode 面板三页版入库；测试环境快照恢复加固。详见 [发布说明](docs/RELEASE_NOTES_v2.10.2.md) |
 | **v2.10.1** | **路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复**：引入声明式否决宏 `@commercial_market` 消除医药商业误路由；接入 `parallel_free` 海外视频通道并归一化 YouTube URL；消除 local-seek 零命中双跑税与工具缺失静默；支持无外链源 `url_kind: none` 与空占位符死链守卫；引擎状态自洽；解耦夜间漂移门。详见 [发布说明](docs/RELEASE_NOTES_v2.10.1.md) |
 | **v2.10.0** | **源到 284 + 视频检索与抓取 + 抓取前沿质控**：新增秘塔五档、Sciverse、NCPSSD 与 DSH/技能索引五源；`video` 域与 `--video`/`--min-duration`/`--max-duration`，B 站字幕与 YouTube timedtext、可选 ASR；crawl 前沿质控与 `argo watch` 噪声 diff；通用选源实测排序 + DeepSeek 英文对冲 + 权威早停；安装器 venv 化。详见 [发布说明](docs/RELEASE_NOTES_v2.10.0.md) |
 | **v2.9.9** | **安全纵深 + 慢源交付不丢 + 五类误路由收口**：高风险正文隔离+清洗替换（不进证据分）、逐跳重定向校验与 DNS 重绑定封堵；早停弃置的慢源转后台收割（`ARGO_TAIL_COMPLETE_S`），学习器记真实成绩；六族真实场景扫描收口学术/财务/企业/法律/医药误路由；`argo engine add` 一键接引擎、场景分桶学习、ZCode 插件包。详见 [发布说明](docs/RELEASE_NOTES_v2.9.9.md) |

@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.10.1; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.10.2; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -283,7 +283,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.10.1**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.10.2**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -468,13 +468,15 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.10.1)
+### Conjunto aproximado de capacidades (v2.10.2)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 284 fuentes, 240 sin clave, 99 dominios.
 
 Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
 Las últimas versiones arreglaron cada una una clase de problemas.
+
+v2.10.2 se enfoca en el enrutado semántico y la base de pruebas. Aterrizaron la ponderación por anclas de relevancia y una tabla estática de vectores de conceptos; un conjunto etiquetado de 13 casos más una compuerta de ejecutabilidad elevó la precisión etiquetada de 76.9% a 100% — las consultas de principio/explicación ya no caen en bibliotecas académicas y las de guías de plataforma ya no disparan escucha social. 123 de 201 decisiones del snapshot de enrutado (61%) pasaron de puntuación tfidf a coincidencia directa por regex/concepto: más rápido y más asertable. La fábrica del circuit-breaker resuelve en tiempo de llamada, así que el mismo módulo cargado desde distintas rutas ya no mantiene estados separados. La higiene de etiquetas de snippet y el dedupe de calibres entran al ensamblado de salida; se incorporó el panel ZCode de tres pestañas y las variables ARGO_* se restauran por caso de prueba, cerrando la contaminación esporádica de orden. El enrutado semántico por conceptos está apagado por defecto; se activa con ARGO_CONCEPT_ROUTER=1.
 
 v2.10.1 se enfoca en la consolidación de la precisión del enrutado y correcciones de problemas de la comunidad. Introduce la macro declarativa de exclusión @commercial_market para evitar que consultas comerciales de farma (tamaño de mercado, compras públicas, ingresos) secuestren bases de datos bioinformáticas como UniProt (#34.1); añade un carril de vídeo en el extranjero sin clave mediante parallel_free con site:youtube.com y elimina los parámetros de rastreo de YouTube (#34.3); elimina el impuesto de doble ejecución en cero coincidencias de local-seek, emitiendo avisos estructurados y priorizando SQLite FTS5 (#34.4); añade soporte para url_kind: none en especificaciones sin URL y evita enlaces muertos con prefijos vacíos (#29); corrige el estado de motores no registrados a unknown con disabled_reason y limpia especificaciones huérfanas (#29, #34.6); y desacopla el gate de deriva nocturno eliminando confirmaciones automáticas de línea base (#35).
 
@@ -701,6 +703,15 @@ argo/
 
 Solo las tres versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.10.2: Enrutado semántico en tres pasos + precisión etiquetada 76.9%→100% + corrección de división del circuit-breaker
+
+- **Precisión de enrutado etiquetado 76.9%→100%**: un conjunto etiquetado de 13 casos más una compuerta de ejecutabilidad cierran dos clases de colisión de intención — las consultas de principio/explicación ya no caen en bibliotecas académicas y las de guías de plataforma ya no disparan escucha social; 123 de 201 consultas del snapshot (61%) pasaron de puntuación tfidf a coincidencia directa por regex/concepto
+- **Base de enrutado semántico sin dependencias (apagado por defecto)**: tabla estática de vectores de conceptos de 3104 líneas + constructor incluidos; se activa con `ARGO_CONCEPT_ROUTER=1`
+- **División por alias de módulo del circuit-breaker corregida**: la fábrica resuelve en tiempo de llamada, así que el mismo módulo cargado desde distintas rutas ya no mantiene estados separados; regresión de 116 líneas lo sella
+- **Limpieza del ensamblado de salida**: higiene de etiquetas de snippet (quitar etiquetas en línea y entidades HTML) y dedupe de calibres
+- **Versión de tres pestañas del panel ZCode incorporada**: panel/llaves/diagnóstico (variables CSS + modo oscuro), alineada con el entregable verificado en máquina
+- **Endurecimiento del entorno de pruebas**: las variables ARGO_* se restauran por caso desde una instantánea, cerrando los rojos esporádicos de la suite completa
+
 ### v2.10.1: Consolidación de precisión de enrutado + macro de intención comercial + carril de vídeo en el extranjero + correcciones comunitarias
 
 - **Macro de intención comercial `@commercial_market`**: aplicada en `protein_search`, `chem_search` y `medical` para que las consultas comerciales cedan el paso a la búsqueda general (#34.1)
@@ -742,6 +753,7 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 
 | Versión | Notas |
 |---------|-------|
+| **v2.10.2** | **Enrutado semántico en tres pasos + precisión etiquetada 76.9%→100% + corrección de división del circuit-breaker**: ponderación por anclas de relevancia + tabla estática de vectores de conceptos (`ARGO_CONCEPT_ROUTER=1`, apagado por defecto) + consolidación de precisión — 13/13 en el conjunto etiquetado, 61% de las decisiones del snapshot pasan a coincidencia directa por concepto; la fábrica del circuit-breaker resuelve en tiempo de llamada y elimina divisiones por alias de módulo; higiene de etiquetas de snippet y dedupe de calibres; panel ZCode de tres pestañas; endurecimiento de restauración de entorno en tests. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **Consolidación de precisión de enrutado + macro comercial + vídeo extranjero + correcciones**: macro `@commercial_market` en farma; vídeo en el extranjero con `parallel_free` y desduplicación de YouTube; eliminación de doble ejecución en local-seek; soporte de `url_kind: none` y guardas de enlaces muertos; estado coherente de motores; desacople de deriva nocturna. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo**: cinco niveles de Metaso, Sciverse, NCPSSD y cinco fuentes de DSH/índices de skills; dominio `video` con `--video`/`--min-duration`/`--max-duration`, subtítulos de Bilibili y timedtext de YouTube con ASR opcional; control de frontera del rastreo y diff de ruido en `argo watch`; selección general medida con cobertura de DeepSeek en inglés y parada temprana por autoridad; instalador con venv. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **Seguridad en profundidad + los resultados de fuentes lentas ya no se descartan + cinco clases de enrutado erróneo cerradas**: texto de alto riesgo aislado con sustitución limpia (fuera de la puntuación de evidencia), validación de redirecciones salto a salto y fijación contra reencadernación DNS; las fuentes lentas abandonadas por la parada temprana se recolectan en segundo plano (`ARGO_TAIL_COMPLETE_S`) y registran su puntuación real; un barrido de seis familias de escenarios reales cierra el enrutado erróneo de academia/finanzas/empresas/legal/farma; además `argo engine add` en un paso, aprendizaje por cubos de escenario y el paquete de plugin ZCode. Ver [notas de la versión](docs/RELEASE_NOTES_v2.9.9.md). |

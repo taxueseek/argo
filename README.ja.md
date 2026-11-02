@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方法 1：ワンコマンドスクリプト（本機で長期利用に推奨）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方法 2：npm / npx（対応済み、現在 2.10.1。tag ごとに公開、バージョン固定）
+# 方法 2：npm / npx（対応済み、現在 2.10.2。tag ごとに公開、バージョン固定）
 npm install -g argo-search       # CLI をグローバルインストール
 npx -y argo-search               # またはインストールせず即時利用
 npx -y github:taxueseek/argo     # main の最新コミットに追従したい場合
@@ -283,7 +283,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.10.1**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
+どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.10.2**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -468,13 +468,15 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.10.1）
+### 現時点の能力概要（v2.10.2）
 
 Argo のやることを一行で言うと、質問を領域と言語で適切なソースに振り分け、返ってきた結果を信頼度で並べ、エージェントには並べ替えられ検証できる素材を渡す。検索・取得・証拠確認・ローカルファイル検索は同じパイプラインを流れ、19 個の MCP ツールは CLI コマンドと一対一で対応するので、どの形态で入れても能力は欠けない。単独コマンドもいくつかある：argo tweet は X 投稿をまとめ、argo auth はログイン状态を管理し、argo job は採用情報を集約する。全ソースの費用・键・状态は docs/ENGINE_CATALOG.md に清单されている：284 ソース、240 無設定、99 ドメイン。
 
 DSH プラグインとして入れると、これらの能力は宿主のネイティブツールになる。高頻度の検索と取得は既定でオン、長尾フォレンジックは設定ページで必要に応じてチェック、argo 本体の 28 個の挙動スイッチ（キャッシュ、再順位、重複除去、ガード、プロキシ、TTL など）は環境変数からパネルへ移った。キーは宿主の凭证库に入り、平文は表示されず、変更は保存即有効。
 
 最近数版が、それぞれ一类の問題を直した。
+
+v2.10.2 はセマンティックルーティングとテスト基盤に注力しました。関連性アンカー重み付けと静的コンセプトベクトル表を導入し、13 件の人手ラベル集合と実行可能性ゲートでラベル精度を 76.9%→100% に収口——原理・解説系クエリが学術ライブラリへ、プラットフォーム攻略系がソーシャルリスニングへ誤流入しなくなりました。スナップショット 201 件中 123 件（61%）の決定が tfidf スコアリングから regex/コンセプト直判定へ移り、より速く断言可能に。サーキットブレーカ工場は呼び出し時解決になり、別パスから読んだ同名モジュールが別のブレーカ状態を持たなくなりました。スニペットタグ衛生と口径重複排除が出力アセンブリに入り、ZCode パネル 3 タブ版を取り込み、テスト環境の ARGO_* 変数をケースごとにスナップショット復元して散発的な順序汚染を封じました。コンセプトセマンティックルーティングは既定オフ、ARGO_CONCEPT_ROUTER=1 で有効化。
 
 v2.10.1 はルーティング精度の収口とコミュニティ報告の修正に注力しました。宣言的意図拒否マクロ @commercial_market を導入し、医薬ビジネスや市場調査クエリ（市場規模、集採、売上高など）が UniProt 等のバイオDBへ誤流入する問題を解消（#34.1）；動画モードでキー不要の parallel_free を接続し site:youtube.com を付加、YouTube の追跡パラメータを除去（#34.3）；local-seek のゼロ一致ダブルラン税を解消し、ツール欠落警告を構造化・SQLite FTS5 を優先（#34.4）；URL なし宣言型ソース url_kind: none と空プレースホルダ死リンク防止（#29）；未登録エンジンの ready 誤判定を unknown に修正し disabled_reason を透過；夜間ドリフトゲートを分離し自動コミットを廃止（#35）。
 
@@ -701,6 +703,15 @@ argo/
 
 直近 3 バージョンのみを載せています。完全な履歴は[更新履歴](#更新履歴)、各版の詳細は [Releases](https://github.com/taxueseek/argo/releases) を参照してください。
 
+### v2.10.2：セマンティックルーティング三段階 + ラベル精度 76.9%→100% + サーキットブレーカ分裂修正
+
+- **ラベル付きルート精度 76.9%→100%**：13 件の人手ラベル集合と実行可能性ゲートで 2 種類の意図衝突を収口——原理・解説系クエリが学術ライブラリへ、プラットフォーム攻略系がソーシャルリスニングへ誤流入しなくなる；スナップショット 201 件中 123 件（61%）が tfidf スコアリングから regex/コンセプト直判定へ移行
+- **ゼロ依存のセマンティックルーティング基盤（既定オフ）**：3104 行の静的コンセプトベクトル表 + ビルダーを同梱、`ARGO_CONCEPT_ROUTER=1` で有効化
+- **サーキットブレーカのモジュール別名分裂を修正**：ファクトリを呼び出し時解決にし、別パスから読んだ同名モジュールが別のブレーカ状態を持たないように；116 行の回帰で封印
+- **出力アセンブリの清掃**：スニペットタグ衛生（インラインタグと HTML 実体の除去）と口径重複排除
+- **ZCode パネル 3 タブ版を取り込み**：ダッシュボード/キー/診断（CSS 変数 + ダークモード）、実機検証済みデリバラブルと整合
+- **テスト環境の強化**：ARGO_* 環境変数をケースごとにスナップショット復元し、全量実行時の散発的な赤を封じる
+
 ### v2.10.1：ルーティング精度収口 + 商業意図マクロ + 海外動画レーン + 課題修正
 
 - **商業意図拒否マクロ `@commercial_market`**：`protein_search`、`chem_search`、`medical` に適用し、医薬市場クエリがバイオ/化学DBへ誤判定されるのを防止（#34.1）
@@ -742,6 +753,7 @@ argo/
 
 | 版 | 内容 |
 |----|------|
+| **v2.10.2** | **セマンティックルーティング三段階 + ラベル精度 76.9%→100% + サーキットブレーカ分裂修正**：関連性アンカー重み付け + 静的コンセプトベクトル表（`ARGO_CONCEPT_ROUTER=1`、既定オフ）+ ルーティング精度収口——13 件のラベル集合で 100%、スナップショットの 61% がコンセプト直判定へ；サーキットブレーカ工場を呼び出し時解決にし、モジュール別名分裂を解消；スニペットタグ衛生と口径重複排除；ZCode パネル 3 タブ版；テスト環境スナップショット復元の強化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.2.md)。 |
 | **v2.10.1** | **ルーティング精度収口 + 商業意図マクロ + 海外動画レーン + 課題修正**：宣言的拒否マクロ `@commercial_market` の導入；`parallel_free` による海外動画レーンと YouTube URL 正規化；local-seek のゼロ一致ダブルラン解消と警告透過；URL なしソース `url_kind: none` と死リンク防止；エンジン状態整合性；夜間ドリフトゲート分離。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.1.md)。 |
 | **v2.10.0** | **ソース 284 件 + 動画検索と取得 + クロールのフロンティア品質管理**：秘塔の五档、Sciverse、NCPSSD、DSH/スキル索引の 5 件を追加。`video` 域と `--video`/`--min-duration`/`--max-duration`、B 站字幕と YouTube timedtext、任意の ASR。クロールのフロンティア品質管理と `argo watch` のノイズ差分。汎用ソース選択の実測順 + DeepSeek 英語ヘッジ + 権威アーリーストップ。インストーラの venv 化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.0.md)。 |
 | **v2.9.9** | **多層セキュリティ + 遅いソースの成果を捨てない + 誤ルーティング五類の収口**：高リスク本文の隔離＋洗浄差し替え（証拠スコアから除外）、リダイレクトのホップごと検証と DNS リバインディング封鎖。早期停止で打ち切られた遅いソースはバックグラウンド回収（`ARGO_TAIL_COMPLETE_S`）で実績を学習器に記録。六族の実シナリオ走査で学術/財務/企業/法律/医薬の誤ルーティングを収口。`argo engine add` の一段階接続、シナリオ別バケット学習、ZCode プラグインパッケージ。詳細は [リリースノート](docs/RELEASE_NOTES_v2.9.9.md)。 |

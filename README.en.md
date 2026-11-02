@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-284-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ Zero config works. Three ways to install, pick your habit:
 # Option 1: install script (recommended for long-term local use)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Option 2: npm / npx (supported, currently 2.10.1; released per tag, version pinned)
+# Option 2: npm / npx (supported, currently 2.10.2; released per tag, version pinned)
 npm install -g argo-search       # install the CLI globally
 npx -y argo-search               # or run it without installing
 npx -y github:taxueseek/argo     # use this to follow the latest commit on main
@@ -283,7 +283,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **npm install is supported, current version 2.10.1**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
+Pick any path. **npm install is supported, current version 2.10.2**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -426,13 +426,15 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.10.1)
+### Rough capability set (v2.10.2)
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **284 sources (240 usable with no key), 99 domains**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
+
+v2.10.2 focuses on semantic routing and the test foundation. Relevance anchor weighting and a static concept vector table landed; a 13-case human-labeled route set plus an executability gate raised labeled accuracy from 76.9% to 100% — principle/explainer queries no longer fall into academic libraries and platform-guide queries no longer trigger social listening. 123 of 201 routing-snapshot decisions (61%) moved from tfidf scoring to regex/concept direct-match, faster and more assertable. The circuit-breaker factory now resolves at call time, so the same module loaded from different paths no longer keeps separate breaker states. Snippet tag hygiene and caliber dedup join output assembly. The three-tab ZCode panel landed, and ARGO_* env vars are snapshot-restored per test case, closing sporadic ordering pollution. Concept semantic routing is off by default; enable with ARGO_CONCEPT_ROUTER=1.
 
 v2.10.1 focuses on routing precision consolidation and community issue fixes. It introduces the declarative @commercial_market intent exclusion macro to prevent pharma commercial queries (market size, volume-based procurement, revenue) from falsely hijacking bioinformatics databases like UniProt (#34.1); adds a keyless overseas video lane via parallel_free with site:youtube.com and strips YouTube tracking params (#34.3); eliminates the local-seek zero-match double-run tax, surfacing missing-tool warnings and prioritizing SQLite FTS5 (#34.4); adds url_kind: none support for URL-less specs and guards against empty placeholder bare prefix dead links (#29); fixes engine_status unknown engine reporting and cleans up orphan specs (#29, #34.6); and decouples the nightly drift gate by removing automatic baseline auto-commits (#35).
 
@@ -659,6 +661,15 @@ argo/
 
 Only the three most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.10.2: Semantic routing in three steps + labeled accuracy 76.9%→100% + circuit-breaker split fix
+
+- **Labeled route accuracy 76.9%→100%**: a 13-case human-labeled set plus an executability gate close two intent-collision classes — principle/explainer queries no longer land in academic libraries, platform-guide queries no longer trigger social listening; 123 of 201 snapshot queries (61%) moved from tfidf scoring to regex/concept direct-match
+- **Zero-dependency semantic routing foundation (off by default)**: a 3104-line static concept vector table + builder landed; turn on with `ARGO_CONCEPT_ROUTER=1`
+- **Circuit-breaker module-alias split fixed**: the factory now resolves at call time, so the same module loaded from different paths no longer keeps separate breaker states; a 116-line regression locks it
+- **Output assembly cleanup**: snippet tag hygiene (strip inline tags & HTML entities) and caliber dedup
+- **ZCode panel three-tab version landed**: dashboard/keys/diagnostics (CSS variables + dark mode), aligned with the machine-verified deliverable
+- **Test env hardening**: ARGO_* env vars are snapshot-restored per case, closing sporadic full-suite reds
+
 ### v2.10.1: Routing precision consolidation + commercial intent macro + overseas video lane + community fixes
 
 - **Commercial intent macro `@commercial_market`**: applied across `protein_search`, `chem_search`, and `medical` so pharma commercial queries yield to general search (#34.1)
@@ -700,6 +711,7 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 
 | Version | Notes |
 |---------|-------|
+| **v2.10.2** | **Semantic routing in three steps + labeled accuracy 76.9%→100% + circuit-breaker split fix**: relevance anchor weighting + static concept vector table (`ARGO_CONCEPT_ROUTER=1`, off by default) + route accuracy consolidation — 13-case labeled set at 100%, 61% of snapshot decisions moved to concept direct-match; circuit-breaker factory resolves at call time, killing module-alias splits; snippet tag hygiene and caliber dedup; ZCode panel three-tab layout; test env snapshot-restore hardening. See [release notes](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **Routing precision consolidation + commercial intent macro + overseas video lane + community fixes**: added `@commercial_market` macro across pharma domains; keyless overseas video via `parallel_free` + YouTube dedup; fixed local-seek zero-match double-run tax and missing-tool warnings; `url_kind: none` spec support and dead link guards; engine status consistency; decoupled nightly drift baseline. See [release notes](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **284 sources + video search and fetch + crawl frontier quality control**: five Metaso tiers, Sciverse, NCPSSD and five DSH/skill index sources; a `video` domain with `--video`/`--min-duration`/`--max-duration`, Bilibili subtitles and YouTube timedtext with optional ASR; crawl frontier quality control and noisy-diff `argo watch`; measured general source selection with the DeepSeek English hedge and authority early-stop; venv-based installer. See [release notes](docs/RELEASE_NOTES_v2.10.0.md). |
 | **v2.9.9** | **Security in depth + slow-source results no longer dropped + five mis-routing classes closed**: high-risk text quarantined with cleaned replacement (excluded from the evidence score), hop-by-hop redirect validation and DNS-rebinding pinning; slow engines abandoned by early-stop are collected in the background (`ARGO_TAIL_COMPLETE_S`) and their real scores recorded; a six-family real-scenario scan closes academic/finance/corporate/legal/pharma mis-routing; plus `argo engine add` one-step onboarding, bucketed scenario learning, and the ZCode plugin package. See [release notes](docs/RELEASE_NOTES_v2.9.9.md). |
