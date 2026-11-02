@@ -167,6 +167,27 @@ _ZH_EN_ALIASES: dict[str, tuple[str, ...]] = {
     "\u7ec8\u7aef": ("terminal", "cli"),
 }
 
+_LOOKUP_INSTANCE = None
+
+
+def _get_concept_lookup():
+    """按需延迟加载 concept_lookup（零依赖 fail-open）。"""
+    global _LOOKUP_INSTANCE
+    if _LOOKUP_INSTANCE is None:
+        try:
+            import sys
+            from pathlib import Path
+            cur_file = Path(__file__).resolve()
+            argo_root = cur_file.parents[3]
+            scripts_dir = str(argo_root / "scripts")
+            if scripts_dir not in sys.path:
+                sys.path.insert(0, scripts_dir)
+            from concept_lookup import get_concept_lookup
+            _LOOKUP_INSTANCE = get_concept_lookup()
+        except Exception:
+            _LOOKUP_INSTANCE = False
+    return _LOOKUP_INSTANCE if _LOOKUP_INSTANCE is not False else None
+
 # 跨字段协同加成（Minimal Span / Coordination Level）：单条结果的 (name ∪ dir ∪ line) 覆盖越多不同查询词元越优先
 _ROW_COORD_WEIGHT = 5.0
 
@@ -262,6 +283,26 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
             for term in f_tf[f]:
                 f_df[term] += 1
 
+    # 概念向量对齐扩展：从候选项路径高频词元中，寻找与查询词元高度语义对齐的词（余弦 >= 0.75）
+    concept_expanded: dict[str, set[str]] = {}
+    lookup = _get_concept_lookup()
+    if lookup and lookup.is_available:
+        for qt in list(q_tf):
+            vq = lookup.get_vector(qt)
+            if vq is None:
+                continue
+            matched = set()
+            cand_vocab = set(df["name"]) | set(df["dir"])
+            for cand in cand_vocab:
+                if cand in q_eff:
+                    continue
+                vt = lookup.get_vector(cand)
+                if vt is not None and lookup.vector_cosine(vq, vt) >= 0.75:
+                    q_eff[cand] = 0.60
+                    matched.add(cand)
+            if matched:
+                concept_expanded[qt] = matched
+
     scores: list[float] = []
     n_q_primary = max(len(q_tf), 1)
     for i, f_tf in enumerate(row_fields):
@@ -286,7 +327,8 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
         # 单行三字段协同覆盖度（name ∪ dir ∪ line 覆盖了多少查询词/跨语言映射词）
         row_voc = set(f_tf["name"]) | set(f_tf["dir"]) | set(f_tf["line"])
         covered = sum(1.0 for qt in q_tf if qt in row_voc or any(
-            en in row_voc for en in _ZH_EN_ALIASES.get(qt, ())))
+            en in row_voc for en in _ZH_EN_ALIASES.get(qt, ())) or any(
+            ce in row_voc for ce in concept_expanded.get(qt, ())))
         if covered > 1.0:
             total += _ROW_COORD_WEIGHT * (covered / n_q_primary)
         if phrases:

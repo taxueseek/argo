@@ -94,7 +94,7 @@
   {
    "query": "Cristiano Ronaldo club",
    "domain": "sports_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -154,7 +154,7 @@
   {
    "query": "LeBron James team",
    "domain": "sports_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -262,7 +262,7 @@
   {
    "query": "Taylor Swift album",
    "domain": "media_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "itunes",
     "musicbrainz"
@@ -274,7 +274,7 @@
   {
    "query": "US CPI",
    "domain": "macro_data",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "fred",
     "worldbank"
@@ -444,8 +444,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "parallel_free",
-    "firecrawl"
+    "devto",
+    "parallel_free"
    ],
    "expect": null,
    "forbid": null,
@@ -574,7 +574,7 @@
   {
    "query": "npm express 弃用",
    "domain": "package_intel",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "deps_dev",
     "anysearch"
@@ -600,8 +600,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "parallel_free",
-    "firecrawl"
+    "anysearch",
+    "parallel_free"
    ],
    "expect": null,
    "forbid": "stock_query",
@@ -610,7 +610,7 @@
   {
    "query": "python asyncio tutorial",
    "domain": "english_tech",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "octen",
     "deepseek_search"
@@ -622,7 +622,7 @@
   {
    "query": "python 生命周期 停止支持",
    "domain": "lifecycle_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "endoflife",
     "anysearch"
@@ -718,7 +718,7 @@
   {
    "query": "v2ex 技术社区",
    "domain": "v2ex_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "v2ex",
     "anysearch"
@@ -732,8 +732,8 @@
    "domain": "weather_query",
    "kind": "tfidf",
    "engines": [
-    "byted",
-    "weather_cn"
+    "open_meteo",
+    "byted"
    ],
    "expect": "weather_query",
    "forbid": null,
@@ -755,8 +755,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "parallel_free",
-    "firecrawl"
+    "github",
+    "parallel_free"
    ],
    "expect": null,
    "forbid": null,
@@ -945,7 +945,7 @@
   {
    "query": "中国 GDP",
    "domain": "macro_data",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "worldbank",
     "fred"
@@ -1005,7 +1005,7 @@
   {
    "query": "刑法 司法解释 判例",
    "domain": "legal",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "anysearch",
     "byted"
@@ -1115,8 +1115,8 @@
    "domain": "media_search",
    "kind": "tfidf",
    "engines": [
-    "itunes",
-    "musicbrainz"
+    "qq_music",
+    "itunes"
    ],
    "expect": "media_search",
    "forbid": null,
@@ -1127,8 +1127,8 @@
    "domain": "media_search",
    "kind": "tfidf",
    "engines": [
-    "qq_music",
-    "itunes"
+    "itunes",
+    "musicbrainz"
    ],
    "expect": "media_search",
    "forbid": null,
@@ -1173,7 +1173,7 @@
   {
    "query": "国际新闻 外媒 国际要闻",
    "domain": "intl_news_flash",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "guardian_rss",
     "deepseek_search"
@@ -1306,8 +1306,8 @@
    "domain": "stock_query",
    "kind": "tfidf",
    "engines": [
-    "sina_quote",
-    "local_openstreetmap"
+    "eastmoney",
+    "sina_quote"
    ],
    "expect": null,
    "forbid": null,
@@ -1342,8 +1342,8 @@
    "domain": "redskill_search",
    "kind": "tfidf",
    "engines": [
-    "redskill",
-    "anysearch"
+    "xiaohongshu",
+    "redskill"
    ],
    "expect": "redskill_search",
    "forbid": null,
@@ -1376,7 +1376,7 @@
   {
    "query": "年报 模板 怎么写",
    "domain": "chinese_general",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "bocha",
     "yuanbao"
@@ -1426,8 +1426,8 @@
    "domain": "chinese_general",
    "kind": "tfidf",
    "engines": [
-    "bocha",
-    "yuanbao"
+    "cnii",
+    "bocha"
    ],
    "expect": null,
    "forbid": null,
@@ -1544,7 +1544,7 @@
   {
    "query": "杭州亚运会 场馆",
    "domain": "sports_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -1678,7 +1678,7 @@
    "domain": "academic",
    "kind": "tfidf",
    "engines": [
-    "local_arxiv",
+    "semantic_scholar",
     "arxiv"
    ],
    "expect": "academic",
@@ -2024,7 +2024,7 @@
   {
    "query": "财联社 快讯",
    "domain": "cls_telegraph_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "cls_telegraph",
     "jin10"
@@ -2036,7 +2036,7 @@
   {
    "query": "财联社 电报 快讯",
    "domain": "cls_telegraph_search",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "cls_telegraph",
     "jin10"
@@ -2060,7 +2060,7 @@
   {
    "query": "贵州茅台 2025 年报 营收",
    "domain": "stock_query",
-   "kind": "regex",
+   "kind": "tfidf",
    "engines": [
     "sina_quote",
     "tencent_quote"

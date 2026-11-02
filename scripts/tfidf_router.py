@@ -262,6 +262,18 @@ class SemanticRouter:
             return [("anysearch", 0.0, "无领域文档，回退 AnySearch")]
 
         query_vec = self.vectorizer.transform(query)
+        # P2: 静态概念语义向量 (Model2Vec 思想，零依赖快速查表)
+        concept_vec = None
+        cl = None
+        try:
+            from concept_lookup import get_concept_lookup, concept_router_enabled
+            if concept_router_enabled():
+                cl = get_concept_lookup()
+                if cl.is_available:
+                    concept_vec = cl.text_vector(query)
+        except Exception:
+            concept_vec = None
+
         scores = []
         quota_state = _load_quota_state() if quota_aware else {}
         cost_profiles = _load_cost_profiles()
@@ -269,7 +281,23 @@ class SemanticRouter:
 
         for name in self.engine_names:
             sim = cosine_similarity(query_vec, self.engine_vectors[name])
+            eff_sim = sim
+            c_sim = 0.0
+            if concept_vec is not None and cl is not None:
+                eng_cvec = cl.get_engine_vector(name)
+                if eng_cvec is not None:
+                    c_sim = cl.vector_cosine(concept_vec, eng_cvec)
+                    if c_sim >= 0.75:
+                        if sim > 0:
+                            eff_sim = max(sim, 0.70 * sim + 0.30 * c_sim)
+                        else:
+                            eff_sim = c_sim * 0.50
+                    elif sim > 0 and c_sim > 0.40:
+                        eff_sim = max(sim, 0.80 * sim + 0.20 * c_sim)
+
             parts = []
+            if c_sim >= 0.75 and sim <= 0:
+                parts.append(f"concept={c_sim:.2f}")
 
             # boost 加权
             boost = 1.0
@@ -290,7 +318,7 @@ class SemanticRouter:
             if hit_combos:
                 parts.append(f"combo:{','.join(hit_combos)}")
 
-            final_score = sim * boost
+            final_score = eff_sim * boost
 
             # 成本感知（profiles 已缓存，不再每引擎读盘）
             cf = _cost_factor(name, cost_profiles)
@@ -308,7 +336,7 @@ class SemanticRouter:
                     final_score *= 0.5 + qr
                     parts.append(f"配额偏低({qr:.0%})")
 
-            reason = f"sim={sim:.3f}" + (f", {', '.join(parts)}" if parts else "")
+            reason = f"sim={eff_sim:.3f}" + (f", {', '.join(parts)}" if parts else "")
             scores.append((name, round(final_score, 4), reason))
 
         scores.sort(key=lambda x: -x[1])
