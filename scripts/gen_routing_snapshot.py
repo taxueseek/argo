@@ -81,12 +81,17 @@ def _route_one(query: str) -> dict:
     from route import route_query
     d = route_query(query, mode="auto", depth="fast")
     reason = d.get("reason") or ""
+    # kind 判定口径：
+    # 命中 TF-IDF 信号（包括纯语义路由、覆写 catch-all 及低分回退）记为 tfidf；
+    # 纯硬域正则命中的记为 regex。保留 reason 用于 diff 诊断。
     kind = "tfidf" if "TF-IDF" in reason else "regex"
     return {
         "domain": d.get("domain"),
         "kind": kind,
         "engines": (d.get("engines_combo") or [])[:2],
+        "reason": reason,
     }
+
 
 
 def _build() -> list[dict]:
@@ -113,9 +118,10 @@ def _diff(current: list[dict], recorded: list[dict]) -> list[str]:
             continue
         for key in ("domain", "kind"):
             if prev.get(key) != e.get(key):
+                reason_hint = f"\n    (当前 reason: {e.get('reason')!r})" if e.get("reason") else ""
                 problems.append(
                     f"  {e['query']!r}: {key} {prev.get(key)!r} -> {e.get(key)!r}"
-                    f"（期望域 {e.get('expect')!r}，来源 {e.get('src')}）")
+                    f"（期望域 {e.get('expect')!r}，来源 {e.get('src')}）{reason_hint}")
     for q in sorted(set(old) - {e["query"] for e in current}):
         problems.append(f"  快照有而语料没有: {q!r}（语料被删？若是故意，重新生成）")
     # 期望域失配（标注集自己抓的那层，快照顺带报告）
@@ -176,13 +182,17 @@ def main() -> int:
         print(f"路由快照对账通过（{len(current)} 条查询，domain+kind 零漂移）")
         return 0
 
+    clean_entries = [
+        {k: v for k, v in e.items() if k != "reason"}
+        for e in current
+    ]
     payload = {
         "version": 1,
         "generated_by": "scripts/gen_routing_snapshot.py",
         "compare_keys": ["domain", "kind"],
         "note": "engines 仅存档不比对（随熔断/配额波动）；expect/forbid 是语料"
                 "自带的标注，失配由 precision/negative 测试与 --check 双报",
-        "entries": current,
+        "entries": clean_entries,
     }
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
     SNAPSHOT.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n",

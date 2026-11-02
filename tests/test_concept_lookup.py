@@ -93,6 +93,20 @@ class TestConceptLookup(unittest.TestCase):
         self.assertTrue(all(stripped[i] == 0 for i in GEO_DIMS))
         self.assertTrue(all(stripped[i] == 1 for i in range(64) if i not in GEO_DIMS))
 
+    def test_geo_dims_match_clusters_definition(self):
+        """GEO_DIMS 必须与 build_concept_table 中的聚类名称动态索引严格一致。
+
+        防止离线构建脚本聚类增减或顺序调整时，生产环境的 GEO_DIMS 发生静默错位。
+        """
+        from build_concept_table import get_context_dim_indices
+        from concept_lookup import GEO_DIMS
+        self.assertEqual(
+            GEO_DIMS,
+            get_context_dim_indices(),
+            "concept_lookup.GEO_DIMS 编号与 build_concept_table.py 的聚类定义脱节！"
+        )
+
+
     def test_geo_query_not_hijacked_by_geo_engine(self):
         """含地名的旅游查询不被航空数据源顶到第一；天气查询仍命中专业源。"""
         import tfidf_router

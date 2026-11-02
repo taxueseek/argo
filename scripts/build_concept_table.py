@@ -437,6 +437,17 @@ CLUSTERS: list[dict[str, list[str]]] = [
     ]},
 ]
 
+# 上下文/定位维度簇名：在语义路由中属于背景修饰而非意图本体，
+# concept_lookup.GEO_DIMS 依此清零，避免地名重叠导致航空/测绘引擎虚高
+CONTEXT_DIM_NAMES: tuple[str, ...] = ("geography", "location_poi")
+
+
+def get_context_dim_indices() -> frozenset[int]:
+    """返回 CLUSTERS 中上下文维度的下标集合（供 concept_lookup.py 对齐验证）。"""
+    names = set(CONTEXT_DIM_NAMES)
+    return frozenset(i for i, c in enumerate(CLUSTERS) if c["name"] in names)
+
+
 
 def build():
     if np is None:
