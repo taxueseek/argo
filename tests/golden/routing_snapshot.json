@@ -46,7 +46,7 @@
   {
    "query": "BRCA1 基因检测 医保报销 价格",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -94,7 +94,7 @@
   {
    "query": "Cristiano Ronaldo club",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -106,7 +106,7 @@
   {
    "query": "DeepSeek Harness DSH 插件开发",
    "domain": "dsh_plugin_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "dshopen",
     "deepseek1024"
@@ -118,7 +118,7 @@
   {
    "query": "Inception movie director",
    "domain": "film_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "imdb",
     "douban_movie"
@@ -130,7 +130,7 @@
   {
    "query": "Interstellar film cast",
    "domain": "film_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "imdb",
     "douban_movie"
@@ -142,7 +142,7 @@
   {
    "query": "Kevin 的 项目",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -154,7 +154,7 @@
   {
    "query": "LeBron James team",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -166,7 +166,7 @@
   {
    "query": "MLB 季后赛 赛程",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -190,7 +190,7 @@
   {
    "query": "NBA 球队 排名",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -214,7 +214,7 @@
   {
    "query": "PD-1 蛋白 结构域 序列",
    "domain": "protein_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "uniprot",
     "local_bing"
@@ -238,7 +238,7 @@
   {
    "query": "React vs Vue",
    "domain": "english_tech",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "octen",
     "deepseek_search"
@@ -250,7 +250,7 @@
   {
    "query": "SEC EDGAR 招股书 财报申报",
    "domain": "sec_filings",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sec_edgar",
     "anysearch"
@@ -262,7 +262,7 @@
   {
    "query": "Taylor Swift album",
    "domain": "media_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "itunes",
     "musicbrainz"
@@ -274,7 +274,7 @@
   {
    "query": "US CPI",
    "domain": "macro_data",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "fred",
     "worldbank"
@@ -286,7 +286,7 @@
   {
    "query": "World Cup 2022 winner",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -298,7 +298,7 @@
   {
    "query": "agent skills 市场 目录",
    "domain": "skill_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "skillsmp",
     "clawhub"
@@ -334,7 +334,7 @@
   {
    "query": "deep dive 架构 实践",
    "domain": "tech_deep",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "arxiv",
     "semantic_scholar"
@@ -357,11 +357,11 @@
   },
   {
    "query": "drugstore 连锁",
-   "domain": "general_search",
-   "kind": "tfidf",
+   "domain": "chinese_general",
+   "kind": "regex",
    "engines": [
-    "parallel_free",
-    "firecrawl"
+    "bocha",
+    "yuanbao"
    ],
    "expect": null,
    "forbid": "chem_search",
@@ -394,7 +394,7 @@
   {
    "query": "github 代码 实现 用法",
    "domain": "code_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "github",
     "mdn"
@@ -406,7 +406,7 @@
   {
    "query": "google scholar 学术论文 期刊",
    "domain": "scholar_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "doaj",
     "google_scholar"
@@ -430,7 +430,7 @@
   {
    "query": "hn search 讨论",
    "domain": "hackernews_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "anysearch",
     "local_bing"
@@ -444,8 +444,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "devto",
-    "parallel_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -454,7 +454,7 @@
   {
    "query": "how to cook pasta carbonara",
    "domain": "english_tech",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "octen",
     "deepseek_search"
@@ -466,7 +466,7 @@
   {
    "query": "huggingface 预训练模型 开源模型",
    "domain": "ml_models",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "huggingface",
     "github"
@@ -490,7 +490,7 @@
   {
    "query": "models.dev claude 价格 上下文",
    "domain": "ai_model",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "models_dev",
     "anysearch"
@@ -514,7 +514,7 @@
   {
    "query": "mozilla developer fetch 属性",
    "domain": "web_docs",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "mdn",
     "stackoverflow"
@@ -526,7 +526,7 @@
   {
    "query": "nbalive 直播 源",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -538,7 +538,7 @@
   {
    "query": "newspaper 行业 衰退",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -562,7 +562,7 @@
   {
    "query": "noticias 国际 新闻",
    "domain": "world_news",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "anysearch",
     "seltz"
@@ -622,7 +622,7 @@
   {
    "query": "python 生命周期 停止支持",
    "domain": "lifecycle_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "endoflife",
     "anysearch"
@@ -645,11 +645,11 @@
   },
   {
    "query": "settlement 结算 周期",
-   "domain": "general_search",
-   "kind": "tfidf",
+   "domain": "chinese_general",
+   "kind": "regex",
    "engines": [
-    "parallel_free",
-    "doaj"
+    "bocha",
+    "yuanbao"
    ],
    "expect": null,
    "forbid": "astro_space",
@@ -658,7 +658,7 @@
   {
    "query": "stackoverflow 编程问题 代码问题",
    "domain": "stackoverflow_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_stackoverflow",
     "stackoverflow"
@@ -670,7 +670,7 @@
   {
    "query": "steam 游戏推荐 好玩的游戏",
    "domain": "game_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "steam",
     "anysearch"
@@ -706,7 +706,7 @@
   {
    "query": "transformer attention paper",
    "domain": "academic",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "arxiv",
     "openreview"
@@ -730,10 +730,10 @@
   {
    "query": "weather Tokyo",
    "domain": "weather_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "open_meteo",
-    "byted"
+    "byted",
+    "weather_cn"
    ],
    "expect": "weather_query",
    "forbid": null,
@@ -742,7 +742,7 @@
   {
    "query": "where is Eiffel Tower",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap"
    ],
@@ -755,8 +755,8 @@
    "domain": "general_search",
    "kind": "tfidf",
    "engines": [
-    "github",
-    "parallel_free"
+    "parallel_free",
+    "firecrawl"
    ],
    "expect": null,
    "forbid": null,
@@ -825,7 +825,7 @@
   {
    "query": "エッフェル塔 どこ",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "anysearch"
@@ -849,7 +849,7 @@
   {
    "query": "メッシ クラブ",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "anysearch"
@@ -861,7 +861,7 @@
   {
    "query": "三体 小说 书评",
    "domain": "book_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "weread",
     "douban_book"
@@ -873,7 +873,7 @@
   {
    "query": "上海 天气 怎么样",
    "domain": "weather_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "open_meteo",
     "byted"
@@ -885,7 +885,7 @@
   {
    "query": "上海天气 未来一周",
    "domain": "weather_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "open_meteo",
     "byted"
@@ -897,7 +897,7 @@
   {
    "query": "上证指数 行情",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sina_quote",
     "tencent_quote"
@@ -933,7 +933,7 @@
   {
    "query": "中国 8541 2023 进出口",
    "domain": "trade_stats",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "un_comtrade",
     "anysearch"
@@ -957,7 +957,7 @@
   {
    "query": "中文 编程 算法 架构 深度对比",
    "domain": "chinese_tech_deep",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "byted",
     "octen"
@@ -969,7 +969,7 @@
   {
    "query": "临床指南 糖尿病",
    "domain": "medical",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "clinicaltrials",
     "anysearch"
@@ -981,7 +981,7 @@
   {
    "query": "人民币 汇率 中间价",
    "domain": "fx_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "fx_rate",
     "cfets"
@@ -1005,7 +1005,7 @@
   {
    "query": "刑法 司法解释 判例",
    "domain": "legal",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "anysearch",
     "byted"
@@ -1029,7 +1029,7 @@
   {
    "query": "劳动合同解除 赔偿 N+1",
    "domain": "legal",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "anysearch",
     "byted"
@@ -1041,7 +1041,7 @@
   {
    "query": "北京 今天 天气",
    "domain": "weather_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "open_meteo",
     "byted"
@@ -1053,7 +1053,7 @@
   {
    "query": "北京 地铁 时刻表",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "local_openstreetmap"
@@ -1065,7 +1065,7 @@
   {
    "query": "北京 天气",
    "domain": "weather_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "open_meteo",
     "byted"
@@ -1077,7 +1077,7 @@
   {
    "query": "北京首都机场 航空气象 METAR",
    "domain": "aviation_weather",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "aviation_weather",
     "local_openstreetmap"
@@ -1089,7 +1089,7 @@
   {
    "query": "华为 总部在哪",
    "domain": "org_entity",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wikidata",
     "wikipedia"
@@ -1101,7 +1101,7 @@
   {
    "query": "卫星 TLE 轨道根数",
    "domain": "astro_space",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "noaa_swpc",
     "satnogs"
@@ -1113,10 +1113,10 @@
   {
    "query": "周杰伦 专辑",
    "domain": "media_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "qq_music",
-    "itunes"
+    "itunes",
+    "musicbrainz"
    ],
    "expect": "media_search",
    "forbid": null,
@@ -1125,10 +1125,10 @@
   {
    "query": "周杰伦 新歌 专辑",
    "domain": "media_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "itunes",
-    "musicbrainz"
+    "qq_music",
+    "itunes"
    ],
    "expect": "media_search",
    "forbid": null,
@@ -1137,7 +1137,7 @@
   {
    "query": "国务院职能",
    "domain": "org_entity",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wikidata",
     "wikipedia"
@@ -1149,7 +1149,7 @@
   {
    "query": "国家标准 国标 标准号",
    "domain": "standards",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "std_samr",
     "openstd"
@@ -1161,7 +1161,7 @@
   {
    "query": "国际事件 地缘政治 局势",
    "domain": "global_event",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "google_news",
     "deepseek_search"
@@ -1173,7 +1173,7 @@
   {
    "query": "国际新闻 外媒 国际要闻",
    "domain": "intl_news_flash",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "guardian_rss",
     "deepseek_search"
@@ -1185,7 +1185,7 @@
   {
    "query": "土壤 重金属 检测",
    "domain": "soil_agri",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "usda",
     "openfoodfacts"
@@ -1197,7 +1197,7 @@
   {
    "query": "地震 震级 余震 震中",
    "domain": "earth_science",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "usgs",
     "gdacs"
@@ -1209,7 +1209,7 @@
   {
    "query": "埃菲尔铁塔 位置",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "wikipedia"
@@ -1221,7 +1221,7 @@
   {
    "query": "埃菲尔铁塔 在哪里",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap"
    ],
@@ -1232,7 +1232,7 @@
   {
    "query": "埃菲尔铁塔 经纬度",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "wikipedia"
@@ -1244,7 +1244,7 @@
   {
    "query": "埃菲尔铁塔在哪",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "wikipedia"
@@ -1256,7 +1256,7 @@
   {
    "query": "塔罗牌 入门教程",
    "domain": "chinese_tech_deep",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "byted",
     "octen"
@@ -1268,7 +1268,7 @@
   {
    "query": "大模型 长上下文 综述",
    "domain": "academic",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "arxiv",
     "openreview"
@@ -1280,7 +1280,7 @@
   {
    "query": "如何学习机器学习",
    "domain": "chinese_tech_deep",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "byted",
     "octen"
@@ -1304,10 +1304,10 @@
   {
    "query": "宁德时代 毛利率 现金流",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "eastmoney",
-    "sina_quote"
+    "sina_quote",
+    "local_openstreetmap"
    ],
    "expect": null,
    "forbid": null,
@@ -1316,7 +1316,7 @@
   {
    "query": "宮崎駿 アニメ 映画",
    "domain": "film_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "imdb",
     "anysearch"
@@ -1340,10 +1340,10 @@
   {
    "query": "小红书 技能 排行榜",
    "domain": "redskill_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "xiaohongshu",
-    "redskill"
+    "redskill",
+    "anysearch"
    ],
    "expect": "redskill_search",
    "forbid": null,
@@ -1364,7 +1364,7 @@
   {
    "query": "布洛芬 说明书 用法用量",
    "domain": "medical",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "clinicaltrials",
     "anysearch"
@@ -1376,7 +1376,7 @@
   {
    "query": "年报 模板 怎么写",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -1388,7 +1388,7 @@
   {
    "query": "库里 球队",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -1400,7 +1400,7 @@
   {
    "query": "微信公众号 文章 搜狗微信",
    "domain": "wechat_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_sogou",
     "wechat_sogou"
@@ -1412,7 +1412,7 @@
   {
    "query": "微博热搜 今日热搜",
    "domain": "hot_trending",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "weibo",
     "baidu_hot"
@@ -1424,10 +1424,10 @@
   {
    "query": "怎么写论文 查重 降重",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "cnii",
-    "bocha"
+    "bocha",
+    "yuanbao"
    ],
    "expect": null,
    "forbid": null,
@@ -1448,7 +1448,7 @@
   {
    "query": "我的知乎 我的创作 收藏",
    "domain": "zhihu_user_data",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "zhihu_user",
     "local_bing"
@@ -1460,7 +1460,7 @@
   {
    "query": "掘金 前端文章 技术博客",
    "domain": "cn_tech_community",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "juejin",
     "v2ex"
@@ -1472,7 +1472,7 @@
   {
    "query": "日本 法令 民法 条文",
    "domain": "japan_law",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "egov_law",
     "anysearch"
@@ -1484,7 +1484,7 @@
   {
    "query": "晨曦合成科技有限公司 开票信息 税号",
    "domain": "company_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "yuanbao",
     "gleif"
@@ -1520,7 +1520,7 @@
   {
    "query": "最新新闻 今天发生 突发",
    "domain": "news_realtime",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "byted",
     "zhihu_global"
@@ -1556,7 +1556,7 @@
   {
    "query": "東京 おすすめ ラーメン 屋 はどこ",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "anysearch"
@@ -1568,7 +1568,7 @@
   {
    "query": "東京 地図",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "anysearch"
@@ -1580,7 +1580,7 @@
   {
    "query": "東京の天気",
    "domain": "weather_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "open_meteo",
     "weather_cn"
@@ -1592,7 +1592,7 @@
   {
    "query": "梅西 俱乐部",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -1604,7 +1604,7 @@
   {
    "query": "比特币 以太坊 加密货币 价格",
    "domain": "crypto_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "coingecko",
     "defillama"
@@ -1616,7 +1616,7 @@
   {
    "query": "民间借贷 利率 司法保护上限",
    "domain": "legal",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "anysearch",
     "byted"
@@ -1628,7 +1628,7 @@
   {
    "query": "沪深300 基金净值",
    "domain": "fund_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "eastmoney",
     "anysearch"
@@ -1640,7 +1640,7 @@
   {
    "query": "沪深300 基金定投",
    "domain": "fund_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "eastmoney",
     "anysearch"
@@ -1652,7 +1652,7 @@
   {
    "query": "沪铜 期货 行情",
    "domain": "futures_market",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "shfe",
     "anysearch"
@@ -1664,7 +1664,7 @@
   {
    "query": "法条 法律条文 全文",
    "domain": "law_text",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "flk_law",
     "anysearch"
@@ -1676,9 +1676,9 @@
   {
    "query": "深度学习 paper 论文",
    "domain": "academic",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
-    "semantic_scholar",
+    "local_arxiv",
     "arxiv"
    ],
    "expect": "academic",
@@ -1688,7 +1688,7 @@
   {
    "query": "深蹲膝盖疼怎么恢复",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -1700,7 +1700,7 @@
   {
    "query": "清华大学 创办年份",
    "domain": "org_entity",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wikidata",
     "wikipedia"
@@ -1712,7 +1712,7 @@
   {
    "query": "港股 港交所 披露易 公告",
    "domain": "hk_filings",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "hkex",
     "anysearch"
@@ -1724,7 +1724,7 @@
   {
    "query": "火影忍者 番剧 声优",
    "domain": "anime_encyclopedia",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "moegirl",
     "bangumi"
@@ -1748,7 +1748,7 @@
   {
    "query": "电影 主演 是谁",
    "domain": "film_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "imdb",
     "tvmaze"
@@ -1760,7 +1760,7 @@
   {
    "query": "电网 发电结构 发电量",
    "domain": "energy_grid",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "electricity_maps",
     "energy_charts"
@@ -1772,7 +1772,7 @@
   {
    "query": "疫情 暴发 流行病 通报",
    "domain": "outbreak_health",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "who_don",
     "who_gho"
@@ -1784,7 +1784,7 @@
   {
    "query": "看NBA视频 集锦",
    "domain": "sports_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "thesportsdb",
     "jolpica"
@@ -1796,7 +1796,7 @@
   {
    "query": "知乎 怎么看待 如何评价",
    "domain": "zhihu_content",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "zhihu",
     "zhihu_global"
@@ -1808,7 +1808,7 @@
   {
    "query": "知乎热榜 知乎热搜",
    "domain": "zhihu_hot_list",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "zhihu_hot",
     "zhihu"
@@ -1820,7 +1820,7 @@
   {
    "query": "科研数据集 开放数据 下载",
    "domain": "dataset_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "figshare",
     "datacite"
@@ -1844,7 +1844,7 @@
   {
    "query": "红烧肉 做法 视频",
    "domain": "video",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bilibili",
     "parallel_free"
@@ -1856,7 +1856,7 @@
   {
    "query": "纽约 共享单车 站点",
    "domain": "transport_rt",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "gbfs_nyc",
     "train"
@@ -1868,7 +1868,7 @@
   {
    "query": "维基数据 知识图谱 实体查询",
    "domain": "entity_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wikidata",
     "baidu_baike"
@@ -1880,7 +1880,7 @@
   {
    "query": "网络梗 流行语 黑话",
    "domain": "meme_slang",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "itotii",
     "urban_dictionary"
@@ -1892,7 +1892,7 @@
   {
    "query": "网页快照 历史网页 wayback",
    "domain": "web_archive",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wikipedia",
     "local_bing"
@@ -1904,7 +1904,7 @@
   {
    "query": "肖申克的救赎 主演",
    "domain": "film_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "imdb",
     "douban_movie"
@@ -1916,7 +1916,7 @@
   {
    "query": "腾讯元宝 yuanbao.com URL 参数 搜索",
    "domain": "chinese_general",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "bocha",
     "yuanbao"
@@ -1928,7 +1928,7 @@
   {
    "query": "英文单词 词典 意思",
    "domain": "dictionary_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "free_dictionary",
     "wikipedia"
@@ -1940,7 +1940,7 @@
   {
    "query": "苹果股价 行情",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sina_quote",
     "tencent_quote"
@@ -1952,7 +1952,7 @@
   {
    "query": "药品 说明书",
    "domain": "medical",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "clinicaltrials",
     "anysearch"
@@ -1976,7 +1976,7 @@
   {
    "query": "莫奈 monet 画作",
    "domain": "art_museum",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "met_museum",
     "wikipedia"
@@ -1988,7 +1988,7 @@
   {
    "query": "营收 净利润 财务数据 苹果",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sina_quote",
     "tencent_quote"
@@ -2000,7 +2000,7 @@
   {
    "query": "蛋白质 基因 氨基酸序列",
    "domain": "protein_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "uniprot",
     "local_bing"
@@ -2012,7 +2012,7 @@
   {
    "query": "裁判文书 判决书",
    "domain": "wenshu_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wenshu",
     "anysearch"
@@ -2048,7 +2048,7 @@
   {
    "query": "购物 评测 推荐 踩坑",
    "domain": "shopping",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "zhihu",
     "anysearch"
@@ -2060,7 +2060,7 @@
   {
    "query": "贵州茅台 2025 年报 营收",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sina_quote",
     "tencent_quote"
@@ -2072,7 +2072,7 @@
   {
    "query": "贵州茅台 市盈率 估值",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sina_quote",
     "tencent_quote"
@@ -2084,7 +2084,7 @@
   {
    "query": "贵州茅台股价",
    "domain": "stock_query",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "sina_quote",
     "tencent_quote"
@@ -2096,7 +2096,7 @@
   {
    "query": "车辆 VIN 查询",
    "domain": "vehicle_data",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "nhtsa_vpic",
     "anysearch"
@@ -2108,7 +2108,7 @@
   {
    "query": "辟谣 传言 事实核查",
    "domain": "claim_check",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "factcheck_org",
     "full_fact"
@@ -2132,7 +2132,7 @@
   {
    "query": "金十 7x24 快讯",
    "domain": "jin10_flash",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "jin10",
     "cls_telegraph"
@@ -2144,7 +2144,7 @@
   {
    "query": "长亭科技 股东 持股比例",
    "domain": "company_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "yuanbao",
     "gleif"
@@ -2156,7 +2156,7 @@
   {
    "query": "长征 百度百科 词条解释",
    "domain": "cn_encyclopedia",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "baidu_baike",
     "zh_wikipedia"
@@ -2168,7 +2168,7 @@
   {
    "query": "长江 长度 是多少",
    "domain": "fact_check",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "wikipedia",
     "byted"
@@ -2204,7 +2204,7 @@
   {
    "query": "雪景 壁纸 图片",
    "domain": "image_search",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "openverse",
     "wikimedia_commons"
@@ -2216,7 +2216,7 @@
   {
    "query": "韩国 法令 民法 条文",
    "domain": "kor_law",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "kor_law",
     "anysearch"
@@ -2240,7 +2240,7 @@
   {
    "query": "黄河 流经省份",
    "domain": "geo_places",
-   "kind": "tfidf",
+   "kind": "regex",
    "engines": [
     "local_openstreetmap",
     "wikipedia"

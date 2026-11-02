@@ -214,15 +214,24 @@ def detect_language(query: str) -> str:
     # 汉字为主判 zh
     if han / total_chars >= 0.3:
         return "zh"
+    # 汉字与拉丁并存的中文技术查询（「Transformer 模型 原理」「OpenAI o3 评测」
+    # 「Python asyncio 教程」）判 mixed 而不是 en。
+    #
+    # 为什么这条放在拉丁判定**之前**：这些查询里拉丁词是技术专名（模型名、
+    # 库名、产品名），汉字才是用户真正在问的内容。判 en 会让
+    # route_domains 的中文域语言门把所有中文域整片跳过——实测「Transformer
+    # 模型 原理」命中 chinese_tech_deep/chinese_general 后又被门清空，
+    # 掉进 TF-IDF 分支落到 arxiv（返回 NLP 综述，而用户要的是原理）。
+    # 判 mixed 与 en 都不在 _ZH_LANG_GATED_DOMAINS 的跳过条件里
+    # （`primary_lang not in ("zh","mixed","other")`），中文域正常参与。
+    if han and latin:
+        return "mixed"
     # 拉丁字母（含扩展字符 é/ü/ñ 等）为主 → 拉丁语系
     # 扩展字符占比 ≥ 0.08 时判 latin（café / español / français 等）
     if (latin + latin_ext) / total_chars >= 0.5:
         if latin_ext / total_chars >= 0.08:
             return "latin"
         return "en" if latin else "latin"
-    # 有汉字也有大量拉丁 → 中英混合；其余情况判混合
-    if han and latin:
-        return "mixed"
     return "other"
 
 

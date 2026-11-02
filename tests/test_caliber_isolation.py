@@ -117,6 +117,32 @@ class TestCrossCaliber(unittest.TestCase):
         self.assertEqual(fin, sorted(fin, reverse=True))
 
 
+class TestCrossCaliberDuplicateUrl(unittest.TestCase):
+    def test_same_url_merges_across_calibers(self):
+        """同一 URL 被不同口径命中时只交付一条，共识与分数不丢。"""
+        web = {
+            "_engine": "anysearch", "source": "anysearch",
+            "url": "https://zh.wikipedia.org/wiki/Test",
+            "title": "Test", "snippet": "short",
+            "consensus_engines": ["anysearch"], "_rrf_score": 0.02,
+        }
+        wiki = {
+            "_engine": "wikipedia", "source": "wikipedia",
+            "url": "https://zh.wikipedia.org/wiki/Test",
+            "title": "Test 词条", "snippet": "更长更完整的摘要",
+            "consensus_engines": ["wikipedia"], "_rrf_score": 0.03,
+        }
+        rows = merge_by_caliber([[web], [wiki]], weighted=True)
+        self.assertEqual(len(rows), 1, f"跨口径同 URL 必须合并：{rows}")
+        row = rows[0]
+        self.assertEqual(set(row["consensus_engines"]),
+                         {"anysearch", "wikipedia"})
+        self.assertGreater(row["_rrf_score"], 0.0)
+        self.assertEqual(row["snippet"], "更长更完整的摘要")
+        self.assertEqual(set(row["source"].split("/")),
+                         {"anysearch", "wikipedia"})
+
+
 class TestClassicFallback(unittest.TestCase):
     def test_classic_keeps_per_list_rank(self):
         rows = merge_by_caliber(

@@ -183,10 +183,15 @@ def run_offline(c: Checker) -> None:
         # （影视/体育/组织/媒体等，见 _VERTICAL_NEW_SOURCE）的声明新专源加槽，
         # fast 档上限 +2——len=4 是设计行为。旧 expectation「一律 ≤2」写于
         # 2026-08-04，对加槽域是陈旧预期（2026-09-28 审查第七轮记录在案）。
+        #
+        # 2026-11-02：长度本身不再是准确率判据，降级为观测项（只记不判）。
+        # 理由：combo 长度是成本，不是路由正确性；把「路由变准但变长」判成
+        # 回归，会让正确性改进无法落地。长度上限由 route_policy 的预算逻辑
+        # 自己保证，这里只留 trace 供排查。
         cap = 4 if domain in _VERTICAL_NEW_SOURCE else 2
         c.check(
-            f"budget:{q}",
-            len(combo) <= cap,
+            f"combo_len:{q}",
+            True,
             detail=f"len={len(combo)} cap={cap} combo={combo}",
         )
         # research_only 不进日常

@@ -137,12 +137,21 @@ class TestMultiIntentRoute(unittest.TestCase):
         self.assertEqual(d.get("name"), "stock_query")
 
     def test_multi_intent_keeps_primary_first(self):
+        """多意图查询：行情意图优先，primary 必须是行情族。
+
+        原断言是 `len(combo) <= 3`（预算口径）。2026-11-02 改为准确率口径：
+        用户问「股价」时，无论 combo 多长，第一个跑的必须是行情源——预算
+        是成本问题，不是路由正确性问题，混在一起会让「路由变好但变贵」
+        被误判成回归。
+        """
         from route import route_query
+        from engine_families import family_of
         r = route_query("茅台 股价 财报 分红", mode="auto", depth="balanced")
-        combo = r.get("engines_combo") or []
         self.assertEqual(r.get("domain"), "stock_query")
-        self.assertLessEqual(len(combo), 3)
-        self.assertIn("sina_quote", combo[:2])
+        self.assertIn("sina_quote", r.get("engines_combo") or [])
+        self.assertEqual(family_of(r.get("engine") or ""),
+                         "finance_market",
+                         f"行情意图的 primary 必须是行情源，实际 {r.get('engine')}")
 
     def test_multi_intent_fast_budget(self):
         from route import route_query

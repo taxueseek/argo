@@ -187,9 +187,11 @@ def merge_by_caliber(
             _canonical_url=_canonical_url, _engine_weight=_engine_weight,
         )
 
-    # 不同口径按优先级排序后并列输出
+    # 不同口径按优先级排序后并列输出；拼接后再按 URL 合并一次，
+    # 避免同一文档因跨口径命中被交付两遍（共识证据并入首条）。
     out = []
     for cal in sorted(merged_by_caliber.keys(),
                      key=lambda c: _CALIBER_PRIORITY.get(c, 8)):
         out.extend(merged_by_caliber[cal])
-    return out
+    from caliber_dedupe import merge_cross_caliber_duplicates
+    return merge_cross_caliber_duplicates(out, _canonical_url)

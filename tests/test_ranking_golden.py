@@ -48,6 +48,25 @@ def test_golden_metrics_at_or_above_floor():
     )
 
 
+def test_ndcg_is_bounded_and_order_has_unique_urls():
+    """nDCG 必须落在 [0,1]；同一 URL 不得在最终序里出现两次。
+
+    这两条是度量的定义式，不是阈值：重复计分会让 nDCG 大于 1（实测
+    1.4525），从此任何排序回归都能被「同一文档多算一次」掩盖。
+    """
+    import ranking_eval
+
+    report = ranking_eval.evaluate_all()
+    for case in report["cases"]:
+        assert case["ndcg"] <= 1.0001, (
+            f"{case['id']} nDCG={case['ndcg']} 超过 1，重复文档被重复计分")
+        # 无 URL 的结构化卡（weather_card/train_card）是合法独立条目，
+        # 它们天然共享空串；只对真实 URL 查重复。
+        urls = [u for u in case["order"] if u]
+        assert len(urls) == len(set(urls)), (
+            f"{case['id']} 最终序有重复 URL：{case['order']}")
+
+
 def test_golden_file_health():
     golden_doc = json.loads(
         (ROOT / "tests" / "golden" / "ranking_golden.json").read_text(

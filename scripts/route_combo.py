@@ -168,6 +168,28 @@ def _hard_down_blocked(engine_id: str) -> bool:
         return False
 
 
+def _dep_ready(engine_id: str, specs: dict | None = None) -> bool:
+    """引擎声明的外部依赖（CLI 工具等）是否就绪。
+
+    路由准入此前不查依赖，只查 enabled/熔断/配额/死源/语言，而执行层
+    另有一套（engine_status 的 dep_ready）。两套判据的后果是 primary
+    可以是一个「路由认为可用、执行必然失败」的引擎：实测本机
+    xiaohongshu 缺 xhs CLI，路由仍把它放首位，结果由 fallback 悄悄
+    接管，reason 却写着「→ 小红书」。让路由与执行共用同一个依赖判据。
+    """
+    spec = (specs or {}).get(engine_id)
+    if not isinstance(spec, dict):
+        return True
+    requires = spec.get("requires")
+    if not requires:
+        return True
+    try:
+        from engine_requires import requires_status
+        return bool(requires_status(spec).get("dep_ready", True))
+    except Exception:
+        return True
+
+
 def is_engine_routable(
     engine_id: str,
     *,
@@ -175,11 +197,14 @@ def is_engine_routable(
     check_breaker: bool = True,
     check_hard_down: bool = True,
     check_dead: bool = False,
+    check_deps: bool = True,
     lang: str = "",
     specs: dict | None = None,
 ) -> bool:
-    """单一引擎路由准入谓词：统一收口 enabled / 熔断 / 配额硬耗尽 / 死源地板 / 语言可达。"""
+    """单一引擎路由准入谓词：统一收口 enabled / 依赖 / 熔断 / 配额硬耗尽 / 死源 / 语言可达。"""
     if enabled is not None and engine_id not in enabled:
+        return False
+    if check_deps and not _dep_ready(engine_id, specs):
         return False
     if lang and not lang_allows(engine_id, lang, (specs or {}).get(engine_id)):
         return False
@@ -288,6 +313,7 @@ def select_tfidf_best(query: str,
                       semantic_route,
                       min_score: float = 0.12,
                       enabled: set[str] | None = None,
+                      vetoed: set[str] | None = None,
                       ) -> tuple[str | None, float, list]:
     """TF-IDF 语义路由选源：返回 (最佳引擎, 分数, 候选表)。
 
@@ -303,6 +329,9 @@ def select_tfidf_best(query: str,
          顶到首位——实测 thesportsdb 0.084 仍是「NBA
          总决赛」类查询的第一候选，注入后撤销 GEC 地板
          过滤并占 wave-1 竞速首位，白等它的单引擎超时。
+      ⑤ 域规则否决（vetoed）：域已用 unless 否决过该引擎所属域时，词面分
+         不得复活它——实测「怎么写论文 查重 降重」域判 chinese_general，
+         TF-IDF 仍按「论文」高分把 cnii（日文学术）注入首位。
 
     semantic_route 由调用方传入：route.py 经模块属性
     访问解析（测试打桩 patch("route.semantic_route")
@@ -342,6 +371,8 @@ def select_tfidf_best(query: str,
         if enabled is not None and cand not in enabled:
             if near_miss is None:
                 near_miss = (cand, score)
+            continue
+        if vetoed and cand in vetoed:
             continue
         tfidf_best = cand
         tfidf_best_score = score

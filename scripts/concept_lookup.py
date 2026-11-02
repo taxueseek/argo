@@ -132,14 +132,21 @@ class ConceptLookup:
         """将短语或查询聚合为归一化的 64 维 int8 概念向量。"""
         if not self._available or not text:
             return None
-        # 提取候选词元：整词、空格切词、连续CJK片段
+        # 提取候选词元：整词 + 仅 CJK 片段的二元组。
+        #
+        # 为什么英文/拉丁词不拆二元组（2026-11-02 实测）：词表里有 pr/ts/go/js/
+        # ml/ai/db 等 16 个两字母概念词，英文单词的字符组会撞上它们——
+        # "printing press" 拆出 "pr" 让 GitHub（pull request）余弦 0.835，
+        # "tomato plants" 拆出 "ts" 让 dev.to（TypeScript）余弦 0.912，
+        # 两条查询的主源因此分别被劫持到 github / devto。
         raw_tokens = []
         for part in text.lower().split():
             clean = part.strip(",.!?;:()[]{}\"'“”‘’，。！？；：")
-            if clean:
-                raw_tokens.append(clean)
-                if len(clean) >= 2:
-                    raw_tokens.extend(clean[i : i + 2] for i in range(len(clean) - 1))
+            if not clean:
+                continue
+            raw_tokens.append(clean)
+            if len(clean) >= 2 and any("\u4e00" <= ch <= "\u9fff" for ch in clean):
+                raw_tokens.extend(clean[i : i + 2] for i in range(len(clean) - 1))
 
         matched_vecs = []
         for t in raw_tokens:
@@ -189,10 +196,17 @@ def get_concept_lookup() -> ConceptLookup:
 
 
 def concept_router_enabled() -> bool:
-    """概念语义路由开关：默认开，ARGO_CONCEPT_ROUTER=0 时关闭。"""
+    """概念语义路由开关：默认关，ARGO_CONCEPT_ROUTER=1 时开启。
+
+    默认关的理由（2026-11-02 实测）：在 201 条路由语料上概念分改了 9 条
+    主源，至少 5 条明显错（github/devto 来自英文二元组、itunes 逆向覆盖中文
+    音乐、cnii 跨域、xiaohongshu 不可执行），只有 1 条明显对。概念分还直接
+    混进 TF-IDF 分数并越过 0.6 强注入阈值，绕过域规则已有的否决。先收回到
+    v2.10.1 的纯词面行为；等标注集证明 precision 后再按需开启。
+    """
     try:
         from engine_env import env_flag
-        return env_flag("ARGO_CONCEPT_ROUTER", True)
+        return env_flag("ARGO_CONCEPT_ROUTER", False)
     except Exception:
-        val = os.environ.get("ARGO_CONCEPT_ROUTER", "1").strip().lower()
-        return val not in ("0", "off", "no", "false")
+        val = os.environ.get("ARGO_CONCEPT_ROUTER", "0").strip().lower()
+        return val in ("1", "on", "yes", "true")

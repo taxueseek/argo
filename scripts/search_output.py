@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from search_rank import filter_results_by_domains
 from search_types import slot_record as dataclass
+from snippet_clean import clean_snippet
 from typing import Any
 from output_transparency import (  # noqa: F401
     _AGGREGATOR_HOSTS,
@@ -759,6 +760,15 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             result["failures"] = failures
     except Exception as e:
         _log(f"失败清单跳过: {type(e).__name__}")
+    # 摘要装饰清洗（输出质量）：剥 markdown 列表/标题标记、站导航链与重复
+    # 站名前缀，压空白。放在收口处，full/agent/人读三种出口共享同一份文本；
+    # 不改 schema、不截断，失败静默跳过。
+    try:
+        for _r in (result.get("results") or []):
+            if isinstance(_r, dict) and isinstance(_r.get("snippet"), str):
+                _r["snippet"] = clean_snippet(_r["snippet"])
+    except Exception as e:
+        _log(f"摘要清洗跳过: {type(e).__name__}")
     # 信任级别与边界清洗：所有入口（full/agent/MCP）共用同一个收口，
     # 避免 CLI/agent 档带 content_trust 却未剥离网页自带的 </untrusted-web-content>。
     try:

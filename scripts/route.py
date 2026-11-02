@@ -129,6 +129,7 @@ from route_lang import (  # noqa: E402
     _get_registry,
 )
 from paid_policy import insert_hedge
+from route_primary import promote_executable_primary
 from route_combo import (  # noqa: E402
     _expand_local_search,
     _general_fallback,
@@ -602,6 +603,12 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
     engines_combo = insert_hedge(
         engines_combo, domain.get("name", ""), mode, enabled,
         lang=str((features or {}).get("primary_lang") or ""))
+    # primary 可执行性：combo 装配早期不看依赖，缺 CLI 的引擎能占住首位。
+    # 顺位到第一个路由与执行都判可用的引擎（判据见函数 docstring）。
+    # 不传 specs：_specs_snapshot() 在路由路径下恒为空表（只读已加载的
+    # engines 模块），传空表会让依赖判据对全部引擎失效。
+    engines_combo, _demoted = promote_executable_primary(
+        engines_combo, enabled=enabled)
 
     return _done(
         engine=engines_combo[0],
@@ -617,7 +624,9 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
                and e not in set(domain.get("engines_combo") or [])]),
         reason=(
             f"{_feature_labels(features)} → 命中域 [{domain.get('name', '?')}]"
-            + (f" [TF-IDF→{tfidf_best}]" if tfidf_best else "")
+            # 只有真正进入 combo 的 TF-IDF 推荐才写进 reason：落选（被
+            # 否决/预算/域规则挡下）的候选若照写，排查会指向一个从未执行的源。
+            + (f" [TF-IDF→{tfidf_best}]" if tfidf_best and tfidf_best in engines_combo else "")
             + (" [TF-IDF覆写catch-all]" if is_catch_all and tfidf_best and tfidf_best_score > TFIDF_STRONG_SCORE and tfidf_best in engines_combo else "")
             + (f" [boost={engines_boost}]" if engines_boost else "")
             + f" → {_engine_display(engines_combo[0])}"
@@ -693,6 +702,8 @@ def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
     # D4：统一熔断统一处理（TF-IDF 注入/语言追加可能绕过 _get_engines_combo）
     engines_combo = breaker_filter(engines_combo, enabled, features=features,
                                    query=query)
+    engines_combo, _demoted = promote_executable_primary(
+        engines_combo, enabled=enabled)
     if mode == "fast":
         parallel = False
     else:
@@ -756,6 +767,8 @@ def _route_by_fallback(ctx: _RouteCtx) -> dict[str, Any]:
     # D4：统一熔断统一处理（保底组合可能含熔断引擎）。
     # 兜底次序与本分支的语义一致：通用保底路径只认 anysearch。
     fallback_combo = breaker_filter(fallback_combo, enabled, empty=("anysearch",))
+    fallback_combo, _demoted = promote_executable_primary(
+        fallback_combo, enabled=enabled)
 
     low = tfidf_scores and all(s[1] < TFIDF_MIN_SCORE for s in tfidf_scores)
     reason = (
@@ -896,9 +909,18 @@ def route_query(query: str, engine_override: str = "auto",
             # 选源四道门（社交信号 / 分数地板 / 语言可达 / 死源地板）
             # 见 select_tfidf_best docstring
             _semantic_route = sys.modules[__name__].semantic_route
+            # 域规则否决：零实域命中时，被 unless 否决的域其引擎不得被
+            # TF-IDF 按词面分复活（判据见 route_domains.vetoes_apply）。
+            _vetoed: set[str] = set()
+            if not hard_domain:
+                try:
+                    from route_primary import domain_vetoed_engines
+                    _vetoed = domain_vetoed_engines(query, domains_cfg)
+                except Exception:
+                    _vetoed = set()
             tfidf_best, tfidf_best_score, tfidf_scores = select_tfidf_best(
                 query, features, _specs_snapshot(), _semantic_route,
-                min_score=TFIDF_MIN_SCORE, enabled=enabled)
+                min_score=TFIDF_MIN_SCORE, enabled=enabled, vetoed=_vetoed)
         except ImportError:
             pass
         except Exception as e:

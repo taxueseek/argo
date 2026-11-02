@@ -576,7 +576,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_ADMISSION_DIR` | admission dir | 见 references/operations.md 与模块 docstring |
 | `ARGO_ALLOW_PRIVATE_URLS` | allow private urls | 见 references/operations.md 与模块 docstring |
 | `ARGO_ALLOW_RECOMPUTE` | ('research 可复算脚本执行', '默认拒绝，显式授权') | 见 references/operations.md 与模块 docstring |
-| `ARGO_CONCEPT_ROUTER` | ('概念语义路由（Model2Vec 零依赖静态向量）', '默认开；=0 回退纯词面 TF-IDF') | 见 concept_lookup.py docstring |
+| `ARGO_CONCEPT_ROUTER` | ('概念语义路由（Model2Vec 零依赖静态向量）', '默认关；=1 开启，回退纯词面 TF-IDF') | 见 concept_lookup.py docstring |
 | `ARGO_CONFIG_CACHE` | ('配置解析缓存', '默认开') | 见 references/operations.md 与模块 docstring |
 | `ARGO_CONFIG_STAMP_TTL_S` | config stamp ttl s | 见 references/operations.md 与模块 docstring |
 | `ARGO_CONTENT_RISK_GATE` | ('内容风险门禁：高风险正文隔离 + 清洗后替换', '默认开；=0 放行高风险内容') | 见 content_security.py docstring |

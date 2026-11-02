@@ -103,8 +103,30 @@ def _dcg(grades: list[float]) -> float:
                for i, g in enumerate(grades))
 
 
+def _unique_by_url(rows: list[dict]) -> list[dict]:
+    """按归一 URL 去重，保留首次出现。
+
+    nDCG 的 IDCG 只按唯一相关文档算；若 ranked 里同一 URL 出现两次，
+    DCG 会重复计分，指标可以大于 1（实测 1.4525）。度量层必须自己
+    守住唯一性，不能假设上游每条路径都去过重。
+    """
+    from url_canon import canonical_url
+    seen: set[str] = set()
+    out: list[dict] = []
+    for r in rows:
+        key = canonical_url(r.get("url", ""))
+        if not key:
+            out.append(r)
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
 def evaluate_case(case: dict) -> dict:
-    ranked = _run_pipeline(case)
+    ranked = _unique_by_url(_run_pipeline(case))
     relevant = {u: g for u, g in (case.get("relevant") or {}).items() if g > 0}
     grades = []
     for r in ranked[:10]:

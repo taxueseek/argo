@@ -1468,7 +1468,10 @@ domains:
   - match: '(?i)(transformer|attention|neural\s+network|deep\s+learning|machine\s+learning|BERT|GPT)'
     # 「工程实践/博客/案例」是产品与经验文章语境，不是论文。实测「GPT
     # 工程实践 清理死代码」被 academic 接走，arXiv 返回 AI 教育论文。
-    unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙|工程实践|实践|博客|文章|官方博客|公司|团队|案例)'
+    # 2026-11-02 补「原理/是什么/解释」复合守卫：求解释不是查论文，实测
+    # 「Transformer 模型 原理」返回 NLP 综述与医学 EEG 论文。守卫只拦
+    # 「解释词命中且不含论文词」的查询，「Transformer 原理 论文」仍归本域。
+    unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙|工程实践|实践|博客|文章|官方博客|公司|团队|案例|(?!.*(论文|paper|综述|文献|期刊|arXiv|DOI)).*(原理|是什么|解释|入门|科普|详解))'
   - (?i)(論文|ジャーナル|学会誌|査読|研究論文|プレプリント)
   primary: arxiv
 - desc: 技术深度研究
@@ -1873,7 +1876,12 @@ domains:
   # route_domains._social_domain_first 会把 social 提到命中列表首位——实测
   # 「v2ex 技术社区」落本域用 hackernews 搜（HackerNews 里确有一批 V2EX 讨论帖，
   # 但那是转载不是社区本身），而 v2ex_search 才是垂直域。从 patterns 移除 v2ex。
-  - (?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑)
+  # 2026-11-02 补 unless：平台名 + 内容意图（攻略/推荐/做法…）是找内容，
+  # 不是舆情监听。实测「小红书 露营 攻略」返回「露营季广告」「露营经济
+  # 红利」这类营销稿；平台名在内容语境里只是来源限定。反例「小红书 露营
+  # 舆情/评论」仍归本域（unless 不命中）。
+  - match: '(?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑)'
+    unless: '(?i)(攻略|推荐|路线|景点|美食|做法|教程|测评|怎么玩|清单)'
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   - (?i)(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)
   primary: zhihu

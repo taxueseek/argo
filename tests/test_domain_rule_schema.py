@@ -148,6 +148,10 @@ def test_every_rule_compiles_and_survives_compilation():
         # academic unless（2026-09-30）：裸 GPT/BERT 子串不再把产品语境抢进论文域
         ("academic", "chatgpt 使用技巧"),
         ("academic", "如何用 GPT 写周报"),
+        # academic unless（2026-11-02）：求解释不是查论文
+        ("academic", "Transformer 模型 原理"),
+        # social unless（2026-11-02）：平台名 + 内容意图是找内容，不是舆情
+        ("social", "小红书 露营 攻略"),
         # fund_query unless（2026-10-14）：法规/管理办法不进基金净值接口
         ("fund_query", "公募基金运作管理办法 修订 逐条解读"),
         # org_entity unless（2026-10-14）：岗位职责/求职不锁进 wikidata
@@ -237,7 +241,7 @@ def test_unless_declared_domains_are_covered_by_negative_cases():
                "code_search", "image_search", "company_search",
                "ai_model", "us_fundamentals", "stock_query", "medical",
                "global_event", "video", "protein_search", "chem_search",
-               "cn_encyclopedia", "fact_check", "sports_search"}
+               "cn_encyclopedia", "fact_check", "sports_search", "social"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)

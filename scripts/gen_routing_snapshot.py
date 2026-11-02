@@ -81,10 +81,19 @@ def _route_one(query: str) -> dict:
     from route import route_query
     d = route_query(query, mode="auto", depth="fast")
     reason = d.get("reason") or ""
-    # kind 判定口径：
-    # 命中 TF-IDF 信号（包括纯语义路由、覆写 catch-all 及低分回退）记为 tfidf；
-    # 纯硬域正则命中的记为 regex。保留 reason 用于 diff 诊断。
-    kind = "tfidf" if "TF-IDF" in reason else "regex"
+    # kind 判定口径：**按路由分支**判，不按 reason 文案判。
+    #
+    # 2026-11-02 修：此前判据是「reason 里有没有 TF-IDF 字样」。概念路由默认关
+    # 之后，域命中分支的 reason 不再写 [TF-IDF→x]（那一行只在推荐真进 combo 时
+    # 才写），于是 87 条域命中查询的 kind 从 tfidf 误翻成 regex——快照失去
+    # 「这条路由走的是硬域正则还是语义选源」这个信息。
+    #
+    # 正确判据：reason 以「TF-IDF」开头的是语义选源分支；domain 非空且 reason
+    # 含「命中域」的是域分支；domain 为 general_search 且无命中域的是回退。
+    if reason.startswith("TF-IDF") or "回退通用" in reason:
+        kind = "tfidf"
+    else:
+        kind = "regex"
     return {
         "domain": d.get("domain"),
         "kind": kind,

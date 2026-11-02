@@ -62,8 +62,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-29 +19：open_meteo 多 place forecast 并行化（串行 9.28s → "
               "3.9-5.1s，bounded_run 有界并发 + 保序）"),
     "scripts/caliber_isolation.py": (
-        195, "口径隔离：RRF 融合前按口径分组，不同口径不直接 merge；"
+        197, "口径隔离：RRF 融合前按口径分组，不同口径不直接 merge；"
               "纯函数，可独立测试；"
+              "2026-11-02 +2：跨口径同 URL 合并改为调用 caliber_dedupe"
+              "（同 URL 被多口径命中时只交付一条，nDCG 不再 >1）；"
               "2026-10-17 +9：分组单位从「单条结果」改回「整条引擎列表」——"
               "旧写法让 merge_within_caliber 的 i 恒为 0，同引擎全部同分、"
               "名次衰减归零（tests/test_caliber_isolation.py 锁三条不变式）；"
@@ -358,7 +360,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-26 +1：补 dsh_plugin_search 域用例（新域零用例会被 "
               "test_route_matrix_coverage 拦下）；上限 1297 → 1298"),
     "scripts/route.py": (
-        1011, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+        1033, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+              "2026-11-02 +22：primary 可执行性顺位与域否决的**调用点**"
+              "（判定本体拆到 route_primary，本文件只留接线）；"
               "2026-10-27 +2：付费对冲传 lang（insert_hedge 调用三行化；"
               "语言条件对冲的判据在 paid_policy，本文件只留传参）；"
               "2026-10-26 +1：三条分支共用 general_kwargs（参数样板在 "

@@ -15,7 +15,9 @@ HttpClient 接入后这些 mock 不再生效。默认回退 urllib 路径，保�
 import atexit
 import os
 import shutil
+import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -108,8 +110,6 @@ def _isolate_measure_clock():
 
 @pytest.fixture(autouse=True)
 def _isolate_conn_pool():
-    import sys
-    from pathlib import Path
     scripts = Path(__file__).resolve().parent.parent / "scripts"
     if str(scripts) not in sys.path:
         sys.path.insert(0, str(scripts))
@@ -155,6 +155,30 @@ def _isolate_adaptive_and_breaker(tmp_path_factory, monkeypatch):
     adaptive._learner = None
     route_combo._adaptive_learner = route_combo._UNRESOLVED
     circuit_breaker._breaker = _old_breaker
+
+
+@pytest.fixture(autouse=True)
+def _isolate_local_search_registry(monkeypatch, tmp_path):
+    """本地检索注册表是**进程级单例**，其健康状态跨用例共享。
+
+    实测（2026-11-02）：`get_registry()` 带 lru_cache，状态目录整轮共享时，
+    前序用例写下的 `local_sogou` 不可用记录会让
+    `test_circuit_breaker_drops_open_engine` 在全量套件里红、单跑全绿
+    （该用例断言熔断引擎被跳过，而可用性检查先一步把它过滤掉了）。
+    每个用例把健康状态文件指到临时目录并清掉单例缓存。
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent
+                               / "sub-skills" / "local-search"))
+        import engine_registry
+    except ImportError:
+        yield
+        return
+    monkeypatch.setattr(engine_registry, "_default_health_state_path",
+                        lambda: tmp_path / "local_search_health.json")
+    engine_registry.get_registry.cache_clear()
+    yield
+    engine_registry.get_registry.cache_clear()
 
 
 @pytest.fixture
