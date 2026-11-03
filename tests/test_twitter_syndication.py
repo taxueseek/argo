@@ -31,6 +31,11 @@ class TestExtractTweetId:
             "https://x.com/elonmusk/status/1585841080431321088"
         ) == "1585841080431321088"
 
+    def test_short_id_in_url(self):
+        assert extract_tweet_id(
+            "https://x.com/jack/status/20"
+        ) == "20"
+
     def test_twitter_com_statuses(self):
         assert extract_tweet_id(
             "https://twitter.com/a/statuses/1585841080431321088?s=20"

@@ -297,7 +297,7 @@ def search(query: str, n: int = 5) -> list[dict]:
     # 否则一次网络抖动就让整条兜底链失效（2026-11-03 issue #36 实测）。
     fx_errors: list[dict] = []
     try:
-        results = search_fxtwitter(query, n=n, timeout=10)
+        results = search_fxtwitter(query, n=n, timeout=3, max_retries=0)
         valid = [r for r in results
                  if isinstance(r, dict) and not r.get("error")]
         if valid:
@@ -308,6 +308,38 @@ def search(query: str, n: int = 5) -> list[dict]:
         pass
 
     # 2) twitter-cli（`twitter`）/ `tw` CLI，两者参数形态不同，逐个试
+    # CLI 只认自己的变量：Twitter 凭据从 engine_env 读，代理从 TWITTER_PROXY 读，
+    # 这里把它们收拢成一份子进程环境，避免 CLI 在 Windows 上按 GBK 读输出崩。
+    env = dict(os.environ)
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    for k in ("NO_PROXY", "no_proxy"):
+        if k in env and "[::1]" in env[k]:
+            env[k] = ",".join(x for x in env[k].split(",") if x.strip() != "[::1]")
+    proxy_val = (
+        env.get("TWITTER_PROXY")
+        or env.get("ARGO_PROXY")
+        or env.get("HTTPS_PROXY")
+        or env.get("https_proxy")
+        or env.get("HTTP_PROXY")
+        or env.get("http_proxy")
+    )
+    if proxy_val and proxy_val.lower() != "direct":
+        env.setdefault("TWITTER_PROXY", proxy_val)
+    try:
+        from engine_env import get_env
+
+        for k in ("TWITTER_AUTH_TOKEN", "TWITTER_CT0", "TWITTER_PROXY"):
+            val = get_env([k])
+            if val:
+                env.setdefault(k, val)
+        if not env.get("TWITTER_PROXY"):
+            argo_proxy = get_env(["ARGO_PROXY"])
+            if argo_proxy and argo_proxy.lower() != "direct":
+                env["TWITTER_PROXY"] = argo_proxy
+    except Exception:
+        pass
+
     for cmd in (
         ["twitter", "search", query, "-n", str(n), "--json"],
         ["tw", "search", query, "--limit", str(n), "--json"],
@@ -319,7 +351,8 @@ def search(query: str, n: int = 5) -> list[dict]:
                 text=True,
                 encoding="utf-8",  # Windows GBK locale 下 UTF-8 输出会解码崩
                 errors="replace",
-                timeout=10,
+                timeout=12,
+                env=env,
             )
             if result.returncode == 0 and result.stdout.strip():
                 parsed = _parse_tw_json(result.stdout, n)

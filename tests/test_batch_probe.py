@@ -29,7 +29,7 @@ class TestClassifyUrl:
         assert bp.classify_url("") == bp.UNSUPPORTED
 
     def test_login_wall(self):
-        assert bp.classify_url("https://x.com/a/status/1") == bp.NEEDS_AUTH
+        assert bp.classify_url("https://x.com/home") == bp.NEEDS_AUTH
         assert bp.classify_url("https://www.instagram.com/p/abc/") == bp.NEEDS_AUTH
         assert bp.classify_url("https://medium.com/@a/post") == bp.NEEDS_AUTH
 
@@ -50,13 +50,13 @@ class TestProbeBatch:
     def test_mixed_verdict_go_with_skips(self):
         report = bp.probe_batch([
             "https://example.com/a",
-            "https://x.com/a/status/1",
+            "https://x.com/home",
             "not a url",
         ])
         assert report["total"] == 3
         assert report["ready"] == 1
         assert report["verdict"] == "go_with_skips"
-        assert report["by_problem"]["needs_auth"] == ["https://x.com/a/status/1"]
+        assert report["by_problem"]["needs_auth"] == ["https://x.com/home"]
         assert report["by_problem"]["unsupported"] == ["not a url"]
 
     def test_all_clean_go(self):
@@ -77,7 +77,7 @@ class TestProbeBatch:
 
     def test_actionable_only_needs_auth(self):
         report = bp.probe_batch([
-            "https://x.com/a/status/1",
+            "https://x.com/home",
             "not a url",
             "https://example.com/ok",
         ])
@@ -88,7 +88,7 @@ class TestProbeBatch:
     def test_ready_urls_lists_executable(self):
         report = bp.probe_batch([
             "https://example.com/a",
-            "https://x.com/a/status/1",
+            "https://x.com/home",
         ])
         assert report["ready_urls"] == ["https://example.com/a"]
 
@@ -97,14 +97,14 @@ class TestReportFormat:
     def test_text_report_sections(self):
         report = bp.probe_batch([
             "https://example.com/a",
-            "https://x.com/a/status/1",
+            "https://x.com/home",
             "not a url",
         ])
         text = bp._format_report(report)
         assert "需要登录态" in text
         assert "无法处理" in text
         assert "可执行清单" in text
-        assert "https://x.com/a/status/1" in text
+        assert "https://x.com/home" in text
         assert "not a url" in text
         assert "https://example.com/a" in text
 
