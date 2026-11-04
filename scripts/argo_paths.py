@@ -316,12 +316,18 @@ def _check_lock_roundtrip(hold_s: float) -> tuple[str, str]:
                 pass
 
 
-def run_checks(lock_hold_s: float = 0.6) -> list[dict[str, Any]]:
+def run_checks(lock_hold_s: float = 0.15) -> list[dict[str, Any]]:
     """在**当前机器**上实测一遍路径解析与关键能力（`argo paths --check`）。
 
     为什么要有它：跨平台分支（Windows 用哪个目录、msvcrt 锁是否真互斥、解释器候选
     最终落到谁）在开发机上只能做契约级测试，真机验证此前得靠人肉翻代码。这里把
     「这台机器上实际发生了什么」一次打印清楚——任何平台一条命令自行验证。
+
+    `lock_hold_s` 是子进程持锁时长，判据是「第二个持有者等待 ≥100 ms」（见
+    `_check_lock_roundtrip`），0.15 s 留足一倍余量即可。历史上这里写 0.6 s，
+    让每次自检固定空等 600 ms；同仓 `packages/argo-zcode/server/py_bridge.py`
+    与 `tests/test_platform_paths_conventions.py` 早已分别用 0.15 / 0.2，
+    此处对齐同一口径，自检结论不变。
     """
     checks: list[dict[str, Any]] = []
 
