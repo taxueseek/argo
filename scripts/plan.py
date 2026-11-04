@@ -45,13 +45,13 @@ ExecutionTier = Literal["daily", "professional", "deep_research"]
 # 按 URL 取单条的抽取引擎：query 本身就是要处理的目标（单条推文 URL、公网图片
 # URL），显式指定时不能被 known-url handoff 当成「读链接」拦下。
 URL_INPUT_ENGINES = frozenset(
-    {"twitter_syndication", "saucenao", "animetrace", "google_lens", "tineye"}
+    {"twitter_syndication", "saucenao", "animetrace", "google_lens"}
 )
 
 # 以图搜图引擎：返回的是「这张图出现在哪些作品/页面」，条目是出处页而非图片文件，
 # 图片可用性过滤与空结果恢复链对它们都是错的判据（出处页没有分辨率，替身网页也不
 # 是这张图）。显式只点这些引擎时，两处都要让路。
-REVERSE_IMAGE_ENGINES = frozenset({"saucenao", "animetrace", "tineye", "google_lens"})
+REVERSE_IMAGE_ENGINES = frozenset({"saucenao", "animetrace", "google_lens"})
 
 
 def execution_tier(

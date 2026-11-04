@@ -2932,18 +2932,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: 同花顺热点（当日强势股+题材归因，独家能力）
-- name: tineye
-  tier: T1
-  type: tineye
-  coverage:
-  - image
-  - reverse_image
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力）
 - name: tinyfish
   tier: T1
   type: http

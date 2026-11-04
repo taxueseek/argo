@@ -635,9 +635,9 @@ def search_local(
 ) -> list[dict[str, Any]]:
     """按文本查本地图片；给 similar_to（图片路径）时按指纹找相似图。
 
-    `similar_to` 走的是「以图找相似」——原反搜图通道（TinEye）上游已 403，
-    本地相似检索是这条需求目前唯一可用的实现：不告诉你「这张图从哪来」，
-    但能回答「我这套素材里有没有和它像的」。
+    `similar_to` 走的是「以图找相似」：不回答「这张图从哪来」（那是反搜图
+    引擎的事，且都要外网与凭据），而是在本机素材里回答「有没有和它像的」，
+    离线、不产生调用成本。
     """
     if similar_to:
         return _search_by_fingerprint(conn, similar_to, limit=limit)

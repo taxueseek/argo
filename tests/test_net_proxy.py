@@ -214,10 +214,9 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
     def test_explicit_direct_rule_bypasses_standard_env_proxy(self):
         """rules 的 direct 语义必须是**真直连**。
 
-        2026-11-04 实测：animetrace.com 按出口 IP 限频，config 里给它配了
-        `"${ARGO_ANIMETRACE_PROXY}"`（未设置=直连），但 open_url 落回
-        urlopen 后仍被 HTTPS_PROXY 兜到 Clash 出口，稳定 429；同一秒裸
-        urllib（ProxyHandler({})）直连却是 200。故显式 direct 要自己装空
+        animetrace.com 按出口 IP 限频：config 里给它配了
+        `"${ARGO_ANIMETRACE_PROXY}"`（未设置=直连），open_url 落回 urlopen 后
+        仍被 HTTPS_PROXY 兜到 Clash 出口时稳定 429。故显式 direct 要自己装空
         ProxyHandler，不能依赖 urlopen 的原生环境变量行为。
         """
         seen = {}

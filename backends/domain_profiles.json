@@ -2483,12 +2483,6 @@
     "boost_keywords": {},
     "boost_combos": {}
   },
-  "tineye": {
-    "label": "TinEye反搜图",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
   "bing_rss": {
     "label": "BingRSS",
     "documents": [],

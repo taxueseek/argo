@@ -339,10 +339,10 @@ class TestGoogleLens(unittest.TestCase):
 
 class TestUrlInputEngines(unittest.TestCase):
     def test_engine_set_covers_all_url_extract_engines(self):
-        # URL 输入引擎含单条推文抽取；反搜图集合只收「图 → 出处页」的四条。
+        # URL 输入引擎含单条推文抽取；反搜图集合只收「图 → 出处页」的三条。
         self.assertIn("twitter_syndication", plan.URL_INPUT_ENGINES)
         self.assertNotIn("twitter_syndication", plan.REVERSE_IMAGE_ENGINES)
-        for name in ("saucenao", "animetrace", "google_lens", "tineye"):
+        for name in ("saucenao", "animetrace", "google_lens"):
             self.assertIn(name, plan.URL_INPUT_ENGINES)
             self.assertIn(name, plan.REVERSE_IMAGE_ENGINES)
 

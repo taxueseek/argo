@@ -2330,16 +2330,6 @@
     "cost_tier": "free",
     "priority": 20
   },
-  "tineye": {
-    "label": "TinEye反搜图",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 30
-  },
   "tinyfish": {
     "label": "TinyFish 实时搜索",
     "qps": 1,

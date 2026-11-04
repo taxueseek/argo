@@ -204,8 +204,9 @@ def explicit_direct(url: str) -> bool:
     为什么需要：urlopen 原生认标准 `HTTP(S)_PROXY`。rules 写 "direct"、或
     `${VAR}` 的 VAR 未设置时，本意都是「真直连」，但 resolve_proxy 只回 None，
     open_url 落回 urlopen 后又被环境变量代理兜走——「强制直连」在设了
-    HTTPS_PROXY 的机器上名不副实。2026-11-04 实测：animetrace.com 按出口 IP
-    限频，规则要求直连却仍走 Clash 出口，稳定 429（同一秒裸 urllib 直连 200）。
+    HTTPS_PROXY 的机器上名不副实。例：animetrace.com 这类源按出口 IP 限频，
+    配置写明 direct 却仍走 Clash 出口时稳定 429——是否该直连取决于本机出口，
+    但 explicit_direct 至少要保证调用方真的拿到配置要求的出口。
     """
     val = _matched_rule_value(url)
     if val is not None:

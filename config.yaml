@@ -4291,23 +4291,6 @@ engines:
     # 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
     relevance_check: false
     timeout: 10
-  tineye:
-    type: tineye
-    enabled: true
-    # 反搜图 query 语义特殊（须喂图片 URL），不进通用网页 combo——显式调用
-    explicit_only: true
-    label: TinEye反搜图
-    cost_tier: free
-    qps: 1
-    priority: 30
-    period: second
-    cost_per_call: 0.0
-    cost_unit: free
-    coverage:
-    - image
-    - reverse_image
-    desc: TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力）
-    timeout: 10
   bing_rss:
     type: bing_rss
     enabled: true
