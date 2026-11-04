@@ -21,7 +21,25 @@ from typing import Any, Optional
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths as _paths
 
-STATE_PATH = str(_paths.state_path("circuit_breaker.json"))
+# 默认状态路径**调用期解析**，不在导入期派生。
+#
+# 为什么：`ARGO_STATE_DIR` 在导入后才被改写是常态（测试用临时目录验证路径派生、
+# 多工作树/子进程切换状态根）。导入期常量会让「记录」与「读取」落到两个不同文件，
+# 且同一个类对默认路径给出两个答案。2026-11-02 的 `ec5b959` 只在消费侧（search_v3
+# 调用期解析工厂）堵住了症状，源头这一处仍在——实测只改 `ARGO_STATE_DIR`、不重导入
+# 时 `CircuitBreaker()._path` 仍指向旧目录。
+#
+# 用 PEP 562 模块 `__getattr__` 暴露 `STATE_PATH`：每次访问都按当前环境解析，
+# 既保持「`circuit_breaker.STATE_PATH` 可读、可 patch」的既有契约（测试与
+# monkeypatch 依赖它），又不再把值钉在导入那一刻。
+def _default_state_path() -> str:
+    return str(_paths.state_path("circuit_breaker.json"))
+
+
+def __getattr__(name: str):
+    if name == "STATE_PATH":
+        return str(_default_state_path())
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # 熔断参数
 FAILURE_THRESHOLD = 2          # 连续失败次数
@@ -38,8 +56,12 @@ DISABLE_COOLDOWN_SECONDS = 3600  # 禁用后 1h 内不自动恢复（避免频�
 class CircuitBreaker:
     """进程内 + 磁盘共享的引擎熔断器。"""
 
-    def __init__(self, state_path: str = STATE_PATH):
-        self._path = state_path
+    def __init__(self, state_path: str | None = None):
+        # 读模块属性而非 `_default_state_path()`：`STATE_PATH` 可被 monkeypatch，
+        # 且每次构造都按当前 ARGO_STATE_DIR 解析（见模块 `__getattr__`）。
+        # 注意用 `globals().get`：函数体内的裸名查找不触发 PEP 562 `__getattr__`。
+        self._path = state_path if state_path else (
+            globals().get("STATE_PATH") or _default_state_path())
         self._lock = threading.RLock()
         self._engines: dict[str, dict[str, Any]] = {}
         self._neg: dict[str, dict[str, Any]] = {}  # key → {expires, status}

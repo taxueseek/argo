@@ -28,7 +28,17 @@ import argo_paths as _paths
 ARGO_DIR = Path(__file__).resolve().parent.parent
 LOCAL_SEARCH_DIR = ARGO_DIR / "sub-skills" / "local-search"
 LOCAL_SEARCH_CONFIG = LOCAL_SEARCH_DIR / "config.yaml"
-HEALTH_STATE_PATH = _paths.state_path("argo_engine_health.json")
+
+
+def __getattr__(name: str):
+    """`HEALTH_STATE_PATH` 每次访问按当前 ARGO_STATE_DIR 解析（PEP 562）。
+
+    与 circuit_breaker 同一口径：导入期常量会与改写后的 `ARGO_STATE_DIR` 脱节，
+    而读写必须落同一个文件。保留此名以维持「可读、可 patch」的既有契约。
+    """
+    if name == "HEALTH_STATE_PATH":
+        return _paths.state_path("argo_engine_health.json")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # ── YAML mtime 缓存（route 热路径会高频调用 list_local_engines） ──────────────
 _yaml_cache: dict[str, Any] | None = None
@@ -68,14 +78,30 @@ class EngineRegistry:
 
     def __init__(self):
         self._health: dict = {}
+        # 读模块属性（可被 monkeypatch），每次构造按当前 ARGO_STATE_DIR 解析。
+        # 用 `globals().get`：裸名查找不触发 PEP 562 `__getattr__`。
+        self._health_path = globals().get("HEALTH_STATE_PATH") or _paths.state_path(
+            "argo_engine_health.json")
         self._local_names_cache: list[str] | None = None
         self._local_names_mtime: float = -1.0
         self._load_health()
 
+    def _health_state_path(self) -> Path:
+        """健康状态路径：实例属性 → 模块属性（可 patch）→ 按当前环境解析。
+
+        收口成一处，是为了让绕过 `__init__` 的构造（测试用 `__new__` 直接注入
+        `_health`）也能拿到正确路径——否则 `_save_health` 会因缺 `_health_path`
+        抛错并被 `except` 吞掉，表现为「静默不写盘」。
+        """
+        return (getattr(self, "_health_path", None)
+                or globals().get("HEALTH_STATE_PATH")
+                or _paths.state_path("argo_engine_health.json"))
+
     def _load_health(self):
-        if HEALTH_STATE_PATH.exists():
+        path = self._health_state_path()
+        if path.exists():
             try:
-                self._health = json.loads(HEALTH_STATE_PATH.read_bytes())
+                self._health = json.loads(path.read_bytes())
             except Exception:
                 self._health = {}
 
@@ -85,7 +111,7 @@ class EngineRegistry:
             # 健康门状态丢失——"全体失忆"。同族事故已在
             # sub-skills/local-search/engine_registry 与 local_seek 修过两例，
             # 这是漏网的第三例；mkstemp 唯一 tmp + os.replace，失败自清理。
-            _paths.atomic_write_json(HEALTH_STATE_PATH, self._health, indent=None)
+            _paths.atomic_write_json(self._health_state_path(), self._health, indent=None)
         except Exception:
             pass
 
