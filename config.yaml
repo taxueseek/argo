@@ -791,6 +791,18 @@ domains:
   - match: '(?i)(下雨|下雪|降雨|降雪|雨夹雪|暴雨|大雨|小雨|中雨|大雪|小雪|中雪|阵雨|雷阵雨|雨量|雪量|雨天|雪天|有雨|有雪)'
     unless: '(?i)(图片|壁纸|照片|图库|素材|插画|头像|背景图|桌面|png|jpg|海报|摄影|写真|剧照|表情|雪花|雪景|雨景|wallpaper|photo|image|picture|illustration|poster)'
   - (?i)(날씨|기온|온도|예보|몇\s*도)
+  # 多语言天气触发词（2026-11-04）：combo 里的 open_meteo 是**全球天气**引擎
+  # （免认证、按地名取坐标），但本域 patterns 此前只有中/日/韩三种语言，
+  # 其余 13 种语言的天气查询全部落 general_search（实测 13/13 失配）。
+  # 词表按各语言「天气/预报」的常用写法收，只收裸词（与中文第一条同口径）。
+  # 单行书写：YAML 里反斜杠续行会破坏结构（实测整份 config 解析失败）。
+  #
+  # 泰语单独挂 unless（与中文第一条同构）：裸 อากาศ（天气）在通用句里也出现
+  # （实测「วันนี้อากาศดีมาก เรามีประชุมที่กรุงเทพ」=「今天天气很好，我们在曼谷
+  # 开会」被误判天气域）。否决词收「会议/出行/工作」等语境词——与中文用
+  # 「气候变化/极端天气」否决气候议题是同一手法：裸词让位，明确意图词保留。
+  - match: '(?i)(\bweather\b|\bforecast\b|\btemperature\b|\bdegrees?\b|météo|prévision|prévisions|tiempo|pronóstico|previsión|Wetter|Vorhersage|Temperatur|previsão\s+do\s+tempo|thời\s+tiết|dự\s+báo|prakiraan\s+cuaca|погод\w*|прогноз\s+погоды|температур\w*|الطقس|توقعات|درجات\s+الحرارة|מזג\s+אוויר|תחזית|טמפרטורה|อากาศ|พยากรณ์|อุณหภูมิ|počasí|předpověď|teplota|srázky|hava\s+durumu|hava\s+tahmini|tahmin|yağış|sıcaklık)'
+    unless: '(?i)(ประชุม|ทำงาน|เดินทาง|งาน|会议|出行|工作)'
   early_stop_min_results: 1
   primary: qweather
 - desc: 垂直结构化模态卡（统一语义识别：火车票/油价/贵金属/万年历/星座/手机/汽车/挂号/薪资等）

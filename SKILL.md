@@ -47,16 +47,17 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 
 | 参数 | 说明 |
 |------|------|
-| `--engine <name>` | 强制引擎（anysearch/byted/bocha/exa/deepseek_search/tavily/eastmoney/zhihu/arxiv…，见 `--list-engines`） |
+| `--engine <name>` | 强制引擎（见 `argo list-engines`） |
 | `--local-first` | 本地零成本聚合优先（local_search 29 引擎） |
-| `--include-local` / `--no-local` | 本机文件命中（source=local_files）：fast/budget 默认开，auto/deep 显式 |
-| `--mode fast|auto|deep|budget` | fast 免费 / auto 成本感知（默认）/ deep 质量 / budget 配额控制 |
+| `--include-local` / `--no-local` | 本机文件命中（fast/budget 默认开） |
+| `--mode fast|auto|deep|budget` | fast 免费 / auto 成本感知（默认）/ deep 质量 / budget 配额 |
 | `--explain` / `--no-cache` | 解释路由决策 / 跳过缓存 |
 | `--depth fast|balanced|deep` | 搜索深度 |
-| `--academic-deep` | 学术多源：depth=deep + domain=academic，禁用早停（arxiv/openalex/local_pubmed/core 等） |
+| `--academic-deep` | 学术多源：depth=deep + domain=academic，禁用早停 |
 | `--since 7d|2026-08-01` `--until` `--sort relevance|newest|oldest` | 时间窗过滤 + 时间排序 |
 | `--video` `--min-duration SEC` `--max-duration SEC` | 视频模式（B 站 + YouTube）及时长筛选 |
-| `--verify [N]` | 对 top-N 抓正文回填证据分（URL→证据分缓存复用） |
+| `--verify [N]` | 对 top-N 抓正文回填证据分 |
+| `--numverify [N]` `--verify-with <引擎>` | 数值印证（对关键数字抓原文确认核对簇）+ 核对配对 |
 | `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域限定 / 关本地统计与查询落盘 |
 
 **按场景选引擎**：时事 → deepseek_search，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → skill_search/dsh_plugin_search。口径见 `references/usage.md`。
@@ -98,12 +99,12 @@ argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 ## Agent 执行纪律
 
 1. **高后果问题**（金融/医疗/法律/事实核查）：search → evidence（或看 `credibility_fast`）→ fetch 高分 URL → 再下结论；`fetch_required=true` 时禁止跳过核验
-2. **数字**：必须标注算法（全市场/主动/持仓市值 vs 占比）；冲突时并列，禁止算法未对齐就合并
+2. **数字**：必须标注算法（全市场/主动/持仓市值 vs 占比）；冲突时并列；关键财务/价格/指标推荐带 `--numverify` 抓原文印证
 3. **SERP 链**（baidu/s、sogou/link）：禁止当正文来源
 4. **社交帖**：叙事/舆情，不进事实真值
 5. **深度研究**：先读 `references/research-protocol.md`；有决策含义就交工作包，不要靠扩词充问题树；`quality_gate_results.passed=false` 必须降级表述
 6. **引用**：讲给用户的事实带 URL 出处，日常档也要带（URL 在 `results[].url`，零成本）
-7. **上下文纪律**：Agent 用 `--json --fields agent`、按需 `-n`；追溯/归档才加 `--envelope`；引擎状态用 `--list-engines --detail --engine <名>`（~0.9 KB）。踩坑见 Gotchas
+7. **上下文纪律**：Agent 用 `--json --fields agent`、按需 `-n`；追溯/归档才加 `--envelope`；引擎状态用 `argo list-engines --detail --engine <名>`（~0.9 KB）。踩坑见 Gotchas
 
 ## Gotchas
 
@@ -112,7 +113,7 @@ argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 - **`--envelope` 与 `--fields agent` 别同给**：后者把 envelope 增量剥成 0 字节；要 provenance 就去掉 `--fields agent`。
 - **结果异常少**：看 `funnel` 六格阶段计数，哪格归零即塌陷点。
 - **慢查询**：看 `timing.dispatch` 的 `tail_wait_ms`（就绪后还在等）/`abandoned_engine_ms`。
-- **`--list-engines` 别直接 `--all`**：全量 ~54 KB 灌爆版面，默认摘要够用。
+- **`--list-engines`**：可用 `argo list-engines` 或 `argo search --list-engines`；别直接 `--all`（全量 ~54 KB 灌爆版面），默认摘要够用。
 - **`-n` 超 10 无收益**。
 
 ## 按需读取（低频操作细节）
@@ -121,16 +122,16 @@ argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 
 | 场景 | 读什么 |
 |------|--------|
-| MCP 工具全清单 / 多客户端注入 / DSH 插件接入 / 配额·TinyFish / 子技能 / 本地打通 / 工程纪律 | `references/operations.md` |
+| MCP 工具全清单 / 多客户端注入 / DSH 插件接入 / 配额 / 工程纪律 | `references/operations.md` |
 | **使用指南**：全命令、参数、86 开关总表、输出体积陷阱、日志反馈 | `references/usage.md` |
 | 深度研究协议：约定、工作包、取证包 vs 判断稿、达标检查 | `references/research-protocol.md` |
 | 约定 / 工作包 / 判断稿模板 | `references/research-templates.md` |
-| X 关键词搜索与查询模板（`argo x-search` / `argo template`，含机制与扩展） | `references/query-templates.md` |
+| X 关键词搜索与查询模板（`argo x-search` / `argo template`） | `references/query-templates.md` |
 | 引擎全景：垂直域/社交/学术/本地引擎表 + 路由规则 | `references/engines.md` |
-| 学术检索：查询构造（arXiv/S2/GS 语法）、相关性五因子排序、引用网络挖掘、学术反模式与证据分级 | `references/academic-query.md` |
-| 架构：文件结构、证据流水线、量化公式、输出 JSON Schema、内容质量信号 | `references/architecture.md` |
+| 学术检索：查询构造、相关性五因子排序、引用网络挖掘、证据分级 | `references/academic-query.md` |
+| 架构：文件结构、证据流水线、输出 JSON Schema、内容质量信号 | `references/architecture.md` |
 | MCP 多客户端注入详解 | `docs/MCP_SETUP.md` |
-| **搜索源使用文档**：全量清单（费用 / 密钥 / 状态 / 域组合）+ 特别能力 + 打开方式 | `docs/ENGINE_CATALOG.md`（生成，勿手改） |
+| **搜索源使用文档**：全量清单（费用/密钥/状态/域组合）+ 特别能力 | `docs/ENGINE_CATALOG.md`（生成，勿手改） |
 
 
 > 工程纪律（每个事实只定义一处：代码看本仓库、引擎声明看 config.yaml、宿主入口用 link_source.py 建软链、新增源流程）见 `references/operations.md` 末尾。

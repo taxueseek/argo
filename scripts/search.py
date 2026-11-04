@@ -604,9 +604,6 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     注意：路由永远基于原始 query。改写词只用于引擎检索，避免
     「Python → 追加 pip/库」之类改写污染 package_search 等域规则。
     """
-    if cache is None:
-        from cache import SearchCache  # 局部 import；见模块头注释（不能用裸名）
-        cache = SearchCache()
     original_query = query
 
     # 查询操作符契约层（2026-10-17 query_operators）：指令从路由与检索两侧
@@ -783,6 +780,10 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                   file=sys.stderr)
         if search_query != original_query:
             print(f"[改写] {original_query} → {search_query}", file=sys.stderr)
+    if cache is None:
+        from cache import SearchCache  # 按需延迟初始化，短路/离线计划路径免建 SQLite 缓存
+        cache = SearchCache()
+
     # L1 并行化：本地搜索与主搜索并行提交（仅显式开启时在宽根下提示）。
     _local_seek_explicit = include_local is not None
     include_local = _resolve_include_local(include_local, mode, query)

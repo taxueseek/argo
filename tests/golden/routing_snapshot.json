@@ -800,11 +800,11 @@
   },
   {
    "query": "อากาศ กรุงเทพ",
-   "domain": "general_search",
-   "kind": "tfidf",
+   "domain": "weather_query",
+   "kind": "regex",
    "engines": [
-    "anysearch",
-    "local_bing"
+    "byted",
+    "weather_cn"
    ],
    "expect": null,
    "forbid": null,

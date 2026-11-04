@@ -625,6 +625,12 @@ def main():
     sub = sys.argv[1]
     rest = sys.argv[2:]
 
+    # 顶层别名：--list-engines / list-engines 转发至 search.py 的清单处理
+    # 消除 Agent 与用户调用 argo --list-engines 触发 Unknown subcommand 的历史断点
+    if sub in ("--list-engines", "list-engines"):
+        sub = "search"
+        rest = ["--list-engines"] + rest
+
     # env 文件 → os.environ 同步（只填缺失，不覆盖已有值）：子进程按标准
     # os.environ 直读密钥（读取方零改动，含其他 AGT 既有集成），未经
     # mcp_launch.sh 注入的裸 shell 也能拿到。
