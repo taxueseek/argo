@@ -5,15 +5,18 @@
 # 6 道门禁红 + 阻塞全量收集，故障在树里躺了幾小时才被人工发现。「改了没
 # 验证就提交」没有机制拦截，只靠自觉。本 hook 把拦截点放在提交层。
 #
-# 只跑快的六道（实测合计 ~12s）：static_lint（语法/重复键/未声明 env）、
+# 只跑快的八道（实测合计 ~12s）：static_lint（语法/重复键/未声明 env）、
 # module_size_gate（1000 行门禁与祖父登记）、usage_doc（ARGO_* 开关总表）、
 # consistency（版本/徽章/工具数五语对账）、routing_snapshot（路由决策漂移）、
-# context_budget + engine_catalog（常驻文档预算、源文档/死源/声明一致）。
-# 后两道是 2026-10-18 补的：f702ee2 把 SKILL.md 压到 8049B、4a71693 让
-# deepseek_search 成死源，两笔都过了 hook 却在全量回归里红——正是「改完没跑
-# 到那条门」的同一个洞。全量回归 ~5 分钟留给 CI 或手动（python3 -m pytest
-# tests/ -q），不进 hook——hook 慢于 20s 就会被用户 --no-verify 绕过，那是更
-# 坏的结局。
+# context_budget + engine_catalog（常驻文档预算、源文档/死源/声明一致）、
+# spec_contracts + stub_targets（2026-11-04 补的 B 类复发护栏：规格契约
+# ——bilibili/xhs 缺 --json 同类根因；打桩目标存在性——重构后打桩落转出
+# 副本的三例同类根因，实测合计 +0.7s）。
+# 2026-10-18 补的两道（context_budget + engine_catalog）：f702ee2 把
+# SKILL.md 压到 8049B、4a71693 让 deepseek_search 成死源，两笔都过了 hook
+# 却在全量回归里红——正是「改完没跑到那条门」的同一个洞。全量回归 ~5 分钟
+# 留给 CI 或手动（python3 -m pytest tests/ -q），不进 hook——hook 慢于 20s
+# 就会被用户 --no-verify 绕过，那是更坏的结局。
 #
 # 安装：bash scripts/install.sh 自动装（链式：不覆盖 privacy-guard 等既有
 # hook，装成 hooks/pre-commit-argo 并追一行调用）。手动：
@@ -35,11 +38,14 @@ cd "$root" || exit 1
 # 裸 `command -v python3`——2026-10-26 实测，默认 PATH 的 python3 是 3.15
 # （无 pytest），hook 每次提交都死在 pytest 收集之前，拦截层形同虚设。
 # 与 6971c73 给 eval 侧加的自愈重入是同一类根因（解释器选择散落多处、没有
-# 单一真源），这里把门禁这一处也收进候选链。真 import 而非 find_spec：半装
-# 的 pytest、被 sitecustomize 顶掉的包都属「说在其实不在」（见 bin/argo 严格
-# 档的同类教训）。候选全空时维持原口径 fail closed，绝不静默放行。
+# 单一真源），这里把门禁这一处也收进候选链。2026-11-04 补 .venv 首选：
+# homebrew 升级清掉 python3.14 后候选链第 4 次漂移断链，根治靠仓内钉版
+# .venv（uv venv .venv --python 3.14 && uv pip install -p .venv -r
+# requirements-dev.txt），PATH 散装解释器只作回落。真 import 而非 find_spec：
+# 半装的 pytest、被 sitecustomize 顶掉的包都属「说在其实不在」（见 bin/argo
+# 严格档的同类教训）。候选全空时维持原口径 fail closed，绝不静默放行。
 PY=""
-for cand in "${ARGO_GATE_PYTHON:-}" python3.14 python3.13 python3.12 python3.11 python3.10 python3 python; do
+for cand in "${ARGO_GATE_PYTHON:-}" .venv/bin/python python3.14 python3.13 python3.12 python3.11 python3.10 python3 python; do
     if [ -n "$cand" ] && command -v "$cand" >/dev/null 2>&1 \
             && "$cand" -c "import pytest, yaml" >/dev/null 2>&1; then
         PY=$cand
@@ -47,7 +53,7 @@ for cand in "${ARGO_GATE_PYTHON:-}" python3.14 python3.13 python3.12 python3.11 
     fi
 done
 if [ -z "$PY" ]; then
-    echo "[pre-commit] 找不到带 pytest+yaml 的解释器（候选：\$ARGO_GATE_PYTHON、python3.14/3.13/3.12/3.11/3.10、python3、python），门禁视为失败" >&2
+    echo "[pre-commit] 找不到带 pytest+yaml 的解释器（候选：\$ARGO_GATE_PYTHON、仓内 .venv、python3.14/3.13/3.12/3.11/3.10、python3、python），门禁视为失败" >&2
     exit 1
 fi
 
@@ -60,4 +66,6 @@ echo "[pre-commit] argo 快门禁（~12s，解释器 $PY；全量回归请手动
     tests/test_routing_snapshot.py \
     tests/test_context_budget.py \
     tests/test_engine_catalog.py \
-    tests/test_release_consistency.py
+    tests/test_release_consistency.py \
+    tests/test_spec_contracts.py \
+    tests/test_stub_targets.py
