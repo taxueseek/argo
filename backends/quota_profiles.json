@@ -10,6 +10,16 @@
     "cost_tier": "free",
     "priority": 42
   },
+  "animetrace": {
+    "label": "AnimeTrace 角色识别",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 36
+  },
   "antara": {
     "label": "安塔拉通讯社 RSS",
     "qps": 1,
@@ -2009,6 +2019,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "saucenao": {
+    "label": "SauceNAO 反搜图",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
   },
   "sciverse": {
     "label": "Sciverse（题录）",

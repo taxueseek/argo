@@ -486,14 +486,14 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _tock(timing, "filter", _tk_filter)
 
     # ── 图片可用性过滤（仅图片检索域）─────────────────────────────────
-    # 只在 image_search 这种「用户要的就是图」的查询上启用：普通网页搜索的
-    # 结果里也可能带 image_url（正文配图），那里图小不构成丢弃整篇文章的理由。
-    # 判据与阈值见 image_ops（分辨率下限、极端长宽比、明确非商用）。
-    # 默认只剔「字段层面即可确定不可用」的（无图/过小/极端比例）；非商用图
-    # 不剔——「搜图看看」和「找能发布的素材」是两个需求，后者由调用方显式
-    # 开启。剔除明细进 image_dropped，供诊断「为什么少了 N 条」。
+    # 只在 image_search 这种「用户要的就是图」的查询上启用：普通网页搜索的结果
+    # 也可能带 image_url（正文配图），图小不构成丢弃整篇文章的理由。判据与阈值见
+    # image_ops。以图搜图的条目是出处页（pixiv/bgm），按分辨率判它们全数不合格，
+    # 故显式只点反搜图引擎时跳过。剔除明细进 image_dropped 供诊断。
     image_dropped: dict[str, int] = {}
-    if merged and domain == "image_search":
+    from plan import REVERSE_IMAGE_ENGINES, URL_INPUT_ENGINES  # plan 模块级拖 argparse，热路径外导入
+    _reverse_scope = bool(engines) and set(engines) <= REVERSE_IMAGE_ENGINES
+    if merged and domain == "image_search" and not _reverse_scope:
         try:
             from image_ops import filter_usable_images as _filter_imgs
             merged, image_dropped = _filter_imgs(merged)
@@ -526,19 +526,19 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         pass
     _tk_recovery = _tick(timing)
     _recovery_engines: set[str] = set()
-    # 查询词回声（2026-10-17 实锤）：有结果但整批退化时同样要恢复——
-    # `if not merged` 只看「有没有结果」，不看「是不是垃圾」。判据与理由见
-    # query_signals.is_query_echo（rerank 尚未执行，只能用零网络成本的词面）。
+    # 查询词回声（2026-10-17 实锤）：有结果但整批退化时同样要恢复——`if not merged`
+    # 只看「有没有结果」，不看「是不是垃圾」。判据见 query_signals.is_query_echo。
     try:
         from postprocess_signals import echo_recovery_needed as _echo_needed
         _echo_triggered = _echo_needed(merged, query)
     except OPT_IMPORT + SHAPE_BENIGN:  # 守卫不可用不设卡（fail-open）
         _echo_triggered = False
-    # 视频/时长模式不做恢复链：恢复链会跨域补搜普通网页，补进来的结果要么
-    # 被 video_only 过滤掉（白付一轮网络），要么绕过时长过滤（把已筛掉的
-    # 长/短视频重新带回来）。0 条就直接返回空，条件由调用方自己放宽。
+    # 视频/时长模式不做恢复链：恢复链会跨域补搜普通网页，补进来的结果要么被
+    # video_only 过滤掉（白付一轮网络），要么绕过时长过滤（带回已筛掉的长/短视频）。
+    # 0 条就直接返回空，条件由调用方自己放宽。
     _video_scope = (_video_only or _min_d is not None or _max_d is not None)
-    if (not merged or _echo_triggered) and not _video_scope:
+    _url_extract_only = bool(engines) and set(engines) <= URL_INPUT_ENGINES  # 目标就是那一条，替身网页不是它
+    if (not merged or _echo_triggered) and not _video_scope and not _url_extract_only:
         from recovery_runner import run_pipeline_recovery
         _dk = {k: v for k in ("domain", "sub_domain") if (v := getattr(req, "engine_" + k, None))}
         merged, _rec_info = run_pipeline_recovery(

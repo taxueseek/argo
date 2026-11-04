@@ -616,7 +616,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_WOLFRAM_APPID` | wolfram appid | 见 references/operations.md 与模块 docstring |
 | `ARGO_XHS_TIMEOUT` | xhs timeout | 见 references/operations.md 与模块 docstring |
 
-### API 密钥（值放 ~/.config/argo/env）（23）
+### API 密钥（值放 ~/.config/argo/env）（24）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -631,6 +631,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_GITHUB_TOKEN` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_JEV_API_KEY` | TypeSafe JEV key（语义证据层 `semantic_evidence`；官方名 `TYPESAFE_API_KEY` 同样识别） | 缺密钥=语义层静默跳过，核验链路照常 |
 | `ARGO_METASO_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_SAUCENAO_API_KEY` | SauceNAO 反搜图（saucenao.com 注册，免费档 150 次/日） | 缺密钥=saucenao 引擎跳过或返回「缺 key」错误 |
 | `ARGO_OPENCORPORATES_API_TOKEN` | 对应引擎/服务的凭据（OpenCorporates，2026-10 起匿名请求被上游全面拒 401） | 缺密钥=该源跳过或降级 |
 | `ARGO_OCTEN_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_PARALLEL_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |

@@ -1,0 +1,35 @@
+# AnimeTrace · 动漫角色识别
+#
+# 输入形态特殊：query 必须是**公网可访问的图片 URL**，不是关键词。上游返回图中
+# 角色所属作品与角色名（可能多个 box、每个 box 多个候选），并给出每个 box 的
+# 置信度标记（not_confident）。
+#
+# 免 key，但按出口 IP 限频：超限返回 HTTP 429 + code 17737（频率限制）、
+#   code 17728（用量上限）。实测共享机场节点出口常被别的客户端打到 429，
+#   而该 API 直连可达——故 config.yaml 的 network.proxy.rules 给
+#   animetrace.com 配了 ${ARGO_ANIMETRACE_PROXY}（未设置即直连）。
+#
+# 结果形态：上游只给作品名/角色名，不给「这张图出自哪一页」。url 槽填 Bangumi
+#   的作品检索页（下一步去哪儿查证的入口），不是宣称图源就是那一页。
+#
+# 路由形态：explicit_only —— 理由同 saucenao，只经显式调用。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine animetrace --stage all --admit --write-doc
+
+engine_id: animetrace
+type: animetrace
+enabled: true
+explicit_only: true
+cost_tier: free
+timeout: 20
+# model 留空 = 用服务端默认模型（上游模型清单会变，别在声明里钉死名字）
+is_multi: false
+canary_query: "https://files.yande.re/image/2555de7669c169cd98a6c9da7da27edd/yande.re%20447155%20bigxixi%20feet%20pantyhose%20see_through.jpg"
+label: AnimeTrace 角色识别
+family: misc_vertical
+priority: 36
+
+coverage: [image, reverse_image]
+
+desc: AnimeTrace 动漫角色识别（query 须为公网图片 URL，免 key，给作品名与角色名，按 IP 限频）

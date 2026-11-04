@@ -2696,5 +2696,17 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "animetrace": {
+    "label": "AnimeTrace 角色识别",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "saucenao": {
+    "label": "SauceNAO 反搜图",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

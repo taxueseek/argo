@@ -5571,3 +5571,7 @@ network:
     # 避免硬编码端口在无代理环境下每次白烧 TLS 握手超时。
     rules:
       "gdeltproject.org": "${ARGO_GDELT_PROXY}"
+      # animetrace.com 按出口 IP 限频：共享机场节点的出口常被别的客户端打到
+      # 429（实测 code 17737 连发数小时），而该 API 直连可达（实测 code 0 秒回）。
+      # 与上一条同语义：默认直连，需要走代理的环境用 ARGO_ANIMETRACE_PROXY 覆盖。
+      "animetrace.com": "${ARGO_ANIMETRACE_PROXY}"

@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 284 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 240 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
-- **需自备密钥 30 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
+- **收录 286 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **开箱可用 241 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **需自备密钥 31 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 11 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 23 个**：`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`qwant`、`sciverse`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 25 个**：`animetrace`、`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`qwant`、`saucenao`、`sciverse`、`tineye`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 263 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 14 个要自备密钥（免费额度）：em_miaoxiang、keenable、opencorporates、qweather、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 265 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 15 个要自备密钥（免费额度）：em_miaoxiang、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 21 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -127,7 +127,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `yuanbao` | 需自备密钥 | 按调用计费 | 2000/月 | ARGO_YUANBAO_API_KEY | 域 chinese_general、域 company_search | 腾讯元宝搜索 |
 | `zhihu_global` | 需自备密钥 | 按调用计费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 chinese_general、域 news_realtime、域 zhihu_content | 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET） |
 
-### 其他垂直（34）
+### 其他垂直（36）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -158,12 +158,14 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `weather` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 天气查询（免 Key：wttr.in 主用 + Open-Meteo 兜底，当前+未来预报） |
 | `weather_cn` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 中国天气网城市实况（城市联想取 cityid → sk JSON，免认证，两步） |
 | `wikimedia_commons` | 可直接用 | 免费 | 不限 | — | 域 image_search | Wikimedia Commons 通用图库（免 key，CC 素材，原图直链+许可+宽高） |
+| `animetrace` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | AnimeTrace 动漫角色识别（query 须为公网图片 URL，免 key，给作品名与角色名，按 IP 限频） |
 | `datagov_uk` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | data.gov.uk 英国政府开放数据目录（CKAN，免 key） |
 | `metaso_image` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（图片） |
 | `metaso_podcast` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（播客） |
 | `metaso_video` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（视频） |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
+| `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 须为公网图片 URL，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |
 | `tineye` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力） |
 
 ### 学术文献（31）
@@ -587,7 +589,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 284 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 286 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检
