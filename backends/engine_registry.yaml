@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-11-04'
+last_updated: '2026-11-05'
 engines:
 - name: aljazeera
   tier: T1
