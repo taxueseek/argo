@@ -96,3 +96,43 @@ class TestExistingFieldsIntact:
         rs = _parse({"items": [{"id": "abc123", "xsec_token": "T",
                                 "note_card": {"display_title": "t"}}]})
         assert rs[0]["social_meta"]["note_id"] == "abc123"
+
+
+class TestSubprocessCliInvocation:
+    """CLI 调用契约：强制 --json、剥离 NO_PROXY 中的 [::1]、未登录返回 error 占位。"""
+
+    def test_passes_json_flag_and_strips_ipv6_loopback_no_proxy(self, monkeypatch):
+        captured = {}
+
+        class FakeProc:
+            returncode = 0
+            stdout = json.dumps({
+                "ok": True,
+                "data": {"items": [{"id": "n1", "xsec_token": "TOK", "note_card": {"display_title": "ok"}}]},
+            })
+            stderr = ""
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env", {})
+            return FakeProc()
+
+        monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1,[::1]")
+        monkeypatch.setattr(xe.subprocess, "run", fake_run)
+        rs = xe.search("哲学", n=2)
+        assert captured["cmd"] == ["xhs", "search", "--json", "哲学"]
+        assert "[::1]" not in captured["env"].get("NO_PROXY", "")
+        assert len(rs) == 1 and rs[0]["social_meta"]["url_verifiable"] is True
+
+    def test_not_authenticated_returns_error_placeholder(self, monkeypatch):
+        class FakeProc:
+            returncode = 1
+            stdout = '{"ok": false, "error": {"code": "not_authenticated", "message": "No cookies"}}'
+            stderr = ""
+
+        monkeypatch.setattr(xe.subprocess, "run", lambda *a, **kw: FakeProc())
+        rs = xe.search("哲学", n=2)
+        assert len(rs) == 1
+        assert "not_authenticated" in rs[0].get("error", "")
+        assert rs[0].get("source") == "xiaohongshu"
+
