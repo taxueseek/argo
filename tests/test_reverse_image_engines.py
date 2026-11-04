@@ -22,6 +22,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+import urllib.parse
 from pathlib import Path
 from unittest.mock import patch
 
@@ -57,7 +58,7 @@ class TestImageUrlGate(unittest.TestCase):
 
 
 class TestLocalImageInput(unittest.TestCase):
-    """本地图片入口：SauceNAO 走 multipart、AnimeTrace 走 base64、Lens 明确拒绝。"""
+    """本地图片入口：SauceNAO 走 multipart、AnimeTrace 走 base64、Lens 走 SerpAPI 上传。"""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -107,11 +108,73 @@ class TestLocalImageInput(unittest.TestCase):
         self.assertIn("base64", captured["body"])
         self.assertNotIn("url", captured["body"])
 
-    def test_google_lens_rejects_local_file(self):
+    def test_google_lens_uploads_local_file_and_searches_by_image_id(self):
+        captured = {}
+
+        class _Ctx:
+            def __init__(self, body):
+                self._body = body
+
+            def __enter__(self):
+                return io.BytesIO(self._body)
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_open(req, **kw):
+            if "serpapi.com/image" in req.full_url:
+                captured["upload"] = req.data
+                captured["upload_type"] = req.get_header("Content-type")
+                return _Ctx(json.dumps({"message": "ok", "image_id": "img-1"}).encode())
+            captured["search_url"] = req.full_url
+            return _Ctx(json.dumps({"visual_matches": [
+                {"title": "相似图", "link": "https://e.example/p"}]}).encode())
+
         eng = engines._BUILDERS["google_lens"](_spec("google_lens"))
-        out = eng(self.jpg.as_uri(), n=3)
-        self.assertIn("SerpAPI", out[0]["error"])
-        self.assertIn("saucenao", out[0]["error"])
+        with patch("engines_builders_reverse_image.get_env", return_value="k"), \
+             patch("engines_builders_reverse_image.http_open", side_effect=fake_open):
+            out = eng(self.jpg.as_uri(), n=3)
+        query = urllib.parse.parse_qs(
+            urllib.parse.urlparse(captured["search_url"]).query)
+        self.assertEqual(query["image_id"], ["img-1"])
+        self.assertNotIn("url", query)
+        self.assertIn("multipart/form-data", captured["upload_type"])
+        self.assertIn(b'name="image"', captured["upload"])
+        self.assertIn(b"\xff\xd8\xff", captured["upload"])
+        self.assertEqual(out[0]["url"], "https://e.example/p")
+
+    def test_google_lens_upload_error_surfaces(self):
+        class _Ctx:
+            def __enter__(self):
+                return io.BytesIO(json.dumps(
+                    {"error": "Invalid image format. Supported format: jpg, jpeg, png, webp"}
+                ).encode())
+
+            def __exit__(self, *a):
+                return False
+
+        eng = engines._BUILDERS["google_lens"](_spec("google_lens"))
+        with patch("engines_builders_reverse_image.get_env", return_value="k"), \
+             patch("engines_builders_reverse_image.http_open", return_value=_Ctx()):
+            out = eng(self.jpg.as_uri(), n=3)
+        self.assertEqual(len(out), 1)
+        self.assertIn("Invalid image format", out[0]["error"])
+
+    def test_google_lens_refuses_image_over_500kb(self):
+        big = Path(self._tmp.name) / "big.jpg"
+        big.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * (600 * 1024))
+        eng = engines._BUILDERS["google_lens"](_spec("google_lens"))
+        with patch("engines_builders_reverse_image.get_env", return_value="k"):
+            out = eng(big.as_uri(), n=3)
+        self.assertIn("500KB", out[0]["error"])
+
+    def test_google_lens_refuses_mime_serpapi_cannot_take(self):
+        gif = Path(self._tmp.name) / "pic.gif"
+        gif.write_bytes(b"GIF89a" + b"0" * 32)
+        eng = engines._BUILDERS["google_lens"](_spec("google_lens"))
+        with patch("engines_builders_reverse_image.get_env", return_value="k"):
+            out = eng(gif.as_uri(), n=3)
+        self.assertIn("JPEG/PNG/WebP", out[0]["error"])
 
     def test_saucenao_upload_shrinks_big_local_image(self):
         try:

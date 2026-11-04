@@ -32,4 +32,4 @@ priority: 36
 
 coverage: [image, reverse_image]
 
-desc: AnimeTrace 动漫角色识别（query 须为公网图片 URL，免 key，给作品名与角色名，按 IP 限频）
+desc: AnimeTrace 动漫角色识别（query 为图片 URL 或本地图片路径，免 key，给作品名与角色名，按 IP 限频）

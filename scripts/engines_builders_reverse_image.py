@@ -7,7 +7,8 @@
 
 - 输入有两种形态：公网图片 URL，或本地图片（`file://` / 盘符路径 / UNC）。
   本地图由 SauceNAO 走 multipart 上传、AnimeTrace 走 base64；Google Lens
-  经 SerpAPI 只有 `url` 参数，对本地图直接返回可读的 error 条目；
+  先经 SerpAPI Image API 上传换 `image_id` 再检索（只收 JPEG/PNG/WebP、
+  单张 ≤500KB，`image_id` 10 分钟内有效）；
 - 关键词在入口直接返回可读的 error 条目（静默返回 [] 会让调用方误以为
   「查了但没找到」）；
 - 只做显式调用（spec 里 explicit_only），不进自动路由候选池——没有图片
@@ -377,6 +378,11 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
 # ── Google Lens（SerpAPI 托管，付费档）─────────────────────────────────────
 
 _SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
+# Image API：本地图上传换 image_id 的入口（google_lens 的 image_id 参数只认
+# 这个通道发出的 id，10 分钟内有效）。上限 500KB，格式只收 JPEG/PNG/WebP。
+_SERPAPI_IMAGE_ENDPOINT = "https://serpapi.com/image"
+_SERPAPI_IMAGE_MAX_BYTES = 500 * 1024
+_SERPAPI_IMAGE_MIMES = frozenset({"image/jpeg", "image/png", "image/webp"})
 
 # 抓取顺序即相关度顺序：先「同一张图」（exact），再「长得像的图」（visual），
 # 最后才是「讲到这张图的网页」（organic）。三者混在一列里必须各自带标，
@@ -401,6 +407,58 @@ def _google_lens_error(status: int, payload_text: str) -> dict[str, Any]:
         msg = (payload_text or "").strip()[:120]
     detail = " · ".join(b for b in (f"HTTP {status}" if status else "", msg) if b)
     return {"error": detail or "请求失败", "source": "google_lens"}
+
+
+def _serpapi_upload_image(data: bytes, filename: str, mime: str, key: str,
+                          timeout: float, engine: str) -> tuple[str, dict[str, Any] | None]:
+    """上传本地图到 SerpAPI Image API，返回 (image_id, error)。
+
+    multipart 由标准库拼装：SerpAPI 不在 Cloudflare 后，不需要 TLS 指纹伪造，
+    走 `http_open` 即可复用全仓的代理与失败归因。
+    """
+    safe_name = (os.path.basename(filename).replace('"', "")
+                 .replace("\r", "").replace("\n", ""))
+    boundary = f"----argo{os.urandom(12).hex()}"
+    head = [
+        (f"--{boundary}\r\nContent-Disposition: form-data; "
+         f"name=\"api_key\"\r\n\r\n{key}\r\n").encode("utf-8"),
+        (f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; "
+         f"filename=\"{safe_name}\"\r\nContent-Type: {mime}\r\n\r\n").encode("utf-8"),
+    ]
+    body = b"".join(head) + data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+    req = urllib.request.Request(
+        _SERPAPI_IMAGE_ENDPOINT, data=body, method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
+                 "Accept": "application/json"},
+    )
+    try:
+        with http_open(req, timeout=timeout, engine=engine) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        payload = ""
+        try:
+            payload = e.read().decode("utf-8", errors="replace")[:400]
+        except OSError:
+            payload = ""
+        return "", _google_lens_error(e.code, payload)
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        return "", {"error": f"SerpAPI 图片上传失败（{type(e).__name__}）",
+                    "source": "google_lens"}
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return "", {"error": "SerpAPI 图片上传返回了非 JSON 响应",
+                    "source": "google_lens"}
+    if not isinstance(payload, dict):
+        return "", {"error": "SerpAPI 图片上传返回了非对象响应",
+                    "source": "google_lens"}
+    if payload.get("error"):
+        return "", {"error": str(payload["error"])[:200], "source": "google_lens"}
+    image_id = str(payload.get("image_id") or "").strip()
+    if not image_id:
+        return "", {"error": "SerpAPI 图片上传成功但没有返回 image_id",
+                    "source": "google_lens"}
+    return image_id, None
 
 
 def _google_lens_item(item: dict[str, Any], match_label: str, base: float,
@@ -459,11 +517,8 @@ def _build_google_lens_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         q = (query or "").strip()
-        if _local_image_path(q) is not None:
-            return [{"error": "本地图片不支持（SerpAPI 只有 url 参数，没有上传口）；"
-                              "本地图请用 saucenao 或 animetrace",
-                     "source": "google_lens"}]
-        if not _IMAGE_URL_RE.match(q):
+        is_local = _local_image_path(q) is not None
+        if not is_local and not _IMAGE_URL_RE.match(q):
             return _image_input_error("google_lens", q)
         key = get_env(["ARGO_SERPAPI_API_KEY", "SERPAPI_API_KEY"])
         if not key:
@@ -472,7 +527,6 @@ def _build_google_lens_engine(spec: dict[str, Any]) -> Any:
                      "source": "google_lens"}]
         params = {
             "engine": "google_lens",
-            "url": q,
             "type": search_type,
             "api_key": key,
         }
@@ -480,6 +534,39 @@ def _build_google_lens_engine(spec: dict[str, Any]) -> Any:
             params["hl"] = hl
         if country:
             params["country"] = country
+        if is_local:
+            loaded = _load_local_image(q)
+            if isinstance(loaded, dict):
+                loaded["source"] = "google_lens"
+                return [loaded]
+            data, filename, mime = loaded
+            if mime not in _SERPAPI_IMAGE_MIMES:
+                return [{"error": "SerpAPI 图片上传只收 JPEG/PNG/WebP，"
+                                  f"这张是 {mime}；请先另存为 JPEG",
+                         "source": "google_lens"}]
+            # 500KB 是 Image API 的硬上限；原图多半超，缩到 1024px 仍认得出，
+            # 仍超再退 768/512（每一步都是重新编码，最多三轮）。
+            stem = os.path.splitext(filename)[0]
+            for side in (1024, 768, 512):
+                if len(data) <= _SERPAPI_IMAGE_MAX_BYTES:
+                    break
+                shrunk = _shrink_image_bytes(data, side)
+                if shrunk:
+                    data, mime = shrunk, "image/jpeg"
+                    filename = f"{stem}.jpg"
+            if len(data) > _SERPAPI_IMAGE_MAX_BYTES:
+                return [{"error": f"SerpAPI 图片上限 500KB，这张仍有 "
+                                  f"{len(data) // 1024}KB；请先压缩后再搜",
+                         "source": "google_lens"}]
+            image_id, up_err = _serpapi_upload_image(
+                data, filename, mime, key, float(_timeout or timeout),
+                spec.get("_name", ""),
+            )
+            if up_err:
+                return [up_err]
+            params["image_id"] = image_id
+        else:
+            params["url"] = q
         url = f"{_SERPAPI_ENDPOINT}?{urllib.parse.urlencode(params)}"
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
         try:

@@ -159,15 +159,15 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `weather` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 天气查询（免 Key：wttr.in 主用 + Open-Meteo 兜底，当前+未来预报） |
 | `weather_cn` | 可直接用 | 免费 | 不限 | — | 域 weather_query | 中国天气网城市实况（城市联想取 cityid → sk JSON，免认证，两步） |
 | `wikimedia_commons` | 可直接用 | 免费 | 不限 | — | 域 image_search | Wikimedia Commons 通用图库（免 key，CC 素材，原图直链+许可+宽高） |
-| `animetrace` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | AnimeTrace 动漫角色识别（query 须为公网图片 URL，免 key，给作品名与角色名，按 IP 限频） |
+| `animetrace` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | AnimeTrace 动漫角色识别（query 为图片 URL 或本地图片路径，免 key，给作品名与角色名，按 IP 限频） |
 | `datagov_uk` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | data.gov.uk 英国政府开放数据目录（CKAN，免 key） |
-| `google_lens` | 需自备密钥 + 显式专用 | 付费 | 不限 | ARGO_SERPAPI_API_KEY | 显式调用（--engine） | Google Lens 通用视觉反查（query 须为公网图片 URL，经 SerpAPI，付费档 250 次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣 |
+| `google_lens` | 需自备密钥 + 显式专用 | 付费 | 不限 | ARGO_SERPAPI_API_KEY | 显式调用（--engine） | Google Lens 通用视觉反查（query 为公网图片 URL 或本地图片路径，本地图经 SerpAPI Image API 上传，付费档 250 次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣 |
 | `metaso_image` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（图片） |
 | `metaso_podcast` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（播客） |
 | `metaso_video` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（视频） |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
-| `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 须为公网图片 URL，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |
+| `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |
 
 ### 学术文献（31）
 

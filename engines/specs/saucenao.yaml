@@ -42,4 +42,4 @@ required_env:
 
 coverage: [image, reverse_image]
 
-desc: SauceNAO 二次元图源反查（query 须为公网图片 URL，免费 key 150 次/日，给相似度与 Pixiv 等出处页）
+desc: SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页）

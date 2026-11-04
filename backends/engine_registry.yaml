@@ -25,7 +25,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: true
-  desc: AnimeTrace 动漫角色识别（query 须为公网图片 URL，免 key，给作品名与角色名，按 IP 限频）
+  desc: AnimeTrace 动漫角色识别（query 为图片 URL 或本地图片路径，免 key，给作品名与角色名，按 IP 限频）
 - name: antara
   tier: T1
   type: rss_feed
@@ -1233,8 +1233,8 @@ engines:
   status: ok
   recommended: true
   explicit_only: true
-  desc: Google Lens 通用视觉反查（query 须为公网图片 URL，经 SerpAPI，付费档 250 次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call
-    ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣
+  desc: Google Lens 通用视觉反查（query 为公网图片 URL 或本地图片路径，本地图经 SerpAPI Image API 上传，付费档 250
+    次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣
 - name: google_news
   tier: T1
   type: google_news
@@ -2564,7 +2564,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: true
-  desc: SauceNAO 二次元图源反查（query 须为公网图片 URL，免费 key 150 次/日，给相似度与 Pixiv 等出处页）
+  desc: SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页）
 - name: sciverse
   tier: T1
   type: http
