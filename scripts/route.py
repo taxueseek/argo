@@ -71,7 +71,6 @@ from route_domains import (  # noqa: E402
     match_domains,
     match_domain,
     _get_compiled_domains,
-    _compile_domain_patterns,
     _social_domain_first,
     _intent_gate,
     _ZH_LANG_GATED_DOMAINS,

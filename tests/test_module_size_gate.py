@@ -360,7 +360,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-26 +1：补 dsh_plugin_search 域用例（新域零用例会被 "
               "test_route_matrix_coverage 拦下）；上限 1297 → 1298"),
     "scripts/route.py": (
-        1033, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+        1032, "路由决策主干（route_query + 三个 _route_by_* 判定器）；"
+              "2026-11-04 −1：删掉只导入未使用的 `_compile_domain_patterns`"
+              "（全仓无调用方，测试直接从 route_domains 导入）；"
               "2026-11-02 +22：primary 可执行性顺位与域否决的**调用点**"
               "（判定本体拆到 route_primary，本文件只留接线）；"
               "2026-10-27 +2：付费对冲传 lang（insert_hedge 调用三行化；"

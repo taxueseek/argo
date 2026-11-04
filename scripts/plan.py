@@ -30,6 +30,7 @@ import hashlib
 import os
 import re
 import sys
+import time
 from typing import Any, Literal
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from cli_io import dumps
@@ -173,8 +174,16 @@ def build_plan(
     input_kind: str = "auto",
     login_approved: bool = False,
     context: str = "search",
+    timing: Any = None,
 ) -> dict[str, Any]:
-    """离线计划。永不调用搜索后端；永不回调 super_search/research。"""
+    """离线计划。永不调用搜索后端；永不回调 super_search/research。
+
+    timing：调用方传入的 StageTiming（`--timing` 时由 search_cli 构造）。
+    此前 plan-only 路径在 search.py 里 `return build_plan(...)` 直接返回，
+    既不走 route_query_cached 也不产生任何 timing 键——`--explain-timing`
+    在这条路径上恒为空，而它恰恰是「离线路由慢在哪」的唯一观测口。这里把
+    路由那段单独计时并挂到返回体的 `timing` 键（与主搜索同一结构）。
+    """
     kind = classify_input_kind(query, input_kind)
     urls = extract_urls(query)
     limitations: list[str] = []
@@ -277,12 +286,20 @@ def build_plan(
         }
 
     # ── 正常 keyword / url-seed：保持一致 route_query（离线，无网络）──
+    # 走 route_query_cached 而非 route_query：同一个路由决策，search 主路径
+    # （search.py:746）早已走缓存，plan-only 这条离线路径此前是唯一不走的——
+    # 实测冷进程 route_query 47ms vs route_query_cached 命中 4ms，而 plan-only
+    # 是「本该最快」的那条路径，没理由每次重付。缓存契约（命中返回深拷贝、
+    # 不改变功能）由 tests/test_route_cache.py 锁住；本函数只读 decision。
     try:
-        from route import route_query
-        decision = route_query(
+        from route import route_query_cached
+        _t_route = time.perf_counter() if timing is not None else None
+        decision = route_query_cached(
             search_query, engine_override=engine, mode=mode,
             depth=depth, context=context,
         )
+        if timing is not None and _t_route is not None:
+            timing.add("route", (time.perf_counter() - _t_route) * 1000.0)
     except Exception as e:
         return {
             "schema_version": "1.0",
@@ -348,7 +365,7 @@ def build_plan(
     if max_results > 10:
         limitations.append("Some backends clamp max_results ≤10; request may be truncated per engine.")
 
-    return {
+    out = {
         "schema_version": "1.0",
         "status": "ready",
         "authorization": "not_required",
@@ -381,6 +398,10 @@ def build_plan(
         "mode": mode,
         "depth": depth,
     }
+    # timing 只在调用方显式传入时出现（`--timing`），默认输出结构逐字节不变。
+    if timing is not None:
+        out["timing"] = timing.summary()
+    return out
 
 
 def main() -> int:

@@ -641,6 +641,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                 engine=engine if not local_first else "local_search",
                 input_kind=input_kind,
                 context=context,
+                timing=timing,
             )
         if kind == "known-url" and not force_search:
             plan_info = build_plan(
