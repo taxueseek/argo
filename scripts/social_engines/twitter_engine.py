@@ -290,62 +290,146 @@ def _parse_nitter_html(html: str, n: int) -> list[dict]:
 
 
 def search(query: str, n: int = 5) -> list[dict]:
-    """主搜索入口：FxTwitter → tw CLI → nitter。"""
+    """主搜索入口：FxTwitter → twitter/tw CLI → nitter。"""
     # 1) FxTwitter（主路径）
+    # 注意：search_fxtwitter 在异常时返回带 error 字段的占位（不是空列表），
+    # 那是给 MCP 的「失败可见」契约用的；但在这里它**不能阻断后续通道**——
+    # 否则一次网络抖动就让整条兜底链失效（2026-11-03 issue #36 实测）。
+    fx_errors: list[dict] = []
     try:
         results = search_fxtwitter(query, n=n, timeout=10)
-        if results:
-            return results
+        valid = [r for r in results
+                 if isinstance(r, dict) and not r.get("error")]
+        if valid:
+            return valid
+        fx_errors = [r for r in results
+                     if isinstance(r, dict) and r.get("error")]
     except Exception:
         pass
 
-    # 2) twitter CLI
-    try:
-        result = subprocess.run(
-            ["tw", "search", query, "--limit", str(n), "--json"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",  # Windows GBK locale 下 UTF-8 输出会解码崩
-            errors="replace",
-            timeout=10,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            parsed = _parse_tw_json(result.stdout, n)
-            if parsed:
-                return parsed
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
+    # 2) twitter-cli（`twitter`）/ `tw` CLI，两者参数形态不同，逐个试
+    for cmd in (
+        ["twitter", "search", query, "-n", str(n), "--json"],
+        ["tw", "search", query, "--limit", str(n), "--json"],
+    ):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",  # Windows GBK locale 下 UTF-8 输出会解码崩
+                errors="replace",
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                parsed = _parse_tw_json(result.stdout, n)
+                if parsed:
+                    return parsed
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
 
     # 3) nitter 保底
-    return search_nitter(query, n)
+    nitter_res = search_nitter(query, n)
+    if nitter_res:
+        return nitter_res
+    # 全部通道不可用：把 FxTwitter 的 error 占位带回去，保持「失败可见」契约
+    return fx_errors
 
 
 def _parse_tw_json(raw: str, n: int) -> list[dict]:
-    """解析 twitter CLI JSON 输出。"""
-    results = []
-    for line in raw.strip().split("\n"):
-        try:
-            tweet = json.loads(line)
-            if not isinstance(tweet, dict):
+    """解析 twitter-cli / tw CLI 的 JSON 输出。
+
+    三种形态都要认（不同版本/不同 CLI 的输出并不统一）：
+
+    - JSONL：每行一个 tweet 对象（`tw` 的默认形态）
+    - 数组：`[{...}, {...}]`
+    - envelope：`{"ok": true, "data": [{...}]}`（`twitter` CLI 的形态）
+    - 单对象：`{...}`（单条结果时）
+
+    错误字典（如 `{"error": "No tweets found for ..."}`）与非 tweet 对象
+    一律跳过——issue #36 的根因之一就是它曾被当成有效条目产出。
+    """
+    results: list[dict] = []
+    stripped = raw.strip()
+    if not stripped:
+        return results
+
+    items: list[dict] = []
+    try:
+        payload = json.loads(stripped)
+    except (json.JSONDecodeError, ValueError):
+        payload = None
+        # JSONL 兜底：整体解析失败时逐行试
+        for line in stripped.split("\n"):
+            try:
+                obj = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
                 continue
-            results.append({
-                "title": (tweet.get("text", "") or tweet.get("full_text", ""))[:100],
-                "url": tweet.get("url", f"https://twitter.com/i/status/{tweet.get('id', '')}"),
-                "snippet": tweet.get("text", "") or tweet.get("full_text", ""),
-                "source": "twitter",
-                "score": max(1.0 - len(results) * 0.1, 0.1),
-                "social_meta": {
-                    "platform": "twitter",
-                    "content_type": "tweet",
-                    "author": tweet.get("user", {}).get("screen_name", ""),
-                    "likes": tweet.get("favorite_count", 0),
-                    "retweets": tweet.get("retweet_count", 0),
-                    "replies": tweet.get("reply_count", 0),
-                    "provider": "tw_cli",
-                },
-            })
-        except (json.JSONDecodeError, ValueError):
+            if isinstance(obj, dict):
+                items.append(obj)
+            elif isinstance(obj, list):
+                items.extend(x for x in obj if isinstance(x, dict))
+
+    if payload is not None:
+        if isinstance(payload, list):
+            items.extend(x for x in payload if isinstance(x, dict))
+        elif isinstance(payload, dict):
+            # 错误/空结果信封：ok 为假，或带 error 字段
+            if payload.get("ok") in (False, 0, "false", "False"):
+                return results
+            if payload.get("error"):
+                return results
+            data = payload.get("data")
+            if isinstance(data, list):
+                items.extend(x for x in data if isinstance(x, dict))
+            elif isinstance(data, dict):
+                items.append(data)
+            elif isinstance(payload, dict) and (
+                    "text" in payload or "full_text" in payload or "id" in payload):
+                # 单条 tweet 对象
+                items.append(payload)
+
+    for tweet in items:
+        if not isinstance(tweet, dict):
             continue
+        text = (tweet.get("text") or tweet.get("full_text") or "").strip()
+        tid = str(tweet.get("id") or "")
+        if not text and not tid:
+            continue
+        author_obj = tweet.get("author") or tweet.get("user") or {}
+        if not isinstance(author_obj, dict):
+            author_obj = {}
+        handle = (author_obj.get("screenName") or author_obj.get("screen_name") or "")
+        metrics = tweet.get("metrics") or {}
+        if not isinstance(metrics, dict):
+            metrics = {}
+        likes = metrics.get("likes") if "likes" in metrics else tweet.get("favorite_count", 0)
+        retweets = (metrics.get("retweets") if "retweets" in metrics
+                    else tweet.get("retweet_count", 0))
+        replies = metrics.get("replies") if "replies" in metrics else tweet.get("reply_count", 0)
+        views = metrics.get("views") if "views" in metrics else tweet.get("views")
+        url = tweet.get("url") or (f"https://x.com/{handle}/status/{tid}" if tid else "")
+        results.append({
+            "title": text[:100] + ("..." if len(text) > 100 else ""),
+            "url": url,
+            "snippet": text[:300],
+            "source": "twitter",
+            "published_at": tweet.get("createdAtISO") or tweet.get("createdAt") or None,
+            "score": max(1.0 - len(results) * 0.1, 0.1),
+            "social_meta": {
+                "platform": "twitter",
+                "content_type": "tweet",
+                "id": tid,
+                "author": handle,
+                "author_name": author_obj.get("name") or "",
+                "likes": likes or 0,
+                "retweets": retweets or 0,
+                "reposts": retweets or 0,
+                "replies": replies or 0,
+                "views": views,
+                "provider": "twitter_cli",
+            },
+        })
         if len(results) >= n:
             break
     return results
