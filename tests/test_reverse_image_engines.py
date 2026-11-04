@@ -94,6 +94,24 @@ class TestSaucenao(unittest.TestCase):
         self.assertIn("status -1", out[0]["error"])
         self.assertIn("匿名档", out[0]["error"])
 
+    def test_request_carries_filter_and_dedupe_params(self):
+        captured = {}
+
+        def fake_get(url, *a, **kw):
+            captured["url"] = url
+            return json.dumps({"header": {"status": 0}, "results": []})
+
+        eng = engines._BUILDERS["saucenao"](_spec("saucenao", hide=1, dedupe=2, db=999))
+        with patch("engines_builders_reverse_image.get_env", return_value="k"), \
+             patch("engines_builders_reverse_image._http_get_raw", side_effect=fake_get):
+            eng(_IMG, n=3)
+        url = captured["url"]
+        self.assertIn("hide=1", url)
+        self.assertIn("dedupe=2", url)
+        self.assertIn("db=999", url)
+        self.assertIn("output_type=2", url)
+        self.assertIn("minsim=30", url)
+
 
 class TestAnimetrace(unittest.TestCase):
     def test_characters_mapped_to_bangumi_lookup(self):

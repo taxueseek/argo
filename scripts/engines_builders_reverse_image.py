@@ -104,6 +104,16 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
     timeout = spec.get("timeout", 20)
     res_cap = int(spec.get("num_results", 5) or 5)
     min_sim = int(spec.get("min_similarity", 30) or 30)
+    # hide：0 全显示 / 1 隐藏露骨 / 2 再隐藏疑似 / 3 只留安全内容。群聊默认 1。
+    try:
+        hide = min(max(int(spec.get("hide", 1)), 0), 3)
+    except (TypeError, ValueError):
+        hide = 1
+    # dedupe：0 不去重 / 1 按条目去重 / 2 连系列一起并（SauceNAO 默认 2）。
+    try:
+        dedupe = min(max(int(spec.get("dedupe", 2)), 0), 2)
+    except (TypeError, ValueError):
+        dedupe = 2
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -119,13 +129,21 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
             "testmode": "0",
             "numres": str(min(max(int(n), 1), res_cap)),
             "output_type": "2",
-            "hide": "0",
-            "db": "999",
+            "hide": str(hide),
+            "dedupe": str(dedupe),
+            "db": str(spec.get("db", 999) or 999),
             "minsim": str(min_sim),
             "url": q,
             "api_key": key,
         }
-        url = f"{_SAUCENAO_ENDPOINT}?{urllib.parse.urlencode(params)}"
+        dbs = spec.get("dbs")
+        if isinstance(dbs, (list, tuple)) and dbs:
+            # dbs[] 是重复键，urlencode(dict) 拼不出来，单独拼在末尾。
+            params.pop("db", None)
+            extra = "&".join(f"dbs[]={urllib.parse.quote(str(i))}" for i in dbs)
+            url = f"{_SAUCENAO_ENDPOINT}?{urllib.parse.urlencode(params)}&{extra}"
+        else:
+            url = f"{_SAUCENAO_ENDPOINT}?{urllib.parse.urlencode(params)}"
         raw = _http_get_raw(url, {"Accept": "application/json",
                                   "Referer": "https://saucenao.com/"},
                             _timeout or timeout, engine=spec.get("_name", ""),

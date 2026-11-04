@@ -26,6 +26,13 @@ cost_tier: free
 timeout: 20
 num_results: 5
 min_similarity: 30
+# hide：0 全显示 / 1 隐藏露骨 / 2 再隐藏疑似露骨 / 3 只留安全内容。群聊默认 1——
+# Pixiv、Kemono 这类库本身就带成人内容，等回传后再由调用方筛已经晚了。
+hide: 1
+# dedupe：0 不去重 / 1 按条目去重 / 2 连系列一起并（SauceNAO 默认 2）。
+dedupe: 2
+# db=999 搜全部索引；要限定库时换成 dbs: [5, 43]（索引号列表，与 db 互斥）。
+db: 999
 canary_query: "https://files.yande.re/image/2555de7669c169cd98a6c9da7da27edd/yande.re%20447155%20bigxixi%20feet%20pantyhose%20see_through.jpg"
 label: SauceNAO 反搜图
 family: misc_vertical
