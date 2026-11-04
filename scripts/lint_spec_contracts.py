@@ -41,18 +41,18 @@ def load_specs() -> list[tuple[str, str, dict[str, Any]]]:
     out: list[tuple[str, str, dict[str, Any]]] = []
     for p in sorted(SPECS_DIR.glob("*.yaml")):
         try:
-            import yaml
+            from yaml_load import loads
 
-            data = yaml.safe_load(p.read_text(encoding="utf-8"))
+            data = loads(p.read_text(encoding="utf-8"))
         except Exception as e:  # 坏 YAML 本身就是结构违例
             out.append((f"specs/{p.name}", "", {"_load_error": str(e)}))
             continue
         if isinstance(data, dict):
             out.append((f"specs/{p.name}", str(data.get("engine_id", "")), data))
     try:
-        import yaml
+        from yaml_load import loads
 
-        cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+        cfg = loads(CONFIG_PATH.read_text(encoding="utf-8")) or {}
     except Exception:
         cfg = {}
     for name, spec in (cfg.get("engines") or {}).items():
