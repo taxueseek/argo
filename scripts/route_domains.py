@@ -356,14 +356,69 @@ _UNLESS_MACROS: dict[str, str] = {
     "@compare_or_award": (
         r"(?i)(区别|比较|对比|怎么选|哪个好|优劣|利弊|差异|权衡|\bvs\b|得主|获奖)"
     ),
+    # 本地/免 key 镜像通道否决集（2026-11-04）：`local_*` 六个域是用户**显式
+    # 选择**本地化通道的意图（`references/usage.md`：「local_ 前缀是本地化/免 key
+    # 镜像通道」），但它们在 config 里排在末尾（idx 92-97），而域匹配先到先得——
+    # 于是「本地搜索」「arxiv api」「wikipedia api」「bing news」「百度」全部被
+    # 靠前的 catch-all / academic / code_search / news_realtime 截走，那六个域
+    # 永远拿不到主位（实测 6/6 失配）。
+    #
+    # 修法：加 `_channel_intent_gate`（见文件下方），查询含本宏意图词时把
+    # local_* 域提到首位。词表与 local_* 六域的 patterns 对齐。
+    #
+    # **词表只收「带通道语义的写法」，不收裸平台名**：`github repo`、
+    # `stackoverflow`、`npm package` 既是通道意图也是普通技术词，收进来会误伤
+    # 「github repo 教程 推荐」（实测被误判 local_code）。裸平台名交给各域
+    # 自己的 patterns 处理，通道门只认明确的通道修饰语——即「平台名 + 本地/
+    # 镜像/免 key」的组合，或「本地 + 平台名」的组合。
+    "@local_channel": (
+        r"(?i)(本地搜索|local search|零成本|free search|本地新闻|本地中文|"
+        r"本地代码|本地学术|本地参考|本地通用|"
+        r"arxiv api|semantic scholar|crossref|pubmed|site:arxiv\.org|"
+        r"wikipedia api|wiktionary|wikiquote|nominatim|openstreetmap|"
+        r"site:baidu|site:sogou|"
+        r"(?:github|gitlab|stackoverflow|npm|pip|cargo)\s+(?:repo|package)(?:\s+(?:本地|镜像|免\s?key|local|mirror))|"
+        r"(?:本地|镜像)\s+(?:github|gitlab|stackoverflow|npm|pip|cargo))"
+    ),
 }
 
 
 def _split_pattern_entry(entry: Any) -> tuple[Any, Any]:
-    """触发词条目的两种形态：字符串，或 `{match, unless}`（unless 支持 @宏名 展开）。"""
+    """触发词条目的两种形态：字符串，或 `{match, unless}`（unless 支持 @宏名 展开）。
+
+    `unless` 可以是：
+
+    - 字符串正则（原样编译）；
+    - `@宏名`（整体替换成宏的正则）；
+    - **列表**：每项是字符串正则或 `@宏名`，展开后用 `|` 拼接成一个正则。
+
+    列表形态是 2026-11-04 为「一个触发词要挂多个否决集」加的：academic 的
+    论文条目原有写作技巧否决，又要加本地通道否决，两个都要生效——拼接成
+    一个字符串会让 `(?i)` 的作用域只覆盖前半段（实测宏不展开），而整体
+    替换成宏名又会丢掉原有否决。列表让两类否决各占一项、语义清晰。
+    """
     if isinstance(entry, dict):
         unless = entry.get("unless")
-        if isinstance(unless, str) and unless in _UNLESS_MACROS:
+        if isinstance(unless, list):
+            parts: list[str] = []
+            for item in unless:
+                if isinstance(item, str) and item in _UNLESS_MACROS:
+                    parts.append(_UNLESS_MACROS[item])
+                elif isinstance(item, str) and item:
+                    parts.append(item)
+            # 拼接前剥掉后续项开头的 `(?i)`：Python 3.11+ 不允许内联 flag
+            # 出现在非开头位置（`(?i)a|(?i)b` 编译失败），而宏与正则都自带
+            # `(?i)`，剥掉后语义不变（整条仍由第一个 `(?i)` 控制）。
+            if parts:
+                merged = parts[0]
+                for p in parts[1:]:
+                    if p.startswith("(?i)"):
+                        p = p[4:]
+                    merged += "|" + p
+                unless = merged
+            else:
+                unless = None
+        elif isinstance(unless, str) and unless in _UNLESS_MACROS:
             unless = _UNLESS_MACROS[unless]
         return entry.get("match"), unless
     return entry, None
@@ -541,6 +596,59 @@ def _intent_gate(hits: list[dict[str, Any]], query: str) -> list[dict[str, Any]]
     return kept
 
 
+# ── 阶段 4：显式通道意图门（2026-11-04）──────────────────────────────────────
+#
+# 与 `_intent_gate` 对称但方向相反：那个是「点查域在主题句下让位」，这个是
+# 「泛化域在显式通道意图下让位」。
+#
+# 为什么需要：`local_*` 六个域是用户**显式选择**本地化/免 key 通道的意图
+# （`references/usage.md`：「local_ 前缀是本地化/免 key 镜像通道」），但它们在
+# config 里排在末尾（idx 92-97），而域匹配先到先得——「本地搜索」「arxiv api」
+# 「wikipedia api」「github repo」「bing news」「百度」全部被靠前的泛化域截走，
+# 那六个域永远拿不到主位（实测 6/6 失配）。
+#
+# 为什么不在每个泛化域上加 unless：那是打地鼠——code_search 有四条 pattern
+# 命中同一个查询，逐个加否决总会漏（实测加到第三条仍失配）。而且新增泛化域
+# 时又会漏。门放在匹配层，一次覆盖所有泛化域。
+#
+# 判据：查询含 `@local_channel` 宏的意图词，且命中列表里有 `local_*` 域时，
+# 把非 local_ 的命中域降级为次域（保留在列表里，不删除——它们仍可能补位）。
+
+_CHANNEL_INTENT_RE: re.Pattern | None = None
+
+
+def _channel_intent_re() -> re.Pattern | None:
+    """惰性编译通道意图正则（复用 @local_channel 宏，避免词表两处维护）。"""
+    global _CHANNEL_INTENT_RE
+    if _CHANNEL_INTENT_RE is None:
+        src = _UNLESS_MACROS.get("@local_channel")
+        if not src:
+            return None
+        try:
+            _CHANNEL_INTENT_RE = re.compile(src, re.I)
+        except re.error:
+            return None
+    return _CHANNEL_INTENT_RE
+
+
+def _channel_intent_gate(hits: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """显式通道意图存在时，把 local_* 域提到首位（泛化域降为次域）。
+
+    不删除泛化域——它们仍可能在 local 通道不可用时补位（fallback 语义）。
+    只调整顺序：主域是 local_*，泛化域退到次域位置。
+    """
+    if not hits:
+        return hits
+    re_ = _channel_intent_re()
+    if re_ is None or re_.search(query) is None:
+        return hits
+    local_hits = [h for h in hits if str(h.get("name", "")).startswith("local_")]
+    if not local_hits:
+        return hits  # 没有 local 域命中：不调整（说明 local 域规则没覆盖）
+    others = [h for h in hits if not str(h.get("name", "")).startswith("local_")]
+    return local_hits + others
+
+
 # ── 对外入口 ──────────────────────────────────────────────────────────────────
 
 def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
@@ -595,6 +703,9 @@ def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
 
     hits = _social_domain_first(hits)
     hits = _intent_gate(hits, query)
+    # 显式通道意图门放在最后：它只重排已命中列表（local_* 提前），不改变
+    # 「哪些域命中」这个事实，因此不影响前面的意图门与社交提前逻辑。
+    hits = _channel_intent_gate(hits, query)
     hits = hits[:max_n]
     return hits if hits else ([catch_all] if catch_all else [])
 

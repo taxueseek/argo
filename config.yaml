@@ -1456,7 +1456,13 @@ domains:
   # 不是找论文——实测两类都落本域，arxiv 答不了写作技巧。只否决这一条，
   # 「综述 论文」等真检索语境不受影响。
   - match: '(?i)(论文|\bpaper\b|预印本|preprint|arXiv|bioRxiv|medRxiv|DOI|引用|citation|学术|文献|期刊|学报|综述|同行评议|影响因子|openalex|crossref|europe pmc|dblp|PubMed|知网|万方|维普)'
-    unless: '(?i)(怎么写|查重|降重|盲审|开题|致谢|选题|范文|抄袭|写作技巧|参考文献格式)'
+    # 2026-11-04 补 @local_channel：「arxiv api」「semantic scholar」「crossref」
+    # 「pubmed」这类**显式选择本地免 key 通道**的写法要让位 local_academic
+    # （idx 95），否则该域永远拿不到主位（实测 6/6 local_* 域被抢占）。
+    # 用列表挂两类否决——拼接成字符串会让 (?i) 作用域只覆盖前半段。
+    unless:
+    - '(?i)(怎么写|查重|降重|盲审|开题|致谢|选题|范文|抄袭|写作技巧|参考文献格式)'
+    - '@local_channel'
   - \b\d{4}\.\d{4,5}\b
   # 2026-09-30：模型名词表拆成独立条目并挂 unless。此前裸 (?i)...|BERT|GPT)
   # 是子串匹配，「chatgpt 使用技巧」「如何用 GPT 写周报」「gpt-5 发布」这类
@@ -1540,7 +1546,9 @@ domains:
   # 2026-10-25 补 unless：药品语境让位 medical——「用法」子串会命中
   # 「用法用量」（实测药品说明书查询被 GitHub/MDN 接走）。
   - match: '(?i)(github|source code|源码|开源\s*(项目|代码|仓库|库|软件|框架)|函数|实现|用法|snippet)'
-    unless: '(?i)(用法用量|说明书|不良反应|禁忌|症状|服用|剂量|药品|药物)'
+    unless:
+    - '(?i)(用法用量|说明书|不良反应|禁忌|症状|服用|剂量|药品|药物)'
+    - '@local_channel'
   # 「统一社会信用代码」是工商登记字段，不是代码搜索。拆出「代码」单条，
   # 让 company_search（更靠后）能接到这类查询。
   - match: '(?i)(代码)'
@@ -1548,12 +1556,18 @@ domains:
     # 博客 … 维护代码库 … 死代码」被 code_search 接走，GitHub 返回 OpenGL
     # 和 MDN 的 sidebarAction。让位给 chinese_tech_deep 的中文技术组合。
     unless: '(?i)(统一社会信用代码|社会信用代码|信用代码|区划代码|行政代码|邮政编码|股票代码|证券代码|基金代码|基金份额代码|商品代码|HS\s*代码|海关编码|商品编码|验证码|信用卡|安全码|CVV|官方博客|博客|文章|工程实践|实践|维护|重构|死代码|屎山|清理|经验|案例|周报|月报)'
-  - (?i)\b(repo|repository|library|package|npm|pip|cargo)\b
+  # 2026-11-04 补 @local_channel：「gitlab repo」「github repo」里的 repo 会命中
+  # 本条，而上面 github 条目已否决本地通道——两条要一致，否则 repo 单独
+  # 绕过否决（实测「github repo 本地搜索 代码」仍被本域接走）。
+  - match: '(?i)\b(repo|repository|library|package|npm|pip|cargo)\b'
+    unless: '@local_channel'
   # API 在「A vs B / 对比 / 区别」句里要的是概念解释，不是代码仓库：
   # 实测「kubernetes ingress vs gateway api」被 code_search 接走，GitHub 回
   # 两个示例仓、MDN 回 502/504 错误页。让位给 english_tech 的通用组合。
   - match: '(?i)\b(API|api)\b'
-    unless: '(?i)(\bvs\b|\bversus\b|\bcompare\b|\bcomparison\b|\bdifference\b|对比|区别|差异)'
+    unless:
+    - '(?i)(\bvs\b|\bversus\b|\bcompare\b|\bcomparison\b|\bdifference\b|对比|区别|差异)'
+    - '@local_channel'
   - (?i)\b(example|examples|example\s+code)\b
   primary: github
 - desc: 网络梗/流行语/俚语/黑话
@@ -1670,7 +1684,11 @@ domains:
   # AI agent framework 2026 latest）会被误路由到这里，combo 只有新闻源。
   # 只保留明确的新闻搭配（latest on/about/in、latest news/headlines/
   # developments/events）；版本语义的 latest 让位给技术/通用域（issue #18）。
-  - (?i)\bnews\b
+  - match: '(?i)\bnews\b'
+    # 2026-11-04 补 @local_channel：「bing news」「google news」「本地新闻」
+    # 这类显式选择本地通道的写法要让位 local_news（idx 93），否则该域
+    # 永远拿不到主位（实测 6/6 local_* 域被抢占）。
+    unless: '@local_channel'
   - (?i)\blatest\s+(?:on|about|in|news|headlines?|developments?|events?)\b
   primary: byted
 - desc: 中文技术深挖（先于英文技术域/中文通用域；要求含中文）
@@ -1685,7 +1703,11 @@ domains:
   parallel: true
   patterns:
   - match: '(?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南|原理|底层|综述|深入|深挖|架构设计|实现|用法)'
-    unless: '(?i)(统一社会信用代码|社会信用代码|信用代码|区划代码|行政代码|邮政编码)'
+    unless:
+    - '(?i)(统一社会信用代码|社会信用代码|信用代码|区划代码|行政代码|邮政编码)'
+    # 2026-11-04 补 @local_channel：「github repo 本地搜索 代码」这类显式
+    # 选择本地通道的写法要让位 local_code（idx 94）。
+    - '@local_channel'
   # 拉丁语言名必须有字母数字边界：裸 alternation 会让 Go 命中 argo、让
   # Java 命中 JavaScript（顺序靠前会截断）。实测「重启后 django 自检」被
   # 「Go ⊂ argo」锁进本域。
@@ -1703,7 +1725,10 @@ domains:
   parallel: true
   patterns:
   - (?i)(async|performance|best practices|tutorial|guide|how to|internals|SDK|framework)
-  - (?i)\b(API|api)\b
+  # 2026-11-04 补 @local_channel：「wikipedia api」「arxiv api」这类显式选择
+  # 本地免 key 通道的写法要让位 local_reference / local_academic。
+  - match: '(?i)\b(API|api)\b'
+    unless: '@local_channel'
   - (?i)\b(Rust|Python|JavaScript|TypeScript|React|Vue|Node|Docker|Kubernetes|asyncio)\b
   primary: octen
 - desc: 公司注册/尽调（GLEIF 法人主数据 + OpenCorporates 注册库；元宝补中文企业信息）
@@ -1784,7 +1809,18 @@ domains:
   name: chinese_general
   parallel: true
   patterns:
-  - '[一-鿿]'
+  # catch-all 中文兜底：任意汉字即命中。但「本地/免 key 镜像通道」是用户
+  # **显式选择**的意图，不该被兜底截走——local_* 六个域排在本域之后
+  # （idx 92-97），而域匹配是先到先得，于是「本地搜索」「arxiv api」
+  # 「wikipedia api」「github repo」「bing news」「百度」全部被本域抢走，
+  # 那六个域永远拿不到主位（2026-11-04 实测，见
+  # tests/test_route_capability_coverage.py 的 _KNOWN_GAPS）。
+  #
+  # 修法：给 catch-all 加 unless，把明确选择本地通道的意图词否决掉。
+  # 否决是**逐触发词**的（挂在这一条上），不影响其他中文查询走兜底。
+  # 词表与 local_* 六个域的 patterns 对齐，新增 local 域时同步补这里。
+  - match: '[一-鿿]'
+    unless: '(?i)(本地搜索|local search|零成本|free search|本地新闻|bing news|google news|news rss|arxiv api|semantic scholar|crossref|pubmed|site:arxiv.org|wikipedia api|wiktionary|wikiquote|nominatim|openstreetmap|stackoverflow|npm package|gitlab repo|github repo|site:stackoverflow.com|百度|搜狗|site:baidu|site:sogou)'
   primary: bocha
 - desc: 本地中文搜索
   engines_combo:

@@ -219,6 +219,14 @@ def test_every_rule_compiles_and_survives_compilation():
         # 实体查询域（wikidata/百科给机构条目，接不住「执行到哪一步」）
         ("sports_search", "中国男足国家队主教练现在是谁？"),
         ("org_entity", "欧盟 AI Act 目前执行到哪一步了？"),
+        # chinese_general / english_tech / news_realtime unless（2026-11-04）：
+        # 显式选择本地/免 key 通道的写法要让位 local_* 六域——它们排在 config
+        # 末尾（idx 92-97），而域匹配先到先得，不加否决就被这些泛化域截走
+        # （实测 6/6 local_* 域拿不到主位）。反例同时验证「否决生效」。
+        ("chinese_general", "本地搜索 零成本 free search"),
+        ("chinese_general", "百度 site:baidu.com 搜索"),
+        ("english_tech", "wikipedia api 本地 查询"),
+        ("news_realtime", "本地新闻 bing news"),
     ],
 )
 def test_unless_has_a_negative_case(domain_name, query):
@@ -241,7 +249,9 @@ def test_unless_declared_domains_are_covered_by_negative_cases():
                "code_search", "image_search", "company_search",
                "ai_model", "us_fundamentals", "stock_query", "medical",
                "global_event", "video", "protein_search", "chem_search",
-               "cn_encyclopedia", "fact_check", "sports_search", "social"}
+               "cn_encyclopedia", "fact_check", "sports_search", "social",
+               # 2026-11-04：这三域为让位 local_* 通道域加了 @local_channel 否决
+               "chinese_general", "english_tech", "news_realtime"}
     declared = {d.get("name") for d in DOMAINS
                 if any(_split_pattern_entry(p)[1] for p in _entries_of(d))}
     missing = sorted(declared - covered)
