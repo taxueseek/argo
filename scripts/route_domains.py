@@ -169,8 +169,12 @@ def _get_candidate_domain_indices(query: str) -> set[int] | None:
     return candidates
 
 
-def _ensure_domain_compiled(domain: dict[str, Any]) -> list[tuple[re.Pattern, re.Pattern | None]]:
-    """按需编译单个域的触发词与意图正则（扫到哪个域才编译哪个域）。"""
+def _ensure_domain_compiled(domain: dict[str, Any]) -> list[tuple[Any, Any]]:
+    """按需编译单个域的触发词与意图正则（扫到哪个域才编译哪个域）。
+
+    返回的 matcher 是鸭子类型：`re.Pattern` 或 `_LiteralMatcher`，两者都提供
+    `.search(query)`（前者返回 `re.Match`，后者返回 `_LiteralMatch`，均带 `.span()`）。
+    """
     rules = domain.get("_rules")
     if rules is not None:
         return rules
@@ -204,9 +208,124 @@ def _compile_domain_patterns(domains: list[dict[str, Any]]) -> list[dict[str, An
     return compiled
 
 
-def _try_compile(src: Any) -> re.Pattern | None:
+# 纯字面 alternation 判定：只认「剥掉开头 (?i) 与最外层括号后，由 | 分隔、
+# 每段都是纯字面字符」的 pattern。字符类里出现正则元字符（. * + ? ^ $ \ [ ] ( ) |）
+# 或内联结构一律不认——判定必须保守，判不准就交回 re.compile，宁可少优化。
+_LITERAL_CHAR = re.compile(r"^[\w\u4e00-\u9fff \-/#&:,.'’]+\Z", re.UNICODE)
+
+
+def _literal_alternatives(src: str) -> tuple[list[str], bool] | None:
+    """判定 pattern 是否为纯字面 alternation；是则返回 (词表, 是否忽略大小写)。
+
+    等价性：`(?i)(a|b)` 的 `re.search` 与「query 含 a 或 b（忽略大小写）」等价；
+    无 `(?i)` 时与「query 含 a 或 b（区分大小写）」等价。含非 ASCII 拉丁字母
+    （é/ß 等）时 `(?i)` 与 `str.lower()` 的 Unicode 规则不完全一致，故退回。
+    """
+    if not src:
+        return None
+    s = src
+    ignore_case = False
+    if s.startswith("(?i)"):
+        s = s[4:]
+        ignore_case = True
+        # `(?i)` 只作用于其后的表达式。若顶层还有 `|` 且不是「整体被一对括号
+        # 包裹」，flag 作用域只覆盖第一个分支（如 `(?i)foo|bar` 的 bar 区分
+        # 大小写），此时按整体忽略大小写处理会误判 → 退回 re.compile。
+        wrapped = (s.startswith("(") and s.endswith(")")
+                   and s.count("(") == 1 and s.count(")") == 1)
+        if not wrapped:
+            depth = 0
+            for ch in s:
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                elif ch == "|" and depth == 0:
+                    return None
+    # 只剥「整体被一对括号包裹」的情形（顶层无其他内容）
+    if s.startswith("(") and s.endswith(")") and s.count("(") == 1 and s.count(")") == 1:
+        s = s[1:-1]
+    parts: list[str] = []
+    depth = 0
+    cur: list[str] = []
+    for ch in s:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "|" and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    parts.append("".join(cur))
+    if not parts:
+        return None
+    words: list[str] = []
+    for p in parts:
+        if not p or not _LITERAL_CHAR.match(p):
+            return None
+        if ignore_case:
+            if any(ord(c) > 127 and not ("\u4e00" <= c <= "\u9fff") for c in p):
+                return None
+            p = p.lower()
+        words.append(p)
+    return words, ignore_case
+
+
+class _LiteralMatch:
+    """`_LiteralMatcher.search` 的返回值：只提供调用方用到的 `.span()`。"""
+
+    __slots__ = ("_span",)
+
+    def __init__(self, span: tuple[int, int]):
+        self._span = span
+
+    def span(self) -> tuple[int, int]:
+        return self._span
+
+
+class _LiteralMatcher:
+    """纯字面 alternation 的匹配器：子串查找替代 `re.compile` + `re.search`。
+
+    为什么值得（2026-11-04 实测）：域规则 326 条 pattern 里 134 条是纯字面
+    alternation（如 `(?i)(金十|jin10)`、`(?i)(技术社区|程序员社区)`），它们每次
+    冷进程都要付一次 `re.compile`（326 条全量实测 23.8 ms），而子串查找零编译、
+    更快。判定由 `_literal_alternatives` 保守把关，判不准的一律走原正则路径。
+    """
+
+    __slots__ = ("_words", "_ignore_case")
+
+    def __init__(self, words: list[str], ignore_case: bool):
+        self._words = words
+        self._ignore_case = ignore_case
+
+    def search(self, query: str) -> _LiteralMatch | None:
+        hay = query.lower() if self._ignore_case else query
+        best: tuple[int, int] | None = None
+        for w in self._words:
+            pos = hay.find(w)
+            if pos < 0:
+                continue
+            # 与 re 的 leftmost 语义一致：取最早出现；同位置取分支顺序在前者
+            if best is None or pos < best[0]:
+                best = (pos, pos + len(w))
+        return _LiteralMatch(best) if best is not None else None
+
+
+def _try_compile(src: Any) -> Any:
+    """编译域规则：纯字面 alternation 走子串匹配，其余走 `re.compile`。
+
+    返回值是鸭子类型（均提供 `.search(query)`，返回值带 `.span()`）：
+    `_LiteralMatcher` 或 `re.Pattern`。写坏的正则仍返回 None 被丢弃，
+    「编译失败静默丢弃」的既有语义不变（纯字面判定本身保证每段都是字面
+    字符，不可能写坏）。
+    """
     if not isinstance(src, str) or not src:
         return None
+    literal = _literal_alternatives(src)
+    if literal is not None:
+        return _LiteralMatcher(*literal)
     try:
         return re.compile(src)
     except re.error:
