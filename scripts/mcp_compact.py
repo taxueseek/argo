@@ -49,6 +49,11 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         # 保留发布时间维度（仅引擎输出该字段时，避免空字段噪音）
         if r.get("published_at"):
             item["published_at"] = r["published_at"]
+        # 图链与许可：图搜/反搜图结果靠这两条「看图」，缺了 Agent 只剩出处页链接。
+        # 缩略图只作展示（出处与引用仍以 url 为准），所以不进 snippet、也不当证据。
+        for k in ("image_url", "image_license"):
+            if r.get(k):
+                item[k] = r[k]
         # 顶包标记：recovery 替换了引擎原结果时透传，供上层识别结果已被代答
         if r.get("_recovered"):
             item["recovered"] = r["_recovered"]

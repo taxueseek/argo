@@ -75,6 +75,46 @@ def test_compact_research_keeps_gates():
     print("  ✅ compact research keeps gates, drops raw")
 
 
+def test_compact_search_keeps_image_fields():
+    """图搜/反搜图结果的图链必须到达 Agent——摘要档也不例外。"""
+    raw = {
+        "query": "https://files.yande.re/x.jpg",
+        "results": [
+            {
+                "title": "白丝袜",
+                "url": "https://www.pixiv.net/artworks/68259314",
+                "snippet": "相似度 95.55%",
+                "source": "saucenao",
+                "score": 0.95,
+                "image_url": "https://img1.saucenao.com/res/pixiv/x.jpg?auth=k5JCeqOr",
+                "image_license": "",
+            }
+        ],
+        "count": 1,
+        "engines_used": ["saucenao"],
+    }
+    out = _compact_search_result(raw, summary=True)
+    row = out["results"][0]
+    assert row["image_url"].startswith("https://img1.saucenao.com/")
+    assert row["url"] == "https://www.pixiv.net/artworks/68259314"
+    print("  ✅ compact search keeps image_url")
+
+
+def test_compact_search_does_not_invent_image_fields():
+    """没有图链的结果不得凭空长出空键（避免每条多 40 字节空字段）。"""
+    raw = {
+        "query": "q",
+        "results": [{"title": "t", "url": "https://ex.com", "snippet": "s", "source": "zhihu"}],
+        "count": 1,
+        "engines_used": ["zhihu"],
+    }
+    out = _compact_search_result(raw, summary=True)
+    row = out["results"][0]
+    assert "image_url" not in row
+    assert "image_license" not in row
+    print("  ✅ compact search leaves image fields absent")
+
+
 def test_resolve_topic_academic():
     prof, key = _resolve_research_profile({"query": "文献综述 CRISPR", "auto_topic": True})
     assert key == "academic"
@@ -132,6 +172,8 @@ if __name__ == "__main__":
         test_dumps_compact_smaller_than_pretty,
         test_compact_search_strips_heavy_fields,
         test_compact_research_keeps_gates,
+        test_compact_search_keeps_image_fields,
+        test_compact_search_does_not_invent_image_fields,
         test_resolve_topic_academic,
         test_initialize_short_instructions_and_warm,
         test_extract_respects_caller_max_chars,
