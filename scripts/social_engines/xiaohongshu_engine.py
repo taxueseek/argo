@@ -30,12 +30,22 @@ def search(query: str, n: int = 5) -> list[dict]:
     """主搜索入口"""
     try:
         result = subprocess.run(
-            ["xhs", "search", query],
+            # --json 必须传：xhs-cli 的 argparse 接受该 flag 但**不传时只打印
+            # 人类可读文本**，_parse_xhs_output 的 json.loads 会失败并静默返回
+            # 空列表（2026-11-03 issue #36 实测）。
+            ["xhs", "search", "--json", query],
             capture_output=True, text=True, timeout=_subprocess_timeout(),
             encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_xhs_output(result.stdout, n)
+        if result.returncode != 0:
+            # 未登录不是「平台 0 结果」：带可归因 error 浮上来，避免与「查了没有」
+            # 同形（同 zhihu_engine / 社交引擎统一范式）。
+            err_msg = (result.stdout or result.stderr or "").strip()
+            if "not_authenticated" in err_msg or "NoCookieError" in err_msg:
+                return [{"error": "xhs not_authenticated (run `xhs login --qrcode`)",
+                         "source": "xiaohongshu"}]
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         # CLI 未安装/超时不是「平台 0 结果」：带 error 浮上来，与社交引擎
         # 统一范式一致（zhihu_engine 范式，mcp_handlers 的 err=None 设计
