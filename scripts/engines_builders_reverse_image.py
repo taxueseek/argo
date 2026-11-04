@@ -196,6 +196,151 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
+# ── Google Lens（SerpAPI 托管，付费档）─────────────────────────────────────
+
+_SERPAPI_ENDPOINT = "https://serpapi.com/search.json"
+
+# 抓取顺序即相关度顺序：先「同一张图」（exact），再「长得像的图」（visual），
+# 最后才是「讲到这张图的网页」（organic）。三者混在一列里必须各自带标，
+# 否则调用方会把「视觉相似的另一张图」当成这张图的出处。
+_GOOGLE_LENS_BUCKETS: tuple[tuple[str, str, float], ...] = (
+    ("exact_matches", "精确匹配", 0.95),
+    ("visual_matches", "视觉相似", 0.78),
+    ("organic_results", "相关网页", 0.6),
+)
+
+
+def _google_lens_error(status: int, payload_text: str) -> dict[str, Any]:
+    """SerpAPI 的错误统一走 `error` 字段（无效 key、额度用尽、上游失败）。"""
+    msg = ""
+    try:
+        obj = json.loads(payload_text)
+    except (json.JSONDecodeError, ValueError):
+        obj = None
+    if isinstance(obj, dict):
+        msg = str(obj.get("error") or "").strip()
+    if not msg:
+        msg = (payload_text or "").strip()[:120]
+    detail = " · ".join(b for b in (f"HTTP {status}" if status else "", msg) if b)
+    return {"error": f"google_lens: {detail or '请求失败'}", "source": "google_lens"}
+
+
+def _google_lens_item(item: dict[str, Any], match_label: str, base: float,
+                      index: int, engine_name: str) -> dict[str, Any] | None:
+    """把一条 Lens 条目归一成 Argo 结果；没有可用链接的条目直接丢弃。"""
+    link = str(item.get("link") or "").strip()
+    if not link:
+        return None
+    title = str(item.get("title") or "").strip()
+    site = str(item.get("source") or "").strip()
+    if not title:
+        title = site or link
+    thumb = str(item.get("thumbnail") or "").strip()
+    image = str(item.get("image") or "").strip()
+    price = item.get("price")
+    price_txt = ""
+    if isinstance(price, dict):
+        price_txt = str(price.get("value") or price.get("extracted_value") or "").strip()
+    elif isinstance(price, str):
+        price_txt = price.strip()
+    bits = [b for b in (
+        match_label,
+        f"站点 {site}" if site else "",
+        price_txt,
+        str(item.get("snippet") or "").strip()[:160],
+    ) if b]
+    result: dict[str, Any] = {
+        "title": title[:200],
+        "url": link,
+        "snippet": " · ".join(bits)[:300],
+        "source": engine_name or "google_lens",
+        "score": rank_score(base, index),
+        "metadata": {
+            "match_type": match_label,
+            "site": site,
+            "thumbnail": thumb,
+            "image": image,
+            "position": item.get("position"),
+        },
+    }
+    if thumb:
+        result["image_url"] = thumb
+    return result
+
+
+def _build_google_lens_engine(spec: dict[str, Any]) -> Any:
+    """Google Lens 反搜图（SerpAPI 托管：付费档，按次计费，免费额度 250 次/月）。"""
+    timeout = spec.get("timeout", 30)
+    search_type = str(spec.get("search_type") or "all").strip()
+    if search_type not in {"all", "exact_matches", "visual_matches"}:
+        search_type = "all"
+    hl = str(spec.get("hl") or "").strip()
+    country = str(spec.get("country") or "").strip()
+    res_cap = int(spec.get("num_results", 8) or 8)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = (query or "").strip()
+        if not _IMAGE_URL_RE.match(q):
+            return _image_url_error("google_lens", q)
+        key = get_env(["ARGO_SERPAPI_API_KEY", "SERPAPI_API_KEY"])
+        if not key:
+            return [{"error": "google_lens: 缺 ARGO_SERPAPI_API_KEY"
+                              "（serpapi.com 注册后免费 250 次/月）",
+                     "source": "google_lens"}]
+        params = {
+            "engine": "google_lens",
+            "url": q,
+            "type": search_type,
+            "api_key": key,
+        }
+        if hl:
+            params["hl"] = hl
+        if country:
+            params["country"] = country
+        url = f"{_SERPAPI_ENDPOINT}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        try:
+            with http_open(req, timeout=_timeout or timeout, engine=spec.get("_name", "")) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            payload = ""
+            try:
+                payload = e.read().decode("utf-8", errors="replace")[:400]
+            except OSError:
+                payload = ""
+            return [_google_lens_error(e.code, payload)]
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return []
+        try:
+            payload = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        if not isinstance(payload, dict):
+            return []
+        if payload.get("error"):
+            return [_google_lens_error(0, raw)]
+        cap = min(max(int(n), 1), res_cap)
+        results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for bucket, label, base in _GOOGLE_LENS_BUCKETS:
+            for item in payload.get(bucket) or []:
+                if len(results) >= cap:
+                    return results
+                if not isinstance(item, dict):
+                    continue
+                link = str(item.get("link") or "").strip()
+                if link in seen:
+                    continue
+                parsed = _google_lens_item(item, label, base, len(results), spec.get("_name", ""))
+                if parsed is None:
+                    continue
+                seen.add(link)
+                results.append(parsed)
+        return results
+    return _engine
+
+
 # ── AnimeTrace（动漫角色识别，免 key、按 IP 限频）────────────────────────────
 
 _ANIMETRACE_ENDPOINT = "https://api.animetrace.com/v1/search"

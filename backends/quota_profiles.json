@@ -970,6 +970,16 @@
     "cost_tier": "free",
     "priority": 55
   },
+  "google_lens": {
+    "label": "Google Lens 反搜图",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.11,
+    "cost_unit": "cny",
+    "cost_tier": "paid",
+    "priority": 37
+  },
   "google_news": {
     "label": "google_news",
     "qps": 2,

@@ -77,10 +77,12 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     # tineye 反搜图不属于任何既有能力族，归 misc_vertical。
     "bing_rss": "web_general",
     "tineye": "misc_vertical",
-    # 反搜图三兄弟（tineye / sauceNAO / AnimeTrace）都吃图片 URL：tineye 查全图
-    # 出处，SauceNAO 查二次元图源，AnimeTrace 认动漫角色；归 misc_vertical。
+    # 反搜图四条（tineye / SauceNAO / AnimeTrace / Google Lens）都吃图片 URL：
+    # tineye 查全图出处，SauceNAO 查二次元图源，AnimeTrace 认动漫角色，Google
+    # Lens 查通用视觉同源；归 misc_vertical。
     "saucenao": "misc_vertical",
     "animetrace": "misc_vertical",
+    "google_lens": "misc_vertical",
     # 学术
     "arxiv": "academic",
     "openalex": "academic",

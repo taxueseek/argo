@@ -2708,5 +2708,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "google_lens": {
+    "label": "Google Lens 反搜图",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

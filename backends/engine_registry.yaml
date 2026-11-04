@@ -1222,6 +1222,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: GLEIF 全球法人 LEI 注册库（法定名称/注册地/状态/母公司，免 key）
+- name: google_lens
+  tier: T1
+  type: google_lens
+  coverage:
+  - image
+  - reverse_image
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: Google Lens 通用视觉反查（query 须为公网图片 URL，经 SerpAPI，付费档 250 次/月免费额度，回精确匹配/视觉相似/相关网页三档）
 - name: google_news
   tier: T1
   type: google_news

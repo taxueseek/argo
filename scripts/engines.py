@@ -230,6 +230,7 @@ from engines_builders_batch11 import (  # noqa: F401
 # 取数与解析都与关键词引擎不同，独立成模块。
 from engines_builders_reverse_image import (  # noqa: F401
     _build_animetrace_engine,
+    _build_google_lens_engine,
     _build_saucenao_engine,
 )
 
@@ -447,6 +448,7 @@ _BUILDERS = {
     "tineye": _build_tineye_engine,
     "saucenao": _build_saucenao_engine,
     "animetrace": _build_animetrace_engine,
+    "google_lens": _build_google_lens_engine,
     "bing_rss": _build_bing_rss_engine,
     "ths_hot": _build_ths_hot_engine,
     "cls_telegraph": _build_cls_telegraph_engine,
