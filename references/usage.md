@@ -646,7 +646,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_YUANBAO_API_KEY` | 对应引擎/服务的凭据（腾讯元宝搜索，官方名 `TENCENTCLOUD_WSA_APIKEY` 同样识别） | 缺密钥=该源跳过或降级 |
 | `ARGO_ZHIHU_ACCESS_SECRET` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 
-### 行为调参（37）
+### 行为调参（38）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -664,6 +664,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_QUOTA_TAVILY_LIMIT` | 行为阈值/预算调参 | Tavily 每月次数上限（默认 1000）；0=不限制；空=沿用 config.yaml |
 | `ARGO_BUDGETS_JSON` | 预算整份 JSON 覆盖 | 高级/测试用；优先级高于预算文件，例 `{"deepseek_search":{"amount":5,"currency":"CNY","period":"month"}}` |
 | `ARGO_BUDGET_FILE` | 预算文件路径覆盖 | 默认 `~/.config/argo/budgets.json`；多环境隔离时用 |
+| `ARGO_IMAGE_LOCAL_ROOTS` | 反搜图允许读取的本地目录（`os.pathsep` 分隔） | 默认空=不限目录（本机 CLI 由人直接调用）；MCP 宿主里设成收图目录，模型便只能把落盘的那几张图送去反搜，群消息无法驱动它读任意本地文件 |
 | `ARGO_PAID_BUDGET_BYPASS` | 单次绕过月度预算 | =1 时显式/自动调用都不检查预算；用于临时排障，不改变配置 |
 | `ARGO_ADAPTIVE_TAIL` | 尾宽按 backup 引擎历史 P75 分层（快源等满/慢源早收工） | 默认关；=1 开启（2026-10-16 三轮交错 A/B 未证实收益，对拍记录在本机 docs-local/调度对拍_尾宽分层与并发_2026-10-16.md，属本地归档不随发布件分发） |
 | `ARGO_TAIL_COMPLETE_S` | 早停后台补全的收割宽限（秒）：弃置引擎宽限内完成则记学习器真实成绩并把交付合并进 L2 缓存 | 默认 3；0=关闭（回到纯丢弃）。CLI 由 atexit 等待、输出已先行；MCP/daemon 常驻进程自然收割。证据见 docs/QUALITY_OF_SLOW_SOURCES.md |

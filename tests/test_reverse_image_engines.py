@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
@@ -48,10 +50,106 @@ class TestImageUrlGate(unittest.TestCase):
             self.assertIn("公网图片 URL", out[0]["error"])
             self.assertEqual(out[0]["source"], name)
 
-    def test_local_path_is_rejected(self):
+    def test_missing_local_file_reports_error(self):
         eng = engines._BUILDERS["animetrace"](_spec("animetrace"))
-        out = eng("C:/Users/me/pic.png", n=3)
-        self.assertIn("error", out[0])
+        out = eng("C:/no/such/dir/pic.png", n=3)
+        self.assertIn("读不到本地图片", out[0]["error"])
+
+
+class TestLocalImageInput(unittest.TestCase):
+    """本地图片入口：SauceNAO 走 multipart、AnimeTrace 走 base64、Lens 明确拒绝。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.jpg = Path(self._tmp.name) / "pic.jpg"
+        self.jpg.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 64)
+        self.txt = Path(self._tmp.name) / "note.txt"
+        self.txt.write_text("not an image", encoding="utf-8")
+
+    def test_saucenao_uploads_file_instead_of_url(self):
+        captured = {}
+
+        def fake_post(params, data, filename, mime, timeout, engine):
+            captured.update(params=params, data=data, filename=filename, mime=mime)
+            return json.dumps({"header": {"status": 0}, "results": [
+                {"header": {"similarity": "88.0"},
+                 "data": {"pixiv_id": "123456", "ext_urls": [_PIXIV]}}]}), ""
+
+        eng = engines._BUILDERS["saucenao"](_spec("saucenao"))
+        with patch("engines_builders_reverse_image.get_env", return_value="k"), \
+             patch("engines_builders_reverse_image._saucenao_post_file", side_effect=fake_post):
+            out = eng(self.jpg.as_uri(), n=3)
+        self.assertEqual(out[0]["url"], _PIXIV)
+        keys = [k for k, _ in captured["params"]]
+        self.assertNotIn("url", keys)
+        self.assertIn("api_key", keys)
+        self.assertEqual(captured["filename"], "pic.jpg")
+        self.assertEqual(captured["mime"], "image/jpeg")
+
+    def test_animetrace_sends_base64_for_local_file(self):
+        captured = {}
+
+        class _Ctx:
+            def __enter__(self):
+                return io.BytesIO(json.dumps({"code": 0, "data": []}).encode())
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_open(req, **kw):
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            return _Ctx()
+
+        eng = engines._BUILDERS["animetrace"](_spec("animetrace"))
+        with patch("engines_builders_reverse_image.http_open", side_effect=fake_open):
+            eng(self.jpg.as_uri(), n=3)
+        self.assertIn("base64", captured["body"])
+        self.assertNotIn("url", captured["body"])
+
+    def test_google_lens_rejects_local_file(self):
+        eng = engines._BUILDERS["google_lens"](_spec("google_lens"))
+        out = eng(self.jpg.as_uri(), n=3)
+        self.assertIn("SerpAPI", out[0]["error"])
+        self.assertIn("saucenao", out[0]["error"])
+
+    def test_saucenao_upload_shrinks_big_local_image(self):
+        try:
+            from PIL import Image as PILImage
+        except ImportError:
+            self.skipTest("Pillow 未安装，缩放分支不生效")
+        big = Path(self._tmp.name) / "big.png"
+        PILImage.new("RGB", (2400, 1600), (200, 120, 60)).save(big)
+        captured = {}
+
+        def fake_post(params, data, filename, mime, timeout, engine):
+            captured.update(data=data, filename=filename, mime=mime)
+            return json.dumps({"header": {"status": 0}, "results": []}), ""
+
+        eng = engines._BUILDERS["saucenao"](_spec("saucenao"))
+        with patch("engines_builders_reverse_image.get_env", return_value="k"), \
+             patch("engines_builders_reverse_image._saucenao_post_file", side_effect=fake_post):
+            eng(big.as_uri(), n=3)
+        self.assertEqual(captured["mime"], "image/jpeg")
+        self.assertEqual(captured["filename"], "big.jpg")
+        self.assertTrue(captured["data"].startswith(b"\xff\xd8\xff"))
+        self.assertLess(len(captured["data"]), big.stat().st_size)
+
+    def test_non_image_file_is_refused(self):
+        eng = engines._BUILDERS["animetrace"](_spec("animetrace"))
+        out = eng(self.txt.as_uri(), n=3)
+        self.assertIn("不是可识别的图片", out[0]["error"])
+
+    def test_local_roots_restrict_readable_dirs(self):
+        other = Path(self._tmp.name) / "allowed"
+        other.mkdir()
+        eng = engines._BUILDERS["animetrace"](_spec("animetrace"))
+        with patch.dict(os.environ, {"ARGO_IMAGE_LOCAL_ROOTS": str(other)}):
+            out = eng(self.jpg.as_uri(), n=3)
+        self.assertIn("ARGO_IMAGE_LOCAL_ROOTS", out[0]["error"])
+        with patch.dict(os.environ, {"ARGO_IMAGE_LOCAL_ROOTS": str(self.jpg.parent)}):
+            out = eng(self.txt.as_uri(), n=3)  # 目录放行，内容仍要过图片校验
+        self.assertIn("不是可识别的图片", out[0]["error"])
 
 
 class TestSaucenao(unittest.TestCase):

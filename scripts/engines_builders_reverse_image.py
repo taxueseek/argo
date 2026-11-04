@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""专用构建器：反向图片搜索（SauceNAO / AnimeTrace）
+"""专用构建器：反向图片搜索（SauceNAO / AnimeTrace / Google Lens）
 
-以图搜图与其他引擎的根本差别在输入：query 不是关键词，而是**公网可访问的
-图片 URL**——引擎把这串 URL 交给上游做图片指纹比对，回答「这张图出自哪里」，
-输出的是原图/出处页，而不是「讲述了这张图的网页」。因此：
+以图搜图与其他引擎的根本差别在输入：query 不是关键词，而是**一张图**——
+引擎把这串图交给上游做图片指纹比对，回答「这张图出自哪里」，输出的是
+原图/出处页，而不是「讲述了这张图的网页」。因此：
 
-- 两条引擎都只接受 http(s) 图片 URL，收到关键词直接返回可读的 error 条目
-  （静默返回 [] 会让调用方误以为「查了但没找到」）；
-- 只做显式调用（spec 里 explicit_only），不进自动路由候选池——没有图片 URL
+- 输入有两种形态：公网图片 URL，或本地图片（`file://` / 盘符路径 / UNC）。
+  本地图由 SauceNAO 走 multipart 上传、AnimeTrace 走 base64；Google Lens
+  经 SerpAPI 只有 `url` 参数，对本地图直接返回可读的 error 条目；
+- 关键词在入口直接返回可读的 error 条目（静默返回 [] 会让调用方误以为
+  「查了但没找到」）；
+- 只做显式调用（spec 里 explicit_only），不进自动路由候选池——没有图片
   的普通查询落进来必然是空结果；
 - known-url 输入不应被离线 handoff 拦截：显式指定引擎时按 URL 取数，
   见 `search.py` 的 URL 输入引擎豁免。
@@ -18,7 +21,7 @@
    `{"header":{"status":-1,"message":"The anonymous account type does not permit
    API usage."}}`。站点在 Cloudflare 之后（urllib 直连拿到 `Cf-Mitigated:
    challenge` 的 403 页），取数须走 TLS 指纹伪造（curl_cffi impersonate），
-   故 `_http_get_raw` 传 `tls_profiles`。
+   故 `_http_get_raw` 传 `tls_profiles`，multipart 上传由 curl_cffi 直接发。
 2. AnimeTrace 免 key 但按出口 IP 限频：超限返回 HTTP 429 + `code:17737`，
    配额用尽是 `code:17728`。两者都映射成 error 条目而不是空结果——调用方
    需要分清「这张图认不出」与「这次没资格查」。
@@ -26,8 +29,12 @@
 
 from __future__ import annotations
 
+import base64
+import io
 import json
+import os
 import re
+import stat
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -36,17 +43,100 @@ from typing import Any
 from engines_base import _http_get_raw, http_open, rank_score, safe_search
 from engine_env import get_env
 
-# 只认公网图片地址；裸关键词、本地路径、file:// 一律在入口挡下并说明原因。
+# 公网图片地址；裸关键词在入口挡下并说明原因。
 _IMAGE_URL_RE = re.compile(r"(?i)^https?://[^\s]+$")
+# 本地图片来源：file://、盘符绝对路径（C:\ 或 C:/）、UNC 路径。
+_LOCAL_REF_RE = re.compile(r"(?i)^(file:|[a-z]:[\\/]|\\\\)")
+_MAX_LOCAL_BYTES = 20 * 1024 * 1024
+# 只认图片魔数：路径可能指向任意本地文件，按扩展名放行等于把整个磁盘
+# 交给一条「上传到第三方」的通路。
+_IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"GIF8", "image/gif"),
+    (b"RIFF", "image/webp"),
+    (b"BM", "image/bmp"),
+)
 
 
-def _image_url_error(engine: str, query: str) -> list[dict[str, Any]]:
-    """输入不是图片 URL 时的可读错误（各反搜图引擎共用同一口径）。"""
+def _image_input_error(engine: str, query: str) -> list[dict[str, Any]]:
+    """输入既不是图片 URL 也不是可读本地图片时的可读错误。"""
     return [{
-        "error": f"{engine}: 反搜图引擎要喂公网图片 URL（http(s):// 开头）作为查询，"
+        "error": "反搜图引擎要喂公网图片 URL 或本地图片路径作为查询，"
                  f"收到的是「{(query or '')[:50]}」",
         "source": engine,
     }]
+
+
+def _local_image_path(query: str) -> str | None:
+    """把 file:// 或本地绝对路径还原成文件系统路径；不是本地引用则返回 None。"""
+    q = (query or "").strip()
+    if not _LOCAL_REF_RE.match(q):
+        return None
+    if q.lower().startswith("file:"):
+        try:
+            path = urllib.request.url2pathname(urllib.parse.urlparse(q).path)
+        except ValueError:
+            return None
+        # file:///D:/x.jpg 的 path 是 /D:/x.jpg；盘符前那个斜杠要去掉。
+        if re.match(r"^/[A-Za-z]:", path):
+            path = path[1:]
+        return path
+    return q
+
+
+def _local_roots() -> list[str]:
+    """`ARGO_IMAGE_LOCAL_ROOTS` 允许的目录（os.pathsep 分隔）。
+
+    未设置时不限目录（本机 CLI 由人直接调用，路径就是人给的）；MCP 宿主
+    里把它设成收图目录，模型便只能把落盘的那几张图送去反搜，而不是任意
+    本地文件（群消息可注入「反搜一下 C:\\...\\id_rsa」这种指令）。
+    """
+    raw = os.environ.get("ARGO_IMAGE_LOCAL_ROOTS", "")
+    return [os.path.realpath(p) for p in raw.split(os.pathsep) if p.strip()]
+
+
+def _sniff_mime(data: bytes) -> str:
+    for magic, mime in _IMAGE_MAGIC:
+        if data.startswith(magic):
+            if magic == b"RIFF" and data[8:12] != b"WEBP":
+                continue
+            return mime
+    return ""
+
+
+def _load_local_image(query: str) -> tuple[bytes, str, str] | dict[str, Any]:
+    """读本地图片：返回 (bytes, 文件名, mime)；失败返回可读 error 条目。"""
+    path = _local_image_path(query)
+    if not path:
+        return {"error": "无法解析本地图片路径", "source": "reverse_image"}
+    engine = "reverse_image"
+    try:
+        st = os.stat(path)
+    except OSError as e:
+        return {"error": f"读不到本地图片 {path}（{type(e).__name__}）",
+                "source": engine}
+    if not stat.S_ISREG(st.st_mode):
+        return {"error": f"{path} 不是普通文件", "source": engine}
+    if st.st_size > _MAX_LOCAL_BYTES:
+        return {"error": f"本地图片 {st.st_size // (1024 * 1024)}MB 超过上限 "
+                         f"{_MAX_LOCAL_BYTES // (1024 * 1024)}MB", "source": engine}
+    roots = _local_roots()
+    if roots:
+        real = os.path.realpath(path)
+        if not any(real == r or real.startswith(r + os.sep) for r in roots):
+            return {"error": "本地图片只允许读取已配置的收图目录"
+                             "（ARGO_IMAGE_LOCAL_ROOTS）", "source": engine}
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        return {"error": f"读本地图片失败（{type(e).__name__}）", "source": engine}
+    mime = _sniff_mime(data)
+    if not mime:
+        return {"error": f"{os.path.basename(path)} 不是可识别的图片"
+                         "（只支持 JPEG/PNG/GIF/WebP/BMP）", "source": engine}
+    return data, os.path.basename(path), mime
 
 
 # ── SauceNAO（二次元图源索引，需免费 API key）───────────────────────────────
@@ -99,6 +189,56 @@ def _saucenao_title(data: dict[str, Any], index_name: str) -> str:
     return index_name or "SauceNAO 匹配"
 
 
+def _saucenao_post_file(params: list[tuple[str, str]], data: bytes, filename: str,
+                        mime: str, timeout: float, engine: str) -> tuple[str | None, str]:
+    """multipart 上传本地图片，返回 (响应文本, 错误说明)。
+
+    SauceNAO 在 Cloudflare 之后，带文件的 POST 也须走 TLS 指纹伪造；`HttpClient`
+    只支持 JSON / urlencode 的 body，multipart 由 curl_cffi 直接发。
+    """
+    try:
+        from curl_cffi import requests as cr
+    except ImportError:
+        return None, "本地图片需要 curl_cffi（SauceNAO 走 Cloudflare，需指纹伪造）"
+    # 0.17 起 curl_cffi 只认 multipart=CurlMime（files= 会抛 NotImplementedError）。
+    try:
+        from curl_cffi import CurlMime
+        mime_body = CurlMime()
+        mime_body.addpart("file", filename=filename, content_type=mime, data=data)
+    except (ImportError, AttributeError):
+        mime_body = None
+    proxies = None
+    try:
+        from net_proxy import resolve_proxy
+        p = resolve_proxy(_SAUCENAO_ENDPOINT)
+        if p:
+            proxies = {"https": p}
+    except Exception:
+        proxies = None
+    last: Exception | None = None
+    for fp in ("chrome", "safari"):
+        try:
+            if mime_body is not None:
+                resp = cr.post(_SAUCENAO_ENDPOINT, params=params,
+                               multipart=mime_body,
+                               headers={"Accept": "application/json",
+                                        "Referer": "https://saucenao.com/"},
+                               timeout=timeout, impersonate=fp, proxies=proxies)
+            else:
+                resp = cr.post(_SAUCENAO_ENDPOINT, params=params,
+                               files={"file": (filename, data, mime)},
+                               headers={"Accept": "application/json",
+                                        "Referer": "https://saucenao.com/"},
+                               timeout=timeout, impersonate=fp, proxies=proxies)
+        except Exception as e:
+            last = e
+            continue
+        if resp.status_code == 200:
+            return resp.text, ""
+        last = RuntimeError(f"HTTP {resp.status_code} · {resp.text[:120]}")
+    return None, f"上传失败（{type(last).__name__}: {last}）"
+
+
 def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
     """SauceNAO 以图搜图（POST/GET 同一端点，需 API key，走 TLS 指纹伪造过 CF）。"""
     timeout = spec.get("timeout", 20)
@@ -118,36 +258,56 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         q = (query or "").strip()
-        if not _IMAGE_URL_RE.match(q):
-            return _image_url_error("saucenao", q)
+        is_local = _local_image_path(q) is not None
+        if not is_local and not _IMAGE_URL_RE.match(q):
+            return _image_input_error("saucenao", q)
         key = get_env(["ARGO_SAUCENAO_API_KEY", "SAUCENAO_API_KEY"])
         if not key:
-            return [{"error": "saucenao: 缺 ARGO_SAUCENAO_API_KEY"
+            return [{"error": "缺 ARGO_SAUCENAO_API_KEY"
                               "（匿名档已不允许 API 调用；saucenao.com 免费注册 150 次/日）",
                      "source": "saucenao"}]
-        params = {
-            "testmode": "0",
-            "numres": str(min(max(int(n), 1), res_cap)),
-            "output_type": "2",
-            "hide": str(hide),
-            "dedupe": str(dedupe),
-            "db": str(spec.get("db", 999) or 999),
-            "minsim": str(min_sim),
-            "url": q,
-            "api_key": key,
-        }
+        # 用 (键, 值) 列表而不是 dict：dbs[] 是重复键，且 curl_cffi 的 multipart
+        # POST 与 urllib 的 GET 都能直接吃列表。
+        params: list[tuple[str, str]] = [
+            ("testmode", "0"),
+            ("numres", str(min(max(int(n), 1), res_cap))),
+            ("output_type", "2"),
+            ("hide", str(hide)),
+            ("dedupe", str(dedupe)),
+            ("minsim", str(min_sim)),
+            ("api_key", key),
+        ]
         dbs = spec.get("dbs")
         if isinstance(dbs, (list, tuple)) and dbs:
-            # dbs[] 是重复键，urlencode(dict) 拼不出来，单独拼在末尾。
-            params.pop("db", None)
-            extra = "&".join(f"dbs[]={urllib.parse.quote(str(i))}" for i in dbs)
-            url = f"{_SAUCENAO_ENDPOINT}?{urllib.parse.urlencode(params)}&{extra}"
+            params.extend(("dbs[]", str(i)) for i in dbs)
         else:
+            params.append(("db", str(spec.get("db", 999) or 999)))
+        if is_local:
+            loaded = _load_local_image(q)
+            if isinstance(loaded, dict):
+                return [loaded]
+            data, filename, mime = loaded
+            # 原图直传在慢链路上会顶满 20s 引擎超时（实测 2.9 MB 走代理偶发
+            # 20s 无响应），缩到 1024px 后相似度不变（95.55 → 95.50）而上传
+            # 体积降一个量级。
+            shrunk = _shrink_image_bytes(data)
+            if shrunk:
+                data = shrunk
+                mime = "image/jpeg"
+                filename = f"{os.path.splitext(filename)[0]}.jpg"
+            raw, post_err = _saucenao_post_file(
+                params, data, filename, mime, float(_timeout or timeout),
+                spec.get("_name", ""),
+            )
+            if post_err:
+                return [{"error": post_err, "source": "saucenao"}]
+        else:
+            params.append(("url", q))
             url = f"{_SAUCENAO_ENDPOINT}?{urllib.parse.urlencode(params)}"
-        raw = _http_get_raw(url, {"Accept": "application/json",
-                                  "Referer": "https://saucenao.com/"},
-                            _timeout or timeout, engine=spec.get("_name", ""),
-                            tls_profiles=["chrome", "safari"])
+            raw = _http_get_raw(url, {"Accept": "application/json",
+                                      "Referer": "https://saucenao.com/"},
+                                _timeout or timeout, engine=spec.get("_name", ""),
+                                tls_profiles=["chrome", "safari"])
         if not raw:
             return []
         try:
@@ -167,7 +327,7 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
             msg = str(header.get("message") or "").strip()
             hint = _SAUCENAO_STATUS_HINT.get(status, "")
             detail = " · ".join(b for b in (f"status {status}", msg, hint) if b)
-            return [{"error": f"saucenao: {detail}", "source": "saucenao"}]
+            return [{"error": detail, "source": "saucenao"}]
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
         for item in payload.get("results") or []:
@@ -240,7 +400,7 @@ def _google_lens_error(status: int, payload_text: str) -> dict[str, Any]:
     if not msg:
         msg = (payload_text or "").strip()[:120]
     detail = " · ".join(b for b in (f"HTTP {status}" if status else "", msg) if b)
-    return {"error": f"google_lens: {detail or '请求失败'}", "source": "google_lens"}
+    return {"error": detail or "请求失败", "source": "google_lens"}
 
 
 def _google_lens_item(item: dict[str, Any], match_label: str, base: float,
@@ -299,11 +459,15 @@ def _build_google_lens_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         q = (query or "").strip()
+        if _local_image_path(q) is not None:
+            return [{"error": "本地图片不支持（SerpAPI 只有 url 参数，没有上传口）；"
+                              "本地图请用 saucenao 或 animetrace",
+                     "source": "google_lens"}]
         if not _IMAGE_URL_RE.match(q):
-            return _image_url_error("google_lens", q)
+            return _image_input_error("google_lens", q)
         key = get_env(["ARGO_SERPAPI_API_KEY", "SERPAPI_API_KEY"])
         if not key:
-            return [{"error": "google_lens: 缺 ARGO_SERPAPI_API_KEY"
+            return [{"error": "缺 ARGO_SERPAPI_API_KEY"
                               "（serpapi.com 注册后免费 250 次/月）",
                      "source": "google_lens"}]
         params = {
@@ -390,7 +554,7 @@ def _animetrace_error(status: int, payload: str) -> dict[str, Any]:
         msg,
         hint or "",
     ) if b)
-    return {"error": f"animetrace: {detail or '请求失败'}", "source": "animetrace"}
+    return {"error": detail or "请求失败", "source": "animetrace"}
 
 
 def _bgm_search_url(work: str) -> str:
@@ -403,6 +567,34 @@ def _bgm_search_url(work: str) -> str:
     return f"https://bgm.tv/subject_search/{urllib.parse.quote(work)}"
 
 
+def _shrink_image_bytes(data: bytes, max_side: int = 1024) -> bytes | None:
+    """把图片转成长边 ≤ max_side 的 JPEG；Pillow 缺失或解码失败返回 None。"""
+    try:
+        from PIL import Image as _PILImage
+    except ImportError:
+        return None
+    try:
+        img = _PILImage.open(io.BytesIO(data))
+        img.load()
+    except Exception:
+        return None
+    if max(img.size) > max_side:
+        img.thumbnail((max_side, max_side))
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, "JPEG", quality=88)
+    return buf.getvalue()
+
+
+def _image_to_base64(data: bytes, max_side: int = 1024) -> str:
+    """把本地图片压成 base64（长边 ≤ max_side 的 JPEG）。
+
+    AnimeTrace 的 base64 入参对体积敏感（实测 2.9 MB 原图直传会被上游拒），
+    而缩到 1024px 后仍能认出角色与作品。
+    """
+    shrunk = _shrink_image_bytes(data, max_side)
+    return base64.b64encode(shrunk or data).decode("ascii")
+
+
 def _build_animetrace_engine(spec: dict[str, Any]) -> Any:
     """AnimeTrace 角色识别（免 key，POST JSON 传图片 URL）。"""
     timeout = spec.get("timeout", 20)
@@ -412,9 +604,17 @@ def _build_animetrace_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         q = (query or "").strip()
-        if not _IMAGE_URL_RE.match(q):
-            return _image_url_error("animetrace", q)
-        body: dict[str, Any] = {"url": q}
+        is_local = _local_image_path(q) is not None
+        if not is_local and not _IMAGE_URL_RE.match(q):
+            return _image_input_error("animetrace", q)
+        body: dict[str, Any] = {}
+        if is_local:
+            loaded = _load_local_image(q)
+            if isinstance(loaded, dict):
+                return [loaded]
+            body["base64"] = _image_to_base64(loaded[0])
+        else:
+            body["url"] = q
         if is_multi:
             body["is_multi"] = 1
         if model:
