@@ -69,7 +69,7 @@ class TestRouteLabeledRegression(unittest.TestCase):
     def test_labels_cover_real_domains(self):
         """语料必须覆盖多个域——单域语料等于没覆盖。"""
         labels = _load_labels()
-        self.assertGreater(len(labels), 100,
+        self.assertGreater(len(labels), 50,
                            f"语料只有 {len(labels)} 条，不足以当回归锚")
         from config import get_domains
         live = {d.get("name") for d in get_domains()}

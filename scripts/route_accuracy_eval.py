@@ -31,7 +31,7 @@
 ## 用法
 
     python3 scripts/route_accuracy_eval.py                 # 全量
-    python3 scripts/route_accuracy_eval.py --evidence badcase
+    python3 scripts/route_accuracy_eval.py --evidence capability
     python3 scripts/route_accuracy_eval.py --json
     python3 scripts/route_accuracy_eval.py --show-miss 20  # 打印失配样例
 """
@@ -171,7 +171,7 @@ def _print_text(r: dict[str, Any]) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="路由准确率评测（离线）")
     ap.add_argument("--evidence", default=None,
-                    choices=["badcase", "usage_error", "usage_ok"])
+                    choices=["capability", "language", "feedback"])
     ap.add_argument("--json", action="store_true", dest="json_output")
     ap.add_argument("--show-miss", type=int, default=0)
     args = ap.parse_args()

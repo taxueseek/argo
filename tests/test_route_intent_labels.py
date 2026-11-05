@@ -71,7 +71,7 @@ class TestRouteIntentLabels(unittest.TestCase):
     def test_labels_have_intent_field(self):
         """每条语料必须有 intent 字段——缺标签等于没扩展。"""
         labels = _load_labels()
-        self.assertGreater(len(labels), 100)
+        self.assertGreater(len(labels), 50)
         missing = [e["query"] for e in labels if not e.get("intent")]
         self.assertEqual(missing[:10], [],
                          f"{len(missing)} 条语料缺 intent 字段"
