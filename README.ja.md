@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方法 1：ワンコマンドスクリプト（本機で長期利用に推奨）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方法 2：npm / npx（対応済み、現在 2.10.2。tag ごとに公開、バージョン固定）
+# 方法 2：npm / npx（対応済み、現在 2.11.2。tag ごとに公開、バージョン固定）
 npm install -g argo-search       # CLI をグローバルインストール
 npx -y argo-search               # またはインストールせず即時利用
 npx -y github:taxueseek/argo     # main の最新コミットに追従したい場合
@@ -283,7 +283,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.10.2**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
+どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.11.2**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -475,6 +475,8 @@ Argo のやることを一行で言うと、質問を領域と言語で適切な
 DSH プラグインとして入れると、これらの能力は宿主のネイティブツールになる。高頻度の検索と取得は既定でオン、長尾フォレンジックは設定ページで必要に応じてチェック、argo 本体の 28 個の挙動スイッチ（キャッシュ、再順位、重複除去、ガード、プロキシ、TTL など）は環境変数からパネルへ移った。キーは宿主の凭证库に入り、平文は表示されず、変更は保存即有効。
 
 最近数版が、それぞれ一类の問題を直した。
+
+v2.11.2 は外部フィードバックの収束に注力しました。SauceNAO・AnimeTrace・Google Lens の明示専用逆画像エンジンを補完し失効した tineye を撤去；keyRefs 認証がサブプロセスに届かない（鍵必須エンジンが skipped-missing-env にならない）、クォータの鍵交換時自己回復不全と 402 の 30 日誤ロック、ソーシャルエンジンのサブプロセス env と認証転送という 4 種のサイレント障害を解消；lint_spec_contracts を共有 YAML loader 経由にして本体の unit/extras を緑化しました。
 
 v2.10.2 はセマンティックルーティングとテスト基盤に注力しました。関連性アンカー重み付けと静的コンセプトベクトル表を導入し、13 件の人手ラベル集合と実行可能性ゲートでラベル精度を 76.9%→100% に収口——原理・解説系クエリが学術ライブラリへ、プラットフォーム攻略系がソーシャルリスニングへ誤流入しなくなりました。スナップショット 201 件中 123 件（61%）の決定が tfidf スコアリングから regex/コンセプト直判定へ移り、より速く断言可能に。サーキットブレーカ工場は呼び出し時解決になり、別パスから読んだ同名モジュールが別のブレーカ状態を持たなくなりました。スニペットタグ衛生と口径重複排除が出力アセンブリに入り、ZCode パネル 3 タブ版を取り込み、テスト環境の ARGO_* 変数をケースごとにスナップショット復元して散発的な順序汚染を封じました。コンセプトセマンティックルーティングは既定オフ、ARGO_CONCEPT_ROUTER=1 で有効化。
 

@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 방식 1: 원클릭 스크립트(로컬 장기 사용 권장)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 방식 2: npm / npx(지원됨, 현재 2.10.2, tag마다 배포·버전 고정)
+# 방식 2: npm / npx(지원됨, 현재 2.11.2, tag마다 배포·버전 고정)
 npm install -g argo-search       # CLI 전역 설치
 npx -y argo-search               # 또는 설치 없이 즉시 사용
 npx -y github:taxueseek/argo     # main 최신 커밋을 따라가려면 이 명령
@@ -283,7 +283,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.10.2**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
+경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.11.2**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -475,6 +475,8 @@ Argo가 하는 일을 한 줄로 말하면, 질문을 도메인과 언어로 알
 DSH 플러그인으로 설치하면 이 능력들이 호스트의 네이티브 도구가 된다. 고빈도 검색과 긁기는 기본으로 켜져 있고, 롱테일 포렌식은 설정 페이지에서 필요에 따라 체크하며, argo 본체의 28개 동작 스위치(캐시, 재순위, 중복 제거, 가드, 프록시, TTL 등)는 환경 변수에서 패널로 옮겨졌다. 키는 호스트 凭证库에 들어가고, 평문은 표시되지 않으며, 모든 변경은 저장 즉시 적용된다.
 
 최근 몇 판이 각자 한 부류의 문제를 고쳤다.
+
+v2.11.2는 외부 피드백 수습에 집중했습니다. SauceNAO·AnimeTrace·Google Lens 명시 전용 역이미지 엔진을 보강하고 만료된 tineye를 제거; keyRefs 인증이 서브프로세스에 도달하지 못함(키 필요 엔진이 더 이상 skipped-missing-env 아님), 쿼터 키 교체 시 자가 회복 미흡과 402의 30일 오잠금, 소셜 엔진 서브프로세스 env와 인증 전달이라는 4가지 조용한 실패를 해소; lint_spec_contracts를 공용 YAML loader 경유로 바꾸어 본체 unit/extras를 녹색화했습니다.
 
 v2.10.2는 시맨틱 라우팅과 테스트 기반에 집중했습니다. 관련성 앵커 가중치와 정적 콘셉트 벡터 테이블을 도입하고 13건 사람 라벨 집합과 실행 가능성 게이트로 라벨 정확도를 76.9%→100%로 수습 — 원리/해설 쿼리는 더 이상 학술 라이브러리로, 플랫폼 가이드 쿼리는 더 이상 소셜 리스닝으로 흐르지 않습니다. 스냅샷 201건 중 123건(61%)의 결정이 tfidf 채점에서 regex/콘셉트 직접 판정으로 전환되어 더 빠르고 단언 가능해졌습니다. 서킷브레이커 팩토리는 호출 시점 해석으로 바뀌어 다른 경로에서 로드한 같은 모듈이 별개의 브레이커 상태를 갖지 않습니다. 스니펫 태그 위생과 기준 중복 제거가 출력 조립에 들어가고, ZCode 패널 3탭 버전이 반영되었으며, 테스트 환경의 ARGO_* 변수를 케이스마다 스냅샷 복원해 산발적 순서 오염을 차단했습니다. 콘셉트 시맨틱 라우팅은 기본 꺼짐, ARGO_CONCEPT_ROUTER=1로 활성화.
 

@@ -148,7 +148,7 @@ Zero config works. Three ways to install, pick your habit:
 # Option 1: install script (recommended for long-term local use)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Option 2: npm / npx (supported, currently 2.10.2; released per tag, version pinned)
+# Option 2: npm / npx (supported, currently 2.11.2; released per tag, version pinned)
 npm install -g argo-search       # install the CLI globally
 npx -y argo-search               # or run it without installing
 npx -y github:taxueseek/argo     # use this to follow the latest commit on main
@@ -283,7 +283,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **npm install is supported, current version 2.10.2**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
+Pick any path. **npm install is supported, current version 2.11.2**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -433,6 +433,8 @@ What Argo does, in one sentence: it sends each question to the right sources by 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
+
+v2.11.2 focuses on closing external feedback. It adds SauceNAO, AnimeTrace, and Google Lens as explicit-only reverse-image engines and removes the dead tineye; fixes four silent-failure classes — keyRefs credentials never reaching subprocesses (key-needing engines no longer return skipped-missing-env), quota not self-healing on key rotation and 402 wrongly locking 30 days, and social-engine subprocess env / credential forwarding; and routes lint_spec_contracts through the shared YAML loader, clearing main's unit/extras shard failures.
 
 v2.10.2 focuses on semantic routing and the test foundation. Relevance anchor weighting and a static concept vector table landed; a 13-case human-labeled route set plus an executability gate raised labeled accuracy from 76.9% to 100% — principle/explainer queries no longer fall into academic libraries and platform-guide queries no longer trigger social listening. 123 of 201 routing-snapshot decisions (61%) moved from tfidf scoring to regex/concept direct-match, faster and more assertable. The circuit-breaker factory now resolves at call time, so the same module loaded from different paths no longer keeps separate breaker states. Snippet tag hygiene and caliber dedup join output assembly. The three-tab ZCode panel landed, and ARGO_* env vars are snapshot-restored per test case, closing sporadic ordering pollution. Concept semantic routing is off by default; enable with ARGO_CONCEPT_ROUTER=1.
 

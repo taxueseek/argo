@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方式一：一键脚本（推荐本机长期用）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方式二：npm / npx（已支持，当前 2.10.2；按 tag 发布，版本固定）
+# 方式二：npm / npx（已支持，当前 2.11.2；按 tag 发布，版本固定）
 npm install -g argo-search      # 全局安装 CLI
 npx -y argo-search              # 或即用即走，不装
 npx -y github:taxueseek/argo    # 要跟 main 最新提交时用这条
@@ -285,7 +285,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**npm 安装已支持，当前版本 2.10.2**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
+任选一种即可。**npm 安装已支持，当前版本 2.11.2**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -506,6 +506,8 @@ Argo 干的事，一句话能说完：把一个问题按领域和语言分给合
 装成 DSH 插件后，这些能力直接变成宿主的原生工具：高频的搜索与抓取默认就开，长尾取证能力在设置页里按需勾选，argo 本体的 28 个行为开关（缓存、重排、去重、守卫、代理、TTL 等）也从环境变量搬进了面板。密钥写进宿主凭证库，明文不回显，改完即生效。
 
 最近几个版本各修了一类问题。
+
+v2.11.2 聚焦外部反馈收口。补入 SauceNAO、AnimeTrace、Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；修掉 keyRefs 凭证未转发到子进程（需密钥引擎不再一律 skipped-missing-env）、quota 换 Key 不自愈与 402 误锁 30 天、社交引擎子进程 env 与凭据透传四类静默失效；lint_spec_contracts 改走共享 YAML loader，解除主干 unit/extras 分片常红。
 
 v2.10.2 聚焦语义路由与测试地基。相关性锚点加权与静态概念向量表落地，新建 13 条人工标注路由集与可执行性门禁，标注定向从 76.9% 收到 100%，原理/详解类查询不再误入学术库、平台攻略类不再误入舆情监听；路由快照 201 条中 123 条（61%）的决策从 tfidf 打分换成 regex/概念直判，命中更快也更可断言；熔断器工厂改调用期解析，同名模块多路径加载不再各持一份熔断状态；摘要标签卫生与口径去重进输出装配；ZCode 面板三页版入库，测试环境 ARGO_* 变量每用例快照恢复堵住偶发顺序污染。概念语义路由默认关，ARGO_CONCEPT_ROUTER=1 开启。
 

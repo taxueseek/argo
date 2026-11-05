@@ -148,7 +148,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.10.2; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.11.2; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -283,7 +283,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.10.2**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.11.2**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -475,6 +475,8 @@ Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas seg�
 Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
 Las últimas versiones arreglaron cada una una clase de problemas.
+
+v2.11.2 se enfoca en cerrar el feedback externo. Añade SauceNAO, AnimeTrace y Google Lens como motores de búsqueda inversa explicit-only y elimina el tineye muerto; corrige cuatro fallos silenciosos — credenciales keyRefs que no llegan a los subprocesos (los motores con clave ya no devuelven skipped-missing-env), cuota que no se auto-recupera al rotar clave y 402 bloqueando 30 días por error, y env/reenvío de credenciales de subprocesos de motores sociales; y enruta lint_spec_contracts por el YAML loader compartido, despejando los fallos de los shards unit/extras de main.
 
 v2.10.2 se enfoca en el enrutado semántico y la base de pruebas. Aterrizaron la ponderación por anclas de relevancia y una tabla estática de vectores de conceptos; un conjunto etiquetado de 13 casos más una compuerta de ejecutabilidad elevó la precisión etiquetada de 76.9% a 100% — las consultas de principio/explicación ya no caen en bibliotecas académicas y las de guías de plataforma ya no disparan escucha social. 123 de 201 decisiones del snapshot de enrutado (61%) pasaron de puntuación tfidf a coincidencia directa por regex/concepto: más rápido y más asertable. La fábrica del circuit-breaker resuelve en tiempo de llamada, así que el mismo módulo cargado desde distintas rutas ya no mantiene estados separados. La higiene de etiquetas de snippet y el dedupe de calibres entran al ensamblado de salida; se incorporó el panel ZCode de tres pestañas y las variables ARGO_* se restauran por caso de prueba, cerrando la contaminación esporádica de orden. El enrutado semántico por conceptos está apagado por defecto; se activa con ARGO_CONCEPT_ROUTER=1.
 
