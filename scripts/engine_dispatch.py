@@ -422,7 +422,8 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             _until_s = (time.strftime("%m-%d %H:%M", time.localtime(_until))
                         if _until else "未知")
             outcome["detail"] = (
-                f"远端配额耗尽，跳过调用（自愈至 {_until_s}）："
+                f"远端配额耗尽，跳过调用（自愈至 {_until_s}；已充值或换 Key 可执行 "
+                f"`quota.py reset {eng}` 立即恢复）："
                 f"{str(_mark.get('reason') or '')[:80]}")
             return eng, [], outcome, lat
 

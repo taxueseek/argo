@@ -919,7 +919,8 @@ def _mark_source_down(name: str, detail: str) -> None:
     """
     try:
         from quota import get_quota_manager
-        get_quota_manager().mark_remote_exhausted(name, reason=detail[:160])
+        get_quota_manager().mark_remote_exhausted(
+            name, reason=detail[:160], category="quota_exhausted")
     except Exception:
         pass
 

@@ -252,7 +252,8 @@ def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
     """
     try:
         from quota import get_quota_manager
-        get_quota_manager().mark_remote_exhausted(engine, reason=detail)
+        # 带上 category，让余额不足（402）走短冷却、与月度预算周期解耦（#42）
+        get_quota_manager().mark_remote_exhausted(engine, reason=detail, category="quota_exhausted")
     except Exception:  # 侧信道：标记失败不得影响搜索主流程（规则见 except_sets）
         pass
 
@@ -990,11 +991,10 @@ if __name__ == "__main__":
     # _MODULE_T0` —— 那是**第二次**导入 search（真模块），此刻依赖全在
     # sys.modules 里，差值 ≈ 0。于是 --explain-timing 的 import_ms 恒为 0.0，
     # 而它这一栏恰恰是给「优化固定开销」用的，报 0 等于把人指向错的数字。
-    #
-    # runpy 不会把 __main__ 留在 sys.modules['__main__']（它会恢复原模块），
-    # 所以靠 __main__ 取不到；写进 search_cli 的模块属性是唯一稳定的交接点。
+    # runpy 不会把 __main__ 留在 sys.modules['__main__']（会恢复原模块），所以靠
+    # __main__ 取不到；写进 search_cli 的模块属性是唯一稳定交接点。
     from search_cli import main  # 反向导入放这里：CLI 依赖本模块，模块级会成环
-    import search_cli as _cli_mod
+    import search_cli as _cli_mod  # noqa: E402
     _cli_mod._TRUE_IMPORT_T0 = _MODULE_T0
     _cli_mod._TRUE_IMPORTS_DONE = _IMPORTS_DONE
     main()

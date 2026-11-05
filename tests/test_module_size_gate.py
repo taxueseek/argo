@@ -191,7 +191,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-27 登录墙页面类型接线 +7 已随飞书功能撤出回撤"
               "（revert 01971bc，上限 1380 → 1373）"),
     "scripts/engine_dispatch.py": (
-        996, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+        997, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+              "2026-11-05 +1：skipped-quota-exhausted 的 detail 补 `quota.py reset` "
+              "手动恢复指引（issue #42，纯文案，不新增分支）；"
               "2026-10-27 +8：视频时长条件经 decision 下发（_engine_domain_kwargs "
               "只加 min/max_duration 两个非空键，不新增函数签名层）；"
               "2026-10-26 −1：重试前把归因寄存器只读快照交给 "
@@ -332,7 +334,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "下一步拆 _recovery_executor（L3）后本文件"
               "可回落到 1000 行内"),
     "scripts/job.py": (
-        1186, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
+        1187, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
+              "2026-11-05 +1：_mark_source_down 的 mark_remote_exhausted 补 category "
+              "参数（issue #42，一行拆两行）；"
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "
               "ARGO_MCPJOBS_DIR 显式覆盖（原硬编码 ~/.cache）"),
     "scripts/matrix_search_eval.py": (

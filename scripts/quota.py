@@ -145,11 +145,71 @@ def _at_or_over_budget(cost_used: float, budget: float) -> bool:
     return round(float(cost_used), 6) >= round(float(budget), 6)
 
 
+# 远端配额报错的默认冷却（秒）：不依赖 profile 的 period 字段（那是本地记账
+# 周期）。远端配额报错分两类，“多久能好”取决于归因类别，而不取决于“这条限制
+# 是按天还是按月”：
+#   - 预充值余额不足（HTTP 402 insufficient balance / “not enough money”）：
+#     账户余额问题，充值或换 Key 立即恢复，绝不会到月底自动恢复。锁 30 天是
+#     最坏组合（#42 实测：充值后每次调用 55ms 返回 skipped，自愈日期写着下月）。
+#     默认 1h——够覆盖一次误充/换 Key 的操作窗口，又不至于让用户干等。
+#   - 免费额度耗尽（10406 Free quota exhausted 等）：多数按下月重置，沿用既有
+#     period 口径（默认 24h 兜底，避免 second/minute 的限频周期被误当配额周期）。
+# 换 Key 自愈（key_fp 对比）对两类都生效，见 _mark_expired。
+_BALANCE_QUOTA_COOLDOWN_S = 3600
+_DEFAULT_QUOTA_COOLDOWN_S = 86400
+
+
+def _quota_cooldown_seconds(category: str | None, reason: str,
+                            period: str | None) -> int:
+    """远端配额耗尽的冷却秒数（单一计算点，mark 与文案都读它）。
+
+    余额不足类固定短冷却、与 period 解耦；其余按 period 映射，过短按 24h 兜底。
+    坏值一律回落默认，不让一次异常把某种引擎永久锁死。
+    """
+    if category == "quota_exhausted" and _looks_like_balance_error(reason):
+        return _BALANCE_QUOTA_COOLDOWN_S
+    seconds = {"hour": 3600, "day": 86400, "month": 30 * 86400}.get(
+        str(period or "day"), _DEFAULT_QUOTA_COOLDOWN_S)
+    return seconds if seconds >= 3600 else _DEFAULT_QUOTA_COOLDOWN_S
+
+
+def _looks_like_balance_error(reason: str) -> bool:
+    """错误文本是否是「账户余额不足」（预充值用尽，充值即恢复）。"""
+    m = str(reason or "").lower()
+    return any(k in m for k in ("insufficient balance", "insufficient funds",
+                                "not enough money", "余额不足", "402"))
+
+
+def _required_candidates(engine: str, spec: dict[str, Any]) -> list[str]:
+    """引擎 key 的候选环境变量名（含 ARGO_ 变体与占位符别名展开）。
+
+    与 engine_env.missing_env_for 的候选构造同源；这里只是把「候选」摊平成
+    一条可读的名单，供取指纹用。无 required_env 时返回空（由调用方回退）。
+    """
+    from engine_env import PLACEHOLDER_ALIASES
+    explicit = spec.get("required_env")
+    if not explicit:
+        return []
+    out: list[str] = []
+    for item in explicit:
+        if isinstance(item, list):
+            out.extend(str(x) for x in item if x)
+        elif isinstance(item, str) and item:
+            if item in PLACEHOLDER_ALIASES:
+                out.extend(PLACEHOLDER_ALIASES[item])
+            elif item.startswith("ARGO_"):
+                out.extend([item, item[len("ARGO_"):]])
+            else:
+                out.extend([f"ARGO_{item}", item])
+    return out
+
+
 class QuotaManager:
     """配额追踪与消耗速率计算（v2）。"""
 
-    # 远端配额周期候选；本地 period=second/minute 只是限频计算方式，不代表远端
-    # 配额周期（火山免费额度按日），过短一律按 24h 保守处理
+
+    # 远端配额周期候选（模块级 _quota_cooldown_seconds 是唯一计算点；本地
+    # period=second/minute 只是限频口径，不代表远端配额周期，过短按 24h 兜底）
     _PERIOD_SECONDS = {"hour": 3600, "day": 86400, "month": 30 * 86400}
 
     def __init__(self):
@@ -405,12 +465,48 @@ class QuotaManager:
 
     @staticmethod
     def _engine_key_fp(engine: str) -> str:
-        """当前引擎生效密钥的短指纹（8 hex）；无密钥或读取失败返回空串。"""
+        """当前引擎生效密钥的短指纹（8 hex）；无密钥或读取失败返回空串。
+
+        **必须与实际取 key 的地方同源**（issue #42）：指纹的用途是「换 Key 就
+        自愈」，所以它算的必须是引擎运行时真正读的那个环境变量。此前用
+        resolve_env_name 按 `<ENGINE>_API_KEY` 拼名，与 spec.required_env 对不上
+        的 13 个引擎（deepseek_search 读 DEEPSEEK_API_KEY、metaso_* 读
+        ARGO_METASO_API_KEY、you 读 YDC_API_KEY 等）指纹恒为空串，于是
+        `_mark_expired` 的换 Key 分支永远不触发，换新 Key 也解不了熔断。
+        改为与 search._missing_env_for 同一条链：先取 spec，用
+        required_env_for/missing_env_for 的候选解析逻辑取值，无 spec 再回退
+        resolve_env_name。任一候选有值即算命中——与「路由认为它可用」同口径。
+        """
         try:
             import hashlib
-            from engine_env import get_env, resolve_env_name
-            val = get_env(resolve_env_name(engine))
-            return hashlib.sha256(val.encode("utf-8")).hexdigest()[:8] if val else ""
+            from engine_env import get_env, missing_env_for, resolve_env_name
+            spec = None
+            try:
+                from engines import get_engine_spec
+                spec = get_engine_spec(engine)
+            except Exception:
+                spec = None
+            val = ""
+            if spec is not None:
+                # required_env 声明的是「主名」，但候选链（PLACEHOLDER_ALIASES /
+                # ARGO_ 变体）里任一有值都算配置了 key——与 missing_env_for 同源。
+                missing = missing_env_for(engine, spec)
+                if not missing:
+                    # 有声明且都齐了：取主名的实际值算指纹
+                    from engine_env import required_env_for
+                    for name in required_env_for(engine, spec):
+                        cand = [name] if name.startswith("ARGO_") else [f"ARGO_{name}", name]
+                        got = get_env(cand)
+                        if got:
+                            val = got
+                            break
+                else:
+                    # 声明了但缺：仍尝试按声明候选读（可能只有可选键齐）
+                    val = get_env(_required_candidates(engine, spec))
+            if not val:
+                val = get_env(resolve_env_name(engine))
+            return (hashlib.sha256(val.encode("utf-8")).hexdigest()[:8]
+                    if val else "")
         except Exception:
             return ""
 
@@ -427,13 +523,18 @@ class QuotaManager:
         return False
 
     def mark_remote_exhausted(self, engine: str, reason: str = "",
-                              period: str | None = None) -> None:
+                              period: str | None = None,
+                              category: str | None = None) -> None:
         """远端明示「配额耗尽」（如火山 10406 Free quota exhausted）时调用。
 
         设计目标：配额问题不需要人工改配置——标记后路由组合层全模式排除
         该引擎，备用源自然接管；到下一周期边界或更换新 Key 时惰性自愈（is_available /
         is_hard_down 检查时清除），恢复后引擎自动回归。提前恢复（如原 Key 充值）
         可执行 `python3 scripts/quota.py reset <engine>`。
+
+        `category`（如 "quota_exhausted"）与 `reason` 一起决定冷却时长：余额不足
+        类（402 insufficient balance）与月度预算周期解耦、固定短冷却，避免一次
+        欠费把引擎锁死 30 天（issue #42）。
         """
         key_fp = self._engine_key_fp(engine)
         with self._lock:
@@ -444,9 +545,7 @@ class QuotaManager:
                 })
                 profile = self._profiles.get(engine, {})
                 p = period or profile.get("period") or "day"
-                seconds = self._PERIOD_SECONDS.get(p, 86400)
-                if seconds < 3600:
-                    seconds = 86400
+                seconds = _quota_cooldown_seconds(category, reason, p)
                 st["remote_exhausted"] = {
                     "until": time.time() + seconds,
                     "reason": (reason or "")[:200],

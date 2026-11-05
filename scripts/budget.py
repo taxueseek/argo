@@ -170,7 +170,16 @@ def budget_for(engine: str) -> dict[str, Any] | None:
 
 
 def apply_to_profiles(profiles: dict[str, dict[str, Any]]) -> None:
-    """把预算挂到 quota profile（就地）。只覆盖存在的引擎，拼错不生效。"""
+    """把预算挂到 quota profile（就地）。只覆盖存在的引擎，拼错不生效。
+
+    **只写 budget_*，不碰 `period`**（issue #42）：`period` 是本地记账/限频的
+    重置口径（quota._period_elapsed 读它：second/minute 限频、day/month 计费），
+    而预算条目里的 period 是「预算多久清零一次」。两者此前共用一个字段，导致
+    DeepSeek 的 period 从 `second`（限频语义）被预算覆写成 `month`——远端一次
+    402 余额不足就按 `month` 熔断 30 天。现在拆开：预算周期只落在
+    `budget_period`，配额记账周期保留 spec 声明值。远端 402 冷却也不再读
+    profile.period，见 quota._quota_cooldown_seconds。
+    """
     active = load_budgets()
     for engine, spec in profiles.items():
         if not isinstance(spec, dict) or str(engine).startswith("_"):
@@ -179,11 +188,12 @@ def apply_to_profiles(profiles: dict[str, dict[str, Any]]) -> None:
         if entry is not None:
             spec["budget_amount"] = entry["amount"]
             spec["budget_currency"] = entry["currency"]
-            # 预算周期即重置周期；与 limit 共用同一条 `period`，避免两套时钟。
-            spec["period"] = entry["period"]
+            # 预算清零周期独立成 budget_period，绝不覆写 quota 记账用的 period
+            spec["budget_period"] = entry["period"]
         else:
             spec.pop("budget_amount", None)
             spec.pop("budget_currency", None)
+            spec.pop("budget_period", None)
 
 
 def _write(data: dict[str, Any]) -> None:

@@ -292,7 +292,7 @@ class _FakeQuotaManager:
     def is_hard_down(self, name):
         return self._hard_down
 
-    def mark_remote_exhausted(self, name, reason=""):
+    def mark_remote_exhausted(self, name, reason="", category=None):
         self.marked.append((name, reason))
 
 
