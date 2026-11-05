@@ -26,14 +26,32 @@ def _subprocess_timeout() -> int:
         return _DEFAULT_TIMEOUT
 
 
-def search(query: str, n: int = 5) -> list[dict]:
-    """主搜索入口"""
-    env = dict(os.environ)
+def _child_env() -> dict:
+    """xhs 子进程环境：UTF-8 + 剔除 NO_PROXY 里的 [::1]（issue #36）。
+
+    两处都会让引擎表现成「平台 0 结果」，且都是环境层问题、与查询无关：
+      ① xhs-cli 的输出含 emoji（📕），子进程继承 Windows GBK 控制台编码时抛
+         UnicodeEncodeError 直接退出 → 强制 PYTHONUTF8/PYTHONIOENCODING；
+      ② 宿主注入 NO_PROXY=...,[::1] 时 xhs 内部 httpx 抛
+         InvalidURL: Invalid port ':1]' → 从 NO_PROXY/no_proxy 里剔掉 [::1]。
+    """
+    env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
-    for k in ("NO_PROXY", "no_proxy"):
-        if k in env and "[::1]" in env[k]:
-            env[k] = ",".join(x for x in env[k].split(",") if x.strip() != "[::1]")
+    for key in ("NO_PROXY", "no_proxy"):
+        raw = env.get(key)
+        if not raw:
+            continue
+        kept = [p for p in raw.split(",") if p.strip() and p.strip() != "[::1]"]
+        if kept:
+            env[key] = ",".join(kept)
+        else:
+            env.pop(key, None)
+    return env
+
+
+def search(query: str, n: int = 5) -> list[dict]:
+    """主搜索入口"""
     try:
         result = subprocess.run(
             # --json 必须传：xhs-cli 的 argparse 接受该 flag 但**不传时只打印
@@ -42,7 +60,7 @@ def search(query: str, n: int = 5) -> list[dict]:
             ["xhs", "search", "--json", query],
             capture_output=True, text=True, timeout=_subprocess_timeout(),
             encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
-            env=env,
+            env=_child_env(),  # UTF-8 环境 + 剥 [::1]，见 _child_env（issue #36）
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_xhs_output(result.stdout, n)
