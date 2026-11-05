@@ -65,9 +65,13 @@ chinese_tech_deep，而 13 条人工集判路由是对的）。
 
 ## 用法
 
-    python3 scripts/build_route_labels.py            # 构建（写 jsonl + 打印统计）
+    python3 scripts/build_route_labels.py            # 重建（清空后依次跑四个扩展脚本）
     python3 scripts/build_route_labels.py --dry-run  # 只统计不写
     python3 scripts/build_route_labels.py --check    # 与已提交文件对账
+
+`--check` 走 `build()`（空基底）与已提交文件对账，因此**只在语料为空时可过**；
+非空语料的对账走 `--reproduce`——它按同一条链重建到临时文件再与已提交文件
+逐条比，是 CI 与人工复核都用的入口（防止「只改了 jsonl 忘了改生成脚本」）。
 """
 
 from __future__ import annotations
@@ -138,11 +142,82 @@ def _check() -> int:
     return 0
 
 
+# 四道扩展的这一条链就是语料的**唯一构造过程**（顺序即语义：能力 → 语言 →
+# 意图标签 → 未覆盖域补齐）。`--reproduce` 按这条链重放，是「jsonl 与生成脚本
+# 同源」的验证入口。
+_EXTEND_CHAIN = (
+    "extend_route_labels_by_capability",
+    "extend_route_labels_by_language",
+    "extend_route_labels",
+    "extend_route_labels_full_coverage",
+)
+
+
+def _reproduce() -> int:
+    """按扩展链重建语料，与已提交文件逐条对账（jsonl 与生成脚本同源验证）。
+
+    扩展脚本写的是同一个 `OUTPUT`（模块常量），所以先把已提交内容留在内存里，
+    无论成功失败都还原——`--reproduce` 是**只读**的对账入口，不该改工作区文件。
+    """
+    original = OUTPUT.read_text(encoding="utf-8")
+    recorded = {}
+    for line in original.splitlines():
+        if line.strip():
+            d = json.loads(line)
+            recorded[d["query"]] = d
+
+    try:
+        _write([])  # 从空基底重放整条链
+        for name in _EXTEND_CHAIN:
+            mod = __import__(name)
+            saved = sys.argv
+            sys.argv = [name]
+            try:
+                rc = mod.main()
+            finally:
+                sys.argv = saved
+            if rc:
+                print(f"[build_route_labels] 扩展 {name} 失败（rc={rc}）",
+                      file=sys.stderr)
+                return rc
+
+        rebuilt = {}
+        for line in OUTPUT.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                d = json.loads(line)
+                rebuilt[d["query"]] = d
+    finally:
+        OUTPUT.write_text(original, encoding="utf-8")
+
+    problems = []
+    for q in sorted(set(rebuilt) - set(recorded)):
+        problems.append(f"  未提交: {q!r}（生成脚本产出了语料里没有的条目）")
+    for q in sorted(set(recorded) - set(rebuilt)):
+        problems.append(f"  未复现: {q!r}（语料里有，生成脚本产不出来）")
+    for q in sorted(set(rebuilt) & set(recorded)):
+        for k in ("expect_domain", "evidence"):
+            if rebuilt[q].get(k) != recorded[q].get(k):
+                problems.append(
+                    f"  {k} 漂移: {q!r} {recorded[q].get(k)!r} -> {rebuilt[q].get(k)!r}")
+    if problems:
+        print(f"语料与生成脚本不同源（{len(problems)} 处）：\n  "
+              + "\n  ".join(problems[:40]), file=sys.stderr)
+        return 1
+    print(f"[build_route_labels] 复现一致（{len(rebuilt)} 条，链："
+          f"{' → '.join(_EXTEND_CHAIN)}）")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="从已归因坏例构建路由标注集")
     ap.add_argument("--dry-run", action="store_true", help="只统计不写")
     ap.add_argument("--check", action="store_true", help="与已提交文件对账")
+    ap.add_argument("--reproduce", action="store_true",
+                    help="按扩展链重放并逐条对账（jsonl 与生成脚本同源验证）")
     args = ap.parse_args()
+
+    if args.reproduce:
+        return _reproduce()
 
     entries, stats = build()
     print(f"[build_route_labels] badcase {stats['badcases']} 条 → "

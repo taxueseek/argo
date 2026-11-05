@@ -261,8 +261,15 @@ domains:
   # 企业落本域全废）——与「XX 股价」既有分流约定同构：zh 词走 stock_query，
   # 英文词形或美股语境才进本域。与 stock_query 新增的财务 pattern 成对出现，
   # 改一处必须同步另一处。
+  # 2026-11-06 补语言门 `(?=[^\n]*[\u4e00-\u9fff])`：除名单里的 zh 词形（营收/
+  # 净利润/财报/资产负债表…）本意是「zh 问法让位 stock_query」，实际却把英文
+  # 财务查询一起否掉了——除名单含 revenue/net income/financials 的中文对应词，
+  # 而否定是「命中任一即否」，于是「AAPL annual revenue net income financials」
+  # 触发词命中、除名单也命中，本域失效、落 us_stock。要求「查询里至少有一个
+  # 汉字」才让位，正好是原注释的口径（英文词形或美股语境才进本域），
+  # 「宁德时代 毛利率 现金流」这类 zh 查询行为不变。
   - match: '(?i)(营收|营业收入|净利润|净利|利润|财务数据|财务指标|annual\s+revenue|revenue|net\s+income|earnings|financials|fundamentals|balance\s+sheet|资产负债表|现金流|cash\s+flow|\bEPS\b|每股收益|总资产|总负债|毛利)'
-    unless: '(?i)(A股|沪深|沪市|深市|上证|深证|北交所|创业板|科创板|年报|季报|财报|营收|营业收入|净利润|净利|利润|财务数据|财务指标|资产负债表|现金流|每股收益|总资产|总负债|毛利)'
+    unless: '(?i)(?=[^\n]*[\u4e00-\u9fff])(A股|沪深|沪市|深市|上证|深证|北交所|创业板|科创板|年报|季报|财报|营收|营业收入|净利润|净利|利润|财务数据|财务指标|资产负债表|现金流|每股收益|总资产|总负债|毛利)'
   primary: sec_companyfacts
 
 - desc: 美股筛选/分析（Finviz + Seeking Alpha；须排在 stock_query 前，避免「美股/ticker」被 A 股域吸走）
@@ -947,8 +954,12 @@ domains:
   - (?i)\b(LLM|GPT|Claude|Gemini|GLM|Llama|Mistral|DeepSeek|Qwen|Grok)\b
   # 2026-10-25 补 unless：综述/论文语境让位给 tech_deep（openalex/arxiv）——
   # 实测「大模型 长上下文 综述」被本域 models_dev 抢走，模型目录答不了综述。
-  - match: '(?i)(模型|model).{0,24}(价格|pricing|多少钱|上下文|context|token|支持视觉|vision|能力|对比|免费|开源)'
-    unless: '(?i)(综述|survey|论文|文献|研究进展|预印本|state\s+of\s+the\s+art|SOTA)'
+  # 2026-11-06 补 unless：比较决策题（「A 和 B 对比/区别/哪个好」）整类让位通用域，
+  # 与 cn_encyclopedia「是什么」尾巴、fact_check「是多少」尾巴共用 @compare_or_award
+  # 宏的既有口径一致（2026-10-31 评测基线）。此前「模型定价对比」这类查询被
+  # 本域 intent_required 的「对比」豁免词留住，models_dev 目录答不了横向对比。
+  - match: '(?i)(模型|model).{0,24}(价格|定价|成本|pricing|多少钱|上下文|context|token|支持视觉|vision|能力|免费|开源)'
+    unless: '(?i)(综述|survey|论文|文献|研究进展|预印本|state\s+of\s+the\s+art|SOTA)|@compare_or_award'
   - (?i)(API price|pricing|context window|token limit|vision model|tool call)
   # 点查域意图豁免词（语义见 route_domains.intent_required）
   # 扩展（2026-10-06）：意图门 token 门槛降到 4 后，4 token 的真点查

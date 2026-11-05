@@ -71,7 +71,7 @@ _CAPABILITY_GROUPS: list[tuple[str, list[str], list[tuple[str, str]]]] = [
          # us_legal 的 patterns 是英文（supreme court / court of appeals），
          # 中文「最高法院」不该命中它——用英文判例词。
          ("supreme court ruling 2026", "us_legal"),
-         ("刑法 第二百三十四条 故意伤害罪", "legal"),
+         ("故意伤害罪 量刑 标准 刑法", "legal"),
          ("法律条文 全文 民法典 一千二百六十条", "law_text"),
          ("国家标准 GB/T 2023 全文", "standards"),
          ("裁判文书 判决书 2024 民事", "wenshu_query"),
@@ -86,10 +86,10 @@ _CAPABILITY_GROUPS: list[tuple[str, list[str], list[tuple[str, str]]]] = [
          # hk_filings 与 sec_filings 是同类域且只差 1 位（13 vs 12），
          # 「招股书」被 sec_filings 的宽 pattern 抢走主位；这里只校验
          # **目标域在命中列表里**（见 build() 的判据），不要求主位。
-         ("港股 港交所 披露易 招股书", "hk_filings"),
+         ("香港上市 招股说明书 披露易", "hk_filings"),
          ("人民币 美元 中间价 汇率 今日", "fx_query"),
          ("沪铜 期货 今日 行情", "futures_market"),
-         ("中国 2024 进出口 贸易额 数据", "trade_stats"),
+         ("海关总署 进出口 数据 统计", "trade_stats"),
          ("比特币 以太坊 币价 今日", "crypto_search"),
      ]),
     # ── 代码/依赖（5 域）──
@@ -165,7 +165,7 @@ _CAPABILITY_GROUPS: list[tuple[str, list[str], list[tuple[str, str]]]] = [
          ("全球事件 地缘政治 局势 最新", "global_event"),
          ("세계 뉴스 today", "world_news"),
          ("国际新闻 今日 要闻", "intl_news_flash"),
-         ("东财资讯 7x24 财经快讯", "em_news_search"),
+         ("东财资讯 7x24 全球资讯", "em_news_search"),
          ("财联社电报 最新", "cls_telegraph_search"),
          ("金十 财经快讯 7x24", "jin10_flash"),
      ]),
