@@ -42,7 +42,6 @@ from engines_builders_tech import (
     _build_endoflife_engine,
     _build_v2ex_engine,
     _build_github_engine,
-    _build_tineye_engine,
     _build_bing_rss_engine,
 )
 from engines_builders_cn import (

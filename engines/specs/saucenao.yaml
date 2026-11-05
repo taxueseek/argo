@@ -1,0 +1,45 @@
+# SauceNAO · 二次元图源反查
+#
+# 输入形态特殊：query 必须是**公网可访问的图片 URL**，不是关键词。上游拿这张图
+# 做指纹比对，返回它出自哪个库（Pixiv / Danbooru / Twitter / 游戏 CG 等），
+# 以及相似度、作者、出处页。
+#
+# 为什么必须配 key：匿名档已关闭 API 调用（2026-11-04 实测不带 api_key 返回
+#   {"header":{"status":-1,"message":"The anonymous account type does not permit
+#   API usage."}}）。saucenao.com 免费注册后每天 150 次；没有 key 时本引擎
+#   在自动路由里被跳过，显式调用返回一条「缺 key」的 error 条目。
+#
+# 出口：站点在 Cloudflare 之后，urllib 直连吃 403 挑战页；取数走 TLS 指纹伪造
+#   （curl_cffi impersonate），代理仍按 net_proxy 的域规则/全局配置解析。
+#
+# 路由形态：explicit_only —— 没有图片 URL 的普通查询落进来只会得到错误条目，
+#   故不进自动路由候选池；用法是 `argo search "<图片URL>" --engine saucenao`。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine saucenao --stage all --admit --write-doc
+
+engine_id: saucenao
+type: saucenao
+enabled: true
+explicit_only: true
+cost_tier: free
+timeout: 20
+num_results: 5
+min_similarity: 30
+# hide：0 全显示 / 1 隐藏露骨 / 2 再隐藏疑似露骨 / 3 只留安全内容。群聊默认 1——
+# Pixiv、Kemono 这类库本身就带成人内容，等回传后再由调用方筛已经晚了。
+hide: 1
+# dedupe：0 不去重 / 1 按条目去重 / 2 连系列一起并（SauceNAO 默认 2）。
+dedupe: 2
+# db=999 搜全部索引；要限定库时换成 dbs: [5, 43]（索引号列表，与 db 互斥）。
+db: 999
+canary_query: "https://files.yande.re/image/2555de7669c169cd98a6c9da7da27edd/yande.re%20447155%20bigxixi%20feet%20pantyhose%20see_through.jpg"
+label: SauceNAO 反搜图
+family: misc_vertical
+priority: 35
+required_env:
+  - ARGO_SAUCENAO_API_KEY
+
+coverage: [image, reverse_image]
+
+desc: SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页）

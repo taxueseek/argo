@@ -627,9 +627,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
     tier = "daily"
     plan_info: dict[str, Any] | None = None
     try:
-        from plan import (
-            build_plan, classify_input_kind, execution_tier, should_attach_plan,
-        )
+        from plan import (URL_INPUT_ENGINES, build_plan, classify_input_kind,
+                          execution_tier, should_attach_plan)
         kind = classify_input_kind(query, input_kind)
         tier = execution_tier(mode, depth, context)
         if plan_only:
@@ -640,7 +639,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                 context=context,
                 timing=timing,
             )
-        if kind == "known-url" and not force_search:
+        # 按 URL 取单条的抽取引擎（单条推文 / 反搜图）显式指定时不拦截为 handoff。
+        if kind == "known-url" and not force_search and (engine or "").strip() not in URL_INPUT_ENGINES:
             plan_info = build_plan(
                 query, mode=mode, depth=depth, max_results=n,
                 engine=engine, input_kind="known-url", context=context,

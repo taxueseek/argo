@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-10-28'
+last_updated: '2026-11-05'
 engines:
 - name: aljazeera
   tier: T1
@@ -14,6 +14,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: 半岛电视台阿语（半岛阿语版，阿拉伯世界一手视角，免 key）
+- name: animetrace
+  tier: T1
+  type: animetrace
+  coverage:
+  - image
+  - reverse_image
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: AnimeTrace 动漫角色识别（query 为图片 URL 或本地图片路径，免 key，给作品名与角色名，按 IP 限频）
 - name: antara
   tier: T1
   type: rss_feed
@@ -1210,6 +1222,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: GLEIF 全球法人 LEI 注册库（法定名称/注册地/状态/母公司，免 key）
+- name: google_lens
+  tier: T1
+  type: google_lens
+  coverage:
+  - image
+  - reverse_image
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: Google Lens 通用视觉反查（query 为公网图片 URL 或本地图片路径，本地图经 SerpAPI Image API 上传，付费档 250
+    次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣
 - name: google_news
   tier: T1
   type: google_news
@@ -2528,6 +2553,18 @@ engines:
   recommended: false
   explicit_only: false
   desc: 卫星目录（SatNOGS DB，NORAD ID/发射信息，免认证）
+- name: saucenao
+  tier: T1
+  type: saucenao
+  coverage:
+  - image
+  - reverse_image
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页）
 - name: sciverse
   tier: T1
   type: http
@@ -2896,18 +2933,6 @@ engines:
   recommended: true
   explicit_only: false
   desc: 同花顺热点（当日强势股+题材归因，独家能力）
-- name: tineye
-  tier: T1
-  type: tineye
-  coverage:
-  - image
-  - reverse_image
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: true
-  explicit_only: true
-  desc: TinEye 反向图片搜索（query 须为公网图片 URL，免 key；argo 首个反搜图能力）
 - name: tinyfish
   tier: T1
   type: http

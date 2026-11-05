@@ -1,0 +1,50 @@
+# Google Lens · 通用视觉同源反查（SerpAPI 托管）
+#
+# 输入形态特殊：query 是一张图（公网图片 URL 或本地图片路径），不是关键词。上游
+# 拿这张图做视觉匹配，分三档回来：exact_matches（就是这张图）、visual_matches
+# （长得像的图与同源商品/帖子）、organic_results（讲到这张图的网页）。结果条目
+# 各自带 `metadata.match_type` 标注归属哪一档——三档混成一列而不标注，调用方会
+# 把「另一张相似的图」当成这张图的出处。
+#
+# 本地图片先 POST 到 SerpAPI Image API（`https://serpapi.com/image`，multipart，
+# 只收 JPEG/PNG/WebP、单张 ≤500KB）换 `image_id`，再用 `image_id` 检索；该 id
+# 10 分钟内有效，故上传后立即用掉。超限的本地图先缩到 1024px，仍超再退 768/512。
+#
+# 为什么走 SerpAPI：Google Lens 官方没有公开 API，免 key 的
+# `lens.google.com/uploadbyurl` 只回壳页（2026-11-04 实测 200 但无结果 JSON）。
+# SerpAPI 的 `engine=google_lens` 是文档最全的托管通道：`url` 传图片直链或
+# `image_id` 传上传图，`type` 选 all/exact_matches/visual_matches，返回结构见
+# https://serpapi.com/google-lens-api 。
+#
+# 计费：paid 档，按次扣费（Free 计划 250 次/月、50 次/小时）；1 小时内完全相同
+# 的参数走 SerpAPI 缓存、不计次。cost_per_call 按 Developer 计划 $75/5000 次
+# ≈ ¥0.11/次折算，仅用于预算面板估算，不代表实扣金额。
+#
+# 路由形态：explicit_only —— 没有图片的普通查询落进来只会得到错误条目，
+#   故不进自动路由候选池；用法是 `argo search "<图片URL或本地路径>" --engine google_lens`。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine google_lens --stage all --admit --write-doc
+
+engine_id: google_lens
+type: google_lens
+enabled: true
+explicit_only: true
+cost_tier: paid
+cost_per_call: 0.11
+cost_unit: cny
+timeout: 30
+num_results: 8
+search_type: all
+hl: zh-CN
+country: cn
+canary_query: "https://files.yande.re/image/2555de7669c169cd98a6c9da7da27edd/yande.re%20447155%20bigxixi%20feet%20pantyhose%20see_through.jpg"
+label: Google Lens 反搜图
+family: misc_vertical
+priority: 37
+required_env:
+  - ARGO_SERPAPI_API_KEY
+
+coverage: [image, reverse_image]
+
+desc: Google Lens 通用视觉反查（query 为公网图片 URL 或本地图片路径，本地图经 SerpAPI Image API 上传，付费档 250 次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣

@@ -82,7 +82,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-17 +2：normalize_url 真正去掉 fragment（docstring 一直"
               "这么写，旧实现把它原样带回）"),
     "scripts/engines_builders_tech.py": (
-        1359, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
+        1281, "技术社区源声明构建器（V2EX/StackExchange 等），逐源一段；"
               "2026-09-26 批次十增强净增 +402：sov2ex 一级全文来源（v2ex 就地升级）、"
               "tineye/bing_rss 新引擎、exa 免 key 匿名通道——与原逐源一段同性质，"
               "拆出只会把同一张表切碎（新引擎的下一站是 batch 模块）；"
@@ -93,7 +93,8 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "随该工作正式提交后由其转正或回调；"
               "2026-10-05 A1 惰性 logging 导入（+11）：模块级 import logging 改"
               "_LazyLogger 代理类，省 ~10ms/次冷启动；"
-              "2026-10-14 7ca2f22 移除 OSV/CISA KEV 代码段（−261）"),
+              "2026-10-14 7ca2f22 移除 OSV/CISA KEV 代码段（−261）；"
+              "2026-11-04 移除 tineye 构建器（−78）"),
     "scripts/fetch_v3.py": (
         1836, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"

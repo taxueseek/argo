@@ -211,6 +211,46 @@ class TestOpenUrlIsProxyAware(unittest.TestCase):
             self.assertIsNone(
                 net_proxy.resolve_proxy("https://example.com", include_standard_env=False))
 
+    def test_explicit_direct_rule_bypasses_standard_env_proxy(self):
+        """rules 的 direct 语义必须是**真直连**。
+
+        animetrace.com 按出口 IP 限频：config 里给它配了
+        `"${ARGO_ANIMETRACE_PROXY}"`（未设置=直连），open_url 落回 urlopen 后
+        仍被 HTTPS_PROXY 兜到 Clash 出口时稳定 429。故显式 direct 要自己装空
+        ProxyHandler，不能依赖 urlopen 的原生环境变量行为。
+        """
+        seen = {}
+
+        class _FakeOpener:
+            def open(self, req, timeout=None):
+                return "DIRECT"
+
+        def _fake_build(handler):
+            seen["handler"] = handler
+            return _FakeOpener()
+
+        with patch.object(net_proxy, "_network_cfg",
+                          return_value=_cfg(rules={"animetrace.com": "${ARGO_NO_SUCH_VAR}"})), \
+             patch.dict("os.environ", {"HTTPS_PROXY": _PROXY, "ARGO_PROXY": ""}), \
+             patch.object(urllib.request, "build_opener", _fake_build), \
+             patch.object(urllib.request, "urlopen",
+                          side_effect=AssertionError("显式直连不该走 urlopen")):
+            out = net_proxy.open_url("https://api.animetrace.com/v1/search", timeout=5.0)
+        self.assertEqual(out, "DIRECT")
+        self.assertEqual(seen["handler"].proxies, {})
+        self.assertTrue(net_proxy.explicit_direct("https://api.animetrace.com/v1/search"))
+
+    def test_unmatched_host_keeps_urlopen_defaults(self):
+        """没有 argo 级规则命中的主机维持 urlopen 原生行为（环境变量代理照旧）。"""
+        with patch.object(net_proxy, "_network_cfg",
+                          return_value=_cfg(rules={"github.com": _PROXY})), \
+             patch.dict("os.environ", {"ARGO_PROXY": ""}), \
+             patch.object(urllib.request, "urlopen", lambda r, timeout=None: "ENV"), \
+             patch.object(urllib.request, "build_opener",
+                          side_effect=AssertionError("未命中规则不该自建 opener")):
+            self.assertEqual(net_proxy.open_url("https://example.com/x"), "ENV")
+        self.assertFalse(net_proxy.explicit_direct("https://example.com/x"))
+
 
 class TestEnvFileDrivesNetworkLayer(unittest.TestCase):
     """环境层必须真正驱动出口调度（2026-09-30 修复的失效开关）。

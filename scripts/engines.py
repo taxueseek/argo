@@ -103,7 +103,6 @@ from engines_builders import (
     _build_stackoverflow_engine,
     _build_google_scholar_engine,
     _build_v2ex_engine,
-    _build_tineye_engine,
     _build_bing_rss_engine,
     _build_ths_hot_engine,
     _build_cls_telegraph_engine,
@@ -225,6 +224,13 @@ from engines_builders_batch10 import (  # noqa: F401
 # query.pages 是 pageid 字典，声明式 output_map 取不到字段，必须有 builder。
 from engines_builders_batch11 import (  # noqa: F401
     _build_wikimedia_commons_engine,
+)
+# 反搜图（engines_builders_reverse_image）：query 是公网图片 URL 而非关键词，
+# 取数与解析都与关键词引擎不同，独立成模块。
+from engines_builders_reverse_image import (  # noqa: F401
+    _build_animetrace_engine,
+    _build_google_lens_engine,
+    _build_saucenao_engine,
 )
 
 
@@ -438,7 +444,9 @@ _BUILDERS = {
     "clawhub": _build_clawhub_engine,
     "google_scholar": _build_google_scholar_engine,
     "v2ex": _build_v2ex_engine,
-    "tineye": _build_tineye_engine,
+    "saucenao": _build_saucenao_engine,
+    "animetrace": _build_animetrace_engine,
+    "google_lens": _build_google_lens_engine,
     "bing_rss": _build_bing_rss_engine,
     "ths_hot": _build_ths_hot_engine,
     "cls_telegraph": _build_cls_telegraph_engine,

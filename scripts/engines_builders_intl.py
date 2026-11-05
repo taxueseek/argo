@@ -981,12 +981,12 @@ def _build_qq_music_engine(spec: dict[str, Any]) -> Any:
 
 # ── X/Twitter 单条推文（syndication 免登录通道）─────────────────────────────
 
-# 推文 URL / 裸 ID 提取。链接形态覆盖 x.com 与 twitter.com 两代域名，
-# 以及 /statuses/ 老路径与移动端分享链接的 query 参数形态。
+# 推文 URL / 裸 ID 提取：覆盖两代域名、/statuses/ 老路径与 query 参数形态；
+# URL/query 允许 1~25 位早期短 ID，裸数字仍按 10~20 位防普通数字误判。
 _TWEET_URL_RE = re.compile(
-    r"(?:x\.com|twitter\.com)/[^/\s]+/(?:status|statuses)/(\d{10,20})", re.I)
+    r"(?:x\.com|twitter\.com)/[^/\s]+/(?:status|statuses)/(\d{1,25})", re.I)
 _TWEET_BARE_ID_RE = re.compile(r"^\d{10,20}$")
-_TWEET_QUERY_ID_RE = re.compile(r"[?&](?:tweet_id|status_id|id)=(\d{10,20})")
+_TWEET_QUERY_ID_RE = re.compile(r"[?&](?:tweet_id|status_id|id)=(\d{1,25})")
 
 
 def extract_tweet_id(text: str) -> str | None:

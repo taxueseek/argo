@@ -178,6 +178,48 @@ def resolve_proxy(url: str, override: str | None = None,
     return None
 
 
+def _matched_rule_value(url: str) -> str | None:
+    """命中的域规则的**原始值**（未插值）；未命中返回 None。
+
+    与 resolve_proxy 的分工：那里把 `${VAR}` 未设置也压成 None（=不设代理），
+    无法区分「没配规则」与「规则要求直连」。open_url 需要这个区分——前者
+    维持 urlopen 的原生行为，后者要绕开标准环境变量代理。
+    """
+    try:
+        import urllib.parse
+        host = (urllib.parse.urlparse(url if "//" in url else "https://" + url)
+                .hostname or "").lower()
+        for domain, val in (_network_cfg().get("rules") or {}).items():
+            d = str(domain).lower().strip()
+            if d and (host == d or host.endswith("." + d)):
+                return str(val)
+    except Exception:
+        return None
+    return None
+
+
+def explicit_direct(url: str) -> bool:
+    """argo 级配置是否**显式**要求该 URL 直连（而不是「恰好没配代理」）。
+
+    为什么需要：urlopen 原生认标准 `HTTP(S)_PROXY`。rules 写 "direct"、或
+    `${VAR}` 的 VAR 未设置时，本意都是「真直连」，但 resolve_proxy 只回 None，
+    open_url 落回 urlopen 后又被环境变量代理兜走——「强制直连」在设了
+    HTTPS_PROXY 的机器上名不副实。例：animetrace.com 这类源按出口 IP 限频，
+    配置写明 direct 却仍走 Clash 出口时稳定 429——是否该直连取决于本机出口，
+    但 explicit_direct 至少要保证调用方真的拿到配置要求的出口。
+    """
+    val = _matched_rule_value(url)
+    if val is not None:
+        return _interp_env(val) is None
+    argo = _argo_env("ARGO_PROXY")
+    if argo:
+        return argo.lower() == "direct"
+    cu = str(_network_cfg().get("url") or "").strip()
+    if cu:
+        return _interp_env(cu) is None
+    return False
+
+
 def open_url(req: Any, timeout: float = 10.0):
     """代理感知的 `urllib.request.urlopen` 替身——urllib 类出口的唯一入口。
 
@@ -210,6 +252,11 @@ def open_url(req: Any, timeout: float = 10.0):
         logger.debug("代理解析失败（%s），本次按直连处理：%r", url, e)
         px = None
     if not px:
+        # 显式直连要自己装空 ProxyHandler：urlopen 会把标准环境变量里的代理
+        # 再兜一层，那样 rules="direct" 等于没写。未配置时仍走 urlopen 原生。
+        if explicit_direct(url):
+            return urllib.request.build_opener(
+                urllib.request.ProxyHandler({})).open(req, timeout=timeout)
         return urllib.request.urlopen(req, timeout=timeout)
     scheme = urllib.parse.urlparse(url).scheme or "https"
     opener = urllib.request.build_opener(

@@ -221,6 +221,31 @@ class TestSuperSearchGates(unittest.TestCase):
         self.assertIn("handoff", r)
         self.assertFalse(r.get("requires_confirmation"))
 
+    def test_known_url_allows_twitter_syndication_engine(self):
+        """显式指定 twitter_syndication 时，推文 URL 不被 known-url handoff 拦截。"""
+        import json
+        import engines_base
+        from unittest.mock import patch
+        payload = json.dumps({
+            "__typename": "Tweet",
+            "text": "just setting up my twttr",
+            "user": {"screen_name": "jack", "name": "jack"},
+            "created_at": "2006-03-21T20:50:14.000Z",
+            "id_str": "20",
+        })
+        with patch.object(engines_base, "_http_get_raw", return_value=payload):
+            r = super_search(
+                "https://x.com/jack/status/20",
+                engine="twitter_syndication",
+                n=1,
+                skip_cache=True,
+                include_local=False,
+            )
+        self.assertNotEqual(r.get("status"), "handoff_required")
+        self.assertEqual(r.get("engine"), "twitter_syndication")
+        self.assertEqual(r.get("count"), 1)
+        self.assertIn("just setting up my twttr", r["results"][0]["snippet"])
+
     def test_daily_keyword_no_plan_no_confirm(self):
         """日常热路径：用缓存预写结果，验证不挂 plan、不要求确认。"""
         db = os.path.join(tempfile.mkdtemp(), "daily.db")

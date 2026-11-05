@@ -2483,12 +2483,6 @@
     "boost_keywords": {},
     "boost_combos": {}
   },
-  "tineye": {
-    "label": "TinEye反搜图",
-    "documents": [],
-    "boost_keywords": {},
-    "boost_combos": {}
-  },
   "bing_rss": {
     "label": "BingRSS",
     "documents": [],
@@ -2693,6 +2687,24 @@
   },
   "metaso_video": {
     "label": "秘塔搜索（视频）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "animetrace": {
+    "label": "AnimeTrace 角色识别",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "saucenao": {
+    "label": "SauceNAO 反搜图",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "google_lens": {
+    "label": "Google Lens 反搜图",
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}

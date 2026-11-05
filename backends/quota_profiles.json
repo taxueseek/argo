@@ -10,6 +10,16 @@
     "cost_tier": "free",
     "priority": 42
   },
+  "animetrace": {
+    "label": "AnimeTrace 角色识别",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 36
+  },
   "antara": {
     "label": "安塔拉通讯社 RSS",
     "qps": 1,
@@ -959,6 +969,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 55
+  },
+  "google_lens": {
+    "label": "Google Lens 反搜图",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.11,
+    "cost_unit": "cny",
+    "cost_tier": "paid",
+    "priority": 37
   },
   "google_news": {
     "label": "google_news",
@@ -2010,6 +2030,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "saucenao": {
+    "label": "SauceNAO 反搜图",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
+  },
   "sciverse": {
     "label": "Sciverse（题录）",
     "qps": 2,
@@ -2299,16 +2329,6 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 20
-  },
-  "tineye": {
-    "label": "TinEye反搜图",
-    "qps": 1,
-    "limit": null,
-    "period": "second",
-    "cost_per_call": 0.0,
-    "cost_unit": "free",
-    "cost_tier": "free",
-    "priority": 30
   },
   "tinyfish": {
     "label": "TinyFish 实时搜索",
