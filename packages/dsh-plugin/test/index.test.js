@@ -396,6 +396,27 @@ function makeCtx() {
   }
   return { ctx, registered, providers, fetchProviders, guards }}
 
+test('searchViaArgoMCP: pool path resolves keyRefs from caller credentials (issue #41)', async () => {
+  // 回归：search 走 MCP 池，连接 envResolver 只认 options.config/env。web 搜索
+  // provider 经 registerSearchProvider 进来，手里有 config、无独立顶层
+  // credentials；此前 acquireMcp 只传 options.credentials（undefined），于是
+  // resolveArgoEnv 的 provider 恒为 undefined，keyRefs 解析不出来，所有需
+  // API key 的引擎长期 skipped-missing-env。锁住 config.credentials 这条路径：
+  // 记录凭据被解析过 + 池确实按该 config 开了一条连接（桩不回 JSON，忽略载荷）。
+  stubEnv()
+  let resolved = 0
+  const fake = { resolve: async (ref) => { resolved += 1; return ref === 'DEEPSEEK_API_KEY' ? { value: 'sk-host', source: 'file' } : undefined } }
+  const fakeConn = { release() {}, request: async () => ({ content: [{ type: 'text', text: '{"success":true,"results":[]}' }] }) }
+  try {
+    await searchViaArgoMCP('hello', 5, undefined, {
+      command: process.execPath, args: [STUB_SERVER], timeoutMs: 5000,
+      credentials: fake, config: { keyRefs: ['DEEPSEEK_API_KEY'] },
+    })
+  } catch { /* 桩载荷非 JSON，忽略；只验凭据解析 */ }
+  assert.ok(resolved >= 1, 'caller 传入的 credentials 应被用来解析 keyRefs')
+  assert.equal(spawnCount(), 1, '应按该 config 开一条池连接')
+})
+
 test('providerSupportsStructured: rc.2 capabilities no longer include toolFilter', () => {
   assert.equal(providerSupportsStructured({
     capabilities: { agentOptions: true, agentPreset: true, outputSchema: true, depthLimit: true }

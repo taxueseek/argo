@@ -427,6 +427,9 @@ export function apply(ctx, providedConfig = {}) {
           idleMs: config.searchIdleMs,
           max: config.searchConcurrency,
           config,
+          // issue #41：显式带上宿主凭证服务，否则池内连接 envResolver 解析
+          // keyRefs 时 provider 为 undefined，所有需 key 引擎静默 skipped。
+          credentials: hostCredentials,
         })
       },
     })
@@ -444,6 +447,8 @@ export function apply(ctx, providedConfig = {}) {
             max: config.searchConcurrency,
             maxChars: config.fetchMaxChars,
             config,
+            // issue #41：与 search 同理，fetch 池连接也要带上凭证服务。
+            credentials: hostCredentials,
           })
         },
       })

@@ -472,13 +472,19 @@ export async function searchViaArgoMCP(query, maxResults = 5, signal, options = 
   const timeoutMs = options.timeoutMs ?? DEFAULTS.searchTimeoutMs
   const count = clamp(maxResults ?? 5, 5, 1, 20)
 
+  // 关键（issue #41）：search 走 MCP 池，但池的连接此前只把 config 交给
+  // envResolver，没有把 caller 的 credentials 带上——而 web 搜索 provider
+  // 是经 registerSearchProvider 进来的，手里有 config 却没有 credentials 服务，
+  // 于是 resolveArgoEnv 的 provider 恒为 undefined，keyRefs 一个都解析不出来，
+  // 所有需 API key 的引擎长期 skipped-missing-env。这里把 config.credentials
+  // 显式并入，让「池内连接」与「单发兜底」两条路径解析出同一份 key。
   const conn = await acquireMcp({
     command,
     args,
     idleMs: options.idleMs ?? DEFAULTS.searchIdleMs,
     max: options.max ?? DEFAULTS.searchConcurrency,
     initMs: timeoutMs,
-    credentials: options.credentials,
+    credentials: options.credentials ?? options.config?.credentials,
     config: options.config,
   }, signal)
 
