@@ -13,8 +13,11 @@ local_image.DEFAULT_DB、redskill_engine.CACHE_DIR/CACHE_FILE）。本护栏把
 
 ## 口径
 
-- 扫 `scripts/**/*.py` 与 `argo_search/**/*.py` 的 Module 直接子节点：
-  Assign / AnnAssign / AugAssign 的值、函数定义的默认参数；
+- 扫 `scripts/**/*.py` 与 `argo_search/**/*.py` 的 Module 顶层语句——含
+  顶层 `if`/`try`/`with`/`for`/`while`/`class` **体内**的语句（分支不论走
+  哪条，能执行到的赋值都在导入期绑定）；函数体内的语句是调用期，不下钻；
+- 计数对象：Assign / AnnAssign / AugAssign 的值、函数定义的默认参数
+  （默认参数在 def 执行时求值，同属导入期）；
 - 子树出现 `os.environ` / `os.getenv` / 裸名 `environ`（from os import
   environ）即计一次；
 - 只拦直接读：经 `state_path()`/`db_path()` 等解析器的间接绑定是另一笔账，
@@ -49,10 +52,33 @@ def _env_read(node: ast.AST) -> bool:
     return False
 
 
+def _import_time_stmts(body: list[ast.stmt]):
+    """Module 顶层（含顶层复合语句体内）的语句——都在导入期执行。
+
+    函数定义本身会 yield（默认参数在 def 执行时求值），但函数体不下钻
+    （那是调用期）；类体下钻（类属性赋值同为导入期）。
+    """
+    for st in body:
+        yield st
+        if isinstance(st, (ast.If, ast.For, ast.AsyncFor, ast.While)):
+            yield from _import_time_stmts(st.body)
+            yield from _import_time_stmts(st.orelse)
+        elif isinstance(st, (ast.With, ast.AsyncWith)):
+            yield from _import_time_stmts(st.body)
+        elif isinstance(st, ast.Try):
+            yield from _import_time_stmts(st.body)
+            for h in st.handlers:
+                yield from _import_time_stmts(h.body)
+            yield from _import_time_stmts(st.orelse)
+            yield from _import_time_stmts(st.finalbody)
+        elif isinstance(st, ast.ClassDef):
+            yield from _import_time_stmts(st.body)
+
+
 def _module_level_env_reads(tree: ast.Module) -> list[int]:
-    """Module 直接子节点里的 env 读绑定行号（赋值与函数默认参数）。"""
+    """导入期 env 读绑定的行号（赋值与函数默认参数）。"""
     lines: list[int] = []
-    for st in tree.body:
+    for st in _import_time_stmts(tree.body):
         vals: list[ast.AST] = []
         if isinstance(st, (ast.Assign, ast.AugAssign)):
             vals = [st.value]
@@ -107,3 +133,23 @@ def test_gate_covers_both_roots():
     """口径自检：两个扫描根都真实存在（目录重构时别忘了改这里）。"""
     for base in _SCAN_ROOTS:
         assert (ROOT / base).is_dir(), base
+
+
+def test_scanner_catches_inside_top_level_if():
+    """正对照：顶层 if 体内的 env 读必须被抓到（防扫描器静默失效）。"""
+    src = ("import os\n"
+           "if True:\n"
+           "    X = os.environ.get('A')\n"
+           "    Y = [os.getenv('B')]\n"
+           "Z = 1\n")
+    assert _module_level_env_reads(ast.parse(src)) == [3, 4]
+
+
+def test_scanner_ignores_function_bodies():
+    """负对照：函数体内是调用期，不计入；def 默认参数要计入。"""
+    src = ("import os\n"
+           "def f():\n"
+           "    return os.environ.get('A')\n"
+           "def g(x=os.environ.get('B')):\n"
+           "    return x\n")
+    assert _module_level_env_reads(ast.parse(src)) == [4]
