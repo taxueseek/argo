@@ -12,6 +12,8 @@
 # spec_contracts + stub_targets（2026-11-04 补的 B 类复发护栏：规格契约
 # ——bilibili/xhs 缺 --json 同类根因；打桩目标存在性——重构后打桩落转出
 # 副本的三例同类根因，实测合计 +0.7s）。
+# env_binding（2026-11-06 补的第 3 道 B 类复发护栏：模块导入期直接读 env
+# 一律红灯——290d3d8 同根因累计 9 处灭类后零祖父，AST 扫描 <0.5s）。
 # 2026-10-18 补的两道（context_budget + engine_catalog）：f702ee2 把
 # SKILL.md 压到 8049B、4a71693 让 deepseek_search 成死源，两笔都过了 hook
 # 却在全量回归里红——正是「改完没跑到那条门」的同一个洞。全量回归 ~5 分钟
@@ -68,4 +70,5 @@ echo "[pre-commit] argo 快门禁（~12s，解释器 $PY；全量回归请手动
     tests/test_engine_catalog.py \
     tests/test_release_consistency.py \
     tests/test_spec_contracts.py \
-    tests/test_stub_targets.py
+    tests/test_stub_targets.py \
+    tests/test_env_binding_gate.py
