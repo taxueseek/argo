@@ -64,8 +64,7 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 
 ### 图片检索
 
-网络图走 `search`（`image_search` 域自动命中）；本地素材走 `argo local-image`
-（Vision 索引 + `--similar-to` 找相似图 + `--sheet` 出联络表；默认关，需 `ARGO_LOCAL_IMAGE=1`，见 `references/usage.md`）。
+网络图走 `search`（`image_search` 域自动命中）；本地素材走 `argo local-image`（Vision 索引/相似图/联络表；默认关，需 `ARGO_LOCAL_IMAGE=1`，见 `references/usage.md`）。反搜图（图→出处）：`argo search "<图片URL>" --engine saucenao|animetrace|google_lens`，不进自动路由，saucenao/google_lens 需 key。
 
 ### 增强三工具
 
