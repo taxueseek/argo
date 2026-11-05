@@ -96,8 +96,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-14 7ca2f22 移除 OSV/CISA KEV 代码段（−261）；"
               "2026-11-04 移除 tineye 构建器（−78）"),
     "scripts/fetch_v3.py": (
-        1836, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
+        1857, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
+              "2026-11-06 +21：_IDENTITY_PATH 改 PEP 562 调用期解析"
+              "（模块级 env 绑定灭类，test_env_binding_gate 配套）；"
               "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）；"
               "2026-09-28 +2：_identity_mem 内存表 512 有界淘汰；"
               "2026-09-29 +10：llms-full.txt token 炸弹守卫（候选出口过滤）；"
@@ -338,7 +340,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "下一步拆 _recovery_executor（L3）后本文件"
               "可回落到 1000 行内"),
     "scripts/job.py": (
-        1187, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
+        1212, "招聘多平台聚合，各平台解析各成一段（数据表性质）；"
+              "2026-11-06 +25：MCPJOBS_DIR/ENTRY 改 PEP 562 调用期解析"
+              "（模块级 env 绑定灭类，test_env_binding_gate 配套）；"
               "2026-11-05 +1：_mark_source_down 的 mark_remote_exhausted 补 category "
               "参数（issue #42，一行拆两行）；"
               "2026-09-28 +4：MCPJOBS_DIR 收编 argo_paths 平台缓存根 + "

@@ -45,9 +45,30 @@ PAGE_URL = "https://cowork.xiaohongshu.com/s/redskill-rank/"
 EXPLORE_URL = "https://www.xiaohongshu.com/explore/{}"
 SEARCH_URL = "https://www.xiaohongshu.com/search_result?keyword={}"
 PROFILE_URL = "https://www.xiaohongshu.com/user/profile/{}"
-CACHE_DIR = Path(os.environ.get("ARGO_REDSKILL_CACHE")
-                 or (argo_paths.platform_cache_default() / "argo-redskill"))
-CACHE_FILE = CACHE_DIR / "data.json"
+def _cache_dir() -> Path:
+    """缓存根：模块属性（测试 patch 的真名）优先，否则按当前 env 解析。"""
+    patched = globals().get("CACHE_DIR")
+    if patched is not None:
+        return patched
+    return Path(os.environ.get("ARGO_REDSKILL_CACHE")
+                or (argo_paths.platform_cache_default() / "argo-redskill"))
+
+
+def _cache_file() -> Path:
+    return _cache_dir() / "data.json"
+
+
+def __getattr__(name: str):
+    """`CACHE_DIR`/`CACHE_FILE` 按当前 ARGO_REDSKILL_CACHE 解析（PEP 562，290d3d8 同口径）。
+
+    模块内裸名查找不触发本函数（LOAD_GLOBAL 语义），函数体一律走
+    _cache_dir()/_cache_file()；这里只维持外部属性访问契约。
+    """
+    if name == "CACHE_DIR":
+        return _cache_dir()
+    if name == "CACHE_FILE":
+        return _cache_file()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 USER_AGENT = "argo-search/1.0 (+https://github.com/taxueseek/argo; redskill)"
 DOWNLOAD_TIMEOUT = 120  # 14.6MB 全量，首次下载需要更长时间
 
@@ -114,8 +135,9 @@ def _is_fresh(data_date: str) -> bool:
 
 def _read_cache() -> dict[str, Any] | None:
     try:
-        if CACHE_FILE.exists() and CACHE_FILE.stat().st_size > 0:
-            with open(CACHE_FILE, encoding="utf-8") as f:
+        cf = _cache_file()
+        if cf.exists() and cf.stat().st_size > 0:
+            with open(cf, encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
         _log(f"缓存读取失败: {e}")
@@ -123,7 +145,8 @@ def _read_cache() -> dict[str, Any] | None:
 
 
 def _download(force: bool = False) -> dict[str, Any]:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = _cache_file()
+    _cache_dir().mkdir(parents=True, exist_ok=True)
     raw = _http_get(DATA_URL)
     data = json.loads(raw.decode("utf-8"))
     if "allSkills" not in data:
@@ -131,9 +154,9 @@ def _download(force: bool = False) -> dict[str, Any]:
     # 原子写走 argo_paths 唯一来源（唯一 tmp 名）；旧实现固定 `.tmp` 名，
     # 并发刷新（手动 update 撞上搜索自动刷新）会互相搬走临时文件而写失败。
     # 14.6MB 缓存用 indent=None 省掉格式化的时间与体积。
-    argo_paths.atomic_write_json(CACHE_FILE, data, indent=None)
+    argo_paths.atomic_write_json(cache_file, data, indent=None)
     if force:
-        _log(f"已强制刷新缓存: {CACHE_FILE} ({CACHE_FILE.stat().st_size / 1e6:.1f}MB, dataDate={data.get('dataDate')})")
+        _log(f"已强制刷新缓存: {cache_file} ({cache_file.stat().st_size / 1e6:.1f}MB, dataDate={data.get('dataDate')})")
     return data
 
 
@@ -295,8 +318,8 @@ def _stats(data: dict[str, Any]) -> dict[str, Any]:
             "authorList": len(data.get("authorList", [])),
             "allSkills": len(data.get("allSkills", [])),
         },
-        "cache_file": str(CACHE_FILE),
-        "cache_mb": round(CACHE_FILE.stat().st_size / 1e6, 1) if CACHE_FILE.exists() else 0,
+        "cache_file": str((cf := _cache_file())),
+        "cache_mb": round(cf.stat().st_size / 1e6, 1) if cf.exists() else 0,
     }
 
 

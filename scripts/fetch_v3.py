@@ -554,9 +554,30 @@ def _mobile_first_host(url: str) -> bool:
 # 直接移动首发（1 次触碰）。实测依据：抖音类站点按 IP 递进限速，请求节奏比
 # 身份选择重要一个数量级，省掉的每次试错都是真实的封禁风险。
 _IDENTITY_TTL = 86400
-_IDENTITY_PATH = os.environ.get(
-    "ARGO_IDENTITY_MEMORY",
-    str(_paths.state_path("fetch-identity.json")))
+
+
+def _identity_path() -> str:
+    """身份记忆文件路径：模块属性（测试 monkeypatch 的真名）优先，否则按当前 env 解析。"""
+    patched = globals().get("_IDENTITY_PATH")
+    if patched is not None:
+        return patched
+    return os.environ.get(
+        "ARGO_IDENTITY_MEMORY",
+        str(_paths.state_path("fetch-identity.json")))
+
+
+def __getattr__(name: str):
+    """`_IDENTITY_PATH` 每次访问按当前 ARGO_IDENTITY_MEMORY 解析（PEP 562）。
+
+    290d3d8 同口径：状态根在导入后被改写是常态（测试临时目录、多工作树）。
+    模块内裸名查找不触发本函数（LOAD_GLOBAL 语义），函数体一律走
+    _identity_path()；这里只维持外部属性访问与 monkeypatch 契约。
+    """
+    if name == "_IDENTITY_PATH":
+        return _identity_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 _identity_mem: dict[str, float] = {}
 _identity_loaded = False
 _identity_dirty = False
@@ -570,7 +591,7 @@ def _identity_load() -> None:
         return
     _identity_loaded = True
     try:
-        with open(_IDENTITY_PATH, encoding="utf-8") as f:  # 写侧 atomic_write_text 恒 UTF-8，读侧同编码
+        with open(_identity_path(), encoding="utf-8") as f:  # 写侧 atomic_write_text 恒 UTF-8，读侧同编码
             raw = json.load(f)
         now = time.time()
         mem: dict[str, float] = {}
@@ -603,7 +624,7 @@ def _identity_remember_mobile(host: str) -> None:
     try:
         # 原子写走 argo_paths 唯一来源（唯一 tmp 名）；旧实现固定 `.tmp` 名，
         # 并发抓取进程会互相搬走临时文件，身份记忆静默丢失。
-        _paths.atomic_write_json(Path(_IDENTITY_PATH), _identity_mem, indent=None)
+        _paths.atomic_write_json(Path(_identity_path()), _identity_mem, indent=None)
         _identity_dirty = False
     except Exception:
         pass

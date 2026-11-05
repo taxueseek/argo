@@ -95,10 +95,24 @@ _SKIP_DIRS = frozenset((
 
 from argo_paths import platform_cache_default  # noqa: E402
 
-DEFAULT_DB = Path(
-    os.environ.get("ARGO_IMAGE_DB")
-    or (platform_cache_default() / "argo-image" / "index.db")
-)
+
+def _default_db() -> Path:
+    """索引库路径：模块属性（测试 patch 的真名）优先，否则按当前 env 解析。"""
+    patched = globals().get("DEFAULT_DB")
+    if patched is not None:
+        return patched
+    return Path(os.environ.get("ARGO_IMAGE_DB")
+                or (platform_cache_default() / "argo-image" / "index.db"))
+
+
+def __getattr__(name: str):
+    """`DEFAULT_DB` 按当前 ARGO_IMAGE_DB 解析（PEP 562，290d3d8 同口径）。
+
+    模块内裸名查找不触发本函数（LOAD_GLOBAL 语义），函数体一律走 _default_db()。
+    """
+    if name == "DEFAULT_DB":
+        return _default_db()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
@@ -169,7 +183,7 @@ def local_image_enabled() -> bool:
 
 
 def open_db(db_path: Path | str | None = None) -> sqlite3.Connection:
-    p = Path(db_path).expanduser() if db_path else DEFAULT_DB
+    p = Path(db_path).expanduser() if db_path else _default_db()
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(p), timeout=30)
     conn.row_factory = sqlite3.Row
@@ -281,9 +295,9 @@ def _db_file(conn: sqlite3.Connection) -> Path:
     try:
         row = conn.execute("PRAGMA database_list").fetchone()
     except sqlite3.Error:
-        return DEFAULT_DB
+        return _default_db()
     f = row["file"] if row is not None else ""
-    return Path(f) if f else DEFAULT_DB
+    return Path(f) if f else _default_db()
 
 
 def _unit(vec):
@@ -875,7 +889,7 @@ def main(argv: list[str] | None = None) -> int:
     p_st.add_argument("--json", action="store_true")
 
     args = ap.parse_args(argv)
-    db = args.db or DEFAULT_DB
+    db = args.db or _default_db()
 
     # 默认关闭：本能力要 macOS+swiftc+numpy 且先建 ~226MB 索引，对多数安装是
     # 纯负担。--help 已在 parse_args 内退出，不会走到这里。

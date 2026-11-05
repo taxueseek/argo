@@ -29,12 +29,24 @@ from cli_io import dumps_pretty
 import argo_paths as _paths
 
 # ARGO_ADMISSION_DIR 优先（测试隔离）；未设置时由唯一来源派生目录
-DEFAULT_ADMISSION_DIR = Path(
-    os.path.expanduser(os.environ.get(
-        "ARGO_ADMISSION_DIR",
-        str(_paths.state_path("admission")),
-    ))
-)
+def _default_admission_dir() -> Path:
+    """admission 目录：模块属性（测试 patch 的真名）优先，否则按当前 env 解析。"""
+    patched = globals().get("DEFAULT_ADMISSION_DIR")
+    if patched is not None:
+        return patched
+    return Path(os.path.expanduser(os.environ.get(
+        "ARGO_ADMISSION_DIR", str(_paths.state_path("admission")))))
+
+
+def __getattr__(name: str):
+    """`DEFAULT_ADMISSION_DIR` 按当前 ARGO_ADMISSION_DIR 解析（PEP 562）。
+
+    290d3d8 同口径：模块内裸名查找不触发本函数（LOAD_GLOBAL 语义），函数体
+    一律走 _default_admission_dir()；这里只维持外部属性访问与测试 patch 契约。
+    """
+    if name == "DEFAULT_ADMISSION_DIR":
+        return _default_admission_dir()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def admission_dir() -> Path:
@@ -42,7 +54,7 @@ def admission_dir() -> Path:
     # 可能切换，缓存目录反而容易写到已被清理的旧目录。exist_ok=True 在目录已存在
     # 时只是一次很便宜的路径查询，真正的重复大头（读记录前先 exists 再 read）已在
     # load_admission 里去掉。
-    d = DEFAULT_ADMISSION_DIR
+    d = _default_admission_dir()
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -63,7 +75,7 @@ def _read_path(engine_id: str) -> Path:
     admission_path 每次都 mkdir(parents=True)，一次搜索因此多出约两百次
     路径查询。写记录（save_admission 等）仍走 admission_path 确保目录存在。
     """
-    return DEFAULT_ADMISSION_DIR / f"{_admission_stem(engine_id)}.json"
+    return _default_admission_dir() / f"{_admission_stem(engine_id)}.json"
 
 
 def _now_iso() -> str:
@@ -168,7 +180,7 @@ _admission_dir_set_cache: dict[str, tuple[float, frozenset[str]]] = {}
 
 def _admission_exists_set() -> frozenset[str]:
     """有记录的引擎文件名（去 .json）集合，按 TTL 重扫目录。"""
-    key = str(DEFAULT_ADMISSION_DIR)
+    key = str(_default_admission_dir())
     now = time.monotonic()
     hit = _admission_dir_set_cache.get(key)
     if hit is not None and now - hit[0] < _admission_ttl():
@@ -176,7 +188,7 @@ def _admission_exists_set() -> frozenset[str]:
     try:
         stems = frozenset(
             entry.name[: -len(".json")]
-            for entry in os.scandir(DEFAULT_ADMISSION_DIR)
+            for entry in os.scandir(_default_admission_dir())
             if entry.name.endswith(".json")
         )
     except OSError:

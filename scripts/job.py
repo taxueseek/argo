@@ -734,9 +734,33 @@ def _search_jobspy(q: str, n: int) -> list:
 _MCPJ = {"proc": None, "id": 0}
 from argo_paths import platform_cache_default  # noqa: E402
 
-MCPJOBS_DIR = os.environ.get("ARGO_MCPJOBS_DIR") or str(
-    platform_cache_default() / "argo-mcpjobs")
-MCPJOBS_ENTRY = os.path.join(MCPJOBS_DIR, "node_modules", "mcp-jobs", "dist", "mcp.js")
+
+def _mcpjobs_dir() -> str:
+    """mcp-jobs 安装根：模块属性（测试 patch 的真名）优先，否则按当前 env 解析。"""
+    patched = globals().get("MCPJOBS_DIR")
+    if patched is not None:
+        return patched
+    return os.environ.get("ARGO_MCPJOBS_DIR") or str(
+        platform_cache_default() / "argo-mcpjobs")
+
+
+def _mcpjobs_entry() -> str:
+    return os.path.join(
+        _mcpjobs_dir(), "node_modules", "mcp-jobs", "dist", "mcp.js")
+
+
+def __getattr__(name: str):
+    """`MCPJOBS_DIR`/`MCPJOBS_ENTRY` 按当前 ARGO_MCPJOBS_DIR 解析（PEP 562）。
+
+    290d3d8 同口径：导入期绑定在 env 改写后（测试隔离临时目录、换缓存根）
+    仍持旧值。模块内裸名查找不触发本函数（LOAD_GLOBAL 语义），函数体一律走
+    _mcpjobs_dir()/_mcpjobs_entry()；这里只维持外部属性访问契约。
+    """
+    if name == "MCPJOBS_DIR":
+        return _mcpjobs_dir()
+    if name == "MCPJOBS_ENTRY":
+        return _mcpjobs_entry()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _mcpjobs_send(method: str, params: dict, timeout: int = 60) -> dict:
@@ -764,14 +788,15 @@ def _mcpjobs_ensure() -> bool:
     if _MCPJ["proc"] and _MCPJ["proc"].poll() is None:
         return True
     try:
-        if not os.path.exists(MCPJOBS_ENTRY):
+        entry = _mcpjobs_entry()
+        if not os.path.exists(entry):
             r = subprocess.run(
-                ["npm", "install", "--prefix", MCPJOBS_DIR, "--no-audit", "--no-fund",
+                ["npm", "install", "--prefix", _mcpjobs_dir(), "--no-audit", "--no-fund",
                  "mcp-jobs"], capture_output=True, text=True, timeout=240,
                 encoding="utf-8", errors="replace")  # Windows GBK 控制台读 stderr 需显式 UTF-8
             if r.returncode != 0:
                 raise RuntimeError(f"npm install mcp-jobs 失败：{(r.stderr or r.stdout)[:120]}")
-        p = subprocess.Popen(["node", MCPJOBS_ENTRY],
+        p = subprocess.Popen(["node", entry],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                              stderr=subprocess.DEVNULL, text=True, bufsize=1,
                              encoding="utf-8", errors="replace")  # node JSON-RPC 恒 UTF-8，Windows 默认 GBK 会对不上
