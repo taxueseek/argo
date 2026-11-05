@@ -28,6 +28,12 @@ def _subprocess_timeout() -> int:
 
 def search(query: str, n: int = 5) -> list[dict]:
     """主搜索入口"""
+    env = dict(os.environ)
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    for k in ("NO_PROXY", "no_proxy"):
+        if k in env and "[::1]" in env[k]:
+            env[k] = ",".join(x for x in env[k].split(",") if x.strip() != "[::1]")
     try:
         result = subprocess.run(
             # --json 必须传：xhs-cli 的 argparse 接受该 flag 但**不传时只打印
@@ -36,6 +42,7 @@ def search(query: str, n: int = 5) -> list[dict]:
             ["xhs", "search", "--json", query],
             capture_output=True, text=True, timeout=_subprocess_timeout(),
             encoding="utf-8", errors="replace",  # Windows GBK locale 下 UTF-8 输出会解码崩
+            env=env,
         )
         if result.returncode == 0 and result.stdout.strip():
             return _parse_xhs_output(result.stdout, n)
