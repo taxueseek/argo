@@ -247,7 +247,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "> 严格猜测链，fetch_v3/article.py 兜底车道同享），curl 车道改收 "
               "bytes 交同一解码入口并补 --compressed；上限 1039 → 1035 随动下调"),
     "scripts/search_rank.py": (
-        1000, "RRF 融合 + minhash 去重 + 五维重排；"
+        1015, "RRF 融合 + minhash 去重 + 五维重排；"
+              "2026-11-05 +15：rerank 入口加 bocha 配额联动（搜索端点已归因 "
+              "quota_exhausted 时直接 skipped_quota，与搜索端点冷却口径对称，"
+              "省掉熔断半开探测的 ~866 次无效 403/天）——检查块 12 行 + "
+              "docstring/保底全集各 1 行 + 白名单注释 1 行；上限 1000 → 1015；"
               "2026-10-29 +2：五维重排把 query 传给 score_authority——裁判文书站"
               "这类有条件降权（demote_domains_unless）必须按提问语境判，"
               "只传 URL/引擎拿不到 query；上限 998 → 1000；"

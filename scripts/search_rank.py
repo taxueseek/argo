@@ -500,7 +500,7 @@ def rerank_results(query: str, results: list[dict[str, Any]],
     """使用博查语义排序模型对搜索结果二次精排。
 
     返回 (results, status)：status ∈ ok | skipped_no_key | skipped_short |
-    skipped_fast | skipped_circuit_open | fallback
+    skipped_fast | skipped_circuit_open | skipped_quota | fallback
     """
     if not results or len(results) <= 1:
         return results, "skipped_short"
@@ -508,6 +508,20 @@ def rerank_results(query: str, results: list[dict[str, Any]],
     api_key = get_env(["ARGO_BOCHA_API_KEY", "BOCHA_API_KEY"])
     if not api_key:
         return results, "skipped_no_key"
+
+    # 配额联动（在熔断器之前）：bocha 搜索侧已归因 quota_exhausted（同源同
+    # key）时，精排端点连「半开探测」都不必打。此前 rerank 的 403 归 auth 走
+    # 熔断器，冷却结束就放一次真实探测（实测 opens=18、间隔 ~100s，折合
+    # ~866 次无效 403/天）；联动后行为与搜索端点对称——冷却期由
+    # quota._quota_cooldown_seconds 单点决定（余额类 1h，免费额度类按 period），
+    # 充值/换 Key 后随搜索端点一起自愈。fail-open：quota 层读不到就照旧走
+    # 熔断器，联动检查不成为新的单点故障。
+    try:
+        from quota import get_quota_manager
+        if get_quota_manager().is_remote_exhausted("bocha"):
+            return results, "skipped_quota"
+    except Exception:
+        pass
 
     # 端点熔断：先问「还该不该打这一枪」。
     #
@@ -996,5 +1010,6 @@ _RERANK_DEGRADED_STATUSES = frozenset({
     "skipped_short",         # 结果太少，不值得精排
     "skipped_fast",          # fast 档不付远程精排
     "skipped_circuit_open",  # 端点熔断中（见 _RERANK_BREAKER_KEY）
+    "skipped_quota",         # 搜索端点已归因配额耗尽，联动跳过（同源同 key）
     "fallback",              # 端点报错或返回不可用数据
 })

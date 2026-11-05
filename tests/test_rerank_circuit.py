@@ -28,7 +28,9 @@
   3. 冷却期结束后半开探测，成功则闭合（人工充值后不该被历史失败永久拦住）；
   4. 未配置密钥时走 `skipped_no_key`，不污染熔断状态；
   5. `skipped_circuit_open` 必须落在本地五维保底的状态全集里——否则会退化成
-     「既不精排也不保底」，最终顺序悄悄变成 RRF 原始序。
+     「既不精排也不保底」，最终顺序悄悄变成 RRF 原始序；
+  6. 搜索端点已归因配额耗尽时走 `skipped_quota` 联动跳过，quota 层读不到时
+     fail-open 退回熔断器旧路径——联动检查不得成为新的单点故障。
 
 运行：
   python3 -m pytest tests/test_rerank_circuit.py -v
@@ -177,6 +179,71 @@ def test_missing_key_does_not_touch_breaker(breaker):
         _, status = search.rerank_results("q", _docs())
     assert status == "skipped_no_key"
     assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "closed"
+
+
+class _ExhaustedQM:
+    """只回答 is_remote_exhausted 的最小桩，不触碰真实配额状态文件。
+
+    rerank_results 里是调用期 `from quota import get_quota_manager`，因此
+    patch quota 模块属性即可注入；quota 层自身的状态机有 test_hot_state 等
+    专项覆盖，这里不重复。
+    """
+
+    def __init__(self, exhausted):
+        self._exhausted = set(exhausted)
+
+    def is_remote_exhausted(self, engine):
+        return engine in self._exhausted
+
+
+def test_quota_exhausted_gate_skips_network_and_breaker(breaker, with_key):
+    """搜索端点已归因配额耗尽时，精排入口直接联动跳过。
+
+    此前 rerank 的 403 归 auth 走熔断器，冷却结束就放一次真实半开探测
+    （实测 opens=18、间隔 ~100s，折合 ~866 次无效 403/天）；联动后冷却期
+    连探测都不打，行为与搜索端点对称（余额类 1h 短冷却，充值/换 Key 后
+    随搜索端点一起自愈）。联动检查在熔断器之前，所以跳过时也不得污染
+    熔断状态——那是端点故障的账本，配额不是它的记法。
+    """
+    qm = _ExhaustedQM({"bocha"})
+    with patch("quota.get_quota_manager", lambda: qm), \
+            patch("net_proxy.open_url",
+                  lambda req, timeout=None: pytest.fail("配额耗尽时不得发起请求")):
+        _, status = search.rerank_results("q", _docs())
+    assert status == "skipped_quota"
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "closed", \
+        "联动跳过不得在熔断器里留下失败计数"
+
+
+def test_quota_gate_only_gates_same_engine(breaker, with_key):
+    """联动只认 bocha 自己的配额标记：别的引擎欠费不该拦精排。"""
+    qm = _ExhaustedQM({"octen", "deepseek_search"})
+    ok = {"data": {"results": [{"index": 0, "relevance_score": 0.9}]}}
+    with patch("quota.get_quota_manager", lambda: qm), \
+            patch("net_proxy.open_url", lambda req, timeout=None: _OkResp(ok)):
+        _, status = search.rerank_results("q", _docs())
+    assert status == "ok"
+
+
+def test_quota_gate_fails_open_when_quota_unavailable(breaker, with_key):
+    """quota 层读不到时必须 fail-open 退回熔断器旧路径。
+
+    联动是加速，不是闸门：quota 管理器任何异常（导入失败/锁竞争/状态文件
+    损坏）都不该把精排整段跳掉——退回「熔断器 + 真实探测」的既有语义。
+    """
+    def _boom():
+        raise RuntimeError("quota layer unavailable")
+
+    ok = {"data": {"results": [{"index": 0, "relevance_score": 0.9}]}}
+    with patch("quota.get_quota_manager", _boom), \
+            patch("net_proxy.open_url", lambda req, timeout=None: _OkResp(ok)):
+        _, status = search.rerank_results("q", _docs())
+    assert status == "ok"
+
+
+def test_skipped_quota_triggers_local_fallback():
+    """联动状态必须落在保底全集里——否则退化成「既不精排也不保底」。"""
+    assert "skipped_quota" in search._RERANK_DEGRADED_STATUSES
 
 
 def test_circuit_open_status_triggers_local_fallback():
