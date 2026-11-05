@@ -20,7 +20,7 @@ const SERVER_ROOT = join(PLUGIN_ROOT, "server");
 const PANEL_URI = "ui://argo/panel.html";
 const PANEL_MIME = "text/html;profile=mcp-app";
 const SERVER_NAME = "argo-panel";
-const SERVER_INFO = { name: SERVER_NAME, version: "2.10.2" };
+const SERVER_INFO = { name: SERVER_NAME, version: "2.11.2" };
 
 // 宿主 resources/read 只回文本，页面里的相对 import 解析不了：vendor 在服务端
 // 内联进同一段脚本后返回。源文件保持可读可 diff，内联只做一次并缓存。

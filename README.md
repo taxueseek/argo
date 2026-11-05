@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-286-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -499,7 +499,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.10.2）
+### 当前大致能力（v2.11.2）
 
 Argo 干的事，一句话能说完：把一个问题按领域和语言分给合适的源，取回结果后按可信度排个序，交回给 Agent 的是能排序、能复核的材料。搜索、抓取、核验、本机文件检索走同一条管线，19 个 MCP 工具和 CLI 命令一一对应，装哪种形态都不缺能力。另有几个单点命令随用随取：argo tweet 打包 X 帖子，argo auth 管登录态，argo job 聚合招聘信息。
 
@@ -782,6 +782,14 @@ argo/
 
 只列最近三个版本。完整历史见[版本记录](#版本记录)，逐版详情见 [Releases](https://github.com/taxueseek/argo/releases)。
 
+### v2.11.2：以图搜图补齐 + 四类静默失效收口 + 主干常红修复
+
+- **以图搜图补齐**：接 SauceNAO（Pixiv/Pawoo 出处）、AnimeTrace（角色/作品→Bangumi）、Google Lens（SerpAPI，三档匹配）三条显式专用引擎，均 `explicit_only`；彻底摘除已失效的 tineye（HTTP 422）
+- **keyRefs 凭证打通**（#41）：dsh 插件搜索/抓取 provider 走 MCP 池时补带 `hostCredentials`，需密钥引擎不再一律 `skipped-missing-env`
+- **配额状态机三修**（#42）：key_fp 与 `required_env` 同源（13 引擎换 Key 自愈）、402 余额不足固定 1h 短冷却（不再误锁 30 天）、报错补 `quota.py reset` 指引
+- **社交引擎 env 修复**（#36）：xhs/twitter 子进程 UTF-8 环境 + 剥 `NO_PROXY [::1]` + 透传 `TWITTER_*` 凭据与代理
+- **主干常红修复**：`lint_spec_contracts.py` 改走共享 `yaml_load`，main 的 unit/extras 分片转绿
+
 ### v2.10.2：语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复
 
 - **路由标注定向 76.9%→100%**：新建 13 条人工标注集与可执行性两道门禁，收口「原理/详解类查询误入学术库」「平台攻略类误入舆情监听」两类意图撞车（上一版 3 条失配清零）；路由快照 201 条中 123 条（61%）从 tfidf 打分换 regex/概念直判
@@ -812,6 +820,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.11.2** | **以图搜图补齐 + 四类静默失效收口 + 主干常红修复**：接入 SauceNAO/AnimeTrace/Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；keyRefs 凭证经 dsh 插件 provider 透传到 MCP 池（#41）；quota 换 Key 自愈 + 402 误锁 30 天修复 + reset 指引（#42）；xhs/twitter 子进程 env 与凭据透传（#36）；lint_spec_contracts 走共享 YAML loader 解除主干常红。详见 [发布说明](docs/RELEASE_NOTES_v2.11.2.md) |
 | **v2.10.2** | **语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复**：相关性锚点加权 + 静态概念向量表（`ARGO_CONCEPT_ROUTER=1` 默认关）+ 路由准确率收口，13 条标注集定向 100%、快照 61% 决策换概念直判；熔断器工厂调用期解析消除模块别名分裂；摘要标签卫生与口径去重；ZCode 面板三页版入库；测试环境快照恢复加固。详见 [发布说明](docs/RELEASE_NOTES_v2.10.2.md) |
 | **v2.10.1** | **路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复**：引入声明式否决宏 `@commercial_market` 消除医药商业误路由；接入 `parallel_free` 海外视频通道并归一化 YouTube URL；消除 local-seek 零命中双跑税与工具缺失静默；支持无外链源 `url_kind: none` 与空占位符死链守卫；引擎状态自洽；解耦夜间漂移门。详见 [发布说明](docs/RELEASE_NOTES_v2.10.1.md) |
 | **v2.10.0** | **源到 284 + 视频检索与抓取 + 抓取前沿质控**：新增秘塔五档、Sciverse、NCPSSD 与 DSH/技能索引五源；`video` 域与 `--video`/`--min-duration`/`--max-duration`，B 站字幕与 YouTube timedtext、可选 ASR；crawl 前沿质控与 `argo watch` 噪声 diff；通用选源实测排序 + DeepSeek 英文对冲 + 权威早停；安装器 venv 化。详见 [发布说明](docs/RELEASE_NOTES_v2.10.0.md) |

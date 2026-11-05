@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-286-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.10.2）
+### 現時点の能力概要（v2.11.2）
 
 Argo のやることを一行で言うと、質問を領域と言語で適切なソースに振り分け、返ってきた結果を信頼度で並べ、エージェントには並べ替えられ検証できる素材を渡す。検索・取得・証拠確認・ローカルファイル検索は同じパイプラインを流れ、19 個の MCP ツールは CLI コマンドと一対一で対応するので、どの形态で入れても能力は欠けない。単独コマンドもいくつかある：argo tweet は X 投稿をまとめ、argo auth はログイン状态を管理し、argo job は採用情報を集約する。全ソースの費用・键・状态は docs/ENGINE_CATALOG.md に清单されている：286 ソース、240 無設定、99 ドメイン。
 
@@ -703,6 +703,14 @@ argo/
 
 直近 3 バージョンのみを載せています。完全な履歴は[更新履歴](#更新履歴)、各版の詳細は [Releases](https://github.com/taxueseek/argo/releases) を参照してください。
 
+### v2.11.2：逆画像検索の補完 + 4 種のサイレント障害の収束 + 本体 CI 修正
+
+- **逆画像検索の補完**：SauceNAO（Pixiv/Pawoo 出典）、AnimeTrace（キャラ/作品→Bangumi）、Google Lens（SerpAPI、3 段階一致）の明示専用エンジンを追加、いずれも `explicit_only`；失効した tineye（HTTP 422）は完全撤去
+- **keyRefs 認証が鍵必須エンジンに到達**（#41）：dsh プラグインの search/fetch provider が MCP プールへ `hostCredentials` を渡し、`skipped-missing-env` が解消
+- **クォータ状態機械の三修正**（#42）：key_fp を `required_env` と同源化（13 エンジンが鍵交換で自己回復）、HTTP 402 残高不足は 1h の短冷却（30 日ロックを解消）、エラーに `quota.py reset` の案内を追加
+- **ソーシャルエンジン env 修正**（#36）：xhs/twitter サブプロセスに UTF-8 環境、`NO_PROXY [::1]` 剥離、`TWITTER_*` 認証とプロキシを転送
+- **本体 CI 修正**：`lint_spec_contracts.py` を共有 `yaml_load` 経由にし、main の unit/extras を緑化
+
 ### v2.10.2：セマンティックルーティング三段階 + ラベル精度 76.9%→100% + サーキットブレーカ分裂修正
 
 - **ラベル付きルート精度 76.9%→100%**：13 件の人手ラベル集合と実行可能性ゲートで 2 種類の意図衝突を収口——原理・解説系クエリが学術ライブラリへ、プラットフォーム攻略系がソーシャルリスニングへ誤流入しなくなる；スナップショット 201 件中 123 件（61%）が tfidf スコアリングから regex/コンセプト直判定へ移行
@@ -753,6 +761,7 @@ argo/
 
 | 版 | 内容 |
 |----|------|
+| **v2.11.2** | **逆画像検索の補完 + 4 種のサイレント障害の収束 + 本体 CI 修正**：SauceNAO/AnimeTrace/Google Lens の明示専用逆画像エンジンを追加し失効した tineye を撤去；keyRefs 認証を dsh プラグイン provider 経由で MCP プールへ転送（#41）；クォータの鍵交換自己回復 + 402 の 30 日ロック修正 + reset 案内（#42）；xhs/twitter サブプロセスの env と認証転送（#36）；lint_spec_contracts を共有 YAML loader 経由にして本体 CI を解消。詳細は [リリースノート](docs/RELEASE_NOTES_v2.11.2.md)。 |
 | **v2.10.2** | **セマンティックルーティング三段階 + ラベル精度 76.9%→100% + サーキットブレーカ分裂修正**：関連性アンカー重み付け + 静的コンセプトベクトル表（`ARGO_CONCEPT_ROUTER=1`、既定オフ）+ ルーティング精度収口——13 件のラベル集合で 100%、スナップショットの 61% がコンセプト直判定へ；サーキットブレーカ工場を呼び出し時解決にし、モジュール別名分裂を解消；スニペットタグ衛生と口径重複排除；ZCode パネル 3 タブ版；テスト環境スナップショット復元の強化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.2.md)。 |
 | **v2.10.1** | **ルーティング精度収口 + 商業意図マクロ + 海外動画レーン + 課題修正**：宣言的拒否マクロ `@commercial_market` の導入；`parallel_free` による海外動画レーンと YouTube URL 正規化；local-seek のゼロ一致ダブルラン解消と警告透過；URL なしソース `url_kind: none` と死リンク防止；エンジン状態整合性；夜間ドリフトゲート分離。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.1.md)。 |
 | **v2.10.0** | **ソース 284 件 + 動画検索と取得 + クロールのフロンティア品質管理**：秘塔の五档、Sciverse、NCPSSD、DSH/スキル索引の 5 件を追加。`video` 域と `--video`/`--min-duration`/`--max-duration`、B 站字幕と YouTube timedtext、任意の ASR。クロールのフロンティア品質管理と `argo watch` のノイズ差分。汎用ソース選択の実測順 + DeepSeek 英語ヘッジ + 権威アーリーストップ。インストーラの venv 化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.0.md)。 |

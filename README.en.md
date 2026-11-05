@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-286-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -426,7 +426,7 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.10.2)
+### Rough capability set (v2.11.2)
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **286 sources (240 usable with no key), 99 domains**.
 
@@ -661,6 +661,14 @@ argo/
 
 Only the three most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.11.2: Reverse-image engines added + four silent-failure classes closed + main-CI fix
+
+- **Reverse-image search filled in**: SauceNAO (Pixiv/Pawoo sources), AnimeTrace (character/work -> Bangumi), Google Lens (SerpAPI, three match tiers) — all `explicit_only`; the dead tineye (HTTP 422) is fully removed
+- **keyRefs credentials finally reach key-needing engines** (#41): the dsh plugin's search/fetch providers now carry `hostCredentials` into the MCP pool, so engines no longer return `skipped-missing-env`
+- **Quota state machine, three fixes** (#42): key_fp sourced from `required_env` (13 engines self-heal on key rotation), HTTP 402 balance errors get a 1h cooldown instead of a 30-day lock, and the error text now points to `quota.py reset`
+- **Social engine env fix** (#36): xhs/twitter subprocess gets UTF-8 env, `NO_PROXY [::1]` stripped, and `TWITTER_*` credentials + proxy forwarded
+- **Main-CI fix**: `lint_spec_contracts.py` now goes through the shared `yaml_load`, turning main's unit/extras shards green
+
 ### v2.10.2: Semantic routing in three steps + labeled accuracy 76.9%→100% + circuit-breaker split fix
 
 - **Labeled route accuracy 76.9%→100%**: a 13-case human-labeled set plus an executability gate close two intent-collision classes — principle/explainer queries no longer land in academic libraries, platform-guide queries no longer trigger social listening; 123 of 201 snapshot queries (61%) moved from tfidf scoring to regex/concept direct-match
@@ -711,6 +719,7 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 
 | Version | Notes |
 |---------|-------|
+| **v2.11.2** | **Reverse-image engines + four silent-failure classes closed + main-CI fix**: adds SauceNAO/AnimeTrace/Google Lens as explicit-only reverse-image engines and removes the dead tineye; keyRefs credentials forwarded through the dsh plugin providers into the MCP pool (#41); quota key-rotation self-heal + 402 30-day lock fixed + reset hint (#42); xhs/twitter subprocess env and credential forwarding (#36); lint_spec_contracts through the shared YAML loader clears main CI. See [release notes](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **Semantic routing in three steps + labeled accuracy 76.9%→100% + circuit-breaker split fix**: relevance anchor weighting + static concept vector table (`ARGO_CONCEPT_ROUTER=1`, off by default) + route accuracy consolidation — 13-case labeled set at 100%, 61% of snapshot decisions moved to concept direct-match; circuit-breaker factory resolves at call time, killing module-alias splits; snippet tag hygiene and caliber dedup; ZCode panel three-tab layout; test env snapshot-restore hardening. See [release notes](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **Routing precision consolidation + commercial intent macro + overseas video lane + community fixes**: added `@commercial_market` macro across pharma domains; keyless overseas video via `parallel_free` + YouTube dedup; fixed local-seek zero-match double-run tax and missing-tool warnings; `url_kind: none` spec support and dead link guards; engine status consistency; decoupled nightly drift baseline. See [release notes](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **284 sources + video search and fetch + crawl frontier quality control**: five Metaso tiers, Sciverse, NCPSSD and five DSH/skill index sources; a `video` domain with `--video`/`--min-duration`/`--max-duration`, Bilibili subtitles and YouTube timedtext with optional ASR; crawl frontier quality control and noisy-diff `argo watch`; measured general source selection with the DeepSeek English hedge and authority early-stop; venv-based installer. See [release notes](docs/RELEASE_NOTES_v2.10.0.md). |

@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-286-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.10.2)
+### 대략적인 능력 세트 (v2.11.2)
 
 Argo가 하는 일을 한 줄로 말하면, 질문을 도메인과 언어로 알맞은 소스에 보내고, 돌아온 결과를 신뢰도로 줄세워, 에이전트에는 줄세우고 검증할 수 있는 재료를 넘긴다. 검색·긁기·증거 확인·로컬 파일 검색은 같은 파이프라인을 흐르고, 19개 MCP 도구는 CLI 명령과 일대일로 대응하므로 어떤 형태로 설치해도 능력이 빠지지 않는다. 단독 명령도 몇 개 있다: argo tweet은 X 게시물을 묶고, argo auth는 로그인 상태를 관리하며, argo job은 채용 정보를 모은다. 전체 소스의 비용·키·상태는 docs/ENGINE_CATALOG.md에 있다: 286 소스, 240 무설정, 99 도메인.
 
@@ -703,6 +703,14 @@ argo/
 
 최근 세 버전만 싣습니다. 전체 이력은 [변경 이력](#변경-이력), 각 버전의 상세는 [Releases](https://github.com/taxueseek/argo/releases)에서 볼 수 있습니다.
 
+### v2.11.2: 역이미지 검색 보강 + 4가지 조용한 실패 수습 + 본체 CI 수정
+
+- **역이미지 검색 보강**: SauceNAO(Pixiv/Pawoo 출처), AnimeTrace(캐릭터/작품→Bangumi), Google Lens(SerpAPI, 3단계 매칭) 명시 전용 엔진 추가, 모두 `explicit_only`; 만료된 tineye(HTTP 422)는 완전 제거
+- **keyRefs 인증이 키 필요 엔진에 도달** (#41): dsh 플러그인의 search/fetch provider가 MCP 풀에 `hostCredentials`를 전달해 `skipped-missing-env` 해소
+- **쿼터 상태 머신 3개 수정** (#42): key_fp를 `required_env`와 동일 출처로(13개 엔진 키 교체 시 자가 회복), HTTP 402 잔액 부족은 1시간 짧은 쿨다운(30일 잠금 해소), 오류에 `quota.py reset` 안내 추가
+- **소셜 엔진 env 수정** (#36): xhs/twitter 서브프로세스에 UTF-8 환경, `NO_PROXY [::1]` 제거, `TWITTER_*` 인증과 프록시 전달
+- **본체 CI 수정**: `lint_spec_contracts.py`를 공용 `yaml_load` 경유로 전환해 main의 unit/extras 녹색화
+
 ### v2.10.2: 시맨틱 라우팅 3단계 + 라벨 정확도 76.9%→100% + 서킷브레이커 분할 수정
 
 - **라벨 라우팅 정확도 76.9%→100%**: 13건 사람 라벨 집합과 실행 가능성 게이트로 두 부류의 의도 충돌을 수습 — 원리/해설 쿼리는 더 이상 학술 라이브러리로, 플랫폼 가이드 쿼리는 더 이상 소셜 리스닝으로 흐르지 않음; 스냅샷 201건 중 123건(61%)이 tfidf 채점에서 regex/콘셉트 직접 판정으로 전환
@@ -753,6 +761,7 @@ argo/
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.11.2** | **역이미지 검색 보강 + 4가지 조용한 실패 수습 + 본체 CI 수정**: SauceNAO/AnimeTrace/Google Lens 명시 전용 역이미지 엔진 추가 및 만료된 tineye 제거; keyRefs 인증을 dsh 플러그인 provider 경유로 MCP 풀에 전달(#41); 쿼터 키 교체 자가 회복 + 402 30일 잠금 수정 + reset 안내(#42); xhs/twitter 서브프로세스 env와 인증 전달(#36); lint_spec_contracts를 공용 YAML loader 경유로 본체 CI 해소. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **시맨틱 라우팅 3단계 + 라벨 정확도 76.9%→100% + 서킷브레이커 분할 수정**: 관련성 앵커 가중치 + 정적 콘셉트 벡터 테이블(`ARGO_CONCEPT_ROUTER=1`, 기본 꺼짐) + 라우팅 정확도 수습 — 13건 라벨 집합 100%, 스냅샷 61%가 콘셉트 직접 판정으로 전환; 서킷브레이커 팩토리를 호출 시점 해석으로 바꿔 모듈 별칭 분할 해소; 스니펫 태그 위생과 기준 중복 제거; ZCode 패널 3탭 버전; 테스트 환경 스냅샷 복원 강화. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **라우팅 정밀도 수습 + 상업 의도 매크로 + 해외 비디오 레인 + 커뮤니티 이슈 수정**: 선언적 거부 매크로 `@commercial_market` 도입, `parallel_free` 해외 비디오 레인 및 YouTube URL 정규화, local-seek 0건 이중 실행 해소 및 경고 전달, URL 없는 소스 `url_kind: none` 지원 및 데드링크 방지, 엔진 상태 정합성, 야간 드리프트 게이트 분리. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **소스 284개 + 영상 검색과 가져오기 + 크롤 프론티어 품질 관리**: 메타소 다섯 등급, Sciverse, NCPSSD, DSH/스킬 색인 5종 추가. `video` 영역과 `--video`/`--min-duration`/`--max-duration`, B 站 자막과 YouTube timedtext, 선택적 ASR. 크롤 프론티어 품질 관리와 `argo watch` 노이즈 diff. 범용 소스 선택 실측 순서 + DeepSeek 영어 헤지 + 권위 조기 종료. 설치기 venv화. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.10.0.md). |

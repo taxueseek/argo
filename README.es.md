@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.10.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-286-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.10.2)
+### Conjunto aproximado de capacidades (v2.11.2)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 286 fuentes, 240 sin clave, 99 dominios.
 
@@ -703,6 +703,14 @@ argo/
 
 Solo las tres versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.11.2: Motores de búsqueda inversa añadidos + cuatro fallos silenciosos cerrados + arreglo de CI en main
+
+- **Búsqueda inversa completada**: SauceNAO (fuentes Pixiv/Pawoo), AnimeTrace (personaje/obra -> Bangumi), Google Lens (SerpAPI, tres niveles) — todos `explicit_only`; el tineye muerto (HTTP 422) se elimina por completo
+- **Las credenciales keyRefs llegan a los motores que necesitan clave** (#41): los providers search/fetch del plugin dsh ahora llevan `hostCredentials` al pool MCP, sin más `skipped-missing-env`
+- **Máquina de estado de cuota, tres arreglos** (#42): key_fp desde `required_env` (13 motores se auto-recuperan al cambiar clave), los errores HTTP 402 reciben enfriamiento de 1h en vez de bloqueo de 30 días, y el texto ahora indica `quota.py reset`
+- **Arreglo de env de motores sociales** (#36): el subproceso xhs/twitter recibe env UTF-8, se elimina `NO_PROXY [::1]`, y se reenvían credenciales `TWITTER_*` y proxy
+- **Arreglo de CI en main**: `lint_spec_contracts.py` pasa por el `yaml_load` compartido, poniendo en verde los shards unit/extras de main
+
 ### v2.10.2: Enrutado semántico en tres pasos + precisión etiquetada 76.9%→100% + corrección de división del circuit-breaker
 
 - **Precisión de enrutado etiquetado 76.9%→100%**: un conjunto etiquetado de 13 casos más una compuerta de ejecutabilidad cierran dos clases de colisión de intención — las consultas de principio/explicación ya no caen en bibliotecas académicas y las de guías de plataforma ya no disparan escucha social; 123 de 201 consultas del snapshot (61%) pasaron de puntuación tfidf a coincidencia directa por regex/concepto
@@ -753,6 +761,7 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 
 | Versión | Notas |
 |---------|-------|
+| **v2.11.2** | **Motores de búsqueda inversa + cuatro fallos silenciosos cerrados + arreglo de CI en main**: añade SauceNAO/AnimeTrace/Google Lens como motores de búsqueda inversa explicit-only y elimina el tineye muerto; credenciales keyRefs reenviadas por los providers del plugin dsh al pool MCP (#41); auto-recuperación de clave de cuota + arreglo del bloqueo de 30 días por 402 + pista de reset (#42); env y reenvío de credenciales de subproceso xhs/twitter (#36); lint_spec_contracts por el YAML loader compartido despeja el CI de main. Ver [notas de la versión](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **Enrutado semántico en tres pasos + precisión etiquetada 76.9%→100% + corrección de división del circuit-breaker**: ponderación por anclas de relevancia + tabla estática de vectores de conceptos (`ARGO_CONCEPT_ROUTER=1`, apagado por defecto) + consolidación de precisión — 13/13 en el conjunto etiquetado, 61% de las decisiones del snapshot pasan a coincidencia directa por concepto; la fábrica del circuit-breaker resuelve en tiempo de llamada y elimina divisiones por alias de módulo; higiene de etiquetas de snippet y dedupe de calibres; panel ZCode de tres pestañas; endurecimiento de restauración de entorno en tests. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **Consolidación de precisión de enrutado + macro comercial + vídeo extranjero + correcciones**: macro `@commercial_market` en farma; vídeo en el extranjero con `parallel_free` y desduplicación de YouTube; eliminación de doble ejecución en local-seek; soporte de `url_kind: none` y guardas de enlaces muertos; estado coherente de motores; desacople de deriva nocturna. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.1.md). |
 | **v2.10.0** | **284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo**: cinco niveles de Metaso, Sciverse, NCPSSD y cinco fuentes de DSH/índices de skills; dominio `video` con `--video`/`--min-duration`/`--max-duration`, subtítulos de Bilibili y timedtext de YouTube con ASR opcional; control de frontera del rastreo y diff de ruido en `argo watch`; selección general medida con cobertura de DeepSeek en inglés y parada temprana por autoridad; instalador con venv. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.0.md). |
