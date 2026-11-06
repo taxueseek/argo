@@ -110,6 +110,10 @@ export function setEnvResolver(fn) {
   activeEnvResolver = fn
 }
 
+export function resetEnvResolver() {
+  activeEnvResolver = null
+}
+
 export async function resolveEnv(options = {}, config = undefined) {
   if (typeof activeEnvResolver === 'function') {
     return activeEnvResolver(options, config)
@@ -274,7 +278,8 @@ export function createMcpConnection(options) {
         } catch { /* ignore */ }
       }
     },
-    close
+    close,
+    dispose: close,
   }
   return conn
 }
@@ -350,7 +355,12 @@ export async function acquireMcp(options, signal) {
 }
 
 export function disposeSharedMcp() {
-  for (const conn of [...mcpPool]) conn.close()
+  for (const conn of [...mcpPool]) {
+    try {
+      if (typeof conn.dispose === 'function') conn.dispose()
+      else conn.close()
+    } catch { /* ignore */ }
+  }
   mcpPool.length = 0
 }
 

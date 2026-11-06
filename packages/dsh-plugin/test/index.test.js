@@ -3,7 +3,32 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { normalizeTracks, stageTracks, evaluateGates, normalizeSource, normalizeSourceUrl, mapArgoToWebResult, buildLocalSources, parseJsonArray, parseJsonObject, extractValues, resolveNativeSpawn, resolveArgoEnv, makeNativeTool, buildChildToolFilters, apply, nativeViaMcpPool, disposeSharedMcp, startStructured, providerSupportsStructured, fetchViaArgo, mapArgoToWebFetch, classifyFetchError, runNativeCall, searchViaArgoMCP } from '../dsh/index.js'
+import { apply, buildChildToolFilters, resolveArgoEnv } from '../dsh/index.js'
+import {
+  normalizeTracks,
+  stageTracks,
+  evaluateGates,
+  normalizeSource,
+  normalizeSourceUrl,
+  buildLocalSources,
+  parseJsonArray,
+  parseJsonObject,
+  extractValues,
+  startStructured,
+  providerSupportsStructured,
+} from '../dsh/wide-research.js'
+import {
+  mapArgoToWebResult,
+  resolveNativeSpawn,
+  makeNativeTool,
+  nativeViaMcpPool,
+  disposeSharedMcp,
+  fetchViaArgo,
+  mapArgoToWebFetch,
+  classifyFetchError,
+  runNativeCall,
+  searchViaArgoMCP,
+} from '../dsh/runner.js'
 import { NATIVE_TOOLS } from '../dsh/native-tools.mjs'
 
 test('mapArgoToWebResult maps compact argo payload to web sources', () => {
@@ -179,7 +204,7 @@ test('persistReport writes to <dir>/<ts>-<slug>.md and returns absolute path', a
   const { mkdtemp, readFile } = await import('node:fs/promises')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
-  const { persistReport } = await import('../dsh/index.js')
+  const { persistReport } = await import('../dsh/wide-research.js')
   const dir = await mkdtemp(join(tmpdir(), 'argo-report-'))
   const file = await persistReport(dir, '测试 报告？问题', '# Report\ncontent')
   assert.ok(file.startsWith(dir))

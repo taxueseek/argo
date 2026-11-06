@@ -29,41 +29,19 @@ import {
   DEFAULTS,
   PLUGIN_VERSION as RUNNER_PLUGIN_VERSION,
   setEnvResolver,
-  resolveEntry,
-  resolveNativeSpawn,
+  resetEnvResolver,
   makeNativeTool,
-  nativeViaMcpPool,
-  runNativeCall,
   disposeSharedMcp,
-  searchViaArgoMCP,
   fetchViaArgo,
   mapArgoToWebResult,
-  mapArgoToWebFetch,
   classifyFetchError,
-  argoAborted,
-  argoToolError,
 } from './runner.js'
 
 import {
-  normalizeTracks,
-  stageTracks,
-  evaluateGates,
-  normalizeSource,
-  normalizeSourceUrl,
-  buildLocalSources,
-  parseJsonArray,
-  parseJsonObject,
-  extractValues,
-  persistReport,
-  startStructured,
-  providerSupportsStructured,
-  recomputeViaArgoMCP,
   createWideResearchTool,
 } from './wide-research.js'
 
 import {
-  getMcpPoolStats,
-  resetMcpPool,
   getRouteHealth,
 } from './diagnostics.js'
 
@@ -92,7 +70,7 @@ function resolvePluginVersion() {
   return RUNNER_PLUGIN_VERSION || '0.0.0-unknown'
 }
 
-export const PLUGIN_VERSION = resolvePluginVersion()
+const PLUGIN_VERSION = resolvePluginVersion()
 
 export const name = 'wide-research'
 export const inject = ['tools', 'subagents', 'systemPrompt', 'web']
@@ -182,7 +160,7 @@ function parseArgoEnvLine(line) {
   return { name, value }
 }
 
-export function argoEnvOverlay(config = activeConfig) {
+function argoEnvOverlay(config = activeConfig) {
   const overlay = {}
   for (const entry of asStringArray(config?.argoEnv, 64)) {
     const parsed = parseArgoEnvLine(entry)
@@ -498,6 +476,8 @@ export function apply(ctx, providedConfig = {}) {
       try { dispose?.() } catch { /* ignore */ }
     }
     nativeRegistrations.clear()
+    resetEnvResolver()
+    disposeSharedMcp()
   })
 
   ctx.tools.register(createWideResearchTool(ctx, config, {
@@ -524,31 +504,4 @@ export function apply(ctx, providedConfig = {}) {
   } catch { /* ignore */ }
 
   return { childIds, syncNativeTools }
-}
-
-export {
-  normalizeTracks,
-  stageTracks,
-  evaluateGates,
-  normalizeSource,
-  normalizeSourceUrl,
-  buildLocalSources,
-  parseJsonArray,
-  parseJsonObject,
-  extractValues,
-  nativeViaMcpPool,
-  runNativeCall,
-  resolveNativeSpawn,
-  makeNativeTool,
-  disposeSharedMcp,
-  startStructured,
-  providerSupportsStructured,
-  fetchViaArgo,
-  mapArgoToWebResult,
-  mapArgoToWebFetch,
-  classifyFetchError,
-  searchViaArgoMCP,
-  persistReport,
-  getMcpPoolStats,
-  resetMcpPool,
 }

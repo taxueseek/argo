@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { getMcpPoolStats, resetMcpPool } from '../dsh/index.js'
+import { getMcpPoolStats, resetMcpPool } from '../dsh/diagnostics.js'
 
 test('diagnostics: getMcpPoolStats returns pool status and active loads', () => {
   const dummyPool = [
