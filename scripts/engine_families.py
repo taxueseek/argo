@@ -400,9 +400,10 @@ def family_of(engine: str, spec: dict[str, Any] | None = None) -> str:
 # 可达性门统一从这里取）。config.yaml 引擎声明 `langs` 时以其为准；
 # 未声明的引擎 = ["*"]（语言中立：anysearch/github/wikipedia/arxiv/local_* 等）。
 ENGINE_LANGS: dict[str, list[str]] = {
-    # 纯英文社区（对中文查询几乎零召回）
+    # 纯英文社区与纯英文学术聚合（对中文查询几乎零召回）
     "hackernews": ["en"], "reddit": ["en"], "twitter": ["en"],
     "nitter": ["en"], "lobsters": ["en"],
+    "openalex": ["en"], "europepmc": ["en"],
     # 中文专用（对 en/ja/ko 几乎零召回）
     "zhihu": ["zh"], "zhihu_global": ["zh"], "zhihu_hot": ["zh"],
     "zhihu_user": ["zh"], "zhihu_content": ["zh"],

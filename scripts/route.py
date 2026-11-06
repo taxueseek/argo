@@ -381,11 +381,11 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
             _specs_snapshot()))
         _filtered = [e for e in engines_combo if e not in _drop]
         engines_combo = _filtered or [e for e in ["anysearch"] if e in enabled] or engines_combo
-    # 🔑 中文查询 + 学术类域 → 剔除英文论文源（openalex/europepmc 对中文查询噪声大）
+    # 🔑 中文查询 + 学术类域 → 剔除纯英文论文源（ENGINE_LANGS 声明 langs=["en"]）
     if (domain.get("name") in ("tech_deep", "academic")
             and any("\u4e00" <= ch <= "\u9fff" for ch in query)):
         engines_combo = [e for e in engines_combo
-                         if e not in ("openalex", "europepmc")]
+                         if engine_langs(e, _specs_snapshot().get(e)) != {"en"}]
         if not engines_combo:
             engines_combo = [e for e in ["arxiv", "anysearch", "local_search"]
                              if e in enabled]

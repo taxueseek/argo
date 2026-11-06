@@ -75,55 +75,128 @@ _ZH_LANG_GATED_DOMAINS = frozenset({
 _compiled_domains: list[dict[str, Any]] | None = None
 _compiled_domains_id: tuple | None = None  # (name, patterns/exclude_if 内容指纹)
 _compiled_domains_ref: int | None = None
-_anchor_matcher: re.Pattern | None = None
+_anchor_matcher: Any = None
 _anchor_to_domains: dict[str, list[int]] = {}
+_anchor_first_char_lens: dict[str, list[int]] = {}
 _unconstrained_domains: set[int] = set()
 
+_ANCHOR_LOOKAROUND_RE = re.compile(r"\(\?[=!<][^()]*\)")
+_ANCHOR_OPT_GROUP_RE = re.compile(r"\((?:\?:)?[^()]+\)(?:\?|\*|\{0,[^}]*\})")
+_ANCHOR_CHARSET_RE = re.compile(r"\[(?:\\.|[^\]\\])*\]\??\*?\+?(?:\{\d+,?\d*\})?")
+_ANCHOR_ESCAPE_RE = re.compile(r"\\[wWdDsSbB]|\\.")
+_ANCHOR_OPT_CHAR_RE = re.compile(r"[^()|\\]\?|\.\*|\.\+|\.\?")
+_ANCHOR_QUANT_RE = re.compile(r"\{\d+,?\d*\}")
+_ANCHOR_INNER_GROUP_RE = re.compile(r"\((?:\?:)?([^()]+)\)")
+_ANCHOR_RUN_RE = re.compile(
+    r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]{1,}"
+    r"|[a-zA-Z0-9_\-\.\u00c0-\u024f\u0400-\u04ff\u0600-\u06ff\u0590-\u05ff\u0e00-\u0e7f]{2,}"
+)
 
-def _extract_anchors(src: Any) -> set[str] | None:
-    """从正则源码中提取一组必须包含其一的字面锚点词集合（全小写）。
 
-    若无法提取安全锚点（如含有纯通配、字符集类 []、通用转义字符类），返回 None。
-    """
-    if not isinstance(src, str) or not src:
-        return None
-    s = re.sub(r"^\(\?[a-zA-Z]+\)", "", src)
-    s = re.sub(r"\\b", "", s)
-    if s.startswith("(") and s.endswith(")"):
-        s = s[1:-1]
+def _split_top_level_pipe(s: str) -> list[str]:
     parts: list[str] = []
     depth = 0
+    in_br = False
+    escape = False
     cur: list[str] = []
     for ch in s:
-        if ch in ("(", "["):
-            depth += 1
-        elif ch in (")", "]"):
-            depth -= 1
-        if ch == "|" and depth == 0:
-            parts.append("".join(cur))
-            cur = []
-        else:
+        if escape:
             cur.append(ch)
+            escape = False
+            continue
+        if ch == "\\":
+            cur.append(ch)
+            escape = True
+            continue
+        if ch == "[" and not in_br:
+            in_br = True
+        elif ch == "]" and in_br:
+            in_br = False
+        elif not in_br:
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            elif ch == "|" and depth == 0:
+                parts.append("".join(cur))
+                cur = []
+                continue
+        cur.append(ch)
     if cur:
         parts.append("".join(cur))
+    return parts
 
+
+def _extract_anchors(src: Any, _depth: int = 0) -> set[str] | None:
+    """从正则源码中提取一组必须包含其一的字面锚点词集合（全小写）。
+
+    对每个顶层 | 分支提取必现字面量（剥离环视断言、字符集、转义类与可选量词），
+    若某分支无顶层字面量但含必现括号组，则递归提取该组的锚点并求并集。
+    若任一分支无法提取安全锚点，返回 None（该域归入 _unconstrained_domains）。
+    """
+    if not isinstance(src, str) or not src or _depth > 3:
+        return None
+    s = re.sub(r"^\(\?[a-zA-Z]+\)", "", src.strip())
+    while s.startswith("(") and s.endswith(")"):
+        inner = s[1:-1]
+        if len(_split_top_level_pipe(inner)) >= 1 and inner.count("(") == inner.count(")"):
+            d = 0
+            ok = True
+            for ch in inner:
+                if ch == "(":
+                    d += 1
+                elif ch == ")":
+                    d -= 1
+                    if d < 0:
+                        ok = False
+                        break
+            if ok and d == 0:
+                s = inner
+                continue
+        break
+    if s.startswith("?:"):
+        s = s[2:]
+
+    parts = _split_top_level_pipe(s)
+    if not parts:
+        return None
     anchors: set[str] = set()
     for part in parts:
-        # 正则字符类与元字符无法保证字面子串存在
-        if re.search(r"\[.*?\]", part) or re.search(r"\\[wWdDsS]", part):
+        p_no_la = _ANCHOR_LOOKAROUND_RE.sub(" ", part)
+        p_no_opt_grp = _ANCHOR_OPT_GROUP_RE.sub(" ", p_no_la)
+        p_outside = re.sub(r"\([^()]*\)", " ", p_no_opt_grp)
+        while "(" in p_outside and ")" in p_outside:
+            p_outside_next = re.sub(r"\([^()]*\)", " ", p_outside)
+            if p_outside_next == p_outside:
+                break
+            p_outside = p_outside_next
+        p_clean = _ANCHOR_CHARSET_RE.sub(" ", p_outside)
+        p_clean = _ANCHOR_ESCAPE_RE.sub(" ", p_clean)
+        p_clean = _ANCHOR_OPT_CHAR_RE.sub(" ", p_clean)
+        p_clean = _ANCHOR_QUANT_RE.sub(" ", p_clean)
+        runs = _ANCHOR_RUN_RE.findall(p_clean)
+        valid = [r.strip(".-_").lower() for r in runs if len(r.strip(".-_")) >= 2 or any("\u4e00" <= c <= "\u9fff" for c in r)]
+        valid = [v for v in valid if v]
+        if valid:
+            anchors.add(max(valid, key=len))
+            continue
+        found_grp = False
+        for m_grp in _ANCHOR_INNER_GROUP_RE.finditer(p_no_opt_grp):
+            grp_anc = _extract_anchors(m_grp.group(1), _depth + 1)
+            if grp_anc:
+                anchors.update(grp_anc)
+                found_grp = True
+                break
+        if not found_grp:
             return None
-        runs = re.findall(r"[\u4e00-\u9fff]{1,}|[a-zA-Z0-9_\-\.]{2,}", part)
-        if not runs:
-            return None
-        for r in runs:
-            anchors.add(r.lower())
     return anchors if anchors else None
 
 
 def _init_anchor_index(compiled: list[dict[str, Any]]) -> None:
-    """初始化全局锚点自动机索引（方案一：Aho-Corasick 前置快速分桶）。"""
-    global _anchor_matcher, _anchor_to_domains, _unconstrained_domains
+    """初始化全局锚点字典索引（子串闭包 + 首字符长度表贪心扫描）。"""
+    global _anchor_matcher, _anchor_to_domains, _anchor_first_char_lens, _unconstrained_domains
     _anchor_to_domains = {}
+    _anchor_first_char_lens = {}
     _unconstrained_domains = set()
     all_anchors: set[str] = set()
 
@@ -149,23 +222,46 @@ def _init_anchor_index(compiled: list[dict[str, Any]]) -> None:
                 all_anchors.add(term)
 
     if all_anchors:
-        sorted_terms = sorted(all_anchors, key=len, reverse=True)
-        escaped = [re.escape(t) for t in sorted_terms]
-        _anchor_matcher = re.compile("|".join(escaped), re.IGNORECASE)
+        by_fc: dict[str, set[int]] = {}
+        for t in all_anchors:
+            by_fc.setdefault(t[0], set()).add(len(t))
+        _anchor_first_char_lens = {
+            k: sorted(v, reverse=True) for k, v in by_fc.items()
+        }
+        _anchor_matcher = True
     else:
         _anchor_matcher = None
 
 
 def _get_candidate_domain_indices(query: str) -> set[int] | None:
-    """通过锚点词快速扫描返回候选域索引集合；无索引时返回 None。"""
-    if _anchor_matcher is None:
+    """通过锚点字典快速扫描返回候选域索引集合；无索引时返回 None。
+
+    为与旧 `_anchor_matcher.finditer` 的非重叠贪心最长匹配语义逐位一致，
+    命中长为 ln 的锚点词后游标推进 ln（不回看其内部被长词覆盖的短子串）。
+    """
+    if not _anchor_matcher:
         return None
     candidates = set(_unconstrained_domains)
-    for m in _anchor_matcher.finditer(query):
-        term = m.group(0).lower()
-        doms = _anchor_to_domains.get(term)
-        if doms:
-            candidates.update(doms)
+    q_low = query.lower()
+    qn = len(q_low)
+    fc_map = _anchor_first_char_lens
+    a2d = _anchor_to_domains
+    i = 0
+    while i < qn:
+        lens = fc_map.get(q_low[i])
+        if not lens:
+            i += 1
+            continue
+        rem = qn - i
+        matched_ln = 0
+        for ln in lens:
+            if ln <= rem:
+                doms = a2d.get(q_low[i:i + ln])
+                if doms:
+                    candidates.update(doms)
+                    matched_ln = ln
+                    break
+        i += matched_ln if matched_ln > 0 else 1
     return candidates
 
 
