@@ -886,7 +886,7 @@ Apache License 2.0 © 2026 [taxueseek](https://github.com/taxueseek)
 
 ---
 
-> 好的搜索不是让你看得更多，是让你更敢下结论——以及知道什么时候还不该下结论。
+> 好的搜索不仅仅让你看得更多更广，能够消除信息差，找出你最关心的地方。
 
 <p align="center">
   <picture>
