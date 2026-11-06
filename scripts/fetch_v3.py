@@ -1231,6 +1231,11 @@ def _strip_html_unless_needed(result: dict, need_html: bool) -> dict:
     return result
 
 
+def _is_wechat_article_url(url: str) -> bool:
+    """微信公众号文章 URL（文章页 path 以 /s 开头，含 /s?__biz= 与 /s/ 两种）。"""
+    return "mp.weixin.qq.com/s" in url
+
+
 def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
              use_browser_fallback: bool = True,
              actions: list[dict] | None = None,
@@ -1320,6 +1325,50 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             return _strip_html_unless_needed(result, need_html)
     except ImportError:
         pass
+
+    # 微信公众号文章走专用降级链（HTTP→CDP→搜狗，唯一来源 wechat_article.py，
+    # 即 `argo wx` 同一实现）：通用 HTML 链对 mp.weixin 只能拿到 JS 骨架，
+    # 正文全空（2026-11-01 实测缺口：fetch 对 mp.weixin 零处理）。robots 已在
+    # 上方拦截，这里只做域名分流；need_html/actions/force_browser 同视频分支让路。
+    if (_is_wechat_article_url(url) and not need_html and not actions
+            and not force_browser):
+        try:
+            from wechat_article import fetch_wechat_article
+            _wx = fetch_wechat_article(url)
+        except Exception:
+            _wx = None
+        if _wx and _wx.get("ok"):
+            _wx_result = {
+                "url": url,
+                "title": _wx.get("title") or "",
+                "content": (_wx.get("content") or "")[:max_chars],
+                "html": "",
+                "length": int(_wx.get("char_count") or 0),
+                "success": True,
+                "fetch_method": "wechat:" + str(
+                    _wx.get("fetch_method") or "http_direct"),
+                "author": _wx.get("author") or "",
+                "publish_time": _wx.get("publish_time") or "",
+            }
+            try:
+                _wx_result = _assess_quality(_wx_result)
+            except Exception:
+                pass
+            _wx_result["cached"] = False
+            return _strip_html_unless_needed(_wx_result, need_html)
+        # 专用链三级（HTTP→CDP→搜狗）全败即结构化失败、不落回通用链：
+        # 通用链对 mp.weixin 只会拿 JS 骨架冒充成功（11-01 实测病灶），
+        # 「失败的诚实」好过「成功的空壳」；_has_content 已保证到不了这的
+        # 都是三通道都判负的真失败。
+        return _strip_html_unless_needed({
+            "url": url,
+            "title": "", "content": "", "html": "",
+            "length": 0, "success": False,
+            "error": (_wx or {}).get("error")
+                     or "微信公众号文章抓取失败（HTTP/浏览器/搜狗三通道均未取到正文）",
+            "fetch_method": "wechat_failed",
+            "cached": False,
+        }, need_html)
 
     # 登录态车道（A2）：站点有 argo auth 持久 profile → 跳过匿名链直进浏览器。
     # 匿名 HTTP 对已登录站只会拿到「登出态」内容——那是成功的假象，比失败更糟。

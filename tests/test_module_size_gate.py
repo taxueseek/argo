@@ -96,8 +96,13 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-14 7ca2f22 移除 OSV/CISA KEV 代码段（−261）；"
               "2026-11-04 移除 tineye 构建器（−78）"),
     "scripts/fetch_v3.py": (
-        1857, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
+        1906, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
+              "2026-11-07 +49：微信公众号文章前置分支（mp.weixin 域分流到 "
+              "wechat_article.fetch_wechat_article，即 `argo wx` 同一实现；"
+              "本体在 wechat_article.py，此处只留 _is_wechat_article_url "
+              "判定、接线与结果形状映射，修 11-01 实测缺口「fetch 对 "
+              "mp.weixin 零处理」）；"
               "2026-11-06 +21：_IDENTITY_PATH 改 PEP 562 调用期解析"
               "（模块级 env 绑定灭类，test_env_binding_gate 配套）；"
               "2026-09-27 +10：identity memory 内存缓存（dirty flag + 30s 写盘节流）；"
