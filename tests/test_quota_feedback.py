@@ -73,6 +73,34 @@ class TestRemoteQuotaStateMachine(unittest.TestCase):
         self.assertFalse(mgr.is_remote_exhausted("byted"))
         self.assertFalse(mgr.is_hard_down("byted"))
 
+    def test_balance_error_and_legacy_empty_key_fp_auto_heal(self):
+        """存量 402 余额标记按 1h 冷却自愈；历史空 key_fp 在有效密钥就位时自愈。"""
+        mgr = _fresh_manager()
+        now = time.time()
+        mgr._state["deepseek_search"] = {
+            "remote_exhausted": {
+                "until": now + 20 * 86400,
+                "reason": "HTTP 402: Insufficient Balance",
+                "marked_at": now - 7200,
+                "key_fp": "",
+            }
+        }
+        self.assertFalse(
+            mgr.is_remote_exhausted("deepseek_search"),
+            "超过 1h 冷却窗的存量 402 余额标记应自动过期自愈")
+        mgr._state["deepseek_search"] = {
+            "remote_exhausted": {
+                "until": now + 20 * 86400,
+                "reason": "10406: quota exhausted",
+                "marked_at": now - 60,
+                "key_fp": "",
+            }
+        }
+        with patch.object(QuotaManager, "_engine_key_fp", return_value="a1b2c3d4"):
+            self.assertFalse(
+                mgr.is_remote_exhausted("deepseek_search"),
+                "历史空 key_fp 记录在当前有效密钥指纹存在时应自动自愈")
+
 
 class TestRouteExclusion(unittest.TestCase):
     """路由组合层：配额死引擎全模式排除，备用源接管。"""

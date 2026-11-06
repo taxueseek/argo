@@ -482,8 +482,8 @@ class QuotaManager:
             from engine_env import get_env, missing_env_for, resolve_env_name
             spec = None
             try:
-                from engines import get_engine_spec
-                spec = get_engine_spec(engine)
+                from config import get_engines
+                spec = get_engines().get(engine)
             except Exception:
                 spec = None
             val = ""
@@ -515,11 +515,16 @@ class QuotaManager:
         """远端耗尽标记是否已失效（周期到期、数据损坏、或已更换新 API Key）。"""
         if not isinstance(mark, dict) or now >= float(mark.get("until") or 0):
             return True
+        marked_at = float(mark.get("marked_at") or 0)
+        if marked_at > 0 and _looks_like_balance_error(str(mark.get("reason") or "")):
+            if now >= marked_at + _BALANCE_QUOTA_COOLDOWN_S:
+                return True
         saved_fp = mark.get("key_fp")
         if saved_fp:
-            cur_fp = cls._engine_key_fp(engine)
-            if cur_fp != saved_fp:
+            if cls._engine_key_fp(engine) != saved_fp:
                 return True
+        elif "key_fp" in mark and cls._engine_key_fp(engine):
+            return True
         return False
 
     def mark_remote_exhausted(self, engine: str, reason: str = "",
