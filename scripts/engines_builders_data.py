@@ -404,12 +404,12 @@ def _build_clinicaltrials_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         import urllib.parse as up
+        q = " ".join(re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", query))
+        if not re.search(r"[A-Za-z]{2,}", q):
+            return []
         to = _timeout or timeout
         url = "https://clinicaltrials.gov/api/v2/studies?" + up.urlencode({
-            "query.term": query,
-            "pageSize": min(n, 20),
-            "format": "json",
-        })
+            "query.term": q, "pageSize": min(n, 20), "format": "json"})
         try:
             with http_open(urllib.request.Request(
                     url, headers={"User-Agent": "argo-search/2.5", "Accept": "application/json"}), timeout=to, engine=spec.get("_name", "")) as resp:
@@ -449,14 +449,14 @@ def _build_openfda_engine(spec: dict[str, Any]) -> Any:
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         import urllib.parse as up
         to = _timeout or timeout
-        # 清洗查询，优先 brand/generic 字段检索
-        q = re.sub(r"(?i)\b(drug|medicine|药品|药物|说明书|openfda|fda)\b", " ", query).strip()
-        q = q or query.strip()
+        # openFDA Lucene 语法与拉丁索引守卫：提取英文药名并剥离 CJK 与问号/冒号
+        q = re.sub(r"(?i)\b(drug|medicine|label|openfda|fda)\b", " ", query)
+        q = " ".join(re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", q))
+        if not re.search(r"[A-Za-z]{2,}", q):
+            return []
         search = f'openfda.brand_name:"{q}" openfda.generic_name:"{q}"'
         url = "https://api.fda.gov/drug/label.json?" + up.urlencode({
-            "search": search,
-            "limit": min(n, 20),
-        })
+            "search": search, "limit": min(n, 20)})
         try:
             with http_open(urllib.request.Request(
                     url, headers={"User-Agent": "argo-search/2.5", "Accept": "application/json"}), timeout=to, engine=spec.get("_name", "")) as resp:

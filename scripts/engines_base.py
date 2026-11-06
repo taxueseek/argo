@@ -492,7 +492,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
             for k, v in body_template.items():
                 resolved = _resolve(str(v), query, n, **kwargs)
                 if k == "search_depth":
-                    body[k] = depth
+                    body[k] = {"fast": "fast", "balanced": "basic", "deep": "advanced", "basic": "basic", "advanced": "advanced", "ultra-fast": "ultra-fast"}.get(str(depth), resolved or "basic")
                 elif resolved.lower() == "true":
                     body[k] = True
                 elif resolved.lower() == "false":
