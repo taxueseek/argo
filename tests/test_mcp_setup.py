@@ -214,6 +214,27 @@ class TestPlatformAndNewClients(TestMcpSetupBase):
             if old is not None:
                 os.environ["ARGO_ENV_FILE"] = old
 
+    def test_home_override_beats_xdg_config(self):
+        """HOME 覆盖（隔离跑）必须压过 XDG_CONFIG_HOME。
+
+        2026-11-06 实证：CI 分片 2 里 `XDG_CONFIG_HOME` 有值，隔离用的
+        `ARGO_HOME_OVERRIDE` 被它顶掉，共享 env 文件指回真实用户目录，
+        用例只在含本文件的这一片红。
+        """
+        old = os.environ.pop("ARGO_ENV_FILE", None)
+        old_xdg = os.environ.get("XDG_CONFIG_HOME")
+        os.environ["XDG_CONFIG_HOME"] = "/var/tmp/not-the-isolated-home"
+        try:
+            self.assertEqual(ms._get_shared_env_file(),
+                             Path(self.tmp) / ".config" / "argo" / "env")
+        finally:
+            if old is not None:
+                os.environ["ARGO_ENV_FILE"] = old
+            if old_xdg is None:
+                os.environ.pop("XDG_CONFIG_HOME", None)
+            else:
+                os.environ["XDG_CONFIG_HOME"] = old_xdg
+
     def test_cmd_config_outputs(self):
         from io import StringIO
         buf = StringIO()

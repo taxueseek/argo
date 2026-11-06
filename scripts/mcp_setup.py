@@ -315,6 +315,13 @@ def _get_shared_env_file() -> Path:
     override = os.environ.get("ARGO_ENV_FILE", "").strip()
     if override:
         return Path(override).expanduser()
+    # HOME 覆盖（e2e / 单测隔离）必须排在平台惯例变量之前：`XDG_CONFIG_HOME`
+    # 在部分 Linux 桌面与 CI 镜像里天生就有值，让它抢在前面等于隔离失效——
+    # 隔离跑仍去读写真实用户配置。2026-11-06 实证：CI 分片 2 上
+    # `ARGO_HOME_OVERRIDE` 指向临时目录，`_get_shared_env_file()` 却返回
+    # `/home/runner/.config/argo/env`，用例只在这一片红。
+    if os.environ.get("ARGO_HOME_OVERRIDE", "").strip():
+        return _home() / ".config" / "argo" / "env"
     if sys.platform.startswith("win"):
         base = os.environ.get("APPDATA", "").strip()
         if base:
