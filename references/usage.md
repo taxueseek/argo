@@ -3,7 +3,7 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（29 个，唯一事实=bin/argo 分发表）
+## 命令总览（30 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
@@ -31,6 +31,7 @@
 | `argo cite` | DOI 引用条目（四格式） |
 | `argo mcp` | 多客户端 MCP 注入/诊断/还原 |
 | `argo paths` | 路径自省与状态目录自检 |
+| `argo settings` | 本地只读设置页（单文件 HTML：密钥掩码状态 + 接入片段 + 开关现值，`--out`/`--no-open`） |
 | `argo daemon` | 常驻进程管理（search 自动走 UDS 快路径，见「argo daemon」节） |
 | `argo stats` | 使用日志与反馈状态（本地使用日志只读出口） |
 | `argo budget` | 按引擎的月度预算（原生币种；list/set/unset） |

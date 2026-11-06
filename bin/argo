@@ -715,6 +715,10 @@ def main():
         # template：查询模板（命名检索模式 → 展开并转发给 search / x-search）。
         # 注册表 references/query-templates.yaml，用户可加 ~/.config/argo/query-templates.yaml。
         "template":  ("template_cli.py", []),
+        # settings：本地只读设置页（单文件 HTML，掩码展示密钥状态与接入片段）。
+        # issue #44 的最小兑现：多 agent 客户端共享同一份配置透视，只读不写回，
+        # 编辑仍走 config.yaml / envfile；不进 MCP 工具面（同 paths）。
+        "settings":  ("settings_page.py", []),
     }
 
     if sub not in scripts:

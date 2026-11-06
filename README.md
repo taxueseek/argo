@@ -424,6 +424,8 @@ python3 scripts/search.py --list-engines --detail   # 逐源状态：配了 key 
 python3 scripts/health_check.py --all               # 真联网探针：验证 key 对端真认（可选）
 python3 bin/argo paths --check                      # 本机路径自检（可选）
 python3 bin/argo mcp status                         # MCP 注入/连通诊断（可选）
+python3 bin/argo settings --no-open                 # 本地只读设置页：密钥掩码状态
+                                                    # + 各客户端接入片段（可选）
 python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 ```
 
