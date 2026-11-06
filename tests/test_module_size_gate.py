@@ -282,7 +282,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "dsh_hub=1.15，单行带行尾注释，理由指向 config.yaml 的 "
               "dsh_plugin_search.score_floors）；上限 997 → 998"),
     "scripts/search_pipeline.py": (
-        989, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+        984, "搜索编排主管线（路由→分派→融合→恢复→漏斗输出）；"
+             "2026-11-07 −5：自适应记账的质量信号改为终榜边际贡献"
+             "（计算本体在 adaptive.marginal_contribution，此处只留调用点），"
+             "上限 989 → 984；"
              "2026-10-31 +5：usage_log 补 top_urls（头部结果 URL 截 5 条×200 字符，"
              "采纳回放地基——此前账本无法回放「哪条结果被上游采纳」），"
              "上限 984 → 989 随动登记；"

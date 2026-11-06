@@ -26,7 +26,7 @@ argo/
 │   ├── engine_families.py # 能力族分类（16 族，MECE）
 │   ├── engines.py        # 引擎适配层（_BUILDERS）
 │   ├── cache.py          # 双层缓存（L1 LRU + L2 SQLite + gzip）
-│   ├── adaptive.py       # 自适应学习（success×latency×cost）
+│   ├── adaptive.py       # 自适应学习（success×latency×cost×终榜边际贡献；(domain, lang) 桶 = 健康度收缩 × 场景召回率）
 │   ├── quota.py          # 配额管理
 │   ├── search_types.py   # 统一类型系统
 │   ├── research.py       # 深度研究取证调度（dossier）

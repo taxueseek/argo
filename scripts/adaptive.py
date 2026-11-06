@@ -82,6 +82,43 @@ def quality_factor(avg_quality: float | None, sum_quality: float | int | None) -
                min(QUALITY_FACTOR_MAX, 0.75 + 0.5 * avg))
 
 
+def marginal_contribution(merged: list[dict] | None, k: int,
+                          participants: list[str]) -> dict[str, float]:
+    """终榜边际贡献：每个参与引擎在融合后 top-k 里实际占了多少份额。
+
+    为什么不用词面相关度：旧口径给每个引擎记 `result_relevance(query, res)`，
+    五个源返回同一批结果时五个都拿高分——它奖励的是「看着相关」，不是
+    「对最终答案有贡献」。这里改为覆盖博弈的 Shapley 值：top-k 每条结果
+    价值 1，由 `consensus_engines` 里的引擎均分。独家结果整条归一个源，
+    被五个源同时召回的结果每个源只分到 1/5，同质冗余源的分数因此自然下降。
+
+    归一到「公平份额」：q = 0.5 × 份额占比 × 参与引擎数，截到 [0, 1]。恰好
+    拿到公平份额（含单引擎查询）记 0.5，`quality_factor` 映射成 1.0，中性；
+    两倍公平份额及以上记 1.0；没有一条进入 top-k 记 0.01（地板，原因见下）。两个源返回完全
+    相同的结果时各记 0.5，冗余不加分。
+
+    `merged` 为空时返回 {}：结果被后置过滤清空不是任何源的责任，调用方
+    据此记 None（不参与质量评分）。纯内存计算，O(k × 共识数)。
+    """
+    top = [r for r in (merged or [])[:max(int(k or 0), 1)] if isinstance(r, dict)]
+    names = [e for e in dict.fromkeys(participants or []) if e]
+    if not top or not names:
+        return {}
+    share = dict.fromkeys(names, 0.0)
+    for r in top:
+        cons = [e for e in dict.fromkeys(r.get("consensus_engines") or []) if e]
+        if not cons:
+            src = r.get("_engine") or r.get("source") or ""
+            cons = [src] if src else []
+        for e in cons:
+            if e in share:
+                share[e] += 1.0 / len(cons)
+    scale = 0.5 * len(names) / len(top)
+    # 地板 0.01 而不是 0：`quality_factor` 以 SUM(quality)>0 判「有无质量数据」，
+    # 一个从不进终榜的源若全记 0，会被当成「无数据」拿中性 1.0，反而逃过降权。
+    return {e: round(max(0.01, min(1.0, v * scale)), 4) for e, v in share.items()}
+
+
 def scenario_of(decision: dict | None) -> dict[str, str]:
     """从路由决策里抽 (domain, lang) 场景标签，供 record 分桶使用。
 
@@ -312,13 +349,14 @@ class AdaptiveLearner:
                   lang: str | None = None, purpose: str = "daily") -> float:
         """获取引擎的综合推荐分数（0.0 ~ 1.0）。
 
-        **HEB-DCB 正交解耦（全局健康度 vs 场景召回率）**：
-        1. 全局层（不传 domain/lang）：只按 `empty=0` 算成功率，防止垂直源被跨域
-           无召回查询误杀；
-        2. 场景分桶层（给 `domain` / `lang`）：在桶内引入 Beta(2, 0) 经验贝叶斯
-           场景召回因子 rho_recall = (2 + b_ok) / (2 + b_ok + b_empty)。无空结果时
-           rho_recall = 1.0，与旧口径逐位一致；当某源在特定 (domain, lang) 持续
-           返回空结果（b_empty > 0）时，仅下调该场景桶分，不污染其全局健康分。
+        **全局层**（不传 domain/lang）：只按 `empty=0` 算成功率，防止垂直源
+        被跨域无召回查询误杀。
+
+        **场景层**（给 `domain` / `lang`）：全局分 × 桶内健康度收缩 × 场景
+        召回率，见 `_blend_bucket`。某源在特定场景持续空结果只压低该场景分。
+
+        `quality` 列自 2026-11-07 起记的是终榜边际贡献（`marginal_contribution`），
+        不再是词面相关度。
         """
         return self.get_score_with_samples(
             engine, domain, lang, purpose)[0]
@@ -346,27 +384,47 @@ class AdaptiveLearner:
             score = self._score_from_row(grow, purpose)
             samples = int((grow[1] if grow else 0) or 0)
             if domain or lang:
-                brow = self._bucket_row(engine, domain or "", lang or "")
-                b_judged = int(brow[1] or 0)
-                b_ok = int(brow[2] or 0)
-                b_empty = int(brow[8] or 0) if len(brow) > 8 else 0
-                if b_judged > 0 and b_empty == 0:
-                    b_score = self._score_from_row(brow[:8], purpose)
-                    w = 0.5 if b_judged >= 3 else 0.3
-                    score = round((1 - w) * score + w * b_score, 4)
-                    samples = b_judged
-                elif b_empty > 0:
-                    rho_recall = (2.0 + b_ok) / (2.0 + b_ok + b_empty)
-                    base_b = (self._score_from_row(brow[:8], purpose)
-                              if b_judged > 0 else min(score, 0.5))
-                    b_score = base_b * rho_recall
-                    b_obs = b_judged + b_empty
-                    w = min(0.75, b_obs / (b_obs + 2.0)) if b_obs >= 3 else 0.3
-                    score = round((1 - w) * score + w * b_score, 4)
-                    samples = b_obs
+                score, samples = self._blend_bucket(
+                    score, samples,
+                    self._bucket_row(engine, domain or "", lang or ""), purpose)
 
         self._score_cache[key] = (score, samples, now + self.SCORE_CACHE_TTL)
         return score, samples
+
+    # 场景桶向全局分收缩的先验强度：桶内有效观测 n 条时桶的权重为 n/(n+2)。
+    # n=1 → 0.33，n=3 → 0.6，n=6 → 0.75，样本越多越信桶，无需分段常数。
+    BUCKET_PRIOR_N = 2.0
+    # 场景召回的 Beta 先验：未观测时召回率视为 1（不先验地惩罚任何源）。
+    RECALL_PRIOR_OK = 2.0
+
+    def _blend_bucket(self, g_score: float, g_samples: int, brow,
+                      purpose: str) -> tuple[float, int]:
+        """场景桶分 = 健康度 H × 场景召回率 R，两个因子各自做经验贝叶斯收缩。
+
+        - H：桶内有判定样本（非空结果）时，按 `BUCKET_PRIOR_N` 向全局分收缩；
+          没有判定样本时 H 就是全局分。
+        - R：Beta 后验均值 (a + 有结果次数) / (a + 有结果次数 + 空结果次数)。
+          某源在这个 (domain, lang) 下持续空结果，只压低这一桶，全局分不动。
+
+        替换此前的三条分支（w=0.3/0.5 固定权重、空结果另走 rho_recall 并把
+        基准截到 0.5、w 封顶 0.75）。桶完全无行时 H=全局分、R=1，与只看全局
+        逐位一致。
+        """
+        if not brow:
+            return g_score, g_samples
+        b_judged = int(brow[1] or 0)
+        b_ok = int(brow[2] or 0)
+        b_empty = int(brow[8] or 0) if len(brow) > 8 else 0
+        if b_judged + b_empty == 0:
+            return g_score, g_samples
+        health = g_score
+        if b_judged > 0:
+            b_health = self._score_from_row(brow[:8], purpose)
+            w = b_judged / (b_judged + self.BUCKET_PRIOR_N)
+            health = (1 - w) * g_score + w * b_health
+        a = self.RECALL_PRIOR_OK
+        recall = (a + b_ok) / (a + b_ok + b_empty)
+        return round(health * recall, 4), b_judged + b_empty
 
     def get_ranking(self) -> list[tuple[str, float]]:
         """获取所有引擎的推荐排名（降序）。空结果的排除口径同 `get_score`。"""

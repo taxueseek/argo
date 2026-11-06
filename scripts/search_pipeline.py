@@ -810,11 +810,12 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
     # 自适应学习（单事务批量写入 + cache_guard 统一状态态过滤）
     try:
         import contextlib
-        from adaptive import get_learner, scenario_of
+        from adaptive import get_learner, marginal_contribution, scenario_of
         learner = get_learner()
         _outcome_of = {o.get("engine"): o
                        for o in engine_outcomes if isinstance(o, dict)}
         _batch_ctx = learner.batch() if hasattr(learner, "batch") else contextlib.nullcontext()
+        _shares = marginal_contribution(merged, max_results, [e for e, r in raw_results.items() if r])  # 终榜边际贡献，见 adaptive
         with _batch_ctx:
             for eng, res in raw_results.items():
                 outcome = _outcome_of.get(eng)
@@ -826,13 +827,7 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
                 empty = (not success) and st in ("no-results", "no-results-cached")
                 latency = engine_latency.get(eng, elapsed / max(len(raw_results), 1))
                 cost = get_cost_factor(eng)
-                quality = None
-                if success:
-                    try:
-                        from query_signals import result_relevance
-                        quality = result_relevance(query, res)
-                    except Exception:
-                        quality = None
+                quality = _shares.get(eng) if success else None
                 learner.record(eng, success=success, latency_ms=latency,
                                cost=0.0 if cost >= 0.85 else 0.001, empty=empty,
                                quality=quality, **scenario_of(decision))

@@ -46,10 +46,27 @@ _STOPWORDS_CN = {
 _STOPWORDS_EN = {"the", "a", "an", "of", "for", "to", "please", "how", "what"}
 
 # 常见「过长尾修饰」：地点/时间/程度等，去掉后主体更聚焦
+# 年份只认「独立的四位数」：前后不能贴着数字、点、横线或斜杠。旧写法
+# `\b\d{4}` 只要求左边界，会把「GB/T 15834」的 1583 当年份切掉、剩下孤立
+# 的「4」（2026-11-07 实测 L1/L3 恢复都在用被改坏的查询）。
 _TAIL_MODIFIERS = re.compile(
-    r"(?:\b\d{4}年?(?:度)?|\b\d{1,2}月|"
-    r"最新|最全|详细|完整|全面|2020|2021|2022|2023|2024|2025|2026|"
+    r"(?:(?<![\w.\-/])\d{4}(?![\d.\-])年?(?:度)?|\b\d{1,2}月|"
+    r"最新|最全|详细|完整|全面|(?<!\d)(?:2020|2021|2022|2023|2024|2025|2026)(?!\d)|"
     r"知乎|贴吧|论坛|大全|汇总|排行榜|一览|数据|报告|统计|分析|趋势)"
+)
+
+# 标识符原子：放宽与切词时整体保留，不拆、不删。切词正则只认字母数字，
+# 「GB/T 15834-2011」会变成「GB T 15834 2011」，DOI、版本号同理被拆碎，
+# 这类精确标识一旦拆开，引擎就按散词召回。顺序即优先级（DOI 先于版本号）。
+_ATOM_RE = re.compile(
+    r"\b10\.\d{4,9}/[^\s\"'“”「」]+"                  # DOI
+    r"|\bCVE-\d{4}-\d{4,}\b"                           # CVE 编号
+    # 标准号：带斜杠前缀（GB/T、ISO/IEC）或已知标准组织前缀。不放开成任意
+    # 大写词加数字，否则「AI 2026」会被当成标准号、年份删不掉。
+    r"|\b(?:[A-Z]{2,6}/[A-Z]{1,3}|RFC|ISO|IEC|IEEE|GB|GJB|JIS|DIN|ASTM|ANSI|PEP|ECMA)"
+    r"[ \t]?\d{2,6}(?:[.:\-]\d+)*"
+    r"|\bv?\d+(?:\.\d+){1,3}\b"                        # 版本号、章节号
+    r"|(?<!\d)\d{5,}(?!\d)"                             # 长数字代码（股票代码等）
 )
 
 _QUOTE_CHARS = re.compile(r'["\'“”‘’「」『』]')
@@ -120,19 +137,27 @@ def _load_synonyms() -> dict[str, Any]:
 
 # ── L1 放宽 ────────────────────────────────────────────────────────────────────
 
+def _relax_plain(segment: str) -> list[str]:
+    """对不含标识符原子的片段去尾修饰、孤立年月与停用词，返回保留词。"""
+    seg = _TAIL_MODIFIERS.sub(" ", segment)
+    seg = re.sub(r"(?<=\s)[年月](?=\s|$)|^([年月]\s+)", " ", seg)
+    return [t for t in re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", seg)
+            if t.lower() not in _STOPWORDS_EN and t not in _STOPWORDS_CN]
+
+
 def relax_query(query: str) -> str:
-    """L1：去引号 / 去停用词 / 去过长尾修饰与孤立年份时间词。"""
+    """L1：去引号 / 去停用词 / 去过长尾修饰与孤立年份时间词。
+
+    标识符原子（标准号、DOI、CVE、版本号、长数字代码）原样保留，见 `_ATOM_RE`。
+    """
     q = _QUOTE_CHARS.sub(" ", query)
-    q = _TAIL_MODIFIERS.sub(" ", q)
-    # 清理孤立残留的年月单字
-    q = re.sub(r"(?<=\s)[年月](?=\s|$)|^([年月]\s+)", " ", q)
-    # 去停用词（按 token）
-    tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", q)
-    kept = []
-    for t in tokens:
-        if t.lower() in _STOPWORDS_EN or t in _STOPWORDS_CN:
-            continue
-        kept.append(t)
+    kept: list[str] = []
+    pos = 0
+    for m in _ATOM_RE.finditer(q):
+        kept.extend(_relax_plain(q[pos:m.start()]))
+        kept.append(m.group(0))
+        pos = m.end()
+    kept.extend(_relax_plain(q[pos:]))
     relaxed = " ".join(kept).strip()
     # 保底：去停用词后不能为空
     return relaxed or re.sub(r"\s+", " ", q).strip() or query

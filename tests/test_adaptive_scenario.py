@@ -47,7 +47,7 @@ def test_global_score_unchanged_without_bucket(learner):
 
 
 def test_bucket_blends_with_global(learner):
-    """桶样本 ≥3 时权重 0.5；桶分与全局分融合。"""
+    """桶向全局分收缩：3 条判定样本时桶权重 3/(3+2)=0.6。"""
     for _ in range(3):
         learner.record("eng", success=True, latency_ms=100, quality=1.0,
                        domain="chem", lang="zh")
@@ -57,8 +57,8 @@ def test_bucket_blends_with_global(learner):
     chem = learner.get_score("eng", "chem", "zh")
     sports = learner.get_score("eng", "sports", "en")
     assert chem > learner.get_score("eng") > sports
-    assert chem == pytest.approx(0.875, abs=1e-3)
-    assert sports == pytest.approx(0.25, abs=1e-3)
+    assert chem == pytest.approx(0.4 * 0.5 + 0.6 * 1.25, abs=1e-3)
+    assert sports == pytest.approx(0.4 * 0.5, abs=1e-3)
 
 
 def test_empty_bucket_falls_back_to_global(learner):
@@ -148,3 +148,72 @@ def test_heb_ucb_score_protects_low_sample_but_not_dead_source():
     assert AdaptiveLearner.heb_ucb_score(0.24, 2) >= 0.30
     # 随样本数增大（n=50），同分平庸源的 UCB 奖励收敛，不再越过 0.3
     assert AdaptiveLearner.heb_ucb_score(0.24, 50) < 0.30
+
+
+def test_bucket_weight_grows_with_samples(learner):
+    """桶权重 n/(n+2) 随样本单调上升，取代 0.3/0.5/0.75 分段常数。"""
+    learner.record("eng", success=False, latency_ms=100, domain="other", lang="en")
+    learner.record("eng", success=True, latency_ms=100, domain="other", lang="en")
+    prev = None
+    for n in range(1, 7):
+        learner.record("eng", success=True, latency_ms=100, domain="chem", lang="zh")
+        cur = learner.get_score("eng", "chem", "zh")
+        if prev is not None:
+            assert cur > prev
+        prev = cur
+
+
+def test_bucket_empty_and_ok_mix(learner):
+    """场景召回率 = (2 + 有结果) / (2 + 有结果 + 空结果)，只作用于该桶。"""
+    for _ in range(2):
+        learner.record("eng", success=True, latency_ms=100, domain="d", lang="zh")
+    for _ in range(4):
+        learner.record("eng", success=False, latency_ms=100, empty=True,
+                       domain="d", lang="zh")
+    g = learner.get_score("eng")
+    s, n = learner.get_score_with_samples("eng", "d", "zh")
+    assert n == 6
+    # 健康度：桶与全局同为 1.0；召回率 (2+2)/(2+2+4) = 0.5
+    assert s == pytest.approx(g * 0.5, abs=1e-3)
+
+
+def test_marginal_contribution_shapley_shares():
+    """独家结果归一个源，共识结果均分；公平份额记 0.5。"""
+    from adaptive import marginal_contribution
+    merged = [
+        {"url": "a", "consensus_engines": ["x"]},
+        {"url": "b", "consensus_engines": ["x", "y"]},
+        {"url": "c", "consensus_engines": ["x", "y"]},
+        {"url": "d", "consensus_engines": ["x"]},
+    ]
+    out = marginal_contribution(merged, 4, ["x", "y", "z"])
+    # 份额 x=3, y=1, z=0；q = 0.5 × 份额/4 × 3，z 取地板 0.01
+    assert out == {"x": 1.0, "y": 0.375, "z": 0.01}
+
+
+def test_marginal_contribution_redundant_sources_not_rewarded():
+    """两个源返回完全相同的结果：各记公平份额 0.5（中性），冗余不加分。"""
+    from adaptive import marginal_contribution
+    merged = [{"url": u, "consensus_engines": ["x", "y"]} for u in "abc"]
+    assert marginal_contribution(merged, 3, ["x", "y"]) == {"x": 0.5, "y": 0.5}
+    # 单引擎查询没有可比对象：记中性 0.5
+    solo = [{"url": u, "consensus_engines": ["x"]} for u in "abc"]
+    assert marginal_contribution(solo, 3, ["x"]) == {"x": 0.5}
+
+
+def test_marginal_contribution_empty_inputs():
+    from adaptive import marginal_contribution
+    assert marginal_contribution([], 10, ["x"]) == {}
+    assert marginal_contribution([{"url": "a", "consensus_engines": ["x"]}], 10, []) == {}
+    # 无 consensus_engines 时回退 _engine / source
+    assert marginal_contribution([{"url": "a", "source": "x"}], 10, ["x"]) == {"x": 0.5}
+
+
+def test_never_contributing_source_is_demoted(learner):
+    """从不进终榜的源记地板 0.01：SUM(quality)>0，quality_factor 降到 ~0.75 而非中性。"""
+    from adaptive import marginal_contribution, quality_factor
+    q = marginal_contribution([{"url": "a", "consensus_engines": ["x"]}], 1, ["x", "z"])["z"]
+    for _ in range(3):
+        learner.record("z", success=True, latency_ms=100, quality=q)
+    assert learner.get_score("z") == pytest.approx(quality_factor(0.01, 0.03), abs=1e-3)
+    assert learner.get_score("z") < 0.76

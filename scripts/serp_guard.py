@@ -348,23 +348,14 @@ def filter_content_farms(results: list) -> list:
 
 # ── 自适应放宽建议（2026-10-23 方案四）───────────────────────────────────
 
-_RELAX_TAIL_RE = re.compile(
-    r"(?:\b\d{4}年?(?:度)?|\b\d{1,2}月|"
-    r"最新|最全|详细|完整|全面|2020|2021|2022|2023|2024|2025|2026|"
-    r"知乎|贴吧|论坛|大全|汇总|排行榜|一览|数据|报告|统计|分析|趋势)"
-)
-
-
 def suggest_relaxed_query(query: str) -> str:
-    """针对 SERP 守卫击杀场景的自适应放宽查询（剥离过度约束的修饰与年份词）。"""
+    """针对 SERP 守卫击杀场景的自适应放宽查询（剥离过度约束的修饰与年份词）。
+
+    与恢复链 L1 放宽同一口径，直接复用 `recovery.relax_query`：此前这里抄了一份
+    同样的尾修饰正则，两份一起把「GB/T 15834」切成「GB T 4」。
+    """
     if not query or not isinstance(query, str):
         return ""
-    q = _RELAX_TAIL_RE.sub(" ", query)
-    q = re.sub(r"(?<=\s)[年月](?=\s|$)|^([年月]\s+)", " ", q)
-    tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]+", q)
-    stopwords = {"的", "了", "呢", "吧", "请问", "怎么", "如何", "一下", "关于", "有关", "求", "谁知道",
-                 "the", "a", "an", "of", "for", "to", "how", "what"}
-    kept = [t for t in tokens if t.lower() not in stopwords]
-    relaxed = " ".join(kept).strip()
-    return relaxed or re.sub(r"\s+", " ", q).strip() or query
+    from recovery import relax_query
+    return relax_query(query)
 
