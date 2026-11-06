@@ -85,8 +85,12 @@ def _term_covered(term: str, text: str,
     return len(term) >= 4 and any(tok.startswith(term) for tok in tokens)
 
 
-def _discriminative_coverage_ok(results: list[dict[str, Any]],
-                                query: str) -> bool:
+def _discriminative_coverage_ok(
+    results: list[dict[str, Any]],
+    query: str,
+    *,
+    _pre_full_tokens: list[tuple[str, set[str]]] | None = None,
+) -> bool:
     """至少一条结果同时命中**两个**查询主题词。
 
     2026-10-26 实测：查询「git commit」时 local_bing 返回 8 条泛化 Git 页
@@ -101,6 +105,11 @@ def _discriminative_coverage_ok(results: list[dict[str, Any]],
     terms = _query_terms(query)
     if len(terms) < 2:
         return True
+    if _pre_full_tokens is not None:
+        for text, tokens in _pre_full_tokens:
+            if sum(1 for term in terms if _term_covered(term, text, tokens)) >= 2:
+                return True
+        return False
     try:
         from tfidf_router import tokenize
     except ImportError:
@@ -245,28 +254,34 @@ def query_coverage_ok(results: list[dict[str, Any]], query: str,
     q_set = set(tokenize(query))
     if not q_set:
         return True
-    # 同构垃圾检测：结构性包索引被域外查询误抢时，会把查询切词后逐词
-    # 返回单 token 包名（title≈1 词、URL=/project/<word>），词面覆盖因此
-    # 虚高（垃圾包名恰好是查询关键词）→ 覆盖守卫被骗过、垃圾即成最终
-    # 答案。多数结果标题 ≤1 token 且查询有 ≥3 token 时，视为索引噪声，
-    # 拒绝早停、放行串行次引擎补跑。
-    single_token_titles = sum(
-        1 for r in results if len(set(tokenize(r.get("title") or ""))) <= 1
-    )
-    # 至少 3 条才判：单条结果本来就可能是「Paris」这种一词答案，把它当
-    # 包索引噪声会误杀（2026-10-26 实测「what is the capital of France」）。
+    # PB-HOS 摊销分词：单轮早停守卫内对每条结果的 title 与全文只分词一次，
+    # 供单 token 噪声、回声检测、区分性覆盖与多数覆盖四道判据共享。
+    title_tok_sets: list[set[str]] = []
+    full_tok_pairs: list[tuple[str, set[str]]] = []
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        t_str = r.get("title") or ""
+        s_str = r.get("snippet") or ""
+        t_set = set(tokenize(t_str))
+        s_set = set(tokenize(s_str)) if s_str else set()
+        title_tok_sets.append(t_set)
+        full_tok_pairs.append((f"{t_str} {s_str}".lower(), t_set | s_set))
+
+    single_token_titles = sum(1 for ts in title_tok_sets if len(ts) <= 1)
     if (len(results) >= 3 and len(q_set) >= 3
             and single_token_titles * 2 > len(results)):
         return False
-    if is_query_echo(results, query):
+    if len(q_set) >= 4 and len(results) >= 3:
+        covered_title_terms: set[str] = set()
+        for ts in title_tok_sets:
+            covered_title_terms |= (q_set & ts)
+        if len(covered_title_terms) == 1:
+            return False
+    if not _discriminative_coverage_ok(
+            results, query, _pre_full_tokens=full_tok_pairs):
         return False
-    if not _discriminative_coverage_ok(results, query):
-        return False
-    covered = 0
-    for r in results:
-        text = f"{r.get('title') or ''} {r.get('snippet') or ''}"
-        if q_set & set(tokenize(text)):
-            covered += 1
+    covered = sum(1 for _, f_set in full_tok_pairs if q_set & f_set)
     if strict:
         # 明确过半：2 条要 2 条都命中，4 条要 3 条命中。没有权威信号时
         # 不用「刚好一半」换早停。

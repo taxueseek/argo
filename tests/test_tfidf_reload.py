@@ -55,6 +55,19 @@ class TestHotReloadEdge(unittest.TestCase):
                     r.engine_names, ["anysearch"],
                     "同 mtime 还原后必须重载——mtime 复位是本测试守的契约")
 
+    def test_ac_igtr_inverted_postings_and_bm25_saturation(self):
+        """AC-IGTR 倒排稀疏张量积与 BM25 次线性饱和契约。"""
+        r = t.SemanticRouter()
+        r._ensure_loaded()
+        self.assertTrue(r._postings, "加载后必须构建倒排表 _postings")
+        # 重复词不把单特征权重线性放大到 2 倍
+        v1 = r.vectorizer.transform("arxiv paper", sublinear=True)
+        v2 = r.vectorizer.transform("arxiv arxiv arxiv paper", sublinear=True)
+        if "arxiv" in v1 and "arxiv" in v2:
+            self.assertLess(v2["arxiv"], v1["arxiv"] * 1.5)
+        scores = r.route("transformer attention mechanism paper", top_k=3)
+        self.assertTrue(scores and scores[0][1] > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

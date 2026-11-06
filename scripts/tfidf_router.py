@@ -93,23 +93,28 @@ class TfidfVectorizer:
         for token, count in df.items():
             self.idf[token] = math.log((total + 1) / (count + 1)) + 1
 
-    def transform(self, text: str) -> dict[str, float]:
-        """把文本转为 TF-IDF 向量（稀疏表示）。"""
+    def transform(self, text: str, *, sublinear: bool = False) -> dict[str, float]:
+        """把文本转为 TF-IDF 向量（查询侧可选 sublinear BM25 词频饱和抑制重复词劫持）。"""
         tokens = tokenize_with_bigrams(text)
         tf = Counter(tokens)
         total = len(tokens) if tokens else 1
-        return {token: (count / total) * self.idf[token]
+        if not sublinear:
+            return {token: (count / total) * self.idf[token]
+                    for token, count in tf.items() if token in self.idf}
+        return {token: (((2.2 * count) / (1.2 + count)) / total) * self.idf[token]
                 for token, count in tf.items() if token in self.idf}
 
 
 # ── 余弦相似度 ─────────────────────────────────────────────────────────────────
 
 def cosine_similarity(vec_a: dict[str, float], vec_b: dict[str, float]) -> float:
-    """两个稀疏向量的余弦相似度。"""
+    """两个稀疏向量的余弦相似度（按较短向量遍历避免全集交集构造）。"""
     if not vec_a or not vec_b:
         return 0.0
-    common = set(vec_a.keys()) & set(vec_b.keys())
-    dot = sum(vec_a[k] * vec_b[k] for k in common)
+    short, long_v = (vec_a, vec_b) if len(vec_a) <= len(vec_b) else (vec_b, vec_a)
+    dot = sum(v * long_v[k] for k, v in short.items() if k in long_v)
+    if dot == 0.0:
+        return 0.0
     norm_a = math.sqrt(sum(v * v for v in vec_a.values()))
     norm_b = math.sqrt(sum(v * v for v in vec_b.values()))
     if norm_a == 0 or norm_b == 0:
@@ -211,11 +216,14 @@ class SemanticRouter:
         self.engine_vectors: dict[str, dict[str, float]] = {}
         self.boost_keywords: dict[str, dict[str, float]] = {}
         self.boost_combos: dict[str, dict[str, float]] = {}
+        self._postings: dict[str, list[tuple[str, float]]] = {}
+        self._boost_kw_norm: dict[str, list[tuple[str, str, float]]] = {}
+        self._boost_combo_norm: dict[str, list[tuple[str, tuple[str, ...], float]]] = {}
         self._loaded = False
         self._profiles_mtime: float = 0.0
 
     def _ensure_loaded(self) -> None:
-        """懒加载领域文档；文件变化时自动重载。"""
+        """懒加载领域文档并预编译 AC-IGTR 稀疏倒排表与归一化触发词。"""
         if self._loaded:
             try:
                 mtime = DOMAIN_PROFILES_PATH.stat().st_mtime
@@ -228,6 +236,9 @@ class SemanticRouter:
             self.engine_vectors.clear()
             self.boost_keywords.clear()
             self.boost_combos.clear()
+            self._postings.clear()
+            self._boost_kw_norm.clear()
+            self._boost_combo_norm.clear()
         if not DOMAIN_PROFILES_PATH.exists():
             self._loaded = True
             # mtime 一并复位：留着旧值的话，文件以原 mtime 还原（回收站恢复/
@@ -247,21 +258,38 @@ class SemanticRouter:
             if name.startswith("_"):
                 continue
             self.engine_names.append(name)
-            self.boost_keywords[name] = profile.get("boost_keywords", {})
-            self.boost_combos[name] = profile.get("boost_combos", {})
+            b_kw = profile.get("boost_keywords", {})
+            b_cb = profile.get("boost_combos", {})
+            self.boost_keywords[name] = b_kw
+            self.boost_combos[name] = b_cb
+            self._boost_kw_norm[name] = [
+                (kw, kw.lower(), weight - 1.0) for kw, weight in b_kw.items()
+            ]
+            self._boost_combo_norm[name] = [
+                (combo, tuple(w.lower() for w in combo.split()), bonus)
+                for combo, bonus in b_cb.items()
+            ]
             corpus.append(" ".join(profile.get("documents", [])))
 
         if corpus:
             self.vectorizer.fit(corpus)
+            postings: dict[str, list[tuple[str, float]]] = {}
             for i, name in enumerate(self.engine_names):
-                self.engine_vectors[name] = self.vectorizer.transform(corpus[i])
+                vec = self.vectorizer.transform(corpus[i])
+                self.engine_vectors[name] = vec
+                norm = math.sqrt(sum(v * v for v in vec.values()))
+                if norm > 0:
+                    inv_n = 1.0 / norm
+                    for tok, val in vec.items():
+                        postings.setdefault(tok, []).append((name, val * inv_n))
+            self._postings = postings
         self._profiles_mtime = DOMAIN_PROFILES_PATH.stat().st_mtime
         self._loaded = True
 
     def route(self, query: str, top_k: int = 3,
               quota_aware: bool = True) -> list[tuple[str, float, str]]:
         """
-        路由查询到最匹配的引擎。
+        路由查询到最匹配的引擎（AC-IGTR 倒排稀疏张量积 + 信息增益特异性共振）。
 
         返回: [(engine_name, score, reason), ...] 按分数降序。
         """
@@ -269,7 +297,19 @@ class SemanticRouter:
         if not self.engine_names:
             return [("anysearch", 0.0, "无领域文档，回退 AnySearch")]
 
-        query_vec = self.vectorizer.transform(query)
+        query_vec = self.vectorizer.transform(query, sublinear=True)
+        q_norm = math.sqrt(sum(v * v for v in query_vec.values())) if query_vec else 0.0
+        sim_by_eng: dict[str, float] = {}
+        if q_norm > 0.0 and self._postings:
+            inv_qn = 1.0 / q_norm
+            for tok, qv in query_vec.items():
+                posts = self._postings.get(tok)
+                if not posts:
+                    continue
+                q_unit = qv * inv_qn
+                for eng_name, e_unit in posts:
+                    sim_by_eng[eng_name] = sim_by_eng.get(eng_name, 0.0) + q_unit * e_unit
+
         # P2: 静态概念语义向量 (Model2Vec 思想，零依赖快速查表)
         concept_vec = None
         cl = None
@@ -291,13 +331,17 @@ class SemanticRouter:
         quota_state = _load_quota_state() if quota_aware else {}
         cost_profiles = _load_cost_profiles()
         q_lower = query.lower()  # 一次即可，避免每个引擎重复 lower
+        use_postings = bool(self._postings)
 
         for name in self.engine_names:
-            sim = cosine_similarity(query_vec, self.engine_vectors[name])
+            if use_postings:
+                sim = sim_by_eng.get(name, 0.0)
+            else:
+                sim = cosine_similarity(query_vec, self.engine_vectors.get(name, {}))
             eff_sim = sim
             c_sim = 0.0
             if concept_vec is not None and cl is not None:
-                eng_cvec = strip_context_dims(cl.get_engine_vector(name))
+                eng_cvec = cl.get_stripped_engine_vector(name)
                 if eng_cvec is not None:
                     c_sim = cl.vector_cosine(concept_vec, eng_cvec)
                     catch_all = name in _CATCH_ALL_CONCEPT
@@ -321,22 +365,36 @@ class SemanticRouter:
             if c_sim >= 0.75 and sim <= 0:
                 parts.append(f"concept={c_sim:.2f}")
 
-            # boost 加权
+            # boost 加权（使用预编译小写词表）
             boost = 1.0
             hit_kws = []
-            for kw, weight in self.boost_keywords.get(name, {}).items():
-                if kw.lower() in q_lower:
-                    boost += weight - 1.0
-                    hit_kws.append(kw)
+            kw_entries = self._boost_kw_norm.get(name)
+            if kw_entries is not None:
+                for kw, kw_low, delta in kw_entries:
+                    if kw_low in q_lower:
+                        boost += delta
+                        hit_kws.append(kw)
+            else:
+                for kw, weight in self.boost_keywords.get(name, {}).items():
+                    if kw.lower() in q_lower:
+                        boost += weight - 1.0
+                        hit_kws.append(kw)
             if hit_kws:
                 parts.append(f"boost关键词:{','.join(hit_kws)}")
 
-            # 组合关键词加成
+            # 组合关键词加成（使用预切分小写词元组）
             hit_combos = []
-            for combo, bonus in self.boost_combos.get(name, {}).items():
-                if all(w.lower() in q_lower for w in combo.split()):
-                    boost += bonus
-                    hit_combos.append(combo)
+            combo_entries = self._boost_combo_norm.get(name)
+            if combo_entries is not None:
+                for combo, words_low, bonus in combo_entries:
+                    if all(w in q_lower for w in words_low):
+                        boost += bonus
+                        hit_combos.append(combo)
+            else:
+                for combo, bonus in self.boost_combos.get(name, {}).items():
+                    if all(w.lower() in q_lower for w in combo.split()):
+                        boost += bonus
+                        hit_combos.append(combo)
             if hit_combos:
                 parts.append(f"combo:{','.join(hit_combos)}")
 

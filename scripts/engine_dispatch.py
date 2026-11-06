@@ -114,7 +114,7 @@ def _max_parallel_engines(*, depth: str | None = None) -> int:
 
 
 def _adaptive_grace(engine: str, base_grace_s: float) -> float:
-    """对冲宽限窗的自适应收窄：快引擎收窄到自己的 P75，慢引擎不动（只缩不放）。
+    """PB-HOS 帕累托风险率对冲宽限窗：按主引擎 P75 与健康度联合收窄（只缩不放）。
 
     窗口语义不变（见 search._PRIMARY_GRACE_S）：「先给首选引擎多久，没回来才
     补发备选源」。变的只是窗的取值来源——固定 0.8s 对快引擎（redskill P75
@@ -122,18 +122,13 @@ def _adaptive_grace(engine: str, base_grace_s: float) -> float:
     而对慢引擎（anysearch P75 2.6s）0.8s 已经是「几乎必补发」，放宽它只是
     把尾延迟换成调用量，方向不对（用户取舍：稳定性 > 尾延迟 > 成本）。
 
-    所以这里**只缩不放**：grace = max(0.3, min(base, P75(引擎)))，上界仍是
-    base（默认 0.8s），下界 0.3s 与 wave-1 的既有 floor 同源。快引擎的对冲
-    提前到「比它平时明显慢」的时刻点火，尾部有人救场；慢引擎行为逐位不变。
-
+    PB-HOS 双信号只缩不放（上界 base，下界 0.3s）：
+    1. 延迟分位：P75 < base 时收到 P75(引擎)，快引擎异常慢时提前点火备选源；
+    2. 故障风险率：主引擎健康分 rel ∈ (0, 0.45)（近期高频失败）时，按风险率折减
+       因子 (0.55 + rel) 提前触发对冲，不傻等高危主源耗满固定宽限窗。
     口径与失败处理：
-    - P75 取 adaptive.latency_percentile（7 天窗、仅 success 且非空的交付），
-      样本不足 5 条或快照过时（STALE_AFTER_SECONDS）→ 不收窄，回到 base。
-    - 任何异常（学习库损坏/被锁/缺模块）一律 fail-open 回 base，观测层不阻断
-      调度主路径（同 file_lock / 熔断器的契约）。
-    - `ARGO_ADAPTIVE_GRACE=0` 整体关闭（回固定 base 窗）。**默认开**：v2 冻结期
-      的 A/B 曾判未证实收益，c52b7d4 起转默认启用——「只缩不放」对慢引擎逐位
-      无行为变化，收益只落在快引擎的救场提前量上。要退回去设 =0，别改这里默认值。
+    - 样本不足 / 快照过时 / 异常一律 fail-open 回 base；
+    - `ARGO_ADAPTIVE_GRACE=0` 整体关闭（回固定 base 窗）。
     """
     try:
         from engine_env import env_flag
@@ -149,12 +144,17 @@ def _adaptive_grace(engine: str, base_grace_s: float) -> float:
         return base_grace_s
     try:
         from adaptive import get_learner
-        p75_ms = get_learner().latency_percentile(engine, 0.75)
+        learner = get_learner()
+        p75_ms = learner.latency_percentile(engine, 0.75)
+        rel = getattr(learner, "get_score", lambda _e: 0.5)(engine)
     except Exception:
         return base_grace_s
-    if not p75_ms or p75_ms <= 0:
-        return base_grace_s
-    return max(0.3, min(base, float(p75_ms) / 1000.0))
+    cand = base
+    if isinstance(p75_ms, (int, float)) and p75_ms > 0:
+        cand = min(cand, float(p75_ms) / 1000.0)
+    if isinstance(rel, (int, float)) and not isinstance(rel, bool) and 0.0 < rel < 0.45:
+        cand = min(cand, round(base * (0.55 + float(rel)), 4))
+    return max(0.3, cand) if cand < base else base_grace_s
 
 # 失败类别与重试判据住在 retry_policy（唯一来源）：重试判据与归因判据必须
 # 同源，而本文件已接近行数上限——纯策略搬出去，两边都轻。

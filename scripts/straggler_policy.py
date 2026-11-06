@@ -47,7 +47,9 @@ def straggler_tail(engine: str, base: float) -> float:
         return base
     try:
         from adaptive import get_learner
-        p75_ms = get_learner().latency_percentile(engine, 0.75)
+        learner = get_learner()
+        p75_ms = learner.latency_percentile(engine, 0.75)
+        score = getattr(learner, "get_score", lambda _e: None)(engine)
     except Exception:
         return base
     if not p75_ms or p75_ms <= 0:
@@ -55,6 +57,8 @@ def straggler_tail(engine: str, base: float) -> float:
     p75 = float(p75_ms) / 1000.0
     if p75 <= base * 0.5:
         return base
-    if p75 <= base * 1.5:
-        return base * 0.7
-    return max(0.3, base * 0.4)
+    tail = base * 0.7 if p75 <= base * 1.5 else max(0.3, base * 0.4)
+    # PB-HOS 期望价值调制：低健康分（<0.35）慢源进一步收紧尾窗（保底 0.3s）
+    if isinstance(score, (int, float)) and not isinstance(score, bool) and 0.0 < score < 0.35:
+        tail = max(0.3, round(tail * 0.75, 4))
+    return tail

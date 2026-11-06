@@ -389,25 +389,51 @@ class _LiteralMatcher:
     alternation（如 `(?i)(金十|jin10)`、`(?i)(技术社区|程序员社区)`），它们每次
     冷进程都要付一次 `re.compile`（326 条全量实测 23.8 ms），而子串查找零编译、
     更快。判定由 `_literal_alternatives` 保守把关，判不准的一律走原正则路径。
+    AC-IGTR 增补首字符分桶索引与预小写复用，消除宽分支字面表的无关扫描。
     """
 
-    __slots__ = ("_words", "_ignore_case")
+    __slots__ = ("_words", "_ignore_case", "_by_fc")
 
     def __init__(self, words: list[str], ignore_case: bool):
         self._words = words
         self._ignore_case = ignore_case
+        if len(words) >= 6:
+            by_fc: dict[str, list[tuple[int, str]]] = {}
+            for idx, w in enumerate(words):
+                by_fc.setdefault(w[0], []).append((idx, w))
+            self._by_fc: dict[str, list[tuple[int, str]]] | None = by_fc
+        else:
+            self._by_fc = None
 
-    def search(self, query: str) -> _LiteralMatch | None:
-        hay = query.lower() if self._ignore_case else query
-        best: tuple[int, int] | None = None
-        for w in self._words:
+    def search(self, query: str, q_lower: str | None = None) -> _LiteralMatch | None:
+        hay = (q_lower if q_lower is not None else query.lower()) if self._ignore_case else query
+        if not hay:
+            return None
+        best: tuple[int, int, int] | None = None
+        if self._by_fc is not None:
+            seen_fc: set[str] = set()
+            for ch in hay:
+                if ch in seen_fc:
+                    continue
+                seen_fc.add(ch)
+                bucket = self._by_fc.get(ch)
+                if not bucket:
+                    continue
+                for idx, w in bucket:
+                    pos = hay.find(w)
+                    if pos < 0:
+                        continue
+                    if best is None or pos < best[0] or (pos == best[0] and idx < best[1]):
+                        best = (pos, idx, pos + len(w))
+            return _LiteralMatch((best[0], best[2])) if best is not None else None
+        for idx, w in enumerate(self._words):
             pos = hay.find(w)
             if pos < 0:
                 continue
             # 与 re 的 leftmost 语义一致：取最早出现；同位置取分支顺序在前者
             if best is None or pos < best[0]:
-                best = (pos, pos + len(w))
-        return _LiteralMatch(best) if best is not None else None
+                best = (pos, idx, pos + len(w))
+        return _LiteralMatch((best[0], best[2])) if best is not None else None
 
 
 def _try_compile(src: Any) -> Any:
@@ -521,12 +547,20 @@ def _split_pattern_entry(entry: Any) -> tuple[Any, Any]:
     return entry, None
 
 
-def _domain_fires_with_span(domain: dict[str, Any], query: str) -> tuple[bool, int, int]:
+def _domain_fires_with_span(
+    domain: dict[str, Any], query: str, q_lower: str | None = None
+) -> tuple[bool, int, int]:
     """一个域是否成立，并返回命中的 (是否成立, match_span_start, match_span_len)。"""
     for match_re, unless_re in _ensure_domain_compiled(domain):
-        if unless_re is not None and unless_re.search(query):
-            continue
-        m = match_re.search(query)
+        if unless_re is not None:
+            u_hit = (unless_re.search(query, q_lower)
+                     if isinstance(unless_re, _LiteralMatcher)
+                     else unless_re.search(query))
+            if u_hit:
+                continue
+        m = (match_re.search(query, q_lower)
+             if isinstance(match_re, _LiteralMatcher)
+             else match_re.search(query))
         if m is not None:
             start, end = m.span()
             return True, start, end - start
@@ -773,6 +807,7 @@ def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
     non_zh = bool(primary_lang and primary_lang not in ("zh", "mixed", "other"))
     candidates = _get_candidate_domain_indices(query)
     q_len = max(len(query), 1)
+    q_lower = query.lower()
 
     for idx, domain in enumerate(compiled):
         if not domain.get("patterns", []):
@@ -782,7 +817,7 @@ def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
             continue
         if candidates is not None and idx not in candidates:
             continue
-        fires, span_start, span_len = _domain_fires_with_span(domain, query)
+        fires, span_start, span_len = _domain_fires_with_span(domain, query, q_lower)
         if fires:
             if not hits:
                 hits.append(domain)

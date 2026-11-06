@@ -150,6 +150,26 @@ class TestStragglerTailTiers(unittest.TestCase):
         self.assertEqual(straggler_tail("anysearch", 0), 0)
         self.assertEqual(straggler_tail("", self.BASE), self.BASE)
 
+    def test_pb_hos_low_reliability_straggler_tightened(self):
+        """PB-HOS 期望价值调制：中慢速且低健康分（<0.35）的尾源进一步收紧尾宽。"""
+        class _ScoredLearner(_FakeLearner):
+            def __init__(self, p75_ms, score):
+                super().__init__(p75_ms)
+                self._score = score
+
+            def get_score(self, _engine):
+                return self._score
+
+        os.environ["ARGO_ADAPTIVE_TAIL"] = "1"
+        try:
+            with patch("adaptive.get_learner", return_value=_ScoredLearner(1000, 0.20)):
+                t_low = straggler_tail("shaky_backup", self.BASE)
+            with patch("adaptive.get_learner", return_value=_ScoredLearner(1000, 0.70)):
+                t_ok = straggler_tail("healthy_backup", self.BASE)
+            self.assertLess(t_low, t_ok)
+        finally:
+            del os.environ["ARGO_ADAPTIVE_TAIL"]
+
 
 class _AllowAllBreaker:
     def allow(self, *_a, **_k):

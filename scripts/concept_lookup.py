@@ -56,6 +56,7 @@ class ConceptLookup:
         self._vocab_size = 0
         self._dim = 64
         self._engine_vecs: dict[str, list[int]] = {}
+        self._stripped_engine_vecs: dict[str, list[int]] = {}
         self._available = False
         self._load()
 
@@ -99,12 +100,16 @@ class ConceptLookup:
             self._mm = None
             self._f = None
 
-        # 尝试加载引擎预置向量
+        # 尝试加载引擎预置向量并一次性预计算去地名维向量（避免每次查询为 200 引擎重复拷贝）
         if ENGINE_VECS_PATH.exists():
             try:
                 self._engine_vecs = json.loads(ENGINE_VECS_PATH.read_text(encoding="utf-8"))
+                self._stripped_engine_vecs = {
+                    k: strip_context_dims(v) for k, v in self._engine_vecs.items() if v
+                }
             except Exception:
                 self._engine_vecs = {}
+                self._stripped_engine_vecs = {}
 
     @property
     def is_available(self) -> bool:
@@ -182,6 +187,14 @@ class ConceptLookup:
     def get_engine_vector(self, engine: str) -> list[int] | None:
         """获取引擎的预计算语义中心向量。"""
         return self._engine_vecs.get(engine)
+
+    def get_stripped_engine_vector(self, engine: str) -> list[int] | None:
+        """获取预剥离上下文维（GEO_DIMS）的引擎概念向量。"""
+        v = self._stripped_engine_vecs.get(engine)
+        if v is not None:
+            return v
+        raw = self._engine_vecs.get(engine)
+        return strip_context_dims(raw) if raw is not None else None
 
 
 _GLOBAL_LOOKUP: Optional[ConceptLookup] = None

@@ -152,6 +152,16 @@ class TestAdaptiveGrace(unittest.TestCase):
         """显式 0 = 不节流（备选源与首引擎同时起跑），不得被抬到下界。"""
         self.assertEqual(self._grace("fast_eng", 0.0, 250.0), 0.0)
 
+    def test_pb_hos_degraded_reliability_shrinks_grace(self):
+        """PB-HOS 故障风险率收窄：即使 P75 未知或偏慢，低健康分（<0.45）主源提前触发对冲。"""
+        fake = MagicMock()
+        fake.latency_percentile.return_value = None
+        fake.get_score.return_value = 0.20
+        with patch.dict(os.environ, {"ARGO_ADAPTIVE_GRACE": "1"}), \
+                patch("adaptive.get_learner", return_value=fake):
+            g = engine_dispatch._adaptive_grace("shaky_primary", 0.8)
+        self.assertEqual(g, 0.6)
+
 
 class _AllowAllBreaker:
     def allow(self, *_a, **_k):
