@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply, buildChildToolFilters, resolveArgoEnv } from '../dsh/index.js'
+import { apply } from '../dsh/index.js'
+import { buildChildToolFilters, resolveArgoEnv } from '../dsh/specs.js'
 import {
   normalizeTracks,
   stageTracks,

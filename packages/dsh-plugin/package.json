@@ -1,6 +1,6 @@
 {
   "name": "@taxueseek/argo-dsh",
-  "version": "2.11.2",
+  "version": "2.11.3",
   "description": "Argo 阿尔戈 — DSH plugin：argo 原生搜索/抓取工具 + web_search seam + wide_research 编排；自带设置页（接入/工具/API 密钥/研究/高级）；argo MCP 19 工具全量面按需挂载。安装：dsh plugin --profile web add @taxueseek/argo-dsh（或从 GitHub main 装：dsh plugin --profile web add \"github:taxueseek/argo#main&path:packages/dsh-plugin\"）",
   "license": "Apache-2.0",
   "type": "module",
@@ -8,6 +8,7 @@
   "exports": {
     ".": "./dsh/index.js",
     "./dsh": "./dsh/index.js",
+    "./specs": "./dsh/specs.js",
     "./client": "./dsh/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
@@ -26,6 +27,12 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-settings"
       ]
+    },
+    "compatibility": {
+      "dsh": "^0.2.0-rc.1 || ^0.2.1 || ^0.2.2-0",
+      "dshReleases": {
+        "0.2.2-rc.1": "compatible"
+      }
     }
   },
   "engines": {
@@ -33,6 +40,7 @@
   },
   "scripts": {
     "check": "node --check dsh/index.js && node --check dsh/runner.js && node --check dsh/wide-research.js && node --check dsh/diagnostics.js && node --check dsh/client.js",
+    "typecheck": "npm run check",
     "test": "node --test test/*.test.js"
   }
 }

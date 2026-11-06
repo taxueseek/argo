@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { NATIVE_TOOLS } from '../dsh/native-tools.mjs'
-import { ARGO_ENV_SPECS } from '../dsh/index.js'
+import { ARGO_ENV_SPECS } from '../dsh/specs.js'
 
 /** 在最小沙箱里执行 lazy-CJS bundle，返回 ModuleLoader 收到的定义。 */
 function loadBundle() {
