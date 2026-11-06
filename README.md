@@ -30,6 +30,8 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
+> 插件部分采用 [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 适配了最新版 Harness 0.2.2-rc.1。它是 DSH 插件升级适配与代码审查的主入口：核对官方最新版本与升级指南、扫插件的破坏性变更，按适配升级、造插件、启动排障、代码审查四条车道出 P0/P1 报告。后续每次宿主升级的适配也走这个 skill。
+>
 > **taxueseek 系列 skill 的一员**，负责「搜索与深度研究」。同系列技能：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★（去 AI 味写作）· [session-digger](https://github.com/taxueseek/session-digger) 33★（跨环境会话挖掘）· [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★（投资分析）· [taxueskills](https://github.com/taxueseek/taxueskills) 24★（踏雪决策系统）· [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★（创意风格插画）。
 >
 > Argo 同时是 DeepSeek Harness 插件，一行命令装好（见下文「DSH 插件」）。同作者的 DSH 插件精品：[dsh-files](https://github.com/taxueseek/dsh-files) 41★（文件夹上传 + 文档解析）· [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 7★（插件升级适配）· [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★（装前审计）。
