@@ -235,8 +235,6 @@ def _local_seek_grace_s() -> float:
     return 0.25
 
 
-_LOCAL_SEEK_GRACE_S = _local_seek_grace_s()
-
 # include-local 的本地搜索 worker：单例下沉到 local_seek 模块，避免 search.py
 # 在 daemon.py 的 runpy.run_module("search", run_name="__main__") 下重跑顶层时
 # 把 _LOCAL_SEEK_EXECUTOR 覆写为 None、导致每次调用泄漏一个 ThreadPoolExecutor。
