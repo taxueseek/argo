@@ -311,13 +311,81 @@ def _status_line(client: dict[str, Any]) -> str:
     return f"  {id_:<12} {name:<14} {state}"
 
 
+def _get_shared_env_file() -> Path:
+    override = os.environ.get("ARGO_ENV_FILE", "").strip()
+    if override:
+        return Path(override).expanduser()
+    if sys.platform.startswith("win"):
+        base = os.environ.get("APPDATA", "").strip()
+        if base:
+            return Path(base).expanduser() / "argo" / "env"
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME", "").strip()
+        if base:
+            return Path(base).expanduser() / "argo" / "env"
+    return _home() / ".config" / "argo" / "env"
+
+
+def _mask_secret(val: str) -> str:
+    if not val:
+        return ""
+    if len(val) <= 8:
+        return "***"
+    return f"{val[:4]}***{val[-4:]}"
+
+
+def cmd_config(as_path: bool = False) -> None:
+    env_path = _get_shared_env_file()
+    if as_path:
+        print(env_path)
+        return
+
+    print("Argo MCP 统一配置中心（单一真源）\n")
+    print(f"  配置文件: {env_path}")
+    print(f"  生效范围: 所有已注入 MCP 客户端（Cursor / Claude Code / Windsurf / Codex / DSH 等）")
+    print(f"  生效机制: 热重读生效（修改文件无需重启 MCP 进程）\n")
+
+    if not env_path.exists():
+        print("  当前状态: 尚未创建配置文件。")
+        print(f"  配置方法: 创建 {env_path} 并写入环境变量，例如：")
+        print("    export BOCHA_API_KEY=\"sk-...\"")
+        print("    export EXA_API_KEY=\"...\"")
+        print("    export TAVILY_API_KEY=\"tvly-...\"")
+        return
+
+    try:
+        from engine_env import _parse_envfile
+        data = _parse_envfile(env_path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+
+    keys = sorted(k for k in data.keys() if ("KEY" in k or "SECRET" in k or "TOKEN" in k))
+    other_switches = sorted(k for k in data.keys() if k not in keys)
+
+    print(f"  已配置凭证 ({len(keys)} 个):")
+    if keys:
+        for k in keys:
+            print(f"    - {k:<24} : {_mask_secret(data[k])}")
+    else:
+        print("    （暂未配置任何引擎 API Key，当前使用 240+ 免密公开源）")
+
+    if other_switches:
+        print(f"\n  已配置行为开关 ({len(other_switches)} 个):")
+        for k in other_switches:
+            print(f"    - {k:<24} : {data[k]}")
+
+    print(f"\n  编辑命令: vim {env_path}")
+
+
 # ── 主命令 ──────────────────────────────────────────────────────────────
 
 def cmd_status(clients: list[dict[str, Any]]) -> None:
     print("Argo MCP 客户端状态\n")
     for c in clients:
         print(_status_line(c))
-    print("\n可用: inject [--all|--client ...] | undo [--all|--client ...] | status")
+    env_path = _get_shared_env_file()
+    print(f"\n统一配置真源: {env_path} ({'已配置' if env_path.exists() else '待创建'}，所有客户端共享)")
+    print("\n可用: inject [--all|--client ...] | undo [--all|--client ...] | config [--path] | status")
 
 
 def _select(clients: list[dict[str, Any]], flags: list[str]) -> list[dict[str, Any]]:
@@ -363,6 +431,10 @@ def cmd_inject(clients: list[dict[str, Any]], flags: list[str], dry_run: bool) -
             print(f"  ✔ 已注入 {c['name']} → {path} {note}")
         except (OSError, ValueError) as e:
             print(f"  ✘ {c['name']}: {e}")
+
+    if not dry_run:
+        env_file = _get_shared_env_file()
+        print(f"\n💡 提示：所有已注入客户端自动共享配置真源 {env_file}，直接在文件中配置 API Key 即全局生效，无需各客户端重复填写。")
 
 
 def cmd_undo(clients: list[dict[str, Any]], flags: list[str], dry_run: bool) -> None:
@@ -410,6 +482,9 @@ def main(argv: list[str] | None = None) -> int:
     p_undo.add_argument("--client", action="append", default=[], help="指定客户端 id（可多次）")
     p_undo.add_argument("--dry-run", action="store_true", help="只预览不写")
 
+    p_config = sub.add_parser("config", help="查看跨客户端共享的 MCP 配置中心")
+    p_config.add_argument("--path", action="store_true", help="仅输出配置文件绝对路径")
+
     args = parser.parse_args(argv)
 
     try:
@@ -420,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         cmd_status(clients)
+    elif args.command == "config":
+        cmd_config(args.path)
     elif args.command == "inject":
         cmd_inject(clients, (["all"] if args.all else args.client), args.dry_run)
     elif args.command == "undo":

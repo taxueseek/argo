@@ -77,15 +77,27 @@ undo 时若 entry 已不存在（比如被手动删了），从最近备份 `cop
 ## 6. 执行流程
 
 ```
-argo mcp status        # 逐客户端：已安装/已配置/未安装
-argo mcp inject --all  # 对已安装客户端：备份 → patch（JSON merge 或 TOML append）→ 原子写
+argo mcp status         # 逐客户端：已安装/已配置/未安装 + 统一配置真源路径
+argo mcp config         # 查看当前跨客户端共享的配置真源与凭证脱敏摘要
+argo mcp config --path  # 仅输出配置文件绝对路径（方便编辑器快速打开）
+argo mcp inject --all   # 对已安装客户端：备份 → patch（JSON merge 或 TOML append）→ 原子写
 argo mcp inject --cursor --dry-run  # 只预览
-argo mcp undo --all    # 精确移除 entry；无 entry 从备份回滚
+argo mcp undo --all     # 精确移除 entry；无 entry 从备份回滚
 ```
 
 `--client` 支持逗号分隔（`--client codex,cursor`）。未知 id 忽略并提示。
 
-## 7. 明确不做 / 边界
+## 7. 跨客户端配置共享（单一真源）
+
+Argo 遵循 **Single Source of Truth** 设计哲学：
+- **配置文件**：统一存放在 `~/.config/argo/env`（Windows: `%APPDATA%\argo\env`）。
+- **共享生效**：所有通过 `argo mcp inject` 注入的 MCP 客户端（Cursor、Claude Code、Windsurf、Codex、Cline、WorkBuddy 等）均共用此文件。用户**无需**在每个客户端的配置文件中重复配置 `env`。
+- **免重启热生效**：底层通过 `engine_env.py` 实现文件签名指纹感知，修改配置文件后**无需重启 MCP 进程或 Agent 客户端**，下一次调用即时热重读生效。
+- **DSH 客户端形态区分**：
+  - **主包**（`mcp-argo`，由根目录 patch 提供）：纯 MCP 客户端形态，注入 19 个 MCP 工具，不带客户端设置页面；
+  - **子包**（`@taxueseek/argo-dsh`，由 `packages/dsh-plugin` 提供）：DSH 深度集成形态，含 7 槽位 React 设置与仪表盘看板、原生工具与 `wide_research`。如需图形设置页，请安装子包。
+
+## 8. 明确不做 / 边界
 
 - **不做 keyless / 认证管理**：本模块只写 MCP server entry，不涉及 API key 的登录/存储（那是
   `engine_env.py` 的职责）。entry 里的 `env` 只放运行必需项。

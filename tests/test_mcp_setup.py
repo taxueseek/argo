@@ -204,6 +204,27 @@ class TestPlatformAndNewClients(TestMcpSetupBase):
         finally:
             sys.platform = old_plat
 
+    def test_shared_env_file_resolution(self):
+        old = os.environ.pop("ARGO_ENV_FILE", None)
+        try:
+            env_file = ms._get_shared_env_file()
+            self.assertTrue(str(env_file).endswith("env"))
+            self.assertIn(self.tmp, str(env_file))
+        finally:
+            if old is not None:
+                os.environ["ARGO_ENV_FILE"] = old
+
+    def test_cmd_config_outputs(self):
+        from io import StringIO
+        buf = StringIO()
+        old_stdout = sys.stdout
+        try:
+            sys.stdout = buf
+            ms.cmd_config(as_path=True)
+            self.assertIn("env", buf.getvalue())
+        finally:
+            sys.stdout = old_stdout
+
 
 if __name__ == "__main__":
     unittest.main()
