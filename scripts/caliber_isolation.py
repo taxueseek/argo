@@ -47,18 +47,16 @@ _CALIBER_GROUPS = {
     }),
 }
 
-# 口径优先级：数值越小优先级越高，排序时高口径的结果排在前面
+# 口径优先级与 IASF 自适应温度 k_c（高精结构化口径采用陡峭梯度，泛网与社交抗噪）
 _CALIBER_PRIORITY = {
-    "financial_data": 0,
-    "academic": 1,
-    "encyclopedia": 2,
-    "news": 3,
-    "social": 4,
-    "code": 5,
-    "media": 6,
-    "reference": 7,
-    "general": 8,
+    "financial_data": 0, "academic": 1, "encyclopedia": 2, "news": 3,
+    "social": 4, "code": 5, "media": 6, "reference": 7, "general": 8,
 }
+_CALIBER_K = {
+    "financial_data": 15, "academic": 20, "encyclopedia": 20, "code": 25,
+    "reference": 25, "news": 45, "media": 50, "social": 60, "general": 60,
+}
+_CALIBER_REDUNDANCY_DECAY = {"general": 0.75, "social": 0.80, "news": 0.85}
 
 
 def caliber_of(engine: str) -> str:
@@ -101,13 +99,15 @@ def merge_within_caliber(
     lang: str | None = None,
     _canonical_url=None,
     _engine_weight=None,
+    caliber: str = "general",
 ) -> list[dict[str, Any]]:
-    """同口径内做 RRF 融合。"""
+    """同口径内做 IASF 信息精算与子模 RRF 融合。"""
     if _canonical_url is None:
         from url_canon import canonical_url as _canonical_url
     if _engine_weight is None:
         from search_rank import _engine_weight as _engine_weight
-
+    k_eff = _CALIBER_K.get(caliber, k) if (weighted and k == 60) else k
+    decay = _CALIBER_REDUNDANCY_DECAY.get(caliber, 0.90) if weighted else 1.0
     scores: dict[str, float] = {}
     items: dict[str, dict[str, Any]] = {}
 
@@ -119,10 +119,11 @@ def merge_within_caliber(
                 or (f"__card__:{r.get('card_type', '')}" if r.get("card_type") else "")
                 or f"__idx__:{id(r)}"
             )
-            w = _engine_weight(r.get("_engine") or r.get("source") or "",
-                               lang=lang) if weighted else 1.0
-            scores[key] = scores.get(key, 0.0) + w / (k + i + 1)
             eng = r.get("_engine") or r.get("source", "") or ""
+            w = _engine_weight(eng, lang=lang) if weighted else 1.0
+            m = len(items[key].get("consensus_engines") or []) if key in items else 0
+            disc = (decay ** m) if (m > 0 and eng not in (items[key].get("consensus_engines") or [])) else 1.0
+            scores[key] = scores.get(key, 0.0) + disc * (w / (k_eff + i + 1))
             if key not in items:
                 item = dict(r)
                 item["_rrf_score"] = 0.0
@@ -179,12 +180,11 @@ def merge_by_caliber(
         )
 
     caliber_groups = group_by_caliber(ranked_lists)
-
     merged_by_caliber: dict[str, list[dict[str, Any]]] = {}
     for cal, groups in caliber_groups.items():
         merged_by_caliber[cal] = merge_within_caliber(
             groups, k=k, weighted=weighted, lang=lang,
-            _canonical_url=_canonical_url, _engine_weight=_engine_weight,
+            _canonical_url=_canonical_url, _engine_weight=_engine_weight, caliber=cal,
         )
 
     # 不同口径按优先级排序后并列输出；拼接后再按 URL 合并一次，

@@ -517,13 +517,32 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     # 只是多了一个维度——「引擎在 A 域强、B 域弱」现在可被路由区分。
     _dom_name = str(domain.get("name") or "")
     _q_lang = str((features or {}).get("primary_lang") or "")
+    _score_memo: dict[str, float] = {}
 
     def _score_of(e: str) -> float:
+        cached_s = _score_memo.get(e)
+        if cached_s is not None:
+            return cached_s
         try:
-            return _adaptive_learner.get_score(e, _dom_name, _q_lang)
+            s = float(_adaptive_learner.get_score(e, _dom_name, _q_lang))
         except TypeError:
             # 旧版 adaptive（无 domain/lang 形参）回退全局分
-            return _adaptive_learner.get_score(e)
+            s = float(_adaptive_learner.get_score(e))
+        _score_memo[e] = s
+        return s
+
+    def _ucb_of(e: str) -> float:
+        s = _score_of(e)
+        if s < _VERTICAL_FLOOR or s >= 0.3:
+            return s
+        try:
+            _, n = _adaptive_learner.get_score_with_samples(e, _dom_name, _q_lang)
+            if isinstance(n, int):
+                from adaptive import AdaptiveLearner
+                return AdaptiveLearner.heb_ucb_score(s, n, floor=_VERTICAL_FLOOR)
+        except Exception:
+            pass
+        return s
 
     combo = domain.get("engines_combo", [])
     primary = domain.get("primary", "anysearch")
@@ -638,7 +657,7 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
             if e in protect
             or (e == primary
                 and _score_of(e) >= _VERTICAL_FLOOR)
-            or _score_of(e) >= 0.3
+            or _ucb_of(e) >= 0.3
         ]
         if not filtered:
             filtered = original

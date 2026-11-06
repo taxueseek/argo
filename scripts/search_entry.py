@@ -120,50 +120,8 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
     engines = [e for e in engines_combo if e] or ["anysearch"]
     parallel = decision.get("parallel", False) and len(engines) > 1
 
-    # P0-001：查询理解 — clean_query 用于检索，exclude_terms 用于融合后过滤
-    exclude_terms: list[str] = []
-    retrieval_query = query
-    qu = None
-    try:
-        from query_understanding import _understand_cached as understand
-        qu = understand(query)
-        exclude_terms = qu.exclude_terms
-        # 查询操作符 -词/-"短语" 的排除项汇合（2026-10-17 query_operators）：
-        # 与否定理解共用同一「融合后过滤」通道，去重保序。
-        _op_excl = ((decision or {}).get("operators") or {}).get("exclude_terms") or []
-        for t in _op_excl:
-            if t and t not in exclude_terms:
-                exclude_terms.append(t)
-        # 仅当去否定片段后仍有实义内容时才替换检索词，避免空检索
-        if qu.clean_query and qu.clean_query.strip():
-            retrieval_query = qu.clean_query
-    except ImportError:
-        pass  # query_understanding 不可用
-    except Exception as e:
-        _log(f"查询理解跳过: {type(e).__name__}")
-
-    # 词形规范化：全角→半角、拆斜杠、压多余空格（提升精确源命中，治型号/日期分隔符）
-    try:
-        from query_enhance import normalize_query
-        retrieval_query = normalize_query(retrieval_query)
-    except ImportError:
-        pass
-
     if on_progress:
         on_progress(Stage.START, {"query": query})
-
-    # 网络环境感知：慢网放大超时预算（避免误杀），快网收紧（更快响应）
-    _eff_timeout = timeout
-    try:
-        from network_aware import adjusted_timeout, network_profile
-        _eff_timeout = adjusted_timeout(timeout, engines)
-        if _eff_timeout != timeout:
-            _log(
-                f"网络感知超时: {timeout}s → {_eff_timeout}s "
-                f"({network_profile(engines).get('network')})",
-            )
-    except ImportError:
-        pass
 
     # 时间窗归一化：下推/缓存键用归一化 ISO（相对值转绝对日期），
     # 后过滤用 epoch 秒；非法输入保持原样下推、不参与后过滤。
@@ -281,6 +239,44 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
             if timing is not None:
                 _hit["timing"] = timing.summary()
             return _Prepared(cached=_hit)
+
+    # 缓存未命中才拉起查询理解、词形规范化与网络感知超时（缓存命中热路径零开销）
+    exclude_terms: list[str] = []
+    retrieval_query = query
+    qu = None
+    try:
+        from query_understanding import _understand_cached as understand
+        qu = understand(query)
+        exclude_terms = qu.exclude_terms
+        _op_excl = ((decision or {}).get("operators") or {}).get("exclude_terms") or []
+        for t in _op_excl:
+            if t and t not in exclude_terms:
+                exclude_terms.append(t)
+        if qu.clean_query and qu.clean_query.strip():
+            retrieval_query = qu.clean_query
+    except ImportError:
+        pass
+    except Exception as e:
+        _log(f"查询理解跳过: {type(e).__name__}")
+
+    try:
+        from query_enhance import normalize_query
+        retrieval_query = normalize_query(retrieval_query)
+    except ImportError:
+        pass
+
+    _eff_timeout = timeout
+    try:
+        from network_aware import adjusted_timeout, network_profile
+        _eff_timeout = adjusted_timeout(timeout, engines)
+        if _eff_timeout != timeout:
+            _log(
+                f"网络感知超时: {timeout}s → {_eff_timeout}s "
+                f"({network_profile(engines).get('network')})",
+            )
+    except ImportError:
+        pass
+
     try:
         from circuit_breaker import get_breaker
         breaker = get_breaker()

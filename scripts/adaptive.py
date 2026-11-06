@@ -273,7 +273,7 @@ class AdaptiveLearner:
             "       SUM(CASE WHEN empty = 0 THEN 1 ELSE 0 END), "
             "       SUM(CASE WHEN empty = 0 THEN success ELSE 0 END), "
             "       AVG(latency_ms), AVG(cost), "
-            "       AVG(quality), SUM(quality), MAX(created_at) "
+            "       AVG(CASE WHEN empty = 0 THEN quality END), SUM(quality), MAX(created_at) "
             "FROM engine_perf WHERE engine = ? AND created_at > ?",
             (engine, cutoff),
         ).fetchone()
@@ -285,35 +285,40 @@ class AdaptiveLearner:
             "       SUM(CASE WHEN empty = 0 THEN 1 ELSE 0 END), "
             "       SUM(CASE WHEN empty = 0 THEN success ELSE 0 END), "
             "       AVG(latency_ms), AVG(cost), "
-            "       AVG(quality), SUM(quality), MAX(created_at) "
+            "       AVG(CASE WHEN empty = 0 THEN quality END), SUM(quality), MAX(created_at), "
+            "       SUM(CASE WHEN empty = 1 THEN 1 ELSE 0 END) "
             "FROM engine_perf WHERE engine = ? AND created_at > ? "
             "AND domain = ? AND lang = ?",
             (engine, cutoff, domain, lang),
         ).fetchone()
 
+    @staticmethod
+    def heb_ucb_score(score: float, samples: int,
+                      floor: float = 0.15, c_ucb: float = 0.35) -> float:
+        """HEB-DCB 经验贝叶斯置信上界（防小样本垂直源饿死）。
+
+        对尚未跌破死源地板（score >= floor）的低样本引擎补偿后验标准差：
+          UCB(s, n) = s + c_ucb * sqrt(max(s*(1-s), 0.04) / (n + 3))
+        随样本数 n 增长探索奖励以 1/sqrt(n) 自然衰减，死源（< floor）不获补偿。
+        """
+        if score < floor:
+            return score
+        import math
+        n = max(0, int(samples or 0))
+        var = max(score * (1.0 - score), 0.04)
+        return round(min(1.0, score + c_ucb * math.sqrt(var / (n + 3.0))), 4)
+
     def get_score(self, engine: str, domain: str | None = None,
                   lang: str | None = None, purpose: str = "daily") -> float:
         """获取引擎的综合推荐分数（0.0 ~ 1.0）。
 
-        **只按「有明确结果」的调用算成功率**（`empty=0`）。
-
-        为什么要把空结果排除：分数被用来决定「这个源该不该继续用」，
-        而「这次查询它没东西」说明的是**查询与源不匹配**，不是源坏了。
-        两者混在一起会误杀：实测 github 在窗口内 63 次调用、成功率 6%，
-        失败归因全是 empty——它被用来回答各种查询，只有少数落进它的覆盖范围；
-        而它却在 `local_code` / `package_search` 这些**声明要用它**的域里
-        因分数低于 0.3 被整个剔除。同类还有 wikipedia(0.17)、
-        openalex(0.29)、hackernews(0.10)、twitter(0.17)、open_library(0.17)。
-
-        延迟与成本仍按全部调用统计——空结果也是真实开销。
-
-        **场景分桶**（2026-10-24）：给 `domain` / `lang` 时，按 (engine, domain,
-        lang) 聚合出「桶分」，与全局分加权融合（桶样本 <3 时权重 0.3，≥3 时 0.5）。
-        这让「引擎在 A 域强、B 域弱」可表达，新引擎也能在建议域里被更快识别。
-        桶为空时回退全局分——旧调用方（不传 domain/lang）行为逐位不变。
-
-        `purpose`：daily（默认）沿用 2s 延迟悬崖；research 抬到 8s，见
-        `_score_from_row`。默认值保证旧调用方逐位不变。
+        **HEB-DCB 正交解耦（全局健康度 vs 场景召回率）**：
+        1. 全局层（不传 domain/lang）：只按 `empty=0` 算成功率，防止垂直源被跨域
+           无召回查询误杀；
+        2. 场景分桶层（给 `domain` / `lang`）：在桶内引入 Beta(2, 0) 经验贝叶斯
+           场景召回因子 rho_recall = (2 + b_ok) / (2 + b_ok + b_empty)。无空结果时
+           rho_recall = 1.0，与旧口径逐位一致；当某源在特定 (domain, lang) 持续
+           返回空结果（b_empty > 0）时，仅下调该场景桶分，不污染其全局健康分。
         """
         return self.get_score_with_samples(
             engine, domain, lang, purpose)[0]
@@ -325,7 +330,7 @@ class AdaptiveLearner:
 
         选源层需要区分「0.5 分是因为没数据」与「0.5 分是因为确实平庸」：
         对无样本的源，实测先验应当做主，而不是被自适应默认分稀释。样本数
-        取场景桶的 judged（桶为空时取全局 judged）。
+        取场景桶的有效观测数（桶为空时取全局 judged）。
         """
         key = (engine, domain or "", lang or "", purpose)
         now = time.time()
@@ -343,11 +348,22 @@ class AdaptiveLearner:
             if domain or lang:
                 brow = self._bucket_row(engine, domain or "", lang or "")
                 b_judged = int(brow[1] or 0)
-                if b_judged > 0:
-                    b_score = self._score_from_row(brow, purpose)
+                b_ok = int(brow[2] or 0)
+                b_empty = int(brow[8] or 0) if len(brow) > 8 else 0
+                if b_judged > 0 and b_empty == 0:
+                    b_score = self._score_from_row(brow[:8], purpose)
                     w = 0.5 if b_judged >= 3 else 0.3
                     score = round((1 - w) * score + w * b_score, 4)
                     samples = b_judged
+                elif b_empty > 0:
+                    rho_recall = (2.0 + b_ok) / (2.0 + b_ok + b_empty)
+                    base_b = (self._score_from_row(brow[:8], purpose)
+                              if b_judged > 0 else min(score, 0.5))
+                    b_score = base_b * rho_recall
+                    b_obs = b_judged + b_empty
+                    w = min(0.75, b_obs / (b_obs + 2.0)) if b_obs >= 3 else 0.3
+                    score = round((1 - w) * score + w * b_score, 4)
+                    samples = b_obs
 
         self._score_cache[key] = (score, samples, now + self.SCORE_CACHE_TTL)
         return score, samples

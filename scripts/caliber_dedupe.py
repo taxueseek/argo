@@ -52,10 +52,10 @@ def merge_cross_caliber_duplicates(
             if eng and eng not in cons:
                 cons.append(eng)
         cur["consensus_engines"] = cons
-        cur["_rrf_score"] = round(max(
-            float(cur.get("_rrf_score") or 0.0),
-            float(r.get("_rrf_score") or 0.0),
-        ), 6)
+        s_cur = float(cur.get("_rrf_score") or 0.0)
+        s_new = float(r.get("_rrf_score") or 0.0)
+        # IASF 跨口径独立共振：不同口径独立命中同一 URL 时叠加次口径 0.35 边际共振增益
+        cur["_rrf_score"] = round(max(s_cur, s_new) + 0.35 * min(s_cur, s_new), 6)
         sources = {cur.get("source", ""), r.get("source", "")}
         cur["source"] = "/".join(s for s in sources if s)
         new_txt = f"{r.get('title', '')} {r.get('snippet', '')}"

@@ -625,7 +625,6 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 
 
-
 def _consensus_prior(results: list[dict[str, Any]]) -> list[float]:
     """融合先验：把 RRF 分与跨引擎共识数归一化成 [0,1]（逐条保持一致 results）。
 
@@ -649,16 +648,17 @@ def _consensus_prior(results: list[dict[str, Any]]) -> list[float]:
     priors: list[float] = []
     raw = [float(r.get("_rrf_score", 0.0) or 0.0) for r in results]
     peak = max(raw) if raw else 0.0
+    from caliber_isolation import caliber_of
     for r, rrf in zip(results, raw):
         rrf_norm = (rrf / peak) if peak > 0 else 0.0
-        cons = len(r.get("consensus_engines") or [])
+        cons_engs = r.get("consensus_engines") or []
+        cons = len(cons_engs)
         cons_norm = min(max(cons - 1, 0), 3) / 3.0
-        # 两个子信号取均值：单纯多引擎重复 != 更可信，RRF 分还含引擎权重
+        if cons >= 2 and len({caliber_of(e) for e in cons_engs if e}) >= 2:
+            cons_norm = min(1.0, cons_norm + 0.15)
+        # 两个子信号取均值：跨口径独立共识额外获 0.15 异质印证增益
         priors.append(0.5 * rrf_norm + 0.5 * cons_norm)
     return priors
-
-
-
 
 
 def local_five_dim_rerank(query: str, results: list[dict[str, Any]],

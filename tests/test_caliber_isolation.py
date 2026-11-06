@@ -156,6 +156,37 @@ class TestClassicFallback(unittest.TestCase):
                            "第 1 名必须高于第 2 名（按列表内名次衰减）")
 
 
+class TestIASFFusionProperties(unittest.TestCase):
+    def test_authoritative_caliber_has_steeper_rank_gradient_than_general(self):
+        """IASF 口径自适应温度：权威结构化口径（financial_data/academic）的名次衰减比泛网更陡峭。"""
+        fin = merge_by_caliber([_engine_list("eastmoney", "fin.com", 3)], weighted=True)
+        gen = merge_by_caliber([_engine_list("octen", "web.com", 3)], weighted=True)
+        fin_ratio = fin[0]["_rrf_score"] / fin[2]["_rrf_score"]
+        gen_ratio = gen[0]["_rrf_score"] / gen[2]["_rrf_score"]
+        self.assertGreater(fin_ratio, gen_ratio)
+
+    def test_cross_caliber_resonance_beats_single_caliber_score(self):
+        """IASF 跨口径共振：跨口径同时命中的条目 RRF 分高于任一单口径单独命中。"""
+        wiki_only = merge_by_caliber([[{
+            "_engine": "wikipedia", "source": "wikipedia",
+            "url": "https://en.wikipedia.org/wiki/RRF",
+            "title": "RRF", "snippet": "Reciprocal Rank Fusion",
+        }]], weighted=True)[0]["_rrf_score"]
+        both = merge_by_caliber([
+            [{
+                "_engine": "wikipedia", "source": "wikipedia",
+                "url": "https://en.wikipedia.org/wiki/RRF",
+                "title": "RRF", "snippet": "Reciprocal Rank Fusion",
+            }],
+            [{
+                "_engine": "anysearch", "source": "anysearch",
+                "url": "https://en.wikipedia.org/wiki/RRF",
+                "title": "RRF", "snippet": "short",
+            }],
+        ], weighted=True)[0]["_rrf_score"]
+        self.assertGreater(both, wiki_only)
+
+
 if __name__ == "__main__":
     import unittest as _u
     _u.main()

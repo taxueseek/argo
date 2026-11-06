@@ -113,3 +113,38 @@ def test_scenario_columns_migrate(tmp_path, monkeypatch):
     learner = adaptive.get_learner()
     cols = [r[1] for r in learner._connect().execute("PRAGMA table_info(engine_perf)")]
     assert "domain" in cols and "lang" in cols
+
+
+def test_heb_dcb_bucket_empty_demotes_scenario_without_polluting_global(learner):
+    """HEB-DCB 正交解耦：场景桶内的持续空结果下调该场景桶分，但不污染全局健康分。"""
+    # 引擎在 code 域有正常高质量返回（全局健康分高）
+    for _ in range(4):
+        learner.record("github", success=True, latency_ms=120, quality=1.0,
+                       empty=False, domain="code_search", lang="en")
+    g_before = learner.get_score("github")
+    assert g_before >= 0.8
+
+    # 同一引擎在 cooking 域持续返回空结果（empty=True）
+    for _ in range(6):
+        learner.record("github", success=False, latency_ms=150,
+                       empty=True, domain="cooking", lang="zh")
+
+    # 1. 全局健康分不受跨域 empty 污染
+    assert learner.get_score("github") == pytest.approx(g_before, abs=1e-3)
+    # 2. 强域 code_search 分数保持高位
+    assert learner.get_score("github", "code_search", "en") >= 0.8
+    # 3. 持续空结果的 cooking 域桶分被经验贝叶斯召回因子显著下调
+    cooking_score, cooking_n = learner.get_score_with_samples("github", "cooking", "zh")
+    assert cooking_n == 6
+    assert cooking_score < 0.5
+
+
+def test_heb_ucb_score_protects_low_sample_but_not_dead_source():
+    """HEB-DCB UCB 置信上界：保护低样本边界源（>=0.15），不庇护死源（<0.15）与高样本平庸源。"""
+    from adaptive import AdaptiveLearner
+    # 死源（<0.15）不获 UCB 补偿
+    assert AdaptiveLearner.heb_ucb_score(0.084, 2) == 0.084
+    # 低样本（n=2）且未跌破地板（0.24）的垂直源获 UCB 补偿越过 0.3 阈值
+    assert AdaptiveLearner.heb_ucb_score(0.24, 2) >= 0.30
+    # 随样本数增大（n=50），同分平庸源的 UCB 奖励收敛，不再越过 0.3
+    assert AdaptiveLearner.heb_ucb_score(0.24, 50) < 0.30
