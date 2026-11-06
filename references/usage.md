@@ -440,6 +440,16 @@ URL 就在 `results[].url` 里（`--fields agent` 也保留），零额外成本
 
 ## 子技能细节
 
+子技能体系按数据源形态与计算边界严格 MECE 划分，各司其职且边界正交：
+
+| 子技能 | 领域 | 本质与计算边界 | 典型入口 / 触发机制 |
+|---|---|---|---|
+| `local-seek` | 本机文本与代码 | 纯本地无网络，rg/fd/Spotlight L1~L3 逐级定位 | `argo search --include-local`、MCP `argo_local_search`、CLI `seek.py` |
+| `local-image` | 本机图片多模态 | 离线 Vision OCR/分类/768 维特征矩阵（4ms 点积） | `argo local-image index/search`（需 `ARGO_LOCAL_IMAGE=1`） |
+| `local-search` | 公开网页聚合 | 免 Key SERP 直连聚合，33 本地源，健康探针自愈 | `argo search --local-first` 或主流程候选引擎 |
+| `ego-search` | 登录态受限网页 | 独立 Chromium profile/WebBridge，鉴权抓取与隔离缓存 | CLI `ego_search.py`（默认关，显式开启） |
+| `js-run` | 轻量纯计算沙箱 | V8 mini-racer 沙箱跑挑战 JS/解密，零网络 I/O | 无独立命令，fetch 降级链一级 E 自动触发（`ARGO_FETCH_JSRUN`） |
+
 ### local-search（本地零成本聚合）
 
 - 33 本地引擎、29 默认启用，覆盖 web_general/chinese/academic/news/code/reference/vertical 七大类
@@ -573,48 +583,48 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
-| `ARGO_ADMISSION_DIR` | admission dir | 见 references/operations.md 与模块 docstring |
-| `ARGO_ALLOW_PRIVATE_URLS` | allow private urls | 见 references/operations.md 与模块 docstring |
-| `ARGO_ALLOW_RECOMPUTE` | ('research 可复算脚本执行', '默认拒绝，显式授权') | 见 references/operations.md 与模块 docstring |
-| `ARGO_CONCEPT_ROUTER` | ('概念语义路由（Model2Vec 零依赖静态向量）', '默认关；=1 开启，回退纯词面 TF-IDF') | 见 concept_lookup.py docstring |
-| `ARGO_CONFIG_CACHE` | ('配置解析缓存', '默认开') | 见 references/operations.md 与模块 docstring |
-| `ARGO_CONFIG_STAMP_TTL_S` | config stamp ttl s | 见 references/operations.md 与模块 docstring |
-| `ARGO_CONTENT_RISK_GATE` | ('内容风险门禁：高风险正文隔离 + 清洗后替换', '默认开；=0 放行高风险内容') | 见 content_security.py docstring |
-| `ARGO_CONTENT_RISK_THRESHOLD` | ('门禁阈值：risk_score ≥ 此值即隔离', '默认 0.5') | 见 content_security.py docstring |
-| `ARGO_COMPLETENESS_V2` | ('完整性维度 QSDM 信息/噪声比', '默认开；=0 退回长度启发式') | 见 rank_signals.py docstring |
-| `ARGO_CROSS_DOMAIN_HOMOGENEITY` | ('跨域内容同质惩罚（异域发同一篇内容降权，对应 Google scaled content abuse）', '默认开') | 见 rank_signals.py docstring |
-| `ARGO_DOMAIN_CONCENTRATION` | ('域级聚合惩罚（同域占比过半降权）', '默认开') | 见 rank_signals.py docstring |
-| `ARGO_DISABLE_ENGINES` | disable engines | 见 references/operations.md 与模块 docstring |
-| `ARGO_ENABLE_ENGINES` | enable engines | 见 references/operations.md 与模块 docstring |
-| `ARGO_ENGINE_HTTP_CLIENT` | ('HttpClient 渐进增强层（UA轮换/节流/重试）', '默认开；=0 回退 urllib 保底') | 见 references/operations.md 与模块 docstring |
-| `ARGO_ENV_FILE` | env file | 见 references/operations.md 与模块 docstring |
-| `ARGO_FULLTEXT` | ('抓取全文存档（--full）', '随 --full 启用') | 见 references/operations.md 与模块 docstring |
-| `ARGO_HTTP_POOL` | ('HTTP keep-alive 连接池', '默认开；=0 退回一次请求一条连接') | 同主机请求复用 TCP+TLS 连接；对拍/应急用 0 |
-| `ARGO_IDENTITY_MEMORY` | identity memory | 见 references/operations.md 与模块 docstring |
-| `ARGO_IMAGE_DB` | ('本地图片索引库路径', '默认 ~/.cache/unified-search/argo-image/index.db') | 建库与检索共用；指纹矩阵 fp.npy 与它同目录 |
-| `ARGO_LOCAL_IMAGE` | ('本地图片检索（local-image 子命令）', '默认关；=1 开启') | 要 macOS+swiftc+numpy 且先建索引，默认不启用 |
-| `ARGO_LOCAL_RERANK` | ('本地五维重排', '默认开') | 见 references/operations.md 与模块 docstring |
-| `ARGO_MAX_REDIRECTS` | ('最大重定向跳数', '默认 5；合法 1-20，越界回落默认') | 见 http_client.py `_max_redirects` |
-| `ARGO_MCPJOBS_DIR` | ('mcp-jobs 安装根', '默认随平台缓存根 argo-mcpjobs') | job.py 安装与启动共用；换位置只改这一处 |
-| `ARGO_MINHASH_DEDUPE` | ('近重复结果去重', '默认开') | 见 references/operations.md 与模块 docstring |
-| `ARGO_MOBILE_FIRST_HOSTS` | mobile first hosts | 见 references/operations.md 与模块 docstring |
-| `ARGO_MULTI_QUERY` | ('multi-query 变体召回（普适性增强）', '默认开；=0 一键回滚/A-B') | 见 variant_recall.py docstring |
-| `ARGO_NO_AUTORELOAD` | no autoreload | 见 references/operations.md 与模块 docstring |
-| `ARGO_NO_CACHE` | ('测试模式：跳过结果缓存读', '默认关；等价 --no-cache。仅改进 Skill/插件需要实时结果时开') | 见 references/operations.md 与模块 docstring |
-| `ARGO_NO_PREWARM` | ('MCP warm 线程里的 anysearch 预连接', '默认开；非空且非 0 时跳过') | 预连接把 TLS 握手藏进 initialize 到首次 tools/call 的空档；对拍/排障时置 1 |
-| `ARGO_PROXY` | proxy | 见 references/operations.md 与模块 docstring |
-| `ARGO_PYTHON` | python | 见 references/operations.md 与模块 docstring |
-| `ARGO_REDSKILL_CACHE` | redskill cache | 见 references/operations.md 与模块 docstring |
-| `ARGO_RESPECT_ROBOTS` | ('robots.txt 遵守', '默认遵守') | 见 references/operations.md 与模块 docstring |
-| `ARGO_ROUTE_CACHE` | ('路由决策跨进程缓存', '默认开；测试环境默认关') | 见 references/operations.md 与模块 docstring |
-| `ARGO_RRF_WEIGHTED` | ('RRF 加权融合', '默认关（逃生开关）') | 见 references/operations.md 与模块 docstring |
-| `ARGO_SEMANTIC_EVIDENCE` | ('可选语义证据层（classifier.dev）', '默认关，个人可选开') | 见 references/operations.md 与模块 docstring |
-| `ARGO_SERP_GUARD` | ('SERP 垃圾结果守卫', '默认开；=0 关闭') | 见 references/operations.md 与模块 docstring |
-| `ARGO_USAGE_LOG` | ('本地使用日志（JSONL 流，stats 数据源）', '默认开；=0 整体关闭') | 见 references/operations.md 与模块 docstring |
-| `ARGO_UNPAYWALL_EMAIL` | unpaywall email | 见 references/operations.md 与模块 docstring |
-| `ARGO_VIDEO_ASR_CMD` | ('视频转写兜底命令模板', '默认空=不转写；命令含 {url} 或自动追加 URL') | 仅 video_fetch.py 使用；shlex.split 执行、不走 shell |
-| `ARGO_WOLFRAM_APPID` | wolfram appid | 见 references/operations.md 与模块 docstring |
-| `ARGO_XHS_TIMEOUT` | xhs timeout | 见 references/operations.md 与模块 docstring |
+| `ARGO_ADMISSION_DIR` | 引擎准入状态与探针熔断记录存储目录 | 默认跟随平台状态目录；测试或多实例隔离时覆盖 |
+| `ARGO_ALLOW_PRIVATE_URLS` | SSRF 安全防护放行开关（私有/内网 IP 请求） | 默认 0（阻止私有地址）；=1 放行（用于本地网关与抓取对拍测试） |
+| `ARGO_ALLOW_RECOMPUTE` | research 深度研究可复算脚本执行受限授权 | 默认 0（拒绝执行子进程）；=1 允许调度器调用执行器 |
+| `ARGO_CONCEPT_ROUTER` | 概念语义路由（Model2Vec 零依赖静态向量） | 默认关；=1 开启，回退纯词面 TF-IDF |
+| `ARGO_CONFIG_CACHE` | 配置解析与合并结果的文件缓存 | 默认开；=0/false/no/off 关闭并回退实时解析 |
+| `ARGO_CONFIG_STAMP_TTL_S` | 配置时间戳与签名缓存的有效期（秒） | 默认 5s；设 0 即关闭记忆、每次即时扫描 |
+| `ARGO_CONTENT_RISK_GATE` | 内容风险安全门禁（高风险正文隔离清洗替换） | 默认开；=0 放行高风险内容（应急排障用） |
+| `ARGO_CONTENT_RISK_THRESHOLD` | 内容风险判定阈值（risk_score ≥ 此值即隔离清洗） | 默认 0.5 |
+| `ARGO_COMPLETENESS_V2` | 完整性维度 QSDM 信息/噪声比评估算子 | 默认开；=0 退回旧长度启发式 |
+| `ARGO_CROSS_DOMAIN_HOMOGENEITY` | 跨域内容同质惩罚（异域搬运同一内容降权） | 默认开；=0 关闭 |
+| `ARGO_DOMAIN_CONCENTRATION` | 域级聚合惩罚（同域结果占比过半时降权） | 默认开；=0 关闭 |
+| `ARGO_DISABLE_ENGINES` | 临时强行禁用的引擎名单（逗号分隔） | 覆盖 config.yaml 的启用状态 |
+| `ARGO_ENABLE_ENGINES` | 临时强行启用的引擎名单（逗号分隔） | 覆盖 config.yaml 的禁用状态 |
+| `ARGO_ENGINE_HTTP_CLIENT` | HttpClient 渐进增强层（UA 轮换/自适应节流/重试） | 默认开；=0 回退 urllib 保底 |
+| `ARGO_ENV_FILE` | 单一配置真源文件的绝对路径 | 默认读取 ~/.config/argo/env；指定时只读此文件不做合并 |
+| `ARGO_FULLTEXT` | 网页抓取全文持久化存档开关 | 随 CLI --full 默认开启；=0 关闭存档 |
+| `ARGO_HTTP_POOL` | HTTP keep-alive 连接池 | 默认开，同主机复用 TCP+TLS；=0 每次新建连接（对拍/应急用） |
+| `ARGO_IDENTITY_MEMORY` | 客户端身份识别持久化记忆 | 默认开；=0 关闭 |
+| `ARGO_IMAGE_DB` | 本地图片索引数据库路径 | 默认 ~/.cache/unified-search/argo-image/index.db，指纹矩阵 fp.npy 同目录 |
+| `ARGO_LOCAL_IMAGE` | 本地图片检索能力（local-image 子命令） | 默认关；需 macOS+swiftc+numpy，=1 开启 |
+| `ARGO_LOCAL_RERANK` | 本地五维重排算子（相关性/权威度/时效/完整性/多样性） | 默认开；=0 关闭 |
+| `ARGO_MAX_REDIRECTS` | 抓取与请求的最大重定向跳数 | 默认 5（合法范围 1-20，越界回落默认） |
+| `ARGO_MCPJOBS_DIR` | mcp-jobs 招聘工具与环境安装根目录 | 默认随平台缓存根 argo-mcpjobs |
+| `ARGO_MINHASH_DEDUPE` | 基于 MinHash 的近重复结果去重 | 默认开；=0 关闭 |
+| `ARGO_MOBILE_FIRST_HOSTS` | 移动端优先请求 Host 白名单（逗号分隔） | 命中站点优先使用移动端 UA 与降级链 |
+| `ARGO_MULTI_QUERY` | 多查询变体扩展召回 | 默认开；=0 一键回滚/用于 A-B 对拍测试 |
+| `ARGO_NO_AUTORELOAD` | 关闭环境配置文件（~/.config/argo/env）热重载感知 | 默认开；=1 关闭 |
+| `ARGO_NO_CACHE` | 测试模式跳过结果缓存读取 | 默认关，等价 --no-cache；仅改动调试需要实时结果时开启 |
+| `ARGO_NO_PREWARM` | MCP warm 线程里的 anysearch 预连接 | 默认开（把 TLS 握手藏进初始化空档）；=1 跳过预连 |
+| `ARGO_PROXY` | 全局代理配置（支持 http://、socks5://） | 传 "direct" 表示强制直连 |
+| `ARGO_PYTHON` | Argo 执行器与子进程使用的 Python 解释器路径覆盖 | 默认自动寻找系统高版本 python3.x |
+| `ARGO_REDSKILL_CACHE` | 小红书 Redskill 搜索引擎本地缓存路径覆盖 | 默认跟随系统状态目录 |
+| `ARGO_RESPECT_ROBOTS` | 抓取遵守目标站点 robots.txt 协议 | 默认遵守；=0 强制忽略 |
+| `ARGO_ROUTE_CACHE` | 智能路由决策跨进程缓存 | 默认开；测试环境默认关，=0 强制关闭 |
+| `ARGO_RRF_WEIGHTED` | RRF 加权融合算法 | 默认关（逃生开关）；=1 启用权重调制融合 |
+| `ARGO_SEMANTIC_EVIDENCE` | 可选语义证据层（classifier.dev / TypeSafe JEV） | 默认关；配置 key 后可选开启 |
+| `ARGO_SERP_GUARD` | SERP 垃圾与壳链结果守卫（过滤无效跳转与空壳） | 默认开；=0 关闭 |
+| `ARGO_USAGE_LOG` | 本地使用日志流（JSONL，stats 统计数据源） | 默认开；=0 整体关闭 |
+| `ARGO_UNPAYWALL_EMAIL` | Unpaywall 学术开放获取 API 的联系人邮箱 | 遵循 polite pool 规范 |
+| `ARGO_VIDEO_ASR_CMD` | 视频语音转写兜底命令模板（无字幕时调用） | 默认空，含 {url} 或自动追加 URL；shlex.split 执行 |
+| `ARGO_WOLFRAM_APPID` | WolframAlpha 知识计算引擎的 AppID | 缺省则跳过该引擎 |
+| `ARGO_XHS_TIMEOUT` | 小红书平台抓取请求超时上限（秒） | 默认 3.0s；慢网调试时可调大 |
 
 ### API 密钥（值放 ~/.config/argo/env）（25）
 
@@ -657,53 +667,53 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_PAID_SEARCH` | 付费搜索对冲开关 | 默认 `auto`：在 english_tech / intl_news_flash / global_event 的付费位插入 DeepSeek（预算用完回落 TinyFish）；`off` 关闭。见 `scripts/paid_policy.py` |
 | `ARGO_PAID_HEDGE_DEFER` | english_tech 的付费对冲降到第三位（免费源先跑，不达标才付费） | 默认空=常驻第二位（2026-10-26 四臂实测：p50 打平，均值 967 vs 1246ms、权威覆盖 0.83 vs 0.50）；=1 省 75% DeepSeek 调用，适合预算紧张。新闻域始终第二位 |
 | `ARGO_BUDGET_DEEPSEEK_SEARCH` | DeepSeek 月度预算（元） | 默认 5（≈1000 次成功调用）；0=关闭自动使用。也可用 `argo budget set deepseek_search 5` 写共享文件 |
-| `ARGO_QUOTA_ANYSEARCH_LIMIT` | 行为阈值/预算调参 | AnySearch 每日次数上限（默认 1000）；0=不限制；空=沿用 config.yaml |
-| `ARGO_QUOTA_ZHIHU_LIMIT` | 行为阈值/预算调参 | 知乎每日次数上限（默认 5000）；0=不限制；空=沿用 config.yaml |
-| `ARGO_QUOTA_YUANBAO_LIMIT` | 行为阈值/预算调参 | 元宝每月次数上限（默认 2000）；0=不限制；空=沿用 config.yaml |
+| `ARGO_QUOTA_ANYSEARCH_LIMIT` | AnySearch 每日调用次数上限覆盖 | 默认 1000；0=不限制；空=沿用 config.yaml |
+| `ARGO_QUOTA_ZHIHU_LIMIT` | 知乎每日调用次数上限覆盖 | 默认 5000；0=不限制；空=沿用 config.yaml |
+| `ARGO_QUOTA_YUANBAO_LIMIT` | 元宝每月调用次数上限覆盖 | 默认 2000；0=不限制；空=沿用 config.yaml |
 | `ARGO_BUDGET_EXA` | Exa 月度预算（美元） | 默认 10（≈1000 次）；0=关闭自动使用；按成功调用计费 |
-| `ARGO_QUOTA_TAVILY_LIMIT` | 行为阈值/预算调参 | Tavily 每月次数上限（默认 1000）；0=不限制；空=沿用 config.yaml |
+| `ARGO_QUOTA_TAVILY_LIMIT` | Tavily 每月调用次数上限覆盖 | 默认 1000；0=不限制；空=沿用 config.yaml |
 | `ARGO_BUDGETS_JSON` | 预算整份 JSON 覆盖 | 高级/测试用；优先级高于预算文件，例 `{"deepseek_search":{"amount":5,"currency":"CNY","period":"month"}}` |
 | `ARGO_BUDGET_FILE` | 预算文件路径覆盖 | 默认 `~/.config/argo/budgets.json`；多环境隔离时用 |
 | `ARGO_IMAGE_LOCAL_ROOTS` | 反搜图允许读取的本地目录（`os.pathsep` 分隔） | 默认空=不限目录（本机 CLI 由人直接调用）；MCP 宿主里设成收图目录，模型便只能把落盘的那几张图送去反搜，群消息无法驱动它读任意本地文件 |
 | `ARGO_PAID_BUDGET_BYPASS` | 单次绕过月度预算 | =1 时显式/自动调用都不检查预算；用于临时排障，不改变配置 |
 | `ARGO_ADAPTIVE_TAIL` | 尾宽按 backup 引擎历史 P75 分层（快源等满/慢源早收工） | 默认关；=1 开启（2026-10-16 三轮交错 A/B 未证实收益，对拍记录在本机 docs-local/调度对拍_尾宽分层与并发_2026-10-16.md，属本地归档不随发布件分发） |
 | `ARGO_TAIL_COMPLETE_S` | 早停后台补全的收割宽限（秒）：弃置引擎宽限内完成则记学习器真实成绩并把交付合并进 L2 缓存 | 默认 3；0=关闭（回到纯丢弃）。CLI 由 atexit 等待、输出已先行；MCP/daemon 常驻进程自然收割。证据见 docs/QUALITY_OF_SLOW_SOURCES.md |
-| `ARGO_ADMISSION_TTL_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_ADMISSION_TTL_S` | 引擎准入缓存 TTL（秒） | 默认 1s，控制熔断与探针状态在进程间的同步延迟 |
 | `ARGO_DAEMON` | 允许 search 在 daemon 不在位时自动后台拉起（显式 opt-in） | 默认关；=1 开启。`argo daemon start` 手动启动的实例不受此开关影响；`ARGO_NO_DAEMON=1` 优先 |
 | `ARGO_DAEMON_TIMEOUT` | daemon 快路径客户端等待上限（秒） | 默认 120；deep 长查询可调大 |
-| `ARGO_FETCH_DEADLINE_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_FETCH_DEADLINE_S` | 网页抓取全降级链总墙钟时间上限（秒） | 默认 60s |
 | `ARGO_VERIFY_BUDGET_S` | `--verify` 全局墙钟预算（秒） | 默认 5：到点未回的 URL 进 `pending`，已回的照常回填；0=关闭（逐 URL 8s 降级链照旧）。2026-10-22 实测最坏 9.7s→≤5.5s |
-| `ARGO_DEDUP_FUZZY` | ('minhash 去重的 rapidfuzz 模糊近重复复核（近似命中带内启用）', '默认开；=0 关；未装 rapidfuzz 时自动回退纯 minhash') | 见 rank_signals.py docstring |
-| `ARGO_DEDUP_FUZZY_THR` | 行为阈值/预算调参 | 默认 0.88（token_set_ratio 判定线） |
-| `ARGO_DEDUP_FUZZY_BAND` | 行为阈值/预算调参 | 默认 0.55（minhash 近似命中带下限） |
-| `ARGO_TFIDF_RERANK` | ('精排降级时的零依赖 TF-IDF 语义抛光（防 SERP 壳链回顶）', '默认开；=0 关；fast/budget 档内建跳过') | 见 rerank_tfidf.py docstring |
-| `ARGO_NUMBER_CROSSCHECK` | ('数字交叉验证信号（多源同指标数值分歧标记）', '默认开；仅 deep/auto 且结果 ≥3；=0 关') | 见 fact_crosscheck.py docstring |
-| `ARGO_TEXT_LEXICON` | 行为阈值/预算调参 | 数字交叉验证的指标词表 JSON 路径（默认 backends/text_lexicon.json） |
+| `ARGO_DEDUP_FUZZY` | minhash 近似命中带内的 rapidfuzz 模糊近重复复核 | 默认开；=0 关；未装 rapidfuzz 时自动回退纯 minhash |
+| `ARGO_DEDUP_FUZZY_THR` | rapidfuzz 模糊去重判定阈值 | 默认 0.88（token_set_ratio 判定线） |
+| `ARGO_DEDUP_FUZZY_BAND` | minhash 近似去重判定带下限 | 默认 0.55 |
+| `ARGO_TFIDF_RERANK` | 精排降级时的零依赖 TF-IDF 语义抛光（防 SERP 壳链回顶） | 默认开；=0 关；fast/budget 档内建跳过 |
+| `ARGO_NUMBER_CROSSCHECK` | 数字交叉验证信号（多源同指标数值分歧标记） | 默认开；仅 deep/auto 且结果 ≥3；=0 关 |
+| `ARGO_TEXT_LEXICON` | 数字交叉验证的指标词表 JSON 路径 | 默认 backends/text_lexicon.json |
 | `ARGO_LOCAL_SEEK_GRACE_S` | 本地命中并入的宽限窗秒数 | 默认 0.25；覆盖 seek 常规 60~140ms |
 | `ARGO_MAX_PARALLEL_ENGINES` | 单轮编排并发引擎数上限（config.yaml `execution.max_parallel_engines` 的环境覆盖，供 A/B 对拍/运维应急） | 默认随配置（6）；非法值回落配置不报错 |
-| `ARGO_MINHASH_THRESHOLD` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_MINHASH_THRESHOLD` | MinHash 近重复内容去重的相似度判定阈值 | 默认 0.85 |
 | `ARGO_NO_DAEMON` | 关闭 UDS 快路径，search 恒走常态冷进程 | 默认开快路径；=1 关闭 |
-| `ARGO_RELEVANCE_V2` | ('相关性算子：CJK 二元组覆盖率', '默认开；=0 退回单字覆盖率') | 见 rank_signals.py docstring |
-| `ARGO_ROUTE_SAMPLE_RATE` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
-| `ARGO_SERIAL_STAGGER_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
-| `ARGO_STRAGGLER_GRACE_S` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
-| `ARGO_TOOL_CALL_COALESCE` | 行为阈值/预算调参 | 默认经实测校准，勿轻动 |
+| `ARGO_RELEVANCE_V2` | 相关性算子：CJK 二元组覆盖率 | 默认开；=0 退回旧单字覆盖率 |
+| `ARGO_ROUTE_SAMPLE_RATE` | 路由质量分析日志采样率分母 | 默认 20（即 1/20 采样率） |
+| `ARGO_SERIAL_STAGGER_S` | 通用串行引擎启动间隔秒数 | 默认 0.2s，避免并发突发流量 |
+| `ARGO_STRAGGLER_GRACE_S` | 慢源（掉队者）等待宽限时间（秒） | 默认 0.5s，超期即截断早停 |
+| `ARGO_TOOL_CALL_COALESCE` | MCP 工具并发单飞合并（single-flight）开关 | 默认 1（同一毫秒内相同请求合并执行）；=0 关闭 |
 
 ### 路径与数据位置（11）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
-| `ARGO_ARCHIVE_ROOT` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_CLIENTS_PATH` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_FULLTEXT_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_HOME_OVERRIDE` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_LINK_TARGETS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_LOCAL_READ_DIRS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_LOCAL_SEEK_PATH` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_LOCAL_SEEK_ROOTS` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_STATE_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
-| `ARGO_TEMPLATES_FILE` | 用户查询模板注册表路径覆盖 | 默认 `~/.config/argo/query-templates.yaml`（见 query-templates.md） |
-| `ARGO_USAGE_LOG_DIR` | 数据/状态位置覆盖 | 默认惯例目录（argo paths 查看） |
+| `ARGO_ARCHIVE_ROOT` | 研究与搜索完整候选归档根目录 | 默认数据/argo-search-archive/（argo paths 查看） |
+| `ARGO_CLIENTS_PATH` | MCP 客户端配置声明文件路径覆盖 | 默认 mcp/clients.yaml |
+| `ARGO_FULLTEXT_DIR` | 网页全文抓取持久化存档目录 | 默认 <状态目录>/fulltext/ |
+| `ARGO_HOME_OVERRIDE` | 用户 Home 目录覆盖（测试/沙箱隔离） | 隔离 ~/.argo 与 ~/.config/argo，防污染真实环境 |
+| `ARGO_LINK_TARGETS` | 链接解析与跳转链跟踪目标覆盖 | 测试用覆盖目标 |
+| `ARGO_LOCAL_READ_DIRS` | MCP argo_local_read 允许读取的本地白名单目录（逗号分隔） | 没配置就不放行任何本地路径，保证安全沙箱 |
+| `ARGO_LOCAL_SEEK_PATH` | 本机文件搜索 seek.py 脚本显式绝对路径 | 未设时按内置候选根自动寻找 |
+| `ARGO_LOCAL_SEEK_ROOTS` | seek.py 自动发现时的候选搜索根目录（os.pathsep 分隔） | 找不到显式路径时按此候选列表顺次探测 |
+| `ARGO_STATE_DIR` | Argo 运行时状态主目录 | 默认 ~/.cache/unified-search（或平台缓存目录） |
+| `ARGO_TEMPLATES_FILE` | 用户查询模板注册表路径覆盖 | 默认 ~/.config/argo/query-templates.yaml（见 query-templates.md） |
+| `ARGO_USAGE_LOG_DIR` | 本地使用日志（JSONL 流）存放目录 | 默认 <状态目录>/usage_log/ |
 
 ### MCP 运行配置（6）
 
@@ -712,23 +722,23 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_MCP_PRETTY` | MCP 输出缩进美化 | server 层接管，模型不可见 |
 | `ARGO_MCP_SKIP_CACHE` | 跳过缓存直连 | server 层接管，模型不可见 |
 | `ARGO_MCP_TIMEOUT` | MCP 工具统一超时秒 | server 层接管，模型不可见 |
-| `ARGO_MCP_TIMEOUT_CRAWL` | crawl 专用超时 | server 层接管，模型不可见 |
-| `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时 | server 层接管，模型不可见 |
+| `ARGO_MCP_TIMEOUT_CRAWL` | crawl 专用超时秒 | server 层接管，模型不可见 |
+| `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时秒 | server 层接管，模型不可见 |
 | `ARGO_MCP_TOOLS` | tools/list 注入范围（core 三件套/all/逗号名单） | server 层接管，模型不可见 |
 
 ### 抓取降级链分级开关（9）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
-| `ARGO_FETCH_IMPERSONATE` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_FETCH_JINA` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_FETCH_JSRUN` | js-run 车道（V8 沙箱跑挑战页 JS）启停 | 默认开启；=0 关闭 |
-| `ARGO_FETCH_MD_NEGOTIATE` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_FETCH_MD_VARIANT` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_FETCH_MOBILE` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_FETCH_PARALLEL` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_FETCH_TINYFISH` | fetch 降级链单级启停 | 默认自动降级 |
-| `ARGO_AUTH_FETCH`（别名 `ARGO_FETCH_AUTH`） | 登录态车道（站点有 `argo auth` profile 时跳过匿名链直进浏览器）启停 | 默认开启；=0 关闭。不影响 auth 子命令本身 |
+| `ARGO_FETCH_IMPERSONATE` | TLS/浏览器指纹仿冒降级车道（curl_cffi 仿冒 Chrome/Safari） | 默认自动降级开启；=0 关闭 |
+| `ARGO_FETCH_JINA` | Jina Reader 远程 Markdown 渲染转码兜底车道 | 默认自动降级开启；=0 关闭 |
+| `ARGO_FETCH_JSRUN` | js-run V8 纯计算沙箱车道（跑反爬 JS 挑战算通行证） | 默认开启；=0 关闭 |
+| `ARGO_FETCH_MD_NEGOTIATE` | HTTP Accept Markdown 内容协商直取车道 | 默认自动降级开启；=0 关闭 |
+| `ARGO_FETCH_MD_VARIANT` | 目标站点官方/镜像 Markdown 变体直取车道（.md 或 llms.txt） | 默认自动降级开启；=0 关闭 |
+| `ARGO_FETCH_MOBILE` | 移动端端点与移动 UA 降级直取车道 | 默认自动降级开启；=0 关闭 |
+| `ARGO_FETCH_PARALLEL` | 多车道并发竞速抓取优化 | 默认自动降级开启；=0 关闭 |
+| `ARGO_FETCH_TINYFISH` | TinyFish 原生直连提取与动态渲染车道 | 配置 key 后默认开启；=0 关闭 |
+| `ARGO_AUTH_FETCH`（别名 `ARGO_FETCH_AUTH`） | 登录态车道（站点有 argo auth profile 时跳过匿名链直进 Chromium） | 默认开启；=0 关闭。不影响 auth 子命令本身 |
 
 ### argo auth — 浏览器登录态（A2，2026-10）
 
@@ -771,11 +781,36 @@ argo cite "10.1038/xxx" --style apa            # apa | bibtex | numeric | gbt771
 ```
 Crossref+OpenAlex 免 key。MCP 工具 `argo_cite`（dois 数组 + style）。
 
-### argo job / paths / mcp
+### argo job / paths
 
 - `argo job "query" --city 成都`：BOSS/猎聘/智联/前程无忧/597/今日招聘并发聚合。
 - `argo paths [--check] [--migrate]`：状态目录/密钥文件位置自省与本机自检。
-- `argo mcp {{status|inject|undo}}`：多客户端 MCP 一键注入/诊断/还原。
+
+## argo mcp — 多客户端配置与单一真源（2026-11）
+
+Argo 遵循 **单一真源（Single Source of Truth）** 与 **安全可逆** 设计哲学，为主流 AI 客户端（Claude Code、Cursor、Windsurf、Codex、OpenCode、Cline、WorkBuddy 等）提供开箱即用的 MCP 接入层。
+
+### 核心命令与生命周期
+
+```bash
+argo mcp status                 # 诊断各客户端（已安装/已配置）与统一配置真源状态
+argo mcp config                 # 查看跨客户端共享的配置真源与凭证脱敏摘要
+argo mcp config --path          # 仅输出配置文件绝对路径（方便编辑器快速打开）
+argo mcp inject --all           # 注入所有已安装客户端（原子写 + 备份）
+argo mcp inject --cursor        # 注入指定客户端（支持逗号分隔，如 --client codex,cursor）
+argo mcp inject --all --dry-run # 只预览改动，不写盘
+argo mcp undo --all             # 安全还原（精确移除 entry 或从备份回滚）
+```
+
+### 运行机制与核心原则
+
+- **单一真源（Single Source of Truth）**：统一配置文件位于 `~/.config/argo/env`（`ARGO_ENV_FILE` 可覆盖）。所有注入客户端默认共享此文件中的 API Key 与功能开关，无需在每个客户端中重复复制粘贴环境变量。
+- **免重启热生效**：底层通过 `engine_env.py` 实现文件指纹签名与 mtime 感知。修改 `~/.config/argo/env` 后无需重启 MCP 进程或 Agent 客户端，下一轮调用即时热重载生效。
+- **安全与可逆性**：
+  - 写入前自动在 `~/.argo/mcp-backup/<时间戳>_<文件名>` 备份；
+  - `atomic_write` 保证同目录临时文件原子替换，避免半截写入；
+  - 含密钥文件严格采用 `0600` 权限；
+  - TOML 采用行级精确追加/删除（`[mcp_servers.argo]` 独立 section），绝不破坏手写配置与已有注释。
 
 ## argo budget — 月度预算（原生币种）
 

@@ -35,17 +35,19 @@
 python3 scripts/mcp_server.py [--test]
 ```
 
-多客户端 MCP 一键接入（自研，注入/诊断/还原；客户端描述来源 `mcp/clients.yaml`）：
+多客户端 MCP 一键接入（自研，注入/诊断/还原/配置查看；客户端描述来源 `mcp/clients.yaml`）：
 
 ```bash
-argo mcp status                 # 诊断各客户端（已安装/已配置）
+argo mcp status                 # 诊断各客户端（已安装/已配置）与统一配置真源状态
+argo mcp config                 # 查看跨客户端共享的配置真源与凭证脱敏摘要
+argo mcp config --path          # 仅输出配置文件绝对路径（方便编辑器快速打开）
 argo mcp inject --all           # 注入所有已安装客户端（原子写 + 备份）
 argo mcp inject --cursor        # 注入指定客户端（支持逗号分隔）
 argo mcp undo --all             # 还原（精确移除 entry 或从备份回滚）
 argo mcp inject --all --dry-run # 只预览不写
 ```
 
-安全可逆：写入前备份到 `~/.argo/mcp-backup/`（带时间戳），atomic_write（同目录 temp+rename），含密钥配置 0600 权限；TOML 走行级 append section 不破坏手写注释。支持 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline。
+跨客户端单一真源：所有注入客户端统一共用 `~/.config/argo/env`（`ARGO_ENV_FILE` 可覆盖），无需在各个客户端重复配置环境变量；底层支持文件指纹感知，配置修改免重启即时热生效。安全可逆：写入前备份到 `~/.argo/mcp-backup/`（带时间戳），atomic_write（同目录 temp+rename），含密钥配置 0600 权限；TOML 走行级 append section 不破坏手写注释。支持 Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline / WorkBuddy 等。
 
 细节见 `docs/MCP_SETUP.md`。
 
@@ -92,6 +94,7 @@ export TINYFISH_API_KEY="sk-tinyfish-..."   # 去 agent.tinyfish.ai/api-keys 申
 |--------|------|------|
 | local-search（本地零成本聚合） | `sub-skills/local-search/` | `python3 scripts/search.py "查询" --local-first` |
 | local-seek（本机文件搜索） | `sub-skills/local-seek/` | `python3 sub-skills/local-seek/scripts/seek.py "查询" --path ~/notes --count`（MCP: `argo_local_search`） |
+| local-image（本机图片多模态） | `scripts/local_image.py` | `argo local-image search "查询"`（需 `ARGO_LOCAL_IMAGE=1`） |
 | ego-search（登录态专业搜索） | `sub-skills/ego-search/` | `python3 sub-skills/ego-search/scripts/ego_search.py search "AI 搜索" --runtime auto` |
 | js-run（V8 算车道） | `sub-skills/js-run/` | 无独立入口：fetch 降级链第一级 E 自动触发（`fetch_jsrun.py`），开关 `ARGO_FETCH_JSRUN`（默认开，=0 关闭） |
 
