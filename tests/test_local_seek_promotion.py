@@ -146,10 +146,13 @@ def test_cache_hit_wait_budget_wiring():
     """H1 源码钉住：cached 结果的本地等待收窄到宽限窗，且 deadline 跨
     两个等待点共享（预等待 + shape_response 合并等待共用同一预算）。"""
     src = (ROOT / "scripts" / "search.py").read_text(encoding="utf-8")
-    assert "_LOCAL_SEEK_GRACE_S" in src
+    # 宽限值改为调用期解析（导入期读 env 已进 env_binding 门禁红灯），
+    # 因此钉住的是调用点，模块级常量必须已经不存在。
+    import search as search_mod
+    assert "_local_seek_grace_s()" in src
+    assert not hasattr(search_mod, "_LOCAL_SEEK_GRACE_S")
     assert 'result.get("cached")' in src
     # 两个等待点都必须走 deadline（剩余预算），不能各自拿满超时
     assert src.count("_local_deadline - time.monotonic()") == 2
     # 宽限窗必须显著小于常规超时（快路径保护语义）
-    import search as search_mod
-    assert search_mod._LOCAL_SEEK_GRACE_S < search_mod._LOCAL_SEEK_TIMEOUT_S / 4
+    assert search_mod._local_seek_grace_s() < search_mod._LOCAL_SEEK_TIMEOUT_S / 4

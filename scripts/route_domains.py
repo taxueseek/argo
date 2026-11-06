@@ -175,8 +175,9 @@ def _extract_anchors(src: Any, _depth: int = 0) -> set[str] | None:
         p_clean = _ANCHOR_OPT_CHAR_RE.sub(" ", p_clean)
         p_clean = _ANCHOR_QUANT_RE.sub(" ", p_clean)
         runs = _ANCHOR_RUN_RE.findall(p_clean)
-        valid = [r.strip(".-_").lower() for r in runs if len(r.strip(".-_")) >= 2 or any("\u4e00" <= c <= "\u9fff" for c in r)]
-        valid = [v for v in valid if v]
+        # 单字锚点（含 CJK 单字）过滤力接近零、还会把带通配的模式误判成有锚点，
+        # 一律不收：宁可落进 _unconstrained_domains 多算几路，也不造假锚点。
+        valid = [v for v in (r.strip(".-_").lower() for r in runs) if len(v) >= 2]
         if valid:
             anchors.add(max(valid, key=len))
             continue
