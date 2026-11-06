@@ -34,8 +34,10 @@ def _default_admission_dir() -> Path:
     patched = globals().get("DEFAULT_ADMISSION_DIR")
     if patched is not None:
         return patched
-    return Path(os.path.expanduser(os.environ.get(
-        "ARGO_ADMISSION_DIR", str(_paths.state_path("admission")))))
+    env_dir = os.environ.get("ARGO_ADMISSION_DIR", "").strip()
+    if env_dir:
+        return Path(os.path.expanduser(env_dir))
+    return _paths.state_path("admission")
 
 
 def __getattr__(name: str):
@@ -178,9 +180,10 @@ def _read_admission_file(path: Path) -> dict[str, Any] | None:
 _admission_dir_set_cache: dict[str, tuple[float, frozenset[str]]] = {}
 
 
-def _admission_exists_set() -> frozenset[str]:
+def _admission_exists_set(adm_dir: Path | None = None) -> frozenset[str]:
     """有记录的引擎文件名（去 .json）集合，按 TTL 重扫目录。"""
-    key = str(_default_admission_dir())
+    d = adm_dir if adm_dir is not None else _default_admission_dir()
+    key = str(d)
     now = time.monotonic()
     hit = _admission_dir_set_cache.get(key)
     if hit is not None and now - hit[0] < _admission_ttl():
@@ -188,7 +191,7 @@ def _admission_exists_set() -> frozenset[str]:
     try:
         stems = frozenset(
             entry.name[: -len(".json")]
-            for entry in os.scandir(_default_admission_dir())
+            for entry in os.scandir(d)
             if entry.name.endswith(".json")
         )
     except OSError:
@@ -204,7 +207,7 @@ def _admission_dir_set_add(dir_key: str, stem: str) -> None:
         _admission_dir_set_cache[dir_key] = (hit[0], hit[1] | {stem})
 
 
-def load_admission(engine_id: str) -> dict[str, Any] | None:
+def load_admission(engine_id: str, *, _adm_dir: Path | None = None) -> dict[str, Any] | None:
     """读一份准入记录（带进程内 TTL 缓存，见 _admission_read_cache）。
 
     **只用于读路径**（路由判定、状态展示）。读-改-写的调用方要用
@@ -212,7 +215,9 @@ def load_admission(engine_id: str) -> dict[str, Any] | None:
     字段（审计实测：子进程写入 stages_passed 的 quality，父进程在 TTL 内读-改-写
     后只剩 health，quality 丢失）。
     """
-    path = _read_path(engine_id)
+    adm_dir = _adm_dir if _adm_dir is not None else _default_admission_dir()
+    stem = _admission_stem(engine_id)
+    path = adm_dir / f"{stem}.json"
     ttl = _admission_ttl()
     now = time.monotonic()
     if ttl > 0:
@@ -221,7 +226,7 @@ def load_admission(engine_id: str) -> dict[str, Any] | None:
             return hit[1]
         # 存在集合短路：目录里没有这个引擎的记录，连 open 都不做（62% 注定
         # 扑空的那部分）。扑空结果与旧实现一样进读缓存，同 TTL 新鲜度。
-        if _admission_stem(engine_id) not in _admission_exists_set():
+        if stem not in _admission_exists_set(adm_dir):
             _admission_read_cache[str(path)] = (now, None)
             return None
     data = _read_admission_file(path)
@@ -338,9 +343,9 @@ def record_validation(
     return save_admission(engine_id, record)
 
 
-def is_blocked(engine_id: str, default: bool = False) -> bool:
+def is_blocked(engine_id: str, default: bool = False, *, _adm_dir: Path | None = None) -> bool:
     """是否被准入系统拉黑。无记录时 default=False（兼容存量）。"""
-    rec = load_admission(engine_id)
+    rec = load_admission(engine_id, _adm_dir=_adm_dir)
     if rec is None:
         return default
     return bool(rec.get("blocked", False))
@@ -370,9 +375,10 @@ def list_admissions() -> dict[str, dict[str, Any]]:
 
 def filter_routable(engine_ids: list[str] | set[str]) -> list[str]:
     """过滤掉 blocked 引擎，保持原顺序。"""
+    adm_dir = _default_admission_dir()
     out = []
     for e in engine_ids:
-        if is_blocked(e):
+        if is_blocked(e, _adm_dir=adm_dir):
             continue
         out.append(e)
     return out

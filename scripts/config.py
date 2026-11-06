@@ -489,6 +489,8 @@ def _load_config_public(force: bool = False) -> dict[str, Any]:
         # stamp 记忆留着旧值 → 1 秒内 get_registry() 仍按旧 stamp 决定要不要
         # 重建，于是「--check 之后立刻搜索」拿到的注册表与刚重读的配置不是
         # 一个版本。两者都已在本函数里算出来了，直接回填，不额外扫盘。
+        global _peek_db_memo
+        _peek_db_memo = None
         _remember_ext_scan(scan)
         if _stamp_ttl() > 0:
             _stamp_cache = (time.monotonic(), combined_mtime)
@@ -662,14 +664,19 @@ def _routable_filter(result: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
     显式 --engine 路径不经 enabled，不受影响。
     """
     from engine_env import is_engine_allowed_by_env, env_ready
-    from engine_admission import is_blocked
+    from engine_admission import is_blocked, _default_admission_dir
+    adm_dir = _default_admission_dir()
     filtered: dict[str, dict[str, Any]] = {}
     for name, spec in result.items():
         if not is_engine_allowed_by_env(name):
             continue
         if not env_ready(name, spec):
             continue
-        if is_blocked(name):
+        try:
+            blocked = is_blocked(name, _adm_dir=adm_dir)
+        except TypeError:
+            blocked = is_blocked(name)
+        if blocked:
             continue
         if spec.get("explicit_only"):
             continue
@@ -745,6 +752,9 @@ def _read_config_yaml() -> tuple[bool, dict[str, Any] | None, str | None]:
     return True, parsed, None
 
 
+_peek_db_memo: tuple[tuple[int, int, int, float], str | None] | None = None
+
+
 def peek_cache_db_path() -> str | None:
     """轻量读取 config.yaml 的 cache.db_path，**不合并外置引擎 spec**。
 
@@ -771,12 +781,17 @@ def peek_cache_db_path() -> str | None:
     而缓存键里已经记着这份文件的 stat，与逐次读盘语义一致。缓存未命中或停用
     （ARGO_CONFIG_CACHE=0）则照旧走解析链。
     """
+    global _peek_db_memo
     try:
         st = CONFIG_PATH.stat()
     except OSError:
         return None
+    memo_key = (st.st_mtime_ns, st.st_size, getattr(st, "st_ctime_ns", 0), _local_config_mtime())
+    if _peek_db_memo is not None and _peek_db_memo[0] == memo_key:
+        return _peek_db_memo[1]
     hit, db_path = _peek_disk_cache_db_path(st, _config_content_digest(st))
     if hit:
+        _peek_db_memo = (memo_key, db_path)
         return db_path
     try:
         ok, parsed, _err = _read_config_yaml()
@@ -786,9 +801,12 @@ def peek_cache_db_path() -> str | None:
         return None
     cache_cfg = parsed.get("cache")
     if not isinstance(cache_cfg, dict):
+        _peek_db_memo = (memo_key, None)
         return None
     db_path = cache_cfg.get("db_path")
-    return os.path.expanduser(str(db_path)) if db_path else None
+    res = os.path.expanduser(str(db_path)) if db_path else None
+    _peek_db_memo = (memo_key, res)
+    return res
 
 
 def get_cache_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
