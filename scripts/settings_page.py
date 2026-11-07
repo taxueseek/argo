@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""settings_page — 本地只读设置页（单文件 HTML，零依赖）。
+"""settings_page — 本地只读设置页（单文件 HTML，零依赖）+ 配置写回命令。
 
-用法: argo settings [--out PATH] [--no-open]
+用法: argo settings [--out PATH] [--no-open]    # 生成只读透视页
+      argo settings list                        # 纯文本透视（终端/agent）
+      argo settings set <VAR>                   # 写入/覆盖（值从 stdin 读）
+      argo settings unset <VAR> [<VAR>...]      # 清除（含历史裸名行）
 
 定位（2026-11-07，issue #44 的最小兑现）：多 agent 客户端并存时各自重复填
 API Key 是真实痛点，用户要的是「一份配置透视、处处可看」。本命令把配置
 单一真源（config.yaml + envfile）渲染成单文件 HTML：密钥状态掩码展示、
-接入片段一键复制、常用开关现值。只读——编辑仍走 config.yaml / envfile，
-这里不做写回、不起常驻服务、不需要鉴权（页面本身不含任何密钥明文，
-落在本机 state 目录，比常驻端口小一个暴露面）。
+接入片段一键复制、常用开关现值。只读——编辑走 `settings set/unset`
+（env_store 唯一写路径：原子写、0600、.bak 备份、候选链合并），这里不做
+写回表单、不起常驻服务、不需要鉴权（页面本身不含任何密钥明文，落在本机
+state 目录，比常驻端口小一个暴露面）。
 
 数据来源（全部现成，不新增真源）：
   - argo_paths.resolved_paths()      路径诊断（state_root / env_files）
@@ -34,6 +38,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import argo_paths  # noqa: E402
+import env_store  # noqa: E402
 
 # 常用开关的展示清单（名 → 一句话说明）。只列有行为语义的，凑数的不进。
 _KNOWN_SWITCHES = [
@@ -246,15 +251,8 @@ function cp(btn){{
 </body></html>"""
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(
-        description="生成本地只读设置页（单文件 HTML，掩码展示密钥状态）")
-    ap.add_argument("--out", default=None,
-                    help="输出路径（默认 <state>/settings.html）")
-    ap.add_argument("--no-open", action="store_true",
-                    help="只生成不打开浏览器")
-    args = ap.parse_args()
-
+def _run_page(args) -> int:
+    """默认行为：生成只读设置页。"""
     data = collect()
     page = render_html(data)
 
@@ -272,8 +270,90 @@ def main() -> int:
         except Exception:
             pass  # 无桌面环境的场景：路径照常打印，agent 可转述
     print(f"设置页已生成：{page_url}")
-    print("多客户端共享同一份配置；修改请编辑 config.yaml 与密钥 env 文件。")
+    print("多客户端共享同一份配置；修改请用 argo settings set/unset。")
     return 0
+
+
+def _run_list() -> int:
+    """纯文本透视（与设置页同一份 collect 数据，给终端与 agent 用）。"""
+    data = collect()
+    counts = data.get("engine_counts", {})
+    print(f"Argo v{data.get('version', '?')} · "
+          f"引擎收录 {counts.get('total', 0)} · 可路由 {counts.get('routable', 0)}")
+    env_in_use = (data.get("paths") or {}).get("env_file_in_use")
+    if env_in_use:
+        print(f"密钥文件：{env_in_use}")
+    for r in data.get("key_rows", []):
+        envs = "、".join(f"{v['name']} {v['status']}" for v in r["envs"])
+        print(f"  {r['engine']}: {envs}")
+    for s in data.get("switches", []):
+        print(f"  [{s['name']}] {s['value']} — {s['desc']}")
+    print("修改：echo <值> | argo settings set <变量名>；"
+          "清除：argo settings unset <变量名>。")
+    return 0
+
+
+def _read_secret(prompt: str) -> str:
+    """值只从 stdin 进来：tty 用 getpass 不回显，管道直接读一行。
+    值不进 argv——进程列表与 shell history 都不会留痕。"""
+    if sys.stdin.isatty():
+        import getpass
+        return getpass.getpass(prompt).strip()
+    line = sys.stdin.readline()
+    return line.rstrip("\r\n").strip()
+
+
+def _run_set(args) -> int:
+    try:
+        value = _read_secret(f"请输入 {args.key} 的值（输入不回显）: ")
+        report = env_store.apply_changes(sets={args.key: value})
+    except env_store.EnvStoreError as e:
+        print(f"settings set 失败：{e}", file=sys.stderr)
+        return 1
+    print(env_store.format_report(report))
+    try:
+        from engine_env import get_env
+        print(f"现值：{env_store.mask(get_env(args.key) or '')}")
+    except Exception:
+        pass  # 回读失败不影响写回本身
+    print("已生效：下一次调用即读到新值（envfile 热读，无需重启）。")
+    return 0
+
+
+def _run_unset(args) -> int:
+    try:
+        report = env_store.apply_changes(unsets=list(args.keys))
+    except env_store.EnvStoreError as e:
+        print(f"settings unset 失败：{e}", file=sys.stderr)
+        return 1
+    print(env_store.format_report(report))
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description="本地只读设置页与配置写回（单文件 HTML，掩码展示密钥状态）")
+    ap.add_argument("--out", default=None,
+                    help="输出路径（默认 <state>/settings.html）")
+    ap.add_argument("--no-open", action="store_true",
+                    help="只生成不打开浏览器")
+    sub = ap.add_subparsers(dest="cmd")
+
+    sub.add_parser("list", help="纯文本透视：密钥状态 + 开关现值（不生成页面）")
+    p_set = sub.add_parser("set", help="写入/覆盖一个环境变量（值从 stdin 读，"
+                                        "不进 argv/history）")
+    p_set.add_argument("key", help="变量名，如 ARGO_BOCHA_API_KEY")
+    p_unset = sub.add_parser("unset", help="清除一个或多个环境变量（含历史裸名行）")
+    p_unset.add_argument("keys", nargs="+", help="变量名列表")
+    args = ap.parse_args()
+
+    if args.cmd == "list":
+        return _run_list()
+    if args.cmd == "set":
+        return _run_set(args)
+    if args.cmd == "unset":
+        return _run_unset(args)
+    return _run_page(args)
 
 
 if __name__ == "__main__":

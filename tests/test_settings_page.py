@@ -8,6 +8,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest  # noqa: E402
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 import settings_page  # noqa: E402
@@ -167,3 +169,73 @@ def test_main_writes_page_and_prints_uri(monkeypatch, tmp_path, capsys):
     assert "复制 MCP JSON" in body
     printed = capsys.readouterr().out
     assert out.resolve().as_uri() in printed  # issue #44：末行给 agent 可转述的地址
+
+
+# ── 方案 A：set / unset / list ──────────────────────────────────────────────
+
+@pytest.fixture()
+def env_target(monkeypatch, tmp_path):
+    """ARGO_ENV_FILE 指向临时文件，写回与读取全部离线。"""
+    target = tmp_path / "env"
+    monkeypatch.setenv("ARGO_ENV_FILE", str(target))
+    return target
+
+
+def test_set_reads_value_from_piped_stdin(monkeypatch, tmp_path, capsys,
+                                          env_target):
+    import io
+    secret = "piped-value-123456"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(secret + "\n"))
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "set", "ARGO_A_KEY"])
+    rc = settings_page.main()
+    assert rc == 0
+    body = env_target.read_text(encoding="utf-8")
+    assert "ARGO_A_KEY=" in body and secret in body
+    out = capsys.readouterr().out
+    assert secret not in out            # 明文不回显
+    assert "…3456）" in out             # 只有掩码
+    assert "热读" in out
+
+
+def test_set_rejects_empty_value(monkeypatch, tmp_path, capsys, env_target):
+    import io
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n"))
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "set", "ARGO_A_KEY"])
+    rc = settings_page.main()
+    assert rc == 1
+    assert "失败" in capsys.readouterr().err
+
+
+def test_unset_removes_from_envfile(monkeypatch, tmp_path, capsys, env_target):
+    env_target.write_text("ARGO_A_KEY=keepme-123456789\nARGO_B_KEY=byeeee-12345\n",
+                          encoding="utf-8")
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "unset", "ARGO_B_KEY"])
+    rc = settings_page.main()
+    assert rc == 0
+    body = env_target.read_text(encoding="utf-8")
+    assert "ARGO_A_KEY=keepme-123456789" in body and "ARGO_B_KEY" not in body
+
+
+def test_unset_reports_absent_key(monkeypatch, tmp_path, capsys, env_target):
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "unset", "ARGO_NOT_THERE"])
+    rc = settings_page.main()
+    assert rc == 0
+    assert "未找到" in capsys.readouterr().out
+
+
+def test_list_prints_text(monkeypatch, tmp_path, capsys, env_target):
+    _install_stubs(
+        monkeypatch,
+        envfile={"ARGO_A_KEY": "tail-only-123456"},
+        engines_spec={"eng_a": {"required_env": ["ARGO_A_KEY"]}},
+    )
+    monkeypatch.setattr(sys, "argv", ["settings_page.py", "list"])
+    rc = settings_page.main()
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "eng_a" in out and "ARGO_A_KEY 已配置" in out
+    assert "tail-only-123456" not in out  # 明文不进终端

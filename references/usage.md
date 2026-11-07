@@ -31,7 +31,7 @@
 | `argo cite` | DOI 引用条目（四格式） |
 | `argo mcp` | 多客户端 MCP 注入/诊断/还原 |
 | `argo paths` | 路径自省与状态目录自检 |
-| `argo settings` | 本地只读设置页（单文件 HTML：密钥掩码状态 + 接入片段 + 开关现值，`--out`/`--no-open`） |
+| `argo settings` | 本地只读设置页 + 配置写回（页面/`list` 看透视；`set` 值走 stdin 不进 history、`unset` 清除含裸名行；`--out`/`--no-open`） |
 | `argo ui` | `argo settings` 的同义别名（issue #44 承诺的唤起词） |
 | `argo daemon` | 常驻进程管理（search 自动走 UDS 快路径，见「argo daemon」节） |
 | `argo stats` | 使用日志与反馈状态（本地使用日志只读出口） |
