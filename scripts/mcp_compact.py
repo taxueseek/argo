@@ -54,6 +54,10 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         for k in ("image_url", "image_license"):
             if r.get(k):
                 item[k] = r[k]
+        # 双通道引擎（同一引擎名背后有两条取数通路）标出本条结果实际走的通道，
+        # 排查「匿名档拿不到认证后内容」时靠这一条区分，不留就只能看原始日志。
+        if r.get("channel"):
+            item["channel"] = r["channel"]
         # 顶包标记：recovery 替换了引擎原结果时透传，供上层识别结果已被代答
         if r.get("_recovered"):
             item["recovered"] = r["_recovered"]

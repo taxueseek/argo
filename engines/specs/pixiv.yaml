@@ -1,0 +1,35 @@
+# Pixiv 公开作品关键词检索：匿名 Web / OAuth App API 单引擎双通道
+#
+# 未配置 refresh token 时走匿名 Web Ajax；配置后只走 App API，不合并或回退。
+# 结果 channel 标出实际取数通道。Web/App 均无公开稳定性承诺。
+#
+# 可选环境变量：
+#   ARGO_PIXIV_REFRESH_TOKEN  Pixiv OAuth refresh token（只读，勿写入仓库）
+#   ARGO_PIXIV_ALLOW_R18      true 时允许 App R-18 结果与下游预览；默认过滤
+#
+# App 支持 partial_match_for_tags / exact_match_for_tags / title_and_caption、
+# start_date / end_date（YYYY-MM-DD）、search_ai_type=0/1 与 popular_desc。
+# 验证:
+#   python3 scripts/engine_validate.py --engine pixiv --stage all --admit --write-doc
+
+engine_id: pixiv
+type: pixiv
+enabled: true
+explicit_only: true
+cost_tier: free
+family: misc_vertical
+priority: 34
+timeout: 20
+order: date
+canary_query: "初音ミク"
+label: Pixiv 公开作品
+desc: "Pixiv 关键词搜图（匿名 Web 或 OAuth App API，结果标通道；默认过滤 R-18，带预览图与作品页）"
+coverage: [image, media, web]
+recommended: false
+latency_ms: 2500
+
+image_license: "版权所有（Pixiv 作品，作者保留权利）"
+
+quality_queries:
+  - query: "初音ミク"
+  - query: "hatsune miku"
