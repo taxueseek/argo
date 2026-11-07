@@ -75,11 +75,33 @@ def _error(message: str, engine: str) -> list[dict[str, Any]]:
     return [{"error": message, "source": engine}]
 
 
-def _search_url(query: str, *, order: str) -> str:
+# 标签匹配口径：App 与 Web 用两套枚举名，统一到一套对调用方可见的取值。
+_SEARCH_TARGETS = {
+    "partial_match_for_tags": "s_tag",
+    "exact_match_for_tags": "s_tag_full",
+    "title_and_caption": "s_tc",
+}
+
+
+def _search_target(spec: dict[str, Any], kwargs: dict[str, Any]) -> str:
+    target = str(
+        kwargs.get("search_target") or spec.get("search_target") or "partial_match_for_tags"
+    )
+    return target if target in _SEARCH_TARGETS else "partial_match_for_tags"
+
+
+def _search_url(query: str, *, order: str, target: str) -> str:
     """Web 搜索要求关键词进入路径；动态部分统一按 URL 组件编码。"""
     encoded = urllib.parse.quote(query, safe="")
     params = urllib.parse.urlencode(
-        {"word": query, "p": 1, "order": order, "mode": "all", "lang": "zh"}
+        {
+            "word": query,
+            "p": 1,
+            "order": order,
+            "mode": "all",
+            "lang": "zh",
+            "s_mode": _SEARCH_TARGETS.get(target, "s_tag"),
+        }
     )
     return f"{_WEB_API}/{encoded}?{params}"
 
@@ -167,13 +189,15 @@ def _result_row(
     }
 
 
-def _web_search(query: str, n: int, timeout: float, spec: dict[str, Any]) -> list[dict[str, Any]]:
+def _web_search(
+    query: str, n: int, timeout: float, spec: dict[str, Any], target: str
+) -> list[dict[str, Any]]:
     engine = spec.get("_name", "pixiv")
     order = str(spec.get("order") or "date")
     if order not in {"date", "popular"}:
         order = "date"
     req = urllib.request.Request(
-        _search_url(query, order=order),
+        _search_url(query, order=order, target=target),
         headers={
             "User-Agent": _WEB_UA,
             "Accept": "application/json",
@@ -266,9 +290,7 @@ def _refresh_access_token(refresh_token: str, timeout: float, engine: str) -> st
 
 
 def _app_params(query: str, spec: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
-    target = str(kwargs.get("search_target") or spec.get("search_target") or "partial_match_for_tags")
-    if target not in {"partial_match_for_tags", "exact_match_for_tags", "title_and_caption"}:
-        target = "partial_match_for_tags"
+    target = _search_target(spec, kwargs)
     sort = str(kwargs.get("sort") or spec.get("sort") or "date_desc")
     if sort not in {"date_desc", "date_asc", "popular_desc"}:
         sort = "date_desc"
@@ -504,7 +526,7 @@ def _build_pixiv_engine(spec: dict[str, Any]) -> Any:
         elif get_env("ARGO_PIXIV_REFRESH_TOKEN").strip():
             results = _app_search(q, limit, to, spec, kwargs)
         else:
-            results = _web_search(q, limit, to, spec)
+            results = _web_search(q, limit, to, spec, _search_target(spec, kwargs))
         return finalize_image_fields(results, spec.get("image_license") or "")
 
     return _engine

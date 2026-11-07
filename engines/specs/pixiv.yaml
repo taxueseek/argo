@@ -8,6 +8,10 @@
 # 五到九位纯数字，或 画师:<画师名>（经 App 用户搜索取最匹配的一位）。
 # 画师作品列表只有 App 接口能给出可用的图片直链，匿名通道返回明确提示。
 #
+# 标签匹配口径：search_target 取 partial_match_for_tags（默认，Web 用 s_mode=s_tag）、
+# exact_match_for_tags（Web 用 s_mode=s_tag_full）、title_and_caption（Web 用 s_mode=s_tc）；
+# 调用方也可在单次请求里覆盖。标签串按空格分隔多个标签，日文名与中文本地化标签都能命中。
+#
 # 可选环境变量：
 #   ARGO_PIXIV_REFRESH_TOKEN  Pixiv OAuth refresh token（只读，勿写入仓库）
 #   ARGO_PIXIV_ALLOW_R18      true 时允许 App R-18 结果与下游预览；默认过滤

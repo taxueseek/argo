@@ -78,7 +78,7 @@ def _web_payload(items, *, error=False):
     return {"error": False, "body": {"illustManga": {"data": items, "total": len(items)}}}
 
 
-def _run_web(monkeypatch, items, query="hatsune miku", n=5):
+def _run_web(monkeypatch, items, query="hatsune miku", n=5, **kwargs):
     monkeypatch.delenv(_REFRESH_ENV, raising=False)
     monkeypatch.delenv(_R18_ENV, raising=False)
     monkeypatch.setattr(pixiv, "get_env", lambda name, default="": default)
@@ -89,7 +89,7 @@ def _run_web(monkeypatch, items, query="hatsune miku", n=5):
         return _FakeResp(json.dumps(_web_payload(items)).encode())
 
     monkeypatch.setattr(pixiv, "http_open", fake_open)
-    results = pixiv._build_pixiv_engine(_SPEC)(query, n)
+    results = pixiv._build_pixiv_engine(_SPEC)(query, n, **kwargs)
     return requests, results
 
 
@@ -124,6 +124,18 @@ def test_query_is_percent_encoded_in_path_and_query(monkeypatch):
     assert parsed.path.endswith("/hatsune%20miku")
     assert "hatsune miku" not in req.full_url
     assert urllib.parse.parse_qs(parsed.query)["word"] == ["hatsune miku"]
+
+
+def test_web_maps_search_target_to_s_mode(monkeypatch):
+    requests, _ = _run_web(monkeypatch, [_web_item()])
+    params = urllib.parse.parse_qs(urllib.parse.urlsplit(requests[0][0].full_url).query)
+    assert params["s_mode"] == ["s_tag"]
+
+    strict, _ = _run_web(monkeypatch, [_web_item()], search_target="exact_match_for_tags")
+    strict_params = urllib.parse.parse_qs(
+        urllib.parse.urlsplit(strict[0][0].full_url).query
+    )
+    assert strict_params["s_mode"] == ["s_tag_full"]
 
 
 def test_web_preview_removes_crop_segment_and_keeps_dimensions(monkeypatch):
