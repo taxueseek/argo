@@ -719,6 +719,9 @@ def main():
         # issue #44 的最小兑现：多 agent 客户端共享同一份配置透视，只读不写回，
         # 编辑仍走 config.yaml / envfile；不进 MCP 工具面（同 paths）。
         "settings":  ("settings_page.py", []),
+        # ui：settings 的别名——#44 公开承诺的唤起词是 `argo ui`，留别名让
+        # 已发布的说法不落空；同一实现，不另起摊子。
+        "ui":        ("settings_page.py", []),
     }
 
     if sub not in scripts:
