@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Pixiv 公开作品关键词检索：匿名 Web 与 OAuth App API 单引擎双通道。
+"""Pixiv 公开作品检索：关键词搜索与画师作品列表，匿名 Web 与 OAuth App API 双通道。
 
 配置 refresh token 后只走 App API，避免标签、日期、AI 过滤或内容分级在
 通道切换时静默改变。Web 与 App 接口均无公开稳定性承诺；结果标出实际
 取数通道。R-18 是部署级内容边界，默认拒绝，只有显式授权才放行。
+画师作品列表只有 App 接口能给出可用的图片直链，匿名通道明确返回提示。
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 import threading
 import time
@@ -43,6 +45,8 @@ logger = _LazyLogger()
 
 _WEB_API = "https://www.pixiv.net/ajax/search/artworks"
 _APP_API = "https://app-api.pixiv.net/v1/search/illust"
+_APP_USER_ILLUSTS_API = "https://app-api.pixiv.net/v1/user/illusts"
+_APP_SEARCH_USER_API = "https://app-api.pixiv.net/v1/search/user"
 _OAUTH_API = "https://oauth.secure.pixiv.net/auth/token"
 _WEB_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -326,6 +330,162 @@ def _app_search(
     return results
 
 
+_USER_URL_RE = re.compile(
+    r"^https?://(?:www\.)?pixiv\.net/users/(\d+)(?:[/?#].*)?$", re.IGNORECASE
+)
+_ARTIST_ID_RE = re.compile(
+    r"^(?:user|artist|画师|画師)\s*[:：]\s*(\d+)$", re.IGNORECASE
+)
+_ARTIST_NAME_RE = re.compile(r"^(?:artist|画师|画師)\s*[:：]\s*(\S.*)$", re.IGNORECASE)
+_BARE_ARTIST_ID_RE = re.compile(r"^\d{5,9}$")
+
+
+def _artist_target(query: str) -> tuple[int | None, str]:
+    """识别画师作品查询，返回 (画师 id, 画师名)；不是画师查询时返回 (None, "")。"""
+    text = (query or "").strip()
+    match = _USER_URL_RE.match(text)
+    if match:
+        return int(match.group(1)), ""
+    match = _ARTIST_ID_RE.match(text)
+    if match:
+        return int(match.group(1)), ""
+    match = _ARTIST_NAME_RE.match(text)
+    if match:
+        return None, match.group(1).strip()
+    if _BARE_ARTIST_ID_RE.match(text):
+        return int(text), ""
+    return None, ""
+
+
+def _app_json(
+    url: str, access_token: str, timeout: float, engine: str
+) -> tuple[dict[str, Any] | None, str]:
+    """请求 App 接口，把网络与业务错误统一成 (None, 可读文案)。"""
+    req = urllib.request.Request(
+        url,
+        headers={
+            **_APP_HEADERS,
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
+    try:
+        with http_open(req, timeout=timeout, engine=engine) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as exc:
+        logger.warning(f"Pixiv App HTTP 错误: {exc.code}")
+        if exc.code in (400, 401, 403):
+            return None, "Pixiv App 认证或权限不足，请检查 refresh token 与账号状态"
+        return None, f"Pixiv App 请求失败（HTTP {exc.code}）"
+    except (urllib.error.URLError, OSError, ValueError):
+        logger.warning("Pixiv App 请求失败")
+        return None, "Pixiv App 暂时不可用，请检查网络后重试"
+    if not isinstance(payload, dict):
+        return None, "Pixiv App 返回了无法识别的响应，请稍后重试"
+    return payload, ""
+
+
+def _app_resolve_artist_id(
+    name: str, access_token: str, timeout: float, engine: str
+) -> tuple[int | None, str]:
+    """按画师名查账号 id，取搜索结果的第一位。"""
+    url = f"{_APP_SEARCH_USER_API}?{urllib.parse.urlencode({'word': name, 'filter': 'for_ios'})}"
+    payload, error = _app_json(url, access_token, timeout, engine)
+    if error:
+        return None, error
+    previews = payload.get("user_previews") if payload else None
+    if not isinstance(previews, list):
+        return None, "Pixiv App 返回了无法识别的响应，请稍后重试"
+    for entry in previews:
+        user = entry.get("user") if isinstance(entry, dict) else None
+        user_id = str(user.get("id") or "").strip() if isinstance(user, dict) else ""
+        if user_id.isdigit():
+            return int(user_id), ""
+    return None, f"没有找到匹配的画师：{name}"
+
+
+def _app_artist_works(
+    artist_id: int,
+    n: int,
+    timeout: float,
+    engine: str,
+    access_token: str,
+    allow_r18: bool,
+) -> list[dict[str, Any]]:
+    """拉取画师作品列表；R-18 被过滤后条数不足时最多再翻一页。"""
+    results: list[dict[str, Any]] = []
+    offset = 0
+    for _ in range(2):
+        params = {
+            "user_id": artist_id,
+            "type": "illust",
+            "filter": "for_ios",
+            "offset": offset,
+        }
+        url = f"{_APP_USER_ILLUSTS_API}?{urllib.parse.urlencode(params)}"
+        payload, error = _app_json(url, access_token, timeout, engine)
+        if error:
+            return results or _error(error, engine)
+        items = payload.get("illusts") if payload else None
+        if not isinstance(items, list):
+            return results or _error(
+                "Pixiv App 返回了无法识别的响应，请稍后重试", engine
+            )
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            row = _result_row(
+                item,
+                channel="app",
+                engine=engine,
+                index=len(results),
+                allow_r18=allow_r18,
+            )
+            if row is not None:
+                results.append(row)
+            if len(results) >= n:
+                break
+        if len(results) >= n or not items or not payload.get("next_url"):
+            break
+        offset += len(items)
+    if not results:
+        return _error("该画师的作品里没有可展示的条目（可能都被内容分级过滤）", engine)
+    return results[:n]
+
+
+def _artist_search(
+    artist_id: int | None,
+    artist_name: str,
+    n: int,
+    timeout: float,
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    engine = spec.get("_name", "pixiv")
+    refresh_token = get_env("ARGO_PIXIV_REFRESH_TOKEN").strip()
+    if not refresh_token:
+        return _error(
+            "按画师浏览作品需要登录凭证（Pixiv App 接口），当前是匿名模式，请改用关键词搜索",
+            engine,
+        )
+    try:
+        access_token = _refresh_access_token(refresh_token, timeout, engine)
+    except ValueError as exc:
+        return _error(str(exc), engine)
+    if artist_name:
+        resolved, error = _app_resolve_artist_id(
+            artist_name, access_token, timeout, engine
+        )
+        if error:
+            return _error(error, engine)
+        artist_id = resolved
+    if not artist_id:
+        return _error("没有找到匹配的画师", engine)
+    allow_r18 = env_flag(
+        "ARGO_PIXIV_ALLOW_R18", default=False, expand=False, strict=True
+    )
+    return _app_artist_works(artist_id, n, timeout, engine, access_token, allow_r18)
+
+
 def _build_pixiv_engine(spec: dict[str, Any]) -> Any:
     timeout = float(spec.get("timeout", 20))
 
@@ -338,7 +498,10 @@ def _build_pixiv_engine(spec: dict[str, Any]) -> Any:
             return []
         limit = max(1, int(n))
         to = _timeout or timeout
-        if get_env("ARGO_PIXIV_REFRESH_TOKEN").strip():
+        artist_id, artist_name = _artist_target(q)
+        if artist_id or artist_name:
+            results = _artist_search(artist_id, artist_name, limit, to, spec)
+        elif get_env("ARGO_PIXIV_REFRESH_TOKEN").strip():
             results = _app_search(q, limit, to, spec, kwargs)
         else:
             results = _web_search(q, limit, to, spec)

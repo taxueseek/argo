@@ -165,7 +165,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `metaso_image` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（图片） |
 | `metaso_podcast` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（播客） |
 | `metaso_video` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（视频） |
-| `pixiv` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Pixiv 关键词搜图（匿名 Web 或 OAuth App API，结果标通道；默认过滤 R-18，带预览图与作品页） |
+| `pixiv` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18 |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
 | `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |

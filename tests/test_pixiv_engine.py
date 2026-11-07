@@ -281,3 +281,138 @@ def test_oauth_failure_is_an_actionable_error(monkeypatch):
 )
 def test_preview_url_rejects_non_canonical_or_insecure_input(raw_url):
     assert pixiv._web_preview_url(raw_url) == ""
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("user:29456671", (29456671, "")),
+        ("画师：29456671", (29456671, "")),
+        ("https://www.pixiv.net/users/29456671", (29456671, "")),
+        ("https://www.pixiv.net/users/29456671/artworks", (29456671, "")),
+        ("29456671", (29456671, "")),
+        ("画师:米山舞", (None, "米山舞")),
+        ("artist:米山舞", (None, "米山舞")),
+        ("初音ミク", (None, "")),
+        ("1234", (None, "")),
+    ],
+)
+def test_artist_target_recognizes_query_forms(query, expected):
+    assert pixiv._artist_target(query) == expected
+
+
+def _run_artist(monkeypatch, routes, query, n=5):
+    monkeypatch.setattr(
+        pixiv,
+        "get_env",
+        lambda name, default="": (
+            "test-refresh-token" if name == _REFRESH_ENV else default
+        ),
+    )
+    monkeypatch.setattr(
+        pixiv,
+        "_refresh_access_token",
+        lambda token, timeout, engine: "test-access-token",
+    )
+    monkeypatch.delenv(_R18_ENV, raising=False)
+    requests = []
+
+    def fake_open(req, timeout, engine):
+        requests.append(req.full_url)
+        for fragment, payload in routes:
+            if fragment in req.full_url:
+                return _FakeResp(json.dumps(payload).encode())
+        raise AssertionError(f"未覆盖的请求: {req.full_url}")
+
+    monkeypatch.setattr(pixiv, "http_open", fake_open)
+    results = pixiv._build_pixiv_engine(_SPEC)(query, n)
+    return requests, results
+
+
+def test_artist_works_are_listed_by_user_id(monkeypatch):
+    routes = [
+        (
+            "/v1/user/illusts",
+            {"illusts": [_app_item("151792368"), _app_item("151792369")]},
+        )
+    ]
+    requests, results = _run_artist(monkeypatch, routes, "user:29456671", n=2)
+    assert len(requests) == 1
+    assert "user_id=29456671" in requests[0]
+    assert len(results) == 2
+    assert results[0]["channel"] == "app"
+    assert results[0]["url"] == "https://www.pixiv.net/artworks/151792368"
+    assert results[0]["snippet"].startswith("作者 测试作者")
+
+
+def test_artist_name_is_resolved_then_listed(monkeypatch):
+    routes = [
+        (
+            "/v1/search/user",
+            {"user_previews": [{"user": {"id": 1554775, "name": "米山舞"}}]},
+        ),
+        ("/v1/user/illusts", {"illusts": [_app_item()]}),
+    ]
+    requests, results = _run_artist(monkeypatch, routes, "画师:米山舞", n=5)
+    assert len(requests) == 2
+    assert "word=" in requests[0] and "%E7%B1%B3%E5%B1%B1%E8%88%9E" in requests[0]
+    assert "user_id=1554775" in requests[1]
+    assert len(results) == 1
+
+
+def test_unknown_artist_name_is_an_actionable_error(monkeypatch):
+    routes = [("/v1/search/user", {"user_previews": []})]
+    _, results = _run_artist(monkeypatch, routes, "画师:查无此人", n=5)
+    assert len(results) == 1
+    assert "没有找到匹配的画师：查无此人" in results[0]["error"]
+
+
+def test_artist_mode_requires_login_on_anonymous_channel(monkeypatch):
+    monkeypatch.setattr(pixiv, "get_env", lambda name, default="": default)
+    monkeypatch.delenv(_R18_ENV, raising=False)
+    results = pixiv._build_pixiv_engine(_SPEC)("user:29456671", 5)
+    assert len(results) == 1
+    assert "登录凭证" in results[0]["error"]
+
+
+def test_artist_works_filter_r18_by_default(monkeypatch):
+    items = [_app_item("151792368", x_restrict=1), _app_item("151792369", x_restrict=0)]
+    routes = [("/v1/user/illusts", {"illusts": items})]
+    _, results = _run_artist(monkeypatch, routes, "user:29456671", n=5)
+    assert [row["url"] for row in results] == [
+        "https://www.pixiv.net/artworks/151792369"
+    ]
+
+
+def test_artist_works_page_again_when_filtered_short(monkeypatch):
+    first = [_app_item("151792368", x_restrict=1)]
+    second = [_app_item("151792369", x_restrict=0)]
+    calls = {"n": 0}
+
+    monkeypatch.setattr(
+        pixiv,
+        "get_env",
+        lambda name, default="": (
+            "test-refresh-token" if name == _REFRESH_ENV else default
+        ),
+    )
+    monkeypatch.setattr(
+        pixiv,
+        "_refresh_access_token",
+        lambda token, timeout, engine: "test-access-token",
+    )
+    monkeypatch.delenv(_R18_ENV, raising=False)
+
+    def fake_open(req, timeout, engine):
+        calls["n"] += 1
+        if "offset=0" in req.full_url:
+            return _FakeResp(
+                json.dumps({"illusts": first, "next_url": "next"}).encode()
+            )
+        return _FakeResp(json.dumps({"illusts": second}).encode())
+
+    monkeypatch.setattr(pixiv, "http_open", fake_open)
+    results = pixiv._build_pixiv_engine(_SPEC)("user:29456671", 5)
+    assert calls["n"] == 2
+    assert [row["url"] for row in results] == [
+        "https://www.pixiv.net/artworks/151792369"
+    ]

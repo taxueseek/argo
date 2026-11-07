@@ -1,8 +1,12 @@
-# Pixiv 公开作品关键词检索：匿名 Web / OAuth App API 单引擎双通道
+# Pixiv 公开作品检索：关键词搜索与画师作品列表，匿名 Web / OAuth App API 双通道
 #
 # 未配置 refresh token 时走匿名 Web Ajax；配置后只走 App API，不合并或回退。
 # 结果 channel 标出实际取数通道（web/app），排查时用于区分内容范围差异。
 # Web/App 均无公开稳定性承诺，Pixiv 随时可能调整接口行为。
+#
+# 画师作品查询：query 写 user:<画师 id>、https://www.pixiv.net/users/<id>、
+# 五到九位纯数字，或 画师:<画师名>（经 App 用户搜索取最匹配的一位）。
+# 画师作品列表只有 App 接口能给出可用的图片直链，匿名通道返回明确提示。
 #
 # 可选环境变量：
 #   ARGO_PIXIV_REFRESH_TOKEN  Pixiv OAuth refresh token（只读，勿写入仓库）
@@ -27,7 +31,7 @@ timeout: 20
 order: date
 canary_query: "初音ミク"
 label: Pixiv 公开作品
-desc: "Pixiv 关键词搜图（匿名 Web 或 OAuth App API，结果标通道；默认过滤 R-18，带预览图与作品页）"
+desc: "Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18"
 coverage: [image, media, web]
 recommended: false
 latency_ms: 2500
