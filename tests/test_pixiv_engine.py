@@ -194,6 +194,21 @@ def test_r18_is_filtered_by_default_on_both_channels(monkeypatch):
     assert [row["url"] for row in app_results] == ["https://www.pixiv.net/artworks/1"]
 
 
+def test_r18_tag_is_filtered_from_snippet(monkeypatch):
+    """R-18 作为标签名出现时不得进 snippet（bot 会复述标签）。即使内容放行，分级标签也要过滤。"""
+    monkeypatch.setattr(
+        pixiv,
+        "env_flag",
+        lambda name, default=True, **kwargs: name == _R18_ENV,
+    )
+    item = _app_item("2", x_restrict=1)
+    item["tags"] = [{"name": "R-18"}, {"name": "初音ミク"}, {"name": "VOCALOID"}]
+    _, results = _run_app(monkeypatch, [item])
+    assert len(results) == 1
+    assert "R-18" not in results[0]["snippet"]
+    assert "初音ミク" in results[0]["snippet"]
+
+
 def test_r18_requires_explicit_authorization(monkeypatch):
     monkeypatch.setattr(
         pixiv,

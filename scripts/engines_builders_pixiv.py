@@ -140,7 +140,8 @@ def _result_row(
     tags = []
     for tag in item.get("tags") or []:
         name = str(tag.get("name") or "").strip() if isinstance(tag, dict) else str(tag).strip()
-        if name:
+        # R-18 是分级标签不是主题标签，不应进 snippet（bot 会复述）。
+        if name and name.upper() not in {"R-18", "R-18G"}:
             tags.append(name)
     snippet_bits = [author and f"作者 {author}"]
     if page_count:
