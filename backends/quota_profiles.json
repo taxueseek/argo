@@ -1890,6 +1890,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "pixiv": {
+    "label": "Pixiv 公开作品",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 34
+  },
   "polymarket": {
     "label": "Polymarket",
     "qps": 2,
