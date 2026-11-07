@@ -51,7 +51,7 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
             item["published_at"] = r["published_at"]
         # 图链与许可：图搜/反搜图结果靠这两条「看图」，缺了 Agent 只剩出处页链接。
         # 缩略图只作展示（出处与引用仍以 url 为准），所以不进 snippet、也不当证据。
-        for k in ("image_url", "image_license"):
+        for k in ("image_url", "image_url_preview", "image_license"):
             if r.get(k):
                 item[k] = r[k]
         # 双通道引擎（同一引擎名背后有两条取数通路）标出本条结果实际走的通道，

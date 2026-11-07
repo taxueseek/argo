@@ -93,7 +93,31 @@ def _run_web(monkeypatch, items, query="hatsune miku", n=5, **kwargs):
     return requests, results
 
 
-def _run_app(monkeypatch, items, query="初音ミク", n=5, **kwargs):
+def _detail_payload(illust_id, *, pages=None):
+    illust = {"id": int(illust_id), "title": "测试作品"}
+    if pages:
+        illust["meta_pages"] = [
+            {
+                "image_urls": {
+                    "original": (
+                        "https://i.pximg.net/img-original/img/2026/11/07/20/30/09/"
+                        f"{illust_id}_p{index}.jpg"
+                    )
+                }
+            }
+            for index in range(pages)
+        ]
+    else:
+        illust["meta_single_page"] = {
+            "original_image_url": (
+                "https://i.pximg.net/img-original/img/2026/11/07/20/30/09/"
+                f"{illust_id}_p0.jpg"
+            )
+        }
+    return {"illust": illust}
+
+
+def _run_app(monkeypatch, items, query="初音ミク", n=5, detail=True, **kwargs):
     monkeypatch.setattr(
         pixiv,
         "get_env",
@@ -109,6 +133,12 @@ def _run_app(monkeypatch, items, query="初音ミク", n=5, **kwargs):
 
     def fake_open(req, timeout, engine):
         requests.append((req, timeout, engine))
+        url = req.full_url
+        if "/v1/illust/detail" in url:
+            if not detail:
+                return _FakeResp(json.dumps({"error": True}).encode())
+            illust_id = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["illust_id"][0]
+            return _FakeResp(json.dumps(_detail_payload(illust_id)).encode())
         return _FakeResp(json.dumps({"illusts": items}).encode())
 
     monkeypatch.setattr(pixiv, "http_open", fake_open)
@@ -179,6 +209,75 @@ def test_app_channel_normalizes_fields_and_uses_bearer_header(monkeypatch):
     serialized = json.dumps(results, ensure_ascii=False)
     assert "test-access-token" not in serialized
     assert "test-refresh-token" not in serialized
+
+
+def test_app_results_prefer_original_and_keep_preview(monkeypatch):
+    """App 结果取作品详情里的原图直链，large 档留在 image_url_preview 供体积超限时回退。"""
+    item = _app_item("151792368")
+    item["image_urls"]["large"] = (
+        "https://i.pximg.net/c/600x1200_90/img-master/img/2026/11/07/20/30/09/"
+        "151792368_p0_master1200.jpg"
+    )
+    requests, results = _run_app(monkeypatch, [item])
+    row = results[0]
+    assert row["image_url"] == (
+        "https://i.pximg.net/img-original/img/2026/11/07/20/30/09/151792368_p0.jpg"
+    )
+    assert row["image_url_preview"].endswith("151792368_p0_master1200.jpg")
+    assert row["image_url_preview"] != row["image_url"]
+    detail = [url for url, _ in ((req.full_url, t) for req, t, _ in requests) if "/v1/illust/detail" in url]
+    assert detail and "illust_id=151792368" in detail[0]
+
+
+def test_app_keeps_large_when_detail_fails(monkeypatch):
+    _, results = _run_app(monkeypatch, [_app_item("151792368")], detail=False)
+    row = results[0]
+    assert row["image_url"].endswith("151792368_p0.jpg")
+    assert "image_url_preview" not in row
+
+
+def test_detail_is_requested_once_per_result(monkeypatch):
+    requests, results = _run_app(
+        monkeypatch, [_app_item("151792368"), _app_item("151792369")], n=5
+    )
+    assert len(results) == 2
+    detail = [req.full_url for req, _, _ in requests if "/v1/illust/detail" in req.full_url]
+    assert len(detail) == 2
+    assert {urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["illust_id"][0] for url in detail} == {
+        "151792368",
+        "151792369",
+    }
+
+
+@pytest.mark.parametrize(
+    "illust,expected",
+    [
+        (
+            {"meta_single_page": {"original_image_url": "https://i.pximg.net/a_p0.png"}},
+            "https://i.pximg.net/a_p0.png",
+        ),
+        (
+            {
+                "meta_pages": [
+                    {"image_urls": {"original": "https://i.pximg.net/b_p0.jpg"}},
+                    {"image_urls": {"original": "https://i.pximg.net/b_p1.jpg"}},
+                ]
+            },
+            "https://i.pximg.net/b_p0.jpg",
+        ),
+        (
+            {"meta_single_page": {"original_image_url": "http://i.pximg.net/c.jpg"}},
+            "",
+        ),
+        (
+            {"meta_single_page": {"original_image_url": "https://example.com/c.jpg"}},
+            "",
+        ),
+        ({}, ""),
+    ],
+)
+def test_original_url_from_detail(illust, expected):
+    assert pixiv._original_url_from_detail(illust) == expected
 
 
 def test_app_supports_search_target_dates_and_ai_filter(monkeypatch):
@@ -339,6 +438,11 @@ def _run_artist(monkeypatch, routes, query, n=5):
         for fragment, payload in routes:
             if fragment in req.full_url:
                 return _FakeResp(json.dumps(payload).encode())
+        if "/v1/illust/detail" in req.full_url:
+            illust_id = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(req.full_url).query
+            )["illust_id"][0]
+            return _FakeResp(json.dumps(_detail_payload(illust_id)).encode())
         raise AssertionError(f"未覆盖的请求: {req.full_url}")
 
     monkeypatch.setattr(pixiv, "http_open", fake_open)
@@ -354,8 +458,9 @@ def test_artist_works_are_listed_by_user_id(monkeypatch):
         )
     ]
     requests, results = _run_artist(monkeypatch, routes, "user:29456671", n=2)
-    assert len(requests) == 1
-    assert "user_id=29456671" in requests[0]
+    listing = [url for url in requests if "/v1/user/illusts" in url]
+    assert len(listing) == 1
+    assert "user_id=29456671" in listing[0]
     assert len(results) == 2
     assert results[0]["channel"] == "app"
     assert results[0]["url"] == "https://www.pixiv.net/artworks/151792368"
@@ -371,9 +476,10 @@ def test_artist_name_is_resolved_then_listed(monkeypatch):
         ("/v1/user/illusts", {"illusts": [_app_item()]}),
     ]
     requests, results = _run_artist(monkeypatch, routes, "画师:米山舞", n=5)
-    assert len(requests) == 2
-    assert "word=" in requests[0] and "%E7%B1%B3%E5%B1%B1%E8%88%9E" in requests[0]
-    assert "user_id=1554775" in requests[1]
+    listing = [url for url in requests if "/v1/illust/detail" not in url]
+    assert len(listing) == 2
+    assert "word=" in listing[0] and "%E7%B1%B3%E5%B1%B1%E8%88%9E" in listing[0]
+    assert "user_id=1554775" in listing[1]
     assert len(results) == 1
 
 
@@ -421,6 +527,11 @@ def test_artist_works_page_again_when_filtered_short(monkeypatch):
     monkeypatch.delenv(_R18_ENV, raising=False)
 
     def fake_open(req, timeout, engine):
+        if "/v1/illust/detail" in req.full_url:
+            illust_id = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(req.full_url).query
+            )["illust_id"][0]
+            return _FakeResp(json.dumps(_detail_payload(illust_id)).encode())
         calls["n"] += 1
         if "offset=0" in req.full_url:
             return _FakeResp(

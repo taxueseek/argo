@@ -18,6 +18,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -61,6 +62,8 @@ _APP_HEADERS = {
 _CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
 _CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
 _HASH_SECRET = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"
+_APP_ILLUST_DETAIL_API = "https://app-api.pixiv.net/v1/illust/detail"
+_DETAIL_WORKERS = 4
 _WEB_PAGE_SIZE = 60
 _APP_PAGE_SIZE = 30
 _ACCESS_TOKEN_TTL = 3000.0
@@ -132,6 +135,70 @@ def _app_image_url(item: dict[str, Any]) -> str:
         if parsed.scheme == "https" and parsed.hostname == "i.pximg.net" and parsed.path:
             return raw
     return ""
+
+
+def _pximg_https(raw: str) -> str:
+    """只接受 i.pximg.net 的 https 直链。"""
+    candidate = raw.strip()
+    parsed = urllib.parse.urlsplit(candidate)
+    if parsed.scheme == "https" and parsed.hostname == "i.pximg.net" and parsed.path:
+        return candidate
+    return ""
+
+
+def _original_url_from_detail(illust: dict[str, Any]) -> str:
+    """作品详情里的原图直链：单页在 meta_single_page，多页取第一张。"""
+    single = illust.get("meta_single_page")
+    if isinstance(single, dict):
+        url = _pximg_https(str(single.get("original_image_url") or ""))
+        if url:
+            return url
+    pages = illust.get("meta_pages")
+    if isinstance(pages, list):
+        for page in pages:
+            images = page.get("image_urls") if isinstance(page, dict) else None
+            if isinstance(images, dict):
+                url = _pximg_https(str(images.get("original") or ""))
+                if url:
+                    return url
+    return ""
+
+
+def _app_illust_original(
+    illust_id: str, access_token: str, timeout: float, engine: str
+) -> str:
+    params = urllib.parse.urlencode({"illust_id": illust_id, "filter": "for_ios"})
+    payload, error = _app_json(
+        f"{_APP_ILLUST_DETAIL_API}?{params}", access_token, timeout, engine
+    )
+    if error or not isinstance(payload, dict):
+        return ""
+    illust = payload.get("illust")
+    return _original_url_from_detail(illust) if isinstance(illust, dict) else ""
+
+
+def _attach_originals(
+    results: list[dict[str, Any]], access_token: str, timeout: float, engine: str
+) -> None:
+    """并发补齐原图直链，预览直链留在 image_url_preview 供超限回退。"""
+
+    def fetch(row: dict[str, Any]) -> None:
+        illust_id = str(row.get("url") or "").rstrip("/").rsplit("/", 1)[-1]
+        if not illust_id.isdigit():
+            return
+        try:
+            original = _app_illust_original(illust_id, access_token, timeout, engine)
+        except Exception:  # 详情失败不影响检索结果
+            logger.warning(f"Pixiv 原图直链获取失败: illust_id={illust_id}")
+            return
+        if original:
+            row["image_url_preview"] = row["image_url"]
+            row["image_url"] = original
+
+    if not results:
+        return
+    with ThreadPoolExecutor(max_workers=min(_DETAIL_WORKERS, len(results))) as pool:
+        list(pool.map(fetch, results))
 
 
 def _result_row(
@@ -349,6 +416,7 @@ def _app_search(
             results.append(row)
         if len(results) >= min(n, _APP_PAGE_SIZE):
             break
+    _attach_originals(results, access_token, timeout, engine)
     return results
 
 
@@ -496,7 +564,9 @@ def _app_artist_works(
                 f"该画师的作品里没有同时带这些标签的条目（标签：{joined}）", engine
             )
         return _error("该画师的作品里没有可展示的条目（可能都被内容分级过滤）", engine)
-    return results[:n]
+    trimmed = results[:n]
+    _attach_originals(trimmed, access_token, timeout, engine)
+    return trimmed
 
 
 def _artist_search(

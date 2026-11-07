@@ -20,6 +20,10 @@
 # 防盗链说明：i.pximg.net 的图片直链需要 Referer: https://www.pixiv.net/ 才能下载，
 # 插件层的图片下载链路已自动补全该头部，CLI 或其他直接访问场景需手动加 Referer。
 #
+# 图片直链：App 通道对每条结果并发补一次作品详情，image_url 取原图（meta_single_page
+# 或多页作品的第一张），原图宽高比与预览一致；详情失败或取不到时保持 large 档。
+# 此时 image_url_preview 保留 large 直链，供下游在体积超限时回退。
+#
 # App 支持 partial_match_for_tags / exact_match_for_tags / title_and_caption、
 # start_date / end_date（YYYY-MM-DD）、search_ai_type=0/1 与 popular_desc。
 # 验证:
