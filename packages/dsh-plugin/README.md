@@ -4,28 +4,35 @@ DeepSeek Harness 插件：一行同时挂上 [Argo](https://github.com/taxueseek
 
 ## 安装
 
+版本号以仓库根 `package.json` 的 `version` 为准（与 `argo --version`、npm 上的 `argo-search` 同步），本文不复制版本号。
+
 ```bash
-dsh plugin --profile web add @taxueseek/argo-dsh          # npm 发布版，已支持，当前 2.10.0
+dsh plugin --profile web add @taxueseek/argo-dsh                              # npm 发布版
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"  # GitHub main
 ```
 
-重启 `dsh web` 后生效。
+`@taxueseek/argo-dsh` 是 DSH 插件包，`argo-search` 是 CLI 包，两者不能互换。重启 `dsh web` 后生效。
 
-### 本地开发：改完源码必须同步进 profile
+### 本地开发：改完源码必须同步进 profile（改动收尾固定步骤）
 
 profile 里的依赖是 `file:` / `github:`，pnpm 安装时**复制**进
 `node_modules/@taxueseek/argo-dsh`，不是软链。只改本仓源码、不跑同步，
 DSH 设置页读到的仍是旧 bundle（2026-10-22 实测：缓存开关与付费额度已改，
-面板仍显示旧版）。
+面板仍显示旧版；2026-11-08 复核：web 与 desktop 两个 profile 均已漂移）。
 
 ```bash
-packages/dsh-plugin/scripts/sync-local.sh --check    # 比对源码与已安装 bundle
-packages/dsh-plugin/scripts/sync-local.sh            # 同步 web/desktop
-packages/dsh-plugin/scripts/sync-local.sh --restart  # 同步并重启 dsh web
+packages/dsh-plugin/scripts/sync-local.sh --check    # 1. 比对源码与已安装 bundle，有漂移退出 1
+packages/dsh-plugin/scripts/sync-local.sh            # 2. 同步 web/desktop
+packages/dsh-plugin/scripts/sync-local.sh --restart  # 3. 同步并重启 dsh web
 ```
 
-同步会先备份到 `~/.dsh/backups/argo-dsh-sync-<时间>-<profile>`；浏览器如仍显示
-旧面板，做一次硬刷新（Cmd+Shift+R）。
+**改完源码或文档后，必须跑到 `sync-local.sh --check` 输出 `[ok]` 才算交付完成**；不适用 `--check` 的场景（例如只改仓库内文档、不影响已安装 bundle）要在交付说明里写明跳过理由。同步会先备份到 `~/.dsh/backups/argo-dsh-sync-<时间>-<profile>`；浏览器如仍显示旧面板，做一次硬刷新（Cmd+Shift+R）。
+
+### 当前启用状态（web profile）
+
+`wide_research` 编排、原生 `argo_search` / `argo_fetch` 与 `web` 服务行的 `searchProvider: argo` 已在用户层 `~/.dsh/profiles/web/cordis.patch.yml` 默认启用，无需取消任何注释即可使用。profile patch 里 `mcp-argo` 段注释掉的「按需开启」只针对 MCP 完整工具面，不代表整个插件未启用。
+
+该 patch 的 `fetchProviderEnabled: false` 是主动关闭 fetch seam，因此 `web` 服务行不 pin `fetchProvider`；若改为启用 fetch seam，必须按本文「web seam 的 pin 必读」一节在 `web` 服务行加 `fetchProvider: argo`，否则多个可用 provider 会触发 `WEB_PROVIDER_AMBIGUOUS`。
 
 本 bundle 提供 **三形态接入**——同一套 argo 检索能力（同引擎、同压缩、同守卫），三种调用通道互为冗余，按宿主能力自动降级：
 
@@ -100,9 +107,11 @@ argo 的 `deepseek_search` 引擎（官方 `api.deepseek.com/v1/tools/search`，
 
 ## Compatibility（DSH Harness 版本对照）
 
+本机 `dsh --version` 与插件 `package.json` 的 `dsh.compatibility` 是版本真源；下表只保留历史验证记录，不声明「当前」版本。
+
 | argo-dsh | DSH Harness | 说明 |
 |----------|-------------|------|
-| 2.10.0（当前） | 0.2.1-rc.2（当前，运行中） | 与 2.9.9 同一套宿主适配；本版新增的技能索引/DSH 插件目录源与视频抓取都走既有工具面，插件侧无需改动 |
+| 2.11.2（本机已装） | 0.2.2-rc.1（本机运行中） | `package.json` 的 compatibility 已含该版本；`wide_research` 与原生工具走既有工具面，插件侧无需改动 |
 | 2.9.9（上一版，兼容） | 0.2.1-rc.2（当前，运行中） | 自带设置页（接入 / 工具 / API 密钥 / 研究 / 高级）新增路由观测卡片（getRouteHealth 只读本机 usage_log / route.jsonl 汇总最近路由决策，无日志不假装有数据）与工具推荐组合（按场景一键套用工具勾选，中英双语）；双栈入口 `startActivation({provider, label, request, signal, delivery})`；rc.2 移除 `toolFilter` 启动期字段后由插件内 tool guard 阻止 worker 嵌套调用 `wide_research`；`wide_research` 端到端实测通过（planner → 2 worker → synthesis，passed=true / 14 sources） |
 | 2.9.7（上一版，兼容） | 0.2.1-alpha.1（实测，兼容） | 旧宿主走 `start(provider, request)` 分支，`toolFilter` 启动期字段仍认；该分支由插件单测覆盖，未在 alpha.x 上重跑端到端 |
 | 2.9.2 | 0.2.1-alpha.1（实测） | 上一轮适配验证基线；rc.2 的新入口与 tool guard 自 2.9.4 起进入 |

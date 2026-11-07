@@ -59,7 +59,7 @@ argo mcp inject --all --dry-run # 只预览不写
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"
 ```
 
-`wide_research` 与 `argo_research` 共用同一套证据语义：规划互补轨道（可带 `depends_on` 依赖分阶段，默认并行）→ 有界并发子代理取证 → 来源账本（仅 http(s) URL 入账）→ 综合报告，输出自带 `quality_gate_results`（`passed` / `conclusion_cap`：failures→low、warnings→medium、干净→high）。`passed=false` 或 `conclusion_cap=low` 时禁止把报告结论当事实表述，先 `argo_fetch` / `--verify` 核验账本来源再下判断。worker 只用 argo 取证工具，不允许调用 `argo_research`（防研究套研究，硬保护不可放行）。
+`wide_research` 与 `argo_research` 共用同一套证据语义：规划互补轨道（可带 `depends_on` 依赖分阶段，默认并行）→ 取证 → 来源账本（仅 http(s) URL 入账）→ 综合报告，输出自带 `quality_gate_results`（`passed` / `conclusion_cap`：failures→low、warnings→medium、干净→high）。`passed=false` 或 `conclusion_cap=low` 时禁止把报告结论当事实表述，先 `argo_fetch` / `--verify` 核验账本来源再下判断。取证引擎按 `references/research-protocol.md`「广泛研究」表按宿主能力选一条：宿主挂了本插件走有界 LLM worker（工具白名单硬保护，不允许调用 `argo_research`，防研究套研究）；没有该工具的宿主走 `research.py --work-packages` 零子代理管道。不要在两种形态间混用 worker 纪律。
 
 ### DeepSeek 官方 key：DSH 凭证服务原生供给
 

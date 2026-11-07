@@ -16,7 +16,9 @@ macOS / Linux 直接跑。Windows 用 PowerShell：
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.ps1 | iex"
 ```
 
-### 方式二：npm / npx（已支持，当前 2.10.0）
+版本以仓库根 `package.json` 的 `version`（或 `argo --version`）为准，本文不复制版本号。当前 npm 发布版与 GitHub tag 同步发版，安装时取到的可能是较新的版本。
+
+### 方式二：npm / npx（CLI，包名 `argo-search`）
 
 ```bash
 npm install -g argo-search    # 全局安装 CLI
@@ -24,16 +26,16 @@ npx -y argo-search            # 或即用即走，不装
 npx -y github:taxueseek/argo  # 要跟 main 最新提交时用这条
 ```
 
-需要 Node.js 18+ 和 Python 3.9+。npm 上的 `argo-search` 由本仓库发布，当前版本 2.10.0，按 tag 更新。
+需要 Node.js 18+ 和 Python 3.9+。
 
-### 方式三：DSH 插件
+### 方式三：DSH 插件（包名 `@taxueseek/argo-dsh`）
 
 ```bash
-dsh plugin --profile web add argo-search                   # npm 发布版，当前 2.10.0
-dsh plugin --profile web add "github:taxueseek/argo"       # GitHub main
+dsh plugin --profile web add @taxueseek/argo-dsh                              # npm 发布版
+dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"  # GitHub main
 ```
 
-装完重启 `dsh web` 生效。
+`argo-search` 是 CLI 包，不是 DSH 插件包；两者不能互换。装完重启 `dsh web` 生效。本机用 `file:` 依赖指向同一仓库时，pnpm 安装会**复制**而非软链，改完源码必须跑 `packages/dsh-plugin/scripts/sync-local.sh`（先 `--check` 比对，再不带参数同步，最后 `--restart` 重启）才生效，详见 `packages/dsh-plugin/README.md`。
 
 ### 方式四：MCP 客户端直接填入（免预装）
 
@@ -149,4 +151,4 @@ python3 ~/.local/share/argo/scripts/health_check.py --all
 2. **搜索结果页 / 跳转链**：不要当正文信源
 3. **社交帖**：当舆情与叙事，不当事实真值
 4. **CLI 退出码恒 0**（含断网）：成败判断走 JSON 的 `status` / `errors` 字段
-5. **npm 安装已支持**：`argo-search` 由本仓库发布，最新版本 2.10.0，可放心 `npm install -g argo-search` 或 `npx -y argo-search`；registry 上更早的 v1.0.1 是历史版本，不要锁定到它
+5. **npm 安装已支持**：CLI 包 `argo-search` 由本仓库发布，可放心 `npm install -g argo-search` 或 `npx -y argo-search`；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。版本号以 `package.json` 为准

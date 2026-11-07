@@ -15,7 +15,7 @@
 
 ## Agent 流程
 
-1. 立研究契约：决策、对象、时间窗、地域、计算方式、停止条件。意图会改结论时，先问一个最关键的问题。
+1. 立研究契约：决策、对象、时间窗、地域、计算方式、停止条件。意图有歧义时按最合理假设推进，并在判断稿里标注该假设与备选解释；仅当两种解释导向相反结论且返工成本极高时才问一个最关键的问题。
 2. 把核心问题拆成互斥的工作包。每个包是可验证主张，不是搜索扩词。定义或基线未定时，先做前置包。
 3. 把工作包交给 `argo_research`（`--work-packages` / MCP `work_packages`）。有依赖就写 `depends_on`，机器按阶段取证，不一次并行。
 4. 没有工作包时，机器只做扩词检索，仍返回 dossier，不当成「问题分解」。
@@ -60,7 +60,7 @@
 }
 ```
 
-规则（默认拒绝：没明确允许就不放行）：
+规则（登记元信息即可，无需授权；只有 `recompute` 执行计算脚本才需显式授权）：
 - `path` 必填；文件必须存在、普通文件、可读；类型白名单 csv/tsv/xlsx/xls/parquet/json/md/txt/pdf（kind 未给时按扩展名推断）
 - 文件内容不入库：dossier `local_sources` 只登记路径、sha256、大小、mtime、kind、role（引用时标注路径与行号）
 - `no_primary_sources` 检查把已入账的本地文件计为一手命中
@@ -112,12 +112,13 @@ context 下 combo 预算不截断，指定的引擎都会参战：
 
 ## 广泛研究（wide research，多轨道取证账本）
 
-深度研究回答一个问题的取证；广泛研究是**多视角对比、要跨轨道引用账本**的形态。两条路径共用同一套语义（轨道分阶段、URL 去重账本 S1..Sn、门禁 failures→low / warnings→medium / 干净→high），产物差异只在取证引擎：
+深度研究回答一个问题的取证；广泛研究是**多视角对比、要跨轨道引用账本**的形态。三条路径共用同一套语义（轨道分阶段、URL 去重账本 S1..Sn、门禁 failures→low / warnings→medium / 干净→high），下面按宿主能力 MECE 分流，**只走匹配的一条，不要同时启动两套编排**：
 
 | 路径 | 取证引擎 | 何时用 |
 |---|---|---|
-| DSH 插件 `wide_research` 工具 | 有界 LLM worker（≤9，toolFilter 硬保护） | 宿主挂了 `@taxueseek/argo-dsh` 就直接用 |
-| skill 形态（本节） | `research.py --work-packages`（确定性管道，零子代理）为主；确需自适应迭代才派宿主子代理 | 没有 wide_research 工具的宿主（DSH 未挂插件、Claude Code 等） |
+| DSH 插件 `wide_research` 工具 | 有界 LLM worker（≤9，toolFilter 硬保护） | 宿主已挂 `@taxueseek/argo-dsh` 且 `wide_research` 可用（本机 web profile 即此态，直接走这条） |
+| skill 形态 · 确定性管道（默认） | `research.py --work-packages`（零子代理） | 宿主没有 `wide_research` 工具时（如 Claude Code）；`packages/dsh-plugin` 未启用也算此态 |
+| skill 形态 · 宿主子代理（例外） | 有界并发 worker（默认 6、上限 9） | 仅当轨道需要自适应迭代（搜→读→改词→再搜）且宿主提供 Agent 工具；默认不上 |
 
 ### skill 形态流程
 
