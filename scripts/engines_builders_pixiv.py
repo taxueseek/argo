@@ -145,8 +145,6 @@ def _result_row(
     snippet_bits = [author and f"作者 {author}"]
     if page_count:
         snippet_bits.append(f"{page_count} 页")
-    if is_r18:
-        snippet_bits.append("R-18")
     if tags:
         snippet_bits.append("标签 " + " / ".join(tags[:6]))
     return {
@@ -155,7 +153,6 @@ def _result_row(
         "snippet": " · ".join(bit for bit in snippet_bits if bit)[:300],
         "source": engine,
         "channel": channel,
-        "is_r18": is_r18,
         "score": rank_score(0.8, index),
         "published_at": created,
         "image_url": image_url,

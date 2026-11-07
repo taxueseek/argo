@@ -1,11 +1,15 @@
 # Pixiv 公开作品关键词检索：匿名 Web / OAuth App API 单引擎双通道
 #
 # 未配置 refresh token 时走匿名 Web Ajax；配置后只走 App API，不合并或回退。
-# 结果 channel 标出实际取数通道。Web/App 均无公开稳定性承诺。
+# 结果 channel 标出实际取数通道（web/app），排查时用于区分内容范围差异。
+# Web/App 均无公开稳定性承诺，Pixiv 随时可能调整接口行为。
 #
 # 可选环境变量：
 #   ARGO_PIXIV_REFRESH_TOKEN  Pixiv OAuth refresh token（只读，勿写入仓库）
 #   ARGO_PIXIV_ALLOW_R18      true 时允许 App R-18 结果与下游预览；默认过滤
+#
+# 防盗链说明：i.pximg.net 的图片直链需要 Referer: https://www.pixiv.net/ 才能下载，
+# 插件层的图片下载链路已自动补全该头部，CLI 或其他直接访问场景需手动加 Referer。
 #
 # App 支持 partial_match_for_tags / exact_match_for_tags / title_and_caption、
 # start_date / end_date（YYYY-MM-DD）、search_ai_type=0/1 与 popular_desc。

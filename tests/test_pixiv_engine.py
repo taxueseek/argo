@@ -137,7 +137,7 @@ def test_web_preview_removes_crop_segment_and_keeps_dimensions(monkeypatch):
     assert (row["image_width"], row["image_height"]) == (5504, 3072)
     assert row["image_commercial_ok"] is False
     assert row["channel"] == "web"
-    assert row["is_r18"] is False
+    assert "is_r18" not in row
 
 
 def test_web_business_error_returns_empty_results(monkeypatch):
@@ -202,8 +202,8 @@ def test_r18_requires_explicit_authorization(monkeypatch):
     )
     _, results = _run_app(monkeypatch, [_app_item("2", x_restrict=1)])
     assert len(results) == 1
-    assert results[0]["is_r18"] is True
-    assert "R-18" in results[0]["snippet"]
+    assert "is_r18" not in results[0]
+    assert "R-18" not in results[0]["snippet"]
 
 
 def test_app_auth_error_is_visible_and_does_not_fall_back_to_web(monkeypatch):
