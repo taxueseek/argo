@@ -96,7 +96,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-14 7ca2f22 移除 OSV/CISA KEV 代码段（−261）；"
               "2026-11-04 移除 tineye 构建器（−78）"),
     "scripts/fetch_v3.py": (
-        1906, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
+        1905, "抓取降级链（HTTP→md 变体→TLS 指纹→jina→Parallel→浏览器），"
               "每级都要保留顺序与超时语义，尚未找到能一次搬走且可验证的切面；"
               "2026-11-07 +49：微信公众号文章前置分支（mp.weixin 域分流到 "
               "wechat_article.fetch_wechat_article，即 `argo wx` 同一实现；"

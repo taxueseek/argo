@@ -19,19 +19,19 @@ import settings_page  # noqa: E402
 
 def test_mask_never_returns_plaintext():
     long_key = "sk-abcdef1234567890"
-    m = settings_page._mask(long_key)
+    m = settings_page.env_store.mask(long_key)
     assert long_key not in m
     assert m.endswith("…7890）")
 
 
 def test_mask_short_and_missing():
-    assert settings_page._mask("abc") == "已配置"
-    assert settings_page._mask("") == "缺失"
-    assert settings_page._mask(None) == "缺失"
+    assert settings_page.env_store.mask("abc") == "已配置"
+    assert settings_page.env_store.mask("") == "缺失"
+    assert settings_page.env_store.mask(None) == "缺失"
 
 
 def test_mask_whitespace_only_is_missing():
-    assert settings_page._mask("   ") == "缺失"
+    assert settings_page.env_store.mask("   ") == "缺失"
 
 
 # ── collect（stub 注入，不读真实注册表/网络）────────────────────────────────

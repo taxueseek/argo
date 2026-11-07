@@ -130,11 +130,11 @@ test('client TOOLS mirror native-tools.mjs (drift gate)', () => {
 })
 
 test('client ENGINE_TOGGLES mirror ARGO_ENV_SPECS (drift gate)', () => {
-  // 面板引擎开关与 index.js 白名单同一份名单：名字、双语标签、数值域都要对得上。
+  // 面板引擎开关与 specs.js 白名单同一份名单：名字、双语标签、数值域都要对得上。
   const mod = factory(loadBundle())
   const specNames = ARGO_ENV_SPECS.map((spec) => spec.name).sort()
   const toggleNames = [...mod.ENGINE_TOGGLES].map((spec) => spec.name).sort()
-  assert.deepEqual(toggleNames, specNames, '面板 ENGINE_TOGGLES 与 index.js ARGO_ENV_SPECS 漂移，请同步两边')
+  assert.deepEqual(toggleNames, specNames, '面板 ENGINE_TOGGLES 与 specs.js ARGO_ENV_SPECS 漂移，请同步两边')
   const specByName = new Map(ARGO_ENV_SPECS.map((spec) => [spec.name, spec]))
   for (const toggle of mod.ENGINE_TOGGLES) {
     const spec = specByName.get(toggle.name)
@@ -289,7 +289,7 @@ test('ArgoPanel renders every tab without undefined references', () => {
 })
 
 test('engines tab renders a control for every ENGINE_TOGGLES switch (no invisible group)', () => {
-  // 上面的 mirror 测试只核对「index.js 白名单 ↔ client.js 镜像」同名同字段，
+  // 上面的 mirror 测试只核对「specs.js 白名单 ↔ client.js 镜像」同名同字段，
   // 核对不到「这个 group 到底渲不渲染」。2026-10-21 实锤：`paid` 分组没进渲染
   // 清单，ARGO_PAID_SEARCH 与 ARGO_BUDGET_DEEPSEEK_SEARCH 在白名单、镜像、
   // 双语文案三处都齐全，面板上却完全不显示——用户配了预算却找不到入口，

@@ -69,14 +69,11 @@ def _version() -> str:
         return "unknown"
 
 
-def _mask(value: str) -> str:
-    """密钥掩码：只承认「已配置」与尾 4 位，任何长度都不回显明文。"""
-    v = (value or "").strip()
-    if not v:
-        return "缺失"
-    if len(v) >= 8:
-        return f"已配置（…{v[-4:]}）"
-    return "已配置"
+def _runtime_candidates(var: str) -> list[str]:
+    """与 engine_env.missing_env_for 同序：ARGO_ 推荐名优先、裸名兜底。"""
+    if var.startswith("ARGO_"):
+        return [var, var[len("ARGO_"):]]
+    return [f"ARGO_{var}", var]
 
 
 def _effective_env(key: str) -> str:
@@ -121,13 +118,6 @@ def collect() -> dict[str, Any]:
         from engine_env import (required_env_for, missing_env_for, get_env,
                                 PLACEHOLDER_ALIASES)
 
-        def _candidates(var: str) -> list[str]:
-            if var in PLACEHOLDER_ALIASES:
-                return list(PLACEHOLDER_ALIASES[var])
-            if var.startswith("ARGO_"):
-                return [var, var[len("ARGO_"):]]
-            return [f"ARGO_{var}", var]
-
         for name in names:
             spec = get_engine_spec(name) or {}
             try:
@@ -143,7 +133,9 @@ def collect() -> dict[str, Any]:
             data["key_rows"].append({
                 "engine": name,
                 "envs": [{"name": r,
-                          "status": (_mask(get_env(_candidates(r)) or "")
+                          "status": (env_store.mask(
+                              get_env(PLACEHOLDER_ALIASES.get(r) or _runtime_candidates(r))
+                              or "")
                                      if r not in missing else "缺失")}
                          for r in reqs],
             })
@@ -390,11 +382,11 @@ def _run_list() -> int:
 def _read_secret(prompt: str) -> str:
     """值只从 stdin 进来：tty 用 getpass 不回显，管道直接读一行。
     值不进 argv——进程列表与 shell history 都不会留痕。"""
-    if sys.stdin.isatty():
-        import getpass
-        return getpass.getpass(prompt).strip()
-    line = sys.stdin.readline()
-    return line.rstrip("\r\n").strip()
+    from cli_io import stdin_is_piped
+    if stdin_is_piped():
+        return sys.stdin.readline().rstrip("\r\n").strip()
+    import getpass
+    return getpass.getpass(prompt).strip()
 
 
 def _run_set(args) -> int:

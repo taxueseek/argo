@@ -1232,8 +1232,9 @@ def _strip_html_unless_needed(result: dict, need_html: bool) -> dict:
 
 
 def _is_wechat_article_url(url: str) -> bool:
-    """微信公众号文章 URL（文章页 path 以 /s 开头，含 /s?__biz= 与 /s/ 两种）。"""
-    return "mp.weixin.qq.com/s" in url
+    """公众号文章页（/s?__biz= 与 /s/ 两种）。按 host+path 判，代理 URL 不误分流。"""
+    p = urlparse(url)
+    return (p.hostname or "") == "mp.weixin.qq.com" and (p.path == "/s" or p.path.startswith("/s/"))
 
 
 def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
@@ -1356,10 +1357,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 pass
             _wx_result["cached"] = False
             return _strip_html_unless_needed(_wx_result, need_html)
-        # 专用链三级（HTTP→CDP→搜狗）全败即结构化失败、不落回通用链：
-        # 通用链对 mp.weixin 只会拿 JS 骨架冒充成功（11-01 实测病灶），
-        # 「失败的诚实」好过「成功的空壳」；_has_content 已保证到不了这的
-        # 都是三通道都判负的真失败。
+        # 专用链三级全败即结构化失败、不落回通用链：通用链对 mp.weixin 只会拿
+        # JS 骨架冒充成功（11-01 实测病灶）；_has_content 保证到这里的是真失败。
         return _strip_html_unless_needed({
             "url": url,
             "title": "", "content": "", "html": "",

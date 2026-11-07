@@ -31,6 +31,8 @@ import {
   resolveArgoEnv,
   setHostCredentials,
   setActiveConfig,
+  CREDENTIAL_REF_PATTERN,
+  asStringArray,
 } from './specs.js'
 
 const require = createRequire(import.meta.url)
@@ -196,8 +198,6 @@ export const Config = Schema === undefined ? undefined : Schema.object({
     .volatile(),
 })
 
-const CREDENTIAL_REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
-
 function readHostCredentials(ctx) {
   try {
     const service = typeof ctx?.get === 'function' ? ctx.get('credentials') : ctx?.credentials
@@ -215,9 +215,6 @@ function runEffect(ctx, fn) {
 }
 
 const asString = (value, fallback = '') => typeof value === 'string' ? value.trim() : fallback
-const asStringArray = (value, maximum) => Array.isArray(value)
-  ? value.filter(entry => typeof entry === 'string').map(entry => entry.trim()).filter(Boolean).slice(0, maximum)
-  : []
 
 // 注入执行器的动态环境变量解析逻辑
 setEnvResolver(async (options, config) => {

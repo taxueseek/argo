@@ -124,3 +124,17 @@ def test_non_wechat_url_never_hits_wx_chain(wx_stub, offline_http):
     fetch_v3.fetch_v3("https://example.com/some/page", skip_cache=True,
                       need_html=True, use_browser_fallback=False)
     assert wx_stub["calls"] == []
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://mp.weixin.qq.com/s?__biz=1&mid=2", True),
+    ("https://mp.weixin.qq.com/s/AbCdEf", True),
+    ("http://MP.WEIXIN.QQ.COM/s/x", True),
+    ("https://r.jina.ai/https://mp.weixin.qq.com/s/abc", False),
+    ("https://example.com/?ref=mp.weixin.qq.com/s", False),
+    ("https://mp.weixin.qq.com/mp/profile_ext?action=home", False),
+    ("https://mp.weixin.qq.com/search", False),
+])
+def test_wechat_url_matches_host_and_path(url, expected):
+    """判定看 host+path：代理 URL、query 里夹带的微信链接不分流。"""
+    assert fetch_v3._is_wechat_article_url(url) is expected

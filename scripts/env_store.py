@@ -19,7 +19,6 @@ stdin / JSON 输入就不该再出现在任何输出里。
 """
 from __future__ import annotations
 
-import os
 import re
 import shlex
 import sys
@@ -29,6 +28,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import argo_paths  # noqa: E402
+import engine_env  # noqa: E402
 
 # env 变量名：字母/下划线开头，仅字母数字下划线（含小写——跨平台 env 不强求大写）
 _KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -88,15 +88,6 @@ def _parse_line(line: str) -> tuple[str, str] | None:
     return k, v.strip()
 
 
-def _variants(key: str) -> list[str]:
-    """逻辑键的候选链（ARGO_ 前缀名与历史裸名同键），复用 engine_env 口径。"""
-    try:
-        from engine_env import _name_variants
-        return list(_name_variants(key))
-    except Exception:
-        if key.startswith("ARGO_"):
-            return [key, key[len("ARGO_"):]]
-        return [key, f"ARGO_{key}"]
 
 
 def patch_lines(lines: list[str], sets: dict[str, str],
@@ -115,7 +106,7 @@ def patch_lines(lines: list[str], sets: dict[str, str],
 
     # 逐逻辑键处理：命中行就地替换为规范名，多余命中行删除
     for key, value in sets.items():
-        variants = set(_variants(key))
+        variants = set(engine_env._name_variants(key))
         replaced = False
         kept: list[str] = []
         for line in lines:
@@ -136,12 +127,15 @@ def patch_lines(lines: list[str], sets: dict[str, str],
             else:
                 kept.append(line)
         if not replaced:
-            kept.append(f"{key}={_quote_value(value)}")
+            # 末行无换行时先补上，否则新行会粘在旧值尾部（"B=2C=3"）
+            if kept and not kept[-1].endswith("\n"):
+                kept[-1] += "\n"
+            kept.append(f"{key}={_quote_value(value)}\n")
             report["appended"].append(key)
         lines = kept
 
     for key in unsets:
-        variants = set(_variants(key))
+        variants = set(engine_env._name_variants(key))
         kept: list[str] = []
         removed = False
         for line in lines:
@@ -163,11 +157,7 @@ def patch_lines(lines: list[str], sets: dict[str, str],
 
 def envfile_path() -> Path:
     """写回目标：与读取同一候选链的首选路径（显式 ARGO_ENV_FILE 优先）。"""
-    try:
-        from engine_env import _envfile_paths
-        return _envfile_paths()[0]
-    except Exception:
-        return Path(os.path.expanduser("~/.config/argo/env"))
+    return engine_env._envfile_path()
 
 
 def apply_changes(sets: dict[str, str] | None = None,
@@ -190,18 +180,15 @@ def apply_changes(sets: dict[str, str] | None = None,
     backup: str | None = None
     if path.is_file():
         backup_path = path.with_suffix(path.suffix + ".bak")
-        backup_path.write_text(old_text, encoding="utf-8")
-        os.chmod(backup_path, 0o600)
+        # 备份同样走原子写 + 0600：先写后 chmod 会留一个按 umask（常为 0644）
+        # 可读的窗口，而备份里是旧密钥明文
+        argo_paths.atomic_write_text(backup_path, old_text, mode=0o600)
         backup = str(backup_path)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     argo_paths.atomic_write_text(path, new_text, mode=0o600)
 
-    try:
-        from engine_env import reset_envfile_cache
-        reset_envfile_cache()
-    except Exception:
-        pass  # 缓存失效失败只影响本进程热读，不影响落盘正确性
+    engine_env.reset_envfile_cache()
 
     report["path"] = str(path)
     report["backup"] = backup

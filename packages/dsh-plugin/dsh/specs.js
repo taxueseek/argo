@@ -1,12 +1,11 @@
 import { NATIVE_TOOLS as NATIVE_TOOL_SPECS } from "./native-tools.mjs"
 import { DEFAULTS } from "./runner.js"
 
-const asString = (value, fallback = "") => typeof value === "string" ? value.trim() : fallback
-const asStringArray = (value, maximum) => Array.isArray(value)
+export const asStringArray = (value, maximum) => Array.isArray(value)
   ? value.filter(entry => typeof entry === "string").map(entry => entry.trim()).filter(Boolean).slice(0, maximum)
   : []
 
-const CREDENTIAL_REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
+export const CREDENTIAL_REF_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 let hostCredentials = undefined
 let activeConfig = DEFAULTS
@@ -17,14 +16,6 @@ export function setHostCredentials(creds) {
 
 export function setActiveConfig(config) {
   activeConfig = config
-}
-
-export function getHostCredentials() {
-  return hostCredentials
-}
-
-export function getActiveConfig() {
-  return activeConfig
 }
 
 const MCP_CHILD_TOOLS = Object.keys(NATIVE_TOOL_SPECS).map(name => `mcp__argo__${name}`)
@@ -101,7 +92,6 @@ export const ARGO_ENV_SPECS = Object.freeze([
 ])
 
 export const ARGO_ENV_NAMES = new Set(ARGO_ENV_SPECS.map(spec => spec.name))
-export const ARGO_ENV_BY_NAME = new Map(ARGO_ENV_SPECS.map(spec => [spec.name, spec]))
 
 export function parseArgoEnvLine(line) {
   const eq = line.indexOf('=')
@@ -121,14 +111,6 @@ export function argoEnvOverlay(config = activeConfig) {
   }
   return overlay
 }
-
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write')
-const isVolatileRef = (value) =>
-  typeof value === 'object' && value !== null && VOLATILE_WRITE in value && typeof value.get === 'function'
-
-
 
 export async function resolveArgoEnv(config, options = {}) {
   const cfg = config ?? activeConfig

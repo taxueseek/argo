@@ -126,3 +126,19 @@ def test_report_has_no_plaintext(env_file):
     text = env_store.format_report(rep)
     assert secret not in text and "old-1234567890" not in text
     assert "已覆盖" in text and "已清除" in text
+
+
+def test_append_after_last_line_without_newline_does_not_glue():
+    """末行无换行时追加新键，旧值不能和新行粘成一行（"B=2C=3"）。"""
+    new, rep = env_store.patch_lines(["A=1\n", "B=2"], {"C": "3"}, [])
+    assert "".join(new) == "A=1\nB=2\nC=3\n"
+    assert rep["appended"] == ["C"]
+
+
+def test_backup_is_0600(tmp_path, monkeypatch):
+    envfile = tmp_path / "env"
+    envfile.write_text("ARGO_X=old\n", encoding="utf-8")
+    monkeypatch.setenv("ARGO_ENV_FILE", str(envfile))
+    rep = env_store.apply_changes(sets={"ARGO_X": "new"})
+    mode = stat.S_IMODE(os.stat(rep["backup"]).st_mode)
+    assert mode == 0o600

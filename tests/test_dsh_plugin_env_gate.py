@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """test_dsh_plugin_env_gate.py — DSH 插件 argoEnv 白名单与 argo 源码的对拍门禁。
 
-packages/dsh-plugin/dsh/index.js 的 ARGO_ENV_SPECS 是「面板可露出的 argo
+packages/dsh-plugin/dsh/specs.js 的 ARGO_ENV_SPECS 是「面板可露出的 argo
 环境变量开关」白名单：apply 期对白名单外的名字 loud fail。本测试保证白名单
 里每个名字都在 argo 源码（scripts/ 与 bin/）有真实读取点——拼错或抄了个
 不存在的名字，此处必须红，而不是等用户在面板上配了不生效。
@@ -14,13 +14,13 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PLUGIN_INDEX = ROOT / "packages" / "dsh-plugin" / "dsh" / "index.js"
+PLUGIN_SPECS = ROOT / "packages" / "dsh-plugin" / "dsh" / "specs.js"
 
 
 def _plugin_allowlist() -> set[str]:
-    src = PLUGIN_INDEX.read_text(encoding="utf-8")
+    src = PLUGIN_SPECS.read_text(encoding="utf-8")
     m = re.search(r"export const ARGO_ENV_SPECS = Object\.freeze\(\[(.*?)\n\]\)", src, re.S)
-    assert m, "index.js 缺少 ARGO_ENV_SPECS 导出"
+    assert m, "specs.js 缺少 ARGO_ENV_SPECS 导出"
     return set(re.findall(r"name: '(ARGO_[A-Z0-9_]+)'", m.group(1)))
 
 

@@ -344,7 +344,7 @@ window.__ModuleLoader__.load({
       { id: 'zhihu', nameZh: '知乎 Zhihu', nameEn: 'Zhihu', roleZh: '中文专业问答舆情', roleEn: 'Professional Q&A / Social', ref: 'ZHIHU_ACCESS_SECRET', keyless: true },
     ];
 
-    // argo 引擎开关（argoEnv 的 KEY=VALUE 行）。与 index.js 的 ARGO_ENV_SPECS
+    // argo 引擎开关（argoEnv 的 KEY=VALUE 行）。与 specs.js 的 ARGO_ENV_SPECS
     // 同一份名单，由 test/client.test.js 的漂移门禁核对；kind 决定控件：
     // bool=开关、num=数字、str=文本、list=名单。def 仅作「未配置时显示什么」，
     // 缺省即不写该行。开关文案写正向行为或明确的关闭动作，不再用 invert 反转
@@ -1318,7 +1318,7 @@ window.__ModuleLoader__.load({
         //
         // 历史 bug（2026-10-21 定位）：`paid` 一度不在这个清单里，于是
         // ARGO_PAID_SEARCH 与 ARGO_BUDGET_DEEPSEEK_SEARCH 两条开关在
-        // index.js 白名单、client.js ENGINE_TOGGLES、双语文案三处都齐全，
+        // specs.js 白名单、client.js ENGINE_TOGGLES、双语文案三处都齐全，
         // 却在面板上完全不显示——用户配好了预算却找不到入口，还以为是插件
         // 没装。漂移门禁只核对「两边名单同集合、字段一致」，核对不到「这个
         // 分组到底渲不渲染」；已由 test/client.test.js 的「engines tab renders
@@ -1588,7 +1588,7 @@ window.__ModuleLoader__.load({
     exports.inject = inject;
     exports.ArgoPanel = ArgoPanel;
     // 静态数据导出供漂移门禁核对：TOOLS 必须与 native-tools.mjs（mcp_tools.py
-    // 生成产物）同名同集合，ENGINE_TOGGLES 必须与 index.js 的 ARGO_ENV_SPECS
+    // 生成产物）同名同集合，ENGINE_TOGGLES 必须与 specs.js 的 ARGO_ENV_SPECS
     // 同名同集合——两边任何一边增删而另一边没跟上，测试即红。
     exports.TOOLS = TOOLS;
     exports.TOOL_GROUPS = TOOL_GROUPS;
