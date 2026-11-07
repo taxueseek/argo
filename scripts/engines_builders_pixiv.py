@@ -362,21 +362,36 @@ _ARTIST_NAME_RE = re.compile(r"^(?:artist|画师|画師)\s*[:：]\s*(\S.*)$", re
 _BARE_ARTIST_ID_RE = re.compile(r"^\d{5,9}$")
 
 
-def _artist_target(query: str) -> tuple[int | None, str]:
-    """识别画师作品查询，返回 (画师 id, 画师名)；不是画师查询时返回 (None, "")。"""
-    text = (query or "").strip()
-    match = _USER_URL_RE.match(text)
+def _artist_target(query: str) -> tuple[int | None, str, list[str]]:
+    """识别画师作品查询，返回 (画师 id, 画师名, 标签过滤词)。"""
+    text = (query or "").replace("\u3000", " ").strip()
+    if not text:
+        return None, "", []
+    parts = text.split(None, 1)
+    head = parts[0]
+    tags = parts[1].split() if len(parts) > 1 else []
+    match = _USER_URL_RE.match(head)
     if match:
-        return int(match.group(1)), ""
-    match = _ARTIST_ID_RE.match(text)
+        return int(match.group(1)), "", tags
+    match = _ARTIST_ID_RE.match(head)
     if match:
-        return int(match.group(1)), ""
-    match = _ARTIST_NAME_RE.match(text)
+        return int(match.group(1)), "", tags
+    match = _ARTIST_NAME_RE.match(head)
     if match:
-        return None, match.group(1).strip()
-    if _BARE_ARTIST_ID_RE.match(text):
-        return int(text), ""
-    return None, ""
+        return None, match.group(1).strip(), tags
+    if _BARE_ARTIST_ID_RE.match(head):
+        return int(head), "", tags
+    return None, "", []
+
+
+def _item_matches_tags(item: dict[str, Any], tags: list[str]) -> bool:
+    """条目标签需覆盖全部过滤词（大小写不敏感，按子串匹配，兼容本土化的长标签）。"""
+    names = [
+        str(entry.get("name") or "").casefold()
+        for entry in item.get("tags") or []
+        if isinstance(entry, dict)
+    ]
+    return all(any(tag.casefold() in name for name in names) for tag in tags)
 
 
 def _app_json(
@@ -433,11 +448,13 @@ def _app_artist_works(
     engine: str,
     access_token: str,
     allow_r18: bool,
+    tags: list[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """拉取画师作品列表；R-18 被过滤后条数不足时最多再翻一页。"""
+    """拉取画师作品列表；带标签过滤时多翻几页，R-18 过滤后条数不足时再补一页。"""
     results: list[dict[str, Any]] = []
+    filters = tags or []
     offset = 0
-    for _ in range(2):
+    for _ in range(5 if filters else 2):
         params = {
             "user_id": artist_id,
             "type": "illust",
@@ -456,6 +473,8 @@ def _app_artist_works(
         for item in items:
             if not isinstance(item, dict):
                 continue
+            if filters and not _item_matches_tags(item, filters):
+                continue
             row = _result_row(
                 item,
                 channel="app",
@@ -471,6 +490,11 @@ def _app_artist_works(
             break
         offset += len(items)
     if not results:
+        if filters:
+            joined = " / ".join(filters)
+            return _error(
+                f"该画师的作品里没有同时带这些标签的条目（标签：{joined}）", engine
+            )
         return _error("该画师的作品里没有可展示的条目（可能都被内容分级过滤）", engine)
     return results[:n]
 
@@ -481,6 +505,7 @@ def _artist_search(
     n: int,
     timeout: float,
     spec: dict[str, Any],
+    tags: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     engine = spec.get("_name", "pixiv")
     refresh_token = get_env("ARGO_PIXIV_REFRESH_TOKEN").strip()
@@ -505,7 +530,9 @@ def _artist_search(
     allow_r18 = env_flag(
         "ARGO_PIXIV_ALLOW_R18", default=False, expand=False, strict=True
     )
-    return _app_artist_works(artist_id, n, timeout, engine, access_token, allow_r18)
+    return _app_artist_works(
+        artist_id, n, timeout, engine, access_token, allow_r18, tags
+    )
 
 
 def _build_pixiv_engine(spec: dict[str, Any]) -> Any:
@@ -520,9 +547,11 @@ def _build_pixiv_engine(spec: dict[str, Any]) -> Any:
             return []
         limit = max(1, int(n))
         to = _timeout or timeout
-        artist_id, artist_name = _artist_target(q)
+        artist_id, artist_name, artist_tags = _artist_target(q)
         if artist_id or artist_name:
-            results = _artist_search(artist_id, artist_name, limit, to, spec)
+            results = _artist_search(
+                artist_id, artist_name, limit, to, spec, artist_tags
+            )
         elif get_env("ARGO_PIXIV_REFRESH_TOKEN").strip():
             results = _app_search(q, limit, to, spec, kwargs)
         else:

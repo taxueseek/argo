@@ -297,15 +297,21 @@ def test_preview_url_rejects_non_canonical_or_insecure_input(raw_url):
 @pytest.mark.parametrize(
     ("query", "expected"),
     [
-        ("user:29456671", (29456671, "")),
-        ("画师：29456671", (29456671, "")),
-        ("https://www.pixiv.net/users/29456671", (29456671, "")),
-        ("https://www.pixiv.net/users/29456671/artworks", (29456671, "")),
-        ("29456671", (29456671, "")),
-        ("画师:米山舞", (None, "米山舞")),
-        ("artist:米山舞", (None, "米山舞")),
-        ("初音ミク", (None, "")),
-        ("1234", (None, "")),
+        ("user:29456671", (29456671, "", [])),
+        ("画师：29456671", (29456671, "", [])),
+        ("https://www.pixiv.net/users/29456671", (29456671, "", [])),
+        ("https://www.pixiv.net/users/29456671/artworks", (29456671, "", [])),
+        ("29456671", (29456671, "", [])),
+        ("画师:米山舞", (None, "米山舞", [])),
+        ("artist:米山舞", (None, "米山舞", [])),
+        ("画师:ke-ta フランドール", (None, "ke-ta", ["フランドール"])),
+        ("user:29456671 白タイツ", (29456671, "", ["白タイツ"])),
+        (
+            "https://www.pixiv.net/users/29456671 白タイツ 制服",
+            (29456671, "", ["白タイツ", "制服"]),
+        ),
+        ("初音ミク", (None, "", [])),
+        ("1234", (None, "", [])),
     ],
 )
 def test_artist_target_recognizes_query_forms(query, expected):
@@ -428,3 +434,28 @@ def test_artist_works_page_again_when_filtered_short(monkeypatch):
     assert [row["url"] for row in results] == [
         "https://www.pixiv.net/artworks/151792369"
     ]
+
+
+def test_artist_works_keep_only_items_matching_tag_filters(monkeypatch):
+    flandre = _app_item("151792368")
+    flandre["tags"] = [{"name": "東方Project"}, {"name": "フランドール・スカーレット"}]
+    miku = _app_item("151792369")
+    routes = [
+        (
+            "/v1/search/user",
+            {"user_previews": [{"user": {"id": 3104565, "name": "ke-ta"}}]},
+        ),
+        ("/v1/user/illusts", {"illusts": [miku, flandre]}),
+    ]
+    _, results = _run_artist(monkeypatch, routes, "画师:ke-ta フランドール", n=5)
+    assert [row["url"] for row in results] == [
+        "https://www.pixiv.net/artworks/151792368"
+    ]
+
+
+def test_artist_tag_filter_reports_missing_tags(monkeypatch):
+    routes = [("/v1/user/illusts", {"illusts": [_app_item("151792368")]})]
+    _, results = _run_artist(monkeypatch, routes, "user:29456671 白タイツ", n=5)
+    assert len(results) == 1
+    assert "没有同时带这些标签的条目" in results[0]["error"]
+    assert "白タイツ" in results[0]["error"]

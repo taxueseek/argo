@@ -6,6 +6,7 @@
 #
 # 画师作品查询：query 写 user:<画师 id>、https://www.pixiv.net/users/<id>、
 # 五到九位纯数字，或 画师:<画师名>（经 App 用户搜索取最匹配的一位）。
+# 画师查询后接空格分隔的标签，用于在该画师作品里收窄，如 画师:ke-ta フランドール。
 # 画师作品列表只有 App 接口能给出可用的图片直链，匿名通道返回明确提示。
 #
 # 标签匹配口径：search_target 取 partial_match_for_tags（默认，Web 用 s_mode=s_tag）、
