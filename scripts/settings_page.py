@@ -163,6 +163,24 @@ def collect() -> dict[str, Any]:
     return data
 
 
+# 两版页面（只读 / 编辑表单）共用的样式：单文件自包含，不引外部资源
+_CSS = """
+ body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+      max-width:860px;margin:24px auto;padding:0 16px;color:#1f2328;line-height:1.6}
+ h1{font-size:20px} h2{font-size:16px;margin-top:28px;
+   border-bottom:1px solid #d0d7de;padding-bottom:4px}
+ table{border-collapse:collapse;width:100%;font-size:13px}
+ td,th{border:1px solid #d0d7de;padding:5px 8px;text-align:left;
+       vertical-align:top}
+ code{background:#f6f8fa;padding:1px 5px;border-radius:4px;font-size:12px}
+ .muted{color:#656d76;font-size:12px}
+ .btn{font-size:12px;padding:2px 10px;cursor:pointer}
+ .ok{color:#1a7f37} .miss{color:#cf222e}
+ input[type=text],input[type=password]{font-size:13px;padding:3px 6px;
+   border:1px solid #d0d7de;border-radius:4px;width:220px}
+"""
+
+
 def render_html(data: dict[str, Any]) -> str:
     """渲染单文件 HTML。所有动态值经 html.escape；本函数是唯一的拼接口。"""
     e = html.escape
@@ -200,19 +218,7 @@ def render_html(data: dict[str, Any]) -> str:
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <title>Argo 设置 · {e(data.get('version', ''))}</title>
-<style>
- body{{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
-       max-width:860px;margin:24px auto;padding:0 16px;color:#1f2328;line-height:1.6}}
- h1{{font-size:20px}} h2{{font-size:16px;margin-top:28px;
-   border-bottom:1px solid #d0d7de;padding-bottom:4px}}
- table{{border-collapse:collapse;width:100%;font-size:13px}}
- td,th{{border:1px solid #d0d7de;padding:5px 8px;text-align:left;
-        vertical-align:top}}
- code{{background:#f6f8fa;padding:1px 5px;border-radius:4px;font-size:12px}}
- .muted{{color:#656d76;font-size:12px}}
- .btn{{font-size:12px;padding:2px 10px;cursor:pointer}}
- .ok{{color:#1a7f37}} .miss{{color:#cf222e}}
-</style></head><body>
+<style>{_CSS}</style></head><body>
 <h1>Argo 设置 <span class="muted">v{e(data.get('version', ''))} · 只读透视 ·
 生成于 {e(data.get('generated_at', ''))}</span></h1>
 <p class="muted">本页由 <code>argo settings</code> 生成本地单文件，不含任何密钥明文；
@@ -251,15 +257,100 @@ function cp(btn){{
 </body></html>"""
 
 
+def render_edit_html(data: dict[str, Any]) -> str:
+    """渲染编辑表单页（--edit）。与只读页同一份数据，唯一区别：密钥行变成
+    「掩码现值 + 新值输入 + 清除勾选」，页内导出变更 JSON 交给
+    `argo settings apply` 写回——写回通道仍只有 env_store 一条，页面自身
+    无服务、无鉴权、不携带任何现值明文。"""
+    e = html.escape
+    form_rows = "".join(
+        "<tr><td>{eng}</td><td><code>{var}</code> {st}</td>"
+        "<td><input type=\"password\" data-env=\"{var}\" "
+        "placeholder=\"留空 = 不改动\"></td>"
+        "<td>{unset_box}</td></tr>".format(
+            eng=e(r["engine"]),
+            var=e(v["name"]), st=e(v["status"]),
+            unset_box=(f'<label><input type="checkbox" data-unset="{e(v["name"])}">'
+                       "清除</label>" if "已配置" in v["status"] else ""))
+        for r in data.get("key_rows", []) for v in r["envs"])
+    if not form_rows:
+        form_rows = ('<tr><td colspan="4">（未读到引擎注册表，'
+                     "请检查 config.yaml 是否可解析）</td></tr>")
+
+    # 自定义新增变量行：不在 required_env 清单里的键也能加（预留 3 行）
+    new_rows = "".join(
+        f'<tr><td>新增</td>'
+        f'<td><input type="text" data-newname placeholder="变量名"></td>'
+        f'<td><input type="password" data-newvalue placeholder="值（留空 = 跳过）"></td>'
+        f'<td></td></tr>'
+        for _ in range(3))
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>Argo 设置 · 编辑 · {e(data.get('version', ''))}</title>
+<style>{_CSS}</style></head><body>
+<h1>Argo 设置 · 编辑 <span class="muted">v{e(data.get('version', ''))} ·
+生成于 {e(data.get('generated_at', ''))}</span></h1>
+<p class="muted">填完点「导出变更 JSON」→ 终端执行
+<code>argo settings apply 变更.json</code> 写回。本页不含任何现值明文；
+导出的 JSON 含新值明文，apply 成功后请删除该文件。</p>
+
+<h2>引擎密钥（掩码现值 + 新值 + 清除）</h2>
+<table>
+<tr><th>引擎</th><th>变量</th><th>新值</th><th>清除</th></tr>
+{form_rows}
+</table>
+
+<h2>自定义变量（可选）</h2>
+<table>
+<tr><th>动作</th><th>变量名</th><th>值</th><th></th></tr>
+{new_rows}
+</table>
+
+<p><button class="btn" onclick="exportChanges()">导出变更 JSON</button>
+<span class="muted" id="summary"></span></p>
+
+<script>
+function exportChanges(){{
+  var out = {{sets: {{}}, unsets: []}}, n = 0;
+  document.querySelectorAll('[data-env]').forEach(function(inp){{
+    if (inp.value) {{ out.sets[inp.dataset.env] = inp.value; n++; }}
+  }});
+  document.querySelectorAll('[data-unset]').forEach(function(cb){{
+    if (cb.checked) {{ out.unsets.push(cb.dataset.unset); n++; }}
+  }});
+  var names = document.querySelectorAll('[data-newname]');
+  var vals = document.querySelectorAll('[data-newvalue]');
+  names.forEach(function(nameInp, i){{
+    var name = nameInp.value.trim(), val = vals[i] ? vals[i].value : '';
+    if (name && val) {{ out.sets[name] = val; n++; }}
+  }});
+  if (!n) {{ document.getElementById('summary').textContent =
+    '没有填写任何变更'; return; }}
+  var s = JSON.stringify(out, null, 2);
+  var blob = new Blob([s], {{type: 'application/json'}});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'argo-settings-changes.json';
+  a.click();
+  document.getElementById('summary').textContent =
+    '已导出 ' + n + ' 项变更；复制备用见弹窗';
+  window.prompt('变更 JSON（已触发下载，也可复制）：', s);
+}}
+</script>
+</body></html>"""
+
+
 def _run_page(args) -> int:
-    """默认行为：生成只读设置页。"""
+    """默认行为：生成设置页（--edit 为编辑表单版，其余只读透视）。"""
     data = collect()
-    page = render_html(data)
+    page = render_edit_html(data) if args.edit else render_html(data)
 
     if args.out:
         out_path = Path(args.out).expanduser()
     else:
-        out_path = Path(argo_paths.state_path("settings.html"))
+        out_path = Path(argo_paths.state_path(
+            "settings-edit.html" if args.edit else "settings.html"))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(page, encoding="utf-8")
 
@@ -270,7 +361,10 @@ def _run_page(args) -> int:
         except Exception:
             pass  # 无桌面环境的场景：路径照常打印，agent 可转述
     print(f"设置页已生成：{page_url}")
-    print("多客户端共享同一份配置；修改请用 argo settings set/unset。")
+    if args.edit:
+        print("填完点「导出变更 JSON」，然后执行 argo settings apply <文件> 写回。")
+    else:
+        print("多客户端共享同一份配置；修改请用 argo settings set/unset。")
     return 0
 
 
@@ -330,6 +424,40 @@ def _run_unset(args) -> int:
     return 0
 
 
+def _run_apply(args) -> int:
+    """方案 B 写回口：读编辑页导出的变更 JSON（或 stdin 的 "-"）。"""
+    try:
+        if args.file == "-":
+            raw = sys.stdin.read()
+        else:
+            raw = Path(args.file).expanduser().read_text(encoding="utf-8")
+        changes = json.loads(raw)
+        if not isinstance(changes, dict):
+            raise env_store.EnvStoreError("JSON 顶层必须是对象")
+        sets = changes.get("sets") or {}
+        unsets = changes.get("unsets") or []
+        if not isinstance(sets, dict) or not isinstance(unsets, list):
+            raise env_store.EnvStoreError(
+                '形状必须是 {"sets": {变量: 值}, "unsets": [变量]}')
+        if len(sets) > 200 or len(unsets) > 200:
+            raise env_store.EnvStoreError("变更条数超上限（200）")
+        for k, v in sets.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise env_store.EnvStoreError(
+                    f"sets 的键与值都必须是字符串：{k!r}")
+        report = env_store.apply_changes(sets=sets, unsets=[str(u) for u in unsets])
+    except (env_store.EnvStoreError, json.JSONDecodeError) as e:
+        print(f"settings apply 失败：{e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"settings apply 失败：读不到 {args.file}：{e}", file=sys.stderr)
+        return 1
+    print(env_store.format_report(report))
+    if args.file != "-":
+        print("提醒：变更 JSON 含新值明文，确认生效后请删除该文件。")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="本地只读设置页与配置写回（单文件 HTML，掩码展示密钥状态）")
@@ -337,6 +465,8 @@ def main() -> int:
                     help="输出路径（默认 <state>/settings.html）")
     ap.add_argument("--no-open", action="store_true",
                     help="只生成不打开浏览器")
+    ap.add_argument("--edit", action="store_true",
+                    help="生成编辑表单页（导出变更 JSON 后用 apply 写回）")
     sub = ap.add_subparsers(dest="cmd")
 
     sub.add_parser("list", help="纯文本透视：密钥状态 + 开关现值（不生成页面）")
@@ -345,6 +475,8 @@ def main() -> int:
     p_set.add_argument("key", help="变量名，如 ARGO_BOCHA_API_KEY")
     p_unset = sub.add_parser("unset", help="清除一个或多个环境变量（含历史裸名行）")
     p_unset.add_argument("keys", nargs="+", help="变量名列表")
+    p_apply = sub.add_parser("apply", help="应用编辑页导出的变更 JSON（\"-\" 读 stdin）")
+    p_apply.add_argument("file", help="变更 JSON 路径，或 - 表示 stdin")
     args = ap.parse_args()
 
     if args.cmd == "list":
@@ -353,6 +485,8 @@ def main() -> int:
         return _run_set(args)
     if args.cmd == "unset":
         return _run_unset(args)
+    if args.cmd == "apply":
+        return _run_apply(args)
     return _run_page(args)
 
 

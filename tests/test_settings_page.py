@@ -239,3 +239,66 @@ def test_list_prints_text(monkeypatch, tmp_path, capsys, env_target):
     out = capsys.readouterr().out
     assert "eng_a" in out and "ARGO_A_KEY 已配置" in out
     assert "tail-only-123456" not in out  # 明文不进终端
+
+
+# ── 方案 B：--edit 表单页 + apply ───────────────────────────────────────────
+
+def test_edit_page_form_without_plaintext(monkeypatch, tmp_path, env_target):
+    _install_stubs(
+        monkeypatch,
+        envfile={"ARGO_A_KEY": "hidden-value-123456"},
+        engines_spec={"eng_a": {"required_env": ["ARGO_A_KEY"]}},
+    )
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "--edit", "--no-open",
+                         "--out", str(tmp_path / "edit.html")])
+    assert settings_page.main() == 0
+    body = (tmp_path / "edit.html").read_text(encoding="utf-8")
+    assert 'data-env="ARGO_A_KEY"' in body          # 新值输入框按变量名定位
+    assert "已配置" in body                          # 现值只有掩码
+    assert "hidden-value-123456" not in body        # 现值明文不进页面
+    assert "argo settings apply" in body            # 写回指引
+    assert "exportChanges" in body                  # 导出按钮
+    assert 'data-unset="ARGO_A_KEY"' in body        # 已配置项带清除勾选
+
+
+def test_apply_writes_changes_from_file(monkeypatch, tmp_path, capsys,
+                                        env_target):
+    env_target.write_text("ARGO_OLD_KEY=legacy-123456789\n", encoding="utf-8")
+    changes = tmp_path / "changes.json"
+    changes.write_text('{"sets": {"ARGO_A_KEY": "fresh-123456789", '
+                       '"ARGO_OLD_KEY": "replaced-12345"}, '
+                       '"unsets": ["ARGO_GONE"]}', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "apply", str(changes)])
+    assert settings_page.main() == 0
+    body = env_target.read_text(encoding="utf-8")
+    assert "ARGO_A_KEY=fresh-123456789" in body
+    assert "ARGO_OLD_KEY=replaced-12345" in body
+    out = capsys.readouterr().out
+    assert "fresh-123456789" not in out              # 报告掩码
+    assert "请删除" in out                            # 明文文件删除提醒
+
+
+def test_apply_accepts_stdin_dash(monkeypatch, tmp_path, capsys, env_target):
+    import io
+    monkeypatch.setattr(sys, "stdin",
+                        io.StringIO('{"sets": {"ARGO_A_KEY": "vv-12345678"}}'))
+    monkeypatch.setattr(sys, "argv", ["settings_page.py", "apply", "-"])
+    assert settings_page.main() == 0
+    assert "ARGO_A_KEY=vv-12345678" in env_target.read_text(encoding="utf-8")
+
+
+def test_apply_rejects_bad_shape_and_missing_file(monkeypatch, tmp_path,
+                                                  capsys, env_target):
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"sets": "not-a-dict"}', encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["settings_page.py", "apply", str(bad)])
+    assert settings_page.main() == 1
+    assert "失败" in capsys.readouterr().err
+
+    monkeypatch.setattr(sys, "argv",
+                        ["settings_page.py", "apply",
+                         str(tmp_path / "nope.json")])
+    assert settings_page.main() == 1
+    assert "失败" in capsys.readouterr().err
