@@ -2394,7 +2394,7 @@ engines:
   status: ok
   recommended: false
   explicit_only: true
-  desc: Pixiv 关键词搜图（匿名 Web 或 OAuth App API，结果标通道；默认过滤 R-18，带预览图与作品页）
+  desc: Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18
 - name: polymarket
   tier: T1
   type: http
