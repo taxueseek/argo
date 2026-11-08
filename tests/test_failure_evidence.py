@@ -79,6 +79,23 @@ class TestAuthEscalation(_TmpBreakerCase):
         self.assertEqual(self.cb.status("eng")["auth_streak"], 2)
         self.assertTrue(self.cb.status("eng")["auth_disabled"])
 
+    def test_success_resets_auth_streak(self):
+        # 连击语义是「连续」：一次成功断开连击，孤立的后续 auth 失败不再
+        # 直接累积到禁用阈值（review 修复的回归测试：成功短路曾漏清连击）
+        self.cb.record_failure("eng", kind="error", attribution=AUTH_ATTR)
+        self.cb.record_success("eng")
+        self.assertEqual(self.cb.status("eng")["auth_streak"], 0)
+        self.cb.record_failure("eng", kind="error", attribution=AUTH_ATTR)
+        self.assertNotEqual(self.cb.status("eng")["state"], "disabled")
+
+    def test_blocked_rate_limited_preserve_auth_streak(self):
+        # blocked / rate-limited 是源站级信号，对 auth 是否修好无证据：
+        # 不清也不进（review 修复：此前被当成普通失败重置连击）
+        self.cb.record_failure("eng", kind="error", attribution=AUTH_ATTR)
+        self.cb.record_failure("eng", kind="blocked")
+        self.cb.record_failure("eng", kind="rate-limited")
+        self.assertEqual(self.cb.status("eng")["auth_streak"], 1)
+
     def test_disabled_not_overridden_by_opens_ladder(self):
         # 第二次 auth 失败时 failures 也爬过 FAILURE_THRESHOLD：disabled 优先，
         # 不被 opens 块盖回 open
@@ -133,6 +150,17 @@ class TestRevive(_TmpBreakerCase):
     def test_revive_unknown_engine(self):
         cleared = self.cb.revive("never_seen")
         self.assertEqual(cleared["had_state"], "closed")
+
+    def test_reenable_preserves_baseline(self):
+        # review 修复的兄弟点：reenable 全量重建状态曾抹掉 ever_nonempty，
+        # 破位判定退回「从未成功」态，下次失效无法显形
+        self.cb.record_success("eng")
+        self.cb.record_failure("eng", kind="error")
+        self.cb.record_failure("eng", kind="error")
+        self.cb.record_failure("eng", kind="error")
+        self.cb.reenable("eng")
+        st = self.cb.snapshot().get("eng") or {}
+        self.assertTrue(st.get("ever_nonempty"))
 
 
 class TestEmptyBaselineBreach(_TmpBreakerCase):

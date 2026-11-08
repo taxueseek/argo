@@ -72,11 +72,17 @@ def _verdict(st: dict[str, Any]) -> tuple[str, str]:
 
 
 def picture() -> dict[str, dict[str, Any]]:
-    """全引擎运行时画像：只含熔断器里有证据的引擎（无证据不进画像）。"""
+    """全引擎运行时画像：只含熔断器里有证据的引擎（无证据不进画像）。
+
+    逐引擎走 status() 而不是 snapshot()：suspected_stale / auth_streak 是
+    status() 里的**派生字段**（从 empty_recent 现算），snapshot 的原始状态
+    里没有——画像若读原始态会把破位源显示成正常（2026-11-08 实测抓到）。
+    """
     from circuit_breaker import get_breaker
-    snap = get_breaker().snapshot()
+    br = get_breaker()
     out: dict[str, dict[str, Any]] = {}
-    for eng, st in snap.items():
+    for eng in br.snapshot().keys():
+        st = br.status(eng)
         verdict, reason = _verdict(st)
         if verdict == "unknown" and not st.get("failures"):
             # 无失败记录的 closed 条目（record_success 留下的干净态）不进画像：
@@ -151,10 +157,25 @@ def main(argv: list[str] | None = None) -> int:
         prog="argo engine-health",
         description="引擎运行时健康画像（零请求，来自熔断器落盘证据）")
     ap.add_argument("--json", action="store_true", help="JSON 输出")
+    ap.add_argument("--engine", default=None,
+                    help="只看指定引擎（诊断单源；默认全量分诊）")
     args = ap.parse_args(argv)
     rep = summary()
-    text = _render_text(rep)
-    print(dumps(rep) if args.json else text)
+    if args.engine:
+        rep["offenders"] = [o for o in rep["offenders"]
+                            if o.get("engine") == args.engine]
+        single = picture().get(args.engine)
+        rep["single"] = single or {
+            "verdict": "unknown",
+            "reason": "熔断器无该引擎的失效证据（低流量或一直健康）",
+        }
+        if args.json:
+            print(dumps(rep))
+        else:
+            s = rep["single"]
+            print(f"[{s['verdict']}] {args.engine}\n  {s['reason']}")
+        return 0
+    print(dumps(rep) if args.json else _render_text(rep))
     return 0
 
 

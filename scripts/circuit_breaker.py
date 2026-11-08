@@ -323,8 +323,12 @@ class CircuitBreaker:
                     and not st.get("failures")
                     and not st.get("opens")
                     and not st.get("empty_streak")
-                    and not st.get("empty_recent")):
-                # 已健康且无任何待清理状态：内存短路，零写盘
+                    and not st.get("empty_recent")
+                    and not st.get("auth_streak")):
+                # 已健康且无任何待清理状态：内存短路，零写盘。
+                # auth_streak 必须参与短路判定：成功=「auth 问题没再出现」，
+                # 连击该清零——否则残留连击会让下一次孤立 auth 失败提前
+                # 直达禁用（ 连击语义是「连续」，成功即断开）。
                 return
 
         def _m() -> None:
@@ -390,9 +394,10 @@ class CircuitBreaker:
             category = (attribution or {}).get("category")
             if category in _AUTH_ESCALATE_CATEGORIES:
                 st["auth_streak"] = int(st.get("auth_streak") or 0) + 1
-            elif kind != "empty":
-                # 空/限流/拦截类失败不重置 auth 连击（它们不是「auth 修好了」
-                # 的证据），但也只有 auth/quota 归因本身推进连击。
+            elif drives_opens:
+                # 连击语义是「连续 auth 归因失败」：error/timeout 类失败说明
+                # 引擎在活动且没报 auth（连击断开）；empty/blocked/rate-limited
+                # 是查询级/源站级信号，对 auth 是否修好无证据，不清不进。
                 st["auth_streak"] = 0
             if (st.get("auth_streak", 0) >= AUTH_DISABLE_AFTER
                     and st.get("state") != "disabled"):
@@ -443,10 +448,17 @@ class CircuitBreaker:
         """外部主动恢复（用户测试通过 / 新环境确认）。"""
 
         def _m() -> None:
-            self._engines[engine] = {
+            fresh = {
                 "state": "closed", "failures": 0, "opens": 0,
                 "last_ok": time.time(), "reenabled_at": time.time(),
             }
+            # ever_nonempty 是历史基线，与 reenable 同为粘性（同 revive 口径）：
+            # 用户确认「引擎能用」恰恰是基线成立的新证据，抹掉会让破位判定
+            # 退回「从未成功」态、下次失效无法显形。
+            prev = self._engines.get(engine) or {}
+            if prev.get("ever_nonempty"):
+                fresh["ever_nonempty"] = True
+            self._engines[engine] = fresh
 
         self._mutate_locked(_m)
 
