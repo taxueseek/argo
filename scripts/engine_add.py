@@ -607,8 +607,9 @@ def cmd_revive(engine: str) -> int:
         quota_cleared = qm.clear_remote_exhausted(engine)
         if ":" in engine:
             quota_cleared = qm.clear_remote_exhausted(engine.split(":", 1)[-1]) or quota_cleared
-    except Exception:
-        pass
+    except Exception as _exc:  # 清理失败不能伪装成「本来就没有标记」（契约：两处清干净才算复活）
+        print(f"revive {engine}: quota 状态机清理失败（{_exc.__class__.__name__}: {_exc}）"
+              "——引擎可能仍被 skipped-quota-exhausted 拦下", file=sys.stderr)
     print(f"revived {engine}: breaker(had_state={cleared.get('had_state')}, "
           f"auth_disabled={cleared.get('auth_disabled')}, "
           f"suspected_stale={cleared.get('suspected_stale')}) "

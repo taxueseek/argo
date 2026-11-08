@@ -41,6 +41,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cli_io import dumps  # noqa: E402
+from circuit_breaker import AUTH_DISABLE_AFTER  # noqa: E402
 
 
 def _verdict(st: dict[str, Any]) -> tuple[str, str]:
@@ -49,7 +50,10 @@ def _verdict(st: dict[str, Any]) -> tuple[str, str]:
     判定顺序即严重度：auth_down > suspect > auto_disabled > flapping > watch。
     """
     state = st.get("state", "closed")
-    if st.get("auth_disabled") or (state == "disabled" and st.get("auth_streak", 0) >= 2):
+    # 阈值引用熔断器常量（不手抄）：legacy 态（disabled 无 auth_disabled 标志）
+    # 的判线必须与真实禁用线永远一致，否则恢复指引给错。
+    if st.get("auth_disabled") or (state == "disabled"
+                                   and st.get("auth_streak", 0) >= AUTH_DISABLE_AFTER):
         cat = (st.get("last_attribution") or {}).get("category") or "auth"
         return ("auth_down",
                 f"结构性失败（{cat}）已停用：修凭证/改代码后 "

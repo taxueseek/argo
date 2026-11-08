@@ -583,3 +583,27 @@ class TestZcodePluginConsistency(unittest.TestCase):
             self.assertEqual(
                 main, copy,
                 f"插件 references/{name} 与主仓不一致：同步一次再提交")
+
+
+class TestFailureEvidenceContractBinding(unittest.TestCase):
+    """失效证据的「注释契约」必须有机械载体（2026-11-08 审查收口）。
+
+    v2.12.0..a5cc97b 三条 HIGH 的共同模式：契约写在注释里（「与 engine_failure
+    分类常量同源」「阈值与熔断器一致」），没有代码结构绑定，漂移零报警。本类
+    把同源从注释声明升级为断言——手抄字面量回潮即在门禁红。
+    """
+
+    def test_auth_escalate_set_binds_engine_failure_constants(self):
+        import circuit_breaker
+        import engine_failure
+        self.assertEqual(
+            circuit_breaker._AUTH_ESCALATE_CATEGORIES,
+            {engine_failure.AUTH, engine_failure.QUOTA_EXHAUSTED},
+            "auth/quota 直达禁用判据必须 import engine_failure 常量，不得手抄字面量")
+
+    def test_engine_health_threshold_binds_breaker_constant(self):
+        import circuit_breaker
+        import engine_health
+        self.assertEqual(
+            engine_health.AUTH_DISABLE_AFTER, circuit_breaker.AUTH_DISABLE_AFTER,
+            "engine_health 分诊阈值必须引用 circuit_breaker.AUTH_DISABLE_AFTER，不得手抄")

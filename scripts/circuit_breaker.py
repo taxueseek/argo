@@ -20,6 +20,9 @@ from typing import Any, Optional
 
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths as _paths
+# 失效分类常量唯一真源（AUTH/QUOTA_EXHAUSTED 等）：_AUTH_ESCALATE_CATEGORIES
+# 从这里取值，engine_failure 改名由 import 链强制传播，不靠注释维护同源。
+import engine_failure
 
 # 默认状态路径**调用期解析**，不在导入期派生。
 #
@@ -57,10 +60,12 @@ DISABLE_COOLDOWN_SECONDS = 3600  # 禁用后 1h 内不自动恢复（避免频�
 # 与按 opens 阶梯爬到 DISABLE_AFTER_OPENS 的 error 类不同——连续 2 次 auth
 # 归因失败即直达 disabled，恢复通道=换 key（指纹变化即自愈）/ revive / 1h 探测。
 AUTH_DISABLE_AFTER = 2
-# auth/quota 类归因的判定集合：与 engine_failure 的分类常量同源（那边是
-# 「归类」，这边是「据此调整熔断策略」——边界仍是 engine_failure 只归类、
-# circuit_breaker 掌管策略）。
-_AUTH_ESCALATE_CATEGORIES = frozenset({"auth", "quota_exhausted"})
+# auth/quota 类归因的判定集合：与 engine_failure 的分类常量**机械同源**
+# （import 绑定，2026-11-08 审查修复——此前手抄字面量，那边改名即静默失配、
+# auth 直达禁用无声退回 opens 阶梯）——那边是「归类」，这边是「据此调整
+# 熔断策略」，边界仍是 engine_failure 只归类、circuit_breaker 掌管策略。
+_AUTH_ESCALATE_CATEGORIES = frozenset({engine_failure.AUTH,
+                                       engine_failure.QUOTA_EXHAUSTED})
 
 # 空结果基线破位（2026-11-08）：empty 按设计不驱动开闸（防误伤易空引擎），
 # 但「历史常非空 + 近期连续空 + 跨查询」是健康引擎异常变空的信号（met_museum
@@ -159,6 +164,12 @@ class CircuitBreaker:
                 "state": state,
                 "failures": int(st.get("failures") or 0),
                 "opened_at": opened_at,
+                # opens/last_fail 是只在落盘态里的原始证据字段：2026-11-08 审查
+                # 修复——此前 status() 只回派生视图，engine_health 从这里取
+                # opens/last_fail 恒得 0/None，分诊 last 恒 ?。派生字段（如
+                # suspected_stale）与原始证据字段同表返回，消费方只认这一个出口。
+                "opens": int(st.get("opens") or 0),
+                "last_fail": float(st["last_fail"]) if st.get("last_fail") else None,
                 "last_kind": st.get("last_kind"),
                 "last_attribution": st.get("last_attribution"),
                 # 基线破位画像（2026-11-08）：历史常非空的引擎近期连续空结果
@@ -324,8 +335,14 @@ class CircuitBreaker:
                     and not st.get("opens")
                     and not st.get("empty_streak")
                     and not st.get("empty_recent")
-                    and not st.get("auth_streak")):
+                    and not st.get("auth_streak")
+                    and st.get("ever_nonempty")):
                 # 已健康且无任何待清理状态：内存短路，零写盘。
+                # ever_nonempty 必须参与短路判定：升级前落盘的存量干净条目没有
+                # 该字段，若在这里短路就永远补不上基线——引擎此后「只回空、再
+                # 不成功」时 _suspected_stale_locked 第一道守卫恒 False，破位检
+                # 测对存量机队静默失明（2026-11-08 审查抓到，正是 met_museum
+                # /search 410 死 5 周的形态）。补写一次后黏性生效，继续短路。
                 # auth_streak 必须参与短路判定：成功=「auth 问题没再出现」，
                 # 连击该清零——否则残留连击会让下一次孤立 auth 失败提前
                 # 直达禁用（ 连击语义是「连续」，成功即断开）。

@@ -25,6 +25,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from argo_paths import atomic_write_text
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 DOC_PATH = SKILL_DIR / "docs" / "ENGINE_CATALOG.md"
@@ -426,7 +428,8 @@ def sync_counts(write: bool) -> list[str]:
     if not COUNTS_JSON.exists() or COUNTS_JSON.read_text(encoding="utf-8") != badge:
         stale.append(str(COUNTS_JSON.relative_to(SKILL_DIR)))
         if write:
-            COUNTS_JSON.write_text(badge, encoding="utf-8", newline="\n")
+            # 原子写（保持 0644）：counts.json 有外部读者（README 徽章渲染），不裸 write_text
+            atomic_write_text(COUNTS_JSON, badge, mode=0o644)
     for rel, rules in COUNT_RULES.items():
         path = SKILL_DIR / rel
         if not path.exists():
@@ -443,7 +446,8 @@ def sync_counts(write: bool) -> list[str]:
         if fixed != text:
             stale.append(rel)
             if write:
-                path.write_text(fixed, encoding="utf-8", newline="\n")
+                # 原子写（保持 0644）：README/SKILL 等正文档不做裸截断写
+                atomic_write_text(path, fixed, mode=0o644)
     return stale
 
 
@@ -470,7 +474,7 @@ def main() -> int:
         print(f"✅ 搜索源文档与当前引擎声明一致（{len(_collect()['rows'])} 个源）")
         return 0
     DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-    DOC_PATH.write_text(text, encoding="utf-8")
+    atomic_write_text(DOC_PATH, text, mode=0o644)
     print(f"已生成 {DOC_PATH.relative_to(SKILL_DIR)}（{len(_collect()['rows'])} 个源）")
     for rel in sync_counts(write=True):
         print(f"已校正计数：{rel}")

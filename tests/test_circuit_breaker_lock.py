@@ -133,22 +133,29 @@ class TestCircuitBreakerCrossProcess(unittest.TestCase):
             self.assertEqual(b._engines[ENG]["state"], "closed")
 
     def test_record_success_healthy_skips_disk_write(self) -> None:
-        """健康态（closed 且计数为 0）调 record_success 不得重写磁盘或改 mtime。"""
+        """健康态 record_success 的写盘契约：存量条目只补写一次基线，之后静默短路。"""
         from circuit_breaker import CircuitBreaker
 
         with tempfile.TemporaryDirectory() as tmp:
             state_path = str(Path(tmp) / "circuit_breaker.json")
+            # 存量形态（升级前落盘，无 ever_nonempty）：首次成功必须补写一次基线
+            # ——否则引擎此后「只回空、再不成功」时破位检测永失明（2026-11-08 审查）。
             Path(state_path).write_text(
                 json.dumps({"engines": {ENG: {"state": "closed", "failures": 0}}}),
                 encoding="utf-8",
             )
             b = CircuitBreaker(state_path=state_path)
+            b.record_success(ENG)
+            self.assertTrue(
+                json.loads(Path(state_path).read_text(encoding="utf-8"))
+                ["engines"][ENG].get("ever_nonempty"),
+                "存量干净条目首次成功应补写 ever_nonempty 基线")
+            # 基线立起后（含新式条目）必须回归静默短路：连续成功零写盘、零 mtime 刷新。
             sig_before = b._file_sig()
             b.record_success(ENG)
-            sig_after = b._file_sig()
             self.assertEqual(
-                sig_before, sig_after,
-                "健康引擎 record_success 应静默短路，不应改写状态文件或刷新 mtime"
+                sig_before, b._file_sig(),
+                "基线已立的健康引擎 record_success 应静默短路，不应改写状态文件或刷新 mtime"
             )
 
 

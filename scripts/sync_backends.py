@@ -36,6 +36,9 @@ import sys
 from pathlib import Path
 from typing import Any
 from cli_io import dumps, dumps_pretty
+# 派生件一律原子写（2026-11-08 审查收口）：原地 write_text 先截断后写，并发读者
+# （如 mcp_launch.sh 读 env_passthrough.txt）会拿到半截文件，随后被熔断器按 auth 误禁。
+from argo_paths import atomic_write_text
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
@@ -326,7 +329,9 @@ def write_dsh_keys_block(block: str) -> None:
     i, j = s.find(_KEYS_BEGIN), s.find(_KEYS_END)
     if i < 0 or j < i:
         raise SystemExit(f"{DSH_CLIENT_PATH} 缺 <generated:keys> 标记区")
-    DSH_CLIENT_PATH.write_text(s[:i] + block + s[j + len(_KEYS_END):], encoding="utf-8")
+    # 整文件原子替换（保持 0644）：再生成时并发读者（DSH 插件运行时）不该看到
+    # 半截文件——与仓内其他派生件同一纪律（2026-11-08 审查收口）。
+    atomic_write_text(DSH_CLIENT_PATH, s[:i] + block + s[j + len(_KEYS_END):], mode=0o644)
 
 
 # ── 校验/补全：domain_profiles.json ─────────────────────────────────────────
@@ -430,18 +435,19 @@ def collect_issues(engines: dict[str, dict[str, Any]],
 
 
 def write_quota(quota: dict[str, Any]) -> None:
-    QUOTA_PROFILES_PATH.write_text(dumps_pretty(quota) + "\n", encoding="utf-8")
+    atomic_write_text(QUOTA_PROFILES_PATH, dumps_pretty(quota) + "\n", mode=0o644)
 
 
 def write_registry(registry: dict[str, Any]) -> None:
     import yaml
-    REGISTRY_PATH.write_text(
+    atomic_write_text(
+        REGISTRY_PATH,
         yaml.safe_dump(registry, allow_unicode=True, sort_keys=False, default_flow_style=False),
-        encoding="utf-8")
+        mode=0o644)
 
 
 def write_domain(domain: dict[str, Any]) -> None:
-    DOMAIN_PROFILES_PATH.write_text(dumps_pretty(domain) + "\n", encoding="utf-8")
+    atomic_write_text(DOMAIN_PROFILES_PATH, dumps_pretty(domain) + "\n", mode=0o644)
 
 
 def main() -> int:
@@ -518,7 +524,7 @@ def main() -> int:
     write_registry(registry_new)
     write_domain(domain_new)
     pt_new = derive_passthrough(engines)
-    PASSTHROUGH_PATH.write_text(render_passthrough(pt_new), encoding="utf-8")
+    atomic_write_text(PASSTHROUGH_PATH, render_passthrough(pt_new), mode=0o644)
     print(f"已派生 {len(engines)} 个引擎的注册表：")
     print(f"  env_passthrough.txt   {len(pt_new)} 个变量名")
     if DSH_CLIENT_PATH.exists():
@@ -531,7 +537,7 @@ def main() -> int:
     try:
         import gen_engine_catalog
         gen_engine_catalog.DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
-        gen_engine_catalog.DOC_PATH.write_text(gen_engine_catalog.render(), encoding="utf-8")
+        atomic_write_text(gen_engine_catalog.DOC_PATH, gen_engine_catalog.render(), mode=0o644)
         gen_engine_catalog.sync_counts(write=True)
         print("  ENGINE_CATALOG.md / counts.json 已同步")
     except Exception as exc:

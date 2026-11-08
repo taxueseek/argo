@@ -298,10 +298,25 @@ class TestHealthVerdicts(unittest.TestCase):
             {"state": "closed", "failures": 2})[0], "watch")
 
     def test_picture_excludes_clean_entries(self):
+        """干净态不进画像：tmp 熔断器塞真实条目，双向锚（删过滤与过滤过宽都红）。"""
         import engine_health
-        clean = {"state": "closed", "failures": 0, "opens": 0, "ever_nonempty": True}
-        self.assertNotIn("clean_eng", engine_health.picture())
-        self.assertTrue(True)  # picture 读真实熔断器；干净态过滤由 _verdict+空判断保证
+        fd, path = tempfile.mkstemp(prefix="cb_pic_", suffix=".json")
+        os.close(fd)
+        os.unlink(path)
+        old_gb = cb.get_breaker
+        try:
+            br = cb.CircuitBreaker(state_path=path)
+            br.record_success("clean_eng")                # 干净态：closed 且零计数
+            br.record_failure("sick_eng", kind="error")   # 有失败证据
+            cb.get_breaker = lambda: br
+            pic = engine_health.picture()
+        finally:
+            cb.get_breaker = old_gb
+            if os.path.exists(path):
+                os.unlink(path)
+        self.assertNotIn("clean_eng", pic)   # 删掉 picture 的过滤分支此断言先红
+        self.assertIn("sick_eng", pic)       # 反向锚：过滤过宽（全滤）也红
+        self.assertEqual(pic["sick_eng"]["verdict"], "watch")
 
 
 if __name__ == "__main__":

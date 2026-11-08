@@ -188,8 +188,10 @@ if command -v git >/dev/null 2>&1 && { [ -d "$INSTALL_DIR/.git" ] || [ -f "$INST
     if [ -f "$_hook" ] && grep -qF "$_marker" "$_hook"; then
       echo "==> pre-commit 调度器已就位（无需重装）"
     else
-      if [ -f "$_hook" ] && grep -q "^# argo pre-commit 快门禁" "$_hook"; then
-        # 旧版无用户 hook 时直接 cp 了 pre-commit-argo：不是用户自定义 hook，直接替换
+      if [ -f "$_hook" ] && { grep -qF "# argo-managed-hook" "$_hook" || grep -q "^# argo 提交前快门禁" "$_hook"; }; then
+        # argo 自产 hook（新版带 argo-managed-hook 标记；旧版 cp 件头行是「argo 提交
+        # 前快门禁」——2026-11-08 审查修复：旧模式串与真实头行不符，分支永不命中，
+        # 旧门禁整块溜进 pre-commit.user 每次 commit 双跑）：不是用户自定义 hook，直接替换
         rm -f "$_hook"
       elif [ -f "$_hook" ] && ! grep -q "pre-commit-argo" "$_hook"; then
         mv "$_hook" "$_hooks_dir/pre-commit.user"
