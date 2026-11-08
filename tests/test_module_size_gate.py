@@ -200,7 +200,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-10-27 登录墙页面类型接线 +7 已随飞书功能撤出回撤"
               "（revert 01971bc，上限 1380 → 1373）"),
     "scripts/engine_dispatch.py": (
-        997, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+        999, "引擎编排调度器（wave-1 竞速 / wave-2 补全 / 串行对冲 / 收账）；"
+              "2026-11-08 +2：record_failure 传 query（仅 empty 用）——空结果"
+              "基线破位判定的跨查询去重，与缓存键同取 retrieval_query；"
               "2026-11-05 +1：skipped-quota-exhausted 的 detail 补 `quota.py reset` "
               "手动恢复指引（issue #42，纯文案，不新增分支）；"
               "2026-10-27 +8：视频时长条件经 decision 下发（_engine_domain_kwargs "
@@ -256,7 +258,10 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "> 严格猜测链，fetch_v3/article.py 兜底车道同享），curl 车道改收 "
               "bytes 交同一解码入口并补 --compressed；上限 1039 → 1035 随动下调"),
     "scripts/search_rank.py": (
-        1015, "RRF 融合 + minhash 去重 + 五维重排；"
+        1019, "RRF 融合 + minhash 去重 + 五维重排；"
+              "2026-11-08 +4：suspected_stale 降权分支（空结果基线破位 → 因子 "
+              "0.7，降权不熔断）——met_museum /search 410 被吞成空结果死 5 周"
+              "的那类失效从「无人知」变「排序可见」；"
               "2026-11-05 +15：rerank 入口加 bocha 配额联动（搜索端点已归因 "
               "quota_exhausted 时直接 skipped_quota，与搜索端点冷却口径对称，"
               "省掉熔断半开探测的 ~866 次无效 403/天）——检查块 12 行 + "

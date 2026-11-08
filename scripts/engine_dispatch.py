@@ -567,7 +567,9 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 breaker.record_note(eng, _attr)
             elif st != "skipped-quota-exhausted":
                 breaker.record_failure(
-                    eng, kind=_BREAKER_FAIL_KIND.get(st, "error"), attribution=_attr
+                    eng, kind=_BREAKER_FAIL_KIND.get(st, "error"), attribution=_attr,
+                    # query 仅 empty 用：破位判定的跨查询去重（与缓存键同源）
+                    query=retrieval_query,
                 )
                 # 配置/状态类失败（缺密钥/熔断/鉴权/配额）不写负缓存，换好环境即恢复。
                 if not is_state_failure_outcome(outcome):

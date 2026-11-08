@@ -52,6 +52,39 @@ HALF_OPEN_PROBE = True         # 冷却后允许一次探测
 DISABLE_AFTER_OPENS = 3        # 连续 open 达此次数 → 自动禁用（持久跳过）
 DISABLE_COOLDOWN_SECONDS = 3600  # 禁用后 1h 内不自动恢复（避免频繁探测）
 
+# auth 归因直达禁用（2026-11-08）：401/403/410 这类结构性失败不会因等待
+# 自愈（rerank:bocha 实测累计 18 次开闸、每次冷却到期都付一次 403 RTT），
+# 与按 opens 阶梯爬到 DISABLE_AFTER_OPENS 的 error 类不同——连续 2 次 auth
+# 归因失败即直达 disabled，恢复通道=换 key（指纹变化即自愈）/ revive / 1h 探测。
+AUTH_DISABLE_AFTER = 2
+# auth/quota 类归因的判定集合：与 engine_failure 的分类常量同源（那边是
+# 「归类」，这边是「据此调整熔断策略」——边界仍是 engine_failure 只归类、
+# circuit_breaker 掌管策略）。
+_AUTH_ESCALATE_CATEGORIES = frozenset({"auth", "quota_exhausted"})
+
+# 空结果基线破位（2026-11-08）：empty 按设计不驱动开闸（防误伤易空引擎），
+# 但「历史常非空 + 近期连续空 + 跨查询」是健康引擎异常变空的信号（met_museum
+# /search 410 被吞成空结果死了 5 周无人知）。只对 ever_nonempty 的引擎生效
+# ——从零空历史起步的引擎（含从未成功过的新源）不受影响，这是与统一阈值
+# 的本质区别：判定用引擎自己的历史，不用全局常数。
+EMPTY_BREACH_STREAK = 3          # 破位需累计的 empty 次数
+EMPTY_BREACH_MIN_QUERIES = 2     # 且需跨 ≥2 个不同查询（同查询重复空不算）
+EMPTY_RECENT_WINDOW = 7 * 86400  # 只看近 7 天的 empty（更早的不能代表「近期」）
+
+
+def _engine_key_fp_safe(engine: str) -> str:
+    """引擎当前生效密钥的短指纹；失败/无 key 返回空串（不阻断熔断主流程）。
+
+    复用 quota._engine_key_fp：那边已与 search._missing_env_for 同链对齐
+    （issue #42，13 个引擎的候选名解析坑在那里修过），这里不重算第二遍。
+    惰性导入防循环（quota ← → circuit_breaker 互不顶层依赖）。
+    """
+    try:
+        from quota import get_quota_manager
+        return get_quota_manager()._engine_key_fp(engine)
+    except Exception:
+        return ""
+
 
 class CircuitBreaker:
     """进程内 + 磁盘共享的引擎熔断器。"""
@@ -128,12 +161,37 @@ class CircuitBreaker:
                 "opened_at": opened_at,
                 "last_kind": st.get("last_kind"),
                 "last_attribution": st.get("last_attribution"),
+                # 基线破位画像（2026-11-08）：历史常非空的引擎近期连续空结果
+                # 且跨查询——疑似失效，供排序降权与 stats 分诊；不是熔断，
+                # 一次真实成功即解除。
+                "suspected_stale": self._suspected_stale_locked(st),
+                "auth_disabled": bool(st.get("auth_disabled")),
+                "auth_streak": int(st.get("auth_streak") or 0),
                 # 用 time.time()（墙钟）而非 time.monotonic()：熔断状态持久化到文件，
                 # 跨进程恢复时 opened_at 必须可比较。monotonic 在不同进程间基准不同，
                 # 换用会导致跨进程冷却判断错误。时钟回拨风险可控（只会让冷却提前结束）。
                 "cooldown_remain": max(0, int(OPEN_SECONDS - (time.time() - opened_at)))
                 if state == "open" else 0,
             }
+
+    @staticmethod
+    def _suspected_stale_locked(st: dict[str, Any]) -> bool:
+        """空结果基线破位判定（锁内调用，纯读）。
+
+        三个条件缺一不可：引擎曾交出过非空结果（ever_nonempty， 易空引擎
+        的「常态空」不触发）；近 7 天 empty 累计达 EMPTY_BREACH_STREAK；
+        这些 empty 跨 ≥EMPTY_BREACH_MIN_QUERIES 个不同查询（同一查询重复
+        空是「这个查询没结果」，不是「引擎坏了」）。
+        """
+        if not st.get("ever_nonempty"):
+            return False
+        now = time.time()
+        recent = [(fp, ts) for fp, ts in (st.get("empty_recent") or [])
+                  if now - float(ts) <= EMPTY_RECENT_WINDOW]
+        if len(recent) < EMPTY_BREACH_STREAK:
+            return False
+        distinct = {fp for fp, _ in recent if fp}
+        return len(distinct) >= EMPTY_BREACH_MIN_QUERIES
 
     def allow(self, engine: str) -> tuple[bool, str]:
         """是否允许调用该引擎。返回 (allowed, reason)。"""
@@ -147,6 +205,22 @@ class CircuitBreaker:
             # 但冷却期（DISABLE_COOLDOWN_SECONDS）过后自动转 half_open 探测，
             # 避免引擎恢复后永久无入口（B4）。disabled_at=0 视为旧数据，直接放行探测。
             if state == "disabled":
+                # auth 禁用的换 key 自愈：401/403 的恢复方式是「修好凭证」，
+                # 而配 key 是离散事件——指纹变了就说明修好了，立即放行，
+                # 不用等 1h 冷却（与 quota 的 key_fp 自愈同一思路）。
+                if st.get("auth_disabled") and st.get("key_fp"):
+                    cur = _engine_key_fp_safe(engine)
+                    if cur and cur != st.get("key_fp"):
+                        def _key_healed() -> None:
+                            fresh = self._engines.get(engine) or {}
+                            fresh.update({"state": "closed", "failures": 0,
+                                          "opens": 0, "auth_streak": 0})
+                            fresh.pop("auth_disabled", None)
+                            fresh.pop("key_fp", None)
+                            fresh["last_ok"] = time.time()
+                            self._engines[engine] = fresh
+                        self._mutate_locked(_key_healed)
+                        return True, "auth_key_changed"
                 disabled_at = float(st.get("disabled_at") or 0)
                 if disabled_at == 0 or \
                         (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS:
@@ -239,14 +313,18 @@ class CircuitBreaker:
         with self._lock:
             self._fresh_locked()
             st = self._engines.get(engine)
-            if not st or (
-                st.get("state", "closed") == "closed"
-                and not st.get("failures")
-                and not st.get("opens")
-                and not st.get("empty_streak")
-            ):
-                if st is None:
-                    self._engines[engine] = {"state": "closed", "failures": 0, "opens": 0}
+            if st is None:
+                # 首次成功也是一次「交出非空结果」：基线在此立起（record_success
+                # 只在交出可用结果时被调用，见 engine_dispatch 的贡献者判据）。
+                self._engines[engine] = {"state": "closed", "failures": 0, "opens": 0,
+                                         "ever_nonempty": True}
+                return
+            if (st.get("state", "closed") == "closed"
+                    and not st.get("failures")
+                    and not st.get("opens")
+                    and not st.get("empty_streak")
+                    and not st.get("empty_recent")):
+                # 已健康且无任何待清理状态：内存短路，零写盘
                 return
 
         def _m() -> None:
@@ -254,17 +332,27 @@ class CircuitBreaker:
                 "state": "closed",
                 "failures": 0,
                 "opens": 0,          # 重置连续 open 计数
+                # ever_nonempty 是基线（「这引擎交出过非空结果」），粘性字段：
+                # 空结果破位判定（_suspected_stale_locked）依赖它，成功不擦除，
+                # 否则每次成功都会把基线抹掉、破位永远立不起来。破位的解除靠
+                # empty_recent 清空（下面），不靠抹基线。
+                "ever_nonempty": True,
+                "empty_recent": [],   # 空结果破位解除：一次真实成功即清零
+                "auth_streak": 0,     # 连续 auth 归因失败计数同步归零
             }
         self._mutate_locked(_m)
 
     def record_failure(self, engine: str, kind: str = "error",
-                       attribution: dict[str, Any] | None = None) -> None:
+                       attribution: dict[str, Any] | None = None,
+                       query: str = "") -> None:
         """kind: error | timeout | empty | blocked | rate-limited
 
         attribution：可选的失败归因（失败现场记录，含 category/reason/detail）。
         kind 是熔断策略用的粗粒度标签，attribution 是给「为什么坏」用的细粒度
         事实——两者维度不同，不能互相推导（把 kind 当响应文本再归类，只能得到
         unknown）。持久化后 `--list-engines --detail` 才能显示真实原因。
+        query：仅 empty 用——按查询指纹记录近期空结果，供基线破位判定做
+        「跨 ≥2 个不同查询」的去重（同一查询反复空不构成引擎失效证据）。
 
         empty 语义是「该查询无结果」——查询级信号，不是引擎级故障。
         它仍可触发 60s 短冷却（防止重复打无效源），但不累计 opens，
@@ -277,10 +365,12 @@ class CircuitBreaker:
         auto-disable 是封错人——引擎实现没有问题，换客户端形态、
         等冷却或等源站策略变化即可恢复。
         """
-        self._mutate_locked(lambda: self._mutate_failure(engine, kind, attribution))
+        self._mutate_locked(
+            lambda: self._mutate_failure(engine, kind, attribution, query))
 
     def _mutate_failure(self, engine: str, kind: str,
-                        attribution: dict[str, Any] | None) -> None:
+                        attribution: dict[str, Any] | None,
+                        query: str = "") -> None:
         """`record_failure` 的状态变更体（只改内存，不落盘）。
 
         拆出来是为了让整段「重读 → 改 → 写」跑在同一个文件锁内：进程内
@@ -293,9 +383,38 @@ class CircuitBreaker:
         with self._lock:
             st = self._engines.get(engine) or {"failures": 0, "state": "closed"}
             drives_opens = kind not in ("empty", "blocked", "rate-limited")
-            # empty 权重低：两次 empty 才算一次 failure 贡献
+            # auth/quota 归因直达禁用（2026-11-08）：结构性失败（401/403/410、
+            # 配额耗尽）不会因等待自愈，走 opens 阶梯只是反复付无效 RTT
+            # （rerank:bocha 实测 opens=18）。连续 AUTH_DISABLE_AFTER 次 auth
+            # 归因失败 → 直达 disabled；恢复=换 key（指纹自愈）/revive/1h 探测。
+            category = (attribution or {}).get("category")
+            if category in _AUTH_ESCALATE_CATEGORIES:
+                st["auth_streak"] = int(st.get("auth_streak") or 0) + 1
+            elif kind != "empty":
+                # 空/限流/拦截类失败不重置 auth 连击（它们不是「auth 修好了」
+                # 的证据），但也只有 auth/quota 归因本身推进连击。
+                st["auth_streak"] = 0
+            if (st.get("auth_streak", 0) >= AUTH_DISABLE_AFTER
+                    and st.get("state") != "disabled"):
+                st["state"] = "disabled"
+                st["disabled_at"] = time.time()
+                st["auth_disabled"] = True
+                if category == "auth":
+                    fp = _engine_key_fp_safe(engine)
+                    if fp:
+                        st["key_fp"] = fp
+            # empty 权重低：两次 empty 才算一次 failure 贡献；同时按查询指纹
+            # 记近期空结果，供基线破位判定（跨查询去重）
             if kind == "empty":
                 st["empty_streak"] = int(st.get("empty_streak") or 0) + 1
+                fp = ""
+                if query:
+                    import hashlib as _hl
+                    fp = _hl.sha1(query.encode("utf-8")).hexdigest()[:12]
+                recent = [(f, t) for f, t in (st.get("empty_recent") or [])
+                          if time.time() - t <= EMPTY_RECENT_WINDOW]
+                recent.append((fp, time.time()))
+                st["empty_recent"] = recent[-6:]
                 if st["empty_streak"] < 2:
                     self._engines[engine] = st
                     return
@@ -309,8 +428,10 @@ class CircuitBreaker:
             # open 熔断：否则「空结果→open 60s→half_open→再 open」无效 churn，
             # 还占主位阻塞 6s。仅 error/timeout 驱动稳定 state 切换（空结果由
             # 负缓存短 TTL 保底）。2026-08 修复；blocked 2026-09 并入同语义。
-            if drives_opens and (st["failures"] >= FAILURE_THRESHOLD
-                                 or st.get("state") == "half_open"):
+            # 已因 auth 直达 disabled 的不再被 opens 块盖回 open（禁用优先）。
+            if (drives_opens and st.get("state") != "disabled"
+                    and (st["failures"] >= FAILURE_THRESHOLD
+                         or st.get("state") == "half_open")):
                 st["state"] = "open"
                 st["opened_at"] = time.time()
                 # 连续 open 计数：仅 error/timeout 计入（引擎级故障），
@@ -328,6 +449,36 @@ class CircuitBreaker:
             }
 
         self._mutate_locked(_m)
+
+    def revive(self, engine: str) -> dict[str, Any]:
+        """人工复活（argo engine revive）：清空该引擎的全部熔断/禁用/破位状态。
+
+        与 reenable 的分工：revive 面向「auth 禁用 / 基线破位」这类证据型
+        停用——修好凭证或换环境后由人或 CLI 显式叫醒。ever_nonempty 基线
+        保留（它记录的是「这引擎历史上交出过结果」，复活不改变历史）。
+        """
+        cleared: dict[str, Any] = {}
+        with self._lock:
+            self._fresh_locked()
+            st = self._engines.get(engine) or {}
+            cleared = {"had_state": st.get("state", "closed"),
+                       "auth_disabled": bool(st.get("auth_disabled")),
+                       "suspected_stale": self._suspected_stale_locked(st)}
+            base = {"state": "closed", "failures": 0, "opens": 0,
+                    "last_ok": time.time(), "revived_at": time.time()}
+            if st.get("ever_nonempty"):
+                base["ever_nonempty"] = True
+
+            def _m() -> None:
+                self._engines[engine] = base
+            self._mutate_locked(_m)
+        return cleared
+
+    def snapshot(self) -> dict[str, dict[str, Any]]:
+        """全部引擎熔断状态的只读快照（画像/诊断用，不推进探测）。"""
+        with self._lock:
+            self._fresh_locked()
+            return {k: dict(v) for k, v in self._engines.items()}
 
     def record_note(self, engine: str,
                     attribution: dict[str, Any] | None = None) -> None:

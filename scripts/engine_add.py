@@ -588,11 +588,39 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def cmd_revive(engine: str) -> int:
+    """`argo engine revive <name>`：人工复活被 auth/破位停用的引擎。
+
+    复用既有机制不另造：熔断器 revive（清 auth 禁用/基线破位/opens 计数，
+    保留 ever_nonempty 基线）+ quota clear_remote_exhausted（auth/quota 类
+    可能同时被配额状态机标记）。两处清干净才算复活。
+    """
+    if not engine:
+        print("用法: argo engine revive <engine_id>", file=sys.stderr)
+        return 2
+    from circuit_breaker import get_breaker
+    cleared = get_breaker().revive(engine)
+    quota_cleared = False
+    try:
+        from quota import get_quota_manager
+        quota_cleared = get_quota_manager().clear_remote_exhausted(engine)
+    except Exception:
+        pass
+    print(f"revived {engine}: breaker(had_state={cleared.get('had_state')}, "
+          f"auth_disabled={cleared.get('auth_disabled')}, "
+          f"suspected_stale={cleared.get('suspected_stale')}) "
+          f"quota_exhausted_cleared={quota_cleared}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # `argo engine add ...` 与 `argo engine ...` 等价：剥掉首个 "add"
     if argv and argv[0] == "add":
         argv = argv[1:]
+    # revive 是独立的动词（不是 add 的 flag）：argo engine revive <engine_id>
+    if argv and argv[0] == "revive":
+        return cmd_revive(argv[1] if len(argv) > 1 else "")
     parser = _build_parser()
     args = parser.parse_args(argv)
     return cmd_add(args)

@@ -75,6 +75,18 @@ def _stream_summary(name: str, n: int) -> dict:
     return {"samples": len(rows), "recent": rows[-3:]}
 
 
+def _health_summary() -> dict:
+    """引擎运行时健康画像（engine_health，零请求只读熔断器落盘）。
+
+    独立 try/except：熔断器状态损坏不能拖垮 stats 主报告（与噪声门同纪律）。
+    """
+    try:
+        import engine_health
+        return engine_health.summary()
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 def build_report(n: int) -> dict:
     return {
         "data_dir": str(usage_log.stream_dir()),
@@ -83,9 +95,13 @@ def build_report(n: int) -> dict:
         "recovery": _stream_summary("recovery", n),
         "route": _stream_summary("route", n),
         "merge": _stream_summary("merge", n),
+        # 失效证据的一等公民化（2026-11-08）：发现死源靠「每次被踩到都记账
+        # 且可见」，不靠事前探测——画像只含熔断器里有证据的引擎
+        "engine_health": _health_summary(),
         "hints": [
             "流量回放/审计：argo search --archive（完整候选归档）",
-            "引擎健康：argo preflight --probe / --list-engines --detail",
+            "引擎健康：argo stats 的 engine_health 段 / scripts/engine_health.py --json",
+            "复活被 auth/破位停用的引擎：argo engine revive <name>",
             "关闭日志：ARGO_USAGE_LOG=0",
         ],
     }

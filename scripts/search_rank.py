@@ -160,6 +160,10 @@ def _single_reliability(engine: str) -> float:
         failures = int(st.get("failures") or 0)
         if failures >= 5:
             factor = min(factor, 0.8)
+        # 空结果基线破位：历史常非空 + 近期连续空且跨查询 → 疑似失效，降权
+        # 不熔断（empty 不驱动开闸是既有设计）；一次真实成功即解除。
+        if st.get("suspected_stale"):
+            factor = min(factor, 0.7)
     except Exception:
         factor = 1.0
     _evict_cache(_rel_factor_cache, now)
