@@ -26,7 +26,7 @@ triggers:
 
 # Argo — 统一搜索与证据核验
 
-> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 286 个源、240 免密钥；digup 默认关；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 跳过）。
+> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 287 个源、241 免密钥；digup 默认关；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 跳过）。
 
 ## 快速上手
 
@@ -64,7 +64,7 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 
 ### 图片检索
 
-网络图走 `search`（`image_search` 域自动命中）；本地素材走 `argo local-image`（Vision 索引/相似图/联络表；默认关，需 `ARGO_LOCAL_IMAGE=1`，见 `references/usage.md`）。反搜图（图→出处）：`argo search "<图片URL>" --engine saucenao|animetrace|google_lens`，不进自动路由，saucenao/google_lens 需 key。
+网络图走 `search`（`image_search` 域自动命中）；本地素材走 `argo local-image`（Vision 索引/相似图/联络表；默认关，需 `ARGO_LOCAL_IMAGE=1`，见 `references/usage.md`）。反搜图（图→出处）：`argo search "<图片URL>" --engine saucenao|animetrace|google_lens|tracemoe`，不进自动路由，saucenao/google_lens 需 key。
 
 ### 增强三工具
 

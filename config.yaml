@@ -5569,3 +5569,7 @@ network:
       # 429（实测 code 17737 连发数小时），而该 API 直连可达（实测 code 0 秒回）。
       # 与上一条同语义：默认直连，需要走代理的环境用 ARGO_ANIMETRACE_PROXY 覆盖。
       "animetrace.com": "${ARGO_ANIMETRACE_PROXY}"
+      # api.trace.moe 按出口 IP 限频（免费档 100 次/小时）：共享机场节点的出口
+      # 常被别的客户端打到 429，而该 API 直连可达（实测 GET 秒回）。
+      # 与上一条同语义：默认直连，需要走代理的环境用 ARGO_TRACEMOE_PROXY 覆盖。
+      "api.trace.moe": "${ARGO_TRACEMOE_PROXY}"

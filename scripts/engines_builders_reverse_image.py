@@ -781,3 +781,171 @@ def _build_animetrace_engine(spec: dict[str, Any]) -> Any:
                     break
         return results
     return _engine
+
+
+# ── trace.moe（动画场景识别，免 key、按 IP 限频）────────────────────────────
+
+_TRACEMOE_ENDPOINT = "https://api.trace.moe/search"
+
+# 上游 error 字段的语义：error 非空 = 上游没查成（拉不到图、配额用尽等），
+# 不能当「没找到」。quota/quotaUsed 用于配额可见性，非失败信号。
+
+
+def _tracemoe_error(payload: str) -> dict[str, Any]:
+    """把上游 error 文本合成一条可读错误。"""
+    msg = ""
+    try:
+        obj = json.loads(payload)
+    except (json.JSONDecodeError, ValueError):
+        obj = None
+    if isinstance(obj, dict):
+        msg = str(obj.get("error") or "").strip()
+    elif payload:
+        msg = payload.strip()[:160]
+    return {"error": msg or "请求失败", "source": "tracemoe"}
+
+
+def _tracemoe_get(image_url: str, timeout: float, engine: str) -> str | None:
+    """GET 查询 trace.moe；上游在 Cloudflare 之后，须走 TLS 指纹伪造。
+
+    返回响应文本；失败返回 None。走 curl_cffi impersonate（与 SauceNAO 同口径）。
+    实测：POST JSON 上游回 400，GET query 参数 200 可用。
+    """
+    try:
+        from curl_cffi import requests as cr
+    except ImportError:
+        return None
+    proxies = None
+    try:
+        from net_proxy import resolve_proxy
+        p = resolve_proxy(_TRACEMOE_ENDPOINT)
+        if p:
+            proxies = {"https": p}
+    except Exception:
+        proxies = None
+    last: Exception | None = None
+    for fp in ("chrome", "safari"):
+        try:
+            resp = cr.get(_TRACEMOE_ENDPOINT, params={"url": image_url},
+                          headers={"Accept": "application/json"},
+                          timeout=timeout, impersonate=fp, proxies=proxies)
+        except Exception as e:
+            last = e
+            continue
+        if resp.status_code == 200:
+            return resp.text
+        last = RuntimeError(f"HTTP {resp.status_code} · {resp.text[:120]}")
+    return None
+
+
+def _tracemoe_episode(item: dict[str, Any]) -> str:
+    """把 episode 字段归一成可读文本；上游可能是 int、str 或 null。"""
+    ep = item.get("episode")
+    if ep is None:
+        return ""
+    if isinstance(ep, str) and "|" in ep:
+        return f"第 {ep} 话"
+    try:
+        return f"第 {int(ep)} 话"
+    except (TypeError, ValueError):
+        return f"第 {ep} 话"
+
+
+def _tracemoe_timestamp(seconds: float) -> str:
+    """把秒数归一成 mm:ss；上游 from/to 是浮点秒。"""
+    try:
+        total = int(float(seconds))
+    except (TypeError, ValueError):
+        return ""
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _build_tracemoe_engine(spec: dict[str, Any]) -> Any:
+    """trace.moe 动画场景识别（免 key，POST JSON 传图片 URL）。
+
+    上游返回「这张截图出自动画第几集的哪个时间点」，条目带 similarity（0-1）
+    与 AniList ID。url 槽填 AniList 作品页（下一步去哪儿查证的入口），不是
+    宣称这张图就出自该页——与 AnimeTrace 同口径。
+    """
+    timeout = spec.get("timeout", 20)
+    min_sim = float(spec.get("min_similarity", 0.7) or 0.7)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = (query or "").strip()
+        is_local = _local_image_path(q) is not None
+        if not is_local and not _IMAGE_URL_RE.match(q):
+            return _image_input_error("tracemoe", q)
+        if is_local:
+            # trace.moe 只收公网可访问的图片 URL，没有上传端点。本地图直接
+            # 返回可读错误——把 base64 塞进 url 参数上游会回 400/422，不如
+            # 在入口说清「这条路走不通」。
+            return [{"error": "trace.moe 只收公网图片 URL，不支持本地图片上传；"
+                              f"收到本地路径「{q}」",
+                     "source": "tracemoe"}]
+        raw = _tracemoe_get(q, float(_timeout or timeout), spec.get("_name", ""))
+        if raw is None:
+            return []
+        try:
+            payload = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        if not isinstance(payload, dict):
+            return []
+        if payload.get("error"):
+            return [_tracemoe_error(raw)]
+        results: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        for item in payload.get("result") or []:
+            if len(results) >= max(1, int(n)):
+                break
+            if not isinstance(item, dict):
+                continue
+            anilist_id = item.get("anilist")
+            if isinstance(anilist_id, int) and anilist_id in seen:
+                continue
+            if isinstance(anilist_id, int):
+                seen.add(anilist_id)
+            try:
+                sim = float(item.get("similarity") or 0)
+            except (TypeError, ValueError):
+                sim = 0.0
+            if sim < min_sim:
+                continue
+            filename = str(item.get("filename") or "").strip()
+            episode = _tracemoe_episode(item)
+            at = _tracemoe_timestamp(item.get("at"))
+            thumb = str(item.get("image") or "").strip()
+            video = str(item.get("video") or "").strip()
+            bits = [b for b in (
+                f"相似度 {sim * 100:.1f}%" if sim > 0 else "",
+                f"作品 {anilist_id}" if anilist_id else "",
+                episode,
+                f"时间点 {at}" if at else "",
+                f"文件 {filename[:80]}" if filename else "",
+            ) if b]
+            title = filename[:200] or f"trace.moe 匹配 {anilist_id}"
+            url = f"https://anilist.co/anime/{anilist_id}" if anilist_id else video or thumb
+            if not url:
+                continue
+            results.append({
+                "title": title,
+                "url": url,
+                "snippet": " · ".join(bits)[:300],
+                "source": spec.get("_name") or "tracemoe",
+                "score": rank_score(min(sim, 1.0) if sim > 0 else 0.6, len(results)),
+                "metadata": {
+                    "similarity": sim,
+                    "anilist_id": anilist_id,
+                    "filename": filename,
+                    "episode": item.get("episode"),
+                    "at": item.get("at"),
+                    "video": video,
+                    "image": thumb,
+                    "quota": payload.get("quota"),
+                    "quota_used": payload.get("quotaUsed"),
+                },
+                **({"image_url": thumb} if thumb else {}),
+            })
+        return results
+    return _engine

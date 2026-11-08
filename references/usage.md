@@ -518,6 +518,21 @@ argo local-image stats                          # 索引概况
 这类需要真正的图像-文本嵌入（CLIP 路线），本机当前未接（要 ~2GB 依赖）；接口留了位，
 需要时再挂，不为少数场景让所有安装背上重依赖。
 
+**以图搜图**走 `argo search "<图片URL>" --engine <引擎>`，四条引擎均为 `explicit_only`，
+不进自动路由候选池。query 必须是公网可访问的图片 URL（不是关键词）：
+
+| 引擎 | 密钥 | 定位 | 说明 |
+|------|------|------|------|
+| `saucenao` | `ARGO_SAUCENAO_API_KEY` | 二次元图源反查 | 相似度 + Pixiv/Pawoo/Getchu 出处页；免费 key 150 次/日 |
+| `animetrace` | 免 key | 动漫角色识别 | 作品名 + 角色名 → Bangumi 检索入口；按出口 IP 限频 |
+| `google_lens` | `ARGO_SERPAPI_API_KEY` | 通用视觉反查 | 精确匹配/视觉相似/相关网页三档；付费档 250 次/月免费额度 |
+| `tracemoe` | 免 key | 动画场景识别 | 作品名 + 集数 + 时间点 → AniList 作品页；按出口 IP 限频（免费档 100 次/小时） |
+
+本地图片：`saucenao` 走 multipart 上传、`animetrace` 走 base64、`google_lens` 经
+SerpAPI Image API 上传；`tracemoe` 只收公网 URL，本地图在入口返回可读错误。
+本地图片输入受 `ARGO_IMAGE_LOCAL_ROOTS` 目录白名单约束（MCP 宿主必须设置，
+本机 CLI 默认不限目录）。
+
 ### local-seek（本机文件搜索）
 
 ```bash
@@ -677,6 +692,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_BUDGETS_JSON` | 预算整份 JSON 覆盖 | 高级/测试用；优先级高于预算文件，例 `{"deepseek_search":{"amount":5,"currency":"CNY","period":"month"}}` |
 | `ARGO_BUDGET_FILE` | 预算文件路径覆盖 | 默认 `~/.config/argo/budgets.json`；多环境隔离时用 |
 | `ARGO_IMAGE_LOCAL_ROOTS` | 反搜图允许读取的本地目录（`os.pathsep` 分隔） | 默认空=不限目录（本机 CLI 由人直接调用）；MCP 宿主里设成收图目录，模型便只能把落盘的那几张图送去反搜，群消息无法驱动它读任意本地文件 |
+| `ARGO_TRACEMOE_PROXY` | trace.moe 反搜图的出口代理覆盖（api.trace.moe 按出口 IP 限频） | 默认空=直连；共享机场节点被别的客户端打到 429 时设成代理端口 |
 | `ARGO_PAID_BUDGET_BYPASS` | 单次绕过月度预算 | =1 时显式/自动调用都不检查预算；用于临时排障，不改变配置 |
 | `ARGO_ADAPTIVE_TAIL` | 尾宽按 backup 引擎历史 P75 分层（快源等满/慢源早收工） | 默认关；=1 开启（2026-10-16 三轮交错 A/B 未证实收益，对拍记录在本机 docs-local/调度对拍_尾宽分层与并发_2026-10-16.md，属本地归档不随发布件分发） |
 | `ARGO_TAIL_COMPLETE_S` | 早停后台补全的收割宽限（秒）：弃置引擎宽限内完成则记学习器真实成绩并把交付合并进 L2 缓存 | 默认 3；0=关闭（回到纯丢弃）。CLI 由 atexit 等待、输出已先行；MCP/daemon 常驻进程自然收割。证据见 docs/QUALITY_OF_SLOW_SOURCES.md |

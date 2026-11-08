@@ -1,0 +1,33 @@
+# trace.moe · 动画场景识别
+#
+# 输入形态特殊：query 必须是**公网可访问的图片 URL**，不是关键词。上游返回图中
+# 场景所属动画作品、集数与时间点（AniList ID + filename + episode + at），并给出
+# similarity（0-1）。
+#
+# 免 key，但按出口 IP 限频：免费档 100 次/小时（quota 字段可见）。实测共享机场
+#   节点出口常被别的客户端打到 429，而该 API 直连可达——故 config.yaml 的
+#   network.proxy.rules 给 api.trace.moe 配了 ${ARGO_TRACEMOE_PROXY}（未设置即直连）。
+#
+# 结果形态：上游只给作品名/文件名/集数/时间点，不给「这张图出自哪一页」。url 槽
+#   填 AniList 作品页（下一步去哪儿查证的入口），不是宣称图源就是那一页。
+#
+# 路由形态：explicit_only —— 理由同 saucenao，只经显式调用。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine tracemoe --stage all --admit --write-doc
+
+engine_id: tracemoe
+type: tracemoe
+enabled: true
+explicit_only: true
+cost_tier: free
+timeout: 20
+min_similarity: 0.7
+canary_query: "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png"
+label: trace.moe 场景识别
+family: misc_vertical
+priority: 38
+
+coverage: [image, reverse_image]
+
+desc: trace.moe 动画场景识别（query 为图片 URL，免 key，给作品名+集数+时间点，按出口 IP 限频）

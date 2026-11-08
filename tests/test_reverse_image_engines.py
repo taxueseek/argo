@@ -400,19 +400,123 @@ class TestGoogleLens(unittest.TestCase):
         self.assertIn("Invalid API key", out[0]["error"])
 
 
+class TestTracemoe(unittest.TestCase):
+    def test_scene_mapped_to_anilist_entry(self):
+        payload = {
+            "quota": 100,
+            "quotaUsed": 1,
+            "frameCount": 1740428938,
+            "error": "",
+            "result": [{
+                "anilist": 918,
+                "filename": "[LAC][Gintama][116][DVDRip][720x540][x264_AAC].mp4",
+                "episode": 116,
+                "from": 759.7593,
+                "at": 764.7643,
+                "to": 766.099,
+                "duration": 1481.1049,
+                "similarity": 0.8099021762025123,
+                "video": "https://api.trace.moe/video/abc",
+                "image": "https://api.trace.moe/image/abc",
+            }],
+        }
+        eng = engines._BUILDERS["tracemoe"](_spec("tracemoe"))
+        with patch("engines_builders_reverse_image._tracemoe_get",
+                   return_value=json.dumps(payload)):
+            out = eng(_IMG, n=3)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["url"], "https://anilist.co/anime/918")
+        self.assertIn("81.0%", out[0]["snippet"])
+        self.assertIn("第 116 话", out[0]["snippet"])
+        self.assertIn("12:44", out[0]["snippet"])
+        self.assertEqual(out[0]["metadata"]["anilist_id"], 918)
+        self.assertEqual(out[0]["image_url"], "https://api.trace.moe/image/abc")
+        self.assertAlmostEqual(out[0]["score"], 0.8099, places=3)
+
+    def test_local_image_rejected_with_readable_error(self):
+        eng = engines._BUILDERS["tracemoe"](_spec("tracemoe"))
+        out = eng("C:/no/such/dir/pic.png", n=3)
+        self.assertIn("只收公网图片 URL", out[0]["error"])
+        self.assertEqual(out[0]["source"], "tracemoe")
+
+    def test_upstream_error_surfaces_as_error_entry(self):
+        payload = {"error": "Failed to fetch image", "quota": 100, "quotaUsed": 2}
+        eng = engines._BUILDERS["tracemoe"](_spec("tracemoe"))
+        with patch("engines_builders_reverse_image._tracemoe_get",
+                   return_value=json.dumps(payload)):
+            out = eng(_IMG, n=3)
+        self.assertEqual(len(out), 1)
+        self.assertIn("Failed to fetch image", out[0]["error"])
+        self.assertEqual(out[0]["source"], "tracemoe")
+
+    def test_low_similarity_filtered(self):
+        payload = {
+            "quota": 100,
+            "quotaUsed": 1,
+            "error": "",
+            "result": [
+                {"anilist": 1, "filename": "a.mp4", "episode": 1,
+                 "similarity": 0.5, "image": "https://api.trace.moe/image/a"},
+                {"anilist": 2, "filename": "b.mp4", "episode": 2,
+                 "similarity": 0.9, "image": "https://api.trace.moe/image/b"},
+            ],
+        }
+        eng = engines._BUILDERS["tracemoe"](_spec("tracemoe", min_similarity=0.7))
+        with patch("engines_builders_reverse_image._tracemoe_get",
+                   return_value=json.dumps(payload)):
+            out = eng(_IMG, n=3)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["metadata"]["anilist_id"], 2)
+
+    def test_duplicate_anilist_ids_collapsed(self):
+        payload = {
+            "quota": 100,
+            "quotaUsed": 1,
+            "error": "",
+            "result": [
+                {"anilist": 918, "filename": "a.mp4", "episode": 1,
+                 "similarity": 0.9, "image": "https://api.trace.moe/image/a"},
+                {"anilist": 918, "filename": "b.mp4", "episode": 2,
+                 "similarity": 0.85, "image": "https://api.trace.moe/image/b"},
+            ],
+        }
+        eng = engines._BUILDERS["tracemoe"](_spec("tracemoe"))
+        with patch("engines_builders_reverse_image._tracemoe_get",
+                   return_value=json.dumps(payload)):
+            out = eng(_IMG, n=5)
+        self.assertEqual(len(out), 1)
+
+    def test_quota_fields_in_metadata(self):
+        payload = {
+            "quota": 100,
+            "quotaUsed": 42,
+            "error": "",
+            "result": [{
+                "anilist": 918, "filename": "a.mp4", "episode": 1,
+                "similarity": 0.9, "image": "https://api.trace.moe/image/a",
+            }],
+        }
+        eng = engines._BUILDERS["tracemoe"](_spec("tracemoe"))
+        with patch("engines_builders_reverse_image._tracemoe_get",
+                   return_value=json.dumps(payload)):
+            out = eng(_IMG, n=3)
+        self.assertEqual(out[0]["metadata"]["quota"], 100)
+        self.assertEqual(out[0]["metadata"]["quota_used"], 42)
+
+
 class TestUrlInputEngines(unittest.TestCase):
     def test_engine_set_covers_all_url_extract_engines(self):
-        # URL 输入引擎含单条推文抽取；反搜图集合只收「图 → 出处页」的三条。
+        # URL 输入引擎含单条推文抽取；反搜图集合只收「图 → 出处页」的四条。
         self.assertIn("twitter_syndication", plan.URL_INPUT_ENGINES)
         self.assertNotIn("twitter_syndication", plan.REVERSE_IMAGE_ENGINES)
-        for name in ("saucenao", "animetrace", "google_lens"):
+        for name in ("saucenao", "animetrace", "google_lens", "tracemoe"):
             self.assertIn(name, plan.URL_INPUT_ENGINES)
             self.assertIn(name, plan.REVERSE_IMAGE_ENGINES)
 
     def test_registered_in_builders_and_families(self):
         from engine_families import family_of
 
-        for name in ("saucenao", "animetrace", "google_lens"):
+        for name in ("saucenao", "animetrace", "google_lens", "tracemoe"):
             self.assertIn(name, engines._BUILDERS)
             self.assertEqual(family_of(name), "misc_vertical")
 

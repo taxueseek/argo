@@ -75,12 +75,13 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "so": "web_general",
     # 批次十（2026-09-26）：bing_rss 是 local_bing 的 RSS 稳定出口。
     "bing_rss": "web_general",
-    # 反搜图三条（SauceNAO / AnimeTrace / Google Lens）都吃图片 URL：
-    # SauceNAO 查二次元图源，AnimeTrace 认动漫角色，Google Lens 查通用视觉同源；
-    # 归 misc_vertical。
+    # 反搜图四条（SauceNAO / AnimeTrace / Google Lens / trace.moe）都吃图片 URL：
+    # SauceNAO 查二次元图源，AnimeTrace 认动漫角色，Google Lens 查通用视觉同源，
+    # trace.moe 认动画场景（作品+集数+时间点）；归 misc_vertical。
     "saucenao": "misc_vertical",
     "animetrace": "misc_vertical",
     "google_lens": "misc_vertical",
+    "tracemoe": "misc_vertical",
     # 学术
     "arxiv": "academic",
     "openalex": "academic",
