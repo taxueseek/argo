@@ -9,6 +9,10 @@ enabled: true
 cost_tier: free
 timeout: 15
 canary_query: "pop"
+# 词面门豁免：收听趋势榜是固定榜单（sitewide/artists?range=week），查询词
+# 按设计不参与过滤（实测 "test"/"pop" 同榜）；榜单内容是艺人名，对任何
+# 查询词都天然零词面交集
+relevance_check: false
 desc: "音乐收听趋势榜（ListenBrainz，免认证）"
 coverage: [media, music, statistics]
 recommended: false

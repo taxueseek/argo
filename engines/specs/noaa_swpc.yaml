@@ -10,6 +10,9 @@ enabled: true
 cost_tier: free
 timeout: 15
 canary_query: "solar"
+# 词面门豁免：Kp 指数/太阳活动区是固定观测数据（builder 不读 query），
+# 标题中文化（「太阳活动区 N」）对英文查询词天然零词面交集
+relevance_check: false
 desc: "空间天气（NOAA SWPC，Kp 指数/太阳活动区，官方免认证）"
 coverage: [astronomy, space, science, official]
 recommended: false

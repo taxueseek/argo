@@ -1145,7 +1145,15 @@ def _build_satnogs_engine(spec: dict[str, Any]) -> Any:
         q = (query or "").strip()
         if not q:
             return []
-        url = f"https://db.satnogs.org/api/satellites/?format=json&search={urllib.parse.quote(q)}&limit={n}"
+        # 上游 search/name 过滤已失效（实测 2026-11-08：search=ISS 返回固定
+        # 列表 TRANSIT 5B-5 等），唯一有效过滤是 norad_cat_id 精确匹配。
+        # 查询为 3-6 位数字时按 NORAD ID 精确查（真搜索）；其余查询上游
+        # 无从过滤，返回默认列表（候选池，spec 已声明 relevance_check: false）。
+        if q.isdigit() and 3 <= len(q) <= 6:
+            url = (f"https://db.satnogs.org/api/satellites/?format=json"
+                   f"&norad_cat_id={urllib.parse.quote(q)}")
+        else:
+            url = f"https://db.satnogs.org/api/satellites/?format=json&limit={n}"
         try:
             data = _json(url, to, spec.get("_name", ""))
         except Exception as e:

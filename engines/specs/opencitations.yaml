@@ -28,11 +28,14 @@ period: second
 cost_per_call: 0.0
 cost_unit: free
 method: GET
-url: https://opencitations.net/index/api/v1/citation-count/{query}
+url: https://api.opencitations.net/index/v1/citation-count/{query}
 query_param: ""
 timeout: 12
 format: json
 canary_query: "10.1038/nature12373"
+# 词面门豁免：计数型源（输入 DOI → 输出引用计数），输出不含输入词元，
+# title 只可能是数字（实测 count=1806）——对词面判据结构性不可见
+relevance_check: false
 coverage:
 - academic
 - citation

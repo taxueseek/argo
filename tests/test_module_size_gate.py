@@ -56,7 +56,9 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
               "2026-09-28 −36：bocha_ai 模态卡特化移除（_BOCHA_CARD_NAMES 类型表/"
               "_flatten_card helper/卡分支，非 webpage 消息一律跳过）"),
     "scripts/engines_builders_batch9.py": (
-        1468, "批次九的源声明构建器，逐源一段；与既有构建器同形，拆开不减少概念"),
+        1476, "批次九的源声明构建器，逐源一段；与既有构建器同形，拆开不减少概念；"
+              "2026-11-08 +8：satnogs 上游 search/name 过滤失效，改 NORAD ID 精确查"
+              "与默认列表分流（+5 分支 +3 注释）"),
     "scripts/engines_builders_intl.py": (
         1242, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异；"
               "2026-09-29 +19：open_meteo 多 place forecast 并行化（串行 9.28s → "

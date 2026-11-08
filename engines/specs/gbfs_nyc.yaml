@@ -14,6 +14,9 @@ url: https://gbfs.citibikenyc.com/gbfs/en/station_information.json
 timeout: 15
 query_param: ""
 canary_query: "bike"
+# 词面门豁免：站点列表是固定 GBFS 快照（url 无查询参数），item_title 是
+# 站名（「3 Ave & E 109 St」），对 bike share 类查询天然零词面交集
+relevance_check: false
 desc: "GBFS 共享单车站点（NYC Citi Bike，通用规范，免认证）"
 coverage: [transport, geo, realtime, open_data]
 recommended: false

@@ -17,6 +17,8 @@ recommended: false
 latency_ms: 3000
 
 # DOI 必须真实存在：API 无记录时引擎诚实返回空，canary 会因此失败。
+# 本机网络对 api.biorxiv.org 间歇 SSL 阻断（2026-11-08 实测 connection-failed
+# 与直连 200 交替出现）：引擎代码无病，属环境类 flapper，熔断器自动处理。
 # 精确查询空结果会触发 recovery 救援链换通用源补位，属编排层既有行为。
 
 quality_queries:

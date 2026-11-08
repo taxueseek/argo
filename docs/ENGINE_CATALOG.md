@@ -401,7 +401,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_openstreetmap` | 可直接用 | 免费 | 不限 | — | 域 geo_places、语义画像命中 | Nominatim 地理编码/地点搜索（OSM，免认证，须带 User-Agent） |
 | `nasa_cmr` | 可直接用 | 免费 | 不限 | — | 域 earth_science | NASA CMR 地球科学数据目录（MODIS/遥感，cmr.earthdata.nasa.gov 免认证） |
 | `noaa_swpc` | 可直接用 | 免费 | 不限 | — | 域 astro_space | 空间天气（NOAA SWPC，Kp 指数/太阳活动区，官方免认证） |
-| `satnogs` | 可直接用 | 免费 | 不限 | — | 域 astro_space | 卫星目录（SatNOGS DB，NORAD ID/发射信息，免认证） |
+| `satnogs` | 可直接用 | 免费 | 不限 | — | 域 astro_space | 卫星目录（SatNOGS DB，NORAD ID 精确查/默认列表，免认证；上游搜索过滤已失效） |
 | `tle_mirror` | 可直接用 | 免费 | 不限 | — | 域 astro_space | TLE 轨道根数镜像（第三方，Celestrak 不可达时替代，免认证） |
 | `usgs` | 可直接用 | 免费 | 不限 | — | 域 earth_science | USGS 地震目录（最近 30 天 M2.5+，earthquake.usgs.gov 免认证） |
 | `soilgrids` | 已停用 | 免费 | 不限 | — | 域 earth_science、域 soil_agri | 全球土壤属性（ISRIC SoilGrids，逐点栅格，免认证） |
