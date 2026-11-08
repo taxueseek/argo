@@ -54,6 +54,10 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         for k in ("image_url", "image_url_preview", "image_license"):
             if r.get(k):
                 item[k] = r[k]
+        # 作者/标签/相似度：多作者混排与「相似≠同一作品」的判断全靠这三条
+        for k in ("author", "similarity", "tags"):
+            if r.get(k):
+                item[k] = r[k]
         # 双通道引擎（同一引擎名背后有两条取数通路）标出本条结果实际走的通道，
         # 排查「匿名档拿不到认证后内容」时靠这一条区分，不留就只能看原始日志。
         if r.get("channel"):

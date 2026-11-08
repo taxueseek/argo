@@ -245,6 +245,8 @@ def _result_row(
         "title": title[:200],
         "url": f"https://www.pixiv.net/artworks/{illust_id}",
         "snippet": " · ".join(bit for bit in snippet_bits if bit)[:300],
+        "author": author[:50],
+        "tags": tags[:6],
         "source": engine,
         "channel": channel,
         "score": rank_score(0.8, index),

@@ -305,6 +305,15 @@ def test_r18_is_filtered_by_default_on_both_channels(monkeypatch):
     assert [row["url"] for row in app_results] == ["https://www.pixiv.net/artworks/1"]
 
 
+def test_row_carries_author_and_tags(monkeypatch):
+    """作者与标签要有结构化字段：下游按条目标注作者，多作者混排时模型不会张冠李戴。"""
+    item = _app_item("9")
+    item["tags"] = [{"name": "初音ミク"}, {"name": "VOCALOID"}, {"name": "R-18"}]
+    _, results = _run_app(monkeypatch, [item])
+    assert results[0]["author"] == "测试作者"
+    assert results[0]["tags"] == ["初音ミク", "VOCALOID"]
+
+
 def test_r18_tag_is_filtered_from_snippet(monkeypatch):
     """R-18 作为标签名出现时不得进 snippet（bot 会复述标签）。即使内容放行，分级标签也要过滤。"""
     monkeypatch.setattr(
