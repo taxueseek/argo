@@ -113,7 +113,8 @@ def test_repeated_failure_opens_breaker_and_stops_calling_network(breaker, with_
     assert statuses[:2] == ["fallback", "fallback"], statuses
     assert statuses[2:] == ["skipped_circuit_open"] * 3, statuses
     assert len(calls) == 2, f"熔断后仍在打网：{len(calls)} 次"
-    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "open"
+    # 403 归因 auth：连续 2 次即直达 disabled（89af6df），不再停在 open 阶梯
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "disabled"
 
 
 def test_breaker_state_is_persisted_for_next_process(breaker, with_key):
@@ -128,7 +129,8 @@ def test_breaker_state_is_persisted_for_next_process(breaker, with_key):
     on_disk = json.loads(Path(breaker._path).read_text(encoding="utf-8"))
     entry = on_disk["engines"].get(search_rank._RERANK_BREAKER_KEY)
     assert entry, "rerank 熔断态未落盘，下个 CLI 进程会重犯同一笔开销"
-    assert entry["state"] == "open"
+    assert entry["state"] == "disabled"
+    assert entry["auth_disabled"] is True
     assert entry["last_attribution"]["category"] == "auth", entry["last_attribution"]
 
 
@@ -140,20 +142,20 @@ def test_success_closes_breaker(breaker, with_key):
     with patch("net_proxy.open_url", _fail):
         search.rerank_results("q", _docs())
         search.rerank_results("q", _docs())
-    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "open"
+    assert breaker.status(search_rank._RERANK_BREAKER_KEY)["state"] == "disabled"
 
     ok = {"data": {"results": [{"index": 0, "relevance_score": 0.9}]}}
     with patch("net_proxy.open_url", lambda req, timeout=None: _OkResp(ok)):
         # 冷却期未过时仍被拦（allow 返回 False）——这是设计行为
         assert search.rerank_results("q", _docs())[1] == "skipped_circuit_open"
 
-    # 把 opened_at 拨回冷却期之前，走**真实的**半开探测路径（不等 60s，
+    # 把 disabled_at 拨回 1h 冷却之前，走**真实的**半开探测路径（不等 1h，
     # 也不用 reenable 抄近路——那会把要验证的状态机整段跳过）。
     # 经 `_mutate_locked` 落盘而不是手调 `_save`：状态写入的唯一入口就是它
     # （2026-09-27 起 `_save` 已删除，裸写会绕过重读-改-写序列）。
     def _rewind() -> None:
         st = breaker._engines[search_rank._RERANK_BREAKER_KEY]
-        st["opened_at"] = time.time() - circuit_breaker.OPEN_SECONDS - 1
+        st["disabled_at"] = time.time() - circuit_breaker.DISABLE_COOLDOWN_SECONDS - 1
         breaker._engines[search_rank._RERANK_BREAKER_KEY] = st
 
     breaker._mutate_locked(_rewind)

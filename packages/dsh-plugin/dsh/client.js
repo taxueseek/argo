@@ -306,31 +306,40 @@ window.__ModuleLoader__.load({
       { id: 'forensics', zh: '取证', en: 'Forensics', tools: ['argo_search', 'argo_fetch', 'argo_crawl', 'argo_pdf', 'argo_screenshot', 'argo_extract'], descZh: '整站/多页/PDF 留档', descEn: 'Site/multi-page/PDF archiving' },
     ];
 
+    // <generated:keys> 由 scripts/sync_backends.py 从引擎声明生成，勿手改
     const KEYS = [
-      { ref: 'DEEPSEEK_API_KEY', common: true, zh: 'DeepSeek 官方搜索', en: 'DeepSeek official search' },
-      { ref: 'ARGO_YUANBAO_API_KEY', common: true, zh: '腾讯元宝搜索', en: 'Tencent Yuanbao' },
-      { ref: 'TAVILY_API_KEY', common: true, zh: 'Tavily', en: 'Tavily' },
-      { ref: 'EXA_API_KEY', common: true, zh: 'Exa', en: 'Exa' },
-      { ref: 'BOCHA_API_KEY', common: true, zh: '博查', en: 'Bocha' },
-      { ref: 'BRAVE_API_KEY', common: true, zh: 'Brave Search', en: 'Brave Search' },
-      { ref: 'TINYFISH_API_KEY', common: true, zh: 'TinyFish（抓取渲染）', en: 'TinyFish (fetch render)' },
-      { ref: 'WEB_SEARCH_API_KEY', zh: '火山 / ByteDance', en: 'ByteDance search' },
-      { ref: 'OCTEN_API_KEY', zh: 'Octen', en: 'Octen' },
-      { ref: 'FELO_API_KEY', zh: 'Felo', en: 'Felo' },
-      { ref: 'METASO_API_KEY', zh: '秘塔 Metaso', en: 'Metaso' },
-      { ref: 'ANYSEARCH_API_KEY', zh: 'AnySearch（可选）', en: 'AnySearch (optional)' },
-      { ref: 'FIRECRAWL_API_KEY', zh: 'Firecrawl（可选，有免费层）', en: 'Firecrawl (optional, free tier)' },
-      { ref: 'WEREAD_API_KEY', zh: '微信读书', en: 'WeRead' },
-      { ref: 'GITHUB_TOKEN', zh: 'GitHub（仅提高限频）', en: 'GitHub (rate limit)' },
-      { ref: 'ZHIHU_ACCESS_SECRET', zh: '知乎', en: 'Zhihu' },
-      { ref: 'PARALLEL_API_KEY', zh: 'Parallel', en: 'Parallel' },
-      { ref: 'SELTZ_API_KEY', zh: 'Seltz', en: 'Seltz' },
-      { ref: 'YDC_API_KEY', zh: 'You.com', en: 'You.com' },
-      { ref: 'EASTMONEY_APIKEY', zh: '东财妙想', en: 'Eastmoney Miaoxiang' },
-      { ref: 'WOLFRAM_APPID', zh: 'Wolfram Alpha', en: 'Wolfram Alpha' },
-      { ref: 'QWEATHER_KEY', zh: '和风天气', en: 'QWeather' },
-      { ref: 'UNPAYWALL_EMAIL', zh: 'Unpaywall 邮箱（非密钥）', en: 'Unpaywall email (not secret)' },
+      { ref: "DEEPSEEK_API_KEY", common: true, label: "DeepSeek Search", en: "DeepSeek Search", engines: ["deepseek_search"] },
+      { ref: "ARGO_YUANBAO_API_KEY", common: true, label: "腾讯元宝搜索", en: "Tencent Yuanbao", engines: ["yuanbao"] },
+      { ref: "TAVILY_API_KEY", common: true, label: "Tavily", en: "Tavily", engines: ["tavily"] },
+      { ref: "EXA_API_KEY", common: true, label: "Exa语义搜索", en: "Exa Semantic Search", engines: ["exa"] },
+      { ref: "BOCHA_API_KEY", common: true, label: "博查搜索", en: "Bocha Search", engines: ["bocha", "bocha_ai"] },
+      { ref: "BRAVE_API_KEY", common: true, label: "Brave", en: "Brave Search", engines: ["brave"] },
+      { ref: "TINYFISH_API_KEY", common: true, label: "TinyFish 实时搜索", en: "TinyFish Live Search", engines: ["tinyfish", "tinyfish_news", "tinyfish_paper"] },
+      { ref: "ANYSEARCH_API_KEY", common: false, label: "AnySearch", en: "AnySearch", engines: ["anysearch"] },
+      { ref: "ARGO_PIXIV_REFRESH_TOKEN", common: false, label: "Pixiv 公开作品", en: "Pixiv App OAuth", engines: ["pixiv"] },
+      { ref: "EASTMONEY_APIKEY", common: false, label: "东财妙想", en: "Eastmoney Miaoxiang", engines: ["em_miaoxiang"] },
+      { ref: "FELO_API_KEY", common: false, label: "Felo AI搜索", en: "Felo AI Search", engines: ["felo"] },
+      { ref: "FIRECRAWL_API_KEY", common: false, label: "Firecrawl", en: "Firecrawl", engines: ["firecrawl"] },
+      { ref: "GITHUB_TOKEN", common: false, label: "GitHub", en: "GitHub", engines: ["github"] },
+      { ref: "KEENABLE_API_KEY", common: false, label: "Keenable", en: "Keenable", engines: ["keenable"] },
+      { ref: "METASO_API_KEY", common: false, label: "秘塔", en: "Metaso", engines: ["metaso", "metaso_doc", "metaso_image", "metaso_podcast", "metaso_scholar", "metaso_video"] },
+      { ref: "OCTEN_API_KEY", common: false, label: "Octen", en: "Octen", engines: ["octen"] },
+      { ref: "OPENCORPORATES_API_TOKEN", common: false, label: "OpenCorporates 公司注册", en: "OpenCorporates", engines: ["opencorporates"] },
+      { ref: "PARALLEL_API_KEY", common: false, label: "Parallel搜索", en: "Parallel Search", engines: ["parallel"] },
+      { ref: "QWEATHER_KEY", common: false, label: "和风天气", en: "QWeather", engines: ["qweather"] },
+      { ref: "SAUCENAO_API_KEY", common: false, label: "SauceNAO 反搜图", en: "SauceNAO Reverse Image", engines: ["saucenao"] },
+      { ref: "SCIVERSE_API_TOKEN", common: false, label: "Sciverse（题录）", en: "Sciverse", engines: ["sciverse"] },
+      { ref: "SEARXNG_URL", common: false, label: "SearXNG", en: "SearXNG", engines: ["searxng"] },
+      { ref: "SELTZ_API_KEY", common: false, label: "Seltz搜索", en: "Seltz Search", engines: ["seltz"] },
+      { ref: "SERPAPI_API_KEY", common: false, label: "Google Lens 反搜图", en: "Google Lens (SerpAPI)", engines: ["google_lens"] },
+      { ref: "UNPAYWALL_EMAIL", common: false, label: "Unpaywall 开放获取定位", en: "Unpaywall Open Access", engines: ["unpaywall"] },
+      { ref: "WEB_SEARCH_API_KEY", common: false, label: "字节搜索", en: "ByteDance Search", engines: ["byted"] },
+      { ref: "WEREAD_API_KEY", common: false, label: "微信读书", en: "WeRead", engines: ["weread"] },
+      { ref: "WOLFRAM_APPID", common: false, label: "WolframAlpha", en: "WolframAlpha", engines: ["wolframalpha"] },
+      { ref: "YDC_API_KEY", common: false, label: "You.com搜索", en: "You.com Search", engines: ["you"] },
+      { ref: "ZHIHU_ACCESS_SECRET", common: false, label: "知乎", en: "Zhihu", engines: ["zhihu", "zhihu_global", "zhihu_hot", "zhihu_user"] },
     ];
+    // </generated:keys>
 
     const CORE_ENGINES = [
       { id: 'deepseek', nameZh: 'DeepSeek 搜索', nameEn: 'DeepSeek Search', roleZh: '通用搜索 / 官方对齐', roleEn: 'General / Official Seam', ref: 'DEEPSEEK_API_KEY', keyless: false },
@@ -389,136 +398,74 @@ window.__ModuleLoader__.load({
     const ENV_NAMES = new Set(ENGINE_TOGGLES.map((spec) => spec.name));
 
     const DEFAULTS = {
-      searchCommand: 'npx',
-      searchArgs: ['-y', 'github:taxueseek/argo'],
-      searchTimeoutMs: 30000,
-      fetchTimeoutMs: 25000,
-      fetchMaxChars: 50000,
-      searchIdleMs: 60000,
-      searchConcurrency: 3,
-      nativeTimeoutMs: 60000,
-      nativeMaxChars: 24000,
-      defaultWorkers: 6,
-      maxWorkers: 9,
-      maxTracks: 9,
-      maxSourcesPerTrack: 5,
-      workerMaxTokens: 5000,
-      synthesisMaxTokens: 7000,
-      reportDir: '',
+      searchCommand: 'npx', searchArgs: ['-y', 'github:taxueseek/argo'],
+      searchTimeoutMs: 30000, fetchTimeoutMs: 25000, fetchMaxChars: 50000,
+      searchIdleMs: 60000, searchConcurrency: 3, nativeTimeoutMs: 60000, nativeMaxChars: 24000,
+      defaultWorkers: 6, maxWorkers: 9, maxTracks: 9, maxSourcesPerTrack: 5,
+      workerMaxTokens: 5000, synthesisMaxTokens: 7000, reportDir: '',
     };
 
     const S = {
-      wrap: {
-        display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 800,
-        color: 'var(--dsw-alias-label-primary, #1f2328)',
-      },
+      wrap: { display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 800, color: 'var(--dsw-alias-label-primary, #1f2328)' },
       title: { margin: 0, fontSize: 18, fontWeight: 600, lineHeight: '26px' },
       hint: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary, #7b818b)' },
       notice: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-state-business-primary, #3b6ef6)' },
       error: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-state-error-primary, #d1242f)' },
-      tabs: {
-        display: 'flex', gap: 2, flexWrap: 'wrap',
-        borderBottom: '.5px solid var(--dsw-alias-border-l2, #e5e7eb)',
-      },
+      tabs: { display: 'flex', gap: 2, flexWrap: 'wrap', borderBottom: '.5px solid var(--dsw-alias-border-l2, #e5e7eb)' },
       tab: (active) => ({
         padding: '7px 12px 9px', border: 0, background: 'transparent', cursor: 'pointer',
-        font: 'inherit', fontSize: 13, lineHeight: '20px', color: active
-          ? 'var(--dsw-alias-label-primary, #1f2328)'
-          : 'var(--dsw-alias-label-tertiary, #7b818b)',
+        font: 'inherit', fontSize: 13, lineHeight: '20px', marginBottom: -1,
+        color: active ? 'var(--dsw-alias-label-primary, #1f2328)' : 'var(--dsw-alias-label-tertiary, #7b818b)',
         borderBottom: active ? '2px solid var(--dsw-alias-state-business-primary, #3b6ef6)' : '2px solid transparent',
-        marginBottom: -1,
       }),
-      card: {
-        display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px',
-        borderRadius: 12, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
-        background: 'var(--dsw-alias-settings-card-fill, #fff)',
-      },
+      card: { display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 12, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-settings-card-fill, #fff)' },
       cardTitle: { margin: 0, fontSize: 14, fontWeight: 600, lineHeight: '20px' },
       row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
       field: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
       label: { fontSize: 13, fontWeight: 500, lineHeight: '18px' },
       sub: { fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary, #7b818b)' },
-      input: {
-        width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 13, lineHeight: '20px',
-        padding: '7px 9px', borderRadius: 8,
-        border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit',
-      },
+      input: { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 13, lineHeight: '20px', padding: '7px 9px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit' },
       mono: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 },
       textarea: { minHeight: 64, resize: 'vertical' },
       grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 },
       toolGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 6 },
       check: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' },
-      btn: {
-        padding: '6px 12px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', font: 'inherit',
-        fontSize: 12, lineHeight: '18px', cursor: 'pointer',
-      },
-      btnPrimary: {
-        padding: '6px 14px', borderRadius: 8, border: '.5px solid var(--dsw-alias-state-business-primary, #3b6ef6)',
-        background: 'var(--dsw-alias-state-business-primary, #3b6ef6)', color: '#fff', font: 'inherit',
-        fontSize: 12, lineHeight: '18px', cursor: 'pointer',
-      },
+      btn: { padding: '6px 12px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', font: 'inherit', fontSize: 12, lineHeight: '18px', cursor: 'pointer' },
+      btnPrimary: { padding: '6px 14px', borderRadius: 8, border: '.5px solid var(--dsw-alias-state-business-primary, #3b6ef6)', background: 'var(--dsw-alias-state-business-primary, #3b6ef6)', color: '#fff', font: 'inherit', fontSize: 12, lineHeight: '18px', cursor: 'pointer' },
       chip: (on) => ({
-        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px',
-        borderRadius: 999, fontSize: 11, lineHeight: '16px',
+        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 999, fontSize: 11, lineHeight: '16px', background: 'transparent',
         border: '.5px solid ' + (on ? 'var(--dsw-alias-state-business-primary, #3b6ef6)' : 'var(--dsw-alias-border-l3, #e5e7eb)'),
         color: on ? 'var(--dsw-alias-state-business-primary, #3b6ef6)' : 'var(--dsw-alias-label-tertiary, #7b818b)',
-        background: 'transparent',
       }),
       status: { margin: 0, fontSize: 12, minHeight: 18, lineHeight: '18px' },
-      keyRow: {
-        display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(0, 1.5fr)', gap: 10,
-        alignItems: 'start', padding: '10px 0',
-        borderTop: '.5px solid var(--dsw-alias-border-l2, #eee)',
-      },
+      keyRow: { display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'start', padding: '10px 0', borderTop: '.5px solid var(--dsw-alias-border-l2, #eee)' },
       keyHead: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
       code: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, color: 'var(--dsw-alias-label-tertiary, #7b818b)' },
-      dot: (on) => ({
-        display: 'inline-block', width: 6, height: 6, borderRadius: 999,
-        background: on ? '#2da44e' : 'var(--dsw-alias-border-l4, #d0d7de)',
-        marginRight: 5,
-      }),
+      dot: (on) => ({ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: on ? '#2da44e' : 'var(--dsw-alias-border-l4, #d0d7de)', marginRight: 5 }),
       actions: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
       switchWrap: { display: 'flex', alignItems: 'center', gap: 8 },
       divider: { height: '.5px', background: 'var(--dsw-alias-border-l2, #eee)', margin: '2px 0' },
       metricGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 },
-      metricCard: {
-        display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
-        borderRadius: 10, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
-        background: 'var(--dsw-alias-bg-layer-2, #f8fafc)',
-      },
+      metricCard: { display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px', borderRadius: 10, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-bg-layer-2, #f8fafc)' },
       metricLabel: { fontSize: 11, fontWeight: 500, color: 'var(--dsw-alias-label-tertiary, #7b818b)', textTransform: 'uppercase', letterSpacing: '0.04em' },
       metricValue: { fontSize: 18, fontWeight: 600, lineHeight: '22px', color: 'var(--dsw-alias-label-primary, #1f2328)' },
       metricSub: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-secondary, #4b5563)' },
       presetGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 },
       presetCard: (active) => ({
-        display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px',
-        borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+        display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
         border: active ? '1.5px solid var(--dsw-alias-state-business-primary, #3b6ef6)' : '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
         background: active ? 'var(--dsw-alias-bg-layer-1, #fff)' : 'var(--dsw-alias-settings-card-fill, #fff)',
         boxShadow: active ? '0 1px 3px rgba(59, 110, 246, 0.12)' : 'none',
       }),
       matrixGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 },
-      matrixCard: {
-        display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px',
-        borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)',
-      },
+      matrixCard: { display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-bg-layer-1, #fff)' },
       badge: (color) => ({
-        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-        borderRadius: 999, fontSize: 10, fontWeight: 500, lineHeight: '14px',
+        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, lineHeight: '14px',
         background: color === 'green' ? 'rgba(46, 160, 67, 0.12)' : (color === 'blue' ? 'rgba(59, 110, 246, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
         color: color === 'green' ? '#2da44e' : (color === 'blue' ? '#3b6ef6' : '#64748b'),
         border: '.5px solid ' + (color === 'green' ? '#2da44e' : (color === 'blue' ? '#3b6ef6' : '#64748b')),
       }),
-      filterInput: {
-        width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 12, lineHeight: '18px',
-        padding: '6px 10px', borderRadius: 8,
-        border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)',
-        background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit',
-        marginBottom: 8,
-      },
+      filterInput: { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 12, lineHeight: '18px', padding: '6px 10px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', marginBottom: 8 },
     };
 
     function asString(value, fallback) {
@@ -1049,7 +996,7 @@ window.__ModuleLoader__.load({
           h('div', { key: 'head', style: S.keyHead }, [
             h('span', { key: 'n', style: S.label }, [
               h('span', { key: 'dot', style: S.dot(configured) }),
-              lang === 'en' ? entry.en : entry.zh,
+              lang === 'en' ? (entry.en || entry.label) : entry.label,
             ]),
             h('span', { key: 'ref', style: S.code }, entry.ref),
             h('span', { key: 's', style: S.sub }, statusParts.join(' · ')),
@@ -1421,7 +1368,7 @@ window.__ModuleLoader__.load({
       if (tab === 'keys') {
         const query = keyFilter.trim().toLowerCase();
         const displayKeys = query
-          ? KEYS.filter((entry) => entry.ref.toLowerCase().includes(query) || (entry.zh && entry.zh.toLowerCase().includes(query)) || (entry.en && entry.en.toLowerCase().includes(query)))
+          ? KEYS.filter((entry) => entry.ref.toLowerCase().includes(query) || entry.label.toLowerCase().includes(query) || (entry.en && entry.en.toLowerCase().includes(query)) || entry.engines.some((id) => id.includes(query)))
           : visibleKeys;
         panel.push(h(Card, { key: 'keys', title: t('keysTitle'), hint: t('keysHint') }, [
           h('input', {
@@ -1593,6 +1540,7 @@ window.__ModuleLoader__.load({
     exports.TOOLS = TOOLS;
     exports.TOOL_GROUPS = TOOL_GROUPS;
     exports.ENGINE_TOGGLES = ENGINE_TOGGLES;
+    exports.KEYS = KEYS;
 
     return module.exports;
   }

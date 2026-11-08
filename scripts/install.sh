@@ -165,13 +165,14 @@ if [[ "$SKIP_PIP" != "1" ]]; then
   fi
 fi
 
-# ── pre-commit 快门禁 hook（2026-10-16 流程洞实证后新增） ──────────────────
-# 背景：并发代理接线没跑测试，6 道门禁红 + 阻塞全量收集，故障在树里躺了几小时
-# 才被人工发现。拦截点放在提交层：只跑四道快门禁（~8s），全量回归留给手动。
-# 链式而非覆盖：hooks/pre-commit 可能已是 privacy-guard 等用户自有防线
-# （2026-10-17 实测本机就是），argo 门禁装成独立文件 pre-commit-argo，再向
-# 既有 hook 追一行调用（幂等：grep 到标记行才追加）。既有 hook 先exit 1 时
-# 我们的不会跑到——隐私/密钥防线优先，正确。
+# ── pre-commit 快门禁 hook（2026-10-16 流程洞实证后新增，2026-11-08 改调度器）──
+# 背景：并发代理接线没跑测试，6 道门禁红 + 阻塞全量收集。拦截点放在提交层。
+#
+# 2026-11-08 改法：旧版把 scripts/pre-commit 拷成 hooks/pre-commit-argo，再往既有
+# hook 末尾追一行调用。两处都会静默失效——既有 hook 以 `exit 0` 结尾时追加行永远
+# 跑不到（本机 privacy-guard 正是如此，10-17 到 11-08 门禁一次没跑过）；拷贝件也
+# 不随仓内门禁更新。现在 hooks/pre-commit 是一个调度器：先跑用户原有 hook（原样
+# 改名为 pre-commit.user，内容不动），失败即中止；再直接跑仓内 scripts/pre-commit。
 if command -v git >/dev/null 2>&1 && { [ -d "$INSTALL_DIR/.git" ] || [ -f "$INSTALL_DIR/.git" ]; }; then
   _common=$(cd "$INSTALL_DIR" && git rev-parse --git-common-dir 2>/dev/null || true)
   case "$_common" in
@@ -181,19 +182,45 @@ if command -v git >/dev/null 2>&1 && { [ -d "$INSTALL_DIR/.git" ] || [ -f "$INST
   esac
   if [ -n "$_common" ] && [ -d "$_common" ]; then
     _hooks_dir="$_common/hooks"
+    _hook="$_hooks_dir/pre-commit"
+    _marker="# argo-hook-dispatcher v2"
     mkdir -p "$_hooks_dir"
-    cp "$INSTALL_DIR/scripts/pre-commit" "$_hooks_dir/pre-commit-argo" \
-      && chmod +x "$_hooks_dir/pre-commit-argo" || {
-        echo "[warn] pre-commit-argo 安装失败（不影响 argo 本体使用）"
-      }
-    if [ ! -e "$_hooks_dir/pre-commit" ]; then
-      cp "$_hooks_dir/pre-commit-argo" "$_hooks_dir/pre-commit"
-      echo "==> 已装 pre-commit 快门禁 hook（~8s；git commit --no-verify 可跳过）"
-    elif grep -q "pre-commit-argo" "$_hooks_dir/pre-commit" 2>/dev/null; then
-      echo "==> pre-commit 已接入 argo 快门禁（无需重复追加）"
+    if [ -f "$_hook" ] && grep -qF "$_marker" "$_hook"; then
+      echo "==> pre-commit 调度器已就位（无需重装）"
     else
-      printf '\n# argo 快门禁（2026-10-17 追加；独立文件，删掉下面一行即可解链）\n[ -x "$(dirname "$0")/pre-commit-argo" ] && "$(dirname "$0")/pre-commit-argo"\n' >> "$_hooks_dir/pre-commit" \
-        && echo "==> argo 快门禁已链入既有 pre-commit（未覆盖你的 hook）"
+      if [ -f "$_hook" ] && grep -q "^# argo pre-commit 快门禁" "$_hook"; then
+        # 旧版无用户 hook 时直接 cp 了 pre-commit-argo：不是用户自定义 hook，直接替换
+        rm -f "$_hook"
+      elif [ -f "$_hook" ] && ! grep -q "pre-commit-argo" "$_hook"; then
+        mv "$_hook" "$_hooks_dir/pre-commit.user"
+      elif [ -f "$_hook" ]; then
+        # 旧版向用户 hook 末尾追加过调用行：安全剥离那两行（防 pipefail 因无剩余行退出）
+        { grep -v -e "pre-commit-argo" -e "# argo 快门禁（2026-10-17 追加" "$_hook" || true; } > "$_hooks_dir/pre-commit.user"
+        if grep -qE '^[[:space:]]*[^#[:space:]]' "$_hooks_dir/pre-commit.user"; then
+          chmod +x "$_hooks_dir/pre-commit.user"
+        else
+          rm -f "$_hooks_dir/pre-commit.user"
+        fi
+        rm -f "$_hook"
+      fi
+      rm -f "$_hooks_dir/pre-commit-argo"
+      cat > "$_hook" <<'ARGO_HOOK_EOF'
+#!/bin/sh
+# argo-hook-dispatcher v2（由 argo scripts/install.sh 生成）
+# 1) 用户原有 hook（pre-commit.user）先跑，非 0 即中止
+# 2) 再跑仓内 scripts/pre-commit 快门禁（直接调用，不拷贝，始终是当前版本）
+here=$(cd "$(dirname "$0")" && pwd)
+if [ -x "$here/pre-commit.user" ]; then
+  "$here/pre-commit.user" "$@" || exit $?
+fi
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 1
+if [ -f "$root/scripts/pre-commit" ]; then
+  exec sh "$root/scripts/pre-commit" "$@"
+fi
+exit 0
+ARGO_HOOK_EOF
+      chmod +x "$_hook"
+      echo "==> 已装 pre-commit 调度器（原有 hook 保留为 pre-commit.user；git commit --no-verify 可跳过）"
     fi
   fi
 fi

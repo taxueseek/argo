@@ -19,7 +19,7 @@ Local Search 是 argo 的「零成本兜底适配器」，用于：
 - **输出与主 skill 同 schema**：`results[]` / `engines_used` / `errors` / `elapsed_ms`，可直接进 evidence 与 RRF。
 - **`local_X` 与主清单的 `X` 是别名，不是备份**：`local_arxiv`/`local_crossref`/`local_semantic_scholar`/`local_github`/`local_npm`/`local_wikipedia`/`local_stackoverflow`/`local_google_news` 与主清单同名项**打同一个上游端点**（主清单走官方 API、这里走免密钥直取），不存在「API 挂了抓取版兜底」。同上游同格式由 `tests/test_local_search_registry.py` 锁定。
 
-### 本地引擎列表（30 个，28 个默认启用）
+### 本地引擎列表（30 个，27 个默认启用）
 
 | unified 名称 | 类型 | 默认启用 | 类别 | 说明 |
 |--------------|------|----------|------|------|
@@ -33,7 +33,7 @@ Local Search 是 argo 的「零成本兜底适配器」，用于：
 | local_360 | html | ✅ | chinese | 360 搜索 |
 | local_jisilu | html | ✅ | finance/chinese | 集思录 |
 | local_ddgs_news | cli(ddgs) | ✅ | news | ddgs news 默认后端（带日期） |
-| local_bing_news | rss | ✅ | news | Bing 新闻 RSS |
+| local_bing_news | rss | ❌ | news | Bing 新闻 RSS（上游已返 HTML，默认禁用） |
 | local_google_news | rss | ✅ | news | Google News RSS |
 | local_duckduckgo_news | cli(ddgs) | ✅ | news | ddgs news 备用后端 |
 | local_ddgs_images | cli(ddgs) | ✅ | images | ddgs images（bing TLS 偶发，已自动重试） |

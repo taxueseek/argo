@@ -32,23 +32,15 @@ set -a
 [ -f "$ENV_FILE" ] && . "$ENV_FILE"
 set +a
 
-# 透传名单单一真源：launchctl print 批量路径与 getenv 回退路径共用这一份
-# （与 engine_env.KNOWN_ENV_ALIASES 展开 + 代理变量对齐，
-# tests/test_launch_passthrough_alignment.py 锁两表一致，改名单两处同步）
-_ARGO_PASSTHROUGH_KEYS="ALL_PROXY ANYSEARCH_API_KEY ARGO_ANYSEARCH_API_KEY ARGO_BOCHA_API_KEY\
- ARGO_BRAVE_API_KEY ARGO_BYTED_API_KEY ARGO_EASTMONEY_APIKEY\
- ARGO_EXA_API_KEY ARGO_FELO_API_KEY ARGO_FIRECRAWL_API_KEY\
- ARGO_GITHUB_TOKEN ARGO_JEV_API_KEY ARGO_METASO_API_KEY\
- ARGO_OCTEN_API_KEY ARGO_PIXIV_REFRESH_TOKEN ARGO_PROXY ARGO_QWEATHER_KEY\
- ARGO_TAVILY_API_KEY TYPESAFE_API_KEY\
- ARGO_WEB_SEARCH_API_KEY ARGO_WEREAD_API_KEY\
- ARGO_WOLFRAM_APPID ARGO_YUANBAO_API_KEY ARGO_ZHIHU_ACCESS_SECRET\
- BOCHA_API_KEY BRAVE_API_KEY EASTMONEY_APIKEY EXA_API_KEY\
- FELO_API_KEY FIRECRAWL_API_KEY GITHUB_TOKEN HTTPS_PROXY\
- HTTP_PROXY METASO_API_KEY NO_PROXY OCTEN_API_KEY\
- QWEATHER_KEY TAVILY_API_KEY TENCENTCLOUD_WSA_APIKEY\
- WEB_SEARCH_API_KEY WEREAD_API_KEY WOLFRAM_APPID\
- YUANBAO_API_KEY ZHIHU_ACCESS_SECRET"
+# 透传名单：由 scripts/sync_backends.py 从引擎声明派生到 backends/env_passthrough.txt，
+# 本脚本只读不写。此前名单手写在这里，只和 KNOWN_ENV_ALIASES 对账，走
+# required_env/占位符声明的引擎（tinyfish、deepseek_search 等 12 个）一直漏透传。
+# 文件缺失时名单为空：env 文件与父环境照常生效，只是少了 launchctl 兜底一层。
+_ARGO_PT_FILE="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)/backends/env_passthrough.txt"
+_ARGO_PASSTHROUGH_KEYS=""
+if [ -f "$_ARGO_PT_FILE" ]; then
+  _ARGO_PASSTHROUGH_KEYS="$(grep -v '^[[:space:]]*#' "$_ARGO_PT_FILE" | tr -s '[:space:]' ' ')"
+fi
 
 # launchctl 兜底（macOS）：旧实现逐键 spawn `launchctl getenv`——实测每次
 # 4-20ms，名单里 ~30 个未设键让每个宿主会话白付百毫秒级纯开销。改为一次

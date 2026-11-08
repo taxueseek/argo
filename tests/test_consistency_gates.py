@@ -171,98 +171,54 @@ class TestDocNumbersMatchCode:
     README_VARIANTS = ("README.md", "README.en.md", "README.es.md",
                        "README.ja.md", "README.ko.md")
 
-    def test_engine_counts_agree_with_catalog(self):
-        """全部 README 变体的引擎数必须与搜索源文档（本身有检查）一致。
 
-        计算方式是声明计算方式：收录 N 个源、M 个免密钥开箱可用。运行时「此刻能路由
-        几个」随密钥与熔断状态变，不写进文档。
-        """
-        doc = (SKILL_DIR / "docs" / "ENGINE_CATALOG.md").read_text(encoding="utf-8")
-        m_doc = re.search(r"收录 (\d+) 个源", doc)
-        m_usable = re.search(r"开箱可用 (\d+) 个", doc)
-        assert m_doc and m_usable, "搜索源文档缺口径行"
-        total, usable = m_doc.group(1), m_usable.group(1)
-        for rel in ("SKILL.md", "README.md"):
-            text = (SKILL_DIR / rel).read_text(encoding="utf-8")
-            assert re.search(rf"{total} 个源", text), \
-                f"{rel} 未写收录数 {total}"
-            assert usable in text, f"{rel} 未写免密钥可用数 {usable}"
 
-    def test_english_readme_numbers_match_catalog(self):
-        """README.en.md 用英文计算方式（sources / usable with no key / domains），
-        正则不同于中文，历史上因此漏网。两处写法都要覆盖：
-        要点列表 `**N sources (M usable with no key), K domains**`
-        与正文 `**N** sources (**M** usable with no key) and **K** domains`。
+
+    def test_engine_counts_live_in_one_place(self):
+        """引擎数、免密钥数只在 ENGINE_CATALOG.md 与 counts.json 两处出现。
+
+        2026-11-08 前这两个数在 10 个文件 66 句话里各存一份，由六个测试逐份
+        对账；每加一个引擎就要改 10-20 个文件，门禁失效时副本立刻漂移。现在
+        正文不写当前数字，README 徽章读 counts.json，这里反向检查：别处一旦
+        又写进当前数字（「290 个源」「241 keyless」这类），立即报红。
         """
+        import json as _json
         total, usable = _catalog_counts()
-        domains = str(len(_domains()))
-        text = (SKILL_DIR / "README.en.md").read_text(encoding="utf-8")
-        bullet = re.search(
-            rf"\*\*{total} sources \({usable} usable with no key\), {domains} domains\*\*",
-            text)
-        prose = re.search(
-            rf"\*\*{total}\*\* sources \(\*\*{usable}\*\* usable with no key\) "
-            rf"and \*\*{domains}\*\* domains", text)
-        assert bullet, f"README.en.md 要点列表口径不符（应 {total}/{usable}/{domains}）"
-        assert prose, f"README.en.md 正文口径不符（应 {total}/{usable}/{domains}）"
-
-    def test_translated_readmes_numbers_match_catalog(self):
-        """es/ja/ko 的正文数字必须与搜索源文档一致（与中/英一致）。
-
-        此前检查只覆盖中文（test_engine_counts_agree_with_catalog，第 184 行
-        写死 ("SKILL.md","README.md")）与英文：es/ja/ko 的 220 fuentes /
-        89 dominios / 185 sin clave 三个数字全错，而同页徽章（受 test_badge_
-        numbers_match_truth 管）写的是正确的——检查全部通过，漂移只能靠人工发现。
-        语言变体是同一份对外承诺，必须同源同校。
-
-        反向检查用「数字 + 量词」的形式（如 `220 fuentes`）而非单个数字：
-        历史条目里的 `218 → 220 fuentes`（发布说明）是当时的真实数字，
-        必须留着，不能被误伤。
-        """
-        total, usable = _catalog_counts()
-        domains = str(len(_domains()))
-        patterns = {
-            "README.es.md": (f"{total} fuentes", f"{usable} sin clave",
-                             f"{domains} dominios"),
-            "README.ja.md": (f"{total} ソース", f"{usable} 無設定",
-                             f"{domains} ドメイン"),
-            "README.ko.md": (f"{total} 소스", f"{usable} 무설정",
-                             f"{domains} 도메인"),
-        }
-        stale_forms = {
-            "README.es.md": ("220 fuentes", "185 sin clave", "89 dominios"),
-            "README.ja.md": ("220 ソース", "185 無設定", "89 ドメイン"),
-            "README.ko.md": ("220 소스", "185 무설정", "89 도메인"),
-        }
+        badge = _json.loads((SKILL_DIR / "assets/readme/counts.json").read_text(encoding="utf-8"))
+        assert badge["message"] == total, f"counts.json 徽章 {badge['message']} ≠ 目录 {total}"
+        files = list(self.README_VARIANTS) + [
+            "SKILL.md", "package.json", "server.json", "packages/marketplace.json",
+            "packages/argo-zcode/.zcode-plugin/plugin.json",
+            "packages/argo-zcode/skills/argo/SKILL.md", "packages/dsh-plugin/README.md",
+            "docs/为什么选择argo.md", "docs/ARGO_INTRO.md", "AGENT_INSTALL_GUIDE.md"]
+        units = (r"个源|个搜索源|个数据源|个这样的源头|源|个免密钥|免密钥|个免配置|sources|keyless|fuentes|sin clave"
+                 r"|ソース|無設定|の検索ソース|개 소스|개의 검색 소스|소스|무설정")
+        strict_units = (r"个源|个搜索源|个数据源|个这样的源头|个免密钥|个免配置|sources|keyless|fuentes|sin clave"
+                        r"|ソース|無設定|の検索ソース|개 소스|개의 검색 소스|무설정")
         problems = []
-        for rel, pats in patterns.items():
-            text = (SKILL_DIR / rel).read_text(encoding="utf-8")
-            for pat in pats:
-                if pat not in text:
-                    problems.append(f"{rel}: 未写当前数字「{pat}」")
-            for line in text.splitlines():
-                # 历史条目里的数字是当时的真实值，必须留着：`168 → 218 fuentes`
-                # （演变写法）与 `| **v2.8.7** | ... 89 dominios`（发布日志行）
-                # 都不算「现状声称」，跳过。只拦不看上下文的现状行。
+        for rel in files:
+            for n, line in enumerate((SKILL_DIR / rel).read_text(encoding="utf-8").splitlines(), 1):
                 if "→" in line or re.match(r"\s*\|?\s*\*\*v2\.\d", line):
-                    continue
-                for old in stale_forms[rel]:
-                    if old in line:
-                        problems.append(f"{rel}: 现状描述里仍是过时的数字「{old}」")
-        assert not problems, "翻译版 README 数字不一致：\n  " + "\n  ".join(problems)
+                    continue  # 发布历史里的数字是当时的事实
+                for num in {total, usable}:
+                    if re.search(rf"(?<![\d.]){num}\**\s?(?:{units})", line):
+                        problems.append(f"{rel}:{n} 写了当前数字 {num}")
+                m_any = re.search(rf"(?<![\d.])(2\d{{2}})\**\s?(?:{strict_units})", line)
+                if m_any and m_any.group(1) not in {total, usable}:
+                    problems.append(f"{rel}:{n} 残留历史源数 {m_any.group(1)}")
+        assert not problems, ("当前引擎数只写在 docs/ENGINE_CATALOG.md 一处，"
+                              "其他文件改成不带数字的说法：\n  " + "\n  ".join(problems))
 
     def test_badge_numbers_match_truth(self):
-        """README 徽章数字必须与来源一致（中英之外的四语种此前只写 150+）。"""
+        """版本号与 MCP 工具数徽章必须与来源一致；engines 徽章读 counts.json。"""
         from mcp_tools import TOOLS
-        doc = (SKILL_DIR / "docs" / "ENGINE_CATALOG.md").read_text(encoding="utf-8")
-        total = re.search(r"收录 (\d+) 个源", doc).group(1)
         version = _skill_version()
         tools = len(TOOLS)
         problems = []
         for rel in self.README_VARIANTS:
             text = (SKILL_DIR / rel).read_text(encoding="utf-8")
-            if f"badge/engines-{total}-orange" not in text:
-                problems.append(f"{rel}: engines 徽章应为 {total}")
+            if "assets%2Freadme%2Fcounts.json" not in text:
+                problems.append(f"{rel}: engines 徽章应读 assets/readme/counts.json")
             if f"badge/version-{version}-informational" not in text:
                 problems.append(f"{rel}: version 徽章应为 {version}")
             if f"badge/MCP-{tools}%20tools-purple" not in text:
@@ -344,15 +300,6 @@ class TestDocNumbersMatchCode:
             finally:
                 bad.unlink(missing_ok=True)
 
-    def test_package_description_source_count(self):
-        """package.json 的 description 是对外第一句承诺，此前写 175 个源。"""
-        doc = (SKILL_DIR / "docs" / "ENGINE_CATALOG.md").read_text(encoding="utf-8")
-        total = re.search(r"收录 (\d+) 个源", doc).group(1)
-        usable = re.search(r"开箱可用 (\d+) 个", doc).group(1)
-        desc = json.loads((SKILL_DIR / "package.json").read_text(
-            encoding="utf-8"))["description"]
-        assert f"{total} 个源" in desc, f"package.json description 未写 {total} 个源"
-        assert usable in desc, f"package.json description 未写免密钥数 {usable}"
 
     def test_version_strings_agree(self):
         pkg = json.loads((SKILL_DIR / "package.json").read_text(encoding="utf-8"))
@@ -617,36 +564,13 @@ class TestZcodePluginConsistency(unittest.TestCase):
         market = json.loads(
             (SKILL_DIR / "packages/marketplace.json").read_text(encoding="utf-8"))
         self.assertEqual(market["plugins"][0]["version"], version)
-        for rel in ("packages/argo-zcode/server/panel_server.mjs",
-                    "packages/argo-zcode/ui/panel.html"):
+        for rel in ("packages/argo-zcode/ui/panel.html",):
             text = (SKILL_DIR / rel).read_text(encoding="utf-8")
             found = re.search(r'version:\s*"([^"]+)"', text)
             self.assertIsNotNone(found, f"{rel} 未找到 version")
             self.assertEqual(found.group(1), version,
                              f"{rel} 版本未跟 package.json")
 
-    def test_source_counts_in_plugin_artifacts(self):
-        total, usable = _catalog_counts()
-        plugin_text = (
-            SKILL_DIR / "packages/argo-zcode/.zcode-plugin/plugin.json"
-        ).read_text(encoding="utf-8")
-        self.assertIn(f"{total} sources", plugin_text)
-        self.assertIn(f"{usable} keyless", plugin_text)
-        self.assertIn(f"{total} 个源", plugin_text)
-        self.assertIn(f"{usable} 个免密钥", plugin_text)
-
-        skill_text = (
-            SKILL_DIR / "packages/argo-zcode/skills/argo/SKILL.md"
-        ).read_text(encoding="utf-8")
-        self.assertIn(f"{total} 源", skill_text)
-        self.assertIn(f"{usable} 免密钥", skill_text)
-        self.assertIn(f"{total} 个源", skill_text)
-
-        market_text = (
-            SKILL_DIR / "packages/marketplace.json"
-        ).read_text(encoding="utf-8")
-        self.assertIn(f"{total} sources", market_text)
-        self.assertIn(f"{total} 源", market_text)
 
     def test_plugin_references_are_synced(self):
         """插件 references 是拷贝（npm 打包需要），必须与主仓逐字节一致。"""

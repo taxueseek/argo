@@ -20,9 +20,8 @@
 # 留给 CI 或手动（python3 -m pytest tests/ -q），不进 hook——hook 慢于 20s
 # 就会被用户 --no-verify 绕过，那是更坏的结局。
 #
-# 安装：bash scripts/install.sh 自动装（链式：不覆盖 privacy-guard 等既有
-# hook，装成 hooks/pre-commit-argo 并追一行调用）。手动：
-#   cp scripts/pre-commit "$(git rev-parse --git-common-dir)/hooks/pre-commit-argo"
+# 安装：bash scripts/install.sh 自动装调度器 hooks/pre-commit（原有 hook 改名
+# pre-commit.user 先跑，再直接执行本文件，不拷贝）。手动跑：sh scripts/pre-commit
 # 跳过（不推荐）：git commit --no-verify
 set -e
 
@@ -71,4 +70,10 @@ echo "[pre-commit] argo 快门禁（~12s，解释器 $PY；全量回归请手动
     tests/test_release_consistency.py \
     tests/test_spec_contracts.py \
     tests/test_stub_targets.py \
-    tests/test_env_binding_gate.py
+    tests/test_env_binding_gate.py \
+    tests/test_local_search_registry.py \
+    tests/test_launch_passthrough_alignment.py
+
+if command -v node >/dev/null 2>&1 && [ -f packages/dsh-plugin/test/size-gate.test.js ]; then
+    node --test packages/dsh-plugin/test/size-gate.test.js packages/dsh-plugin/test/client.test.js
+fi

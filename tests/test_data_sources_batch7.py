@@ -26,8 +26,10 @@ from engines_builders_tech import (  # noqa: E402
     _build_deps_dev_engine,
     _build_endoflife_engine,
 )
-from engines_builders_data import (  # noqa: E402
+from engines_builders_science import (
     _build_biorxiv_engine,
+)
+from engines_builders_finance import (
     _build_un_comtrade_engine,
 )
 

@@ -234,7 +234,8 @@ engines:
 
   local_bing_news:
     type: rss
-    enabled: true
+    enabled: false
+    disabled_reason: "Bing News RSS 三种变体（search/q、news/search+format=rss、cc=cn）均返回 HTML 页面，非合法 XML（2026-11-08 实测停用）"
     categories: [news]
     url: "https://www.bing.com/news/search"
     query_param: q

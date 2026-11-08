@@ -5453,7 +5453,6 @@ engines:
     timeout: 10
   qwant:
     type: qwant
-    enabled: true
     enabled: false
     # 2026-11-08 实测停用：主站 qwant.com/?q= 已是 SPA 空壳（页面里 0 个结果
     # 锚点，正则解析必然空手而归）；lite.qwant.com 同样 SPA 化（0 锚点）；

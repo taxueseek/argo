@@ -199,11 +199,22 @@ test('Exa uses a monthly USD budget, not a call count', () => {
     'Exa 是金额额度，不应再暴露成次数上限')
 })
 
-test('keys tab exposes the Yuanbao credential ref', () => {
-  // KEYS 是面板「密钥」页的清单；元宝已成为中文通用域第 2 位对冲源，
-  // key 不在清单里就只能手改 ~/.config/argo/env（2026-10-22 用户反馈）。
-  const src = readFileSync(new URL('../dsh/client.js', import.meta.url), 'utf8')
-  assert.match(src, /ref: 'ARGO_YUANBAO_API_KEY'/, '密钥页缺腾讯元宝')
+test('keys tab exposes the Yuanbao credential ref and bilingual labels', () => {
+  // KEYS 是面板「密钥」页的清单（由 sync_backends.py 从引擎声明派生）；
+  // 直接断言导出的 mod.KEYS，避免引号风格变化让正则误打中 CORE_ENGINES。
+  const definition = loadBundle()
+  const { react } = statefulReact()
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error('unexpected require: ' + id)
+  })
+  assert.ok(Array.isArray(mod.KEYS) && mod.KEYS.length >= 25, 'mod.KEYS 应导出完整密钥清单')
+  const yb = mod.KEYS.find((k) => k.ref === 'ARGO_YUANBAO_API_KEY')
+  assert.ok(yb, '密钥页缺腾讯元宝 ARGO_YUANBAO_API_KEY')
+  for (const k of mod.KEYS) {
+    assert.ok(typeof k.label === 'string' && k.label.length > 0, `${k.ref} 缺中文 label`)
+    assert.ok(typeof k.en === 'string' && k.en.length > 0, `${k.ref} 缺英文 en 标签`)
+  }
 })
 
 test('ArgoPanel renders every tab without undefined references', () => {

@@ -14,10 +14,11 @@ sync_backends.py — 注册表派生与一致性校验（唯一来源：运行�
   运行时合并后的 engines 段（唯一来源）
     ├── backends/quota_profiles.json    配额/成本/限频（由引擎声明的元数据派生）
     ├── backends/engine_registry.yaml   引擎注册表文档（由引擎声明派生）
-    └── backends/domain_profiles.json   TF-IDF 领域文档（校验引擎名集合，缺失补空模板）
+    ├── backends/domain_profiles.json   TF-IDF 领域文档（校验引擎名集合，缺失补空模板）
+    └── backends/env_passthrough.txt    mcp_launch.sh 的密钥透传名单（声明里能读到的全部密钥名）
 
 用法：
-  python3 scripts/sync_backends.py             # 派生三份 backends 文件
+  python3 scripts/sync_backends.py             # 派生四份 backends 文件
   python3 scripts/sync_backends.py --check     # 只校验不写，不一致退出码非 0
   python3 scripts/sync_backends.py --list      # 输出引擎清单与统计
 
@@ -44,6 +45,61 @@ BACKENDS_DIR = SKILL_DIR / "backends"
 QUOTA_PROFILES_PATH = BACKENDS_DIR / "quota_profiles.json"
 DOMAIN_PROFILES_PATH = BACKENDS_DIR / "domain_profiles.json"
 REGISTRY_PATH = BACKENDS_DIR / "engine_registry.yaml"
+PASSTHROUGH_PATH = BACKENDS_DIR / "env_passthrough.txt"
+# DSH 设置面板「密钥」页的清单：client.js 跑在浏览器里读不了仓库文件，
+# 所以把清单写进 client.js 里一段由本脚本维护的标记区（与 native-tools.mjs
+# 由 gen_native_tools.py 生成同一思路），面板不再手写第二份密钥名单。
+DSH_CLIENT_PATH = SKILL_DIR / "packages" / "dsh-plugin" / "dsh" / "client.js"
+_KEYS_BEGIN = "    // <generated:keys> 由 scripts/sync_backends.py 从引擎声明生成，勿手改\n"
+_KEYS_END = "    // </generated:keys>\n"
+# 面板常用组：首屏直接显示的那几把 key（其余在「显示全部」里）
+# 旧面板手写名单里与候选链规则不一致的 ref（候选链里确实有这个名字，运行时
+# get_env 能读到）：保留旧名，否则 DSH 凭证库里已存的 key 改名后面板显示未配置
+DSH_LEGACY_REFS = {"ARGO_BYTED_API_KEY": "WEB_SEARCH_API_KEY"}
+DSH_COMMON_KEYS = ("DEEPSEEK_API_KEY", "ARGO_YUANBAO_API_KEY", "ARGO_TAVILY_API_KEY",
+                   "ARGO_EXA_API_KEY", "ARGO_BOCHA_API_KEY", "ARGO_BRAVE_API_KEY",
+                   "ARGO_TINYFISH_API_KEY")
+DSH_EN_LABELS: dict[str, str] = {
+    "DEEPSEEK_API_KEY": "DeepSeek Search",
+    "ARGO_YUANBAO_API_KEY": "Tencent Yuanbao",
+    "TAVILY_API_KEY": "Tavily",
+    "EXA_API_KEY": "Exa Semantic Search",
+    "BOCHA_API_KEY": "Bocha Search",
+    "BRAVE_API_KEY": "Brave Search",
+    "TINYFISH_API_KEY": "TinyFish Live Search",
+    "ANYSEARCH_API_KEY": "AnySearch",
+    "ARGO_PIXIV_REFRESH_TOKEN": "Pixiv App OAuth",
+    "EASTMONEY_APIKEY": "Eastmoney Miaoxiang",
+    "FELO_API_KEY": "Felo AI Search",
+    "FIRECRAWL_API_KEY": "Firecrawl",
+    "GITHUB_TOKEN": "GitHub",
+    "KEENABLE_API_KEY": "Keenable",
+    "METASO_API_KEY": "Metaso",
+    "OCTEN_API_KEY": "Octen",
+    "OPENCORPORATES_API_TOKEN": "OpenCorporates",
+    "PARALLEL_API_KEY": "Parallel Search",
+    "QWEATHER_KEY": "QWeather",
+    "SAUCENAO_API_KEY": "SauceNAO Reverse Image",
+    "SCIVERSE_API_TOKEN": "Sciverse",
+    "SEARXNG_URL": "SearXNG",
+    "SELTZ_API_KEY": "Seltz Search",
+    "SERPAPI_API_KEY": "Google Lens (SerpAPI)",
+    "UNPAYWALL_EMAIL": "Unpaywall Open Access",
+    "WEB_SEARCH_API_KEY": "ByteDance Search",
+    "WEREAD_API_KEY": "WeRead",
+    "WOLFRAM_APPID": "WolframAlpha",
+    "YDC_API_KEY": "You.com Search",
+    "ZHIHU_ACCESS_SECRET": "Zhihu",
+}
+
+# 不属于任何引擎声明、但 MCP 子进程也要拿到的变量：代理五件套与非引擎通道
+# 的凭据（JEV 证据精排、论文 S2 限频、twitter 社交兜底）。新增此类变量只改这里。
+EXTRA_PASSTHROUGH: tuple[str, ...] = (
+    "ARGO_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+    "ARGO_JEV_API_KEY", "TYPESAFE_API_KEY",
+    "SEMANTIC_SCHOLAR_API_KEY",
+    "TWITTER_AUTH_TOKEN", "TWITTER_CT0",
+)
 
 # ── 默认值 ────────────────────────────────────────────────────────────────────
 
@@ -161,6 +217,118 @@ def derive_registry(engines: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# ── 派生：env_passthrough.txt（mcp_launch.sh 的 launchctl 透传名单）──────────
+
+def derive_passthrough(engines: dict[str, dict[str, Any]]) -> list[str]:
+    """引擎声明能读到的全部密钥名（含 ARGO_ 与裸名两套写法）+ EXTRA_PASSTHROUGH。
+
+    此前名单在 mcp_launch.sh 里手写，测试只对 KNOWN_ENV_ALIASES 校验，
+    于是走 required_env / 占位符声明的 12 个引擎（tinyfish、deepseek_search、
+    saucenao 等）从未进名单；pixiv 入别名表后也要单独补一笔提交。改为派生后，
+    新引擎声明了密钥就自动透传。
+    """
+    import engine_env as E
+
+    def chain(name: str) -> list[str]:
+        return list(E.PLACEHOLDER_ALIASES.get(name) or E._name_variants(name))
+
+    names: set[str] = set(EXTRA_PASSTHROUGH)
+    for aliases in E.KNOWN_ENV_ALIASES.values():
+        names.update(aliases)
+    for aliases in E.PLACEHOLDER_ALIASES.values():
+        names.update(aliases)
+    for name, spec in engines.items():
+        explicit = spec.get("required_env") or []
+        for item in explicit:
+            if isinstance(item, list):
+                names.update(x for x in item if x)
+            elif isinstance(item, str) and item:
+                names.update(chain(item))
+        for p in E._placeholders_in_spec(spec):
+            names.update(chain(p))
+    return sorted(n for n in names if n)
+
+
+def render_passthrough(names: list[str]) -> str:
+    return ("# 由 scripts/sync_backends.py 从引擎声明派生，勿手工修改。\n"
+            "# scripts/mcp_launch.sh 读取本文件，把这些变量从 launchctl 透传给 MCP 子进程。\n"
+            + "\n".join(names) + "\n")
+
+
+def read_passthrough() -> list[str]:
+    if not PASSTHROUGH_PATH.exists():
+        return []
+    return [ln.strip() for ln in PASSTHROUGH_PATH.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+# ── 派生：DSH 面板密钥清单（client.js 标记区）──────────────────────────────
+
+def derive_dsh_keys(engines: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """每个引擎声明的主密钥名一行；面板 ref 用宿主凭证库里的名字。
+
+    ref 规则：带 ARGO_ 前缀且候选链第二位是裸名的，面板沿用裸名（DSH 用户
+    此前就按裸名在凭证库存过 key，改名会让已存的 key 失联）；其余照用主名。
+    标签取声明里的 label（多个引擎共用一把 key 时取第一个启用的）。
+    """
+    import engine_env as E
+    groups: dict[str, dict[str, Any]] = {}
+    for name, spec in sorted(engines.items()):
+        reqs = list(E.required_env_for(name, spec) or [])
+        if not reqs and name in E.OPTIONAL_ENV_ENGINES:
+            reqs = [E.KNOWN_ENV_ALIASES[name][0]]
+        for primary in reqs:
+            g = groups.setdefault(primary, {"primary": primary, "engines": [], "label": "", "enabled": False})
+            g["engines"].append(name)
+            on = bool(spec.get("enabled", True))
+            if not g["label"] or (on and not g["enabled"]):
+                g["label"], g["enabled"] = spec.get("label") or name, on
+    out = []
+    for primary, g in sorted(groups.items()):
+        chain = E.KNOWN_ENV_ALIASES.get(g["engines"][0]) or list(
+            E.PLACEHOLDER_ALIASES.get(primary) or E._name_variants(primary))
+        ref = primary
+        if primary.startswith("ARGO_") and len(chain) > 1 and chain[1] == primary[5:]:
+            ref = primary[5:]
+        # 用户已按旧面板名存进凭证库的 key：沿用旧名，避免改名后失联
+        ref = DSH_LEGACY_REFS.get(primary, ref)
+        en = DSH_EN_LABELS.get(ref) or g["engines"][0].replace("_", " ").title()
+        out.append({"ref": ref, "common": primary in DSH_COMMON_KEYS,
+                    "label": g["label"], "en": en, "engines": g["engines"]})
+    out.sort(key=lambda r: (not r["common"],
+                            DSH_COMMON_KEYS.index(next(p for p in DSH_COMMON_KEYS
+                                                       if p in (r["ref"], "ARGO_" + r["ref"])))
+                            if r["common"] else 0, r["ref"]))
+    return out
+
+
+def render_dsh_keys(rows: list[dict[str, Any]]) -> str:
+    body = "".join(
+        "      { ref: %s, common: %s, label: %s, en: %s, engines: %s },\n" % (
+            json.dumps(r["ref"]), "true" if r["common"] else "false",
+            json.dumps(r["label"], ensure_ascii=False),
+            json.dumps(r["en"], ensure_ascii=False),
+            json.dumps(r["engines"]))
+        for r in rows)
+    return _KEYS_BEGIN + "    const KEYS = [\n" + body + "    ];\n" + _KEYS_END
+
+
+def read_dsh_keys_block() -> str:
+    if not DSH_CLIENT_PATH.exists():
+        return ""
+    s = DSH_CLIENT_PATH.read_text(encoding="utf-8")
+    i, j = s.find(_KEYS_BEGIN), s.find(_KEYS_END)
+    return s[i:j + len(_KEYS_END)] if i >= 0 and j > i else ""
+
+
+def write_dsh_keys_block(block: str) -> None:
+    s = DSH_CLIENT_PATH.read_text(encoding="utf-8")
+    i, j = s.find(_KEYS_BEGIN), s.find(_KEYS_END)
+    if i < 0 or j < i:
+        raise SystemExit(f"{DSH_CLIENT_PATH} 缺 <generated:keys> 标记区")
+    DSH_CLIENT_PATH.write_text(s[:i] + block + s[j + len(_KEYS_END):], encoding="utf-8")
+
+
 # ── 校验/补全：domain_profiles.json ─────────────────────────────────────────
 
 def check_domain_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str, Any]) -> list[str]:
@@ -199,7 +367,8 @@ def patch_domain_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str
 
 def collect_issues(engines: dict[str, dict[str, Any]],
                    quota: dict[str, Any], registry: dict[str, Any],
-                   domain: dict[str, Any]) -> list[str]:
+                   domain: dict[str, Any],
+                   passthrough: list[str] | None = None) -> list[str]:
     """汇总所有一致性检查问题（引擎名 + 字段值双层）。
 
     只比引擎名是不够的：名字都在、值被手改（firecrawl.qps 1→99）同样会让
@@ -247,6 +416,16 @@ def collect_issues(engines: dict[str, dict[str, Any]],
                     f"派生件={cur.get(key)!r}")
 
     issues.extend(check_domain_profiles(engines, domain))
+
+    # passthrough 是可选参数：调用方不传就读磁盘现状，保证测试与 --check 同口径
+    cur_pt = read_passthrough() if passthrough is None else passthrough
+    want_pt = derive_passthrough(engines)
+    if cur_pt != want_pt:
+        miss = sorted(set(want_pt) - set(cur_pt))
+        extra = sorted(set(cur_pt) - set(want_pt))
+        issues.append(f"env_passthrough.txt 与声明不一致: 缺 {miss} 多 {extra}")
+    if DSH_CLIENT_PATH.exists() and read_dsh_keys_block() != render_dsh_keys(derive_dsh_keys(engines)):
+        issues.append("packages/dsh-plugin/dsh/client.js 的 KEYS 标记区与引擎声明不一致")
     return issues
 
 
@@ -338,10 +517,25 @@ def main() -> int:
     write_quota(quota_new)
     write_registry(registry_new)
     write_domain(domain_new)
+    pt_new = derive_passthrough(engines)
+    PASSTHROUGH_PATH.write_text(render_passthrough(pt_new), encoding="utf-8")
     print(f"已派生 {len(engines)} 个引擎的注册表：")
+    print(f"  env_passthrough.txt   {len(pt_new)} 个变量名")
+    if DSH_CLIENT_PATH.exists():
+        keys_new = derive_dsh_keys(engines)
+        write_dsh_keys_block(render_dsh_keys(keys_new))
+        print(f"  dsh client.js KEYS    {len(keys_new)} 把 key")
     print(f"  quota_profiles.json   {len(quota_new) - 1} 条")
     print(f"  engine_registry.yaml  {len(registry_new['engines'])} 条")
     print(f"  domain_profiles.json  {len([k for k in domain_new if not k.startswith('_')])} 条（缺失已补空模板）")
+    try:
+        import gen_engine_catalog
+        gen_engine_catalog.DOC_PATH.parent.mkdir(parents=True, exist_ok=True)
+        gen_engine_catalog.DOC_PATH.write_text(gen_engine_catalog.render(), encoding="utf-8")
+        gen_engine_catalog.sync_counts(write=True)
+        print("  ENGINE_CATALOG.md / counts.json 已同步")
+    except Exception as exc:
+        print(f"  ⚠️  gen_engine_catalog 同步跳过: {exc}", file=sys.stderr)
     if issues:
         print(f"  已修复 {len(issues)} 处此前与真源不一致的项：", file=sys.stderr)
         for issue in issues:

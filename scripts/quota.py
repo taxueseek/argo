@@ -481,20 +481,22 @@ class QuotaManager:
             import hashlib
             from engine_env import get_env, missing_env_for, resolve_env_name
             spec = None
+            target = engine.split(":", 1)[-1] if ":" in engine else engine
             try:
                 from config import get_engines
-                spec = get_engines().get(engine)
+                engines_map = get_engines()
+                spec = engines_map.get(engine) or engines_map.get(target)
             except Exception:
                 spec = None
             val = ""
             if spec is not None:
                 # required_env 声明的是「主名」，但候选链（PLACEHOLDER_ALIASES /
                 # ARGO_ 变体）里任一有值都算配置了 key——与 missing_env_for 同源。
-                missing = missing_env_for(engine, spec)
+                missing = missing_env_for(target, spec)
                 if not missing:
                     # 有声明且都齐了：取主名的实际值算指纹
                     from engine_env import required_env_for
-                    for name in required_env_for(engine, spec):
+                    for name in required_env_for(target, spec):
                         cand = [name] if name.startswith("ARGO_") else [f"ARGO_{name}", name]
                         got = get_env(cand)
                         if got:
@@ -502,9 +504,9 @@ class QuotaManager:
                             break
                 else:
                     # 声明了但缺：仍尝试按声明候选读（可能只有可选键齐）
-                    val = get_env(_required_candidates(engine, spec))
+                    val = get_env(_required_candidates(target, spec))
             if not val:
-                val = get_env(resolve_env_name(engine))
+                val = get_env(resolve_env_name(target))
             return (hashlib.sha256(val.encode("utf-8")).hexdigest()[:8]
                     if val else "")
         except Exception:

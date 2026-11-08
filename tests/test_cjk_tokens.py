@@ -162,7 +162,7 @@ def test_baike_gate_rejects_zero_overlap_entry():
 
 
 def test_chem_tokens_expand_spaceless_cjk():
-    from engines_builders_data import _chem_tokens
+    from engines_builders_science import _chem_tokens
 
     toks = _chem_tokens("阿司匹林的作用")
     assert {"阿司", "司匹", "匹林"} <= toks
@@ -171,7 +171,7 @@ def test_chem_tokens_expand_spaceless_cjk():
 
 
 def test_chem_tokens_single_char_still_dropped():
-    from engines_builders_data import _chem_tokens
+    from engines_builders_science import _chem_tokens
 
     toks = _chem_tokens("水")
     assert all(len(t) >= 2 for t in toks), toks

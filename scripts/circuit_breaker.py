@@ -208,9 +208,9 @@ class CircuitBreaker:
                 # auth 禁用的换 key 自愈：401/403 的恢复方式是「修好凭证」，
                 # 而配 key 是离散事件——指纹变了就说明修好了，立即放行，
                 # 不用等 1h 冷却（与 quota 的 key_fp 自愈同一思路）。
-                if st.get("auth_disabled") and st.get("key_fp"):
+                if st.get("auth_disabled") and "key_fp" in st:
                     cur = _engine_key_fp_safe(engine)
-                    if cur and cur != st.get("key_fp"):
+                    if cur and cur != st.get("key_fp", ""):
                         def _key_healed() -> None:
                             fresh = self._engines.get(engine) or {}
                             fresh.update({"state": "closed", "failures": 0,
@@ -404,10 +404,7 @@ class CircuitBreaker:
                 st["state"] = "disabled"
                 st["disabled_at"] = time.time()
                 st["auth_disabled"] = True
-                if category == "auth":
-                    fp = _engine_key_fp_safe(engine)
-                    if fp:
-                        st["key_fp"] = fp
+                st["key_fp"] = _engine_key_fp_safe(engine)
             # empty 权重低：两次 empty 才算一次 failure 贡献；同时按查询指纹
             # 记近期空结果，供基线破位判定（跨查询去重）
             if kind == "empty":

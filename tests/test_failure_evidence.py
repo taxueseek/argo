@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import circuit_breaker as cb  # noqa: E402
 
 AUTH_ATTR = {"category": "auth", "reason": "HTTP 403", "detail": "HTTP 403"}
+QUOTA_ATTR = {"category": "quota_exhausted", "reason": "HTTP 402", "detail": "HTTP 402"}
 NET_ATTR = {"category": "network", "reason": "ssl", "detail": "SSL EOF"}
 
 
@@ -130,6 +131,35 @@ class TestAuthKeySelfHeal(_TmpBreakerCase):
         self.assertFalse(allowed)
         self.assertEqual(reason, "auto_disabled")
 
+    def test_quota_exhausted_key_change_heals(self):
+        self._patch_fp("key_old")
+        self.cb.record_failure("eng", kind="error", attribution=QUOTA_ATTR)
+        self.cb.record_failure("eng", kind="error", attribution=QUOTA_ATTR)
+        self.assertEqual(self.cb.status("eng")["state"], "disabled")
+        self._patch_fp("key_new")
+        allowed, reason = self.cb.allow("eng")
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "auth_key_changed")
+
+    def test_empty_key_to_configured_key_heals(self):
+        self._patch_fp("")
+        self.cb.record_failure("eng", kind="error", attribution=AUTH_ATTR)
+        self.cb.record_failure("eng", kind="error", attribution=AUTH_ATTR)
+        self.assertEqual(self.cb.status("eng")["state"], "disabled")
+        self._patch_fp("key_new")
+        allowed, reason = self.cb.allow("eng")
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "auth_key_changed")
+
+    def test_composite_breaker_key_resolves_underlying_engine_fp(self):
+        from unittest.mock import patch
+        from quota import QuotaManager
+        with patch.dict("os.environ", {"ARGO_BOCHA_API_KEY": "bocha_secret_123"}):
+            fp_rerank = QuotaManager._engine_key_fp("rerank:bocha")
+            fp_bocha = QuotaManager._engine_key_fp("bocha")
+        self.assertTrue(fp_rerank, "rerank:bocha 复合键未能解析底层 bocha 的密钥指纹")
+        self.assertEqual(fp_rerank, fp_bocha)
+
 
 class TestRevive(_TmpBreakerCase):
     """C 构件：revive 人工复活，ever_nonempty 基线保留。"""
@@ -212,37 +242,40 @@ class TestEmptyBaselineBreach(_TmpBreakerCase):
 
 
 class TestReliabilityFactor(unittest.TestCase):
-    """B 构件的调度落点：破位源在排序里降权到 0.7（不熔断）。"""
+    """B 构件的调度落点：破位源在排序里降权到 0.7（不熔断）。
+
+    打桩对象按**调用期**的 sys.modules 解析：test_argo_paths 会 pop 掉
+    circuit_breaker 再重导入，导入期绑定的 cb 此后是旧对象，patch 它的
+    get_breaker 对 search_rank 运行期 `from circuit_breaker import ...`
+    不可见（全套件红、单跑绿；同类见 test_circuit_breaker_module_alias）。
+    """
 
     def setUp(self) -> None:
+        import importlib
+        self.cbm = importlib.import_module("circuit_breaker")
         fd, self.path = tempfile.mkstemp(prefix="cb_rel_", suffix=".json")
         os.close(fd)
         os.unlink(self.path)
-        self._old_sp = getattr(cb, "STATE_PATH", None)
-        self._old_gb = cb.get_breaker
+        self._old_gb = self.cbm.get_breaker
 
     def tearDown(self) -> None:
-        cb.get_breaker = self._old_gb
-        if self._old_sp is not None:
-            cb.STATE_PATH = self._old_sp
-        elif hasattr(cb, "STATE_PATH"):
-            delattr(cb.STATE_PATH)
+        self.cbm.get_breaker = self._old_gb
         import search_rank
         search_rank._rel_factor_cache.clear()
 
     def test_suspected_stale_factor_07(self):
-        br = cb.CircuitBreaker(state_path=self.path)
+        br = self.cbm.CircuitBreaker(state_path=self.path)
         br.record_success("eng")
         for q in ("q1", "q2", "q3"):
             br.record_failure("eng", kind="empty", query=q)
-        cb.get_breaker = lambda: br
+        self.cbm.get_breaker = lambda: br
         import search_rank
         search_rank._rel_factor_cache.clear()
         self.assertAlmostEqual(search_rank._single_reliability("eng"), 0.7)
 
     def test_healthy_factor_1(self):
-        br = cb.CircuitBreaker(state_path=self.path)
-        cb.get_breaker = lambda: br
+        br = self.cbm.CircuitBreaker(state_path=self.path)
+        self.cbm.get_breaker = lambda: br
         import search_rank
         search_rank._rel_factor_cache.clear()
         self.assertAlmostEqual(search_rank._single_reliability("eng"), 1.0)

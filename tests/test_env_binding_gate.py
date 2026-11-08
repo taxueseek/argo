@@ -153,3 +153,33 @@ def test_scanner_ignores_function_bodies():
            "def g(x=os.environ.get('B')):\n"
            "    return x\n")
     assert _module_level_env_reads(ast.parse(src)) == [4]
+
+
+def _builder_outer_env_reads(tree: ast.Module) -> list[tuple[str, int]]:
+    """_build_*_engine 外层闭包体内的 get_env/os.environ 绑定（常驻进程下固化旧 key）。"""
+    hits: list[tuple[str, int]] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef) or not node.name.startswith("_build_"):
+            continue
+        for st in node.body:
+            if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for sub in ast.walk(st):
+                if isinstance(sub, ast.Call):
+                    fn = sub.func
+                    if (isinstance(fn, ast.Name) and fn.id in ("get_env", "getenv", "env_flag")) or (
+                        isinstance(fn, ast.Attribute) and fn.attr in ("get_env", "getenv", "environ", "env_flag")
+                    ):
+                        hits.append((node.name, st.lineno))
+    return hits
+
+
+def test_no_builder_construction_time_env_bindings():
+    """引擎工厂函数外层不得提前固化 get_env（engines._ENGINE_INSTANCES 缓存实例，外层读会让热更新失效）。"""
+    problems: list[str] = []
+    for p in sorted((ROOT / "scripts").glob("engines*.py")):
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        for fn_name, lineno in _builder_outer_env_reads(tree):
+            problems.append(f"scripts/{p.name}:{lineno} ({fn_name}): 工厂外层调用 get_env，请移入内层 _engine 调用期读取")
+    assert not problems, "引擎工厂构造期 env 绑定护栏：\n  " + "\n  ".join(problems)
+

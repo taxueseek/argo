@@ -47,11 +47,9 @@ JSON_DECLS = (
 )
 README_LANGS = ("README.md", "README.en.md", "README.ja.md", "README.ko.md", "README.es.md")
 
-# 源码里的版本常量（正则取，避免 import 副作用）
+# 源码里的版本常量（正则取，避免 import 副作用；panel_server.mjs 已改为运行时读 plugin.json）
 SRC_DECLS = (
     ("scripts/mcp_transport.py", r'ARGO_MCP_VERSION\s*=\s*"([^"]+)"'),
-    ("packages/argo-zcode/server/panel_server.mjs",
-     r'SERVER_INFO\s*=\s*\{[^}]*version:\s*"([^"]+)"'),
     ("packages/argo-zcode/ui/panel.html",
      r'new App\(\{\s*name:\s*"argo-panel",\s*version:\s*"([^"]+)"'),
 )

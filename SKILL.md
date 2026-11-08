@@ -26,7 +26,7 @@ triggers:
 
 # Argo — 统一搜索与证据核验
 
-> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 290 个源、244 免密钥；digup 默认关；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 跳过）。
+> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。源数见 docs/ENGINE_CATALOG.md；digup 默认关；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 跳过）。
 
 ## 快速上手
 
@@ -48,7 +48,7 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 | 参数 | 说明 |
 |------|------|
 | `--engine <name>` | 强制引擎（见 `argo list-engines`） |
-| `--local-first` | 本地零成本聚合优先（local_search 29 引擎） |
+| `--local-first` | 本地零成本聚合优先（local_search 子技能） |
 | `--include-local` / `--no-local` | 本机文件命中（fast/budget 默认开） |
 | `--mode fast|auto|deep|budget` | fast 免费 / auto 成本感知（默认）/ deep 质量 / budget 配额 |
 | `--explain` / `--no-cache` | 解释路由决策 / 跳过缓存 |

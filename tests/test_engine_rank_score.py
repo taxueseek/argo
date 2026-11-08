@@ -30,6 +30,10 @@ if str(SCRIPTS_DIR) not in sys.path:
 BUILDER_FILES = [
     "engines_builders_intl.py",
     "engines_builders_data.py",
+    "engines_builders_media.py",
+    "engines_builders_science.py",
+    "engines_builders_finance.py",
+    "engines_builders_archive.py",
     "engines_builders_cn.py",
     "engines_builders_tech.py",
     "engines_builders_data_macro.py",

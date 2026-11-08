@@ -7,10 +7,10 @@
 ## 一、总量与口径
 
 - **收录 290 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 244 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **开箱可用 241 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
-- **已停用 11 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
+- **已停用 14 个**：`brave`、`digup`、`ecosia`、`europeana`、`felo`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
 - **显式专用 27 个**：`animetrace`、`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`google_lens`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
@@ -142,7 +142,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_bing` | 可直接用 | 免费 | 不限 | — | 深度研究 boost、通用兜底链 | Bing本地 |
 | `local_search` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 local_academic、域 local_chinese、域 local_code、域 local_general、域 local_news、域 local_reference、语义画像命中 | Local Search 聚合 |
 | `local_sogou` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 搜狗本地 |
-| `marginalia` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面，JSON 免认证） |
+| `marginalia` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面；old-search 两步 sst 流程） |
 | `parallel_free` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、域 video、通用兜底链 | Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的 parallel REST 通道分立，作其缺位时的补位） |
 | `searchmysite` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | 人工审核准入的个人独立站索引（非商业博客，HTML 解析） |
 | `shenma` | 可直接用 | 免费 | 不限 | — | 域 chinese_general | 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页 |
@@ -158,13 +158,13 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `byted` | 需自备密钥 | 低价计费 | 不限 | ARGO_BYTED_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 fact_check、域 financial_news、域 legal、域 local_news、域 news_realtime、域 weather_query、语义画像命中 | 字节搜索 API，中文通用/news |
 | `deepseek_search` | 需自备密钥 + 显式专用 | 付费 | 不限 | DEEPSEEK_API_KEY | 显式调用（--engine） | DeepSeek Search |
 | `digup` | 已停用 | 免费 | 不限 | — | 已停用 | DigUp（EmbeddingGemma 2 本地多模态嵌入，全程离线）——照片/截图/PDF/文档/音视频按内容检索 |
-| `ecosia` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页 |
+| `ecosia` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页 |
 | `felo` | 已停用 | 付费 | 不限 | ARGO_FELO_API_KEY | 域 semantic_discovery、语义画像命中 | Felo AI 搜索 API |
 | `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
 | `parallel` | 需自备密钥 | 按调用计费 | 不限 | PARALLEL_API_KEY | 域 chinese_tech_deep | Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch） |
-| `qwant` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页 |
+| `qwant` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页 |
 | `searxng` | 已停用 | 免费 | 不限 | ARGO_SEARXNG_URL | 域 semantic_discovery | SearXNG 直连（已废弃，由 T3 替代） |
 | `tavily` | 需自备密钥 | 按调用计费 | 1000/月 | ARGO_TAVILY_API_KEY | 域 semantic_discovery、语义画像命中 | Tavily AI 搜索 API（免费层 1000 次/月，超出按美元计费；与 exa 同为 api 档） |
 | `tinyfish` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时网页搜索（免费，浏览器渲染，结果含原文摘要，X-API-Key 认证） |
@@ -349,12 +349,12 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `em_global_news` | 可直接用 | 免费 | 不限 | — | 域 em_news_search、域 global_event | 东财全球资讯（7×24 财经快讯） |
 | `google_news` | 可直接用 | 免费 | 不限 | — | 域 global_event、域 news_realtime | Google News RSS（多语言新闻，免认证，支持时间窗与 site: 限定） |
 | `jin10` | 可直接用 | 免费 | 不限 | — | 域 cls_telegraph_search、域 jin10_flash | 金十数据财经快讯（免认证） |
-| `local_bing_news` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Bing News本地 |
 | `local_google_news` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Google News本地 |
 | `people_daily` | 可直接用 | 免费 | 不限 | — | 域 news_realtime | 人民网搜索（权威综合中文新闻，官方接口，免认证） |
 | `wallstreetcn` | 可直接用 | 免费 | 不限 | — | 域 financial_news | 华尔街见闻快讯（lives 直播流 JSON，免认证；全量流 + 本地关键词过滤） |
 | `em_miaoxiang` | 需自备密钥 | 免费 | 不限 | ARGO_EASTMONEY_APIKEY | 域 financial_news | 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY） |
 | `gdelt` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | GDELT 全球新闻事件流（75+ 语言跨国媒体扫描，带域名/语言/国家标注） |
+| `local_bing_news` | 已停用 | 免费 | 不限 | — | 经 local_search 展开 | Bing News本地 |
 | `seltz` | 需自备密钥 | 按调用计费 | 20000/月 | SELTZ_API_KEY | 域 world_news、语义画像命中 | Seltz 搜索（英文主力，news 语料；结果带发布日期与正文摘录；中文无召回价值已用 langs 排除） |
 | `tinyfish_news` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时新闻搜索（免费，含 publisher 与发布日期） |
 

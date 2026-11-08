@@ -342,161 +342,46 @@ def _names(rows: list[dict[str, Any]]) -> str:
     return "、".join(f"`{r['engine_id']}`" for r in rows) if rows else "无"
 
 
-# ── 对外计数：五语 README、徽章与包描述 ────────────────────────────────
-# 源数、免密钥数、业务域数、MCP 工具数散落在五种语言与四个包描述里，
-# 发布时靠手改必然漏：2026-10 的基线里中文写「覆盖 97 个业务领域」、
-# 日文写「97 の業務ドメイン」、韩文还停在「272개의 검색 소스」、西班牙文
-# 写「235 disponibles」，四处彼此矛盾。这里让文档生成器顺带把数字校正
-# 到真源（catalog 的收录/开箱可用行、config 的域清单、mcp_tools 的工具表、
-# SKILL.md 的版本号），`--check` 一并校验——改了引擎却忘了改 README 会红。
-#
-# 规则里只锚定「整句模板」，不做全局数字替换：发布说明里的历史数字
-# （如「218 → 220 fuentes」「fuentes 237→253」）是事实，不能跟着变。
+# ── 对外计数：版本号与 MCP 工具数 ─────────────────────────────────────
+# 引擎数、免密钥数、业务域数只在本文件生成的 docs/ENGINE_CATALOG.md 里写一处，
+# README 首屏徽章读 assets/readme/counts.json（shields.io endpoint，由本脚本写）。
+# 2026-11-08 前这三个数在 10 个文件 66 句话里各存一份，每加一个引擎就要改
+# 10-20 个文件；改为单点后正文只写「数百个源」这类不随引擎增减而变的说法。
+# 版本号与工具数仍按句模板校正：它们变化少，且徽章、包描述需要精确值。
 COUNT_RULES: dict[str, list[tuple[str, str]]] = {
-    "README.md": [
-        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
-        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
-        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
-        (r'(?P<pre>alt="Argo 阿尔戈：[^"]*?，)(?P<total>\d+)(?P<post> 个搜索源，)',
-         "{pre}{total}{post}"),
-        (r"背后连着 (?P<total>\d+) 个搜索源，覆盖 (?P<domains>\d+) 个业务领域",
-         "背后连着 {total} 个搜索源，覆盖 {domains} 个业务领域"),
-        (r"另有 1 个 `wide_research` 并行研究和 (?P<tools>\d+) 个 MCP 工具按需开启",
-         "另有 1 个 `wide_research` 并行研究和 {tools} 个 MCP 工具按需开启"),
-        # 这句原本写死「其余 271 个源不受影响」，可它说的其实是「缺 key 时哪些源
-        # 停用」，算不出发版数减几——去掉数字，只说事实（其余源不受影响）。
-        (r"其余 (?P<n>\d+) 个源不受影响", "其余源不受影响"),
-        (r"\*\*(?P<total>\d+) 个源，(?P<usable>\d+) 个免密钥开箱可用。\*\*",
-         "**{total} 个源，{usable} 个免密钥开箱可用。**"),
-        (r"目前 (?P<total>\d+) 个源（(?P<usable>\d+) 个免密钥开箱可用）、(?P<domains>\d+) 个业务域",
-         "目前 {total} 个源（{usable} 个免密钥开箱可用）、{domains} 个业务域"),
-        (r"（(?P<usable>\d+) 个免配置源）", "（{usable} 个免配置源）"),
-        (r"在 v2\.9\.x 系列里全部落地：(?P<total>\d+) 个源、(?P<domains>\d+) 个领域、"
-         r"(?P<usable>\d+) 个免配置开箱",
-         "在 v2.9.x 系列里全部落地：{total} 个源、{domains} 个领域、{usable} 个免配置开箱"),
-        (r"当前配置 \*\*(?P<total>\d+)\*\* 个源（\*\*(?P<usable>\d+)\*\* 个免密钥开箱可用）、\*\*(?P<domains>\d+)\*\* 个业务域",
-         "当前配置 **{total}** 个源（**{usable}** 个免密钥开箱可用）、**{domains}** 个业务域"),
-        (r"搜索、抓取、核验、本机文件检索走同一条管线，(?P<tools>\d+) 个 MCP 工具和 CLI 命令一一对应",
-         "搜索、抓取、核验、本机文件检索走同一条管线，{tools} 个 MCP 工具和 CLI 命令一一对应"),
+    'README.md': [
+        ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
+        ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
+        ('另有 1 个 `wide_research` 并行研究和 (?P<tools>\\d+) 个 MCP 工具按需开启', '另有 1 个 `wide_research` 并行研究和 {tools} 个 MCP 工具按需开启'),
+        ('其余 (?P<n>\\d+) 个源不受影响', '其余源不受影响'),
+        ('搜索、抓取、核验、本机文件检索走同一条管线，(?P<tools>\\d+) 个 MCP 工具和 CLI 命令一一对应', '搜索、抓取、核验、本机文件检索走同一条管线，{tools} 个 MCP 工具和 CLI 命令一一对应'),
     ],
-    "README.en.md": [
-        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
-        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
-        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
-        (r'(?P<pre>alt="Argo: search and deep research for agents — )(?P<total>\d+)(?P<post> search sources,)',
-         "{pre}{total}{post}"),
-        (r"It connects to (?P<total>\d+) search sources across (?P<domains>\d+) business domains",
-         "It connects to {total} search sources across {domains} business domains"),
-        (r"and (?P<tools>\d+) MCP tools you can enable on demand",
-         "and {tools} MCP tools you can enable on demand"),
-        (r"and the other (?P<n>\d+) sources are unaffected", "and the other sources are unaffected"),
-        (r"\*\*(?P<total>\d+) sources, (?P<usable>\d+) keyless and ready out of the box\.\*\*",
-         "**{total} sources, {usable} keyless and ready out of the box.**"),
-        (r"\((?P<usable>\d+) keyless sources\)", "({usable} keyless sources)"),
-        (r"All five are already shipped across the v2\.9\.x line: (?P<total>\d+) sources, "
-         r"(?P<domains>\d+) domains, (?P<usable>\d+) keyless out of the box",
-         "All five are already shipped across the v2.9.x line: {total} sources, "
-         "{domains} domains, {usable} keyless out of the box"),
-        (r"the (?P<tools>\d+) MCP tools map one-to-one onto CLI commands",
-         "the {tools} MCP tools map one-to-one onto CLI commands"),
-        (r"\*\*(?P<total>\d+) sources \((?P<usable>\d+) usable with no key\), "
-         r"(?P<domains>\d+) domains\*\*",
-         "**{total} sources ({usable} usable with no key), {domains} domains**"),
-        (r"Config currently has \*\*(?P<total>\d+)\*\* sources \(\*\*(?P<usable>\d+)\*\* usable "
-         r"with no key\) and \*\*(?P<domains>\d+)\*\* domains",
-         "Config currently has **{total}** sources (**{usable}** usable with no key) "
-         "and **{domains}** domains"),
+    'README.en.md': [
+        ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
+        ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
+        ('and (?P<tools>\\d+) MCP tools you can enable on demand', 'and {tools} MCP tools you can enable on demand'),
+        ('and the other (?P<n>\\d+) sources are unaffected', 'and the other sources are unaffected'),
+        ('the (?P<tools>\\d+) MCP tools map one-to-one onto CLI commands', 'the {tools} MCP tools map one-to-one onto CLI commands'),
     ],
-    "README.es.md": [
-        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
-        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
-        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
-        (r"(?P<pre>alt=\"Argo: búsqueda e investigación profunda para agentes, )(?P<total>\d+)(?P<post> fuentes de búsqueda,)",
-         "{pre}{total}{post}"),
-        (r"Detrás tiene (?P<total>\d+) fuentes de búsqueda que cubren (?P<domains>\d+) dominios de negocio",
-         "Detrás tiene {total} fuentes de búsqueda que cubren {domains} dominios de negocio"),
-        (r"Además hay 1 `wide_research` de investigación en paralelo y (?P<tools>\d+) herramientas MCP",
-         "Además hay 1 `wide_research` de investigación en paralelo y {tools} herramientas MCP"),
-        (r"y las otras (?P<n>\d+) fuentes no se ven afectadas", "y las demás fuentes no se ven afectadas"),
-        (r"\*\*(?P<total>\d+) fuentes, (?P<usable>\d+) disponibles sin clave desde el primer momento\.\*\*",
-         "**{total} fuentes, {usable} disponibles sin clave desde el primer momento.**"),
-        (r"Los cinco puntos ya están implementados en la serie v2\.9\.x: "
-         r"(?P<total>\d+) fuentes, (?P<domains>\d+) dominios, (?P<usable>\d+) sin clave",
-         "Los cinco puntos ya están implementados en la serie v2.9.x: "
-         "{total} fuentes, {domains} dominios, {usable} sin clave"),
-        (r"(?P<tools>\d+) herramientas MCP se corresponden una a una",
-         "{tools} herramientas MCP se corresponden una a una"),
-        (r"docs/ENGINE_CATALOG\.md: (?P<total>\d+) fuentes, (?P<usable>\d+) sin clave, (?P<domains>\d+) dominios",
-         "docs/ENGINE_CATALOG.md: {total} fuentes, {usable} sin clave, {domains} dominios"),
-        (r"La config tiene ahora \*\*(?P<total>\d+)\*\* fuentes \(\*\*(?P<usable>\d+)\*\* sin clave\) "
-         r"y \*\*(?P<domains>\d+)\*\* dominios",
-         "La config tiene ahora **{total}** fuentes (**{usable}** sin clave) y **{domains}** dominios"),
+    'README.es.md': [
+        ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
+        ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
+        ('Además hay 1 `wide_research` de investigación en paralelo y (?P<tools>\\d+) herramientas MCP', 'Además hay 1 `wide_research` de investigación en paralelo y {tools} herramientas MCP'),
+        ('y las otras (?P<n>\\d+) fuentes no se ven afectadas', 'y las demás fuentes no se ven afectadas'),
+        ('(?P<tools>\\d+) herramientas MCP se corresponden una a una', '{tools} herramientas MCP se corresponden una a una'),
     ],
-    "README.ja.md": [
-        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
-        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
-        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
-        (r"(?P<pre>alt=\"Argo アルゴ：[^\"]*?、)(?P<total>\d+)(?P<post> の検索ソース、)", "{pre}{total}{post}"),
-        (r"背後には (?P<total>\d+) の検索ソースがあり、(?P<domains>\d+) の業務ドメイン",
-         "背後には {total} の検索ソースがあり、{domains} の業務ドメイン"),
-        (r"(?P<tools>\d+) 個の MCP ツール", "{tools} 個の MCP ツール"),
-        (r"\*\*(?P<total>\d+) のソース、うち (?P<usable>\d+) はキー不要ですぐ使える。\*\*",
-         "**{total} のソース、うち {usable} はキー不要ですぐ使える。**"),
-        (r"（(?P<usable>\d+) ソースが無設定）", "（{usable} ソースが無設定）"),
-        (r"v2\.9\.x 系で全て実装済み：(?P<total>\d+) ソース / (?P<domains>\d+) ドメイン / (?P<usable>\d+) 無設定",
-         "v2.9.x 系で全て実装済み：{total} ソース / {domains} ドメイン / {usable} 無設定"),
-        (r"ENGINE_CATALOG\.md に清单されている：(?P<total>\d+) ソース、(?P<usable>\d+) 無設定、"
-         r"(?P<domains>\d+) ドメイン",
-         "ENGINE_CATALOG.md に清单されている：{total} ソース、{usable} 無設定、{domains} ドメイン"),
-        (r"設定上は \*\*(?P<total>\d+)\*\* ソース（うち \*\*(?P<usable>\d+)\*\* はキー不要）、"
-         r"\*\*(?P<domains>\d+)\*\* ドメイン",
-         "設定上は **{total}** ソース（うち **{usable}** はキー不要）、**{domains}** ドメイン"),
+    'README.ja.md': [
+        ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
+        ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
+        ('(?P<tools>\\d+) 個の MCP ツール', '{tools} 個の MCP ツール'),
     ],
-    "README.ko.md": [
-        (r"badge/engines-(?P<total>\d+)-orange", "badge/engines-{total}-orange"),
-        (r"badge/version-(?P<version>[\d.]+)-informational", "badge/version-{version}-informational"),
-        (r"badge/MCP-(?P<tools>\d+)%20tools-purple", "badge/MCP-{tools}%20tools-purple"),
-        (r"뒤에는 (?P<total>\d+)개의 검색 소스가 있고 (?P<domains>\d+)개 업무 영역",
-         "뒤에는 {total}개의 검색 소스가 있고 {domains}개 업무 영역"),
-        (r"(?P<tools>\d+)개의 MCP 도구", "{tools}개의 MCP 도구"),
-        (r"\*\*(?P<total>\d+)개 소스, 그중 (?P<usable>\d+)개는 키 없이 바로 사용\.\*\*",
-         "**{total}개 소스, 그중 {usable}개는 키 없이 바로 사용.**"),
-        (r"\(무설정 (?P<usable>\d+)개\)", "(무설정 {usable}개)"),
-        (r"v2\.9\.x 계열에서 모두 구현되었습니다: (?P<total>\d+) 소스 / (?P<domains>\d+) 도메인 / "
-         r"(?P<usable>\d+) 무설정",
-         "v2.9.x 계열에서 모두 구현되었습니다: {total} 소스 / {domains} 도메인 / {usable} 무설정"),
-        (r"ENGINE_CATALOG\.md에 있다: (?P<total>\d+) 소스, (?P<usable>\d+) 무설정, (?P<domains>\d+) 도메인",
-         "ENGINE_CATALOG.md에 있다: {total} 소스, {usable} 무설정, {domains} 도메인"),
-        (r"설정에는 현재 \*\*(?P<total>\d+)\*\* 소스\(\*\*(?P<usable>\d+)\*\*개는 키 불필요\)와 "
-         r"\*\*(?P<domains>\d+)\*\* 도메인",
-         "설정에는 현재 **{total}** 소스(**{usable}**개는 키 불필요)와 **{domains}** 도메인"),
+    'README.ko.md': [
+        ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
+        ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
+        ('(?P<tools>\\d+)개의 MCP 도구', '{tools}개의 MCP 도구'),
     ],
-    "SKILL.md": [
-        (r"收录 (?P<total>\d+) 个源、(?P<usable>\d+) 免密钥", "收录 {total} 个源、{usable} 免密钥"),
-    ],
-    "package.json": [
-        (r"(?P<total>\d+) 个源（(?P<usable>\d+) 个免密钥开箱可用）",
-         "{total} 个源（{usable} 个免密钥开箱可用）"),
-        (r"(?P<tools>\d+) 个 MCP 工具（与 CLI 能力面对齐）", "{tools} 个 MCP 工具（与 CLI 能力面对齐）"),
-    ],
-    "packages/marketplace.json": [
-        (r"over (?P<total>\d+) sources", "over {total} sources"),
-        (r"（(?P<total>\d+) 源）", "（{total} 源）"),
-    ],
-    "packages/argo-zcode/.zcode-plugin/plugin.json": [
-        (r"over (?P<total>\d+) sources \((?P<usable>\d+) keyless\)",
-         "over {total} sources ({usable} keyless)"),
-        (r"over (?P<total>\d+) sources(?! \()", "over {total} sources"),
-        (r"(?P<total>\d+) 个源、(?P<usable>\d+) 个免密钥可用", "{total} 个源、{usable} 个免密钥可用"),
-    ],
-    "packages/argo-zcode/skills/argo/SKILL.md": [
-        (r"收录 (?P<total>\d+) 个源、(?P<usable>\d+) 个免密钥可用",
-         "收录 {total} 个源、{usable} 个免密钥可用"),
-        (r"（(?P<total>\d+) 源、(?P<usable>\d+) 免密钥）", "（{total} 源、{usable} 免密钥）"),
-    ],
-    "server.json": [
-        (r'"description": "Metasearch (?P<total>\d+) sources',
-         '"description": "Metasearch {total} sources'),
+    'package.json': [
+        ('(?P<tools>\\d+) 个 MCP 工具（与 CLI 能力面对齐）', '{tools} 个 MCP 工具（与 CLI 能力面对齐）'),
     ],
 }
 
@@ -522,10 +407,26 @@ def _count_truth() -> dict[str, str]:
     }
 
 
+COUNTS_JSON = SKILL_DIR / "assets" / "readme" / "counts.json"
+
+
+def render_counts_badge(truth: dict[str, str]) -> str:
+    """shields.io endpoint 徽章数据：README 首屏 engines 徽章唯一的数字来源。"""
+    import json  # noqa: PLC0415
+    return json.dumps({"schemaVersion": 1, "label": "engines",
+                       "message": truth["total"], "color": "orange"},
+                      ensure_ascii=False) + "\n"
+
+
 def sync_counts(write: bool) -> list[str]:
     """把 README / 徽章 / 包描述里的计数校正到真源，返回有差异的文件。"""
     truth = _count_truth()
     stale: list[str] = []
+    badge = render_counts_badge(truth)
+    if not COUNTS_JSON.exists() or COUNTS_JSON.read_text(encoding="utf-8") != badge:
+        stale.append(str(COUNTS_JSON.relative_to(SKILL_DIR)))
+        if write:
+            COUNTS_JSON.write_text(badge, encoding="utf-8", newline="\n")
     for rel, rules in COUNT_RULES.items():
         path = SKILL_DIR / rel
         if not path.exists():

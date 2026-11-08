@@ -54,7 +54,7 @@ for p in "${PROFILES[@]}"; do
   fi
   cp -a "$DEST" "$DSH_HOME/backups/argo-dsh-sync-$TS-$p"
   rsync -a --delete "$SRC/dsh/" "$DEST/dsh/"
-  cp "$SRC/package.json" "$SRC/cordis.patch.yml" "$SRC/README.md" "$DEST/"
+  rsync -a "$SRC/package.json" "$SRC/cordis.patch.yml" "$SRC/README.md" "$DEST/"
   echo "[synced] $p"
 done
 

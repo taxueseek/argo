@@ -603,7 +603,10 @@ def cmd_revive(engine: str) -> int:
     quota_cleared = False
     try:
         from quota import get_quota_manager
-        quota_cleared = get_quota_manager().clear_remote_exhausted(engine)
+        qm = get_quota_manager()
+        quota_cleared = qm.clear_remote_exhausted(engine)
+        if ":" in engine:
+            quota_cleared = qm.clear_remote_exhausted(engine.split(":", 1)[-1]) or quota_cleared
     except Exception:
         pass
     print(f"revived {engine}: breaker(had_state={cleared.get('had_state')}, "

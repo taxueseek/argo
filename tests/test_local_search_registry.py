@@ -143,6 +143,22 @@ class TestCrossRegistryConsistency(unittest.TestCase):
             "同名引擎的响应格式声明不一致——解析器会按不同格式解析同一份响应：\n  "
             + "\n  ".join(mismatched)))
 
+    def test_disabled_in_main_is_not_enabled_in_subskill(self):
+        mismatched = []
+        for name, v in _ls_engines().items():
+            if not isinstance(v, dict):
+                continue
+            main = self.main.get(name)
+            if not isinstance(main, dict):
+                continue
+            ls_on = bool(v.get("enabled", True))
+            main_on = bool(main.get("enabled", True))
+            if not main_on and ls_on:
+                mismatched.append(f"{name}: 主清单已停用 (enabled=False)，子技能仍开启 (enabled=True)")
+        self.assertFalse(mismatched, (
+            "同名引擎在主清单已停用，子技能不得继续开启派发死源：\n  "
+            + "\n  ".join(mismatched)))
+
 
 if __name__ == "__main__":
     unittest.main()

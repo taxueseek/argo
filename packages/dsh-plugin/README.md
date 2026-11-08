@@ -94,7 +94,7 @@ argo 的 `deepseek_search` 引擎（官方 `api.deepseek.com/v1/tools/search`，
 - 解析路径：`ctx.get('credentials').resolve('DEEPSEEK_API_KEY')`，逐次解析——在 web Models 页轮换 key 后，下一跳新连接即生效，无需重启插件（池内连接最长存活 `searchIdleMs`，默认 60s）
 - 层级语义与官方后端一致：**凭证服务管理的 `.credentials.yaml`（web Models 页或设置页写入的那把）> 启动环境变量 > 调用目录 `.env` > `$DSH_HOME/.env`**——存储值胜出，所以面板轮换 key 后 argo 子进程拿到的是新值，不是启动时的旧值
 - 安全：插件不读 key 文件、不落盘、不打日志；key 值只经内存进入 argo 子进程 env，任何输出与错误信息都不含它
-- 旧宿主无 credentials 服务时静默跳过：argo 侧该引擎按缺 key 停用，其余 265 个源不受影响
+- 旧宿主无 credentials 服务时静默跳过：argo 侧该引擎按缺 key 停用，其余源不受影响
 - `keyRefs: []` 可整体关闭转发；后续要转发别的宿主凭证（如 `ARGO_EXA_API_KEY`），把引用名加进数组即可，entry 必须是 POSIX 标识符（apply 期 loud fail）
 - `argoEnv`（设置页「引擎」分区写入）：argo 行为开关，一行一个 `KEY=VALUE`，名字限 curated 白名单（specs.js 的 `ARGO_ENV_SPECS`，35 个；白名单外 apply 期 loud fail，防拼错静默失效）；授权位与路径 / 状态类变量刻意不收。与 `keyRefs` 的分工：`keyRefs` 管密钥（凭证库），`argoEnv` 管行为开关（插件配置），两者都不落明文
 
