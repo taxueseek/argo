@@ -6,8 +6,8 @@
 
 ## 一、总量与口径
 
-- **收录 287 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
-- **开箱可用 241 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **收录 288 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **开箱可用 242 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 11 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 265 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 15 个要自备密钥（免费额度）：em_miaoxiang、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 266 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 15 个要自备密钥（免费额度）：em_miaoxiang、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 22 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -128,7 +128,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `yuanbao` | 需自备密钥 | 按调用计费 | 2000/月 | ARGO_YUANBAO_API_KEY | 域 chinese_general、域 company_search | 腾讯元宝搜索 |
 | `zhihu_global` | 需自备密钥 | 按调用计费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 chinese_general、域 news_realtime、域 zhihu_content | 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET） |
 
-### 其他垂直（37）
+### 其他垂直（38）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -592,7 +592,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 287 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 288 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

@@ -3011,6 +3011,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: 今日头条热榜（hot-board JSON，免认证）
+- name: tracemoe
+  tier: T1
+  type: tracemoe
+  coverage:
+  - image
+  - reverse_image
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: trace.moe 动画场景识别（query 为图片 URL，免 key，给作品名+集数+时间点，按出口 IP 限频）
 - name: train
   tier: T1
   type: cli

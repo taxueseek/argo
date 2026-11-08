@@ -675,7 +675,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_YUANBAO_API_KEY` | 对应引擎/服务的凭据（腾讯元宝搜索，官方名 `TENCENTCLOUD_WSA_APIKEY` 同样识别） | 缺密钥=该源跳过或降级 |
 | `ARGO_ZHIHU_ACCESS_SECRET` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 
-### 行为调参（38）
+### 行为调参（39）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|

@@ -26,7 +26,7 @@ triggers:
 
 # Argo — 统一搜索与证据核验
 
-> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 287 个源、241 免密钥；digup 默认关；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 跳过）。
+> 不止搜到，还要核到：高后果问题标 `fetch_required`、结果标 `fetch_suggested`，`--verify` 核验正文并回填证据分。收录 288 个源、242 免密钥；digup 默认关；deepseek_search 默认开、需 DEEPSEEK_API_KEY（按次计费，无 key 跳过）。
 
 ## 快速上手
 
@@ -113,7 +113,7 @@ argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 - **结果异常少**：看 `funnel` 六格阶段计数，哪格归零即塌陷点。
 - **慢查询**：看 `timing.dispatch` 的 `tail_wait_ms`（就绪后还在等）/`abandoned_engine_ms`。
 - **引擎列表**：`argo list-engines` 默认摘要够用，别加 `--all`（~54 KB）。
-- **缺密钥**：`argo settings list` 查，`argo settings set <变量>` 从 stdin 写入。
+- **缺密钥**：`argo settings list/set/unset`（set 值走 stdin）。
 - `-n` 超 10 无收益。
 
 ## 按需读取（低频操作细节）

@@ -822,7 +822,10 @@ def _tracemoe_get(image_url: str, timeout: float, engine: str) -> str | None:
     proxies = None
     try:
         from net_proxy import resolve_proxy
-        p = resolve_proxy(_TRACEMOE_ENDPOINT)
+        # 显式 override：ARGO_TRACEMOE_PROXY 优先于 config.yaml 域规则；
+        # 未设置（get_env 回 None）时照走 rules→全局→标准 env 的常规链
+        p = resolve_proxy(_TRACEMOE_ENDPOINT,
+                          override=get_env("ARGO_TRACEMOE_PROXY"))
         if p:
             proxies = {"https": p}
     except Exception:

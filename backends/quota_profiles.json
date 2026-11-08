@@ -2390,6 +2390,16 @@
     "cost_tier": "free",
     "priority": 28
   },
+  "tracemoe": {
+    "label": "trace.moe 场景识别",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 38
+  },
   "train": {
     "label": "火车余票",
     "qps": 2,

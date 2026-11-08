@@ -2714,5 +2714,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "tracemoe": {
+    "label": "trace.moe 场景识别",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }
