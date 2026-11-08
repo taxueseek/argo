@@ -349,8 +349,10 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
             index_name = str(item_header.get("index_name") or "").strip()
             author = _saucenao_author(item_data)
             thumb = str(item_header.get("thumbnail") or "").strip()
+            pixiv_id = item_data.get("pixiv_id")
             bits = [b for b in (
                 f"相似度 {sim:g}%" if sim > 0 else "",
+                f"作品 {pixiv_id}" if pixiv_id else "",
                 f"库 {index_name}" if index_name else "",
                 f"作者 {author}" if author else "",
                 f"素材 {item_data.get('material')}" if item_data.get("material") else "",
@@ -359,6 +361,8 @@ def _build_saucenao_engine(spec: dict[str, Any]) -> Any:
                 "title": _saucenao_title(item_data, index_name)[:200],
                 "url": page_url,
                 "snippet": " · ".join(bits)[:300],
+                "author": author,
+                "similarity": sim,
                 "source": spec.get("_name") or "saucenao",
                 "score": rank_score(min(sim / 100.0, 1.0) if sim > 0 else 0.6, len(results)),
                 "metadata": {

@@ -241,7 +241,10 @@ class TestSaucenao(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["url"], _PIXIV)
         self.assertIn("相似度 92.5%", out[0]["snippet"])
+        self.assertIn("作品 123456", out[0]["snippet"])
         self.assertIn("artist", out[0]["snippet"])
+        self.assertEqual(out[0]["author"], "artist")
+        self.assertEqual(out[0]["similarity"], 92.5)
         self.assertEqual(out[0]["metadata"]["similarity"], 92.5)
 
     def test_negative_status_is_error_not_empty(self):

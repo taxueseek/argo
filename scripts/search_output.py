@@ -70,6 +70,9 @@ _AGENT_RESULT_FIELDS = (
     # 出现（backfill_results 回填），未核验结果不造假摘要。
     "summary",
     "image_url", "image_license",
+    # 双通道引擎（同一引擎名背后有匿名与认证两条取数通路）标出本条实际走的
+    # 通道：内容范围差异正是两条通路的区别，剥掉它就只能靠猜。
+    "channel",
     "episode_count", "duration_minutes",
     # 本地已有正文：是可操作提示而非观测数据——告诉 Agent 这条不必重新联网，
     # 以及全文在哪（被截断时还给出 full_text_path）。剥掉它等于把「随时

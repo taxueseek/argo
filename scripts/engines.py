@@ -232,6 +232,8 @@ from engines_builders_reverse_image import (  # noqa: F401
     _build_google_lens_engine,
     _build_saucenao_engine,
 )
+# Pixiv 正向关键词搜图：路径编码与预览图规整需要专用 builder。
+from engines_builders_pixiv import _build_pixiv_engine  # noqa: F401
 
 
 
@@ -447,6 +449,7 @@ _BUILDERS = {
     "saucenao": _build_saucenao_engine,
     "animetrace": _build_animetrace_engine,
     "google_lens": _build_google_lens_engine,
+    "pixiv": _build_pixiv_engine,
     "bing_rss": _build_bing_rss_engine,
     "ths_hot": _build_ths_hot_engine,
     "cls_telegraph": _build_cls_telegraph_engine,

@@ -190,6 +190,9 @@ KNOWN_ENV_ALIASES: dict[str, list[str]] = {
     # argo 推荐名在前；两个都认，便于照文档配的用户直接可用。
     "yuanbao": ["ARGO_YUANBAO_API_KEY", "TENCENTCLOUD_WSA_APIKEY",
                 "YUANBAO_API_KEY"],
+    # Pixiv App API 的 OAuth refresh token：缺失时引擎走匿名 Web Ajax，
+    # 配了之后才切到 App API（认证后可见范围更全）。
+    "pixiv": ["ARGO_PIXIV_REFRESH_TOKEN"],
 }
 
 # 占位符名 → 候选 env（用于 config 中 {TAVILY_API_KEY} 展开）
@@ -223,6 +226,7 @@ OPTIONAL_ENV_ENGINES: set[str] = {
     "github",       # GITHUB_TOKEN 仅提高限频
     "anysearch",    # ANYSEARCH_API_KEY 可选
     "firecrawl",    # FIRECRAWL_API_KEY 可选：官方免费层匿名（keyless）即可搜索
+    "pixiv",        # ARGO_PIXIV_REFRESH_TOKEN 可选：无 token 走匿名 Web Ajax
 }
 
 

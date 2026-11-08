@@ -51,9 +51,17 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
             item["published_at"] = r["published_at"]
         # 图链与许可：图搜/反搜图结果靠这两条「看图」，缺了 Agent 只剩出处页链接。
         # 缩略图只作展示（出处与引用仍以 url 为准），所以不进 snippet、也不当证据。
-        for k in ("image_url", "image_license"):
+        for k in ("image_url", "image_url_preview", "image_license"):
             if r.get(k):
                 item[k] = r[k]
+        # 作者/标签/相似度：多作者混排与「相似≠同一作品」的判断全靠这三条
+        for k in ("author", "similarity", "tags"):
+            if r.get(k):
+                item[k] = r[k]
+        # 双通道引擎（同一引擎名背后有两条取数通路）标出本条结果实际走的通道，
+        # 排查「匿名档拿不到认证后内容」时靠这一条区分，不留就只能看原始日志。
+        if r.get("channel"):
+            item["channel"] = r["channel"]
         # 顶包标记：recovery 替换了引擎原结果时透传，供上层识别结果已被代答
         if r.get("_recovered"):
             item["recovered"] = r["_recovered"]

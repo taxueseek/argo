@@ -2708,5 +2708,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "pixiv": {
+    "label": "Pixiv 公开作品",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }
