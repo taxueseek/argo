@@ -85,7 +85,10 @@ class TestRegistered(unittest.TestCase):
 
     def test_batch12_engines_registered(self):
         import engines
-        for name in ("so", "shenma", "qwant", "ecosia"):
+        # qwant/ecosia 2026-11-08 实测停用（上游反爬，config enabled=false），
+        # 停用引擎按设计退出注册表（同 searxng/brave/jikan），不再在此断言；
+        # 构建器保留待上游变化后重开。
+        for name in ("so", "shenma"):
             self.assertTrue(engines.is_registered(name),
                             f"新引擎 {name} 未注册（构建器与 config 声明必须成对）")
 

@@ -758,7 +758,7 @@ engines:
   - general
   latency_ms: 2000
   cost: free
-  status: ok
+  status: disabled
   recommended: true
   explicit_only: true
   desc: Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页
@@ -1658,7 +1658,7 @@ engines:
   - general
   latency_ms: 2000
   cost: free
-  status: ok
+  status: disabled
   recommended: true
   explicit_only: false
   desc: Bing News本地（http）
@@ -1855,7 +1855,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面，JSON 免认证）
+  desc: Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面；old-search 两步 sst 流程）
 - name: matichon
   tier: T1
   type: rss_feed
@@ -2467,7 +2467,7 @@ engines:
   - general
   latency_ms: 2000
   cost: free
-  status: ok
+  status: disabled
   recommended: true
   explicit_only: true
   desc: Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页

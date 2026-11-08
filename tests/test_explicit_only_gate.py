@@ -23,7 +23,7 @@ backends/domain_profiles.json 的 documents 里，semantic_route 打不到分。
   ② 候选池侧：get_engines(routable_only=True) 排除全部 explicit_only 引擎；
   ③ 显式路径不受牵连：--engine 指定照常单发（契约只挡自动分发）。
 
-用 ecosia（免 key 搜索引擎）而不是 deepseek_search 做路由侧样本：
+用 tinyfish（免 key 搜索引擎）而不是 deepseek_search 做路由侧样本：
 conftest 把 ARGO_ENV_FILE 指向不存在的文件隔离真实密钥，带 key 的引擎在
 测试环境被 env_ready 挡掉，会重现 conftest 自己警告的假绿。
 """
@@ -43,8 +43,10 @@ from config import get_engines, load_config  # noqa: E402
 # 无域 pattern 命中、走 TF-IDF 通用分支的查询（与 test_route_tfidf_weak_score 同型）
 _QUERY = "nanjing food recommendations"
 # 免 key 的 explicit_only 搜索引擎：测试环境里不被 env_ready 挡掉，
-# 能真实走到注入分支（deepseek_search 带 key 时的同型泄漏，见模块 docstring）
-_EXPLICIT_ONLY = "ecosia"
+# 能真实走到注入分支（deepseek_search 带 key 时的同型泄漏，见模块 docstring）。
+# 原样本 ecosia 已于 2026-11-08 停用（上游 bot 盾 403，禁用引擎被 routable
+# 过滤挡住会让本契约测试退化成空转），换同样免 key、enabled 的 tinyfish。
+_EXPLICIT_ONLY = "tinyfish"
 
 
 def test_strong_tfidf_pick_cannot_be_explicit_only():
@@ -93,7 +95,7 @@ def test_routable_pool_excludes_every_explicit_only_engine():
 
 def test_explicit_engine_flag_still_dispatches():
     """契约只挡自动分发：用户显式 --engine 指定照常单发，不过滤。"""
-    out = route_query("ecosia 搜索测试", engine_override=_EXPLICIT_ONLY)
+    out = route_query("tinyfish 搜索测试", engine_override=_EXPLICIT_ONLY)
     assert out["engines"] == [_EXPLICIT_ONLY], (
         f"显式指定被误伤：{out['engines']}")
     assert out.get("reason", "").startswith("用户指定"), out.get("reason")

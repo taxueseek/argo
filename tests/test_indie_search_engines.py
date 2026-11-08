@@ -43,40 +43,90 @@ class _FakeResp:
 
 
 class TestMarginaliaParse(unittest.TestCase):
+    """2026-11-08 搬家后契约：old-search 两步 sst 流程 + HTML 解析。
+
+    fixtures 取自 2026-11-08 实测真实响应（等待页 1011B / 结果页 58.5KB、
+    88 外链）的骨架，结构与类名（card search-result / title / description /
+    additional-results）逐一对齐上游。
+    """
+
+    _WAIT_PAGE = (
+        b'<html lang="en-US"><head><title>Error</title></head><body>'
+        b'<div class="infobox"><h1>Wait For A Moment</h1>'
+        b'<p>The search engine is currently barraged by queries from bots</p>'
+        b'<a href="/search?query=python&amp;sst=S-abc123def">this link</a>'
+        b'</div></body></html>'
+    )
+
+    _RESULTS_PAGE = b"""<section id="results" class="sb-left">
+<section data-ms-rank="5" class="card search-result" >
+<div class="url"><a rel="nofollow external" href="https://a.example/1">https://a.example/1</a></div>
+<h2> <a tabindex="-1" class="title" rel="nofollow external" href="https://a.example/1">T1</a> </h2>
+<p class="description">desc <b>one</b></p>
+<div class="utils">Also from a.example</div>
+<ul class="additional-results">
+<li><a href="https://a.example/1x">Extra One</a></li>
+</ul>
+</section>
+<section data-ms-rank="6" class="card search-result" >
+<div class="url"><a rel="nofollow external" href="https://b.example/2">https://b.example/2</a></div>
+<h2> <a tabindex="-1" class="title" rel="nofollow external" href="https://b.example/2">T2</a> </h2>
+<p class="description">desc two</p>
+</section>
+</section>"""
+
     def setUp(self):
         self.engine = _build_marginalia_engine({"timeout": 8})
 
-    def test_basic_shape(self):
-        payload = {
-            "query": "python",
-            "results": [
-                {"title": "T1", "url": "https://a.example/1", "description": "desc one",
-                 "quality": "3.0", "format": "html"},
-                {"title": "T2", "url": "https://b.example/2", "description": "desc two"},
-            ],
-        }
-        with patch("urllib.request.urlopen", return_value=_FakeResp(json.dumps(payload).encode())):
+    def test_gated_two_step_flow(self):
+        """bot 门等待页 → 提取 sst → 睡 2.2s 复访 → 解析结果页。"""
+        with patch("urllib.request.urlopen",
+                   side_effect=[_FakeResp(self._WAIT_PAGE),
+                                _FakeResp(self._RESULTS_PAGE)]), \
+             patch("time.sleep"):
             res = self.engine("python", 3)
-        self.assertEqual(len(res), 2)
+        self.assertEqual(len(res), 3)
         self.assertEqual(res[0]["title"], "T1")
         self.assertEqual(res[0]["url"], "https://a.example/1")
-        self.assertEqual(res[0]["snippet"], "desc one")
+        self.assertEqual(res[0]["snippet"], "desc one")  # 内嵌 <b> 被剥掉
         self.assertEqual(res[0]["source"], "marginalia")
+        # additional-results 补足：只有标题链接，无 description
+        self.assertEqual(res[2]["title"], "Extra One")
+        self.assertEqual(res[2]["url"], "https://a.example/1x")
+        self.assertEqual(res[2]["snippet"], "")
+
+    def test_direct_results_skip_gate(self):
+        """未触发 bot 门时一步直出，不发第二次请求。"""
+        with patch("urllib.request.urlopen",
+                   side_effect=[_FakeResp(self._RESULTS_PAGE)]) as mu:
+            res = self.engine("python", 5)
+        self.assertEqual(mu.call_count, 1)
+        self.assertEqual(len(res), 3)
 
     def test_n_respects_limit(self):
-        payload = {"results": [{"title": f"T{i}", "url": f"https://x/{i}"} for i in range(5)]}
-        with patch("urllib.request.urlopen", return_value=_FakeResp(json.dumps(payload).encode())):
+        cards = b"".join(
+            b'<section class="card search-result" >'
+            b'<h2> <a class="title" href="https://x/%d">T%d</a> </h2>'
+            b'<p class="description">d%d</p></section>' % (i, i, i)
+            for i in range(5))
+        with patch("urllib.request.urlopen",
+                   side_effect=[_FakeResp(b'<section id="results">' + cards + b'</section>')]):
             res = self.engine("q", 2)
         self.assertEqual(len(res), 2)
+        self.assertEqual(res[0]["title"], "T0")
 
-    def test_empty_and_missing_fields(self):
-        with patch("urllib.request.urlopen", return_value=_FakeResp(json.dumps({"results": []}).encode())):
+    def test_no_results_returns_empty(self):
+        with patch("urllib.request.urlopen",
+                   side_effect=[_FakeResp(b'<html>nothing here</html>')]):
             self.assertEqual(self.engine("q", 3), [])
-        payload = {"results": [{"url": "https://only-url"}]}
-        with patch("urllib.request.urlopen", return_value=_FakeResp(json.dumps(payload).encode())):
-            res = self.engine("q", 3)
-        self.assertEqual(len(res), 1)
-        self.assertEqual(res[0]["title"], "")
+
+    def test_expired_token_gate_again_returns_empty(self):
+        """复用过期令牌会被再次门住（2026-11-08 实测形态）：结果为空不抛错。"""
+        with patch("urllib.request.urlopen",
+                   side_effect=[_FakeResp(self._WAIT_PAGE),
+                                _FakeResp(self._WAIT_PAGE)]), \
+             patch("time.sleep"):
+            self.assertEqual(self.engine("q", 3), [])
 
     def test_network_error_returns_empty(self):
         with patch("urllib.request.urlopen", side_effect=OSError("boom")):

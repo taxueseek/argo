@@ -311,6 +311,11 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     # 详见 engines_builders_batch9._build_pubmed_engine 与
     # tests/test_pubmed_local_0919.py。
     "nasa_images": "图源（astro_space@4 / earth_science@5）：另有图片意图通道，待核实",
+    # 2026-11-08（60f168e）图像准入后位次性休眠（60f168e 落地时漏登，本次收口补账）：
+    # vam@art_museum@5、wallhaven@image_search@4，均超 fast/auto 预算窗，
+    # 与 nasa_images 同语义：另有图片意图通道触达
+    "vam": "图源（art_museum@5）：另有图片意图通道，待核实",
+    "wallhaven": "图源（image_search@4）：另有图片意图通道，待核实",
     "parallel": "待接线：chinese_tech_deep 位次 5",
     "reddit": "social 域位次 7：社交引擎另有专用通道，待核实是否真休眠",
     "twitter": "social 域位次 5：社交引擎另有专用通道，待核实是否真休眠",

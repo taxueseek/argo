@@ -2682,37 +2682,77 @@ def _build_google_patents_engine(spec: dict[str, Any]) -> Any:
 # ── Marginalia 独立索引引擎 ──────────────────────────────────────────────────
 
 def _build_marginalia_engine(spec: dict[str, Any]) -> Any:
-    """Marginalia 独立爬虫索引搜索（api.marginalia.nu，免认证 JSON）。
+    """Marginalia 独立爬虫索引搜索（old-search.marginalia.nu，免认证 HTML）。
 
-    非大厂代理的独立索引，专挖长尾非商业页面；JSON 直出。
+    2026-11-08 搬家：api.marginalia.nu JSON 直出挂死（8s/25s 两轮复测 0 字节），
+    主站 search.marginalia.nu 已改 SPA 空壳；old-search 服务端渲染仍活。
+    上游 bot 门是文档化行为（等待页提示「wait 2 seconds」并给 sst 通行链接）：
+    两步流程 = 先取等待页提取 sst，睡 2.2s 后复访该链接（实测 88 外链/页；
+    令牌必须新鲜，复用过期令牌会被再次门住）。非大厂代理的独立索引，
+    专挖长尾非商业页面。
     """
-    timeout = spec.get("timeout", 10)
+    timeout = spec.get("timeout", 16)
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         import urllib.parse as up
         to = _timeout or timeout
-        url = f"https://api.marginalia.nu/public/search/{up.quote(query)}?count={min(n, 10)}"
+        base = "https://old-search.marginalia.nu"
+        url = f"{base}/search?query={up.quote(query)}"
         try:
             with http_open(urllib.request.Request(
                     url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to, engine=spec.get("_name", "")) as resp:
-                data = json.loads(resp.read().decode("utf-8", "replace"))
+                page = resp.read().decode("utf-8", "replace")
         except Exception as e:
             logger.warning(f"Marginalia 失败: {e}")
             return []
+        gate = re.search(r'href="(/search\?query=[^"]*sst=[^"]+)"', page)
+        if gate:
+            time.sleep(2.2)
+            try:
+                with http_open(urllib.request.Request(
+                        base + gate.group(1).replace("&amp;", "&"),
+                        headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                    page = resp.read().decode("utf-8", "replace")
+            except Exception as e:
+                logger.warning(f"Marginalia sst 复访失败: {e}")
+                return []
         results = []
-        for _rk20, r in enumerate((data.get("results") or [])[:n]):
-            title = r.get("title", "")
-            url_ = r.get("url", "")
-            if not title and not url_:
+        for _rk20, block in enumerate(re.split(r'<section[^>]*class="card search-result"', page)[1:]):
+            m = re.search(r'<h2>\s*<a[^>]*href="(https?://[^"]+)"[^>]*>(.*?)</a>', block, re.S)
+            if not m:
                 continue
+            title = _unescape(re.sub(r"<[^>]+>", "", m.group(2))).strip()
+            if not title:
+                continue
+            md = re.search(r'<p class="description">(.*?)</p>', block, re.S)
+            desc = _unescape(re.sub(r"<[^>]+>", "", md.group(1))).strip() if md else ""
             results.append({
-                "title": title,
-                "url": url_,
-                "snippet": r.get("description", "")[:300],
+                "title": title[:200],
+                "url": m.group(1),
+                "snippet": desc[:300],
                 "source": "marginalia",
                 "score": rank_score(0.7, _rk20),
             })
+            if len(results) >= n:
+                return results
+        # 补足：同域折叠的 additional-results 只有标题链接（无 description）
+        for mu in re.finditer(r'<ul class="additional-results">(.*?)</ul>', page, re.S):
+            for ma in re.finditer(r'<li><a href="(https?://[^"]+)"[^>]*>(.*?)</a></li>', mu.group(1), re.S):
+                title = _unescape(re.sub(r"<[^>]+>", "", ma.group(2))).strip()
+                if not title:
+                    continue
+                results.append({
+                    "title": title[:200],
+                    "url": ma.group(1),
+                    "snippet": "",
+                    "source": "marginalia",
+                    "score": rank_score(0.55, len(results)),
+                })
+                if len(results) >= n:
+                    break
+            if len(results) >= n:
+                break
         return results
     return _engine
 

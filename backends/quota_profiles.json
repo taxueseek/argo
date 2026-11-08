@@ -1472,7 +1472,7 @@
   },
   "marginalia": {
     "label": "Marginalia 独立索引",
-    "qps": 2,
+    "qps": 1,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
