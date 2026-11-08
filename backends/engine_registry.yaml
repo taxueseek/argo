@@ -1,6 +1,6 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
-last_updated: '2026-11-05'
+last_updated: '2026-11-08'
 engines:
 - name: aljazeera
   tier: T1
@@ -2382,6 +2382,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: 人民网搜索（权威综合中文新闻，官方接口，免认证）
+- name: pixiv
+  tier: T1
+  type: pixiv
+  coverage:
+  - image
+  - media
+  - web
+  latency_ms: 2500
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18
 - name: polymarket
   tier: T1
   type: http

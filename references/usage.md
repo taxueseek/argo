@@ -593,10 +593,10 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 
 ## 功能开关总表（`ARGO_*`，唯一事实=源码扫描）
 
-> 121 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
+> 123 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
-### 能力开关（42）
+### 能力开关（43）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -629,6 +629,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_NO_AUTORELOAD` | 关闭环境配置文件（~/.config/argo/env）热重载感知 | 默认开；=1 关闭 |
 | `ARGO_NO_CACHE` | 测试模式跳过结果缓存读取 | 默认关，等价 --no-cache；仅改动调试需要实时结果时开启 |
 | `ARGO_NO_PREWARM` | MCP warm 线程里的 anysearch 预连接 | 默认开（把 TLS 握手藏进初始化空档）；=1 跳过预连 |
+| `ARGO_PIXIV_ALLOW_R18` | pixiv 引擎放行 R-18 作品（含下游预览图） | 默认关=只回全年龄档；=true 时每次都按原样返回 |
 | `ARGO_PROXY` | 全局代理配置（支持 http://、socks5://） | 传 "direct" 表示强制直连 |
 | `ARGO_PYTHON` | Argo 执行器与子进程使用的 Python 解释器路径覆盖 | 默认自动寻找系统高版本 python3.x |
 | `ARGO_REDSKILL_CACHE` | 小红书 Redskill 搜索引擎本地缓存路径覆盖 | 默认跟随系统状态目录 |
@@ -643,7 +644,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_WOLFRAM_APPID` | WolframAlpha 知识计算引擎的 AppID | 缺省则跳过该引擎 |
 | `ARGO_XHS_TIMEOUT` | 小红书平台抓取请求超时上限（秒） | 默认 3.0s；慢网调试时可调大 |
 
-### API 密钥（值放 ~/.config/argo/env）（25）
+### API 密钥（值放 ~/.config/argo/env）（26）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -663,6 +664,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_OPENCORPORATES_API_TOKEN` | 对应引擎/服务的凭据（OpenCorporates，2026-10 起匿名请求被上游全面拒 401） | 缺密钥=该源跳过或降级 |
 | `ARGO_OCTEN_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_PARALLEL_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_PIXIV_REFRESH_TOKEN` | Pixiv App API 的 OAuth refresh token（oauth.secure.pixiv.net 换 access token） | 缺失=pixiv 引擎走匿名 Web Ajax；配置后只走 App API，认证失败不回退 |
 | `ARGO_QWEATHER_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_SELTZ_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_TAVILY_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |

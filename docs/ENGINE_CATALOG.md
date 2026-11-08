@@ -11,7 +11,7 @@
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 11 个**：`brave`、`digup`、`europeana`、`felo`、`jikan`、`local_goodreads`、`nbs_stats`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 26 个**：`animetrace`、`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`google_lens`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`qwant`、`saucenao`、`sciverse`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 27 个**：`animetrace`、`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`google_lens`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -165,6 +165,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `metaso_image` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（图片） |
 | `metaso_podcast` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（播客） |
 | `metaso_video` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（视频） |
+| `pixiv` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18 |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
 | `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |

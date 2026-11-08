@@ -1,0 +1,52 @@
+# Pixiv 公开作品检索：关键词搜索与画师作品列表，匿名 Web / OAuth App API 双通道
+#
+# 未配置 refresh token 时走匿名 Web Ajax；配置后只走 App API，不合并或回退。
+# 结果 channel 标出实际取数通道（web/app），排查时用于区分内容范围差异。
+# Web/App 均无公开稳定性承诺，Pixiv 随时可能调整接口行为。
+#
+# 画师作品查询：query 写 user:<画师 id>、https://www.pixiv.net/users/<id>、
+# 五到九位纯数字，或 画师:<画师名>（经 App 用户搜索取最匹配的一位）。
+# 画师查询后接空格分隔的标签，用于在该画师作品里收窄，如 画师:ke-ta フランドール。
+# 画师作品列表只有 App 接口能给出可用的图片直链，匿名通道返回明确提示。
+#
+# 标签匹配口径：search_target 取 partial_match_for_tags（默认，Web 用 s_mode=s_tag）、
+# exact_match_for_tags（Web 用 s_mode=s_tag_full）、title_and_caption（Web 用 s_mode=s_tc）；
+# 调用方也可在单次请求里覆盖。标签串按空格分隔多个标签，日文名与中文本地化标签都能命中。
+#
+# 可选环境变量：
+#   ARGO_PIXIV_REFRESH_TOKEN  Pixiv OAuth refresh token（只读，勿写入仓库）
+#   ARGO_PIXIV_ALLOW_R18      true 时允许 App R-18 结果与下游预览；默认过滤
+#
+# 防盗链说明：i.pximg.net 的图片直链需要 Referer: https://www.pixiv.net/ 才能下载，
+# 插件层的图片下载链路已自动补全该头部，CLI 或其他直接访问场景需手动加 Referer。
+#
+# 图片直链：App 通道对每条结果并发补一次作品详情，image_url 取原图（meta_single_page
+# 或多页作品的第一张），原图宽高比与预览一致；详情失败或取不到时保持 large 档。
+# 此时 image_url_preview 保留 large 直链，供下游在体积超限时回退。
+#
+# App 支持 partial_match_for_tags / exact_match_for_tags / title_and_caption、
+# start_date / end_date（YYYY-MM-DD）、search_ai_type=0/1 与 popular_desc。
+# 验证:
+#   python3 scripts/engine_validate.py --engine pixiv --stage all --admit --write-doc
+
+engine_id: pixiv
+type: pixiv
+enabled: true
+explicit_only: true
+cost_tier: free
+family: misc_vertical
+priority: 34
+timeout: 20
+order: date
+canary_query: "初音ミク"
+label: Pixiv 公开作品
+desc: "Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18"
+coverage: [image, media, web]
+recommended: false
+latency_ms: 2500
+
+image_license: "版权所有（Pixiv 作品，作者保留权利）"
+
+quality_queries:
+  - query: "初音ミク"
+  - query: "hatsune miku"
