@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.12.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-288-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ Zero config works. Three ways to install, pick your habit:
 # Option 1: install script (recommended for long-term local use)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Option 2: npm / npx (supported, currently 2.11.2; released per tag, version pinned)
+# Option 2: npm / npx (supported, currently 2.12.0; released per tag, version pinned)
 npm install -g argo-search       # install the CLI globally
 npx -y argo-search               # or run it without installing
 npx -y github:taxueseek/argo     # use this to follow the latest commit on main
@@ -283,7 +283,7 @@ Results include `selection`, `absorption`, `credibility_fast`, `evidence_flags`,
 
 ## Quick start
 
-Pick any path. **npm install is supported, current version 2.11.2**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
+Pick any path. **npm install is supported, current version 2.12.0**, published from this repo like GitHub. The npm route uses `npm install -g argo-search` or `npx -y argo-search`, is released per tag, with a pinned version and a smaller download. The GitHub route uses `install.sh` / `install.ps1` or `npx github:taxueseek/argo` and follows main. From now on every tag push makes CI publish both npm packages together with the GitHub Release; the older v1.0.1 on the registry is a historical version, do not pin to it.
 
 **Zero-config works**: without API keys, free engines + local `local_*` engines run; keyed engines are skipped when missing (and usually better when present).
 
@@ -426,7 +426,7 @@ python3 scripts/search.py --list-engines
 | `deep` | research, surveys | quality first; more engines allowed |
 | `budget` | tight quota | quota control; degrade when exhausted |
 
-### Rough capability set (v2.11.2)
+### Rough capability set (v2.12.0)
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **288 sources (242 usable with no key), 99 domains**.
 
@@ -434,6 +434,8 @@ Installed as a DSH plugin, these capabilities become native host tools: the hot-
 
 The last few releases each fixed one class of problems.
 
+
+v2.12.0 ships the unified settings center: one entry point, `argo settings`, to inspect and edit the configuration shared by every client (masked keys, per-client onboarding snippets, live switch values), with a zero-service write-back channel — fulfilling issue #44. Community-contributed pixiv keyword image search (anonymous Web / OAuth App dual channel) and a built-in trace.moe scene-recognition engine bring the source count to 288; fetch stops leaving WeChat articles unhandled; and the scheduling/routing algorithms get internal refinements.
 v2.11.2 focuses on closing external feedback. It adds SauceNAO, AnimeTrace, and Google Lens as explicit-only reverse-image engines and removes the dead tineye; fixes four silent-failure classes — keyRefs credentials never reaching subprocesses (key-needing engines no longer return skipped-missing-env), quota not self-healing on key rotation and 402 wrongly locking 30 days, and social-engine subprocess env / credential forwarding; and routes lint_spec_contracts through the shared YAML loader, clearing main's unit/extras shard failures.
 
 v2.10.2 focuses on semantic routing and the test foundation. Relevance anchor weighting and a static concept vector table landed; a 13-case human-labeled route set plus an executability gate raised labeled accuracy from 76.9% to 100% — principle/explainer queries no longer fall into academic libraries and platform-guide queries no longer trigger social listening. 123 of 201 routing-snapshot decisions (61%) moved from tfidf scoring to regex/concept direct-match, faster and more assertable. The circuit-breaker factory now resolves at call time, so the same module loaded from different paths no longer keeps separate breaker states. Snippet tag hygiene and caliber dedup join output assembly. The three-tab ZCode panel landed, and ARGO_* env vars are snapshot-restored per test case, closing sporadic ordering pollution. Concept semantic routing is off by default; enable with ARGO_CONCEPT_ROUTER=1.
@@ -661,7 +663,16 @@ argo/
 
 ## Recent updates
 
-Only the three most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
+Only the four most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
+
+### v2.12.0: Unified settings center + pixiv/trace.moe image engines + WeChat fetch branch
+
+- **Unified settings center** (#44, thanks @zooyoo): `argo settings` read-only overview page (keys masked to last 4 chars, onboarding snippets, live switch values); `--edit` form page + `apply` write-back; `set/unset/list` direct CLI edits (values read from stdin, never in argv or shell history); `argo ui` as an alias. Zero-service tradeoff: no port, no auth lifecycle, write-back unified in env_store (atomic write + 0600)
+- **pixiv keyword image search** (PR#45, thanks @OMSociety): anonymous Web / OAuth App dual channel (results carry `channel`), R-18 filtered by default, optional `ARGO_PIXIV_REFRESH_TOKEN`; `explicit_only`
+- **trace.moe scene recognition**: image URL -> anime title/episode/timestamp (AniList); keyless with per-egress-IP rate limit, `ARGO_TRACEMOE_PROXY` override; `explicit_only`
+- **WeChat article fetch branch**: mp.weixin.qq.com gets a dedicated pre-branch with exact host+path matching, no longer blocked by the anti-crawl challenge page
+- **Algorithm refinements**: hedge grace window / tail layering / query signals / TF-IDF routing / scenario-bucket shrinking, 52 unit tests green (prior-design improvements, no live A/B yet)
+- **Plugin and docs closeout**: dsh plugin specs decoupled (fast-adapt 100/100), version single-source converged, env_store line-join and `.bak` 0600 fixes
 
 ### v2.11.2: Reverse-image engines added + four silent-failure classes closed + main-CI fix
 
@@ -689,14 +700,6 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 - **Engine status consistency & orphan cleanup**: unknown engines report `status="unknown", enabled=False`, expose `disabled_reason`, and orphan `_cisa_kev` / `_osv` specs are removed (#29, #34.6)
 - **Decouple nightly drift gate**: output size growth demoted to informational, removing automatic nightly baseline pushes to `main` (#35)
 
-### v2.10.0: 284 sources + video search and fetch + crawl frontier quality control
-
-- **272 → 284 sources**: five Metaso tiers (scholar/library/image/video/podcast, all explicit-only), Sciverse records (filter by year/journal/author/subject), NCPSSD Chinese social science (CLI bridge), plus three DSH plugin catalogs and two skill indexes with install counts
-- **A video lane end to end**: new `video` domain and `--video` to force routing, `--min-duration`/`--max-duration` filters; fetching pulls Bilibili descriptions and subtitles, YouTube oEmbed/timedtext, optional `ARGO_VIDEO_ASR_CMD` fallback
-- **Crawl frontier quality control**: URL canonicalization and asset filtering, body-hash dedupe, per-host pacing with 429 exponential backoff, robots Crawl-delay; `argo watch` block-level diff separates noise from substantive change. Measured: 10 pages in 12.1s, 2000 characters of body text (was 500)
-- **Source selection and cost**: general pool now uses measured ordering with a coverage floor and language gate (issue #23); the DeepSeek hedge stays second for English general queries (`ARGO_PAID_HEDGE_DEFER` moves it down); authority levels are backfilled and authority early-stop is in
-- **Installable and releasable**: the installer takes the venv path with `.venv` auto-discovery; new `release_check.py` release-consistency precheck and the MCP Registry manifest `server.json`
-
 ### v2.9.9: security in depth + slow-source results no longer dropped + five mis-routing classes closed
 
 - **High-risk page text can no longer reach the context**: the content-security engine upgrades from "score only" to "quarantine + clean replacement"; text with `risk_score ≥ 0.5` is replaced by its cleaned version and excluded from the evidence score. On by default; `ARGO_CONTENT_RISK_GATE=0` for an emergency override
@@ -721,6 +724,7 @@ Only the three most recent versions. Full history in the [changelog](#changelog)
 
 | Version | Notes |
 |---------|-------|
+| **v2.12.0** | **Unified settings center + pixiv/trace.moe image search + WeChat fetch**: zero-service settings page and write-back via `argo settings` (#44, @zooyoo); pixiv dual-channel keyword image search (PR#45, @OMSociety); trace.moe scene recognition; dedicated WeChat fetch branch; sources 286→288. See [release notes](docs/RELEASE_NOTES_v2.12.0.md). |
 | **v2.11.2** | **Reverse-image engines + four silent-failure classes closed + main-CI fix**: adds SauceNAO/AnimeTrace/Google Lens as explicit-only reverse-image engines and removes the dead tineye; keyRefs credentials forwarded through the dsh plugin providers into the MCP pool (#41); quota key-rotation self-heal + 402 30-day lock fixed + reset hint (#42); xhs/twitter subprocess env and credential forwarding (#36); lint_spec_contracts through the shared YAML loader clears main CI. See [release notes](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **Semantic routing in three steps + labeled accuracy 76.9%→100% + circuit-breaker split fix**: relevance anchor weighting + static concept vector table (`ARGO_CONCEPT_ROUTER=1`, off by default) + route accuracy consolidation — 13-case labeled set at 100%, 61% of snapshot decisions moved to concept direct-match; circuit-breaker factory resolves at call time, killing module-alias splits; snippet tag hygiene and caliber dedup; ZCode panel three-tab layout; test env snapshot-restore hardening. See [release notes](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **Routing precision consolidation + commercial intent macro + overseas video lane + community fixes**: added `@commercial_market` macro across pharma domains; keyless overseas video via `parallel_free` + YouTube dedup; fixed local-seek zero-match double-run tax and missing-tool warnings; `url_kind: none` spec support and dead link guards; engine status consistency; decoupled nightly drift baseline. See [release notes](docs/RELEASE_NOTES_v2.10.1.md). |

@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.12.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-288-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.11.2; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.12.0; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -283,7 +283,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.11.2**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.12.0**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.11.2)
+### Conjunto aproximado de capacidades (v2.12.0)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md: 288 fuentes, 242 sin clave, 99 dominios.
 
@@ -476,6 +476,8 @@ Instalado como plugin DSH, estas capacidades se convierten en herramientas nativ
 
 Las últimas versiones arreglaron cada una una clase de problemas.
 
+
+v2.12.0 presenta el centro de configuración unificado: un solo punto de entrada, `argo settings`, para inspeccionar y editar la configuración compartida por todos los clientes (claves enmascaradas, fragmentos de conexión por cliente, valores vivos de los interruptores), con un canal de escritura sin servicio — cumpliendo la propuesta del issue #44. La búsqueda de imágenes por palabras clave de pixiv (aporte de la comunidad, canal doble Web anónima / OAuth App) y el motor integrado de reconocimiento de escenas trace.moe elevan las fuentes a 288; fetch deja de dejar los artículos de WeChat sin tratar; y los algoritmos de programación y enrutamiento reciben refinamientos internos.
 v2.11.2 se enfoca en cerrar el feedback externo. Añade SauceNAO, AnimeTrace y Google Lens como motores de búsqueda inversa explicit-only y elimina el tineye muerto; corrige cuatro fallos silenciosos — credenciales keyRefs que no llegan a los subprocesos (los motores con clave ya no devuelven skipped-missing-env), cuota que no se auto-recupera al rotar clave y 402 bloqueando 30 días por error, y env/reenvío de credenciales de subprocesos de motores sociales; y enruta lint_spec_contracts por el YAML loader compartido, despejando los fallos de los shards unit/extras de main.
 
 v2.10.2 se enfoca en el enrutado semántico y la base de pruebas. Aterrizaron la ponderación por anclas de relevancia y una tabla estática de vectores de conceptos; un conjunto etiquetado de 13 casos más una compuerta de ejecutabilidad elevó la precisión etiquetada de 76.9% a 100% — las consultas de principio/explicación ya no caen en bibliotecas académicas y las de guías de plataforma ya no disparan escucha social. 123 de 201 decisiones del snapshot de enrutado (61%) pasaron de puntuación tfidf a coincidencia directa por regex/concepto: más rápido y más asertable. La fábrica del circuit-breaker resuelve en tiempo de llamada, así que el mismo módulo cargado desde distintas rutas ya no mantiene estados separados. La higiene de etiquetas de snippet y el dedupe de calibres entran al ensamblado de salida; se incorporó el panel ZCode de tres pestañas y las variables ARGO_* se restauran por caso de prueba, cerrando la contaminación esporádica de orden. El enrutado semántico por conceptos está apagado por defecto; se activa con ARGO_CONCEPT_ROUTER=1.
@@ -703,7 +705,16 @@ argo/
 
 ## Actualizaciones recientes
 
-Solo las tres versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
+Solo las cuatro versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
+
+### v2.12.0: Centro de configuración unificado + motores de imagen pixiv/trace.moe + rama de fetch para WeChat
+
+- **Centro de configuración unificado** (#44, gracias @zooyoo): página de vista `argo settings` de solo lectura (claves enmascaradas a los últimos 4 caracteres, fragmentos de conexión, valores vivos de interruptores); página de formulario `--edit` + escritura con `apply`; ediciones directas por CLI `set/unset/list` (valores leídos de stdin, nunca en argv ni en el historial del shell); `argo ui` como alias. Compromiso sin servicio: sin puerto, sin ciclo de vida de autenticación, escritura unificada vía env_store (escritura atómica + 0600)
+- **Búsqueda de imágenes de pixiv** (PR#45, gracias @OMSociety): canal doble Web anónima / OAuth App (los resultados llevan `channel`), R-18 filtrado por defecto, `ARGO_PIXIV_REFRESH_TOKEN` opcional; `explicit_only`
+- **Reconocimiento de escenas trace.moe**: URL de imagen → título de anime/episodio/marca temporal (AniList); sin clave con límite por IP de salida, `ARGO_TRACEMOE_PROXY` como anulación; `explicit_only`
+- **Rama de fetch para artículos de WeChat**: mp.weixin.qq.com obtiene una rama previa dedicada con coincidencia exacta host+path, ya no bloqueada por la página de desafío anti-rastreo
+- **Refinamientos de algoritmos**: ventana de gracia de cobertura / estratificación de cola / señales de consulta / enrutamiento TF-IDF / contracción de cubos de escenarios, 52 pruebas unitarias en verde (mejoras a priori, sin A/B en vivo todavía)
+- **Cierre de plugin y documentación**: desacople de specs del plugin dsh (fast-adapt 100/100), convergencia de la fuente única de versión, correcciones de unión de líneas y `.bak` 0600 en env_store
 
 ### v2.11.2: Motores de búsqueda inversa añadidos + cuatro fallos silenciosos cerrados + arreglo de CI en main
 
@@ -731,14 +742,6 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 - **Consistencia en el estado de motores y limpieza de huérfanos**: motores desconocidos reportan `status="unknown", enabled=False`, exponen `disabled_reason`, y se eliminan las especificaciones huérfanas `_cisa_kev` y `_osv` (#29, #34.6)
 - **Desacople del gate de deriva nocturno**: el crecimiento del tamaño de salida pasa a ser informativo, eliminando los commits automáticos nocturnos de línea base en `main` (#35)
 
-### v2.10.0: 284 fuentes + búsqueda y obtención de vídeo + control de calidad de frontera en el rastreo
-
-- **272 → 284 fuentes**: cinco niveles de Metaso (académico/biblioteca/imagen/vídeo/pódcast, todos de uso explícito), registros de Sciverse (filtro por año/revista/autor/materia), NCPSSD de ciencias sociales en chino (puente CLI), más tres catálogos de plugins de DSH y dos índices de skills con recuento de instalaciones
-- **Un carril de vídeo de extremo a extremo**: nuevo dominio `video` y `--video` para forzar el enrutado, filtros `--min-duration`/`--max-duration`; al obtener se toman descripción y subtítulos de Bilibili, oEmbed/timedtext de YouTube, con `ARGO_VIDEO_ASR_CMD` opcional como respaldo
-- **Control de calidad de frontera del rastreo**: canonicalización de URL y filtro de recursos, deduplicación por hash del cuerpo, ritmo por host con retroceso exponencial ante 429, Crawl-delay de robots; el diff por bloques de `argo watch` separa ruido de cambio sustantivo. Medido: 10 páginas en 12,1 s, 2000 caracteres de cuerpo (antes 500)
-- **Selección de fuentes y coste**: la capa general usa orden medido con suelo de cobertura y puerta de idioma (issue #23); la cobertura de DeepSeek queda segunda en consultas generales en inglés (`ARGO_PAID_HEDGE_DEFER` la baja); se rellenan los niveles de autoridad y entra la parada temprana por autoridad
-- **Instalable y publicable**: el instalador toma la vía venv con autodetección de `.venv`; nuevo `release_check.py` de consistencia de publicación y el manifiesto de MCP Registry `server.json`
-
 ### v2.9.9: seguridad en profundidad + los resultados de fuentes lentas ya no se descartan + cinco clases de enrutado erróneo cerradas
 
 - **El texto de alto riesgo ya no llega al contexto**: el motor de seguridad de contenido pasa de «solo puntuar» a «aislar + sustitución limpia»; el texto con `risk_score ≥ 0.5` se reemplaza por su versión limpia y queda fuera de la puntuación de evidencia. Activado por defecto; `ARGO_CONTENT_RISK_GATE=0` para anularlo en emergencia
@@ -763,6 +766,7 @@ Solo las tres versiones más recientes. El historial completo está en el [histo
 
 | Versión | Notas |
 |---------|-------|
+| **v2.12.0** | **Centro de configuración unificado + búsqueda de imagen pixiv/trace.moe + fetch de WeChat**: página de configuración sin servicio y escritura vía `argo settings` (#44, @zooyoo); búsqueda de imagen pixiv de canal doble (PR#45, @OMSociety); reconocimiento de escenas trace.moe; rama previa de fetch para WeChat; fuentes 286→288. Ver [notas de la versión](docs/RELEASE_NOTES_v2.12.0.md). |
 | **v2.11.2** | **Motores de búsqueda inversa + cuatro fallos silenciosos cerrados + arreglo de CI en main**: añade SauceNAO/AnimeTrace/Google Lens como motores de búsqueda inversa explicit-only y elimina el tineye muerto; credenciales keyRefs reenviadas por los providers del plugin dsh al pool MCP (#41); auto-recuperación de clave de cuota + arreglo del bloqueo de 30 días por 402 + pista de reset (#42); env y reenvío de credenciales de subproceso xhs/twitter (#36); lint_spec_contracts por el YAML loader compartido despeja el CI de main. Ver [notas de la versión](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **Enrutado semántico en tres pasos + precisión etiquetada 76.9%→100% + corrección de división del circuit-breaker**: ponderación por anclas de relevancia + tabla estática de vectores de conceptos (`ARGO_CONCEPT_ROUTER=1`, apagado por defecto) + consolidación de precisión — 13/13 en el conjunto etiquetado, 61% de las decisiones del snapshot pasan a coincidencia directa por concepto; la fábrica del circuit-breaker resuelve en tiempo de llamada y elimina divisiones por alias de módulo; higiene de etiquetas de snippet y dedupe de calibres; panel ZCode de tres pestañas; endurecimiento de restauración de entorno en tests. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.2.md). |
 | **v2.10.1** | **Consolidación de precisión de enrutado + macro comercial + vídeo extranjero + correcciones**: macro `@commercial_market` en farma; vídeo en el extranjero con `parallel_free` y desduplicación de YouTube; eliminación de doble ejecución en local-seek; soporte de `url_kind: none` y guardas de enlaces muertos; estado coherente de motores; desacople de deriva nocturna. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.1.md). |

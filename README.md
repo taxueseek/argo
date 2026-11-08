@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.11.2-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.12.0-informational">
   <img alt="engines" src="https://img.shields.io/badge/engines-288-orange">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -150,7 +150,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方式一：一键脚本（推荐本机长期用）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方式二：npm / npx（已支持，当前 2.11.2；按 tag 发布，版本固定）
+# 方式二：npm / npx（已支持，当前 2.12.0；按 tag 发布，版本固定）
 npm install -g argo-search      # 全局安装 CLI
 npx -y argo-search              # 或即用即走，不装
 npx -y github:taxueseek/argo    # 要跟 main 最新提交时用这条
@@ -287,7 +287,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**npm 安装已支持，当前版本 2.11.2**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
+任选一种即可。**npm 安装已支持，当前版本 2.12.0**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -503,7 +503,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.11.2）
+### 当前大致能力（v2.12.0）
 
 Argo 干的事，一句话能说完：把一个问题按领域和语言分给合适的源，取回结果后按可信度排个序，交回给 Agent 的是能排序、能复核的材料。搜索、抓取、核验、本机文件检索走同一条管线，19 个 MCP 工具和 CLI 命令一一对应，装哪种形态都不缺能力。另有几个单点命令随用随取：argo tweet 打包 X 帖子，argo auth 管登录态，argo job 聚合招聘信息。
 
@@ -511,6 +511,8 @@ Argo 干的事，一句话能说完：把一个问题按领域和语言分给合
 
 最近几个版本各修了一类问题。
 
+
+v2.12.0 带来统一设置中心：`argo settings` 一个入口透视与编辑全客户端共享的配置（密钥掩码、各客户端接入片段、常用开关现值），写回走零服务通道——issue #44 的提议就此兑现。社区贡献的 pixiv 正向搜图（匿名 Web 与 OAuth App 双通道）与内置 trace.moe 动画场景识别把源带到 288 个；fetch 对微信公众号文章不再零处理；调度与路由算法内部优化。
 v2.11.2 聚焦外部反馈收口。补入 SauceNAO、AnimeTrace、Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；修掉 keyRefs 凭证未转发到子进程（需密钥引擎不再一律 skipped-missing-env）、quota 换 Key 不自愈与 402 误锁 30 天、社交引擎子进程 env 与凭据透传四类静默失效；lint_spec_contracts 改走共享 YAML loader，解除主干 unit/extras 分片常红。
 
 v2.10.2 聚焦语义路由与测试地基。相关性锚点加权与静态概念向量表落地，新建 13 条人工标注路由集与可执行性门禁，标注定向从 76.9% 收到 100%，原理/详解类查询不再误入学术库、平台攻略类不再误入舆情监听；路由快照 201 条中 123 条（61%）的决策从 tfidf 打分换成 regex/概念直判，命中更快也更可断言；熔断器工厂改调用期解析，同名模块多路径加载不再各持一份熔断状态；摘要标签卫生与口径去重进输出装配；ZCode 面板三页版入库，测试环境 ARGO_* 变量每用例快照恢复堵住偶发顺序污染。概念语义路由默认关，ARGO_CONCEPT_ROUTER=1 开启。
@@ -786,7 +788,16 @@ argo/
 
 ## 最近更新
 
-只列最近三个版本。完整历史见[版本记录](#版本记录)，逐版详情见 [Releases](https://github.com/taxueseek/argo/releases)。
+只列最近四个版本。完整历史见[版本记录](#版本记录)，逐版详情见 [Releases](https://github.com/taxueseek/argo/releases)。
+
+### v2.12.0：统一设置中心 + pixiv/trace.moe 两搜图引擎 + 公众号 fetch 分流
+
+- **统一设置中心**（#44，感谢 @zooyoo 提议）：`argo settings` 只读透视页（密钥只露尾 4 位、接入片段、开关现值）；`--edit` 编辑表单 + `apply` 写回；`set/unset/list` 命令直改（值走 stdin，不进 argv 与 shell history）；`argo ui` 同义别名。零服务取舍：不开端口、无鉴权生命周期，写回统一 env_store（原子写 + 0600）
+- **pixiv 正向搜图**（PR#45，感谢 @OMSociety）：匿名 Web / OAuth App 双通道（结果标 `channel`），R-18 默认过滤，`ARGO_PIXIV_REFRESH_TOKEN` 可选；`explicit_only`
+- **trace.moe 场景识别**：图片 URL → 动画作品/集数/时间点（AniList）；免 key 按出口 IP 限频，`ARGO_TRACEMOE_PROXY` 覆盖出口；`explicit_only`
+- **公众号 fetch 分流**：mp.weixin.qq.com 走前置分支，host+path 精确判定，不再被反爬挑战页挡死
+- **算法内部优化**：对冲宽限窗/尾宽分层/查询信号/TF-IDF 路由/场景桶收缩，52 项单测绿（先验改进，暂无线上 A/B）
+- **插件与文档收口**：DSH 插件 specs 解耦（fast-adapt 100/100）、版本真源收敛、env_store 末行粘连与 `.bak` 0600 修复
 
 ### v2.11.2：以图搜图补齐 + 四类静默失效收口 + 主干常红修复
 
@@ -814,18 +825,11 @@ argo/
 - **引擎状态自洽与孤儿清理**：未注册引擎正确返回 `status="unknown", enabled=False` 并透传 `disabled_reason`，清理遗留的 `_cisa_kev` / `_osv` 孤儿 spec（#29、#34.6）
 - **夜间漂移门解耦**：结果体积漂移降为信息项，移除夜间自动覆盖基线并推 `main` 的步骤，防温水煮青蛙与分支污染（#35）
 
-### v2.10.0：源到 284 + 视频检索与抓取 + 抓取前沿质控
-
-- **源 272→284**：秘塔五档（学术/文库/图片/视频/播客，均显式专用）、Sciverse 外文题录（年份/期刊/作者/学科可筛）、NCPSSD 中文社科（CLI 桥），加上 DSH 插件目录三源与技能索引两源（带安装量）
-- **视频一条线走通**：新增 `video` 域与 `--video` 强制路由，`--min-duration`/`--max-duration` 按时长筛；抓取时 B 站取简介与字幕、YouTube 取 oEmbed/timedtext，可选 `ARGO_VIDEO_ASR_CMD` 兜底
-- **抓取前沿质控**：URL 归一与资产过滤、正文哈希去重、同主机礼貌节奏与 429 指数退避、robots Crawl-delay；`argo watch` 的块级 diff 区分噪声与实质改动。实测抓 10 页 12.1s、正文 2000 字（原 500）
-- **选源与成本**：通用层改为实测排序 + 覆盖地板 + 语言门（issue #23），DeepSeek 英文对冲常驻第二位（`ARGO_PAID_HEDGE_DEFER` 可降），权威等级回填与权威早停
-- **装得上、发得出**：安装器 venv 主路 + `.venv` 自动发现；新增 `release_check.py` 发布一致性预检与 MCP Registry 清单 `server.json`
-
 ## 版本记录
 
 | 版本 | 说明 |
 |------|------|
+| **v2.12.0** | **统一设置中心 + pixiv/trace.moe 搜图 + 公众号 fetch**：`argo settings` 零服务设置页与写回（#44，@zooyoo）；pixiv 双通道正向搜图（PR#45，@OMSociety）；trace.moe 场景识别；fetch 公众号前置分流；源 286→288。详见 [发布说明](docs/RELEASE_NOTES_v2.12.0.md) |
 | **v2.11.2** | **以图搜图补齐 + 四类静默失效收口 + 主干常红修复**：接入 SauceNAO/AnimeTrace/Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；keyRefs 凭证经 dsh 插件 provider 透传到 MCP 池（#41）；quota 换 Key 自愈 + 402 误锁 30 天修复 + reset 指引（#42）；xhs/twitter 子进程 env 与凭据透传（#36）；lint_spec_contracts 走共享 YAML loader 解除主干常红。详见 [发布说明](docs/RELEASE_NOTES_v2.11.2.md) |
 | **v2.10.2** | **语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复**：相关性锚点加权 + 静态概念向量表（`ARGO_CONCEPT_ROUTER=1` 默认关）+ 路由准确率收口，13 条标注集定向 100%、快照 61% 决策换概念直判；熔断器工厂调用期解析消除模块别名分裂；摘要标签卫生与口径去重；ZCode 面板三页版入库；测试环境快照恢复加固。详见 [发布说明](docs/RELEASE_NOTES_v2.10.2.md) |
 | **v2.10.1** | **路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复**：引入声明式否决宏 `@commercial_market` 消除医药商业误路由；接入 `parallel_free` 海外视频通道并归一化 YouTube URL；消除 local-seek 零命中双跑税与工具缺失静默；支持无外链源 `url_kind: none` 与空占位符死链守卫；引擎状态自洽；解耦夜间漂移门。详见 [发布说明](docs/RELEASE_NOTES_v2.10.1.md) |
