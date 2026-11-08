@@ -104,3 +104,49 @@ class TestUsageLogFieldContract:
             encoding="utf-8")
         assert "aggregate_slow_engines" in src, \
             "argo stats 未展示慢源归因，写了没人看"
+
+
+class TestEngineResultCounts:
+    """各引擎交付条数：区分「慢源在拖尾」与「慢源是唯一出货的那个」。"""
+
+    def test_counts_per_engine_including_zero(self):
+        got = sa.engine_result_counts([
+            {"engine": "wechat_sogou", "status": "no-results", "results_count": 0},
+            {"engine": "sogou_weixin_browser", "status": "ok", "results_count": 10},
+            {"engine": "anysearch", "status": "cancelled", "results_count": 0},
+        ])
+        assert got == {"wechat_sogou": 0, "sogou_weixin_browser": 10,
+                       "anysearch": 0}
+
+    def test_empty_and_none(self):
+        assert sa.engine_result_counts(None) == {}
+        assert sa.engine_result_counts([]) == {}
+
+    def test_malformed_entries_skipped_or_zeroed(self):
+        got = sa.engine_result_counts([
+            "junk", None, {"status": "ok", "results_count": 3},
+            {"engine": "a", "results_count": "5"},
+            {"engine": "b", "results_count": True},
+            {"engine": "c", "results_count": -2},
+            {"engine": "d"},
+        ])
+        assert got == {"a": 0, "b": 0, "c": 0, "d": 0}
+
+    def test_repeated_engine_keeps_max(self):
+        got = sa.engine_result_counts([
+            {"engine": "octen", "results_count": 0},
+            {"engine": "octen", "results_count": 4},
+            {"engine": "octen", "results_count": 2},
+        ])
+        assert got == {"octen": 4}
+
+    def test_limit_caps_distinct_engines(self):
+        rows = [{"engine": f"e{i}", "results_count": i} for i in range(12)]
+        got = sa.engine_result_counts(rows)
+        assert list(got) == [f"e{i}" for i in range(8)]
+
+    def test_attribution_includes_field_only_when_outcomes_exist(self):
+        with_outcomes = sa.usage_log_attribution(
+            {"x": 900}, engine_outcomes=[{"engine": "x", "results_count": 5}])
+        assert with_outcomes["engine_results"] == {"x": 5}
+        assert "engine_results" not in sa.usage_log_attribution({"x": 900})

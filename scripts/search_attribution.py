@@ -47,7 +47,7 @@ def usage_log_attribution(engine_latency: dict[str, Any] | None,
                           top_n: int = DEFAULT_TOP_N,
                           engine_outcomes: Iterable[dict[str, Any]] | None = None
                           ) -> dict[str, Any]:
-    """usage_log query 流的归因字段（慢源 Top-N + 失败类别）。
+    """usage_log query 流的归因字段（慢源 Top-N + 各引擎交付条数 + 失败类别）。
 
     返回 dict 以便调用方 **展开进日志记录**，未来新增归因维度（如
     「等待预算被谁耗掉」「缓存未命中的原因分布」）时只扩这里，
@@ -59,6 +59,9 @@ def usage_log_attribution(engine_latency: dict[str, Any] | None,
     out: dict[str, Any] = {
         "engine_latency_top": top_engine_latency(engine_latency, top_n),
     }
+    counts = engine_result_counts(engine_outcomes)
+    if counts:
+        out["engine_results"] = counts
     kinds = failure_kinds(engine_outcomes)
     if kinds:
         out["failure_kinds"] = kinds
@@ -133,6 +136,30 @@ def zero_result_recovery_note(recovery: Any,
         f"{note}); empty results likely mean the query had no recall — "
         "try rephrasing"
     )
+
+
+def engine_result_counts(engine_outcomes: Iterable[dict[str, Any]] | None,
+                         limit: int = 8) -> dict[str, int]:
+    """每个引擎交付的有效结果条数 {引擎: 条数}，与 engine_latency_top 配对读。
+
+    只有耗时回答不了「慢源是在拖尾，还是唯一出货的那个」（2026-11-08 实测：
+    wechat_sogou 580ms 返回 0 条、sogou_weixin_browser 2342ms 交付全部 10 条，
+    仅凭耗时会被误判成「白等慢源」）。条数取自 outcome.results_count（与
+    agent 档 engine_outcomes 同一口径）；被跳过、取消、失败的引擎记 0。
+    同名引擎多次出现（如补搜）取最大值；畸形条目跳过；上限与 engines_used 一致。
+    """
+    out: dict[str, int] = {}
+    for o in (engine_outcomes or []):
+        if not isinstance(o, dict) or not o.get("engine"):
+            continue
+        n = o.get("results_count")
+        n = n if isinstance(n, int) and not isinstance(n, bool) and n > 0 else 0
+        name = str(o["engine"])
+        if name in out:
+            out[name] = max(out[name], n)
+        elif len(out) < max(0, int(limit)):
+            out[name] = n
+    return out
 
 
 def failure_kinds(engine_outcomes: Iterable[dict[str, Any]] | None,
