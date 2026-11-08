@@ -1,0 +1,34 @@
+# V&A 博物馆馆藏 — Victoria and Albert Museum（免 key，装饰艺术/设计垂直）
+#
+# 与 met/artic/cleveland 同面的第四家博物馆图源；伦敦 V&A 是装饰艺术与设计
+# 藏品最全的机构（ukiyo-e、海报、时尚、工艺）。官方文档明确免 key：
+#   https://developers.vam.ac.uk/guide/v2
+# `images_exist=1` 只回有图对象；records._images 给 IIIF base，800px 直链由
+# builder 组装（声明式拼不了 IIIF 尺寸语法）。单跳 1.2-1.6s（2026-11-08
+# 质量探针 6/6 出图，~/tmp/argo-img-bench/candidates.json）。
+# 注意：正确路径是 /v2/objects/search（/v2/museumobject/search 404，勿改回）。
+# 许可：上游不逐件给许可字段，商用判定照 ddgs_images 口径（未判定）。
+# 验证:
+#   python3 scripts/engine_validate.py --engine vam --stage all --admit
+
+engine_id: vam
+type: vam
+enabled: true
+cost_tier: free
+label: V&A馆藏
+desc: "V&A 博物馆馆藏（免 key，装饰艺术/设计，IIIF 直链 800px；images_exist=1 只回有图件）"
+coverage: [art, museum, culture, image]
+family: media_book
+priority: 36
+timeout: 15
+# canary 也过词面门：ukiyo-e 实际命中良好但 V&A 只标「Woodblock print」，
+# 对词面判据零交集会被 health 误杀；canary 用有词面落点的等价查询。
+canary_query: "woodblock print"
+# quality_queries 选词有讲究：V&A 是全记录检索，结果标题是作品名，「ukiyo-e」
+# 这种日本术语查询实际命中良好（返回浮世绘版画）但标题/片段只写「Woodblock
+# print」，对词面门是零交集。质量查询用有词面落点的写法；ukiyo-e 保留在
+# canary（health 只查连通与 schema，不查词面）。
+quality_queries:
+  - query: "woodblock print"
+  - query: "vintage poster"
+  - query: "art deco"

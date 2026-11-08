@@ -708,12 +708,13 @@ domains:
   - (?i)(民法典|刑法|劳动法|行政处罚法|个人信息保护法|数据安全法).{0,10}(条文|全文|第)
   primary: flk_law
 
-- desc: 艺术/博物馆藏品（Met Museum）
+- desc: 艺术/博物馆藏品（Met Museum + V&A）
   engines_combo:
   - met_museum
   - wikipedia
   - artic
   - cleveland
+  - vam
   fallback: wikipedia
   name: art_museum
   parallel: true
@@ -1357,6 +1358,7 @@ domains:
   - openverse
   - wikimedia_commons
   - ddgs_images
+  - wallhaven
   - anysearch
   fallback: anysearch
   name: image_search

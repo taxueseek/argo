@@ -172,6 +172,10 @@ from engines_builders_intl import (
     _build_google_news_engine,
     _build_met_museum_engine,
 )
+# vam 与 wikimedia_commons 同属图源补强模块（batch11），不进 intl 组
+from engines_builders_batch11 import (
+    _build_vam_engine,
+)
 from engines_builders_feeds import (
     _build_rss_feed_engine,
 )
@@ -211,6 +215,7 @@ __all__ = [
     "_build_weather_cn_engine",
     "_build_google_news_engine",
     "_build_met_museum_engine",
+    "_build_vam_engine",
     "_build_google_scholar_engine",
     "_build_v2ex_engine",
     "_build_github_engine",

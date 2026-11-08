@@ -30,7 +30,7 @@
   <rect width="1200" height="380" rx="28" fill="url(#dots)"/>
 
   <!-- left accent rail -->
-  <rect x="0" y="48" width="4" height="284" fill="#38BDF8" opacity="0.9"/>
+  <rect x="0" y="48" width="4" height="290" fill="#38BDF8" opacity="0.9"/>
 
   <!-- Title block -->
   <g id="title-block" transform="translate(56 52)">

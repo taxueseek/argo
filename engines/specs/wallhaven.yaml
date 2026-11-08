@@ -1,0 +1,51 @@
+# Wallhaven 壁纸图库 — 免 key 匿名（SFW），原图直链带分辨率
+#
+# 为什么收：图片域缺「壁纸/桌面素材」面；ddgs_images 走 Bing 图搜不给分辨率
+# 与稳定原图直链。匿名档限 45 req/min（429 返回 Retry-After）、purity 锁 100
+# （SFW）；2026-11-08 质量探针 6/6 查询出图、单查询 24 条全带原图直链、
+# 0.5-1.4s（~/tmp/argo-img-bench/candidates.json）。
+# 无许可字段：本源只有「能找到这张图」，商用判定照 ddgs_images 口径（未判定）。
+# 验证:
+#   python3 scripts/engine_validate.py --engine wallhaven --stage all --admit
+
+engine_id: wallhaven
+type: http
+enabled: true
+cost_tier: free
+label: Wallhaven壁纸
+desc: "Wallhaven 壁纸图库（免 key，匿名仅 SFW，45 req/min；原图直链+分辨率，无许可标注）"
+coverage: [image, media, web]
+family: misc_vertical
+priority: 35
+timeout: 15
+canary_query: "snow mountain"
+format: json
+method: GET
+url: https://wallhaven.cc/api/v1/search
+query_param: q
+headers:
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0 Safari/537.36
+extra_params:
+  # 匿名档默认即 100（SFW）；显式声明防上游改默认后混入 NSFW
+  purity: 100
+# 词面门豁免（engine_validate._relevance_applicable 情形 1）：Wallhaven 结构性
+# 无文本元数据（item 无 title/描述，标题字段只能放分辨率），查询相关是设计
+# 内行为但词面判据看不见它——对这类源问的是结构题（出图、直链、分辨率），
+# 不是词面题。质量证据=6/6 查询出图、24 条全带原图直链、0.5-1.4s（2026-11-08
+# 探针），判据见 tests/test_engine_validate_* 的 declared_off 口径。
+relevance_check: false
+output_map:
+  items: data
+  # title 必须逐条唯一：上游没有标题字段，曾映射 resolution，但同一批
+  # 壁纸分辨率高度重复，管线 minhash 文本近重复合并把同题条目当同页削掉
+  # （实测 cat 查询 5 条进 2 条）；换唯一 id 后 5/5 全保留。分辨率信息
+  # 由 image_width/image_height 承载，不丢。
+  item_title: id
+  item_url: url
+  item_image: path
+  item_image_width: dimension_x
+  item_image_height: dimension_y
+quality_queries:
+  - query: "snow mountain"
+  - query: "vintage poster"
+  - query: "雪山"

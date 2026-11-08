@@ -58,9 +58,11 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_batch9.py": (
         1468, "批次九的源声明构建器，逐源一段；与既有构建器同形，拆开不减少概念"),
     "scripts/engines_builders_intl.py": (
-        1239, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异；"
+        1242, "国际（日韩/欧洲）源声明构建器，逐源一段；含各源 XML/RSS 解析差异；"
               "2026-09-29 +19：open_meteo 多 place forecast 并行化（串行 9.28s → "
-              "3.9-5.1s，bounded_run 有界并发 + 保序）"),
+              "3.9-5.1s，bounded_run 有界并发 + 保序）；"
+              "2026-11-08 +3：met_museum /search 上游 2026-10-01 退役（410）迁 v1.1"
+              "（Elastic，响应不变），+2 注释 +1 _SEARCH_BASE 常量，objects/{id} 留 v1"),
     "scripts/caliber_isolation.py": (
         197, "口径隔离：RRF 融合前按口径分组，不同口径不直接 merge；"
               "纯函数，可独立测试；"

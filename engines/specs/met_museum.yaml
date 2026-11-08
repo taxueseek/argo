@@ -1,6 +1,8 @@
 # Met Museum 藏品库 — 大都会艺术博物馆公开馆藏（免认证，两跳：搜索→详情）
 # 艺术品/博物馆藏品的完全空白补位：49 万藏品含高清公版图像。
 # 二跳结构：search 只回 objectIDs，逐个取详情（上限 6 条控延迟）。
+# /search 于 2026-10-01 退役（410），已迁 v1.1（Elastic）；objects/{id} 仍是 v1。
+# coverage 含 image：公版件带 primaryImage 直链与许可（实测非公版件无图，正常）。
 # 验证:
 #   python3 scripts/engine_validate.py --engine met_museum --stage all --admit --write-doc
 
@@ -10,8 +12,8 @@ enabled: true
 cost_tier: free
 timeout: 20
 canary_query: "van gogh"
-desc: "Met Museum 藏品库（艺术/博物馆藏品，两跳搜索，免认证）"
-coverage: [art, museum, culture, media]
+desc: "Met Museum 藏品库（艺术/博物馆藏品，两跳搜索，免认证；公版件带高清直链与许可）"
+coverage: [art, museum, culture, media, image]
 recommended: false
 latency_ms: 3000
 

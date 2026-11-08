@@ -2520,6 +2520,16 @@
     "cost_tier": "free",
     "priority": 19
   },
+  "vam": {
+    "label": "V&A馆藏",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 36
+  },
   "vnpress": {
     "label": "VnExpress RSS",
     "qps": 1,
@@ -2529,6 +2539,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 49
+  },
+  "wallhaven": {
+    "label": "Wallhaven壁纸",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
   },
   "wallstreetcn": {
     "label": "华尔街见闻",

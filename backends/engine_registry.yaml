@@ -1891,12 +1891,13 @@ engines:
   - museum
   - culture
   - media
+  - image
   latency_ms: 3000
   cost: free
   status: ok
   recommended: false
   explicit_only: false
-  desc: Met Museum 藏品库（艺术/博物馆藏品，两跳搜索，免认证）
+  desc: Met Museum 藏品库（艺术/博物馆藏品，两跳搜索，免认证；公版件带高清直链与许可）
 - name: metaso
   tier: T1
   type: http
@@ -3171,6 +3172,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: V2EX（中文技术社区，官方 API 候选池 + 本地相关性过滤）
+- name: vam
+  tier: T1
+  type: vam
+  coverage:
+  - art
+  - museum
+  - culture
+  - image
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: V&A 博物馆馆藏（免 key，装饰艺术/设计，IIIF 直链 800px；images_exist=1 只回有图件）
 - name: vnpress
   tier: T1
   type: rss_feed
@@ -3183,6 +3198,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: VnExpress（越南最大网络新闻，免 key）
+- name: wallhaven
+  tier: T1
+  type: http
+  coverage:
+  - image
+  - media
+  - web
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Wallhaven 壁纸图库（免 key，匿名仅 SFW，45 req/min；原图直链+分辨率，无许可标注）
 - name: wallstreetcn
   tier: T1
   type: wallstreetcn

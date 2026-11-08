@@ -2720,5 +2720,17 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "vam": {
+    "label": "V&A馆藏",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "wallhaven": {
+    "label": "Wallhaven壁纸",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

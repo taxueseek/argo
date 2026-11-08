@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""批次十一构建器：图片检索能力的两个补强源（2026-09-26）。
+"""批次十一构建器：图片检索能力的补强源（2026-09-26 起，2026-11-08 增补 vam）。
 
 本批只收图源，目标是修「搜到图源却拿不到图」这一类缺陷的通用面：
 
   wikimedia_commons  Wikimedia Commons（免 key，通用图库，带 CC 许可与宽高）
+  vam                V&A 博物馆馆藏（免 key，IIIF 直链组装）
 
 为什么单独建一个 builder 而不是声明式 spec：Commons 的 `query.pages` 是
 **以 pageid 为键的字典**，不是数组——`_extract_items` 遇到 dict 会把它当成
@@ -25,6 +26,7 @@ from engines_base import (
     rank_score,
     safe_search,
     http_open,
+    _http_get_raw,
 )
 
 
@@ -171,4 +173,64 @@ def _build_wikimedia_commons_engine(spec: dict[str, Any]) -> Any:
         # 保证两类引擎交付的字段契约完全一致。
         return finalize_image_fields(results, spec.get("image_license") or "")
 
+    return _engine
+
+
+def _build_vam_engine(spec: dict[str, Any]) -> Any:
+    """V&A 博物馆馆藏（api.vam.ac.uk/v2/objects/search，免 key，单跳）。
+
+    装饰艺术/设计垂直，与 met/artic/cleveland 同面。records._images 只给 IIIF
+    base 与 !100,100 缩略图，800px 直链按 IIIF 尺寸语法组装：
+    `{base}full/!800,800/0/default.jpg`（实测 2026-11-08 200 可取图）。
+    落地页用短链 `collections.vam.ac.uk/item/{systemNumber}/`（自带 O 前缀，无 slug 200 直开）。
+    上游不逐件给许可字段，不造 image_license；商用判定照 ddgs_images 口径（未判定）。
+    """
+    timeout = spec.get("timeout", 15)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        q = query.strip()
+        if not q:
+            return []
+        to = _timeout or timeout
+        engine_name = spec.get("_name", "vam")
+        headers = {"User-Agent": "argo-search/1.0 (+vam)", "Accept": "application/json"}
+        url = (f"https://api.vam.ac.uk/v2/objects/search?q={urllib.parse.quote(q)}"
+               f"&images_exist=1&page_size={min(max(int(n), 1), 8)}")
+        raw = _http_get_raw(url, headers, to, engine=engine_name)
+        if raw is None:
+            return []
+        try:
+            d = json.loads(raw) or {}
+        except (json.JSONDecodeError, ValueError):
+            return []
+        out = []
+        for r in d.get("records") or []:
+            if not isinstance(r, dict):
+                continue
+            title = str(r.get("_primaryTitle") or "").strip()
+            imgs = r.get("_images") or {}
+            base = str(imgs.get("_iiif_image_base_url") or "").strip()
+            if not title and not base:
+                continue
+            row: dict[str, Any] = {}
+            if title:
+                row["title"] = title[:80]
+                maker = r.get("_primaryMaker") or {}
+                row["snippet"] = " · ".join(b for b in (
+                    str(maker.get("name") or "").strip(),
+                    str(r.get("_primaryDate") or "").strip(),
+                    str(r.get("objectType") or "").strip()) if b)[:300]
+            if base:
+                row["image_url"] = base + "full/!800,800/0/default.jpg"
+            # systemNumber 自带 O 前缀（如 O417199）；再拼一个 O 会变成
+            # OO417199（302 跳转），直接用原值才是 200 的规范落地页。
+            sn = str(r.get("systemNumber") or "").strip()
+            if sn:
+                row["url"] = f"https://collections.vam.ac.uk/item/{sn}/"
+            row["source"] = engine_name
+            out.append(row)
+            if len(out) >= max(int(n), 1):
+                break
+        return out
     return _engine

@@ -1179,7 +1179,10 @@ def _build_met_museum_engine(spec: dict[str, Any]) -> Any:
     是常态（大量藏品无署名），标题用 title 保底。
     """
     timeout = spec.get("timeout", 20)
+    # /search 已于 2026-10-01 退役（410，Solr 下线）迁 v1.1（Elastic，响应不变）；
+    # objects/{id} 详情端点 v1.1 没有（404），只能留在 v1。
     _BASE = "https://collectionapi.metmuseum.org/public/collection/v1"
+    _SEARCH_BASE = "https://collectionapi.metmuseum.org/public/collection/v1.1"
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -1189,7 +1192,7 @@ def _build_met_museum_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         engine_name = spec.get("_name", "met_museum")
         headers = {"User-Agent": "argo-search/1.0 (+met_museum)", "Accept": "application/json"}
-        search_url = f"{_BASE}/search?q={urllib.parse.quote(q)}&hasImages=true"
+        search_url = f"{_SEARCH_BASE}/search?q={urllib.parse.quote(q)}&hasImages=true"
         raw = _http_get_raw(search_url, headers, to, engine=engine_name)
         if raw is None:
             return []
