@@ -720,34 +720,17 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
         filtered = ([primary_eng] if primary_eng else []) + rest
 
     # 健康检查过滤：只对本地子引擎（local_*）做健康判定，非本地引擎
-    # 无条件保留。两条路径（scripts health_check / health_probe fallback）
-    # 必须保持同一语义，否则被劫持/缺模块时行为会静默漂移（曾导致
-    # wikipedia 被 health.db 的旧探测失败记录误过滤）。
+    # 无条件保留。单一真源（2026-11 收口）：统一走 is_available（内部由 circuit_breaker 判定）。
     try:
         from health_check import is_available as _hc_available
-        healthy = []
-        for e in filtered:
-            if e.startswith("local_"):
-                if _hc_available(e):
-                    healthy.append(e)
-            else:
-                healthy.append(e)
+        healthy = [
+            e for e in filtered
+            if not e.startswith("local_") or _hc_available(e)
+        ]
         if healthy:
             filtered = healthy
-    except ImportError:
-        try:
-            from health_probe import get_engine_status
-            healthy = []
-            for e in filtered:
-                if e.startswith("local_"):
-                    if get_engine_status(e).get("available", True):
-                        healthy.append(e)
-                else:
-                    healthy.append(e)
-            if healthy:
-                filtered = healthy
-        except ImportError:
-            pass
+    except Exception:
+        pass
 
     # ── 配额/熔断感知：确定不可用源剔除 + 候选滚动（无缝切换）──────────
     # 正常路径（全部引擎可用）顺序不变 → 引擎集合不变 → 缓存键不变 → 零速度倒退。

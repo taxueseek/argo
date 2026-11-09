@@ -247,3 +247,26 @@ def test_health_check_category_records_without_keyword_collision():
     finally:
         import importlib
         importlib.reload(health_check)
+
+
+def test_health_sources_align_to_circuit_breaker(monkeypatch):
+    """三套健康存储单一真源：熔断器判定不可用时，health_check 与 health_probe 均一票否决。"""
+    import health_check
+    import health_probe
+    from circuit_breaker import get_breaker
+
+    class _MockBreaker:
+        def allow(self, name):
+            if name == "mock_down_engine":
+                return False, "auth_streak_disabled"
+            return True, "ok"
+
+    monkeypatch.setattr("circuit_breaker.get_breaker", lambda: _MockBreaker())
+
+    # 1. health_check.is_available 必须被熔断单一真源拦截
+    assert health_check.is_available("mock_down_engine") is False
+
+    # 2. health_probe.get_engine_status 必须对齐熔断不可用状态
+    st = health_probe.get_engine_status("mock_down_engine")
+    assert st["available"] is False
+    assert st["status"] == "unavailable"

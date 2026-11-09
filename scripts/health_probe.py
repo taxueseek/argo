@@ -165,7 +165,21 @@ def probe_all_engines():
 
 
 def get_engine_status(engine: str) -> dict[str, Any]:
-    """查询单个引擎的健康状态。"""
+    """查询单个引擎的健康状态。单一真源：优先对齐熔断器证据。"""
+    try:
+        from circuit_breaker import get_breaker
+        allowed, _ = get_breaker().allow(engine)
+        if not allowed:
+            return {
+                "status": engine_states.PROBE_STATUS_UNAVAILABLE,
+                "consecutive_failures": 999,
+                "last_probe_at": time.time(),
+                "last_latency_ms": None,
+                "available": False,
+            }
+    except Exception:
+        pass
+
     _init_db()
     with _connect() as conn:
         row = conn.execute(

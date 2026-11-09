@@ -4,8 +4,7 @@
 #    [dependency-groups].dev；内容与它的对应关系由
 #    tests/test_dependency_source_gate.py 机械对账，漂移即红。
 #    改依赖请改 pyproject.toml，再跑：
-#        uv lock && uv pip compile pyproject.toml --group dev -o requirements-dev.txt
-#    （或让 CI 的对账门禁告诉你哪里不一致。）
+#        python3 scripts/sync_requirements.py
 #
 # 为什么锁死 pytest 版本：门禁的判定标准必须可复现。pytest 大版本会改收集语义
 # （9.x 起 subtests 内建），pytest-timeout 的默认行为也会随版本变。
@@ -13,6 +12,7 @@
 # 版本与 pyproject.toml 一致（含 3.9 档回落）：pytest 9.x 要求 Python >=3.10，
 # 3.9 档由 lock 解析到 pytest 8.3.5。这里保持「只写 >=3.10 档」的钉版写法，
 # 是因为 pip 用户装这份清单就是在装开发档；3.9 档请直接用 uv sync。
+
 pytest==9.1.1
 pytest-split==0.11.0
 pytest-timeout==2.4.0

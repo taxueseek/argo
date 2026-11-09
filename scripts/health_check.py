@@ -161,7 +161,20 @@ def check_all() -> dict[str, dict]:
 
 
 def is_available(name: str) -> bool:
-    """查询引擎是否可用（带 TTL 缓存）。"""
+    """查询引擎是否可用（带 TTL 缓存）。
+
+    单一真源（2026-11 收口）：
+    优先以真实调用落盘的 circuit_breaker 状态为准。
+    若熔断器处于 open/disabled 态，则一票否决；
+    若熔断器无失败记录或处于正常/试探态，再结合注册表元数据。
+    """
+    try:
+        from circuit_breaker import get_breaker
+        allowed, _ = get_breaker().allow(name)
+        if not allowed:
+            return False
+    except Exception:
+        pass
     registry = get_registry()
     return registry.is_available(name)
 

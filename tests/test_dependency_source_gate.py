@@ -194,3 +194,14 @@ def test_manifests_are_marked_derived(rel):
     assert "派生清单" in head and "pyproject.toml" in head, (
         f"{rel} 头部未声明「派生清单」与真源位置"
     )
+
+
+def test_sync_requirements_script_matches_manifests():
+    """验证 sync_requirements.py 能够一键派生且与当前清单完全一致。"""
+    scripts_dir = str(ROOT / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import sync_requirements
+    assert sync_requirements.sync(check_only=True) is True, (
+        "requirements 清单与 pyproject.toml 派生结果不一致，请运行: python3 scripts/sync_requirements.py"
+    )
