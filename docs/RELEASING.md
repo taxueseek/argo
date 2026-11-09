@@ -9,7 +9,7 @@
 python3 scripts/release.py bump 2.10.1
 
 # 2. 填内容（脚本会列出缺哪几块，`check` 全绿前不让发）
-#    - docs/RELEASE_NOTES_v2.10.1.md（去掉 <!-- release-todo -->）
+#    - docs/CHANGELOG.md（去掉 <!-- release-todo -->）
 #    - 五语 README 的「最近更新」段、能力段、发布记录表行
 
 # 3. 校验并发布

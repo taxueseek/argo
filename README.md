@@ -217,7 +217,7 @@ Agent 干活的量级变了，检索的玩法跟着变了五件事，每一件 A
 4. **免费开放生态够用了。** 政府、学术、标准、安全机构的开放 API + 免 key 引擎，已经能覆盖大多数领域（大部分源免配置）；稀缺免费额度（firecrawl 1000 credits/月、stackexchange 300 次/天）做了「日常补位、关键顶上」的分层，订阅墙不是唯一解。
 5. **检索质量从「感觉」到「度量」。** 排序有金标（MRR/nDCG 地板）、融合有增益消融检查、路由有负向控制矩阵——「这版比上版好吗」从此是数字问题，不是玄学。
 
-> 以上五项已经在 v2.9.x 系列里全部落地。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [发布说明](docs/RELEASE_NOTES_v2.9.0.md)。
+> 以上五项已经在 v2.9.x 系列里全部落地。逐项细节见 [docs/为什么选择argo.md](docs/为什么选择argo.md) 与 [CHANGELOG](docs/CHANGELOG.md#v290)。
 
 ---
 
@@ -833,13 +833,13 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
-| **v2.12.0** | **统一设置中心 + pixiv/trace.moe 搜图 + 公众号 fetch**：`argo settings` 零服务设置页与写回（#44，@zooyoo）；pixiv 双通道正向搜图（PR#45，@OMSociety）；trace.moe 场景识别；fetch 公众号前置分流；源 286→288。详见 [发布说明](docs/RELEASE_NOTES_v2.12.0.md) |
-| **v2.11.2** | **以图搜图补齐 + 四类静默失效收口 + 主干常红修复**：接入 SauceNAO/AnimeTrace/Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；keyRefs 凭证经 dsh 插件 provider 透传到 MCP 池（#41）；quota 换 Key 自愈 + 402 误锁 30 天修复 + reset 指引（#42）；xhs/twitter 子进程 env 与凭据透传（#36）；lint_spec_contracts 走共享 YAML loader 解除主干常红。详见 [发布说明](docs/RELEASE_NOTES_v2.11.2.md) |
-| **v2.10.2** | **语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复**：相关性锚点加权 + 静态概念向量表（`ARGO_CONCEPT_ROUTER=1` 默认关）+ 路由准确率收口，13 条标注集定向 100%、快照 61% 决策换概念直判；熔断器工厂调用期解析消除模块别名分裂；摘要标签卫生与口径去重；ZCode 面板三页版入库；测试环境快照恢复加固。详见 [发布说明](docs/RELEASE_NOTES_v2.10.2.md) |
-| **v2.10.1** | **路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复**：引入声明式否决宏 `@commercial_market` 消除医药商业误路由；接入 `parallel_free` 海外视频通道并归一化 YouTube URL；消除 local-seek 零命中双跑税与工具缺失静默；支持无外链源 `url_kind: none` 与空占位符死链守卫；引擎状态自洽；解耦夜间漂移门。详见 [发布说明](docs/RELEASE_NOTES_v2.10.1.md) |
-| **v2.10.0** | **源到 284 + 视频检索与抓取 + 抓取前沿质控**：新增秘塔五档、Sciverse、NCPSSD 与 DSH/技能索引五源；`video` 域与 `--video`/`--min-duration`/`--max-duration`，B 站字幕与 YouTube timedtext、可选 ASR；crawl 前沿质控与 `argo watch` 噪声 diff；通用选源实测排序 + DeepSeek 英文对冲 + 权威早停；安装器 venv 化。详见 [发布说明](docs/RELEASE_NOTES_v2.10.0.md) |
-| **v2.9.9** | **安全纵深 + 慢源交付不丢 + 五类误路由收口**：高风险正文隔离+清洗替换（不进证据分）、逐跳重定向校验与 DNS 重绑定封堵；早停弃置的慢源转后台收割（`ARGO_TAIL_COMPLETE_S`），学习器记真实成绩；六族真实场景扫描收口学术/财务/企业/法律/医药误路由；`argo engine add` 一键接引擎、场景分桶学习、ZCode 插件包。详见 [发布说明](docs/RELEASE_NOTES_v2.9.9.md) |
-| **v2.9.8** | **路由精度审计 + issue #18/#19 修复 + 测试态隔离**：回放真实查询收窄 16 类误触发（品牌名/产品名/字段名/ASCII 子串），SERP 覆盖率门与 CJK 交叉验证落地；nightly 空日志、people_daily 默认 feed、缓存命中守卫一并收口；全量测试按用例隔离 adaptive/熔断状态。感谢 @wpp666 的复现与定位。详见 [发布说明](docs/RELEASE_NOTES_v2.9.8.md) |
+| **v2.12.0** | **统一设置中心 + pixiv/trace.moe 搜图 + 公众号 fetch**：`argo settings` 零服务设置页与写回（#44，@zooyoo）；pixiv 双通道正向搜图（PR#45，@OMSociety）；trace.moe 场景识别；fetch 公众号前置分流；源 286→288。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.11.2** | **以图搜图补齐 + 四类静默失效收口 + 主干常红修复**：接入 SauceNAO/AnimeTrace/Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；keyRefs 凭证经 dsh 插件 provider 透传到 MCP 池（#41）；quota 换 Key 自愈 + 402 误锁 30 天修复 + reset 指引（#42）；xhs/twitter 子进程 env 与凭据透传（#36）；lint_spec_contracts 走共享 YAML loader 解除主干常红。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.10.2** | **语义路由三步走 + 标注定向 76.9%→100% + 熔断器分裂修复**：相关性锚点加权 + 静态概念向量表（`ARGO_CONCEPT_ROUTER=1` 默认关）+ 路由准确率收口，13 条标注集定向 100%、快照 61% 决策换概念直判；熔断器工厂调用期解析消除模块别名分裂；摘要标签卫生与口径去重；ZCode 面板三页版入库；测试环境快照恢复加固。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.10.1** | **路由精度收口 + 商业意图宏 + 海外视频通道 + 社区缺陷修复**：引入声明式否决宏 `@commercial_market` 消除医药商业误路由；接入 `parallel_free` 海外视频通道并归一化 YouTube URL；消除 local-seek 零命中双跑税与工具缺失静默；支持无外链源 `url_kind: none` 与空占位符死链守卫；引擎状态自洽；解耦夜间漂移门。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.10.0** | **源到 284 + 视频检索与抓取 + 抓取前沿质控**：新增秘塔五档、Sciverse、NCPSSD 与 DSH/技能索引五源；`video` 域与 `--video`/`--min-duration`/`--max-duration`，B 站字幕与 YouTube timedtext、可选 ASR；crawl 前沿质控与 `argo watch` 噪声 diff；通用选源实测排序 + DeepSeek 英文对冲 + 权威早停；安装器 venv 化。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.9.9** | **安全纵深 + 慢源交付不丢 + 五类误路由收口**：高风险正文隔离+清洗替换（不进证据分）、逐跳重定向校验与 DNS 重绑定封堵；早停弃置的慢源转后台收割（`ARGO_TAIL_COMPLETE_S`），学习器记真实成绩；六族真实场景扫描收口学术/财务/企业/法律/医药误路由；`argo engine add` 一键接引擎、场景分桶学习、ZCode 插件包。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.9.8** | **路由精度审计 + issue #18/#19 修复 + 测试态隔离**：回放真实查询收窄 16 类误触发（品牌名/产品名/字段名/ASCII 子串），SERP 覆盖率门与 CJK 交叉验证落地；nightly 空日志、people_daily 默认 feed、缓存命中守卫一并收口；全量测试按用例隔离 adaptive/熔断状态。感谢 @wpp666 的复现与定位。详见 [CHANGELOG](docs/CHANGELOG.md) |
 | **v2.9.7** | **架构收口 + DSH web_fetch 占位 + License 转 Apache-2.0**：宿主 web_fetch 改走 argo 抓取链，JS 挑战页与跨源跳转从失败变成功；18 个 explicit_only 引擎从路由候选池剔除，堵住 auto 档误调付费引擎扣费；熔断、记账、配额恢复与路由缓存一批状态契约收口。 |
 | **v2.9.6** | **DeepSeek Search 接入 + 查询操作符契约 + 传输层去重付费 + 路由快照门**：新引擎 `deepseek_search` 默认启用（445-510ms，权威分级 / rerank_score / 时间窗唯一全覆盖）；查询操作符收敛为契约层；POST 连接池复用省 320-561ms/次；路由决策变成可 diff 的 golden。 |
 | **v2.9.5** | **汇率查询专域 + 去重双轨 + 排序误杀修复 + daemon 多检出隔离**：新增 `fx_query` 域，汇率与中间价直接出即期与快讯，不再落进百科词条；去重补站后缀归一与模糊复核；daemon 落盘名字按检出目录隔离，多 worktree 不再互抢。 |
@@ -847,31 +847,31 @@ argo/
 | **v2.9.3** | **X 帖子完整打包 + 浏览器登录态车道 + 本地链质速双修**：新增 `argo tweet`（正文 / 串 / 引用 / 转发与互动数据一次打包）与 `argo auth`（站点持久登录态，cookie 只存 Chrome 加密存储）；本地中文链跳转壳无会话解析，保留结果 1→5 条；共识宽限自适应提速。 |
 | **v2.9.2** | **DSH 0.2.1-alpha.1 适配验证 + 路由/守卫一批修复 + js-run 子技能**：DSH 三形态在新版实测启用，`argo mcp inject` 覆盖到第 7 宿主；TF-IDF 弱证据辅源化、死源与熔断槽位回填、配额耗尽引擎隔离；新增 js-run 子技能，不开浏览器跑网页 JS。 |
 | **v2.9.1** | **内容质量优化 + 对抗内容农场 + 适配最新版本**：提升低质批量生成内容的识别与过滤；本地搜索新增自身安装树守卫，避免结果被自身源码污染。 |
-| **v2.9.0** | **搜索源优化 + 插件与 CLI 持平 + 多语言小语种**：搜索源 237→253（免配置 198→219），新增 14 个小语种源与 CORE 全文源，百度与搜狗修活；导入链 −79%，重排序 33ms→1.5ms；新增 `argo stats` 本地使用日志。详见 [发布说明](docs/RELEASE_NOTES_v2.9.0.md) |
-| **v2.8.9** | **输出减重 + 检索更全更快 + 5 个外媒与核查源**：默认输出 15.5KB→5.2KB（−66%，同一份结果不再写三遍）；召回 +35%、抓取时延 −30%、正文结构保真 0/6→6/6；新增卫报 / France 24 / 德国之声 / FactCheck.org / Full Fact 五个免密钥源，gdelt 死源下线。详见 [发布说明](docs/RELEASE_NOTES_v2.8.9.md) |
-| **v2.8.8** | **真实用户报障修复（#12 密钥别名静默失效、#13 抓取链不走代理）+ 全面提速 + 搜索源 218 → 235**：出口调度统一走 `ARGO_PROXY` / 按域规则并尊重 `NO_PROXY`；命令冷启动 2.1s→0.55s；新增 `argo answer` 直答与 `argo watch` 网页观察，14 个免密钥源。详见 [发布说明](docs/RELEASE_NOTES_v2.8.8.md) |
-| **v2.8.7** | **218 源 / 89 域 + 取信技巧三通道 + 路由触发纪律 + macro 零结果修复**：批次七 / 八 / 九累计 50 个新源；抓取链新增 llms.txt 与 `.md` 直出探测；`--engine` 逗号多引擎修复，中国宏观查询国家统计局前置。详见 [发布说明](docs/RELEASE_NOTES_v2.8.7.md) |
-| **v2.8.6** | **hedged 竞速 + 知乎三源分工 + 声明式语言分发 + 可达性门 + 学术检索协议**：首引擎宽限窗竞速，快引擎只付 1 次调用；zhihu 全网搜接入并防饿死；子查询语言与学术分发；死源显形检查。详见 [发布说明](docs/RELEASE_NOTES_v2.8.6.md) |
-| **v2.8.5** | **DSH 插件工具原生化 + MCP 默认关闭 + Windows 兼容 + 配额自愈 + 抓取 deadline**：`argo_search` / `argo_fetch` 以原生一等工具注册，默认可用；Windows 全平台兼容；配额耗尽自动识别、切备用源、周期结束自愈，无需人工改配置。详见 [发布说明](docs/RELEASE_NOTES_v2.8.5.md) |
-| **v2.8.4** | **本地数据融合 + 多客户端 MCP 接入 + 结构化搜索增强 + Keenable**：深度研究可吃本地一手数据（`file_inputs` + `recompute` 可复算执行器）；`argo mcp inject` 一条命令注入 6 个客户端；查询归一化与复杂度门控。详见 [发布说明](docs/RELEASE_NOTES_v2.8.4.md) |
-| **v2.8.3** | **多语言路由修复 + anysearch 进程化 + weighted RRF**：anysearch 从子进程改为进程内调用，省 Python 启动开销；weighted RRF 新增动态可靠性因子，弱源降权；ja/ko 与欧语言查询返回目标语言。详见 [发布说明](docs/RELEASE_NOTES_v2.8.3.md) |
-| **v2.8.2** | **Windows 全平台 + 证据语义统一**：全链路 UTF-8 防线根治 GBK 崩溃，Chrome / Edge 自动发现；npm 包补 `dsh.bundle` 声明，一行命令即得 MCP 工具；`wide_research` 新增质量门与递归硬保护。详见 [发布说明](docs/RELEASE_NOTES_v2.8.2.md) |
-| **v2.8.0** | **证据完整链路 + 求职 v3 + 天气双源**：搜索输出自带证据门控，`--verify` 一键核验并记住已核实链接；`argo job` 求职搜索 v3（结构化字段 + 增量监控）；天气双源并行。详见 [发布说明](docs/RELEASE_NOTES_v2.8.0.md) |
-| **v2.7.3** | **本轮修复 + 引擎激活**：引擎层接入 HTTP 客户端（UA 轮换 / 重试 / 重定向跟随，arxiv 从 5s 超时变 2s 内 10 条）；TF-IDF 强语义注入激活 25 个此前永远选不中的垂直引擎；70 域缓存 TTL 全覆盖；国际引擎中文查询 URL 编码修复。详见 [发布说明](docs/RELEASE_NOTES_v2.7.3.md) |
-| **v2.7.2** | **登录态专业搜索**：新增 ego-search 子技能（默认关闭，开启方法与依赖见上方「登录态专业搜索」节）；搜索保底与多意图路由；日韩文查询不再混入中文引擎。详见 [发布说明](docs/RELEASE_NOTES_v2.7.2.md) |
-| **v2.7.1** | **安全加固 + 路由修复**：SSRF 防护（URL 白名单 + IP 段检查）；路由健康状态语义漂移根因修复，只对 `local_*` 做健康判定；深度研究 local_first 浪费修复。详见 [发布说明](docs/RELEASE_NOTES_v2.7.1.md) |
-| **v2.7.0** | **垂直结构化模态卡**：内建 `bocha` / `bocha_ai` 原生引擎，`modal_card` 域统一识别火车票 / 油价 / 贵金属 / 万年历 / 星座等实时卡片；修复 `bocha` web 解析缺陷。详见 [发布说明](docs/RELEASE_NOTES_v2.7.0.md) |
-| **v2.6.2** | 合并独立改进线：网络环境感知 / 加权 RRF 与语义缓存 / 自适应引擎禁用 / 内容安全与查询变体 / 三大垂直引擎；含 v2.6.1 路由修复。详见 [发布说明](docs/RELEASE_NOTES_v2.6.2.md) |
-| **v2.6.1** | v2.6.0 修复版：路由误伤修复（`capital of` 不再抢 fact_check）；版本同步。详见 [发布说明](docs/RELEASE_NOTES_v2.6.1.md) |
-| **v2.6.0** | **多语言搜索**（检测 / 引擎参数 / 跨语言回退）；影视·体育·地理·组织·媒体等垂直补全；约 120+ 源。详见 [发布说明](docs/RELEASE_NOTES_v2.6.0.md) |
-| **v2.5.1** | 金融/宏观/化学等垂直答案源加厚；引擎分层 + combo 预算；[v2.5.1 说明](docs/RELEASE_NOTES_v2.5.1.md) |
+| **v2.9.0** | **搜索源优化 + 插件与 CLI 持平 + 多语言小语种**：搜索源 237→253（免配置 198→219），新增 14 个小语种源与 CORE 全文源，百度与搜狗修活；导入链 −79%，重排序 33ms→1.5ms；新增 `argo stats` 本地使用日志。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.9** | **输出减重 + 检索更全更快 + 5 个外媒与核查源**：默认输出 15.5KB→5.2KB（−66%，同一份结果不再写三遍）；召回 +35%、抓取时延 −30%、正文结构保真 0/6→6/6；新增卫报 / France 24 / 德国之声 / FactCheck.org / Full Fact 五个免密钥源，gdelt 死源下线。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.8** | **真实用户报障修复（#12 密钥别名静默失效、#13 抓取链不走代理）+ 全面提速 + 搜索源 218 → 235**：出口调度统一走 `ARGO_PROXY` / 按域规则并尊重 `NO_PROXY`；命令冷启动 2.1s→0.55s；新增 `argo answer` 直答与 `argo watch` 网页观察，14 个免密钥源。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.7** | **218 源 / 89 域 + 取信技巧三通道 + 路由触发纪律 + macro 零结果修复**：批次七 / 八 / 九累计 50 个新源；抓取链新增 llms.txt 与 `.md` 直出探测；`--engine` 逗号多引擎修复，中国宏观查询国家统计局前置。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.6** | **hedged 竞速 + 知乎三源分工 + 声明式语言分发 + 可达性门 + 学术检索协议**：首引擎宽限窗竞速，快引擎只付 1 次调用；zhihu 全网搜接入并防饿死；子查询语言与学术分发；死源显形检查。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.5** | **DSH 插件工具原生化 + MCP 默认关闭 + Windows 兼容 + 配额自愈 + 抓取 deadline**：`argo_search` / `argo_fetch` 以原生一等工具注册，默认可用；Windows 全平台兼容；配额耗尽自动识别、切备用源、周期结束自愈，无需人工改配置。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.4** | **本地数据融合 + 多客户端 MCP 接入 + 结构化搜索增强 + Keenable**：深度研究可吃本地一手数据（`file_inputs` + `recompute` 可复算执行器）；`argo mcp inject` 一条命令注入 6 个客户端；查询归一化与复杂度门控。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.3** | **多语言路由修复 + anysearch 进程化 + weighted RRF**：anysearch 从子进程改为进程内调用，省 Python 启动开销；weighted RRF 新增动态可靠性因子，弱源降权；ja/ko 与欧语言查询返回目标语言。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.2** | **Windows 全平台 + 证据语义统一**：全链路 UTF-8 防线根治 GBK 崩溃，Chrome / Edge 自动发现；npm 包补 `dsh.bundle` 声明，一行命令即得 MCP 工具；`wide_research` 新增质量门与递归硬保护。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.8.0** | **证据完整链路 + 求职 v3 + 天气双源**：搜索输出自带证据门控，`--verify` 一键核验并记住已核实链接；`argo job` 求职搜索 v3（结构化字段 + 增量监控）；天气双源并行。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.7.3** | **本轮修复 + 引擎激活**：引擎层接入 HTTP 客户端（UA 轮换 / 重试 / 重定向跟随，arxiv 从 5s 超时变 2s 内 10 条）；TF-IDF 强语义注入激活 25 个此前永远选不中的垂直引擎；70 域缓存 TTL 全覆盖；国际引擎中文查询 URL 编码修复。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.7.2** | **登录态专业搜索**：新增 ego-search 子技能（默认关闭，开启方法与依赖见上方「登录态专业搜索」节）；搜索保底与多意图路由；日韩文查询不再混入中文引擎。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.7.1** | **安全加固 + 路由修复**：SSRF 防护（URL 白名单 + IP 段检查）；路由健康状态语义漂移根因修复，只对 `local_*` 做健康判定；深度研究 local_first 浪费修复。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.7.0** | **垂直结构化模态卡**：内建 `bocha` / `bocha_ai` 原生引擎，`modal_card` 域统一识别火车票 / 油价 / 贵金属 / 万年历 / 星座等实时卡片；修复 `bocha` web 解析缺陷。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.6.2** | 合并独立改进线：网络环境感知 / 加权 RRF 与语义缓存 / 自适应引擎禁用 / 内容安全与查询变体 / 三大垂直引擎；含 v2.6.1 路由修复。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.6.1** | v2.6.0 修复版：路由误伤修复（`capital of` 不再抢 fact_check）；版本同步。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.6.0** | **多语言搜索**（检测 / 引擎参数 / 跨语言回退）；影视·体育·地理·组织·媒体等垂直补全；约 120+ 源。详见 [CHANGELOG](docs/CHANGELOG.md) |
+| **v2.5.1** | 金融/宏观/化学等垂直答案源加厚；引擎分层 + combo 预算；[CHANGELOG](docs/CHANGELOG.md#v27x-及更早) |
 | **v2.5.0** | 安装脚本 + npx；查询改写与路由拆开；路由热路径缓存；MCP 紧凑响应 |
 | **v2.4.0** | 路由低分回退与社交误吸过滤；缓存 depth / 柔性命中；熔断与负缓存；`engine_outcomes` |
 | **v2.2–v2.3** | 证据两阶段、中文信源表、content_signals、fetch 栈、引擎扩充 |
 | **v2.1** | 社交引擎层（多平台 UGC） |
 | **v1.x** | 统一命名为 Argo，多引擎路由与双层缓存成型 |
 
-更细说明见 `docs/RELEASE_NOTES_v2.7.0.md` 与 `docs/OPTIMIZATION_ROADMAP_v2.4.md`。
+更细说明见 [CHANGELOG](docs/CHANGELOG.md)。
 
 ---
 
