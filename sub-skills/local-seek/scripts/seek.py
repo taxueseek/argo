@@ -88,6 +88,8 @@ NOISE_TIER = [
 _NOISE_SET = frozenset(n for n in NOISE_TIER if not n.endswith("*"))
 DOC_EXTS = {"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "md", "txt",
             "rtf", "html", "htm", "epub", "csv", "json", "yaml", "yml", "log"}
+OFFICE_ZIP_EXTS = {"docx", "pptx", "xlsx"}
+CONFIG_EXTS = {"yaml", "yml", "json", "toml", "ini", "env", "conf", "xml", "properties"}
 CODE_EXTS = {"py", "js", "ts", "tsx", "jsx", "go", "rs", "java", "c", "h",
              "cpp", "hpp", "cs", "rb", "php", "swift", "kt", "sh", "bash",
              "zsh", "sql", "vue", "svelte", "lua", "r", "scala", "dart", "ex"}
@@ -616,6 +618,154 @@ def rg_search(patterns, path, excludes, exts, context, count, max_results,
     )
     return _finish_content(candidates, raw_query, context, count, fixed,
                            path, max_results, drop_noise), None
+
+
+# ── Office 办公文档解包透视（纯 Python 标准库，零第三方依赖）──────────────
+
+def _extract_office_items(file_path: Path) -> list[tuple[int, str]]:
+    """从 docx/pptx/xlsx 等 Office zip 容器中免依赖流式提取 (序号, 文本)。"""
+    ext = file_path.suffix.lower().lstrip(".")
+    if ext not in OFFICE_ZIP_EXTS:
+        return []
+    import zipfile
+    import xml.etree.ElementTree as ET
+    items: list[tuple[int, str]] = []
+    try:
+        with zipfile.ZipFile(file_path, "r") as z:
+            namelist = set(z.namelist())
+            if ext == "docx" and "word/document.xml" in namelist:
+                tree = ET.fromstring(z.read("word/document.xml"))
+                p_count = 0
+                for p in tree.iter():
+                    if p.tag.endswith("}p"):
+                        texts = [node.text for node in p.iter() if node.tag.endswith("}t") and node.text]
+                        if texts:
+                            p_text = "".join(texts).strip()
+                            if p_text:
+                                p_count += 1
+                                items.append((p_count, f"[段落{p_count}] {p_text}"))
+            elif ext == "pptx":
+                slide_names = sorted(
+                    [n for n in namelist if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
+                    key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', x)]
+                )
+                for s_idx, s_name in enumerate(slide_names):
+                    tree = ET.fromstring(z.read(s_name))
+                    texts = [node.text for node in tree.iter() if node.tag.endswith("}t") and node.text]
+                    if texts:
+                        s_text = " ".join(texts).strip()
+                        if s_text:
+                            items.append((s_idx + 1, f"[幻灯片{s_idx + 1}] {s_text}"))
+            elif ext == "xlsx":
+                shared_strings: list[str] = []
+                if "xl/sharedStrings.xml" in namelist:
+                    tree = ET.fromstring(z.read("xl/sharedStrings.xml"))
+                    for si in tree.iter():
+                        if si.tag.endswith("}si"):
+                            texts = [node.text for node in si.iter() if node.tag.endswith("}t") and node.text]
+                            shared_strings.append("".join(texts))
+                sheet_names = sorted(
+                    [n for n in namelist if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")],
+                    key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', x)]
+                )
+                item_idx = 0
+                for s_idx, s_name in enumerate(sheet_names):
+                    tree = ET.fromstring(z.read(s_name))
+                    for c in tree.iter():
+                        if c.tag.endswith("}c"):
+                            cell_ref = c.attrib.get("r", "")
+                            cell_type = c.attrib.get("t", "")
+                            v_node = [node.text for node in c.iter() if node.tag.endswith("}v") and node.text]
+                            val = ""
+                            if v_node:
+                                v_str = v_node[0]
+                                if cell_type == "s" and v_str.isdigit() and int(v_str) < len(shared_strings):
+                                    val = shared_strings[int(v_str)]
+                                else:
+                                    val = v_str
+                            if val and val.strip():
+                                item_idx += 1
+                                r_match = re.search(r'\d+', cell_ref)
+                                row_num = int(r_match.group(0)) if r_match else item_idx
+                                items.append((row_num, f"[Sheet{s_idx + 1}:{cell_ref}] {val.strip()}"))
+    except Exception:
+        return []
+    return items
+
+
+def office_search(patterns: list[str], path: Path, excludes: list[str],
+                  exts: list[str], count: bool, max_results: int,
+                  fixed: bool, raw_query: str = "", dots: bool = False,
+                  drop_noise: bool = True, since_ts: float | None = None,
+                  until_ts: float | None = None) -> list[tuple[str, int, str]]:
+    """扫描目标路径下的 Office 容器文件并提取匹配文本。"""
+    active_exts = (set(exts) & OFFICE_ZIP_EXTS) if exts else OFFICE_ZIP_EXTS
+    if not active_exts:
+        return []
+
+    compiled = []
+    for p in patterns:
+        try:
+            pattern_str = re.escape(p) if fixed else p
+            compiled.append(re.compile(pattern_str, re.IGNORECASE))
+        except re.error:
+            pass
+    if not compiled:
+        return []
+
+    candidates = []
+    counts = []
+
+    if path.is_file():
+        files_to_scan = [path] if path.suffix.lower().lstrip(".") in active_exts else []
+    else:
+        files_to_scan = []
+        for root, dirs, files in os.walk(path):
+            if not dots:
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+            if any(exc in root for exc in excludes if exc):
+                continue
+            for f in files:
+                ext = f.rsplit(".", 1)[-1].lower() if "." in f else ""
+                if ext in active_exts:
+                    fp = Path(root) / f
+                    if _in_time_window(str(fp), since_ts, until_ts):
+                        files_to_scan.append(fp)
+
+    for fp in files_to_scan:
+        fp_str = str(fp)
+        items = _extract_office_items(fp)
+        matched_in_file = 0
+        for line_num, txt in items:
+            if any(c.search(txt) for c in compiled):
+                matched_in_file += 1
+                if not count:
+                    candidates.append((fp_str, line_num, truncate(txt)))
+        if count and matched_in_file > 0:
+            counts.append((fp_str, matched_in_file, ""))
+
+    if count:
+        counts.sort(key=lambda t: (-t[1], t[0]))
+        return counts[:max_results]
+
+    if not candidates:
+        return []
+
+    return _finish_content(iter(candidates), raw_query, 0, count, fixed,
+                           path, max_results, drop_noise)
+
+
+def _merge_content_dedup(a: list, b: list, limit: int) -> list:
+    """按 (文件路径, 行号) 去重合并两组正文搜索结果。"""
+    seen, out = set(), []
+    for it in list(a) + list(b):
+        key = (it[0], it[1]) if isinstance(it, (list, tuple)) and len(it) >= 2 else str(it)
+        if key not in seen:
+            seen.add(key)
+            out.append(it)
+        if len(out) >= limit:
+            break
+    return out
 
 
 # ── fzf FuzzyMatchV2 评分 + 拼音首字母（pypinyin 优先，GB2312 表保底）──────────
@@ -1325,8 +1475,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     ap = argparse.ArgumentParser(prog="seek", description="本地高效搜索统一入口")
     ap.add_argument("query", nargs="?", help="搜索查询词")
     ap.add_argument("--path", default=".", help="搜索目录（默认当前目录）")
-    ap.add_argument("--scope", choices=["code", "doc", "all"], default="code",
-                    help="code=正文+代码；doc=文档类；all=Spotlight 兜底")
+    ap.add_argument("--scope", choices=["code", "doc", "office", "config", "all"], default="code",
+                    help="code=正文+代码；doc/office=办公与文档；config=配置文件；all=Spotlight 兜底")
     ap.add_argument("--filename", action="store_true", help="按文件名查找（fd）")
     ap.add_argument("--spotlight", action="store_true", help="Spotlight 全盘兜底")
     ap.add_argument("--dot", action="store_true",
@@ -1412,13 +1562,14 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     scope = args.scope
     if args.spotlight:
         scope = "all"
-    # doc 场景补充文档扩展名
-    if scope == "doc" and not exts:
-        # 文本档（md/txt/html…）rg 直接搜全文；pdf/docx 等二进制 rg 搜不出
-        # 内容，那是 --spotlight（Spotlight 内容索引）的职责。此前把 md/txt
-        # 从 exts 里减掉，恰好漏掉最常搜的笔记（2026-10-03 实测：--scope doc
-        # 搜 md 零命中，doc 场景等于虚设）。
-        exts = sorted(DOC_EXTS)
+    # doc / office 场景补充文档与办公扩展名
+    if scope in ("doc", "office") and not exts:
+        exts = sorted(DOC_EXTS | OFFICE_ZIP_EXTS)
+        scope = "code"
+        if not tool_exists("rg"):
+            scope = "all"
+    elif scope == "config" and not exts:
+        exts = sorted(CONFIG_EXTS)
         scope = "code"
         if not tool_exists("rg"):
             scope = "all"
@@ -1547,6 +1698,17 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     # 「搜不到就回落重搜」的分支——噪声内容始终在结果池里，只是排在真源之后。
     # 早先版本用 rg 的 -g glob 排除，那会连搜索根自己叫 tests/ 的情况一起打死
     # （实测整棵树被判空、且回落也不触发），故改成 Python 层排序。
+
+    # 融合 Office 办公文档解包透视（DOCX/PPTX/XLSX，纯标准库免依赖）
+    if not args.filename and (args.scope in ("doc", "office") or (exts and any(e in OFFICE_ZIP_EXTS for e in exts))):
+        office_res = office_search(patterns, path, excludes, exts, args.count,
+                                   max_results, fixed, args.query, args.dot,
+                                   drop_noise=not args.include_noise,
+                                   since_ts=since_ts, until_ts=until_ts)
+        if office_res:
+            results = _merge_content_dedup(results or [], office_res, max_results)
+            if "office" not in engine:
+                engine = f"{engine}+office"
 
     elapsed = int((time.time() - start) * 1000)
     # 时间窗：统一出口按文件 mtime 过滤（rg/fd/mdfind 共用）
