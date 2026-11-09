@@ -113,6 +113,25 @@ def test_requirements_files_exist_and_are_wired():
     assert "curl_cffi" in opt and "rapidocr" in opt
 
 
+def test_uv_is_the_install_path_not_pip():
+    """依赖安装必须走 uv + uv.lock，不能退回 pip install -r。
+
+    2026-11-09 收口前的形态：CI 全程 `pip install -r requirements-dev.txt`，
+    而 requirements 里除 pytest 家族全是浮动版本，同一份代码在不同时间装出
+    不同依赖集——「可复现解析」这个门禁前提根本不存在。
+    """
+    for name in ("ci.yml", "nightly.yml", "release.yml"):
+        raw = (WORKFLOWS / name).read_text(encoding="utf-8")
+        assert "astral-sh/setup-uv" in raw, f"{name} 未使用 setup-uv"
+        assert "uv sync --frozen" in raw, (
+            f"{name} 未用 `uv sync --frozen`：--frozen 才保证「装的与 lock 一致」，"
+            "不带它会按当前 pyproject 重新解析，lock 形同虚设"
+        )
+        assert "pip install -r requirements" not in raw, (
+            f"{name} 仍在用 pip 装 requirements：依赖真源已收到 pyproject + uv.lock"
+        )
+
+
 def test_unit_installs_rg_for_local_seek():
     """local-seek 的 5 条用例依赖 rg；CI 镜像默认没有，实测一缺就红成
     「grep 执行失败」。装它只要 1 秒，比在用例里跳过更值。"""
@@ -142,12 +161,14 @@ def test_repo_entrypoint_reaches_path():
 
 
 def test_extras_reuses_cached_venv_but_self_heals():
-    """extras 的 9 件依赖约 5 分钟安装；缓存整个 venv 前提是 key 覆盖两份
-    requirements，且不能只信 cache-hit（镜像换 Python 补丁版后旧 venv 会失效，
+    """extras 的 9 件依赖约 5 分钟安装；缓存整个 venv 前提是 key 覆盖 uv.lock
+    （依赖真源），且不能只信 cache-hit（镜像换 Python 补丁版后旧 venv 会失效，
     而 cache-hit 仍为 true）。这里锁这两个约束。"""
     raw = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
     assert "actions/cache@v4" in raw
-    assert "hashFiles('requirements-dev.txt', 'requirements-optional.txt')" in raw
+    assert "hashFiles('uv.lock')" in raw, (
+        "缓存 key 必须覆盖 uv.lock：lock 变了要重建，否则会装上旧依赖集"
+    )
     extras = _load("ci.yml")["jobs"]["extras"]
     text = _steps_text(extras)
     assert ".venv/bin/python -c" in text, "缺依赖探针：缓存坏了会整轮红"

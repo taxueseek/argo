@@ -10,7 +10,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-VERSION=$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')
+# 解释器选择：uv 同步出来的 .venv 优先（与 CI 同一档），否则回落 python3。
+# 为什么不用裸 python3：CI 里 .venv 是唯一钉版解释器，脚本若在系统 python3 上
+# 跑，`import build` 的判定会随机器而变——同一份代码在不同机器打出不同资产。
+PY="$ROOT_DIR/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+    PY="$(command -v python3 || true)"
+fi
+if [ -z "$PY" ]; then
+    echo "找不到可用的 Python 解释器（需要 .venv/bin/python 或 python3）" >&2
+    exit 1
+fi
+
+VERSION=$("$PY" -c 'import json; print(json.load(open("package.json"))["version"])')
 DIST_DIR="$ROOT_DIR/dist"
 STAGE_DIR="$DIST_DIR/argo-$VERSION"
 
@@ -37,16 +49,16 @@ tar -czf "$TARBALL" -C "$DIST_DIR" "argo-$VERSION"
 # 3. 如果环境已安装 build 模块，打出标准 Python wheel。
 # wheel 的运行树来自 staging：构建前复制到 argo_search/_data，构建后清理。
 # 这样 pip/uvx 安装后 console script 仍能找到 config/engines/sub-skills。
-if python3 -c 'import build' 2>/dev/null; then
+if "$PY" -c 'import build' 2>/dev/null; then
     echo "--> 构建 Python Wheel 与 Sdist..."
     PKG_DATA="$ROOT_DIR/argo_search/_data"
     rm -rf "$PKG_DATA"
     cp -r "$STAGE_DIR" "$PKG_DATA"
-    python3 -m build --outdir "$DIST_DIR"
+    "$PY" -m build --outdir "$DIST_DIR"
     rm -rf "$PKG_DATA"
-elif python3 -c 'import setuptools, wheel' 2>/dev/null; then
+elif "$PY" -c 'import setuptools, wheel' 2>/dev/null; then
     echo "--> 使用 setuptools 构建 Wheel..."
-    python3 setup.py bdist_wheel --dist-dir "$DIST_DIR" 2>/dev/null || true
+    "$PY" setup.py bdist_wheel --dist-dir "$DIST_DIR" 2>/dev/null || true
 fi
 rm -rf "$STAGE_DIR"
 

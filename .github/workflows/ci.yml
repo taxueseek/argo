@@ -44,12 +44,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
+          # 与仓内 .python-version 一致：门禁的判定标准必须可复现，解释器版本
+          # 漂移会让同一份代码在不同作业里跑出不同结果。
+          python-version: "3.14"
+          # uv.lock 是依赖真源；缓存命中判定看 lock 内容，不看 requirements
+          # 清单（后者由 test_dependency_source_gate 与 lock 机械对账）。
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --group dev
       - name: 与本地完全相同的七道门（scripts/pre-commit 可直接独立运行）
         run: bash scripts/pre-commit
 
@@ -63,17 +66,16 @@ jobs:
         group: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --group dev
       - name: 系统依赖（local-seek 用 rg；缺了会退回 grep 并红 5 条）
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
       - name: pytest（按历史耗时切片）
         run: >
-          python -m pytest
+          .venv/bin/python -m pytest
           --splits 4 --group ${{ matrix.group }}
           --durations-path tests/.test_durations
           --timeout=120
@@ -100,20 +102,22 @@ jobs:
         group: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
 
-      # 缓存整个 venv，而不是 pip 的下载缓存：九件里 pymupdf/rapidocr 体积大，
+      # 缓存整个 venv，而不是 uv 的下载缓存：九件里 pymupdf/rapidocr 体积大，
       # 命中下载缓存仍要解包安装约 3 分钟；直接复用装好的 .venv 只花解压时间。
-      # key 里带两个 requirements 的 hash：任一份变了就重建，不会装上旧版本。
+      # key 里带 uv.lock 的 hash：lock 变了就重建，不会装上旧版本（lock 是依赖
+      # 真源，requirements 清单由 test_dependency_source_gate 与它对账）。
       # 四个分片共用同一个 key，各自并行解压（实测命中后安装步骤整体跳过）。
       - name: 恢复 venv（命中则跳过安装）
         id: venv
         uses: actions/cache@v4
         with:
           path: .venv
-          key: extras-venv-${{ runner.os }}-py312-${{ hashFiles('requirements-dev.txt', 'requirements-optional.txt') }}
+          key: extras-venv-${{ runner.os }}-py314-${{ hashFiles('uv.lock') }}
 
       # 不信缓存声明，直接试导入：runner 镜像换 Python 补丁版后，旧 venv 的
       # 解释器路径会失效，而 cache-hit 仍然是 true——只信 key 会让整轮红在一个
@@ -132,9 +136,8 @@ jobs:
         if: steps.deps.outputs.ready != 'true'
         run: |
           rm -rf .venv
-          time python -m venv .venv
-          time .venv/bin/python -m pip install -q --upgrade pip
-          time .venv/bin/python -m pip install -q -r requirements-dev.txt -r requirements-optional.txt
+          time uv venv .venv --python 3.14
+          time uv pip install --python .venv/bin/python -r requirements-dev.txt -r requirements-optional.txt
 
       - name: 系统依赖（local-seek 用 rg；缺了会退回 grep 并红 5 条）
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
@@ -159,13 +162,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: python -m pip install -r requirements-dev.txt
+      - run: uv sync --frozen --group dev
       - name: 入口冒烟（全部不联网）
         run: |
           node --check bin/argo.js

@@ -21,23 +21,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
 
       - name: Install build dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build pytest pyyaml
+          uv sync --frozen --group dev
+          uv pip install --python .venv/bin/python build
 
       # 发布内容门禁前移（2026-11-06）：v2.11.2 实证 tag 推送后 main CI 才红
       # （五语 README 段落缺失 + bump 测试硬编码版本号），发布 7 分钟后出补丁。
       # 全量套件里的发布内容检查在这里先跑，红则中止发布，不再「发了再补」。
       - name: Release content preflight (release.py check + bump tests)
         run: |
-          python scripts/release.py check
-          python -m pytest -q tests/test_release_script.py tests/test_release_consistency.py
+          .venv/bin/python scripts/release.py check
+          .venv/bin/python -m pytest -q tests/test_release_script.py tests/test_release_consistency.py
 
       - name: Run pre-commit gates verification
         run: |

@@ -105,23 +105,39 @@ if (-not $SkipPip) {
     # 解释器候选链会自动发现它，见 _venv_python）。Windows 的 python.org
     # 安装包通常不受 PEP 668 限制，但 venv 仍优于全局安装：不污染全局
     # site-packages，卸载/升级干净，与 macOS/Linux 行为一致。
+    #
+    # 2026-11-09 收口：有 uv 时走 `uv sync --frozen --group dev`——解释器版本读
+    # 仓内 .python-version、依赖版本读 uv.lock，装出来的环境与 CI 完全一致。
+    # 显式传 --python 而不是只靠 .python-version：与 install.sh 同因，环境变量
+    # UV_PYTHON 会覆盖 .python-version（实测会把 3.14 的 venv 换成 3.15）。
     $VenvDir = Join-Path $InstallDir ".venv"
     $VenvPy = Join-Path $VenvDir "Scripts\python.exe"
-    & $script:py -m venv $VenvDir 2>$null
-    if ($LASTEXITCODE -eq 0 -and (Test-Path $VenvPy)) {
-        Write-Host "==> 创建虚拟环境: $VenvDir（依赖装在这里，不碰系统 Python）"
-        & $VenvPy -m pip install pyyaml
-        if ($LASTEXITCODE -ne 0) {
-            & $VenvPy -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pyyaml
+    $script:venvReady = $false
+    $uvCmd = Get-Command uv -ErrorAction SilentlyContinue
+    if ($uvCmd) {
+        $pinnedPy = if (Test-Path (Join-Path $InstallDir ".python-version")) {
+            (Get-Content (Join-Path $InstallDir ".python-version") -Raw).Trim()
+        } else { "3.12" }
+        Write-Host "==> 用 uv 按 .python-version（$pinnedPy）+ uv.lock 同步环境…"
+        & $uvCmd.Source venv $VenvDir --python $pinnedPy 2>$null
+        & $uvCmd.Source sync --frozen --group dev --python $pinnedPy 2>$null
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $VenvPy)) {
+            $script:venvReady = $true
+            Write-Host "==> 依赖就绪（解释器: $VenvPy）"
+        } else {
+            Write-Host "[warn] uv sync 失败，回退 python -m venv + pip…"
+            Remove-Item -Recurse -Force $VenvDir -ErrorAction SilentlyContinue
         }
-        if ($LASTEXITCODE -ne 0) { Write-Host "[warn] venv 内 PyYAML 安装失败，可手动: & `"$VenvPy`" -m pip install pyyaml" }
-        Write-Host "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
-        & $VenvPy -m pip install curl_cffi
-        if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 curl_cffi 失败（可选依赖）" }
-        & $VenvPy -m pip install rapidfuzz
-        if ($LASTEXITCODE -ne 0) { Write-Host "[warn] pip 安装 rapidfuzz 失败（可选依赖，缺失时去重回退纯 minhash）" }
-    } else {
-        Write-Host "[warn] venv 创建失败，回退系统 pip 安装…"
+    }
+    if (-not $script:venvReady) {
+        if (-not (Test-Path $VenvPy)) { & $script:py -m venv $VenvDir 2>$null }
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $VenvPy)) {
+            $script:venvReady = $true
+            Write-Host "==> 创建虚拟环境: $VenvDir（依赖装在这里，不碰系统 Python）"
+        }
+    }
+    if (-not $script:venvReady) {
+        Write-Host "[warn] venv 不可用，回退系统 pip 安装…"
         Write-Host "==> 安装依赖 (PyYAML)…"
         & $script:py -m pip install pyyaml
         if ($LASTEXITCODE -ne 0) {

@@ -17,10 +17,50 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+# 依赖真源（2026-11-09 收口）：requirements-dev.txt / requirements-optional.txt
+# 降级为「pip 用户的可读清单 + 文档引用」，内容与这里的声明由
+# tests/test_dependency_source_gate.py 机械对账，漂移即红。
+#
+# 为什么 3.9 档要分 marker：运行期下限是 3.9（见 bin/argo 的 MIN_PYTHON 与
+# install.sh 的版本闸门），但 pytest 9.x 与 python-jobspy 都要求 >=3.10。
+# 不分开写 uv 无法解析（实测 `uv lock` 直接报 unsatisfiable），而硬抬
+# requires-python 到 3.10 会把 macOS 原生 python3.9 与 python:3.9 容器挡在
+# 门外——那正是 install.sh 注释里刻意保留的兼容面。
 [project.optional-dependencies]
 fast = [
     "curl_cffi>=0.7.0",
     "rapidfuzz>=3.0.0",
+]
+# full = CI 的 extras 作业与「装全可选依赖」的用户档。九件在代码里全是函数内
+# 惰性导入，缺失时主流程必须仍可用（同 requirements-optional.txt 的口径）。
+full = [
+    "brotli; python_version >= '3.10'",
+    "beautifulsoup4; python_version >= '3.10'",
+    "curl_cffi; python_version >= '3.10'",
+    "pymupdf; python_version >= '3.10'",
+    "python-jobspy; python_version >= '3.10'",
+    "openpyxl; python_version >= '3.10'",
+    "pdfplumber; python_version >= '3.10'",
+    "pypdfium2; python_version >= '3.10'",
+    "rapidocr; python_version >= '3.10'",
+]
+
+[dependency-groups]
+dev = [
+    # 门禁判定标准必须可复现，所以 pytest 家族钉死版本（同 requirements-dev.txt
+    # 的既有口径）。3.9 档回落 pytest 8.3.5：8.x 是最后一个支持 3.9 的大版本，
+    # 且分片插件 pytest-split 与 pytest-timeout 在 3.9 档不存在可用版本，
+    # 因此 3.9 档只跑全量、不切片（CI 用 3.12，见 .github/workflows/ci.yml）。
+    "pytest==9.1.1; python_version >= '3.10'",
+    "pytest==8.3.5; python_version < '3.10'",
+    "pytest-split==0.11.0; python_version >= '3.10'",
+    "pytest-timeout==2.4.0; python_version >= '3.10'",
+    "PyYAML==6.0.3",
+    # 测试本身要用的可选依赖（不是运行期依赖）：缺件时相关用例 skip。
+    # 详见 requirements-dev.txt 的注释与 tests/_deps.py。
+    "curl_cffi",
+    "beautifulsoup4",
+    "lxml",
 ]
 
 [project.scripts]

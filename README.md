@@ -375,7 +375,7 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 | **pdfplumber / PyMuPDF** | ❌ 可选 | PDF 提取 | argo_pdf 不可用，其余正常 |
 | **Playwright** | ❌ 可选 | 截图增强 | 截图工具回退 Chrome CDP，其余正常 |
 
-安装脚本（install.sh）只自动装前两个；其余可选依赖按需 `pip install` 或 `brew install` 即可。
+安装脚本（install.sh）只自动装开发档（uv sync 时是 pytest 家族 + 测试要用的三件）；其余可选依赖按需 `pip install` 或 `brew install` 即可。
 更稳、完全不依赖 Node 的写法：先装脚本（方式一），再指向本机 Python：
 
 ```json
@@ -396,10 +396,12 @@ Python 路径特殊时：`export ARGO_PYTHON=/path/to/python3`（仅 npx 入口�
 ```bash
 git clone https://github.com/taxueseek/argo.git
 cd argo
-pip3 install pyyaml
+uv sync --frozen --group dev    # 解释器读 .python-version，依赖读 uv.lock
 bash scripts/install.sh --link ~/.claude/skills/argo   # 可选
-python3 scripts/search.py --list-engines
+.venv/bin/python scripts/search.py --list-engines
 ```
+
+没有 uv 时用 `pip3 install pyyaml`（仅此一个硬依赖）；可选增强见 `requirements-optional.txt`。
 
 ---
 
@@ -664,7 +666,7 @@ python3 scripts/search.py "同一查询" --json | \
 | 项目 | 要求 |
 |------|------|
 | Python | 3.9+（命令行与 MCP 核心） |
-| 依赖 | `pip install pyyaml`（仅此一个硬依赖） |
+| 依赖 | `pip install pyyaml`（仅此一个硬依赖）。开发/CI 档用 `uv sync --frozen --group dev`，解释器与依赖版本分别由 `.python-version` 与 `uv.lock` 钉死 |
 | 可选增强 | `pip install curl_cffi`（TLS 指纹伪造，MIT 许可）。装上后对指纹检测型反爬站（Cloudflare 等）免起浏览器即可抓取；缺失时自动降级，核心功能不受影响 |
 | Node.js | **仅**在使用 `npx` 入口时需要 18+ |
 | SearXNG | 不需要（内置本地引擎替代） |

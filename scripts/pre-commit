@@ -6,7 +6,7 @@
 # 6 道门禁红 + 阻塞全量收集，故障在树里躺了幾小时才被人工发现。「改了没
 # 验证就提交」没有机制拦截，只靠自觉。本 hook 把拦截点放在提交层。
 #
-# 只跑快的八道（实测合计 ~12s）：static_lint（语法/重复键/未声明 env）、
+# 只跑快的几道（实测合计 ~13s）：static_lint（语法/重复键/未声明 env）、
 # module_size_gate（1000 行门禁与祖父登记）、usage_doc（ARGO_* 开关总表）、
 # consistency（版本/徽章/工具数五语对账）、routing_snapshot（路由决策漂移）、
 # context_budget + engine_catalog（常驻文档预算、源文档/死源/声明一致）、
@@ -15,6 +15,8 @@
 # 副本的三例同类根因，实测合计 +0.7s）。
 # env_binding（2026-11-06 补的第 3 道 B 类复发护栏：模块导入期直接读 env
 # 一律红灯——290d3d8 同根因累计 9 处灭类后零祖父，AST 扫描 <0.5s）。
+# dependency_source（2026-11-09 补：pyproject 是真源、requirements 是派生清单，
+# 双向对账——清单里有真源没有的、真源里有 lock 没有的，都红。实测 <0.5s）。
 # 2026-10-18 补的两道（context_budget + engine_catalog）：f702ee2 把
 # SKILL.md 压到 8049B、4a71693 让 deepseek_search 成死源，两笔都过了 hook
 # 却在全量回归里红——正是「改完没跑到那条门」的同一个洞。全量回归 ~5 分钟
@@ -36,30 +38,46 @@ if [ -z "$root" ] || [ ! -d "$root/tests" ]; then
 fi
 cd "$root" || exit 1
 
-# 解释器选择：取第一个「存在且真 import 得动 pytest+yaml」的候选。此前是
-# 裸 `command -v python3`——2026-10-26 实测，默认 PATH 的 python3 是 3.15
-# （无 pytest），hook 每次提交都死在 pytest 收集之前，拦截层形同虚设。
-# 与 6971c73 给 eval 侧加的自愈重入是同一类根因（解释器选择散落多处、没有
-# 单一真源），这里把门禁这一处也收进候选链。2026-11-04 补 .venv 首选：
-# homebrew 升级清掉 python3.14 后候选链第 4 次漂移断链，根治靠仓内钉版
-# .venv（uv venv .venv --python 3.14 && uv pip install -p .venv -r
-# requirements-dev.txt），PATH 散装解释器只作回落。真 import 而非 find_spec：
-# 半装的 pytest、被 sitecustomize 顶掉的包都属「说在其实不在」（见 bin/argo
-# 严格档的同类教训）。候选全空时维持原口径 fail closed，绝不静默放行。
+# 解释器选择：uv 同步出的仓内 .venv 是唯一钉版档（.python-version 指定版本，
+# uv.lock 钉依赖），首选它。此前是裸 `command -v python3`——2026-10-26 实测，
+# 默认 PATH 的 python3 是 3.15（无 pytest），hook 每次提交都死在 pytest 收集
+# 之前，拦截层形同虚设。此后候选链改到第 4 次仍在漂移（homebrew 升级清掉
+# python3.14），根因是「候选链本身就是多个真源」。2026-11-09 收口：有 uv 且
+# .venv 缺失时**当场同步**（uv sync --frozen --group dev，读 .python-version
+# 与 uv.lock），不再靠 PATH 散装解释器回落；PATH 候选仅作为 uv 不可用时的
+# 兜底，且顺序按「越新越优先」排——3.9 档也能跑（pytest 8.3.5 由 lock 解析）。
+# 真 import 而非 find_spec：半装的 pytest、被 sitecustomize 顶掉的包都属
+# 「说在其实不在」（见 bin/argo 严格档的同类教训）。候选全空时维持原口径
+# fail closed，绝不静默放行。
 PY=""
-for cand in "${ARGO_GATE_PYTHON:-}" .venv/bin/python python3.14 python3.13 python3.12 python3.11 python3.10 python3 python; do
-    if [ -n "$cand" ] && command -v "$cand" >/dev/null 2>&1 \
-            && "$cand" -c "import pytest, yaml" >/dev/null 2>&1; then
-        PY=$cand
-        break
+if [ -n "${ARGO_GATE_PYTHON:-}" ]; then
+    PY="$ARGO_GATE_PYTHON"
+fi
+if [ -z "$PY" ] && [ -x .venv/bin/python ] && .venv/bin/python -c "import pytest, yaml" >/dev/null 2>&1; then
+    PY=".venv/bin/python"
+fi
+if [ -z "$PY" ] && command -v uv >/dev/null 2>&1; then
+    echo "[pre-commit] .venv 缺失或不可用，用 uv 按 uv.lock 同步…"
+    if uv sync --frozen --group dev >/dev/null 2>&1 \
+            && .venv/bin/python -c "import pytest, yaml" >/dev/null 2>&1; then
+        PY=".venv/bin/python"
     fi
-done
+fi
 if [ -z "$PY" ]; then
-    echo "[pre-commit] 找不到带 pytest+yaml 的解释器（候选：\$ARGO_GATE_PYTHON、仓内 .venv、python3.14/3.13/3.12/3.11/3.10、python3、python），门禁视为失败" >&2
+    for cand in python3.14 python3.13 python3.12 python3.11 python3.10 python3 python; do
+        if command -v "$cand" >/dev/null 2>&1 \
+                && "$cand" -c "import pytest, yaml" >/dev/null 2>&1; then
+            PY=$cand
+            break
+        fi
+    done
+fi
+if [ -z "$PY" ]; then
+    echo "[pre-commit] 找不到带 pytest+yaml 的解释器（候选：\$ARGO_GATE_PYTHON、仓内 .venv、uv sync、python3.14/3.13/3.12/3.11/3.10、python3、python），门禁视为失败" >&2
     exit 1
 fi
 
-echo "[pre-commit] argo 快门禁（~12s，解释器 $PY；全量回归请手动跑 tests/）..."
+printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
 "$PY" -m pytest -q \
     tests/test_static_lint_gate.py \
     tests/test_module_size_gate.py \
@@ -73,7 +91,8 @@ echo "[pre-commit] argo 快门禁（~12s，解释器 $PY；全量回归请手动
     tests/test_stub_targets.py \
     tests/test_env_binding_gate.py \
     tests/test_local_search_registry.py \
-    tests/test_launch_passthrough_alignment.py
+    tests/test_launch_passthrough_alignment.py \
+    tests/test_dependency_source_gate.py
 
 if command -v node >/dev/null 2>&1 && [ -f packages/dsh-plugin/test/size-gate.test.js ]; then
     node --test packages/dsh-plugin/test/size-gate.test.js packages/dsh-plugin/test/client.test.js

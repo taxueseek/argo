@@ -1,7 +1,17 @@
 # 可选依赖（缺失时主流程必须仍然可用；这九件在代码里全是函数内惰性导入）
 #
+# ⚠️ 本文件是**派生清单**，不是依赖真源。真源在 pyproject.toml 的
+#    [project.optional-dependencies].full；内容与它的对应关系由
+#    tests/test_dependency_source_gate.py 机械对账，漂移即红。
+#    改依赖请改 pyproject.toml，再跑：
+#        uv lock && uv pip compile pyproject.toml --extra full -o requirements-optional.txt
+#
 # CI 的 extras 作业装这一份，用来验证「装全之后仍然通过」；
 # 「一个都不装」由 unit 作业天然覆盖，不需要另开一档。
+#
+# 全部带 `python_version >= '3.10'` 标记：python-jobspy 与 pymupdf 都不支持 3.9，
+# 写进 pyproject 时按 marker 分档，所以 3.9 机器上装这份清单会少几件——这是
+# 预期行为，缺失时主流程仍可用。
 brotli
 beautifulsoup4
 curl_cffi

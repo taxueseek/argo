@@ -36,12 +36,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --group dev
       - name: 整条管线重放（不联网）
         run: python scripts/replay_eval.py --data tests/golden/pipeline_golden.json --check
 
@@ -51,12 +50,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --group dev
 
       - name: 重录固定查询集
         run: |
@@ -91,12 +89,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --group dev
       # 为什么单开一栏：路由测试只能证明「选中了这个源」，证明不了「它交得出
       # 解析结果」。这里守的是 API 形态/解析层零交付（空结果、字段缺失、源改名）。
       # 英文 canary 证明不了中文覆盖——语言覆盖由 spec 的 langs 与路由契约测试
@@ -115,12 +112,11 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
-      - run: python -m pip install -r requirements-dev.txt
+          python-version: "3.14"
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --group dev
       - name: 导出指标
         id: metrics
         run: |

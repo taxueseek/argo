@@ -139,29 +139,55 @@ if [[ "$SKIP_PIP" != "1" ]]; then
   # ModuleNotFoundError（2026-10-23 审计实测）。venv 是解释器自己管的目录，
   # 不受该限制，也不污染用户 site-packages（user-site 遮蔽 Homebrew 主树
   # 的历史风险一并消失）。
+  #
+  # 2026-11-09 收口：有 uv 时走 `uv sync --frozen --group dev`——解释器版本读
+  # 仓内 .python-version、依赖版本读 uv.lock，装出来的环境与 CI 完全一致。
+  # uv 不可用时才回落到 python3 -m venv + pip（旧路径保留，Windows 与精简
+  # 容器可能没有 uv）。
   VENV_DIR="$INSTALL_DIR/.venv"
-  if python3 -m venv "$VENV_DIR" 2>/dev/null; then
-    echo "==> 创建虚拟环境: ${VENV_DIR}（依赖装在这里，不碰系统 Python）"
-    "$VENV_DIR/bin/pip" install -q pyyaml \
-      || echo "[warn] venv 内 PyYAML 安装失败，可手动: $VENV_DIR/bin/pip install pyyaml"
-    echo "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
-    "$VENV_DIR/bin/pip" install -q curl_cffi rapidfuzz 2>/dev/null \
-      || echo "[warn] 可选增强安装失败（不影响核心功能）；需要时: $VENV_DIR/bin/pip install curl_cffi rapidfuzz"
+  if command -v uv >/dev/null 2>&1; then
+    # 解释器版本必须显式传 --python，不能只靠 .python-version：
+    # 环境变量 UV_PYTHON 会覆盖 .python-version（实测：本机 UV_PYTHON 指向
+    # 3.15 时，`uv venv --python 3.14` 建对了，随后不带 --python 的 `uv sync`
+    # 把 .venv 换成了 3.15）。CI 里没有这个变量，本机开发有——同一份脚本在
+    # 两处跑出不同版本，正是「版本一致性」要消掉的形态。
+    ARGO_PINNED_PY="$(cat "$INSTALL_DIR/.python-version" 2>/dev/null || echo 3.12)"
+    echo "==> 用 uv 按 .python-version（${ARGO_PINNED_PY}）+ uv.lock 同步环境…"
+    if uv venv "$VENV_DIR" --python "$ARGO_PINNED_PY" >/dev/null 2>&1 \
+       && uv sync --frozen --group dev --python "$ARGO_PINNED_PY" >/dev/null 2>&1; then
+      echo "==> 依赖就绪（解释器: $VENV_DIR/bin/python，版本 $("$VENV_DIR/bin/python" --version 2>&1)）"
+    else
+      echo "[warn] uv sync 失败，回退 python3 -m venv + pip…"
+      rm -rf "$VENV_DIR"
+      _argo_venv_pip_fallback=1
+    fi
   else
-    echo "[warn] venv 创建失败（Debian/Ubuntu 需先 sudo apt install python3-venv），回退系统 pip 安装…"
-    python3 -m pip install --user -q pyyaml 2>/dev/null \
-      || python3 -m pip install -q pyyaml 2>/dev/null \
-      || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple pyyaml 2>/dev/null \
-      || echo "[warn] pip 安装 PyYAML 失败，可手动: pip install pyyaml"
-    echo "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
-    python3 -m pip install --user -q curl_cffi 2>/dev/null \
-      || python3 -m pip install -q curl_cffi 2>/dev/null \
-      || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple curl_cffi 2>/dev/null \
-      || echo "[warn] pip 安装 curl_cffi 失败（可选依赖）。需要反爬 TLS 指纹伪造时手动: pip install curl_cffi"
-    python3 -m pip install --user -q rapidfuzz 2>/dev/null \
-      || python3 -m pip install -q rapidfuzz 2>/dev/null \
-      || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple rapidfuzz 2>/dev/null \
-      || echo "[warn] pip 安装 rapidfuzz 失败（可选依赖）。缺失时去重回退纯 minhash，需要模糊近重复复核时手动: pip install rapidfuzz"
+    _argo_venv_pip_fallback=1
+  fi
+  if [[ "${_argo_venv_pip_fallback:-0}" == "1" ]]; then
+    if python3 -m venv "$VENV_DIR" 2>/dev/null; then
+      echo "==> 创建虚拟环境: ${VENV_DIR}（依赖装在这里，不碰系统 Python）"
+      "$VENV_DIR/bin/pip" install -q pyyaml \
+        || echo "[warn] venv 内 PyYAML 安装失败，可手动: $VENV_DIR/bin/pip install pyyaml"
+      echo "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
+      "$VENV_DIR/bin/pip" install -q curl_cffi rapidfuzz 2>/dev/null \
+        || echo "[warn] 可选增强安装失败（不影响核心功能）；需要时: $VENV_DIR/bin/pip install curl_cffi rapidfuzz"
+    else
+      echo "[warn] venv 创建失败（Debian/Ubuntu 需先 sudo apt install python3-venv），回退系统 pip 安装…"
+      python3 -m pip install --user -q pyyaml 2>/dev/null \
+        || python3 -m pip install -q pyyaml 2>/dev/null \
+        || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple pyyaml 2>/dev/null \
+        || echo "[warn] pip 安装 PyYAML 失败，可手动: pip install pyyaml"
+      echo "==> 安装可选增强 (curl_cffi: TLS 指纹伪造；rapidfuzz: 去重模糊近重复复核；缺失不影响核心功能)…"
+      python3 -m pip install --user -q curl_cffi 2>/dev/null \
+        || python3 -m pip install -q curl_cffi 2>/dev/null \
+        || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple curl_cffi 2>/dev/null \
+        || echo "[warn] pip 安装 curl_cffi 失败（可选依赖）。需要反爬 TLS 指纹伪造时手动: pip install curl_cffi"
+      python3 -m pip install --user -q rapidfuzz 2>/dev/null \
+        || python3 -m pip install -q rapidfuzz 2>/dev/null \
+        || python3 -m pip install --user -q -i https://pypi.tuna.tsinghua.edu.cn/simple rapidfuzz 2>/dev/null \
+        || echo "[warn] pip 安装 rapidfuzz 失败（可选依赖）。缺失时去重回退纯 minhash，需要模糊近重复复核时手动: pip install rapidfuzz"
+    fi
   fi
 fi
 
