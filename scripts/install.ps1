@@ -94,7 +94,7 @@ if ($Pin) {
         (git -C $InstallDir rev-parse HEAD 2>$null)
     } else { "unknown" }
     if ($actualHead.Trim() -ne $Pin) {
-        Write-Error "供应链校验失败：固定 commit 为 $Pin，实际 HEAD 为 $actualHead。请人工核查仓库来源。"
+        Write-Error "供应链校验失败：固定 commit 为 ${Pin}，实际 HEAD 为 ${actualHead}。请人工核查仓库来源。"
         exit 1
     }
     Write-Host "==> 供应链校验通过: HEAD=$Pin"
@@ -118,12 +118,12 @@ if (-not $SkipPip) {
         $pinnedPy = if (Test-Path (Join-Path $InstallDir ".python-version")) {
             (Get-Content (Join-Path $InstallDir ".python-version") -Raw).Trim()
         } else { "3.12" }
-        Write-Host "==> 用 uv 按 .python-version（$pinnedPy）+ uv.lock 同步环境…"
+        Write-Host "==> 用 uv 按 .python-version（${pinnedPy}）+ uv.lock 同步环境…"
         & $uvCmd.Source venv $VenvDir --python $pinnedPy 2>$null
         & $uvCmd.Source sync --frozen --group dev --python $pinnedPy 2>$null
         if ($LASTEXITCODE -eq 0 -and (Test-Path $VenvPy)) {
             $script:venvReady = $true
-            Write-Host "==> 依赖就绪（解释器: $VenvPy）"
+            Write-Host "==> 依赖就绪（解释器: ${VenvPy}）"
         } else {
             Write-Host "[warn] uv sync 失败，回退 python -m venv + pip…"
             Remove-Item -Recurse -Force $VenvDir -ErrorAction SilentlyContinue
@@ -133,7 +133,7 @@ if (-not $SkipPip) {
         if (-not (Test-Path $VenvPy)) { & $script:py -m venv $VenvDir 2>$null }
         if ($LASTEXITCODE -eq 0 -and (Test-Path $VenvPy)) {
             $script:venvReady = $true
-            Write-Host "==> 创建虚拟环境: $VenvDir（依赖装在这里，不碰系统 Python）"
+            Write-Host "==> 创建虚拟环境: ${VenvDir}（依赖装在这里，不碰系统 Python）"
         }
     }
     if (-not $script:venvReady) {

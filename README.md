@@ -403,6 +403,8 @@ bash scripts/install.sh --link ~/.claude/skills/argo   # 可选
 
 没有 uv 时用 `pip3 install pyyaml`（仅此一个硬依赖）；可选增强见 `requirements-optional.txt`。
 
+安装脚本本身也可单独跑：`bash scripts/install.sh`（装依赖 + 挂入口 + 装提交门禁），支持 `--dry-run` 预览、`--uninstall` 清理、`--skip-pip` 跳过依赖。
+
 ---
 
 ## 适用平台
