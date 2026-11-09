@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.12.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.13.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.12.0; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.13.0; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -283,7 +283,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.12.0**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.13.0**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.12.0)
+### Conjunto aproximado de capacidades (v2.13.0)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md (cifras exactas, mantenidas por el generador).
 
@@ -476,6 +476,8 @@ Instalado como plugin DSH, estas capacidades se convierten en herramientas nativ
 
 Las últimas versiones arreglaron cada una una clase de problemas.
 
+
+v2.13.0 se enfoca en la consolidación de documentación y capa de estado. `docs/` reducido de 87 a 26: eliminados `docs/engines/` 60 (duplicados con `engines/specs/*.yaml` SSOT), 18 informes de proceso archivados en `docs-local/archive/` (no en repo público, rastreabilidad local), añadido `docs/CHANGELOG.md` fusionando 23 RELEASE_NOTES, 27 enlaces muertos en README ahora apuntan a CHANGELOG. Capa de estado `scripts/engine_states.py` expandido de 12 a 22 máquinas de estado, 34 módulos lo referencian, residuales literales 19→0; corregida degradación silenciosa por 4 conjuntos copiados manualmente, crash de `health_check --category`, estado del demonio inferido de texto chino. Capa de despacho: la rama paralela completa del modo deep añade `tail_grace_s`, mediana 10,000ms → 2,324ms, conteo sin cambios. 165 declaraciones migradas de `config.yaml` a `engines/specs/*.yaml`, lógica de fusión de `config.py` de override bidireccional a una vía specs→config, 3523 líneas eliminadas. Dependencias consolidadas en uv (`uv.lock` fijado + `.python-version` + `pyproject.toml` SSOT).
 
 v2.12.0 presenta el centro de configuración unificado: un solo punto de entrada, `argo settings`, para inspeccionar y editar la configuración compartida por todos los clientes (claves enmascaradas, fragmentos de conexión por cliente, valores vivos de los interruptores), con un canal de escritura sin servicio — cumpliendo la propuesta del issue #44. La búsqueda de imágenes por palabras clave de pixiv (aporte de la comunidad, canal doble Web anónima / OAuth App) y el motor integrado de reconocimiento de escenas trace.moe elevan las fuentes a 288; fetch deja de dejar los artículos de WeChat sin tratar; y los algoritmos de programación y enrutamiento reciben refinamientos internos.
 v2.11.2 se enfoca en cerrar el feedback externo. Añade SauceNAO, AnimeTrace y Google Lens como motores de búsqueda inversa explicit-only y elimina el tineye muerto; corrige cuatro fallos silenciosos — credenciales keyRefs que no llegan a los subprocesos (los motores con clave ya no devuelven skipped-missing-env), cuota que no se auto-recupera al rotar clave y 402 bloqueando 30 días por error, y env/reenvío de credenciales de subprocesos de motores sociales; y enruta lint_spec_contracts por el YAML loader compartido, despejando los fallos de los shards unit/extras de main.
@@ -707,6 +709,14 @@ argo/
 
 Solo las cuatro versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.13.0: Consolidación de Documentación + 22 Máquinas de Estado SSOT + Corrección de Cola de Despacho
+
+- **Consolidación de documentación**: `docs/` reducido de 87 a 26 archivos. Eliminados `docs/engines/` 60 archivos (duplicados con `engines/specs/*.yaml` SSOT); 18 informes de proceso archivados en `docs-local/archive/` (no en repo público, rastreabilidad local); añadido `docs/CHANGELOG.md` fusionando 23 RELEASE_NOTES; 27 enlaces muertos en README ahora apuntan a CHANGELOG
+- **22 máquinas de estado SSOT**: `scripts/engine_states.py` expandido de 12 a 22, 34 módulos lo referencian, residuales literales 19→0; corregida degradación silenciosa por 4 conjuntos copiados manualmente, crash de `health_check --category`, estado del demonio inferido de texto chino
+- **Corrección de cola de despacho**: la rama paralela completa del modo deep añade `tail_grace_s`, mediana 10,000ms → 2,324ms, conteo sin cambios
+- **Declaración de motor SSOT**: 165 declaraciones migradas de `config.yaml` a `engines/specs/*.yaml`, lógica de fusión de `config.py` de override bidireccional a una vía specs→config, 3523 líneas eliminadas
+- **Dependencias consolidadas en uv**: `uv.lock` fijado + `.python-version` + `pyproject.toml` SSOT, nuevo `test_dependency_source_gate.py` verificación mecánica de deriva
+
 ### v2.12.0: Centro de configuración unificado + motores de imagen pixiv/trace.moe + rama de fetch para WeChat
 
 - **Centro de configuración unificado** (#44, gracias @zooyoo): página de vista `argo settings` de solo lectura (claves enmascaradas a los últimos 4 caracteres, fragmentos de conexión, valores vivos de interruptores); página de formulario `--edit` + escritura con `apply`; ediciones directas por CLI `set/unset/list` (valores leídos de stdin, nunca en argv ni en el historial del shell); `argo ui` como alias. Compromiso sin servicio: sin puerto, sin ciclo de vida de autenticación, escritura unificada vía env_store (escritura atómica + 0600)
@@ -766,6 +776,7 @@ Solo las cuatro versiones más recientes. El historial completo está en el [his
 
 | Versión | Notas |
 |---------|-------|
+| **v2.13.0** | **Consolidación de Documentación + 22 Máquinas de Estado SSOT + Corrección de Cola de Despacho**: `docs/` 87→26 (eliminados `docs/engines/` 60, archivados 18 informes de proceso, añadido CHANGELOG); `scripts/engine_states.py` 12→22 máquinas de estado, 34 módulos, residuales literales 19→0; cola de despacho deep 10s→2.2s; 165 declaraciones migradas a `engines/specs/`; dependencias consolidadas en uv. Ver [Notas de Lanzamiento](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **Centro de configuración unificado + búsqueda de imagen pixiv/trace.moe + fetch de WeChat**: página de configuración sin servicio y escritura vía `argo settings` (#44, @zooyoo); búsqueda de imagen pixiv de canal doble (PR#45, @OMSociety); reconocimiento de escenas trace.moe; rama previa de fetch para WeChat; fuentes 286→288. Ver [notas de la versión](docs/RELEASE_NOTES_v2.12.0.md). |
 | **v2.11.2** | **Motores de búsqueda inversa + cuatro fallos silenciosos cerrados + arreglo de CI en main**: añade SauceNAO/AnimeTrace/Google Lens como motores de búsqueda inversa explicit-only y elimina el tineye muerto; credenciales keyRefs reenviadas por los providers del plugin dsh al pool MCP (#41); auto-recuperación de clave de cuota + arreglo del bloqueo de 30 días por 402 + pista de reset (#42); env y reenvío de credenciales de subproceso xhs/twitter (#36); lint_spec_contracts por el YAML loader compartido despeja el CI de main. Ver [notas de la versión](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **Enrutado semántico en tres pasos + precisión etiquetada 76.9%→100% + corrección de división del circuit-breaker**: ponderación por anclas de relevancia + tabla estática de vectores de conceptos (`ARGO_CONCEPT_ROUTER=1`, apagado por defecto) + consolidación de precisión — 13/13 en el conjunto etiquetado, 61% de las decisiones del snapshot pasan a coincidencia directa por concepto; la fábrica del circuit-breaker resuelve en tiempo de llamada y elimina divisiones por alias de módulo; higiene de etiquetas de snippet y dedupe de calibres; panel ZCode de tres pestañas; endurecimiento de restauración de entorno en tests. Ver [notas de la versión](docs/RELEASE_NOTES_v2.10.2.md). |

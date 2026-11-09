@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.12.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.13.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方法 1：ワンコマンドスクリプト（本機で長期利用に推奨）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方法 2：npm / npx（対応済み、現在 2.12.0。tag ごとに公開、バージョン固定）
+# 方法 2：npm / npx（対応済み、現在 2.13.0。tag ごとに公開、バージョン固定）
 npm install -g argo-search       # CLI をグローバルインストール
 npx -y argo-search               # またはインストールせず即時利用
 npx -y github:taxueseek/argo     # main の最新コミットに追従したい場合
@@ -283,7 +283,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.12.0**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
+どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.13.0**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.12.0）
+### 現時点の能力概要（v2.13.0）
 
 Argo のやることを一行で言うと、質問を領域と言語で適切なソースに振り分け、返ってきた結果を信頼度で並べ、エージェントには並べ替えられ検証できる素材を渡す。検索・取得・証拠確認・ローカルファイル検索は同じパイプラインを流れ、19 個の MCP ツールは CLI コマンドと一対一で対応するので、どの形态で入れても能力は欠けない。単独コマンドもいくつかある：argo tweet は X 投稿をまとめ、argo auth はログイン状态を管理し、argo job は採用情報を集約する。全ソースの費用・键・状态は docs/ENGINE_CATALOG.md に正確な数がある（生成器が維持）。
 
@@ -476,6 +476,8 @@ DSH プラグインとして入れると、これらの能力は宿主のネイ�
 
 最近数版が、それぞれ一类の問題を直した。
 
+
+v2.13.0 はドキュメント整理と状態層の収束を行いました。`docs/` を 87 から 26 に削減：`docs/engines/` 60 ファイル削除（`engines/specs/*.yaml` SSOT と重複）、18 件のプロセスレポートを `docs-local/archive/` に归档（公開リポジトリには含まれず、ローカルの追跡可能性を保持）、`docs/CHANGELOG.md` を追加して 23 件の RELEASE_NOTES を統合、README の 27 件のデッドリンクを CHANGELOG に変更。状態層 `scripts/engine_states.py` を 12 から 22 の状態機械に拡大、34 モジュールが参照、リテラル残存 19→0；4 か所の手抄ぎによるサイレント退化、`health_check --category` クラッシュ、中国語テキスト推定のデーモン状態を修正。ディスパッチ層：deep モード全量並列ブランチに `tail_grace_s` を追加、中央値 10,000ms → 2,324ms、件数不変。165 のエンジン宣言を `config.yaml` から `engines/specs/*.yaml` に移行、`config.py` のマージロジックを双方向オーバーライドから一方向 specs→config に、3523 行削除。依存関係を uv に集約（`uv.lock` ピン留め + `.python-version` + `pyproject.toml` SSOT）。
 
 v2.12.0 は統一設定センターをお届けします：`argo settings` の 1 つの入口で、全クライアント共有の設定（鍵は末尾 4 桁のみ表示、クライアント別接続スニペット、スイッチの現値）を透過・編集でき、書き戻しはゼロサービス経路——issue #44 の提言がここで実現しました。コミュニティ貢献の pixiv キーワード画像検索（匿名 Web と OAuth App のデュアルチャネル）と内蔵の trace.moe アニメシーン認識でソース数は 288 に；fetch は WeChat 公式アカウント記事をゼロ処理のままにしません；スケジューリングとルーティングのアルゴリズムも内部最適化しました。
 v2.11.2 は外部フィードバックの収束に注力しました。SauceNAO・AnimeTrace・Google Lens の明示専用逆画像エンジンを補完し失効した tineye を撤去；keyRefs 認証がサブプロセスに届かない（鍵必須エンジンが skipped-missing-env にならない）、クォータの鍵交換時自己回復不全と 402 の 30 日誤ロック、ソーシャルエンジンのサブプロセス env と認証転送という 4 種のサイレント障害を解消；lint_spec_contracts を共有 YAML loader 経由にして本体の unit/extras を緑化しました。
@@ -502,6 +504,16 @@ v2.9.4 が直したのは明示エンジン指定の経路。--engine X を指�
 
 版ごとの详细は「最近更新」に、各版のリリースノートは docs/ にある。
 ---
+
+## 最近更新
+
+### v2.13.0：ドキュメント整理 + 22 状態機械 SSOT + ディスパッチ尾幅修正
+
+- **ドキュメント整理**: `docs/` を 87 から 26 に削減。`docs/engines/` 60 ファイル削除（`engines/specs/*.yaml` SSOT と重複）；18 件のプロセスレポートを `docs-local/archive/` に归档（公開リポジトリには含まれず、ローカルの追跡可能性を保持）；`docs/CHANGELOG.md` を追加して 23 件の RELEASE_NOTES を統合；README の 27 件のデッドリンクを CHANGELOG に変更
+- **22 状態機械 SSOT**: `scripts/engine_states.py` を 12 から 22 に拡大、34 モジュールが参照、リテラル残存 19→0；4 か所の手抄ぎによるサイレント退化、`health_check --category` クラッシュ、中国語テキスト推定のデーモン状態を修正
+- **ディスパッチ尾幅修正**: deep モード全量並列ブランチに `tail_grace_s` を追加、中央値 10,000ms → 2,324ms、件数不変
+- **エンジン宣言 SSOT**: 165 のエンジン宣言を `config.yaml` から `engines/specs/*.yaml` に移行、`config.py` のマージロジックを双方向オーバーライドから一方向 specs→config に、3523 行削除
+- **依存関係を uv に集約**: `uv.lock` ピン留め + `.python-version` + `pyproject.toml` SSOT、新規 `test_dependency_source_gate.py` 機械的ドリフトチェック
 
 ## エンジンとルーティング
 
@@ -766,6 +778,7 @@ argo/
 
 | 版 | 内容 |
 |----|------|
+| **v2.13.0** | **ドキュメント整理 + 22 状態機械 SSOT + ディスパッチ尾幅修正**: `docs/` 87→26（`docs/engines/` 60 削除、18 件のプロセスレポートを归档、CHANGELOG 追加）；`scripts/engine_states.py` 12→22 状態機械、34 モジュール、リテラル残存 19→0；deep モード尾幅 10s→2.2s；165 のエンジン宣言を `engines/specs/` に移行；依存関係を uv に集約。詳細は [リリースノート](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **統一設定センター + pixiv/trace.moe 画像検索 + WeChat fetch**：`argo settings` によるゼロサービス設定ページと書き戻し（#44、@zooyoo）；pixiv デュアルチャネル画像検索（PR#45、@OMSociety）；trace.moe シーン認識；WeChat 記事の前置分岐；ソース 286→288。詳細は [リリースノート](docs/RELEASE_NOTES_v2.12.0.md)。 |
 | **v2.11.2** | **逆画像検索の補完 + 4 種のサイレント障害の収束 + 本体 CI 修正**：SauceNAO/AnimeTrace/Google Lens の明示専用逆画像エンジンを追加し失効した tineye を撤去；keyRefs 認証を dsh プラグイン provider 経由で MCP プールへ転送（#41）；クォータの鍵交換自己回復 + 402 の 30 日ロック修正 + reset 案内（#42）；xhs/twitter サブプロセスの env と認証転送（#36）；lint_spec_contracts を共有 YAML loader 経由にして本体 CI を解消。詳細は [リリースノート](docs/RELEASE_NOTES_v2.11.2.md)。 |
 | **v2.10.2** | **セマンティックルーティング三段階 + ラベル精度 76.9%→100% + サーキットブレーカ分裂修正**：関連性アンカー重み付け + 静的コンセプトベクトル表（`ARGO_CONCEPT_ROUTER=1`、既定オフ）+ ルーティング精度収口——13 件のラベル集合で 100%、スナップショットの 61% がコンセプト直判定へ；サーキットブレーカ工場を呼び出し時解決にし、モジュール別名分裂を解消；スニペットタグ衛生と口径重複排除；ZCode パネル 3 タブ版；テスト環境スナップショット復元の強化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.10.2.md)。 |

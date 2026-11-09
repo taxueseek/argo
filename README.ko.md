@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.12.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.13.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 방식 1: 원클릭 스크립트(로컬 장기 사용 권장)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 방식 2: npm / npx(지원됨, 현재 2.12.0, tag마다 배포·버전 고정)
+# 방식 2: npm / npx(지원됨, 현재 2.13.0, tag마다 배포·버전 고정)
 npm install -g argo-search       # CLI 전역 설치
 npx -y argo-search               # 또는 설치 없이 즉시 사용
 npx -y github:taxueseek/argo     # main 최신 커밋을 따라가려면 이 명령
@@ -283,7 +283,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.12.0**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
+경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.13.0**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.12.0)
+### 대략적인 능力 세트 (v2.13.0)
 
 Argo가 하는 일을 한 줄로 말하면, 질문을 도메인과 언어로 알맞은 소스에 보내고, 돌아온 결과를 신뢰도로 줄세워, 에이전트에는 줄세우고 검증할 수 있는 재료를 넘긴다. 검색·긁기·증거 확인·로컬 파일 검색은 같은 파이프라인을 흐르고, 19개 MCP 도구는 CLI 명령과 일대일로 대응하므로 어떤 형태로 설치해도 능력이 빠지지 않는다. 단독 명령도 몇 개 있다: argo tweet은 X 게시물을 묶고, argo auth는 로그인 상태를 관리하며, argo job은 채용 정보를 모은다. 전체 소스의 비용·키·상태는 docs/ENGINE_CATALOG.md에 정확한 수가 있다(생성기가 유지).
 
@@ -476,6 +476,8 @@ DSH 플러그인으로 설치하면 이 능력들이 호스트의 네이티브 �
 
 최근 몇 판이 각자 한 부류의 문제를 고쳤다.
 
+
+v2.13.0은 문서 정리와 상태 계층 수렴을 진행했습니다. `docs/` 87→26으로 축소: `docs/engines/` 60개 삭제 (`engines/specs/*.yaml` SSOT와 중복), 18개 프로세스 리포트를 `docs-local/archive/`로 아카이브 (공개 저장소 미포함, 로컬 추적성 유지), `docs/CHANGELOG.md` 추가하여 23개 RELEASE_NOTES 통합, README 27개 데드링크를 CHANGELOG로 변경. 상태 계층 `scripts/engine_states.py` 12→22로 확장, 34개 모듈 참조, 리터럴 잔여 19→0; 4곳 수기 사본으로 인한 자동 저하, `health_check --category` 크래시, 중국어 텍스트 추정 데몬 상태 수정. 디스패치 계층: deep 모드 전체 병렬 브랜치에 `tail_grace_s` 추가, 중앙값 10,000ms → 2,324ms, 건수 불변. 165개 엔진 선언을 `config.yaml`에서 `engines/specs/*.yaml`로 이전, `config.py` 병합 로직을 양방향 오버라이드에서 일방향 specs→config로, 3523행 삭제. 의존성을 uv로 통합 (`uv.lock` 고정 + `.python-version` + `pyproject.toml` SSOT).
 
 v2.12.0는 통합 설정 센터를 선보입니다: `argo settings` 한 입구로 모든 클라이언트가 공유하는 설정(키는 끝 4자리만 표시, 클라이언트별 연동 스니펫, 스위치 현값)을 투시·편집하고, 쓰기 되돌림은 제로 서비스 경로 — issue #44 제안이 여기서 실현됩니다. 커뮤니티 기여 pixiv 키워드 이미지 검색(익명 Web·OAuth App 이중 채널)과 내장 trace.moe 애니메이션 장면 인식으로 소스는 288개에; fetch가 WeChat 공식계정 글을 더 이상 무처리로 두지 않으며; 스케줄링과 라우팅 알고리즘도 내부 최적화했습니다.
 v2.11.2는 외부 피드백 수습에 집중했습니다. SauceNAO·AnimeTrace·Google Lens 명시 전용 역이미지 엔진을 보강하고 만료된 tineye를 제거; keyRefs 인증이 서브프로세스에 도달하지 못함(키 필요 엔진이 더 이상 skipped-missing-env 아님), 쿼터 키 교체 시 자가 회복 미흡과 402의 30일 오잠금, 소셜 엔진 서브프로세스 env와 인증 전달이라는 4가지 조용한 실패를 해소; lint_spec_contracts를 공용 YAML loader 경유로 바꾸어 본체 unit/extras를 녹색화했습니다.
@@ -707,6 +709,14 @@ argo/
 
 최근 네 버전만 싣습니다. 전체 이력은 [변경 이력](#변경-이력), 각 버전의 상세는 [Releases](https://github.com/taxueseek/argo/releases)에서 볼 수 있습니다.
 
+### v2.13.0: 문서 정리 + 22 상태 머신 SSOT + 디스패치 테일 그레이스
+
+- **문서 정리**: `docs/` 87→26으로 축소. `docs/engines/` 60개 삭제 (`engines/specs/*.yaml` SSOT와 중복); 18개 프로세스 리포트를 `docs-local/archive/`로 아카이브 (공개 저장소 미포함, 로컬 추적성 유지); `docs/CHANGELOG.md` 추가하여 23개 RELEASE_NOTES 통합; README 27개 데드링크를 CHANGELOG로 변경
+- **22 상태 머신 SSOT**: `scripts/engine_states.py` 12→22로 확장, 34개 모듈 참조, 리터럴 잔여 19→0; 4곳 수기 사본으로 인한 자동 저하, `health_check --category` 크래시, 중국어 텍스트 추정 데몬 상태 수정
+- **디스패치 테일 그레이스**: deep 모드 전체 병렬 브랜치에 `tail_grace_s` 추가, 중앙값 10,000ms → 2,324ms, 건수 불변
+- **엔진 선언 SSOT**: 165개 엔진 선언을 `config.yaml`에서 `engines/specs/*.yaml`로 이전, `config.py` 병합 로직을 양방향 오버라이드에서 일방향 specs→config로, 3523행 삭제
+- **의존성을 uv로 통합**: `uv.lock` 고정 + `.python-version` + `pyproject.toml` SSOT, 신규 `test_dependency_source_gate.py` 기계적 드리프트 검사
+
 ### v2.12.0: 통합 설정 센터 + pixiv/trace.moe 이미지 검색 엔진 + WeChat fetch 분기
 
 - **통합 설정 센터**(#44, @zooyoo 제안 감사): `argo settings` 읽기 전용 투시 페이지(키 끝 4자리, 연동 스니펫, 스위치 현값); `--edit` 편집 폼 + `apply` 쓰기 되돌림; `set/unset/list` 명령 직접 편집(값은 stdin에서 읽어 argv·shell history에 남지 않음); `argo ui`는 동의 별칭. 제로 서비스 절충: 포트를 열지 않고 인증 수명주기도 없으며, 쓰기 되돌림은 env_store로 통일(원자적 쓰기 + 0600)
@@ -766,6 +776,7 @@ argo/
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.13.0** | **문서 정리 + 22 상태 머신 SSOT + 디스패치 테일 그레이스**: `docs/` 87→26 (`docs/engines/` 60 삭제, 18개 프로세스 리포트 아카이브, CHANGELOG 추가); `scripts/engine_states.py` 12→22 상태 머신, 34 모듈, 리터럴 잔여 19→0; deep 모드 테일 그레이스 10s→2.2s; 165개 엔진 선언을 `engines/specs/`로 이전; 의존성을 uv로 통합. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **통합 설정 센터 + pixiv/trace.moe 이미지 검색 + WeChat fetch**: `argo settings` 제로 서비스 설정 페이지와 쓰기 되돌림(#44, @zooyoo); pixiv 이중 채널 이미지 검색(PR#45, @OMSociety); trace.moe 장면 인식; WeChat 글 선행 분기; 소스 286→288. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.12.0.md). |
 | **v2.11.2** | **역이미지 검색 보강 + 4가지 조용한 실패 수습 + 본체 CI 수정**: SauceNAO/AnimeTrace/Google Lens 명시 전용 역이미지 엔진 추가 및 만료된 tineye 제거; keyRefs 인증을 dsh 플러그인 provider 경유로 MCP 풀에 전달(#41); 쿼터 키 교체 자가 회복 + 402 30일 잠금 수정 + reset 안내(#42); xhs/twitter 서브프로세스 env와 인증 전달(#36); lint_spec_contracts를 공용 YAML loader 경유로 본체 CI 해소. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.11.2.md). |
 | **v2.10.2** | **시맨틱 라우팅 3단계 + 라벨 정확도 76.9%→100% + 서킷브레이커 분할 수정**: 관련성 앵커 가중치 + 정적 콘셉트 벡터 테이블(`ARGO_CONCEPT_ROUTER=1`, 기본 꺼짐) + 라우팅 정확도 수습 — 13건 라벨 집합 100%, 스냅샷 61%가 콘셉트 직접 판정으로 전환; 서킷브레이커 팩토리를 호출 시점 해석으로 바꿔 모듈 별칭 분할 해소; 스니펫 태그 위생과 기준 중복 제거; ZCode 패널 3탭 버전; 테스트 환경 스냅샷 복원 강화. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.10.2.md). |

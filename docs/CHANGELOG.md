@@ -3,6 +3,22 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## v2.13.0
+
+**定位**：文档分层收口 + 22 台状态机单点真源 + 调度尾宽修复。把 `docs/` 从 87 份精简到 26 份，把散落的状态词收进一个真源文件，修掉 deep 档 10 秒空等缺陷。
+
+**关键变更**：
+- 文档分层收口：删除 `docs/engines/` 60 份（与 `engines/specs/*.yaml` 真源重复）；18 份过程报告归档 `docs-local/archive/`（不进公开仓，保留本机可追溯性）；新增 `docs/CHANGELOG.md` 合并 23 份 RELEASE_NOTES；README 27 处死链改为指向 CHANGELOG
+- 22 台状态机单点真源：`scripts/engine_states.py` 从 12 台扩到 22 台，34 个模块引用，各文件字面量残留从 19 处降到 0；修掉精排降级集合 4 处手抄导致的高危静默退化、`health_check --category` 必崩、daemon 状态靠文案反推、缓存命中路径无终态事件
+- 调度尾宽修复：deep 档全量并行分支补 `tail_grace_s` 与 `tail_grace_fn`，中位 10,000ms → 2,324ms，条数不变（公开版同查询同样 10s 空等）
+- 引擎声明单源：165 个引擎声明从 `config.yaml` 迁到 `engines/specs/*.yaml`，`config.py` 合并逻辑从双源覆盖变单向 specs→config，删 3523 行
+- 依赖收口到 uv：`uv.lock`（3196 行钉版）+ `.python-version` + `pyproject.toml` 真源，新增 `test_dependency_source_gate.py` 机械对账漂移
+- 图像源扩容：V&A（vam）与 Wallhaven 过质量门禁准入，met_museum 迁 v1.1 复活（源 288→290）
+
+**默认关闭**：无新增
+
+---
+
 ## v2.12.0
 
 **定位**：统一设置中心首发；社区贡献 pixiv 正向搜图合入，内置 trace.moe 场景识别（源 286→288）；fetch 对微信公众号文章不再零处理；调度与路由算法内部优化。
