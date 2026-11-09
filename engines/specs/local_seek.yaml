@@ -1,0 +1,28 @@
+# 本机技能与文件搜索（seek.py 适配器 CLI 桥接）
+# 独占证据维度：本机已装技能、项目文件、历史命中——全网源不可替代。
+# rg/fd/Spotlight 三引擎毫秒级（实测 96ms），零网络成本。
+# 验证: python3 scripts/engine_validate.py --engine local_seek --stage all --admit --write-doc
+engine_id: local_seek
+type: cli
+enabled: true
+label: 本机技能与文件搜索
+cost_tier: free
+qps: 20
+priority: 5
+period: second
+cost_per_call: 0.0
+cost_unit: free
+cmd:
+- python3
+- scripts/local_seek_adapter.py
+search_args:
+- '{query}'
+- --max
+- '{n}'
+timeout: 15
+coverage: [local, skill, file, code]
+desc: "本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络）"
+recommended: false
+latency_ms: 300
+quality_queries:
+  - query: "engine_validate"

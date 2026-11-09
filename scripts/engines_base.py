@@ -1032,7 +1032,7 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             containers = soup.select(container_sel)
         except Exception:
             return []
-        from bs4 import NavigableString
+        from bs4 import Comment, NavigableString
 
         def _el_text(el) -> str:
             """提取元素文本。兼容 bs4 4.13+ 将页面文本标记为 TemplateString、
@@ -1046,7 +1046,10 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             while stack:
                 node = stack.pop(0)
                 if isinstance(node, NavigableString):
-                    parts.append(str(node))
+                    # Comment 是 NavigableString 子类：搜狗把内部标记写成
+                    # <!--awbg0--> 混进结果标题（实测 2026-11-10），剥离。
+                    if not isinstance(node, Comment):
+                        parts.append(str(node))
                 elif hasattr(node, "contents"):
                     stack = node.contents + stack
             return "".join(parts)

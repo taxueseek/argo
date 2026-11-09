@@ -1,0 +1,37 @@
+# Yandex 本地通道（经 local-search 子技能的 CLI 桥接）
+# smart_router 2026-10-06 实测：yandex 是 local-search 内部唯一稳定后端
+# （~1.9s），且 ja/ko/中文域均置首——但只活在聚合器内部，主路由够不着。
+# 本 spec 把它暴露为主链引擎，零新代码（复用 search_v3 --engine 单选）。
+# 通道底座是 ddgs：本机出口对其上游间歇 TLS 阻断（2026-11-10 实测
+# --no-cache 成功率 3/5，失败为 RequestError 8s 超时；内部定义纯 yandex
+# 后端无回退，「cli 失败即诚实空」）。60% 成功率进自动 combo 会拖早停
+# 墙钟，故 explicit_only 手动可用；环境自愈后改回 false 接回 combo。
+# 验证: python3 scripts/engine_validate.py --engine local_yandex --stage all --admit --write-doc
+engine_id: local_yandex
+type: cli
+enabled: true
+explicit_only: true
+label: Yandex 本地（local-search 通道）
+cost_tier: free
+qps: 5
+priority: 20
+period: second
+cost_per_call: 0.0
+cost_unit: free
+cmd:
+- python3
+- sub-skills/local-search/search_v3.py
+search_args:
+- '{query}'
+- --engine
+- local_yandex
+- --n
+- '{n}'
+- --json
+timeout: 12
+coverage: [web, general, multilingual, japanese, korean]
+desc: "Yandex 本地通道（local-search 实测最稳后端，多语言兜底）"
+recommended: false
+latency_ms: 2000
+quality_queries:
+  - query: "quantum computing"

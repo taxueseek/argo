@@ -1,6 +1,11 @@
 engine_id: local_baidu
 type: html
 enabled: true
+# 2026-11-10 explicit_only：主路由 10-06 已判「baidu 直连 0 结果移出」
+# （smart_router chinese 域清单），但兜底链漏删导致每轮兜底白烧 1.0s
+# （实测 returned 10 → filtered 0）。已从 GENERAL_FREE_FALLBACK 移除，
+# 声明 explicit_only 保持手动 --engine 可用（TLS 仿冒通道仍在）。
+explicit_only: true
 label: 百度本地
 cost_tier: free
 qps: 3

@@ -2768,5 +2768,17 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "local_seek": {
+    "label": "本机技能与文件搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "local_yandex": {
+    "label": "Yandex 本地（local-search 通道）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

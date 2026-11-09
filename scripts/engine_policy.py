@@ -56,7 +56,7 @@ GENERAL_FREE_FALLBACK: tuple[str, ...] = (
     # asyncio p90 2769→963ms，结果数中位同为 8。生产日志同向：general_search
     # 346 条查询里 324 条的最后一棒是 anysearch（p50 1932ms），octen 同域
     # p50 776ms。anysearch 退到对冲位，能力面不变（仍在 combo 内）。
-    "octen", "anysearch", "local_bing", "uapi", "local_baidu", "firecrawl",
+    "octen", "anysearch", "local_bing", "uapi", "firecrawl",
     "parallel_free", "tavily_free", "keenable_free", "wikipedia",
 )
 

@@ -52,7 +52,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_intl.py": (1242, "国际源构建器，含各源 XML/RSS 解析差异；下一步按地区拆"),
     "scripts/engines_builders_tech.py": (1281, "技术社区源构建器，逐源一段；下一步按主题拆"),
     "scripts/fetch_v3.py": (1905, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段"),
-    "scripts/engines_base.py": (1564, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起"),
+    "scripts/engines_base.py": (1567, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；1567 含 2026-11-10 B2 修复：_el_text 剥离 HTML 注释（搜狗 awbg 实测）"),
     "scripts/cache.py": (1373, "存储实现与门面；键、命中判据、准入策略已分别拆到 cache_key_vdom / cache_similarity / cache_guard"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),
     "scripts/search_rank.py": (976, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支"),

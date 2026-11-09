@@ -132,8 +132,13 @@ def _parse_html(engine_name: str, html: str, spec: dict[str, Any],
         return []
 
     try:
-        from bs4 import BeautifulSoup
+        from bs4 import BeautifulSoup, Comment
         soup = BeautifulSoup(html, "html.parser")
+        # 搜狗等站把内部标记写成 HTML 注释（实测 <!--awbg0--> 混进结果
+        # 标题前缀 awbg0awbg0）：get_text 会拼入 Comment 节点，全页统一
+        # 剥离，一处修复所有 parse_maps HTML 引擎。
+        for c in soup.find_all(string=lambda t: isinstance(t, Comment)):
+            c.extract()
         containers = _select_with_bs4(soup, container_sel)
     except Exception:
         return []

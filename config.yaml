@@ -61,6 +61,7 @@ domains:
   - explainx
   - skills_sh
   - anysearch
+  - local_seek
   fallback: anysearch
   name: skill_search
   parallel: true
