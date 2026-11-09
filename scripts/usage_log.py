@@ -27,27 +27,46 @@ from engine_env import env_flag  # 布尔开关统一判断（见 env_flag 的�
 
 _STREAM_VERSION = 1
 
-# 单流体积上限与回缩后保留的行数。
+# 单流体积上限与回缩目标。
 #
 # why（2026-09-17 实测）：append-only 而无任何轮转，三个流已涨到 771 KB
-# （recovery 383 KB / route 350 KB / merge 38 KB）且只增不减。本模块唯一的
-# 读取方是 tail（只看最近若干条），旧记录没有读者，所以超限时直接回缩到最近
-# _KEEP_LINES 行，不另存归档——归档是「留给会来取的人」，这里没有这样的人。
+# 且只增不减。本模块唯一的读取方是 tail（只看最近若干条），旧记录没有读者，
+# 所以超限时直接回缩，不另存归档——归档是「留给会来取的人」，这里没有。
+#
+# why 改成按字节回缩（2026-11-09）：原实现是「取 lines[-_KEEP_LINES:]」，
+# 但单行实测已达 525 B，2000 行就是 1.05 MiB，早已超过 1 MiB 上限；于是
+# 每次 emit 都判定超限、全读 1 MiB、再用同一个 2000 行原样写回——回缩成了
+# 每次调用都做一次全量读写的空转。按字节从尾部保留才能真正把文件压下来。
 _MAX_BYTES = 1024 * 1024
-_KEEP_LINES = 2000
+_TRIM_TO_BYTES = _MAX_BYTES // 2
 
 
 def _trim_if_oversized(path: Path) -> None:
-    """超过上限就把文件回缩到最近 _KEEP_LINES 行；任何失败静默。
+    """超过上限就把文件回缩到约一半，保留尾部整行；任何失败静默。
 
-    先 stat 再决定要不要读：绝大多数调用只付一次 stat 的代价。
+    先 stat 再决定要不要读：绝大多数调用只付一次 stat 的代价。从尾部按字节
+    累计到 _TRIM_TO_BYTES 即可，不必解析 JSON；丢弃半行前缀（第一行可能不完整）
+    保证每行仍是合法 JSONL。回缩到一半而不是贴着上限，是为了不会每写入几条
+    就又触发一次全量读写。
     """
     try:
         if path.stat().st_size <= _MAX_BYTES:
             return
-        lines = path.read_text(encoding="utf-8").splitlines()
+        data = path.read_bytes()
+        cut = max(0, len(data) - _TRIM_TO_BYTES)
+        nl = data.find(b"\n", cut)
+        if nl >= 0:
+            start = nl + 1                      # 丢掉不完整的前缀行
+        else:
+            # 切点之后到 EOF 没有换行：最后一行异常巨大或未以换行结束。
+            # 保留这完整一行，别把整个日志清空，也别写出半行非法 JSON。
+            prev = data.rfind(b"\n", 0, cut)
+            start = prev + 1
+        kept = data[start:]
+        if not kept or len(kept) >= len(data):
+            return                              # 压不动就不动，避免无意义全量重写
         # 走 argo_paths 的原子写唯一来源，避免回缩中途崩溃留下半截文件
-        _paths.atomic_write_text(path, "\n".join(lines[-_KEEP_LINES:]) + "\n")
+        _paths.atomic_write_text(path, kept.decode("utf-8", errors="replace"))
     except Exception:
         return
 

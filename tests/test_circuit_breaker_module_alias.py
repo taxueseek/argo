@@ -114,3 +114,25 @@ def test_factory_never_binds_module_object_at_import(breaker_modules):
             "改为函数内 `import circuit_breaker` 后取 circuit_breaker.get_breaker()，"
             "否则 sys.modules.pop 重导入会让单例分裂成两个。"
         )
+
+
+def test_popping_module_does_not_leak_alias_into_later_tests():
+    """弹掉模块重导入的用例，不得把新模块对象留给后续用例。
+
+    2026-11-08 实测：`test_argo_paths.py` 用 `sys.modules.pop("circuit_breaker")`
+    验证路径派生，却没在用例后装回原对象。于是 `test_failure_evidence.py`
+    把假熔断器打桩在旧模块 A 上，而 `engine_health.picture()` 运行时 import 到
+    的是新模块 B，断言 `'sick_eng' not found in {}`——单独跑绿、全量跑红。
+    根因与上面两条同源，只是发生在「测试之间」而非「生产代码里」。
+
+    由 conftest 的 `_restore_argo_module_identity` 统一复位；这条用例把它
+    钉成可验证契约：弹一次、装回后，拿到的必须是同一个对象。
+    """
+    import circuit_breaker
+    original = sys.modules["circuit_breaker"]
+    assert original is circuit_breaker
+    # 模拟 test_argo_paths 的写法；conftest 会在本用例结束后把原对象装回
+    sys.modules.pop("circuit_breaker", None)
+    reimported = importlib.import_module("circuit_breaker")
+    assert reimported is not original, "前置条件：重导入应产生新模块对象"
+    # 用例内不手工恢复，交给 conftest——正是要验证的那层保障

@@ -201,6 +201,32 @@ def _isolate_local_search_registry(monkeypatch, tmp_path):
     engine_registry.get_registry.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _restore_argo_module_identity():
+    """每用例复位 Argo 模块的 sys.modules 身份，灭「模块别名分裂」整类串味。
+
+    实测（2026-11-08 全量回归）：`test_argo_paths.py::test_module_paths_under_state_root`
+    为验证路径派生会 `sys.modules.pop(mod_name)` 再重导入，但用例结束后没有把
+    原模块装回 `sys.modules`。于是进程里同时存在两个 `circuit_breaker` 模块对象：
+    测试文件在导入期拿到的旧对象 A，与后续 `engine_health.picture()` 运行时
+    `import` 到的新对象 B。`test_failure_evidence.py` 把假熔断器打桩在
+    `A.get_breaker` 上，而 `picture()` 读的是 `B.get_breaker()` 的单例，断言
+    `'sick_eng' not found in {}`——单独跑绿、全量跑红。
+
+    这与 `test_circuit_breaker_module_alias.py` 文档记的是同一个根因：模块级
+    单例 + 导入期绑定 = 两个真相。该测试只守了 `search_v3` 一侧，其它模块仍
+    会中招。逐用例给每个 pop 的模块补 finally 是补网；这里在 conftest 一处
+    快照-复位，任何用例弹出 Argo 模块都不留残余，新增用例也不会再漏。
+    """
+    snap = dict(sys.modules)
+    yield
+    # 只把被弹掉或换掉的 Argo 模块装回原对象；测试期间新导入的模块不动
+    # （它们可能被别的模块持有着引用，删掉反而制造第二种别名分裂）。
+    for name, mod in snap.items():
+        if sys.modules.get(name) is not mod:
+            sys.modules[name] = mod
+
+
 @pytest.fixture
 def allow_fake_hosts(monkeypatch):
     """让「假域名」不再真的走 DNS：`docs.example.com` 这类地址在本地可能被

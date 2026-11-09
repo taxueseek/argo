@@ -83,8 +83,10 @@ def rules(old: str, new: str) -> list[tuple[str, str, str, int]]:
         ("argo_search/__init__.py", f'__version__ = "{o}"', f'__version__ = "{n}"', 1),
         ("SKILL.md", f"version: {o}", f"version: {n}", 1),
         ("scripts/mcp_transport.py", f'ARGO_MCP_VERSION = "{o}"', f'ARGO_MCP_VERSION = "{n}"', 1),
-        ("packages/argo-zcode/server/panel_server.mjs",
-         f'version: "{o}"', f'version: "{n}"', 1),
+        # panel_server.mjs 自 a5cc97b 起在运行时读 plugin.json 取版本，源码里
+        # 不再有版本字面量；改号清单里曾留着对应的一行，成为第二真源漂移点
+        # （2026-11-08 全量回归三连红的根因）。删掉这行，并用下面的
+        # check_rule_parity() 把两份清单机械绑住，防止「源文件改了、清单没跟」。
         ("packages/argo-zcode/ui/panel.html", f'version: "{o}"', f'version: "{n}"', 1),
         # 五语徽标
         ("README.md", f"badge/version-{o}-", f"badge/version-{n}-", 1),
@@ -122,8 +124,30 @@ def rules(old: str, new: str) -> list[tuple[str, str, str, int]]:
     return out
 
 
+def check_rule_parity() -> None:
+    """改号清单与预检清单必须对上：源文件新增/删除版本声明时两处同步。
+
+    这份清单天然是「版本声明位置」的第二份手写副本。历史上 a5cc97b 把
+    panel_server.mjs 的版本改成运行时读取，删了源码常量却没删改号清单对应
+    行，bump 在第一步就中止，全量回归三连红。与其再加一道「改完记得改清单」
+    的口头纪律，不如让 bump 每次都拿预检的实际声明集对一次账：预检读不到的
+    位置，改号也不该去写。
+    """
+    machine_paths = {rel for rel, *_ in rules("0.0.0", "0.0.1")
+                     if not rel.startswith("README")}
+    checked = set(release_check.JSON_DECLS) | {r for r, _ in release_check.SRC_DECLS}
+    checked |= {"pyproject.toml", "argo_search/__init__.py", "SKILL.md",
+                "packages/marketplace.json"}
+    extra = machine_paths - checked
+    if extra:
+        raise ReleaseError(
+            f"改号清单里有预检不认识的声明位置: {sorted(extra)}——"
+            "源文件已改？同步删掉 rules() 里对应行，或把它加进 release_check 的声明集")
+
+
 def apply_rules(root: Path, old: str, new: str, dry: bool) -> list[str]:
     """按 rules 改写；任何一处次数不符就整体中止（返回已计划清单）。"""
+    check_rule_parity()
     planned: list[str] = []
     for rel, o, n, want in rules(old, new):
         path = root / rel

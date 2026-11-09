@@ -48,12 +48,18 @@ def test_allowlist_names_exist_in_argo_source():
 
 
 def test_allowlist_delta_is_reported(capsys):
-    """argo 源码里有、白名单没有的增量只打印不失败（curated 是渐进过程）。"""
+    """argo 源码里有、白名单没有的增量只打印不失败（curated 是渐进过程）。
+
+    这条只报增量、不设断言，是给人看的观察值。此前用 ``capsys.disabled()``
+    绕过捕获，每次全量 pytest 都往 stdout 插 2547 字符 / 110 个名字，把进度条
+    劈成两截（实测 argo-fulltest-2313.log）；其中 11 个还是源码正则扫出的前缀
+    碎片（ARGO_FETCH_ / ARGO_QUOTA_ 之类），诊断本身也不准。交给 pytest 正常
+    捕获：需要观察时 ``-s`` 即可看到，日常不再污染进度输出。
+    """
     allowlist = _plugin_allowlist()
     delta = sorted(_argo_source_env_names() - allowlist)
-    with capsys.disabled():
-        print(f"[argoEnv] allowlist={len(allowlist)} names, "
-              f"argo-source-only={len(delta)}: {delta}")
+    print(f"[argoEnv] allowlist={len(allowlist)} names, "
+          f"argo-source-only={len(delta)}: {delta}")
 
 
 def test_readme_stated_allowlist_count_matches_code():

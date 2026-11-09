@@ -215,7 +215,10 @@ def derive_registry(engines: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return {
         "_generated": "由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。",
         "version": 2,
-        "last_updated": __import__("datetime").date.today().isoformat(),
+        # 曾写 date.today()：同一份真源隔天重生成就产出一处无语义 diff，
+        # 而 collect_issues 又刻意跳过这个字段（消费者也从不读它），于是
+        # 「派生件可手改 + 生成器不确定」叠加出反复的「合并后重生成」提交。
+        # 派生件必须是真源的纯函数，不含墙钟。
         "engines": entries,
     }
 

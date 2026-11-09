@@ -10,9 +10,11 @@ precision 测试），没有「这次改动翻转了哪些查询」的总视图�
     1. matrix_search_eval.ROUTE_MATRIX（59 条，带期望域）
     2. test_domain_pattern_precision.LEGITIMATE_ROUTES（41 条，期望域）
     3. 同文件 SUBSTRING_ACCIDENTS（~15 条，不得命中的域）
-  每条记录 {query, domain, kind, expect, engines}。**比对键只有 domain 与
-  kind**（regex/tfidf）：引擎组合随熔断/配额/健康态波动，参与比对会让门禁
-  被环境噪声天天假红，直到被人 --no-verify——那比没有门禁更坏。
+  每条记录 {query, domain, kind, expect}。**比对键只有 domain 与 kind**
+  （regex/tfidf）：引擎组合随熔断/配额/健康态波动，参与比对会让门禁被环境
+  噪声天天假红，直到被人 --no-verify——那比没有门禁更坏。既然不比对，就也
+  不写进快照：曾把 engines 作为「仅存档」字段落盘，结果本机熔断态一变，
+  重生成就产出上百行无语义 diff，成了反复「重生成快照」提交的来源。
 
   生成（改完路由先跑它 review diff 再提交）：
     python3 scripts/gen_routing_snapshot.py
@@ -97,7 +99,6 @@ def _route_one(query: str) -> dict:
     return {
         "domain": d.get("domain"),
         "kind": kind,
-        "engines": (d.get("engines_combo") or [])[:2],
         "reason": reason,
     }
 
@@ -199,8 +200,9 @@ def main() -> int:
         "version": 1,
         "generated_by": "scripts/gen_routing_snapshot.py",
         "compare_keys": ["domain", "kind"],
-        "note": "engines 仅存档不比对（随熔断/配额波动）；expect/forbid 是语料"
-                "自带的标注，失配由 precision/negative 测试与 --check 双报",
+        "note": "快照只存比对键与语料标注；引擎组合随环境波动，既不比对也不落盘"
+                "（落盘会让重生成产生无语义 diff）。expect/forbid 失配由"
+                " precision/negative 测试与 --check 双报",
         "entries": clean_entries,
     }
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)

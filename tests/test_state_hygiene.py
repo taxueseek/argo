@@ -92,13 +92,22 @@ def _lines(d: Path, stream: str) -> list[str]:
 
 
 def test_telemetry_trims_when_over_cap(tele_dir, monkeypatch):
-    """超过上限就回缩到最近 N 行，且不丢最新一条。"""
-    monkeypatch.setattr(usage_log, "_MAX_BYTES", 300)
-    monkeypatch.setattr(usage_log, "_KEEP_LINES", 5)
+    """超过上限就按字节回缩，且不丢最新一条。
+
+    旧实现按行回缩（_KEEP_LINES=2000），但单行 525 B × 2000 已超 1 MiB 上限，
+    于是判定超限、全读全写、行数不变，回缩成了空转。这条现在同时钉住
+    「体积真的降下来」和「每行仍是合法 JSONL」两件事。
+    """
+    monkeypatch.setattr(usage_log, "_MAX_BYTES", 2000)
+    monkeypatch.setattr(usage_log, "_TRIM_TO_BYTES", 800)
     for i in range(60):
         usage_log.emit("rotation", {"i": i, "pad": "y" * 40})
+    p = tele_dir / "rotation.jsonl"
     lines = _lines(tele_dir, "rotation")
-    assert len(lines) <= 6, f"未回缩：{len(lines)} 行"
+    # emit 是「先回缩再追加」，最后一次追加会带进一条新行；允许一个记录的余量
+    assert p.stat().st_size < 2000, f"未真正回缩：{p.stat().st_size} B"
+    assert len(lines) < 60, f"回缩没丢旧行：{len(lines)} 行"
+    assert all(json.loads(line)["i"] >= 0 for line in lines), "回缩切出了半行"
     assert json.loads(lines[-1])["i"] == 59, "最新一条不能丢"
 
 
