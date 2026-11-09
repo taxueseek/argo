@@ -1189,7 +1189,9 @@ test('pool: a new connection after idle recycle re-resolves credentials', async 
   const baseline = resolveCalls
   disposeSharedMcp()
   await tool.execute({ query: 'b' })
-  assert.equal(resolveCalls, baseline + 1, `回收后新建连接应再解析一次，实际从 ${baseline} 到 ${resolveCalls}`)
+  // 乘法口径：resolve 调用数 = 名单长度 × 连接数，默认名单已是派生全量
+  // ref（issue #41 收口），硬编码 +1 会在名单扩容时误报。
+  assert.equal(resolveCalls, baseline * 2, `回收后新建连接应再解析一遍全部 ref，实际从 ${baseline} 到 ${resolveCalls}`)
   assert.equal(spawnCount(), 2)
 })
 

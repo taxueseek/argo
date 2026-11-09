@@ -64,9 +64,11 @@ _SINGLE_SOURCE_BY_DESIGN = {
 # （anysearch）提到前 2 位（earth_science: usgs+gdacs+anysearch；
 # sports_search: thesportsdb+jolpica+anysearch），不再是「窄源顶 2」，
 # 故从债务清单移除——清单失真的话，后续读者会以为这两域仍有 0 结果风险。
+# 2026-11-10：code_search 随 grep_app（GitHub 全仓代码检索，34d5dd2）挂入
+# 域档位，前 2 位已有通用源，同理由移除。
 _NARROW_TOP2_DEBT = {
     "academic", "book_search", "chem_search", "cls_telegraph_search",
-    "cn_encyclopedia", "cn_tech_community", "code_search", "dictionary_search",
+    "cn_encyclopedia", "cn_tech_community", "dictionary_search",
     "em_news_search", "entity_search", "financial_news",
     "hot_trending", "jin10_flash", "macro_data", "media_search", "meme_slang",
     "ml_models", "org_entity", "package_search", "protein_search",
