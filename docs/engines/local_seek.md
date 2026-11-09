@@ -1,11 +1,11 @@
 # 引擎：`local_seek`
 
-- 准入时间: 2026-11-10T00:32:15+08:00
+- 准入时间: 2026-11-10T00:45:38+08:00
 - 状态: admitted
 - cost_tier: free
 - type: cli
 - quality_score: 1.0
-- avg_latency_ms: 141.1
+- avg_latency_ms: 100.1
 - blocked: False
 
 ## 环境变量
@@ -16,7 +16,7 @@
 
 ## 最近验证
 
-- health: pass · latency=197.9ms · count=10
+- health: pass · latency=130.0ms · count=10
 - quality: pass · score=1.0 · empty_rate=0.0
 
 ## 调用

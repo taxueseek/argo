@@ -1,59 +1,84 @@
 #!/usr/bin/env python3
-"""seek.py → argo CLI 桥接适配器（纯结构翻译，零逻辑）。
+"""seek.py → argo CLI 桥接适配器（跨平台兼容与来源隔离）。
 
-seek.py 原生 JSON 是 path/line/snippet/mtime（本机文件检索契约）；CLI 桥接
-的行映射吃 title/url/snippet/published_at（argo 结果契约，固定别名表不含
-path）。直连会产出 title/url 全空的空壳条目被下游清掉，故经此适配。
-seek.py 的参数原样透传，末尾强制 --json；url 产出 file:// URI（本地文件
-条目的真实打开方式），mtime 进 published_at 供时效维度消费。
-
-实测背景（2026-11-10）：seek.py --json 96ms（rg 引擎，code scope），
-30 条结构化结果；L3 插件机制（ENGINE_TYPE/build_engine）文档先行未落地，
-故走「适配器脚本 + CLI 桥接」而非插件。
+1. 来源隔离：严格标注 [本机] 前缀、source_type='local'、channel='local_filesystem'、
+   is_local=True，生成规范 file:// URI，杜绝与公网/联网搜索结果混淆。
+2. 跨平台开箱即用：显式 utf-8 管道编码，防 Windows GBK 控制台乱码；Path.resolve().as_uri()
+   同时支持 Windows 驱动器盘符与 POSIX 路径；提供进程内 run_query 容错降级。
 """
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-SEEK = (
-    Path(__file__).resolve().parent.parent
-    / "sub-skills" / "local-seek" / "scripts" / "seek.py"
-)
+SEEK_DIR = Path(__file__).resolve().parent.parent / "sub-skills" / "local-seek" / "scripts"
+SEEK = SEEK_DIR / "seek.py"
 
 
-def main() -> int:
-    argv = [a for a in sys.argv[1:] if a != "--json"]
+def _run_seek(argv: list[str]) -> dict:
+    """运行 seek.py，优先子进程隔离，受限环境降级为进程内调用。"""
     try:
         proc = subprocess.run(
             [sys.executable, str(SEEK), *argv, "--json"],
             capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace",
         )
-        data = json.loads(proc.stdout or "{}") if proc.returncode == 0 else {}
+        if proc.returncode == 0 and proc.stdout:
+            return json.loads(proc.stdout)
     except (subprocess.TimeoutExpired, ValueError, OSError):
-        data = {}
+        pass
+
+    # 进程内容错降级
+    try:
+        if str(SEEK_DIR) not in sys.path:
+            sys.path.insert(0, str(SEEK_DIR))
+        import seek as seek_mod
+        text, rc = seek_mod.run_query([*argv, "--json"], time_budget=30.0)
+        if rc == 0 and text:
+            return json.loads(text)
+    except Exception:
+        pass
+    return {}
+
+
+def main() -> int:
+    argv = [a for a in sys.argv[1:] if a != "--json"]
+    data = _run_seek(argv)
 
     base = data.get("path") or "."
     out: list[dict] = []
+    base_path = Path(base).resolve()
+
     for r in data.get("results", []):
         if not isinstance(r, dict):
             continue
         p = str(r.get("path") or "")
         line = r.get("line")
-        row = {
-            "title": f"{p}:{line}" if line else p,
-            "snippet": str(r.get("snippet") or "")[:300],
+        snippet = str(r.get("snippet") or "")[:300]
+        # 来源显式隔离标识：明确标记为 [本机]
+        title_loc = f"{p}:{line}" if line else p
+        row: dict = {
+            "title": f"[本机] {title_loc}",
+            "snippet": f"[本机文件] {snippet}" if not snippet.startswith("[本机") else snippet,
+            "source_type": "local",
+            "channel": "local_filesystem",
+            "is_local": True,
+            "engine": "local_seek",
         }
         if p:
             try:
-                row["url"] = Path(base).joinpath(p).resolve().as_uri()
+                abs_p = (base_path / p).resolve()
+                row["url"] = abs_p.as_uri()
             except (ValueError, OSError):
-                pass
+                norm_p = p.replace("\\", "/")
+                row["url"] = f"file:///{norm_p.lstrip('/')}"
         if r.get("mtime"):
             row["published_at"] = str(r["mtime"])
         out.append(row)
+
     print(json.dumps({"results": out}, ensure_ascii=False))
     return 0
 

@@ -52,6 +52,18 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# Windows 控制台与多语言环境编码保护（避免 UTF-8 输出在 GBK 等控制台下抛 UnicodeEncodeError）
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from seek_rank import _ZH_EN_ALIASES  # 中英工程词对齐（词源单点在 seek_rank）
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
@@ -1117,6 +1129,149 @@ def mdfind_search(query, path, max_results, timeout=None,
     return [(p, 0, "") for p in lines[:max_results]], None
 
 
+_BINARY_EXTS = frozenset({
+    "exe", "dll", "so", "dylib", "bin", "o", "a", "lib",
+    "png", "jpg", "jpeg", "gif", "ico", "webp", "bmp", "psd",
+    "mp3", "mp4", "mov", "avi", "mkv", "flv", "wav",
+    "zip", "tar", "gz", "7z", "bz2", "xz", "rar",
+    "pyc", "pyo", "pyd", "class", "db", "sqlite", "sqlite3"
+})
+
+
+def py_walk_filename(query: str, path: Path, exts: list[str], max_results: int,
+                     dots: bool = False, timeout: float | None = None,
+                     since_ts: float | None = None, until_ts: float | None = None) -> tuple[list, str | None]:
+    """纯 Python 标准库文件名检索（无 fd 时的全平台保底，零外部依赖）。"""
+    timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
+    deadline = (time.time() + timeout) if timeout else None
+    q_low = query.lower()
+    matches = []
+    excludes = set(load_excludes())
+    root_str = str(Path(path).expanduser())
+
+    for root, dirs, files in os.walk(root_str):
+        if deadline and time.time() > deadline:
+            break
+        if not dots:
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in excludes and not any(ex in d for ex in excludes if "*" in ex)]
+
+        for f in files:
+            if not dots and f.startswith("."):
+                continue
+            if exts:
+                suffix = f.rsplit(".", 1)[-1].lower() if "." in f else ""
+                if suffix not in exts:
+                    continue
+            if not query or q_low in f.lower():
+                fp = os.path.join(root, f)
+                if _in_time_window(fp, since_ts, until_ts):
+                    matches.append((fp, 0, ""))
+                    if len(matches) >= max_results * 4:
+                        break
+        if len(matches) >= max_results * 4:
+            break
+
+    ranked = _rank_path_results(matches, query) if matches else []
+    return ranked[:max_results], None
+
+
+def py_walk_search(patterns: list[str], path: Path, excludes: list[str], exts: list[str],
+                   context: int, count: bool, max_results: int, fixed: bool,
+                   raw_query: str = "", dots: bool = False, timeout: float | None = None,
+                   since_ts: float | None = None, until_ts: float | None = None) -> tuple[list, str | None]:
+    """纯 Python 标准库文件内容检索（无 rg 与 grep 时的全平台保底，零外部依赖）。"""
+    timeout = _RUN_DEFAULT_TIMEOUT_S if timeout is None else timeout
+    deadline = (time.time() + timeout) if timeout else None
+    ex_set = set(excludes)
+    pats = patterns or ([raw_query] if raw_query else [])
+    if not pats:
+        return [], None
+
+    regexes = None
+    if not fixed:
+        regexes = []
+        for p in pats:
+            try:
+                regexes.append(re.compile(p, re.IGNORECASE))
+            except re.error:
+                regexes.append(re.compile(re.escape(p), re.IGNORECASE))
+    pats_lower = [p.lower() for p in pats]
+
+    counts = []
+    candidates = []
+    root_str = str(Path(path).expanduser())
+
+    for root, dirs, files in os.walk(root_str):
+        if deadline and time.time() > deadline:
+            break
+        if not dots:
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+        dirs[:] = [d for d in dirs if d not in ex_set]
+
+        for f in files:
+            if deadline and time.time() > deadline:
+                break
+            if not dots and f.startswith("."):
+                continue
+            suffix = f.rsplit(".", 1)[-1].lower() if "." in f else ""
+            if exts:
+                if suffix not in exts:
+                    continue
+            elif suffix in _BINARY_EXTS:
+                continue
+
+            fp = os.path.join(root, f)
+            try:
+                st = os.stat(fp)
+                if st.st_size > 5 * 1024 * 1024 or st.st_size == 0:
+                    continue
+            except OSError:
+                continue
+
+            if not _in_time_window(fp, since_ts, until_ts):
+                continue
+
+            file_matched_lines = 0
+            try:
+                with open(fp, "r", encoding="utf-8", errors="replace") as fh:
+                    for line_idx, line in enumerate(fh, start=1):
+                        matched = False
+                        if fixed:
+                            line_low = line.lower()
+                            matched = any(p in line_low for p in pats_lower)
+                        elif regexes:
+                            matched = any(rgx.search(line) for rgx in regexes)
+
+                        if matched:
+                            file_matched_lines += 1
+                            if not count:
+                                candidates.append((fp, line_idx, truncate(line)))
+                                if len(candidates) >= _POOL_CAP_MAX:
+                                    break
+            except (OSError, UnicodeError):
+                continue
+
+            if count and file_matched_lines > 0:
+                counts.append((fp, file_matched_lines, ""))
+                if len(counts) >= max_results * 2:
+                    break
+        if (count and len(counts) >= max_results * 2) or (not count and len(candidates) >= _POOL_CAP_MAX):
+            break
+
+    if count:
+        counts.sort(key=lambda t: (-t[1], t[0]))
+        return counts[:max_results], None
+
+    if not candidates:
+        return [], None
+
+    return _finish_content(
+        iter(candidates), raw_query, context, count, fixed,
+        root_str, max_results, drop_noise=True
+    ), None
+
+
 def format_output(results, engine, mode, path, elapsed_ms, query, total):
     lines = [f"local-seek: {total} 处命中（{engine} · {path} · {elapsed_ms}ms · 模式 {mode}）"]
     base = os.path.abspath(os.path.expanduser(path))
@@ -1440,7 +1595,15 @@ def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results,
                 ), None, "fts"
     grep_exe = resolve_grep()
     if not grep_exe:
-        return None, "本机无 rg 与 grep 可用，请安装 ripgrep", ""
+        # 纯 Python 标准库保底（Windows / Linux 裸机环境开箱即用，零外部工具依赖）
+        results, err = py_walk_search(
+            patterns, path, excludes, exts, args.context, args.count,
+            max_results, fixed, raw_query=args.query, dots=dots,
+            timeout=timeout, since_ts=since_ts, until_ts=until_ts
+        )
+        if results:
+            return results, None, "py-walk"
+        return None, "本机无 rg 与 grep 可用（纯 Python 保底亦无匹配），请安装 ripgrep", ""
     mode = "fast"
     if not args.exact and len(patterns) > 1:
         results, err = grep_search(grep_exe, [args.query], path, excludes, exts,
@@ -1606,17 +1769,6 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                 engine, mode = "none", "fast"
             else:
                 engine, mode = "grep", gmode
-    elif not tool_exists("rg"):
-        # 目录内搜索缺 rg 必须落 grep，不能落 mdfind：Spotlight 不索引
-        # 源码内容，会把「工具缺失」伪装成「搜索结论」（实测搜 argo 自身
-        # 符号返回 24 条外部陈旧副本、漏掉正主，还报「未找到匹配」）。
-        results, err, gmode = _run_grep_fallback(
-            args, patterns, fixed, path, excludes, exts, max_results,
-            timeout=time_budget, since_ts=since_ts, until_ts=until_ts)
-        if results is None:
-            engine, mode = "none", "fast"
-        else:
-            engine, mode = "grep", gmode
     elif args.filename:
         engine, mode = "fd", "fast"
         if tool_exists("fd"):
@@ -1644,7 +1796,35 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                     if py_hits:
                         results = _merge_dedup(results or [], py_hits, max_results)
         else:
-            err = "fd 未安装：按文件名搜索需要 fd（内容搜索走 rg/grep）"
+            # 纯 Python 标准库保底：系统未安装 fd 时（Windows/Linux 裸机环境），通过 os.walk 查找文件名
+            results, err = py_walk_filename(
+                args.query, path, exts, max_results, dots=args.dot,
+                timeout=time_budget, since_ts=since_ts, until_ts=until_ts
+            )
+            engine = "py-walk"
+            if not err and len(results or []) < 3:
+                _cjk_len = sum(1 for c in args.query if "\u4e00" <= c <= "\u9fff")
+                q_py = pinyin_initials(args.query)
+                if _cjk_len >= 2 and q_py and q_py.lower() != args.query.strip().lower():
+                    py_res, py_err = py_walk_filename(
+                        q_py, path, exts, max_results, dots=args.dot,
+                        timeout=time_budget, since_ts=since_ts, until_ts=until_ts
+                    )
+                    if not py_err and py_res:
+                        results = _merge_dedup(results or [], py_res, max_results)
+            if not results and not err:
+                err = "fd 未安装（纯 Python 扫描亦无匹配）：按文件名搜索建议安装 fd"
+    elif not tool_exists("rg"):
+        # 目录内搜索缺 rg 必须落 grep，不能落 mdfind：Spotlight 不索引
+        # 源码内容，会把「工具缺失」伪装成「搜索结论」（实测搜 argo 自身
+        # 符号返回 24 条外部陈旧副本、漏掉正主，还报「未找到匹配」）。
+        results, err, gmode = _run_grep_fallback(
+            args, patterns, fixed, path, excludes, exts, max_results,
+            timeout=time_budget, since_ts=since_ts, until_ts=until_ts)
+        if results is None:
+            engine, mode = "none", "fast"
+        else:
+            engine, mode = "grep" if not gmode.startswith("py-walk") else "py-walk", gmode
     else:
         mode = "deep" if (args.context > 0 or args.count) else "fast"
         # FTS 快路资格：带扩展名过滤、自定义排除或符号搜索时关闭（快路不做 rg 侧 glob 与 -w 过滤）。

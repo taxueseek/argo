@@ -65,3 +65,22 @@ def test_launcher_parses_file_under_posix_sh():
                          capture_output=True, text=True, check=True).stdout
     got = set(out.split())
     assert got == set(sb.read_passthrough()), "sh 读出的名单与派生文件不一致"
+
+
+def test_dsh_runner_keyrefs_block_matches_declarations():
+    """DSH 插件 runner.js 的 keyRefs 默认名单也由派生块供给（issue #41 收口）。
+
+    DEFAULTS.keyRefs 此前硬编码 ['DEEPSEEK_API_KEY']，宿主凭证库里其余引擎
+    的 key 不进面板手动加就永远到不了 argo 子进程。派生块让「新装即全量
+    转发」，与 env_passthrough.txt、client.js 的 KEYS 块同一真源
+    （derive_dsh_keys）。
+    """
+    runner = ROOT / "packages" / "dsh-plugin" / "dsh" / "runner.js"
+    assert runner.exists(), "dsh runner.js 不存在"
+    want = sb.render_keyrefs(sb.derive_dsh_keys(sb.load_engines()))
+    got = sb.read_keyrefs_block()
+    assert got == want, ("runner.js keyRefs 标记区与引擎声明不一致（跑 python3 "
+                         "scripts/sync_backends.py 重新派生）")
+    refs = re.findall(r"'([A-Z0-9_]+)'", got)
+    assert "DEEPSEEK_API_KEY" in refs, "派生名单丢了历史默认项"
+    assert len(refs) > 1, "keyRefs 默认名单退回硬编码单条（issue #41 复发）"

@@ -5,6 +5,9 @@
 engine_id: local_seek
 type: cli
 enabled: true
+# 声明 explicit_only：严格隔离本机私域检索与联网公域检索，避免自动路由混淆来源；
+# 专供显式 --engine local_seek 调用。
+explicit_only: true
 label: 本机技能与文件搜索
 cost_tier: free
 qps: 20

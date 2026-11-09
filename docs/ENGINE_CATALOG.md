@@ -11,7 +11,7 @@
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 15 个**：`brave`、`digup`、`ecosia`、`europeana`、`felo`、`fourget`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
-- **显式专用 29 个**：`animetrace`、`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`google_lens`、`local_baidu`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 30 个**：`animetrace`、`bing_rss`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`gdelt`、`google_lens`、`local_baidu`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -96,7 +96,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `lieu` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | webring 专用搜索（只索引加入 webring 的小众站点，HTML 解析） |
 | `local_bing` | 可直接用 | 免费 | 不限 | — | 深度研究 boost、通用兜底链 | Bing本地 |
 | `local_search` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 local_academic、域 local_chinese、域 local_code、域 local_general、域 local_news、域 local_reference、语义画像命中 | Local Search 聚合 |
-| `local_seek` | 可直接用 | 免费 | 不限 | — | 域 skill_search | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
 | `local_sogou` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 搜狗本地 |
 | `marginalia` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面；old-search 两步 sst 流程） |
 | `mojeek` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery | Mojeek 独立爬虫搜索引擎（百亿级自主索引，非大厂代理，零用户画像） |
@@ -121,6 +120,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `fourget` | 已停用 | 免费 | 不限 | ARGO_FOURGET_URL | 已停用 | 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG） |
 | `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `local_baidu` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 百度本地 |
+| `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
 | `local_yandex` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Yandex 本地通道（local-search 实测最稳后端，多语言兜底） |
 | `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
@@ -500,7 +500,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | 域 | 主源 | 组合 |
 |---|---|---|
 | `redskill_search` | `redskill` | `redskill`、`anysearch` |
-| `skill_search` | `skillsmp` | `skillsmp`、`clawhub`、`explainx`、`skills_sh`、`anysearch`、`local_seek` |
+| `skill_search` | `skillsmp` | `skillsmp`、`clawhub`、`explainx`、`skills_sh`、`anysearch` |
 | `dsh_plugin_search` | `dshopen` | `dshopen`、`deepseek1024`、`dsh_hub`、`anysearch` |
 | `wechat_search` | `wechat_sogou` | `wechat_sogou`、`sogou_weixin_browser`、`anysearch` |
 | `hackernews_search` | `hackernews` | `hackernews`、`anysearch` |

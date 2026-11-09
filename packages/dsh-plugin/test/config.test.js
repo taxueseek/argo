@@ -20,7 +20,11 @@ test('Config: volatile settings expose defaults and reject unknown native tools'
   assert.equal(plain(parsed, 'nativeTimeoutMs'), 60000)
   assert.equal(plain(parsed, 'searchConcurrency'), 3)
   assert.deepEqual(plain(parsed, 'nativeTools'), ['argo_search', 'argo_fetch'])
-  assert.deepEqual(plain(parsed, 'keyRefs'), ['DEEPSEEK_API_KEY'])
+  // keyRefs 默认名单由 sync_backends.py 派生（issue #41 收口），不再是单条硬编码
+  const keyRefs = plain(parsed, 'keyRefs')
+  assert.ok(Array.isArray(keyRefs) && keyRefs.length > 1,
+    'keyRefs 默认名单应由派生块供给全量 ref（issue #41）')
+  assert.ok(keyRefs.includes('DEEPSEEK_API_KEY'), '派生名单丢了历史默认项')
 
   const source = parsed.nativeTools
   assert.equal(typeof source.get, 'function', 'nativeTools 必须是 volatile 引用，设置页才能热改')

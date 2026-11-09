@@ -1828,7 +1828,7 @@ engines:
   cost: free
   status: ok
   recommended: false
-  explicit_only: false
+  explicit_only: true
   desc: 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络）
 - name: local_semantic_scholar
   tier: T2

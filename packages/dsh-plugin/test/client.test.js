@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { NATIVE_TOOLS } from '../dsh/native-tools.mjs'
 import { ARGO_ENV_SPECS } from '../dsh/specs.js'
+import { DEFAULTS } from '../dsh/runner.js'
 
 /** 在最小沙箱里执行 lazy-CJS bundle，返回 ModuleLoader 收到的定义。 */
 function loadBundle() {
@@ -215,6 +216,11 @@ test('keys tab exposes the Yuanbao credential ref and bilingual labels', () => {
     assert.ok(typeof k.label === 'string' && k.label.length > 0, `${k.ref} 缺中文 label`)
     assert.ok(typeof k.en === 'string' && k.en.length > 0, `${k.ref} 缺英文 en 标签`)
   }
+  // issue #41 收口：DEFAULTS.keyRefs 必须与 KEYS 派生清单同源——新装即全量
+  // 转发，而不是硬编码单条让其余凭证全靠用户进面板手动加。
+  assert.deepEqual(
+    new Set(DEFAULTS.keyRefs), new Set(mod.KEYS.map((k) => k.ref)),
+    'DEFAULTS.keyRefs 与 KEYS 派生清单不同源（跑 python3 scripts/sync_backends.py 重新派生）')
 })
 
 test('ArgoPanel renders every tab without undefined references', () => {

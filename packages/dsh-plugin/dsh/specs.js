@@ -115,7 +115,9 @@ export function argoEnvOverlay(config = activeConfig) {
 export async function resolveArgoEnv(config, options = {}) {
   const cfg = config ?? activeConfig
   const overlay = argoEnvOverlay(cfg)
-  const refs = asStringArray(cfg?.keyRefs, 20)
+  // 上限 64：默认名单由 sync_backends.py 派生全量 ref（2026-11-10 实测 26 个），
+  // 旧上限 20 会静默截断派生名单，靠后的引擎凭证又被挡在子进程外（issue #41 回归面）。
+  const refs = asStringArray(cfg?.keyRefs, 64)
   if (refs.length > 0) {
     const provider = options.credentials ?? cfg?.credentials ?? hostCredentials
     if (provider !== undefined) {

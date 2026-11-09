@@ -55,6 +55,9 @@ PASSTHROUGH_PATH = BACKENDS_DIR / "env_passthrough.txt"
 DSH_CLIENT_PATH = SKILL_DIR / "packages" / "dsh-plugin" / "dsh" / "client.js"
 _KEYS_BEGIN = "    // <generated:keys> 由 scripts/sync_backends.py 从引擎声明生成，勿手改\n"
 _KEYS_END = "    // </generated:keys>\n"
+DSH_RUNNER_PATH = SKILL_DIR / "packages" / "dsh-plugin" / "dsh" / "runner.js"
+_KEYREFS_BEGIN = "  // <generated:keyrefs> 由 scripts/sync_backends.py 从引擎声明生成，勿手改\n"
+_KEYREFS_END = "  // </generated:keyrefs>\n"
 # 面板常用组：首屏直接显示的那几把 key（其余在「显示全部」里）
 # 旧面板手写名单里与候选链规则不一致的 ref（候选链里确实有这个名字，运行时
 # get_env 能读到）：保留旧名，否则 DSH 凭证库里已存的 key 改名后面板显示未配置
@@ -337,6 +340,27 @@ def write_dsh_keys_block(block: str) -> None:
     atomic_write_text(DSH_CLIENT_PATH, s[:i] + block + s[j + len(_KEYS_END):], mode=0o644)
 
 
+def render_keyrefs(rows: list[dict[str, Any]]) -> str:
+    body = "".join("    '%s',\n" % r["ref"] for r in rows)
+    return _KEYREFS_BEGIN + "  keyRefs: [\n" + body + "  ],\n" + _KEYREFS_END
+
+
+def read_keyrefs_block() -> str:
+    if not DSH_RUNNER_PATH.exists():
+        return ""
+    s = DSH_RUNNER_PATH.read_text(encoding="utf-8")
+    i, j = s.find(_KEYREFS_BEGIN), s.find(_KEYREFS_END)
+    return s[i:j + len(_KEYREFS_END)] if i >= 0 and j > i else ""
+
+
+def write_keyrefs_block(block: str) -> None:
+    s = DSH_RUNNER_PATH.read_text(encoding="utf-8")
+    i, j = s.find(_KEYREFS_BEGIN), s.find(_KEYREFS_END)
+    if i < 0 or j < i:
+        raise SystemExit(f"{DSH_RUNNER_PATH} 缺 <generated:keyrefs> 标记区")
+    atomic_write_text(DSH_RUNNER_PATH, s[:i] + block + s[j + len(_KEYREFS_END):], mode=0o644)
+
+
 # ── 校验/补全：domain_profiles.json ─────────────────────────────────────────
 
 def check_domain_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str, Any]) -> list[str]:
@@ -432,8 +456,11 @@ def collect_issues(engines: dict[str, dict[str, Any]],
         miss = sorted(set(want_pt) - set(cur_pt))
         extra = sorted(set(cur_pt) - set(want_pt))
         issues.append(f"env_passthrough.txt 与声明不一致: 缺 {miss} 多 {extra}")
-    if DSH_CLIENT_PATH.exists() and read_dsh_keys_block() != render_dsh_keys(derive_dsh_keys(engines)):
+    dsh_rows = derive_dsh_keys(engines)
+    if DSH_CLIENT_PATH.exists() and read_dsh_keys_block() != render_dsh_keys(dsh_rows):
         issues.append("packages/dsh-plugin/dsh/client.js 的 KEYS 标记区与引擎声明不一致")
+    if DSH_RUNNER_PATH.exists() and read_keyrefs_block() != render_keyrefs(dsh_rows):
+        issues.append("packages/dsh-plugin/dsh/runner.js 的 keyRefs 标记区与引擎声明不一致")
     return issues
 
 
@@ -533,6 +560,9 @@ def main() -> int:
     if DSH_CLIENT_PATH.exists():
         keys_new = derive_dsh_keys(engines)
         write_dsh_keys_block(render_dsh_keys(keys_new))
+        if DSH_RUNNER_PATH.exists():
+            write_keyrefs_block(render_keyrefs(keys_new))
+            print(f"  dsh runner.js keyRefs {len(keys_new)} 个转发名")
         print(f"  dsh client.js KEYS    {len(keys_new)} 把 key")
     print(f"  quota_profiles.json   {len(quota_new) - 1} 条")
     print(f"  engine_registry.yaml  {len(registry_new['engines'])} 条")
