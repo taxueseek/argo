@@ -166,3 +166,106 @@ def _build_repology_engine(spec: dict[str, Any]) -> Any:
         return results
     return _engine
 
+
+# ── Grep.app 全球百万 GitHub 核心代码正则检索（官方 MCP 传输免认证）─────
+
+_GREP_APP_MCP_URL = "https://mcp.grep.app"
+
+
+def _build_grep_app_engine(spec: dict[str, Any]) -> Any:
+    """Grep.app 全网开源代码精准检索引擎（官方 MCP 通道，免认证）。
+
+    通过官方 MCP 端点直接调用 searchGitHub，避开常规前端 WAF 挑战，
+    支持字面量代码匹配与正则搜索，返回包含仓库、文件路径与行号的真实代码片段。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        q = (query or "").strip()
+        if not q:
+            return []
+
+        from engines_builders_tech import _parse_mcp_wire, _mcp_error_of
+
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "searchGitHub",
+                "arguments": {
+                    "query": q,
+                },
+            },
+        }
+        body = json.dumps(payload).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+        }
+
+        req = urllib.request.Request(_GREP_APP_MCP_URL, data=body, headers=headers)
+        try:
+            with http_open(req, timeout=to, engine=spec.get("_name", "grep_app")) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+        except Exception as e:
+            logger.warning(f"grep_app MCP 请求失败: {e}")
+            return []
+
+        data = _parse_mcp_wire(raw)
+        if not isinstance(data, dict):
+            return []
+
+        mcp_err = _mcp_error_of(data)
+        if mcp_err:
+            logger.warning(f"grep_app MCP 上游错误: {mcp_err}")
+            return []
+
+        result = data.get("result")
+        if not isinstance(result, dict):
+            return []
+
+        content = result.get("content") or []
+        results: list[dict[str, Any]] = []
+
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text") or ""
+            if not text:
+                continue
+
+            repo_m = re.search(r"Repository:\s*(\S+)", text)
+            path_m = re.search(r"Path:\s*(\S+)", text)
+            url_m = re.search(r"URL:\s*(\S+)", text)
+            snip_m = re.search(r"Snippets:\s*(.*)", text, re.S)
+
+            repo = repo_m.group(1) if repo_m else ""
+            path = path_m.group(1) if path_m else ""
+            url = url_m.group(1) if url_m else ""
+            snippet = snip_m.group(1).strip() if snip_m else text[:250]
+
+            if not url:
+                continue
+
+            title = f"{repo}: {path}" if repo and path else (path or repo or "code snippet")
+            results.append({
+                "title": title,
+                "url": url,
+                "snippet": snippet[:350],
+                "source": "grep_app",
+            })
+            if len(results) >= n:
+                break
+
+        return results
+
+    return _engine
+
+

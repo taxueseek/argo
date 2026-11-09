@@ -1328,6 +1328,20 @@ engines:
   recommended: false
   explicit_only: false
   desc: 中国政府网规章库（部门规章/地方政府规章，免认证）
+- name: grep_app
+  tier: T1
+  type: grep_app
+  coverage:
+  - code
+  - github
+  - search
+  - dev
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Grep.app 全球百万 GitHub 核心代码正则检索（官方 MCP 传输免认证）
 - name: guardian_rss
   tier: T1
   type: rss_feed
@@ -2246,6 +2260,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: 全球天气（城市/地名 → 坐标 → 当前天气，免认证）
+- name: openaire
+  tier: T1
+  type: http
+  coverage:
+  - academic
+  - science
+  - paper
+  latency_ms: 3000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口）
 - name: openalex
   tier: T1
   type: http

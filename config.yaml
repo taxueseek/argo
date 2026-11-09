@@ -1561,6 +1561,7 @@ domains:
 - desc: 代码搜索/开源项目
   engines_combo:
   - github
+  - grep_app
   - mdn
   - huggingface
   - anysearch

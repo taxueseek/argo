@@ -1050,6 +1050,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "grep_app": {
+    "label": "Grep.app",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 45
+  },
   "guardian_rss": {
     "label": "卫报 RSS",
     "qps": 1,
@@ -1779,6 +1789,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 54
+  },
+  "openaire": {
+    "label": "openaire",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
   },
   "openalex": {
     "label": "OpenAlex",

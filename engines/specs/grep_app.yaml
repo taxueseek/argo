@@ -1,0 +1,19 @@
+engine_id: grep_app
+type: grep_app
+enabled: true
+label: Grep.app
+cost_tier: free
+family: code
+qps: 2
+priority: 45
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- github
+- search
+- dev
+desc: Grep.app 全球百万 GitHub 核心代码正则检索（官方 MCP 传输免认证）
+canary_query: FastAPI
+timeout: 10

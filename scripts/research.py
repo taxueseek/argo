@@ -43,7 +43,7 @@ _RESEARCH_EN_BOOSTS: tuple[str, ...] = ("octen", "anysearch", "github", "exa")
 _RESEARCH_JA_KO_BOOSTS: tuple[str, ...] = ("anysearch", "local_bing")
 _RESEARCH_ACADEMIC_BOOSTS: tuple[str, ...] = (
     "semantic_scholar", "arxiv", "openalex", "crossref", "google_scholar",
-    "openreview", "biorxiv",
+    "openreview", "biorxiv", "openaire",
 )
 _ACADEMIC_QUERY_RE = re.compile(
     r"(?i)(论文|文献|综述|引用网络|预印本|学术|期刊|会议论文|研究现状"

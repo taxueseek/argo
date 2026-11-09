@@ -2756,5 +2756,17 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "openaire": {
+    "label": "openaire",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "grep_app": {
+    "label": "Grep.app",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

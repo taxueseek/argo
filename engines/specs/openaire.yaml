@@ -1,0 +1,34 @@
+# OpenAIRE — EU 资助科研聚合（免 key）
+# 独特证据：EU 项目资助维度与跨仓库去重聚合（openalex 无 EU project 链路）。
+# API 为 XML 转机械 JSON：单条目所有字段收在 metadata.oaf:entity.oaf:result
+# 下，数组元素的值在 "$" 键（title/pid/collectedfrom），故路径带 .0.$ 与 @name。
+# API 无独立 snippet 字段；source 取 collectedfrom 首仓库名；url 由 pid（DOI）
+# 模板确定性拼接，pid 缺失的题录条目不产出 url（宁缺勿假）。
+# 本机网络对 api.openaire.eu 间歇 SSL 阻断（2026-11-09 实测 UNEXPECTED_EOF
+# 与 200 交替）：引擎代码无病，属环境类 flapper，熔断器自动处理。
+# 验证: python3 scripts/engine_validate.py --engine openaire --stage all --admit --write-doc
+engine_id: openaire
+type: http
+enabled: true
+cost_tier: free
+method: GET
+url: https://api.openaire.eu/search/publications
+query_param: keywords
+format: json
+timeout: 15
+canary_query: "crispr"
+desc: "OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口）"
+coverage: [academic, science, paper]
+recommended: false
+latency_ms: 3000
+extra_params:
+  size: "{n}"
+output_map:
+  items: response.results.result
+  item_title: metadata.oaf:entity.oaf:result.title.0.$
+  item_source: metadata.oaf:entity.oaf:result.collectedfrom.0.@name
+  item_published_at: metadata.oaf:entity.oaf:result.dateofacceptance.$
+  url_template: "https://doi.org/{metadata.oaf:entity.oaf:result.pid.0.$}"
+quality_queries:
+  - query: "crispr"
+  - query: "carbon capture"
