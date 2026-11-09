@@ -9,7 +9,15 @@
 #   packages/dsh-plugin/scripts/sync-local.sh            # 同步 web+desktop（存在才同步）
 #   packages/dsh-plugin/scripts/sync-local.sh web        # 只同步指定 profile
 #   packages/dsh-plugin/scripts/sync-local.sh --check    # 只比对，不写；有漂移退出 1
-#   packages/dsh-plugin/scripts/sync-local.sh --restart  # 同步后重启 DSH web
+#
+# 边界（2026-11-09）：本脚本只做产物同步，结果是 ARTIFACT_SYNCED，不是
+# LIVE_ACTIVATION。不要在这里串重启、也不要手改 profile 的 node_modules 之外
+# 的 Host 状态。本机 dsh CLI 只有 dsh plugin --profile <name> add|remove，
+# 没有 restart 子命令；对同路径的 file: 依赖重复 add 会打印
+# "Already up to date" 而不重拷，这正是本脚本存在的原因。
+# 同步后核对同 PID 的 Host 行与页面功能；本脚本不证明插件已激活。
+# 官方同 PID 默认见 devkit knowledge/contracts/live-activation.md 与
+# pitfalls/file-copy-stale.md。若依赖改成 link: 安装，本脚本可整体删除。
 #
 # 环境变量：DSH_HOME 覆盖 ~/.dsh；DSH_PROFILES 逗号分隔（默认 web,desktop）。
 set -euo pipefail
@@ -17,14 +25,13 @@ set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 MODE="sync"
-RESTART=0
 PROFILES=()
 
 for arg in "$@"; do
   case "$arg" in
     --check) MODE="check" ;;
-    --restart) RESTART=1 ;;
-    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --restart) echo "[removed] --restart 已移除：dsh CLI 无 restart 子命令，同步不等于激活，见脚本头部" >&2; exit 2 ;;
+    -h|--help) sed -n '2,23p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) PROFILES+=("$arg") ;;
   esac
 done
@@ -62,9 +69,4 @@ if [ "$MODE" = check ]; then
   exit "$drift"
 fi
 
-if [ "$RESTART" = 1 ] && [ -x "$DSH_HOME/scripts/argo-dsh-restart.sh" ]; then
-  echo "[restart] $DSH_HOME/scripts/argo-dsh-restart.sh"
-  bash "$DSH_HOME/scripts/argo-dsh-restart.sh"
-else
-  echo "重启 DSH web 后生效：bash $DSH_HOME/scripts/argo-dsh-restart.sh"
-fi
+echo "[artifact-synced] 产物已同步；LIVE_ACTIVATION_UNPROVEN：请核对同 PID 的 Host 行与页面功能，勿重启 Host"

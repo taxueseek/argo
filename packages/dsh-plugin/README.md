@@ -11,7 +11,7 @@ dsh plugin --profile web add @taxueseek/argo-dsh                              # 
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"  # GitHub main
 ```
 
-`@taxueseek/argo-dsh` 是 DSH 插件包，`argo-search` 是 CLI 包，两者不能互换。重启 `dsh web` 后生效。
+`@taxueseek/argo-dsh` 是 DSH 插件包，`argo-search` 是 CLI 包，两者不能互换。安装由官方 plugin manager 应用；RC2 profile HMR 可同 PID 重组 bundle，默认保持同一个 DSH PID，不需要也不应默认重启 Host。本机 `dsh` CLI 只有 `dsh plugin --profile <name> add|remove`，没有 `restart` 子命令；`activation-plan` / `restart-supervised` 属于外部工作台 `dshx`（需单独安装，本机当前未装），不要把它们写成官方命令。激活证据要分开报：`ARTIFACT_SYNCED`、`HOST_TREE_ACTIVE`、`CLIENT_LOADED`、`VISUAL_BEHAVIOR_VERIFIED`；只看到安装成功、配置行、HTTP 200 或 boot manifest 都不算插件已生效。见 `dsh-external-plugin-devkit/knowledge/contracts/live-activation.md`。
 
 ### 本地开发：改完源码必须同步进 profile（改动收尾固定步骤）
 
@@ -22,9 +22,14 @@ DSH 设置页读到的仍是旧 bundle（2026-10-22 实测：缓存开关与付�
 
 ```bash
 packages/dsh-plugin/scripts/sync-local.sh --check    # 1. 比对源码与已安装 bundle，有漂移退出 1
-packages/dsh-plugin/scripts/sync-local.sh            # 2. 同步 web/desktop
-packages/dsh-plugin/scripts/sync-local.sh --restart  # 3. 同步并重启 dsh web
+packages/dsh-plugin/scripts/sync-local.sh            # 2. 同步 web/desktop（只到 ARTIFACT_SYNCED）
 ```
+
+`sync-local.sh` 只同步产物，输出 `ARTIFACT_SYNCED; LIVE_ACTIVATION_UNPROVEN`，不是插件生效证明；它没有 `--restart` 参数，也不该有。同步脚本存在的原因是本机依赖装成了 `file:`（pnpm 复制而非软链），而官方 `dsh plugin add` 对同路径的 `file:` 依赖会打印 `Already up to date` 不重拷，见 `dsh-external-plugin-devkit/knowledge/pitfalls/file-copy-stale.md`。
+
+**结构性修法**：把 web 与 desktop profile 的依赖改成 `link:`（`dsh plugin --profile <name> add "link:<packages/dsh-plugin 的绝对目录>"`），源码直接可见，本脚本及其备份逻辑即可整体删除；这一步改的是本机 profile，需在宿主空闲时做并单独验证。改之前不要用 `dsh plugin add "file:..."` 冒充同步，它不会重拷。
+
+官方明确禁止手改 profile `node_modules` 后直接串重启。激活要核对同 PID 的 Host 行与页面功能；本机没有 `activation-plan`，装了 `dshx` 工作台才可用，且它是外部工具，不是 `dsh` 的一部分（本机当前未装）。
 
 **改完源码或文档后，必须跑到 `sync-local.sh --check` 输出 `[ok]` 才算交付完成**；不适用 `--check` 的场景（例如只改仓库内文档、不影响已安装 bundle）要在交付说明里写明跳过理由。同步会先备份到 `~/.dsh/backups/argo-dsh-sync-<时间>-<profile>`；浏览器如仍显示旧面板，做一次硬刷新（Cmd+Shift+R）。
 
@@ -60,7 +65,7 @@ packages/dsh-plugin/scripts/sync-local.sh --restart  # 3. 同步并重启 dsh we
 - **研究**：worker / 轨道 / 每轨信源 / token 上限与报告落盘目录
 - **高级**：worker 工具 allow / deny 名单、凭证转发名单
 
-保存即生效（全部为 volatile 配置）：原生工具集合按勾选增删注册，超时、并发、研究上限在下一次调用时读取；引擎开关写成 `argoEnv`（一行一个 `KEY=VALUE`）随 argo 子进程 env 进入，对下一次新建连接生效（池内旧连接按 `searchIdleMs` 回收，默认 60s）。结构性字段（`toolName`、`provider`、`searchProviderId`、`fetchProviderId`）不在设置页，仍走 profile patch，改后需重启。
+保存即生效（全部为 volatile 配置）：原生工具集合按勾选增删注册，超时、并发、研究上限在下一次调用时读取；引擎开关写成 `argoEnv`（一行一个 `KEY=VALUE`）随 argo 子进程 env 进入，对下一次新建连接生效（池内旧连接按 `searchIdleMs` 回收，默认 60s）。结构性字段（`toolName`、`provider`、`searchProviderId`、`fetchProviderId`）不在设置页，仍走 profile patch；watched patch 由官方 watcher 同 PID 重组，改后核对 Host 行与功能即可，不默认重启 Host。
 
 密钥写入 DSH 凭证库（与 Models 页同一处），不写进插件配置、不打日志。凭证服务优先级为**存储文件层 > 启动环境 > 项目 .env > 家目录 .env**：在面板（或 Models 页）保存即覆盖启动环境里的旧值，argo 子进程下一跳新连接用新 key；「清除」只删凭证库里的值，环境变量或 .env 提供的 key 会重新露出。设置页只是凭证域的写入口，读取仍由宿主在每次调用时完成。
 
@@ -160,4 +165,4 @@ argo 的 `deepseek_search` 引擎（官方 `api.deepseek.com/v1/tools/search`，
 
 ## 卸载
 
-在 DSH 的 Settings → Plugins 管理面板中移除本 bundle，或从 profile `package.json` 的 `dsh.profile.bundles` 中删除 `@taxueseek/argo-dsh` 后重启。
+在 DSH 的 Settings → Plugins 管理面板中移除本 bundle，或用官方入口 `dsh plugin --profile web remove @taxueseek/argo-dsh`。从 profile `package.json` 的 `dsh.profile.bundles` 手删条目是失败卸载后的残留修复手段，不是正常卸载路径，见 `dsh-external-plugin-devkit/knowledge/pitfalls/leftover-bundles.md`。

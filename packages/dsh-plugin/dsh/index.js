@@ -120,9 +120,9 @@ const NATIVE_TOOL_NAMES = Object.keys(NATIVE_TOOL_SPECS)
 
 export const Config = Schema === undefined ? undefined : Schema.object({
   toolName: Schema.string().default(DEFAULTS.toolName)
-    .description('研究工具名（结构性设置，改动需重启）'),
+    .description('研究工具名（结构性设置，改 profile patch 后核对 Host 行与功能）'),
   provider: Schema.string().default(DEFAULTS.provider)
-    .description('wide_research 使用的子代理 provider（结构性设置，改动需重启）'),
+    .description('wide_research 使用的子代理 provider（结构性设置，改 profile patch 后核对 Host 行与功能）'),
   searchProviderId: Schema.string().default(DEFAULTS.searchProviderId)
     .description('web_search provider id（结构性设置；改动需同步 web 行 searchProvider）'),
   fetchProviderId: Schema.string().default(DEFAULTS.fetchProviderId)

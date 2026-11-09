@@ -18,14 +18,18 @@
 # crawl / local_*）时取消下方注释按需开启。
 #
 # 依赖：Node.js ≥ 18（npx）+ Python 3.9+（pip install pyyaml）。
-# 安装后重启 dsh web 生效。
+# 安装由官方 plugin manager 应用；RC2 profile HMR 可同 PID 重组 bundle，
+# 无需也不应默认重启 Host。官方 dsh CLI 没有 restart 子命令，只有
+# `dsh plugin --profile <name> add|remove`；仅当 manager 明确返回
+# restart-required 才考虑从进程外重启当前受监督的 Host。见 devkit
+# knowledge/contracts/live-activation.md 与 playbooks/restart-outside.md。
 #
 # 同 id 可在用户层 cordis.patch.yml 覆盖（同 id + name 才是替换）。
 # worker 取证工具白名单用内置默认（mcp__argo__* 与原生工具双写，
 # MCP 挂载与否两态自洽），不含 argo_research，避免研究套研究。
 
 - insert:
-    # 按需开启：MCP 完整工具面（取消注释后重启生效）
+    # 按需开启：MCP 完整工具面（取消注释后按 live activation 分支验证生效）
     # - id: mcp-argo
     #   name: '@deepseek-ai/dsh-mcp-client'
     #   config:
