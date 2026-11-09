@@ -93,7 +93,8 @@ printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手�
     tests/test_local_search_registry.py \
     tests/test_launch_passthrough_alignment.py \
     tests/test_dependency_source_gate.py \
-    tests/test_install_script_contract.py
+    tests/test_install_script_contract.py \
+    tests/test_deep_budget_tail_grace.py
 
 if command -v node >/dev/null 2>&1 && [ -f packages/dsh-plugin/test/size-gate.test.js ]; then
     node --test packages/dsh-plugin/test/size-gate.test.js packages/dsh-plugin/test/client.test.js

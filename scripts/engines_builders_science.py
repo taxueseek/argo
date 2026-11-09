@@ -700,6 +700,11 @@ def _build_nasa_cmr_engine(spec: dict[str, Any]) -> Any:
 # DOI 提取：10. 开头的标准 DOI（bioRxiv DOI 形态 10.1101/2024.01.02.123456）
 _PREPRINT_DOI_RE = re.compile(r"10\.\d{4,9}/[^\s\"'，。；）(（]+", re.I)
 
+# 时效模式的触发词：命中才拉「最近 3 天全量」。关键词查询一律短路返回空
+# （API 无搜索端点，拉全量再本地过滤只产假阳性——2026-11-09 实测 65 KB/2.7 s
+# 换 0 条有效结果，且泛词命中 7 条无关文献）。
+_TIMELY_TRIGGERS = frozenset({"最新", "recent", "预印本", "预印"})
+
 
 def _build_biorxiv_engine(spec: dict[str, Any]) -> Any:
     """bioRxiv / medRxiv 预印本引擎（API 免认证）。
@@ -735,8 +740,21 @@ def _build_biorxiv_engine(spec: dict[str, Any]) -> Any:
             coll = data.get("collection") or []
             items = coll
         else:
-            # 时效模式：最近 3 天（含「最新/recent」触发词；关键词一律走时效模式
-            # 的如实空列表——API 无搜索端点，不伪造）
+            # 时效模式：最近 3 天（含「最新/recent」触发词）。
+            #
+            # 2026-11-09 短路：关键词查询**不发请求**，直接返回空。
+            # 理由（实测）：API 无关键词搜索端点，旧实现拉「最近 3 天全量」
+            # （65 KB / 30 条 / 2.7 s）再本地按词过滤——而 mechanism、paper
+            # 这类泛词会命中 7 条无关文献（匹配到 protein response mechanism
+            # 之类），全是假阳性；深档实测该引擎 timeout=12s 拖累整批 9.5 s，
+            # 最终结果条数与不调用它完全相同（5 条）。
+            # 即：2.7-12 s 换 0 条有效结果。关键词发现本就由 openalex /
+            # semantic_scholar 承担（见本函数文档串），本引擎只负责 DOI 与
+            # 时效列表。短路后 deep 档从 10 s 降到 2.2 s（方案 A 的尾宽之上
+            # 再省掉这次请求）。
+            kws = [w for w in q.lower().split() if w not in _TIMELY_TRIGGERS]
+            if kws:
+                return []
             end = date.today()
             start = end - timedelta(days=3)
             url = (f"https://api.biorxiv.org/details/biorxiv/"
@@ -749,12 +767,6 @@ def _build_biorxiv_engine(spec: dict[str, Any]) -> Any:
             except json.JSONDecodeError:
                 return []
             coll = data.get("collection") or []
-            # 时效模式下按查询词做本地相关过滤；纯触发词（最新/recent）放行
-            kws = [w for w in q.lower().split() if w not in ("最新", "recent", "预印本")]
-            if kws:
-                coll = [c for c in coll
-                        if any(kw in (str(c.get("title") or "") + str(c.get("abstract") or "")).lower()
-                               for kw in kws)]
             items = coll[:n]
 
         results = []

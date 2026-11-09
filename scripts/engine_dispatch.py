@@ -921,10 +921,17 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         # 但**总墙钟预算照样成立**——与上面 wave-2、下面串行两条路径同语义。
         # 此前这里直接等 net_timeout+2，而 budget_s 是按 mode 定的（--depth deep
         # 时 mode 仍是 auto，10s），于是会报出 used_ms > total_ms 的自相矛盾读数。
+        #
+        # 2026-11-09 补尾宽：这条路径此前是三条里唯一没有尾宽约束的（wave-1/2
+        # 与串行都有 straggler_grace_s）。deep 全量并行最易撞慢源：实测 4 引擎
+        # 0.5s 交付、biorxiv 超时，tail_wait 9490ms、整批 10s 打满，结果条数
+        # 与 fast 档相同。尾宽只约束空等，不改变「跑满 combo」语义。
         _wait = net_timeout + 2
         if budget_s is not None:
             _wait = min(_wait, max(0.1, _deadline - _now()))
-        _run_engines_bounded(to_run, _wait)
+        _run_engines_bounded(to_run, _wait,
+                             tail_grace_s=straggler_grace_s,
+                             tail_grace_fn=straggler_tail_fn)
     else:
         # 串行路径（`parallel=False` 的垂直域）。
         #
