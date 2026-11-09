@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import threading
+import engine_states as _st  # 失败归因词表唯一真源
 
 import serp_kill_log  # noqa: E402  守卫接线+误杀账本（2026-10-10 拆出，stdlib 级轻量）
 import time
@@ -564,8 +565,7 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
             return None
         except Exception as e:
             _get_logger().warning(f"HTTP 引擎失败(HttpClient): {type(e).__name__} {e}")
-            note_failure(engine, "network", "exception",
-                         f"{type(e).__name__}: {e}")
+            note_failure(engine, _st.FAILURE_NETWORK, "exception", f"{type(e).__name__}: {e}")
             return None
     # 回退 urllib（原行为）。出口仍须经 net_proxy——否则设
     # ARGO_ENGINE_HTTP_CLIENT=0 就顺带关掉了代理支持，在必须走代理的环境里
@@ -588,7 +588,7 @@ def _http_get_raw(url: str, headers: dict, timeout: float,
         return None
     except Exception as e:
         _get_logger().warning(f"HTTP 引擎失败: {e}")
-        note_failure(engine, "network", "exception", str(e))
+        note_failure(engine, _st.FAILURE_NETWORK, "exception", str(e))
         return None
 
 
@@ -602,7 +602,7 @@ def _note_http_failure(engine: str, status: int, body: str) -> None:
     try:
         from engine_failure import classify
     except ImportError:  # 模块缺失时退化为最小事实，不猜类别
-        note_failure(engine, "unknown", f"http-{status}", (body or "")[:120])
+        note_failure(engine, _st.FAILURE_UNKNOWN, f"http-{status}", (body or "")[:120])
         return
     res = classify(status_code=status, output=(body or "")[:2000])
     note_failure(engine, res["category"], res["reason"],
@@ -664,11 +664,11 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
         raise
     except urllib.error.URLError as e:
         _get_logger().warning(f"HTTP 引擎失败: {e}")
-        note_failure(engine, "network", "urlopen", str(e)[:160])
+        note_failure(engine, _st.FAILURE_NETWORK, "urlopen", str(e)[:160])
         raise
     except OSError as e:
         _get_logger().warning(f"HTTP 引擎失败: {e}")
-        note_failure(engine, "network", "exception",
+        note_failure(engine, _st.FAILURE_NETWORK, "exception",
                      f"{type(e).__name__}: {e}")
         raise
     except Exception as e:
@@ -676,7 +676,7 @@ def http_open(req: Any, timeout: float = 10.0, engine: str = ""):
         # ValueError 既不是 URLError 也不是 OSError，不兜这一层就会穿透归因，
         # 与该函数的契约不符，也比 _http_get_raw 的保底更窄。归因后原样抛出。
         _get_logger().warning(f"HTTP 引擎失败: {type(e).__name__} {e}")
-        note_failure(engine, "network", "exception",
+        note_failure(engine, _st.FAILURE_NETWORK, "exception",
                      f"{type(e).__name__}: {e}")
         raise
     with resp:
@@ -1013,7 +1013,7 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
         if _detect_anti_bot(html):
             # 命中拦截页：归因为封锁而非空结果。不记这条，封锁会在聚合层
             # 伪装成「无结果」，被封引擎会被当故障累计进熔断。
-            note_failure(engine_name, "blocked", "anti-bot-page", full_url)
+            note_failure(engine_name, _st.FAILURE_BLOCKED, "anti-bot-page", full_url)
             return []
         maps = _get_parse_maps()
         html_maps = maps.get("html", {})

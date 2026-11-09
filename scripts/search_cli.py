@@ -18,6 +18,7 @@ import time
 from typing import Any
 
 from cli_io import dumps, ensure_utf8_stdio
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 from engine_env import env_flag
 from stage_timing import StageTiming
 from time_utils import WINDOW_FORMATS_HINT, is_valid_time_window
@@ -282,26 +283,26 @@ def build_parser() -> argparse.ArgumentParser:
 # 不可自动路由的成因，顺序即优先级：一个源可能同时缺 env 又缺依赖，若把每种
 # 成立的理由都计一次，分组之和会大于「不可路由总数」，自相矛盾。只认第一个。
 _ENGINE_BLOCK_REASONS: tuple[tuple[str, str], ...] = (
-    ("disabled", "enabled=False（未启用）"),
-    ("missing_env", "缺环境变量（配好密钥即可用）"),
-    ("missing_deps", "缺可选依赖（装好即可用）"),
-    ("quota_exhausted", "配额耗尽（等窗口重置）"),
-    ("not_routable", "其它不可路由（见 --engine <名> 全量行）"),
+    (engine_states.ENGINE_BLOCK_DISABLED, "enabled=False（未启用）"),
+    (engine_states.ENGINE_BLOCK_MISSING_ENV, "缺环境变量（配好密钥即可用）"),
+    (engine_states.ENGINE_BLOCK_MISSING_DEPS, "缺可选依赖（装好即可用）"),
+    (engine_states.ENGINE_BLOCK_QUOTA_EXHAUSTED, "配额耗尽（等窗口重置）"),
+    (engine_states.ENGINE_BLOCK_NOT_ROUTABLE, "其它不可路由（见 --engine <名> 全量行）"),
 )
 
 
 def _engine_block_reason(row: dict[str, Any]) -> str | None:
     """一条引擎记录「不可自动路由」的成因；可自动路由返回 None。"""
     if not row.get("enabled", True):
-        return "disabled"
+        return engine_states.ENGINE_BLOCK_DISABLED
     if row.get("missing_env"):
-        return "missing_env"
+        return engine_states.ENGINE_BLOCK_MISSING_ENV
     if row.get("missing_deps"):
-        return "missing_deps"
+        return engine_states.ENGINE_BLOCK_MISSING_DEPS
     if row.get("quota_exhausted"):
-        return "quota_exhausted"
+        return engine_states.ENGINE_BLOCK_QUOTA_EXHAUSTED
     if not row.get("routable", True):
-        return "not_routable"
+        return engine_states.ENGINE_BLOCK_NOT_ROUTABLE
     return None
 
 

@@ -23,6 +23,10 @@ import argo_paths as _paths
 # 失效分类常量唯一真源（AUTH/QUOTA_EXHAUSTED 等）：_AUTH_ESCALATE_CATEGORIES
 # 从这里取值，engine_failure 改名由 import 链强制传播，不靠注释维护同源。
 import engine_failure
+# 状态词表唯一真源（2026-11-09 收口）：closed/open/half_open/disabled
+# 四个状态名此前在 6 个模块各写一份（half_open 与 half-open 混用），
+# 改名要改 N 处且漏一处即静默失配。
+import engine_states
 
 # 默认状态路径**调用期解析**，不在导入期派生。
 #
@@ -158,7 +162,7 @@ class CircuitBreaker:
         with self._lock:
             self._fresh_locked()
             st = self._engines.get(engine) or {}
-            state = st.get("state", "closed")
+            state = st.get("state", engine_states.BREAKER_CLOSED)
             opened_at = float(st.get("opened_at") or 0)
             return {
                 "state": state,
@@ -182,7 +186,7 @@ class CircuitBreaker:
                 # 跨进程恢复时 opened_at 必须可比较。monotonic 在不同进程间基准不同，
                 # 换用会导致跨进程冷却判断错误。时钟回拨风险可控（只会让冷却提前结束）。
                 "cooldown_remain": max(0, int(OPEN_SECONDS - (time.time() - opened_at)))
-                if state == "open" else 0,
+                if state == engine_states.BREAKER_OPEN else 0,
             }
 
     @staticmethod
@@ -209,13 +213,13 @@ class CircuitBreaker:
         with self._lock:
             self._fresh_locked()
             st = self._engines.get(engine) or {}
-            state = st.get("state", "closed")
+            state = st.get("state", engine_states.BREAKER_CLOSED)
             opened_at = float(st.get("opened_at") or 0)
 
             # 自适应禁用：disabled 引擎直接拒绝（不再 half-open 探测，省超时）。
             # 但冷却期（DISABLE_COOLDOWN_SECONDS）过后自动转 half_open 探测，
             # 避免引擎恢复后永久无入口（B4）。disabled_at=0 视为旧数据，直接放行探测。
-            if state == "disabled":
+            if state == engine_states.BREAKER_DISABLED:
                 # auth 禁用的换 key 自愈：401/403 的恢复方式是「修好凭证」，
                 # 而配 key 是离散事件——指纹变了就说明修好了，立即放行，
                 # 不用等 1h 冷却（与 quota 的 key_fp 自愈同一思路）。
@@ -224,7 +228,7 @@ class CircuitBreaker:
                     if cur and cur != st.get("key_fp", ""):
                         def _key_healed() -> None:
                             fresh = self._engines.get(engine) or {}
-                            fresh.update({"state": "closed", "failures": 0,
+                            fresh.update({"state": engine_states.BREAKER_CLOSED, "failures": 0,
                                           "opens": 0, "auth_streak": 0})
                             fresh.pop("auth_disabled", None)
                             fresh.pop("key_fp", None)
@@ -240,14 +244,14 @@ class CircuitBreaker:
                         # self._engines，闭包里的旧 st 会把另一进程刚落盘的
                         # 状态盖回去（017b01a 修的那类丢更新在 allow() 的漏网处）。
                         fresh = self._engines.get(engine) or {}
-                        fresh["state"] = "half_open"
+                        fresh["state"] = engine_states.BREAKER_HALF_OPEN
                         fresh["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
                         self._engines[engine] = fresh
                     self._mutate_locked(_reenable_probe)
                     return True, "half_open_reenable"
                 return False, "auto_disabled"
 
-            if state == "open":
+            if state == engine_states.BREAKER_OPEN:
                 # 冷却期已过 → half-open 探测（除非已连续多次 open 触发自动禁用）
                 if time.time() - opened_at >= OPEN_SECONDS:
                     opens = int(st.get("opens") or 0)
@@ -259,7 +263,7 @@ class CircuitBreaker:
                     if can_disable:
                         def _auto_disable() -> None:
                             fresh = self._engines.get(engine) or {}  # 同上：锁内重读
-                            fresh["state"] = "disabled"
+                            fresh["state"] = engine_states.BREAKER_DISABLED
                             fresh["disabled_at"] = time.time()
                             self._engines[engine] = fresh
                         self._mutate_locked(_auto_disable)
@@ -267,13 +271,13 @@ class CircuitBreaker:
                     # half-open：允许一次探测
                     def _half_open() -> None:
                         fresh = self._engines.get(engine) or {}  # 同上：锁内重读
-                        fresh["state"] = "half_open"
+                        fresh["state"] = engine_states.BREAKER_HALF_OPEN
                         self._engines[engine] = fresh
                     self._mutate_locked(_half_open)
                     return True, "half_open_probe"
                 remain = int(OPEN_SECONDS - (time.time() - opened_at))
                 return False, f"circuit_open:{remain}s"
-            return True, "closed"
+            return True, engine_states.BREAKER_CLOSED
 
     def _mutate_locked(self, mutator) -> None:
         """跨进程安全的「重读 → 改 → 写入」序列（与 quota._mutate_locked 同形）。
@@ -327,10 +331,10 @@ class CircuitBreaker:
             if st is None:
                 # 首次成功也是一次「交出非空结果」：基线在此立起（record_success
                 # 只在交出可用结果时被调用，见 engine_dispatch 的贡献者判据）。
-                self._engines[engine] = {"state": "closed", "failures": 0, "opens": 0,
+                self._engines[engine] = {"state": engine_states.BREAKER_CLOSED, "failures": 0, "opens": 0,
                                          "ever_nonempty": True}
                 return
-            if (st.get("state", "closed") == "closed"
+            if (st.get("state", engine_states.BREAKER_CLOSED) == engine_states.BREAKER_CLOSED
                     and not st.get("failures")
                     and not st.get("opens")
                     and not st.get("empty_streak")
@@ -350,7 +354,7 @@ class CircuitBreaker:
 
         def _m() -> None:
             self._engines[engine] = {
-                "state": "closed",
+                "state": engine_states.BREAKER_CLOSED,
                 "failures": 0,
                 "opens": 0,          # 重置连续 open 计数
                 # ever_nonempty 是基线（「这引擎交出过非空结果」），粘性字段：
@@ -363,7 +367,7 @@ class CircuitBreaker:
             }
         self._mutate_locked(_m)
 
-    def record_failure(self, engine: str, kind: str = "error",
+    def record_failure(self, engine: str, kind: str = engine_states.BREAKER_KIND_ERROR,
                        attribution: dict[str, Any] | None = None,
                        query: str = "") -> None:
         """kind: error | timeout | empty | blocked | rate-limited
@@ -402,8 +406,8 @@ class CircuitBreaker:
         真坏掉的引擎于是持续被派发。这与 quota._mutate_locked 同一处理。
         """
         with self._lock:
-            st = self._engines.get(engine) or {"failures": 0, "state": "closed"}
-            drives_opens = kind not in ("empty", "blocked", "rate-limited")
+            st = self._engines.get(engine) or {"failures": 0, "state": engine_states.BREAKER_CLOSED}
+            drives_opens = kind not in engine_states.NON_DRIVING_BREAKER_KINDS
             # auth/quota 归因直达禁用（2026-11-08）：结构性失败（401/403/410、
             # 配额耗尽）不会因等待自愈，走 opens 阶梯只是反复付无效 RTT
             # （rerank:bocha 实测 opens=18）。连续 AUTH_DISABLE_AFTER 次 auth
@@ -417,14 +421,14 @@ class CircuitBreaker:
                 # 是查询级/源站级信号，对 auth 是否修好无证据，不清不进。
                 st["auth_streak"] = 0
             if (st.get("auth_streak", 0) >= AUTH_DISABLE_AFTER
-                    and st.get("state") != "disabled"):
-                st["state"] = "disabled"
+                    and st.get("state") != engine_states.BREAKER_DISABLED):
+                st["state"] = engine_states.BREAKER_DISABLED
                 st["disabled_at"] = time.time()
                 st["auth_disabled"] = True
                 st["key_fp"] = _engine_key_fp_safe(engine)
             # empty 权重低：两次 empty 才算一次 failure 贡献；同时按查询指纹
             # 记近期空结果，供基线破位判定（跨查询去重）
-            if kind == "empty":
+            if kind == engine_states.BREAKER_KIND_EMPTY:
                 st["empty_streak"] = int(st.get("empty_streak") or 0) + 1
                 fp = ""
                 if query:
@@ -448,10 +452,10 @@ class CircuitBreaker:
             # 还占主位阻塞 6s。仅 error/timeout 驱动稳定 state 切换（空结果由
             # 负缓存短 TTL 保底）。2026-08 修复；blocked 2026-09 并入同语义。
             # 已因 auth 直达 disabled 的不再被 opens 块盖回 open（禁用优先）。
-            if (drives_opens and st.get("state") != "disabled"
+            if (drives_opens and st.get("state") != engine_states.BREAKER_DISABLED
                     and (st["failures"] >= FAILURE_THRESHOLD
-                         or st.get("state") == "half_open")):
-                st["state"] = "open"
+                         or st.get("state") == engine_states.BREAKER_HALF_OPEN)):
+                st["state"] = engine_states.BREAKER_OPEN
                 st["opened_at"] = time.time()
                 # 连续 open 计数：仅 error/timeout 计入（引擎级故障），
                 # empty 不计入，避免「查询无结果」被误判为引擎持续故障
@@ -463,7 +467,7 @@ class CircuitBreaker:
 
         def _m() -> None:
             fresh = {
-                "state": "closed", "failures": 0, "opens": 0,
+                "state": engine_states.BREAKER_CLOSED, "failures": 0, "opens": 0,
                 "last_ok": time.time(), "reenabled_at": time.time(),
             }
             # ever_nonempty 是历史基线，与 reenable 同为粘性（同 revive 口径）：
@@ -487,10 +491,10 @@ class CircuitBreaker:
         with self._lock:
             self._fresh_locked()
             st = self._engines.get(engine) or {}
-            cleared = {"had_state": st.get("state", "closed"),
+            cleared = {"had_state": st.get("state", engine_states.BREAKER_CLOSED),
                        "auth_disabled": bool(st.get("auth_disabled")),
                        "suspected_stale": self._suspected_stale_locked(st)}
-            base = {"state": "closed", "failures": 0, "opens": 0,
+            base = {"state": engine_states.BREAKER_CLOSED, "failures": 0, "opens": 0,
                     "last_ok": time.time(), "revived_at": time.time()}
             if st.get("ever_nonempty"):
                 base["ever_nonempty"] = True
@@ -519,7 +523,7 @@ class CircuitBreaker:
             return
 
         def _m() -> None:
-            st = self._engines.get(engine) or {"failures": 0, "state": "closed"}
+            st = self._engines.get(engine) or {"failures": 0, "state": engine_states.BREAKER_CLOSED}
             st["last_attribution"] = dict(attribution)
             self._engines[engine] = st
 
@@ -530,7 +534,7 @@ class CircuitBreaker:
         with self._lock:
             self._fresh_locked()
             return [e for e, st in self._engines.items()
-                    if st.get("state") == "disabled"]
+                    if st.get("state") == engine_states.BREAKER_DISABLED]
 
     # ── 查询级负缓存 ────────────────────────────────────────────────────────
 
@@ -570,7 +574,7 @@ class CircuitBreaker:
 
     def stats(self) -> dict[str, Any]:
         with self._lock:
-            open_engines = [e for e, s in self._engines.items() if s.get("state") == "open"]
+            open_engines = [e for e, s in self._engines.items() if s.get("state") == engine_states.BREAKER_OPEN]
             return {
                 "open_engines": open_engines,
                 "tracked": len(self._engines),

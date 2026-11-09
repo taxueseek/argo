@@ -24,6 +24,7 @@ import os
 import re
 import time
 from typing import Any
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 from engine_env import env_flag, get_env
 from url_canon import canonical_url as _canonical_url_impl
@@ -36,7 +37,6 @@ from url_canon import canonical_url as _canonical_url_impl
 # RecursionError 后被 except 吞掉、静默退化成 Jaccard——去重阈值 0.85 之下
 # Jaccard 0.88 会把 20 条不同结果并成 1 条（minhash 只有 0.375）。
 _QUERY_SIMILARITY = None
-
 
 def _resolve_query_similarity():
     """取 cache.query_similarity（首次调用导入，之后走模块级记忆）。"""
@@ -74,17 +74,14 @@ from rank_signals import (  # noqa: E402,F401
     title_stuffing_penalty as _title_stuffing_penalty,
 )
 
-
 # 中文/英文混合分词用的正则，延迟编译（首次 _tokens 时建）
 _CJK_OR_WORD = None
 
 # 域相关性地板表（按域/源），延迟加载一次
 
-
 def _canonical_url(url: str) -> str:
     """URL 归一化（薄转发到 url_canon 唯一来源）。"""
     return _canonical_url_impl(url)
-
 
 _ENGINE_FUSION_WEIGHTS: dict[str, float] = {
     # 权威百科/学术/官方
@@ -115,13 +112,10 @@ _ENGINE_FUSION_WEIGHTS: dict[str, float] = {
     "baidu_hot": 0.8, "toutiao_hot": 0.8, "bilibili_hot": 0.8,
 }
 
-
 _rel_factor_cache: dict[str, tuple[float, float]] = {}
-
 
 _REL_FACTOR_TTL = 30.0
 _MAX_CACHE_SIZE = 256
-
 
 def _evict_cache(cache: dict, now: float) -> None:
     """缓存淘汰：先清除过期条目，如果仍超上限则清除最老的条目。"""
@@ -137,9 +131,7 @@ def _evict_cache(cache: dict, now: float) -> None:
         for k in sorted_keys[:len(cache) - _MAX_CACHE_SIZE + 1]:
             del cache[k]
 
-
 _weight_cache: dict[tuple[str, str], tuple[float, float]] = {}
-
 
 def _single_reliability(engine: str) -> float:
     now = time.time()
@@ -151,11 +143,11 @@ def _single_reliability(engine: str) -> float:
         from circuit_breaker import get_breaker
         st = get_breaker().status(engine)
         state = st.get("state")
-        if state == "disabled":
+        if state == engine_states.BREAKER_DISABLED:
             factor = 0.5
-        elif state == "open":
+        elif state == engine_states.BREAKER_OPEN:
             factor = 0.7
-        elif state == "half_open":
+        elif state == engine_states.BREAKER_HALF_OPEN:  # 半开探测中：轻降权
             factor = 0.85
         failures = int(st.get("failures") or 0)
         if failures >= 5:
@@ -169,7 +161,6 @@ def _single_reliability(engine: str) -> float:
     _evict_cache(_rel_factor_cache, now)
     _rel_factor_cache[engine] = (factor, now + _REL_FACTOR_TTL)
     return factor
-
 
 def _engine_weight(source: str, lang: str | None = None) -> float:
     """按引擎来源返回融合权重（source 可能含 'local_bing/sina_quote' 合并形式）。
@@ -221,7 +212,6 @@ def _engine_weight(source: str, lang: str | None = None) -> float:
         _weight_cache[ck] = (out, now + _REL_FACTOR_TTL)
     return out
 
-
 def invalidate_engine_weight_cache() -> None:
     """清空 _engine_weight 结果缓存。
 
@@ -230,7 +220,6 @@ def invalidate_engine_weight_cache() -> None:
     ——两者 TTL 相同（_REL_FACTOR_TTL），不会互相冻结。
     """
     _weight_cache.clear()
-
 
 def _rrf_weighted_default() -> bool:
     """RRF 是否默认按引擎加权（WG-RRF）。
@@ -254,7 +243,6 @@ def _rrf_weighted_default() -> bool:
     # os.environ 的分支两条路径两份语义。统一后全仓一处判据。
     from engine_env import env_flag
     return env_flag("ARGO_RRF_WEIGHTED", default=True)
-
 
 def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
               weighted: bool | None = None,
@@ -285,7 +273,6 @@ def rrf_merge(ranked_lists: list[list[dict[str, Any]]], k: int = 60,
         _engine_weight=_engine_weight,
     )
 
-
 def _content_similarity(a: str, b: str) -> float:
     """标题+片段的 minhash 相似度（复用 cache.query_similarity，失败回退 Jaccard）。"""
     if not a or not b:
@@ -302,12 +289,10 @@ def _content_similarity(a: str, b: str) -> float:
         return 0.0
     return len(sa & sb) / len(sa | sb) if sa | sb else 0.0
 
-
 def _content_sig(r: dict[str, Any]) -> str:
     # 站后缀先剥（normalize_title_suffix）：跨站同文对差异几乎全在结尾后缀，不剥 minhash 过不了阈值。
     title = normalize_title_suffix(r.get("title", "") or "")
     return f"{title} {r.get('snippet', '') or ''}".strip()
-
 
 def _distinct_data_rows(ka: str, kb: str) -> bool:
     """两条结果的规范 URL 是否「同文档、不同查询」——即同一资源的不同数据行。
@@ -323,16 +308,13 @@ def _distinct_data_rows(ka: str, kb: str) -> bool:
         return False
     return pa.query != pb.query
 
-
 _RERANK_POOL_FACTOR = 3
 
 _RERANK_POOL_MIN = 15
 
-
 def _rerank_pool_limit(max_results: int) -> int:
     """精排池容量（去重提前停与放宽截断的唯一来源）。"""
     return max(max_results * _RERANK_POOL_FACTOR, _RERANK_POOL_MIN)
-
 
 def minhash_dedupe(
     results: list[dict[str, Any]], threshold: float = 0.85,
@@ -389,7 +371,6 @@ def minhash_dedupe(
             kept_keys.append((sig, rkey))
     return kept, removed
 
-
 def deduplicate_by_url(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """URL 去重（归一化键）。"""
     seen: set[str] = set()
@@ -405,7 +386,6 @@ def deduplicate_by_url(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
             seen.add(key)
             out.append(r)
     return out
-
 
 # 「结果是否以目标语言书写」判定表：lang -> (命中, 排除)。
 # 命中 = 目标语言的特征码位；排除 = 与之共享码位、必须让位的语言特征。
@@ -435,7 +415,6 @@ _LANG_SCRIPT: dict[str, tuple[str, str | None]] = {
     "th": (r"[\u0e00-\u0e7f]", None),                      # 泰
     "hi": (r"[\u0900-\u097f]", None),                      # 天城文
 }
-
 
 def _lang_prefer_rerank(results: list[dict[str, Any]],
                         primary_lang: str | None) -> list[dict[str, Any]]:
@@ -471,9 +450,7 @@ def _lang_prefer_rerank(results: list[dict[str, Any]],
     # stable sort：属于目标语言的结果在前，其余保持原 RRF 顺序
     return sorted(results, key=_key)
 
-
 _RERANK_BREAKER_KEY = "rerank:bocha"
-
 
 def _rerank_breaker():
     """精排端点的熔断器；不可用时返回 None（精排降级，不阻断搜索）。"""
@@ -482,7 +459,6 @@ def _rerank_breaker():
         return get_breaker()
     except Exception:
         return None
-
 
 def _note_rerank_failure(breaker, category: str, detail: str) -> None:
     """把精排端点的失败写进熔断器（含归因）。"""
@@ -496,7 +472,6 @@ def _note_rerank_failure(breaker, category: str, detail: str) -> None:
         )
     except Exception:
         pass
-
 
 def rerank_results(query: str, results: list[dict[str, Any]],
                    top_n: int = 10, timeout: float = 5
@@ -601,7 +576,6 @@ def rerank_results(query: str, results: list[dict[str, Any]],
         return results, "fallback"
     return results, "fallback"
 
-
 def _tokens(text: str) -> list[str]:
     """轻量分词：中文单字 + 英文单词，统一小写（复用 tfidf 风格）。
 
@@ -615,10 +589,8 @@ def _tokens(text: str) -> list[str]:
         _CJK_OR_WORD = _re.compile(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+")
     return [t for t in _CJK_OR_WORD.findall((text or "").lower())]
 
-
 def _bigrams(tokens: list[str]) -> set[str]:
     return {f"{tokens[i]}_{tokens[i+1]}" for i in range(len(tokens) - 1)}
-
 
 def _jaccard(a: set[str], b: set[str]) -> float:
     if not a or not b:
@@ -626,8 +598,6 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     inter = len(a & b)
     union = len(a | b)
     return inter / union if union else 0.0
-
-
 
 def _consensus_prior(results: list[dict[str, Any]]) -> list[float]:
     """融合先验：把 RRF 分与跨引擎共识数归一化成 [0,1]（逐条保持一致 results）。
@@ -663,7 +633,6 @@ def _consensus_prior(results: list[dict[str, Any]]) -> list[float]:
         # 两个子信号取均值：跨口径独立共识额外获 0.15 异质印证增益
         priors.append(0.5 * rrf_norm + 0.5 * cons_norm)
     return priors
-
 
 def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
                           domain: str = "general", top_n: int = 10
@@ -847,7 +816,6 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
 
     return ranked[:top_n]
 
-
 def _apply_consensus_and_sort(merged: list[dict[str, Any]],
                               max_results: int) -> list[dict[str, Any]]:
     """融合层最终排序：按五维 rerank 的 score 降序并截断。
@@ -864,7 +832,6 @@ def _apply_consensus_and_sort(merged: list[dict[str, Any]],
     """
     merged.sort(key=lambda r: abs(r.get("score", 0) or 0), reverse=True)
     return merged[:max(0, int(max_results or 0))]
-
 
 def _attach_selection_signals(merged: list[dict[str, Any]], mode: str,
                               depth: str) -> None:
@@ -923,7 +890,6 @@ def _attach_selection_signals(merged: list[dict[str, Any]], mode: str,
         import logging
         logging.getLogger("unified_search").debug(f"可信度评分跳过: {type(e).__name__}")
 
-
 def _align_facts_safe(merged: list[dict[str, Any]], mode: str,
                       depth: str) -> dict[str, Any] | None:
     """关键事实交叉标记（P0-004）。仅 deep/auto 且结果 ≥3；fast 跳过。
@@ -964,11 +930,9 @@ def _align_facts_safe(merged: list[dict[str, Any]], mode: str,
             f"事实交叉标记跳过: {type(e).__name__}")
         return None
 
-
 def _domain_matches(host: str, domain: str) -> bool:
     """host 等于域或是其子域（github.com 命中 api.github.com）。"""
     return host == domain or host.endswith("." + domain)
-
 
 def filter_results_by_domains(
     results: list[Any] | None,

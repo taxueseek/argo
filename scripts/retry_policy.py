@@ -19,6 +19,7 @@ from typing import Any
 
 from cache_guard import _QUOTA_ERROR_KEYWORDS
 from engine_failure import NOTE_STATUS as _NOTE_STATUS
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 # 拦截页特征词（唯一来源）：error 文本里出现即判 blocked。HTML 引擎的反爬
 # 命中没有 error 文本（静默空结果），走 engines_base 的归因寄存器；
@@ -33,7 +34,7 @@ _BLOCKED_ERROR_KEYWORDS = (
 #——配额耗尽重试仍是耗尽，鉴权重试仍是 401，反爬重试仍撞同一堵墙。
 # 与 dsh-free-search 的 failure-aware fallback 同构（quota/auth 冷却到会话
 # 结束、bot-wall 短退避，只有 transient 才重试一次）。
-NON_RETRYABLE_STATUS = frozenset({"quota-exhausted", "auth-failed", "blocked"})
+NON_RETRYABLE_STATUS = engine_states.NON_RETRYABLE_OUTCOMES
 
 # 归因寄存器（engines_base.note_failure）的类别 → 是否确定性失败。
 # 与上面的状态表同义，只是入口不同：HTML 抓取类引擎失败时往往返回空列表，
@@ -55,16 +56,16 @@ def classify_error_status(message: Any) -> str:
     """
     m = str(message or "").lower()
     if "timeout" in m or "timed out" in m:
-        return "timeout"
+        return engine_states.OUTCOME_TIMEOUT
     if any(k in m for k in _QUOTA_ERROR_KEYWORDS):
-        return "quota-exhausted"
+        return engine_states.OUTCOME_QUOTA_EXHAUSTED
     if "rate" in m or "429" in m:
-        return "rate-limited"
+        return engine_states.OUTCOME_RATE_LIMITED
     if any(k in m for k in _BLOCKED_ERROR_KEYWORDS):
-        return "blocked"
+        return engine_states.OUTCOME_BLOCKED
     if "auth" in m or "401" in m or "403" in m:
-        return "auth-failed"
-    return "error"
+        return engine_states.OUTCOME_AUTH_FAILED
+    return engine_states.OUTCOME_ERROR
 
 
 def is_retryable_failure(res: list[Any] | None,

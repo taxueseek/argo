@@ -51,8 +51,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-# 渲染层（第二级A）：TinyFish 直连渲染，独立模块以保持本文件聚焦主链调度
+# 渲染层（第二级A）：TinyFish 直连渲染，独立模块以保持本文件聚焦主链调度；
+# engine_states 是状态词表唯一真源（2026-11-09 收口）
 import fetch_render_tinyfish as _render_tinyfish
+import engine_states
 
 # 解码统一入口（2026-10-26，charset 是只依赖 re 的叶子模块，顶层导入无负担）：
 # urllib 兜底车道与主链共享「头声明 > meta 嗅探 > 猜测链」，GBK 老站不再满屏 U+FFFD
@@ -182,10 +184,7 @@ _EMPTY_SHELL = re.compile(
 )
 
 
-# 已产出 Markdown 的抓取方式：内容已由站点或阅读器转好，没有 HTML 壳可言。
-_MARKDOWN_METHODS = frozenset({"http_md", "md_variant", "llms_txt",
-                               "jina", "jina_reader", "parallel",
-                               "parallel_mcp", "tinyfish"})
+_MARKDOWN_METHODS = engine_states.MARKDOWN_FETCH_METHODS  # 词表真源见 engine_states
 
 
 def _needs_browser(result: dict) -> bool:
@@ -1026,17 +1025,17 @@ def _parallel_mcp_fetch(url: str, max_chars: int = 8000,
     except Exception as e:
         return {"url": url, "title": "", "content": "", "html": "", "length": 0,
                 "success": False, "error": f"parallel_mcp: {e}",
-                "fetch_method": "parallel_mcp"}
+                "fetch_method": engine_states.FETCH_PARALLEL_MCP}
     if resp.get("status", 0) != 200 or not resp.get("text"):
         return {"url": url, "title": "", "content": "", "html": "", "length": 0,
                 "success": False, "error": f"parallel_mcp: HTTP {resp.get('status')}",
-                "fetch_method": "parallel_mcp"}
+                "fetch_method": engine_states.FETCH_PARALLEL_MCP}
     try:
         data = json.loads(resp["text"])
     except (ValueError, TypeError):
         return {"url": url, "title": "", "content": "", "html": "", "length": 0,
                 "success": False, "error": "parallel_mcp: 响应非 JSON",
-                "fetch_method": "parallel_mcp"}
+                "fetch_method": engine_states.FETCH_PARALLEL_MCP}
     # MCP 错误显式记录（fetch 链语义：失败放行后级，但 error 留痕可归因）
     r = data.get("result") or {}
     mcp_err = None
@@ -1061,12 +1060,12 @@ def _parallel_mcp_fetch(url: str, max_chars: int = 8000,
         return {"url": url, "title": "", "content": "", "html": "", "length": 0,
                 "success": False,
                 "error": f"parallel_mcp: {mcp_err or '上游无结果'}",
-                "fetch_method": "parallel_mcp"}
+                "fetch_method": engine_states.FETCH_PARALLEL_MCP}
     item = items[0]
     # full_content=true → 整页 markdown；缺省（上游变更/未开启）退回 excerpts 拼接
     raw = str(item.get("full_content") or "") or "\n\n".join(
         str(e) for e in (item.get("excerpts") or []))
-    result = _make_result(url, "", max_chars, "parallel_mcp")
+    result = _make_result(url, "", max_chars, engine_states.FETCH_PARALLEL_MCP)
     result["content"] = raw[:max_chars]
     result["length"] = len(result["content"])
     result["title"] = str(item.get("title") or "")[:200]
@@ -1284,7 +1283,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 "url": url, "title": "", "content": "",
                 "html": "", "length": 0, "success": False,
                 "error": f"URL 被 SSRF 防护拦截: {reason}",
-                "fetch_method": "blocked",
+                "fetch_method": engine_states.FETCH_BLOCKED,
             }, need_html)
     except ImportError:
         pass
@@ -1346,7 +1345,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 "html": "",
                 "length": int(_wx.get("char_count") or 0),
                 "success": True,
-                "fetch_method": "wechat:" + str(
+                "fetch_method": engine_states.FETCH_WECHAT + str(
                     _wx.get("fetch_method") or "http_direct"),
                 "author": _wx.get("author") or "",
                 "publish_time": _wx.get("publish_time") or "",
@@ -1365,7 +1364,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             "length": 0, "success": False,
             "error": (_wx or {}).get("error")
                      or "微信公众号文章抓取失败（HTTP/浏览器/搜狗三通道均未取到正文）",
-            "fetch_method": "wechat_failed",
+            "fetch_method": engine_states.FETCH_WECHAT_FAILED,
             "cached": False,
         }, need_html)
 
@@ -1614,7 +1613,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                             result = jr
                     # tinyfish 免费渲染（返回 clean Markdown，含 JS 执行）优先于本地 Chrome；
                     # 只产 markdown 无 raw html，爬取（need_html）跳过，失败自动回退。
-                    if result.get("fetch_method") != "jsrun_challenge" and _tinyfish_enabled() and not need_html:
+                    if result.get("fetch_method") != engine_states.FETCH_JSRUN_CHALLENGE and _tinyfish_enabled() and not need_html:
                         # tinyfish 免费渲染（返回 clean Markdown，含 JS 执行）优先于本地 Chrome；
                         # 只产 markdown 无 raw html，爬取（need_html）跳过，失败自动回退。
                         tf = _tinyfish_fetch(url, max_chars,
@@ -1772,7 +1771,8 @@ def _full_view(url: str, args) -> dict:
         "total_length": len(text),
         "offset": start,
         "full_source": "archive" if from_archive else "refetch",
-        "fetch_method": "fulltext" if from_archive else r.get("fetch_method", "full"),
+        "fetch_method": (engine_states.FETCH_FULLTEXT if from_archive
+                      else r.get("fetch_method", "full")),
     })
     return out
 

@@ -42,33 +42,29 @@
 
 from __future__ import annotations
 
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
+
 import re
 from typing import Any
 
 # 分类常量
-DEPENDENCY = "dependency"
-AUTH = "auth"
-RATE_LIMITED = "rate_limited"
-QUOTA_EXHAUSTED = "quota_exhausted"
-BLOCKED = "blocked"
-UPSTREAM = "upstream"
-NETWORK = "network"
-UNKNOWN = "unknown"
+DEPENDENCY = engine_states.FAILURE_DEPENDENCY
+AUTH = engine_states.FAILURE_AUTH
+RATE_LIMITED = engine_states.FAILURE_RATE_LIMITED
+QUOTA_EXHAUSTED = engine_states.FAILURE_QUOTA_EXHAUSTED
+BLOCKED = engine_states.FAILURE_BLOCKED
+UPSTREAM = engine_states.FAILURE_UPSTREAM
+NETWORK = engine_states.FAILURE_NETWORK
+UNKNOWN = engine_states.FAILURE_UNKNOWN
 
 # 归因类别 → 单引擎 outcome.status（唯一来源）。
 # engine_dispatch 用它把「为什么坏」落成可观测状态；retry_policy 反过来用
 # 它派生「哪些类别不重试」。两处各抄一份会在同一次失败上给出两种判断
 # （2026-10-26 审查发现的重复真源）。
-NOTE_STATUS: dict[str, str] = {
-    AUTH: "auth-failed",            # 凭证失效/未登录
-    RATE_LIMITED: "rate-limited",   # 源端限流
-    QUOTA_EXHAUSTED: "quota-exhausted",  # 余额/套餐耗尽（停用，非短冷却）
-    BLOCKED: "blocked",             # 反爬/拦截页
-    DEPENDENCY: "error",            # 缺后端命令（requires 未满足）
-    UPSTREAM: "error",              # 上游改版/页面结构变化
-    NETWORK: "error",               # 连接失败/超时（超时再细分）
-    UNKNOWN: "error",               # 信息不足（含非 200 状态码）
-}
+# 归因类别 → outcome status：从 engine_states.CATEGORY_TO_OUTCOME 派生
+# （2026-11-09 收口）。此前手写字面量，engine_dispatch 的 _BREAKER_FAIL_KIND
+# 也手抄一份，两处各改一套词表时同一次失败会给出两种判断。
+NOTE_STATUS: dict[str, str] = dict(engine_states.CATEGORY_TO_OUTCOME)
 
 # 各类对应的建议动作
 _ACTIONS = {

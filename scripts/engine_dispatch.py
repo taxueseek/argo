@@ -46,22 +46,15 @@ from retry_policy import (
 )
 
 # 失败原因分类 → 引擎结果 status 的对照表（唯一来源在 engine_failure）。
-# 未列出的类别经 .get(cat, "error") 归为 error：以后新增失败类别时默认可见，
-# 不必再回来补白名单。文本里出现超时特征时再细分为 timeout（见 run_one）。
+# 未列出的类别归为 error，新增类别默认可见，不必回来补白名单。
 from engine_failure import NOTE_STATUS as _NOTE_STATUS
+# 状态词表唯一真源（2026-11-09 收口）：outcome / breaker kind / 重试判据
+import engine_states as _s
 
-# 「这次调用对最终答案有贡献」的 outcome 状态（唯一来源）。
-# `no-results` / `skipped-*` / `timeout` / `error` 一律不算——它们消耗了时间但
-# 没有交出任何可用结果。wasted 记账与 timing 可观测面共用这张表。
-_CONTRIBUTING_STATUS = frozenset({"ok", "ok-cached", "partial"})
-
-# 非贡献结局 status → 熔断器 failure kind 映射（未列出的状态归为 "error"）。
-_BREAKER_FAIL_KIND = {
-    "no-results": "empty",
-    "timeout": "timeout",
-    "blocked": "blocked",
-    "rate-limited": "rate-limited",
-}
+# 「这次调用对最终答案有贡献」的 outcome 状态（wasted 记账与 timing 共用）。
+_CONTRIBUTING_STATUS = _s.CONTRIBUTING_OUTCOMES
+# 非贡献结局 → 熔断器 failure kind（唯一来源）。
+_BREAKER_FAIL_KIND = dict(_s.OUTCOME_TO_BREAKER_KIND)
 
 # 并发上限的兜底值 = 原硬编码的 3。配置缺失 / 非法 / 读不到时用它，
 # 保证「接上配置」这件事不会改变任何既有环境下的行为。
@@ -171,7 +164,7 @@ def classify_engine_outcome(eng: str, res: list[dict[str, Any]],
         }
     if not res:
         return {
-            "engine": eng, "status": "no-results",
+            "engine": eng, "status": _s.OUTCOME_NO_RESULTS,
             "results_count": 0, "latency_ms": latency_ms,
         }
     errors = [r for r in res if isinstance(r, dict) and "error" in r]
@@ -185,11 +178,11 @@ def classify_engine_outcome(eng: str, res: list[dict[str, Any]],
         }
     if goods and errors:
         return {
-            "engine": eng, "status": "partial",
+            "engine": eng, "status": _s.OUTCOME_PARTIAL,
             "results_count": len(goods), "latency_ms": latency_ms,
         }
     return {
-        "engine": eng, "status": "ok",
+        "engine": eng, "status": _s.OUTCOME_OK,
         "results_count": len(goods), "latency_ms": latency_ms,
     }
 
@@ -396,7 +389,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         if missing_env:
             lat = int((_now() - t_eng) * 1000)
             outcome = classify_outcome(
-                eng, [], lat, status_hint="skipped-missing-env")
+                eng, [], lat, status_hint=_s.OUTCOME_SKIPPED_MISSING_ENV)
             outcome["detail"] = (
                 f"缺少环境变量：{' / '.join(missing_env)}（配置后重试）")
             return eng, [], outcome, lat
@@ -416,7 +409,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         if eng in _exhausted_marks:
             lat = int((_now() - t_eng) * 1000)
             outcome = classify_outcome(
-                eng, [], lat, status_hint="skipped-quota-exhausted")
+                eng, [], lat, status_hint=_s.OUTCOME_SKIPPED_QUOTA)
             _mark = _exhausted_marks.get(eng) or {}
             _until = float(_mark.get("until") or 0)
             _until_s = (time.strftime("%m-%d %H:%M", time.localtime(_until))
@@ -432,16 +425,14 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             allowed, reason = breaker.allow(eng)
             if not allowed:
                 lat = int((_now() - t_eng) * 1000)
-                outcome = classify_outcome(eng, [], lat, status_hint="skipped-circuit-open")
+                outcome = classify_outcome(eng, [], lat, _s.OUTCOME_SKIPPED_CIRCUIT_OPEN)
                 outcome["detail"] = reason
                 return eng, [], outcome, lat
             neg = breaker.get_negative(query, eng)
             if neg:
                 lat = int((_now() - t_eng) * 1000)
-                outcome = classify_outcome(
-                    eng, [], lat, status_hint="no-results-cached",
-                )
-                outcome["detail"] = neg.get("status", "no-results")
+                outcome = classify_outcome(eng, [], lat, _s.OUTCOME_NO_RESULTS_CACHED)
+                outcome["detail"] = neg.get("status", _s.OUTCOME_NO_RESULTS)
                 return eng, [], outcome, lat
 
         # per-engine 缓存
@@ -461,14 +452,15 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     if isinstance(r, dict):
                         r.setdefault("_engine", eng)
                 outcome = classify_outcome(eng, eng_hit, lat)
-                outcome["status"] = "ok-cached" if eng_hit else "no-results-cached"
+                outcome["status"] = (_s.OUTCOME_OK_CACHED if eng_hit
+                                         else _s.OUTCOME_NO_RESULTS_CACHED)
                 return eng, eng_hit, outcome, lat
 
         # 预算：缓存命中不收费，放在缓存之后；判定/文案在 budget.py。
         _budget_err = over_budget_error(eng)
         if _budget_err:
             lat = int((_now() - t_eng) * 1000)
-            outcome = classify_outcome(eng, [], lat, status_hint="skipped-budget")
+            outcome = classify_outcome(eng, [], lat, _s.OUTCOME_SKIPPED_BUDGET)
             outcome["detail"] = _budget_err
             return eng, [], outcome, lat
 
@@ -490,7 +482,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
             # 避免 6s 探测阻塞串行/并行主路径（慢源拖尾主因）。2026-08 修复。
             if breaker is not None:
                 try:
-                    if breaker.status(eng).get("state") == "half_open":
+                    if breaker.status(eng).get("state") == _s.BREAKER_HALF_OPEN:
                         cap = min(cap, 2.0)
                 except Exception as _exc:
                     # 读失败按默认 cap 处理（fail-open），但必须留痕：
@@ -530,14 +522,18 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         # （不累计 opens、负缓存用 EMPTY_NEGATIVE_TTL 45s 而非 30s）。
         _note = pop_failure_note(eng)
         _attr: dict[str, Any] | None = None
-        if _note and outcome["status"] in ("no-results", "error", "auth-failed"):
+        if _note and outcome["status"] in (
+                _s.OUTCOME_NO_RESULTS, _s.OUTCOME_ERROR,
+                _s.OUTCOME_AUTH_FAILED):
             _text = f"{_note.get('reason', '')} {_note.get('detail', '')}".strip()
-            _mapped = _NOTE_STATUS.get(str(_note.get("category") or ""), "error")
-            if _mapped == "error" and (
+            _mapped = _NOTE_STATUS.get(str(_note.get("category") or ""),
+                                       _s.OUTCOME_ERROR)
+            if _mapped == _s.OUTCOME_ERROR and (
                     "timeout" in _text.lower() or "timed out" in _text.lower()):
-                _mapped = "timeout"
+                _mapped = _s.OUTCOME_TIMEOUT
             # auth 只在引擎确实无输出时升级：已有明确 error 时不改写（原语义）
-            if not (_mapped == "auth-failed" and outcome["status"] != "no-results"):
+            if not (_mapped == _s.OUTCOME_AUTH_FAILED
+                    and outcome["status"] != _s.OUTCOME_NO_RESULTS):
                 outcome["status"] = _mapped
             outcome["detail"] = _text or outcome.get("detail")
         if _note:
@@ -550,7 +546,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 _attr = None
         goods = [r for r in res if isinstance(r, dict) and "error" not in r]
         quota_batch.add(eng, bool(goods))
-        if outcome["status"] == "quota-exhausted":
+        if outcome["status"] == _s.OUTCOME_QUOTA_EXHAUSTED:
             # 远端配额耗尽：交由 quota 状态机接管（周期边界自愈），
             # 不计入下面的健康熔断——配额问题不是引擎健康问题
             note_quota_exhausted(eng, outcome.get("detail") or "")
@@ -562,12 +558,13 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 # partial 是「有结果 + 有错误条目」，同样属于贡献者。
                 breaker.record_success(eng)
                 breaker.clear_negative(query, eng)
-            elif st == "quota-exhausted":
+            elif st == _s.OUTCOME_QUOTA_EXHAUSTED:
                 # 配额问题交由配额状态机接管，不计入健康熔断，但保留归因供诊断。
                 breaker.record_note(eng, _attr)
-            elif st != "skipped-quota-exhausted":
+            elif st != _s.OUTCOME_SKIPPED_QUOTA:
                 breaker.record_failure(
-                    eng, kind=_BREAKER_FAIL_KIND.get(st, "error"), attribution=_attr,
+                    eng, kind=_BREAKER_FAIL_KIND.get(st, _s.BREAKER_KIND_ERROR),
+                    attribution=_attr,
                     # query 仅 empty 用：破位判定的跨查询去重（与缓存键同源）
                     query=retrieval_query,
                 )
@@ -705,7 +702,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
         for holder, th, eng in pending:
             lat_ms = int((_now() - holder.get("t0", _now())) * 1000)
             if th.is_alive():
-                if status == "cancelled":
+                if status == _s.OUTCOME_CANCELLED:
                     # 空列表而非 error 条目：error 条目会被学习器当失败、
                     # 被 _collect_errors 当错误文本收进 errors[]
                     # 弃置的引擎白花的墙钟计入 wasted（见 abandoned_ms）：
@@ -715,18 +712,15 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     # 学习器真实成绩 + 合并写缓存，见 tail_completion）。
                     # 主响应与上面这笔 cancelled 记账逐位不变。
                     stranded.append((eng, holder, _now))
-                    _ingest(eng, [],
-                            classify_outcome(eng, [], lat_ms, "cancelled"),
-                            lat_ms)
+                    _ingest(eng, [], classify_outcome(eng, [], lat_ms, _s.OUTCOME_CANCELLED), lat_ms)
                 else:
                     # 走 _ingest 而不是手写两行收账：超时路径此前漏记 engine_latency，
                     # 而 timing.dispatch 的 engines_run / engine_sum_ms / parallel_efficiency
                     # 全是从 engine_latency 推的——一轮里引擎全部超时时，会报出「跑了 0 个
                     # 引擎」，而那恰恰是最该被看见的一轮。归一到同一处记账，以后 _ingest
                     # 再加字段，超时路径自动跟上。
-                    res = [{"error": "timeout", "source": eng}]
-                    _ingest(eng, res,
-                            classify_outcome(eng, res, lat_ms, "timeout"), lat_ms)
+                    res = [{"error": _s.OUTCOME_TIMEOUT, "source": eng}]
+                    _ingest(eng, res, classify_outcome(eng, res, lat_ms, _s.OUTCOME_TIMEOUT), lat_ms)
             else:
                 _ingest_holder(holder)
 
@@ -812,7 +806,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     first_result_at = _now()
                 if stop is not None and stop(eng, goods):
                     first_sufficient_at = _now()
-                    _settle_pending(pending, status="cancelled")
+                    _settle_pending(pending, status=_s.OUTCOME_CANCELLED)
                     return True
                 if goods and tail_grace_s > 0.0:
                     # 有东西可交付了：剩余等待收窄到宽限窗（只收紧一次，不回扩）
@@ -849,7 +843,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     stagger_rem = max(0.0, stagger_s - (_now() - last_start))
                     wait_step = min(wait_step, stagger_rem)
                 done_evt.wait(max(0.0, wait_step))
-        _settle_pending(pending, status="timeout")
+        _settle_pending(pending, status=_s.OUTCOME_TIMEOUT)
         return False
 
     if parallel and to_run and allow_early and len(to_run) > 1:

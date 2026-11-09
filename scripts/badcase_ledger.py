@@ -24,6 +24,8 @@ list、stats 与 check（发布前门禁：近 N 天新增坏例超阈值即非�
 """
 from __future__ import annotations
 
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
+
 import argparse
 import hashlib
 import json
@@ -131,7 +133,7 @@ def _rows_from_breaker(path: Path) -> list[dict[str, Any]]:
     out = []
     now = datetime.now().astimezone().isoformat(timespec="seconds")
     for name, st in sorted(engines.items()):
-        if st.get("state") == "closed":
+        if st.get("state") == engine_states.BREAKER_CLOSED:
             continue
         out.append({"kind": "breaker", "ts": now, "query": "", "engine": name,
                     "detail": (f"state={st.get('state')} "

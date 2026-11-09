@@ -50,6 +50,7 @@ from urllib.parse import quote
 from typing import Optional
 from engine_env import get_env  # 密钥别名唯一真源（漏 import 曾令全部后端 NameError）
 from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 from cli_io import dumps
 
 # ── 平台白名单 ──────────────────────────────────────────────────────────
@@ -89,7 +90,6 @@ STALE_DAYS = 365  # 距今超过该天数的岗位标记过期
 _INDEX = None
 _COUNTRIES = None
 
-
 def _clean(name: str) -> str:
     """去行政后缀：北京市→北京、内蒙古自治区→内蒙古、金平苗族瑶族傣族自治县→金平。"""
     name = re.sub(r"(维吾尔自治区|壮族自治区|回族自治区|藏族自治区|蒙古族自治区"
@@ -103,7 +103,6 @@ def _clean(name: str) -> str:
     if m:
         name = name[:m.start()]
     return name
-
 
 def _build_index() -> dict:
     """省→全省词集；市→该市+区县+省；区县→本身+市+省；海外国家→城市、城市→国家。"""
@@ -130,14 +129,12 @@ def _build_index() -> dict:
         idx.setdefault(cname, set()).update(info["cities"])
     return idx
 
-
 def _load_countries() -> dict:
     global _COUNTRIES
     if _COUNTRIES is None:
         with open(os.path.join(DATA_DIR, "countries.json"), encoding="utf-8") as f:
             _COUNTRIES = json.load(f)
     return _COUNTRIES
-
 
 def region_words(city: str) -> list:
     global _INDEX
@@ -149,7 +146,6 @@ def region_words(city: str) -> list:
     # 单字词（如「东区」→「东」）易误判其他地名，过滤
     return [w for w in words if len(w) >= 2]
 
-
 def is_overseas(city: str) -> bool:
     """city 是否命中海外国家/城市词表（用于自动启用免 key 国际源）。"""
     cdata = _load_countries()
@@ -157,7 +153,6 @@ def is_overseas(city: str) -> bool:
         if c in cdata or any(c in info["cities"] for info in cdata.values()):
             return True
     return False
-
 
 # 资讯/攻略页特征（非岗位页，strict 模式剔除）
 INFO_RE = re.compile(r"工资待遇|就业前景|如何入行|怎么样|薪资待遇|工资多少|工资高吗|"
@@ -170,7 +165,6 @@ CLOSED_RE = re.compile(r"职位已关闭|已下线|已停招|招聘已结束|暂
 # L2 中命中：摘要前 120 字符含地区词（摘要头部一般是职位信息块）
 # L3 弱命中：摘要其余位置含地区词（可能是公司简介/福利文本，strict 剔除）
 # 0  未命中
-
 
 def judge(item: dict, words: list) -> tuple:
     """返回 (level, reason)。words 为空时全部 L1（无地区约束）。
@@ -198,11 +192,9 @@ def judge(item: dict, words: list) -> tuple:
         return 2, "政府源"
     return 0, "未命中"
 
-
 # ── 时效：日期提取 + 过期标记 ───────────────────────────────────────────
 
 _DATE_RE = re.compile(r"(20\d{2})[-年./](\d{1,2})[-月./](\d{1,2})")
-
 
 def extract_date(item: dict) -> str:
     """从 date 字段 / snippet 提取 YYYY-MM-DD；无则空串。"""
@@ -217,7 +209,6 @@ def extract_date(item: dict) -> str:
         return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
     return ""
 
-
 def is_stale(dstr: str) -> bool:
     if not dstr:
         return False
@@ -226,7 +217,6 @@ def is_stale(dstr: str) -> bool:
         return (date.today() - d).days > STALE_DAYS
     except ValueError:
         return False
-
 
 # ── 结构化字段：薪资/学历/经验/公司（snippet 提取，零成本）──────────────
 
@@ -240,7 +230,6 @@ _EXP_RE = re.compile(r"(经验不限|应届生|\d+\s*[-~至到]\s*\d+\s*年|\d+\
 _COMPANY_RE = re.compile(
     r"([\u4e00-\u9fa5A-Za-z0-9（）()]+?(?:股份有限公司|有限责任公司|有限公司|集团|股份|科技|电子|"
     r"精密|机械|实业|咨询|事务所|工作室|医院|学校|大学|研究院|中心|厂|科技股份|半导体))")
-
 
 def parse_fields(item: dict) -> dict:
     """从 title + snippet 提取结构化字段（详情页不可达时的零成本方案）。"""
@@ -260,13 +249,11 @@ def parse_fields(item: dict) -> dict:
         fields["company"] = m.group(1).strip()
     return fields
 
-
 # ── 指纹去重：标题+公司（多平台同岗位合并）─────────────────────────────
 
 _FP_SALARY = re.compile(
     r"\d+(?:\.\d+)?\s*[kK万元¥￥]|\d{4,6}\s*元|\d+\s*[-~至到]\s*\d+\s*(?:[kK万元¥￥]|元)")
 _FP_SPACE = re.compile(r"\s+")
-
 
 def fingerprint(item: dict) -> str:
     """规范化标题（去薪资/空白/平台标注）+ 公司名 → 指纹。"""
@@ -278,17 +265,14 @@ def fingerprint(item: dict) -> str:
     company = item.get("company") or item.get("fields", {}).get("company", "") or ""
     return f"{t}|{company}"
 
-
 # ── 增量监控快照（data/jobs/）───────────────────────────────────────────
 
 JOBS_DIR = os.path.join(DATA_DIR, "jobs")
-
 
 def snapshot_path(query: str, city: str) -> str:
     import hashlib
     h = hashlib.md5(f"{query}|{city}".encode()).hexdigest()[:12]
     return os.path.join(JOBS_DIR, f"{h}.json")
-
 
 def load_snapshot(path: str) -> Optional[dict]:
     if not os.path.exists(path):
@@ -298,7 +282,6 @@ def load_snapshot(path: str) -> Optional[dict]:
             return json.load(f)
     except Exception:
         return None
-
 
 def save_snapshot(path: str, payload: dict) -> None:
     """写快照（原子写走 argo_paths 唯一来源）。
@@ -311,9 +294,7 @@ def save_snapshot(path: str, payload: dict) -> None:
     import argo_paths
     argo_paths.atomic_write_json(Path(path), payload, indent=1)
 
-
 # ── HTTP 基础 ───────────────────────────────────────────────────────────
-
 
 def _post(url: str, body: dict, headers: Optional[dict] = None,
           timeout: int = 20) -> dict:
@@ -323,14 +304,12 @@ def _post(url: str, body: dict, headers: Optional[dict] = None,
     with open_url(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
-
 def _get(url: str, timeout: int = 20) -> dict:
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"})
     with open_url(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
-
 
 def _norm(item: dict) -> dict:
     """统一结果项字段，并做白名单后置校验（platform 空 → 剔除）。
@@ -362,9 +341,7 @@ def _norm(item: dict) -> dict:
     item["date"] = extract_date(item)
     return item
 
-
 # ── 检索后端 ────────────────────────────────────────────────────────────
-
 
 def _search_exa(q: str, n: int) -> list:
     d = _post("https://api.exa.ai/search",
@@ -376,7 +353,6 @@ def _search_exa(q: str, n: int) -> list:
              "date": r.get("publishedDate", "")}
             for r in d.get("results", [])]
 
-
 def _search_tavily(q: str, n: int) -> list:
     d = _post("https://api.tavily.com/search",
               {"api_key": get_env(["ARGO_TAVILY_API_KEY", "TAVILY_API_KEY"]), "query": q,
@@ -385,7 +361,6 @@ def _search_tavily(q: str, n: int) -> list:
     return [{"title": r.get("title", ""), "url": r.get("url", ""),
              "snippet": (r.get("content") or "")[:200], "date": ""}
             for r in d.get("results", [])]
-
 
 def _search_byted(q: str, n: int) -> list:
     out = []
@@ -405,7 +380,6 @@ def _search_byted(q: str, n: int) -> list:
                         "snippet": r.get("Snippet", ""), "date": ""})
     return out
 
-
 def _search_bocha(q: str, n: int) -> list:
     """博查 Web Search：中文宽查询 + 白名单校验（site: 与宽查询均实测严格）。"""
     # 同 _search_byted：先取密钥再拼头，保持 3.9 可解析。
@@ -421,7 +395,6 @@ def _search_bocha(q: str, n: int) -> list:
              "date": i.get("datePublished", "") or i.get("dateLastCrawled", "")}
             for i in (pages.get("value") or [])]
 
-
 def _search_octen(q: str, n: int) -> list:
     """Octen AI 搜索：宽查询 + 白名单校验。"""
     d = _post("https://api.octen.ai/search",
@@ -435,7 +408,6 @@ def _search_octen(q: str, n: int) -> list:
              "snippet": (r.get("highlight") or "")[:200], "date": ""}
             for r in items]
 
-
 # ── 免 key 国际源（远程/海外岗位，公开 JSON API）───────────────────────
 
 GREENHOUSE_BOARDS = ["asana", "stripe", "airbnb", "reddit", "shopify", "duolingo",
@@ -446,7 +418,6 @@ GREENHOUSE_BOARDS = ["asana", "stripe", "airbnb", "reddit", "shopify", "duolingo
 ASHBY_BOARDS = ["notion", "openai", "figma", "linear", "vercel", "airtable",
                 "plaid", "ramp", "rippling", "paddle", "perplexity", "midjourney"]
 
-
 def _search_remotive(q: str, n: int) -> list:
     d = _get(f"https://remotive.com/api/remote-jobs?limit={n * 3}&search={quote(q)}")
     return [{"title": j.get("title", ""), "url": j.get("url", ""),
@@ -454,7 +425,6 @@ def _search_remotive(q: str, n: int) -> list:
              "location": j.get("candidate_required_location", ""),
              "date": j.get("publication_date", "")}
             for j in d.get("jobs", [])]
-
 
 def _search_himalayas(q: str, n: int) -> list:
     d = _get(f"https://himalayas.app/jobs/api?limit={n * 3}&query={quote(q)}")
@@ -464,14 +434,12 @@ def _search_himalayas(q: str, n: int) -> list:
              "date": ""}
             for j in d.get("jobs", [])]
 
-
 def _search_jobicy(q: str, n: int) -> list:
     d = _get(f"https://jobicy.com/api/v2/remote-jobs?count={n * 3}&tag={quote(q)}")
     return [{"title": j.get("jobTitle", ""), "url": j.get("url", ""),
              "snippet": (j.get("jobGeo", "") or "")[:200],
              "location": j.get("jobGeo", ""), "date": ""}
             for j in d.get("jobs", [])]
-
 
 def _search_arbeitnow(q: str, n: int) -> list:
     d = _get(f"https://www.arbeitnow.com/api/job-board-api?search={quote(q)}")
@@ -480,7 +448,6 @@ def _search_arbeitnow(q: str, n: int) -> list:
              "location": j.get("location", ""),
              "date": j.get("created_at", "")}
             for j in d.get("data", [])[:n * 3]]
-
 
 def _search_greenhouse(q: str, n: int) -> list:
     """Greenhouse ATS 公司直招：boards 并行请求，标题命中即收。"""
@@ -515,7 +482,6 @@ def _search_greenhouse(q: str, n: int) -> list:
         t.join(timeout=12)
     return out[: n * 3]
 
-
 def _search_ashby(q: str, n: int) -> list:
     """Ashby ATS 公司直招（免 key，岗位含 compensation 字段）：boards 并行请求。"""
     out, lock = [], threading.Lock()
@@ -545,12 +511,10 @@ def _search_ashby(q: str, n: int) -> list:
         t.join(timeout=12)
     return out[: n * 3]
 
-
 # ── v4 免 key ATS 直连源（2026-08-11 实测）────────────────────────────
 
 # v4 免 key ATS 直连源（2026-08-11 实测：recruitee 全线无数据已移除）
 LEVER_BOARDS = ["kraken", "outreach"]
-
 
 def _ts2date(v) -> str:
     """unix 秒时间戳 → YYYY-MM-DD；非时间戳原样截断。"""
@@ -558,7 +522,6 @@ def _ts2date(v) -> str:
         return datetime.fromtimestamp(int(v), timezone.utc).date().isoformat()
     except Exception:
         return str(v or "")[:10]
-
 
 def _search_lever(q: str, n: int) -> list:
     """Lever ATS：api.lever.co 免 key，boards 并行，标题命中即收。"""
@@ -589,7 +552,6 @@ def _search_lever(q: str, n: int) -> list:
         t.join(timeout=12)
     return out[: n * 3]
 
-
 def _search_remoteok(q: str, n: int) -> list:
     """RemoteOK：全量远程岗 JSON，本地过滤。"""
     d = _get("https://remoteok.com/api", timeout=15)
@@ -608,13 +570,11 @@ def _search_remoteok(q: str, n: int) -> list:
             break
     return out
 
-
 # ── v4 聚合源（SimplifyJobs / JobSpy / mcp-jobs）───────────────────────
 
 _SIMPLIFY_MONTH = re.compile(
     r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2}),?\s*(\d{4})")
 _SIMPLIFY_REL = re.compile(r"^(\d+)d$")
-
 
 def _simplify_date(s: str) -> str:
     """SimplifyJobs 日期列：绝对日期（Sep 01, 2025）或相对（0d/1d/30d）。"""
@@ -629,13 +589,11 @@ def _simplify_date(s: str) -> str:
         return (date.today() - timedelta(days=int(m.group(1)))).isoformat()
     return ""
 
-
 # SimplifyJobs README 现为 HTML <table>（2026-08 实测：约 2000+ 行岗位）
 _SIMPLIFY_TR = re.compile(r"<tr[^>]*>(.*?)</tr>", re.S)
 _SIMPLIFY_TD = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
 _SIMPLIFY_TAG = re.compile(r"<[^>]+>")
 _SIMPLIFY_HREF = re.compile(r'<a[^>]+href="(https?://[^"]+)"')
-
 
 def _simplify_row(tds: list) -> Optional[dict]:
     if len(tds) < 5:
@@ -653,7 +611,6 @@ def _simplify_row(tds: list) -> Optional[dict]:
     a = _SIMPLIFY_HREF.search(tds[3]) or _SIMPLIFY_HREF.search(tds[1])
     return {"company": company, "role": role, "loc": loc,
             "url": a.group(1) if a else "", "date": _simplify_date(cells[4])}
-
 
 def _search_simplify(q: str, n: int) -> list:
     """SimplifyJobs：GitHub 每日更新岗位表（HTML table，SWE/PM/DS 为主）。"""
@@ -690,7 +647,6 @@ def _search_simplify(q: str, n: int) -> list:
             break
     return out
 
-
 def _search_jobspy(q: str, n: int) -> list:
     """JobSpy 聚合爬虫（可选依赖）：LinkedIn/Indeed/ZipRecruiter。
 
@@ -725,7 +681,6 @@ def _search_jobspy(q: str, n: int) -> list:
         raise RuntimeError("jobspy 抓取失败（反爬或网络），可重试或换 --engine free")
     return out
 
-
 # ── mcp-jobs（猎聘/BOSS/智联，MCP stdio 协议）─────────────────────────
 # npm 包 mcp-jobs 无 bin 入口（README 的 npx 启动方式不可用），
 # 固定安装到平台缓存目录后直接 node dist/mcp.js 启动。
@@ -733,7 +688,6 @@ def _search_jobspy(q: str, n: int) -> list:
 
 _MCPJ = {"proc": None, "id": 0}
 from argo_paths import platform_cache_default  # noqa: E402
-
 
 def _mcpjobs_dir() -> str:
     """mcp-jobs 安装根：模块属性（测试 patch 的真名）优先，否则按当前 env 解析。"""
@@ -743,11 +697,9 @@ def _mcpjobs_dir() -> str:
     return os.environ.get("ARGO_MCPJOBS_DIR") or str(
         platform_cache_default() / "argo-mcpjobs")
 
-
 def _mcpjobs_entry() -> str:
     return os.path.join(
         _mcpjobs_dir(), "node_modules", "mcp-jobs", "dist", "mcp.js")
-
 
 def __getattr__(name: str):
     """`MCPJOBS_DIR`/`MCPJOBS_ENTRY` 按当前 ARGO_MCPJOBS_DIR 解析（PEP 562）。
@@ -761,7 +713,6 @@ def __getattr__(name: str):
     if name == "MCPJOBS_ENTRY":
         return _mcpjobs_entry()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 
 def _mcpjobs_send(method: str, params: dict, timeout: int = 60) -> dict:
     p = _MCPJ["proc"]
@@ -782,7 +733,6 @@ def _mcpjobs_send(method: str, params: dict, timeout: int = 60) -> dict:
         if isinstance(d, dict) and d.get("id") == req_id:
             return d
     raise RuntimeError(f"mcp-jobs 响应超时（{method}）")
-
 
 def _mcpjobs_ensure() -> bool:
     if _MCPJ["proc"] and _MCPJ["proc"].poll() is None:
@@ -809,7 +759,6 @@ def _mcpjobs_ensure() -> bool:
     except Exception as e:
         _MCPJ["proc"] = None
         raise RuntimeError(f"mcp-jobs 启动失败（需 node/npm）：{e}")
-
 
 def _search_mcpjobs(q: str, n: int) -> list:
     """mcp-jobs：猎聘/BOSS/智联零配置 MCP 服务。慢源，仅显式 --engine mcpjobs。"""
@@ -857,7 +806,6 @@ def _search_mcpjobs(q: str, n: int) -> list:
         raise RuntimeError("mcp-jobs 无结果（爬虫源可能被反爬拦截）")
     return out
 
-
 BACKENDS = {"exa": _search_exa, "tavily": _search_tavily, "byted": _search_byted,
             "bocha": _search_bocha, "octen": _search_octen}
 FREE_BACKENDS = {"remotive": _search_remotive, "himalayas": _search_himalayas,
@@ -869,7 +817,6 @@ SLOW_BACKENDS = {"simplify": _search_simplify,
                  "jobspy": _search_jobspy, "mcpjobs": _search_mcpjobs}
 ALL_BACKENDS = dict(BACKENDS, **FREE_BACKENDS, **SLOW_BACKENDS)
 DEFAULT_ENGINES = ["exa", "tavily", "byted", "bocha", "octen"]
-
 
 def _backend_down(name: str) -> bool:
     """该后端是否已知暂时不可用（配额耗尽 / 熔断打开）——跳过它，让别的源顶上。
@@ -904,10 +851,9 @@ def _backend_down(name: str) -> bool:
     except Exception:
         return False
     state = st.get("state")
-    if state == "disabled":
+    if state == engine_states.BREAKER_DISABLED:
         return True
-    return state == "open" and int(st.get("cooldown_remain") or 0) > 0
-
+    return (state == engine_states.BREAKER_OPEN and int(st.get("cooldown_remain") or 0) > 0)
 
 def _is_quota_exhausted(exc: Exception) -> bool:
     """这次失败是不是「源端配额耗尽」——只有这一种才交给配额状态机。
@@ -932,7 +878,6 @@ def _is_quota_exhausted(exc: Exception) -> bool:
     text = str(exc).lower()
     return any(k in text for k in _QUOTA_ERROR_KEYWORDS)
 
-
 def _mark_source_down(name: str, detail: str) -> None:
     """把源标为「配额耗尽」——交给配额状态机，到周期边界自动恢复。
 
@@ -949,9 +894,7 @@ def _mark_source_down(name: str, detail: str) -> None:
     except Exception:
         pass
 
-
 # ── 详情页结构化补全（--fetch N，走 argo fetch_v3 降级链）──────────────
-
 
 def _fetch_detail(url: str, timeout: int = 10) -> Optional[dict]:
     """抓详情页提取结构化字段；失败返回 None（静默降级 snippet 字段）。"""
@@ -978,9 +921,7 @@ def _fetch_detail(url: str, timeout: int = 10) -> Optional[dict]:
     except Exception:
         return None
 
-
 # ── 主流程 ─────────────────────────────────────────────────────────────
-
 
 def sort_jobs(items: list[dict]) -> list[dict]:
     """岗位排序（唯一来源）：级别 L1 > L2 > L3 > 0 为主键（稳定排序先按
@@ -992,7 +933,6 @@ def sort_jobs(items: list[dict]) -> list[dict]:
     out.sort(key=lambda r: r.get("date", ""), reverse=True)
     out.sort(key=lambda r: (r.get("hit_level", 0), r.get("stale", False)))
     return out
-
 
 def search(query: str, city: str = "", num: int = 5, engine: str = "all",
            platforms: str = "", loose: bool = False, fetch_n: int = 0) -> dict:
@@ -1125,7 +1065,6 @@ def search(query: str, city: str = "", num: int = 5, engine: str = "all",
             "strict": strict,
             "errors": errors, "skipped": skipped, "results": unique}
 
-
 def main():
     ap = argparse.ArgumentParser(description="求职岗位搜索：职位 + 地区 → 该地区在招岗位")
     ap.add_argument("query", help="职位关键词，如：工艺工程师、会计、电工")
@@ -1206,7 +1145,6 @@ def main():
             print(f"{mark}[{r['platform']}]{stale} {r['title'][:48]}"
                   + (f" {extra}" if extra else ""))
             print(f"  {r['url'][:88]}")
-
 
 if __name__ == "__main__":
     main()

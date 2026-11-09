@@ -21,6 +21,8 @@ from engine_env import env_status_for, is_engine_allowed_by_env  # noqa: E402
 from engine_requires import requires_status  # noqa: E402
 from engine_admission import load_admission, is_blocked, is_admitted  # noqa: E402
 from cli_io import dumps
+# 状态词表唯一真源（2026-11-09 收口）：engine status / breaker state
+import engine_states
 
 
 def _cost_tier_of(engine_id: str, tiers: dict[str, list[str]]) -> str:
@@ -61,7 +63,7 @@ def _runtime_status(engine_id: str,
         from circuit_breaker import get_breaker
         st = get_breaker().status(engine_id)
         out["breaker"] = {
-            "state": st.get("state", "closed"),
+            "state": st.get("state", engine_states.BREAKER_CLOSED),
             "failures": st.get("failures", 0),
             "cooldown_remain": st.get("cooldown_remain", 0),
             "last_kind": st.get("last_kind"),
@@ -143,27 +145,32 @@ def engine_detail(engine_id: str, spec: dict[str, Any] | None = None,
         and not quota_exhausted
         and not bool(spec.get("explicit_only"))
     )
-    status = "ready"
+    # engine_detail 的 status 是「引擎清单展示态」，与调用结局 outcome.status
+    # 是两套词表：这里用下划线（quota_exhausted / missing_key）且带 missing_*
+    # 等展示专属值，outcome 用连字符（quota-exhausted）。两者不可混用，
+    # 混用会让 list-engines 的既有口径与下游测试同时失配（2026-11-09 实测）。
+    # 词表收在 engine_states 的 ENGINE_DETAIL_STATUSES，不在此写字面量。
+    status = engine_states.ENGINE_STATUS_READY
     if not known:
-        status = "unknown"
+        status = engine_states.ENGINE_STATUS_UNKNOWN
     elif not config_enabled:
-        status = "disabled"
+        status = engine_states.ENGINE_STATUS_DISABLED
     elif not allowed:
-        status = "env_filtered"
+        status = engine_states.ENGINE_STATUS_ENV_FILTERED
     elif not env_ok:
-        status = "missing_key"
+        status = engine_states.ENGINE_STATUS_MISSING_KEY
     elif not dep_ok:
         # 后端工具缺失：密钥齐全、脚本存在，但真正干活的外部命令没有。
         # 此前这类引擎一律显示 ready，调用后静默返回空，无从定位。
-        status = "missing_dep"
+        status = engine_states.ENGINE_STATUS_MISSING_DEP
     elif quota_exhausted:
-        status = "quota_exhausted"
+        status = engine_states.ENGINE_STATUS_QUOTA_EXHAUSTED
     elif blocked:
-        status = "blocked"
+        status = engine_states.ENGINE_STATUS_BLOCKED
     elif admitted:
-        status = "admitted"
+        status = engine_states.ENGINE_STATUS_ADMITTED
     else:
-        status = "ready"  # 未验证但可用（兼容）
+        status = engine_states.ENGINE_STATUS_READY  # 未验证但可用（兼容）
 
     return {
         "engine_id": engine_id,

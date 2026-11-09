@@ -311,7 +311,7 @@ function renderKeys() {
   };
   const disabled = (name) => {
     const engine = (S.data.engines || []).find((entry) => entry.name === name);
-    return Boolean(engine && engine.status === "disabled");
+    return Boolean(engine && (engine.status === "disabled" || engine.status === "not_routable"));
   };
   const items = S.data.keys || [];
   const allOff = (item) => item.engines.length > 0 && item.engines.every(disabled);

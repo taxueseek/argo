@@ -104,10 +104,12 @@ def _breaker_blocked(engine_id: str) -> bool:
         logging.getLogger("unified_search").debug(
             f"breaker.status 读取失败，按健康处理: {_exc!r}")
         return False
+    import engine_states
     state = st.get("state")
-    if state == "disabled":
+    if state == engine_states.BREAKER_DISABLED:
         return True
-    return state == "open" and int(st.get("cooldown_remain") or 0) > 0
+    return (state == engine_states.BREAKER_OPEN
+            and int(st.get("cooldown_remain") or 0) > 0)
 
 
 def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:

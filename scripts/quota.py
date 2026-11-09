@@ -22,6 +22,7 @@ from typing import Any, Optional
 
 import argo_paths
 from cli_io import dumps
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
 
@@ -166,7 +167,8 @@ def _quota_cooldown_seconds(category: str | None, reason: str,
     余额不足类固定短冷却、与 period 解耦；其余按 period 映射，过短按 24h 兜底。
     坏值一律回落默认，不让一次异常把某种引擎永久锁死。
     """
-    if category == "quota_exhausted" and _looks_like_balance_error(reason):
+    if category == engine_states.FAILURE_QUOTA_EXHAUSTED \
+            and _looks_like_balance_error(reason):
         return _BALANCE_QUOTA_COOLDOWN_S
     seconds = {"hour": 3600, "day": 86400, "month": 30 * 86400}.get(
         str(period or "day"), _DEFAULT_QUOTA_COOLDOWN_S)
@@ -539,7 +541,7 @@ class QuotaManager:
         is_hard_down 检查时清除），恢复后引擎自动回归。提前恢复（如原 Key 充值）
         可执行 `python3 scripts/quota.py reset <engine>`。
 
-        `category`（如 "quota_exhausted"）与 `reason` 一起决定冷却时长：余额不足
+        `category`（如 quota_exhausted）与 `reason` 一起决定冷却时长：余额不足
         类（402 insufficient balance）与月度预算周期解耦、固定短冷却，避免一次
         欠费把引擎锁死 30 天（issue #42）。
         """

@@ -38,6 +38,7 @@ from collections.abc import Callable
 from typing import Any
 
 from except_sets import OPT_IMPORT
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 
 class DegradedCacheRejected(ValueError):
@@ -61,8 +62,9 @@ class FailedStateCacheRejected(ValueError):
 # 确实混有「真的没有」，负缓存是既有设计（EMPTY_RESULT_TTL），等一会重试
 # 由 TTL 自然兜底。本类的共同点：**换环境就能好**，缓存它没有信息量。
 _STATE_FAIL_STATUSES = frozenset({
-    "skipped-missing-env", "skipped-circuit-open", "auth-failed",
-    "quota-exhausted", "skipped-quota-exhausted",
+    "skipped-missing-env", "skipped-circuit-open",
+    engine_states.OUTCOME_AUTH_FAILED,
+    engine_states.OUTCOME_QUOTA_EXHAUSTED, "skipped-quota-exhausted",
 })
 
 # 配额耗尽错误关键词（唯一来源）：classify_engine_outcome 的 quota-exhausted
@@ -71,7 +73,7 @@ _QUOTA_ERROR_KEYWORDS = ("quota", "10406", "insufficient balance",
                          "insufficient funds", "not enough money",
                          "余额不足", "额度不足", "配额耗尽")
 
-# builder 路径漏到 status="error" 的缺密钥形态：路由层 env 拦截覆盖不到
+# builder 路径漏到 status=error 的缺密钥形态：路由层 env 拦截覆盖不到
 # 自定义 required_env 的引擎（search.py:192-209 docstring 自认的缺口），
 # issue #12 的 parallel/seltz/you 就读裸名——状态层 env_ready=True、执行层
 # 取不到值。按 detail 文本兜底识别。
@@ -87,7 +89,7 @@ def is_state_failure_outcome(outcome: Any) -> bool:
     status = str(outcome.get("status") or "")
     if status in _STATE_FAIL_STATUSES:
         return True
-    if status == "error":
+    if status == engine_states.OUTCOME_ERROR:
         detail = str(outcome.get("detail") or "").lower()
         return any(k in detail for k in _MISSING_ENV_DETAIL_KEYWORDS)
     return False
@@ -97,7 +99,8 @@ def should_record_adaptive(outcome: dict[str, Any] | None,
                            res: list[dict[str, Any]]) -> bool:
     """单引擎结局是否应记入 adaptive 学习器（跳过早停弃置与配额/鉴权/缺密钥等状态类故障）。"""
     st = str((outcome or {}).get("status") or "")
-    if st.startswith(("cancelled", "skipped-")) or is_state_failure_outcome(outcome):
+    if st.startswith((engine_states.OUTCOME_CANCELLED, engine_states.OUTCOME_SKIPPED_PREFIX)) \
+            or is_state_failure_outcome(outcome):
         return False
     errors = [str(r.get("error", "")) for r in (res or ())
               if isinstance(r, dict) and "error" in r]

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import sys
 import time
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 from search_types import slot_record as dataclass
 from typing import Any, Callable
 from cli_io import dumps
@@ -55,7 +56,6 @@ except ImportError:
 # 的绝大部分）。路由是每次调用的必经路径（缓存命中也要走），HTTP 栈只有真正
 # 打网才需要——为了一个 8 行的纯文本谓词付这笔钱不值得。
 from macro_countries import is_foreign_macro_query
-
 
 # 引擎注册中心（子引擎可见性）
 try:
@@ -159,13 +159,10 @@ from route_policy import (  # noqa: E402
     _apply_policy_with_new_source_slots,
 )
 
-
 # ── 特征提取 ──────────────────────────────────────────────────────────────────
-
 
 # P2-3：显式语言意图 → 覆盖语言（「用英文搜」「in English」「日本語で」等）。
 # 命中后 lang_override 直接决定语言引擎选择与 must_keep，不被习惯/系统 locale 淹没。
-
 
 def _build_engine_names() -> dict[str, str]:
     """从 config.yaml 引擎声明的 label 构建显示名映射（唯一来源）。
@@ -178,7 +175,6 @@ def _build_engine_names() -> dict[str, str]:
     except Exception:
         return {}
     return {name: spec.get("label") or name for name, spec in engines.items()}
-
 
 # 惰性初始化：模块级立即调用 get_engines() 会触发 config 全量加载
 # （合并全部外置引擎 spec，实测约 0.1s——见 config.peek_cache_db_path 的勘误：
@@ -194,7 +190,6 @@ def _build_engine_names() -> dict[str, str]:
 # 外部拿到的就是 None（埋雷）。
 _ENGINE_NAMES_CACHE: dict[str, str] | None = None
 _ENGINE_NAMES_STAMP: float | None = None
-
 
 def _engine_names_map() -> dict[str, str]:
     """引擎 id → 显示名 映射，按 config_stamp 热重建。
@@ -217,11 +212,9 @@ def _engine_names_map() -> dict[str, str]:
         _ENGINE_NAMES_STAMP = stamp
     return _ENGINE_NAMES_CACHE
 
-
 def _engine_display(name: str) -> str:
     """引擎显示名（label 优先），惰性构建映射表。"""
     return _engine_names_map().get(name, name)
-
 
 def __getattr__(name: str):
     # PEP 562：仅在常规模块属性查找失败时触发。
@@ -241,7 +234,6 @@ def __getattr__(name: str):
         globals()["get_router"] = get_router
         return globals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 
 # ── 登录态意图检测（P0-4：五路协同的种子）────────────────────────────────
 # 公开引擎拿不到登录态内容（收藏/关注/持仓/私密等）。route 只做标注不阻塞执行，
@@ -264,7 +256,6 @@ _LOGIN_SENSITIVE_DOMAINS = frozenset({
     "user_profile",
 })
 
-
 def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
     """识别「可能需要登录态内容」的查询，返回 {needs_login, reason}。"""
     ql = query.lower()
@@ -277,7 +268,6 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
                     "reason": f"登录敏感域[{domain_name}] + 弱信号"}
     return {"needs_login": False, "reason": ""}
 
-
 # 语言重排的排除名单改为 engine_families.ENGINE_LANGS 派生（engines_not_for_lang），
 # 三张手写冻结表（_EN_ONLY/_ZH_ONLY/_JA_KO_CN）2026-09-07 收紧删除——
 # 新源声明 langs 一次，全部分发路径自动生效。_SOCIAL_ZH_GENERAL 保留
@@ -285,7 +275,6 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # （提到「小红书/微信」≠ 搜小红书/微信），通用源覆盖真实主题，防平台噪声全占。
 # anysearch 优先：local_bing 直抓 bing.com 对长中文查询存在降级服务风险
 # （2026-08-29 实测：整条查询被 Bing 降级为单字「拍」匹配，返回字典页）。
-
 
 # 仅日/韩需要 must_keep：域主引擎常是中文噪声源，语言补充源不能被 budget 裁掉。
 # 中文 / 其它语种：_merge_language_engines 软追加即可，must_keep 会与垂直域抢预算
@@ -302,14 +291,12 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # tests/test_review_round3 与 test_zh_search_quality 两处锁着；新源从接入起
 # 就按摘除处理，不回溯改既有行为。后续接入语言独占源时加进本表即可。
 
-
 # 意图 → (期望引擎数, 是否并行)。P0-005 动态并行度。
 
 # 窄域引擎单点保护：这类引擎「永不返回零结果」或只覆盖单一主题
 # （跨域查询产出噪声，如 mdn 的 quantum computing → Cloud computing）。
 # definition/fact 意图裁到 1 引擎时，若主引擎是窄域引擎，强制保留 2 引擎，
 # 避免单引擎独占时噪声无处可挡。
-
 
 # ── 垂直域「新专源」保底表（批次九）────────────────────────────────────────────
 # 批次九的 11 个新源声明在 combo 后排（位次 3~6），而 auto/balanced 的 budget=3、
@@ -327,14 +314,12 @@ def _detect_login_intent(query: str, domain_name: str | None) -> dict[str, Any]:
 # 垂直域主源保护名单：这些域的专属源被 budget 裁掉后该域等于没源可用。
 # 模块级常量（原先定义在 route_query 内，每次调用重建一个 18 元素 frozenset）。
 
-
 # ── 分支上下文 ─────────────────────────────────────────────────────────────────
 # 三条分支共享的输入。逐个传参要 11~14 个形参——那是把「谁在调用」变成「参数
 # 摆法」的噪声；用只读上下文传递，分支函数体才能逐字搬运（可验证）。
 
 # TF-IDF 语义路由的最低采纳分（「强证据」线 TFIDF_STRONG_SCORE 在 route_combo）。
 TFIDF_MIN_SCORE = 0.12
-
 
 @dataclass(frozen=True)
 class _RouteCtx:
@@ -352,7 +337,6 @@ class _RouteCtx:
     tfidf_best_score: float
     tfidf_scores: list
     done: Callable[..., dict[str, Any]]
-
 
 # ── 路由主函数 ─────────────────────────────────────────────────────────────────
 
@@ -570,7 +554,7 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
         try:
             from circuit_breaker import get_breaker
             st = get_breaker().status(p)
-            if st.get("state") == "open" and int(st.get("cooldown_remain") or 0) > 0:
+            if (st.get("state") == engine_states.BREAKER_OPEN and int(st.get("cooldown_remain") or 0) > 0):
                 p = None
         except Exception as _exc:  # 侧信道：熔断状态只影响 primary 扶正提示（规则见 except_sets）
             import logging
@@ -643,7 +627,6 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
         mode=mode, depth=depth, context=context,
         login_hint=_detect_login_intent(query, domain.get("name")),
     )
-
 
 def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
     """TF-IDF 语义路由分支：正则未命中，直接用语义推荐引擎 + 通用保底。
@@ -726,7 +709,6 @@ def _route_by_tfidf(ctx: _RouteCtx) -> dict[str, Any]:
         login_hint=_detect_login_intent(query, None),
     )
 
-
 def _route_by_fallback(ctx: _RouteCtx) -> dict[str, Any]:
     """通用保底分支：零分 TF-IDF 与无语义候选都走这里（本地优先 + 免费通用源）。"""
     query = ctx.query
@@ -792,7 +774,6 @@ def _route_by_fallback(ctx: _RouteCtx) -> dict[str, Any]:
         mode=mode, depth=depth, context=context,
         login_hint=_detect_login_intent(query, None),
     )
-
 
 def route_query(query: str, engine_override: str = "auto",
                 mode: str = "auto",
@@ -944,7 +925,6 @@ def route_query(query: str, engine_override: str = "auto",
 
     return _route_by_fallback(ctx)
 
-
 def route_query_cached(query: str, engine_override: str = "auto",
                        mode: str = "auto", depth: str = "fast",
                        context: str = "search",
@@ -1006,7 +986,6 @@ def route_query_cached(query: str, engine_override: str = "auto",
         pass
     return decision
 
-
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 def _cli():
@@ -1026,7 +1005,6 @@ def _cli():
         print(f"原因: {decision['reason']}")
         print(f"置信度: {decision['confidence']:.2f}")
         print(f"耗时: {decision.get('elapsed_ms', 0):.3f} ms")
-
 
 if __name__ == "__main__":
     _cli()

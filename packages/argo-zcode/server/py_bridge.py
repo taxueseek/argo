@@ -219,7 +219,7 @@ def _argo_interpreter(home: str) -> str:
     return parts[0]
 
 
-def _engine_row(spec: dict, name: str, bad: dict, engine_env):
+def _engine_row(spec: dict, name: str, bad: dict, engine_env, states):
     # 密钥判定走 argo 本体 engine_env：required_env_for 覆盖显式声明、别名表、
     # 占位符推断与专用 type；missing_env_for 的 get_env 会热读 ~/.config/argo/env。
     required = [str(k) for k in engine_env.required_env_for(name, spec)]
@@ -229,30 +229,35 @@ def _engine_row(spec: dict, name: str, bad: dict, engine_env):
     # 状态口径与 `argo search --list-engines --detail` 对齐：以官方 not_routable
     # 分类为准，再叠加 explicit_only。显式专用源缺 key 仍算「显式专用」（不进路由），
     # 密钥缺口只作为该行提示，不改变状态。
+    #
+    # 词表来自 argo 本体 scripts/engine_states.py（由调用方注入，见 panel_data）：
+    # 此前这里把 quota_exhausted 写成 quota、把 not_routable 写成 explicit，
+    # 与 show 层的 ENGINE_BLOCK_REASONS 及 engine_detail.status 各写一份，
+    # 改一处漏两处即静默失配（2026-11-09 审计）。
     if not spec.get("enabled", True):
-        status = "disabled"
-    elif reason == "missing_env":
-        status = "missing_env"
-    elif reason == "missing_deps":
-        status = "missing_deps"
-    elif reason == "quota_exhausted":
-        status = "quota"
+        status = states.ENGINE_BLOCK_DISABLED
+    elif reason == states.ENGINE_BLOCK_MISSING_ENV:
+        status = states.ENGINE_BLOCK_MISSING_ENV
+    elif reason == states.ENGINE_BLOCK_MISSING_DEPS:
+        status = states.ENGINE_BLOCK_MISSING_DEPS
+    elif reason == states.ENGINE_BLOCK_QUOTA_EXHAUSTED:
+        status = states.ENGINE_BLOCK_QUOTA_EXHAUSTED
     elif spec.get("explicit_only"):
-        status = "explicit"
+        status = states.ENGINE_BLOCK_NOT_ROUTABLE
     else:
-        status = "routable"
+        status = states.ENGINE_STATUS_READY
     note = ""
-    if status == "disabled":
+    if status == states.ENGINE_BLOCK_DISABLED:
         note = (spec.get("disabled_reason") or entry.get("disabled_reason") or "")[:220]
-    elif status == "missing_env":
+    elif status == states.ENGINE_BLOCK_MISSING_ENV:
         note = "配 " + " / ".join(entry.get("missing_env") or missing)
-    elif status == "missing_deps":
+    elif status == states.ENGINE_BLOCK_MISSING_DEPS:
         deps = entry.get("missing_deps") or []
         fixes = [str(d.get("fix") or "") for d in deps if isinstance(d, dict)]
         note = "；".join([f for f in fixes if f]) or "装缺失的后端工具"
-    elif status == "quota":
+    elif status == states.ENGINE_BLOCK_QUOTA_EXHAUSTED:
         note = "等配额窗口重置"
-    elif status == "explicit":
+    elif status == states.ENGINE_BLOCK_NOT_ROUTABLE:
         note = "不进自动路由，需 --engine 点名"
     return {
         "name": name,
@@ -274,6 +279,7 @@ def _engine_row(spec: dict, name: str, bad: dict, engine_env):
 def panel_data(home: str):
     argo_config, argo_paths = _load_argo(home)
     import engine_env
+    import engine_states as states
     cfg = argo_config.load_config()
     engines_cfg = cfg.get("engines") or {}
     env_path = _env_file(argo_paths)
@@ -286,7 +292,7 @@ def panel_data(home: str):
     for name, spec in engines_cfg.items():
         if not isinstance(spec, dict):
             continue
-        row = _engine_row(spec, name, bad, engine_env)
+        row = _engine_row(spec, name, bad, engine_env, states)
         engines.append(row)
         for key in row["required_env"]:
             item = keys.setdefault(key, {
@@ -308,20 +314,27 @@ def panel_data(home: str):
                 elif item["source"] == "none":
                     item["source"] = "env"
 
-    status_order = {"missing_env": 0, "missing_deps": 1, "quota": 2,
-                    "disabled": 3, "explicit": 4, "routable": 5}
-    engines.sort(key=lambda r: (status_order.get(r["status"], 9), r["name"]))
-    counts = {
-        "total": len(engines),
-        "routable": sum(1 for r in engines if r["status"] == "routable"),
-        "explicit": sum(1 for r in engines if r["status"] == "explicit"),
-        "disabled": sum(1 for r in engines if r["status"] == "disabled"),
-        "missing_env": sum(1 for r in engines if r["status"] == "missing_env"),
-        "missing_deps": sum(1 for r in engines if r["status"] == "missing_deps"),
-        "quota": sum(1 for r in engines if r["status"] == "quota"),
-        "keys_configured": sum(1 for k in keys.values() if k["configured"]),
-        "keys_total": len(keys),
-    }
+    # 展示顺序与计数共用同一份词表，改状态名不再改 4 处。
+    # ready 是「可自动路由」，not_routable 是「显式专用/其它不可路由」，
+    # 与 search_cli._ENGINE_BLOCK_REASONS 的口径一致。
+    status_order = (
+        states.ENGINE_BLOCK_MISSING_ENV,
+        states.ENGINE_BLOCK_MISSING_DEPS,
+        states.ENGINE_BLOCK_QUOTA_EXHAUSTED,
+        states.ENGINE_BLOCK_DISABLED,
+        states.ENGINE_BLOCK_NOT_ROUTABLE,
+        states.ENGINE_STATUS_READY,
+    )
+    order_index = {name: i for i, name in enumerate(status_order)}
+    engines.sort(key=lambda r: (order_index.get(r["status"], len(order_index)), r["name"]))
+    statuses = (states.ENGINE_STATUS_READY, states.ENGINE_BLOCK_NOT_ROUTABLE,
+                states.ENGINE_BLOCK_DISABLED, states.ENGINE_BLOCK_MISSING_ENV,
+                states.ENGINE_BLOCK_MISSING_DEPS,
+                states.ENGINE_BLOCK_QUOTA_EXHAUSTED)
+    counts = {"total": len(engines)}
+    counts.update({s: sum(1 for r in engines if r["status"] == s) for s in statuses})
+    counts["keys_configured"] = sum(1 for k in keys.values() if k["configured"])
+    counts["keys_total"] = len(keys)
     daemon = _daemon_status_fast(home)
     return {
         "version": _version(home),
@@ -398,6 +411,7 @@ def main() -> int:
 
     if cmd == "list-engines":
         import engine_env
+        import engine_states as states
         cfg = argo_config.load_config()
         detail = _detail(home)
         bad = {e.get("engine_id"): e for e in (detail.get("not_routable_engines") or [])}
@@ -405,7 +419,7 @@ def main() -> int:
         for name, spec in (cfg.get("engines") or {}).items():
             if not isinstance(spec, dict):
                 continue
-            engines.append(_engine_row(spec, name, bad, engine_env))
+            engines.append(_engine_row(spec, name, bad, engine_env, states))
         engines.sort(key=lambda e: (not e["enabled"], e["cost_tier"] != "free", e["name"]))
         print(json.dumps({"engines": engines}, ensure_ascii=False))
         return 0

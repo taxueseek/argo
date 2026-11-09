@@ -42,6 +42,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cli_io import dumps  # noqa: E402
 from circuit_breaker import AUTH_DISABLE_AFTER  # noqa: E402
+# 状态词表唯一真源（2026-11-09 收口）：verdict / breaker state
+import engine_states
 
 
 def _verdict(st: dict[str, Any]) -> tuple[str, str]:
@@ -49,30 +51,30 @@ def _verdict(st: dict[str, Any]) -> tuple[str, str]:
 
     判定顺序即严重度：auth_down > suspect > auto_disabled > flapping > watch。
     """
-    state = st.get("state", "closed")
+    state = st.get("state", engine_states.BREAKER_CLOSED)
     # 阈值引用熔断器常量（不手抄）：legacy 态（disabled 无 auth_disabled 标志）
     # 的判线必须与真实禁用线永远一致，否则恢复指引给错。
-    if st.get("auth_disabled") or (state == "disabled"
+    if st.get("auth_disabled") or (state == engine_states.BREAKER_DISABLED
                                    and st.get("auth_streak", 0) >= AUTH_DISABLE_AFTER):
-        cat = (st.get("last_attribution") or {}).get("category") or "auth"
-        return ("auth_down",
+        cat = (st.get("last_attribution") or {}).get("category") or engine_states.FAILURE_AUTH
+        return (engine_states.HEALTH_AUTH_DOWN,
                 f"结构性失败（{cat}）已停用：修凭证/改代码后 "
                 f"`argo engine revive <name>` 或换 key 自动恢复")
     if st.get("suspected_stale"):
-        return ("suspect",
+        return (engine_states.HEALTH_SUSPECT,
                 "疑似失效：历史常非空，近期连续空结果且跨查询（上游退役/改版"
                 "被吞成空结果的典型形态），已降权；一次真实成功即解除")
-    if state == "disabled":
-        return ("auto_disabled",
+    if state == engine_states.BREAKER_DISABLED:
+        return (engine_states.HEALTH_AUTO_DISABLED,
                 "连续失败达阈值已自动禁用；1h 后自动探测回归，"
                 "`argo engine revive <name>` 可提前复活")
-    if state == "open":
-        return ("flapping",
+    if state == engine_states.BREAKER_OPEN:
+        return (engine_states.HEALTH_FLAPPING,
                 "处于熔断冷却（瞬时类，60s 后自动探测）")
     failures = int(st.get("failures") or 0)
     if failures > 0:
-        return ("watch", f"近期有 {failures} 次失败（未熔断），观察")
-    return ("unknown", "无失败记录（低流量或一直健康；证据不足不下结论）")
+        return (engine_states.HEALTH_WATCH, f"近期有 {failures} 次失败（未熔断），观察")
+    return (engine_states.HEALTH_UNKNOWN, "无失败记录（低流量或一直健康；证据不足不下结论）")
 
 
 def picture() -> dict[str, dict[str, Any]]:
@@ -88,14 +90,14 @@ def picture() -> dict[str, dict[str, Any]]:
     for eng in br.snapshot().keys():
         st = br.status(eng)
         verdict, reason = _verdict(st)
-        if verdict == "unknown" and not st.get("failures"):
+        if verdict == engine_states.HEALTH_UNKNOWN and not st.get("failures"):
             # 无失败记录的 closed 条目（record_success 留下的干净态）不进画像：
             # 画像的价值密度来自「有证据的引擎」，全量罗列 290 个 healthy 是噪声
             continue
         out[eng] = {
             "verdict": verdict,
             "reason": reason,
-            "state": st.get("state", "closed"),
+            "state": st.get("state", engine_states.BREAKER_CLOSED),
             "failures": int(st.get("failures") or 0),
             "opens": int(st.get("opens") or 0),
             "auth_streak": int(st.get("auth_streak") or 0),
@@ -108,10 +110,6 @@ def picture() -> dict[str, dict[str, Any]]:
     return out
 
 
-# 严重度排序：越靠前越需要人看
-_SEVERITY = ("auth_down", "suspect", "auto_disabled", "flapping", "watch")
-
-
 def summary() -> dict[str, Any]:
     """分诊汇总：按严重度排序的问题源 + 各类计数。"""
     pic = picture()
@@ -120,8 +118,7 @@ def summary() -> dict[str, Any]:
         counts[v["verdict"]] = counts.get(v["verdict"], 0) + 1
     offenders = sorted(
         pic.items(),
-        key=lambda kv: (_SEVERITY.index(kv[1]["verdict"])
-                        if kv[1]["verdict"] in _SEVERITY else len(_SEVERITY),
+        key=lambda kv: (engine_states.health_severity_index(kv[1]["verdict"]),
                         -(kv[1].get("failures") or 0)))
     return {
         "generated_at": time.time(),
@@ -130,9 +127,9 @@ def summary() -> dict[str, Any]:
         # 只列非 watch 的（watch 是噪声底），watch 总数给个数字就够
         "offenders": [
             {"engine": eng, **info} for eng, info in offenders
-            if info["verdict"] != "watch"
+            if info["verdict"] != engine_states.HEALTH_WATCH
         ],
-        "watch_count": counts.get("watch", 0),
+        "watch_count": counts.get(engine_states.HEALTH_WATCH, 0),
     }
 
 
@@ -170,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
                             if o.get("engine") == args.engine]
         single = picture().get(args.engine)
         rep["single"] = single or {
-            "verdict": "unknown",
+            "verdict": engine_states.HEALTH_UNKNOWN,
             "reason": "熔断器无该引擎的失效证据（低流量或一直健康）",
         }
         if args.json:
