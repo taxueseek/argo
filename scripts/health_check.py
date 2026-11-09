@@ -37,7 +37,10 @@ if not logger.handlers:
     logger.addHandler(logging.StreamHandler())
 
 PROBE_TIMEOUT = 5.0
-MAX_FAILURES = 2
+# 本文件不实现失败阈值：它写注册表的布尔 available，连续失败计数由
+# argo_engine_registry.update_health 累加但无人按阈值读。阈值的唯一
+# 定义在 engine_states.PROBE_MAX_FAILURES（health_probe 消费）。此前这里
+# 另有一个 MAX_FAILURES = 2 却没有任何读取点，看着像有门限其实没有。
 HEALTH_TTL = 300  # 5 分钟
 
 # 反爬/拦截标记
@@ -104,6 +107,23 @@ def check_engine(name: str) -> dict:
     return check_http_engine(name, url, spec)
 
 
+def _record_health(registry, name: str, result: dict) -> None:
+    """把探测结果写进注册表，同时保留 result 里的 available 字段。
+
+    两个坑（2026-11-09 实测复现后修）：
+    - `update_health(name, result["available"], **result)` 会因 **result 里
+      仍有 available 而抛 TypeError: multiple values for argument 'available'
+      ——`--category` 路径每查一个引擎就炸一次；
+    - `update_health(name, result.pop("available"), **result)` 虽不炸，但
+      results[name] 与 result 是同一个 dict，pop 把 available 从**返回值**里
+      也抹掉了，`--all` 的「N/M 可用」恒为 0、每行都显示 ❌。
+    故：显式取布尔，派生的 extra 里剔掉 available，不修改 result。
+    """
+    available = bool(result.get("available"))
+    registry.update_health(
+        name, available, **{k: v for k, v in result.items() if k != "available"})
+
+
 def check_category(category: str) -> dict[str, dict]:
     """检查整个分类的引擎。"""
     registry = get_registry()
@@ -119,7 +139,7 @@ def check_category(category: str) -> dict[str, dict]:
         if url:
             result = check_http_engine(name, url, spec)
             results[name] = result
-            registry.update_health(name, result["available"], **result)
+            _record_health(registry, name, result)
     return results
 
 
@@ -136,7 +156,7 @@ def check_all() -> dict[str, dict]:
             continue
         result = check_http_engine(name, url, spec)
         results[name] = result
-        registry.update_health(name, result.pop("available"), **result)
+        _record_health(registry, name, result)
     return results
 
 

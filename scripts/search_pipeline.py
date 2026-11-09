@@ -74,6 +74,8 @@ from search_rank import (
     rrf_merge,
 )
 from search_types import Stage
+# 状态词表唯一真源：精排结局 / 缓存层级（2026-11-09 收口）
+import engine_states
 from stage_timing import tick as _tick, tock as _tock
 from time_utils import apply_time_window as _apply_time_window
 from time_utils import sort_results_by_time as _sort_results
@@ -140,7 +142,7 @@ class _SearchRun:
     time_filter_warning: str | None = None
     recovery_info: dict[str, Any] | None = None
     rank_method: str = "none"
-    reranker_status: str = "skipped_short"
+    reranker_status: str = engine_states.RERANK_SKIPPED_SHORT
     local_rerank_on: bool = False
     fact_alignment: dict[str, Any] | None = None
     number_conflict: dict[str, Any] | None = None
@@ -580,14 +582,14 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     _tock(timing, "recovery", _tk_recovery)
     _tk_rerank = _tick(timing)
     local_rerank_on = env_flag("ARGO_LOCAL_RERANK")
-    reranker_status = "skipped_short"
+    reranker_status = engine_states.RERANK_SKIPPED_SHORT
     rank_method = "none"
     if mode == "fast" or depth == "fast":
-        reranker_status = "skipped_fast"
+        reranker_status = engine_states.RERANK_SKIPPED_FAST
     elif merged and len(merged) > 1:
         # 全量重排（top_n=len），由最终输出统一截断 max_results
         merged, reranker_status = rerank_results(query, merged, top_n=len(merged))
-        if reranker_status == "ok":
+        if reranker_status == engine_states.RERANK_OK:
             rank_method = "bocha"
 
     # 本地五维 rerank 保底：受 ARGO_LOCAL_RERANK 开关控制（可观测 rank_method）。
@@ -824,7 +826,9 @@ def finalize(req: _SearchRequest, run: _SearchRun, hooks: Any) -> dict[str, Any]
                 st = (outcome or {}).get("status")
                 success = bool(res and any(isinstance(r, dict) and "error" not in r for r in res))
                 # 空结果说明查询与源不匹配而非源故障，单独统计不拉低成功率（见 adaptive.get_score）。
-                empty = (not success) and st in ("no-results", "no-results-cached")
+                empty = (not success) and st in (
+                    engine_states.OUTCOME_NO_RESULTS,
+                    engine_states.OUTCOME_NO_RESULTS_CACHED)
                 latency = engine_latency.get(eng, elapsed / max(len(raw_results), 1))
                 cost = get_cost_factor(eng)
                 quality = _shares.get(eng) if success else None

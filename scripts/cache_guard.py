@@ -62,9 +62,11 @@ class FailedStateCacheRejected(ValueError):
 # 确实混有「真的没有」，负缓存是既有设计（EMPTY_RESULT_TTL），等一会重试
 # 由 TTL 自然兜底。本类的共同点：**换环境就能好**，缓存它没有信息量。
 _STATE_FAIL_STATUSES = frozenset({
-    "skipped-missing-env", "skipped-circuit-open",
+    engine_states.OUTCOME_SKIPPED_MISSING_ENV,
+    engine_states.OUTCOME_SKIPPED_CIRCUIT_OPEN,
     engine_states.OUTCOME_AUTH_FAILED,
-    engine_states.OUTCOME_QUOTA_EXHAUSTED, "skipped-quota-exhausted",
+    engine_states.OUTCOME_QUOTA_EXHAUSTED,
+    engine_states.OUTCOME_SKIPPED_QUOTA,
 })
 
 # 配额耗尽错误关键词（唯一来源）：classify_engine_outcome 的 quota-exhausted

@@ -55,7 +55,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_base.py": (1564, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起"),
     "scripts/cache.py": (1373, "存储实现与门面；键、命中判据、准入策略已分别拆到 cache_key_vdom / cache_similarity / cache_guard"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),
-    "scripts/search_rank.py": (983, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支"),
+    "scripts/search_rank.py": (976, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支"),
     "scripts/job.py": (1150, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
     "scripts/matrix_search_eval.py": (1313, "离线路由矩阵，用例表占多数"),
     "scripts/route.py": (1010, "路由决策主干（route_query + 三个判定器）"),

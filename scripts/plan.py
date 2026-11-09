@@ -34,6 +34,8 @@ import time
 from typing import Any, Literal
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 from cli_io import dumps
+# 状态词表唯一真源：计划三态（2026-11-09 收口）
+import engine_states
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
@@ -107,7 +109,7 @@ def requires_user_confirmation(
       - needs_authorization（显式站内登录敏感查询）
     known-url handoff 是工具分流，不是「请确认后搜索」。
     """
-    if plan_status == "needs_authorization":
+    if plan_status == engine_states.PLAN_NEEDS_AUTHORIZATION:
         return True
     # daily / professional / research 的 keyword 与 url-seed 均不弹确认
     _ = (mode, depth, context, input_kind)
@@ -223,7 +225,7 @@ def build_plan(
             )
         return {
             "schema_version": "1.0",
-            "status": "handoff_required",
+            "status": engine_states.PLAN_HANDOFF_REQUIRED,
             "authorization": "not_applicable",
             "input_kind": kind,
             "query": query,
@@ -274,7 +276,7 @@ def build_plan(
     if needs_login and not login_approved:
         return {
             "schema_version": "1.0",
-            "status": "needs_authorization",
+            "status": engine_states.PLAN_NEEDS_AUTHORIZATION,
             "authorization": "explicit_current_turn_login_required",
             "input_kind": kind,
             "query": query,
@@ -378,7 +380,7 @@ def build_plan(
 
     out = {
         "schema_version": "1.0",
-        "status": "ready",
+        "status": engine_states.PLAN_READY,
         "authorization": "not_required",
         "input_kind": kind,
         "query": query,
@@ -447,7 +449,8 @@ def main() -> int:
         context=args.context,
     )
     print(dumps(plan))
-    return 0 if plan.get("status") in ("ready", "handoff_required", "needs_authorization") else 1
+    # 合法计划态 → 0；invalid_request 之类的输入错误 → 非 0（调用方据此重试）
+    return 0 if plan.get("status") in engine_states.PLAN_STATUSES else 1
 
 
 if __name__ == "__main__":

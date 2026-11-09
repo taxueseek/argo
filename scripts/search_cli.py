@@ -598,7 +598,7 @@ def main():
     # 本地命中并入已上移进 super_search（shape_response 统一出口，L1 并行），
     # 这里不再串行补合并——双份合并会让同一批命中出现两次。
 
-    if args.archive and results.get("status") != "handoff_required":
+    if args.archive and results.get("status") != engine_states.PLAN_HANDOFF_REQUIRED:
         try:
             from archive_run import write_search_archive, resolve_archive_root
             root = resolve_archive_root(args.archive_dir) if args.archive_dir else None

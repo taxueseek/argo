@@ -174,6 +174,11 @@ class Stage(str, Enum):
 
     从 search.py 搬来这里：执行层与加工层（search_pipeline）都要发进度事件，
     枚举放在任何一侧都会让另一侧反向依赖；search_types 是本仓共享类型的家。
+
+    终态契约：一次运行以 DONE 收尾（缓存命中路径同样发 DONE，带
+    `cached=True`）；异常路径由调用方自行捕获并回落，ERROR 保留给消费方
+    上报失败用，本仓热路径不自行发出——不要在流程里「补」一个 ERROR 分支，
+    那会把「回调没收到事件」和「搜索失败」混成同一件事。
     """
 
     START = "start"

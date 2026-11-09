@@ -11,6 +11,7 @@ from __future__ import annotations
 from search_rank import filter_results_by_domains
 from search_types import slot_record as dataclass
 from snippet_clean import clean_snippet
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 from typing import Any
 from output_transparency import (  # noqa: F401
     _AGGREGATOR_HOSTS,
@@ -383,7 +384,7 @@ def format_timing(t: dict[str, Any]) -> str:
 def format_text_output(results: dict[str, Any]) -> str:
     """日常搜索人读格式：条目正文 + 底部「相关信源」链接（类传统 SERP）。"""
     lines = []
-    if results.get("status") == "handoff_required":
+    if results.get("status") == engine_states.PLAN_HANDOFF_REQUIRED:
         ho = results.get("handoff") or {}
         lines.append("=== HANDOFF (known-url, search skipped) ===")
         lines.append(f"  url: {ho.get('url')}")
@@ -391,7 +392,8 @@ def format_text_output(results: dict[str, Any]) -> str:
         for lim in (results.get("limitations") or [])[:4]:
             lines.append(f"  ! {lim}")
         return "\n".join(lines)
-    if results.get("status") in ("ready",) and results.get("steps") and not results.get("results"):
+    if results.get("status") == engine_states.PLAN_READY \
+            and results.get("steps") and not results.get("results"):
         # plan-only
         lines.append(f"=== PLAN {results.get('status')} kind={results.get('input_kind')} ===")
         route = results.get("route") or {}

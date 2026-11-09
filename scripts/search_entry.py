@@ -36,6 +36,8 @@ from usage_log import emit as _emit_usage
 from search_output import _collect_errors
 from search_pipeline import _SearchRequest, _SearchRun
 from search_types import Stage
+# 状态词表唯一真源：缓存层级 / 精排结局（2026-11-09 收口）
+import engine_states
 from stage_timing import StageTiming, tick as _tick, tock as _tock
 from time_utils import (
     is_time_capable as _is_time_capable,
@@ -190,7 +192,8 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
         if hit:
             cache_elapsed = int((time.time() - t_cache_start) * 1000)
             if on_progress:
-                on_progress(Stage.CACHE_HIT, {"cache_level": hit.get("_cache_level", "L?")})
+                on_progress(Stage.CACHE_HIT, {"cache_level": hit.get(
+                    "_cache_level", engine_states.CACHE_LEVEL_UNKNOWN)})
             tfidf_scores = decision.get("tfidf_scores", [])
             if tfidf_scores and all(s.get("score", 0) == 0 for s in tfidf_scores):
                 tfidf_scores = []
@@ -207,7 +210,8 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
                 "query": query, "engine": (cached_combo or engines)[0],
                 "engines": cached_combo,
                 "engines_combo": cached_combo, "cached": True,
-                "cache_level": hit.get("_cache_level", "L?"),
+                "cache_level": hit.get(
+                    "_cache_level", engine_states.CACHE_LEVEL_UNKNOWN),
                 "domain": domain, "elapsed_ms": cache_elapsed,
                 "tfidf_scores": tfidf_scores,
                 "route_reason": hit.get("route_reason") or decision.get("reason"),
@@ -216,7 +220,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
                 "count": len(hit_results),
                 "engines_used": hit.get("engines_used") or engines,
                 "mode": mode, "depth": depth,
-                "reranker": "skipped_cache",
+                "reranker": engine_states.RERANK_SKIPPED_CACHE,
                 "engine_outcomes": hit.get("engine_outcomes") or [],
                 "errors": _collect_errors({}, hit.get("engine_outcomes") or []),
                 "time_filtered": 0,
@@ -238,6 +242,14 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
                 _hit["funnel"] = hit["funnel"]
             if timing is not None:
                 _hit["timing"] = timing.summary()
+            # 缓存命中同样是「一次搜索的结束」：进度契约要求每次运行以
+            # DONE/ERROR 收尾（见 search_types.Stage）。此前这里直接 return，
+            # 消费方在命中路径上永远等不到终态事件——冷路径有、热路径没有，
+            # 而热路径恰恰是常驻进程里最常见的那种。
+            if on_progress:
+                on_progress(Stage.DONE, {"count": len(hit_results),
+                                         "elapsed_ms": cache_elapsed,
+                                         "cached": True})
             return _Prepared(cached=_hit)
 
     # 缓存未命中才拉起查询理解、词形规范化与网络感知超时（缓存命中热路径零开销）

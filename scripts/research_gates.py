@@ -17,6 +17,9 @@ from collections import Counter
 from typing import Any
 from urllib.parse import urlparse
 
+# 状态词表唯一真源：覆盖三态（2026-11-09 收口）
+import engine_states
+
 
 def _host_of(url: str) -> str:
     """取规范化 host（www 折叠为裸域）。"""
@@ -128,7 +131,8 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
 
     uncovered = [
         cm for cm in (dossier.get("coverage_map") or [])
-        if isinstance(cm, dict) and cm.get("status") == "NOT_COVERED"
+        if isinstance(cm, dict)
+        and cm.get("status") == engine_states.COVERAGE_NOT_COVERED
     ]
     if uncovered:
         failures.append({

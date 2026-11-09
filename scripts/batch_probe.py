@@ -38,12 +38,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from cli_io import dumps
+# 状态词表唯一真源：条目分类与批次结论（2026-11-09 收口）
+import engine_states
 
-UNSUPPORTED = "unsupported"
-NEEDS_AUTH = "needs_auth"
-ALREADY_HAVE = "already_have"
-NOT_FOUND = "not_found"
-UNKNOWN = "unknown"
+UNSUPPORTED = engine_states.PROBE_UNSUPPORTED
+NEEDS_AUTH = engine_states.PROBE_NEEDS_AUTH
+ALREADY_HAVE = engine_states.PROBE_ALREADY_HAVE
+NOT_FOUND = engine_states.PROBE_NOT_FOUND
+UNKNOWN = engine_states.PROBE_UNKNOWN
 
 # 用户可自行解决的问题（报告分节与文案依据）
 ACTIONABLE = {NEEDS_AUTH}
@@ -163,11 +165,11 @@ def probe_batch(
             by_problem.setdefault(it["problem"], []).append(it["url"])
 
     if not ready:
-        verdict = "stop"
+        verdict = engine_states.PROBE_STOP
     elif len(ready) < len(items):
-        verdict = "go_with_skips"
+        verdict = engine_states.PROBE_GO_WITH_SKIPS
     else:
-        verdict = "go"
+        verdict = engine_states.PROBE_GO
 
     return {
         "total": len(items),

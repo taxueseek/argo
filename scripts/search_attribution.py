@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
+
 # 写进日志的慢源条数：日志是 append-only JSONL，超限会回缩，
 # 慢源恒在前排，Top-3 足够定位瓶颈而不必留全量底。
 DEFAULT_TOP_N = 3
@@ -86,8 +88,10 @@ def is_synthetic_run(engines: Iterable[str] | None) -> bool:
 # 只收持续性状态（配额/缺 env/鉴权），不含 timeout/error——后者是本次
 # 真的失败了，原表述已够用。
 SKIPPED_SOURCE_STATUSES: frozenset[str] = frozenset({
-    "skipped-quota-exhausted", "skipped-missing-env",
-    "quota-exhausted", "auth-failed",
+    engine_states.OUTCOME_SKIPPED_QUOTA,
+    engine_states.OUTCOME_SKIPPED_MISSING_ENV,
+    engine_states.OUTCOME_QUOTA_EXHAUSTED,
+    engine_states.OUTCOME_AUTH_FAILED,
 })
 
 

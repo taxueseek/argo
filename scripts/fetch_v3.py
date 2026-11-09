@@ -1422,7 +1422,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 except Exception:
                     pass
                 out["cached"] = True
-                out["cache_level"] = hit.get("_cache_level", "L?")
+                out["cache_level"] = hit.get("_cache_level", engine_states.CACHE_LEVEL_UNKNOWN)
                 out["url"] = url
                 return _strip_html_unless_needed(out, need_html)
         except Exception:

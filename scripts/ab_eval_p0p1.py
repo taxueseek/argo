@@ -32,6 +32,7 @@ from cache import SearchCache
 from evidence import is_serp_or_jump_url, score_authority
 from circuit_breaker import CircuitBreaker
 from cli_io import dumps
+import engine_states as _states
 
 
 def section(title: str):
@@ -142,7 +143,10 @@ def main():
     check("e2e_has_outcomes", isinstance(r1.get("engine_outcomes"), list))
     # fast 模式冷路径：skipped_fast；若极短结果也可能 skipped_short
     check("e2e_reranker_skipped_fast",
-          r1.get("reranker") in ("skipped_fast", "skipped_short", "ok", "fallback", "skipped_no_key"),
+          r1.get("reranker") in (
+              _states.RERANK_SKIPPED_FAST, _states.RERANK_SKIPPED_SHORT,
+              _states.RERANK_OK, _states.RERANK_FALLBACK,
+              _states.RERANK_SKIPPED_NO_KEY),
           str(r1.get("reranker")))
     check("e2e_warm_cached", bool(r2.get("cached") and r3.get("cached")),
           f"r2={r2.get('cached')} r3={r3.get('cached')}")
@@ -225,11 +229,12 @@ def main():
           and should_attach_plan("auto", "fast", context="research") is False)
 
     ho = build_plan("https://docs.python.org/3/")
-    check("plan_handoff", ho.get("status") == "handoff_required")
+    check("plan_handoff", ho.get("status") == _states.PLAN_HANDOFF_REQUIRED)
 
     # known-url 不进热搜
     r_url = super_search("https://example.com/x", mode="fast", n=3, timeout=5)
-    check("search_skips_known_url", r_url.get("status") == "handoff_required"
+    check("search_skips_known_url",
+          r_url.get("status") == _states.PLAN_HANDOFF_REQUIRED
           and r_url.get("count", 0) == 0,
           f"status={r_url.get('status')} count={r_url.get('count')}")
     check("known_url_no_confirm", r_url.get("requires_confirmation") is False)
@@ -247,7 +252,8 @@ def main():
     check("envelope_preserves_order", env_out["results"][0]["title"] == "T1")
     check("envelope_candidates", len(env_out.get("candidates") or []) == 2)
     check("envelope_verification_candidate",
-          env_out["candidates"][0]["verification"]["status"] == "candidate")
+          env_out["candidates"][0]["verification"]["status"]
+          == _states.VERIFICATION_CANDIDATE)
     check("envelope_limitations", bool(env_out.get("limitations")))
 
     # 热路径仍带 envelope 且可缓存（不破坏冷/热）

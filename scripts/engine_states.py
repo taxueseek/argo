@@ -39,7 +39,24 @@ engine_dispatch 的探测收紧、route 的扶正判断、badcase_ledger 的过�
     env_filtered / missing_key / missing_dep / quota_exhausted / blocked /
     admitted（CLI 与 ZCode 面板共用）
 12. 平台/运行时状态（§10，dsh-plugin / daemon）：running / stopped / idle /
-    busy；ready / loading / unavailable
+    busy（daemon ping/status 直接输出，ZCode 桥消费）；ready / loading /
+    unavailable（JS 侧仍写死）
+13. 精排器（reranker）：ok / fallback / skipped_no_key / skipped_short /
+    skipped_fast / skipped_circuit_open / skipped_quota / skipped_cache
+    （2026-11-09 收口：此前 8 个值散在 search_rank / search_pipeline /
+    search_entry 三处，降级集合另有一份手抄字面量）
+14. 搜索计划（plan）：ready / handoff_required / needs_authorization
+    （plan.py 产出，search / search_output / search_cli 消费）
+15. 批处理预检（batch probe）：条目 unsupported / needs_auth / already_have /
+    not_found / unknown；结论 go / go_with_skips / stop
+16. 数值印证（numeric verdict）：confirmed / partial / missing / unfetchable
+17. 取证覆盖（coverage）：COVERED / PARTIAL / NOT_COVERED
+18. 健康探针（probe status）：available / degraded / unavailable / unknown
+    （health_probe 落库值；health_check 只写布尔 available）
+19. 缓存层级（cache level）：L1 / L2 / L?（未知兜底）
+20. 候选核验（verification）：candidate / opened
+21. 观察模式变更（watch change）：none / noise / substantive / unknown
+22. 候选信封路由（envelope route）：completed / partial
 
 ## 词表边界（不要把两套词表合并）
 
@@ -250,16 +267,11 @@ def is_contributing_outcome(status: str) -> bool:
     return status in CONTRIBUTING_OUTCOMES
 
 
-def is_state_failure_outcome(status: str) -> bool:
-    """该结局是否为配置/状态类失败（缺密钥/熔断/配额/准入）。
-
-    这类失败不该被当成引擎故障记进熔断器——它们消耗了时间但原因不在引擎实现。
-    """
-    if status.startswith(OUTCOME_SKIPPED_PREFIX):
-        return True
-    return status in {
-        OUTCOME_AUTH_FAILED, OUTCOME_QUOTA_EXHAUSTED, OUTCOME_BLOCKED,
-    }
+# 注：`is_state_failure_outcome` 的**唯一实现**在 cache_guard.py，入参是
+# outcome dict，判据除状态名外还看 detail 里的缺密钥线索，且刻意不收
+# `blocked`（那是源站侧事实，换环境不一定能好）。本模块曾有一个同名纯函数
+# 只收状态名、把 blocked 也算进去，两处同名单义反——统一按 dict 版走，
+# 需要判定请 import cache_guard.is_state_failure_outcome，勿在此处再长一份。
 
 
 # ── 7. 失败归因（failure category）─────────────────────────────────────────
@@ -365,15 +377,19 @@ def is_degraded_fetch_method(method: str) -> bool:
 
 
 # ── 10. 平台/运行时状态（dsh-plugin / daemon）──────────────────────────────
-# 仅登记 Python 侧观测到的状态名，**尚未收口**：
-# - DSH 插件 `packages/dsh-plugin/dsh/client.js` 把 ready/loading/unavailable
-#   写成字面量；ZCode 桥 `packages/argo-zcode/server/py_bridge.py` 的探活是
-#   中文文案 + daemon_running 布尔 + pid 正则，面板 `ui/panel.html` 再写一份。
+# 生产端已收口：`scripts/daemon.py` 的 ping 响应与 `status` 子命令都带
+# machine-readable 的 `state` 字段，值取自本表；进程停止时 status 报
+# DAEMON_STOPPED（此时没有 ping 可回）。`packages/argo-zcode/server/py_bridge.py`
+# 直接读这个字段，不再从中文文案反推 pid、也不再用布尔冒充三态。
+#
+# 未收口的部分（JS 侧，本文件当前不是 JS 真源）：
+# - DSH 插件 `packages/dsh-plugin/dsh/client.js` 的 ready/loading/unavailable
+#   仍是字面量；面板的连接池卡片已改为按配置值渲染，不再写死「正常」。
 # - `scripts/gen_native_tools.py` 只从 mcp_tools.py 生成 NATIVE_TOOLS 工具
 #   schema，产物 `native-tools.mjs` 不含任何状态常量；旧注释声称「JS 侧通过
 #   该生成器引用本词表」与实现不符，已按实测更正。
 # - `tests/test_native_tools_sync.py` 只比对工具 schema，不会发现状态词表漂移。
-# 跨侧收口须另建生成器与对拍门禁，本文件当前不是 JS 侧真源。
+# 跨侧收口须另建生成器与对拍门禁。
 
 DAEMON_RUNNING = "running"
 DAEMON_STOPPED = "stopped"
@@ -390,4 +406,199 @@ PLUGIN_UNAVAILABLE = "unavailable"
 
 PLUGIN_STATES = frozenset({
     PLUGIN_READY, PLUGIN_LOADING, PLUGIN_UNAVAILABLE,
+})
+
+
+# ── 11. 精排器（reranker）──────────────────────────────────────────────────
+# 一次精排调用的结局。`ok` 是唯一「远程精排真出了排序」的值；其余全部
+# 落到降级集合 RERANK_DEGRADED_STATUSES，由本地五维 / TF-IDF 保底接管。
+#
+# 为什么降级集合必须是 frozenset 常量而不是各调用点手抄元组：2026-11-09
+# 审计发现 search_pipeline 的触发条件、postprocess_signals 的抛光条件、
+# ab_eval 的断言三处各写一份，新增一个状态时漏改任何一处都是**静默退化**
+# （既不精排也不保底，顺序退回 RRF 原始序且无信号）。
+
+RERANK_OK = "ok"
+RERANK_FALLBACK = "fallback"
+RERANK_SKIPPED_NO_KEY = "skipped_no_key"
+RERANK_SKIPPED_SHORT = "skipped_short"
+RERANK_SKIPPED_FAST = "skipped_fast"
+RERANK_SKIPPED_CIRCUIT_OPEN = "skipped_circuit_open"
+RERANK_SKIPPED_QUOTA = "skipped_quota"
+# 缓存命中：本次根本没进加工段（search_entry 在命中路径直接写这个值）。
+RERANK_SKIPPED_CACHE = "skipped_cache"
+
+RERANK_STATUSES = frozenset({
+    RERANK_OK, RERANK_FALLBACK, RERANK_SKIPPED_NO_KEY, RERANK_SKIPPED_SHORT,
+    RERANK_SKIPPED_FAST, RERANK_SKIPPED_CIRCUIT_OPEN, RERANK_SKIPPED_QUOTA,
+    RERANK_SKIPPED_CACHE,
+})
+
+# 不是 ok 即降级：需要本地保底接管的状态全集。
+RERANK_DEGRADED_STATUSES = RERANK_STATUSES - {RERANK_OK}
+
+
+def is_rerank_degraded(status: str) -> bool:
+    """该精排结局是否意味着「远程精排没出排序」（需要本地保底）。"""
+    return status in RERANK_DEGRADED_STATUSES
+
+
+# ── 12. 搜索计划（plan）─────────────────────────────────────────────────────
+# plan.build_plan 的三态：可直接搜（ready）、known-url 交接给 fetch
+# （handoff_required）、站内登录需要显式授权（needs_authorization）。
+# 消费面：search.super_search 的短路分支、search_output 的人读格式、
+# search_cli 的归档开关、plan.main 的退出码。
+
+PLAN_READY = "ready"
+PLAN_HANDOFF_REQUIRED = "handoff_required"
+PLAN_NEEDS_AUTHORIZATION = "needs_authorization"
+
+PLAN_STATUSES = frozenset({
+    PLAN_READY, PLAN_HANDOFF_REQUIRED, PLAN_NEEDS_AUTHORIZATION,
+})
+
+
+# ── 13. 批处理预检（batch probe）───────────────────────────────────────────
+# 条目级分类 + 批次级结论。条目 UNKNOWN = 合法 URL 但本地无证据（可能
+# 需要网络探测）；它不直接导致 stop——探测不到不等于不存在。
+
+PROBE_UNSUPPORTED = "unsupported"
+PROBE_NEEDS_AUTH = "needs_auth"
+PROBE_ALREADY_HAVE = "already_have"
+PROBE_NOT_FOUND = "not_found"
+PROBE_UNKNOWN = "unknown"
+
+PROBE_ITEM_STATES = frozenset({
+    PROBE_UNSUPPORTED, PROBE_NEEDS_AUTH, PROBE_ALREADY_HAVE,
+    PROBE_NOT_FOUND, PROBE_UNKNOWN,
+})
+
+PROBE_GO = "go"
+PROBE_GO_WITH_SKIPS = "go_with_skips"
+PROBE_STOP = "stop"
+
+PROBE_VERDICTS = frozenset({PROBE_GO, PROBE_GO_WITH_SKIPS, PROBE_STOP})
+
+
+# ── 14. 数值印证（numeric verdict）─────────────────────────────────────────
+# 摘要里的关键数字与原文是否对得上。只有 missing / partial 触发降权
+# （NUMERIC_PENALIZED），confirmed 与 unfetchable 都不动排序——拿不到正文
+# 不是「数字错了」的证据。
+
+NUMERIC_CONFIRMED = "confirmed"
+NUMERIC_PARTIAL = "partial"
+NUMERIC_MISSING = "missing"
+NUMERIC_UNFETCHABLE = "unfetchable"
+
+NUMERIC_VERDICTS = frozenset({
+    NUMERIC_CONFIRMED, NUMERIC_PARTIAL, NUMERIC_MISSING, NUMERIC_UNFETCHABLE,
+})
+
+# 触发降权的 verdict（reorder_by_numeric 的唯一判据）
+NUMERIC_PENALIZED = frozenset({NUMERIC_MISSING, NUMERIC_PARTIAL})
+
+
+# ── 15. 取证覆盖（coverage）────────────────────────────────────────────────
+# 单个研究维度被多少个结果覆盖。research_dossier 产出，research_gates 与
+# blind_spots 消费；值域大写是既有输出契约（dossier JSON 里就这样出现）。
+
+COVERAGE_COVERED = "COVERED"
+COVERAGE_PARTIAL = "PARTIAL"
+COVERAGE_NOT_COVERED = "NOT_COVERED"
+
+COVERAGE_STATUSES = frozenset({
+    COVERAGE_COVERED, COVERAGE_PARTIAL, COVERAGE_NOT_COVERED,
+})
+
+
+# ── 16. 健康探针（probe status）────────────────────────────────────────────
+# health_probe 的 engine_health.status 列：连续失败未达阈值记 degraded，
+# 达阈值记 unavailable，无记录记 unknown。health_check 另一条路径只写布尔
+# available，不写这一列——两套视图并存是接口事实，不要合并。
+
+PROBE_STATUS_AVAILABLE = "available"
+PROBE_STATUS_DEGRADED = "degraded"
+PROBE_STATUS_UNAVAILABLE = "unavailable"
+PROBE_STATUS_UNKNOWN = "unknown"
+
+PROBE_HEALTH_STATUSES = frozenset({
+    PROBE_STATUS_AVAILABLE, PROBE_STATUS_DEGRADED,
+    PROBE_STATUS_UNAVAILABLE, PROBE_STATUS_UNKNOWN,
+})
+
+# 连续失败达到该次数即判 unavailable（状态机转换条件，与状态名同源）。
+# 此前 health_probe 与 health_check 各写一个 MAX_FAILURES = 2，且 health_check
+# 那份没有任何读取点——改名也照样跑，等于两处「看起来有阈值」。
+PROBE_MAX_FAILURES = 2
+
+# 视为「可路由」的探针状态：只有 unavailable 是硬失败；degraded 是「连续
+# 失败但未达阈值」，unknown 是「没探过」。后两者都放行——与
+# health_probe.get_engine_status 的 available 判据（`!= "unavailable"`）逐位
+# 一致，包括对未登记状态值的 fail-open（宁可放行，不让词表演进把源静默过滤）。
+PROBE_ROUTABLE_STATUSES = frozenset({
+    PROBE_STATUS_AVAILABLE, PROBE_STATUS_DEGRADED, PROBE_STATUS_UNKNOWN,
+})
+
+
+def is_probe_available(status: str) -> bool:
+    """探针状态是否允许参与路由（唯一判据：不是 unavailable）。
+
+    刻意不看 PROBE_ROUTABLE_STATUSES 白名单——历史行为就是「只认
+    unavailable 一票否决」，改成白名单会让未登记值（旧库/新版本回滚）从
+    「可用」静默变成「不可用」，把源过滤掉。
+    """
+    return str(status or "") != PROBE_STATUS_UNAVAILABLE
+
+
+# ── 17. 缓存层级（cache level）─────────────────────────────────────────────
+CACHE_LEVEL_L1 = "L1"
+CACHE_LEVEL_L2 = "L2"
+# 未知兜底：缓存命中但载荷没带 _cache_level（旧存档/替身缓存）。
+CACHE_LEVEL_UNKNOWN = "L?"
+
+CACHE_LEVELS = frozenset({
+    CACHE_LEVEL_L1, CACHE_LEVEL_L2, CACHE_LEVEL_UNKNOWN,
+})
+
+
+# ── 18. 候选核验（verification）────────────────────────────────────────────
+# candidate = 只有摘要线索、未打开原文；opened = 已 fetch 过原文。
+# snippet 永远不得被标成 opened（candidate_envelope 的注释契约）。
+
+VERIFICATION_CANDIDATE = "candidate"
+VERIFICATION_OPENED = "opened"
+
+VERIFICATION_STATUSES = frozenset({
+    VERIFICATION_CANDIDATE, VERIFICATION_OPENED,
+})
+
+
+# ── 19. 观察模式变更（watch change）────────────────────────────────────────
+# 两帧正文比对的三态 + 旧存档（只有指纹无正文）的 unknown 兜底。
+# 哈希只做快速路径：diff 说没变就是没变（noise 也算没变）。
+
+WATCH_CHANGE_NONE = "none"
+WATCH_CHANGE_NOISE = "noise"
+WATCH_CHANGE_SUBSTANTIVE = "substantive"
+WATCH_CHANGE_UNKNOWN = "unknown"
+
+WATCH_CHANGE_TYPES = frozenset({
+    WATCH_CHANGE_NONE, WATCH_CHANGE_NOISE, WATCH_CHANGE_SUBSTANTIVE,
+    WATCH_CHANGE_UNKNOWN,
+})
+
+# 视为「内容真的变了」的集合（watch.cmd_check 的 changed 判据）。
+WATCH_SUBSTANTIVE_TYPES = frozenset({WATCH_CHANGE_SUBSTANTIVE})
+
+
+# ── 20. 候选信封路由（envelope route）──────────────────────────────────────
+# attach_envelope 给每个 route 写的交付态：无 errors 记 completed，有记 partial。
+# 与 outcome.status 的 partial 同名不同层：那个是单个引擎的结局，
+# 这个是整次检索的交付结论。
+
+ENVELOPE_ROUTE_COMPLETED = "completed"
+ENVELOPE_ROUTE_PARTIAL = "partial"
+
+ENVELOPE_ROUTE_STATUSES = frozenset({
+    ENVELOPE_ROUTE_COMPLETED, ENVELOPE_ROUTE_PARTIAL,
 })

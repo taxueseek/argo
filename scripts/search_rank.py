@@ -478,15 +478,14 @@ def rerank_results(query: str, results: list[dict[str, Any]],
                    ) -> tuple[list[dict[str, Any]], str]:
     """使用博查语义排序模型对搜索结果二次精排。
 
-    返回 (results, status)：status ∈ ok | skipped_no_key | skipped_short |
-    skipped_fast | skipped_circuit_open | skipped_quota | fallback
+    返回 (results, status)：status ∈ RERANK_STATUSES（见 engine_states §11）。
     """
     if not results or len(results) <= 1:
-        return results, "skipped_short"
+        return results, engine_states.RERANK_SKIPPED_SHORT
 
     api_key = get_env(["ARGO_BOCHA_API_KEY", "BOCHA_API_KEY"])
     if not api_key:
-        return results, "skipped_no_key"
+        return results, engine_states.RERANK_SKIPPED_NO_KEY
 
     # 配额联动（在熔断器之前）：bocha 搜索侧已归因 quota_exhausted（同源同
     # key）时，精排端点连「半开探测」都不必打。此前 rerank 的 403 归 auth 走
@@ -498,7 +497,7 @@ def rerank_results(query: str, results: list[dict[str, Any]],
     try:
         from quota import get_quota_manager
         if get_quota_manager().is_remote_exhausted("bocha"):
-            return results, "skipped_quota"
+            return results, engine_states.RERANK_SKIPPED_QUOTA
     except Exception:
         pass
 
@@ -519,7 +518,7 @@ def rerank_results(query: str, results: list[dict[str, Any]],
         except Exception:
             allowed = True
         if not allowed:
-            return results, "skipped_circuit_open"
+            return results, engine_states.RERANK_SKIPPED_CIRCUIT_OPEN
 
     documents = []
     for r in results:
@@ -551,7 +550,7 @@ def rerank_results(query: str, results: list[dict[str, Any]],
                     pass
             rerank_results_list = data.get("data", {}).get("results", [])
             if not rerank_results_list:
-                return results, "fallback"
+                return results, engine_states.RERANK_FALLBACK
             scored = []
             for rr in rerank_results_list:
                 idx = rr.get("index", -1)
@@ -563,18 +562,18 @@ def rerank_results(query: str, results: list[dict[str, Any]],
                     scored.append(item)
             if scored:
                 scored.sort(key=lambda x: x.get("score", 0), reverse=True)
-                return scored[:top_n], "ok"
+                return scored[:top_n], engine_states.RERANK_OK
     except urllib.error.HTTPError as e:
         # 401/403（凭证失效 / 额度耗尽）与 429（限流）都不是瞬时抖动：
         # 立刻重试不会自愈，只会把同一笔 RTT 再付一次。分类只影响归因展示，
         # 熔断策略一视同仁（都是 kind="error"）。
         cat = "rate_limited" if e.code == 429 else "auth"
         _note_rerank_failure(breaker, cat, f"HTTP {e.code}")
-        return results, "fallback"
+        return results, engine_states.RERANK_FALLBACK
     except (urllib.error.URLError, json.JSONDecodeError, OSError) as e:
         _note_rerank_failure(breaker, "network", f"{type(e).__name__}: {e}")
-        return results, "fallback"
-    return results, "fallback"
+        return results, engine_states.RERANK_FALLBACK
+    return results, engine_states.RERANK_FALLBACK
 
 def _tokens(text: str) -> list[str]:
     """轻量分词：中文单字 + 英文单词，统一小写（复用 tfidf 风格）。
@@ -970,14 +969,8 @@ def filter_results_by_domains(
 
 # 「bocha 没有产出排序」的唯一来源：落到本地五维保底的状态全集。
 #
-# 此前是内联在调用点的四元素元组，新增状态极易漏改，而漏改的后果是静默的——
-# 既不精排也不保底，最终顺序退化成 RRF 原始序，没有任何信号。它属于精排层，
-# 因此住在精排函数旁边（search.py 只是同名转出）。
-_RERANK_DEGRADED_STATUSES = frozenset({
-    "skipped_no_key",        # 未配置密钥
-    "skipped_short",         # 结果太少，不值得精排
-    "skipped_fast",          # fast 档不付远程精排
-    "skipped_circuit_open",  # 端点熔断中（见 _RERANK_BREAKER_KEY）
-    "skipped_quota",         # 搜索端点已归因配额耗尽，联动跳过（同源同 key）
-    "fallback",              # 端点报错或返回不可用数据
-})
+# 2026-11-09 收口到 engine_states.RERANK_DEGRADED_STATUSES：此前是本文件里的
+# 手抄字面量，search_pipeline 的触发条件、postprocess_signals 的抛光条件、
+# ab_eval 的断言又各写一份——新增状态漏改任何一处都是**静默退化**（既不精排
+# 也不保底，顺序退回 RRF 原始序且无信号）。
+_RERANK_DEGRADED_STATUSES = engine_states.RERANK_DEGRADED_STATUSES

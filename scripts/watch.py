@@ -25,6 +25,7 @@ import time
 from typing import Any
 
 from cli_io import dumps, dumps_pretty
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 _SNAP_CAP = 10  # 每个 URL 保留的快照历史上限（旧的丢弃）
 
@@ -146,7 +147,8 @@ def _block_key(block: str) -> str:
 def diff_text(old: str, new: str) -> dict:
     """比较两版正文。返回 change_type（none/noise/substantive）与变化块样本。"""
     if _norm(old) == _norm(new):
-        return {"change_type": "none", "noise_categories": [],
+        return {"change_type": engine_states.WATCH_CHANGE_NONE,
+                "noise_categories": [],
                 "added_blocks": [], "removed_blocks": []}
     old_blocks = _blocks(old)
     new_blocks = _blocks(new)
@@ -155,12 +157,14 @@ def diff_text(old: str, new: str) -> dict:
     added = [b for b in new_blocks if _block_key(b) not in old_keys][:3]
     removed = [b for b in old_blocks if _block_key(b) not in new_keys][:3]
     if _norm(_mask_noise(old)) == _norm(_mask_noise(new)):
-        change_type = "noise"
+        change_type = engine_states.WATCH_CHANGE_NOISE
     else:
-        change_type = "substantive"
+        change_type = engine_states.WATCH_CHANGE_SUBSTANTIVE
     return {
         "change_type": change_type,
-        "noise_categories": _noise_categories(old, new) if change_type == "noise" else [],
+        "noise_categories": (_noise_categories(old, new)
+                             if change_type == engine_states.WATCH_CHANGE_NOISE
+                             else []),
         "added_blocks": [b[:200] for b in added],
         "removed_blocks": [b[:200] for b in removed],
     }
@@ -246,9 +250,10 @@ def cmd_check(only_url: str | None) -> list[dict]:
                 diff = diff_text(prev["content"], snap["content"])
                 report.update(diff)
                 # 以正文 diff 为准：哈希只做快速路径，diff 说没变就是没变。
-                report["changed"] = diff["change_type"] != "none"
+                report["changed"] = (
+                    diff["change_type"] != engine_states.WATCH_CHANGE_NONE)
             elif report["changed"]:
-                report["change_type"] = "unknown"
+                report["change_type"] = engine_states.WATCH_CHANGE_UNKNOWN
         entry = data["urls"][url]
         entry["snapshots"] = (entry["snapshots"] + [snap])[-_SNAP_CAP:]
         _trim_contents(entry)

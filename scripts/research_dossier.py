@@ -12,6 +12,9 @@ import re
 from typing import Any
 from urllib.parse import urlparse, parse_qsl, urlunparse
 
+# 状态词表唯一真源：覆盖三态（2026-11-09 收口）
+import engine_states
+
 try:
     from evidence import compute_credibility
 except ImportError:  # pragma: no cover
@@ -74,10 +77,10 @@ def coverage_status(sr: dict[str, Any]) -> str:
     results = sr.get("results") or []
     n = len(results)
     if n >= _COVERAGE_OK_MIN:
-        return "COVERED"
+        return engine_states.COVERAGE_COVERED
     if n >= _COVERAGE_PARTIAL_MIN:
-        return "PARTIAL"
-    return "NOT_COVERED"
+        return engine_states.COVERAGE_PARTIAL
+    return engine_states.COVERAGE_NOT_COVERED
 
 
 def evidence_tier(source: str, source_grades: dict[str, Any] | None) -> str:
@@ -441,12 +444,14 @@ def build_dossier(
 
     blind_spots = [
         {"dimension": cm["dimension"], "reason": "无结果"}
-        for cm in coverage_map if cm["status"] == "NOT_COVERED"
+        for cm in coverage_map
+        if cm["status"] == engine_states.COVERAGE_NOT_COVERED
     ]
     blind_spots += [
         {"dimension": cm["dimension"], "reason": "单来源覆盖"}
         for cm in coverage_map
-        if cm["status"] == "PARTIAL" and cm["engine_count"] <= 1
+        if cm["status"] == engine_states.COVERAGE_PARTIAL
+        and cm["engine_count"] <= 1
     ]
     if not blind_spots and coverage_map:
         blind_spots.append({"dimension": "全局", "reason": "无显式未覆盖维度"})

@@ -42,6 +42,7 @@ except ImportError:
 
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths
+import engine_states  # 状态词表唯一真源：缓存层级（2026-11-09 收口）
 from cache_guard import (
     DegradedCacheRejected,
     RECOVERED_DEGRADED_TTL,
@@ -689,9 +690,8 @@ class SQLiteCache:
 
 # ── 双层缓存入口 ───────────────────────────────────────────────────────────────
 
-# 空结果正缓存极短 TTL（秒）— 避免把失败固化成「无结果」
+# 空结果正缓存极短 TTL（秒）— 避免把失败固化成「无结果」；fetch URL 默认 1 小时
 EMPTY_RESULT_TTL = 45
-# fetch URL 默认 TTL
 FETCH_DEFAULT_TTL = 3600
 
 # 证据分在 fetch 条目里的子键名。做成模块级常量而不是类属性：类会被测试
@@ -892,7 +892,7 @@ class SearchCache:
                 out = dict(hit)
                 out["results"] = [dict(r) if isinstance(r, dict) else r
                                    for r in (hit.get("results") or [])]
-                out["_cache_level"] = "L1"
+                out["_cache_level"] = engine_states.CACHE_LEVEL_L1
                 return out
             self._l1.remove(key)
         if time.monotonic() - self._miss_memo[0] < 0.05 and key in self._miss_memo[1]:
@@ -904,7 +904,7 @@ class SearchCache:
             out = dict(hit)
             out["results"] = [dict(r) if isinstance(r, dict) else r
                               for r in (hit.get("results") or [])]
-            out["_cache_level"] = "L2"
+            out["_cache_level"] = engine_states.CACHE_LEVEL_L2
             return out
         return None
 
@@ -987,7 +987,7 @@ class SearchCache:
                         sliced = self._soft_slice(s_hit, max_results)
                         if sliced is not None:
                             out = dict(sliced)
-                            out["_cache_level"] = "L2"
+                            out["_cache_level"] = engine_states.CACHE_LEVEL_L2
                             out["_semantic_hit"] = True
                             out["_semantic_similarity"] = cand["similarity"]
                             out["_semantic_query"] = cand["query"]

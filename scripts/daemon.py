@@ -56,6 +56,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 from argo_paths import state_path, state_root  # noqa: E402
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 SOCK_NAME = "daemon.sock"
 PID_NAME = "daemon.pid"
@@ -460,7 +461,13 @@ class _Server:
                     op = req.get("op")
                     if op == "ping":
                         now = time.monotonic()
+                        # state 是给机器读的唯一判据（词表见 engine_states §10）；
+                        # 保留 ok/running 形态给旧客户端，新增字段不改旧语义。
                         resp = {"ok": True, "pid": os.getpid(),
+                                "state": (engine_states.DAEMON_BUSY
+                                          if self.in_run
+                                          else engine_states.DAEMON_RUNNING),
+                                "in_run": self.in_run,
                                 "uptime_s": round(now - self.started_at, 1),
                                 "idle_s": round(now - self.last_activity, 1),
                                 "fp": self.fp}
@@ -833,8 +840,10 @@ def _stop(args: argparse.Namespace) -> int:
 
 def _status(args: argparse.Namespace) -> int:
     alive = _alive()
-    payload = {"ok": True, "running": bool(alive), "socket": _sock_path(),
-               "pid": (alive or {}).get("pid")}
+    state = (str(alive.get("state") or engine_states.DAEMON_RUNNING)
+             if alive else engine_states.DAEMON_STOPPED)
+    payload = {"ok": True, "running": bool(alive), "state": state,
+               "socket": _sock_path(), "pid": (alive or {}).get("pid")}
     if args.json:
         print(json.dumps(payload, ensure_ascii=False))
     else:

@@ -13,14 +13,20 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
+
 # 本次调用不算失败的基础状态（引擎正常交付、无结果、或被早停主动取消）
 _FAILURE_NON_ERROR: frozenset[str] = frozenset({
-    "ok", "ok-cached", "partial", "no-results", "no-results-cached", "cancelled",
+    engine_states.OUTCOME_OK, engine_states.OUTCOME_OK_CACHED,
+    engine_states.OUTCOME_PARTIAL, engine_states.OUTCOME_NO_RESULTS,
+    engine_states.OUTCOME_NO_RESULTS_CACHED, engine_states.OUTCOME_CANCELLED,
 })
 
 # errors[] 与 uncertainty 排除的 outcome 状态：在基础非错误集之上再排除
 # skipped-quota-exhausted（持续一天的配额跳过状态，不作为单次检索错误刷屏）
-_NON_ERROR_OUTCOME: frozenset[str] = _FAILURE_NON_ERROR | {"skipped-quota-exhausted"}
+_NON_ERROR_OUTCOME: frozenset[str] = _FAILURE_NON_ERROR | {
+    engine_states.OUTCOME_SKIPPED_QUOTA,
+}
 
 # 二手/聚合平台（转载与洗稿高发地）。**刻意不复用 evidence 的词表**：
 # evidence 属热路径禁入名单（tests/test_hotpath_import_lint.py 的 HEAVY_TOP，
@@ -57,16 +63,18 @@ def _hostname(url: Any) -> str:
 # 但归类依据是 argo 自己的 outcome.status（retry_policy.classify_error_status
 # 的唯一真源），不另写一套错误词表。
 _FAILURE_META: dict[str, tuple[str, str, bool]] = {
-    "timeout": ("transient", "超时；可重试或换源", True),
-    "quota-exhausted": ("quota", "配额耗尽；换源或等窗口重置", False),
-    "rate-limited": ("rate-limit", "被限流；稍后重试或换源", True),
-    "blocked": ("bot-wall", "被反爬拦截；稍后重试或换源", True),
-    "auth-failed": ("auth", "检查 API Key 是否有效、是否有该接口权限", False),
-    "error": ("unknown", "源端错误；可重试或换源", True),
-    "skipped-missing-env": ("missing-key", "未配置密钥；配置后即可参与", False),
-    "skipped-quota-exhausted": ("quota", "配额耗尽，本轮跳过", False),
-    "skipped-circuit-open": ("cooldown", "熔断冷却中，稍后自动恢复", True),
-    "skipped-budget": ("budget", "本轮预算不足，未执行", True),
+    engine_states.OUTCOME_TIMEOUT: ("transient", "超时；可重试或换源", True),
+    engine_states.OUTCOME_QUOTA_EXHAUSTED: ("quota", "配额耗尽；换源或等窗口重置", False),
+    engine_states.OUTCOME_RATE_LIMITED: ("rate-limit", "被限流；稍后重试或换源", True),
+    engine_states.OUTCOME_BLOCKED: ("bot-wall", "被反爬拦截；稍后重试或换源", True),
+    engine_states.OUTCOME_AUTH_FAILED: ("auth", "检查 API Key 是否有效、是否有该接口权限", False),
+    engine_states.OUTCOME_ERROR: ("unknown", "源端错误；可重试或换源", True),
+    engine_states.OUTCOME_SKIPPED_MISSING_ENV: (
+        "missing-key", "未配置密钥；配置后即可参与", False),
+    engine_states.OUTCOME_SKIPPED_QUOTA: ("quota", "配额耗尽，本轮跳过", False),
+    engine_states.OUTCOME_SKIPPED_CIRCUIT_OPEN: (
+        "cooldown", "熔断冷却中，稍后自动恢复", True),
+    engine_states.OUTCOME_SKIPPED_BUDGET: ("budget", "本轮预算不足，未执行", True),
 }
 
 
@@ -102,7 +110,7 @@ def build_failures(result: dict[str, Any], limit: int = 6) -> list[dict[str, Any
         }
         # skipped-* 是「持续状态」而不是本次尝试失败：配额窗口/熔断冷却在
         # 周期边界前不会因重试改变。标出来，避免 Agent 立刻重试同一个源。
-        if status.startswith("skipped-"):
+        if status.startswith(engine_states.OUTCOME_SKIPPED_PREFIX):
             item["persistent"] = True
         detail = str(o.get("detail") or "").strip()
         if detail:

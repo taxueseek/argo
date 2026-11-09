@@ -171,17 +171,19 @@ class TestBiorxiv:
         engine("https://www.medrxiv.org/content/10.1101/2026.01.01.000002v1")
         assert "/medrxiv/" in captured["url"]
 
-    def test_recent_mode_with_local_filter(self, engine, monkeypatch):
-        _mock_http(monkeypatch, "api.biorxiv.org", {
-            "collection": [
-                {"doi": "10.1101/a", "title": "Crispr advances", "authors": "X",
-                 "abstract": "gene editing", "date": "2026-09-10"},
-                {"doi": "10.1101/b", "title": "Ocean warming", "authors": "Y",
-                 "abstract": "climate", "date": "2026-09-11"},
-            ]})
-        out = engine("crispr 最新")
-        assert len(out) == 1
-        assert "Crispr" in out[0]["title"]
+    def test_keyword_plus_trigger_short_circuits(self, engine, monkeypatch):
+        """关键词查询不发请求：API 无搜索端点，拉全量再本地过滤只产假阳性。
+
+        2026-11-09 起「crispr 最新」属关键词查询（kws 非空），按设计返回空，
+        旧断言 len(out)==1 守的是已删除的本地过滤实现（e82815e 有意短路，
+        实测 2.7-12s 换 0 条有效结果）。这里改为钉住短路本身，并确认
+        **没有发出 HTTP 请求**——否则「返回空」可能是网络失败掩出来的。
+        """
+        def boom(*_a, **_k):
+            raise AssertionError("关键词查询不应发起 HTTP 请求")
+
+        monkeypatch.setattr(engines_base, "_http_get_raw", boom, raising=True)
+        assert engine("crispr 最新") == []
 
     def test_recent_mode_bare_trigger_passes_all(self, engine, monkeypatch):
         _mock_http(monkeypatch, "api.biorxiv.org", {

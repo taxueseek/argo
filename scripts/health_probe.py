@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
 from cli_io import dumps
+# 状态词表唯一真源：探针三态（2026-11-09 收口）
+import engine_states
 
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -45,7 +47,7 @@ def _db_path() -> Path:
 DB_PATH = _db_path()  # 兼容旧引用
 PROBE_INTERVAL = 300  # 5 分钟
 PROBE_TIMEOUT = 1.5  # 单次探测超时（快，不能拖慢启动）
-MAX_FAILURES = 2  # 连续失败次数阈值
+MAX_FAILURES = engine_states.PROBE_MAX_FAILURES  # 阈值真源见词表 §16
 
 
 # ── SQLite 存储 ───────────────────────────────────────────────────────────────
@@ -135,12 +137,14 @@ def probe_all_engines():
             ).fetchone()
 
             if ok:
-                new_status = "available"
+                new_status = engine_states.PROBE_STATUS_AVAILABLE
                 new_failures = 0
             else:
                 prev_failures = row[0] if row else 0
                 new_failures = prev_failures + 1
-                new_status = "unavailable" if new_failures >= MAX_FAILURES else "degraded"
+                new_status = (engine_states.PROBE_STATUS_UNAVAILABLE
+                              if new_failures >= MAX_FAILURES
+                              else engine_states.PROBE_STATUS_DEGRADED)
 
             conn.execute(
                 """INSERT OR REPLACE INTO engine_health
@@ -151,7 +155,8 @@ def probe_all_engines():
             conn.commit()
 
         results[name] = {
-            "status": "available" if ok else "unavailable",
+            "status": (engine_states.PROBE_STATUS_AVAILABLE if ok
+                       else engine_states.PROBE_STATUS_UNAVAILABLE),
             "latency_ms": round(latency, 1),
             "error": err,
         }
@@ -168,13 +173,14 @@ def get_engine_status(engine: str) -> dict[str, Any]:
             (engine,),
         ).fetchone()
     if not row:
-        return {"status": "unknown", "consecutive_failures": 0, "available": True}
+        return {"status": engine_states.PROBE_STATUS_UNKNOWN,
+                "consecutive_failures": 0, "available": True}
     return {
         "status": row[0],
         "consecutive_failures": row[1],
         "last_probe_at": row[2],
         "last_latency_ms": row[3],
-        "available": row[0] != "unavailable",
+        "available": engine_states.is_probe_available(row[0]),
     }
 
 
@@ -191,7 +197,7 @@ def get_all_status() -> dict[str, dict[str, Any]]:
             "consecutive_failures": row[2],
             "last_probe_at": row[3],
             "last_latency_ms": row[4],
-            "available": row[1] != "unavailable",
+            "available": engine_states.is_probe_available(row[1]),
         }
         for row in rows
     }

@@ -52,6 +52,41 @@ argo/
 └── tests/
 ```
 
+## 状态词表（scripts/engine_states.py）
+
+全部状态名、派生集合与转换判据只有一处：`scripts/engine_states.py`。它只放
+词表与纯函数，不碰 IO，所以热路径可以直接 import。改状态名、加状态值、调
+派生集合，都只改这一个文件；各模块用常量，不写字符串字面量（`tests/
+test_engine_states.py` 的契约用例把这条钉住）。
+
+登记的 22 台状态机：
+
+| 分组 | 状态机 | 关键判据 |
+|------|--------|---------|
+| 引擎层 | 熔断器 breaker | closed/open/half_open/disabled；`is_breaker_routable` |
+| | 配置 config、env 过滤、admission | enabled/disabled、allowed/env_filtered、admitted/blocked/unverified |
+| | 运行时健康 verdict | auth_down→suspect→auto_disabled→flapping→watch→unknown（`health_severity_index`） |
+| | 调用结局 outcome | ok/ok-cached/partial/no-results/timeout/error/auth-failed/quota-exhausted/rate-limited/blocked/skipped-*/cancelled |
+| | 失败归因 category | dependency/auth/rate_limited/quota_exhausted/blocked/upstream/network/unknown |
+| | 重试判据 retry | `is_retryable_outcome`（派生自 outcome） |
+| | 抓取降级链 fetch method | http_md→http→tls→jina→wayback→browser→chrome_cdp→…；`is_degraded_fetch_method` |
+| | 展示态 engine_detail | ready/unknown/disabled/env_filtered/missing_key/missing_dep/quota_exhausted/blocked/admitted |
+| 加工层 | 精排 reranker | ok 与 7 个 skipped_*；`RERANK_DEGRADED_STATUSES` = 全集减 ok，漏一个就是静默退化 |
+| | 搜索计划 plan | ready/handoff_required/needs_authorization（`plan.main` 退出码也按它） |
+| | 数值印证 numeric | confirmed/partial/missing/unfetchable；只有 `NUMERIC_PENALIZED`（missing/partial）降权 |
+| | 取证覆盖 coverage | COVERED/PARTIAL/NOT_COVERED（research_dossier 产、research_gates 消） |
+| | 候选核验 verification | candidate/opened（snippet 永不得标 opened） |
+| | 信封路由 envelope route | completed/partial（整次检索的交付结论，与单引擎 outcome 的 partial 不同层） |
+| 预检与观测 | 批处理预检 batch probe | 条目 unsupported/needs_auth/already_have/not_found/unknown；结论 go/go_with_skips/stop |
+| | 健康探针 probe | available/degraded/unavailable/unknown；`PROBE_MAX_FAILURES`=2；`is_probe_available` 只认 unavailable 一票否决（fail-open） |
+| | 缓存层级 cache level | L1/L2/L?（`L?` 是旧存档缺 `_cache_level` 的兜底） |
+| | 观察模式 watch change | none/noise/substantive/unknown |
+| | 平台运行时 daemon/plugin | running/stopped/idle/busy；ready/loading/unavailable |
+
+词表边界：`outcome.status` 用连字符（`quota-exhausted`），`engine_detail.status`
+与失败归因用下划线（`quota_exhausted`）。这是三层各自的接口契约，跨层映射走
+显式字典，不做字符串等价合并。
+
 ## 证据流水线（MECE）
 
 ```

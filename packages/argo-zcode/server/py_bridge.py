@@ -80,18 +80,46 @@ def _run_argo(home: str, args, timeout: int = 20):
         return "", str(exc), 1
 
 
-def _daemon_status_fast(home: str) -> str:
-    """进程内直读 daemon 状态（<1ms），异常时回退 CLI 子进程。"""
+def _daemon_status_fast(home: str):
+    """进程内直读 daemon 状态（<1ms），异常时回退 CLI 子进程。
+
+    返回 (人读文案, 机器可读 state)。state 走 argo 本体的词表
+    （engine_states.DAEMON_*）：此前面板只能拿中文文案再正则反推 pid、
+    用布尔冒充三态，文案一改就静默失配（2026-11-09 收口）。
+    """
     try:
         import daemon as argo_daemon
+        import engine_states as states
         alive = argo_daemon._alive()
         sock = argo_daemon._sock_path()
         if alive:
-            return f"argo daemon 运行中 pid={alive.get('pid')} socket={sock}"
-        return f"argo daemon 未运行（socket={sock}）"
+            state = str(alive.get("state") or states.DAEMON_RUNNING)
+            return (f"argo daemon 运行中 pid={alive.get('pid')} socket={sock}",
+                    state)
+        return f"argo daemon 未运行（socket={sock}）", states.DAEMON_STOPPED
     except Exception:  # noqa: BLE001
+        # 回退到 CLI 时也拿 --json：state 从字段读，不靠正则反推中文文案。
+        # 不校验取值是否在词表内（fail-open）：将来 daemon 加状态值时桥层原样
+        # 透传，旧面板最多少显示一档，不会把活着的进程报成 stopped。
+        out, _, _ = _run_argo(home, ["daemon", "status", "--json"], 10)
+        try:
+            payload = json.loads(out)
+        except (ValueError, TypeError):
+            payload = None
+        if isinstance(payload, dict):
+            state = str(payload.get("state") or "")
+            if not state:
+                # 旧版 argo 的 --json 只有 running 布尔
+                state = "running" if payload.get("running") else "stopped"
+            text = ("argo daemon 运行中 pid=%s socket=%s"
+                    % (payload.get("pid"), payload.get("socket"))
+                    if state != "stopped"
+                    else "argo daemon 未运行（socket=%s）" % payload.get("socket"))
+            return text, state
+        # 连 --json 都拿不到：退回人读文案 + pid 探活（旧版兼容路径）
         out, _, _ = _run_argo(home, ["daemon", "status"], 10)
-        return out.strip()
+        text = out.strip()
+        return text, "running" if _daemon_running(text) else "stopped"
 
 
 def _budget_list_fast(home: str) -> str:
@@ -335,7 +363,7 @@ def panel_data(home: str):
     counts.update({s: sum(1 for r in engines if r["status"] == s) for s in statuses})
     counts["keys_configured"] = sum(1 for k in keys.values() if k["configured"])
     counts["keys_total"] = len(keys)
-    daemon = _daemon_status_fast(home)
+    daemon, daemon_state = _daemon_status_fast(home)
     return {
         "version": _version(home),
         "argo_home": home,
@@ -343,7 +371,9 @@ def panel_data(home: str):
         "config_base": str(getattr(argo_config, "CONFIG_PATH", "") or ""),
         "config_local": str(getattr(argo_config, "LOCAL_CONFIG_PATH", "") or ""),
         "daemon": daemon,
-        "daemon_running": _daemon_running(daemon),
+        "daemon_state": daemon_state,
+        # busy 也是活着（只是正在跑别的），只有 stopped 才算没在跑
+        "daemon_running": daemon_state != "stopped",
         "engines": engines,
         "keys": sorted(keys.values(), key=lambda k: (-len(k["engines"]), k["key"])),
         "counts": counts,
@@ -358,7 +388,7 @@ def diagnostics(home: str):
     env_path = _env_file(argo_paths)
     paths_check, paths_code = _paths_check_fast(home, argo_paths)
     budget = _budget_list_fast(home)
-    daemon = _daemon_status_fast(home)
+    daemon, daemon_state = _daemon_status_fast(home)
     detail = _detail(home)
     mode = None
     if os.name != "nt":
@@ -381,6 +411,7 @@ def diagnostics(home: str):
         "config_local": local_path,
         "config_local_exists": bool(local_path) and os.path.exists(local_path),
         "daemon": daemon,
+        "daemon_state": daemon_state,
         "budget": budget,
         "paths_check": paths_check,
         "paths_code": paths_code,

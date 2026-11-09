@@ -23,6 +23,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from video_meta import VIDEO_PLATFORMS, parse_duration_seconds
+import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 _TZ_CN = timezone(timedelta(hours=8))
 
@@ -148,7 +149,8 @@ def verification_of(item: dict[str, Any]) -> dict[str, Any]:
         or item.get("post_fetch_absorption") is not None
     )
     return {
-        "status": "opened" if opened else "candidate",
+        "status": (engine_states.VERIFICATION_OPENED if opened
+                   else engine_states.VERIFICATION_CANDIDATE),
         "opened_original": opened,
         "checked_at": None,
     }
@@ -256,7 +258,7 @@ def build_coverage(engine_outcomes: list[dict[str, Any]] | None, max_results: in
             "detail": o.get("detail"),
             "limitations": (
                 ["empty or failed backend"]
-                if status not in ("ok", "ok-cached", "partial")
+                if status not in engine_states.CONTRIBUTING_OUTCOMES
                 else []
             ),
         })
@@ -401,7 +403,9 @@ def attach_envelope(
         "engines": search_result.get("engines_combo") or search_result.get("engines"),
         "mode": search_result.get("mode"),
         "login_state_used": bool(route_login),
-        "status": "completed" if not search_result.get("errors") else "partial",
+        "status": (engine_states.ENVELOPE_ROUTE_COMPLETED
+                   if not search_result.get("errors")
+                   else engine_states.ENVELOPE_ROUTE_PARTIAL),
         "limitations": limitations[:3],
     }])
     return search_result

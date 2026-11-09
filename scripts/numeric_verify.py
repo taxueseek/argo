@@ -33,6 +33,9 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Optional
 
+# 状态词表唯一真源：verdict 值域与降权集合（2026-11-09 收口）
+import engine_states
+
 # 数字 token：页面侧与摘要侧统一用同一套抽取+规范化，比对才是同构的。
 _NUM_TOKEN_RE = re.compile(r"\d[\d,，]*(?:\.\d+)?")
 # 价格：货币符号/代码前缀（$1,299 / ¥5999 / RMB 11,999 / US$799）
@@ -47,8 +50,12 @@ _PCT_RE = re.compile(r"(\d{1,3}(?:\.\d+)?)\s?[%％]")
 _DATE_FULL_RE = re.compile(r"(?:(20\d{2})\s?[年\-/.]\s?)?(\d{1,2})\s?月\s?(\d{1,2})\s?[日号]?")
 _DATE_ISO_RE = re.compile(r"(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})")
 
-# 结果字段上 verdict 的规范值
-VERDICTS = ("confirmed", "partial", "missing", "unfetchable")
+# 结果字段上 verdict 的规范值（词表真源见 engine_states §14）。
+# 顺序即 summary 的键序，是对外 export 契约，不要按字母序重排。
+VERDICTS = (
+    engine_states.NUMERIC_CONFIRMED, engine_states.NUMERIC_PARTIAL,
+    engine_states.NUMERIC_MISSING, engine_states.NUMERIC_UNFETCHABLE,
+)
 
 
 def _norm_num(s: str) -> str:
@@ -121,10 +128,10 @@ def _verdict_for(nums: list[dict[str, str]], page: str) -> tuple[str, list[str],
             hit = n["norm"] in tokens
         (hits if hit else misses).append(n["raw"])
     if not misses:
-        return "confirmed", hits, misses
+        return engine_states.NUMERIC_CONFIRMED, hits, misses
     if hits:
-        return "partial", hits, misses
-    return "missing", hits, misses
+        return engine_states.NUMERIC_PARTIAL, hits, misses
+    return engine_states.NUMERIC_MISSING, hits, misses
 
 
 def numeric_verify_results(results: list[dict[str, Any]],
@@ -230,12 +237,15 @@ def numeric_verify_results(results: list[dict[str, Any]],
                 outcomes.append((*item, val))
 
     verified: list[dict[str, Any]] = []
-    counts = {"confirmed": 0, "partial": 0, "missing": 0, "unfetchable": 0}
+    # 顺序固定为 export 契约（调用方按这些键读 summary）；词表值来自
+    # engine_states，键序留在这里。
+    counts = {v: 0 for v in VERDICTS}
     for r, nums, val in outcomes:
         page, method = val
         if not page or len(page.strip()) < 100:
             # 正文过短：无数可比，不伪造 verdict（unfetchable，不惩罚）
-            verdict, hits, misses = "unfetchable", [], [n["raw"] for n in nums]
+            verdict, hits, misses = (
+                engine_states.NUMERIC_UNFETCHABLE, [], [n["raw"] for n in nums])
         else:
             verdict, hits, misses = _verdict_for(nums, page)
         counts[verdict] += 1
@@ -288,13 +298,14 @@ def reorder_by_numeric(results: list[dict[str, Any]],
             continue
         nv = r.get("numeric_verification") or {}
         verdict = nv.get("verdict")
-        if verdict not in ("missing", "partial"):
+        if verdict not in engine_states.NUMERIC_PENALIZED:
             continue
         try:
             base = float(r.get("score") or 0.0)
         except (TypeError, ValueError):
             continue
-        factor = 1.0 - weight if verdict == "missing" else 1.0 - weight / 2.0
+        factor = (1.0 - weight if verdict == engine_states.NUMERIC_MISSING
+                  else 1.0 - weight / 2.0)
         new_score = base * factor
         if new_score == base:
             continue

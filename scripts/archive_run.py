@@ -290,9 +290,11 @@ def write_search_archive(
             try:
                 from candidate_envelope import verification_of  # type: ignore
             except Exception:
+                import engine_states as _states
+
                 def verification_of(_item):  # type: ignore[misc]
-                    return {"status": "candidate", "opened_original": False,
-                            "checked_at": None}
+                    return {"status": _states.VERIFICATION_CANDIDATE,
+                            "opened_original": False, "checked_at": None}
             candidates = [
                 {
                     "candidate_id": f"web:rank-{i+1}",

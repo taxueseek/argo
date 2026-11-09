@@ -204,13 +204,22 @@ def test_lifecycle_ping_status_stop(tmp_path):
     assert info.get("pid")
     sock = _sock(tmp_path)
     st = _daemon(tmp_path, "status")
-    assert st.returncode == 0 and json.loads(st.stdout)["running"] is True
+    status = json.loads(st.stdout)
+    assert st.returncode == 0 and status["running"] is True
+    # state 是给机器读的判据（engine_states §10）；旧客户端只认 running 也照常成立
+    assert status.get("state") in {"running", "busy", "idle"}
+    ping = _uds(sock, {"op": "ping"})
+    assert ping.get("state") in {"running", "busy", "idle"}
+    assert ping.get("in_run") == 0
     # 二次 start：报已在运行而非起第二个
     again = _start(tmp_path)
     assert again.get("already_running") is True
     _daemon(tmp_path, "stop")
     _wait_sock(tmp_path, False)
     assert not sock.exists(), "socket 未随 stop 清场"
+    # 停止后 status 必须报 stopped（进程没了，没有 ping 可回）
+    stopped = json.loads(_daemon(tmp_path, "status").stdout)
+    assert stopped["running"] is False and stopped["state"] == "stopped"
     assert not (tmp_path / "state" / ("daemon.pid-" + _tag())).exists(), "pid 未随 stop 清场"
 
 

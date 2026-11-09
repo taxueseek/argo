@@ -63,3 +63,187 @@ def test_engine_detail_status_is_display_vocabulary():
     # 逐条走真实判定链需要一个存在的引擎；这里只验契约本身，
     # 具体分支值由 test_http_attribution 的 quota 用例覆盖。
     assert callable(engine_detail)
+
+
+# ── 本轮（2026-11-09 第二次扫）新增词表的契约 ────────────────────────────
+# 目的不是「再断言一遍常量值」，而是钉住**派生关系与消费面同源**：
+# 这些集合一旦被谁手抄一份，漏更新就是静默退化（精排）或静默过滤（探针）。
+
+
+def test_rerank_degraded_is_complement_of_ok():
+    """降级集合必须由全集派生：新增 skipped_* 却漏进降级集合 = 静默退化。"""
+    assert st.RERANK_STATUSES - st.RERANK_DEGRADED_STATUSES == {st.RERANK_OK}
+    assert st.is_rerank_degraded(st.RERANK_OK) is False
+    for status in st.RERANK_STATUSES - {st.RERANK_OK}:
+        assert st.is_rerank_degraded(status) is True, status
+    # 缓存命中也是「没精排」，必须落在保底集合里（search_entry 写这个值）
+    assert st.RERANK_SKIPPED_CACHE in st.RERANK_DEGRADED_STATUSES
+
+
+def test_rerank_consumers_read_the_same_set():
+    """三处消费面（pipeline / postprocess / rank）必须指向同一个 frozenset。"""
+    import search_pipeline
+    import search_rank
+
+    assert search_pipeline._RERANK_DEGRADED_STATUSES is st.RERANK_DEGRADED_STATUSES
+    # search_rank 保留旧名做别名（历史调用点仍 import 它）
+    assert search_rank._RERANK_DEGRADED_STATUSES is st.RERANK_DEGRADED_STATUSES
+    # postprocess_signals 是函数内延迟导入，确认它取到的是同一对象
+    src = (Path(__file__).resolve().parents[1] / "scripts" /
+           "postprocess_signals.py").read_text(encoding="utf-8")
+    assert "from search_rank import _RERANK_DEGRADED_STATUSES" in src
+
+
+def test_plan_statuses_cover_exit_code_contract():
+    """plan.main 的退出码判据是「status 在词表内」——词表漏一个值就变成非零退出。"""
+    import plan
+
+    assert st.PLAN_STATUSES == {"ready", "handoff_required", "needs_authorization"}
+    # 参数错走 invalid_request，它不在计划态词表里，所以 main 对它退出码非零
+    assert "invalid_request" not in st.PLAN_STATUSES
+    # 真打一次 main：合法计划 → 0；路由抛错的 invalid_request → 非 0。
+    # 退出码判据就是「status 在 PLAN_STATUSES 内」，故这里只需分别喂两种 status。
+    argv = sys.argv
+    try:
+        sys.argv = ["plan.py", "python 3.13 release notes"]
+        assert plan.main() == 0
+        sys.argv = ["plan.py", "x"]
+        orig = plan.build_plan
+        plan.build_plan = lambda *a, **k: {"status": "invalid_request"}
+        try:
+            assert plan.main() == 1
+        finally:
+            plan.build_plan = orig
+    finally:
+        sys.argv = argv
+
+
+def test_probe_availability_is_fail_open():
+    """探针可用性只认 unavailable 一票否决；未登记值必须放行（不静默过滤源）。"""
+    assert st.is_probe_available(st.PROBE_STATUS_AVAILABLE)
+    assert st.is_probe_available(st.PROBE_STATUS_DEGRADED)
+    assert st.is_probe_available(st.PROBE_STATUS_UNKNOWN)
+    assert st.is_probe_available("") is True
+    assert st.is_probe_available("some_future_status") is True
+    assert st.is_probe_available(None) is True
+    assert st.is_probe_available(st.PROBE_STATUS_UNAVAILABLE) is False
+    # 白名单集合是文档，判据是黑名单；两者不能互相替代
+    assert st.PROBE_STATUS_UNAVAILABLE not in st.PROBE_ROUTABLE_STATUSES
+
+
+def test_numeric_penalty_set_drives_reorder():
+    """数值降权集合是 reorder_by_numeric 的唯一判据；confirmed/unfetchable 不动分。"""
+    assert st.NUMERIC_PENALIZED == {st.NUMERIC_MISSING, st.NUMERIC_PARTIAL}
+    assert st.NUMERIC_CONFIRMED not in st.NUMERIC_PENALIZED
+    assert st.NUMERIC_UNFETCHABLE not in st.NUMERIC_PENALIZED
+    import numeric_verify
+
+    assert tuple(numeric_verify.VERDICTS) == (
+        st.NUMERIC_CONFIRMED, st.NUMERIC_PARTIAL,
+        st.NUMERIC_MISSING, st.NUMERIC_UNFETCHABLE,
+    )
+
+
+def test_coverage_vocabulary_stays_uppercase():
+    """coverage 值的大写是 dossier JSON 的既有 export 契约，不能为了整齐改小写。"""
+    assert st.COVERAGE_STATUSES == {"COVERED", "PARTIAL", "NOT_COVERED"}
+    import research_dossier
+
+    def _sr(n):
+        return {"results": [{"url": f"https://e{i}.com"} for i in range(n)]}
+
+    assert research_dossier.coverage_status(_sr(9)) == st.COVERAGE_COVERED
+    assert research_dossier.coverage_status(_sr(1)) == st.COVERAGE_PARTIAL
+    assert research_dossier.coverage_status(_sr(0)) == st.COVERAGE_NOT_COVERED
+
+
+def test_probe_threshold_has_one_source():
+    """连续失败阈值只能有一处定义；health_check 不该再长一个没人读的同名常量。"""
+    import health_check
+    import health_probe
+
+    assert health_probe.MAX_FAILURES == st.PROBE_MAX_FAILURES
+    assert not hasattr(health_check, "MAX_FAILURES")
+
+
+def test_daemon_states_are_machine_readable():
+    """daemon 的 state 字段走词表；stopped 之外的任何值都算「活着」。"""
+    import daemon
+
+    assert st.DAEMON_STATES == {"running", "stopped", "idle", "busy"}
+    assert st.DAEMON_STOPPED in st.DAEMON_STATES
+    # ping 响应在停止态下不存在（进程都没了），但 status 命令必须能给出 stopped
+    assert callable(daemon._status)
+
+
+def test_state_failure_outcome_has_one_meaning():
+    """同名反义函数已删：engine_states 不再提供纯状态名版本。
+
+    cache_guard 的 dict 版是唯一实现，且刻意不含 blocked（源站侧事实）。
+    """
+    assert not hasattr(st, "is_state_failure_outcome")
+    from cache_guard import is_state_failure_outcome
+
+    assert is_state_failure_outcome({"status": st.OUTCOME_AUTH_FAILED}) is True
+    assert is_state_failure_outcome({"status": st.OUTCOME_BLOCKED}) is False
+
+
+def test_search_progress_terminates_on_cache_hit(tmp_path):
+    """进度契约：缓存命中路径也必须发 DONE——热路径没有终态，消费方会一直等。"""
+    from search_types import Stage
+    import search_entry
+
+    hit_payload = {
+        "results": [{"title": "t", "url": "https://e.com", "snippet": "s"}],
+        "engines_combo": ["anysearch"], "engine_outcomes": [],
+    }
+
+    class _Cache:
+        def get(self, *a, **k):
+            return hit_payload
+
+    stages = []
+    prepared = search_entry.prepare(
+        "q", {"domain": "general", "engine": "anysearch",
+              "engines": ["anysearch"]},
+        5, 5, "fast", _Cache(), False,
+        mode="auto", on_progress=lambda s, d: stages.append((s, d)),
+        hooks=None,
+    )
+    assert prepared.cached is not None
+    assert [s for s, _ in stages][-1] is Stage.DONE
+    assert stages[-1][1].get("cached") is True
+
+
+def test_health_check_category_records_without_keyword_collision():
+    """--category 路径曾因 available 重复传参必抛 TypeError；--all 路径曾把
+    available 从返回值里 pop 掉（可用数恒 0）。两条都钉住。"""
+    import health_check
+
+    calls = []
+
+    class _Registry:
+        def get_local_search_engines(self):
+            return {"local_a": {"url": "https://a.example", "categories": ["c"],
+                                "enabled": True},
+                    "local_b": {"url": "https://b.example", "categories": ["c"],
+                                "enabled": True}}
+
+        def update_health(self, name, available, **extra):
+            calls.append((name, available, "available" in extra))
+
+    health_check.get_registry = lambda: _Registry()
+    health_check.check_http_engine = (
+        lambda name, url, spec: {"available": True, "latency_ms": 1.0, "error": None})
+    try:
+        cat = health_check.check_category("c")
+        assert set(cat) == {"local_a", "local_b"}
+        assert all(r["available"] is True for r in cat.values())
+        assert calls and all(a is True and not dup for _n, a, dup in calls)
+
+        calls.clear()
+        all_res = health_check.check_all()
+        assert sum(1 for r in all_res.values() if r.get("available")) == 2
+    finally:
+        import importlib
+        importlib.reload(health_check)

@@ -258,6 +258,8 @@ def _note_remote_quota_exhausted(engine: str, detail: str) -> None:
 
 # 进度阶段枚举住在 search_types（执行层与加工层都要发进度事件，见那里的注释）。
 from search_types import Stage  # noqa: E402
+# 状态词表唯一真源：计划态 / 精排结局（2026-11-09 收口）
+import engine_states  # noqa: E402
 
 
 # ── RRF 融合 ───────────────────────────────────────────────────────────────────
@@ -534,15 +536,6 @@ def execute_search(query: str, decision: dict[str, Any], max_results: int,
     return finalize(prepared.req, run, hooks)
 
 
-
-
-
-
-
-
-
-
-
 # ── 统一入口 ──────────────────────────────────────────────────────────────────
 
 from local_seek import resolve_include_local as _resolve_include_local
@@ -661,7 +654,7 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
                 "early_stopped": False,
                 "mode": mode,
                 "depth": depth,
-                "status": "handoff_required",
+                "status": engine_states.PLAN_HANDOFF_REQUIRED,
                 "input_kind": "known-url",
                 "execution_tier": tier,
                 "requires_confirmation": False,

@@ -70,12 +70,21 @@ HAS_INTERNAL_RETRY = ("weibo", "bilibili", "twitter", "anysearch")
 SELF_SCHEDULED = ("local_search",)
 NO_INTERNAL_RETRY = ("xiaohongshu", "reddit")
 
-# 内部重试的特征：共用 _http_get_with_retry（429 + URLError 双分支）
+# 内部重试的特征。三类，缺一不可地组合出「真的会重试」：
+#   a) 本文件自带的重试实现（429 + URLError 双分支）；
+#   b) 显式处理 429 / 网络错误（自带实现的分支特征）；
+#   c) 调用可重试的 GET 出口并给出正的 max_retries。
+# 2026-11-09 起 weibo/bilibili 的重试实现已收口到 net_proxy.http_get
+# （981d228「重复的 HTTP GET 实现收口」），本文件不再有 def _http_get_with_retry
+# 与 except 分支——只认 a/b 会把「调用共享实现且传了 max_retries=2」的引擎
+# 误判成无重试。故补上 c：共享出口 + 正重试次数是两个独立信号，凑够两条才算。
 _RETRY_SIGNS = (
     re.compile(r"def _http_get_with_retry"),
     re.compile(r"except\s+urllib\.error\.HTTPError"),
     re.compile(r"except\s+\(urllib\.error\.URLError,\s*OSError\)"),
-    re.compile(r"max_retries"),
+    re.compile(r"max_retries\s*=\s*[1-9]\d*"),
+    # 共享出口（net_proxy.http_get / 本地 _http_get_with_retry 的调用点）
+    re.compile(r"\b_?http_get(?:_with_retry)?\("),
 )
 
 

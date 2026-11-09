@@ -543,10 +543,13 @@ class CircuitBreaker:
         raw = f"neg|{query}|{engine}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
-    def set_negative(self, query: str, engine: str, status: str = "no-results",
+    def set_negative(self, query: str, engine: str,
+                     status: str = engine_states.OUTCOME_NO_RESULTS,
                      ttl: int | None = None) -> None:
         ttl = ttl if ttl is not None else (
-            EMPTY_NEGATIVE_TTL if status == "no-results" else ERROR_NEGATIVE_TTL
+            EMPTY_NEGATIVE_TTL
+            if status == engine_states.OUTCOME_NO_RESULTS
+            else ERROR_NEGATIVE_TTL
         )
         key = self._neg_key(query, engine)
         with self._lock:

@@ -53,7 +53,7 @@ window.__ModuleLoader__.load({
         routeHealthFallback: '在终端运行 `argo stats` 或 `argo engine list` 查看路由健康、引擎成功率与配额消耗。',
         dashboardHint: '实时监控常驻 MCP 连接池、上游搜索源拓扑与额度状态，提供一键预设与快速调优。',
         poolTitle: '常驻 MCP 连接池监控',
-        poolStatusHealthy: '就绪（正常）',
+        poolStatusHealthy: '按需连接 · 连接数不常驻',
         presetTitle: '工作流快速预设',
         presetHint: '一键对齐常用工作场景的并发与引擎策略，免去逐项手动调优。',
         presetFast: '极速日常',
@@ -173,7 +173,7 @@ window.__ModuleLoader__.load({
         routeHealthFallback: 'Run `argo stats` or `argo engine list` in a terminal to inspect routing health, engine success rates and quota usage.',
         dashboardHint: 'Real-time overview of the resident MCP connection pool, upstream search engine matrix, and quick workflow presets.',
         poolTitle: 'Resident MCP Pool Monitoring',
-        poolStatusHealthy: 'Ready (Healthy)',
+        poolStatusHealthy: 'On demand · no resident connections',
         presetTitle: 'Workflow Presets',
         presetHint: 'One-click presets tailored for common research and search workflows.',
         presetFast: 'Fast & Free',
@@ -1065,10 +1065,10 @@ window.__ModuleLoader__.load({
           h('div', { key: 'pool', style: S.metricCard }, [
             h('span', { key: 'l', style: S.metricLabel }, t('poolTitle')),
             h('div', { key: 'v', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
-              h('span', { key: 'dot', style: S.dot(true) }),
+              h('span', { key: 'dot', style: S.dot(poolConcurrency > 0) }),
               h('span', { key: 'val', style: S.metricValue }, `${poolConcurrency} 并发`),
             ]),
-            h('span', { key: 's', style: S.metricSub }, `${t('poolStatusHealthy')} · 保活 ${poolIdleMs / 1000}s`),
+            h('span', { key: 's', style: S.metricSub }, `${t('poolStatusHealthy')} · 空闲回收 ${poolIdleMs / 1000}s`),
           ]),
           h('div', { key: 'seam', style: S.metricCard }, [
             h('span', { key: 'l', style: S.metricLabel }, t('accessTitle')),
