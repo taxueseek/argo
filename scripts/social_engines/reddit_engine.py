@@ -13,7 +13,6 @@ import json
 import re
 import subprocess
 import urllib.parse
-import urllib.request
 import xml.etree.ElementTree as ET
 
 # 出口调度唯一入口（issue #13 同类修复）：urlopen 原生只认标准 HTTP(S)_PROXY
@@ -22,17 +21,7 @@ import xml.etree.ElementTree as ET
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from net_proxy import open_url  # noqa: E402
-
-
-def _http_get(url: str, headers: dict, timeout: int = 10) -> bytes:
-    """单次 HTTP GET（stdlib）。429 不重试：无 key 端点按 IP「一次一发」，
-    2026-10 实测首次 200 后即连续 429、Retry-After 达分钟级，短间隔重试
-    必然再 429，还会叠乘 config reddit 段的引擎级 8s timeout。失败直接
-    上浮，由 search_reddit_api 转成 error 条目。"""
-    req = urllib.request.Request(url, headers=headers)
-    with open_url(req, timeout=timeout) as resp:
-        return resp.read()
+from net_proxy import http_get  # noqa: E402
 
 
 _ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
@@ -48,7 +37,9 @@ def search_reddit_api(query: str, n: int = 5) -> list[dict]:
     url = (f"https://www.reddit.com/search.rss?q={urllib.parse.quote(query)}"
            f"&sort=relevance&limit={n}")
     try:
-        body = _http_get(url, {"User-Agent": "argo-search/1.0 (by taxueseek)"}, timeout=10)
+        # 单次 GET（stdlib，不重试）：无 key 端点按 IP「一次一发」，2026-10 实测
+        # 首次 200 后即连续 429、Retry-After 达分钟级，短间隔重试必然再 429。
+        body, _ = http_get(url, {"User-Agent": "argo-search/1.0 (by taxueseek)"}, timeout=10)
         return _parse_reddit_rss(body, n)
     except Exception as e:
         # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」

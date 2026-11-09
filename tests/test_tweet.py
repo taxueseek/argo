@@ -236,7 +236,9 @@ class TestDownloadGuard:
             def __exit__(self, *a):
                 return False
 
-        monkeypatch.setattr(tw, "open_url", lambda req, timeout=60: _Resp())
+        monkeypatch.setattr(tw, "http_get",
+                            lambda url, headers=None, timeout=60, max_retries=0:
+                            (_Resp().read(), 200))
         dest = tmp_path / "ok.png"
         r = tw.download_file("https://pbs.twimg.com/media/x.png", dest)
         assert r["ok"] and dest.read_bytes().startswith(b"\x89PNG")

@@ -165,14 +165,8 @@ def test_json_failure_exits_nonzero(monkeypatch):
 # ── 通道3: 搜狗兜底 ────────────────────────────────────────────────────────
 
 def _fake_og_response(title: str = "测试标题"):
-    """open_url 的上下文管理器替身：返回带 og:title 的页面。"""
-    resp = MagicMock()
-    inner = MagicMock()
-    inner.read.return_value = (
-        f'<html><meta property="og:title" content="{title}"></html>'.encode())
-    resp.__enter__.return_value = inner
-    resp.__exit__.return_value = False
-    return resp
+    """net_proxy.http_get 的替身：返回 (body_bytes, status)。"""
+    return (f'<html><meta property="og:title" content="{title}"></html>'.encode(), 200)
 
 
 def test_sogou_cmd_absolute_script_path():
@@ -198,7 +192,7 @@ def test_sogou_fallback_cwd_independent(tmp_path, monkeypatch):
         return m
 
     monkeypatch.chdir(tmp_path)
-    with patch("wechat_article.open_url", return_value=_fake_og_response()), \
+    with patch("wechat_article.http_get", return_value=_fake_og_response()), \
             patch.object(wechat_article.subprocess, "run", side_effect=fake_run):
         out = wechat_article._sogou_fallback("https://mp.weixin.qq.com/s/x")
     assert Path(captured["cmd"][1]).is_absolute()
@@ -220,7 +214,7 @@ def test_sogou_fallback_parses_yaml_list(tmp_path, monkeypatch):
         return m
 
     monkeypatch.chdir(tmp_path)
-    with patch("wechat_article.open_url", return_value=_fake_og_response()), \
+    with patch("wechat_article.http_get", return_value=_fake_og_response()), \
             patch.object(wechat_article.subprocess, "run", side_effect=fake_run):
         out = wechat_article._sogou_fallback("https://mp.weixin.qq.com/s/x")
     assert out["ok"]
@@ -233,12 +227,7 @@ def test_sogou_fallback_without_title_fails_fast():
     """取不到 og:title 时结构化报错，不发起搜狗子进程。"""
     import wechat_article
 
-    resp = MagicMock()
-    inner = MagicMock()
-    inner.read.return_value = b"<html>no title</html>"
-    resp.__enter__.return_value = inner
-    resp.__exit__.return_value = False
-    with patch("wechat_article.open_url", return_value=resp), \
+    with patch("wechat_article.http_get", return_value=(b"<html>no title</html>", 200)), \
             patch.object(wechat_article.subprocess, "run") as fake_run:
         out = wechat_article._sogou_fallback("https://mp.weixin.qq.com/s/x")
     assert not out["ok"]

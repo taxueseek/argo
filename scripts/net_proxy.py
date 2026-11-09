@@ -23,6 +23,12 @@
 
 注意：https 目标经代理走 CONNECT 隧道（set_tunnel）；代理自身按 http://
 明文连接（https 代理极少见，暂不支持）。
+
+## urllib 类出口的两个原语
+
+  - `open_url(req, timeout)`：单次请求，代理感知的 urlopen 替身；
+  - `http_get(url, headers, timeout, max_retries)`：GET 字节 + 状态码，
+    带可选 429/网络重试。模块内所有「Request + open + read」都收敛到这两个。
 """
 
 from __future__ import annotations
@@ -262,6 +268,47 @@ def open_url(req: Any, timeout: float = 10.0):
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({scheme: px}))
     return opener.open(req, timeout=timeout)
+
+
+def http_get(url: str, headers: dict[str, str] | None = None,
+             timeout: float = 10.0, max_retries: int = 0) -> tuple[bytes, int]:
+    """GET 原始字节 + 状态码；出口经 open_url（代理感知）。
+
+    这是 urllib 类出口上「Request + open + read」的唯一实现。此前每个模块
+    各写一份 `_http_get` / `_http_get_with_retry`：weibo 与 bilibili 的 23 行
+    实现逐字相同，reddit / hackernews / v2ex / redskill 各一份同构变体，
+    wx / video_fetch / job / tweet / wechat_article / zhihu 再各一份。它们只是
+    同一件事的复制粘贴，改重试策略要改五六处、漏一处就是行为分叉。
+
+    返回 (body_bytes, status_code)。max_retries>0 时对 429（尊重 Retry-After）
+    与网络层错误做指数退避重试；重试耗尽后原样抛出最后一次异常，调用方既有
+    的 except 分支语义不变。headers 为 None 时只发调用方给的头（不注入默认
+    UA），与改造前各 helper 的行为一致。
+    """
+    import time
+    import urllib.error
+    import urllib.request
+
+    for attempt in range(max_retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=headers or {})
+            with open_url(req, timeout=timeout) as resp:
+                return resp.read(), int(getattr(resp, "status", 200) or 200)
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < max_retries:
+                try:
+                    wait = int(e.headers.get("Retry-After", "5"))
+                except (TypeError, ValueError):
+                    wait = 5
+                time.sleep(min(wait, 30))
+                continue
+            raise
+        except (urllib.error.URLError, OSError):
+            if attempt < max_retries:
+                time.sleep(2 ** attempt + 0.5)
+                continue
+            raise
+    return b"", 0
 
 
 def _verified_tls_context():

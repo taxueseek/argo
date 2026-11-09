@@ -49,7 +49,7 @@ from pathlib import Path
 from urllib.parse import quote
 from typing import Optional
 from engine_env import get_env  # 密钥别名唯一真源（漏 import 曾令全部后端 NameError）
-from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
+from net_proxy import http_get, open_url  # 出口调度唯一入口（issue #13 同类修复）
 import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 from cli_io import dumps
 
@@ -305,11 +305,11 @@ def _post(url: str, body: dict, headers: Optional[dict] = None,
         return json.loads(r.read().decode("utf-8"))
 
 def _get(url: str, timeout: int = 20) -> dict:
-    req = urllib.request.Request(url, headers={
+    body, _ = http_get(url, {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"})
-    with open_url(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+                       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"},
+        timeout=timeout)
+    return json.loads(body.decode("utf-8"))
 
 def _norm(item: dict) -> dict:
     """统一结果项字段，并做白名单后置校验（platform 空 → 剔除）。

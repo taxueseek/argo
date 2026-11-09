@@ -28,7 +28,6 @@ import sys
 import time
 import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +37,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent.parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import argo_paths  # noqa: E402
-from net_proxy import open_url  # noqa: E402  出口调度唯一入口（issue #13 同类修复）
+from net_proxy import http_get  # noqa: E402  出口调度唯一入口（issue #13 同类修复）
 
 DATA_URL = "https://cowork.xiaohongshu.com/s/redskill-rank/data.json"
 PAGE_URL = "https://cowork.xiaohongshu.com/s/redskill-rank/"
@@ -100,12 +99,6 @@ def _log(msg: str) -> None:
     print(f"[redskill] {msg}", file=sys.stderr)
 
 
-def _http_get(url: str, timeout: int = DOWNLOAD_TIMEOUT) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
-    with open_url(req, timeout=timeout) as resp:
-        return resp.read()
-
-
 def _load_data(force: bool = False) -> dict[str, Any]:
     """加载数据：缓存新鲜则直接用，过期或缺失则下载。
 
@@ -147,7 +140,8 @@ def _read_cache() -> dict[str, Any] | None:
 def _download(force: bool = False) -> dict[str, Any]:
     cache_file = _cache_file()
     _cache_dir().mkdir(parents=True, exist_ok=True)
-    raw = _http_get(DATA_URL)
+    raw, _ = http_get(DATA_URL, {"User-Agent": USER_AGENT, "Accept": "application/json"},
+                       timeout=DOWNLOAD_TIMEOUT)
     data = json.loads(raw.decode("utf-8"))
     if "allSkills" not in data:
         raise ValueError("data.json 结构异常：缺少 allSkills")

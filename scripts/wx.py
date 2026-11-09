@@ -28,10 +28,9 @@ import json
 import re
 import sys
 import urllib.parse as up
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
-from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
+from net_proxy import http_get  # 出口调度唯一入口（issue #13 同类修复）
 
 _WTTR_BASE = "https://wttr.in/"
 _OM_BASE = "https://api.open-meteo.com/v1/forecast"
@@ -74,12 +73,6 @@ _WEATHER_EN_ZH = {
 }
 
 
-def _fetch(url: str, timeout: float = 8) -> str:
-    req = urllib.request.Request(url, headers=_HEADERS)
-    with open_url(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "replace")
-
-
 _WEATHER_WORDS = re.compile(
     r"(天气|气温|温度|多少度|预报|怎么样|如何|下雨|降水|雪|晴|今[天日晚]|明[天日晚]|后[天日]|昨[天日]|"
     r"当前|现在|实时|weather|forecast|temperature|today|tonight|tomorrow|now|current)",
@@ -111,7 +104,7 @@ def _wttr(loc: str, query: str | None = None) -> list[dict]:
     """wttr.in 主源。标题用查询词（用户输入），避免 nearest_area 返回细分区域名。"""
     q = (query or loc).strip() or loc
     url = f"{_WTTR_BASE}{up.quote(loc)}?format=j1"
-    data = json.loads(_fetch(url))
+    data = json.loads(http_get(url, _HEADERS)[0])
     area = (data.get("nearest_area") or [{}])[0]
     country = (area.get("country") or [{}])[0].get("value", "")
     cur = (data.get("current_condition") or [{}])[0]
@@ -177,7 +170,7 @@ def _geocode(loc: str) -> dict | None:
     params = {"name": loc, "count": 1, "language": "zh", "format": "json"}
     url = f"{_GEO_BASE}?{up.urlencode(params)}"
     try:
-        data = json.loads(_fetch(url, timeout=6))
+        data = json.loads(http_get(url, _HEADERS, timeout=6)[0])
     except Exception:
         return None
     results = data.get("results") or []
@@ -213,7 +206,7 @@ def _aqi(lat: float, lon: float) -> str | None:
               "current": "pm10,pm2_5", "timezone": "auto"}
     url = f"{_AQI_BASE}?{up.urlencode(params)}"
     try:
-        data = json.loads(_fetch(url, timeout=6))
+        data = json.loads(http_get(url, _HEADERS, timeout=6)[0])
         cur = data.get("current") or {}
     except Exception:
         return None
@@ -254,9 +247,9 @@ def _open_meteo(loc: str) -> list[dict]:
     # 墙钟 = geocode + max(forecast, aqi)。_aqi 内部自带容错（失败返回
     # None），fetch 异常照旧冒泡给调用方的 _safe——两条失败语义都不变。
     with ThreadPoolExecutor(max_workers=2) as ex:
-        f_om = ex.submit(_fetch, url)
+        f_om = ex.submit(http_get, url, _HEADERS)
         f_aqi = ex.submit(_aqi, lat, lon)
-        data = json.loads(f_om.result())
+        data = json.loads(f_om.result()[0])
         aqi = f_aqi.result()
     cur = data.get("current_weather") or {}
     rows = []

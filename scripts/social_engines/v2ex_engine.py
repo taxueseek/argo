@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import re
 import urllib.parse
-import urllib.request
 from typing import Any
 
 # 出口调度唯一入口（issue #13 同类修复）：urlopen 不认 config.yaml 的
@@ -17,16 +16,7 @@ from typing import Any
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from net_proxy import open_url  # noqa: E402
-
-
-def _http_get(url: str, timeout: int = 10) -> str:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
-    )
-    with open_url(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", "replace")
+from net_proxy import http_get  # noqa: E402
 
 
 def search(query: str, n: int = 5) -> list[dict[str, Any]]:
@@ -35,7 +25,8 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
         return []
     url = f"https://www.v2ex.com/search?q={urllib.parse.quote(query.strip())}"
     try:
-        html = _http_get(url)
+        body, _ = http_get(url, {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
+        html = body.decode("utf-8", "replace")
     except Exception as e:
         # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」
         # （mcp_handlers 的 err=None 设计依赖引擎抛异常或返 error 占位，

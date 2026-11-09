@@ -24,7 +24,6 @@ import os
 import re
 import sys
 import time
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -32,7 +31,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fxtwitter_api as fx  # noqa: E402
 from cli_io import dumps, dumps_pretty  # noqa: E402
-from net_proxy import open_url  # noqa: E402
+from net_proxy import http_get  # noqa: E402
 from url_safety import check_url  # noqa: E402
 
 MODES = ("status", "thread", "conversation", "quotes", "reposts")
@@ -60,10 +59,8 @@ def download_file(url: str, dest: Path, *, timeout: float = 60) -> dict[str, Any
                 "error": f"URL 被安全策略拒绝: {reason}"}
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        req = urllib.request.Request(
-            url, headers={"User-Agent": fx.USER_AGENT, "Accept": "*/*"})
-        with open_url(req, timeout=timeout) as resp:
-            data = resp.read()
+        data, _ = http_get(url, {"User-Agent": fx.USER_AGENT, "Accept": "*/*"},
+                            timeout=timeout)
         dest.write_bytes(data)
         return {"ok": True, "path": str(dest), "bytes": len(data),
                 "url": url, "error": None}

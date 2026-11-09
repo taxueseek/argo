@@ -21,7 +21,6 @@ import re
 import subprocess
 import sys
 import time
-import urllib.request
 import html as htmllib
 from typing import Optional
 
@@ -33,7 +32,7 @@ from article import strip_tags, fetch_article
 from fetch_browser import browser_fetch
 
 # urllib 出口唯一入口（issue #13）：代理解析集中在一处；YAML 解析同理
-from net_proxy import open_url
+from net_proxy import http_get
 from yaml_load import loads
 
 # 本脚本所在目录：子进程脚本路径必须绝对（本模块可能从任意 CWD 调起）
@@ -102,15 +101,13 @@ def _sogou_fallback(url: str) -> dict:
     try:
         title = ""
         try:
-            req = urllib.request.Request(url, headers={
+            raw = http_get(url, {
                 "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
                               "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-            })
-            with open_url(req, timeout=5) as r:
-                raw = r.read().decode("utf-8", errors="ignore")
-                m = re.search(r'<meta property="og:title" content="([^"]+)"', raw)
-                if m:
-                    title = m.group(1).strip()
+            }, timeout=5)[0].decode("utf-8", errors="ignore")
+            m = re.search(r'<meta property="og:title" content="([^"]+)"', raw)
+            if m:
+                title = m.group(1).strip()
         except Exception:
             pass
 

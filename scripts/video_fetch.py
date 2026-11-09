@@ -25,10 +25,9 @@ import re
 import shlex
 import subprocess
 import urllib.parse
-import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from net_proxy import open_url
+from net_proxy import http_get
 from video_meta import parse_duration_seconds, video_platform
 
 _TZ_CN = timezone(timedelta(hours=8))
@@ -37,9 +36,7 @@ _UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
 
 
 def _get(url: str, timeout: float) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA})
-    with open_url(req, timeout=timeout) as resp:
-        return resp.read()
+    return http_get(url, {"User-Agent": _UA}, timeout=timeout)[0]
 
 
 def _get_json(url: str, timeout: float) -> dict:

@@ -11,15 +11,15 @@ from __future__ import annotations
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any
 
 # 出口调度唯一入口（issue #13 同类修复）：urlopen 不认 config.yaml 的
 # network.proxy，裸用会在「必须经代理才能出网」的环境里整源连不上。
 import sys as _sys
 _sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from net_proxy import open_url  # noqa: E402
+from net_proxy import http_get  # noqa: E402
 
 ZHIHU_API = "https://developer.zhihu.com/api/v1/content/zhihu_search"
 
@@ -55,9 +55,8 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
         "User-Agent": "argo-search/2.6 (unified-search@local)",
     }
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with open_url(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8", "replace"))
+        body, _ = http_get(url, headers, timeout=10)
+        data = json.loads(body.decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
         # 密钥无效/过期（401/403）等必须暴露为 auth-failed，而不是静默
         # no-results——调用侧把「没配置」「没结果」区分开才可行动

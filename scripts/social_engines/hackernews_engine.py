@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import urllib.parse
-import urllib.request
 from typing import Any
 
 # 出口调度唯一入口（issue #13 同类修复）：urlopen 不认 config.yaml 的
@@ -17,18 +16,9 @@ from typing import Any
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from net_proxy import open_url  # noqa: E402
+from net_proxy import http_get  # noqa: E402
 
 HN_API = "https://hn.algolia.com/api/v1/search"
-
-
-def _http_get(url: str, timeout: int = 10) -> bytes:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "argo-search/1.0 (+https://github.com/taxueseek/argo)", "Accept": "application/json"},
-    )
-    with open_url(req, timeout=timeout) as resp:
-        return resp.read()
 
 
 def search(query: str, n: int = 5) -> list[dict[str, Any]]:
@@ -42,7 +32,9 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
     })
     url = f"{HN_API}?{params}"
     try:
-        data = json.loads(_http_get(url).decode("utf-8"))
+        body, _ = http_get(url, {"User-Agent": "argo-search/1.0 (+https://github.com/taxueseek/argo)",
+                                   "Accept": "application/json"})
+        data = json.loads(body.decode("utf-8"))
     except Exception as e:
         # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」
         # （mcp_handlers 的 err=None 设计依赖引擎抛异常或返 error 占位，
