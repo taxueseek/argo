@@ -1,0 +1,21 @@
+engine_id: frankfurter
+type: frankfurter
+enabled: true
+label: Frankfurter(ECB)
+cost_tier: free
+qps: 3
+priority: 50
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- macro
+- finance
+family: finance_market
+recommended: false
+desc: "Frankfurter ECB 官方参考汇率（免认证，2026-10-06 接入）"
+timeout: 8
+canary_query: 美元 人民币 汇率
+quality_queries:
+- query: 美元 人民币 汇率
+- query: USD to EUR exchange rate

@@ -1,0 +1,26 @@
+engine_id: tavily
+body:
+  api_key: '{TAVILY_API_KEY}'
+  max_results: '{n}'
+  query: '{query}'
+  search_depth: basic
+  topic: general
+  include_answer: basic
+enabled: true
+label: Tavily
+cost_tier: api
+qps: 1.67
+priority: 5
+limit: 1000
+period: month
+cost_per_call: 0.001
+cost_unit: usd
+coverage:
+- general
+desc: Tavily AI 搜索 API（免费层 1000 次/月，超出按美元计费；与 exa 同为 api 档）
+headers:
+  Content-Type: application/json
+method: POST
+timeout: 10
+type: http
+url: https://api.tavily.com/search

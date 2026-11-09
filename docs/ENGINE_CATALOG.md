@@ -6,7 +6,7 @@
 
 ## 一、总量与口径
 
-- **收录 290 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）
+- **收录 290 个源**（`engines/specs/*.yaml` 声明总数）
 - **开箱可用 241 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）

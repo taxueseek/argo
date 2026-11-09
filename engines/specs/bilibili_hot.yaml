@@ -1,0 +1,19 @@
+engine_id: bilibili_hot
+type: bilibili_hot
+enabled: true
+label: B站热搜
+cost_tier: free
+qps: 2
+priority: 29
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- hot
+- trending
+- bilibili
+desc: B站热搜（search/square 热搜词，免认证）
+# 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
+relevance_check: false
+timeout: 10

@@ -1,0 +1,16 @@
+engine_id: models_dev
+type: models_dev
+enabled: true
+label: models.dev
+cost_tier: free
+qps: 1
+priority: 59
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- ml
+- model
+- pricing
+desc: models.dev AI 模型目录（全量缓存，免认证）
+timeout: 15

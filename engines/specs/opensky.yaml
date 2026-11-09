@@ -1,0 +1,17 @@
+engine_id: opensky
+enabled: true
+label: OpenSky 实时航班
+cost_tier: free
+family: structured_card
+qps: 2
+priority: 57
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- flight
+- realtime
+- aviation
+desc: 全球 ADS-B 实时航班（主要都会区 bbox，免 key）
+timeout: 12
+type: opensky

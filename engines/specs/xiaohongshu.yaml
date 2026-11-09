@@ -1,0 +1,25 @@
+engine_id: xiaohongshu
+qps: 2
+type: cli
+label: 小红书
+enabled: true
+cost_tier: free
+cmd:
+- python3
+- scripts/social_engines/xiaohongshu_engine.py
+search_args:
+- search
+- '{query}'
+- -n
+- '{n}'
+env: {}
+# 不声明 timeout（2026-10-06 回归策略门禁）：本引擎内部无重试，声明 ≥8s
+# 会按 search._engine_retries 约定关掉外层重试（execution.retry_count=1），
+# 一次失败即弃、成功率下降。不声明时单次尝试吃 default_timeout=8s。
+# 若将来脚本内加了重试，应同时声明 timeout 并更新 test_timeout_declaration_policy 分组。
+# 后端依赖（实测：脚本内 subprocess 调 `xhs`，本机缺失时状态曾误报 ready，
+# 调用后白等并静默返回 0 条）。另需 `xhs login` 取得登录态 cookie，
+# 属运行时授权而非依赖——缺失时结果为空并带 login_state 标记。
+requires:
+- bin: xhs
+  fix: 安装小红书 CLI（`npm i -g xiaohongshu-cli`，或见项目 README），随后执行 `xhs login` 完成登录

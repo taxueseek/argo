@@ -1,0 +1,26 @@
+engine_id: local_stackoverflow
+type: http
+enabled: true
+label: StackOverflow本地
+cost_tier: free
+qps: 5
+priority: 36
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: q
+extra_params:
+  site: stackoverflow
+  pagesize: '{n}'
+  order: desc
+  sort: relevance
+output_map:
+  items: items
+  item_title: title
+  item_url: link
+  item_summary: excerpt
+  item_published_at: creation_date
+timeout: 10
+url: https://api.stackexchange.com/2.3/search/advanced

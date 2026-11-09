@@ -1,0 +1,14 @@
+engine_id: zhihu_user
+type: zhihu_user
+enabled: true
+label: 知乎个人数据
+cost_tier: free
+qps: 2
+priority: 5
+limit: 10000
+period: day
+cost_per_call: 0.0
+cost_unit: free
+family: personal_data
+desc: 知乎个人数据（本人创作内容/收藏/关注；Access Secret 直查本人无需 OAuth，user_data 池 10000/天）
+timeout: 10

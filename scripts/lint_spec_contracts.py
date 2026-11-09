@@ -27,7 +27,6 @@ from typing import Any
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SPECS_DIR = SKILL_DIR / "engines" / "specs"
-CONFIG_PATH = SKILL_DIR / "config.yaml"
 
 # C1 的显式豁免名单（engine_id）：规格声明的 CLI 默认输出就是机器可读、
 # 且无 --json 类旗标可传时，在此登记并注明依据。当前为空——出现新豁免
@@ -36,8 +35,13 @@ JSON_FLAG_EXEMPT: set[str] = set()
 
 
 def load_specs() -> list[tuple[str, str, dict[str, Any]]]:
-    """收集声明式规格：(来源标签, engine_id, spec)。含 engines/specs/*.yaml
-    与 config.yaml engines 段里的 dict 条目。读不了的文件计为一条结构违例。"""
+    """收集声明式规格：(来源标签, engine_id, spec)。
+
+    2026-11-09 迁移后：引擎声明唯一源是 engines/specs/*.yaml；config.yaml
+    的 engines 段已清空（保留空键仅为兼容顶层键读取）。本函数不再读
+    config.yaml engines 段——那会让「config.yaml 里有没有引擎」成为第二真源。
+    读不了的文件计为一条结构违例。
+    """
     out: list[tuple[str, str, dict[str, Any]]] = []
     for p in sorted(SPECS_DIR.glob("*.yaml")):
         try:
@@ -49,15 +53,6 @@ def load_specs() -> list[tuple[str, str, dict[str, Any]]]:
             continue
         if isinstance(data, dict):
             out.append((f"specs/{p.name}", str(data.get("engine_id", "")), data))
-    try:
-        from yaml_load import loads
-
-        cfg = loads(CONFIG_PATH.read_text(encoding="utf-8")) or {}
-    except Exception:
-        cfg = {}
-    for name, spec in (cfg.get("engines") or {}).items():
-        if isinstance(spec, dict) and spec.get("type") == "cli":
-            out.append(("config.yaml", str(name), spec))
     return out
 
 

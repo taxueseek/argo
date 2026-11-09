@@ -1,0 +1,31 @@
+engine_id: archive_org
+type: http
+enabled: true
+label: Internet Archive
+cost_tier: free
+qps: 1
+priority: 53
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- archive
+- history
+- reference
+desc: Internet Archive 高级搜索（免认证）
+method: GET
+query_param: q
+extra_params:
+  fl[]: identifier,title
+  rows: '{n}'
+  output: json
+output_map:
+  items: response.docs
+  item_title: title
+  item_url: identifier
+  item_summary: identifier
+  url_template: https://archive.org/details/{identifier}
+timeout: 12
+url: https://archive.org/advancedsearch.php
+headers:
+  User-Agent: argo-search/2.5

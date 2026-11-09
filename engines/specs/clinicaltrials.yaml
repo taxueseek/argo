@@ -1,0 +1,15 @@
+engine_id: clinicaltrials
+type: clinicaltrials
+enabled: true
+label: ClinicalTrials
+cost_tier: free
+qps: 2
+priority: 49
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- medical
+- clinical
+desc: ClinicalTrials.gov v2 临床试验（免认证）
+timeout: 12

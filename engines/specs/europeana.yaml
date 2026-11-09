@@ -1,0 +1,19 @@
+engine_id: europeana
+enabled: false
+disabled_reason: 72fd95a 源治理轮批量停用；官方 demo key 限额严、欧洲文化遗产覆盖窄，重开需自备 key 并实测
+label: Europeana 欧洲文化遗产
+cost_tier: free
+family: knowledge
+qps: 2
+priority: 51
+note: 官方 demo key (api2demo) 已失效 401；上游提供新 key 前禁用，避免路由选中空转
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- culture
+- europe
+- heritage
+desc: 欧洲 27 国文化遗产聚合（官方公开 demo key）
+timeout: 12
+type: europeana

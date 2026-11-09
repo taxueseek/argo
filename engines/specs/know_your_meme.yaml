@@ -1,0 +1,18 @@
+engine_id: know_your_meme
+type: html
+enabled: true
+label: Know Your Meme
+cost_tier: free
+qps: 2
+priority: 25
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- english
+- meme
+- culture
+desc: Know Your Meme（英文 meme 词条溯源，HTML 解析）
+url: https://knowyourmeme.com/search
+query_param: q
+timeout: 10

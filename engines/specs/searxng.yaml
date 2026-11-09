@@ -1,0 +1,18 @@
+engine_id: searxng
+enabled: false
+disabled_reason: 已用内嵌本地引擎替代外挂 SearXNG 主路径（自包含部署，少一个外部依赖）；重开需自备 SearXNG 实例并把 ARGO_SEARXNG_URL 指向它
+label: SearXNG
+cost_tier: free
+coverage:
+- general
+desc: SearXNG 直连（已废弃，由 T3 替代）
+format: json
+method: GET
+query_param: q
+timeout: 10
+type: http
+# 外挂实例地址随设备而异（主机 / 端口 / 是否 Docker 各不同），写死本机端口
+# 会在别人机器上静默指向一个不存在的服务——与 gdelt 那处硬编码代理同类。
+# 走引擎 spec 既有的 {VAR} 占位符（engines_base._resolve 经 engine_env 解析，
+# os.environ 优先 + env 文件保底）：未配置时该源不可用，不会假装能用。
+url: "{SEARXNG_URL}"

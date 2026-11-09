@@ -1,0 +1,18 @@
+engine_id: stackoverflow
+enabled: true
+label: StackOverflow
+cost_tier: free
+qps: 3
+priority: 17
+limit: 300
+period: day
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- programming
+- qa
+- english
+desc: Stack Overflow（Stack Exchange API，编程问答）
+timeout: 8
+type: stackoverflow

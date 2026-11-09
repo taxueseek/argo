@@ -1,0 +1,25 @@
+engine_id: urban_dictionary
+type: http
+enabled: true
+label: Urban Dictionary
+cost_tier: free
+qps: 3
+priority: 24
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- english
+- slang
+- meme
+desc: Urban Dictionary（英文俚语定义与例句，官方 API）
+format: json
+method: GET
+query_param: term
+output_map:
+  items: list
+  item_title: word
+  item_url: permalink
+  item_summary: definition
+timeout: 8
+url: https://api.urbandictionary.com/v0/define

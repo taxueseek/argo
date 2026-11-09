@@ -1,0 +1,33 @@
+engine_id: wikidata
+type: http
+enabled: true
+label: 维基数据实体
+cost_tier: free
+qps: 2
+priority: 33
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- entity
+- knowledge
+- wiki
+desc: Wikidata 实体搜索（wbsearchentities，免认证，限流较严）
+format: json
+method: GET
+query_param: search
+headers:
+  User-Agent: argo-search/2.4 (unified-search@local)
+extra_params:
+  action: wbsearchentities
+  format: json
+  language: zh
+  uselang: zh
+  limit: '{n}'
+output_map:
+  items: search
+  item_title: label
+  item_url: url
+  item_summary: description
+timeout: 10
+url: https://www.wikidata.org/w/api.php

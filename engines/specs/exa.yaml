@@ -1,0 +1,20 @@
+engine_id: exa
+enabled: true
+label: Exa语义搜索
+cost_tier: api
+qps: 1
+priority: 14
+limit: 1000
+period: month
+# 每月 $10 赠金按 1000 次折算 → $0.01/次。此前写 0 表示「赠金不计成本」，
+# 结果是 $10 预算永远不消耗、面板上的额度无法参与调度（2026-10-22 修正）。
+cost_per_call: 0.01
+cost_unit: usd
+coverage:
+- semantic
+- general
+- english
+- chinese
+desc: Exa 语义搜索（embedding 匹配 + 内容摘要，新户 $20 赠金 + 每月 $10 赠金）
+timeout: 15
+type: exa

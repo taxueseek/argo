@@ -1,0 +1,16 @@
+engine_id: eu_opendata
+enabled: true
+label: EU Open Data Portal
+cost_tier: free
+family: misc_vertical
+qps: 2
+priority: 53
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- opendata
+- europe
+desc: 欧盟开放数据目录（24 语言元数据）
+timeout: 12
+type: eu_opendata

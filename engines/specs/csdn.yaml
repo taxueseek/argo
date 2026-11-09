@@ -1,0 +1,18 @@
+engine_id: csdn
+type: csdn
+family: social
+enabled: true
+label: CSDN
+cost_tier: free
+qps: 2
+priority: 30
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- tech
+- community
+- blog
+desc: CSDN 搜索（so.csdn.net v3 JSON，免认证；标题与摘要的高亮标签、URL 追踪参数在引擎内清洗）
+timeout: 12

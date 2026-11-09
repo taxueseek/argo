@@ -1,0 +1,18 @@
+engine_id: tencent_kline
+enabled: true
+label: 腾讯 K 线
+cost_tier: free
+family: finance_market
+qps: 2
+priority: 62
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- stock
+- kline
+- chinese
+- chart
+desc: 腾讯财经前复权日 K 线（A股+港股+美股）
+timeout: 10
+type: tencent_kline

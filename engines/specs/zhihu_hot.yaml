@@ -1,0 +1,36 @@
+engine_id: zhihu_hot
+type: http
+enabled: true
+label: 知乎热榜
+cost_tier: free
+qps: 1
+priority: 26
+limit: 100
+period: day
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- hot
+- trending
+- realtime
+desc: 知乎开放平台热榜 hot_list（日配额约 100；需 ZHIHU_ACCESS_SECRET；原 zhihu skill 迁入）
+# 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
+relevance_check: false
+format: json
+headers:
+  Authorization: Bearer {ZHIHU_ACCESS_SECRET}
+  Content-Type: application/json
+  X-Request-Timestamp: '{TIMESTAMP}'
+method: GET
+# 热榜无关键词检索，空 query_param 仅带 Limit
+query_param: ""
+extra_params:
+  Limit: '{n}'
+output_map:
+  items: Data.Items
+  item_title: Title
+  item_url: Url
+  item_summary: Summary
+timeout: 8
+url: https://developer.zhihu.com/api/v1/content/hot_list

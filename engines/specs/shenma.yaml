@@ -1,0 +1,13 @@
+engine_id: shenma
+type: shenma
+enabled: true
+label: 神马搜索
+cost_tier: free
+qps: 3
+priority: 20
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage: [chinese, general]
+desc: 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页
+timeout: 10

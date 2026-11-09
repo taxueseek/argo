@@ -1,0 +1,36 @@
+engine_id: local_openstreetmap
+type: http
+enabled: true
+label: OpenStreetMap本地
+cost_tier: free
+family: science_geo
+qps: 1
+priority: 44
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- geo
+- places
+- map
+desc: Nominatim 地理编码/地点搜索（OSM，免认证，须带 User-Agent）
+# 2026-09-07：显式 6s——Nominatim 在部分网络不可达/超慢，主源位吃满
+# 调用方默认 10s 是 geo 案 12.4s 拖尾的主因；健康网络下 OSM 1-2s 内返回
+timeout: 6
+format: json
+method: GET
+query_param: q
+headers:
+  User-Agent: argo-search/2.6 (unified-search@local)
+  Accept: application/json
+  Accept-Language: zh-CN,zh;q=0.9,en;q=0.8
+extra_params:
+  format: json
+  limit: '{n}'
+output_map:
+  items: .
+  item_title: display_name
+  item_url: osm_id
+  item_summary: type
+  url_template: https://www.openstreetmap.org/{osm_type}/{osm_id}
+url: https://nominatim.openstreetmap.org/search

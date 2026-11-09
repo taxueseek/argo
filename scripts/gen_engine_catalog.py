@@ -2,7 +2,7 @@
 """gen_engine_catalog.py — 生成搜索源使用文档（docs/ENGINE_CATALOG.md）。
 
 为什么要生成而不是手写：引擎清单、密钥要求、可用状态、费用档位分散在
-config.yaml / engines/specs/*.yaml / quota_profiles.json / engine_env 四处，
+engines/specs/*.yaml / quota_profiles.json / engine_env 三处，
 手写文档必然与事实脱节（本仓 2026-09-12 就出现过「文档说 12 个 MCP 工具、
 实际 14 个」「文档说 150+ 引擎、分不清收录与可用」）。这里的做法是：
 文档从**运行时同一批函数**取事实，`--check` 比对磁盘上的文档，
@@ -202,7 +202,7 @@ def render() -> str:
     L.append("")
     L.append("## 一、总量与口径")
     L.append("")
-    L.append(f"- **收录 {len(rows)} 个源**（config.yaml + `engines/specs/*.yaml` 声明合并后的总数）")
+    L.append(f"- **收录 {len(rows)} 个源**（`engines/specs/*.yaml` 声明总数）")
     L.append(f"- **开箱可用 {len(usable)} 个**：不需要你配任何密钥或装额外工具，"
              "自动路由就会用上")
     L.append(f"- **需自备密钥 {len(keyed)} 个**：{_names(keyed)}"

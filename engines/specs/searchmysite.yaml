@@ -1,0 +1,18 @@
+engine_id: searchmysite
+enabled: true
+label: SearchMySite 个人站索引
+cost_tier: free
+family: web_general
+qps: 2
+priority: 55
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- indie
+- blog
+- english
+desc: 人工审核准入的个人独立站索引（非商业博客，HTML 解析）
+timeout: 12
+type: searchmysite

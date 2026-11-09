@@ -1,0 +1,27 @@
+engine_id: local_github
+type: http
+enabled: true
+label: GitHub本地
+cost_tier: free
+qps: 5
+priority: 35
+limit: 1000
+period: day
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: q
+extra_params:
+  per_page: '{n}'
+headers:
+  Accept: application/vnd.github.v3+json
+  User-Agent: argo-search/2.1
+output_map:
+  items: items
+  item_title: full_name
+  item_url: html_url
+  item_summary: description
+  item_published_at: created_at
+timeout: 10
+url: https://api.github.com/search/repositories

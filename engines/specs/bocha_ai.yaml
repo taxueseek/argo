@@ -1,0 +1,27 @@
+engine_id: bocha_ai
+body:
+  answer: false
+  count: '{n}'
+  freshness: noLimit
+  query: '{query}'
+  stream: false
+enabled: true
+label: 博查AI搜索
+cost_tier: low
+qps: 5
+priority: 9
+# 按量付费：同 bocha，不设次数上限。
+cost_per_call: 0.001
+cost_unit: credit
+coverage:
+- chinese
+- general
+- vertical
+desc: 博查 AI 搜索（ai-search 端点网页结果直连）
+headers:
+  Authorization: Bearer {BOCHA_API_KEY}
+  Content-Type: application/json
+method: POST
+timeout: 12
+type: bocha_ai
+url: https://api.bochaai.com/v1/ai-search

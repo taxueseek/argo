@@ -15,11 +15,15 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 def _nbs_stats_enabled() -> bool:
     """nbs_stats 上游停用时（WAF + V2 端点 404，2026-09-30）跳过其前置断言；
-    重开后自动恢复覆盖，不删测试。"""
+    重开后自动恢复覆盖，不删测试。
+
+    2026-11-09 迁移后：引擎声明在 engines/specs/*.yaml，不再读 config.yaml。
+    """
     try:
         import yaml
-        cfg = yaml.safe_load((SKILL_DIR / "config.yaml").read_text(encoding="utf-8"))
-        return bool((cfg.get("engines") or {}).get("nbs_stats", {}).get("enabled", True))
+        spec_path = SKILL_DIR / "engines" / "specs" / "nbs_stats.yaml"
+        cfg = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+        return bool(cfg.get("enabled", True))
     except Exception:
         return True
 

@@ -1,0 +1,31 @@
+engine_id: wallstreetcn
+type: wallstreetcn
+family: news_flash
+enabled: true
+label: 华尔街见闻
+cost_tier: free
+qps: 2
+priority: 59
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- finance
+- news
+- telegraph
+desc: 华尔街见闻快讯（lives 直播流 JSON，免认证；全量流 + 本地关键词过滤）
+# 准入校验用查询：本引擎是「全量快讯流 + 关键词过滤」，通用探针词（英文/技术词）
+# 会把 100 条快讯滤空，被判成空结果 fail。财经属触发词，走全量榜单。
+canary_query: 财经
+# 质量基准查询集：本引擎是「全量快讯流 + 本地关键词过滤」，通用探针词会被过滤成
+# 空结果，把「检索模式不匹配」误判成引擎质量差。故与 v2ex 同法，声明本引擎
+# 实际适用的查询形态（触发词走全量榜单）作为准入基准。
+quality_queries:
+- id: wallstreetcn_finance
+  query: 财经
+  category: finance
+- id: wallstreetcn_us
+  query: 美股
+  category: finance
+timeout: 10

@@ -1,0 +1,39 @@
+engine_id: seltz
+enabled: true
+label: Seltz搜索
+# 英文主力（2026-09-16 实测）：英文查询稳定可用——美联储/OpenAI/英伟达/
+# python asyncio/open source LLM 五条全中，结果自带发布日期与正文摘录（省
+# 一次 fetch）。中文查询全语料均差（同语料下英文 3/3 有答案、中文 3/3 拒答
+# 且引用指向时政类条目），故用 langs 限定为英文，不靠自然中立。
+cost_tier: api
+qps: 1
+priority: 8
+period: month
+# 注册一次性赠 20000 次（官方口径），按月上限保守看管防烧穿
+limit: 20000
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- news
+- english
+desc: Seltz 搜索（英文主力，news 语料；结果带发布日期与正文摘录；中文无召回价值已用 langs 排除）
+timeout: 15
+canary_query: rust async
+type: seltz
+# 语言限定：engine_langs 只认 spec.langs / ENGINE_LANGS 表，不看 coverage。
+# 不写这条则默认 ["*"] 语言中立，中文查询也会被路由过来——这正是中文查询
+# 拿到时政类无关条目的通路。限定 en 后中文查询不再选它。
+langs:
+- en
+# 能力族：归 news_flash（快讯/电报，同 google_news / people_daily）。
+# 原归 web_general 属误判——它答的是新闻类问题；且 web_general 族在
+# dedupe_by_family 里 max_per_family=2，与 octen/anysearch 争同一批槽位
+# 必被挤掉（实测 route 层解析出的 combo 里没有它）。归 news_flash 后
+# 不再被全网搜索族去重剪掉。
+family: news_flash
+# 语料选择：上游只有 news/wikipedia/people/companies，不传默认 news。
+# 此条目按 news 声明 coverage；要查公司概况请另起条目并设 scope: companies。
+scope: news
+# 密钥声明（同 parallel）：builder 内读 SELTZ_API_KEY；缺失时状态转 missing_key
+required_env:
+- SELTZ_API_KEY

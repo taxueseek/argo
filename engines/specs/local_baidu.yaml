@@ -1,0 +1,30 @@
+engine_id: local_baidu
+type: html
+enabled: true
+label: 百度本地
+cost_tier: free
+qps: 3
+# 风控按突发触发：连发即降级（真 SERP→稀页→壳页）。2s 最小间隔实测稳定
+min_interval_ms: 2000
+# 2026-09-26 升级实测：密集调用后本 IP 对 Python 原生 TLS 指纹整档降级为
+# 壳页（1438B），同刻 chrome131/safari184 仿冒 17/12 条——按 ClientHello
+# 拦截。tls_impersonate 声明仿冒档，firefox135 同刻被杀故不入列
+tls_impersonate: [chrome131, safari184]
+priority: 26
+period: second
+cost_per_call: 0.0
+cost_unit: free
+url: https://www.baidu.com/s
+query_param: wd
+extra_params:
+  ie: utf-8
+# 2026-09-26 实测：无 Cookie 首刷可出结果，随后被风控逐级降级（947KB 真
+# SERP → 632KB 稀页 → 1438B 壳页）。带 BAIDUID 后稳定出结果——值本身
+# 不敏感（随机 hex 即可），要求只是跨请求一致；但固定写死值会被关联拉黑
+# （实测同一值密集调用后整值作废），故用 {UUID}：每次进程启动新身份、
+# 进程内跨请求一致，配合 2s 最小间隔长期稳定。
+headers:
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+  Cookie: BAIDUID={UUID}:FG=1
+  Accept-Language: zh-CN,zh;q=0.9
+timeout: 8

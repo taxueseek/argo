@@ -1,0 +1,16 @@
+engine_id: baidu_baike
+type: baidu_baike
+enabled: true
+label: 百度百科
+cost_tier: free
+qps: 2
+priority: 41
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- encyclopedia
+- reference
+desc: 百度百科词条（suggest + OpenAPI 卡片，免认证）
+timeout: 8

@@ -1,0 +1,19 @@
+engine_id: opencorporates
+type: opencorporates
+enabled: true
+label: OpenCorporates 公司注册
+cost_tier: free
+qps: 2
+priority: 56
+period: second
+cost_per_call: 0.0
+cost_unit: free
+# 2026-10-28 直连实测：匿名请求被上游全面拒 401，API 需 api_token（免费档可申请）
+required_env:
+- OPENCORPORATES_API_TOKEN
+coverage:
+- company
+- business
+- legal
+desc: OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token）
+timeout: 10

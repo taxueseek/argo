@@ -1,0 +1,19 @@
+engine_id: metaso
+body:
+  q: '{query}'
+  scope: webpage
+  size: 20
+enabled: true
+label: 秘塔
+cost_tier: low
+coverage:
+- chinese
+- general
+desc: 秘塔搜索 API（中文 AI 搜索）
+headers:
+  Authorization: Bearer {METASO_API_KEY}
+  Content-Type: application/json
+method: POST
+timeout: 15
+type: http
+url: https://metaso.cn/api/v1/search

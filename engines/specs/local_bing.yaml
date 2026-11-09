@@ -1,0 +1,16 @@
+engine_id: local_bing
+type: html
+enabled: true
+label: Bing本地
+cost_tier: free
+qps: 5
+priority: 20
+period: second
+cost_per_call: 0.0
+cost_unit: free
+url: https://www.bing.com/search
+query_param: q
+extra_params:
+  setlang: zh-Hans
+  mkt: zh-CN
+timeout: 8

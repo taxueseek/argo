@@ -437,13 +437,16 @@ class TestConfigDiskCache:
             "peek 返回了上一个版本的 db_path——状态目录会错位"
 
     def test_deleted_external_spec_invalidates_cache(self, monkeypatch, tmp_path):
-        """删掉一个不是最新的外置声明，缓存必须失效（max_mtime 对此是盲的）。"""
+        """删掉一个不是最新的外置声明，缓存必须失效（max_mtime 对此是盲的）。
+
+        2026-11-09 迁移后：spec 文件在 engines/specs/ 子目录。
+        """
         eng = tmp_path / "engines"
-        eng.mkdir()
-        (eng / "alpha.yaml").write_text(
+        (eng / "specs").mkdir(parents=True)
+        (eng / "specs" / "alpha.yaml").write_text(
             "engine_id: alpha\nlabel: Alpha\ntype: http\nurl: https://a.invalid\n",
             encoding="utf-8")
-        (eng / "beta.yaml").write_text(
+        (eng / "specs" / "beta.yaml").write_text(
             "engine_id: beta\nlabel: Beta\ntype: http\nurl: https://b.invalid\n",
             encoding="utf-8")
         monkeypatch.setattr(config, "ENGINES_DIR", eng)
@@ -451,8 +454,8 @@ class TestConfigDiskCache:
         assert "alpha" in cfg1["engines"] and "beta" in cfg1["engines"]
         self._reset_memo()
         # 删掉一个「不是最新」的声明：max_mtime 不变，只有文件数变了
-        (eng / "alpha.yaml").unlink()
-        os.utime(eng / "beta.yaml", None)   # 保证 beta 仍是最新的那个
+        (eng / "specs" / "alpha.yaml").unlink()
+        os.utime(eng / "specs" / "beta.yaml", None)   # 保证 beta 仍是最新的那个
         cfg2 = config.load_config()
         assert "alpha" not in cfg2["engines"], \
             "删除声明后仍从缓存读出已删除的引擎（指纹漏了文件数/字节）"

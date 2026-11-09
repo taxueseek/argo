@@ -1,0 +1,15 @@
+engine_id: wayback_cdx
+enabled: true
+label: Wayback CDX 快照
+cost_tier: free
+qps: 2
+priority: 15
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- archive
+- web
+desc: Wayback Machine CDX 历史快照检索（web.archive.org 免认证）
+timeout: 10
+type: wayback_cdx

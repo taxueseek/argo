@@ -1,0 +1,19 @@
+engine_id: moegirl
+type: html
+enabled: true
+label: 萌娘百科
+cost_tier: free
+qps: 2
+priority: 38
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- anime
+- acg
+- wiki
+desc: 萌娘百科（zh.moegirl.org.cn 搜索页 HTML 解析，免认证）
+url: https://zh.moegirl.org.cn/index.php
+query_param: search
+timeout: 12

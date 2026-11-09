@@ -1,0 +1,30 @@
+engine_id: crates
+type: http
+enabled: true
+label: crates.io 包
+cost_tier: free
+qps: 2
+priority: 34
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- rust
+- package
+desc: crates.io Rust 包搜索（免认证，需 UA）
+format: json
+method: GET
+query_param: q
+headers:
+  User-Agent: argo-search/2.4 (unified-search@local)
+extra_params:
+  per_page: '{n}'
+output_map:
+  items: crates
+  item_title: name
+  item_url: name
+  item_summary: description
+  url_template: https://crates.io/crates/{name}
+timeout: 10
+url: https://crates.io/api/v1/crates

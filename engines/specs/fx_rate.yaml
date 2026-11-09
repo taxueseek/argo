@@ -1,0 +1,14 @@
+engine_id: fx_rate
+enabled: true
+label: 实时汇率
+cost_tier: free
+qps: 2
+priority: 3
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+desc: 实时汇率（open.er-api.com 免认证）
+timeout: 10
+type: fx_rate

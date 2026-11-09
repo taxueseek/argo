@@ -1,0 +1,20 @@
+engine_id: brave
+enabled: false
+disabled_reason: 72fd95a 源治理轮批量停用；需 API key，通用网页能力与免密钥源重叠，重开前需实测对比
+label: Brave
+cost_tier: low
+coverage:
+- general
+desc: Brave Search API
+extra_params:
+  count: '{n}'
+format: json
+headers:
+  Accept: application/json
+  Accept-Encoding: gzip
+  X-Subscription-Token: '{BRAVE_API_KEY}'
+method: GET
+query_param: q
+timeout: 8
+type: http
+url: https://api.search.brave.com/res/v1/web/search

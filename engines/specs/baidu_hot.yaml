@@ -1,0 +1,19 @@
+engine_id: baidu_hot
+type: baidu_hot
+enabled: true
+label: 百度热搜
+cost_tier: free
+qps: 2
+priority: 27
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- hot
+- trending
+- realtime
+desc: 百度热搜（实时热搜榜，HTML 解析，免认证）
+# 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
+relevance_check: false
+timeout: 10

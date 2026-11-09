@@ -1,0 +1,36 @@
+engine_id: wikipedia
+enabled: true
+label: Wikipedia
+cost_tier: free
+qps: 10
+priority: 12
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- wiki
+- factual
+desc: Wikipedia API（T2 替代）
+# 2026-10-31 实测裁决：list=search 匹配碎片 vs prop=extracts 导语明文，
+# 碎片胜——碎片是「查询定向」的（问句里的 half-life 会被带到 5,730 years
+# 那句上），导语是「页面通用」的（定义占满前 260 字，具体事实在正文深处）。
+# 第三轮评测 en citation 1.2→0.95 后回退；标签卫生由 engines_base 统一做。
+extra_params:
+  action: query
+  format: json
+  list: search
+  srlimit: '{n}'
+output_map:
+  items: query.search
+  item_title: title
+  item_url: title
+  item_summary: snippet
+  url_template: https://en.wikipedia.org/wiki/{title}
+format: json
+headers:
+  User-Agent: argo-search/1.0
+method: GET
+query_param: srsearch
+timeout: 8
+type: http
+url: https://en.wikipedia.org/w/api.php

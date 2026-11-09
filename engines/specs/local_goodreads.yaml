@@ -1,0 +1,16 @@
+engine_id: local_goodreads
+type: html
+enabled: false
+disabled_reason: 72fd95a 源治理轮批量停用；本地 HTML 源结构不稳定、图书查询占比低，重开前需实测
+label: Goodreads本地
+cost_tier: free
+qps: 2
+priority: 43
+period: second
+cost_per_call: 0.0
+cost_unit: free
+url: https://www.goodreads.com/search
+query_param: q
+extra_params:
+  search_type: books
+timeout: 10

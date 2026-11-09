@@ -1,0 +1,14 @@
+engine_id: qweather
+type: qweather
+enabled: true
+label: 和风天气
+cost_tier: free
+qps: 2
+priority: 60
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- weather
+desc: 和风天气实时天气（需 QWEATHER_KEY）
+timeout: 8

@@ -1,0 +1,16 @@
+engine_id: free_dictionary
+type: free_dictionary
+enabled: true
+label: 英英词典
+cost_tier: free
+qps: 3
+priority: 37
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- dictionary
+- english
+- word
+desc: dictionaryapi.dev 英英词典（免认证，响应为数组）
+timeout: 8

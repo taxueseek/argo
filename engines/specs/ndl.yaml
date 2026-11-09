@@ -1,0 +1,17 @@
+engine_id: ndl
+enabled: true
+label: NDL 日本国立国会图书馆
+cost_tier: free
+family: knowledge
+qps: 2
+priority: 46
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- books
+- japanese
+- bibliography
+desc: 全日本出版物书目总汇（OpenSearch RSS）
+timeout: 12
+type: ndl

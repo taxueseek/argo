@@ -1,0 +1,31 @@
+engine_id: gov_policy
+type: http
+enabled: true
+label: 中国政府网政策库
+cost_tier: free
+family: legal
+qps: 2
+priority: 42
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- policy
+- gov
+- chinese
+desc: 中国政府网政策文件库（国务院文件，带发布日期）
+format: json
+method: GET
+query_param: q
+url: https://sousuo.www.gov.cn/search-gov/data
+extra_params:
+  t: zhengcelibrary_gw
+  p: '1'
+  n: '{n}'
+timeout: 10
+output_map:
+  items: searchVO.listVO
+  item_title: title
+  item_url: url
+  item_summary: summary
+  item_published_at: pubtimeStr

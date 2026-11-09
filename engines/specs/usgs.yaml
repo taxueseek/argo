@@ -1,0 +1,15 @@
+engine_id: usgs
+enabled: true
+label: USGS 地震
+cost_tier: free
+qps: 2
+priority: 12
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- science
+- geo
+desc: USGS 地震目录（最近 30 天 M2.5+，earthquake.usgs.gov 免认证）
+timeout: 12
+type: usgs

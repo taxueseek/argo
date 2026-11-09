@@ -1,0 +1,26 @@
+engine_id: devto
+type: http
+enabled: true
+label: DEV.to
+cost_tier: free
+qps: 2
+priority: 52
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- tech
+- community
+- english
+desc: DEV.to 技术文章搜索（免认证）
+method: GET
+query_param: q
+output_map:
+  items: .
+  item_title: title
+  item_url: url
+  item_summary: description
+timeout: 10
+url: https://dev.to/api/articles/search
+headers:
+  User-Agent: argo-search/2.5

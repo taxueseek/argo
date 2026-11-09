@@ -1,0 +1,24 @@
+engine_id: redskill
+type: cli
+label: 小红书REDSkill
+enabled: true
+cost_tier: free
+qps: 1
+priority: 5
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- skill
+desc: 小红书 REDSkill 排行榜与全量技能检索（47650 技能，data.json 本地缓存，免认证）
+timeout: 15
+cmd:
+- python3
+- scripts/redskill/redskill_engine.py
+search_args:
+- search
+- '{query}'
+- '-n'
+- '{n}'
+env: {}

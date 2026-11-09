@@ -1,0 +1,16 @@
+engine_id: eastmoney
+enabled: true
+label: 东财金融
+cost_tier: free
+qps: 1
+priority: 3
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- stock
+- fund
+desc: 东方财富，金融数据首选
+timeout: 12
+type: eastmoney

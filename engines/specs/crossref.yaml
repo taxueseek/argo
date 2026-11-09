@@ -1,0 +1,27 @@
+engine_id: crossref
+enabled: true
+label: Crossref
+cost_tier: free
+qps: 2
+priority: 40
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+desc: Crossref DOI 元数据 API（免认证，礼貌池 mailto）
+extra_params:
+  mailto: unified-search@local
+  rows: '{n}'
+method: GET
+query_param: query
+timeout: 12
+type: http
+url: https://api.crossref.org/works
+output_map:
+  items: message.items
+  item_title: title
+  item_url: URL
+  item_summary: publisher
+headers:
+  User-Agent: argo-search/2.5 (mailto:unified-search@local)

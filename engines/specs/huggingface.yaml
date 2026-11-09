@@ -1,0 +1,31 @@
+engine_id: huggingface
+type: http
+enabled: true
+label: Hugging Face
+cost_tier: free
+qps: 2
+priority: 44
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- ml
+- model
+- dataset
+- code
+desc: Hugging Face 模型搜索（免认证）
+format: json
+method: GET
+query_param: search
+extra_params:
+  limit: '{n}'
+output_map:
+  items: .
+  item_title: id
+  item_url: id
+  item_summary: pipeline_tag
+  url_template: https://huggingface.co/{id}
+timeout: 10
+url: https://huggingface.co/api/models
+headers:
+  User-Agent: argo-search/2.5

@@ -1,0 +1,22 @@
+engine_id: marginalia
+enabled: true
+label: Marginalia 独立索引
+cost_tier: free
+family: web_general
+# 2026-11-08：api.marginalia.nu JSON 直出挂死（两轮复测 0 字节），迁
+# old-search 服务端渲染。上游 bot 门要求两步访问（等待页给 sst 令牌、
+# 等 2 秒复访），引擎内固定睡 2.2s——qps 压到 1 避免并发流程互踩令牌，
+# timeout 给到 16s 容纳两跳。
+qps: 1
+priority: 40
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- longtail
+- indie
+- english
+desc: Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面；old-search 两步 sst 流程）
+timeout: 16
+type: marginalia

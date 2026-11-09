@@ -1,0 +1,33 @@
+engine_id: bilibili
+qps: 2
+type: cli
+# timeout 声明（2026-09-10 核查）：该引擎内部已有**广谱重试**
+# （429 + URLError/OSError，最多 3 次带指数退避，见 _http_get_with_retry）。
+# 按 search._engine_retries 约定，声明 ≥8s 即不再叠加引擎级重试——
+# 否则内外两层重试叠乘（anysearch 曾因此跑出 31s）。
+# 安全性：实测延迟 0.62s(稳定)，远低于 8s，不会截断正常请求。
+timeout: 8
+label: B站
+enabled: true
+cost_tier: free
+cmd:
+- python3
+- scripts/social_engines/bilibili_engine.py
+search_args:
+- search
+- '{query}'
+- -n
+- '{n}'
+# 不带 --json 时引擎输出人读文本，通用解析只认 ### / URL / 摘要三行，
+# social_meta（时长/UP 主/播放量）在解析前就不存在了。2026-10-27 实测：
+# 补 --json 之前 envelope 里 13 条视频候选的元数据全为空。
+- --json
+# 时长条件由 engine_dispatch 按 decision 下发；引擎未收到时不追加参数。
+filter_args:
+  min_duration:
+  - --min-duration
+  - '{min_duration}'
+  max_duration:
+  - --max-duration
+  - '{max_duration}'
+env: {}

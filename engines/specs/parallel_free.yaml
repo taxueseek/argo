@@ -1,0 +1,20 @@
+engine_id: parallel_free
+enabled: true
+label: Parallel免费搜索
+cost_tier: free
+qps: 1
+priority: 55
+period: month
+cost_per_call: 0.0
+cost_unit: free
+# daily_support：免费 MCP 端点为共享免费层、上游未公布配额，
+# 日常 combo 只做补位（firecrawl 同款保护策略），不进前排烧额度
+tier: daily_support
+coverage:
+- general
+- chinese
+- english
+desc: Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的 parallel REST 通道分立，作其缺位时的补位）
+timeout: 15
+canary_query: rust async
+type: parallel_free

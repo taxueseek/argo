@@ -1,0 +1,34 @@
+# 需要自配 ARGO_TINYFISH_API_KEY；未配置时不可用。
+# explicit_only：不参与默认 fan-out，配好 key 后用 --engine 显式调用；
+# 声明在此，避免被可达性门禁当成「死源」误报。
+
+engine_id: tinyfish_news
+explicit_only: true
+enabled: true
+label: TinyFish 实时新闻
+cost_tier: free
+qps: 1
+priority: 12
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- news
+- english
+desc: TinyFish 实时新闻搜索（免费，含 publisher 与发布日期）
+method: GET
+query_param: query
+timeout: 15
+type: http
+url: https://api.search.tinyfish.ai
+headers:
+  X-API-Key: '{TINYFISH_API_KEY}'
+extra_params:
+  domain_type: news
+output_map:
+  items: results
+  item_title: title
+  item_url: url
+  item_summary: snippet
+  item_source: site_name
+  item_published_at: date

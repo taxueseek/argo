@@ -1,0 +1,16 @@
+engine_id: cnii
+enabled: true
+label: CiNii Research 日文学术
+cost_tier: free
+family: academic
+qps: 2
+priority: 45
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- japanese
+desc: 日本国立情报学研究所学术总库（论文/博士论文/科研项目，JSON-LD）
+timeout: 12
+type: cnii

@@ -1,0 +1,23 @@
+engine_id: local_crossref
+type: http
+enabled: true
+label: Crossref本地
+cost_tier: free
+qps: 2
+priority: 30
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: query
+extra_params:
+  rows: '{n}'
+  mailto: unified-search@local
+output_map:
+  items: message.items
+  item_title: title
+  item_url: URL
+  item_summary: abstract
+timeout: 12
+url: https://api.crossref.org/works

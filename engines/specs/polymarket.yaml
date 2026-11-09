@@ -1,0 +1,26 @@
+engine_id: polymarket
+type: http
+enabled: true
+label: Polymarket
+cost_tier: free
+qps: 2
+priority: 55
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- prediction
+- social
+desc: Polymarket 预测市场搜索（叙事源，非事实真值）
+method: GET
+query_param: q
+output_map:
+  items: events
+  item_title: title
+  item_url: slug
+  item_summary: description
+  url_template: https://polymarket.com/event/{slug}
+timeout: 10
+url: https://gamma-api.polymarket.com/public-search
+headers:
+  User-Agent: argo-search/2.5

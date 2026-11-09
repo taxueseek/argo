@@ -1,0 +1,14 @@
+engine_id: eurostat
+enabled: true
+label: Eurostat 欧盟统计
+cost_tier: free
+qps: 2
+priority: 7
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- macro
+desc: 欧盟统计局宏观数据（EU 国家 GDP/人均GDP/失业率/人口，ec.europa.eu SDMX 免认证）
+timeout: 15
+type: eurostat

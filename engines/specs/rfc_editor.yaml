@@ -1,0 +1,15 @@
+engine_id: rfc_editor
+enabled: true
+label: RFC/互联网标准
+cost_tier: free
+qps: 3
+priority: 12
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- tech
+- standards
+desc: RFC/互联网标准文档检索（datatracker.ietf.org 免认证）
+timeout: 15
+type: rfc_editor

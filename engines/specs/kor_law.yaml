@@ -1,0 +1,17 @@
+engine_id: kor_law
+enabled: true
+label: 韩国判例库
+cost_tier: free
+family: legal
+qps: 2
+priority: 47
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- legal
+- korean
+- case
+desc: 韩国国家法令信息中心判例全文检索（官方公开 demo 账号，韩文 XML）
+timeout: 12
+type: kor_law

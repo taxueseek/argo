@@ -1,0 +1,42 @@
+engine_id: openverse
+type: http
+enabled: true
+label: Openverse 图库
+cost_tier: free
+qps: 3
+priority: 31
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- image
+- media
+- cc
+desc: Openverse 开放版权图库（免认证，CC 素材）
+format: json
+method: GET
+query_param: q
+headers:
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/126.0 Safari/537.36
+extra_params:
+  page_size: '{n}'
+output_map:
+  items: results
+  item_title: title
+  item_url: foreign_landing_url
+  item_summary: creator
+  # 图片字段：此前只映射标题/落地页/作者，结果「搜到图源却拿不到图」——
+  # 上游一直返回 url（图片直链）、license/license_version/license_url、
+  # width/height、thumbnail，只是没人接。落地页 foreign_landing_url 是
+  # Flickr 那种详情页，不是能直接用的图，这是本源最该修的一处。
+  item_image: url
+  item_image_license: license
+  item_image_license_url: license_url
+  item_image_width: width
+  item_image_height: height
+  # license_version 单独带出来：Openverse 的 license 是 `by-sa` 短码，
+  # 拼上版本才是能搜到条款原文的 `CC BY-SA 2.0`（由
+  # engines_base.finalize_image_fields 归一）。
+  item_image_license_version: license_version
+timeout: 10
+url: https://api.openverse.org/v1/images

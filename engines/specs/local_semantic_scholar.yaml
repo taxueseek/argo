@@ -1,0 +1,23 @@
+engine_id: local_semantic_scholar
+type: http
+enabled: true
+label: Semantic Scholar本地
+cost_tier: free
+qps: 2
+priority: 31
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: query
+extra_params:
+  limit: '{n}'
+  fields: title,abstract,url
+output_map:
+  items: data
+  item_title: title
+  item_url: url
+  item_summary: abstract
+timeout: 12
+url: https://api.semanticscholar.org/graph/v1/paper/search

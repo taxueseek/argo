@@ -1,0 +1,23 @@
+engine_id: local_gitlab
+type: http
+enabled: true
+label: GitLab本地
+cost_tier: free
+qps: 3
+priority: 37
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: search
+extra_params:
+  per_page: '{n}'
+  scope: projects
+output_map:
+  items: .
+  item_title: name_with_namespace
+  item_url: web_url
+  item_summary: description
+timeout: 10
+url: https://gitlab.com/api/v4/search

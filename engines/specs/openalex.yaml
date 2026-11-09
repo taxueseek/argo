@@ -1,0 +1,27 @@
+engine_id: openalex
+enabled: true
+label: OpenAlex
+cost_tier: free
+qps: 2
+priority: 39
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+desc: OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto）
+extra_params:
+  mailto: unified-search@local
+  per_page: '{n}'
+method: GET
+query_param: search
+timeout: 12
+type: http
+url: https://api.openalex.org/works
+output_map:
+  items: results
+  item_title: title
+  item_url: id
+  item_summary: publication_year
+headers:
+  User-Agent: argo-search/2.5 (mailto:unified-search@local)

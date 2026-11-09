@@ -1,0 +1,22 @@
+engine_id: parallel
+enabled: true
+label: Parallel搜索
+cost_tier: api
+qps: 5
+priority: 11
+period: month
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- general
+- chinese
+- english
+desc: Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch）
+timeout: 15
+canary_query: rust async
+type: parallel
+# 密钥声明（缺失时状态转 missing_key，避免路由选中必然失败的引擎）：
+# builder 内读 PARALLEL_API_KEY；此前未声明导致状态误报 ready，
+# 实际调用恒定返回 "PARALLEL_API_KEY 未设置"。
+required_env:
+- PARALLEL_API_KEY

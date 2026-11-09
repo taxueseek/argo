@@ -1,0 +1,32 @@
+engine_id: mdn
+type: http
+enabled: true
+label: MDN Web Docs
+cost_tier: free
+qps: 3
+priority: 45
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- docs
+- web
+- javascript
+- css
+- html
+desc: MDN Web Docs 搜索（en/官方 API，免认证）
+format: json
+method: GET
+query_param: q
+extra_params:
+  locale: en-US
+output_map:
+  items: documents
+  item_title: title
+  item_url: mdn_url
+  item_summary: summary
+  url_template: https://developer.mozilla.org{mdn_url}
+timeout: 8
+url: https://developer.mozilla.org/api/v1/search
+headers:
+  User-Agent: argo-search/2.5

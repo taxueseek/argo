@@ -1,0 +1,15 @@
+engine_id: rcsb_pdb
+enabled: true
+label: RCSB PDB 结构
+cost_tier: free
+qps: 2
+priority: 12
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- science
+- biology
+desc: RCSB PDB 蛋白质结构检索（search.rcsb.org v2 免认证）
+timeout: 15
+type: rcsb_pdb

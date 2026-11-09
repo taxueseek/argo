@@ -1,0 +1,18 @@
+engine_id: wiby
+enabled: true
+label: Wiby 手工网页索引
+cost_tier: free
+family: web_general
+qps: 2
+priority: 41
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- longtail
+- classic
+- english
+desc: Wiby 老式手工网页索引（专收非商业化页面，JSON 免认证）
+timeout: 10
+type: wiby

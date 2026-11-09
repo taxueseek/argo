@@ -1,0 +1,15 @@
+engine_id: sina_quote
+enabled: true
+label: 新浪行情
+cost_tier: free
+qps: 2
+priority: 3
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- stock
+- finance
+desc: 新浪实时行情快照（现价/涨跌/成交量，免认证）
+timeout: 8
+type: sina_quote

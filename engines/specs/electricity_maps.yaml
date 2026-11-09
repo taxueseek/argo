@@ -1,0 +1,17 @@
+engine_id: electricity_maps
+enabled: true
+label: Electricity Maps 电网碳强度
+cost_tier: free
+family: misc_vertical
+qps: 2
+priority: 58
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- energy
+- carbon
+- environment
+desc: 全球电网分区目录（zones 免 key）
+timeout: 12
+type: electricity_maps

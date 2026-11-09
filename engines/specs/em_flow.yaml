@@ -1,0 +1,14 @@
+engine_id: em_flow
+enabled: true
+label: 东财资金流
+cost_tier: free
+qps: 2
+priority: 5
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+desc: 东财资金流向（个股主力/北向/板块，push2.eastmoney.com 免认证）
+timeout: 8
+type: em_flow

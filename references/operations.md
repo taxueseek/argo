@@ -76,7 +76,7 @@ argo 的 `deepseek_search` 引擎（默认开启，按次计费 5 元/千次成�
 
 ```bash
 python3 scripts/quota.py stats              # 配额状态
-python3 scripts/search.py --list-engines    # 全量引擎清单（来源 config.yaml）
+python3 scripts/search.py --list-engines    # 全量引擎清单（来源 engines/specs/*.yaml）
 python3 scripts/search.py --list-engines --routable-only
 ```
 
@@ -188,7 +188,7 @@ python3 scripts/replay_eval.py --record            # 只有它需要联网：重
 
 ## 工程纪律（唯一来源）
 
-- **代码来源** = 本仓库；**引擎声明来源** = `config.yaml`（外置 `engines/specs/*.yaml` 优先覆盖同名引擎）；注册表由 `scripts/sync_backends.py` 派生到 `backends/*`（含 `env_passthrough.txt`：`mcp_launch.sh` 的密钥透传名单，引擎声明了 `required_env` 或 `{KEY}` 占位符即自动进名单，不再手改启动器；非引擎通道的变量登记在 `sync_backends.EXTRA_PASSTHROUGH`）
+- **代码来源** = 本仓库；**引擎声明来源** = `engines/specs/*.yaml`（每引擎一文件，唯一声明源；2026-11-09 迁移后 config.yaml 不再放引擎声明）；注册表由 `scripts/sync_backends.py` 派生到 `backends/*`（含 `env_passthrough.txt`：`mcp_launch.sh` 的密钥透传名单，引擎声明了 `required_env` 或 `{KEY}` 占位符即自动进名单，不再手改启动器；非引擎通道的变量登记在 `sync_backends.EXTRA_PASSTHROUGH`）
 - **提交门禁**：`scripts/install.sh` 把 `hooks/pre-commit` 装成调度器——原有 hook 改名 `pre-commit.user` 先跑，再直接执行仓内 `scripts/pre-commit`（不拷贝，始终是当前版本）。旧版「往既有 hook 末尾追一行」在既有 hook 以 `exit 0` 结尾时永远跑不到，重跑一次 install.sh 即迁移
 - **宿主入口** 用 `scripts/link_source.py` symlink 指回来源（目标来自 `--to` / `ARGO_LINK_TARGETS` / 本机 `installs.local.yaml`）；禁止 rsync/多副本；禁止在产品代码写死主机 skill 路径
-- **新增搜索源**：只改 `config.yaml`（必要时 `scripts/engines.py` 注册 builder）→ `python3 scripts/sync_backends.py && python3 scripts/sync_backends.py --check` → 回归 `python3 -m pytest tests/ -q`
+- **新增搜索源**：只改 `engines/specs/<name>.yaml`（必要时 `scripts/engines.py` 注册 builder）→ `python3 scripts/sync_backends.py && python3 scripts/sync_backends.py --check` → 回归 `python3 -m pytest tests/ -q`

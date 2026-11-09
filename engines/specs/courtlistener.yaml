@@ -1,0 +1,15 @@
+engine_id: courtlistener
+enabled: true
+label: CourtListener 判例
+cost_tier: free
+qps: 1
+priority: 12
+period: minute
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- law
+- legal
+desc: CourtListener 美国判例全文检索（匿名可用，2026-05 起约 5 次/分限额）
+timeout: 12
+type: courtlistener

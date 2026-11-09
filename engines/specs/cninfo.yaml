@@ -1,0 +1,14 @@
+engine_id: cninfo
+enabled: true
+label: 巨潮资讯
+cost_tier: free
+qps: 2
+priority: 3
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+desc: 巨潮资讯网官方公告（A股公告第一官方源，免认证）
+timeout: 12
+type: cninfo

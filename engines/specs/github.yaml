@@ -1,0 +1,25 @@
+engine_id: github
+enabled: true
+label: GitHub
+cost_tier: free
+qps: 5
+priority: 11
+limit: 1000
+period: day
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+desc: GitHub 代码搜索 API
+extra_params:
+  per_page: '{n}'
+format: json
+headers:
+  Accept: application/vnd.github.v3+json
+  Authorization: token {GITHUB_TOKEN}
+  User-Agent: unified-search
+method: GET
+query_param: q
+timeout: 10
+type: github
+url: https://api.github.com/search/repositories

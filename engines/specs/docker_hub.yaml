@@ -1,0 +1,30 @@
+engine_id: docker_hub
+type: http
+enabled: true
+label: Docker Hub
+cost_tier: free
+qps: 2
+priority: 51
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- infra
+- package
+desc: Docker Hub 镜像搜索（免认证）
+format: json
+method: GET
+query_param: query
+extra_params:
+  page_size: '{n}'
+output_map:
+  items: results
+  item_title: repo_name
+  item_url: repo_name
+  item_summary: short_description
+  url_template: https://hub.docker.com/r/{repo_name}
+timeout: 10
+url: https://hub.docker.com/v2/search/repositories/
+headers:
+  User-Agent: argo-search/2.5

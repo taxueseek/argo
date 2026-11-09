@@ -1,0 +1,18 @@
+engine_id: imdb
+type: imdb
+enabled: true
+label: IMDb 影视
+cost_tier: free
+family: media_book
+qps: 3
+priority: 34
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- film
+- movie
+- tv
+- media
+desc: IMDb suggestion API（电影/剧集/人物，免认证）
+timeout: 8

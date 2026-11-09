@@ -1,0 +1,15 @@
+engine_id: finviz
+type: finviz
+enabled: true
+label: Finviz
+cost_tier: free
+qps: 2
+priority: 56
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- us_stock
+desc: Finviz 美股快照（HTML，免认证）
+timeout: 10

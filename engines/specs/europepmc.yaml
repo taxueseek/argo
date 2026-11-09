@@ -1,0 +1,29 @@
+engine_id: europepmc
+type: http
+enabled: true
+label: Europe PMC
+cost_tier: free
+qps: 2
+priority: 47
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- biomedical
+desc: Europe PMC 生物医学文献（免认证，SS 429 后备）
+method: GET
+query_param: query
+extra_params:
+  format: json
+  pageSize: '{n}'
+output_map:
+  items: resultList.result
+  item_title: title
+  item_url: doi
+  item_summary: authorString
+  url_template: https://doi.org/{doi}
+timeout: 12
+url: https://www.ebi.ac.uk/europepmc/webservices/rest/search
+headers:
+  User-Agent: argo-search/2.5

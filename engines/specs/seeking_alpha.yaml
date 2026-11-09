@@ -1,0 +1,15 @@
+engine_id: seeking_alpha
+type: seeking_alpha
+enabled: true
+label: Seeking Alpha
+cost_tier: free
+qps: 1
+priority: 57
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- us_stock
+desc: Seeking Alpha 美股分析（HTML，反爬较强）
+timeout: 12

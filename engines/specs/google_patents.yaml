@@ -1,0 +1,16 @@
+engine_id: google_patents
+type: google_patents
+enabled: true
+label: Google Patents 专利
+cost_tier: free
+qps: 2
+priority: 57
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- patent
+- tech
+- ip
+desc: Google Patents 专利搜索（技术尽调/竞品分析，免认证）
+timeout: 10

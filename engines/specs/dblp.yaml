@@ -1,0 +1,29 @@
+engine_id: dblp
+type: http
+enabled: true
+label: DBLP
+cost_tier: free
+qps: 1
+priority: 48
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- cs
+desc: DBLP 计算机科学文献（免认证，偶发 SSL 抖动）
+method: GET
+query_param: q
+extra_params:
+  format: json
+  h: '{n}'
+output_map:
+  items: result.hits.hit
+  item_title: info.title
+  item_url: info.url
+  item_summary: info.venue
+timeout: 12
+url: https://dblp.uni-trier.de/search/publ/api
+headers:
+  User-Agent: argo-search/2.5
+  Accept: application/json

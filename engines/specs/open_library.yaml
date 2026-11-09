@@ -1,0 +1,15 @@
+engine_id: open_library
+type: open_library
+enabled: true
+label: Open Library 图书
+cost_tier: free
+qps: 3
+priority: 36
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- book
+- library
+desc: Open Library 图书搜索（免认证）
+timeout: 10

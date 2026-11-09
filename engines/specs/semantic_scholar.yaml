@@ -1,0 +1,18 @@
+engine_id: semantic_scholar
+enabled: true
+label: Semantic Scholar
+cost_tier: free
+qps: 2
+priority: 10
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+desc: Semantic Scholar API（备选）
+format: json
+method: GET
+query_param: query
+timeout: 10
+type: http
+url: https://api.semanticscholar.org/graph/v1/paper/search

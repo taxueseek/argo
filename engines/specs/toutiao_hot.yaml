@@ -1,0 +1,19 @@
+engine_id: toutiao_hot
+type: toutiao_hot
+enabled: true
+label: 今日头条热榜
+cost_tier: free
+qps: 2
+priority: 28
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- hot
+- trending
+- realtime
+desc: 今日头条热榜（hot-board JSON，免认证）
+# 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
+relevance_check: false
+timeout: 10

@@ -1,0 +1,22 @@
+engine_id: sec_companyfacts
+type: sec_companyfacts
+enabled: true
+label: SEC 结构化财务
+cost_tier: free
+qps: 5
+priority: 60
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- us_stock
+family: finance_market
+recommended: true
+desc: "SEC XBRL companyfacts 年度结构化财务（营收/净利/资产/EPS，免认证）"
+timeout: 15
+canary_query: AAPL revenue
+quality_queries:
+- query: AAPL revenue
+- query: MSFT net income
+- query: NVDA total assets

@@ -1,0 +1,15 @@
+engine_id: local_google_news
+type: http
+enabled: true
+label: Google News本地
+cost_tier: free
+qps: 3
+priority: 33
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: xml
+method: GET
+query_param: q
+timeout: 8
+url: https://news.google.com/rss/search

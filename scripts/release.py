@@ -68,26 +68,23 @@ def parse_version(v: str) -> tuple[int, int, int]:
     return tuple(int(x) for x in v.split("."))  # type: ignore[return-value]
 
 
-# ── 改号规则：唯一一份「哪些地方写着版本号」的清单 ────────────────────────────
-# 每条 (相对路径, 旧串, 新串, 期望出现次数)；次数不对直接中止，避免误伤历史文案。
+# ── 改号规则 ────────────────────────────────────────────────────────────────
+# 2026-11-09 收口：机器声明（pyproject / package.json / server.json / plugin.json /
+# __version__ / SKILL.md / mcp_transport / panel.html）此前在 rules() 里手写一份
+# 路径清单，release_check 另写一份 JSON_DECLS / SRC_DECLS，两份清单靠
+# check_rule_parity() 机械对账。a5cc97b 把 panel_server.mjs 改成运行时读版本后，
+# 源码常量删了、改号清单那行没删，bump 在第一步就中止（三连红）。
+# 现在：release_check.MACHINE_DECL_SPECS 是唯一真源（含路径 + 正则 + 次数），
+# apply_rules 的机器声明部分从它派生——「源文件改了清单没跟」这个形态从根上
+# 消失，check_rule_parity() 随之删除。
+# 五语 README 的徽标/散文/能力标题不在机器声明里，仍由 rules() 单独维护
+# （它们是散文位置，正则会误伤历史文案；次数与位置由 release_check 校验）。
+
+
 def rules(old: str, new: str) -> list[tuple[str, str, str, int]]:
+    """五语 README 改号规则（字面替换；散文位置，正则匹配会误伤历史文案）。"""
     o, n = old, new
-    out: list[tuple[str, str, str, int]] = [
-        ("pyproject.toml", f'version = "{o}"', f'version = "{n}"', 1),
-        ("package.json", f'"version": "{o}"', f'"version": "{n}"', 1),
-        ("packages/dsh-plugin/package.json", f'"version": "{o}"', f'"version": "{n}"', 1),
-        ("packages/marketplace.json", f'"version": "{o}"', f'"version": "{n}"', 1),
-        ("packages/argo-zcode/.zcode-plugin/plugin.json",
-         f'"version": "{o}"', f'"version": "{n}"', 1),
-        ("server.json", f'"version": "{o}"', f'"version": "{n}"', 2),
-        ("argo_search/__init__.py", f'__version__ = "{o}"', f'__version__ = "{n}"', 1),
-        ("SKILL.md", f"version: {o}", f"version: {n}", 1),
-        ("scripts/mcp_transport.py", f'ARGO_MCP_VERSION = "{o}"', f'ARGO_MCP_VERSION = "{n}"', 1),
-        # panel_server.mjs 自 a5cc97b 起在运行时读 plugin.json 取版本，源码里
-        # 不再有版本字面量；改号清单里曾留着对应的一行，成为第二真源漂移点
-        # （2026-11-08 全量回归三连红的根因）。删掉这行，并用下面的
-        # check_rule_parity() 把两份清单机械绑住，防止「源文件改了、清单没跟」。
-        ("packages/argo-zcode/ui/panel.html", f'version: "{o}"', f'version: "{n}"', 1),
+    return [
         # 五语徽标
         ("README.md", f"badge/version-{o}-", f"badge/version-{n}-", 1),
         ("README.en.md", f"badge/version-{o}-", f"badge/version-{n}-", 1),
@@ -117,38 +114,37 @@ def rules(old: str, new: str) -> list[tuple[str, str, str, int]]:
         ("README.md", f"### 当前大致能力（v{o}）", f"### 当前大致能力（v{n}）", 1),
         ("README.en.md", f"### Rough capability set (v{o})", f"### Rough capability set (v{n})", 1),
         ("README.ja.md", f"### 現時点の能力概要（v{o}）", f"### 現時点の能力概要（v{n}）", 1),
-        ("README.ko.md", f"### 대략적인 능력 세트 (v{o})", f"### 대략적인 능력 세트 (v{n})", 1),
+        ("README.ko.md", f"### 대략적인 능력 세트 (v{o})", f"### 대략적인 능力 세트 (v{n})", 1),
         ("README.es.md", f"### Conjunto aproximado de capacidades (v{o})",
          f"### Conjunto aproximado de capacidades (v{n})", 1),
     ]
-    return out
-
-
-def check_rule_parity() -> None:
-    """改号清单与预检清单必须对上：源文件新增/删除版本声明时两处同步。
-
-    这份清单天然是「版本声明位置」的第二份手写副本。历史上 a5cc97b 把
-    panel_server.mjs 的版本改成运行时读取，删了源码常量却没删改号清单对应
-    行，bump 在第一步就中止，全量回归三连红。与其再加一道「改完记得改清单」
-    的口头纪律，不如让 bump 每次都拿预检的实际声明集对一次账：预检读不到的
-    位置，改号也不该去写。
-    """
-    machine_paths = {rel for rel, *_ in rules("0.0.0", "0.0.1")
-                     if not rel.startswith("README")}
-    checked = set(release_check.JSON_DECLS) | {r for r, _ in release_check.SRC_DECLS}
-    checked |= {"pyproject.toml", "argo_search/__init__.py", "SKILL.md",
-                "packages/marketplace.json"}
-    extra = machine_paths - checked
-    if extra:
-        raise ReleaseError(
-            f"改号清单里有预检不认识的声明位置: {sorted(extra)}——"
-            "源文件已改？同步删掉 rules() 里对应行，或把它加进 release_check 的声明集")
 
 
 def apply_rules(root: Path, old: str, new: str, dry: bool) -> list[str]:
-    """按 rules 改写；任何一处次数不符就整体中止（返回已计划清单）。"""
-    check_rule_parity()
+    """按规则改写：先机器声明（从 MACHINE_DECL_SPECS 正则派生），再五语 README。
+
+    机器声明用正则替换捕获组内容，对格式差异（空格、引号、字段顺序）更宽容；
+    五语 README 用字面替换，避免正则误伤历史文案。
+    """
     planned: list[str] = []
+    # 机器声明：从 release_check.MACHINE_DECL_SPECS 派生
+    for rel, pattern, want in release_check.MACHINE_DECL_SPECS:
+        path = root / rel
+        if not path.is_file():
+            raise ReleaseError(f"{rel}: 文件不存在，无法改号")
+        text = path.read_text(encoding="utf-8")
+        matches = list(re.finditer(pattern, text))
+        if len(matches) != want:
+            raise ReleaseError(
+                f"{rel}: 版本声明匹配 {len(matches)} 次（期望 {want}）——先确认模板没变")
+        if any(m.group(1) != old for m in matches):
+            raise ReleaseError(f"{rel}: 捕获到的版本号不是 {old}——先确认当前版本")
+        planned.append(f"{rel}: {old} -> {new}")
+        if not dry:
+            path.write_text(
+                re.sub(pattern, lambda m: m.group(0).replace(old, new), text),
+                encoding="utf-8", newline="\n")
+    # 五语 README：字面替换
     for rel, o, n, want in rules(old, new):
         path = root / rel
         if not path.is_file():

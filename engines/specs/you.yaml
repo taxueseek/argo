@@ -1,0 +1,22 @@
+engine_id: you
+enabled: true
+label: You.com搜索
+cost_tier: api
+qps: 3
+priority: 12
+period: month
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- general
+- news
+- english
+- chinese
+desc: You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并）
+timeout: 12
+canary_query: OpenAI latest news
+type: you
+# 密钥声明（同 parallel）：builder 内读 YDC_API_KEY；此前未声明导致
+# 状态误报 ready，实际调用恒定返回 "YDC_API_KEY 未设置"。
+required_env:
+- YDC_API_KEY

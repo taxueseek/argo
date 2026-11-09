@@ -1,0 +1,22 @@
+engine_id: yahoo_finance
+type: yahoo_finance
+enabled: true
+label: Yahoo Finance
+cost_tier: free
+qps: 2
+priority: 56
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- us_stock
+family: finance_market
+recommended: true
+desc: "Yahoo Finance 美股代码解析+实时行情（search/chart 免认证，2026-10-06 接入）"
+timeout: 10
+canary_query: AAPL
+quality_queries:
+- query: AAPL
+- query: NVIDIA
+- query: Tesla stock

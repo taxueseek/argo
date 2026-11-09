@@ -1,0 +1,14 @@
+engine_id: tencent_quote
+enabled: true
+label: 腾讯行情
+cost_tier: free
+qps: 2
+priority: 4
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+desc: 腾讯实时行情（qt.gtimg.cn 免认证，含换手率/市盈率/五档）
+timeout: 8
+type: tencent_quote

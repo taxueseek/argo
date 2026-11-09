@@ -1,0 +1,15 @@
+engine_id: openfda
+type: openfda
+enabled: true
+label: openFDA
+cost_tier: free
+qps: 2
+priority: 50
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- medical
+- drug
+desc: openFDA 药品标签（免认证）
+timeout: 12

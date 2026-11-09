@@ -54,6 +54,25 @@ SRC_DECLS = (
      r'new App\(\{\s*name:\s*"argo-panel",\s*version:\s*"([^"]+)"'),
 )
 
+# 机器声明规格：每条 (相对路径, 提取正则, 期望出现次数)。
+# 正则必须有且只有一个捕获组圈住版本号。release.py 的改号规则从这份清单
+# 派生，不再手写第二份路径清单（2026-11-09 收口：check_rule_parity 删除，
+# 因为 rules() 不再有独立的机器声明清单可对账）。
+MACHINE_DECL_SPECS: tuple[tuple[str, str, int], ...] = (
+    ("pyproject.toml", r'(?m)^version\s*=\s*"([^"]+)"', 1),
+    ("package.json", r'"version":\s*"([^"]+)"', 1),
+    ("packages/dsh-plugin/package.json", r'"version":\s*"([^"]+)"', 1),
+    ("packages/marketplace.json", r'"version":\s*"([^"]+)"', 1),
+    ("server.json", r'"version":\s*"([^"]+)"', 2),
+    ("packages/argo-zcode/.zcode-plugin/plugin.json",
+     r'"version":\s*"([^"]+)"', 1),
+    ("scripts/mcp_transport.py", r'ARGO_MCP_VERSION\s*=\s*"([^"]+)"', 1),
+    ("packages/argo-zcode/ui/panel.html",
+     r'new App\(\{\s*name:\s*"argo-panel",\s*version:\s*"([^"]+)"', 1),
+    ("argo_search/__init__.py", r'__version__\s*=\s*"([^"]+)"', 1),
+    ("SKILL.md", r'(?m)^version:\s*(\S+)', 1),
+)
+
 
 def _read(root: Path, rel: str) -> str:
     return (root / rel).read_text(encoding="utf-8")

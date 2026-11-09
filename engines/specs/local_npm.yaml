@@ -1,0 +1,25 @@
+engine_id: local_npm
+type: http
+enabled: true
+label: NPM本地
+cost_tier: free
+qps: 5
+priority: 38
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: text
+extra_params:
+  size: '{n}'
+output_map:
+  items: objects
+  item_title: package.name
+  item_url: package.links.npm
+  item_summary: package.description
+  # 与 npm 引擎保持字段一致：同一 URL 走两条路径时结果形状不应有差别
+  item_published_at: package.date
+  item_upstream: package.links.homepage
+timeout: 8
+url: https://registry.npmjs.org/-/v1/search

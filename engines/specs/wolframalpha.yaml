@@ -1,0 +1,18 @@
+engine_id: wolframalpha
+enabled: false
+disabled_reason: 72fd95a 源治理轮批量停用；需 APPID，计算类查询占比低，重开前需实测对比
+label: WolframAlpha
+cost_tier: free
+coverage:
+- factual
+- math
+desc: WolframAlpha 计算知识引擎
+extra_params:
+  appid: '{WOLFRAM_APPID}'
+  output: json
+format: json
+method: GET
+query_param: input
+timeout: 10
+type: http
+url: https://api.wolframalpha.com/v2/query

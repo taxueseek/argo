@@ -1,0 +1,18 @@
+engine_id: arxiv
+enabled: true
+label: arXiv学术论文
+cost_tier: free
+qps: 1
+priority: 7
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+desc: arXiv 论文搜索
+format: xml
+method: GET
+query_param: search_query
+timeout: 15
+type: http
+url: http://export.arxiv.org/api/query

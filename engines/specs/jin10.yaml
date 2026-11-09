@@ -1,0 +1,15 @@
+engine_id: jin10
+type: jin10
+enabled: true
+label: 金十数据
+cost_tier: free
+qps: 2
+priority: 58
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- news
+desc: 金十数据财经快讯（免认证）
+timeout: 8

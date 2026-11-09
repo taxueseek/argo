@@ -1,0 +1,19 @@
+engine_id: qwant
+type: qwant
+enabled: false
+# 2026-11-08 实测停用：主站 qwant.com/?q= 已是 SPA 空壳（页面里 0 个结果
+# 锚点，正则解析必然空手而归）；lite.qwant.com 同样 SPA 化（0 锚点）；
+# api.qwant.com/v3/search/web 返回 403 error_code 50（bot 防护）。三条
+# 路全断，待上游政策变化后再评估重开。
+disabled_reason: Qwant 全线反爬（主站/lite 均 SPA 空壳，API 403），2026-11-08 实测
+explicit_only: true
+label: Qwant
+cost_tier: free
+qps: 2
+priority: 20
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage: [english, general]
+desc: Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页
+timeout: 10

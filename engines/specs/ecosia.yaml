@@ -1,0 +1,18 @@
+engine_id: ecosia
+type: ecosia
+enabled: false
+# 2026-11-08 实测停用：ecosia.org/search 两种 UA（Mozilla/5.0 与完整
+# Chrome 头 + Referer + Accept-Language）均 403 bot 盾，无公开 RSS/API
+# 替代出口。待上游变化后再评估重开。
+disabled_reason: Ecosia bot 盾 403（双 UA 实测），无替代出口，2026-11-08 实测
+explicit_only: true
+label: Ecosia
+cost_tier: free
+qps: 2
+priority: 20
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage: [english, general]
+desc: Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页
+timeout: 10

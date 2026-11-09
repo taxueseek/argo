@@ -1,0 +1,17 @@
+engine_id: em_global_news
+enabled: true
+label: 东财全球资讯
+cost_tier: free
+qps: 2
+priority: 22
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- news
+- global
+- finance
+desc: 东财全球资讯（7×24 财经快讯）
+timeout: 10
+type: em_global_news

@@ -21,8 +21,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import release  # noqa: E402
 import release_check  # noqa: E402
 
-# bump 会碰的文件 + release_check 的输入；只拷这些，避免整仓 36MB
-FIXTURE_FILES = sorted({rel for rel, *_ in release.rules("9.9.9", "9.9.10")})
+# bump 会碰的文件：五语 README 规则 + release_check 的机器声明规格。
+# 只拷这些，避免整仓 36MB
+FIXTURE_FILES = sorted(
+    {rel for rel, *_ in release.rules("9.9.9", "9.9.10")}
+    | {rel for rel, _, _ in release_check.MACHINE_DECL_SPECS}
+)
 
 
 def _fixture(tmp: Path, ver: str | None = None) -> Path:
@@ -106,28 +110,6 @@ class TestReleaseScript(unittest.TestCase):
     def test_current_repo_is_release_ready(self):
         """当前仓库的内容清单必须全绿——不然下一次发版第一步就卡住。"""
         self.assertEqual(release.check(ROOT), [])
-
-    def test_rules_parity_catches_stale_declaration(self):
-        """改号清单里出现预检不认识的声明位置必须当场拦下。
-
-        2026-11-08 三连红的根因：panel_server.mjs 改成运行时读版本后，源码
-        常量删了、改号清单里那行没删，bump 在第一步就中止。这条守的是
-        「两份清单必须对账」，而不是某个具体文件的名字。
-        """
-        orig = release.rules
-
-        def with_ghost(old, new):
-            return orig(old, new) + [("ghost/version.py", f"v{old}", f"v{new}", 1)]
-
-        release.rules = with_ghost
-        try:
-            with self.assertRaises(release.ReleaseError) as ctx:
-                release.check_rule_parity()
-            self.assertIn("ghost/version.py", str(ctx.exception))
-        finally:
-            release.rules = orig
-        # 正常清单必须对账通过
-        release.check_rule_parity()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,33 @@
+engine_id: weather_cn
+type: weather_cn
+family: misc_vertical
+enabled: true
+label: 中国天气网
+cost_tier: free
+qps: 2
+priority: 59
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- weather
+- realtime
+desc: 中国天气网城市实况（城市联想取 cityid → sk JSON，免认证，两步）
+# 数据型源：回答的是天气数据而非与查询词面匹配的文档（同 weather 豁免）
+relevance_check: false
+# 准入校验用查询：本引擎按城市名查询，通用探针词取不到 cityid，会被判 empty。
+canary_query: 上海天气
+quality_queries:
+- id: weather_cn_sh
+  query: 上海天气
+  category: weather
+- id: weather_cn_bj
+  query: 北京气温
+  category: weather
+timeout: 10
+
+  # ── 2026-09-28（9044621）新增：构建器同日落地，本段声明为补齐件——
+  # 此前只有 _BUILDERS 没有 spec 声明，is_registered=False，--engine 点名
+  # 与 chinese_general combo 里的名字全部静默落空（test_route_bangs
+  # 注册冒烟抓住）。声明与构建器必须成对出现，缺一就是死引擎。

@@ -1,0 +1,16 @@
+engine_id: hal
+enabled: true
+label: HAL 法国学术仓储
+cost_tier: free
+family: academic
+qps: 2
+priority: 52
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- french
+desc: 法国全国科研机构开放仓储（Solr JSON）
+timeout: 12
+type: hal

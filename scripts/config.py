@@ -199,7 +199,7 @@ def _validate_engine_paths(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_external_engine_specs() -> dict[str, dict[str, Any]]:
-    """加载 engines/*.yaml 与 engines/specs/*.yaml 外置声明。
+    """加载 engines/specs/*.yaml 外置声明（唯一声明源）。
 
     文件名（去后缀）默认为 engine_id；文件内 engine_id / name 可覆盖。
     跳过：_ 前缀文件。
@@ -239,13 +239,18 @@ def _load_external_engine_specs() -> dict[str, dict[str, Any]]:
             spec["_external_spec"] = str(path)
             result[engine_id] = spec
 
-    _load_dir(ENGINES_DIR)
     _load_dir(ENGINES_DIR / "specs")
     return result
 
 
 def _merge_external_engines(config: dict[str, Any]) -> dict[str, Any]:
-    """外置 YAML 覆盖/新增引擎；cost_tiers 可选追加。"""
+    """把 engines/specs/*.yaml 的引擎声明并入 config 的 engines 段。
+
+    2026-11-09 收口：config.yaml 的 engines 段已清空（165 个引擎迁移到
+    engines/specs/），本函数只做「specs → config.engines」单向合并，不再有
+    「config.yaml 声明 + specs 覆盖同名」的双源语义。config.yaml 里 engines:
+    段保留空键仅为兼容读顶层键的调用方。
+    """
     external = _load_external_engine_specs()
     if not external:
         return config
@@ -254,13 +259,7 @@ def _merge_external_engines(config: dict[str, Any]) -> dict[str, Any]:
         engines = {}
         config["engines"] = engines
     for eid, spec in external.items():
-        # 外置优先覆盖同名（便于本地试验）
-        base = dict(engines.get(eid) or {})
-        base.update(spec)
-        engines[eid] = base
-    # 注：不再维护独立的 cost_tiers 段。成本分级由 get_cost_tiers() 从 engines
-    # 段的 cost_tier 字段聚合，独立段是第二份计算方式（曾与声明矛盾：zhihu_global
-    # 列在 free 而声明 api、tavily 列在 paid 而声明 api），且无任何读取方。
+        engines[eid] = spec
     return config
 
 

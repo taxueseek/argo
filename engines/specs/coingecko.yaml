@@ -1,0 +1,25 @@
+engine_id: coingecko
+type: http
+enabled: true
+label: CoinGecko 币种
+cost_tier: free
+qps: 3
+priority: 32
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- crypto
+- finance
+desc: CoinGecko 币种搜索（免认证）
+format: json
+method: GET
+query_param: query
+output_map:
+  items: coins
+  item_title: name
+  item_url: id
+  item_summary: symbol
+  url_template: https://www.coingecko.com/en/coins/{id}
+timeout: 10
+url: https://api.coingecko.com/api/v3/search

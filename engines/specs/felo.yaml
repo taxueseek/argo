@@ -1,0 +1,25 @@
+engine_id: felo
+body:
+  query: '{query}'
+enabled: false
+disabled_reason: 72fd95a 源治理轮批量停用；需 API key 且通用网页能力与 anysearch/bocha 重叠，重开前需实测对比
+label: Felo AI搜索
+cost_tier: paid
+qps: 1
+priority: 8
+period: second
+cost_per_call: 0.0
+cost_unit: usd
+coverage:
+- general
+- tech
+desc: Felo AI 搜索 API
+headers:
+  Accept: application/json
+  Authorization: Bearer {FELO_API_KEY}
+  Content-Type: application/json
+  User-Agent: unified-search/1.0.1
+method: POST
+timeout: 15
+type: http
+url: https://openapi.felo.ai/v2/chat

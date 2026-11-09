@@ -1,0 +1,17 @@
+engine_id: qq_music
+enabled: true
+label: QQ 音乐搜索
+cost_tier: free
+family: media_book
+qps: 2
+priority: 63
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- music
+- song
+- chinese
+desc: QQ 音乐曲库搜索（歌手/歌曲/专辑）
+timeout: 10
+type: qq_music

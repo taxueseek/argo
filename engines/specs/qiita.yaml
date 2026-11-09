@@ -1,0 +1,28 @@
+engine_id: qiita
+type: http
+enabled: true
+label: Qiita 日本技术社区
+cost_tier: free
+family: social
+qps: 2
+priority: 43
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- tech
+- japanese
+- community
+desc: Qiita 日本最大技术社区（匿名 60 req/h）
+format: json
+method: GET
+query_param: query
+url: https://qiita.com/api/v2/items
+extra_params:
+  per_page: '{n}'
+timeout: 10
+output_map:
+  items: .
+  item_title: title
+  item_url: url
+  item_summary: body

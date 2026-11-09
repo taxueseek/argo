@@ -1,0 +1,16 @@
+engine_id: google_scholar
+enabled: true
+label: GoogleScholar
+cost_tier: free
+qps: 2
+priority: 18
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- paper
+- research
+desc: Google Scholar（学术论文搜索，HTTP 页面解析）
+timeout: 12
+type: google_scholar

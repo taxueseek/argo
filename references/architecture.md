@@ -5,11 +5,11 @@
 ```
 argo/
 ├── SKILL.md              # 技能注册文档（路由壳，本文件指回）
-├── config.yaml           # 路由规则 + 165 个引擎声明（5595 行，人工维护）
-├── engines/specs/        # 另 125 个引擎声明（人工维护，与 config.yaml 名字不重叠）
-│                         # 两处由 config.py 在运行时合并成 290 个引擎，才是一切派生件的唯一来源；
-│                         # 「外置优先覆盖同名」的合并分支今天没有实际同名项，别据此新增第二个声明入口
-├── backends/             # 注册表派生（sync_backends.py 从合并后的引擎声明生成，勿手改）
+├── config.yaml           # 路由规则（cache / domains / execution / output / semantic_evidence / network）
+│                         # engines: {} 保留空键仅为兼容顶层键读取；2059 行
+├── engines/specs/        # 290 个引擎声明（每引擎一文件，唯一声明源，人工维护）
+│                         # config.py 运行时从这里加载，不再合并第二处
+├── backends/             # 注册表派生（sync_backends.py 从引擎声明生成，勿手改）
 │   ├── domain_profiles.json   # TF-IDF 领域文档（67 条人工语料 + 生成器补的空模板）
 │   ├── engine_registry.yaml   # 引擎注册表
 │   ├── quota_profiles.json    # 配额配置

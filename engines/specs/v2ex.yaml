@@ -1,0 +1,33 @@
+engine_id: v2ex
+enabled: true
+label: V2EX
+cost_tier: free
+qps: 3
+priority: 19
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- tech
+- community
+- discussion
+desc: V2EX（中文技术社区，官方 API 候选池 + 本地相关性过滤）
+# 准入校验用查询：官方 API 无搜索端点，本引擎是「热帖池 + 相关性过滤」，
+# 通用技术查询（Python/kubernetes）在当期热帖里大概率无对应主题，
+# 会被误判为「空结果 fail」。Apple 属 V2EX 高频话题，可稳定命中。
+canary_query: Apple
+# 质量基准查询集：同上原因，本引擎适用「社区高频话题」而非通用技术词。
+# 声明后准入用本集评估，避免把「检索模式不匹配」误判为引擎质量差。
+quality_queries:
+- id: v2ex_apple
+  query: Apple
+  category: community
+- id: v2ex_ai
+  query: AI
+  category: community
+- id: v2ex_dev
+  query: 程序员
+  category: community
+timeout: 10
+type: v2ex

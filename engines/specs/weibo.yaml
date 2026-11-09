@@ -1,0 +1,21 @@
+engine_id: weibo
+qps: 2
+type: cli
+# timeout 声明（2026-09-10 核查）：该引擎内部已有**广谱重试**
+# （429 + URLError/OSError，最多 3 次带指数退避，见 _http_get_with_retry）。
+# 按 search._engine_retries 约定，声明 ≥8s 即不再叠加引擎级重试——
+# 否则内外两层重试叠乘（anysearch 曾因此跑出 31s）。
+# 安全性：实测延迟 0.40s，远低于 8s，不会截断正常请求。
+timeout: 8
+label: 微博
+enabled: true
+cost_tier: free
+cmd:
+- python3
+- scripts/social_engines/weibo_engine.py
+search_args:
+- search
+- '{query}'
+- -n
+- '{n}'
+env: {}

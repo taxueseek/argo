@@ -1,0 +1,22 @@
+engine_id: local_bing_news
+type: http
+enabled: false
+# 2026-11-08 实测停用：bing.com/news/search?format=rss 三变体（原样 /
+# setmkt=en-US / 带 Referer+Cookie）均返回 HTML 页而非 RSS，news 出口
+# 已下线；web 版 bing_rss 同日实测仍活（python tutorial 10 items），
+# 新闻 RSS 取证走 local_google_news。
+disabled_reason: Bing News RSS 出口下线（三变体均回 HTML），2026-11-08 实测
+label: Bing News本地
+cost_tier: free
+qps: 3
+priority: 32
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: xml
+method: GET
+query_param: q
+extra_params:
+  format: rss
+timeout: 8
+url: https://www.bing.com/news/search

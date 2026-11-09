@@ -1,0 +1,16 @@
+engine_id: pypi
+type: pypi
+enabled: true
+label: PyPI
+cost_tier: free
+qps: 3
+priority: 42
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- python
+- package
+desc: PyPI 包查询（/pypi/{name}/json 精确解析，免认证）
+timeout: 10

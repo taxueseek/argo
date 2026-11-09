@@ -1,0 +1,15 @@
+engine_id: gutenberg
+enabled: true
+label: Project Gutenberg
+cost_tier: free
+qps: 2
+priority: 10
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- books
+- literature
+desc: Project Gutenberg 公版书全文检索（gutendex.com 免认证）
+timeout: 15
+type: gutenberg

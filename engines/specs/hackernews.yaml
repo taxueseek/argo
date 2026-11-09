@@ -1,0 +1,17 @@
+engine_id: hackernews
+enabled: true
+label: HackerNews
+cost_tier: free
+qps: 5
+priority: 16
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- tech
+- news
+- discussion
+- english
+desc: Hacker News（Algolia API，科技新闻+讨论）
+timeout: 8
+type: hackernews

@@ -1,0 +1,17 @@
+engine_id: tatoeba
+enabled: true
+label: Tatoeba 双语例句
+cost_tier: free
+family: knowledge
+qps: 2
+priority: 60
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- language
+- translation
+- sentence
+desc: 400+ 语言对真实句子语料（翻译/语言学习）
+timeout: 12
+type: tatoeba

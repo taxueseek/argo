@@ -1,0 +1,28 @@
+# 2026-10 实测：无 key JSON/RSS 端点按 IP「一次一发」，首次 200 后立即
+# 连续 429（bot 与浏览器 UA 无差别，Cloudflare 网关策略）。限流收紧到
+# 分钟级防整池烧配额；引擎内部不再重试（429 重试必然再 429），故不声明
+# timeout、保留外层重试兜底——与 xiaohongshu 同判，
+# 见 tests/test_timeout_declaration_policy.py 三分策略。
+
+engine_id: reddit
+qps: 1
+period: minute
+type: cli
+label: Reddit
+enabled: true
+cost_tier: free
+cmd:
+- python3
+- scripts/social_engines/reddit_engine.py
+search_args:
+- search
+- '{query}'
+- -n
+- '{n}'
+env: {}
+# 降级链：先试 rdt CLI，失败/缺失时回落 Reddit 公开 JSON API。
+# 因此 rdt 声明为 optional——缺了只降级，不算引擎故障（不报 missing_dep）。
+requires:
+- bin: rdt
+  optional: true
+  fix: 可选增强：安装 rdt CLI 以获得更稳定的 Reddit 检索；未安装时自动回落公开 JSON API

@@ -1,0 +1,22 @@
+engine_id: local_search
+type: cli
+enabled: true
+label: Local Search 聚合
+cost_tier: free
+qps: 10
+priority: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+cmd:
+- python3
+- sub-skills/local-search/search_v3.py
+search_args:
+- '{query}'
+- --n
+- '{n}'
+- --mode
+- '{mode}'
+- --json
+timeout: 10
+env: {}

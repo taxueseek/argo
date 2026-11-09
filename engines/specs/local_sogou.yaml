@@ -1,0 +1,15 @@
+engine_id: local_sogou
+type: html
+enabled: true
+label: 搜狗本地
+cost_tier: free
+qps: 3
+priority: 27
+period: second
+cost_per_call: 0.0
+cost_unit: free
+url: https://www.sogou.com/web
+query_param: query
+# 结果链接走 sogou.com/link 跳转壳：同 baidu，须解析才有产出
+resolve_redirects: true
+timeout: 8

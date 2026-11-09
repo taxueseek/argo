@@ -1,0 +1,14 @@
+engine_id: wenshu
+type: wenshu
+enabled: true
+label: 裁判文书网
+cost_tier: free
+qps: 1
+priority: 61
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- legal
+desc: 中国裁判文书网（反爬较强，尽力而为）
+timeout: 12

@@ -1,0 +1,33 @@
+engine_id: anysearch
+type: anysearch
+# 历史 CLI 直连脚本已归档 .trash/2026-08-25_anysearch_http.py；
+# cmd/args 仅作记录保留，进程内 builder 不消费。
+cmd:
+- python3
+- scripts/anysearch_http.py
+enabled: true
+label: AnySearch
+cost_tier: free
+qps: 5
+priority: 1
+# 2026-10-21：默认额度按 1000/日 配置（账号实际可能更高，按默认口径走）
+limit: 1000
+period: day
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- general
+- tech
+desc: 通用搜索主力，进程内 JSON-RPC（HttpClient），零 token
+# 显式声明 timeout：`search._engine_retries` 的约定是「已声明 timeout ≥8s
+# 的引擎不再叠加引擎级重试」（慢源超时即弃，避免叠乘放大延迟）。
+# 此前未声明 → 被施加 retry_count=1（2 次尝试），与 builder 内的
+# HTTP 级重试叠乘出最坏 32s（实测 31.3s）。声明后引擎级重试为 0，
+# 配合 builder 的 max_retries=0，单次调用最多付 1 个 8s 超时。
+timeout: 8
+env: {}
+search_args:
+- search
+- '{query}'
+- -n
+- '{n}'

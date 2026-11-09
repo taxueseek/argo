@@ -1,0 +1,17 @@
+engine_id: dnb
+enabled: true
+label: DNB 德国国家图书馆
+cost_tier: free
+family: knowledge
+qps: 2
+priority: 49
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- books
+- german
+- bibliography
+desc: 德语出版物最全书目（SRU/RDF XML）
+timeout: 12
+type: dnb

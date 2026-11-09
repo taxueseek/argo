@@ -1,0 +1,13 @@
+engine_id: wechat_sogou
+type: wechat_sogou
+enabled: true
+label: 搜狗微信搜索
+cost_tier: free
+qps: 2
+priority: 5
+coverage:
+- chinese
+- wechat
+- article
+desc: 搜狗微信搜索引擎（公众号文章，免登录，中间链自动解析为微信真实链接可引用；fast 跳过解析）
+timeout: 10

@@ -1,0 +1,36 @@
+engine_id: twitter
+qps: 2
+type: cli
+# timeout 声明（2026-10-21 改道后核查）：主通道改为 scripts/x_search.py
+# （ego-browser，复用已登录的 X 会话），实测 3.1s 返回 3 条。
+# 内含浏览器首屏等待，故给 20s 上限；dispatch 仍按整轮预算截断，
+# 不会因为这一源拖垮整次搜索。
+timeout: 20
+label: Twitter/X
+enabled: true
+cost_tier: free
+# 覆盖标签决定路由：X 是社交/英文语料，不是通用网页源。
+# 此前缺省为 [general]，社交意图选不到它、通用意图反而可能被它拖慢。
+coverage:
+- social
+- english
+canary_query: OpenAI
+cmd:
+- python3
+- scripts/x_search.py
+search_args:
+- '{query}'
+- -n
+- '{n}'
+- --json
+env: {}
+# 通道变更（2026-10-21）：旧脚本 twitter_engine.py 的三个通道当时全失效——
+# FxTwitter /2/search 上游已停用、nitter 公共实例实测零结果、tw CLI 未装，
+# 强制调用 6s 超时且结果为空。x_search.py 是仓库内既有的可用替代，
+# 且支持 X 原生布尔语法（from:/-is:retweet/lang:），比旧通道更准。
+# ego-browser 缺失只影响该源本身（显式调用报错），不阻断路由，故标 optional。
+requires:
+- bin: ego-browser
+  optional: true
+  fix: 安装 ego-browser（Ego Lite）并登录 X；缺失时该源跳过，单条推文仍可走 `argo tweet`
+desc: X/Twitter 关键词搜索（ego-browser 通道，原生布尔语法 from:/-is:retweet/lang:）

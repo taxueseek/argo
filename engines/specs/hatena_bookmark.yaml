@@ -1,0 +1,20 @@
+engine_id: hatena_bookmark
+enabled: true
+label: Hatena Bookmark 日本书签
+cost_tier: free
+family: social
+qps: 2
+priority: 48
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- tech
+- japanese
+- bookmark
+- trending
+desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
+# 热榜/榜单型源按设计忽略查询词，相关性判据不适用（标准不降，只是问对问题）
+relevance_check: false
+timeout: 12
+type: hatena_bookmark

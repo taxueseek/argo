@@ -1,0 +1,26 @@
+engine_id: local_wiktionary
+type: http
+enabled: true
+label: Wiktionary本地
+cost_tier: free
+qps: 5
+priority: 40
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: json
+method: GET
+query_param: srsearch
+extra_params:
+  action: query
+  list: search
+  format: json
+  srlimit: '{n}'
+output_map:
+  items: query.search
+  item_title: title
+  item_url: title
+  item_summary: snippet
+  url_template: https://en.wiktionary.org/wiki/{title}
+timeout: 8
+url: https://en.wiktionary.org/w/api.php

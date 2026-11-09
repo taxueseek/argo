@@ -1,0 +1,33 @@
+engine_id: zhihu
+enabled: true
+label: 知乎
+cost_tier: free
+qps: 2
+priority: 4
+limit: 5000
+period: day
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- review
+- opinion
+desc: 知乎搜索，中文观点/评测
+format: json
+headers:
+  Authorization: Bearer {ZHIHU_ACCESS_SECRET}
+  Content-Type: application/json
+  X-Request-Timestamp: '{TIMESTAMP}'
+method: GET
+query_param: Query
+extra_params:
+  Count: '{n}'
+output_map:
+  items: Data.Items
+  item_title: Title
+  item_url: Url
+  item_summary: ContentText
+  item_source: AuthorName
+timeout: 10
+type: http
+url: https://developer.zhihu.com/api/v1/content/zhihu_search

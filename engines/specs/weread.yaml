@@ -1,0 +1,14 @@
+engine_id: weread
+type: weread
+enabled: true
+label: 微信读书
+cost_tier: free
+qps: 3
+priority: 35
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- book
+desc: 微信读书图书搜索（中文书目/评分/在读，需 WEREAD_API_KEY）
+timeout: 10

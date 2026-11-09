@@ -134,4 +134,4 @@ argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 | **搜索源使用文档**：全量清单（费用/密钥/状态/域组合）+ 特别能力 | `docs/ENGINE_CATALOG.md`（生成，勿手改） |
 
 
-> 工程纪律（每个事实只定义一处：代码看本仓库、引擎声明看 config.yaml、宿主入口用 link_source.py 建软链、新增源流程）见 `references/operations.md` 末尾。
+> 工程纪律（每个事实只定义一处：代码看本仓库、引擎声明看 engines/specs/*.yaml、宿主入口用 link_source.py 建软链、新增源流程）见 `references/operations.md` 末尾。

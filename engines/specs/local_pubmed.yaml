@@ -1,0 +1,21 @@
+# 两段式自定义 builder（esearch 取 PMID → esummary 取标题/期刊/日期/DOI）。
+# 旧版是纯声明式 http spec，有两处结构性错误导致**静默返回 0 条**：
+#   ① `format: json` 被 engines_base 当查询参数注入 URL，而 E-utilities
+#      的 format 是输出格式参数且不接受 json —— 同一条 URL 加
+#      `&format=json` 实测 HTTP 400、去掉 200；
+#   ② output_map 的 items=esearchresult.idlist 是**字符串数组**，而
+#      _make_field_parser 对非 dict 条目直接 continue，即便请求通了也
+#      一条都解析不出来；且 esearch 只给 PMID，本就没有标题可填。
+# 详见 engines_builders_batch9._build_pubmed_engine 文档串。
+
+engine_id: local_pubmed
+type: pubmed
+enabled: true
+label: PubMed本地
+cost_tier: free
+qps: 1
+priority: 29
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12

@@ -1,0 +1,18 @@
+engine_id: local_arxiv
+type: http
+enabled: true
+label: arXiv本地
+cost_tier: free
+qps: 1
+priority: 28
+period: second
+cost_per_call: 0.0
+cost_unit: free
+format: xml
+method: GET
+query_param: search_query
+extra_params:
+  start: 0
+  max_results: '{n}'
+timeout: 15
+url: http://export.arxiv.org/api/query

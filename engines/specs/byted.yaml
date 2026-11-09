@@ -1,0 +1,33 @@
+engine_id: byted
+body:
+  Count: '{n}'
+  NeedSummary: true
+  Query: '{query}'
+  SearchType: web
+enabled: true
+label: 字节搜索
+cost_tier: low
+qps: 5
+priority: 2
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- general
+- news
+- chinese
+desc: 字节搜索 API，中文通用/news
+headers:
+  Authorization: Bearer {WEB_SEARCH_API_KEY}
+  Content-Type: application/json
+  X-Traffic-Tag: skill_web_search
+method: POST
+output_map:
+  item_source: SiteName
+  item_summary: Summary
+  item_title: Title
+  item_url: Url
+  items: Result.WebResults
+timeout: 8
+type: http
+url: https://open.feedcoopapi.com/search_api/web_search

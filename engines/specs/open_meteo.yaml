@@ -1,0 +1,17 @@
+engine_id: open_meteo
+enabled: true
+label: Open-Meteo 全球天气
+cost_tier: free
+family: structured_card
+qps: 2
+priority: 54
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- weather
+- global
+- forecast
+desc: 全球天气（城市/地名 → 坐标 → 当前天气，免认证）
+timeout: 12
+type: open_meteo

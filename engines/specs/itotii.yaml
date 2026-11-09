@@ -1,0 +1,17 @@
+engine_id: itotii
+type: itotii
+enabled: true
+label: itotii梗百科
+cost_tier: free
+qps: 3
+priority: 23
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- meme
+- slang
+- culture
+desc: itotii 梗百科（中文流行语/网络梗溯源，WordPress REST，免认证）
+timeout: 10

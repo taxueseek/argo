@@ -1,0 +1,15 @@
+engine_id: fred
+type: fred
+enabled: true
+label: FRED 宏观数据
+cost_tier: free
+qps: 3
+priority: 33
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+- macro
+desc: FRED 宏观时序数据（CPI/失业率/国债收益率/GDP/M2，免认证）
+timeout: 10

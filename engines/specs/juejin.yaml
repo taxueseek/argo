@@ -1,0 +1,16 @@
+engine_id: juejin
+type: juejin
+enabled: true
+label: 掘金
+cost_tier: free
+qps: 2
+priority: 46
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- tech
+- community
+desc: 掘金技术文章搜索（免认证）
+timeout: 10

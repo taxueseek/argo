@@ -1,0 +1,35 @@
+engine_id: zh_wikipedia
+type: http
+enabled: true
+label: 中文维基百科
+cost_tier: free
+qps: 2
+priority: 26
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- wiki
+- factual
+desc: 中文维基百科（MediaWiki API，与 en.wikipedia 同构）
+# 与 en.wikipedia 同步保留 list=search 匹配碎片（查询定向）+ engines_base
+# 统一标签卫生；extracts 导语方案实测回退，裁决理由见 en 侧注释
+format: json
+method: GET
+query_param: srsearch
+headers:
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36
+extra_params:
+  action: query
+  list: search
+  format: json
+  srlimit: '{n}'
+output_map:
+  items: query.search
+  item_title: title
+  item_url: title
+  item_summary: snippet
+  url_template: https://zh.wikipedia.org/wiki/{title}
+timeout: 8
+url: https://zh.wikipedia.org/w/api.php

@@ -1,0 +1,17 @@
+engine_id: figshare
+enabled: true
+label: Figshare 科研数据集
+cost_tier: free
+family: academic
+qps: 2
+priority: 61
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- dataset
+- research
+desc: 科研数据集检索（论文/数据/图表）
+timeout: 12
+type: figshare

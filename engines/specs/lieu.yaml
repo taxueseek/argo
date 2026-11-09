@@ -1,0 +1,18 @@
+engine_id: lieu
+enabled: true
+label: Lieu webring 搜索
+cost_tier: free
+family: web_general
+qps: 2
+priority: 56
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- indie
+- webring
+- english
+desc: webring 专用搜索（只索引加入 webring 的小众站点，HTML 解析）
+timeout: 12
+type: lieu

@@ -1,0 +1,17 @@
+engine_id: bing_rss
+type: bing_rss
+enabled: true
+# local_bing 的备胎出口：先显式使用观察命中率，再决定是否进通用 combo
+explicit_only: true
+label: BingRSS
+cost_tier: free
+qps: 5
+priority: 22
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- general
+desc: Bing 网页搜索 RSS 出口（免 key 免 HTML 解析；local_bing 改版/风控时的稳定备胎）
+timeout: 10

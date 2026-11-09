@@ -1,0 +1,17 @@
+engine_id: local_imdb
+type: imdb
+enabled: true
+label: IMDb本地
+cost_tier: free
+family: media_book
+qps: 3
+priority: 42
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- film
+- movie
+- tv
+desc: IMDb suggestion API（local-search 垂直别名，与 imdb 同源）
+timeout: 8

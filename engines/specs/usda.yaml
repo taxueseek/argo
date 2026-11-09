@@ -1,0 +1,17 @@
+engine_id: usda
+enabled: true
+label: USDA 营养成分库
+cost_tier: free
+family: science_bio
+qps: 2
+priority: 59
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- food
+- nutrition
+- health
+desc: 美国农业部食品营养成分（官方 DEMO_KEY）
+timeout: 12
+type: usda

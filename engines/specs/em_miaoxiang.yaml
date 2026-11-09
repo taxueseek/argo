@@ -1,0 +1,14 @@
+engine_id: em_miaoxiang
+enabled: true
+label: 东财妙想
+cost_tier: free
+qps: 1
+priority: 2
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- finance
+desc: 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY）
+timeout: 12
+type: em_miaoxiang

@@ -1,0 +1,18 @@
+engine_id: thesportsdb
+type: thesportsdb
+enabled: true
+label: TheSportsDB 体育
+cost_tier: free
+family: sports
+qps: 2
+priority: 34
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- sports
+- athlete
+- team
+- league
+desc: TheSportsDB 球员/球队/赛事（公开 test key，免认证）
+timeout: 10

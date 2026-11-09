@@ -1,0 +1,19 @@
+engine_id: cls_telegraph
+enabled: true
+label: 财联社电报
+cost_tier: free
+qps: 2
+priority: 21
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- chinese
+- news
+- telegraph
+- realtime
+desc: 财联社电报（全市场实时快讯，v1 API+本地签名零key）
+# 快讯流数据源：回答的是电报列表而非与查询词面匹配的文档（同热榜类豁免）
+relevance_check: false
+timeout: 10
+type: cls_telegraph

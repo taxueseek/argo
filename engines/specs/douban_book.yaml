@@ -1,0 +1,14 @@
+engine_id: douban_book
+type: douban_book
+enabled: true
+label: 豆瓣读书
+cost_tier: free
+qps: 3
+priority: 34
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- book
+desc: 豆瓣读书搜索（评分/出版社/年份/价格，免认证）
+timeout: 10

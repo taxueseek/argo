@@ -1,0 +1,18 @@
+engine_id: zhihu_global
+type: zhihu_global
+enabled: true
+label: 知乎全网搜索
+cost_tier: api
+qps: 2
+priority: 35
+limit: 5000
+period: day
+cost_per_call: 0.0
+cost_unit: api
+coverage:
+- general
+- chinese
+- web
+family: web_general
+desc: 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET）
+timeout: 10
