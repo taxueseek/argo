@@ -272,16 +272,30 @@ def bump(root: Path, new: str, dry: bool = False, force_branch: bool = False,
 
 # ── 发布 ────────────────────────────────────────────────────────────────────
 def _npm_version_exists(pkg: str, ver: str) -> bool:
-    r = subprocess.run(["npm", "view", f"{pkg}@{ver}", "version"],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(
+        ["npm", "view", f"{pkg}@{ver}", "version", f"--registry={NPM_REGISTRY}"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
     return r.returncode == 0
 
 
+NPM_REGISTRY = "https://registry.npmjs.org"
+
+
 def _npm_publish(root: Path, cwd_rel: str, pkg: str, ver: str, extra: list[str]) -> None:
+    """发布到 npm registry（显式指定 registry）。
+
+    为什么显式指定：环境变量 npm_config_registry 常指向镜像（如 npmmirror），
+    而 .npmrc 里的 _authToken 是给 registry.npmjs.org 的——镜像不认这个 token，
+    npm whoami / publish 会报 ENEEDAUTH。显式 --registry 让发布路径与本机镜像配置解耦。
+    """
     if _npm_version_exists(pkg, ver):
         print(f"  - {pkg}@{ver} 已在 registry，跳过")
         return
-    r = subprocess.run(["npm", "publish", *extra], cwd=root / cwd_rel, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(
+        ["npm", "publish", f"--registry={NPM_REGISTRY}", *extra],
+        cwd=root / cwd_rel, text=True, encoding="utf-8", errors="replace",
+    )
     if r.returncode != 0:
         raise ReleaseError(f"npm publish {pkg} 失败（退出码 {r.returncode}）")
 
@@ -289,8 +303,10 @@ def _npm_publish(root: Path, cwd_rel: str, pkg: str, ver: str, extra: list[str])
 def _wait_npm(pkg: str, ver: str, timeout: int) -> bool:
     start = time.time()
     while time.time() - start < timeout:
-        r = subprocess.run(["npm", "view", pkg, "dist-tags.latest"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        r = subprocess.run(
+            ["npm", "view", pkg, "dist-tags.latest", f"--registry={NPM_REGISTRY}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+        )
         if r.stdout.strip() == ver:
             print(f"  - {pkg} latest = {ver}（{int(time.time() - start)}s）")
             return True
