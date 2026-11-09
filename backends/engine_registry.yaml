@@ -507,6 +507,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: DBLP 计算机科学文献（免认证，偶发 SSL 抖动）
+- name: dbpedia
+  tier: T1
+  type: http
+  coverage:
+  - knowledge
+  - entity
+  - reference
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: DBpedia 维基百科结构化知识图谱与实体消歧（JSON 免认证）
 - name: ddgs_images
   tier: T1
   type: cli
@@ -1047,6 +1061,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: 巴西页报（Folha de S.Paulo，巴西最大日报，免 key）
+- name: fourget
+  tier: T1
+  type: http
+  coverage:
+  - web
+  - privacy
+  - general
+  latency_ms: 2000
+  cost: free
+  status: disabled
+  recommended: true
+  explicit_only: false
+  desc: 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG）
 - name: fr_opendata
   tier: T1
   type: http
@@ -2001,6 +2028,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: 萌娘百科（zh.moegirl.org.cn 搜索页 HTML 解析，免认证）
+- name: mojeek
+  tier: T1
+  type: http
+  coverage:
+  - web
+  - privacy
+  - indie
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Mojeek 独立爬虫搜索引擎（百亿级自主索引，非大厂代理，零用户画像）
 - name: musicbrainz
   tier: T1
   type: http
@@ -2527,6 +2568,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: 小红书 REDSkill 排行榜与全量技能检索（47650 技能，data.json 本地缓存，免认证）
+- name: repology
+  tier: T1
+  type: repology
+  coverage:
+  - code
+  - package
+  - linux
+  - dev
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证）
 - name: rfc_editor
   tier: T1
   type: rfc_editor

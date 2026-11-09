@@ -536,6 +536,7 @@ domains:
 - desc: 包依赖状态（deps.dev）
   engines_combo:
   - deps_dev
+  - repology
   - anysearch
   fallback: anysearch
   name: package_intel
@@ -1396,6 +1397,7 @@ domains:
   - wikidata
   - wikipedia
   - zh_wikipedia
+  - dbpedia
   fallback: baidu_baike
   name: entity_search
   parallel: true
@@ -1542,6 +1544,7 @@ domains:
   - searchmysite
   - wiby
   - uapi
+  - mojeek
   - parallel_free
   - tavily
   - firecrawl

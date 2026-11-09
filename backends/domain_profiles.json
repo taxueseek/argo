@@ -2732,5 +2732,29 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "dbpedia": {
+    "label": "DBpedia 知识库",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "fourget": {
+    "label": "4get 极简元搜索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "mojeek": {
+    "label": "Mojeek 独立索引",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "repology": {
+    "label": "Repology",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

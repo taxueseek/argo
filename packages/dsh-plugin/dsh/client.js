@@ -320,6 +320,7 @@ window.__ModuleLoader__.load({
       { ref: "EASTMONEY_APIKEY", common: false, label: "东财妙想", en: "Eastmoney Miaoxiang", engines: ["em_miaoxiang"] },
       { ref: "FELO_API_KEY", common: false, label: "Felo AI搜索", en: "Felo AI Search", engines: ["felo"] },
       { ref: "FIRECRAWL_API_KEY", common: false, label: "Firecrawl", en: "Firecrawl", engines: ["firecrawl"] },
+      { ref: "FOURGET_URL", common: false, label: "4get 极简元搜索", en: "Fourget", engines: ["fourget"] },
       { ref: "GITHUB_TOKEN", common: false, label: "GitHub", en: "GitHub", engines: ["github"] },
       { ref: "KEENABLE_API_KEY", common: false, label: "Keenable", en: "Keenable", engines: ["keenable"] },
       { ref: "METASO_API_KEY", common: false, label: "秘塔", en: "Metaso", engines: ["metaso", "metaso_doc", "metaso_image", "metaso_podcast", "metaso_scholar", "metaso_video"] },

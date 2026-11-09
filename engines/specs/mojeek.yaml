@@ -1,0 +1,31 @@
+engine_id: mojeek
+type: http
+enabled: true
+label: Mojeek 独立索引
+cost_tier: free
+family: web_general
+qps: 2
+priority: 40
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- privacy
+- indie
+- english
+desc: Mojeek 独立爬虫搜索引擎（百亿级自主索引，非大厂代理，零用户画像）
+method: GET
+url: https://api.mojeek.com/search
+query_param: q
+extra_params:
+  fmt: json
+  api_key: test
+output_map:
+  items: response.results
+  item_title: title
+  item_url: url
+  item_summary: desc
+timeout: 10
+headers:
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)

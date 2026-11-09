@@ -13,6 +13,7 @@ tests/test_new_source_reachability.py::_DORMANT_ALLOWLIST。
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import urllib.request
@@ -101,3 +102,67 @@ def _build_shenma_engine(spec: dict[str, Any]) -> Any:
             logger.warning(f"神马搜索失败: {e}")
             return []
     return _engine
+
+
+# ── Repology 跨发行版包生态版本与状态真相（免认证）────────────────────
+
+def _build_repology_engine(spec: dict[str, Any]) -> Any:
+    """Repology 全网 Linux/UNIX 跨包管理器生态版本真相（免认证）。
+
+    覆盖 Debian、Arch、Nix、Alpine、Homebrew、Fedora 等数百个仓库的真实版本与生命周期状态。
+    """
+    timeout = spec.get("timeout", 10)
+
+    @safe_search
+    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
+        to = _timeout or timeout
+        cleaned = re.sub(r"[，,。？！?\s]+", " ", query or "").strip()
+        tokens = [t for t in cleaned.split(" ") if t and not any(w in t.lower() for w in ("包", "版本", "依赖", "软件", "package", "version"))]
+        q = tokens[0] if tokens else (cleaned.split(" ")[0] if cleaned else "")
+        if not q:
+            return []
+
+        import urllib.parse as up
+        url = f"https://repology.org/api/v1/projects/?search={up.quote(q)}"
+        from engines_base import _http_get_raw
+        raw = _http_get_raw(url, {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}, to, engine="repology")
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(data, dict):
+            return []
+
+        results: list[dict[str, Any]] = []
+        for proj_name, entries in list(data.items())[:n]:
+            if not isinstance(entries, list) or not entries:
+                continue
+            newest_ver = ""
+            repos_summary = []
+            for item in entries:
+                if not isinstance(item, dict):
+                    continue
+                v = item.get("version") or ""
+                repo = item.get("repo") or ""
+                status = item.get("status") or ""
+                if status == "newest" and not newest_ver:
+                    newest_ver = v
+                if any(k in repo for k in ("debian", "arch", "nix", "homebrew", "alpine", "fedora", "ubuntu")):
+                    if len(repos_summary) < 4:
+                        repos_summary.append(f"{repo}: {v}")
+            if not newest_ver and entries:
+                newest_ver = entries[0].get("version", "?")
+
+            repo_text = " · ".join(repos_summary) if repos_summary else f"共收录于 {len(entries)} 个仓库"
+            snippet = f"最新版本: {newest_ver} | 主要发行版: {repo_text}"
+            results.append({
+                "title": f"{proj_name} (Repology 跨发行版包详情)",
+                "url": f"https://repology.org/project/{proj_name}/versions",
+                "snippet": snippet,
+                "source": "repology",
+            })
+        return results
+    return _engine
+

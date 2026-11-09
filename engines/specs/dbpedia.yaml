@@ -1,0 +1,32 @@
+engine_id: dbpedia
+type: http
+enabled: true
+label: DBpedia 知识库
+cost_tier: free
+family: knowledge
+qps: 3
+priority: 45
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- knowledge
+- entity
+- reference
+- english
+desc: DBpedia 维基百科结构化知识图谱与实体消歧（JSON 免认证）
+method: GET
+url: https://lookup.dbpedia.org/api/search
+query_param: query
+extra_params:
+  format: json
+output_map:
+  items: docs
+  item_title: label.0
+  item_url: resource.0
+  item_summary: comment.0
+canary_query: Linux
+timeout: 12
+headers:
+  Accept: application/json
+  User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)

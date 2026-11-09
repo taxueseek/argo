@@ -400,6 +400,16 @@
     "cost_tier": "free",
     "priority": 48
   },
+  "dbpedia": {
+    "label": "DBpedia 知识库",
+    "qps": 3,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 45
+  },
   "ddgs_images": {
     "label": "通用图片",
     "qps": 2,
@@ -829,6 +839,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 44
+  },
+  "fourget": {
+    "label": "4get 极简元搜索",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
   },
   "fr_opendata": {
     "label": "法国政府开放数据",
@@ -1590,6 +1610,16 @@
     "cost_tier": "free",
     "priority": 38
   },
+  "mojeek": {
+    "label": "Mojeek 独立索引",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 40
+  },
   "musicbrainz": {
     "label": "MusicBrainz 音乐人",
     "qps": 1,
@@ -2009,6 +2039,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 5
+  },
+  "repology": {
+    "label": "Repology",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 45
   },
   "rfc_editor": {
     "label": "RFC/互联网标准",

@@ -1,0 +1,23 @@
+engine_id: fourget
+enabled: false
+disabled_reason: 公共 4get.ca 实例对公网存在 IP 封锁与限流；重开需自备 4get 实例（极简轻量无状态元搜索中继）并把 FOURGET_URL 指向它即可
+label: 4get 极简元搜索
+cost_tier: free
+coverage:
+- web
+- privacy
+- general
+desc: 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG）
+format: json
+method: GET
+query_param: s
+extra_params:
+  scraper: ddg
+output_map:
+  items: results
+  item_title: title
+  item_url: url
+  item_summary: snippet
+timeout: 8
+type: http
+url: "{FOURGET_URL}"

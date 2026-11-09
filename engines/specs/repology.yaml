@@ -1,0 +1,18 @@
+engine_id: repology
+type: repology
+enabled: true
+label: Repology
+cost_tier: free
+family: code
+qps: 2
+priority: 45
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- package
+- linux
+- dev
+desc: Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证）
+timeout: 10

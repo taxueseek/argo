@@ -80,6 +80,7 @@ from engines_builders_cn import (
 from engines_builders_batch12 import (
     _build_so_engine,
     _build_shenma_engine,
+    _build_repology_engine,
 )
 
 from engines_builders_batch13 import (
