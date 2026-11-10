@@ -424,7 +424,7 @@ def format_text_output(results: dict[str, Any]) -> str:
     for err in results.get("errors", [])[:3]:
         lines.append(f"  [ERROR] {err}")
 
-    # 正文区：编号 + 标题 + 摘要（链接沉底，避免噪声）
+    # 正文区：分桶呈现【本地搜索】与【联网搜索】，避免来源混淆
     sources = results.get("sources")
     if not isinstance(sources, list) or not sources:
         sources = build_sources(results.get("results") or [])
@@ -432,15 +432,19 @@ def format_text_output(results: dict[str, Any]) -> str:
     # 用 URL 保持一致 ref
     url_to_ref = {s.get("url"): s.get("ref") for s in sources if isinstance(s, dict)}
     body_items = [r for r in (results.get("results") or []) if isinstance(r, dict)]
-    for r in body_items:
+
+    def _is_local_item(it: dict[str, Any]) -> bool:
+        return bool(it.get("is_local") or it.get("source") == "local_files"
+                    or str(it.get("url", "")).startswith("file://")
+                    or str(it.get("source", "")).startswith("local_"))
+
+    local_items = [r for r in body_items if _is_local_item(r)]
+    web_items = [r for r in body_items if not _is_local_item(r)]
+
+    def _render_item(r: dict[str, Any], is_local_sec: bool = False) -> None:
         url = (r.get("url") or "").strip()
         ref = url_to_ref.get(url)
         if ref is None:
-            # 未进 sources 时临时编号。分两种：有 URL 但没被收进 sources
-            # （编号未知，用 ?）；以及**本就没有 URL** 的条目——天气/行情/
-            # 宏观这类结构化快照走的就是这条。此前两种情况共用一个分支，
-            # 且分支条件是 `and url`，于是无 URL 的条目 ref 保持 None，
-            # 正文里直接打成 `[None]`（2026-09-19 实测「北京天气」复现）。
             ref = "?" if url else "—"
         score = r.get("score", 0)
         title = (r.get("title") or "?")[:80]
@@ -451,21 +455,33 @@ def format_text_output(results: dict[str, Any]) -> str:
             lines.append(f"      {snippet[:140]}")
         elif score:
             lines.append(f"      (score={score_s})")
+        if is_local_sec and url.startswith("file://"):
+            lines.append(f"      {url}")
 
-    # 底部相关信源（传统搜索引擎形态）
-    # sources 只保留 ref/url/engine（A2 引用式），title 从 results 回查
-    if sources:
+    if local_items:
         lines.append("")
-        lines.append("── 相关信源 ──")
+        lines.append(f"【本地搜索】（{len(local_items)} 项命中）")
+        for r in local_items:
+            _render_item(r, is_local_sec=True)
+
+    if web_items:
+        lines.append("")
+        lines.append(f"【联网搜索】（{len(web_items)} 项命中）")
+        for r in web_items:
+            _render_item(r, is_local_sec=False)
+
+    # 底部相关信源（仅呈现联网 URL）
+    web_sources = [s for s in sources if isinstance(s, dict)
+                   and not str(s.get("url", "")).startswith("file://")]
+    if web_sources:
+        lines.append("")
+        lines.append("── 联网信源 ──")
         _results_list = results.get("results") or []
-        for s in sources:
-            if not isinstance(s, dict):
-                continue
+        for s in web_sources:
             ref = s.get("ref", "?")
             eng = s.get("engine") or ""
             url = s.get("url") or ""
             eng_s = f" · {eng}" if eng else ""
-            # 通过 ref 回查 results 获取 title（A2：sources 不再重复 title）
             _title = ""
             if isinstance(ref, int) and 1 <= ref <= len(_results_list):
                 _title = (_results_list[ref - 1].get("title") or "")[:60]
@@ -724,8 +740,15 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
                             if isinstance(h, dict) and h.get("url") not in _seen_urls]
             if _fresh_local:
                 result.setdefault("results", []).extend(_fresh_local)
-                result["local_results"] = _fresh_local
         result["include_local"] = True
+
+    # ── 来源分桶：构建独立的 local_results 与 web_results，杜绝来源混淆 ──────────
+    _all_res = [r for r in (result.get("results") or []) if isinstance(r, dict)]
+    _loc_b = [r for r in _all_res if r.get("is_local") or r.get("source") == "local_files"
+              or str(r.get("url", "")).startswith("file://") or str(r.get("source", "")).startswith("local_")]
+    _web_b = [r for r in _all_res if r not in _loc_b]
+    result["local_results"] = _loc_b
+    result["web_results"] = _web_b
     # ── 收口：重算一切「由 results 派生」的字段 ────────────────────────────────
     #
     # why：本函数**后置**改 results 的地方不止一处（域过滤裁剪、本地命中并入），

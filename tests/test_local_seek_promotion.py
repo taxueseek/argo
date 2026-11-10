@@ -33,15 +33,17 @@ from search import _resolve_include_local  # noqa: E402
 
 @pytest.mark.parametrize("mode,expected", [
     ("fast", True), ("budget", True),
-    ("auto", False), ("deep", False),
+    ("auto", True), ("deep", True),
 ])
 def test_auto_default_by_mode(mode, expected):
+    """任意搜索均默认开启本地+联网双轨检索（None=True）。"""
     assert _resolve_include_local(None, mode) is expected
 
 
 def test_explicit_overrides_auto():
     assert _resolve_include_local(True, "deep") is True
     assert _resolve_include_local(False, "fast") is False
+    assert _resolve_include_local(False, "auto") is False
     assert _resolve_include_local(True, "auto") is True
 
 

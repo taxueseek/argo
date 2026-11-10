@@ -190,16 +190,12 @@ def has_local_code_intent(query: str) -> bool:
 def resolve_include_local(include_local: bool | None, mode: str, query: str = "") -> bool:
     """include-local 三态解析：True/False 显式，None=自动。
 
-    自适应感知：除 fast/budget 模式外，当查询具有明显的本地代码/文件特征
-    且处于非宽泛根项目目录时，自动开启本地命中。
+    双轨检索设计：任意搜索默认同时执行本地与联网检索（include_local=True），
+    除非显式指定 --no-local / include_local=False。
     """
     if include_local is not None:
         return bool(include_local)
-    if mode in ("fast", "budget"):
-        return True
-    if has_local_code_intent(query) and _local_seek_dir() is not None:
-        return True
-    return False
+    return True
 
 
 def _is_broad_local_root(path: str) -> bool:
@@ -250,88 +246,87 @@ def _local_seek_dir() -> str | None:
     return cwd
 
 
+def _candidate_targeted_roots() -> list[str]:
+    """宽泛根场景下的定向检索候选目录（既防全盘扫崩，又避免漏掉核心私域资产）。"""
+    home = os.path.realpath(os.path.expanduser("~"))
+    cands = [
+        os.path.join(home, ".agents", "skills"),
+        os.path.join(home, ".claude", "skills"),
+        os.path.join(home, ".codex", "skills"),
+        os.path.join(home, "Documents", "GPT"),
+        os.path.join(home, "workspace"),
+        os.path.join(home, "projects"),
+    ]
+    return [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c)]
+
+
 def _run_local_seek(query: str, max_n: int = 5,
                     search_dir: str | None = None,
                     warn: bool = True, echo: bool = True) -> list[dict[str, Any]]:
     """本机文件命中（include-local 用）：进程内调 seek.run_query，JSON 并入。
 
-    fast/budget 模式下由 super_search 自动调用（_resolve_include_local），
-    auto/deep 需显式 --include-local / MCP include_local。评分与
-    MCP argo_local_search 同口径（0.9 精确 / 0.7 扩展）。
-    进程内失败回退子进程形态（_seek_query_subprocess），能力不回退。
-
-    echo=False 时告警不写 stderr，只进 drain_search_warnings()——`--json`
-    模式的调用方把 2>&1 合并成管道时，stderr 上的中文行会破坏 JSON 解析
-    （issue #34 第 7 条），告警改为结构化字段随响应返回。
+    双轨并发支持：非宽泛根搜当前项目；处于宽泛根时定向扫描高频私域目录。
     """
     target = search_dir or _local_seek_dir()
-    if not target:
-        # 宽泛根：不查，但必须留下可归因的痕迹（docstring 第 1 条）。
-        # 「跳过」与「查了没有」在返回值上都是空列表，但含义完全不同——
-        # 静默跳过会让用户以为本地没匹配，而事实是根本没查。返回一个
-        # 占位「结果」又会污染 results（它只是个说明，不是命中），所以
-        # 说明走告警通道（stderr + 响应的 warnings[]）。
-        # 只在**显式开启**时提示（warn=False 是 fast/budget 的自动路径）：
-        # 自动路径在 home 等宽根下每次 search 都会打印，Agent 会把它当成
-        # 输出的一部分，属于噪音而非归因。
+    targets = [target] if target else _candidate_targeted_roots()
+    if not targets:
         if warn:
             _note_warning(
-                "  [include-local] 当前目录不适合本地检索（home / 根目录过宽，或位于 argo "
-                "自身安装树内——只会命中自身源码），已跳过；"
-                "要搜本机文件请 cd 到目标目录后重试，或用 local-seek 的 seek.py --path <目录>",
+                "  [include-local] 当前目录处于宽泛根且未发现预设私域资产目录，已跳过本地检索；"
+                "要搜特定目录请指定 --path 或切换到目标目录重试",
                 echo)
         return []
 
-    # 缓存：同 query+target 在 TTL 内直接命中，避免重复冷启动 seek.py 子进程。
-    # 文件修改后 TTL 内可能返回旧结果，对本地文件搜索可接受（文件不频繁修改）。
-    cache_key = f"{query}|{max_n}|{target}"
-    cached = _LOCAL_SEEK_CACHE.get(cache_key)
-    if cached is not None and time.time() - cached[0] < _LOCAL_SEEK_TTL_S:
-        return cached[1]
-
-    # H3：跨进程落盘缓存（CLI 每次新进程，进程内缓存救不了 CLI 重复查询；
-    # MCP 常驻进程通常在内存层就命中，落盘层对它是兜底）。命中后回填内存层。
-    disk_hit = _seek_disk_cache_get(cache_key)
-    if disk_hit is not None:
-        if len(_LOCAL_SEEK_CACHE) >= _LOCAL_SEEK_CACHE_MAX:
-            _LOCAL_SEEK_CACHE.clear()
-        _LOCAL_SEEK_CACHE[cache_key] = (time.time(), disk_hit)
-        return disk_hit
-
-    # 安装感知 + 唯一来源：委托 seek_locator 统一发现 local-seek/scripts/seek.py
-    # （打包子技能优先，ARGO_LOCAL_SEEK_PATH / ARGO_LOCAL_SEEK_ROOTS 承载自定义/遗留）。
-    # 不硬编码 ~/.agents/skills|~/.claude/skills 主机路径（SKILL.md 明令禁止）。
     from seek_locator import resolve_seek_py
     seek_py = resolve_seek_py()
     if not seek_py or not os.path.isfile(seek_py):
-        # issue #34 第 4 条：显式 --include-local 时 seek.py 找不到，此前静默
-        # 返回空列表，看起来与「本地没有匹配」一模一样。真正能定位的线索
-        # （装了 local-seek 子技能 / 设 ARGO_LOCAL_SEEK_PATH）必须说出来。
         if warn:
             _note_warning(
-                "  [include-local] 未找到 local-seek 的 seek.py（装 local-seek 子技能，"
-                "或设 ARGO_LOCAL_SEEK_PATH 指向 seek.py）；本机文件检索未执行", echo)
+                "  [include-local] 未找到 local-seek 的 seek.py，本机文件检索未执行", echo)
         return []
 
-    # H2（2026-09-29）：进程内直调 seek.run_query——省掉子进程解释器启动
-    # （实测 30-110ms/次，子进程总成本 60-140ms vs 进程内 ~30ms，落点即 rg
-    # 本体）。seek 模块 stdlib-only，import 实测 0.5ms；time_budget 下传到
-    # 内部 rg/fd 子进程（子进程可硬杀，线程不可杀——不传会占死单线程 executor）。
-    # 进程内失败（模块加载/执行异常）回退子进程路径：能力不回退，只是慢。
-    payload = None
-    try:
-        payload = seek_query_payload(query, target, max_n,
-                                     time_budget=_LOCAL_SEEK_TIMEOUT_S,
-                                     warn=warn, echo=echo)
-    except Exception:
-        payload = None
-    if payload is None:
-        payload = _seek_query_subprocess(seek_py, query, target, max_n)
-    if payload is None or payload.get("_error"):
-        return []
-    out = _payload_to_hits(payload, max_n, cache_key)
-    _seek_disk_cache_put(cache_key, out)  # H3：写穿到落盘层
-    return out
+    combined_hits: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+
+    for tgt in targets:
+        cache_key = f"{query}|{max_n}|{tgt}"
+        cached = _LOCAL_SEEK_CACHE.get(cache_key)
+        if cached is not None and time.time() - cached[0] < _LOCAL_SEEK_TTL_S:
+            hits = cached[1]
+        else:
+            disk_hit = _seek_disk_cache_get(cache_key)
+            if disk_hit is not None:
+                if len(_LOCAL_SEEK_CACHE) >= _LOCAL_SEEK_CACHE_MAX:
+                    _LOCAL_SEEK_CACHE.clear()
+                _LOCAL_SEEK_CACHE[cache_key] = (time.time(), disk_hit)
+                hits = disk_hit
+            else:
+                payload = None
+                try:
+                    payload = seek_query_payload(query, tgt, max_n,
+                                                 time_budget=_LOCAL_SEEK_TIMEOUT_S,
+                                                 warn=warn, echo=echo)
+                except Exception:
+                    payload = None
+                if payload is None:
+                    payload = _seek_query_subprocess(seek_py, query, tgt, max_n)
+                if payload is None or payload.get("_error"):
+                    hits = []
+                else:
+                    hits = _payload_to_hits(payload, max_n, cache_key)
+                    _seek_disk_cache_put(cache_key, hits)
+
+        for h in hits:
+            u = h.get("url")
+            if u not in seen_urls:
+                seen_urls.add(u)
+                combined_hits.append(h)
+                if len(combined_hits) >= max_n:
+                    break
+        if len(combined_hits) >= max_n:
+            break
+
+    return combined_hits[:max_n]
 
 
 def _load_seek_module(seek_py: str):
@@ -428,8 +423,7 @@ def _seek_query_subprocess(seek_py: str, query: str, target: str,
 
 def _payload_to_hits(payload: dict[str, Any], max_n: int,
                      cache_key: str) -> list[dict[str, Any]]:
-    """seek payload → include-local 结果条目（评分与 MCP argo_local_search
-    同口径：0.9 精确命中 / 0.7 扩展召回），并写入进程内缓存。"""
+    """seek payload → include-local 结果条目（明确来源标记）。"""
     hits = payload.get("results") or payload.get("files") or []
     seek_mode = payload.get("mode", "fast")
     hit_score = 0.9 if seek_mode == "fast" else 0.7
@@ -439,12 +433,18 @@ def _payload_to_hits(payload: dict[str, Any], max_n: int,
             continue
         path = h.get("path") or h.get("file") or ""
         line = h.get("line") or h.get("lineno") or 1
-        url = f"file://{path}" + (f"#{line}" if str(line).isdigit() else "")
+        line_str = f":{line}" if str(line).isdigit() and int(line) > 0 else ""
+        url = f"file://{path}" + (f"#{line}" if str(line).isdigit() and int(line) > 0 else "")
+        title = f"[本机] {path}{line_str}"
+        snippet = (h.get("snippet") or h.get("text") or h.get("line_text") or "")[:200]
         out.append({
-            "title": path,
+            "title": title,
             "url": url,
-            "snippet": (h.get("snippet") or h.get("text") or h.get("line_text") or "")[:160],
+            "snippet": f"[本机文件] {snippet}" if not snippet.startswith("[本机") else snippet,
             "source": "local_files",
+            "source_type": "local",
+            "channel": "local_filesystem",
+            "is_local": True,
             "score": hit_score,
             "kind": "local",
         })
