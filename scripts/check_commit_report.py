@@ -38,11 +38,21 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # 高风险模式（与 docs/COMMIT_STANDARD.md 的「哪些提交算高风险」一一对应）。
 # 顺序无关，命中任一即高风险。
+#
+# scope 用白名单而非通配：2026-11-10 首次落地时漏了 `agents`，于是本次这笔
+# 改动自己的提交信息没被门禁检查——门禁管不到自己，正是它最该管的地方。但
+# 改成 `[a-z_]+` 通配又太宽（`feat(local-seek)` 这类子技能改动被误判），
+# 所以此处是**显式 scope 白名单**：新增一类受影响面时往这里加，并在同一次
+# 改动里更新 docs/COMMIT_STANDARD.md。tests/test_check_commit_report.py
+# 的 test_standard_doc_lists_the_same_high_risk_patterns 会机械对拍两者。
+_HIGH_RISK_SCOPES = frozenset({
+    "engines", "engine", "route", "search", "rank", "states", "state",
+    "agents", "agent", "release", "deps",
+})
 _HIGH_RISK = (
-    re.compile(r"^(feat|fix|chore|perf)\(engines?\)"),
-    re.compile(r"^(feat|fix)\((route|search|rank)\)"),
-    re.compile(r"^(feat|refactor|fix|chore)\(states?\)"),
+    # 无 scope 的性能改动：无论改哪里都要给实测数字
     re.compile(r"^perf\("),
+    # 发版与依赖链：动的是发布路径，错了影响所有用户
     re.compile(r"^(fix|chore)\(release\)"),
     re.compile(r"^build\(deps\)"),
 )
@@ -58,8 +68,19 @@ _SEGMENTS = {
 _TITLE_RE = re.compile(r"^\s*([a-z]+)(\(([^)]*)\))?!?:\s*(.*)$")
 
 
+_SCOPE_RE = re.compile(r"^([a-z]+)(?:\(([^)]*)\))?!?:\s*(.*)$")
+
+
 def is_high_risk(title: str) -> bool:
-    """标题是否命中高风险模式。"""
+    """标题是否命中高风险模式。
+
+    判据有两条，命中任一即高风险：
+      1. scope 在 `_HIGH_RISK_SCOPES` 白名单里（带 scope 的常规提交）
+      2. 命中 `_HIGH_RISK` 里的特殊模式（无 scope 的 perf/build 等）
+    """
+    m = _SCOPE_RE.match(title.strip())
+    if m and m.group(2) and m.group(2).strip() in _HIGH_RISK_SCOPES:
+        return True
     return any(p.search(title.strip()) for p in _HIGH_RISK)
 
 

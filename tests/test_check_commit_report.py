@@ -64,6 +64,33 @@ def test_low_risk_titles_skipped(title):
     assert ccr.is_high_risk(title) is False, title
 
 
+@pytest.mark.parametrize("title", [
+    # 子技能改动不进高风险：它们影响面小、跑子技能自己的测试就够
+    "feat(local-seek): 加能力",
+    "feat(seek): 加能力",
+    "feat(parsers): 加解析器",
+    "feat(local-search): 优化打分",
+    "feat(js-run): 加运行时",
+])
+def test_subskill_scopes_are_not_high_risk(title):
+    """子技能 scope 不算高风险。
+
+    回退测试：把白名单改成 `[a-z_]+` 通配时这条会挂——2026-11-10 就试过
+    通配，结果 `feat(local-seek)` 被误判成高风险，清单于是变成所有带 scope
+    的提交都要写，反而没人当真。
+    """
+    assert ccr.is_high_risk(title) is False, title
+
+
+def test_agents_scope_is_high_risk():
+    """`agents` 必须算高风险——门禁管不到自己正是它最该管的地方。
+
+    回退测试：首次落地时白名单漏了 `agents`，本次这笔改动自己的提交信息
+    没被门禁检查到。
+    """
+    assert ccr.is_high_risk("feat(agents): 补全错题本闭环") is True
+
+
 def test_complete_checklist_passes():
     """三段齐全即通过——`未跑: 无` 是合法写法。"""
     text = ("feat(engines): 接入 Mwmbl 源\n\n"
@@ -136,20 +163,18 @@ def test_strict_exit_code_on_missing_segments(tmp_path):
 
 
 def test_standard_doc_lists_the_same_high_risk_patterns():
-    """docs/COMMIT_STANDARD.md 与本模块的高风险模式必须一致——两份真源会漂移。
+    """docs/COMMIT_STANDARD.md 与本模块的高风险 scope 白名单必须一致。
 
-    口径：从代码的 `_HIGH_RISK` 正则里抽 scope 关键词，逐个确认文档提到它。
-    不手写期望列表——手写的那份会和代码各自漂移，就失去了对拍的意义。
+    两份真源会漂移，而漂移的方向是「门禁管不到某类改动」——2026-11-10 首次
+    落地时就漏了 `agents`，本次这笔改动自己的提交信息没被检查。
+
+    口径：从代码的 `_HIGH_RISK_SCOPES` 逐个确认文档提到它。不手写期望列表——
+    手写的那份会和代码各自漂移，就失去了对拍的意义。
     """
     doc = (Path(__file__).resolve().parents[1]
            / "docs" / "COMMIT_STANDARD.md").read_text(encoding="utf-8")
-    scopes = set()
-    for pat in ccr._HIGH_RISK:
-        m = re.search(r"\(([^)]+)\)", pat.pattern)
-        if m:
-            scopes.update(s.strip(r"\?") for s in m.group(1).split("|"))
-    assert scopes, "该从 _HIGH_RISK 里抽到 scope"
-    missing = sorted(s for s in scopes if s not in doc)
-    assert not missing, f"文档缺 scope: {missing}"
+    assert ccr._HIGH_RISK_SCOPES, "该从代码抽到 scope 白名单"
+    missing = sorted(s for s in ccr._HIGH_RISK_SCOPES if s not in doc)
+    assert not missing, f"文档缺高风险 scope: {missing}"
     for seg in ("跑了", "在 commit", "未跑"):
         assert seg in doc, f"文档缺清单段: {seg}"

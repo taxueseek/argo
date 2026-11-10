@@ -48,17 +48,28 @@ hook 却在全量回归里红」），但**这些记录只存在于 commit messa
 
 ## 哪些提交算高风险
 
-满足任一条件即高风险，`scripts/check_commit_report.py` 会要求检查清单：
+**带 scope 的提交**：scope 在下面这张白名单里即高风险。`scripts/check_commit_report.py`
+按同一份白名单做机械检查，`tests/test_check_commit_report.py` 会对拍两者。
+
+`engines` / `engine` / `route` / `search` / `rank` / `states` / `state` /
+`agents` / `agent` / `release` / `deps`
+
+典型形态与要求：
 
 - `feat(engines)` / `fix(engines)` / `chore(engines)`：新增或改引擎，必须真机验过
-- 含 `fix(route` / `fix(search)` / `feat(search)` / `fix(rank)`：动路由或排序，
-  必须跑 `scripts/replay_eval.py --check`
-- 含 `feat(states)` / `refactor(states)` / `fix(states)`：动状态词表，必须跑
-  `tests/test_state_literal_drift.py` 与 `tests/test_state_registry.py`
-- 含 `perf(`：动性能相关代码，必须给实测数字
-- 含 `fix(release)` / `chore(release)` / `build(deps)`：动发版或依赖链
+- `feat(route)` / `fix(search)` / `fix(rank)` / `refactor(states)`：动路由、排序或
+  状态词表，必须跑对应的离线评测与词表门禁
+- `feat(agents)` / `fix(agents)`：动 agent 路由表、提交规范、门禁本身——**门禁管
+  不到自己正是它最该管的地方**，2026-11-10 首次落地时就漏了这一项
 
-其余提交（`docs` / `test` / `refactor` 等）不强制，但鼓励写。
+**无 scope 或特殊形态**（命中任一即高风险）：
+
+- `perf(...)`：动性能相关代码，必须给实测数字
+- `fix(release)` / `chore(release)`：动发版路径
+- `build(deps)`：动依赖链
+
+其余提交（`docs` / `test` / `refactor` / `style` / `chore` / `feat(local-seek)`
+等子技能改动）不强制，但鼓励写。
 
 ## 回退测试要求
 

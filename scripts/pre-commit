@@ -123,15 +123,22 @@ fi
 # 高风险提交的检查清单提示（2026-11-10）：只警告不硬拦。
 # 为什么只警告：hook 慢于 20s 就会被 --no-verify 绕过，一道会被绕过的硬门
 # 比没有门更坏（见本文件头 2026-10-18 的注释）。它只让「省略未跑检查」变可见。
-# EDITMSG 的位置：worktree 的根目录或 git-common-dir（前者给原生 hook，后者给
-# linked worktree）。pre-commit 阶段该文件可能还没写好，读不到就跳过——不是每个
-# 提交都需要这道提示，为它把提交卡住是本末倒置。
+#
+# EDITMSG 的位置与时机：worktree 根目录或 git-common-dir（后者给 linked
+# worktree）。**pre-commit 阶段该文件可能还是上一次提交的内容**——git 在 hook
+# 跑完后才把新信息写进去。所以这里比对文件内容与 HEAD 的提交信息：相同就说明
+# 读到的是旧稿，跳过本次提示（不是每个提交都需要它，为它把提交卡住本末倒置）。
 _editmsg=""
-for _cand in "$root/COMMIT_EDITMSG" "$(git rev-parse --git-common-dir 2>/dev/null)/COMMIT_EDITMSG"; do
+_git_common=$(git rev-parse --git-common-dir 2>/dev/null || true)
+for _cand in "$root/COMMIT_EDITMSG" "$_git_common/COMMIT_EDITMSG"; do
     case "$_cand" in
         */COMMIT_EDITMSG) [ -f "$_cand" ] && { _editmsg="$_cand"; break; } ;;
     esac
 done
 if [ -n "$_editmsg" ]; then
-    "$PY" scripts/check_commit_report.py --message-file "$_editmsg" || true
+    _head_subject=$(git log -1 --format=%s HEAD 2>/dev/null || true)
+    _draft_subject=$(grep -v '^#' "$_editmsg" 2>/dev/null | grep -v '^[[:space:]]*$' | head -1 || true)
+    if [ -n "$_draft_subject" ] && [ "$_draft_subject" != "$_head_subject" ]; then
+        "$PY" scripts/check_commit_report.py --message-file "$_editmsg" || true
+    fi
 fi
