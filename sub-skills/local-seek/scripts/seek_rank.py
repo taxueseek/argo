@@ -58,6 +58,7 @@ _CJK_ONLY_RE = re.compile("^" + _CJK_RUN + "$")
 # BM25 常数（与 local-search/bm25.py 同口径：Okapi k1=1.5 b=0.75）
 _K1 = 1.5
 _DELTA = 1.0          # BM25+ 下界（Lv & Zhai 2011）
+_ACRONYM_BONUS = 3.5  # 驼峰/下划线首字母缩写命中加成（如 hrc 匹配 HedgedRacingCache）
 
 # 字段权重与长度归一化强度：文件名命中最值钱（「文件恰好叫这个」是强意图
 # 信号）；目录段最弱（scripts/tests 这类段名人人都有，IDF 会自动压它）。
@@ -225,6 +226,44 @@ def _tokens(text: str, *, camel: bool = False) -> list[str]:
     return out
 
 
+def _term_stem(w: str) -> str:
+    """轻量英文词干归一：剥离常见复数与时态后缀（长度 >= 4 时生效，纯规则零依赖）。"""
+    if len(w) < 4 or not w.isascii() or not w.isalpha():
+        return w
+    if w.endswith("ies") and len(w) >= 5:
+        return w[:-3] + "y"
+    if w.endswith("es") and len(w) >= 5 and w[-3] in "shxz":
+        return w[:-2]
+    if w.endswith("s") and not w.endswith("ss") and len(w) >= 4:
+        return w[:-1]
+    if w.endswith("ing") and len(w) >= 6:
+        base = w[:-3]
+        if len(base) >= 3 and base[-1] == base[-2]:
+            return base[:-1]
+        return base
+    if w.endswith("ed") and len(w) >= 5:
+        base = w[:-2]
+        if len(base) >= 3 and base[-1] == base[-2]:
+            return base[:-1]
+        return base
+    return w
+
+
+def _acronyms_of(name: str) -> set[str]:
+    """提取文件名/标识符的首字母缩写与内嵌缩写段（如 HedgedRacingCache -> hrc, cache_key_vdom -> ckv, FTS5Index -> fts）。"""
+    name_clean = name.rsplit(".", 1)[0]
+    runs = _CAMEL_RE.findall(name_clean)
+    out = set()
+    if len(runs) >= 2:
+        acr = "".join(r[0].lower() for r in runs if r and r[0].isalpha())
+        if 2 <= len(acr) <= 8:
+            out.add(acr)
+    for r in runs:
+        if r.isupper() and 2 <= len(r) <= 8:
+            out.add(r.lower())
+    return out
+
+
 def _row_fields(fp: str, text: str) -> dict[str, Counter]:
     """一行命中在三字段下的词频表。fp 无目录段时 dir 为空表。"""
     fp = fp.rstrip("/")
@@ -258,6 +297,15 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
         for en in _ZH_EN_ALIASES.get(qt, ()):
             if en not in q_eff:
                 q_eff[en] = 0.65
+
+    # 形态词形归一词元（降权 0.55，使 queries 命中 query，caching 命中 cache）
+    for qt in list(q_tf):
+        stem = _term_stem(qt)
+        if stem != qt and stem not in q_eff and len(stem) >= 3:
+            q_eff[stem] = 0.55
+
+    # 查询中的潜在首字母缩写候选（2~8 位纯 ASCII 字母）
+    q_acronyms = {qt for qt in q_tf if 2 <= len(qt) <= 8 and qt.isalpha() and qt.isascii()}
 
     # 逐字短语表：完整 CJK 连续串 + 较长 ASCII 连续串（行文本做子串检查用）
     phrases = [m.group(0).lower()
@@ -324,6 +372,11 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
                 total += w * qtf * (sat + _DELTA) * idf
         fp = rows[i][0]
         total += _TOPIC_PRIOR_WEIGHT * math.log1p(file_hits[fp])
+        # 首字母缩写加成（如查询含 hrc 且文件名缩写为 hrc）
+        if q_acronyms:
+            fname = fp.rsplit("/", 1)[-1]
+            if _acronyms_of(fname) & q_acronyms:
+                total += _ACRONYM_BONUS
         # 单行三字段协同覆盖度（name ∪ dir ∪ line 覆盖了多少查询词/跨语言映射词）
         row_voc = set(f_tf["name"]) | set(f_tf["dir"]) | set(f_tf["line"])
         covered = sum(1.0 for qt in q_tf if qt in row_voc or any(
@@ -362,10 +415,20 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
                 pass  # 注入的加成失败不拖累打分本体
         scores.append(total)
 
-    # 同文件多行命中边际递减（第 3 条起温和衰减，防单文件 8 行霸屏 Top-5）
+    # 邻近行聚簇（Locality Clustering）：同文件内行号差 <= 4 的相邻命中构成连续语义块，赋予局部性协同加成
     by_fp: dict[str, list[int]] = {}
     for idx, (fp, _ln, _txt) in enumerate(rows):
         by_fp.setdefault(fp, []).append(idx)
+    for idxs in by_fp.values():
+        if len(idxs) >= 2:
+            line_nums = sorted((rows[idx][1], idx) for idx in idxs if rows[idx][1] > 0)
+            for j in range(len(line_nums) - 1):
+                if line_nums[j + 1][0] - line_nums[j][0] <= 4:
+                    idx_a, idx_b = line_nums[j][1], line_nums[j + 1][1]
+                    scores[idx_a] += 1.5
+                    scores[idx_b] += 1.5
+
+    # 同文件多行命中边际递减（第 3 条起温和衰减，防单文件 8 行霸屏 Top-5）
     for idxs in by_fp.values():
         if len(idxs) > 2:
             idxs.sort(key=lambda idx: (-scores[idx], rows[idx][1]))

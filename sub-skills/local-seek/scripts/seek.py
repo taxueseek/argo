@@ -1289,7 +1289,27 @@ def format_output(results, engine, mode, path, elapsed_ms, query, total):
     return "\n".join(lines)
 
 
+def _cluster_results(results):
+    """为同一文件紧邻（行号差 <= 4）的命中分配逻辑聚簇 ID。"""
+    if not results:
+        return []
+    clusters = []
+    cid = 1
+    for i, (fp, ln, _txt) in enumerate(results):
+        assigned = None
+        if i > 0 and ln and ln > 0:
+            prev_fp, prev_ln, _ = results[i - 1]
+            if prev_fp == fp and prev_ln and prev_ln > 0 and abs(ln - prev_ln) <= 4:
+                assigned = clusters[i - 1]
+        if assigned is None:
+            assigned = cid
+            cid += 1
+        clusters.append(assigned)
+    return clusters
+
+
 def to_json(results, engine, mode, scope, path, elapsed_ms, query, since=None, until=None):
+    clusters = _cluster_results(results)
     return json.dumps({
         "query": query,
         "engine": engine,
@@ -1301,8 +1321,8 @@ def to_json(results, engine, mode, scope, path, elapsed_ms, query, since=None, u
         "since": since,
         "until": until,
         "results": [
-            {"path": fp, "line": ln, "snippet": txt, "mtime": _file_mtime(fp)}
-            for fp, ln, txt in results
+            {"path": fp, "line": ln, "snippet": txt, "mtime": _file_mtime(fp), "cluster": cid}
+            for (fp, ln, txt), cid in zip(results, clusters)
         ],
     }, ensure_ascii=False, indent=2)
 
@@ -1823,8 +1843,12 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
             timeout=time_budget, since_ts=since_ts, until_ts=until_ts)
         if results is None:
             engine, mode = "none", "fast"
+        elif gmode == "fts":
+            engine, mode = "fts", gmode
+        elif gmode.startswith("py-walk"):
+            engine, mode = "py-walk", gmode
         else:
-            engine, mode = "grep" if not gmode.startswith("py-walk") else "py-walk", gmode
+            engine, mode = "grep", gmode
     else:
         mode = "deep" if (args.context > 0 or args.count) else "fast"
         # FTS 快路资格：带扩展名过滤、自定义排除或符号搜索时关闭（快路不做 rg 侧 glob 与 -w 过滤）。

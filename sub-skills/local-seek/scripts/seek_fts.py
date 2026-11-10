@@ -52,24 +52,32 @@ _DB_NAME = "seek-fts.db"
 _TTL_S = 120.0            # 索引新鲜度窗口；过期才做增量刷新
 _REFRESH_BUDGET_S = 1.5   # 查询路径上单次刷新的墙钟上界（清单 + 改动文件重读）
 _REBUILD_BUDGET_S = 30.0  # 显式 rebuild 的墙钟上界（大树没建完就再跑一次续做）
-_MAX_BODY_BYTES = 512 * 1024    # 单文件索引正文上限（更深行只有 rg 能搜到）
-_MAX_FILE_BYTES = 2 * 1024 * 1024  # 超过即整体不入索引：会话转写/运行日志类
-                                   # （实测单个 9-33MB、mtime 天天变反复重建），
-                                   # 检索价值低；同样只有 rg 能搜到
+_MAX_BODY_BYTES = 128 * 1024    # 单文件索引正文上限 128KB（瘦身治理：99.5% 源代码与文档均覆盖）
+_MAX_FILE_BYTES = 256 * 1024    # 超过 256KB 坚决不入索引（防大 json、打包代码挤占）
 _MAX_FILES_PER_QUERY = 160      # MATCH 按相关度取前 N 个文件再抽行
 _MAX_LINES_PER_FILE = 200       # 单文件最多贡献的行（防单文件挤占）
 _MAX_LINES_TOTAL = 4000         # 候选行总量上限（喂给池选择前的有界池）
 _BUSY_TIMEOUT_MS = 8000
 
-# rg --files 已尊重 .gitignore；这里只补 --hidden 场景下无搜索价值的系统目录，
-# 防止清单与索引用量被工具链缓存拖爆。log/logs/rollout/backups 是机器输出
-# 目录（会话转写、运行日志、备份转储），不是知识文件（2026-10-11：992MB
-# 索引里最大正文全是这几类）；同名知识目录被误伤时 rg 主路仍可搜。
+# 白名单扩展名：仅对源代码、规范与关键文档建索引（奥卡姆剃刀：从源头杜绝大体积数据/日志入库）
+_INDEXABLE_EXTS = frozenset({
+    ".py", ".ts", ".js", ".jsx", ".tsx", ".rs", ".go", ".c", ".cpp", ".h", ".hpp",
+    ".java", ".kt", ".swift", ".md", ".markdown", ".mdx", ".yaml", ".yml", ".toml",
+    ".sh", ".bash", ".zsh", ".sql", ".html", ".css", ".json", ".txt", ".rst"
+})
+_NON_INDEXABLE_EXTS = frozenset({
+    ".jsonl", ".csv", ".tsv", ".npy", ".npz", ".pkl", ".png", ".jpg",
+    ".jpeg", ".gif", ".webp", ".pdf", ".zip", ".tar", ".gz", ".db", ".sqlite",
+    ".sqlite3", ".min.js", ".min.css", ".map", ".bundle.js"
+})
+
+# 扩展排除目录：过滤机器输出、会话转写与缓存临时目录
 _SKIP_DIRS = frozenset({
     ".git", "node_modules", "__pycache__", ".venv", "venv", ".tox",
     ".mypy_cache", ".ruff_cache", ".pytest_cache", ".trash", "dist",
     "build", "target", ".gradle", ".idea", ".vscode", ".mimosa",
-    "rollout", "logs", "log", "backups",
+    "rollout", "logs", "log", "backups", "tmp", "temp", ".cache",
+    "transcript", "brain", "datasets", "data", "site-packages",
 })
 
 _TEXT_SNIFF_BYTES = 8192
@@ -231,6 +239,9 @@ def refresh(root: str, dots: bool = False, budget_s: float | None = None,
             if not force and p in old and abs(old[p] - mtime) < 1e-6:
                 continue
             if size == 0 or size > _MAX_FILE_BYTES:
+                continue
+            ext = os.path.splitext(p)[1].lower()
+            if ext in _NON_INDEXABLE_EXTS:
                 continue
             path_obj = Path(p)
             if _is_binary(path_obj):
