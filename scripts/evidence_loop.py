@@ -583,9 +583,11 @@ def verify_results(results: list[dict[str, Any]],
     semantic_meta: dict[str, Any] | None = None
     if scored_inputs:
         try:
-            from semantic_evidence import assess_support, enabled as _semantic_enabled
+            from semantic_evidence import assess_support, assess_source_types, enabled as _semantic_enabled
             if _semantic_enabled():
                 support = assess_support(query, scored_inputs)
+                source_types = assess_source_types(scored_inputs)
+                primary_count = 0
                 if support:
                     for item in verified:
                         info = support.get(item.get("url") or "")
@@ -595,11 +597,34 @@ def verify_results(results: list[dict[str, Any]],
                         info = support.get(r.get("url") or "")
                         if info:
                             r["semantic_support"] = info
+                if source_types:
+                    for item in verified:
+                        st = source_types.get(item.get("url") or "")
+                        if st:
+                            item["source_type"] = st
+                            if st.get("is_primary"):
+                                primary_count += 1
+                                # 官方一手源加权置顶：absorption 基础分提权 0.20
+                                item["post_absorption"] = min(1.0, (item.get("post_absorption") or 0.0) + 0.20)
+                                if "delta" in item:
+                                    item["delta"] = round(item["post_absorption"] - (item.get("pre_absorption") or 0.0), 3)
+                    for r in results:
+                        st = source_types.get(r.get("url") or "")
+                        if st:
+                            r["source_type"] = st
+                if support or source_types:
+                    c_count = sum(1 for x in (support or {}).values() if x.get("contradicts"))
                     semantic_meta = {
-                        "scored": len(support),
-                        "supports": sum(1 for x in support.values() if x["supports"]),
-                        "contradicts": sum(1 for x in support.values() if x["contradicts"]),
+                        "scored": len(support or {}),
+                        "supports": sum(1 for x in (support or {}).values() if x.get("supports")),
+                        "contradicts": c_count,
+                        "primary_sources": primary_count,
                     }
+                    if c_count > 0:
+                        semantic_meta["contradiction_alert"] = True
+                        semantic_meta["contradiction_warning"] = (
+                            f"检测到权威信源反驳当前查询前提（{c_count} 条条目与主张冲突）"
+                        )
         except Exception as e:  # fail-open：语义层不阻断核验
             _log(f"语义证据层失败: {type(e).__name__}")
 

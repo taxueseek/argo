@@ -668,6 +668,13 @@ def main():
                     f"degraded={rs.get('degraded', 0)} mean_delta={rs.get('mean_delta', 0)}",
                     file=sys.stderr,
                 )
+                sem = v.get("semantic") or {}
+                if sem.get("contradiction_alert"):
+                    print(f"  ! [事实反驳预警] 检测到权威信源明确反驳查询前提（{sem.get('contradicts')} 条冲突）",
+                          file=sys.stderr)
+                if sem.get("primary_sources"):
+                    print(f"  * [一手源置顶] 识别到 {sem.get('primary_sources')} 条官方/一手公告并加权",
+                          file=sys.stderr)
                 ro = results.get("evidence_reorder") or {}
                 if ro.get("reordered"):
                     print(f"  [verify] 证据回写排序：调整 {len(ro.get('adjusted') or [])} 条，"

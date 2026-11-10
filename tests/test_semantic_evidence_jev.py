@@ -280,5 +280,64 @@ class TestGateTeeth(unittest.TestCase):
             "变异版仍带头——说明真门禁断的不是这个差异，失去意义")
 
 
+class TestPhaseOneEnhancements(unittest.TestCase):
+    """第一阶段增强用例：隐私物理屏障、Hash 缓存与一手源分类。"""
+
+    def test_local_privacy_barrier_blocks_local_paths(self):
+        """本地文件（file:// 或绝对路径）物理级阻断，绝不进入 JEV 请求队列。"""
+        items = [
+            {"url": "file:///Users/taxue/project/secret.py", "title": "secret", "text": "def password(): pass"},
+            {"url": "/Users/taxue/notes/todo.md", "title": "notes", "text": "my private notes"},
+            {"url": "~/workspace/code.rs", "title": "rust", "text": "fn main() {}"},
+            {"url": "https://gov.example.com/announcement", "title": "public", "text": "official public announcement"},
+        ]
+        calls: list = []
+
+        def _fake_post(state, questions, *, timeout):
+            calls.append(state)
+            return _ok()
+
+        with patch.object(se, "_jev_post", _fake_post):
+            res = se.assess_support("test query", items)
+            # 本地项被物理拦截，只有唯一公网 url 被发送
+            assert len(calls) == 1
+            assert "official public announcement" in calls[0]
+            assert res is not None
+            assert "https://gov.example.com/announcement" in res
+            assert "file:///Users/taxue/project/secret.py" not in res
+
+    def test_jev_hash_cache_hit(self):
+        """Hash 缓存命中时 0 网络开销，跳过 _jev_post。"""
+        import os
+        calls: list = []
+
+        def _fake_post(state, questions, *, timeout):
+            calls.append(state)
+            return _ok(label="supports the query", conf=0.95)
+
+        with patch.dict(os.environ, {"_TEST_ENABLE_SEMANTIC_CACHE": "1"}):
+            with patch.object(se, "_jev_post", _fake_post):
+                r1 = se._jev_choice("cached text passage", se.SUPPORT_LABELS, "instruction", 5.0)
+                assert len(calls) == 1
+                assert r1["label"] == "supports the query"
+                # 第二次带相同文本调用，应直接命中缓存，calls 次数不变
+                r2 = se._jev_choice("cached text passage", se.SUPPORT_LABELS, "instruction", 5.0)
+                assert len(calls) == 1
+                assert r2["label"] == "supports the query"
+
+    def test_source_types_identifies_primary_sources(self):
+        """assess_source_types 对一手官方公告赋予 is_primary 标志。"""
+        items = [{"url": "https://gov.cn/policy", "title": "国务院公报", "text": "国务院最新决定..."}]
+
+        def _fake_post(state, questions, *, timeout):
+            return _ok(label="primary data or official announcement", conf=0.98)
+
+        with patch.object(se, "_jev_post", _fake_post):
+            st = se.assess_source_types(items)
+            assert st is not None
+            assert st["https://gov.cn/policy"]["is_primary"] is True
+            assert st["https://gov.cn/policy"]["confidence"] == 0.98
+
+
 if __name__ == "__main__":
     unittest.main()

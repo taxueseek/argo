@@ -37,6 +37,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
+from pathlib import Path
 from typing import Any, Optional
 
 logger = logging.getLogger("unified_search.semantic_evidence")
@@ -67,6 +70,12 @@ JEV_LONG_CONTEXT_CHARS = 24000
 # 并发上限。官方 cookbook（classifying_rag_passages）取 4，理由是端点限流；
 # 429/529 要求指数退避，所以不铺大。
 JEV_MAX_WORKERS = 4
+# 多并发整体截止时间（秒）：防止长尾慢请求拖垮整次搜索体验
+DEFAULT_JEV_DEADLINE_S = 0.45
+
+# 结果级缓存（TTL 7 天）：常见事实与热点二次判定 0ms 响应，API 消耗清零
+_JEV_MEMORY_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_JEV_CACHE_TTL_S = 7 * 86400
 
 # conf ≥ 0.7 才给结论：低于此值的判定不可信（B 实测 4 个严格错误全部 ≤0.67）
 SUPPORT_THRESHOLD = 0.7
@@ -87,6 +96,78 @@ SOURCE_TYPE_LABELS = (
     "social narrative",
     "none of these",
 )
+
+
+def is_local_target(url_or_path: str) -> bool:
+    """本地物理隔离屏障：任何本地文件系统路径/私域目标坚决不进 JEV 队列。"""
+    if not url_or_path:
+        return False
+    u = str(url_or_path).strip()
+    if u.startswith(("file://", "/", "~", "C:\\", ".\\", "../")):
+        return True
+    return any(u.startswith(p) for p in ("/Users/", "/home/", "/private/", "\\"))
+
+
+def _get_cache_key(text: str, labels: tuple[str, ...] | list[str], instructions: str | None) -> str:
+    import hashlib
+    raw = f"{instructions or ''}::{sorted(str(l) for l in labels)}::{text[:1200]}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _should_bypass_cache() -> bool:
+    import sys
+    if os.environ.get("ARGO_NO_CACHE") == "1":
+        return True
+    if ("pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST")) and not os.environ.get("_TEST_ENABLE_SEMANTIC_CACHE"):
+        return True
+    return False
+
+
+def _get_cached_result(key: str) -> Optional[dict[str, Any]]:
+    if _should_bypass_cache():
+        return None
+    cached = _JEV_MEMORY_CACHE.get(key)
+    if cached is not None:
+        ts, data = cached
+        if time.time() - ts < _JEV_CACHE_TTL_S:
+            return dict(data)
+    try:
+        from argo_paths import state_path
+        p = Path(state_path("semantic_cache.json"))
+        if p.is_file():
+            data_map = json.loads(p.read_text(encoding="utf-8"))
+            rec = data_map.get(key)
+            if rec and isinstance(rec, dict) and time.time() - rec.get("ts", 0) < _JEV_CACHE_TTL_S:
+                res = rec.get("result")
+                if isinstance(res, dict):
+                    _JEV_MEMORY_CACHE[key] = (rec.get("ts", time.time()), res)
+                    return dict(res)
+    except Exception:
+        pass
+    return None
+
+
+def _set_cached_result(key: str, result: dict[str, Any]) -> None:
+    if _should_bypass_cache():
+        return
+    now = time.time()
+    _JEV_MEMORY_CACHE[key] = (now, result)
+    try:
+        from argo_paths import state_path
+        p = Path(state_path("semantic_cache.json"))
+        data_map = {}
+        if p.is_file():
+            try:
+                data_map = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                data_map = {}
+        if len(data_map) > 500:
+            data_map.clear()
+        data_map[key] = {"ts": now, "result": result}
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(data_map, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _config() -> dict[str, Any]:
@@ -211,7 +292,7 @@ def _jev_post(path_state: Any, questions: dict[str, Any], *,
 def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
                 instructions: str | None, timeout: float
                 ) -> Optional[dict[str, Any]]:
-    """单条文本 → 一个 Choice 问题。
+    """单条文本 → 一个 Choice 问题（带本地结果级 Hash 缓存，命中 0ms）。
 
     **每条一个请求**，不是「多段一个 state、每段一问」。理由在官方文档里：
     jaggedness 那篇明写「state 里塞与决策无关的细节会降低准确率（context
@@ -219,6 +300,11 @@ def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
     classifying_rag_passages 也是「One request per passage」。（我们试过 3 段
     合一，结果全对，但样本太小，不拿它赌准确率。）
     """
+    cache_key = _get_cache_key(text, labels, instructions)
+    cached = _get_cached_result(cache_key)
+    if cached is not None:
+        return cached
+
     out = _jev_post(text, {
         "cls": {
             "type": "choice",
@@ -235,27 +321,45 @@ def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
         if isinstance(ans, dict):
             logger.debug("JEV 答案缺 choice: %s", str(ans)[:120])
         return None
-    return {
+    res = {
         "label": str(ans.get("choice")),
         "confidence": ans.get("confidence"),
         "scores": ans.get("probabilities"),
     }
+    _set_cached_result(cache_key, res)
+    return res
 
 
 def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
                   instructions: str | None, keep: list[tuple[int, str]],
                   timeout: float) -> Optional[list[dict[str, Any]]]:
-    """JEV 通道：每条文本一个请求，并发 4。
+    """JEV 通道：每条文本一个请求，并发 4，带总体时间硬截止预算。
 
     任一条失败就在该位留 None（与 classifier.dev 通道「整批失败即 None」
     不同）：一次核验有几条正文，坏一条不该把其余判定的价值也丢掉。全部失败
     时仍返回 None，调用方行为与未开启时一致。
     """
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     texts_kept = [t[:MAX_TEXT_CHARS] for _i, t in keep]
+    deadline_s = DEFAULT_JEV_DEADLINE_S
+    start_t = time.time()
+    results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
+
     with ThreadPoolExecutor(max_workers=min(JEV_MAX_WORKERS, len(texts_kept))) as pool:
-        results = list(pool.map(
-            lambda t: _jev_choice(t, labels, instructions, timeout), texts_kept))
+        futures = {pool.submit(_jev_choice, t, labels, instructions, timeout): idx
+                   for idx, t in enumerate(texts_kept)}
+        try:
+            for fut in as_completed(futures, timeout=max(0.1, deadline_s)):
+                orig_idx = futures[fut]
+                try:
+                    results[orig_idx] = fut.result()
+                except Exception:
+                    results[orig_idx] = None
+                if time.time() - start_t >= deadline_s:
+                    break
+        except TimeoutError:
+            pass
+
     if not any(r for r in results):
         return None
     out: list[Optional[dict[str, Any]]] = [None] * len(texts)
@@ -326,8 +430,10 @@ def assess_support(query: str, items: list[dict[str, Any]]) -> Optional[dict[str
     返回 {url: {label, confidence, supports, contradicts}}；未达阈值时
     supports/contradicts 均为 False（原始 label 与 confidence 仍原样保留，
     调用方可自行换阈值）。失败返回 None。
+    自动剔除本地文件（is_local_target），严格物理阻断私域外发。
     """
-    usable = [it for it in items if (it.get("text") or "").strip() and it.get("url")]
+    usable = [it for it in items if (it.get("text") or "").strip() and it.get("url")
+              and not is_local_target(it.get("url", ""))]
     if not usable:
         return None
     texts = [f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
@@ -362,9 +468,11 @@ def assess_source_types(items: list[dict[str, Any]]) -> Optional[dict[str, dict]
     """来源类型分级（研究取证链路用）：一手数据 / 二手报道 / 分析观点 / 社交叙事。
 
     items: [{"url": str, "title": str, "text": str}]（text 可为摘要）
+    自动剔除本地文件（is_local_target），严格物理阻断私域外发。
     """
     usable = [it for it in items if it.get("url") and
-              ((it.get("text") or "").strip() or (it.get("title") or "").strip())]
+              ((it.get("text") or "").strip() or (it.get("title") or "").strip())
+              and not is_local_target(it.get("url", ""))]
     if not usable:
         return None
     texts = [f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
@@ -384,8 +492,10 @@ def assess_source_types(items: list[dict[str, Any]]) -> Optional[dict[str, dict]
             continue
         label = str(r.get("label") or "")
         conf = r.get("confidence")
+        conf_f = float(conf) if isinstance(conf, (int, float)) else 0.0
         out[str(it["url"])] = {
             "label": label,
-            "confidence": float(conf) if isinstance(conf, (int, float)) else 0.0,
+            "confidence": conf_f,
+            "is_primary": (label == "primary data or official announcement" and conf_f >= SUPPORT_THRESHOLD),
         }
     return out or None
