@@ -266,7 +266,9 @@ def test_validation_vocabulary_is_shared_across_producer_and_persister():
         assert "engine_states.VALIDATION_STAGE_HEALTH" in src, \
             f"{rel} 仍手写 health 阶段名"
     assert st.VALIDATION_STATUSES == {"pass", "fail", "skipped", "error"}
-    assert st.VALIDATION_STAGES == {"health", "quality"}
+    # contract 是 2026-11-10 新增的准入前置 stage（family 与 skill_registry
+    # 清单契约，见 engine_validate.check_contracts）
+    assert st.VALIDATION_STAGES == {"contract", "health", "quality"}
 
 
 def test_recovery_level_l0_is_in_the_tier_table():

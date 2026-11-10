@@ -47,15 +47,16 @@ def test_every_engine_declares_family_explicitly():
 
     判据是「有没有显式声明」（config.yaml 的 family 字段，或静态覆盖表），
     不是「算出来的族叫什么」。这样下一个新引擎不可能再默默漏进 web_general。
+    判定逻辑单一真源在 engine_validate.family_claim_missing（准入 contract
+    stage 同消费），这里全局扫描存量。
     """
-    from engine_families import _ENGINE_FAMILY_OVERRIDES
+    from engine_validate import family_claim_missing
 
     cfg = load_config()
     eng = get_engines(cfg, routable_only=False)
     silent = [
         name for name, spec in eng.items()
-        if not (isinstance(spec, dict) and spec.get("family"))
-        and name not in _ENGINE_FAMILY_OVERRIDES
+        if not isinstance(spec, dict) or family_claim_missing(name, spec)
     ]
     assert not silent, (
         "这些引擎没有显式声明能力族，会被静默当成 web_general，"

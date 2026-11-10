@@ -726,8 +726,13 @@ VALIDATION_STATUSES = frozenset({
 
 VALIDATION_STAGE_HEALTH = "health"
 VALIDATION_STAGE_QUALITY = "quality"
+# 清单契约（纯静态毫秒级）：family 显式声明与 skill_registry 对账。
+# 提炼自 test_engine_families / test_skill_registry_contract 的判定，改为
+# 单一真源——清单债（490f99c 收口的 family 三条、常量一条）此前只在全量
+# pytest 红，准入时拦不住；现在 --admit 那一步直接红。
+VALIDATION_STAGE_CONTRACT = "contract"
 VALIDATION_STAGES = frozenset({
-    VALIDATION_STAGE_HEALTH, VALIDATION_STAGE_QUALITY,
+    VALIDATION_STAGE_CONTRACT, VALIDATION_STAGE_HEALTH, VALIDATION_STAGE_QUALITY,
 })
 
 ADMISSION_REASON_VALIDATION_FAILED = "validation_failed"

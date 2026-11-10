@@ -461,6 +461,13 @@ def collect_issues(engines: dict[str, dict[str, Any]],
         issues.append("packages/dsh-plugin/dsh/client.js 的 KEYS 标记区与引擎声明不一致")
     if DSH_RUNNER_PATH.exists() and read_keyrefs_block() != render_keyrefs(dsh_rows):
         issues.append("packages/dsh-plugin/dsh/runner.js 的 keyRefs 标记区与引擎声明不一致")
+    # 休眠台账对账：domains/combo 变更后位置性休眠会漂移，sync 即发现
+    # （判定与台账真源在 dormant_ledger，测试同消费；异常可见而非静默跳过）
+    try:
+        import dormant_ledger
+        issues.extend(dormant_ledger.check_dormant_ledger())
+    except Exception as exc:
+        issues.append(f"dormant_ledger 对账异常: {exc}")
     return issues
 
 

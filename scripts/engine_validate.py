@@ -410,6 +410,55 @@ def run_quality(engine_id: str, *, queries: list[dict[str, str]] | None = None,
     }
 
 
+def family_claim_missing(engine_id: str, spec: dict[str, Any]) -> bool:
+    """family 判定（单引擎口径，准入与全局测试同消费这一份）。"""
+    from engine_families import _ENGINE_FAMILY_OVERRIDES
+    return not (spec.get("family") or engine_id in _ENGINE_FAMILY_OVERRIDES)
+
+
+def check_contracts(engine_id: str) -> list[str]:
+    """清单契约检查（准入时点可判定的静态对账）：family 显式声明 + skill_registry。
+
+    单一真源：判定逻辑提炼自 tests/test_engine_families.py 与
+    tests/test_skill_registry_contract.py，那两个测试改为对本函数对拍——
+    防止「测试一套判定、准入另一套」漂移。休眠台账不同：它要到引擎被排进
+    域 combo 之后才可判定，归 sync_backends.check_dormant_ledger（domains
+    变更后跑 sync 即发现）。
+    """
+    issues: list[str] = []
+    cfg = load_config()
+    engines_map = cfg.get("engines") or {}
+    spec = engines_map.get(engine_id)
+    if spec is None:
+        try:
+            from config import get_engines
+            spec = get_engines(cfg, routable_only=False).get(engine_id)
+        except Exception:
+            spec = None
+    if spec is None:
+        return [f"engine {engine_id} 不在 config.yaml engines 里，清单契约无从检查"]
+    # 1) family 必须显式声明（不许静默落到默认 web_general）
+    if family_claim_missing(engine_id, spec):
+        issues.append(
+            "缺 family 显式声明：补 config.yaml 的 family 字段或 "
+            "engine_families._ENGINE_FAMILY_OVERRIDES 覆盖表")
+    # 2) coverage 声明 skill（config 原始或 specs 文件任一）→ 常量必须同步
+    has_skill = "skill" in (spec.get("coverage") or [])
+    if not has_skill:
+        spec_path = ROOT / "engines" / "specs" / f"{engine_id}.yaml"
+        if spec_path.exists():
+            from yaml_load import load as _yaml_load
+            raw = _yaml_load(str(spec_path)) or {}
+            has_skill = "skill" in (raw.get("coverage") or [])
+    if has_skill:
+        from candidate_envelope import SKILL_REGISTRY_ENGINES
+        if engine_id not in SKILL_REGISTRY_ENGINES:
+            issues.append(
+                "spec coverage 声明了 skill，但 candidate_envelope."
+                "SKILL_REGISTRY_ENGINES 未含本引擎——新增技能目录源时两边要一起改")
+    return issues
+
+
 def validate_engine(
     engine_id: str,
     *,
@@ -422,8 +471,9 @@ def validate_engine(
     """执行验证并可选写入 admission。"""
     stages = []
     if stage == "all":
-        stages = [engine_states.VALIDATION_STAGE_HEALTH,
-                       engine_states.VALIDATION_STAGE_QUALITY]
+        stages = [engine_states.VALIDATION_STAGE_CONTRACT,
+                  engine_states.VALIDATION_STAGE_HEALTH,
+                  engine_states.VALIDATION_STAGE_QUALITY]
     elif stage in engine_states.VALIDATION_STAGES:
         stages = [stage]
     else:
@@ -440,6 +490,21 @@ def validate_engine(
     passed: list[str] = []
     health_res = None
     quality_res = None
+
+    # contract 先于 health/quality：纯静态毫秒级，失败即短路——「先查声明
+    # 再测行为」，清单缺口不必烧网络探针。
+    contract_issues: list[str] = []
+    if engine_states.VALIDATION_STAGE_CONTRACT in stages:
+        contract_issues = check_contracts(engine_id)
+        report["stages"]["contract"] = {"ok": not contract_issues,
+                                        "issues": contract_issues}
+        if contract_issues:
+            report["ok"] = False
+            report["status"] = engine_states.VALIDATION_STATUS_FAIL
+            stages = [s for s in stages
+                      if s == engine_states.VALIDATION_STAGE_CONTRACT]
+        else:
+            passed.append(engine_states.VALIDATION_STAGE_CONTRACT)
 
     if engine_states.VALIDATION_STAGE_HEALTH in stages:
         health_res = run_health(engine_id, timeout=timeout)
@@ -479,7 +544,8 @@ def validate_engine(
         # blocked=false/reason=validation_passed，与注释宣称的语义矛盾）。
         # 成功与否由 blocked/admitted_at/stages_passed 表达，不需要 reason。
         if blocked:
-            reason = ((health_res or {}).get("error")
+            reason = (contract_issues[0] if contract_issues
+                      else (health_res or {}).get("error")
                       or engine_states.ADMISSION_REASON_HEALTH_FAILED)
         else:
             reason = ""
@@ -495,11 +561,16 @@ def validate_engine(
             stages_passed=passed,
             quality_score=qscore,
             avg_latency_ms=avg_lat,
-            blocked=blocked if (engine_states.VALIDATION_STAGE_HEALTH in stages) else None,
+            # contract 失败必须显式 block：此时 passed 为空，record 默认分支
+            # 会把「空 passed」当不表态（blocked=False）——清单缺口就漏过去了
+            blocked=(True if contract_issues else
+                     (blocked if (engine_states.VALIDATION_STAGE_HEALTH in stages)
+                      else None)),
             reason=reason,
             health=health_res,
             quality=quality_res,
-            admit=admit and (engine_states.VALIDATION_STAGE_HEALTH in passed),
+            admit=admit and not contract_issues
+            and (engine_states.VALIDATION_STAGE_HEALTH in passed),
         )
         report["admission"] = adm
     else:
