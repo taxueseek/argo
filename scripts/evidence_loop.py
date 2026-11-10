@@ -583,11 +583,17 @@ def verify_results(results: list[dict[str, Any]],
     semantic_meta: dict[str, Any] | None = None
     if scored_inputs:
         try:
-            from semantic_evidence import assess_support, assess_source_types, enabled as _semantic_enabled
+            from semantic_evidence import (
+                assess_support, assess_source_types,
+                assess_substantive_discussion, enabled as _semantic_enabled,
+            )
             if _semantic_enabled():
                 support = assess_support(query, scored_inputs)
                 source_types = assess_source_types(scored_inputs)
+                substantive_map = assess_substantive_discussion(query, scored_inputs)
                 primary_count = 0
+                substantive_count = 0
+                passing_count = 0
                 if support:
                     for item in verified:
                         info = support.get(item.get("url") or "")
@@ -612,13 +618,46 @@ def verify_results(results: list[dict[str, Any]],
                         st = source_types.get(r.get("url") or "")
                         if st:
                             r["source_type"] = st
-                if support or source_types:
+                if substantive_map:
+                    for item in verified:
+                        sub = substantive_map.get(item.get("url") or "")
+                        if sub:
+                            item["discussion_depth"] = sub
+                            if sub.get("is_substantive"):
+                                substantive_count += 1
+                                item["substantive_discussion"] = True
+                                # 深度实质探讨加权提权：+0.15
+                                item["post_absorption"] = min(1.0, (item.get("post_absorption") or 0.0) + 0.15)
+                                if "delta" in item:
+                                    item["delta"] = round(item["post_absorption"] - (item.get("pre_absorption") or 0.0), 3)
+                            elif sub.get("is_passing_mention"):
+                                passing_count += 1
+                                item["passing_mention"] = True
+                                # 仅顺带提及闲聊降权去噪：-0.10
+                                item["post_absorption"] = max(0.0, (item.get("post_absorption") or 0.0) - 0.10)
+                                if "delta" in item:
+                                    item["delta"] = round(item["post_absorption"] - (item.get("pre_absorption") or 0.0), 3)
+                    for r in results:
+                        sub = substantive_map.get(r.get("url") or "")
+                        if sub:
+                            r["discussion_depth"] = sub
+                            if sub.get("is_substantive"):
+                                r["substantive_discussion"] = True
+                            elif sub.get("is_passing_mention"):
+                                r["passing_mention"] = True
+
+                if any((primary_count, substantive_count, passing_count)):
+                    revisions = [v["delta"] for v in verified if "delta" in v]
+
+                if support or source_types or substantive_map:
                     c_count = sum(1 for x in (support or {}).values() if x.get("contradicts"))
                     semantic_meta = {
-                        "scored": len(support or {}),
+                        "scored": len(support or source_types or substantive_map or {}),
                         "supports": sum(1 for x in (support or {}).values() if x.get("supports")),
                         "contradicts": c_count,
                         "primary_sources": primary_count,
+                        "substantive_discussions": substantive_count,
+                        "passing_mentions": passing_count,
                     }
                     if c_count > 0:
                         semantic_meta["contradiction_alert"] = True

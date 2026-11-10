@@ -29,6 +29,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -337,6 +338,84 @@ class TestPhaseOneEnhancements(unittest.TestCase):
             assert st is not None
             assert st["https://gov.cn/policy"]["is_primary"] is True
             assert st["https://gov.cn/policy"]["confidence"] == 0.98
+
+
+class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
+    """第二阶段增强用例：播客与长文本实质探讨判定、顺带提及校准去噪与本地隔离。"""
+
+    def test_substantive_discussion_classification(self):
+        """区分实质深度探讨 vs 顺带提及。"""
+        items = [
+            {"url": "https://podcast.example.com/deep_ep", "title": "深入拆解架构", "text": "从底核指令集全方位解析架构"},
+            {"url": "https://podcast.example.com/passing_ep", "title": "周末闲聊", "text": "喝咖啡时顺口打了个比方提到架构"},
+        ]
+
+        def _fake_post(state, questions, *, timeout):
+            if "全方位解析" in state:
+                return _ok(label="substantive in-depth discussion", conf=0.99)
+            return _ok(label="passing mention or brief reference", conf=0.95)
+
+        with patch.object(se, "_jev_post", _fake_post):
+            res = se.assess_substantive_discussion("芯片架构", items)
+            assert res is not None
+            deep_res = res["https://podcast.example.com/deep_ep"]
+            assert deep_res["is_substantive"] is True
+            assert deep_res["is_passing_mention"] is False
+
+            passing_res = res["https://podcast.example.com/passing_ep"]
+            assert passing_res["is_substantive"] is False
+            assert passing_res["is_passing_mention"] is True
+
+    def test_substantive_discussion_blocks_local_paths(self):
+        """本地文件绝对路径不外发给实质探讨分类。"""
+        items = [
+            {"url": "file:///Users/taxue/podcast_transcript.txt", "title": "local", "text": "local private transcript"},
+            {"url": "https://xiaoyuzhoufm.com/episode/123", "title": "public podcast", "text": "public podcast transcript"},
+        ]
+        calls: list = []
+
+        def _fake_post(state, questions, *, timeout):
+            calls.append(state)
+            return _ok(label="substantive in-depth discussion", conf=0.96)
+
+        with patch.object(se, "_jev_post", _fake_post):
+            res = se.assess_substantive_discussion("播客主题", items)
+            assert len(calls) == 1
+            assert "public podcast transcript" in calls[0]
+            assert "file:///Users/taxue/podcast_transcript.txt" not in res
+            assert "https://xiaoyuzhoufm.com/episode/123" in res
+
+    def test_evidence_loop_substantive_and_passing_adjustments(self):
+        """测试 evidence_loop 对实质探讨 (+0.15) 与顺带提及 (-0.10) 的吸收分调整及统计。"""
+        from evidence_loop import verify_results
+
+        results = [
+            {"url": "https://podcast.example.com/ep1", "title": "Deep Discussion", "score": 0.8},
+            {"url": "https://podcast.example.com/ep2", "title": "Passing Chat", "score": 0.75},
+        ]
+
+        def fake_fetch(url, max_chars=8000, timeout=10.0):
+            if "ep1" in url:
+                return {"url": url, "success": True, "content": "深度探讨了主题细节内容，包含大量实质逻辑。"}
+            return {"url": url, "success": True, "content": "闲聊顺带提了一句，主要聊别的。"}
+
+        def fake_post(state, questions, *, timeout):
+            if "深度探讨" in state:
+                return _ok(label="substantive in-depth discussion", conf=0.95)
+            return _ok(label="passing mention or brief reference", conf=0.92)
+
+        with patch.dict(os.environ, {"ARGO_SEMANTIC_EVIDENCE": "1"}), \
+             patch.object(se, "enabled", return_value=True), \
+             patch.object(se, "_jev_post", fake_post):
+            out = verify_results(results, query="测试主题", top_k=2, fetch_fn=fake_fetch)
+            assert out is not None
+            sem = out.get("semantic") or {}
+            assert sem.get("substantive_discussions") == 1
+            assert sem.get("passing_mentions") == 1
+
+            v_items = {v["url"]: v for v in out.get("verified", [])}
+            assert v_items["https://podcast.example.com/ep1"].get("substantive_discussion") is True
+            assert v_items["https://podcast.example.com/ep2"].get("passing_mention") is True
 
 
 if __name__ == "__main__":

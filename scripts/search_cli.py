@@ -675,6 +675,12 @@ def main():
                 if sem.get("primary_sources"):
                     print(f"  * [一手源置顶] 识别到 {sem.get('primary_sources')} 条官方/一手公告并加权",
                           file=sys.stderr)
+                if sem.get("substantive_discussions"):
+                    print(f"  * [深度探讨置顶] 识别到 {sem.get('substantive_discussions')} 条深度探讨内容并提权",
+                          file=sys.stderr)
+                if sem.get("passing_mentions"):
+                    print(f"  ~ [顺带提及校准] 识别到 {sem.get('passing_mentions')} 条仅顺带提及内容并去噪",
+                          file=sys.stderr)
                 ro = results.get("evidence_reorder") or {}
                 if ro.get("reordered"):
                     print(f"  [verify] 证据回写排序：调整 {len(ro.get('adjusted') or [])} 条，"

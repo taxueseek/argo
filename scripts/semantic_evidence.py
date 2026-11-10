@@ -96,6 +96,18 @@ SOURCE_TYPE_LABELS = (
     "social narrative",
     "none of these",
 )
+SUBSTANTIVE_DISCUSSION_LABELS = (
+    "substantive in-depth discussion",
+    "passing mention or brief reference",
+    "unrelated chatter",
+    "none of these",
+)
+SUBSTANTIVE_DISCUSSION_CRITERIA = {
+    "substantive in-depth discussion": "The topic is a primary subject, core explanation, or key focus of the text.",
+    "passing mention or brief reference": "The topic is only mentioned in passing, as a metaphor, an offhand remark, or a minor tangent.",
+    "unrelated chatter": "The text is casual talk or unrelated discussion where the topic is absent or irrelevant.",
+    "none of these": "None of the above criteria fit the text.",
+}
 
 
 def is_local_target(url_or_path: str) -> bool:
@@ -108,9 +120,12 @@ def is_local_target(url_or_path: str) -> bool:
     return any(u.startswith(p) for p in ("/Users/", "/home/", "/private/", "\\"))
 
 
-def _get_cache_key(text: str, labels: tuple[str, ...] | list[str], instructions: str | None) -> str:
+def _get_cache_key(text: str, labels: tuple[str, ...] | list[str],
+                   instructions: str | None,
+                   criteria: dict[str, str] | None = None) -> str:
     import hashlib
-    raw = f"{instructions or ''}::{sorted(str(l) for l in labels)}::{text[:1200]}"
+    crit_repr = str(sorted((criteria or {}).items())) if criteria else str(sorted(str(l) for l in labels))
+    raw = f"{instructions or ''}::{crit_repr}::{text[:1200]}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -290,7 +305,8 @@ def _jev_post(path_state: Any, questions: dict[str, Any], *,
 
 
 def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
-                instructions: str | None, timeout: float
+                instructions: str | None, timeout: float,
+                criteria: dict[str, str] | None = None
                 ) -> Optional[dict[str, Any]]:
     """单条文本 → 一个 Choice 问题（带本地结果级 Hash 缓存，命中 0ms）。
 
@@ -300,18 +316,19 @@ def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
     classifying_rag_passages 也是「One request per passage」。（我们试过 3 段
     合一，结果全对，但样本太小，不拿它赌准确率。）
     """
-    cache_key = _get_cache_key(text, labels, instructions)
+    cache_key = _get_cache_key(text, labels, instructions, criteria=criteria)
     cached = _get_cached_result(cache_key)
     if cached is not None:
         return cached
 
+    crit_map = criteria or {str(lab): str(lab) for lab in labels}
     out = _jev_post(text, {
         "cls": {
             "type": "choice",
             "instructions": instructions or "Classify the state into one of the criteria.",
             # criteria 的**值**是描述：jaggedness 说 instructions 与 criteria
-            # 不一致时模型会困惑，所以两边用同一句话，不给它两个版本。
-            "criteria": {str(lab): str(lab) for lab in labels},
+            # 不一致时模型会困惑，所以未显式给描述时两边用同一句话。
+            "criteria": crit_map,
         },
     }, timeout=timeout)
     if not isinstance(out, dict):
@@ -331,7 +348,8 @@ def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
 
 
 def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
-                  instructions: str | None, keep: list[tuple[int, str]],
+                  instructions: str | None, criteria: dict[str, str] | None = None,
+                  keep: list[tuple[int, str]],
                   timeout: float) -> Optional[list[dict[str, Any]]]:
     """JEV 通道：每条文本一个请求，并发 4，带总体时间硬截止预算。
 
@@ -346,7 +364,7 @@ def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
     results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
 
     with ThreadPoolExecutor(max_workers=min(JEV_MAX_WORKERS, len(texts_kept))) as pool:
-        futures = {pool.submit(_jev_choice, t, labels, instructions, timeout): idx
+        futures = {pool.submit(_jev_choice, t, labels, instructions, timeout, criteria): idx
                    for idx, t in enumerate(texts_kept)}
         try:
             for fut in as_completed(futures, timeout=max(0.1, deadline_s)):
@@ -371,6 +389,7 @@ def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
 
 def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
              instructions: str | None = None,
+             criteria: dict[str, str] | None = None,
              timeout: float | None = None,
              tier: str | None = None) -> Optional[list[dict[str, Any]]]:
     """一次批量分类。任何异常/非 200/条数不匹配 → None。
@@ -389,7 +408,7 @@ def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
     to = timeout or _timeout()
     if _transport() == "jev":
         return _classify_jev(texts, labels, instructions=instructions,
-                             keep=keep, timeout=to)
+                             criteria=criteria, keep=keep, timeout=to)
     body: dict[str, Any] = {
         "labels": [str(x) for x in labels],
         "inputs": [t[:MAX_TEXT_CHARS] for _i, t in keep],
@@ -499,3 +518,41 @@ def assess_source_types(items: list[dict[str, Any]]) -> Optional[dict[str, dict]
             "is_primary": (label == "primary data or official announcement" and conf_f >= SUPPORT_THRESHOLD),
         }
     return out or None
+
+
+def assess_substantive_discussion(topic: str, items: list[dict[str, Any]]) -> Optional[dict[str, dict]]:
+    """对正文/播客单集转录/长篇段落批量判定「是否对主题进行了实质性深入探讨」。
+
+    用于复杂需求与播客/音视频长文本场景，区分：
+    - substantive in-depth discussion: 深入、实质性探讨或核心讲解
+    - passing mention or brief reference: 顺带提及、比喻借用或偏题带过
+    - unrelated chatter: 闲聊或偏离主题
+    自动剔除本地文件（is_local_target），严格物理阻断私域外发。
+    """
+    usable = [it for it in items if (it.get("text") or "").strip() and it.get("url")
+              and not is_local_target(it.get("url", ""))]
+    if not usable:
+        return None
+    texts = [f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
+             for it in usable]
+    instructions = f"Determine the depth of discussion regarding the topic {topic!r} in the text."
+    results = classify(texts, SUBSTANTIVE_DISCUSSION_LABELS,
+                       instructions=instructions,
+                       criteria=SUBSTANTIVE_DISCUSSION_CRITERIA)
+    if results is None:
+        return None
+    out: dict[str, dict] = {}
+    for it, r in zip(usable, results):
+        if not r:
+            continue
+        label = str(r.get("label") or "")
+        conf = r.get("confidence")
+        conf_f = float(conf) if isinstance(conf, (int, float)) else 0.0
+        out[str(it["url"])] = {
+            "label": label,
+            "confidence": conf_f,
+            "is_substantive": (label == "substantive in-depth discussion" and conf_f >= SUPPORT_THRESHOLD),
+            "is_passing_mention": (label == "passing mention or brief reference" and conf_f >= SUPPORT_THRESHOLD),
+        }
+    return out or None
+
