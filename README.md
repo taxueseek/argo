@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.13.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.14.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -150,7 +150,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方式一：一键脚本（推荐本机长期用）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方式二：npm / npx（已支持，当前 2.13.0；按 tag 发布，版本固定）
+# 方式二：npm / npx（已支持，当前 2.14.0；按 tag 发布，版本固定）
 npm install -g argo-search      # 全局安装 CLI
 npx -y argo-search              # 或即用即走，不装
 npx -y github:taxueseek/argo    # 要跟 main 最新提交时用这条
@@ -287,7 +287,7 @@ freshness  ≈ 发布时间（会忽略「2015 年以来」这类历史对比年
 
 ## 快速开始
 
-任选一种即可。**npm 安装已支持，当前版本 2.13.0**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
+任选一种即可。**npm 安装已支持，当前版本 2.14.0**，与 GitHub 同为本仓库发布。npm 路线用 `npm install -g argo-search` 或 `npx -y argo-search`，按 tag 发布、版本固定、下载体积更小；GitHub 路线用 `install.sh` / `install.ps1` 或 `npx github:taxueseek/argo`，跟 main 走。之后每次打 tag，CI 会把两个 npm 包和 GitHub Release 一起发出；registry 上更早的 v1.0.1 是历史版本，不要锁定到它。
 
 **零配置就能跑**：不配 API Key 时走免费引擎 + 本地 `local_*` 引擎；配了 Key 的源质量通常更好，没配则自动跳过。
 
@@ -507,7 +507,7 @@ python3 -m pytest tests/test_unit.py -q             # 单测（可选）
 | `deep` | 调研、综述 | 质量优先，可多用引擎 |
 | `budget` | 额度紧 | 配额控制，用完降级 |
 
-### 当前大致能力（v2.13.0）
+### 当前大致能力（v2.14.0）
 
 Argo 干的事，一句话能说完：把一个问题按领域和语言分给合适的源，取回结果后按可信度排个序，交回给 Agent 的是能排序、能复核的材料。搜索、抓取、核验、本机文件检索走同一条管线，19 个 MCP 工具和 CLI 命令一一对应，装哪种形态都不缺能力。另有几个单点命令随用随取：argo tweet 打包 X 帖子，argo auth 管登录态，argo job 聚合招聘信息。
 
@@ -515,6 +515,8 @@ Argo 干的事，一句话能说完：把一个问题按领域和语言分给合
 
 最近几个版本各修了一类问题。
 
+
+v2.14.0 做的是解析器层收口、引擎扩容与错题本机制落地。接新源不再必须手写 Python 解析器：新增解析器注册表与「智能自省推断解析器」，声明字段路径即可自动推断解析规则，零配置、不需要 `output_map`；`argo doctor` 补源审计，解析层失效能主动报出来，而不是等用户遇到「这个源返回 0 条」——这类失败此前分不清是没结果还是解析坏了。源从 290 增到 300（Mwmbl、Kaggle、HuggingFace Papers、grep.app、OpenAIRE、Mojeek、Repology、DBpedia、4get，另有 clinicaltrials / coingecko / fxtwitter 三源复活）。本机检索四项改进：消除特定机器路径硬编码、多环境自适应资产发现、FTS5 索引瘦身与词形归一、跨平台纯标库保底。错题本机制是本版最该说清的一件：坏例账本补了归因层（12 类根因，判不出标「未归因」不硬猜）与复发判定——同一根因跨 3 个不同日期出现即触发「该挪进硬规则」，活网排名漂移不算。同版新增 `AGENTS.md` 路由表与 `docs/COMMIT_STANDARD.md` 提交规范，高风险提交须写「跑了什么 / 在哪个 commit 上跑的 / 没跑什么」——这是两起「过了 pre-commit 却在全量回归里红」事故的应对。
 
 v2.13.0 做的是文档分层收口与状态层收口。`docs/` 从 87 份精简到 26 份：删除 `docs/engines/` 60 份（与 `engines/specs/*.yaml` 真源重复），18 份过程报告归档 `docs-local/archive/`（不进公开仓，保留本机可追溯性），新增 `docs/CHANGELOG.md` 合并 23 份 RELEASE_NOTES，README 27 处死链改为指向 CHANGELOG。状态层 `scripts/engine_states.py` 从 12 台扩到 22 台状态机，34 个模块引用，各文件字面量残留从 19 处降到 0；修掉精排降级集合 4 处手抄导致的高危静默退化、`health_check --category` 必崩、daemon 状态靠文案反推。调度层 deep 档全量并行分支补 `tail_grace_s`，中位 10,000ms → 2,324ms，条数不变（公开版同查询同样 10s 空等）。165 个引擎声明从 `config.yaml` 迁到 `engines/specs/*.yaml`，`config.py` 合并逻辑从双源覆盖变单向 specs→config，删 3523 行。依赖收口到 uv（`uv.lock` 钉版 + `.python-version` + `pyproject.toml` 真源）。
 
@@ -796,6 +798,15 @@ argo/
 
 只列最近四个版本。完整历史见[版本记录](#版本记录)，逐版详情见 [Releases](https://github.com/taxueseek/argo/releases)。
 
+### v2.14.0：解析器层收口 + 源到 300 + 错题本机制落地
+
+- **新引擎接入不再手写解析器**：新增解析器注册表与「智能自省推断解析器」，声明字段路径即可自动推断解析规则，零配置、不需要 `output_map`；`argo doctor` 补源审计，解析层失效能主动报出来，而不是等用户遇到「这个源返回 0 条」
+- **源从 290 增到 300**：新增 Mwmbl、Kaggle、HuggingFace Papers、grep.app（官方 MCP 代码检索）、OpenAIRE、Mojeek、Repology、DBpedia、4get 九条声明，另有 clinicaltrials / coingecko / fxtwitter 三源复活。其中 8 个默认可用，4get 默认关（匿名搜索备用通道）
+- **本机检索四项改进**：消除特定机器路径硬编码，落地多环境自适应资产发现（换机器不用再改代码）；FTS5 索引瘦身门禁、词形归一与缩写增强、邻近行聚簇；跨平台纯标库保底与公网/本机搜索隔离；成本可观测、候选可配、意图预判、条数上限
+- **本地意图信号收口**：两级信号驱动与分面通道隔离落地，异常与私有标识符信号收口到单一真源；修掉 `cnii` 重复注册导致语言独占摘除从未生效（英文查询白跑日文源）
+- **错题本机制**：坏例账本补归因层（12 类根因，判不出标「未归因」不硬猜）与复发判定——同一根因跨 3 个不同日期出现即触发「该挪进硬规则」，活网排名漂移不算（那不是 argo 的问题）。新增 `AGENTS.md` agent 路由表与 `docs/COMMIT_STANDARD.md` 提交规范，高风险提交须写「跑了什么 / 在哪个 commit 上跑的 / 没跑什么」
+- **状态机 22 → 27 台**：隐式状态机普查补齐 3 台（恢复链等级、结论上限、验证结论）与坏例根因（第 27 台）；新增 AST 门禁 `test_state_literal_drift.py`，已登记状态值退回裸字面量即红
+
 ### v2.13.0：文档分层收口 + 22 台状态机单点真源 + 调度尾宽修复
 
 - **文档分层收口**：`docs/` 从 87 份精简到 26 份。删除 `docs/engines/` 60 份（与 `engines/specs/*.yaml` 真源重复）；18 份过程报告归档 `docs-local/archive/`（不进公开仓，保留本机可追溯性）；新增 `docs/CHANGELOG.md` 合并 23 份 RELEASE_NOTES；README 27 处死链改为指向 CHANGELOG
@@ -843,6 +854,7 @@ argo/
 
 | 版本 | 说明 |
 |------|------|
+| **v2.14.0** | **解析器层收口 + 源到 300 + 错题本机制落地**：新引擎接入不再手写解析器（注册表 + 智能自省推断解析器，零配置免 `output_map`）；`argo doctor` 补源审计；源 290→300（Mwmbl/Kaggle/HF Papers/grep.app/OpenAIRE/Mojeek/Repology/DBpedia/4get + 三源复活）；本机检索四项改进（多环境自适应资产发现、FTS5 瘦身与词形归一、跨平台纯标库保底、成本可观测）；本地意图信号收口（修掉英文查询白跑日文源）；坏例账本补归因层与 Seen N× 复发门；新增 `AGENTS.md` 路由表与 `docs/COMMIT_STANDARD.md` 提交规范；状态机 22→27 台。详见 [发布说明](docs/RELEASE_NOTES_v2.14.0.md) |
 | **v2.13.0** | **文档分层收口 + 22 台状态机单点真源 + 调度尾宽修复**：`docs/` 87→26 份（删 `docs/engines/` 60 份、归档 18 份过程报告、新增 CHANGELOG）；`scripts/engine_states.py` 12→22 台状态机，34 模块引用，字面量残留 19→0；deep 档尾宽 10s→2.2s；165 个引擎声明迁到 `engines/specs/`；依赖收口到 uv。详见 [发布说明](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **统一设置中心 + pixiv/trace.moe 搜图 + 公众号 fetch**：`argo settings` 零服务设置页与写回（#44，@zooyoo）；pixiv 双通道正向搜图（PR#45，@OMSociety）；trace.moe 场景识别；fetch 公众号前置分流；源 286→288。详见 [CHANGELOG](docs/CHANGELOG.md) |
 | **v2.11.2** | **以图搜图补齐 + 四类静默失效收口 + 主干常红修复**：接入 SauceNAO/AnimeTrace/Google Lens 三条显式专用反搜图引擎并摘除失效的 tineye；keyRefs 凭证经 dsh 插件 provider 透传到 MCP 池（#41）；quota 换 Key 自愈 + 402 误锁 30 天修复 + reset 指引（#42）；xhs/twitter 子进程 env 与凭据透传（#36）；lint_spec_contracts 走共享 YAML loader 解除主干常红。详见 [CHANGELOG](docs/CHANGELOG.md) |

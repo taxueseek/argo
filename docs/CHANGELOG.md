@@ -3,9 +3,9 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
-## 未发布（当前工作树）
+## v2.14.0
 
-**定位**：隐式状态机普查后的收口。把审计发现的三类「登记了但没真正收口」补齐，并给词表加机械门禁，防止改完又退回去写字面量。
+**定位**：解析器层收口 + 引擎扩容 + 错题本机制落地。把「新引擎接入要手写解析」变成「声明字段即可推断」，源从 290 增到 300；把「失败可归因、经验可复用」从口号变成可执行机制。
 
 **关键变更**：
 - 修掉恢复链 L0 门控失效：`max_level="L0"` 与任何未登记值此前都通过 `_TIER.get(..., 3)` 落到最高档，放行 L3 换引擎与 L4 跨语言；现在等级词表与成本序收进 `engine_states.py`，未登记值 fail-closed 返回空计划。补 `tests/test_p0_v25.py` 两条红转绿契约。
@@ -15,15 +15,6 @@
 - 新增机械门禁 `tests/test_state_literal_drift.py`：AST 扫 `scripts/*.py` 状态字段上下文，已登记状态值再退回裸字面量即红（含同名异义白名单与负向验证）。它与 `test_engine_states.py`、`test_native_tools_sync.py`、`test_zcode_bridge_daemon_state.py` 一并挂进 `scripts/pre-commit` 快门禁——此前改 `engine_states.py` 不跑全量 pytest 就能提交。
 - 文档：`references/architecture.md` 的状态机登记表从 22 台更新到 25 台（22 台 + 3 台新登记），补三道门禁的说明。
 
-**默认关闭**：无新增
-
----
-
-## 未发布（错题本机制）
-
-**定位**：把「失败可归因、经验可复用」补成闭环。此前坏例账本只到「发现 → 入账」，缺归因层与复发判定；提交信息没有「未跑什么」的位置；仓库没有 agent 路由表。三件都是外部实践（magpie 的 LESSONS.md）里被验证过的机制，本次落地。
-
-**关键变更**：
 - **坏例账本加归因层**：`scripts/badcase_ledger.py` 每条坏例入账时按证据判 `root_cause`（词表为 `scripts/badcase_causes.py`，12 个值；由该模块自行注册进 `engine_states.STATE_REGISTRY` 成为第 27 台状态机），判不出归 `unattributed` 不硬猜。新增 `root_cause_stats()` 按根因聚合出 `seen_days`（在多少个不同日期出现过）与首末日期。老库自动补列不重建——历史坏例是证据，重建等于丢掉。
 - **Seen N× 升级判定**：`check` 增加 `--promote-days`（默认 3），同一根因跨 3 个不同日期出现即非零退出并点名「该挪进硬规则」。判定与条数门相互独立，报告里分开列。`external_ranking`（活网排名漂移）排除在升级判定外——它不是 argo 的问题，算成复发会制造长期噪音（2026-10-28 issue #35 误报根因）。新增 `lessons` 子命令导出 LESSONS.md 格式清单。
 - **提交检查清单契约**：新增 `docs/COMMIT_STANDARD.md`（提交信息格式唯一真源）与 `scripts/check_commit_report.py`。高风险提交（新增引擎、改路由、改状态词表、动发版或依赖链）须写「跑了 / 在 commit / 未跑」三段，`未跑: 无` 合法但整段省略不合法。挂进 pre-commit 时**只警告不硬拦**——hook 慢于 20s 就会被 `--no-verify` 绕过，一道会被绕过的硬门比没有门更坏。
