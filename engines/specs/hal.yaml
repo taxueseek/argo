@@ -13,4 +13,17 @@ coverage:
 - french
 desc: 法国全国科研机构开放仓储（Solr JSON）
 timeout: 12
-type: hal
+type: http
+method: GET
+url: "https://api.archives-ouvertes.fr/search/"
+query_param: q
+extra_params:
+  wt: json
+  fl: "title_s,uri_s,abstract_s,producedDate_s"
+format_is_query_param: false
+output_map:
+  items: response.docs
+  item_title: title_s
+  item_url: uri_s
+  item_summary: abstract_s
+  item_published_at: producedDate_s

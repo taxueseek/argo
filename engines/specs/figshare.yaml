@@ -14,4 +14,13 @@ coverage:
 - research
 desc: 科研数据集检索（论文/数据/图表）
 timeout: 12
-type: figshare
+type: http
+method: GET
+url: "https://api.figshare.com/v2/articles"
+query_param: search_for
+format_is_query_param: false
+output_map:
+  items: .
+  item_title: title
+  item_url: url_public_html
+  item_summary: doi

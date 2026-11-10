@@ -13,4 +13,8 @@ coverage:
 - europe
 desc: 欧盟开放数据目录（24 语言元数据）
 timeout: 12
-type: eu_opendata
+type: http
+method: GET
+url: "https://data.europa.eu/api/hub/search/search"
+query_param: q
+format_is_query_param: false

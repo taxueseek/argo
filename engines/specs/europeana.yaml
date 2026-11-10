@@ -16,4 +16,13 @@ coverage:
 - heritage
 desc: 欧洲 27 国文化遗产聚合（官方公开 demo key）
 timeout: 12
-type: europeana
+type: http
+method: GET
+url: "https://api.europeana.eu/record/v2/search.json"
+query_param: query
+extra_params:
+  wskey: api2demo
+  rows: 10
+format_is_query_param: false
+output_map:
+  items: items

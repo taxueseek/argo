@@ -49,7 +49,7 @@ HARD_LIMIT = 1000
 GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_cn.py": (2283, "中文源构建器，逐源一段；下一步按主题拆（同 engines_builders_data 2026-11-08 的做法）"),
     "scripts/engines_builders_batch9.py": (1357, "批次九源构建器，逐源一段；方案 A 归一消减 cleveland/tvmaze/deezer 净瘦身 119 行"),
-    "scripts/engines_builders_intl.py": (1242, "国际源构建器，含各源 XML/RSS 解析差异；下一步按地区拆"),
+    "scripts/engines_builders_intl.py": (991, "国际源构建器，方案 A 归一消减 doaj/europeana/hal/eu_opendata/tatoeba/figshare 净瘦身 251 行"),
     "scripts/engines_builders_tech.py": (1281, "技术社区源构建器，逐源一段；下一步按主题拆"),
     "scripts/fetch_v3.py": (1905, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段"),
     "scripts/engines_base.py": (1510, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；1510 含 2026-11-10 方案三：通用智能推断解析器抽离至 engines_parsers 并对齐出口契约，净瘦身 57 行"),

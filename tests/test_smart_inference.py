@@ -187,3 +187,38 @@ def test_smart_inference_on_tvmaze_show_style():
     assert res[0]["snippet"] == "Breaking Bad is an American television series."
     assert res[0]["published_at"] == "2008-01-20"
 
+
+def test_smart_inference_on_doaj_and_multilingual():
+    """测试 DOAJ 嵌套 bibjson、多语言 title 字典与 Europeana guid URL 识别。"""
+    payload_doaj = {
+        "results": [
+            {
+                "bibjson": {
+                    "title": "Biotechnology Regulation Review",
+                    "abstract": "Analysis of biotech frameworks.",
+                    "link": [{"type": "fulltext", "url": "https://doi.org/10.1234/test"}],
+                }
+            }
+        ]
+    }
+    res_doaj = engines_base._parse_generic(payload_doaj, "doaj", 5, {"engine_id": "doaj"})
+    assert len(res_doaj) == 1
+    assert res_doaj[0]["title"] == "Biotechnology Regulation Review"
+    assert res_doaj[0]["url"] == "https://doi.org/10.1234/test"
+    assert res_doaj[0]["snippet"] == "Analysis of biotech frameworks."
+
+    # 多语言 title 字典与 guid 落地页提取
+    payload_multi = [
+        {
+            "title": {"fr": "Titre Francais", "en": "English Title"},
+            "guid": "https://www.europeana.eu/item/123",
+            "description": {"en": "English description content"},
+        }
+    ]
+    res_multi = engines_base._parse_generic(payload_multi, "europeana", 5, {"engine_id": "europeana"})
+    assert len(res_multi) == 1
+    assert res_multi[0]["title"] == "English Title"
+    assert res_multi[0]["url"] == "https://www.europeana.eu/item/123"
+    assert res_multi[0]["snippet"] == "English description content"
+
+

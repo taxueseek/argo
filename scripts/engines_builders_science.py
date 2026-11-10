@@ -653,48 +653,6 @@ def _build_usgs_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-# ── NASA CMR 地球科学数据目录引擎 ────────────────────────────────────────────
-
-_CMR_API = "https://cmr.earthdata.nasa.gov/search/collections.json"
-
-
-def _build_nasa_cmr_engine(spec: dict[str, Any]) -> Any:
-    """NASA CMR 地球科学数据目录检索（cmr.earthdata.nasa.gov，免认证）。
-
-    MODIS/卫星/遥感等关键词 → 数据集集合（含概念 ID，链接 Earthdata Search）。
-    """
-    timeout = spec.get("timeout", 12)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        q = _ascii_tokens(query)
-        if not q:
-            return []
-        to = _timeout or timeout
-        url = _CMR_API + "?" + urllib.parse.urlencode({"keyword": q, "page_size": min(n, 10)})
-        try:
-            with http_open(urllib.request.Request(url, headers=_HEADERS), timeout=to, engine=spec.get("_name", "")) as resp:
-                data = json.loads(resp.read().decode("utf-8", "replace"))
-        except Exception as e:
-            logger.warning(f"NASA CMR 失败: {e}")
-            return []
-        results = []
-        for _rk16, x in enumerate(((data.get("feed") or {}).get("entry") or [])[:n]):
-            title = x.get("title") or q
-            cid = x.get("id") or ""
-            summary = (x.get("summary") or "")[:200]
-            results.append({
-                "title": title,
-                "url": f"https://search.earthdata.nasa.gov/search/granules?p={cid}" if cid else "",
-                "snippet": summary[:300],
-                "source": "nasa_cmr",
-                "score": rank_score(0.8, _rk16),
-            })
-        return results
-    return _engine
-
-
 # ── bioRxiv / medRxiv 预印本引擎 ─────────────────────────────────────────────
 
 # DOI 提取：10. 开头的标准 DOI（bioRxiv DOI 形态 10.1101/2024.01.02.123456）

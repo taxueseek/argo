@@ -14,4 +14,10 @@ coverage:
 - global
 desc: 开放获取期刊全球总库（80+ 语种，元数据统一英文）
 timeout: 12
-type: doaj
+type: http
+method: GET
+url: "https://doaj.org/api/search/articles/{query_quoted}"
+query_param: ""
+extra_params:
+  pageSize: 10
+format_is_query_param: false

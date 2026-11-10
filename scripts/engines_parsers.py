@@ -297,34 +297,57 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
         if not isinstance(i, dict):
             continue
         flat = dict(i)
-        for nested_k in ("paper", "item", "data", "node", "article", "entry", "show"):
+        for nested_k in ("paper", "item", "data", "node", "article", "entry", "show", "bibjson"):
             if isinstance(i.get(nested_k), dict):
                 for k, v in i[nested_k].items():
                     flat.setdefault(k, v)
 
         title = (
             flat.get("title") or flat.get("name") or flat.get("heading")
-            or flat.get("Title") or flat.get("titleNullable")
-            or flat.get("headline") or flat.get("subject") or flat.get("topic") or ""
+            or flat.get("Title") or flat.get("titleNullable") or flat.get("title_s")
+            or flat.get("headline") or flat.get("subject") or flat.get("topic")
+            or flat.get("text") or ""
         )
-        if isinstance(title, list):
+        if isinstance(title, dict):
+            # 多语言字典（如 EU Open Data）：优先取 en/zh/fr/de，否则取首个
+            for lang in ("en", "zh", "fr", "de"):
+                if title.get(lang):
+                    title = title[lang]
+                    break
+            if isinstance(title, dict) and title:
+                title = next(iter(title.values()))
+        elif isinstance(title, list):
             title = title[0] if title else ""
         raw_id = flat.get("id") or flat.get("objectID") or flat.get("ID") or ""
         url = (
             flat.get("url") or flat.get("URL") or flat.get("html_url")
             or flat.get("link") or flat.get("href") or flat.get("urlNullable")
-            or flat.get("web_url") or flat.get("canonical_url") or ""
+            or flat.get("web_url") or flat.get("canonical_url") or flat.get("guid")
+            or flat.get("uri_s") or flat.get("url_public_html")
+            or flat.get("resource") or flat.get("landing_page") or ""
         )
+        if isinstance(url, list) and url:
+            if isinstance(url[0], dict):
+                url = url[0].get("url") or url[0].get("href") or url[0].get("resource") or ""
+            else:
+                url = str(url[0])
         if not url and url_template and raw_id:
             url = url_template.replace("{id}", str(raw_id))
 
         snippet = (
             flat.get("snippet") or flat.get("summary") or flat.get("content")
-            or flat.get("description") or flat.get("abstract")
+            or flat.get("description") or flat.get("abstract") or flat.get("abstract_s")
             or flat.get("subtitleNullable") or flat.get("subtitle")
             or flat.get("extract") or flat.get("details") or flat.get("text") or ""
         )
-        if isinstance(snippet, list):
+        if isinstance(snippet, dict):
+            for lang in ("en", "zh", "fr", "de"):
+                if snippet.get(lang):
+                    snippet = snippet[lang]
+                    break
+            if isinstance(snippet, dict) and snippet:
+                snippet = next(iter(snippet.values()))
+        elif isinstance(snippet, list):
             snippet = snippet[0] if snippet else ""
 
         # 文本标签剥离与 HTML 实体反转义

@@ -623,7 +623,7 @@ engines:
   desc: 德语出版物最全书目（SRU/RDF XML）
 - name: doaj
   tier: T1
-  type: doaj
+  type: http
   coverage:
   - academic
   - open_access
@@ -864,7 +864,7 @@ engines:
   desc: Energy-Charts 欧洲发电结构/可再生占比（Fraunhofer ISE，免认证）
 - name: eu_opendata
   tier: T1
-  type: eu_opendata
+  type: http
   coverage:
   - opendata
   - europe
@@ -876,7 +876,7 @@ engines:
   desc: 欧盟开放数据目录（24 语言元数据）
 - name: europeana
   tier: T1
-  type: europeana
+  type: http
   coverage:
   - culture
   - europe
@@ -988,7 +988,7 @@ engines:
   desc: Felo AI 搜索 API
 - name: figshare
   tier: T1
-  type: figshare
+  type: http
   coverage:
   - academic
   - dataset
@@ -1369,7 +1369,7 @@ engines:
   desc: Hacker News（Algolia API，科技新闻+讨论）
 - name: hal
   tier: T1
-  type: hal
+  type: http
   coverage:
   - academic
   - french
@@ -2128,7 +2128,7 @@ engines:
   desc: Mwmbl 开源非盈利独立搜索引擎（免 key，JSON API，零用户画像，标题与摘要结构化返回）
 - name: nasa_cmr
   tier: T1
-  type: nasa_cmr
+  type: http
   coverage:
   - science
   - earth
@@ -2997,7 +2997,7 @@ engines:
   desc: 塔斯社（俄罗斯国家通讯社（ТАСС），俄语一手新闻，免 key）
 - name: tatoeba
   tier: T1
-  type: tatoeba
+  type: http
   coverage:
   - language
   - translation

@@ -17,7 +17,7 @@ import engine_states as _st  # 失败归因词表唯一真源
 
 import serp_kill_log  # noqa: E402  守卫接线+误杀账本（2026-10-10 拆出，stdlib 级轻量）
 import time
-import urllib.error
+import urllib.error, urllib.parse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -237,7 +237,7 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
     """替换模板占位符。"""
     if isinstance(template, list):
         return [_resolve(item, query, n, **extra) for item in template]
-    s = template.replace("{query}", query).replace("{n}", str(n))
+    s = template.replace("{query_quoted}", urllib.parse.quote(str(query))).replace("{query}", query).replace("{n}", str(n))
     s = s.replace("{TIMESTAMP}", str(int(time.time())))
     if "{UUID}" in s:
         s = s.replace("{UUID}", _proc_uuid())
@@ -843,7 +843,7 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
             "image_license": output_map.get("item_image_license", ""),
             # 其余图片字段（许可链接/协议版本原料/像素尺寸）见 image_ops
             **image_output_map_fields(output_map),
-        }, url_template=output_map.get("url_template"))(data)
+        }, url_template=output_map.get("url_template") or spec.get("url_template"))(data)
         # spec 级授权常量：授权不随条目变化的源（如 NASA 公版）在 spec 上写一次
         _lic = spec.get("image_license")
         for r in parsed:

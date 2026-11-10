@@ -14,4 +14,12 @@ coverage:
 - sentence
 desc: 400+ 语言对真实句子语料（翻译/语言学习）
 timeout: 12
-type: tatoeba
+type: http
+method: GET
+url: "https://tatoeba.org/en/api_v0/search"
+query_param: query
+format_is_query_param: false
+output_map:
+  items: results
+  item_title: text
+  url_template: "https://tatoeba.org/en/sentences/show/{id}"
