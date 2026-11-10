@@ -299,41 +299,83 @@ def _is_own_install_root(path: str) -> bool:
     return real == _OWN_INSTALL_ROOT or real.startswith(_OWN_INSTALL_ROOT + os.sep)
 
 
+def _detect_project_root(start_dir: str | None = None) -> str | None:
+    """从当前目录向上回溯探测工程根目录（根据 .git / 常见项目清单识别）。
+
+    避免用户在项目深度子目录执行检索时，因范围过窄漏掉顶层架构文档与同级模块。
+    """
+    try:
+        cur = Path(start_dir or os.getcwd()).resolve()
+        markers = {".git", "pyproject.toml", "package.json", "Cargo.toml", "go.mod"}
+        for parent in [cur] + list(cur.parents):
+            if any((parent / m).exists() for m in markers):
+                p_str = str(parent)
+                if not _is_broad_local_root(p_str) and not _is_own_install_root(p_str):
+                    return p_str
+    except Exception:
+        pass
+    return None
+
+
 def _local_seek_dir() -> str | None:
     """本地检索的适用范围；宽泛根或自身安装树返回 None（据此跳过本地命中）。
 
-    宁可返回 None 也不返回一个「象征性收窄」的路径：本地命中是增强项，
-    在范围不合理时**不产出**比产出噪音 + 20 s 等待更符合用户预期。
-    用户想搜特定树时 cd 到目标目录，或用 local-seek 的 seek.py 显式给
-    --path（网络类查询另有 argo search --local-first 走本地引擎聚合），
-    那条路径不受此守卫影响。
+    当前处于某个具体工程或其子目录时，优先自适应溯源至工程根（覆盖全局文档）；
+    若处于宽泛根或自身安装树则返回 None，由调用方进入定向私域资产探测。
     """
     cwd = os.getcwd()
     if _is_broad_local_root(cwd) or _is_own_install_root(cwd):
         return None
-    return cwd
+    return _detect_project_root(cwd) or cwd
 
 
 def _candidate_targeted_roots() -> list[str]:
     """宽泛根场景下的定向检索候选目录（既防全盘扫崩，又避免漏掉核心私域资产）。
 
-    默认六个高频私域目录；ARGO_LOCAL_SEEK_ROOTS 可用冒号（POSIX）或分号
-    （Windows）分隔覆盖。判据是「存在且不是 argo 自身安装树」——与默认
-    清单同一条守卫，防自定义目录指回源码树。
+    彻底消除特定机器/个人工作区硬编码（如 Documents/GPT），优先环境变量覆盖，
+    自适应感知云端/容器工作区与跨平台 Agent 技能规范。
     """
-    home = os.path.realpath(os.path.expanduser("~"))
-    cands = [
-        os.path.join(home, ".agents", "skills"),
-        os.path.join(home, ".claude", "skills"),
-        os.path.join(home, ".codex", "skills"),
-        os.path.join(home, "Documents", "GPT"),
-        os.path.join(home, "workspace"),
-        os.path.join(home, "projects"),
-    ]
     raw = os.environ.get("ARGO_LOCAL_SEEK_ROOTS", "").strip()
     if raw:
         cands = [p for p in re.split(r"[:;]", raw) if p.strip()]
-    return [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c)]
+        return [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c) and not _is_broad_local_root(c)]
+
+    cands: list[str] = []
+
+    # 1. 容器与 CI/CD 环境工作区感知（Docker / K8s / Cloud Shell）
+    for env_var in ("WORKSPACE", "PROJECT_DIR", "CI_PROJECT_DIR"):
+        v = os.environ.get(env_var, "").strip()
+        if v and os.path.isdir(v):
+            cands.append(v)
+    for container_root in ("/workspace", "/app", "/project"):
+        if os.path.isdir(container_root):
+            cands.append(container_root)
+
+    # 2. 跨平台通用标准私域目录（基于用户 home 规范派生，零特定主机字面量）
+    home = os.path.realpath(os.path.expanduser("~"))
+    standard_roots = [
+        os.path.join(home, ".agents", "skills"),  # Agent Skills 行业规范目录
+        os.path.join(home, ".claude", "skills"),  # Claude 客户端规范目录
+        os.path.join(home, ".codex", "skills"),   # Codex 客户端规范目录
+        os.path.join(home, "workspace"),          # 通用工作区目录
+        os.path.join(home, "projects"),           # 通用工程目录
+        os.path.join(home, "notes"),              # 通用笔记目录
+    ]
+    cands.extend(standard_roots)
+
+    seen = set()
+    valid_roots = []
+    for c in cands:
+        try:
+            real_c = os.path.realpath(os.path.expanduser(c))
+        except OSError:
+            continue
+        if real_c in seen:
+            continue
+        seen.add(real_c)
+        if os.path.isdir(real_c) and not _is_broad_local_root(real_c) and not _is_own_install_root(real_c):
+            valid_roots.append(real_c)
+    return valid_roots
 
 
 def _run_local_seek(query: str, max_n: int = 5,
