@@ -62,6 +62,8 @@ def _warn(message: str) -> None:
 _AGENT_RESULT_FIELDS = (
     "title", "url", "snippet", "source", "score", "ref",
     "published_at", "fetch_suggested", "full_text_url",
+    # 本地命中标记：明确区分本地文件与联网结果，供 Agent 分面过滤
+    "is_local",
     # 离散权威等级（0-4，≥3 极权威）：Agent 的廉价可信闸门——连续 authority
     # 分不知道该在哪切，等级才能直接当门用（DeepSeek Search 同款语义）。
     # 整数字段约 6 字节，剥掉它等于把「先信谁」重新推回给调用方猜。
@@ -227,6 +229,8 @@ def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
         # 信任级别：网页文本一律是不可信外部数据，随答案一起到达，
         # 避免调用方把摘要里的指令当任务执行（输出层声明，非提示词）。
         "content_trust",
+        # 本地与公网分面契约（方案三）：通道隔离，避免本地命中与联网结果在同一列表里混淆
+        "local_results", "web_results", "local_seek_skipped", "local_seek_skip_reason", "facets",
         # 核验产出：verify/evidence_reorder 是**花了墙钟换来的**，且是
         # 「该不该引用这批结果」的直接依据。此前被整块剥掉，调用方付了
         # 几秒核验却只看到 verified_count 一个数（2026-10-22 实测）。
@@ -256,6 +260,18 @@ def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
         slim_results.append(slim)
     out["results"] = slim_results
     out["count"] = len(slim_results)
+
+    # 分面通道：对 local_results 与 web_results 按同一字段白名单瘦身
+    if "local_results" in payload:
+        out["local_results"] = [
+            {k: r[k] for k in _AGENT_RESULT_FIELDS if r.get(k) is not None}
+            for r in (payload.get("local_results") or []) if isinstance(r, dict)
+        ]
+    if "web_results" in payload:
+        out["web_results"] = [
+            {k: r[k] for k in _AGENT_RESULT_FIELDS if r.get(k) is not None}
+            for r in (payload.get("web_results") or []) if isinstance(r, dict)
+        ]
     return out
 
 
@@ -768,8 +784,15 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
     _loc_b = [r for r in _all_res if r.get("is_local") or r.get("source") == "local_files"
               or str(r.get("url", "")).startswith("file://") or str(r.get("source", "")).startswith("local_")]
     _web_b = [r for r in _all_res if r not in _loc_b]
+    for _lr in _loc_b:
+        _lr["is_local"] = True
     result["local_results"] = _loc_b
     result["web_results"] = _web_b
+    result["facets"] = {
+        "web_count": len(_web_b),
+        "local_count": len(_loc_b),
+        "total_count": len(_all_res),
+    }
     # ── 收口：重算一切「由 results 派生」的字段 ────────────────────────────────
     #
     # why：本函数**后置**改 results 的地方不止一处（域过滤裁剪、本地命中并入），

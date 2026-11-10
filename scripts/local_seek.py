@@ -218,11 +218,7 @@ def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
 # 判据与 local_intent._LOCAL_SIGNAL_RE 逐字一致（红绿锁见
 # tests/test_local_intent.py::test_intent_pattern_matches_local_seek）。
 _LOCAL_INTENT_PATTERN = re.compile(
-    r"(?i)(?:\b(?:def|class|function|fn|import|export|const|var|struct|enum)\b|"
-    r"\.(?:py|js|ts|json|yaml|yml|md|rs|go|c|cpp|h|sh|sql)\b|"
-    r"(?:readme|config|package\.json|cargo\.toml|dockerfile|makefile)|"
-    r"(?:本工程|本项目|代码库|本地文件|本地脚本|脚本文件|架构实现|函数|方法|源码|接口定义))"
-)
+    '(?i)(?:(?:^|[\\s\\"\'`(])(?:~/|/Users/|/home/|file://|C:\\\\\\\\|\\./|\\.\\./)|\\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|sql|docx|pptx|xlsx|pdf|csv|log|cfg|ini|conf)\\b|(?:readme|package\\.json|cargo\\.toml|dockerfile|makefile|\\.gitignore|\\.env|pyproject\\.toml|tsconfig\\.json|go\\.mod|requirements\\.txt|Cargo\\.lock)|(?:\\.agents/skills|\\.obsidian|\\.config/argo|本机|本地文件|本地脚本|本地代码|我的文件|我的笔记|我的电脑|代码库|本工程|本项目|这个仓库|这个工程|当前目录|工作目录|源码里|仓库里))')
 
 
 def has_local_code_intent(query: str) -> bool:
@@ -234,26 +230,18 @@ def has_local_code_intent(query: str) -> bool:
 
 def resolve_include_local(include_local: bool | None, mode: str, query: str = "",
                           domain: str | None = None) -> bool:
-    """include-local 三态解析：True/False 显式，None=自动。
-
-    双轨检索设计：任意搜索默认同时执行本地与联网检索（include_local=True），
-    除非显式指定 --no-local / include_local=False。
-
-    自动路径唯一的例外：查询命中**公域答案型域**（天气/行情/汇率/宏观/
-    新闻等，判据见 local_intent）且不含本地工程意图信号时跳过——本机文件
-    对这类查询是纯噪声，省下的是一次 rg/fd 遍历。显式 True 恒尊重，
-    用户点名要搜就搜。
-    """
+    """include-local 三态解析：True/False 显式，None=信号驱动。"""
     if include_local is not None:
         return bool(include_local)
     try:
-        from local_intent import should_skip_local
+        from local_intent import should_run_local_by_signal, should_skip_local
         if should_skip_local(domain, query):
             return False
+        if should_run_local_by_signal(query, domain):
+            return True
     except Exception:
         pass  # 判据失败 fail-open：宁可多搜一次本地，也不误杀
-    return True
-
+    return False
 
 def _max_local_hits() -> int:
     """本机命中条数上限（ARGO_LOCAL_SEEK_MAX_HITS 可覆盖）。"""

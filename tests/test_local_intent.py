@@ -87,12 +87,46 @@ def test_explicit_include_local_not_overridden():
 
 
 def test_auto_path_uses_domain():
+    """公域查询仍跳过；非域信息时默认不跑（信号驱动）。"""
     assert local_seek.resolve_include_local(None, "fast", "北京天气",
                                             "weather_query") is False
+    # 2026-11-10 P0-1 翻转：无本地信号时默认不跑本机轨
     assert local_seek.resolve_include_local(None, "fast", "北京天气",
-                                            "general") is True
-    # 无域信息时保守不跳（fail-open）
-    assert local_seek.resolve_include_local(None, "fast", "北京天气", None) is True
+                                            "general") is False
+    assert local_seek.resolve_include_local(None, "fast", "北京天气", None) is False
+
+
+def test_auto_path_runs_with_local_signal():
+    """带本地信号的查询默认跑本机轨。"""
+    assert local_seek.resolve_include_local(
+        None, "fast", "config.yaml 里的 engines 字段", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "本地文件里有没有 deep research 笔记", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "我的 .agents/skills 有哪些", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "~/projects/my-app/notes.md", None) is True
+    # 方案一增强：错误类名、私有函数名、工程配置文件、调用语法
+    assert local_seek.resolve_include_local(
+        None, "fast", "ZeroDivisionError 怎么排查", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "_run_local_seek 函数在哪", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "pyproject.toml 里的依赖", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "resolve_include_local() 实现", None) is True
+
+
+def test_two_tier_engineering_signals_zero_pollution_on_public_domains():
+    """公域白名单优先：即便包含技术弱信号，命中公域答案型白名单仍坚决跳过。"""
+    assert local_seek.resolve_include_local(
+        None, "fast", "北京天气", "weather_query") is False
+    assert local_seek.resolve_include_local(
+        None, "fast", "attention mechanism paper", "scholar_search") is False
+    assert local_seek.resolve_include_local(
+        None, "fast", "美联储 加息 最新消息", "financial_news") is False
+    assert local_seek.resolve_include_local(
+        None, "fast", "红烧肉 做法", "general") is False
 
 
 # ── 5. 条数上限 ───────────────────────────────────────────────────────────────
