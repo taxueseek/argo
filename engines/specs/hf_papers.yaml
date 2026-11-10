@@ -1,5 +1,5 @@
 engine_id: hf_papers
-type: hf_papers
+type: http
 enabled: true
 label: Hugging Face Papers
 cost_tier: free
@@ -16,6 +16,11 @@ coverage:
 - social
 desc: Hugging Face Papers 论文检索（免认证，含 upvotes/作者/发布日期，arXiv 与 OpenAlex 无的社交信号）
 timeout: 15
+method: GET
+url: "https://huggingface.co/api/papers/search"
+query_param: q
+url_template: "https://huggingface.co/papers/{id}"
+format_is_query_param: false
 canary_query: "attention"
 quality_queries:
   - query: "attention mechanism"

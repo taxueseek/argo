@@ -5,10 +5,20 @@
 #   python3 scripts/engine_validate.py --engine deezer --stage all --admit --write-doc
 
 engine_id: deezer
-type: deezer
+type: http
 enabled: true
 cost_tier: free
 timeout: 15
+method: GET
+url: "https://api.deezer.com/search/artist"
+query_param: q
+format_is_query_param: false
+output_map:
+  items: data
+  item_title: name
+  item_url: link
+  item_summary: type
+  item_image: picture_medium
 canary_query: "radiohead"
 desc: "音乐艺人/专辑（Deezer，免认证）"
 coverage: [media, music, entertainment]

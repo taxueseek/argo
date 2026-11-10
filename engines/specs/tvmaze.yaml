@@ -5,10 +5,14 @@
 #   python3 scripts/engine_validate.py --engine tvmaze --stage all --admit --write-doc
 
 engine_id: tvmaze
-type: tvmaze
+type: http
 enabled: true
 cost_tier: free
 timeout: 15
+method: GET
+url: "https://api.tvmaze.com/search/shows"
+query_param: q
+format_is_query_param: false
 canary_query: "dark"
 desc: "电视剧元数据（TVMaze，免认证，含首播/语言/评分）"
 coverage: [film, tv, media, entertainment]

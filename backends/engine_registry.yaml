@@ -283,7 +283,7 @@ engines:
   desc: ClawHub 技能生态聚合（OpenClaw + skills.sh 条目，免认证，带生态下载量与官方标记）
 - name: cleveland
   tier: T1
-  type: cleveland
+  type: http
   coverage:
   - art
   - museum
@@ -547,7 +547,7 @@ engines:
   desc: DeepSeek Search（http）
 - name: deezer
   tier: T1
-  type: deezer
+  type: http
   coverage:
   - media
   - music
@@ -1395,7 +1395,7 @@ engines:
   desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
 - name: hf_papers
   tier: T1
-  type: hf_papers
+  type: http
   coverage:
   - academic
   - paper
@@ -3175,7 +3175,7 @@ engines:
   desc: 火车余票/中转/经停查询（免 Key：12306 官方接口）
 - name: tvmaze
   tier: T1
-  type: tvmaze
+  type: http
   coverage:
   - film
   - tv

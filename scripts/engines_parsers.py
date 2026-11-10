@@ -297,7 +297,7 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
         if not isinstance(i, dict):
             continue
         flat = dict(i)
-        for nested_k in ("paper", "item", "data", "node", "article", "entry"):
+        for nested_k in ("paper", "item", "data", "node", "article", "entry", "show"):
             if isinstance(i.get(nested_k), dict):
                 for k, v in i[nested_k].items():
                     flat.setdefault(k, v)
@@ -339,7 +339,8 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
 
         published_at = (
             flat.get("published_at") or flat.get("publishedAt")
-            or flat.get("created_at") or flat.get("pubdate") or flat.get("date") or ""
+            or flat.get("created_at") or flat.get("pubdate") or flat.get("date")
+            or flat.get("premiered") or flat.get("first_air_date") or ""
         )
         if published_at:
             try:

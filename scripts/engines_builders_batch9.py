@@ -641,91 +641,7 @@ def _build_artic_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-def _build_cleveland_engine(spec: dict[str, Any]) -> Any:
-    """克利夫兰艺术博物馆（CC0 开放图像）。"""
-    timeout = spec.get("timeout", 20)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        q = (query or "").strip()
-        if not q:
-            return []
-        url = ("https://openaccess-api.clevelandart.org/api/artworks/?"
-               f"q={urllib.parse.quote(q)}&limit={n}&has_image=1")
-        try:
-            data = _json(url, to, spec.get("_name", ""))
-        except Exception as e:
-            logger.warning(f"Cleveland 失败: {e}")
-            return []
-        results = []
-        for _rk, it in enumerate((data.get("data") or [])[:n]):
-            if not isinstance(it, dict):
-                continue
-            title = (it.get("title") or "").strip()
-            if not title:
-                continue
-            _lic = str(it.get("share_license_status") or "").strip()
-            _row = {
-                "title": title[:200],
-                "url": it.get("url") or "https://www.clevelandart.org/",
-                "snippet": (f"{it.get('tombstone','')} · 授权 {_lic}"
-                            "（克利夫兰艺术博物馆）")[:300],
-                "source": "cleveland",
-                "score": rank_score(0.85, _rk),
-            }
-            # 图片字段：请求已带 has_image=1，这里把 images.web.url 一并带上
-            # （web 尺寸适合直接展示，full/print 留给需要原图的场景）。
-            _img = str((((it.get("images") or {}).get("web") or {}).get("url")) or "").strip()
-            if _img:
-                _row["image_url"] = _img
-                if _lic:
-                    _row["image_license"] = _lic
-            results.append(_row)
-        return results
-    return _engine
-
-
 # ── 影视/动漫/音乐 ────────────────────────────────────────────────────────────
-
-def _build_tvmaze_engine(spec: dict[str, Any]) -> Any:
-    """TVMaze 电视剧元数据（免认证，补 film_search 的剧集维度）。"""
-    timeout = spec.get("timeout", 15)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        q = (query or "").strip()
-        if not q:
-            return []
-        url = f"https://api.tvmaze.com/search/shows?q={urllib.parse.quote(q)}"
-        try:
-            data = _json(url, to, spec.get("_name", ""))
-        except Exception as e:
-            logger.warning(f"TVMaze 失败: {e}")
-            return []
-        results = []
-        for _rk, row in enumerate((data or [])[:n]):
-            if not isinstance(row, dict):
-                continue
-            s = row.get("show") or {}
-            name = (s.get("name") or "").strip()
-            if not name:
-                continue
-            genres = ", ".join(s.get("genres") or [])
-            results.append({
-                "title": f"{name}（{s.get('premiered','')[:4]}）"[:200],
-                "url": s.get("url") or "",
-                "snippet": (f"{s.get('language','')} · {genres} · "
-                            f"评分 {((s.get('rating') or {}).get('average')) or '-'}"
-                            "（TVMaze）")[:300],
-                "source": "tvmaze",
-                "score": rank_score(0.8, _rk),
-                "published_at": s.get("premiered") or "",
-            })
-        return results
-    return _engine
-
 
 def _build_jikan_engine(spec: dict[str, Any]) -> Any:
     """Jikan（MyAnimeList 非官方 API）动漫元数据。"""
@@ -757,41 +673,6 @@ def _build_jikan_engine(spec: dict[str, Any]) -> Any:
                             f"评分 {a.get('score') or '-'} · {a.get('status','')}"
                             "（MyAnimeList）")[:300],
                 "source": "jikan",
-                "score": rank_score(0.8, _rk),
-            })
-        return results
-    return _engine
-
-
-def _build_deezer_engine(spec: dict[str, Any]) -> Any:
-    """Deezer 音乐艺人/专辑（免认证）。"""
-    timeout = spec.get("timeout", 15)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        q = (query or "").strip()
-        if not q:
-            return []
-        url = f"https://api.deezer.com/search/artist?q={urllib.parse.quote(q)}&limit={n}"
-        try:
-            data = _json(url, to, spec.get("_name", ""))
-        except Exception as e:
-            logger.warning(f"Deezer 失败: {e}")
-            return []
-        results = []
-        for _rk, a in enumerate((data.get("data") or [])[:n]):
-            if not isinstance(a, dict):
-                continue
-            name = (a.get("name") or "").strip()
-            if not name:
-                continue
-            results.append({
-                "title": f"{name}（音乐人）"[:200],
-                "url": a.get("link") or "",
-                "snippet": (f"Deezer 音乐人 · 专辑 {a.get('nb_album','')} · "
-                            f"粉丝 {a.get('nb_fan','')}")[:300],
-                "source": "deezer",
                 "score": rank_score(0.8, _rk),
             })
         return results

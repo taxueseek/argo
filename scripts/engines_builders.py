@@ -14,10 +14,7 @@ from engines_builders_batch9 import (
     _build_openf1_engine,
     _build_openligadb_engine,
     _build_artic_engine,
-    _build_cleveland_engine,
-    _build_tvmaze_engine,
     _build_jikan_engine,
-    _build_deezer_engine,
     _build_listenbrainz_engine,
     _build_egov_law_engine,
     _build_k10plus_engine,
@@ -97,9 +94,6 @@ from engines_builders_batch14 import (
 )
 from engines_builders_batch15 import (
     _build_yuanbao_engine,
-)
-from engines_builders_batch16 import (
-    _build_hf_papers_engine,
 )
 from engines_builders_data import (
     _build_open_library_engine,
@@ -317,10 +311,7 @@ __all__ = [
     "_build_openf1_engine",
     "_build_openligadb_engine",
     "_build_artic_engine",
-    "_build_cleveland_engine",
-    "_build_tvmaze_engine",
     "_build_jikan_engine",
-    "_build_deezer_engine",
     "_build_listenbrainz_engine",
     "_build_egov_law_engine",
     "_build_k10plus_engine",

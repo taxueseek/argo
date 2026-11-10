@@ -48,7 +48,7 @@ HARD_LIMIT = 1000
 #（2026-11-08 前说明文字两周从 10.6k 字涨到 14.3k 字，清单本身成了流水账）。
 GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_cn.py": (2283, "中文源构建器，逐源一段；下一步按主题拆（同 engines_builders_data 2026-11-08 的做法）"),
-    "scripts/engines_builders_batch9.py": (1476, "批次九源构建器，逐源一段；下一步按主题拆"),
+    "scripts/engines_builders_batch9.py": (1357, "批次九源构建器，逐源一段；方案 A 归一消减 cleveland/tvmaze/deezer 净瘦身 119 行"),
     "scripts/engines_builders_intl.py": (1242, "国际源构建器，含各源 XML/RSS 解析差异；下一步按地区拆"),
     "scripts/engines_builders_tech.py": (1281, "技术社区源构建器，逐源一段；下一步按主题拆"),
     "scripts/fetch_v3.py": (1905, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段"),

@@ -163,3 +163,27 @@ def test_smart_inference_html_cleaning_and_epoch():
     assert 0.0 <= res[1]["score"] <= 1.0
     # 验证第 1 名由于 rank 衰减，即便原始分是 100 也会被夹紧并发生衰减
     assert res[1]["score"] <= 1.0
+
+
+def test_smart_inference_on_tvmaze_show_style():
+    """测试 TVMaze 嵌套 show 对象自适应展平与 HTML 摘要清洗。"""
+    payload = [
+        {
+            "score": 1.25,
+            "show": {
+                "id": 169,
+                "name": "Breaking Bad",
+                "url": "https://www.tvmaze.com/shows/169/breaking-bad",
+                "premiered": "2008-01-20",
+                "summary": "<p><b>Breaking Bad</b> is an American television series.</p>",
+            }
+        }
+    ]
+    spec = {"engine_id": "tvmaze"}
+    res = engines_base._parse_generic(payload, "tvmaze", 5, spec)
+    assert len(res) == 1
+    assert res[0]["title"] == "Breaking Bad"
+    assert res[0]["url"] == "https://www.tvmaze.com/shows/169/breaking-bad"
+    assert res[0]["snippet"] == "Breaking Bad is an American television series."
+    assert res[0]["published_at"] == "2008-01-20"
+
