@@ -169,7 +169,9 @@ def test_large_body_capped(fts_env):
     head = "needle in head\n"
     body = "x" * seek_fts._MAX_BODY_BYTES + "\n"  # 超界大行，挤掉 tail
     tail = "needle in tail\n"
-    _write(tree, "big.log", head + body + tail)
+    # 用 .txt 而非 .log：扩展名白名单不含 .log（日志是机器输出，不入索引），
+    # 本用例验的是「正文截断」行为，不是「.log 该被索引」。
+    _write(tree, "big.txt", head + body + tail)
     _build(tree)
     rows = seek_fts.content_candidates("needle", str(tree))
     assert [r[2] for r in rows] == ["needle in head"]

@@ -63,6 +63,23 @@ class TestSeekEnhancements(unittest.TestCase):
         self.assertLessEqual(fts._MAX_BODY_BYTES, 128 * 1024)
         self.assertLessEqual(fts._MAX_FILE_BYTES, 256 * 1024)
 
+    def test_whitelist_gates_extension_in_refresh(self):
+        """白名单必须接入 refresh()——此前定义了却从未使用，是死代码。
+
+        直接验证 refresh 的过滤口径（不依赖 FTS 索引是否可用）：
+        不在白名单的扩展名（.log/.bin/无扩展名）不入索引，白名单内的 .txt 入。
+        """
+        import inspect
+        src = inspect.getsource(fts.refresh)
+        self.assertIn("_INDEXABLE_EXTS", src,
+                      "refresh() 必须检查白名单——否则 _INDEXABLE_EXTS 是死代码")
+        # 扩展名过滤判据本身
+        for ext in (".txt", ".py", ".md"):
+            self.assertIn(ext, fts._INDEXABLE_EXTS)
+        for ext in (".log", ".bin", ".jsonl", ".csv"):
+            self.assertNotIn(ext, fts._INDEXABLE_EXTS,
+                             f"{ext} 不该进白名单")
+
 
 if __name__ == "__main__":
     unittest.main()

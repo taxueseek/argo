@@ -302,6 +302,60 @@ def render(report: dict, verbose: bool = False) -> str:
     return "\n".join(lines)
 
 
+def _apply_fix(report: dict[str, Any], days: int) -> dict[str, Any]:
+    """执行 demote（停用）与 quarantine（隔离）。
+
+    改写的是 spec 文件里的 `enabled` 与 `disabled_reason` 两个键，保留其余
+    内容（注释、字段顺序、授权常量）不动——整文件重写会丢注释，而 spec 是
+    人工维护的真源。改写后不自动跑 sync_backends：调用方需自行决定何时同步
+    派生件（见 main 的提示）。
+
+    quarantine 与 demote 落到同一个 `enabled: false`，但 disabled_reason
+    前缀不同，便于区分「低价值停用」与「低交付率隔离」。
+    """
+    import re as _re
+
+    spec_dir = Path(__file__).parent.parent / "engines" / "specs"
+    actions: list[dict[str, str]] = []
+    for action, items in (("demote", report.get("demote") or []),
+                          ("quarantine", report.get("quarantine") or [])):
+        for rec in items:
+            name = rec.get("engine") or ""
+            path = spec_dir / f"{name}.yaml"
+            if not path.is_file():
+                actions.append({"engine": name, "action": action,
+                                "status": "spec 不存在"})
+                continue
+            text = path.read_text(encoding="utf-8")
+            reason = (f"{action} by argo doctor --fix "
+                      f"({rec.get('reason', '')}；审计窗口 {days} 天)")
+            # 幂等：已停用且原因已标注的跳过
+            if _re.search(r"^enabled:\s*false", text, _re.M) and action in text:
+                actions.append({"engine": name, "action": action,
+                                "status": "已停用（跳过）"})
+                continue
+            if _re.search(r"^enabled:\s*true", text, _re.M):
+                text = _re.sub(r"^enabled:\s*true.*$",
+                               "enabled: false", text, count=1, flags=_re.M)
+            else:
+                # 无 enabled 键：补在 engine_id 之后
+                text = _re.sub(r"^(engine_id:.*)$",
+                               r"\1\nenabled: false", text, count=1, flags=_re.M)
+            # 写 disabled_reason（已有则替换，没有则补在 enabled 之后）
+            if _re.search(r"^disabled_reason:", text, _re.M):
+                text = _re.sub(r"^disabled_reason:.*$",
+                               f"disabled_reason: {reason}", text,
+                               count=1, flags=_re.M)
+            else:
+                text = _re.sub(r"^(enabled: false.*)$",
+                               rf"\1\ndisabled_reason: {reason}", text,
+                               count=1, flags=_re.M)
+            path.write_text(text, encoding="utf-8")
+            actions.append({"engine": name, "action": action,
+                            "status": "已停用"})
+    return {"actions": actions}
+
+
 def main() -> int:
     import argparse
     parser = argparse.ArgumentParser(
@@ -310,9 +364,28 @@ def main() -> int:
                         help="审计窗口（天），默认 90")
     parser.add_argument("--json", action="store_true", help="JSON 输出")
     parser.add_argument("--verbose", action="store_true", help="显示全部明细")
+    parser.add_argument("--fix", action="store_true",
+                        help="执行 demote（停用）与 quarantine（隔离）")
     args = parser.parse_args()
 
     report = audit(days=args.days, verbose=args.verbose)
+
+    if args.fix:
+        fixed = _apply_fix(report, args.days)
+        if args.json:
+            try:
+                import cli_io
+                print(cli_io.dumps(fixed))
+            except ImportError:
+                print(json.dumps(fixed, ensure_ascii=False, separators=(",", ":")))
+        else:
+            print(f"已执行 {len(fixed['actions'])} 项动作：")
+            for a in fixed["actions"][:20]:
+                print(f"  - {a['engine']}: {a['action']} → {a['status']}")
+            if len(fixed["actions"]) > 20:
+                print(f"  ... 另有 {len(fixed['actions']) - 20} 项")
+            print("\n改写 spec 后请同步派生件：python3 scripts/sync_backends.py")
+        return 0
 
     if args.json:
         # CLI stdout 必须紧凑 JSON（cli_io.dumps）——缩进 JSON 会被

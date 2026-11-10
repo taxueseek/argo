@@ -72,12 +72,16 @@ _NON_INDEXABLE_EXTS = frozenset({
 })
 
 # 扩展排除目录：过滤机器输出、会话转写与缓存临时目录
+#
+# 不含裸 `data`：那是极常见目录名（argo 自己的 data/ 里是 countries.json、
+# regions_cn.json 这类知识文件），按目录名一刀切会误伤大量项目的知识目录。
+# 真要排除机器数据目录，靠扩展名白名单（_JSONL/_CSV 等已排除）与体积门禁。
 _SKIP_DIRS = frozenset({
     ".git", "node_modules", "__pycache__", ".venv", "venv", ".tox",
     ".mypy_cache", ".ruff_cache", ".pytest_cache", ".trash", "dist",
     "build", "target", ".gradle", ".idea", ".vscode", ".mimosa",
     "rollout", "logs", "log", "backups", "tmp", "temp", ".cache",
-    "transcript", "brain", "datasets", "data", "site-packages",
+    "transcript", "brain", "datasets", "site-packages",
 })
 
 _TEXT_SNIFF_BYTES = 8192
@@ -241,6 +245,10 @@ def refresh(root: str, dots: bool = False, budget_s: float | None = None,
             if size == 0 or size > _MAX_FILE_BYTES:
                 continue
             ext = os.path.splitext(p)[1].lower()
+            # 白名单优先：不在白名单内的一律不入索引（无扩展名的文件如 Dockerfile、
+            # Makefile 也不入——它们的内容价值低且已被 rg 主路覆盖）。
+            if ext not in _INDEXABLE_EXTS:
+                continue
             if ext in _NON_INDEXABLE_EXTS:
                 continue
             path_obj = Path(p)
