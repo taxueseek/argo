@@ -113,12 +113,12 @@ _STRONG_LOCAL_SIGNAL_RE = re.compile(
     r"(?:readme|package\.json|cargo\.toml|dockerfile|makefile|"
     r"\.gitignore|\.env|pyproject\.toml|tsconfig\.json|"
     r"go\.mod|requirements\.txt|Cargo\.lock)|"
-    # 异常类与错误类名（公域答案里不会出现）
-    r"\b[A-Za-z0-9_]+(?:Error|Exception|Fault|Warning)\b|"
+    # 异常类与错误类名（公域答案里不会出现；Warning 限定为编程常见警告类，排除气象与日常预警词）
+    r"\b[A-Za-z0-9_]+(?:Error|Exception|Fault)\b|\b(?:User|Deprecation|Runtime|Future|Syntax|Resource|Import)Warning\b|"
     # 私有标识符（下划线开头，公域答案里不会出现）
     r"\b_[a-zA-Z0-9_]{2,}\b|"
-    # 函数调用特征（`foo(...)`）
-    r"\b[a-zA-Z0-9_]+\([^\)]*\)|"
+    # 函数调用特征（`foo(...)`，排除 (19)/(D)/(x) 等纯数字或单字母变量与公域缩写）
+    r"\b[a-zA-Z_][a-zA-Z0-9_]*\((?!\s*(?:[0-9]+|[a-zA-Z])\s*\))[^\)]*\)|"
     # 本机目录与说法
     r"(?:\.agents/skills|\.obsidian|\.config/argo|本机|本地文件|本地脚本|"
     r"本地代码|本地笔记|我的文件|我的笔记|我的电脑|我的代码|代码库|本工程|本项目|"

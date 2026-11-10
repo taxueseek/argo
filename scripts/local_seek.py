@@ -317,16 +317,32 @@ def _local_seek_dir() -> str | None:
     return _detect_project_root(cwd) or cwd
 
 
+_CACHED_TARGETED_ROOTS: tuple[tuple[str, ...], list[str]] | None = None
+
+
 def _candidate_targeted_roots() -> list[str]:
     """宽泛根场景下的定向检索候选目录（既防全盘扫崩，又避免漏掉核心私域资产）。
 
     彻底消除特定机器/个人工作区硬编码（如 Documents/GPT），优先环境变量覆盖，
     自适应感知云端/容器工作区与跨平台 Agent 技能规范。
+    带环境变量感知的轻量缓存，消除每轮检索重复的文件系统 isdir/realpath 探测。
     """
-    raw = os.environ.get("ARGO_LOCAL_SEEK_ROOTS", "").strip()
+    global _CACHED_TARGETED_ROOTS
+    env_key = (
+        os.environ.get("ARGO_LOCAL_SEEK_ROOTS", ""),
+        os.environ.get("WORKSPACE", ""),
+        os.environ.get("PROJECT_DIR", ""),
+        os.environ.get("CI_PROJECT_DIR", ""),
+    )
+    if _CACHED_TARGETED_ROOTS is not None and _CACHED_TARGETED_ROOTS[0] == env_key:
+        return list(_CACHED_TARGETED_ROOTS[1])
+
+    raw = env_key[0].strip()
     if raw:
         cands = [p for p in re.split(r"[:;]", raw) if p.strip()]
-        return [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c) and not _is_broad_local_root(c)]
+        valid_roots = [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c) and not _is_broad_local_root(c)]
+        _CACHED_TARGETED_ROOTS = (env_key, list(valid_roots))
+        return valid_roots
 
     cands: list[str] = []
 
@@ -363,6 +379,7 @@ def _candidate_targeted_roots() -> list[str]:
         seen.add(real_c)
         if os.path.isdir(real_c) and not _is_broad_local_root(real_c) and not _is_own_install_root(real_c):
             valid_roots.append(real_c)
+    _CACHED_TARGETED_ROOTS = (env_key, list(valid_roots))
     return valid_roots
 
 
@@ -380,6 +397,7 @@ def _run_local_seek(query: str, max_n: int = 5,
     _t0 = time.time()
     _LAST_LOCAL_SEEK_SKIPPED = False
     target = search_dir or _local_seek_dir()
+    is_targeted_fallback = not target
     targets = [target] if target else _candidate_targeted_roots()
     if not targets:
         _LAST_LOCAL_SEEK_SKIPPED = True
@@ -404,7 +422,12 @@ def _run_local_seek(query: str, max_n: int = 5,
     seen_urls: set[str] = set()
     _cap = min(max_n, _max_local_hits())
 
+    # 宽泛根定向私域回退时的总体时间预算（0.35s），防止多目标串行拖累整次搜索
+    _targeted_deadline = (_t0 + 0.35) if is_targeted_fallback else None
+
     for tgt in targets:
+        if _targeted_deadline and time.time() >= _targeted_deadline:
+            break
         cache_key = f"{query}|{max_n}|{tgt}"
         cached = _LOCAL_SEEK_CACHE.get(cache_key)
         if cached is not None and time.time() - cached[0] < _LOCAL_SEEK_TTL_S:
@@ -422,9 +445,11 @@ def _run_local_seek(query: str, max_n: int = 5,
                     # 不在这里 return——多目标场景下其余目标可能仍有缓存。
                     continue
                 payload = None
+                _budget = (min(_LOCAL_SEEK_TIMEOUT_S, max(0.1, _targeted_deadline - time.time()))
+                           if _targeted_deadline else _LOCAL_SEEK_TIMEOUT_S)
                 try:
                     payload = seek_query_payload(query, tgt, max_n,
-                                                 time_budget=_LOCAL_SEEK_TIMEOUT_S,
+                                                 time_budget=_budget,
                                                  warn=warn, echo=echo)
                 except Exception:
                     payload = None

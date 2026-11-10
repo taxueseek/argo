@@ -302,7 +302,8 @@ def render(report: dict, verbose: bool = False) -> str:
     return "\n".join(lines)
 
 
-def _apply_fix(report: dict[str, Any], days: int) -> dict[str, Any]:
+def _apply_fix(report: dict[str, Any], days: int,
+               spec_dir: Path | None = None) -> dict[str, Any]:
     """执行 demote（停用）与 quarantine（隔离）。
 
     改写的是 spec 文件里的 `enabled` 与 `disabled_reason` 两个键，保留其余
@@ -315,13 +316,13 @@ def _apply_fix(report: dict[str, Any], days: int) -> dict[str, Any]:
     """
     import re as _re
 
-    spec_dir = Path(__file__).parent.parent / "engines" / "specs"
+    target_dir = spec_dir or (Path(__file__).parent.parent / "engines" / "specs")
     actions: list[dict[str, str]] = []
     for action, items in (("demote", report.get("demote") or []),
                           ("quarantine", report.get("quarantine") or [])):
         for rec in items:
             name = rec.get("engine") or ""
-            path = spec_dir / f"{name}.yaml"
+            path = target_dir / f"{name}.yaml"
             if not path.is_file():
                 actions.append({"engine": name, "action": action,
                                 "status": "spec 不存在"})
@@ -341,14 +342,14 @@ def _apply_fix(report: dict[str, Any], days: int) -> dict[str, Any]:
                 # 无 enabled 键：补在 engine_id 之后
                 text = _re.sub(r"^(engine_id:.*)$",
                                r"\1\nenabled: false", text, count=1, flags=_re.M)
-            # 写 disabled_reason（已有则替换，没有则补在 enabled 之后）
+            # 写 disabled_reason（已有则替换，没有则补在 enabled 之后；用 lambda 避免 reason 中特殊符号引起转义异常）
             if _re.search(r"^disabled_reason:", text, _re.M):
                 text = _re.sub(r"^disabled_reason:.*$",
-                               f"disabled_reason: {reason}", text,
+                               lambda _: f"disabled_reason: {reason}", text,
                                count=1, flags=_re.M)
             else:
                 text = _re.sub(r"^(enabled: false.*)$",
-                               rf"\1\ndisabled_reason: {reason}", text,
+                               lambda m: f"{m.group(1)}\ndisabled_reason: {reason}", text,
                                count=1, flags=_re.M)
             path.write_text(text, encoding="utf-8")
             actions.append({"engine": name, "action": action,

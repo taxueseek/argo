@@ -110,11 +110,49 @@ def test_auto_path_runs_with_local_signal():
     assert local_seek.resolve_include_local(
         None, "fast", "ZeroDivisionError 怎么排查", None) is True
     assert local_seek.resolve_include_local(
+        None, "fast", "UserWarning triggered in app", None) is True
+    assert local_seek.resolve_include_local(
         None, "fast", "_run_local_seek 函数在哪", None) is True
     assert local_seek.resolve_include_local(
         None, "fast", "pyproject.toml 里的依赖", None) is True
     assert local_seek.resolve_include_local(
         None, "fast", "resolve_include_local() 实现", None) is True
+    assert local_seek.resolve_include_local(
+        None, "fast", "calculate_tax(income, rate)", None) is True
+
+
+def test_public_queries_with_brackets_and_warning_do_not_trigger_local():
+    """严防误杀：公域自然语言警报词与带括号缩写/数学式不应误触发本机搜索。"""
+    for query in (
+        "StormWarning in Florida",
+        "EarlyWarning detection system",
+        "FloodWarning alert",
+        "sin(x) derivative",
+        "COVID(19) updates",
+        "Vitamin(D) benefits",
+        "Python(3) release date",
+    ):
+        assert local_seek.resolve_include_local(
+            None, "fast", query, "general") is False, query
+        assert local_seek.resolve_include_local(
+            None, "fast", query, "weather_query") is False, query
+
+
+def test_candidate_roots_cache_and_env_invalidation(monkeypatch, tmp_path):
+    """候选目录缓存生效且在 ARGO_LOCAL_SEEK_ROOTS 变动时自动失效重新计算。"""
+    d1, d2 = tmp_path / "c1", tmp_path / "c2"
+    d1.mkdir()
+    d2.mkdir()
+    monkeypatch.setenv("ARGO_LOCAL_SEEK_ROOTS", str(d1))
+    r1 = local_seek._candidate_targeted_roots()
+    assert r1 == [str(d1)]
+    # 再次读取走缓存
+    r2 = local_seek._candidate_targeted_roots()
+    assert r2 == [str(d1)]
+    # 环境变量改变，缓存自动失效
+    monkeypatch.setenv("ARGO_LOCAL_SEEK_ROOTS", str(d2))
+    r3 = local_seek._candidate_targeted_roots()
+    assert r3 == [str(d2)]
 
 
 def test_two_tier_engineering_signals_zero_pollution_on_public_domains():

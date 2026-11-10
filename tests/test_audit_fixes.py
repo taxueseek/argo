@@ -189,3 +189,24 @@ def test_crawl_bfs_parallel(tmp_path, monkeypatch):
                         timeout=3, interval=0)
     assert len(r["pages"]) >= 1
     assert active["max"] > 1, "frontier 应并行抓取（修复前串行 max=1）"
+
+
+def test_source_audit_apply_fix_handles_special_escapes(tmp_path, monkeypatch):
+    """source_audit._apply_fix 遇反斜杠与正则转义符（如 \\d, \\s）不报错且安全改写。"""
+    import source_audit
+    spec_dir = tmp_path / "specs"
+    spec_dir.mkdir()
+    fake_spec = spec_dir / "test_engine.yaml"
+    fake_spec.write_text("engine_id: test_engine\nenabled: true\n", encoding="utf-8")
+    monkeypatch.setattr(source_audit, "Path", lambda *a: spec_dir if "specs" in a else Path(*a))
+
+    report = {
+        "demote": [{"engine": "test_engine", "reason": "pattern with \\d+ and \\s* special regex"}],
+        "quarantine": []
+    }
+    # 若使用直接包含变量的正则替换，\d 或 \s 会触发 re.error 或意外转义
+    res = source_audit._apply_fix(report, 90, spec_dir=spec_dir)
+    assert res["actions"][0]["status"] == "已停用"
+    content = fake_spec.read_text(encoding="utf-8")
+    assert "enabled: false" in content
+    assert "pattern with \\d+ and \\s* special regex" in content
