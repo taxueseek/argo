@@ -1,0 +1,26 @@
+engine_id: kaggle
+type: kaggle
+enabled: true
+label: Kaggle Datasets
+cost_tier: free
+family: dataset
+qps: 2
+priority: 46
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- dataset
+- ml
+- data
+- kaggle
+desc: Kaggle 数据集搜索（免认证，含许可证/大小/版本/URL 结构化元数据）
+timeout: 12
+canary_query: "climate"
+quality_queries:
+  - query: "climate"
+    category: "dataset"
+  - query: "machine learning"
+    category: "dataset"
+  - query: "healthcare"
+    category: "dataset"

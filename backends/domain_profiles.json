@@ -2780,5 +2780,23 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "hf_papers": {
+    "label": "Hugging Face Papers",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "kaggle": {
+    "label": "Kaggle Datasets",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "mwmbl": {
+    "label": "Mwmbl 独立索引",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

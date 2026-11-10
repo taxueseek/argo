@@ -1110,6 +1110,16 @@
     "cost_tier": "free",
     "priority": 48
   },
+  "hf_papers": {
+    "label": "Hugging Face Papers",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 46
+  },
   "hkex": {
     "label": "港交所披露易",
     "qps": 1,
@@ -1229,6 +1239,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "kaggle": {
+    "label": "Kaggle Datasets",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 46
   },
   "keenable": {
     "label": "Keenable",
@@ -1659,6 +1679,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 35
+  },
+  "mwmbl": {
+    "label": "Mwmbl 独立索引",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 42
   },
   "nasa_cmr": {
     "label": "NASA CMR 地球数据",

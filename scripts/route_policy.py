@@ -38,7 +38,7 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # local_pubmed 是**修复**（旧实现静默 400 且解析不出字符串数组，实测 0 条，
     # 详见 engines_builders_batch9._build_pubmed_engine 文档串）。两者声明在
     # 既有源之后，由本表加槽，不挤掉 arxiv/openreview 等既有位次。
-    "academic": ("local_pubmed", "core", "cinii"),     # 生物医学全文 + 机构仓储开放获取 + 日本学术 + 数学索引
+    "academic": ("local_pubmed", "core", "cinii", "hf_papers"),  # 生物医学全文 + 机构仓储开放获取 + 日本学术 + 数学索引 + HF 论文社交信号
     # 2026-09-21：academic 补两个国别/学科专门源。位次 5/6 是照本域上方注释
     # 的既有实践选的（deepest=6 → 加槽后预算覆盖到 6，前四位次一律不动）。
     # cinii 声明 langs=ja，靠 engines_demote_for_lang 的语言专用源降级，
@@ -50,6 +50,11 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # redskill 只有小红书站内口径）都给不出。声明在既有源之后，由本表加槽，
     # 不挤掉 skillsmp/clawhub/redskill 的位次。
     "skill_search": ("explainx", "skills_sh"),
+    # 2026-11-10：三个新源。mwmbl 补独立搜索引擎族（非大厂代理）；
+    # kaggle 补社区数据集（DataCite/Zenodo 是机构仓储，Kaggle 是社区）；
+    # hf_papers 补论文社交信号（upvotes/作者，arXiv/OpenAlex 无）。
+    "semantic_discovery": ("mwmbl",),
+    "dataset_search": ("kaggle",),
 }
 
 

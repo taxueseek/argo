@@ -6,8 +6,8 @@
 
 ## 一、总量与口径
 
-- **收录 298 个源**（`engines/specs/*.yaml` 声明总数）
-- **开箱可用 248 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **收录 301 个源**（`engines/specs/*.yaml` 声明总数）
+- **开箱可用 251 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 15 个**：`brave`、`digup`、`ecosia`、`europeana`、`felo`、`fourget`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 276 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 16 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 279 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 16 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 22 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -85,7 +85,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 状态含义：**可直接用** = 自动路由会用上；**需自配密钥 / 需装后端工具** = 配好后即可用；**被上游封锁** = 源站当前拒绝；**已停用** = 配置层面关闭。
 
-### 全网搜索（43）
+### 全网搜索（44）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -99,6 +99,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_sogou` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 搜狗本地 |
 | `marginalia` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面；old-search 两步 sst 流程） |
 | `mojeek` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery | Mojeek 独立爬虫搜索引擎（百亿级自主索引，非大厂代理，零用户画像） |
+| `mwmbl` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery | Mwmbl 开源非盈利独立搜索引擎（免 key，JSON API，零用户画像，标题与摘要结构化返回） |
 | `openaire` | 可直接用 | 免费 | 不限 | — | 深度研究 boost | OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口） |
 | `parallel_free` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、域 video、通用兜底链 | Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的 parallel REST 通道分立，作其缺位时的补位） |
 | `searchmysite` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | 人工审核准入的个人独立站索引（非商业博客，HTML 解析） |
@@ -177,7 +178,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |
 | `tracemoe` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | trace.moe 动画场景识别（query 为图片 URL，免 key，给作品名+集数+时间点，按出口 IP 限频） |
 
-### 学术文献（31）
+### 学术文献（32）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -194,6 +195,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `figshare` | 可直接用 | 免费 | 不限 | — | 域 academic、语义画像命中 | 科研数据集检索（论文/数据/图表） |
 | `google_scholar` | 可直接用 | 免费 | 不限 | — | 域 scholar_search、深度研究 boost | Google Scholar（学术论文搜索，HTTP 页面解析） |
 | `hal` | 可直接用 | 免费 | 不限 | — | 域 academic、语义画像命中 | 法国全国科研机构开放仓储（Solr JSON） |
+| `hf_papers` | 可直接用 | 免费 | 不限 | — | 域 academic | Hugging Face Papers 论文检索（免认证，含 upvotes/作者/发布日期，arXiv 与 OpenAlex 无的社交信号） |
 | `k10plus` | 可直接用 | 免费 | 不限 | — | 域 book_search | K10plus 联合目录（德国最大图书馆联合目录，SRU，免认证） |
 | `local_arxiv` | 可直接用 | 免费 | 不限 | — | 域 patent_search、语义画像命中 | arXiv本地 |
 | `local_crossref` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Crossref本地 |
@@ -487,6 +489,12 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `archive_org` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Internet Archive 高级搜索（免认证） |
 | `wayback_cdx` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Wayback Machine CDX 历史快照检索（web.archive.org 免认证） |
 
+### dataset（1）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `kaggle` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | Kaggle 数据集搜索（免认证，含许可证/大小/版本/URL 结构化元数据） |
+
 ### 个人数据（1）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -539,7 +547,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `standards` | `std_samr` | `std_samr`、`openstd` |
 | `law_text` | `flk_law` | `flk_law`、`anysearch`、`gov_regulations`、`wenshu`、`eu_opendata`、`fr_opendata`、`gov_policy` |
 | `art_museum` | `met_museum` | `met_museum`、`wikipedia`、`artic`、`cleveland`、`vam` |
-| `dataset_search` | `datacite` | `datacite`、`zenodo`、`anysearch` |
+| `dataset_search` | `datacite` | `datacite`、`zenodo`、`kaggle`、`anysearch` |
 | `financial_news` | `em_miaoxiang` | `em_miaoxiang`、`cninfo`、`wallstreetcn`、`byted`、`eastmoney`、`anysearch` |
 | `aviation_weather` | `—` | `aviation_weather` |
 | `weather_query` | `qweather` | `qweather`、`byted`、`weather_cn`、`weather`、`open_meteo` |
@@ -574,10 +582,10 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `entity_search` | `wikidata` | `baidu_baike`、`wikidata`、`wikipedia`、`zh_wikipedia`、`dbpedia` |
 | `zhihu_user_data` | `zhihu_user` | `zhihu_user` |
 | `zhihu_content` | `zhihu` | `zhihu`、`zhihu_global`、`anysearch` |
-| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`local_pubmed`、`core`、`cinii`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal`、`cnii` |
+| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`core`、`cinii`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal`、`cnii` |
 | `tech_deep` | `openalex` | `openalex`、`arxiv`、`semantic_scholar`、`github`、`europepmc` |
 | `shopping` | `zhihu` | `zhihu`、`anysearch` |
-| `semantic_discovery` | `exa` | `exa`、`anysearch`、`lieu`、`marginalia`、`searchmysite`、`wiby`、`uapi`、`mojeek`、`parallel_free`、`tavily`、`firecrawl`、`brave`、`felo`、`searxng` |
+| `semantic_discovery` | `exa` | `exa`、`anysearch`、`lieu`、`marginalia`、`searchmysite`、`wiby`、`uapi`、`mojeek`、`mwmbl`、`parallel_free`、`tavily`、`firecrawl`、`brave`、`felo`、`searxng` |
 | `code_search` | `github` | `github`、`grep_app`、`mdn`、`huggingface`、`anysearch` |
 | `meme_slang` | `itotii` | `itotii`、`urban_dictionary`、`know_your_meme`、`anysearch` |
 | `fact_check` | `wikipedia` | `wikipedia`、`byted`、`wolframalpha` |
@@ -602,7 +610,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 298 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 301 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

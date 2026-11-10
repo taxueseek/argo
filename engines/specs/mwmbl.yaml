@@ -1,0 +1,26 @@
+engine_id: mwmbl
+type: mwmbl
+enabled: true
+label: Mwmbl 独立索引
+cost_tier: free
+family: web_general
+qps: 2
+priority: 42
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- web
+- longtail
+- indie
+- english
+desc: Mwmbl 开源非盈利独立搜索引擎（免 key，JSON API，零用户画像，标题与摘要结构化返回）
+timeout: 12
+canary_query: "rust"
+quality_queries:
+  - query: "rust async"
+    category: "tech"
+  - query: "machine learning"
+    category: "general"
+  - query: "climate change"
+    category: "general"

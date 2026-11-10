@@ -1,0 +1,26 @@
+engine_id: hf_papers
+type: hf_papers
+enabled: true
+label: Hugging Face Papers
+cost_tier: free
+family: academic
+qps: 2
+priority: 46
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- academic
+- paper
+- ml
+- social
+desc: Hugging Face Papers 论文检索（免认证，含 upvotes/作者/发布日期，arXiv 与 OpenAlex 无的社交信号）
+timeout: 15
+canary_query: "attention"
+quality_queries:
+  - query: "attention mechanism"
+    category: "academic"
+  - query: "transformer"
+    category: "academic"
+  - query: "crispr"
+    category: "academic"

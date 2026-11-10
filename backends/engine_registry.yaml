@@ -1406,6 +1406,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
+- name: hf_papers
+  tier: T1
+  type: hf_papers
+  coverage:
+  - academic
+  - paper
+  - ml
+  - social
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Hugging Face Papers 论文检索（免认证，含 upvotes/作者/发布日期，arXiv 与 OpenAlex 无的社交信号）
 - name: hkex
   tier: T1
   type: hkex
@@ -1569,6 +1583,20 @@ engines:
   recommended: false
   explicit_only: false
   desc: K10plus 联合目录（德国最大图书馆联合目录，SRU，免认证）
+- name: kaggle
+  tier: T1
+  type: kaggle
+  coverage:
+  - dataset
+  - ml
+  - data
+  - kaggle
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Kaggle 数据集搜索（免认证，含许可证/大小/版本/URL 结构化元数据）
 - name: keenable
   tier: T1
   type: http
@@ -2098,6 +2126,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）
+- name: mwmbl
+  tier: T1
+  type: mwmbl
+  coverage:
+  - web
+  - longtail
+  - indie
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Mwmbl 开源非盈利独立搜索引擎（免 key，JSON API，零用户画像，标题与摘要结构化返回）
 - name: nasa_cmr
   tier: T1
   type: nasa_cmr

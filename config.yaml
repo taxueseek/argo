@@ -732,6 +732,7 @@ domains:
   engines_combo:
   - datacite
   - zenodo
+  - kaggle
   - anysearch
   fallback: datacite
   name: dataset_search
@@ -1449,6 +1450,7 @@ domains:
   - openreview
   - biorxiv
   - openalex
+  - hf_papers
   # 2026-09-19 追加，插在**第 5/6 位**——这个位次是算出来的，不是审美：
   # route._new_source_extra 的加槽额度 = min(最深新源位次 - base, cap)，
   # cap 在 auto/balanced 档为 4、base 为 3，故「两个新源都能进 kept」要求
@@ -1545,6 +1547,7 @@ domains:
   - wiby
   - uapi
   - mojeek
+  - mwmbl
   - parallel_free
   - tavily
   - firecrawl
