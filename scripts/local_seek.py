@@ -31,6 +31,49 @@ from typing import Any
 # 本地命中是尾部增强项，不是主结果，它的等待不配与搜索引擎同等。
 _LOCAL_SEEK_TIMEOUT_S = 3.0
 
+# 最近一次本机检索的耗时与命中数（毫秒级可观测性，进程内单槽）。
+# 写侧在 _run_local_seek 收口；读侧由 search.py 在搜索收尾时取走并
+# 写进 usage_log 的 query 流——「本地检索实际花了多久、带回几条」此前
+# 只能靠猜，现在有账。
+_LAST_LOCAL_SEEK_MS = 0
+_LAST_LOCAL_SEEK_COUNT = 0
+_LAST_LOCAL_SEEK_SKIPPED = False
+
+
+def local_seek_last_ms() -> int:
+    return _LAST_LOCAL_SEEK_MS
+
+
+def local_seek_last_count() -> int:
+    return _LAST_LOCAL_SEEK_COUNT
+
+
+def local_seek_last_skipped() -> bool:
+    return _LAST_LOCAL_SEEK_SKIPPED
+
+
+def local_seek_accounting() -> dict[str, Any]:
+    """最近一次本机检索的账（读侧唯一入口）。
+
+    返回 {} 表示本地轨本次没跑（宽根无候选 / seek.py 缺失 / 被意图预判
+    跳过）——空字典与「跑了但 0 命中」在语义上不同，调用方据此决定是否
+    写日志字段。字段与 usage_log 的 local_seek 流、响应里的
+    local_seek_ms / local_seek_count / local_seek_skipped 三键同口径。
+    """
+    if _LAST_LOCAL_SEEK_SKIPPED:
+        return {"local_seek_skipped": True}
+    return {
+        "local_seek_ms": _LAST_LOCAL_SEEK_MS,
+        "local_seek_count": _LAST_LOCAL_SEEK_COUNT,
+    }
+
+# 本机命中条数上限：本地命中是尾部增强项，不该挤压公网结果的排序位置。
+# 调用方传入的 max_n 是「本次搜索总结果数」，而本地命中并入后会与公网结果
+# 争抢同一个 results 列表；设一个固定上限（而非按 n 比例）让本地命中的
+# 占比在 n 变大时自然收缩——n=10 时本地仍最多 3 条，公网结果保住主体。
+# 可用 ARGO_LOCAL_SEEK_MAX_HITS 覆盖。
+_LOCAL_SEEK_MAX_HITS = 3
+
 # 搜索期告警（issue #34 第 4/7 条）：--json 模式下 stderr 会被调用方
 # 2>&1 合并，任何中文告警行都会破坏 JSON 解析。告警统一进这个列表，
 # search.py 组装完响应后 drain 并作为 warnings[] 字段随 JSON 返回；
@@ -172,11 +215,13 @@ def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
 
 
 # 本地代码/工程/配置意图正则模式
+# 判据与 local_intent._LOCAL_SIGNAL_RE 逐字一致（红绿锁见
+# tests/test_local_intent.py::test_intent_pattern_matches_local_seek）。
 _LOCAL_INTENT_PATTERN = re.compile(
     r"(?i)(?:\b(?:def|class|function|fn|import|export|const|var|struct|enum)\b|"
     r"\.(?:py|js|ts|json|yaml|yml|md|rs|go|c|cpp|h|sh|sql)\b|"
     r"(?:readme|config|package\.json|cargo\.toml|dockerfile|makefile)|"
-    r"(?:本工程|本项目|代码库|本地文件|架构实现|函数|方法|源码|接口定义))"
+    r"(?:本工程|本项目|代码库|本地文件|本地脚本|脚本文件|架构实现|函数|方法|源码|接口定义))"
 )
 
 
@@ -187,15 +232,38 @@ def has_local_code_intent(query: str) -> bool:
     return bool(_LOCAL_INTENT_PATTERN.search(query))
 
 
-def resolve_include_local(include_local: bool | None, mode: str, query: str = "") -> bool:
+def resolve_include_local(include_local: bool | None, mode: str, query: str = "",
+                          domain: str | None = None) -> bool:
     """include-local 三态解析：True/False 显式，None=自动。
 
     双轨检索设计：任意搜索默认同时执行本地与联网检索（include_local=True），
     除非显式指定 --no-local / include_local=False。
+
+    自动路径唯一的例外：查询命中**公域答案型域**（天气/行情/汇率/宏观/
+    新闻等，判据见 local_intent）且不含本地工程意图信号时跳过——本机文件
+    对这类查询是纯噪声，省下的是一次 rg/fd 遍历。显式 True 恒尊重，
+    用户点名要搜就搜。
     """
     if include_local is not None:
         return bool(include_local)
+    try:
+        from local_intent import should_skip_local
+        if should_skip_local(domain, query):
+            return False
+    except Exception:
+        pass  # 判据失败 fail-open：宁可多搜一次本地，也不误杀
     return True
+
+
+def _max_local_hits() -> int:
+    """本机命中条数上限（ARGO_LOCAL_SEEK_MAX_HITS 可覆盖）。"""
+    try:
+        raw = os.environ.get("ARGO_LOCAL_SEEK_MAX_HITS")
+        if raw is not None and raw.strip() != "":
+            return max(0, int(raw))
+    except (TypeError, ValueError):
+        pass
+    return _LOCAL_SEEK_MAX_HITS
 
 
 def _is_broad_local_root(path: str) -> bool:
@@ -247,7 +315,12 @@ def _local_seek_dir() -> str | None:
 
 
 def _candidate_targeted_roots() -> list[str]:
-    """宽泛根场景下的定向检索候选目录（既防全盘扫崩，又避免漏掉核心私域资产）。"""
+    """宽泛根场景下的定向检索候选目录（既防全盘扫崩，又避免漏掉核心私域资产）。
+
+    默认六个高频私域目录；ARGO_LOCAL_SEEK_ROOTS 可用冒号（POSIX）或分号
+    （Windows）分隔覆盖。判据是「存在且不是 argo 自身安装树」——与默认
+    清单同一条守卫，防自定义目录指回源码树。
+    """
     home = os.path.realpath(os.path.expanduser("~"))
     cands = [
         os.path.join(home, ".agents", "skills"),
@@ -257,6 +330,9 @@ def _candidate_targeted_roots() -> list[str]:
         os.path.join(home, "workspace"),
         os.path.join(home, "projects"),
     ]
+    raw = os.environ.get("ARGO_LOCAL_SEEK_ROOTS", "").strip()
+    if raw:
+        cands = [p for p in re.split(r"[:;]", raw) if p.strip()]
     return [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c)]
 
 
@@ -267,26 +343,37 @@ def _run_local_seek(query: str, max_n: int = 5,
 
     双轨并发支持：非宽泛根搜当前项目；处于宽泛根时定向扫描高频私域目录。
     """
+    global _LAST_LOCAL_SEEK_MS, _LAST_LOCAL_SEEK_COUNT, _LAST_LOCAL_SEEK_SKIPPED
+    # 用 time.time 而非 perf_counter：本模块的时间源是 time（TTL 判定、
+    # 落盘缓存共用），换钟会让「耗时」与「缓存新鲜度」在测试冻结时钟时
+    # 分叉（test_b4_knobs 的 _FrozenClock 只冻 time）。差值语义不变。
+    _t0 = time.time()
+    _LAST_LOCAL_SEEK_SKIPPED = False
     target = search_dir or _local_seek_dir()
     targets = [target] if target else _candidate_targeted_roots()
     if not targets:
+        _LAST_LOCAL_SEEK_SKIPPED = True
         if warn:
             _note_warning(
                 "  [include-local] 当前目录处于宽泛根且未发现预设私域资产目录，已跳过本地检索；"
                 "要搜特定目录请指定 --path 或切换到目标目录重试",
                 echo)
+        _LAST_LOCAL_SEEK_MS = int((time.time() - _t0) * 1000)
         return []
 
     from seek_locator import resolve_seek_py
     seek_py = resolve_seek_py()
     if not seek_py or not os.path.isfile(seek_py):
+        _LAST_LOCAL_SEEK_SKIPPED = True
         if warn:
             _note_warning(
                 "  [include-local] 未找到 local-seek 的 seek.py，本机文件检索未执行", echo)
+        _LAST_LOCAL_SEEK_MS = int((time.time() - _t0) * 1000)
         return []
 
     combined_hits: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
+    _cap = min(max_n, _max_local_hits())
 
     for tgt in targets:
         cache_key = f"{query}|{max_n}|{tgt}"
@@ -321,12 +408,14 @@ def _run_local_seek(query: str, max_n: int = 5,
             if u not in seen_urls:
                 seen_urls.add(u)
                 combined_hits.append(h)
-                if len(combined_hits) >= max_n:
+                if len(combined_hits) >= _cap:
                     break
-        if len(combined_hits) >= max_n:
+        if len(combined_hits) >= _cap:
             break
 
-    return combined_hits[:max_n]
+    _LAST_LOCAL_SEEK_MS = int((time.time() - _t0) * 1000)
+    _LAST_LOCAL_SEEK_COUNT = len(combined_hits)
+    return combined_hits[:_cap]
 
 
 def _load_seek_module(seek_py: str):

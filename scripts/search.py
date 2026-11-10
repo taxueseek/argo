@@ -217,7 +217,11 @@ from engine_dispatch import (  # noqa: E402
     classify_engine_outcome as _classify_engine_outcome,
     run_dispatch,
 )
-from local_seek import _run_local_seek, _LOCAL_SEEK_TIMEOUT_S  # noqa: E402
+from local_seek import (  # noqa: E402
+    _run_local_seek,
+    _LOCAL_SEEK_TIMEOUT_S,
+    local_seek_accounting,
+)
 
 
 # 缓存命中路径的 include-local 宽限窗（秒）：主结果命中缓存时墙钟已极小
@@ -778,7 +782,15 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
 
     # L1 并行化：本地搜索与主搜索并行提交（仅显式开启时在宽根下提示）。
     _local_seek_explicit = include_local is not None
-    include_local = _resolve_include_local(include_local, mode, query)
+    # 「用户没有显式关掉」= 自动路径或显式 True；显式 False 不报跳过
+    # （用户说了不要，不必再解释）。None 是自动路径，必须算「请求过」。
+    _include_local_requested = include_local is not False
+    include_local = _resolve_include_local(include_local, mode, query,
+                                          decision.get("domain"))
+    # 自动路径被判据跳过（公域查询 + 无本地信号）：这是「没跑」而非「跑了没
+    # 命中」，必须留痕，否则与显式 --no-local 无法区分（前者是系统优化，
+    # 后者是用户选择）。显式 False 不写——用户已经说了不要，不必再报。
+    _local_seek_intent_skipped = (_include_local_requested and not include_local)
     _local_seek_future = None
     if include_local:
         _local_seek_future = _get_local_seek_executor().submit(
@@ -944,33 +956,29 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         result.setdefault("errors", []).append(
             f"{_name}: registry 查无此引擎（拼写错误，或该源未随本版发布）")
 
+    # 本机检索账（耗时/命中数/跳过）：口径单点在 local_seek_accounting()。
+    # 意图跳过（公域查询）与用户显式 --no-local 都要留痕，但语义不同：
+    # 前者是系统判据，后者是用户选择——分开标记，日志里可归因。
+    try:
+        _ls_acct = ({"local_seek_skipped": True,
+                     "skip_reason": "public_domain_intent"}
+                    if _local_seek_intent_skipped else local_seek_accounting())
+        result.update(_ls_acct)
+        from usage_log import emit as _emit_usage_log
+        from search_attribution import is_synthetic_run as _is_syn
+        if include_local or _local_seek_intent_skipped:
+            if not _is_syn(result.get("engines_used")):
+                _ls_acct.update(query=(original_query or "")[:60],
+                                elapsed_ms=result.get("elapsed_ms"),
+                                count=result.get("count"))
+                _emit_usage_log("local_seek", _ls_acct)
+    except Exception:
+        pass
+
     return result
 
 
-# ── 信源标准化 ─────────────────────────────────────────────────────────────────
-
-# --fields agent：每条 result 保留的答案字段（P2-2）。
-# 媒体专属字段按需登记——非该媒体的结果此键为 None，_strip_for_agent 会自动
-# 丢弃，其他查询不付代价：image_* 来自图源，episode_count/duration_minutes
-# 来自 itunes 的播客结果。
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ── 输出格式化 ─────────────────────────────────────────────────────────────────
-
 
 if __name__ == "__main__":
     # 把本模块（此刻身份是 __main__）的 import 时点交给 search_cli。

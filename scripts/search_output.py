@@ -733,6 +733,15 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
         except Exception as e:
             local_hits = []
             _log(f"[include-local] {type(e).__name__}: {e}")
+        # 本地轨意图预判跳过了（公域答案型查询 + 无本地信号）：显式标记，
+        # 让调用方看到「本地轨没跑」而不是误以为「本地没有匹配」。
+        # 与 local_seek_skipped 的另两个来源（宽根守卫 / seek.py 缺失）同义。
+        try:
+            from local_seek import local_seek_last_skipped
+            if local_seek_last_skipped():
+                result["local_seek_skipped"] = True
+        except Exception:
+            pass
         if local_hits:
             _seen_urls = {r.get("url") for r in (result.get("results") or [])
                           if isinstance(r, dict)}

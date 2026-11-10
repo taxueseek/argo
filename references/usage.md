@@ -675,7 +675,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_YUANBAO_API_KEY` | 对应引擎/服务的凭据（腾讯元宝搜索，官方名 `TENCENTCLOUD_WSA_APIKEY` 同样识别） | 缺密钥=该源跳过或降级 |
 | `ARGO_ZHIHU_ACCESS_SECRET` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 
-### 行为调参（39）
+### 行为调参（40）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -710,6 +710,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_NUMBER_CROSSCHECK` | 数字交叉验证信号（多源同指标数值分歧标记） | 默认开；仅 deep/auto 且结果 ≥3；=0 关 |
 | `ARGO_TEXT_LEXICON` | 数字交叉验证的指标词表 JSON 路径 | 默认 backends/text_lexicon.json |
 | `ARGO_LOCAL_SEEK_GRACE_S` | 本地命中并入的宽限窗秒数 | 默认 0.25；覆盖 seek 常规 60~140ms |
+| `ARGO_LOCAL_SEEK_MAX_HITS` | 单次搜索本机命中条数上限（防本地命中挤压公网结果排序） | 默认 3；=0 关闭本地轨 |
 | `ARGO_MAX_PARALLEL_ENGINES` | 单轮编排并发引擎数上限（config.yaml `execution.max_parallel_engines` 的环境覆盖，供 A/B 对拍/运维应急） | 默认随配置（6）；非法值回落配置不报错 |
 | `ARGO_MINHASH_THRESHOLD` | MinHash 近重复内容去重的相似度判定阈值 | 默认 0.85 |
 | `ARGO_NO_DAEMON` | 关闭 UDS 快路径，search 恒走常态冷进程 | 默认开快路径；=1 关闭 |

@@ -98,18 +98,37 @@ class TestLocalSeekDirGuard(unittest.TestCase):
 class TestRunLocalSeekGuard(unittest.TestCase):
     """_run_local_seek 的端到端行为：跳过时不留噪音、要留说明。"""
 
-    def test_broad_root_skips_without_spawning(self):
-        """宽泛根下不得启动子进程——这是 22.6 s 事故的直接防线。"""
+    def test_broad_root_no_candidates_skips_without_spawning(self):
+        """候选目录全不存在时不得启动子进程（原「宽根直接跳过」的残留场景）。"""
         home = os.path.realpath(os.path.expanduser("~"))
         with mock.patch.object(os, "getcwd", return_value=home), \
+             mock.patch.object(ls, "_candidate_targeted_roots", return_value=[]), \
              mock.patch("subprocess.run") as m_run:
             buf = io.StringIO()
             with redirect_stderr(buf):
                 hits = ls._run_local_seek("anything", 5)
             self.assertEqual(hits, [], "跳过时必须返回空列表")
             m_run.assert_not_called()
-            self.assertIn("过宽", buf.getvalue(),
-                          "跳过必须留可归因的说明，不能静默（否则看起来像「没匹配」）")
+            self.assertTrue(ls.local_seek_last_skipped(),
+                            "跳过必须留下结构化标记（不能看起来像「没匹配」）")
+
+    def test_broad_root_never_scans_home_itself(self):
+        """宽泛根下不得把 home 本身当检索范围——这是 22.6 s 事故的直接防线。
+
+        2026-11-10（a3016e1）起宽根不再「整轨跳过」，改为**定向探测候选
+        目录**（~/.agents/skills 等）。本用例守的因此不再是「不启动子进程」，
+        而是「候选根里永远不含 home 本身」——探测候选目录是收窄后的范围，
+        与扫全盘有本质区别；若 home 混进候选，22.6 s 事故原样复发。
+        """
+        home = os.path.realpath(os.path.expanduser("~"))
+        roots = ls._candidate_targeted_roots()
+        self.assertNotIn(home, roots,
+                         "home 本身不得出现在候选根（扫全盘 = 22.6s 事故）")
+        for r in roots:
+            self.assertTrue(r.startswith(home + os.sep),
+                            f"候选根必须位于 home 下的具体子目录：{r}")
+        self.assertTrue(all(not ls._is_broad_local_root(r) for r in roots),
+                        "候选根不得再命中宽泛根判据")
 
     def test_explicit_search_dir_bypasses_guard(self):
         """显式给 search_dir 时不受宽泛根限制（调用方明确指定了范围）。"""
