@@ -13,3 +13,11 @@ coverage:
 - clinical
 desc: ClinicalTrials.gov v2 临床试验（免认证）
 timeout: 12
+canary_query: "CRISPR"
+quality_queries:
+  - query: "CRISPR gene editing"
+    category: "clinical"
+  - query: "cancer immunotherapy"
+    category: "clinical"
+  - query: "diabetes type 2"
+    category: "clinical"

@@ -139,7 +139,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 |---|---|---|---|---|---|---|
 | `aviation_weather` | 可直接用 | 免费 | 不限 | — | 域 aviation_weather | 航空气象（METAR 实时例行天气报告，按 ICAO 机场代码查询） |
 | `clawhub` | 可直接用 | 免费 | 不限 | — | 域 skill_search | ClawHub 技能生态聚合（OpenClaw + skills.sh 条目，免认证，带生态下载量与官方标记） |
-| `coingecko` | 可直接用 | 免费 | 不限 | — | 域 crypto_search、语义画像命中 | CoinGecko 币种搜索（免认证） |
+| `coingecko` | 可直接用 | 免费 | 不限 | — | 域 crypto_search、语义画像命中 | CoinGecko 币种搜索（免认证；上游 429 限流较严，qps 压到 1 避免连发被封） |
 | `ddgs_images` | 可直接用 | 免费 | 不限 | — | 域 image_search | 通用图片搜索（免 Key，覆盖全网图片；无版权标注，发布前须自行核对） |
 | `deepseek1024` | 可直接用 | 免费 | 不限 | — | 域 dsh_plugin_search、语义画像命中 | DSH 插件目录（13855 条，免认证，带安装命令与安装量/星数/增长口径） |
 | `dsh_hub` | 可直接用 | 免费 | 不限 | — | 域 dsh_plugin_search | DSH 插件市场（18933 条，免认证，带社区评分与可安装性判定） |

@@ -381,7 +381,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: CoinGecko 币种搜索（免认证）
+  desc: CoinGecko 币种搜索（免认证；上游 429 限流较严，qps 压到 1 避免连发被封）
 - name: core
   tier: T1
   type: core

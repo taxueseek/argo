@@ -3,7 +3,7 @@ type: http
 enabled: true
 label: CoinGecko 币种
 cost_tier: free
-qps: 3
+qps: 1
 priority: 32
 period: second
 cost_per_call: 0.0
@@ -11,7 +11,7 @@ cost_unit: free
 coverage:
 - crypto
 - finance
-desc: CoinGecko 币种搜索（免认证）
+desc: CoinGecko 币种搜索（免认证；上游 429 限流较严，qps 压到 1 避免连发被封）
 format: json
 method: GET
 query_param: query
@@ -22,4 +22,12 @@ output_map:
   item_summary: symbol
   url_template: https://www.coingecko.com/en/coins/{id}
 timeout: 10
+canary_query: "bitcoin"
+quality_queries:
+  - query: "bitcoin"
+    category: "crypto"
+  - query: "ethereum"
+    category: "crypto"
+  - query: "solana"
+    category: "crypto"
 url: https://api.coingecko.com/api/v3/search

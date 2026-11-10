@@ -292,7 +292,7 @@
   },
   "coingecko": {
     "label": "CoinGecko 币种",
-    "qps": 3,
+    "qps": 1,
     "limit": null,
     "period": "second",
     "cost_per_call": 0.0,
