@@ -19,6 +19,22 @@
 
 ---
 
+## 未发布（错题本机制）
+
+**定位**：把「失败可归因、经验可复用」补成闭环。此前坏例账本只到「发现 → 入账」，缺归因层与复发判定；提交信息没有「未跑什么」的位置；仓库没有 agent 路由表。三件都是外部实践（magpie 的 LESSONS.md）里被验证过的机制，本次落地。
+
+**关键变更**：
+- **坏例账本加归因层**：`scripts/badcase_ledger.py` 每条坏例入账时按证据判 `root_cause`（词表为 `scripts/badcase_causes.py`，12 个值；由该模块自行注册进 `engine_states.STATE_REGISTRY` 成为第 27 台状态机），判不出归 `unattributed` 不硬猜。新增 `root_cause_stats()` 按根因聚合出 `seen_days`（在多少个不同日期出现过）与首末日期。老库自动补列不重建——历史坏例是证据，重建等于丢掉。
+- **Seen N× 升级判定**：`check` 增加 `--promote-days`（默认 3），同一根因跨 3 个不同日期出现即非零退出并点名「该挪进硬规则」。判定与条数门相互独立，报告里分开列。`external_ranking`（活网排名漂移）排除在升级判定外——它不是 argo 的问题，算成复发会制造长期噪音（2026-10-28 issue #35 误报根因）。新增 `lessons` 子命令导出 LESSONS.md 格式清单。
+- **提交检查清单契约**：新增 `docs/COMMIT_STANDARD.md`（提交信息格式唯一真源）与 `scripts/check_commit_report.py`。高风险提交（新增引擎、改路由、改状态词表、动发版或依赖链）须写「跑了 / 在 commit / 未跑」三段，`未跑: 无` 合法但整段省略不合法。挂进 pre-commit 时**只警告不硬拦**——hook 慢于 20s 就会被 `--no-verify` 绕过，一道会被绕过的硬门比没有门更坏。
+- **AGENTS.md 路由表**：新增仓库根 `AGENTS.md`，只写路由不写规则。含「先读哪份」表、「不可回退的决定」清单（12 个默认关能力开关 + 已停用引擎 + 出口安全边界）、工程纪律结论、提交纪律与坏例复发处理。规则本身仍在各份被引用文档里，不复制第二份真源。
+- **三道机械门禁**：`tests/test_badcase_ledger.py` 补 9 条（含 4 条回退测试）、新增 `tests/test_check_commit_report.py`（26 条）、`tests/test_agents_routing.py`（6 条）。三者一并挂进 `scripts/pre-commit`。AGENTS.md 的门禁会机械对拍「usage.md 的默认关开关是否都登记进不可回退清单」，漏登即红。
+- **回退测试**：三处新判定都做了回退验证——把旧实现放回去，新测试必须挂（旧 `check()` 无 `recurrence_ok` 字段直接 KeyError；旧 `check_commit_report` 恒回 ok 导致 4 条断言失败；删掉 AGENTS.md 或抽空开关清单都会红）。「测试存在」不等于「测试有效」。
+
+**默认关闭**：无新增
+
+---
+
 ## v2.13.0
 
 **定位**：文档分层收口 + 22 台状态机单点真源 + 调度尾宽修复。把 `docs/` 从 87 份精简到 26 份，把散落的状态词收进一个真源文件，修掉 deep 档 10 秒空等缺陷。

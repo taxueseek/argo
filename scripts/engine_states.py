@@ -72,6 +72,13 @@ Python→JS 词表投影，堵住「登记完又退回裸字面量」与跨侧�
 25. 验证结论（validation）：pass / fail / skipped / error，阶段名
     health / quality，reason 三值（持久化落 admission 文件；
     `skipped` 改名漏一处会把未探测引擎静默拉黑并落库）
+26. 状态机注册表（STATE_REGISTRY）：强制注册机制，见 §26
+27. 坏例根因（badcase root_cause）：路由选错源 / 解析层零交付 / 认证失效 /
+    配额耗尽 / 限流 / 源站拦截 / 上游改版 / 网络 / 恢复链未兜住 / 引擎被停用 /
+    外部排名漂移 / 未归因（badcase_ledger 落库；词表在 `badcase_causes.py`，
+    由该模块自行注册进 STATE_REGISTRY——2026-11-10 从本文件拆出。它不属于
+    「引擎状态」这一族：本文件的 26 台描述「调用/引擎现在处于什么状态」，
+    而坏例根因描述「这条失败该由谁修」，是项目级归因维度）
 
 第 9 台（fetch method）另外补齐了此前漏登的 10 个值：http_mobile、
 tls_spoof、jina_reader、md_variant、llms_txt、robots_blocked、http_direct、
@@ -980,4 +987,3 @@ register_state_machine(
     states=VALIDATION_STATUSES,
     description="验证结论：pass / fail / skipped / error",
 )
-

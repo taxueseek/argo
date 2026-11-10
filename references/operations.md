@@ -192,3 +192,6 @@ python3 scripts/replay_eval.py --record            # 只有它需要联网：重
 - **提交门禁**：`scripts/install.sh` 把 `hooks/pre-commit` 装成调度器——原有 hook 改名 `pre-commit.user` 先跑，再直接执行仓内 `scripts/pre-commit`（不拷贝，始终是当前版本）。旧版「往既有 hook 末尾追一行」在既有 hook 以 `exit 0` 结尾时永远跑不到，重跑一次 install.sh 即迁移
 - **宿主入口** 用 `scripts/link_source.py` symlink 指回来源（目标来自 `--to` / `ARGO_LINK_TARGETS` / 本机 `installs.local.yaml`）；禁止 rsync/多副本；禁止在产品代码写死主机 skill 路径
 - **新增搜索源**：只改 `engines/specs/<name>.yaml`（必要时 `scripts/engines.py` 注册 builder）→ `python3 scripts/sync_backends.py && python3 scripts/sync_backends.py --check` → 回归 `python3 -m pytest tests/ -q`
+- **提交信息**：高风险提交（新增引擎、改路由、改状态词表、动发版或依赖链）必须在提交信息里写「跑了 / 在 commit / 未跑」三段，口径与示例见 `docs/COMMIT_STANDARD.md`，机械检查是 `scripts/check_commit_report.py`。`未跑: 无` 合法，整段省略不合法
+- **坏例复发**：`scripts/badcase_ledger.py check --promote-days 3` 判定同一根因是否跨 3 个不同日期出现；触发即该把这条教训挪进硬规则（补测试或 lint）。词表见 `scripts/engine_states.py` §27，导出清单用 `lessons` 子命令
+- **Agent 路由**：仓库根 `AGENTS.md` 是 agent 动手前的路由表，只写路由不写规则；新增 `references/` 文档或新增「不可回退的决定」时同一次改动更新它

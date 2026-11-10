@@ -62,7 +62,7 @@ test_state_literal_drift.py` 用 AST 扫「已登记状态值又退回裸字面�
 `tests/test_native_tools_sync.py` 把词表投影对拍到 JS 生成物；三者都进
 `scripts/pre-commit` 快门禁。
 
-登记的 25 台状态机（22 台 + 3 台新登记）：
+登记的 27 台状态机（25 台 + 坏例根因 root_cause）：
 
 | 分组 | 状态机 | 关键判据 |
 |------|--------|---------|

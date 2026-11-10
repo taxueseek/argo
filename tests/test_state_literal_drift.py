@@ -45,7 +45,7 @@ _STATE_KEYS = frozenset({
     "health", "change_type", "coverage", "fetch_method", "reranker_status",
     "login_state", "level", "strategy", "max_level", "conclusion_cap",
     "access_status", "freshness_cadence", "confidence_tier",
-    "corroboration_level", "evidence_tier", "reason",
+    "corroboration_level", "evidence_tier", "reason", "root_cause",
 })
 
 # 已在词表登记、但语义太泛或属于另一台机器的值：不参与扫描。

@@ -26,9 +26,9 @@ import engine_states as es  # noqa: E402
 
 
 class TestRegistryCompleteness:
-    """注册表必须覆盖全部 25 台状态机。"""
+    """注册表必须覆盖全部 27 台状态机。"""
 
-    # 期望的 25 台状态机名（与 engine_states.py 文件头 §1-§25 一一对应）
+    # 期望的 27 台状态机名（与 engine_states.py 文件头 §1-§27 一一对应）
     EXPECTED_MACHINES = frozenset({
         "breaker", "config", "env", "admission", "health",
         "outcome", "failure", "fetch_method", "retry",
@@ -36,7 +36,7 @@ class TestRegistryCompleteness:
         "batch_probe", "batch_probe_verdict", "numeric",
         "coverage", "probe", "cache", "verification",
         "watch", "envelope", "recovery_level", "conclusion_cap",
-        "validation",
+        "validation", "root_cause",
     })
 
     def test_all_machines_registered(self):
