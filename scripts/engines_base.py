@@ -800,7 +800,18 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
         _get_logger().warning(f"HTTP 引擎业务错误: {eng} {env_err[:120]}")
         return [{"error": f"{eng} {env_err}", "source": eng}]
     limit = max(1, int(n or 5))
-    # 专用 JSON 解析器优先（DDG Instant Answer / UAPI / Semantic Scholar 等）
+    # 0. 注册响应解析器优先（spec.response.parser 显式声明，P1-2）
+    try:
+        from engines_parsers import resolve as _resolve_parsers
+        _parsers = _resolve_parsers(spec)
+        if _parsers:
+            _cur = data
+            for _p in _parsers:
+                _cur = _p(_cur, spec)
+            return _apply_url_kind(_ensure_engine_source(_cur, eng)[:limit], spec)
+    except Exception as _pe:
+        _get_logger().warning(f"注册解析器失败: {eng} {_pe}")
+    # 1. 专用 JSON 解析器兜底（DDG Instant Answer / UAPI / Semantic Scholar 等）
     custom = _CUSTOM_JSON_PARSERS.get(eng)
     if custom:
         return _apply_url_kind(_ensure_engine_source(custom(data), eng)[:limit], spec)
@@ -862,9 +873,9 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
             spec)
     if isinstance(data, list):
         return _ensure_engine_source(
-            _parse_generic({"results": data}, eng, limit), eng
+            _parse_generic({"results": data}, eng, limit, spec), eng
         )[:limit]
-    return _ensure_engine_source(_parse_generic(data, eng, limit), eng)[:limit]
+    return _ensure_engine_source(_parse_generic(data, eng, limit, spec), eng)[:limit]
 
 
 # ── HTML 网页解析引擎 ─────────────────────────────────────────────────────────
@@ -1251,78 +1262,11 @@ def _parse_xml(text: str, engine_name: str) -> list[dict[str, Any]]:
     return results
 
 
-def _parse_generic(data: dict[str, Any], engine_name: str = "?",
-                    limit: int = 10) -> list[dict[str, Any]]:
-    """通用 JSON 解析：自动探测常见列表路径与字段别名。
-
-    列表探测（最多 3 层，只走已知键）：
-      - 顶层 results/items/data/works/search 等
-      - 一层嵌套（data.results / data.value）
-      - 二层嵌套（data.webPages.value —— 博查等 AI 搜索 API）
-
-    字段别名：title|name|heading；url|URL|html_url|link|href；
-    snippet|summary|content|description|abstract。
-    """
-    list_keys = (
-        "results", "items", "value", "works", "search", "data",
-        "organic", "webPages", "hits", "documents", "entries",
-    )
-
-    def _find_items(obj: Any, depth: int = 0) -> list | None:
-        if depth > 3 or obj is None:
-            return None
-        if isinstance(obj, list):
-            # 空列表或 dict 元素列表视为结果集；纯标量列表跳过
-            if not obj or isinstance(obj[0], dict):
-                return obj
-            return None
-        if not isinstance(obj, dict):
-            return None
-        for key in list_keys:
-            if key not in obj:
-                continue
-            found = _find_items(obj[key], depth + 1)
-            if found is not None:
-                return found
-        # 浅层扫描嵌套 dict（避免深扫整棵树误抓无关数组）
-        if depth < 2:
-            for v in obj.values():
-                if isinstance(v, dict):
-                    found = _find_items(v, depth + 1)
-                    if found is not None:
-                        return found
-        return None
-
-    items = _find_items(data) if isinstance(data, (dict, list)) else None
-    if not items or not isinstance(items, list):
-        return []
-
-    results: list[dict[str, Any]] = []
-    for i in items:
-        if not isinstance(i, dict):
-            continue
-        title = i.get("title") or i.get("name") or i.get("heading") or i.get("Title") or ""
-        if isinstance(title, list):
-            title = title[0] if title else ""
-        url = (
-            i.get("url") or i.get("URL") or i.get("html_url")
-            or i.get("link") or i.get("href") or ""
-        )
-        snippet = (
-            i.get("snippet") or i.get("summary") or i.get("content")
-            or i.get("description") or i.get("abstract") or ""
-        )
-        if isinstance(snippet, list):
-            snippet = snippet[0] if snippet else ""
-        score = rank_score(next((v for v in (i.get("score"), i.get("relevance_score")) if v not in (None, "")), 0.5), len(results))  # 哨兵判空：显式 0 分不得膨胀成 0.5
-        results.append({
-            "title": str(title)[:200],
-            "url": str(url),
-            "snippet": str(snippet)[:300],
-            "score": score,
-            "source": engine_name,
-        })
-    return results[:limit]
+def _parse_generic(data: dict[str, Any] | list, engine_name: str = "?",
+                    limit: int = 10, spec: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """通用智能推断 JSON 解析（委托 engines_parsers.parse_smart_generic）。"""
+    from engines_parsers import parse_smart_generic
+    return parse_smart_generic(data, engine_name, limit, spec)
 
 
 def _ensure_engine_source(

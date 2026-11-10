@@ -237,6 +237,123 @@ register("strip_fields", parse_strip_fields)
 register("mwmbl", parse_mwmbl)
 
 
+def parse_smart_generic(data: Any, engine_name: str = "?",
+                        limit: int = 10, spec: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """通用智能自省推断解析器：自适应探测常见列表路径、单层嵌套展平与字段候选降级。
+
+    列表探测（最多 3 层）：
+      - 顶层 results/items/data/works/search/hits/papers/documents/entries 等
+      - 一层嵌套（data.results / data.value）
+      - 二层嵌套（data.webPages.value 等）
+
+    字段别名与候选降级：
+      - title: title|name|heading|Title|titleNullable|headline|subject|topic
+      - url: url|URL|html_url|link|href|urlNullable|web_url|canonical_url（支持 url_template/{id}）
+      - snippet: snippet|summary|content|description|abstract|subtitleNullable|subtitle|extract|details|text
+      - published_at: published_at|publishedAt|created_at|pubdate|date|time
+    """
+    if spec is None and isinstance(engine_name, dict):
+        spec = engine_name
+        engine_name = spec.get("engine_id", "?")
+    spec = spec or {}
+
+    list_keys = (
+        "results", "items", "value", "works", "search", "data",
+        "organic", "webPages", "hits", "documents", "entries", "papers",
+    )
+
+    def _find_items(obj: Any, depth: int = 0) -> list | None:
+        if depth > 3 or obj is None:
+            return None
+        if isinstance(obj, list):
+            if not obj or isinstance(obj[0], dict):
+                return obj
+            return None
+        if not isinstance(obj, dict):
+            return None
+        for key in list_keys:
+            if key not in obj:
+                continue
+            found = _find_items(obj[key], depth + 1)
+            if found is not None:
+                return found
+        if depth < 2:
+            for v in obj.values():
+                if isinstance(v, dict):
+                    found = _find_items(v, depth + 1)
+                    if found is not None:
+                        return found
+        return None
+
+    items = _find_items(data) if isinstance(data, (dict, list)) else None
+    if not items or not isinstance(items, list):
+        return []
+
+    url_template = spec.get("url_template") or (spec.get("output_map") or {}).get("url_template")
+    results: list[dict[str, Any]] = []
+
+    for idx, i in enumerate(items):
+        if not isinstance(i, dict):
+            continue
+        flat = dict(i)
+        for nested_k in ("paper", "item", "data", "node", "article", "entry"):
+            if isinstance(i.get(nested_k), dict):
+                for k, v in i[nested_k].items():
+                    flat.setdefault(k, v)
+
+        title = (
+            flat.get("title") or flat.get("name") or flat.get("heading")
+            or flat.get("Title") or flat.get("titleNullable")
+            or flat.get("headline") or flat.get("subject") or flat.get("topic") or ""
+        )
+        if isinstance(title, list):
+            title = title[0] if title else ""
+        raw_id = flat.get("id") or flat.get("objectID") or flat.get("ID") or ""
+        url = (
+            flat.get("url") or flat.get("URL") or flat.get("html_url")
+            or flat.get("link") or flat.get("href") or flat.get("urlNullable")
+            or flat.get("web_url") or flat.get("canonical_url") or ""
+        )
+        if not url and url_template and raw_id:
+            url = url_template.replace("{id}", str(raw_id))
+        elif not url and raw_id and engine_name == "hackernews":
+            url = f"https://news.ycombinator.com/item?id={raw_id}"
+
+        snippet = (
+            flat.get("snippet") or flat.get("summary") or flat.get("content")
+            or flat.get("description") or flat.get("abstract")
+            or flat.get("subtitleNullable") or flat.get("subtitle")
+            or flat.get("extract") or flat.get("details") or flat.get("text") or ""
+        )
+        if isinstance(snippet, list):
+            snippet = snippet[0] if snippet else ""
+
+        published_at = (
+            flat.get("published_at") or flat.get("publishedAt")
+            or flat.get("created_at") or flat.get("pubdate") or flat.get("date") or ""
+        )
+
+        score = max(0.0, 0.7 - idx * 0.05)
+        raw_score = flat.get("score") if flat.get("score") is not None else flat.get("relevance_score")
+        if isinstance(raw_score, (int, float)):
+            score = float(raw_score)
+
+        row: dict[str, Any] = {
+            "title": str(title)[:200],
+            "url": str(url),
+            "snippet": str(snippet)[:300],
+            "score": score,
+            "source": engine_name,
+        }
+        if published_at:
+            row["published_at"] = str(published_at)
+        results.append(row)
+    return results[:limit]
+
+
+register("smart_generic", parse_smart_generic)
+
+
 # 迁移 engines_base.py 里现有的 4 个专用解析器（保持向后兼容）
 def _migrate_builtin() -> None:
     """把 engines_base 的 _CUSTOM_JSON_PARSERS 投影进注册表。
