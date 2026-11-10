@@ -3,6 +3,22 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## 未发布（当前工作树）
+
+**定位**：隐式状态机普查后的收口。把审计发现的三类「登记了但没真正收口」补齐，并给词表加机械门禁，防止改完又退回去写字面量。
+
+**关键变更**：
+- 修掉恢复链 L0 门控失效：`max_level="L0"` 与任何未登记值此前都通过 `_TIER.get(..., 3)` 落到最高档，放行 L3 换引擎与 L4 跨语言；现在等级词表与成本序收进 `engine_states.py`，未登记值 fail-closed 返回空计划。补 `tests/test_p0_v25.py` 两条红转绿契约。
+- 抓取降级链词表与代码实际值对齐：登记 `http_mobile` / `tls_spoof` / `jina_reader` / `md_variant` / `llms_txt` / `robots_blocked` / `http_direct` / `full` 八个此前未进词表的值，修正词表写 `tls` 而代码写 `tls_spoof` 的失配；`fetch_v3` 与四个抓取侧脚本改引用常量，`is_degraded_fetch_method` 的判据集合也收进词表。
+- 验证结论状态机收口：`pass/fail/skipped/error` 与阶段名 `health/quality` 由 `engine_validate.py`（产出）、`engine_admission.py`（落库）共用同一常量，消除 `skipped` 改名漏一处即静默拉黑引擎并落库的隐患；结论上限 `conclusion_cap` 三态由 Python 三处与 JS `wide-research` 共用同一词表。
+- 跨侧状态词表投影：`scripts/gen_native_tools.py` 除 `NATIVE_TOOLS` 外新增导出 `STATES`（plugin / daemon / conclusionCap），与 `engine_states.py` 逐值对拍；`py_bridge.py` 的 CLI 回退分支不再写死 `running/stopped`。此前改 Python 词表不会让任何 JS 或桥侧测试变红。
+- 新增机械门禁 `tests/test_state_literal_drift.py`：AST 扫 `scripts/*.py` 状态字段上下文，已登记状态值再退回裸字面量即红（含同名异义白名单与负向验证）。它与 `test_engine_states.py`、`test_native_tools_sync.py`、`test_zcode_bridge_daemon_state.py` 一并挂进 `scripts/pre-commit` 快门禁——此前改 `engine_states.py` 不跑全量 pytest 就能提交。
+- 文档：`references/architecture.md` 的状态机登记表从 22 台更新到 25 台（22 台 + 3 台新登记），补三道门禁的说明。
+
+**默认关闭**：无新增
+
+---
+
 ## v2.13.0
 
 **定位**：文档分层收口 + 22 台状态机单点真源 + 调度尾宽修复。把 `docs/` 从 87 份精简到 26 份，把散落的状态词收进一个真源文件，修掉 deep 档 10 秒空等缺陷。

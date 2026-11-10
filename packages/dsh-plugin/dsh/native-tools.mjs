@@ -1,12 +1,14 @@
-// 本文件由 scripts/gen_native_tools.py 从 schema 唯一真源
-// scripts/mcp_tools.py 生成 —— 勿手改；改 schema 后重新生成，
+// 本文件由 scripts/gen_native_tools.py 从 Python 真源生成 —— 勿手改；
+// 改 mcp_tools.py 或 engine_states.py 后重新生成，
 // tests/test_native_tools_sync.py 负责漂移门禁。
 //
 // 说明：
-//   - description / parameters 与 MCP 模型可见 schema 完全一致
+//   - NATIVE_TOOLS：description / parameters 与 MCP 模型可见 schema 完全一致
 //   - allowed = parameters.properties 键序（原生侧 pickArgs 白名单）
 //   - 不含 argo_research：分钟级编排不适合 CLI 单发（默认超时会中断），
 //     走 MCP 形态或 wide_research 入口
+//   - STATES：engine_states.py 状态词表的只读投影，按状态机分组；
+//     JS 侧一律从这里取值，不再手写 ready/low/running 等字面量
 //
 export const NATIVE_TOOLS = {
   "argo_search": {
@@ -745,5 +747,24 @@ export const NATIVE_TOOLS = {
       "dois",
       "style"
     ]
+  }
+};
+
+export const STATES = {
+  "plugin": {
+    "loading": "loading",
+    "ready": "ready",
+    "unavailable": "unavailable"
+  },
+  "daemon": {
+    "busy": "busy",
+    "idle": "idle",
+    "running": "running",
+    "stopped": "stopped"
+  },
+  "conclusionCap": {
+    "high": "high",
+    "low": "low",
+    "medium": "medium"
   }
 };

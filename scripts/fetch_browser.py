@@ -13,13 +13,15 @@
 
 from __future__ import annotations
 
+import engine_states
+
 
 def _fail(url: str, error: str) -> dict:
     """失败结果（与 fetch_v3._make_result 的空内容形状逐字段一致）。"""
     return {
         "url": url, "content": "", "html": "", "title": "",
         "length": 0, "success": False, "error": error,
-        "fetch_method": "browser",
+        "fetch_method": engine_states.FETCH_BROWSER,
     }
 
 
@@ -65,7 +67,7 @@ def browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
             "length": len(text) if text else 0,
             "success": bool(text),
             "error": None if text else "empty content",
-            "fetch_method": "chrome_cdp",
+            "fetch_method": engine_states.FETCH_CHROME_CDP,
         }
         if auth_profile:
             # 登录态 provenance：与 ego-browser 通道的 envelope 语义同源

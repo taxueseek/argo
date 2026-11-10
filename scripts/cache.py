@@ -1184,9 +1184,9 @@ class SearchCache:
             # ① 反面记录：以前抓过、结果不可用
             if hit and not hit.get("success"):
                 err = str(hit.get("error") or "")
-                ret = {"status": "blocked" if hit.get("fetch_method") == "robots_blocked"
-                       else "poor",
-                       "reason": "robots" if hit.get("fetch_method") == "robots_blocked"
+                _robots = hit.get("fetch_method") == engine_states.FETCH_ROBOTS_BLOCKED
+                ret = {"status": "blocked" if _robots else "poor",
+                       "reason": "robots" if _robots
                        else (hit.get("fetch_method") or "fetch_failed")}
                 if err:
                     ret["detail"] = err[:120]

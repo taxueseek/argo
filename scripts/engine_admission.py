@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from cli_io import dumps_pretty
+import engine_states
 
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths as _paths
@@ -301,10 +302,13 @@ def record_validation(
     ))
     if blocked is None:
         # 默认：health 失败则 block；通过则 unblock
-        blocked = "health" not in stages_passed and bool(stages_passed)
-        if "health" in (stages_passed or []):
+        blocked = (engine_states.VALIDATION_STAGE_HEALTH not in stages_passed
+                   and bool(stages_passed))
+        if engine_states.VALIDATION_STAGE_HEALTH in (stages_passed or []):
             blocked = False
-        if health is not None and not health.get("ok", False) and health.get("status") != "skipped":
+        if (health is not None and not health.get("ok", False)
+                and health.get("status")
+                != engine_states.VALIDATION_STATUS_SKIPPED):
             blocked = True
 
     admitted_at = current.get("admitted_at")
@@ -325,10 +329,10 @@ def record_validation(
     if reason:
         eff_reason = reason
     elif blocked:
-        eff_reason = "validation_failed"
+        eff_reason = engine_states.ADMISSION_REASON_VALIDATION_FAILED
     else:
         # 本次未 block：清掉历史失败原因，避免与 blocked=False 矛盾
-        eff_reason = ""
+        eff_reason = engine_states.ADMISSION_REASON_NONE
 
     record = {
         "admitted_at": admitted_at,

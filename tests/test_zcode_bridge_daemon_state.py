@@ -89,6 +89,8 @@ def test_daemon_running_is_derived_from_state(monkeypatch, state, expected):
     bridge = _load_bridge()
     source = BRIDGE.read_text(encoding="utf-8")
     # 判据必须写成「state != stopped」，不能写「state == running」——
-    # 后者会把正在跑搜索的 daemon 报成没在跑。
-    assert '"daemon_running": daemon_state != "stopped",' in source
+    # 后者会把正在跑搜索的 daemon 报成没在跑。同时钉住它引用词表常量而非
+    # 手写字面量：此前本用例断言源码里必须出现 `"stopped"`，改词表时改测试
+    # 即可全绿，属于「看起来有门禁」的假阳性（2026-11-10 审计）。
+    assert "daemon_state != states.DAEMON_STOPPED" in source
     assert expected == (state != "stopped")

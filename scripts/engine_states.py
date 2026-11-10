@@ -19,6 +19,12 @@ engine_dispatch 的探测收紧、route 的扶正判断、badcase_ledger 的过�
 
 ## 覆盖的状态机
 
+2026-11-10 第二次收口：在既有 22 台之外补登记 3 台隐式状态机（恢复链等级、
+结论上限、验证结论），并把抓取降级链此前漏登的 10 个 method 值补进 §9 的
+同一台机器。同时补了 `tests/test_state_literal_drift.py` 机械门禁与
+Python→JS 词表投影，堵住「登记完又退回裸字面量」与跨侧漂移（详见文件末
+§23、§24、§25 与 `references/architecture.md`）。
+
 1. 熔断器（breaker）：closed → open → half_open → closed / disabled
 2. 引擎配置（config）：enabled / disabled（声明层）
 3. 环境白黑名单（env）：allowed / filtered
@@ -57,6 +63,20 @@ engine_dispatch 的探测收紧、route 的扶正判断、badcase_ledger 的过�
 20. 候选核验（verification）：candidate / opened
 21. 观察模式变更（watch change）：none / noise / substantive / unknown
 22. 候选信封路由（envelope route）：completed / partial
+23. 恢复链等级（recovery level）：L0 / L1 / L2 / L3 / L4，含成本序
+    `RECOVERY_LEVEL_TIER`（2026-11-10 收口：L0 是 L0 恢复车道专用，不在
+    计划生成器的 L1→L4 里，但必须进同一张表；此前 `max_level="L0"` 落到
+    默认档 3，等于放行全部高价策略）
+24. 结论上限（conclusion_cap）：low / medium / high（dossier JSON 落盘，
+    Python 三处 + JS wide-research 两处共写一份）
+25. 验证结论（validation）：pass / fail / skipped / error，阶段名
+    health / quality，reason 三值（持久化落 admission 文件；
+    `skipped` 改名漏一处会把未探测引擎静默拉黑并落库）
+
+第 9 台（fetch method）另外补齐了此前漏登的 10 个值：http_mobile、
+tls_spoof、jina_reader、md_variant、llms_txt、robots_blocked、http_direct、
+full、tinyfish、parallel。词表原写 `tls`，代码实际写 `tls_spoof`，两套名字
+指同一级，已在 §9 一并登记。
 
 ## 词表边界（不要把两套词表合并）
 
@@ -354,13 +374,43 @@ FETCH_METHODS = frozenset({
     FETCH_X_ARTICLE, FETCH_BLOCKED,
 })
 
+# 降级链的渲染层细分值与移动端分支：此前只登记了一半，词表写 `tls`、
+# fetch_v3 实际写 `tls_spoof`，两套名字指同一级；`http_mobile`、
+# `jina_reader`、`robots_blocked` 等则完全没进词表。值即 fetch_method 字段。
+FETCH_HTTP_MOBILE = "http_mobile"
+FETCH_TLS_SPOOF = "tls_spoof"
+FETCH_JINA_READER = "jina_reader"
+FETCH_MD_VARIANT = "md_variant"
+FETCH_LLMS_TXT = "llms_txt"
+FETCH_TINYFISH = "tinyfish"
+FETCH_PARALLEL = "parallel"
+FETCH_ROBOTS_BLOCKED = "robots_blocked"
+FETCH_HTTP_DIRECT = "http_direct"
+FETCH_FULL = "full"
+
+# 完整全集：§9 的 FETCH_METHODS 是「降级链主干」视图，保留不改消费面。
+FETCH_METHODS_ALL = FETCH_METHODS | frozenset({
+    FETCH_HTTP_MOBILE, FETCH_TLS_SPOOF, FETCH_JINA_READER, FETCH_MD_VARIANT,
+    FETCH_LLMS_TXT, FETCH_TINYFISH, FETCH_PARALLEL, FETCH_ROBOTS_BLOCKED,
+    FETCH_HTTP_DIRECT, FETCH_FULL,
+})
+
 # 已产出 Markdown 的抓取方式：内容已由站点或阅读器转好，没有 HTML 壳可言。
-# 降级链级别（http_md / jina / parallel_mcp）之外的渲染层细分值
-# （tinyfish / md_variant / llms_txt / jina_reader / parallel）也收在这里，
+# 降级链级别（http_md / jina / parallel_mcp）之外的渲染层细分值也收在这里，
 # 因为它们回答的是同一个问题：「这次正文拿到的是不是已经转好的 Markdown」。
 MARKDOWN_FETCH_METHODS = frozenset({
     FETCH_HTTP_MD, FETCH_JINA, FETCH_PARALLEL_MCP,
-    "md_variant", "llms_txt", "jina_reader", "parallel", "tinyfish",
+    FETCH_MD_VARIANT, FETCH_LLMS_TXT, FETCH_JINA_READER,
+    FETCH_PARALLEL, FETCH_TINYFISH,
+})
+
+# 降级路径：非首级 HTTP。补登记 tls_spoof / http_mobile / jina_reader 等真实
+# 写入值，否则 is_degraded_fetch_method 对它们一律返回 False（静默误判）。
+DEGRADED_FETCH_METHODS = frozenset({
+    FETCH_JINA, FETCH_WAYBACK, FETCH_BROWSER, FETCH_CHROME_CDP,
+    FETCH_PARALLEL_MCP, FETCH_SOGOU_FALLBACK, FETCH_FULLTEXT,
+    FETCH_TLS, FETCH_TLS_SPOOF, FETCH_HTTP_MOBILE, FETCH_JINA_READER,
+    FETCH_MD_VARIANT, FETCH_LLMS_TXT, FETCH_TINYFISH, FETCH_PARALLEL,
 })
 
 
@@ -368,12 +418,9 @@ def is_degraded_fetch_method(method: str) -> bool:
     """该 fetch_method 是否为降级路径（非首级 HTTP）。
 
     降级路径拿到的正文质量通常低于首级 HTTP（云渲染可能丢结构、快照可能过期），
-    调用方据此决定是否值得再抓一次。
+    调用方据此决定是否值得再抓一次。判据集合只在 DEGRADED_FETCH_METHODS 一处。
     """
-    return method in {
-        FETCH_JINA, FETCH_WAYBACK, FETCH_BROWSER, FETCH_CHROME_CDP,
-        FETCH_PARALLEL_MCP, FETCH_SOGOU_FALLBACK, FETCH_FULLTEXT,
-    }
+    return method in DEGRADED_FETCH_METHODS
 
 
 # ── 10. 平台/运行时状态（dsh-plugin / daemon）──────────────────────────────
@@ -602,3 +649,86 @@ ENVELOPE_ROUTE_PARTIAL = "partial"
 ENVELOPE_ROUTE_STATUSES = frozenset({
     ENVELOPE_ROUTE_COMPLETED, ENVELOPE_ROUTE_PARTIAL,
 })
+
+
+# ── 23. 恢复链等级（recovery level）─────────────────────────────────────────
+# L0 是 recovery_l0 的「补跑被早停跳过的同域引擎」，不属于 build_recovery_plan
+# 的 L1→L4；但它同样是 level_used / max_level 的合法值，必须进同一张表。
+# 血泪：`_TIER` 曾只写 {"L1":0,"L2":1,"L3":2,"L4":3}，`max_level="L0"`
+# 与任何未登记值都通过 `.get(..., 3)` 落到最高档，放行 L3 换引擎与 L4 跨语言
+# ——「low 查询只跑低成本放宽」这道门形同虚设且不报错（2026-11-10 实测）。
+
+RECOVERY_LEVEL_L0 = "L0"
+RECOVERY_LEVEL_L1 = "L1"
+RECOVERY_LEVEL_L2 = "L2"
+RECOVERY_LEVEL_L3 = "L3"
+RECOVERY_LEVEL_L4 = "L4"
+
+RECOVERY_LEVELS = frozenset({
+    RECOVERY_LEVEL_L0, RECOVERY_LEVEL_L1, RECOVERY_LEVEL_L2,
+    RECOVERY_LEVEL_L3, RECOVERY_LEVEL_L4,
+})
+
+# 成本序（越大越贵）。L0 排 -1：比 L1 还低，作为门控上界时一律不放行计划步骤。
+RECOVERY_LEVEL_TIER = {
+    RECOVERY_LEVEL_L0: -1,
+    RECOVERY_LEVEL_L1: 0,
+    RECOVERY_LEVEL_L2: 1,
+    RECOVERY_LEVEL_L3: 2,
+    RECOVERY_LEVEL_L4: 3,
+}
+
+# fast 档允许的等级（recovery.py 的 fast 过滤）
+RECOVERY_FAST_LEVELS = frozenset({RECOVERY_LEVEL_L1, RECOVERY_LEVEL_L3})
+
+
+def recovery_level_tier(level: str) -> int | None:
+    """等级的成本序号；未登记值返回 None（调用方据此 fail-closed，勿回退最高档）。"""
+    return RECOVERY_LEVEL_TIER.get(level)
+
+
+# ── 24. 结论上限（conclusion_cap）───────────────────────────────────────────
+# 取证包质量门控的产出，落进 dossier JSON 并被 report / 归档 / MCP 消费。
+# 三态由 failures/warnings 决定，跨 Python 与 JS（wide-research）两侧共用。
+
+CONCLUSION_CAP_LOW = "low"
+CONCLUSION_CAP_MEDIUM = "medium"
+CONCLUSION_CAP_HIGH = "high"
+
+CONCLUSION_CAP_STATUSES = frozenset({
+    CONCLUSION_CAP_LOW, CONCLUSION_CAP_MEDIUM, CONCLUSION_CAP_HIGH,
+})
+
+# ── 25. 验证结论（validation）────────────────────────────────────────────────
+# engine_validate.py 产出 → engine_admission.py 持久化 → engine_status.py 展示。
+# 三处此前各写一份字面量：把 `skipped` 改名只改产出侧、漏改
+# engine_admission 的 `status != "skipped"`，未探测引擎会同时满足
+# `not ok` 与「不是 skipped」，被判 blocked=True / reason=validation_failed
+# 并落库，is_blocked() 返回真、路由直接跳过——与既往 24 个引擎错拉黑
+# 事故同形态，全程无异常（2026-11-10 审计）。
+
+VALIDATION_STATUS_PASS = "pass"
+VALIDATION_STATUS_FAIL = "fail"
+VALIDATION_STATUS_SKIPPED = "skipped"
+VALIDATION_STATUS_ERROR = "error"
+
+VALIDATION_STATUSES = frozenset({
+    VALIDATION_STATUS_PASS, VALIDATION_STATUS_FAIL,
+    VALIDATION_STATUS_SKIPPED, VALIDATION_STATUS_ERROR,
+})
+
+VALIDATION_STAGE_HEALTH = "health"
+VALIDATION_STAGE_QUALITY = "quality"
+VALIDATION_STAGES = frozenset({
+    VALIDATION_STAGE_HEALTH, VALIDATION_STAGE_QUALITY,
+})
+
+ADMISSION_REASON_VALIDATION_FAILED = "validation_failed"
+ADMISSION_REASON_HEALTH_FAILED = "health_failed"
+ADMISSION_REASON_NONE = ""
+
+ADMISSION_REASONS = frozenset({
+    ADMISSION_REASON_VALIDATION_FAILED, ADMISSION_REASON_HEALTH_FAILED,
+    ADMISSION_REASON_NONE,
+})
+

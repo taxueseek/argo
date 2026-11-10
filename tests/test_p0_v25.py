@@ -187,6 +187,23 @@ class TestRecovery(unittest.TestCase):
         levels = {s.level for s in plan}
         self.assertIn("L4", levels)
 
+    def test_max_level_l0_blocks_all_planned_steps(self):
+        """L0 是「补跑被早停跳过的同域引擎」，不属于计划生成器的 L1→L4。
+
+        传 max_level=L0 意为「本轮不生成任何放宽步骤」；此前 _TIER 没有 L0，
+        .get("L0", 3) 落到默认 3，等于放行全部高价策略（L3 换引擎、L4 跨语言），
+        与 low 查询限成本的门控意图相反且不报错。
+        """
+        plan = build_recovery_plan("英伟达 财报", ["anysearch"],
+                                   ["duckduckgo"], mode="auto", max_level="L0")
+        self.assertEqual([s.level for s in plan], [])
+
+    def test_max_level_unknown_value_fails_closed(self):
+        """未登记的 max_level 不得静默放行：旧实现落到默认 3 等于没有门控。"""
+        plan = build_recovery_plan("英伟达 财报", ["anysearch"],
+                                   ["duckduckgo"], mode="auto", max_level="L9")
+        self.assertEqual([s.level for s in plan], [])
+
     def test_run_recovery_success(self):
         def executor(q, engines):
             if "earnings" in q or "英伟达" in q or q == "英伟达 财报":

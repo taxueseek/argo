@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import engine_states
+
 import argparse
 import json
 import os
@@ -84,7 +86,7 @@ def _cdp_fetch(url: str, timeout: int = 15) -> dict:
             "image_count": len(imgs),
             "images": imgs,
             "content": content,
-            "fetch_method": "chrome_cdp",
+            "fetch_method": engine_states.FETCH_CHROME_CDP,
         }
     except Exception as e:
         return {"ok": False, "error": f"CDP 通道异常: {e}"}
@@ -141,7 +143,7 @@ def _sogou_fallback(url: str) -> dict:
             "image_count": 0,
             "images": [],
             "content": best.get("snippet", ""),
-            "fetch_method": "sogou_fallback",
+            "fetch_method": engine_states.FETCH_SOGOU_FALLBACK,
             "note": "通过搜狗搜索间接获取，内容可能不完整",
         }
     except Exception as e:
@@ -198,7 +200,7 @@ def fetch_wechat_article(url: str) -> dict:
     # 通道1: HTTP 直取（快速失败）
     result = _http_fetch(url, timeout=5)
     if _has_content(result):
-        result["fetch_method"] = "http_direct"
+        result["fetch_method"] = engine_states.FETCH_HTTP_DIRECT
         result.setdefault("char_count", len(result.get("content") or ""))
         return result
 

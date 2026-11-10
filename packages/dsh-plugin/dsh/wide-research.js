@@ -11,6 +11,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { acquireMcp, DEFAULTS } from './runner.js'
+import { STATES } from './native-tools.mjs'
 
 const text = (value) => [{ type: 'text', text: value }]
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -180,7 +181,7 @@ export const outputSchema = {
       required: ['passed', 'conclusion_cap', 'failures', 'warnings'],
       properties: {
         passed: { type: 'boolean' },
-        conclusion_cap: { type: 'string', enum: ['low', 'medium', 'high'] },
+        conclusion_cap: { type: 'string', enum: Object.values(STATES.conclusionCap) },
         failures: {
           type: 'array',
           items: {
@@ -506,7 +507,8 @@ export function evaluateGates(output) {
     }
   }
 
-  const cap = failures.length ? 'low' : (warnings.length ? 'medium' : 'high')
+  const caps = STATES.conclusionCap
+  const cap = failures.length ? caps.low : (warnings.length ? caps.medium : caps.high)
   return { passed: failures.length === 0, conclusion_cap: cap, failures, warnings }
 }
 

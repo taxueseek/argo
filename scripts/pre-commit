@@ -17,6 +17,11 @@
 # 一律红灯——290d3d8 同根因累计 9 处灭类后零祖父，AST 扫描 <0.5s）。
 # dependency_source（2026-11-09 补：pyproject 是真源、requirements 是派生清单，
 # 双向对账——清单里有真源没有的、真源里有 lock 没有的，都红。实测 <0.5s）。
+# 状态词表四件套（2026-11-10 补）：test_engine_states（词表契约）、
+# test_native_tools_sync（Python→JS 生成物漂移）、test_zcode_bridge_daemon_state
+# （桥的 daemon 状态读字段）、test_state_literal_drift（AST 扫「已登记状态值
+# 又退回去写成字面量」）。此前改 engine_states.py 不跑全量 pytest 就能提交，
+# hook 与 CI 都没有这几道门；四者合计 <1s，放进 hook 不触发 --no-verify 绕过。
 # 2026-10-18 补的两道（context_budget + engine_catalog）：f702ee2 把
 # SKILL.md 压到 8049B、4a71693 让 deepseek_search 成死源，两笔都过了 hook
 # 却在全量回归里红——正是「改完没跑到那条门」的同一个洞。全量回归 ~5 分钟
@@ -94,7 +99,11 @@ printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手�
     tests/test_launch_passthrough_alignment.py \
     tests/test_dependency_source_gate.py \
     tests/test_install_script_contract.py \
-    tests/test_deep_budget_tail_grace.py
+    tests/test_deep_budget_tail_grace.py \
+    tests/test_engine_states.py \
+    tests/test_native_tools_sync.py \
+    tests/test_zcode_bridge_daemon_state.py \
+    tests/test_state_literal_drift.py
 
 if command -v node >/dev/null 2>&1 && [ -f packages/dsh-plugin/test/size-gate.test.js ]; then
     node --test packages/dsh-plugin/test/size-gate.test.js packages/dsh-plugin/test/client.test.js

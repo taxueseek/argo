@@ -87,9 +87,11 @@ def _daemon_status_fast(home: str):
     （engine_states.DAEMON_*）：此前面板只能拿中文文案再正则反推 pid、
     用布尔冒充三态，文案一改就静默失配（2026-11-09 收口）。
     """
+    # 词表在函数入口 import：CLI 回退分支同样要用，不能只在进程内直读分支
+    # 局部 import（此前该分支写死 "running"/"stopped"，改词表不会让它变红）。
+    import engine_states as states
     try:
         import daemon as argo_daemon
-        import engine_states as states
         alive = argo_daemon._alive()
         sock = argo_daemon._sock_path()
         if alive:
@@ -110,16 +112,18 @@ def _daemon_status_fast(home: str):
             state = str(payload.get("state") or "")
             if not state:
                 # 旧版 argo 的 --json 只有 running 布尔
-                state = "running" if payload.get("running") else "stopped"
+                state = (states.DAEMON_RUNNING if payload.get("running")
+                         else states.DAEMON_STOPPED)
             text = ("argo daemon 运行中 pid=%s socket=%s"
                     % (payload.get("pid"), payload.get("socket"))
-                    if state != "stopped"
+                    if state != states.DAEMON_STOPPED
                     else "argo daemon 未运行（socket=%s）" % payload.get("socket"))
             return text, state
         # 连 --json 都拿不到：退回人读文案 + pid 探活（旧版兼容路径）
         out, _, _ = _run_argo(home, ["daemon", "status"], 10)
         text = out.strip()
-        return text, "running" if _daemon_running(text) else "stopped"
+        return text, (states.DAEMON_RUNNING if _daemon_running(text)
+                      else states.DAEMON_STOPPED)
 
 
 def _budget_list_fast(home: str) -> str:
@@ -373,7 +377,7 @@ def panel_data(home: str):
         "daemon": daemon,
         "daemon_state": daemon_state,
         # busy 也是活着（只是正在跑别的），只有 stopped 才算没在跑
-        "daemon_running": daemon_state != "stopped",
+        "daemon_running": daemon_state != states.DAEMON_STOPPED,
         "engines": engines,
         "keys": sorted(keys.values(), key=lambda k: (-len(k["engines"]), k["key"])),
         "counts": counts,

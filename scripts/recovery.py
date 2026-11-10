@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from cjk_tokens import signal_tokens
+import engine_states
 
 _BACKENDS_DIR = Path(__file__).parent.parent / "backends"
 _SYNONYMS_PATH = _BACKENDS_DIR / "query_synonyms_cn.json"
@@ -532,13 +533,21 @@ def build_recovery_plan(query: str, tried_engines: list[str],
 
     # fast 模式：仅保留 L1 + L3
     if mode == "fast":
-        steps = [s for s in steps if s.level in ("L1", "L3")]
+        steps = [s for s in steps if s.level in engine_states.RECOVERY_FAST_LEVELS]
 
-    # 复杂度门控：low 查询只保留低成本放宽（L1/L2），禁高价多源/跨语言（L3/L4）
+    # 复杂度门控：low 查询只保留低成本放宽（L1/L2），禁高价多源/跨语言（L3/L4）。
+    # 词表见 engine_states §23：L0 是恢复车道专用，成本序 -1；未登记的
+    # max_level 一律 fail-closed 返回空计划，绝不能回退到最高档 3（旧实现
+    # `.get(..., 3)` 让 max_level="L0" 放行全部高价策略，门控形同虚设）。
     if max_level:
-        _TIER = {"L1": 0, "L2": 1, "L3": 2, "L4": 3}
-        cut = _TIER.get(max_level, 3)
-        steps = [s for s in steps if _TIER.get(s.level, 3) <= cut]
+        cut = engine_states.recovery_level_tier(max_level)
+        if cut is None:
+            return []
+        # 步骤等级同样 fail-closed：未登记等级一律剔除，不用 `or 0` 把
+        # None 当 L1 放行（那会重演本条注释要堵的静默回退）。
+        steps = [s for s in steps
+                 if (tier := engine_states.recovery_level_tier(s.level)) is not None
+                 and tier <= cut]
 
     return steps
 

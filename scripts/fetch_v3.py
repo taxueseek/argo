@@ -388,10 +388,10 @@ def _ai_variant_candidates(url: str) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     md = _md_variant_url(url)
     if md:
-        out.append((md, "md_variant"))
+        out.append((md, engine_states.FETCH_MD_VARIANT))
     llms = _llms_txt_url(url)
     if llms:
-        out.append((llms, "llms_txt"))
+        out.append((llms, engine_states.FETCH_LLMS_TXT))
     # token 炸弹守卫：全站合并类变体永不进候选（见 _BANNED_AI_VARIANTS）
     return [(u, k) for u, k in out if not _is_banned_ai_variant(u)]
 
@@ -649,7 +649,7 @@ def _mobile_http_fetch(url: str, max_chars: int = 8000,
         from url_safety import check_url
         ok, reason = check_url(url)
         if not ok:
-            return _make_result(url, "", 0, "http_mobile", ok=False,
+            return _make_result(url, "", 0, engine_states.FETCH_HTTP_MOBILE, ok=False,
                                 error=f"URL 被 SSRF 防护拦截: {reason}")
     except ImportError:
         pass
@@ -666,17 +666,17 @@ def _mobile_http_fetch(url: str, max_chars: int = 8000,
                 return _make_result(url, _decode_charset(r.read(), r.headers.get("Content-Type", "")),
                                     max_chars, "http_mobile")
         except Exception as e:
-            return _make_result(url, "", 0, "http_mobile", ok=False,
+            return _make_result(url, "", 0, engine_states.FETCH_HTTP_MOBILE, ok=False,
                                 error=str(e)[:100])
     if resp.get("status", 0) >= 400:
-        result = _make_result(url, "", 0, "http_mobile", ok=False,
+        result = _make_result(url, "", 0, engine_states.FETCH_HTTP_MOBILE, ok=False,
                               error=f"HTTP {resp.get('status')}")
         _mark_stop_signal(result, resp)
         return result
     if not resp.get("text"):
-        return _make_result(url, "", 0, "http_mobile", ok=False,
+        return _make_result(url, "", 0, engine_states.FETCH_HTTP_MOBILE, ok=False,
                             error="empty response")
-    result = _make_result(url, resp["text"], max_chars, "http_mobile")
+    result = _make_result(url, resp["text"], max_chars, engine_states.FETCH_HTTP_MOBILE)
     _mark_stop_signal(result, resp)
     return result
 
@@ -713,7 +713,7 @@ def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0,
         from url_safety import check_url
         ok, reason = check_url(url)
         if not ok:
-            return _make_result(url, "", 0, "http", ok=False,
+            return _make_result(url, "", 0, engine_states.FETCH_HTTP, ok=False,
                                 error=f"URL 被 SSRF 防护拦截: {reason}")
     except ImportError:
         pass
@@ -732,17 +732,17 @@ def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0,
         try:
             with open_url(req, timeout=timeout) as r:
                 return _make_result(url, _decode_charset(r.read(), r.headers.get("Content-Type", "")),
-                                    max_chars, "http")
+                                    max_chars, engine_states.FETCH_HTTP)
         except Exception as e:
-            return _make_result(url, "", 0, "http", ok=False, error=str(e)[:100])
+            return _make_result(url, "", 0, engine_states.FETCH_HTTP, ok=False, error=str(e)[:100])
 
     if resp.get("status", 0) >= 400:
-        result = _make_result(url, "", 0, "http", ok=False,
+        result = _make_result(url, "", 0, engine_states.FETCH_HTTP, ok=False,
                               error=f"HTTP {resp.get('status')}")
         _mark_stop_signal(result, resp)
         return result
     if not resp.get("text"):
-        return _make_result(url, "", 0, "http", ok=False, error="empty response")
+        return _make_result(url, "", 0, engine_states.FETCH_HTTP, ok=False, error="empty response")
 
     if negotiate:
         text = _negotiated_markdown(resp)
@@ -750,7 +750,7 @@ def _http_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0,
             return _markdown_result(url, text, max_chars, "http_md",
                                     final_url=resp.get("url", ""))
 
-    return _make_result(url, resp["text"], max_chars, "http")
+    return _make_result(url, resp["text"], max_chars, engine_states.FETCH_HTTP)
 
 
 def _tls_spoof_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict:
@@ -766,7 +766,7 @@ def _tls_spoof_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> d
         from url_safety import check_url
         ok, reason = check_url(url)
         if not ok:
-            return _make_result(url, "", 0, "tls_spoof", ok=False,
+            return _make_result(url, "", 0, engine_states.FETCH_TLS_SPOOF, ok=False,
                                 error=f"URL 被 SSRF 防护拦截: {reason}")
     except ImportError:
         pass
@@ -776,19 +776,19 @@ def _tls_spoof_fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> d
         client = HttpClient(timeout=timeout, max_retries=1, jitter=False)
         resp = client.get_impersonated(url, timeout=timeout)
     except ImportError:
-        return _make_result(url, "", 0, "tls_spoof", ok=False,
+        return _make_result(url, "", 0, engine_states.FETCH_TLS_SPOOF, ok=False,
                             error="http_client not available")
 
     if resp.get("status", 0) >= 400:
-        result = _make_result(url, "", 0, "tls_spoof", ok=False,
+        result = _make_result(url, "", 0, engine_states.FETCH_TLS_SPOOF, ok=False,
                               error=f"HTTP {resp.get('status')}")
         _mark_stop_signal(result, resp)
         return result
     if not resp.get("text"):
-        return _make_result(url, "", 0, "tls_spoof", ok=False,
+        return _make_result(url, "", 0, engine_states.FETCH_TLS_SPOOF, ok=False,
                             error=resp.get("error", "empty response"))
 
-    result = _make_result(url, resp["text"], max_chars, "tls_spoof")
+    result = _make_result(url, resp["text"], max_chars, engine_states.FETCH_TLS_SPOOF)
     result["impersonate"] = resp.get("impersonate", "")
     return result
 
@@ -962,7 +962,7 @@ def _jina_reader_fetch(url: str, max_chars: int = 8000,
         raw = raw.split("Markdown Content:", 1)[1].lstrip()
     if not _looks_like_markdown(raw):
         return None
-    result = _make_result(url, "", max_chars, "jina_reader")
+    result = _make_result(url, "", max_chars, engine_states.FETCH_JINA_READER)
     result["content"] = raw[:max_chars]
     result["length"] = len(result["content"])
     result["title"] = title
@@ -1318,7 +1318,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
     try:
         from robots_guard import robots_blocked
         if robots_blocked(url, timeout=min(timeout, 5.0)):
-            result = _make_result(url, "", 0, "robots_blocked", ok=False,
+            result = _make_result(url, "", 0, engine_states.FETCH_ROBOTS_BLOCKED, ok=False,
                                   error="robots.txt 禁止抓取")
             result = _assess_quality(result)
             result["cached"] = False
@@ -1346,7 +1346,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 "length": int(_wx.get("char_count") or 0),
                 "success": True,
                 "fetch_method": engine_states.FETCH_WECHAT + str(
-                    _wx.get("fetch_method") or "http_direct"),
+                    _wx.get("fetch_method") or engine_states.FETCH_HTTP_DIRECT),
                 "author": _wx.get("author") or "",
                 "publish_time": _wx.get("publish_time") or "",
             }
@@ -1531,7 +1531,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 # 该类分流与 TLS 指纹无关，stdlib 免费尝试即可，命中则免去
                 # TLS 伪造与浏览器冷启动。ARGO_FETCH_MOBILE=0 关闭。
                 if (_mobile_branch_enabled() and not gated
-                        and result.get("fetch_method") != "http_mobile"
+                        and result.get("fetch_method") != engine_states.FETCH_HTTP_MOBILE
                         and (not result.get("success")
                              or _needs_browser(result))):
                     mob = _mobile_http_fetch(url, max_chars,

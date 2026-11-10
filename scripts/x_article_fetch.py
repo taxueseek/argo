@@ -11,6 +11,7 @@ entityMap 里 MEDIA/MARKDOWN 原子块还原为带内嵌图片 Markdown。
 
 from __future__ import annotations
 
+import engine_states
 import json
 import os
 import re
@@ -124,7 +125,7 @@ def fetch_x_article(url: str, max_chars: int = 8000,
             "length": min(len(content), max_chars),
             "success": True,
             "error": None,
-            "fetch_method": "x_article",
+            "fetch_method": engine_states.FETCH_X_ARTICLE,
         }
     except Exception:
         return None

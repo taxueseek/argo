@@ -40,6 +40,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from cli_io import dumps  # noqa: E402
+import engine_states  # noqa: E402
 from research_work_packages import stage_work_packages  # noqa: E402
 
 MAX_SOURCES_PER_TRACK = 8
@@ -300,7 +301,9 @@ def evaluate_gates(
             "detail": f"{len(farm_hits)} sources originate from content farms or SEO scraper mirrors; evidence quality severely degraded.",
         })
 
-    cap = "low" if failures else ("medium" if warnings else "high")
+    cap = (engine_states.CONCLUSION_CAP_LOW if failures
+           else (engine_states.CONCLUSION_CAP_MEDIUM if warnings
+                 else engine_states.CONCLUSION_CAP_HIGH))
     return {"passed": not failures, "conclusion_cap": cap, "failures": failures, "warnings": warnings}
 
 

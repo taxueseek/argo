@@ -31,6 +31,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from config import load_config  # noqa: E402
+import engine_states  # noqa: E402
 from engine_env import missing_env_for, env_ready  # noqa: E402
 from engine_admission import record_validation, load_admission  # noqa: E402
 from engine_status import engine_detail  # noqa: E402
@@ -214,21 +215,21 @@ def run_health(engine_id: str, *, query: str | None = None, n: int = 3,
     if not spec:
         return {
             "ok": False,
-            "status": "error",
+            "status": engine_states.VALIDATION_STATUS_ERROR,
             "engine": engine_id,
             "error": "engine_not_in_config",
         }
     if not spec.get("enabled", True):
         return {
             "ok": False,
-            "status": "skipped",
+            "status": engine_states.VALIDATION_STATUS_SKIPPED,
             "engine": engine_id,
             "error": "disabled_in_config",
         }
     if not env_ready(engine_id, spec):
         return {
             "ok": False,
-            "status": "skipped",
+            "status": engine_states.VALIDATION_STATUS_SKIPPED,
             "engine": engine_id,
             "error": "missing_env",
             "missing_env": missing_env_for(engine_id, spec),
@@ -239,7 +240,7 @@ def run_health(engine_id: str, *, query: str | None = None, n: int = 3,
     if engine_id not in reg:
         return {
             "ok": False,
-            "status": "error",
+            "status": engine_states.VALIDATION_STATUS_ERROR,
             "engine": engine_id,
             "error": "no_builder_or_not_registered",
             "type": spec.get("type"),
@@ -259,7 +260,7 @@ def run_health(engine_id: str, *, query: str | None = None, n: int = 3,
     except Exception as e:
         return {
             "ok": False,
-            "status": "error",
+            "status": engine_states.VALIDATION_STATUS_ERROR,
             "engine": engine_id,
             "error": f"{type(e).__name__}: {e}",
             "latency_ms": round((time.time() - t0) * 1000, 1),
@@ -284,7 +285,8 @@ def run_health(engine_id: str, *, query: str | None = None, n: int = 3,
         ok = False
     return {
         "ok": ok,
-        "status": "pass" if ok else "fail",
+        "status": (engine_states.VALIDATION_STATUS_PASS if ok
+                  else engine_states.VALIDATION_STATUS_FAIL),
         "engine": engine_id,
         "query": query,
         "count": len(results),
@@ -313,11 +315,11 @@ def run_quality(engine_id: str, *, queries: list[dict[str, str]] | None = None,
     """质量基准：多 query 空结果率、平均延迟、字段完整率。"""
     spec = _get_spec(engine_id)
     if not spec or not spec.get("enabled", True):
-        return {"ok": False, "status": "skipped", "engine": engine_id, "error": "disabled_or_missing"}
+        return {"ok": False, "status": engine_states.VALIDATION_STATUS_SKIPPED, "engine": engine_id, "error": "disabled_or_missing"}
     if not env_ready(engine_id, spec):
         return {
             "ok": False,
-            "status": "skipped",
+            "status": engine_states.VALIDATION_STATUS_SKIPPED,
             "engine": engine_id,
             "error": "missing_env",
             "missing_env": missing_env_for(engine_id, spec),
@@ -392,7 +394,8 @@ def run_quality(engine_id: str, *, queries: list[dict[str, str]] | None = None,
 
     return {
         "ok": ok,
-        "status": "pass" if ok else "fail",
+        "status": (engine_states.VALIDATION_STATUS_PASS if ok
+                  else engine_states.VALIDATION_STATUS_FAIL),
         "engine": engine_id,
         "quality_score": quality_score,
         "pass_rate": round(pass_rate, 3),
@@ -410,7 +413,7 @@ def run_quality(engine_id: str, *, queries: list[dict[str, str]] | None = None,
 def validate_engine(
     engine_id: str,
     *,
-    stage: str = "health",
+    stage: str = engine_states.VALIDATION_STAGE_HEALTH,
     admit: bool = False,
     timeout: float = 10.0,
     write_doc: bool = False,
@@ -419,8 +422,9 @@ def validate_engine(
     """执行验证并可选写入 admission。"""
     stages = []
     if stage == "all":
-        stages = ["health", "quality"]
-    elif stage in ("health", "quality"):
+        stages = [engine_states.VALIDATION_STAGE_HEALTH,
+                       engine_states.VALIDATION_STAGE_QUALITY]
+    elif stage in engine_states.VALIDATION_STAGES:
         stages = [stage]
     else:
         return {"ok": False, "error": f"unknown stage: {stage}"}
@@ -430,43 +434,44 @@ def validate_engine(
         "stage_requested": stage,
         "stages": {},
         "ok": True,
-        "status": "pass",
+        "status": engine_states.VALIDATION_STATUS_PASS,
         "profile": profile,
     }
     passed: list[str] = []
     health_res = None
     quality_res = None
 
-    if "health" in stages:
+    if engine_states.VALIDATION_STAGE_HEALTH in stages:
         health_res = run_health(engine_id, timeout=timeout)
         report["stages"]["health"] = health_res
-        if health_res.get("status") == "skipped":
+        if health_res.get("status") == engine_states.VALIDATION_STATUS_SKIPPED:
             report["ok"] = False
-            report["status"] = "skipped"
+            report["status"] = engine_states.VALIDATION_STATUS_SKIPPED
             report["skip_reason"] = health_res.get("error")
         elif health_res.get("ok"):
-            passed.append("health")
+            passed.append(engine_states.VALIDATION_STAGE_HEALTH)
         else:
             report["ok"] = False
-            report["status"] = "fail"
+            report["status"] = engine_states.VALIDATION_STATUS_FAIL
 
-    if "quality" in stages and report.get("status") != "skipped":
+    if ("quality" in stages and report.get("status")
+            != engine_states.VALIDATION_STATUS_SKIPPED):
         quality_res = run_quality(engine_id, timeout=timeout, profile=profile)
         report["stages"]["quality"] = quality_res
-        if quality_res.get("status") == "skipped":
+        if quality_res.get("status") == engine_states.VALIDATION_STATUS_SKIPPED:
             report["ok"] = False
-            report["status"] = "skipped"
+            report["status"] = engine_states.VALIDATION_STATUS_SKIPPED
             report["skip_reason"] = quality_res.get("error")
         elif quality_res.get("ok"):
-            passed.append("quality")
+            passed.append(engine_states.VALIDATION_STAGE_QUALITY)
         else:
             report["ok"] = False
-            if report["status"] != "skipped":
-                report["status"] = "fail"
+            if report["status"] != engine_states.VALIDATION_STATUS_SKIPPED:
+                report["status"] = engine_states.VALIDATION_STATUS_FAIL
 
     # 写 admission
-    if report.get("status") != "skipped":
-        blocked = not ("health" in passed)
+    if report.get("status") != engine_states.VALIDATION_STATUS_SKIPPED:
+        blocked = not (engine_states.VALIDATION_STAGE_HEALTH in passed)
         # reason 只在**被 block** 时写：它表达「为什么不能用」。
         # 未 block 时留空——`record_validation` 的不变式是
         # 「blocked=False ⇒ reason 为空」，成功路径上写
@@ -474,7 +479,8 @@ def validate_engine(
         # blocked=false/reason=validation_passed，与注释宣称的语义矛盾）。
         # 成功与否由 blocked/admitted_at/stages_passed 表达，不需要 reason。
         if blocked:
-            reason = (health_res or {}).get("error") or "health_failed"
+            reason = ((health_res or {}).get("error")
+                      or engine_states.ADMISSION_REASON_HEALTH_FAILED)
         else:
             reason = ""
         avg_lat = None
@@ -489,17 +495,17 @@ def validate_engine(
             stages_passed=passed,
             quality_score=qscore,
             avg_latency_ms=avg_lat,
-            blocked=blocked if ("health" in stages) else None,
+            blocked=blocked if (engine_states.VALIDATION_STAGE_HEALTH in stages) else None,
             reason=reason,
             health=health_res,
             quality=quality_res,
-            admit=admit and ("health" in passed),
+            admit=admit and (engine_states.VALIDATION_STAGE_HEALTH in passed),
         )
         report["admission"] = adm
     else:
         report["admission"] = load_admission(engine_id)
 
-    if write_doc and report.get("status") == "pass":
+    if write_doc and report.get("status") == engine_states.VALIDATION_STATUS_PASS:
         path = _write_engine_doc(engine_id, report)
         report["doc_path"] = str(path)
 
@@ -514,8 +520,8 @@ def _write_engine_doc(engine_id: str, report: dict[str, Any]) -> Path:
     path = docs / f"{engine_id}.md"
     detail = report.get("detail") or engine_detail(engine_id)
     adm = report.get("admission") or {}
-    health = (report.get("stages") or {}).get("health") or {}
-    quality = (report.get("stages") or {}).get("quality") or {}
+    health = (report.get("stages") or {}).get(engine_states.VALIDATION_STAGE_HEALTH) or {}
+    quality = (report.get("stages") or {}).get(engine_states.VALIDATION_STAGE_QUALITY) or {}
     lines = [
         f"# 引擎：`{engine_id}`",
         "",
@@ -576,7 +582,8 @@ def _free_engine_ids() -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Argo 引擎标准化验证")
     parser.add_argument("--engine", "-e", help="引擎 ID")
-    parser.add_argument("--stage", default="health", choices=["health", "quality", "all"])
+    parser.add_argument("--stage", default=engine_states.VALIDATION_STAGE_HEALTH,
+                   choices=[*sorted(engine_states.VALIDATION_STAGES), "all"])
     parser.add_argument("--admit", action="store_true", help="通过后写入准入状态")
     parser.add_argument("--write-doc", action="store_true", help="通过后生成 docs/engines/<id>.md")
     parser.add_argument("--timeout", type=float, default=10.0)
@@ -608,30 +615,31 @@ def main() -> int:
         stage = args.stage
         admit = args.admit
         if args.all_free and args.stage == "all" and len(targets) > 3:
-            stage = "health"
+            stage = engine_states.VALIDATION_STAGE_HEALTH
         rep = validate_engine(
             eng, stage=stage, admit=admit, timeout=args.timeout,
             write_doc=args.write_doc, profile=args.profile,
         )
         reports.append(rep)
-        if rep.get("status") == "fail":
+        if rep.get("status") == engine_states.VALIDATION_STATUS_FAIL:
             exit_ok = False
-        elif args.strict and rep.get("status") != "pass":
+        elif (args.strict and rep.get("status")
+                  != engine_states.VALIDATION_STATUS_PASS):
             # skipped 也是「这个源没证明自己能交付」：夜间门禁要的是
             # 11 个关键源全部 pass，缺 key/改名/禁用都不该静默全绿。
             exit_ok = False
         if not args.json:
             st = rep.get("status")
             lat = ""
-            h = (rep.get("stages") or {}).get("health") or {}
+            h = (rep.get("stages") or {}).get(engine_states.VALIDATION_STAGE_HEALTH) or {}
             if h.get("latency_ms") is not None:
                 lat = f" {h['latency_ms']}ms"
-            q = (rep.get("stages") or {}).get("quality") or {}
+            q = (rep.get("stages") or {}).get(engine_states.VALIDATION_STAGE_QUALITY) or {}
             qnote = f" q={q.get('quality_score')}" if q else ""
             print(f"[{st}] {eng}{lat}{qnote} stages_passed={ (rep.get('admission') or {}).get('stages_passed')}")
             if rep.get("skip_reason"):
                 print(f"       skip: {rep['skip_reason']}")
-            if st == "fail":
+            if st == engine_states.VALIDATION_STATUS_FAIL:
                 err = h.get("error") or q.get("error") or rep.get("error")
                 print(f"       error: {err}")
 

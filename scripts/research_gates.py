@@ -262,11 +262,11 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
             })
 
     if failures:
-        cap = "low"
+        cap = engine_states.CONCLUSION_CAP_LOW
     elif warnings:
-        cap = "medium"
+        cap = engine_states.CONCLUSION_CAP_MEDIUM
     else:
-        cap = "high"
+        cap = engine_states.CONCLUSION_CAP_HIGH
 
     return {
         "passed": not failures,

@@ -26,6 +26,8 @@ L0 是恢复决策树的第 0 级：补跑本 combo 的 skipped 引擎，非空
 
 from __future__ import annotations
 
+import engine_states
+
 import time
 from typing import Any, Callable
 
@@ -131,10 +133,10 @@ def maybe_retry_skipped(
     info = {
         "triggered": True,
         "recovered": True,
-        "level_used": "L0",
+        "level_used": engine_states.RECOVERY_LEVEL_L0,
         "strategy_used": "retry_skipped",
         "steps_tried": [{
-            "level": "L0",
+            "level": engine_states.RECOVERY_LEVEL_L0,
             "strategy": "retry_skipped",
             "query": query,
             "engines": skipped,
@@ -149,7 +151,7 @@ def maybe_retry_skipped(
                 "query": (query[:60] if query else query),
                 "triggered": True,
                 "recovered": True,
-                "level_used": "L0",
+                "level_used": engine_states.RECOVERY_LEVEL_L0,
                 "strategy_used": "retry_skipped",
                 "steps_tried": 1,
                 "final_query": (query[:60] if query else query),

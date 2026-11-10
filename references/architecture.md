@@ -56,10 +56,13 @@ argo/
 
 全部状态名、派生集合与转换判据只有一处：`scripts/engine_states.py`。它只放
 词表与纯函数，不碰 IO，所以热路径可以直接 import。改状态名、加状态值、调
-派生集合，都只改这一个文件；各模块用常量，不写字符串字面量（`tests/
-test_engine_states.py` 的契约用例把这条钉住）。
+派生集合，都只改这一个文件；各模块用常量，不写字符串字面量。`tests/
+test_engine_states.py` 钉住派生关系与消费面同源，`tests/
+test_state_literal_drift.py` 用 AST 扫「已登记状态值又退回裸字面量」，
+`tests/test_native_tools_sync.py` 把词表投影对拍到 JS 生成物；三者都进
+`scripts/pre-commit` 快门禁。
 
-登记的 22 台状态机：
+登记的 25 台状态机（22 台 + 3 台新登记）：
 
 | 分组 | 状态机 | 关键判据 |
 |------|--------|---------|
@@ -82,6 +85,10 @@ test_engine_states.py` 的契约用例把这条钉住）。
 | | 缓存层级 cache level | L1/L2/L?（`L?` 是旧存档缺 `_cache_level` 的兜底） |
 | | 观察模式 watch change | none/noise/substantive/unknown |
 | | 平台运行时 daemon/plugin | running/stopped/idle/busy；ready/loading/unavailable |
+| 跨层结论 | 恢复链等级 recovery level | L0/L1/L2/L3/L4；`RECOVERY_LEVEL_TIER` 成本序，`recovery_level_tier` 未登记值返回 `None`（fail-closed） |
+| | 结论上限 conclusion_cap | low/medium/high；Python 三处与 JS `wide-research` 共用生成物 `STATES.conclusionCap` |
+| | 验证结论 validation | pass/fail/skipped/error；阶段 health/quality；`engine_validate` 产出、`engine_admission` 落库、`engine_status` 展示共用 |
+| 抓取降级链 | fetch method 补值 | http_mobile/tls_spoof/jina_reader/md_variant/llms_txt/robots_blocked/http_direct/full；`FETCH_METHODS_ALL` 是全集，`DEGRADED_FETCH_METHODS` 是其子集 |
 
 词表边界：`outcome.status` 用连字符（`quota-exhausted`），`engine_detail.status`
 与失败归因用下划线（`quota_exhausted`）。这是三层各自的接口契约，跨层映射走

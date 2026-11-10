@@ -8,6 +8,8 @@ quota_exhausted 三套。本用例把各层词表钉死，改错一处即失败�
 """
 from __future__ import annotations
 
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -247,6 +249,43 @@ def test_health_check_category_records_without_keyword_collision():
     finally:
         import importlib
         importlib.reload(health_check)
+
+
+def test_validation_vocabulary_is_shared_across_producer_and_persister():
+    """验证结论词表必须被 engine_validate / engine_admission 同时引用。
+
+    `skipped` 改名只改产出侧、漏改 admission 的 `status != "skipped"`，
+    未探测引擎会被判 blocked=True 并落库、路由直接跳过（既往 24 个引擎
+    错拉黑事故的同形态）。本用例钉住两侧都从词表取值，不写字面量。
+    """
+    for rel in ("scripts/engine_validate.py", "scripts/engine_admission.py"):
+        src = (Path(__file__).resolve().parents[1] / rel).read_text(encoding="utf-8")
+        assert "import engine_states" in src, f"{rel} 未引用词表"
+        assert "engine_states.VALIDATION_STATUS_SKIPPED" in src, \
+            f"{rel} 仍手写 skipped 字面量"
+        assert "engine_states.VALIDATION_STAGE_HEALTH" in src, \
+            f"{rel} 仍手写 health 阶段名"
+    assert st.VALIDATION_STATUSES == {"pass", "fail", "skipped", "error"}
+    assert st.VALIDATION_STAGES == {"health", "quality"}
+
+
+def test_recovery_level_l0_is_in_the_tier_table():
+    """L0 必须进成本序表：缺它时 max_level=L0 落到默认最高档，门控失效。"""
+    assert st.recovery_level_tier(st.RECOVERY_LEVEL_L0) == -1
+    assert st.recovery_level_tier("L9") is None  # 未登记值不得回退
+    assert st.RECOVERY_LEVEL_TIER[st.RECOVERY_LEVEL_L4] == 3
+
+
+def test_conclusion_cap_vocabulary_is_generated_to_js():
+    """结论上限三态必须与 JS 侧生成物逐值对拍。"""
+    data = (Path(__file__).resolve().parents[1] /
+            "packages/dsh-plugin/dsh/native-tools.mjs").read_text(encoding="utf-8")
+    m = re.search(r"export const STATES = (\{.*?\n\});", data, re.S)
+    assert m, "native-tools.mjs 缺 STATES 导出"
+    states = json.loads(m.group(1))
+    assert states["conclusionCap"] == {v: v for v in st.CONCLUSION_CAP_STATUSES}
+    assert states["plugin"] == {v: v for v in st.PLUGIN_STATES}
+    assert states["daemon"] == {v: v for v in st.DAEMON_STATES}
 
 
 def test_health_sources_align_to_circuit_breaker(monkeypatch):

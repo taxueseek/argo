@@ -12,6 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import engine_states
 from engine_env import env_flag
 
 
@@ -100,7 +101,7 @@ def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
                             "length": len(resp.text),
                             "success": True,
                             "error": None,
-                            "fetch_method": "jsrun_challenge",
+                            "fetch_method": engine_states.FETCH_JSRUN_CHALLENGE,
                             "jsrun_cookie": cookie[:100],
                         }
                     last_err = f"HTTP {resp.status_code}, {len(resp.text)} 字节"
