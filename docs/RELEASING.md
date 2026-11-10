@@ -33,11 +33,41 @@ python3 scripts/release.py publish 2.10.1 --yes
 
 - 发布说明正文、五语「最近更新」、能力段新段落、发布记录表行——这些要写和翻，脚本只检查在不在
 
+## Release 资产（scripts/build_release_assets.sh）
+
+资产清单是 **wheel + sdist 两件套**，每项配一个独立 `.sha256`：
+
+```
+argo_search-<ver>-py3-none-any.whl      装好的包，pip / uvx 用
+argo_search-<ver>.tar.gz                sdist，无 wheel 的平台或源码构建用
+argo_search-<ver>-py3-none-any.whl.sha256
+argo_search-<ver>.tar.gz.sha256
+```
+
+**为什么没有运行时源码包**：GitHub 每个 Release 页面自动生成 Source code
+(tar.gz) 与 (zip)，那是完整仓库快照，「要源码」的需求已被平台覆盖。同类项目
+（psf/requests、pandas、astral-sh/uv）的 Release 资产都是 wheel + sdist 两件
+套，没有一个手动传运行时源码包。曾存在一个 `argo-v<ver>.tar.gz`（运行时子集，
+不含 tests），2026-11-10 删除——它服务的需求没有安装路径能触达。
+
+**为什么 sdist 不含 tests/**：sdist 服务「从源码构建」，tests/ 解包后约 4 MB、
+占 sdist 三分之一；想跑测试的人用 `git clone`（能拿到完整仓库、测试依赖与
+CI 配置）。`MANIFEST.in` 里 `recursive-exclude tests *` 负责排除。
+
+**为什么逐资产一个 .sha256 而不是合并清单**：合并清单（`SHA256SUMS.txt`）是
+单点——它损坏则所有校验都不可用；且校验时必须先下清单再逐项对。独立文件可以
+边下边校，一个损坏不影响其余。格式照 astral-sh/uv：`<sha256>  <filename>`。
+
+这三条由 `tests/test_release_assets_contract.py` 机械锁住。
+
 ## 已知环境事实
 
 - **npm 由本地脚本发**：CI 的 release 工作流里 npm 步骤因无 `NPM_TOKEN` 会跳过，GitHub Release 与资产照常。要改回 CI 发，配 `NPM_TOKEN` 即可。
 - **npm CDN 传播 3-4 分钟**：`publish` 里已做轮询（默认 300s，`--wait` 可调），期间查不到新版本是正常现象，**不要重发**。
 - **解释器**：用 `python3.14` 跑（3.15 没有 pytest 与 PyYAML）。脚本检测到缺 PyYAML 会提示。
+- **build 模块**：`build_release_assets.sh` 打 wheel/sdist 需要 `.venv` 里有
+  `build`（CI 的 release 工作流会 `uv pip install build`）。缺失时脚本会走
+  setuptools 分支，可能打不出 wheel——本机要手跑一次构建时先装。
 
 ## 发到一半失败怎么办
 

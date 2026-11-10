@@ -3,6 +3,21 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## 未发布
+
+**定位**：Release 资产瘦身。调研同类项目（psf/requests、pandas、astral-sh/uv）的 Release 资产后，把三处冗余或不一致的产入口径收掉。
+
+**关键变更**：
+- **去掉运行时源码包**：`build_release_assets.sh` 不再产出 `argo-v<ver>.tar.gz`。GitHub 每个 Release 页面自动生成 Source code (tar.gz/zip)，「要源码」的需求已被平台覆盖；同类项目都是 wheel + sdist 两件套，没有一个手动传运行时源码包。那个包服务的需求没有安装路径能触达，保留它意味着每版多约 2 MB 下载、多一处版本号同步、多一个可能与 sdist 不一致的副本
+- **sdist 排除 tests/**：`MANIFEST.in` 加 `recursive-exclude tests *`。tests/ 解包后约 4 MB、占 sdist 三分之一，而 sdist 服务「从源码构建」不服务「跑测试」——想跑测试的人用 `git clone`。sdist 从 3.1 MB 降到 2.2 MB
+- **校验和改为逐资产独立 `.sha256`**：不再产出合并的 `SHA256SUMS.txt`（照 astral-sh/uv 格式）。合并清单是单点，损坏则所有校验失效；独立文件可以边下边校，一个损坏不影响其余
+- **新增 `tests/test_release_assets_contract.py`** 锁住以上三条，三处都做了回退验证（把旧写法加回来，对应用例必须挂）。首次写的断言漏了「带路径前缀」的变体写法，回退时没抓到，已改为正则匹配
+- 资产总下载从 7.4 MB 降到约 4.7 MB
+
+**默认关闭**：无新增
+
+---
+
 ## v2.14.0
 
 **定位**：解析器层收口 + 引擎扩容 + 错题本机制落地。把「新引擎接入要手写解析」变成「声明字段即可推断」，源从 290 增到 300；把「失败可归因、经验可复用」从口号变成可执行机制。
