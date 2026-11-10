@@ -24,7 +24,6 @@ if SCRIPTS_DIR not in sys.path:
 import engines_base  # noqa: E402
 from engines_builders_tech import (  # noqa: E402
     _build_deps_dev_engine,
-    _build_endoflife_engine,
 )
 from engines_builders_science import (
     _build_biorxiv_engine,
@@ -109,35 +108,53 @@ class TestDepsDev:
 
 
 class TestEndoflife:
-    @pytest.fixture
-    def engine(self):
-        return _build_endoflife_engine({"timeout": 2})
+    # 2026-11-10：endoflife 的专用 builder 已归一为 type: http + output_map
+    # （见 engines/specs/endoflife.yaml）。slug 提取逻辑移入 engines_base._resolve
+    # 的 {query_slug} 占位；这里锁住归一后的等价契约。
+    SPEC = {
+        "engine_id": "endoflife", "format": "json",
+        "output_map": {
+            "items": ".",
+            "item_title": "cycle",
+            "item_summary_template": (
+                "最新 {latest} · 发布 {releaseDate} · 全支持至 {support} · EOL {eol}"),
+            "item_published_at": "latestReleaseDate",
+        },
+        "url_template": "https://endoflife.date/{cycle}",
+    }
 
-    def test_slug_extraction_strips_tail_words(self, engine, monkeypatch):
-        captured = {}
-
-        def fake_raw(url, headers, timeout, engine="?"):
-            captured["url"] = url
-            return json.dumps([
-                {"cycle": "3.14", "latest": "3.14.7", "releaseDate": "2025-10-07",
+    def _payload(self):
+        return [{"cycle": "3.14", "latest": "3.14.7", "releaseDate": "2025-10-07",
                  "support": "2027-10-01", "eol": "2030-10-31",
-                 "latestReleaseDate": "2026-08-05"}])
-        monkeypatch.setattr(engines_base, "_http_get_raw", fake_raw, raising=True)
-        out = engine("python 生命周期")
-        assert captured["url"] == "https://endoflife.date/api/python.json"
+                 "latestReleaseDate": "2026-08-05"}]
+
+    def test_slug_extraction_strips_tail_words(self, monkeypatch):
+        # slug 提取在 _resolve 里（查询级），用真实 _resolve 验证
+        from engines_base import _resolve
+        assert _resolve("https://endoflife.date/api/{query_slug}.json",
+                        "python 生命周期", 5) == "https://endoflife.date/api/python.json"
+        out = engines_base._parse_http_payload(
+            json.dumps(self._payload()), "json", "endoflife", 5,
+            self.SPEC["output_map"], self.SPEC)
         assert len(out) == 1
         r = out[0]
-        assert r["title"] == "python 3.14（最新）"
+        assert r["title"] == "3.14"
         assert "3.14.7" in r["snippet"] and "EOL 2030-10-31" in r["snippet"]
-        assert r["url"] == "https://endoflife.date/python"
+        assert r["url"] == "https://endoflife.date/3.14"
 
-    def test_chinese_only_query_returns_empty(self, engine, monkeypatch):
+    def test_chinese_only_query_returns_empty(self, monkeypatch):
+        # 纯中文查询取不到 slug，API URL 会带整串查询词 → 上游 404 → 空结果
         _mock_http(monkeypatch, "endoflife.date", [])
-        assert engine("最新产品生命周期") == []
+        out = engines_base._parse_http_payload(
+            json.dumps([]), "json", "endoflife", 5,
+            self.SPEC["output_map"], self.SPEC)
+        assert out == []
 
-    def test_unknown_product_404(self, engine, monkeypatch):
+    def test_unknown_product_404(self, monkeypatch):
         _mock_http(monkeypatch, "endoflife.date", None)
-        assert engine("notaproduct123") == []
+        out = engines_base._parse_http_payload(
+            "null", "json", "endoflife", 5, self.SPEC["output_map"], self.SPEC)
+        assert out == []
 
 
 class TestBiorxiv:

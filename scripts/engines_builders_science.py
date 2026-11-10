@@ -23,49 +23,6 @@ from engines_base import (
 
 logger = logging.getLogger("unified_search.engines")
 
-# ── ClinicalTrials.gov v2 ────────────────────────────────────────────────────
-
-def _build_clinicaltrials_engine(spec: dict[str, Any]) -> Any:
-    """ClinicalTrials.gov API v2 试验检索（免认证）。"""
-    timeout = spec.get("timeout", 12)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        import urllib.parse as up
-        q = " ".join(re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", query))
-        if not re.search(r"[A-Za-z]{2,}", q):
-            return []
-        to = _timeout or timeout
-        url = "https://clinicaltrials.gov/api/v2/studies?" + up.urlencode({
-            "query.term": q, "pageSize": min(n, 20), "format": "json"})
-        try:
-            with http_open(urllib.request.Request(
-                    url, headers={"User-Agent": "argo-search/2.5", "Accept": "application/json"}), timeout=to, engine=spec.get("_name", "")) as resp:
-                data = json.loads(resp.read().decode("utf-8", "replace"))
-        except Exception as e:
-            logger.warning(f"clinicaltrials 失败: {e}")
-            return []
-        results = []
-        for _rk5, st in enumerate((data.get("studies") or [])[:n]):
-            ps = st.get("protocolSection") or {}
-            ident = ps.get("identificationModule") or {}
-            desc = ps.get("descriptionModule") or {}
-            status = (ps.get("statusModule") or {}).get("overallStatus") or ""
-            nct = ident.get("nctId") or ""
-            title = ident.get("briefTitle") or ident.get("officialTitle") or nct
-            summary = desc.get("briefSummary") or status
-            if not title and not nct:
-                continue
-            results.append({
-                "title": str(title)[:200],
-                "url": f"https://clinicaltrials.gov/study/{nct}" if nct else "",
-                "snippet": str(summary).replace("\n", " ")[:300],
-                "source": "clinicaltrials",
-                "score": rank_score(0.85, _rk5),
-            })
-        return results
-    return _engine
-
 
 # ── openFDA 药品标签 ─────────────────────────────────────────────────────────
 

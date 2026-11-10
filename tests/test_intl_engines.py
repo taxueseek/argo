@@ -40,7 +40,37 @@ class _BuilderCase(unittest.TestCase):
         return res
 
 
-class TestCnii(_BuilderCase):
+class _SpecCase(unittest.TestCase):
+    """声明式源：走 _parse_http_payload 验证 spec 的 output_map 与拼接模板。
+
+    2026-11-10 起 doaj / europeana / hal / eu_opendata / tatoeba / figshare
+    的专用 builder 已归一为 type: http + output_map（见各自 spec）。这些用例
+    锁住归一后的等价契约——原 builder 拼接的字段（作者/日期/摘要、provider、
+    许可/DOI）必须仍在，否则归一就是信息降级。
+    """
+
+    def parse(self, name, payload, spec):
+        import engines_base
+        return engines_base._parse_http_payload(
+            json.dumps(payload), "json", name, 5, spec["output_map"], spec)
+
+
+class TestCnii(_SpecCase):
+    # 2026-11-10：cnii 的专用 builder 已归一为 type: http + output_map
+    # （见 engines/specs/cnii.yaml）。锁住归一后的等价契约。
+    SPEC = {
+        "engine_id": "cnii", "format": "json",
+        "output_map": {
+            "items": "items",
+            "item_title": "title",
+            "item_url": "link.@id",
+            "item_summary_template": (
+                "{dc:creator.0} · {dc:creator.1} · {dc:creator.2} · "
+                "{prism:publicationDate} · {description}"),
+            "item_published_at": "prism:publicationDate",
+        },
+    }
+
     def test_parse(self):
         payload = {"items": [
             {"title": "Deep learning in visual computing", "@id": "https://cir.nii.ac.jp/crid/1",
@@ -49,15 +79,19 @@ class TestCnii(_BuilderCase):
              "description": "A book on deep learning."},
             {"title": "Second paper", "link": {"@id": "https://cir.nii.ac.jp/crid/2"}},
         ]}
-        res = self.run_case(intl._build_cnii_engine, payload)
+        res = self.parse("cnii", payload, self.SPEC)
         self.assertEqual(len(res), 2)
         self.assertEqual(res[0]["title"], "Deep learning in visual computing")
         self.assertEqual(res[0]["url"], "https://cir.nii.ac.jp/crid/1")
         self.assertIn("Ugail", res[0]["snippet"])
 
     def test_network_error(self):
-        with patch.object(intl, "_http_json", side_effect=OSError("x")):
-            res = intl._build_cnii_engine({"timeout": 8})("q", 3)
+        """非 JSON 响应（网络层失败）→ 空结果，不抛。"""
+        import engines_base
+        res = engines_base._parse_http_payload(
+            "<html>gateway error</html>", "json", "cnii", 5,
+            self.SPEC["output_map"], {"engine_id": "cnii", "format": "json",
+                                      "output_map": self.SPEC["output_map"]})
         self.assertEqual(res, [])
 
 
@@ -133,21 +167,6 @@ class TestDnb(_BuilderCase):
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Wissenschaft und Technik")
         self.assertIn("d-nb.info", res[0]["url"])
-
-
-class _SpecCase(unittest.TestCase):
-    """声明式源：走 _parse_http_payload 验证 spec 的 output_map 与拼接模板。
-
-    2026-11-10 起 doaj / europeana / hal / eu_opendata / tatoeba / figshare
-    的专用 builder 已归一为 type: http + output_map（见各自 spec）。这些用例
-    锁住归一后的等价契约——原 builder 拼接的字段（作者/日期/摘要、provider、
-    许可/DOI）必须仍在，否则归一就是信息降级。
-    """
-
-    def parse(self, name, payload, spec):
-        import engines_base
-        return engines_base._parse_http_payload(
-            json.dumps(payload), "json", name, 5, spec["output_map"], spec)
 
 
 class TestDoaj(_SpecCase):
@@ -434,16 +453,29 @@ class TestElectricityMaps(_BuilderCase):
         self.assertEqual(res, [])
 
 
-class TestUsda(_BuilderCase):
+class TestUsda(_SpecCase):
+    # 2026-11-10：usda 的专用 builder 已归一为 type: http + output_map
+    # （见 engines/specs/usda.yaml）。锁住归一后的等价契约。
+    SPEC = {
+        "engine_id": "usda", "format": "json",
+        "output_map": {
+            "items": "foods",
+            "item_title": "description",
+            "item_summary_template": "{foodCategory} · {brandOwner} · FDC {fdcId}",
+            "item_url_template": "https://fdc.nal.usda.gov/food-details/{fdcId}/nutrients",
+        },
+    }
+
     def test_parse(self):
         payload = {"totalHits": 25685, "foods": [
             {"description": "APPLE, RAW", "fdcId": 45400,
              "foodCategory": "Fruits", "brandOwner": "Generic"},
         ]}
-        res = self.run_case(intl._build_usda_engine, payload)
+        res = self.parse("usda", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "APPLE, RAW")
         self.assertIn("45400", res[0]["url"])
+        self.assertIn("FDC 45400", res[0]["snippet"])
 
 
 class TestTatoeba(_SpecCase):

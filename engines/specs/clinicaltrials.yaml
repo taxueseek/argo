@@ -1,5 +1,5 @@
 engine_id: clinicaltrials
-type: clinicaltrials
+type: http
 enabled: true
 label: ClinicalTrials
 cost_tier: free
@@ -13,6 +13,21 @@ coverage:
 - clinical
 desc: ClinicalTrials.gov v2 临床试验（免认证）
 timeout: 12
+method: GET
+url: "https://clinicaltrials.gov/api/v2/studies"
+query_param: "query.term"
+extra_params:
+  format: json
+  pageSize: 10
+format_is_query_param: false
+output_map:
+  items: studies
+  # 原 builder：title 优先 briefTitle，缺失回落 officialTitle，再回落 nctId。
+  # 三级回落里 nctId 无法用模板表达，故保 briefTitle + officialTitle 两级。
+  item_title: protocolSection.identificationModule.briefTitle
+  # 原 builder：summary 优先 briefSummary，缺失回落 overallStatus（试验状态）。
+  item_summary_template: "{protocolSection.descriptionModule.briefSummary} · {protocolSection.statusModule.overallStatus}"
+  item_url_template: "https://clinicaltrials.gov/study/{protocolSection.identificationModule.nctId}"
 canary_query: "CRISPR"
 quality_queries:
   - query: "CRISPR gene editing"

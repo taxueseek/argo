@@ -114,23 +114,20 @@ class TestBuildersEmitDescendingScores:
     def _items(self, payload):
         return payload
 
-    def test_cnii_descending(self, monkeypatch):
-        """cnii（原先全部写死 0.7）现在应给出口内递减分。"""
+    def test_electricity_maps_descending(self, monkeypatch):
+        """electricity_maps 给出口内递减分。"""
         import engines_builders_intl as bi
-        records = [{"title": f"论文 {i}", "link": {"@id": f"https://doi.org/10.{i}"},
-                    "prism:publicationDate": "2026", "description": "摘要"}
-                   for i in range(5)]
-        payload = {"items": records}
+        zones = {f"US-CAL-{i}": {"zoneName": f"California {i}", "countryCode": "US", "isCommerciallyAvailable": True, "tier": 1} for i in range(5)}
 
         def fake_json(url, timeout, engine=""):
-            return payload
+            return zones
 
         monkeypatch.setattr(bi, "_http_json", fake_json, raising=False)
-        spec = {"_name": "cnii", "timeout": 5}
-        engine = bi._build_cnii_engine(spec)
-        out = engine("metasearch", n=5)
+        spec = {"_name": "electricity_maps", "timeout": 5}
+        engine = bi._build_electricity_maps_engine(spec)
+        out = engine("california", n=5)
         scores = [r["score"] for r in out]
-        assert scores, "cnii 应返回结果"
+        assert scores, "electricity_maps 应返回结果"
         assert all(scores[i] > scores[i + 1] for i in range(len(scores) - 1)), scores
         assert scores[0] == 0.7, "首条应保持原档位常量"
 

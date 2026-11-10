@@ -80,46 +80,6 @@ def _http_text(url: str, timeout: float, engine: str = "") -> str:
         return resp.read().decode("utf-8", "replace")
 
 
-# ── CiNii Research ────────────────────────────────────────────────────────────
-
-def _build_cnii_engine(spec: dict[str, Any]) -> Any:
-    """CiNii Research 学术总库（cir.nii.ac.jp，OpenSearch JSON-LD，免认证）。"""
-    timeout = spec.get("timeout", 12)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        url = f"https://cir.nii.ac.jp/opensearch/all?q={urllib.parse.quote(query)}&format=json&count={min(n, 10)}"
-        try:
-            data = _http_json(url, to, engine=spec.get("_name", ""))
-        except Exception as e:
-            logger.warning(f"CiNii 失败: {e}")
-            return []
-        results = []
-        for _rk, it in enumerate((data.get("items") or [])[:n]):
-            if not isinstance(it, dict):
-                continue
-            title = it.get("title", "")
-            link = it.get("link")
-            url_ = link.get("@id", "") if isinstance(link, dict) else str(link or "")
-            creators = it.get("dc:creator") or []
-            if isinstance(creators, str):
-                creators = [creators]
-            year = it.get("prism:publicationDate", "")
-            parts = [p for p in (", ".join(str(c) for c in creators[:3]), str(year)) if p]
-            if not title and not url_:
-                continue
-            results.append({
-                "title": str(title)[:200],
-                "url": url_,
-                "snippet": (" · ".join(parts) + " · " + str(it.get("description", "")))[:300],
-                "source": "cnii",
-                "score": rank_score(0.7, _rk),
-            })
-        return results
-    return _engine
-
-
 # ── NDL Search（OpenSearch RSS）───────────────────────────────────────────────
 
 def _build_ndl_engine(spec: dict[str, Any]) -> Any:
@@ -564,43 +524,6 @@ def _build_electricity_maps_engine(spec: dict[str, Any]) -> Any:
                 })
                 if len(results) >= n:
                     break
-        return results
-    return _engine
-
-
-# ── USDA FoodData Central 营养成分 ────────────────────────────────────────────
-
-def _build_usda_engine(spec: dict[str, Any]) -> Any:
-    """USDA FoodData Central 营养成分（api.nal.usda.gov，官方 DEMO_KEY）。"""
-    timeout = spec.get("timeout", 12)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        url = (f"https://api.nal.usda.gov/fdc/v1/foods/search?api_key=DEMO_KEY"
-               f"&query={urllib.parse.quote(query)}&pageSize={min(n, 10)}")
-        try:
-            data = _http_json(url, to, engine=spec.get("_name", ""))
-        except Exception as e:
-            logger.warning(f"USDA 失败: {e}")
-            return []
-        results = []
-        for _rk14, food in enumerate((data.get("foods") or [])[:n]):
-            if not isinstance(food, dict):
-                continue
-            desc = food.get("description", "")
-            fdc = food.get("fdcId", "")
-            brand = food.get("brandOwner") or ""
-            parts = [p for p in (food.get("foodCategory", ""), brand) if p]
-            if not desc:
-                continue
-            results.append({
-                "title": desc[:200],
-                "url": f"https://fdc.nal.usda.gov/food-details/{fdc}/nutrients" if fdc else "",
-                "snippet": (" · ".join(parts) + f" · FDC {fdc}")[:300] if fdc else " · ".join(parts)[:300],
-                "source": "usda",
-                "score": rank_score(0.7, _rk14),
-            })
         return results
     return _engine
 

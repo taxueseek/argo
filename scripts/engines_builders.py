@@ -118,7 +118,6 @@ from engines_builders_science import (
     _build_biorxiv_engine,
     _build_rcsb_pdb_engine,
     _build_usgs_engine,
-    _build_clinicaltrials_engine,
     _build_openfda_engine,
 )
 from engines_builders_finance import (
@@ -151,7 +150,6 @@ from engines_builders_search import (
     _build_ecosia_engine,
 )
 from engines_builders_intl import (
-    _build_cnii_engine,
     _build_ndl_engine,
     _build_kor_law_engine,
     _build_hatena_bookmark_engine,
@@ -162,7 +160,6 @@ from engines_builders_intl import (
     _build_lieu_engine,
     _build_opensky_engine,
     _build_electricity_maps_engine,
-    _build_usda_engine,
     _build_tencent_kline_engine,
     _build_qq_music_engine,
     _build_google_news_engine,
@@ -242,7 +239,6 @@ __all__ = [
     "_build_free_dictionary_engine",
     "_build_baidu_baike_engine",
     "_build_pypi_engine",
-    "_build_clinicaltrials_engine",
     "_build_openfda_engine",
     "_build_juejin_engine",
     "_build_models_dev_engine",
@@ -262,7 +258,6 @@ __all__ = [
     "_build_google_patents_engine",
     "_build_marginalia_engine",
     "_build_wiby_engine",
-    "_build_cnii_engine",
     "_build_ndl_engine",
     "_build_kor_law_engine",
     "_build_hatena_bookmark_engine",
@@ -273,7 +268,6 @@ __all__ = [
     "_build_lieu_engine",
     "_build_opensky_engine",
     "_build_electricity_maps_engine",
-    "_build_usda_engine",
     "_build_tencent_kline_engine",
     "_build_qq_music_engine",
     "_build_parallel_engine",

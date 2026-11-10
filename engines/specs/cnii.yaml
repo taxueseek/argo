@@ -8,9 +8,6 @@ priority: 45
 period: second
 cost_per_call: 0.0
 cost_unit: free
-# 语言绑定：本库是日文论文/学会刊直采，英文查询召回价值为零。
-# 曾漏声明 → 语言路由层按默认 ["*"] 当语言中立，英文查询照常把它选进
-# academic 预算窗口（2026-11-10 排查「cnii 误入英文 combo」时定位）。
 langs:
 - ja
 coverage:
@@ -18,4 +15,18 @@ coverage:
 - japanese
 desc: 日本国立情报学研究所学术总库（论文/博士论文/科研项目，JSON-LD）
 timeout: 12
-type: cnii
+type: http
+method: GET
+url: "https://cir.nii.ac.jp/opensearch/all"
+query_param: q
+extra_params:
+  format: json
+  count: 10
+format_is_query_param: false
+output_map:
+  items: items
+  item_title: title
+  item_url: "link.@id"
+  # 拼接模板：原 builder 的 `作者 · 年份 · 摘要`（作者取前 3 位）
+  item_summary_template: "{dc:creator.0} · {dc:creator.1} · {dc:creator.2} · {prism:publicationDate} · {description}"
+  item_published_at: "prism:publicationDate"

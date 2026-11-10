@@ -14,4 +14,17 @@ coverage:
 - health
 desc: 美国农业部食品营养成分（官方 DEMO_KEY）
 timeout: 12
-type: usda
+type: http
+method: GET
+url: "https://api.nal.usda.gov/fdc/v1/foods/search"
+query_param: query
+extra_params:
+  api_key: DEMO_KEY
+  pageSize: 10
+format_is_query_param: false
+output_map:
+  items: foods
+  item_title: description
+  # 拼接模板：原 builder 的 `分类 · 品牌 · FDC {id}`
+  item_summary_template: "{foodCategory} · {brandOwner} · FDC {fdcId}"
+  item_url_template: "https://fdc.nal.usda.gov/food-details/{fdcId}/nutrients"

@@ -297,7 +297,7 @@ engines:
   desc: 克利夫兰艺术博物馆（CC0 开放图像，免认证）
 - name: clinicaltrials
   tier: T1
-  type: clinicaltrials
+  type: http
   coverage:
   - medical
   - clinical
@@ -336,7 +336,7 @@ engines:
   desc: 中文 AI 垂直资讯检索（模型/产品/行业/论文，含发布时间与上游来源）
 - name: cnii
   tier: T1
-  type: cnii
+  type: http
   coverage:
   - academic
   - japanese
@@ -3273,7 +3273,7 @@ engines:
   desc: Urban Dictionary（英文俚语定义与例句，官方 API）
 - name: usda
   tier: T1
-  type: usda
+  type: http
   coverage:
   - food
   - nutrition
