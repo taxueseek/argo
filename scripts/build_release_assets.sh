@@ -1,9 +1,33 @@
 #!/usr/bin/env bash
-# 构建 Argo Release 资产包（tar.gz、wheel 与 sha256 校验和）
+# 构建 Argo Release 资产包（wheel、sdist 与逐个资产的 .sha256 校验文件）
 #
 # 用法：
 #   bash scripts/build_release_assets.sh
 #   产物输出至 dist/ 目录。
+#
+# ## 为什么只打 wheel 与 sdist，不再打运行时源码包
+#
+# 2026-11-10（v2.14.0 发版后）审视：仓库曾额外打一个 argo-v<ver>.tar.gz
+# （运行时子集，不含 tests）。实测同类项目（psf/requests、pandas、
+# astral-sh/uv）的 Release 资产都是 wheel + sdist 两件套，没有一个手动传
+# 运行时源码包——因为 GitHub 每个 Release 页面**自动生成** Source code
+# (tar.gz) 与 (zip)，那是完整仓库快照，「要源码」的需求已被平台覆盖。
+#
+# 按需求穷举（MECE）：
+#   普通用户装 CLI      → npm（主路径）或 wheel
+#   想跑 main 最新       → git clone / npx github:...（不经过 Release）
+#   要审源码 / 改源码   → GitHub 自动生成的 Source code（平台已覆盖）
+#   无 wheel 平台装      → sdist（pip install xxx.tar.gz）
+#   想拿运行时文件直接跑 → 没有安装路径引导到这里，属不存在的需求
+# 最后一行是那个源码包唯一独有的场景，而它没有触达路径。保留它意味着每版
+# 多约 2 MB 下载、多一处版本号同步、多一个可能与 sdist 不一致的副本。
+# 故删除。
+#
+# ## 为什么校验和改成逐个资产一个 .sha256
+#
+# 照 astral-sh/uv 的格式。合并清单（SHA256SUMS.txt）有两个缺点：校验时
+# 必须先下清单再逐项对；清单本身是单点——它若损坏，所有校验都不可用。
+# 独立文件可以边下边校，且一个损坏不影响其余。
 
 set -euo pipefail
 
@@ -24,15 +48,17 @@ fi
 
 VERSION=$("$PY" -c 'import json; print(json.load(open("package.json"))["version"])')
 DIST_DIR="$ROOT_DIR/dist"
-STAGE_DIR="$DIST_DIR/argo-$VERSION"
+# staging 是「wheel 的运行时数据源」：复制到 argo_search/_data 后交给 build，
+# 构建完清理（见下）。它不再被打包成独立的运行时源码包。
+STAGE_DIR="$DIST_DIR/.stage-argo-$VERSION"
 
 echo "==> 开始构建 Argo Release 资产包 (v$VERSION)..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR" "$STAGE_DIR"
 
-# 1. 拷贝运行时必需核心文件至 staging 目录（排除测试/缓存/私有数据）
-echo "--> 组织源码资产..."
-cp -r bin config.yaml engines backends data mcp scripts sub-skills README.md SKILL.md LICENSE package.json pyproject.toml "$STAGE_DIR/"
+# 1. 组织 wheel 的运行时数据（与此前同口径：运行时必需文件，排除测试与缓存）
+echo "--> 组织运行时数据..."
+cp -r bin config.yaml engines backends data mcp scripts sub-skills README.md SKILL.md LICENSE package.json pyproject.toml AGENTS.md docs "$STAGE_DIR/"
 
 # 清理 staging 内的多余缓存与测试
 find "$STAGE_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -41,12 +67,7 @@ rm -rf "$STAGE_DIR/data/jobs" 2>/dev/null || true
 find "$STAGE_DIR/sub-skills" -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE_DIR/sub-skills" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
-# 2. 打包 tar.gz
-TARBALL="$DIST_DIR/argo-v$VERSION.tar.gz"
-echo "--> 生成源码压缩包: $TARBALL"
-tar -czf "$TARBALL" -C "$DIST_DIR" "argo-$VERSION"
-
-# 3. 如果环境已安装 build 模块，打出标准 Python wheel。
+# 2. 打 wheel 与 sdist。
 # wheel 的运行树来自 staging：构建前复制到 argo_search/_data，构建后清理。
 # 这样 pip/uvx 安装后 console script 仍能找到 config/engines/sub-skills。
 if "$PY" -c 'import build' 2>/dev/null; then
@@ -62,14 +83,21 @@ elif "$PY" -c 'import setuptools, wheel' 2>/dev/null; then
 fi
 rm -rf "$STAGE_DIR"
 
-# 4. 生成 SHA256 校验和清单
-echo "--> 计算 SHA256 校验和..."
+# 3. 逐个资产生成 .sha256（格式照 astral-sh/uv：`<sha256>  <filename>`，两空格）
+# 资产清单由本脚本的产物决定，与 CI 的 `files: dist/*` 同出一源——不再有
+# 第二个地方维护清单。
+echo "--> 生成逐个资产的 SHA256 校验文件..."
+rm -f "$DIST_DIR"/SHA256SUMS.txt   # 旧格式的合并清单不再产出
 (
     cd "$DIST_DIR"
     if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum * > SHA256SUMS.txt
+        for f in *; do
+            sha256sum "$f" > "$f.sha256"
+        done
     elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 * > SHA256SUMS.txt
+        for f in *; do
+            shasum -a 256 "$f" > "$f.sha256"
+        done
     fi
 )
 

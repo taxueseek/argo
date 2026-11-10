@@ -1,4 +1,14 @@
 # wheel 的完整运行树由 scripts/build_release_assets.sh 在构建前复制到
 # argo_search/_data；这里保证 sdist/wheel 都带上它。
 recursive-include argo_search/_data *
-include README.md SKILL.md LICENSE package.json pyproject.toml
+include README.md SKILL.md AGENTS.md LICENSE package.json pyproject.toml docs/ docs/COMMIT_STANDARD.md
+
+# 2026-11-10（v2.14.0 发版后）：sdist 排除 tests/。
+#
+# 理由：tests/ 解包后约 4 MB，占 sdist 的三分之一，而它服务的是「想跑测试
+# 的人」——那些人用 git clone（能拿到完整仓库、测试依赖与 CI 配置）。sdist
+# 服务的是「要从源码构建的人」，不需要测试代码。
+#
+# 实测同类项目（psf/requests、pandas）的 sdist 均不含测试目录，与社区惯例一致。
+recursive-exclude tests *
+global-exclude __pycache__ *.py[cod]
