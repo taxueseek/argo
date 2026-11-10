@@ -37,6 +37,7 @@ image_url / upstream（均为可选，缺省由下游补）。
 
 from __future__ import annotations
 
+import html as _htmllib
 from typing import Any, Callable
 
 # 解析器签名：(原始数据, spec) -> 标准结果行列表
@@ -316,8 +317,6 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
         )
         if not url and url_template and raw_id:
             url = url_template.replace("{id}", str(raw_id))
-        elif not url and raw_id and engine_name == "hackernews":
-            url = f"https://news.ycombinator.com/item?id={raw_id}"
 
         snippet = (
             flat.get("snippet") or flat.get("summary") or flat.get("content")
@@ -328,15 +327,34 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
         if isinstance(snippet, list):
             snippet = snippet[0] if snippet else ""
 
+        # 文本标签剥离与 HTML 实体反转义
+        if isinstance(title, str) and ("<" in title or "&" in title):
+            title = _strip_tags(title)
+            if "&" in title:
+                title = _htmllib.unescape(title)
+        if isinstance(snippet, str) and ("<" in snippet or "&" in snippet):
+            snippet = _strip_tags(snippet)
+            if "&" in snippet:
+                snippet = _htmllib.unescape(snippet)
+
         published_at = (
             flat.get("published_at") or flat.get("publishedAt")
             or flat.get("created_at") or flat.get("pubdate") or flat.get("date") or ""
         )
+        if published_at:
+            try:
+                from engines_base import _normalize_epoch
+                published_at = _normalize_epoch(published_at)
+            except Exception:
+                published_at = str(published_at)
 
-        score = max(0.0, 0.7 - idx * 0.05)
-        raw_score = flat.get("score") if flat.get("score") is not None else flat.get("relevance_score")
-        if isinstance(raw_score, (int, float)):
-            score = float(raw_score)
+        # 统一分值契约：复用 engines_base.rank_score（保证 [0, 1] 夹紧、防 NaN/Inf、单调平滑衰减）
+        raw_score = next((v for v in (flat.get("score"), flat.get("relevance_score")) if v not in (None, "")), 0.5)
+        try:
+            from engines_base import rank_score
+            score = rank_score(raw_score, idx)
+        except Exception:
+            score = max(0.0, 0.7 - idx * 0.05)
 
         row: dict[str, Any] = {
             "title": str(title)[:200],

@@ -871,11 +871,10 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                 parsed, eng, preserve=bool(spec.get("preserve_source"))
             )[:limit],
             spec)
-    if isinstance(data, list):
-        return _ensure_engine_source(
-            _parse_generic({"results": data}, eng, limit, spec), eng
-        )[:limit]
-    return _ensure_engine_source(_parse_generic(data, eng, limit, spec), eng)[:limit]
+    parsed = _parse_generic(data, eng, limit, spec)
+    return _apply_url_kind(_ensure_engine_source(
+        parsed, eng, preserve=bool(spec.get("preserve_source"))
+    )[:limit], spec)
 
 
 # ── HTML 网页解析引擎 ─────────────────────────────────────────────────────────

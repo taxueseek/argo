@@ -43,7 +43,7 @@ def test_smart_inference_on_kaggle_nullable_style():
 
 
 def test_smart_inference_on_hackernews_algolia_style():
-    """测试 HackerNews Algolia hits 结构与 objectID 兜底拼装。"""
+    """测试 HackerNews Algolia hits 结构与基于 url_template 的 objectID 兜底拼装。"""
     payload = {
         "hits": [
             {
@@ -60,7 +60,10 @@ def test_smart_inference_on_hackernews_algolia_style():
             }
         ]
     }
-    spec = {"engine_id": "hackernews"}
+    spec = {
+        "engine_id": "hackernews",
+        "url_template": "https://news.ycombinator.com/item?id={id}",
+    }
     res = engines_base._parse_generic(payload, "hackernews", 5, spec)
     assert len(res) == 2
     assert res[0]["title"] == "Show HN: Argo AI Search Engine"
@@ -128,3 +131,35 @@ def test_registered_parser_priority_over_generic():
     assert res[0]["title"] == "Mwmbl Project"
     assert res[0]["url"] == "https://mwmbl.org"
     assert res[0]["snippet"] == "Indie search"
+
+
+def test_smart_inference_html_cleaning_and_epoch():
+    """测试 HTML 标签剥离、实体反转义以及时间戳规范化与 rank_score 单调衰减。"""
+    payload = {
+        "results": [
+            {
+                "title": "<b>Python &amp; Rust</b>",
+                "snippet": "Analysis of &quot;memory safety&quot; <span class='tag'>systems</span>",
+                "url": "https://example.com/article",
+                "date": 1712345678,  # 秒级时间戳
+                "score": 0.95,
+            },
+            {
+                "title": "Second Article",
+                "snippet": "Details about performance",
+                "url": "https://example.com/perf",
+                "score": 100,  # 异常高分测试：应被 rank_score 夹紧在 [0.0, 1.0]
+            }
+        ]
+    }
+    spec = {"engine_id": "test_cleaning"}
+    res = engines_base._parse_generic(payload, "test_cleaning", 5, spec)
+    assert len(res) == 2
+    assert res[0]["title"] == "Python & Rust"
+    assert res[0]["snippet"] == 'Analysis of "memory safety" systems'
+    assert res[0]["published_at"] == "2024-04-05"
+    # 验证 rank_score 夹紧在 [0.0, 1.0] 范围内
+    assert 0.0 <= res[0]["score"] <= 1.0
+    assert 0.0 <= res[1]["score"] <= 1.0
+    # 验证第 1 名由于 rank 衰减，即便原始分是 100 也会被夹紧并发生衰减
+    assert res[1]["score"] <= 1.0

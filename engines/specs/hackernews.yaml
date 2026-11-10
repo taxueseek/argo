@@ -15,3 +15,4 @@ coverage:
 desc: Hacker News（Algolia API，科技新闻+讨论）
 timeout: 8
 type: hackernews
+url_template: "https://news.ycombinator.com/item?id={id}"
