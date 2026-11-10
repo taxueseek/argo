@@ -268,19 +268,6 @@ engines:
   recommended: false
   explicit_only: false
   desc: 中国外汇交易中心人民币中间价（25 个币种，官方授权口径，免 key）
-- name: cinii
-  tier: T1
-  type: http
-  coverage:
-  - academic
-  - paper
-  - japan
-  latency_ms: 2000
-  cost: free
-  status: ok
-  recommended: false
-  explicit_only: false
-  desc: CiNii Research 日本学术总库（论文/博士论文/科研项目，免 key）
 - name: clawhub
   tier: T1
   type: clawhub

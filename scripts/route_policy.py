@@ -47,7 +47,7 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     #   · crossref/europepmc/dblp 本就与 openalex 高度重叠，靠 deep 触达。
     # 故保 cinii、舍 core：core 退回普通 combo 成员，deep/research 与
     # 恢复链可达（它的位次 8 在 deep 档不截断路径上）。
-    "academic": ("local_pubmed", "cinii", "hf_papers"),  # 生物医学全文 + 日本学术 + HF 论文社交信号
+    "academic": ("local_pubmed", "cnii", "hf_papers"),  # 生物医学全文 + 日本学术 + HF 论文社交信号
     # 2026-09-21：academic 补两个国别/学科专门源。位次 5/6 是照本域上方注释
     # 的既有实践选的（deepest=6 → 加槽后预算覆盖到 6，前四位次一律不动）。
     # cinii 声明 langs=ja，靠 engines_demote_for_lang 的语言专用源降级，

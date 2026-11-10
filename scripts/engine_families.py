@@ -439,8 +439,10 @@ ENGINE_LANGS: dict[str, list[str]] = {
     "hurriyet": ["tr"], "ynet": ["he"], "ct24": ["cs"],
     # 语言专用的国别垂直库：与上面同理——只在 spec YAML 里声明会被路由层
     # 漏掉（route._specs_snapshot() 在 engines 未加载时返回空表，回退到本表）。
-    # 实测：cinii 漏登记时英文查询照样把它选进 academic 域预算窗口。
-    "cinii": ["ja"],
+    # 2026-11-10：原登记为 "cinii"（同一源的重复注册，无专属 builder），
+    # 实际生效的是 "cnii"（type: cnii）。漏登记导致英文查询把日文源选进
+    # academic 预算窗口——本次排查的正是这个缺陷。
+    "cnii": ["ja"],
     # 同样只存在于 config.yaml 而未登记本表的日语源（route_lang 查
     # ENGINE_LANGS 决定族内互斥与 must_keep，漏登记 = 在语言路由层隐形）：
     #   qiita  实测日文查询 5/5 全日文，是 ja 技术类查询的主力源；

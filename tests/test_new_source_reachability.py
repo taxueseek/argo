@@ -344,8 +344,8 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     # 2026-11-10：core 从加槽表移出（四源争三个槽位，取舍见 route_policy 注释），
     # 位次 8 落在 auto/balanced 预算窗（base 3 + cap 4 = 7）之外。它与
     # local_pubmed 同属「开放获取全文」层，能力重叠，故让位给独特性更高的
-    # cinii（本域唯一亚洲学术源）；deep/research 与恢复链仍可达。
-    "core": "academic 位次 8：让位 cinii（加槽 cap 取舍），与 local_pubmed 能力重叠，deep/research 可达",
+    # cnii（本域唯一亚洲学术源）；deep/research 与恢复链仍可达。
+    "core": "academic 位次 8：让位 cnii（加槽 cap 取舍），与 local_pubmed 能力重叠，deep/research 可达",
     # mojeek 原登记在此（semantic_discovery 位次 8），2026-11-10 前移到第 3 位
     # 后落进基础预算，已撤账——保留注释记录这笔账的来龙去脉。
     "so": "chinese_general 位次 8：新增观察期（9044621），待可用性数据",
@@ -354,7 +354,8 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     # 声明的源数远超 fast/auto 档预算窗口（budget=2~3），位次 3+ 的源不参与
     # 自动路由，只在 deep/research 不截断时才跑。逐域登记如下：
     # academic 域（combo 15 源，budget=2~3，位次 12+ 一律休眠）
-    "cnii": "academic 位次 15（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
+    # cnii 原登记在此（academic 位次 15），2026-11-10 前移到第 7 位落进加槽
+    # 射程（base 3 + cap 4 = 7），已撤账——保留注释记录这笔账的来龙去脉。
     "doaj": "academic 位次 12（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
     "figshare": "academic 位次 13（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
     "hal": "academic 位次 14（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",

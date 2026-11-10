@@ -186,22 +186,27 @@ class TestLatinLanguageHint:
 
 
 class TestLangExclusiveSource:
-    """语言独占源（如 cinii=ja）：只在该语言的查询里在场。
+    """语言独占源（cnii=ja）：只在该语言的查询里在场。
 
     与 world_news 族的区别是「摘除」的判据来源：族按 family，独占源按
     route._LANG_EXCLUSIVE_ENGINES 白名单（既有源的移尾语义是 2026-09-07
     review 的契约，不回溯改；新源从接入起就按摘除处理）。
+
+    2026-11-10：引擎名从 `cinii` 改为 `cnii`。原 `cinii` 是同一源
+    （cir.nii.ac.jp/opensearch/all）的重复注册且无专属 builder，实际生效的
+    一直是 `cnii`——白名单里写 `cinii` 导致摘除逻辑从未生效，英文查询照样
+    把日文源选进 academic 预算窗口。本次排查的正是这个缺陷。
     """
 
     def test_reachable_for_its_own_language(self):
         combo = _combo("人工知能 論文", depth="balanced")
-        assert "cinii" in combo, f"日语学术查询未选中 cinii：{combo}"
+        assert "cnii" in combo, f"日语学术查询未选中 cnii：{combo}"
 
     @pytest.mark.parametrize("query", ["machine learning survey", "机器学习 论文"])
     def test_dropped_for_other_languages(self, query):
         combo = _combo(query, depth="balanced")
-        assert "cinii" not in combo, (
-            f"{query!r} 拿到了日文专用源：{combo}——cinii 对该语言零召回"
+        assert "cnii" not in combo, (
+            f"{query!r} 拿到了日文专用源：{combo}——cnii 对该语言零召回"
         )
 
     def test_registered_in_static_lang_table(self):

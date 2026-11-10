@@ -535,7 +535,12 @@ def _filter_lang_bound_family(combo: list[str], features: dict | None,
 
 
 _LANG_EXCLUSIVE_ENGINES: frozenset[str] = frozenset({
-    "cinii",     # 日本学术总库（ja）：中文/英文查询拿不到任何可用结果
+    # 2026-11-10：原写 "cinii"——那是同一源（cir.nii.ac.jp/opensearch/all）
+    # 的重复注册，没有专属 builder（type 是通用 http，engines._BUILDERS
+    # 查无此名），实际生效的一直是 "cnii"（type: cnii，自定义 builder）。
+    # 于是本表从未真正生效：英文/中文查询照样把日文源选进 academic 预算
+    # 窗口。已删 cinii spec，本表改为 "cnii"。
+    "cnii",      # 日本学术总库（ja）：中文/英文查询拿不到任何可用结果
 })
 
 

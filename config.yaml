@@ -1464,13 +1464,20 @@ domains:
   #     local_pubmed — 生物医学全文；此前是坏源（实测 0 条 / HTTP 400），本次修复
   #     core         — 开放获取全文 + PDF 直链，补「元数据之外的全文层」
   - local_pubmed
-  # 2026-11-10：cinii 从第 8 位前移到第 7 位（紧随 local_pubmed、core 之前）。
+  # 2026-11-10：cnii 从第 8 位前移到第 7 位（紧随 local_pubmed、core 之前）。
   # 它是日本学术总库，补的是本域唯一的**亚洲学术**盲区（其余源全是欧美），
   # 能力独特性高于它现在排在前面的 crossref/europepmc/dblp（都与 openalex
   # 高度重叠）。位次 8 超出 auto/balanced 的加槽射程（base 3 + cap 4 = 7），
   # 实测「装了但路由不带它」——test_new_source_reachability 红。前移一位即
   # 落进射程，core/crossref/europepmc/dblp 顺延一位，它们本就靠 deep 触达。
-  - cinii
+  #
+  # 注：本行曾写 `cinii`——那是同一源（cir.nii.ac.jp/opensearch/all）的重复
+  # 注册，但**没有专属 builder**（type 是通用 http，engines._BUILDERS 查无
+  # 此名），实际生效的一直是 `cnii`（type: cnii，自定义 builder）。重复的
+  # 副作用：cinii 在 spec 里声明了 langs: [ja]，而生效的 cnii 没声明，语言
+  # 路由层查 ENGINE_LANGS["cnii"] 得默认 ["*"]（语言中立），于是英文查询
+  # 照常把日文源选进预算窗口。已删 cinii spec 并给 cnii 补 langs。
+  - cnii
   - core
   - crossref
   - europepmc

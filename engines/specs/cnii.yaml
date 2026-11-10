@@ -8,6 +8,11 @@ priority: 45
 period: second
 cost_per_call: 0.0
 cost_unit: free
+# 语言绑定：本库是日文论文/学会刊直采，英文查询召回价值为零。
+# 曾漏声明 → 语言路由层按默认 ["*"] 当语言中立，英文查询照常把它选进
+# academic 预算窗口（2026-11-10 排查「cnii 误入英文 combo」时定位）。
+langs:
+- ja
 coverage:
 - academic
 - japanese
