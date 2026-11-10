@@ -429,13 +429,20 @@ class TestListEnginesCompactProjection:
         assert slim["quota_exhausted_reason"] == "quota exhausted"
 
     def test_compact_dump_size_capped(self):
-        """压缩后全量体积封顶：投影再膨胀说明有字段忘了登记。"""
+        """压缩后全量体积封顶：投影再膨胀说明有字段忘了登记。
+
+        2026-11-10 改锁**列式投影**（compact_engine_table）：此前锁的是逐条
+        对象的体积和，而 15 个字段名在 301 个引擎上各出现一次——键名本身就
+        70.7 KB，超过 64 KB 上限。引擎数随每次接入增长，键名成本是
+        O(引擎数 × 字段数)，注定持续膨胀（hf_papers/kaggle/mwmbl 三源接入
+        后本例即红）。列式把键名降到 1 份：实测 67.7 KB → 25.8 KB。
+        """
         import json
-        from engine_status import compact_engine_row
+        from engine_status import compact_engine_table
         rows = self._rows()
-        total = sum(len(json.dumps(compact_engine_row(r), ensure_ascii=False))
-                    for r in rows)
-        assert total < 64 * 1024, f"瘦身全量超 64KB：{total}B（检查投影字段集）"
+        payload = json.dumps(compact_engine_table(rows), ensure_ascii=False)
+        assert len(payload.encode("utf-8")) < 64 * 1024, (
+            f"列式全量超 64KB：{len(payload)}B（检查投影字段集）")
 
 
 class TestEngineListDefaultIsASummary:

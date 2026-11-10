@@ -250,6 +250,37 @@ def compact_engine_row(row: dict[str, Any]) -> dict[str, Any]:
     return slim
 
 
+# 列式投影的字段顺序（唯一真源）：--all 的 JSON 输出按这个顺序给值，
+# 消费方按 fields 解包。改动这里等于改输出契约，需同步测试与文档。
+COMPACT_FIELDS: tuple[str, ...] = (
+    "engine_id", "enabled", "type", "cost_tier", "status", "explicit_only",
+    "env_ready", "routable", "quota_exhausted", "dep_ready",
+    "missing_env", "missing_deps", "disabled_reason",
+    "quota_exhausted_reason", "failure",
+)
+
+
+def compact_engine_table(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """把逐条投影打成**列式** JSON：{"fields": [...], "rows": [[...], ...]}。
+
+    为什么必须列式（2026-11-10）：compact_engine_row 逐条输出时，15 个字段名
+    在 301 个引擎上各出现一次——键名占 70.7 KB，超过 64 KB 上限本身。引擎数
+    随每次接入增长，而键名成本是 O(引擎数 × 字段数)，注定持续膨胀。
+
+    列式把键名从 N 次降到 1 次：实测 301 源 67.7 KB → 25.8 KB（-62%），且
+    引擎再翻倍也不会顶到上限（行值本身很短：健康源一行约 60 B）。
+
+    契约：字段顺序即 COMPACT_FIELDS，缺失键补 None（不省略列——省略会让
+    列位错乱，消费方无法按 fields 对齐）。健康源的条件键为 None，非空值
+    才占实际字节。
+    """
+    cols: list[list[Any]] = []
+    for r in rows:
+        slim = compact_engine_row(r)
+        cols.append([slim.get(f) for f in COMPACT_FIELDS])
+    return {"fields": list(COMPACT_FIELDS), "rows": cols}
+
+
 def list_engines_detail(
     *,
     routable_only: bool = False,

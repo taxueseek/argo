@@ -421,6 +421,7 @@ def main():
             try:
                 from engine_status import (list_engines_detail,
                                            compact_engine_row,
+                                           compact_engine_table,
                                            format_engines_table)
                 rows = list_engines_detail(routable_only=args.routable_only,
                                            engines=_wanted)
@@ -452,7 +453,15 @@ def main():
                         print(f"[list-engines] 未收录的引擎: {', '.join(_missing)}",
                               file=sys.stderr)
                 if args.json_output:
-                    print(dumps(rows))
+                    # --all 的 JSON 走列式投影（2026-11-10）：逐条对象在 301 个
+                    # 引擎上重复 15 个键名，键名本身就 70 KB，超过 64 KB 上限。
+                    # 列式把键名降到 1 份，实测 67.7 KB → 25.8 KB。
+                    # 单引擎诊断（--engine <名>）仍给逐条全量对象——那一档
+                    # 只有 1 条，键名成本可忽略，且需要嵌套的 runtime/admission。
+                    if not _wanted:
+                        print(dumps(compact_engine_table(rows)))
+                    else:
+                        print(dumps(rows))
                 else:
                     print(format_engines_table(rows))
             except Exception as e:

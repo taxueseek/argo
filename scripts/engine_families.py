@@ -28,6 +28,7 @@ engine_families.py — 搜索源能力族分类（第一性原理重构）
   sports           体育赛事/球员球队           thesportsdb
   archive          归档/历史                 wayback_cdx / archive_org
   misc_vertical    其他垂直（游戏/预测/天气/标准等） steam / polymarket / qweather / rfc_editor / models_dev / itotii / urban_dictionary / know_your_meme / coingecko / docker_hub / huggingface / stackoverflow 等
+  dataset          科研/开放数据集            datacite / zenodo / kaggle / dryad / figshare（与 academic 区分：数据集≠论文）
   structured_card  垂直结构化模态卡（统一语义识别，跨域） bocha_ai
 
 用途：
@@ -254,9 +255,16 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     # 与 openalex/crossref 同一问题域；差别在**返回层**（可下载全文 PDF）
     # 而非能力域。单独建族会让 dedupe_by_family 失去「同族去重」的意义。
     "core": "academic",
+    "openaire": "academic",    # EU 资助科研与开放获取文献聚合
     # 代码/包
     "deps_dev": "code",
     "endoflife": "code",
+    # 本机文件/技能检索：回答「我这台机器上有什么代码与文件」，与 github/pypi
+    # 的「网上有什么代码库」是同一能力域的本地面，归 code 而非新建族。
+    "local_seek": "code",
+    # 本机通道的网页镜像（Yandex）：能力仍是全网搜索，归 web_general；
+    # local_ 前缀指的是「免 key 镜像通道」，不是本机文件（命名口径见 usage.md）。
+    "local_yandex": "web_general",
     # 百科/实体
     "ror": "knowledge",        # 研究机构标识
     "opencorporates": "knowledge",
@@ -360,6 +368,7 @@ FAMILY_LABELS: dict[str, str] = {
     "media_book": "媒体/图书",
     "sports": "体育",
     "archive": "归档/历史",
+    "dataset": "科研/开放数据集",
     "structured_card": "垂直结构化模态卡",
     "personal_data": "个人数据（本人创作/收藏/关注）",
     "misc_vertical": "其他垂直",

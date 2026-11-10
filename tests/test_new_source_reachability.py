@@ -199,6 +199,14 @@ class TestProbeActuallyRoutesToNewSource:
         # chinese_general（实测），而 dsh_plugin_search 只认 dsh/deepseek
         # harness + 插件，故英文词能稳定落在本域并选出新源。
         "skill_search": ("agent skills", "claude skills 市场"),
+        # 2026-11-10（76c00df）：dataset_search 接入 kaggle（免认证数据集库，
+        # 补 datacite/zenodo 的「可直接下载」层）。探针用「数据集」——本域
+        # patterns 的中文主词，稳定落域并选出新源。
+        "dataset_search": ("数据集 下载", "climate dataset"),
+        # 2026-11-10（d00df55）：semantic_discovery 接入 mojeek + mwmbl
+        # （独立索引，补 exa/anysearch 的大厂依赖）。探针用「有哪些值得关注」
+        # ——本域中文主词，英文「find me」类同义。
+        "semantic_discovery": ("有哪些值得关注 行业格局", "find me emerging tools"),
     }
 
     @pytest.mark.parametrize("domain", sorted(NEW_SOURCES))
@@ -326,6 +334,20 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     # 2026-09-28（9044621）：360/神马新接入 chinese_general 尾部（位次 8/9，
     # 预算外）。挂观察期：首周熔断/配额/反爬数据达线后，再评估进
     # route._VERTICAL_NEW_SOURCE 加槽通电，或确认与既有 CN 源同质后裁撤。
+    # 2026-11-10（d00df55）dbpedia/mojeek 接入后位次性休眠，补登记：
+    # dbpedia@entity_search@5（budget=3，前四位 baidu_baike/wikidata/wikipedia/
+    # zh_wikipedia 已覆盖中文百科与维基数据，DBpedia 的 SPARQL 结构化问答是
+    # 差异化能力，deep/研究档与恢复链可达）；mojeek@semantic_discovery@8
+    # （combo 15 源，budget=2~3，位次 8 远超窗口；独立索引能力在 exa/anysearch
+    # 覆盖不足时由 deep/research 触达）。
+    "dbpedia": "entity_search 位次 5：结构化知识图谱源，fast/auto 预算窗外，deep/research 可达",
+    # 2026-11-10：core 从加槽表移出（四源争三个槽位，取舍见 route_policy 注释），
+    # 位次 8 落在 auto/balanced 预算窗（base 3 + cap 4 = 7）之外。它与
+    # local_pubmed 同属「开放获取全文」层，能力重叠，故让位给独特性更高的
+    # cinii（本域唯一亚洲学术源）；deep/research 与恢复链仍可达。
+    "core": "academic 位次 8：让位 cinii（加槽 cap 取舍），与 local_pubmed 能力重叠，deep/research 可达",
+    # mojeek 原登记在此（semantic_discovery 位次 8），2026-11-10 前移到第 3 位
+    # 后落进基础预算，已撤账——保留注释记录这笔账的来龙去脉。
     "so": "chinese_general 位次 8：新增观察期（9044621），待可用性数据",
     "shenma": "chinese_general 位次 9：新增观察期（9044621），待可用性数据",
     # 2026-10-05：批量登记 33 个位置性休眠引擎。共性根因——各域 combo
@@ -336,18 +358,22 @@ _DORMANT_ALLOWLIST: dict[str, str] = {
     "doaj": "academic 位次 12（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
     "figshare": "academic 位次 13（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
     "hal": "academic 位次 14（combo 15 源，budget=2~3，位次 12+ 不参与自动路由）",
-    # semantic_discovery 域（combo 13 源，budget=2~3，位次 4+ 一律休眠）
-    "marginalia": "semantic_discovery 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
-    "searchmysite": "semantic_discovery 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
-    "wiby": "semantic_discovery 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
-    "uapi": "semantic_discovery 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
+    # semantic_discovery 域（combo 15 源，budget=3，位次 4+ 一律休眠）
+    # 2026-11-10：mwmbl/mojeek 前移到 2/3 位后，其余源位次全部顺延。本检查
+    # 只看基础预算（不含加槽），故位次 4+ 全休眠；生产路径的加槽额度（extra=4）
+    # 覆盖到位次 7，与本检查口径不同——这正是既有口径，不因本次前移改变。
+    "lieu": "semantic_discovery 位次 5（budget=3，位次 4+ 不参与自动路由）",
+    "marginalia": "semantic_discovery 位次 6（budget=3，位次 4+ 不参与自动路由）",
+    "searchmysite": "semantic_discovery 位次 7（budget=3，位次 4+ 不参与自动路由）",
+    "wiby": "semantic_discovery 位次 8（budget=3，位次 4+ 不参与自动路由）",
+    "uapi": "semantic_discovery 位次 9（budget=3，位次 4+ 不参与自动路由）",
     # parallel_free 已撤账（2026-10-31）：通用池选源改造后它进入 lead 组合参与
     # 自动路由（评测 fe03 实测它作为 general_search 主源出结果），不再是位置性休眠
-    "tavily": "semantic_discovery 位次 9（budget=2~3，位次 4+ 不参与自动路由）",
-    "firecrawl": "semantic_discovery 位次 10（budget=2~3，位次 4+ 不参与自动路由）",
-    "brave": "semantic_discovery 位次 11（budget=2~3，位次 4+ 不参与自动路由）",
-    "felo": "semantic_discovery 位次 12（budget=2~3，位次 4+ 不参与自动路由）",
-    "searxng": "semantic_discovery 位次 13（budget=2~3，位次 4+ 不参与自动路由）",
+    "tavily": "semantic_discovery 位次 11（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
+    "firecrawl": "semantic_discovery 位次 12（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
+    "brave": "semantic_discovery 位次 13（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
+    "felo": "semantic_discovery 位次 14（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
+    "searxng": "semantic_discovery 位次 15（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
     # social 域（社交引擎另有专用通道）
     "hatena_bookmark": "social 域位次 10：社交引擎另有专用通道，待核实是否真休眠",
     "qiita": "social 域位次 11：社交引擎另有专用通道，待核实是否真休眠",

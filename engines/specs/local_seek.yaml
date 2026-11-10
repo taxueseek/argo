@@ -23,7 +23,10 @@ search_args:
 - --max
 - '{n}'
 timeout: 15
-coverage: [local, skill, file, code]
+# coverage 不含 skill：本引擎搜的是「本机已装技能」，不是技能市场。
+# 算进 skill 会让 candidate_envelope.SKILL_REGISTRY_ENGINES 命中，给本机
+# 文件结果挂上「这是市场列表页、装之前核对上游」的误导提示。
+coverage: [local, file, code]
 desc: "本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络）"
 recommended: false
 latency_ms: 300

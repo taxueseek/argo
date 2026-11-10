@@ -48,14 +48,6 @@
     "references/query-templates.yaml",
     "references/query-templates.md",
     "LICENSE",
-    "!**/__pycache__/**",
-    "!**/*.pyc",
-    "!sub-skills/**/__pycache__/**",
-    "!sub-skills/**/*.pyc",
-    "!sub-skills/**/tests/**",
-    "!sub-skills/**/references/**",
-    "!assets/readme/*.webp",
-    "!data/jobs",
     "docs/CHANGELOG.md",
     "docs/QUALITY_OF_SLOW_SOURCES.md",
     "docs/MCP_SETUP.md",
@@ -77,7 +69,15 @@
     "docs/RELEASE_NOTES_v2.8.9.md",
     "docs/RELEASE_NOTES_v2.9.0.md",
     "docs/RELEASE_NOTES_v2.9.8.md",
-    "docs/RELEASE_NOTES_v2.9.9.md"
+    "docs/RELEASE_NOTES_v2.9.9.md",
+    "!**/__pycache__/**",
+    "!**/*.pyc",
+    "!sub-skills/**/__pycache__/**",
+    "!sub-skills/**/*.pyc",
+    "!sub-skills/**/tests/**",
+    "!sub-skills/**/references/**",
+    "!assets/readme/*.webp",
+    "!data/jobs"
   ],
   "dsh": {
     "bundle": {

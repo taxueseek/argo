@@ -1464,8 +1464,14 @@ domains:
   #     local_pubmed — 生物医学全文；此前是坏源（实测 0 条 / HTTP 400），本次修复
   #     core         — 开放获取全文 + PDF 直链，补「元数据之外的全文层」
   - local_pubmed
-  - core
+  # 2026-11-10：cinii 从第 8 位前移到第 7 位（紧随 local_pubmed、core 之前）。
+  # 它是日本学术总库，补的是本域唯一的**亚洲学术**盲区（其余源全是欧美），
+  # 能力独特性高于它现在排在前面的 crossref/europepmc/dblp（都与 openalex
+  # 高度重叠）。位次 8 超出 auto/balanced 的加槽射程（base 3 + cap 4 = 7），
+  # 实测「装了但路由不带它」——test_new_source_reachability 红。前移一位即
+  # 落进射程，core/crossref/europepmc/dblp 顺延一位，它们本就靠 deep 触达。
   - cinii
+  - core
   - crossref
   - europepmc
   - dblp
@@ -1538,16 +1544,22 @@ domains:
   - (?i)\b(product\s+review|buyer's?\s+guide|worth\s+buying|best\s+buy|shopping)\b
   primary: zhihu
 - desc: 语义发现/开放式调研（Exa 语义引擎）
+  # 2026-11-10：mwmbl/mojeek 从队尾（位次 9/8）前移到 exa 之后（位次 2/3）。
+  # 二者是独立索引（非大厂代理），能力与 exa 同类但来源独立，本就该紧挨
+  # 语义引擎；此前追加到队尾导致位次 8/9 远超 auto/balanced 预算窗
+  # （budget=3 + 加槽 4 = 7），「装了但路由不带它」，test_new_source_
+  # reachability 红。前移后两源落进基础预算（3），尾部 tavily/firecrawl/
+  # brave/felo/searxng 等付费与重型源顺延，它们本就靠 deep/research 触达。
   engines_combo:
   - exa
+  - mwmbl
+  - mojeek
   - anysearch
   - lieu
   - marginalia
   - searchmysite
   - wiby
   - uapi
-  - mojeek
-  - mwmbl
   - parallel_free
   - tavily
   - firecrawl

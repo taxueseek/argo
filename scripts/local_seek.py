@@ -361,15 +361,14 @@ def _run_local_seek(query: str, max_n: int = 5,
         _LAST_LOCAL_SEEK_MS = int((time.time() - _t0) * 1000)
         return []
 
+    # seek.py 存在性检查**下沉到缓存未命中分支**（2026-11-10）：缓存命中不
+    # 需要 seek.py——把检查前置会让「子技能未装/工具暂时缺失」时 TTL 内的缓存
+    # 结果也拿不到，而缓存的全部意义正是省掉工具调用。前置检查还让
+    # test_b4_knobs 的进程内缓存 TTL 用例无法验证（它故意 mock 掉 seek.py
+    # 来短路真检索，结果连缓存都读不到）。
     from seek_locator import resolve_seek_py
     seek_py = resolve_seek_py()
-    if not seek_py or not os.path.isfile(seek_py):
-        _LAST_LOCAL_SEEK_SKIPPED = True
-        if warn:
-            _note_warning(
-                "  [include-local] 未找到 local-seek 的 seek.py，本机文件检索未执行", echo)
-        _LAST_LOCAL_SEEK_MS = int((time.time() - _t0) * 1000)
-        return []
+    _seek_py_ok = bool(seek_py) and os.path.isfile(seek_py)
 
     combined_hits: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
@@ -388,6 +387,10 @@ def _run_local_seek(query: str, max_n: int = 5,
                 _LOCAL_SEEK_CACHE[cache_key] = (time.time(), disk_hit)
                 hits = disk_hit
             else:
+                if not _seek_py_ok:
+                    # 缓存未命中 + 工具缺失：本次无法检索（缓存已是最后手段）。
+                    # 不在这里 return——多目标场景下其余目标可能仍有缓存。
+                    continue
                 payload = None
                 try:
                     payload = seek_query_payload(query, tgt, max_n,
@@ -412,6 +415,16 @@ def _run_local_seek(query: str, max_n: int = 5,
                     break
         if len(combined_hits) >= _cap:
             break
+
+    # 工具缺失且**所有**目标都无缓存命中：此时确实是「检索未执行」，必须
+    # 留可归因说明（不能与「查了没有」同形）。缓存命中的目标不算——它们
+    # 已经交付了结果，只是没走工具。
+    if not _seek_py_ok and not combined_hits:
+        _LAST_LOCAL_SEEK_SKIPPED = True
+        if warn:
+            _note_warning(
+                "  [include-local] 未找到 local-seek 的 seek.py 且无缓存命中，"
+                "本机文件检索未执行", echo)
 
     _LAST_LOCAL_SEEK_MS = int((time.time() - _t0) * 1000)
     _LAST_LOCAL_SEEK_COUNT = len(combined_hits)

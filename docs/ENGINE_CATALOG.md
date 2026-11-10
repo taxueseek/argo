@@ -85,7 +85,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 状态含义：**可直接用** = 自动路由会用上；**需自配密钥 / 需装后端工具** = 配好后即可用；**被上游封锁** = 源站当前拒绝；**已停用** = 配置层面关闭。
 
-### 全网搜索（44）
+### 全网搜索（42）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -100,7 +100,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `marginalia` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Marginalia 独立爬虫索引（非大厂代理，专挖长尾非商业页面；old-search 两步 sst 流程） |
 | `mojeek` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery | Mojeek 独立爬虫搜索引擎（百亿级自主索引，非大厂代理，零用户画像） |
 | `mwmbl` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery | Mwmbl 开源非盈利独立搜索引擎（免 key，JSON API，零用户画像，标题与摘要结构化返回） |
-| `openaire` | 可直接用 | 免费 | 不限 | — | 深度研究 boost | OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口） |
 | `parallel_free` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、域 video、通用兜底链 | Parallel 免费搜索（官方免费 MCP 端点 search.parallel.ai，无账号无 key；excerpts 长文摘录省 fetch；与按量计费的 parallel REST 通道分立，作其缺位时的补位） |
 | `searchmysite` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | 人工审核准入的个人独立站索引（非商业博客，HTML 解析） |
 | `shenma` | 可直接用 | 免费 | 不限 | — | 域 chinese_general | 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页 |
@@ -121,7 +120,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `fourget` | 已停用 | 免费 | 不限 | ARGO_FOURGET_URL | 已停用 | 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG） |
 | `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `local_baidu` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 百度本地 |
-| `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
 | `local_yandex` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Yandex 本地通道（local-search 实测最稳后端，多语言兜底） |
 | `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
@@ -178,7 +176,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `saucenao` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SAUCENAO_API_KEY | 显式调用（--engine） | SauceNAO 二次元图源反查（query 为图片 URL 或本地图片路径，免费 key 150 次/日，给相似度与 Pixiv 等出处页） |
 | `tracemoe` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | trace.moe 动画场景识别（query 为图片 URL，免 key，给作品名+集数+时间点，按出口 IP 限频） |
 
-### 学术文献（32）
+### 学术文献（33）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -201,6 +199,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_crossref` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Crossref本地 |
 | `local_pubmed` | 可直接用 | 免费 | 不限 | — | 域 academic、域 medical | PubMed本地 |
 | `local_semantic_scholar` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Semantic Scholar本地 |
+| `openaire` | 可直接用 | 免费 | 不限 | — | 深度研究 boost | OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口） |
 | `openalex` | 可直接用 | 免费 | 不限 | — | 域 academic、域 chem_search、域 tech_deep、深度研究 boost | OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto） |
 | `openreview` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | OpenReview 顶会论文（含评审可见性与 PDF，AI/ML 研究为主） |
 | `semantic_scholar` | 可直接用 | 免费 | 不限 | — | 域 academic、域 local_academic、域 patent_search、域 tech_deep、深度研究 boost、语义画像命中 | Semantic Scholar API（备选） |
@@ -268,7 +267,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `europeana` | 已停用 | 免费 | 不限 | — | 域 cn_encyclopedia、语义画像命中 | 欧洲 27 国文化遗产聚合（官方公开 demo key） |
 | `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
 
-### 代码 / 包 / 文档（17）
+### 代码 / 包 / 文档（18）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -289,6 +288,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `pypi` | 可直接用 | 免费 | 不限 | — | 域 package_search | PyPI 包查询（/pypi/{name}/json 精确解析，免认证） |
 | `repology` | 可直接用 | 免费 | 不限 | — | 域 package_intel | Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证） |
 | `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs | Stack Overflow（Stack Exchange API，编程问答） |
+| `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
 
 ### 社区 UGC（16）
 
@@ -582,10 +582,10 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `entity_search` | `wikidata` | `baidu_baike`、`wikidata`、`wikipedia`、`zh_wikipedia`、`dbpedia` |
 | `zhihu_user_data` | `zhihu_user` | `zhihu_user` |
 | `zhihu_content` | `zhihu` | `zhihu`、`zhihu_global`、`anysearch` |
-| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`core`、`cinii`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal`、`cnii` |
+| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`cinii`、`core`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal`、`cnii` |
 | `tech_deep` | `openalex` | `openalex`、`arxiv`、`semantic_scholar`、`github`、`europepmc` |
 | `shopping` | `zhihu` | `zhihu`、`anysearch` |
-| `semantic_discovery` | `exa` | `exa`、`anysearch`、`lieu`、`marginalia`、`searchmysite`、`wiby`、`uapi`、`mojeek`、`mwmbl`、`parallel_free`、`tavily`、`firecrawl`、`brave`、`felo`、`searxng` |
+| `semantic_discovery` | `exa` | `exa`、`mwmbl`、`mojeek`、`anysearch`、`lieu`、`marginalia`、`searchmysite`、`wiby`、`uapi`、`parallel_free`、`tavily`、`firecrawl`、`brave`、`felo`、`searxng` |
 | `code_search` | `github` | `github`、`grep_app`、`mdn`、`huggingface`、`anysearch` |
 | `meme_slang` | `itotii` | `itotii`、`urban_dictionary`、`know_your_meme`、`anysearch` |
 | `fact_check` | `wikipedia` | `wikipedia`、`byted`、`wolframalpha` |

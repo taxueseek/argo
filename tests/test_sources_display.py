@@ -48,10 +48,12 @@ class TestFormatSerp(unittest.TestCase):
             ]),
         }
         text = search_mod.format_text_output(payload)
-        self.assertIn("── 相关信源 ──", text)
+        # 2026-11-10（a3016e1）：信源区分桶呈现，「相关信源」改名「联网信源」
+        # 以区分本机命中；本用例两条结果都是公网 URL，落【联网搜索】视区。
+        self.assertIn("── 联网信源 ──", text)
         # 正文区在信源区之前出现标题
         i_title = text.index("标题一")
-        i_src = text.index("── 相关信源 ──")
+        i_src = text.index("── 联网信源 ──")
         self.assertLess(i_title, i_src)
         # 完整 URL 应出现在信源区（允许正文不刷 URL——至少信源区有）
         self.assertIn("https://one.example/x", text[i_src:])

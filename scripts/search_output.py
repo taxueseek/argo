@@ -727,6 +727,18 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
     #（宽根守卫 + 3s 超时兜底），--include-local / MCP include_local 显式开，
     # --no-local / include_local=false 关。按 URL 去重后并入，防止与既有
     # 结果（或未来评分变化）产生双份条目。
+    # 内容形态约束优先于双轨并发：--video / --min-duration 是用户对「结果形态」
+    # 的硬要求，本机文件（.md/.py/.txt…）永远不满足。此前不判形态直接并入，
+    # 实测 --video 的 3 条视频会被 3 条本机 markdown 挤成 6 条混合结果。
+    # 判据与 search_pipeline 的视频过滤同源（decision 的 video_only/min/max_duration）。
+    _video_scope = bool((decision or {}).get("video_only")) \
+        or (decision or {}).get("min_duration") is not None \
+        or (decision or {}).get("max_duration") is not None
+    if include_local and _video_scope:
+        result["local_seek_skipped"] = True
+        result["local_seek_skip_reason"] = "content_shape_video"
+        include_local = False
+
     if include_local:
         try:
             local_hits = _run_local_seek(query, n)

@@ -1849,7 +1849,6 @@ engines:
   type: cli
   coverage:
   - local
-  - skill
   - file
   - code
   latency_ms: 300

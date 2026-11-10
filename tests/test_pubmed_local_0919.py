@@ -234,7 +234,11 @@ class TestAcademicDomainWiring:
         dom, combo = self._combo("machine learning survey", "fast")
         assert dom == "academic", f"查询未落 academic 域，实际 {dom}"
         assert "local_pubmed" in combo, f"local_pubmed 被预算裁掉了：{combo}"
-        assert "core" in combo, f"core 被预算裁掉了：{combo}"
+        # 2026-11-10：core 不再断言必须在 fast combo 里——它已移出加槽表
+        # （取舍见 route_policy._VERTICAL_NEW_SOURCE 注释：cinii 的亚洲学术
+        # 独特性高于 core 与 local_pubmed 的重叠全文层）。core 仍随声明
+        # combo 在 deep/research 与恢复链可达，本用例不再代表它的契约。
+        assert "hf_papers" in combo, f"hf_papers 被预算裁掉了：{combo}"
 
     def test_existing_sources_not_displaced(self):
         """加槽而非顶位：既有的前排源必须仍在声明 combo 的前列。
@@ -277,8 +281,14 @@ class TestAcademicDomainWiring:
         cfg = load_config()
         dom = next(d for d in cfg["domains"] if d.get("name") == "academic")
         combo = list(dom["engines_combo"])
-        new = [e for e in ("local_pubmed", "core") if e in combo]
-        assert new, "两个新源都不在 combo 里"
+        # 2026-11-10：判据从「core 必须在」改为「**加槽表里的**新源位次须
+        # 落在射程内」。core 已移出加槽表（取舍见 route_policy 注释），
+        # 把它算进来会让本约束与加槽表的实际语义脱节——本用例要锁的是
+        # 「声明为待接入的源必须可达」，而不是「所有新源都必须可达」。
+        from route_policy import _VERTICAL_NEW_SOURCE
+        new = [e for e in _VERTICAL_NEW_SOURCE.get("academic", ())
+               if e in combo]
+        assert new, "academic 加槽表里的源都不在 combo 里"
         deepest = max(combo.index(e) + 1 for e in new)  # 1-based 位次
         # auto/balanced: base=3, cap=4 → 最深位次须 <= 7
         assert deepest <= 7, (

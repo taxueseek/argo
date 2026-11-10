@@ -38,7 +38,16 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # local_pubmed 是**修复**（旧实现静默 400 且解析不出字符串数组，实测 0 条，
     # 详见 engines_builders_batch9._build_pubmed_engine 文档串）。两者声明在
     # 既有源之后，由本表加槽，不挤掉 arxiv/openreview 等既有位次。
-    "academic": ("local_pubmed", "core", "cinii", "hf_papers"),  # 生物医学全文 + 机构仓储开放获取 + 日本学术 + 数学索引 + HF 论文社交信号
+    #
+    # 2026-11-10：core 移出本表。四个加槽源（hf_papers@5 / local_pubmed@6 /
+    # cinii@7 / core@8）的最深位次 8 需要 extra=5，超出 auto/balanced 的
+    # cap=4（base 3 + 4 = 7）——四源不可兼得。取舍依据是**能力独特性**：
+    #   · cinii 是本域唯一的亚洲学术源（日本总库），其余源全是欧美；
+    #   · core 与 local_pubmed 同属「开放获取全文」层，能力重叠；
+    #   · crossref/europepmc/dblp 本就与 openalex 高度重叠，靠 deep 触达。
+    # 故保 cinii、舍 core：core 退回普通 combo 成员，deep/research 与
+    # 恢复链可达（它的位次 8 在 deep 档不截断路径上）。
+    "academic": ("local_pubmed", "cinii", "hf_papers"),  # 生物医学全文 + 日本学术 + HF 论文社交信号
     # 2026-09-21：academic 补两个国别/学科专门源。位次 5/6 是照本域上方注释
     # 的既有实践选的（deepest=6 → 加槽后预算覆盖到 6，前四位次一律不动）。
     # cinii 声明 langs=ja，靠 engines_demote_for_lang 的语言专用源降级，
@@ -104,19 +113,12 @@ def _new_source_budget_extra(
     if not domain or not engines_combo:
         return 0
 
-    # 学术域固定加成：该域有 11+ 个引擎（arxiv/openreview/biorxiv/openalex/
-    # crossref/europepmc/dblp/semantic_scholar/local_pubmed/core/cinii），
-    # auto 模式 budget=3 只够前 3 个，后 8 个永远轮不到。学术搜索需要多源
-    # 交叉验证才严谨，固定 +3 让 budget 达到 6，覆盖到 semantic_scholar。
-    if domain.get("name") == "academic":
-        try:
-            from engine_policy import combo_budget
-            base = combo_budget(mode=mode, depth=depth, context=context)
-            if base is not None:
-                return min(3, max(0, 6 - base))
-        except Exception:
-            pass
-
+    # 2026-11-10 撤掉 academic 域的固定 +3 加成分支：固定值写死「budget 达到
+    # 6」，而 combo 随新源接入增长（hf_papers 插入第 5 位，local_pubmed/core/
+    # cinii 顺延到 6/7/8）。固定分支**提前 return**，跳过下方按最深位次算额
+    # 度的通用逻辑，三者叠加后 hf_papers 之后的源全被截断。通用逻辑本就覆盖
+    # 这个场景（deepest=6 → extra=3），固定分支是它的劣化版：既不能自适应，
+    # 又阻断自适应。cinii（位次 8）超出 cap=4 的射程，由休眠台账登记。
     pending = [
         e for e in _VERTICAL_NEW_SOURCE.get(domain.get("name"), ())
         if e in engines_combo and e in enabled
