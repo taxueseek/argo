@@ -238,13 +238,13 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
     if isinstance(template, list):
         return [_resolve(item, query, n, **extra) for item in template]
     s = template.replace("{query_quoted}", urllib.parse.quote(str(query))).replace("{query}", query).replace("{n}", str(n))
+    if "{query_slug}" in s:
+        _slug = next((_t for _tok in re.split(r"[\s,，。/?]+", str(query)) if (_t := _tok.strip().lower()) and re.fullmatch(r"[a-z][a-z0-9.\-_]{1,30}", _t) and not any(_w in _t for _w in ("生命周期", "支持到", "eol", "support", "lifecycle", "什么时候", "停更"))), "")
+        s = s.replace("{query_slug}", _slug or urllib.parse.quote(str(query)))
     s = s.replace("{TIMESTAMP}", str(int(time.time())))
-    if "{UUID}" in s:
-        s = s.replace("{UUID}", _proc_uuid())
-    for key, val in extra.items():
-        s = s.replace(f"{{{key}}}", str(val))
-    if s.startswith("~"):
-        s = str(Path.home() / s[1:])
+    if "{UUID}" in s: s = s.replace("{UUID}", _proc_uuid())
+    for key, val in extra.items(): s = s.replace(f"{{{key}}}", str(val))
+    if s.startswith("~"): s = str(Path.home() / s[1:])
     # env 占位符：缺失时替换为空串而非保留字面量。
     # 保留字面量会把 `Authorization: token {GITHUB_TOKEN}` 原样发出 → 401；
     # 空串 + 调用方过滤空头 = 未配置 key 的引擎自动退化为匿名请求。
@@ -322,67 +322,21 @@ def _coerce_field(val: Any, *, max_len: int | None = None) -> str:
 
 
 def _format_url_template(template: str, item: dict) -> str:
-    """支持 {field} 与 {a.b.c} 点分路径的 URL 模板；任一占位为空则返回空串。"""
-    vals = {m.group(1): _coerce_field(_get_path(item, m.group(1))) for m in re.finditer(r"\{([^}]+)\}", template)}
-    if any(not v for v in vals.values()):
-        return ""
-    try:
-        return re.sub(r"\{([^}]+)\}", lambda m: vals[m.group(1)], template)
-    except Exception:
-        return ""
-
-
-def _extract_items(data: Any, path: str) -> list:
-    """从 JSON 按路径提取列表。path 为 . / $ / [] / 空 且 data 为 list 时直接返回。"""
-    if path in ("", ".", "$", "[]"):
-        return data if isinstance(data, list) else []
-    if not isinstance(data, dict):
-        return []
-    obj = _get_path(data, path)
-    if isinstance(obj, list):
-        return obj
-    # DBLP 等 API 在 h=1 时把 hit 收成对象而非数组
-    if isinstance(obj, dict):
-        return [obj]
-    return []
+    """委托 engines_parsers（声明式字段映射的 URL 模板能力归属解析层）。"""
+    from engines_parsers import _format_url_template as _impl
+    return _impl(template, item)
 
 
 def _make_field_parser(path: str, fields: dict[str, str], url_template: str | None = None,
-                   max_items: int = 10) -> Callable:
-    """构造声明式 parser。支持点分路径字段与 url_template（含嵌套占位）。"""
-    def parser(data: Any) -> list[dict[str, Any]]:
-        if isinstance(data, list) and path in ("", ".", "$", "[]"):
-            items = data
-        elif isinstance(data, dict):
-            items = _extract_items(data, path)
-        else:
-            items = []
-        results = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            r: dict[str, Any] = {}
-            for ok, ik in fields.items():
-                if not ik:
-                    continue
-                raw = _get_path(item, ik) if "." in str(ik) else item.get(ik, "")
-                if raw in ("", None) and "." not in str(ik):
-                    raw = item.get(ik, "")
-                coerced = _coerce_field(raw, max_len=300 if ok == "snippet" else 500)
-                if coerced:
-                    r[ok] = coerced
-            if url_template and (not r.get("url") or not str(r["url"]).startswith(("http://", "https://"))):
-                built = _format_url_template(url_template, item)
-                if built.startswith(("http://", "https://")):
-                    r["url"] = built
-                else:
-                    r.pop("url", None)
-            if isinstance(r.get("url"), str) and r["url"].startswith("//"):
-                r["url"] = "https:" + r["url"]
-            if r.get("title") or r.get("url"):
-                results.append(r)
-        return results[:max_items]
-    return parser
+                   max_items: int = 10, templates: dict[str, str] | None = None,
+                   url_item_template: str | None = None) -> Callable:
+    """委托 engines_parsers.make_field_parser（2026-11-10 拆出，见该文件说明）。
+
+    保留本函数名是为了 engines_base 内部调用点与既有测试不变；实现已归解析层，
+    避免同一套 output_map 语义在两个文件各存一份真源。
+    """
+    from engines_parsers import make_field_parser as _impl
+    return _impl(path, fields, url_template, max_items, templates, url_item_template)
 
 
 def _build_cli_engine(spec: dict[str, Any]) -> Any:
@@ -843,7 +797,13 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
             "image_license": output_map.get("item_image_license", ""),
             # 其余图片字段（许可链接/协议版本原料/像素尺寸）见 image_ops
             **image_output_map_fields(output_map),
-        }, url_template=output_map.get("url_template") or spec.get("url_template"))(data)
+        }, url_template=output_map.get("url_template") or spec.get("url_template"),
+            templates={
+                # 多字段拼接模板（2026-11-10）：声明后覆盖同名单字段映射，
+                # 把原 builder 的「tombstone · 授权 CC0」这类拼接变成声明式能力。
+                k: output_map.get(k) for k in ("item_title_template", "item_summary_template")
+            },
+            url_item_template=output_map.get("item_url_template"))(data)
         # spec 级授权常量：授权不随条目变化的源（如 NASA 公版）在 spec 上写一次
         _lic = spec.get("image_license")
         for r in parsed:

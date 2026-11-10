@@ -5,10 +5,20 @@
 #   python3 scripts/engine_validate.py --engine artic --stage all --admit --write-doc
 
 engine_id: artic
-type: artic
+type: http
 enabled: true
 cost_tier: free
 timeout: 20
+method: GET
+url: "https://api.artic.edu/api/v1/artworks/search"
+query_param: q
+extra_params:
+  fields: "id,title,artist_display,date_display,image_id"
+format_is_query_param: false
+response:
+  # IIIF 图片直链依赖响应级 config.iiif_url 拼接，output_map 表达不了，
+  # 故引用注册的 artic 解析器（见 engines_parsers.parse_artic）。
+  parser: artic
 canary_query: "monet"
 desc: "芝加哥艺术博物馆馆藏（免认证，含 IIIF 图像）"
 coverage: [art, museum, culture, image]

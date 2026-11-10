@@ -518,37 +518,6 @@ def _build_wechat_sogou_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-# ── Hacker News 搜索引擎 ──────────────────────────────────────────────────────
-
-def _build_hackernews_engine(spec: dict[str, Any]) -> Any:
-    """Hacker News 搜索（Algolia API）"""
-    timeout = spec.get("timeout", 8)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        import urllib.parse as up
-        to = _timeout or timeout
-        url = f"https://hn.algolia.com/api/v1/search?query={up.quote(query)}&tags=story&hitsPerPage={min(n, 10)}"
-        headers = {"User-Agent": "argo-search/1.0"}
-        req = urllib.request.Request(url, headers=headers)
-        try:
-            with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
-                data = json.loads(resp.read())
-            results = []
-            for h in data.get("hits", []):
-                results.append({
-                    "title": h.get("title", ""),
-                    "url": h.get("url", f"https://news.ycombinator.com/item?id={h.get('objectID', '')}"),
-                    "snippet": f"score: {h.get('points', 0)} | comments: {h.get('num_comments', 0)} | by: {h.get('author', '')}",
-                    "source": "hackernews",
-                })
-            return results
-        except Exception as e:
-            logger.warning(f"HackerNews 引擎失败: {e}")
-            return []
-    return _engine
-
-
 # ── Stack Overflow 搜索引擎 ───────────────────────────────────────────────────
 
 # Stack Exchange 站点族：同一 API 换 site 参数覆盖 180+ 站点，
@@ -1161,73 +1130,6 @@ def _build_deps_dev_engine(spec: dict[str, Any]) -> Any:
                 "published_at": str(v.get("publishedAt") or "")[:10],
             })
         return results[:n]
-    return _engine
-
-
-# ── endoflife.date 产品生命周期引擎 ──────────────────────────────────────────
-
-_EOL_TAIL_WORDS = ("生命周期", "支持到", "eol", "support", "lifecycle",
-                   "什么时候", "停更")
-
-
-def _build_endoflife_engine(spec: dict[str, Any]) -> Any:
-    """endoflife.date 产品生命周期引擎（200+ 产品，免认证）。
-
-    查询词 = 产品 slug（python / nodejs / go / kubernetes / ubuntu…）。
-    API 无搜索端点，slug 提取取查询里的第一个 ASCII 词并剥离「生命周期 /
-    EOL / 支持」类尾词；未识别产品 404 → 诚实返回空，slug 模糊匹配交给
-    通用搜索源。每条结果附 endoflife.date 产品页，可核验。
-    """
-    timeout = spec.get("timeout", 10)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        slug = ""
-        for tok in re.split(r"[\s,，。/?]+", (query or "")):
-            t = tok.strip().lower()
-            if not t or not re.fullmatch(r"[a-z][a-z0-9.\-_]{1,30}", t):
-                continue
-            if any(w in t for w in _EOL_TAIL_WORDS):
-                continue
-            slug = t
-            break
-        if not slug:
-            return []
-        from engines_base import _http_get_raw
-        raw = _http_get_raw(f"https://endoflife.date/api/{slug}.json",
-                            {"Accept": "application/json"}, to,
-                            engine="endoflife")
-        if not raw:
-            return []
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        if not isinstance(data, list):
-            return []
-        web_url = f"https://endoflife.date/{slug}"
-        results = []
-        for i, cyc in enumerate(data[:n]):
-            label = "（最新）" if i == 0 else ""
-            snippet_parts = []
-            if cyc.get("latest"):
-                snippet_parts.append(f"最新 {cyc['latest']}")
-            if cyc.get("releaseDate"):
-                snippet_parts.append(f"发布 {cyc['releaseDate']}")
-            if cyc.get("support"):
-                snippet_parts.append(f"全支持至 {cyc['support']}")
-            if cyc.get("eol"):
-                snippet_parts.append(f"EOL {cyc['eol']}")
-            results.append({
-                "title": f"{slug} {cyc.get('cycle', '?')}{label}",
-                "url": web_url,
-                "snippet": " · ".join(snippet_parts),
-                "source": "endoflife",
-                "score": 0.9 if i == 0 else 0.7,
-                "published_at": str(cyc.get("latestReleaseDate") or "")[:10],
-            })
-        return results
     return _engine
 
 

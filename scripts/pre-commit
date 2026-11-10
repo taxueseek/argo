@@ -27,6 +27,11 @@
 # 却在全量回归里红——正是「改完没跑到那条门」的同一个洞。全量回归 ~5 分钟
 # 留给 CI 或手动（python3 -m pytest tests/ -q），不进 hook——hook 慢于 20s
 # 就会被用户 --no-verify 绕过，那是更坏的结局。
+# 2026-11-10 补的两道（test_intl_engines + test_image_sources）：d532486 把
+# 7 个国际源与 cleveland 的专用 builder 归一为声明式 Spec 后，这两份用例
+# 仍直接调用已删除的 _build_xxx_engine，实测 9 项 AttributeError——而它们
+# 不在 hook 覆盖内，于是「门禁全绿 + 归一后解析路径零覆盖」并存。归一的
+# 风险不在新代码本身，而在「旧契约测试没跟着改」。两者合计 <1s。
 #
 # 安装：bash scripts/install.sh 自动装调度器 hooks/pre-commit（原有 hook 改名
 # pre-commit.user 先跑，再直接执行本文件，不拷贝）。手动跑：sh scripts/pre-commit
@@ -106,7 +111,9 @@ printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手�
     tests/test_state_literal_drift.py \
     tests/test_check_commit_report.py \
     tests/test_badcase_ledger.py \
-    tests/test_agents_routing.py
+    tests/test_agents_routing.py \
+    tests/test_intl_engines.py \
+    tests/test_image_sources.py
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。

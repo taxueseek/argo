@@ -26,3 +26,12 @@ extra_params:
 format_is_query_param: false
 output_map:
   items: items
+  # 上游 link 是记录 API 地址（原 builder 直接用）。
+  item_url: link
+  # 上游 title 有两种形态：数组（取首项）与多语言 dict（en 优先）。
+  # 数组形态无法用模板表达，故同时声明 item_title（数组走单字段映射取首项）
+  # 与 item_title_template（dict 形态走模板，非空时覆盖前者）。
+  item_title: title
+  item_title_template: "{title.en}"
+  # 拼接模板：原 builder 把 dataProvider 放进 snippet（provider: X）。
+  item_summary_template: "provider: {dataProvider.0}"

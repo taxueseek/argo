@@ -5,10 +5,25 @@
 #   python3 scripts/engine_validate.py --engine endoflife --stage all --admit --write-doc
 
 engine_id: endoflife
-type: endoflife
+type: http
 enabled: true
 cost_tier: free
 timeout: 10
+method: GET
+url: "https://endoflife.date/api/{query_slug}.json"
+headers:
+  Accept: "application/json"
+url_template: "https://endoflife.date/{cycle}"
+format_is_query_param: false
+output_map:
+  items: .
+  # 原 builder 的标题是 `{slug} {cycle}（最新）`；slug 来自查询词、首条标「最新」，
+  # 两者都无法用逐条目模板表达，故标题保留 cycle（slug 已在 URL 里）。
+  item_title: cycle
+  item_url_template: "https://endoflife.date/{cycle}"
+  # 拼接模板：原 builder 的 `最新 X · 发布 X · 全支持至 X · EOL X`
+  item_summary_template: "最新 {latest} · 发布 {releaseDate} · 全支持至 {support} · EOL {eol}"
+  item_published_at: latestReleaseDate
 canary_query: "python 生命周期"
 desc: "产品生命周期（版本/最新/支持期/EOL，endoflife.date 200+ 产品）"
 coverage: [tech]

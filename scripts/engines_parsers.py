@@ -38,6 +38,7 @@ image_url / upstream（均为可选，缺省由下游补）。
 from __future__ import annotations
 
 import html as _htmllib
+import re
 from typing import Any, Callable
 
 # 解析器签名：(原始数据, spec) -> 标准结果行列表
@@ -96,6 +97,164 @@ def resolve(spec: dict) -> list[Parser]:
         return []
     names = [raw] if isinstance(raw, str) else list(raw)
     return [get(n) for n in names]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 声明式字段映射（output_map 的通用实现）
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# 为什么放在这里：2026-11-10 归一 13 个专用 builder 时发现，原 builder 常把
+# 多个上游字段拼进 snippet（cleveland 的 `tombstone · 授权 CC0`、deezer 的
+# `Deezer 音乐人 · 专辑 N · 粉丝 M`），而 output_map 只能取单个字段——归一后
+# 这类信息会静默丢失。把「拼接」变成声明式能力，属于解析层职责，故与
+# `parse_*` 解析器同文件维护；engines_base 只做委托调用。
+
+def _dig(obj: Any, path: str) -> Any:
+    """按点分路径取嵌套值；路径段为数字时按数组索引。"""
+    if not path:
+        return obj
+    cur = obj
+    for seg in path.split("."):
+        if isinstance(cur, list):
+            try:
+                cur = cur[int(seg)]
+            except (ValueError, IndexError):
+                return None
+        elif isinstance(cur, dict):
+            cur = cur.get(seg)
+        else:
+            return None
+    return cur
+
+
+def _coerce_field(val: Any, *, max_len: int | None = None) -> str:
+    """把 API 字段压成字符串：list 取首项、dict 丢弃、其余 str。"""
+    if val is None:
+        return ""
+    if isinstance(val, list):
+        if not val:
+            return ""
+        val = val[0]
+    if isinstance(val, dict):
+        return ""
+    s = str(val).strip()
+    if max_len is not None and len(s) > max_len:
+        return s[:max_len]
+    return s
+
+
+def _render_field_template(template: str, item: dict) -> str:
+    """模板插值：`{field}` 取条目字段（支持点分路径），空值置空并折叠分隔符。
+
+    与 URL 模板的区别：URL 模板任一占位为空则整体落空（否则拼出半截链接），
+    而文本模板把空占位折叠掉——少一段仍是有效文本。
+    连续/首尾的 `·`/`⇄`/`|` 分隔符会折叠，避免缺字段留下 `a ·  · b` 残渣。
+    """
+    def _repl(m: re.Match) -> str:
+        return _coerce_field(_dig(item, m.group(1)))
+
+    out = re.sub(r"\{([^}]+)\}", _repl, template)
+    out = re.sub(r"(?:\s*[·⇄|]\s*)+", lambda m: " " + next(
+        (ch for ch in m.group(0) if ch in "·⇄|"), "·") + " ", out)
+    out = out.strip()
+    out = re.sub(r"(?:^\s*[·⇄|]\s*|\s*[·⇄|]\s*$)", "", out)
+    return out.strip()
+
+
+def _format_url_template(template: str, item: dict) -> str:
+    """支持 {field} 与 {a.b.c} 点分路径的 URL 模板；任一占位为空则返回空串。"""
+    vals = {m.group(1): _coerce_field(_dig(item, m.group(1)))
+            for m in re.finditer(r"\{([^}]+)\}", template)}
+    if any(not v for v in vals.values()):
+        return ""
+    try:
+        return re.sub(r"\{([^}]+)\}", lambda m: vals[m.group(1)], template)
+    except Exception:
+        return ""
+
+
+def extract_items(data: Any, path: str) -> list:
+    """从 JSON 按路径提取列表。path 为 . / $ / [] / 空 且 data 为 list 时直接返回。"""
+    if path in ("", ".", "$", "[]"):
+        return data if isinstance(data, list) else []
+    if not isinstance(data, dict):
+        return []
+    obj = _dig(data, path)
+    if isinstance(obj, list):
+        return obj
+    # DBLP 等 API 在 h=1 时把 hit 收成对象而非数组
+    if isinstance(obj, dict):
+        return [obj]
+    return []
+
+
+def make_field_parser(path: str, fields: dict[str, str], url_template: str | None = None,
+                      max_items: int = 10, templates: dict[str, str] | None = None,
+                      url_item_template: str | None = None) -> Callable:
+    """构造声明式 parser。支持点分路径字段、url_template（含嵌套占位）与模板拼接。
+
+    `templates` 是可选的模板字段映射（`{item_title, item_summary}`），声明后
+    覆盖同名 `fields` 条目——用于需要多字段拼接的源（见 `_render_field_template`）。
+
+    `url_item_template` 是**逐条目**的 URL 拼接模板（如 eu_opendata 的
+    `landing_page.0.resource` 数组取首项）。与 `url_template` 的区别：后者用
+    `_format_url_template` 且任一占位为空即整体落空；前者在取不到值时保持
+    「不声明 URL」，交给通用推断或下游补。
+    """
+    templates = templates or {}
+
+    def parser(data: Any) -> list[dict[str, Any]]:
+        if isinstance(data, list) and path in ("", ".", "$", "[]"):
+            items = data
+        elif isinstance(data, dict):
+            items = extract_items(data, path)
+        else:
+            items = []
+        results = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            r: dict[str, Any] = {}
+            for ok, ik in fields.items():
+                if not ik:
+                    continue
+                raw = _dig(item, ik) if "." in str(ik) else item.get(ik, "")
+                if raw in ("", None) and "." not in str(ik):
+                    raw = item.get(ik, "")
+                coerced = _coerce_field(raw, max_len=300 if ok == "snippet" else 500)
+                if coerced:
+                    r[ok] = coerced
+            # 模板字段优先于同名单字段映射（声明式拼接覆盖单字段取值）。
+            # 键名是 output_map 的声明名（item_title_template），落到标准行字段
+            # 名（title/snippet）——不转换会把结果写进 `item_summary_template` 键。
+            # 模板渲染为空时**回落**到单字段映射（如 tatoeba 无译文时用 lang），
+            # 而不是把已取到的值覆盖成空。
+            for ok, tmpl in templates.items():
+                if not tmpl:
+                    continue
+                std = {"item_title_template": "title",
+                       "item_summary_template": "snippet"}.get(ok, ok)
+                rendered = _render_field_template(tmpl, item)
+                if rendered:
+                    r[std] = rendered[:300 if std == "snippet" else 500]
+            if url_template and (not r.get("url") or not str(r["url"]).startswith(("http://", "https://"))):
+                built = _format_url_template(url_template, item)
+                if built.startswith(("http://", "https://")):
+                    r["url"] = built
+                else:
+                    r.pop("url", None)
+            # 逐条目 URL 模板：占位取自条目自身（如 landing_page.0.resource），
+            # 取不到就保持无 URL（不造半截链接）。
+            if url_item_template and (not r.get("url") or not str(r["url"]).startswith(("http://", "https://"))):
+                built = _format_url_template(url_item_template, item)
+                if built.startswith(("http://", "https://")):
+                    r["url"] = built
+            if isinstance(r.get("url"), str) and r["url"].startswith("//"):
+                r["url"] = "https:" + r["url"]
+            if r.get("title") or r.get("url"):
+                results.append(r)
+        return results[:max_items]
+    return parser
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -231,11 +390,55 @@ def parse_mwmbl(data: Any, spec: dict) -> list[dict]:
     return results
 
 
+def parse_artic(data: Any, spec: dict) -> list[dict]:
+    """Art Institute of Chicago 响应解析（L2：IIIF 图片需响应级 config 拼接）。
+
+    上游把 IIIF 基础地址放在响应的 `config.iiif_url`（不在条目里），图片直链
+    是 `{iiif_url}/{image_id}/full/843,/0/default.jpg`。这类「拼接依赖响应级
+    配置」的解析无法用 output_map 声明，故注册专用解析器——协议标准、解析变体。
+
+    image_id 为空时**不产出** image_url（不得凭空造链接，见 test_image_sources）。
+    """
+    if not isinstance(data, dict):
+        return []
+    source = spec.get("engine_id", "artic")
+    iiif = str(((data.get("config") or {}).get("iiif_url") or "")).rstrip("/")
+    rows = data.get("data") if isinstance(data.get("data"), list) else []
+    results = []
+    for _rk, it in enumerate(rows):
+        if not isinstance(it, dict):
+            continue
+        title = str(it.get("title") or "").strip()
+        art_id = it.get("id")
+        url_ = f"https://www.artic.edu/artworks/{art_id}" if art_id else ""
+        if not title and not url_:
+            continue
+        row = {
+            "title": title[:200],
+            "url": url_,
+            "snippet": str(it.get("artist_display") or "")[:300],
+            "source": source,
+            "score": max(0.0, 0.7 - _rk * 0.05),
+        }
+        image_id = str(it.get("image_id") or "").strip()
+        if iiif and image_id:
+            row["image_url"] = f"{iiif}/{image_id}/full/843,/0/default.jpg"
+            # AIC 是 CC0 开放图像；授权缺失时按无授权处理，不凭空标注
+            lic = str(it.get("copyright_notice") or "").strip()
+            if lic:
+                row["image_license"] = lic
+            else:
+                row["image_license"] = "CC0（芝加哥艺术博物馆开放图像）"
+        results.append(row)
+    return results
+
+
 # 注册通用解析器
 register("array_at", parse_array_at)
 register("object_root", parse_object_root)
 register("strip_fields", parse_strip_fields)
 register("mwmbl", parse_mwmbl)
+register("artic", parse_artic)
 
 
 def parse_smart_generic(data: Any, engine_name: str = "?",
@@ -306,7 +509,7 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
             flat.get("title") or flat.get("name") or flat.get("heading")
             or flat.get("Title") or flat.get("titleNullable") or flat.get("title_s")
             or flat.get("headline") or flat.get("subject") or flat.get("topic")
-            or flat.get("text") or ""
+            or flat.get("text") or flat.get("cycle") or ""
         )
         if isinstance(title, dict):
             # 多语言字典（如 EU Open Data）：优先取 en/zh/fr/de，否则取首个
@@ -331,8 +534,11 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
                 url = url[0].get("url") or url[0].get("href") or url[0].get("resource") or ""
             else:
                 url = str(url[0])
-        if not url and url_template and raw_id:
+        if not url and url_template:
             url = url_template.replace("{id}", str(raw_id))
+            for _k, _v in flat.items():
+                if f"{{{_k}}}" in url:
+                    url = url.replace(f"{{{_k}}}", str(_v))
 
         snippet = (
             flat.get("snippet") or flat.get("summary") or flat.get("content")
@@ -340,6 +546,12 @@ def parse_smart_generic(data: Any, engine_name: str = "?",
             or flat.get("subtitleNullable") or flat.get("subtitle")
             or flat.get("extract") or flat.get("details") or flat.get("text") or ""
         )
+        if not snippet and (flat.get("eol") or flat.get("latest")):
+            _sp = [f"最新 {flat['latest']}" if flat.get("latest") else "",
+                   f"发布 {flat['releaseDate']}" if flat.get("releaseDate") else "",
+                   f"支持至 {flat['support']}" if flat.get("support") else "",
+                   f"EOL {flat['eol']}" if flat.get("eol") else ""]
+            snippet = " · ".join(x for x in _sp if x)
         if isinstance(snippet, dict):
             for lang in ("en", "zh", "fr", "de"):
                 if snippet.get(lang):

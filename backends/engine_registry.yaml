@@ -64,7 +64,7 @@ engines:
   desc: Internet Archive 高级搜索（免认证）
 - name: artic
   tier: T1
-  type: artic
+  type: http
   coverage:
   - art
   - museum
@@ -839,7 +839,7 @@ engines:
   desc: 东财妙想搜索（官方研报/公告/政策，需 EASTMONEY_APIKEY）
 - name: endoflife
   tier: T1
-  type: endoflife
+  type: http
   coverage:
   - tech
   latency_ms: 2000
@@ -1355,7 +1355,7 @@ engines:
   desc: Project Gutenberg 公版书全文检索（gutendex.com 免认证）
 - name: hackernews
   tier: T1
-  type: hackernews
+  type: http
   coverage:
   - tech
   - news
@@ -1506,7 +1506,7 @@ engines:
   desc: iTunes Search API（音乐/专辑、播客节目与单集（含集数/时长/发布日期）；中文 country=cn，免认证）
 - name: jikan
   tier: T1
-  type: jikan
+  type: http
   coverage:
   - anime
   - media

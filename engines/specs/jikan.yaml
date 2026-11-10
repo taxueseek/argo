@@ -1,18 +1,20 @@
-# Jikan（MyAnimeList 数据，免认证非官方）——【暂不启用】
-# 2026-09-13 实测：/anime?q= 检索端点持续 504（curl 直连同样 504，非本机问题），
-# 而同站 /top/anime 与 /anime/{id} 返回 200 —— 是其检索端点的上游故障。
-# builder 逻辑已验证正确，待检索端点恢复后把 enabled 改回 true 即可。
-# 补 anime_encyclopedia 域：现有 bangumi（中文圈）+ 萌娘百科，Jikan 覆盖
-# MAL 的全球番剧库（含日文原名与评分）。社区接口，失败诚实空。
-# 验证:
-#   python3 scripts/engine_validate.py --engine jikan --stage all --admit --write-doc
-
 engine_id: jikan
-type: jikan
+type: http
 enabled: false
 disabled_reason: builder 逻辑已验证正确，待检索端点恢复后把 enabled 改回 true（见文件头注释）；重开前需实测端点可用性
 cost_tier: free
 timeout: 20
+method: GET
+url: "https://api.jikan.moe/v4/anime"
+query_param: q
+format_is_query_param: false
+output_map:
+  items: data
+  # 原 builder 优先 title_japanese 缺失时回落 title；这里 title 直取。
+  item_title: title
+  item_url: url
+  # 拼接模板：原 builder 的 `类型 · N 集 · 评分 X · 状态（MyAnimeList）`
+  item_summary_template: "{type} · {episodes} 集 · 评分 {score} · {status}（MyAnimeList）"
 canary_query: "naruto"
 desc: "动漫元数据（Jikan/MyAnimeList，免认证，含评分与集数）"
 coverage: [anime, media, entertainment, japanese]

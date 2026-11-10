@@ -18,3 +18,9 @@ method: GET
 url: "https://data.europa.eu/api/hub/search/search"
 query_param: q
 format_is_query_param: false
+output_map:
+  items: result.results
+  # 多语言标题：en 优先（与通用推断器的语言序一致）。
+  item_title_template: "{title.en}"
+  # landing_page 是 [{resource: url}] 数组——逐条目 URL 模板取首项。
+  item_url_template: "{landing_page.0.resource}"

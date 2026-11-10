@@ -22,5 +22,7 @@ format_is_query_param: false
 output_map:
   items: .
   item_title: title
+  # 原 builder 优先用 url_public_api（结构化 API 地址），归一后改用人类可读的
+  # 落地页，并把 DOI 标注进 snippet（与 kaggle 的许可/大小同口径）。
   item_url: url_public_html
-  item_summary: doi
+  item_summary_template: "DOI: {doi}"

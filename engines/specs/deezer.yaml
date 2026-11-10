@@ -15,9 +15,10 @@ query_param: q
 format_is_query_param: false
 output_map:
   items: data
-  item_title: name
+  # 拼接模板：原 builder 标题带「（音乐人）」标注，snippet 含专辑数与粉丝数。
+  item_title_template: "{name}（音乐人）"
   item_url: link
-  item_summary: type
+  item_summary_template: "Deezer 音乐人 · 专辑 {nb_album} · 粉丝 {nb_fan}"
   item_image: picture_medium
 canary_query: "radiohead"
 desc: "音乐艺人/专辑（Deezer，免认证）"

@@ -34,7 +34,6 @@ SCRIPTS_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-import engines_builders_batch9 as b9  # noqa: E402
 import engines_builders_intl as bintl  # noqa: E402
 from engines_base import _parse_http_payload  # noqa: E402
 
@@ -71,29 +70,34 @@ _AIC = {
     ],
 }
 
+_ARTIC_SPEC = {
+    "_name": "artic", "format": "json",
+    "response": {"parser": "artic"},
+}
+
 
 class TestArtic:
-    def test_image_url_built_from_response_iiif_base(self, monkeypatch):
-        _patch_json(monkeypatch, b9, _AIC)
-        out = b9._build_artic_engine({"_name": "artic", "timeout": 5})("monet", 5)
+    # 2026-11-10：artic 的专用 builder 已归一为 type: http + response.parser: artic
+    # （见 engines/specs/artic.yaml 与 engines_parsers.parse_artic）。IIIF 图片
+    # 依赖响应级 config.iiif_url 拼接，output_map 表达不了，故走注册解析器。
+    def test_image_url_built_from_response_iiif_base(self):
+        out = _parse_http_payload(json.dumps(_AIC), "json", "artic", 5, {}, _ARTIC_SPEC)
         assert len(out) == 2
         assert out[0]["image_url"] == (
             "https://www.artic.edu/iiif/2/3c27b499-af56-f0d5-93b5-a7f2f1ad5813"
             "/full/843,/0/default.jpg")
         assert out[0]["image_license"]
 
-    def test_no_image_id_means_no_field(self, monkeypatch):
+    def test_no_image_id_means_no_field(self):
         """没有 image_id 的藏品不得凭空造 image_url。"""
-        _patch_json(monkeypatch, b9, _AIC)
-        out = b9._build_artic_engine({"_name": "artic", "timeout": 5})("monet", 5)
+        out = _parse_http_payload(json.dumps(_AIC), "json", "artic", 5, {}, _ARTIC_SPEC)
         assert "image_url" not in out[1]
         assert "image_license" not in out[1]
 
-    def test_iiif_base_missing_does_not_emit_broken_url(self, monkeypatch):
+    def test_iiif_base_missing_does_not_emit_broken_url(self):
         """响应没带 config.iiif_url 时不得拼出半截 URL（如 '//full/843,'）。"""
         payload = {"data": [dict(_AIC["data"][0])]}  # 去掉 config
-        _patch_json(monkeypatch, b9, payload)
-        out = b9._build_artic_engine({"_name": "artic", "timeout": 5})("monet", 5)
+        out = _parse_http_payload(json.dumps(payload), "json", "artic", 5, {}, _ARTIC_SPEC)
         assert "image_url" not in out[0]
 
 
@@ -113,15 +117,34 @@ _CLE = {
 
 
 class TestCleveland:
-    def test_image_url_and_license(self, monkeypatch):
-        _patch_json(monkeypatch, b9, _CLE)
-        out = b9._build_cleveland_engine({"_name": "cleveland", "timeout": 5})("monet", 5)
+    # 2026-11-10：cleveland 的专用 builder 已归一为 type: http + output_map
+    # （见 engines/specs/cleveland.yaml）。此处改为验证声明式路径的等价契约：
+    # 图片、授权、以及原 builder 拼接进 snippet 的「tombstone · 授权」都要在。
+    SPEC = {
+        "_name": "cleveland",
+        "format": "json",
+        "output_map": {
+            "items": "data",
+            "item_title": "title",
+            "item_url": "url",
+            "item_summary_template": "{tombstone} · 授权 {share_license_status}（克利夫兰艺术博物馆）",
+            "item_image": "images.web.url",
+            "item_image_license": "share_license_status",
+        },
+    }
+
+    def test_image_url_and_license(self):
+        out = _parse_http_payload(json.dumps(_CLE), "json", "cleveland", 5,
+                                  self.SPEC["output_map"], self.SPEC)
         assert out[0]["image_url"] == "https://openaccess-cdn.clevelandart.org/1958.39/1958.39_web.jpg"
         assert out[0]["image_license"] == "CC0"
+        # 归一不得丢原 builder 的授权拼接（这是本轮归一修的重点）
+        assert "CC0" in out[0]["snippet"]
+        assert "Claude Monet" in out[0]["snippet"]
 
-    def test_missing_images_block_no_field(self, monkeypatch):
-        _patch_json(monkeypatch, b9, _CLE)
-        out = b9._build_cleveland_engine({"_name": "cleveland", "timeout": 5})("monet", 5)
+    def test_missing_images_block_no_field(self):
+        out = _parse_http_payload(json.dumps(_CLE), "json", "cleveland", 5,
+                                  self.SPEC["output_map"], self.SPEC)
         assert "image_url" not in out[1]
 
 

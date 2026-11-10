@@ -135,7 +135,35 @@ class TestDnb(_BuilderCase):
         self.assertIn("d-nb.info", res[0]["url"])
 
 
-class TestDoaj(_BuilderCase):
+class _SpecCase(unittest.TestCase):
+    """声明式源：走 _parse_http_payload 验证 spec 的 output_map 与拼接模板。
+
+    2026-11-10 起 doaj / europeana / hal / eu_opendata / tatoeba / figshare
+    的专用 builder 已归一为 type: http + output_map（见各自 spec）。这些用例
+    锁住归一后的等价契约——原 builder 拼接的字段（作者/日期/摘要、provider、
+    许可/DOI）必须仍在，否则归一就是信息降级。
+    """
+
+    def parse(self, name, payload, spec):
+        import engines_base
+        return engines_base._parse_http_payload(
+            json.dumps(payload), "json", name, 5, spec["output_map"], spec)
+
+
+class TestDoaj(_SpecCase):
+    SPEC = {
+        "engine_id": "doaj", "format": "json",
+        "output_map": {
+            "items": "results",
+            "item_title": "bibjson.title",
+            "item_url": "bibjson.link.0.url",
+            "item_summary_template": (
+                "{bibjson.author.0.name} · {bibjson.author.1.name} · "
+                "{bibjson.author.2.name} · {bibjson.year} · "
+                "{bibjson.journal.title} · {bibjson.abstract}"),
+        },
+    }
+
     def test_parse(self):
         payload = {"total": 10, "results": [
             {"bibjson": {"title": "Paper One",
@@ -143,48 +171,92 @@ class TestDoaj(_BuilderCase):
                          "author": [{"name": "A. Smith"}], "year": 2024,
                          "abstract": "Abstract text here."}},
         ]}
-        res = self.run_case(intl._build_doaj_engine, payload)
+        res = self.parse("doaj", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Paper One")
         self.assertEqual(res[0]["url"], "https://ieeexplore.ieee.org/document/1")
         self.assertIn("A. Smith", res[0]["snippet"])
 
     def test_empty(self):
-        res = self.run_case(intl._build_doaj_engine, {"total": 0, "results": []})
+        res = self.parse("doaj", {"total": 0, "results": []}, self.SPEC)
         self.assertEqual(res, [])
 
 
-class TestEuropeana(_BuilderCase):
+class TestEuropeana(_SpecCase):
+    SPEC = {
+        "engine_id": "europeana", "format": "json",
+        "output_map": {
+            "items": "items",
+            "item_url": "link",
+            "item_title": "title",
+            "item_title_template": "{title.en}",
+            "item_summary_template": "provider: {dataProvider.0}",
+        },
+    }
+
     def test_parse_title_list(self):
         payload = {"totalResults": 5, "items": [
             {"title": ["Mona Lisa", "Mona Lisa"], "link": "https://api.europeana.eu/record/1",
              "dataProvider": ["The Louvre"]},
         ]}
-        res = self.run_case(intl._build_europeana_engine, payload)
+        res = self.parse("europeana", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Mona Lisa")
         self.assertIn("Louvre", res[0]["snippet"])
 
+    def test_parse_title_dict(self):
+        """多语言 title 走模板（en 优先），不能落空。"""
+        payload = {"items": [
+            {"title": {"fr": "Titre Francais", "en": "English Title"},
+             "guid": "https://www.europeana.eu/item/123",
+             "description": {"en": "English description content"}},
+        ]}
+        res = self.parse("europeana", payload, self.SPEC)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["title"], "English Title")
 
-class TestHal(_BuilderCase):
+
+class TestHal(_SpecCase):
+    SPEC = {
+        "engine_id": "hal", "format": "json",
+        "output_map": {
+            "items": "response.docs",
+            "item_title": "title_s",
+            "item_url": "uri_s",
+            "item_summary_template": (
+                "{authFullName_s.0} · {authFullName_s.1} · "
+                "{authFullName_s.2} · {producedDate_s} · {abstract_s}"),
+            "item_published_at": "producedDate_s",
+        },
+    }
+
     def test_parse(self):
         payload = {"response": {"numFound": 5, "docs": [
             {"title_s": ["Titre de l'article"], "uri_s": "https://hal.science/hal-1",
              "authFullName_s": ["Jean Dupont"], "producedDate_s": "2024-01-01"},
         ]}}
-        res = self.run_case(intl._build_hal_engine, payload)
+        res = self.parse("hal", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Titre de l'article")
         self.assertIn("Jean Dupont", res[0]["snippet"])
 
 
-class TestEuOpendata(_BuilderCase):
+class TestEuOpendata(_SpecCase):
+    SPEC = {
+        "engine_id": "eu_opendata", "format": "json",
+        "output_map": {
+            "items": "result.results",
+            "item_title_template": "{title.en}",
+            "item_url_template": "{landing_page.0.resource}",
+        },
+    }
+
     def test_parse(self):
         payload = {"result": {"count": 10, "results": [
             {"title": {"en": "Climate Data", "fr": "Données climat"},
              "landing_page": [{"resource": "https://data.bs.ch/explore/dataset/1"}]},
         ]}}
-        res = self.run_case(intl._build_eu_opendata_engine, payload)
+        res = self.parse("eu_opendata", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Climate Data")
         self.assertEqual(res[0]["url"], "https://data.bs.ch/explore/dataset/1")
@@ -374,27 +446,60 @@ class TestUsda(_BuilderCase):
         self.assertIn("45400", res[0]["url"])
 
 
-class TestTatoeba(_BuilderCase):
+class TestTatoeba(_SpecCase):
+    SPEC = {
+        "engine_id": "tatoeba", "format": "json",
+        "output_map": {
+            "items": "results",
+            "item_title": "text",
+            "item_summary": "lang",
+            "item_summary_template": (
+                "{translations.0.0.text} ⇄ {translations.0.1.text} ⇄ "
+                "{translations.1.0.text} ⇄ {translations.1.1.text} ⇄ "
+                "{translations.2.0.text} ⇄ {translations.2.1.text}"),
+            "url_template": "https://tatoeba.org/en/sentences/show/{id}",
+        },
+    }
+
     def test_parse_list_results(self):
         payload = {"paging": {}, "results": [
             {"id": 14006447, "text": "Hello world!", "lang": "eng",
              "translations": [[{"id": 1, "text": "你好，世界！", "lang": "cmn"}]]},
         ]}
-        res = self.run_case(intl._build_tatoeba_engine, payload)
+        res = self.parse("tatoeba", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Hello world!")
         self.assertIn("你好", res[0]["snippet"])
 
+    def test_no_translation_falls_back_to_lang(self):
+        """无译文时模板落空，必须回落到 item_summary（lang），不得输出空 snippet。"""
+        payload = {"results": [{"id": 1, "text": "Hi", "lang": "eng", "translations": []}]}
+        res = self.parse("tatoeba", payload, self.SPEC)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["snippet"], "eng")
 
-class TestFigshare(_BuilderCase):
+
+class TestFigshare(_SpecCase):
+    SPEC = {
+        "engine_id": "figshare", "format": "json",
+        "output_map": {
+            "items": ".",
+            "item_title": "title",
+            "item_url": "url_public_html",
+            "item_summary_template": "DOI: {doi}",
+        },
+    }
+
     def test_parse(self):
         payload = [{"id": 33197788, "title": "Sinefungin synthesis",
                     "doi": "10.1021/jacs.6c10565.s001",
+                    "url_public_html": "https://figshare.com/articles/dataset/1",
                     "url_public_api": "https://api.figshare.com/v2/articles/33197788"}]
-        res = self.run_case(intl._build_figshare_engine, payload)
+        res = self.parse("figshare", payload, self.SPEC)
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["title"], "Sinefungin synthesis")
         self.assertIn("figshare", res[0]["url"])
+        self.assertIn("10.1021", res[0]["snippet"])
 
 
 class TestTencentKline(_BuilderCase):

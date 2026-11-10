@@ -19,11 +19,16 @@ url: "https://api.archives-ouvertes.fr/search/"
 query_param: q
 extra_params:
   wt: json
-  fl: "title_s,uri_s,abstract_s,producedDate_s"
+  # fl 必须含 authFullName_s：原 builder 把它拼进 snippet（作者 · 日期 · 摘要），
+  # 归一化后 fl 少列这个字段会让「作者」静默消失。
+  fl: "title_s,uri_s,abstract_s,authFullName_s,producedDate_s"
 format_is_query_param: false
 output_map:
   items: response.docs
   item_title: title_s
   item_url: uri_s
-  item_summary: abstract_s
+  # 拼接模板：原 builder 输出 `作者 · 日期 · 摘要`（作者取前 3 位）。
+  # 注：authFullName_s 是数组，_coerce_field 取首项——完整作者列表走
+  # upstream 或后续专用解析器，此处保前 3 位语义。
+  item_summary_template: "{authFullName_s.0} · {authFullName_s.1} · {authFullName_s.2} · {producedDate_s} · {abstract_s}"
   item_published_at: producedDate_s

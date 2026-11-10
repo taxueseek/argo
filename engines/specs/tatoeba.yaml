@@ -22,4 +22,9 @@ format_is_query_param: false
 output_map:
   items: results
   item_title: text
+  # 拼接模板：原 builder 输出 `译文1 ⇄ 译文2`（取前 3 层、每层前 2 条），
+  # 无译文时回落 `(lang)`。单字段映射只能取到单条译文，故用模板；
+  # item_summary 作模板为空时的兜底（模板非空时覆盖它）。
+  item_summary: lang
+  item_summary_template: "{translations.0.0.text} ⇄ {translations.0.1.text} ⇄ {translations.1.0.text} ⇄ {translations.1.1.text} ⇄ {translations.2.0.text} ⇄ {translations.2.1.text}"
   url_template: "https://tatoeba.org/en/sentences/show/{id}"

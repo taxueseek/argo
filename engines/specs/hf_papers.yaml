@@ -19,8 +19,19 @@ timeout: 15
 method: GET
 url: "https://huggingface.co/api/papers/search"
 query_param: q
-url_template: "https://huggingface.co/papers/{id}"
+url_template: "https://huggingface.co/papers/{paper.id}"
 format_is_query_param: false
+output_map:
+  items: .
+  # 上游条目把主字段放在嵌套 paper 对象里；声明显式路径，避免依赖推断器的
+  # 别名表（多源共用一份推断逻辑，加一源的特化别名会污染其余源）。
+  item_title: paper.title
+  # 不声明 item_url：paper.id 是裸 ID，交给 spec 级 url_template 拼成完整链接。
+  # 声明了 item_url 会让 _make_field_parser 认为 URL 已就位而跳过模板。
+  # 拼接模板：原 builder 输出 `摘要 · 发布日期 · upvotes: N · 作者`。
+  # 社交信号（upvotes）是本源相对 arXiv/OpenAlex 的差异化价值，不能丢。
+  item_summary_template: "{paper.summary} · {publishedAt} · upvotes: {paper.upvotes} · {paper.authors.0.name} · {paper.authors.1.name} · {paper.authors.2.name}"
+  item_published_at: paper.publishedAt
 canary_query: "attention"
 quality_queries:
   - query: "attention mechanism"

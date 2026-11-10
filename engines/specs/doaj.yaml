@@ -21,3 +21,10 @@ query_param: ""
 extra_params:
   pageSize: 10
 format_is_query_param: false
+output_map:
+  items: results
+  # bibjson 是嵌套对象：字段路径需带 bibjson 前缀，否则取不到值。
+  item_title: bibjson.title
+  item_url: bibjson.link.0.url
+  # 拼接模板：原 builder 输出 `作者 · 年份 · 期刊 · 摘要`（作者取前 3 位）。
+  item_summary_template: "{bibjson.author.0.name} · {bibjson.author.1.name} · {bibjson.author.2.name} · {bibjson.year} · {bibjson.journal.title} · {bibjson.abstract}"

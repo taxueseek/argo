@@ -48,11 +48,10 @@ HARD_LIMIT = 1000
 #（2026-11-08 前说明文字两周从 10.6k 字涨到 14.3k 字，清单本身成了流水账）。
 GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_cn.py": (2283, "中文源构建器，逐源一段；下一步按主题拆（同 engines_builders_data 2026-11-08 的做法）"),
-    "scripts/engines_builders_batch9.py": (1357, "批次九源构建器，逐源一段；方案 A 归一消减 cleveland/tvmaze/deezer 净瘦身 119 行"),
-    "scripts/engines_builders_intl.py": (991, "国际源构建器，方案 A 归一消减 doaj/europeana/hal/eu_opendata/tatoeba/figshare 净瘦身 251 行"),
-    "scripts/engines_builders_tech.py": (1281, "技术社区源构建器，逐源一段；下一步按主题拆"),
+    "scripts/engines_builders_batch9.py": (1272, "批次九源构建器，方案 A 归一消减 artic/jikan 净瘦身 85 行"),
+    "scripts/engines_builders_tech.py": (1183, "技术社区源构建器，方案 A 归一消减 hackernews/endoflife 净瘦身 98 行"),
     "scripts/fetch_v3.py": (1905, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段"),
-    "scripts/engines_base.py": (1510, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；1510 含 2026-11-10 方案三：通用智能推断解析器抽离至 engines_parsers 并对齐出口契约，净瘦身 57 行"),
+    "scripts/engines_base.py": (1470, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；1470 含 2026-11-10 两轮拆分：通用智能推断解析器（方案三）与声明式字段映射/模板拼接（_make_field_parser 等）先后抽离至 engines_parsers，累计净瘦身 97 行"),
     "scripts/cache.py": (1373, "存储实现与门面；键、命中判据、准入策略已分别拆到 cache_key_vdom / cache_similarity / cache_guard"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),
     "scripts/search_rank.py": (976, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支"),

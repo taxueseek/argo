@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 import pytest
@@ -220,5 +221,93 @@ def test_smart_inference_on_doaj_and_multilingual():
     assert res_multi[0]["title"] == "English Title"
     assert res_multi[0]["url"] == "https://www.europeana.eu/item/123"
     assert res_multi[0]["snippet"] == "English description content"
+
+
+# ── 声明式字段拼接模板（2026-11-10 归一 13 个 builder 时补的能力）────────────
+#
+# 为什么需要这组测试：归一化把 builder 的手写拼接（`tombstone · 授权 CC0`、
+# `Deezer 音乐人 · 专辑 N · 粉丝 M`、`作者 · 日期 · 摘要`）改成声明式 output_map
+# 时，单字段映射无法表达拼接，导致 3 个源的字段静默丢失。这组测试锁住：
+# 1. 模板非空时覆盖同名单字段映射；
+# 2. 模板渲染为空时回落到单字段映射（不把已有值抹成空）；
+# 3. 缺字段的分隔符残渣必须折叠（不能留 `a ·  · b`）；
+# 4. 逐条目 URL 模板（item_url_template）取不到值时不造半截链接。
+
+
+def _parse_with_map(name, payload, output_map):
+    return engines_base._parse_http_payload(
+        json.dumps(payload), "json", name, 5, output_map,
+        {"engine_id": name, "format": "json", "output_map": output_map})
+
+
+def test_summary_template_overrides_single_field():
+    """模板非空时覆盖 item_summary 单字段映射。"""
+    out = _parse_with_map("t", {"items": [{"a": "AAA", "b": "BBB"}]},
+                          {"items": "items", "item_title": "a",
+                           "item_summary": "a", "item_summary_template": "{a} · {b}"})
+    assert out[0]["snippet"] == "AAA · BBB"
+
+
+def test_summary_template_falls_back_when_empty():
+    """模板渲染为空时保留单字段值（如 tatoeba 无译文回落 lang）。"""
+    out = _parse_with_map("t", {"items": [{"a": "AAA", "b": ""}]},
+                          {"items": "items", "item_title": "a",
+                           "item_summary": "a", "item_summary_template": "{b} · {c}"})
+    assert out[0]["snippet"] == "AAA"
+
+
+def test_template_folds_missing_field_separators():
+    """缺字段不得留下连续/首尾分隔符残渣。"""
+    out = _parse_with_map("t", {"items": [{"a": "AAA", "b": "", "c": "CCC"}]},
+                          {"items": "items", "item_title": "a",
+                           "item_summary_template": "{a} · {b} · {c}"})
+    assert out[0]["snippet"] == "AAA · CCC"
+
+    # 首尾缺字段
+    out2 = _parse_with_map("t2", {"items": [{"a": "AAA"}]},
+                           {"items": "items", "item_title": "a",
+                            "item_summary_template": "{missing} · {a} · {missing2}"})
+    assert out2[0]["snippet"] == "AAA"
+
+
+def test_title_template_supports_suffix():
+    """标题拼接模板：原 deezer builder 的「（音乐人）」后缀。"""
+    out = _parse_with_map("t", {"items": [{"name": "Radiohead"}]},
+                          {"items": "items",
+                           "item_title_template": "{name}（音乐人）"})
+    assert out[0]["title"] == "Radiohead（音乐人）"
+
+
+def test_item_url_template_missing_placeholder_no_broken_url():
+    """逐条目 URL 模板取不到值时保持无 URL，不造半截链接。"""
+    out = _parse_with_map("t", {"items": [{"id": "1", "name": "A"},
+                                        {"id": "", "name": "B"}]},
+                          {"items": "items", "item_title": "name",
+                           "item_url_template": "https://x.test/{id}"})
+    assert out[0]["url"] == "https://x.test/1"
+    assert "url" not in out[1], "占位为空时不得产出半截 URL"
+
+
+def test_spec_files_use_templates_for_former_builder_sources():
+    """真实 spec 必须用模板恢复原 builder 拼接的字段（防回归）。"""
+    import yaml
+    from pathlib import Path
+    spec_dir = Path(__file__).resolve().parent.parent / "engines" / "specs"
+    expected = {
+        "cleveland": "item_summary_template",
+        "deezer": "item_summary_template",
+        "kaggle": "item_summary_template",
+        "doaj": "item_summary_template",
+        "hal": "item_summary_template",
+        "europeana": "item_summary_template",
+        "tatoeba": "item_summary_template",
+        "figshare": "item_summary_template",
+        "hf_papers": "item_summary_template",
+        "eu_opendata": "item_title_template",
+    }
+    for name, key in expected.items():
+        spec = yaml.safe_load((spec_dir / f"{name}.yaml").read_text(encoding="utf-8"))
+        om = spec.get("output_map") or {}
+        assert key in om, f"{name} 的 output_map 缺 {key}——归一不得丢原 builder 字段"
 
 

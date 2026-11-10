@@ -18,7 +18,8 @@ output_map:
   items: data
   item_title: title
   item_url: url
-  item_summary: tombstone
+  # 拼接模板：原 builder 把 tombstone 与授权一起放进 snippet，单字段映射会丢授权。
+  item_summary_template: "{tombstone} · 授权 {share_license_status}（克利夫兰艺术博物馆）"
   item_image: images.web.url
   item_image_license: share_license_status
 canary_query: "monet"
