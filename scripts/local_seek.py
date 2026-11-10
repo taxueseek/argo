@@ -218,7 +218,7 @@ def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
 # 判据与 local_intent._LOCAL_SIGNAL_RE 逐字一致（红绿锁见
 # tests/test_local_intent.py::test_intent_pattern_matches_local_seek）。
 _LOCAL_INTENT_PATTERN = re.compile(
-    '(?i)(?:(?:^|[\\s\\"\'`(])(?:~/|/Users/|/home/|file://|C:\\\\\\\\|\\./|\\.\\./)|\\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|sql|docx|pptx|xlsx|pdf|csv|log|cfg|ini|conf)\\b|(?:readme|package\\.json|cargo\\.toml|dockerfile|makefile|\\.gitignore|\\.env|pyproject\\.toml|tsconfig\\.json|go\\.mod|requirements\\.txt|Cargo\\.lock)|(?:\\.agents/skills|\\.obsidian|\\.config/argo|本机|本地文件|本地脚本|本地代码|我的文件|我的笔记|我的电脑|代码库|本工程|本项目|这个仓库|这个工程|当前目录|工作目录|源码里|仓库里))')
+    '(?i)(?:\\b(?:def|class|function|fn|import|export|const|var|struct|enum)\\b|\\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|sql|conf|cfg|ini|log)\\b|(?:readme|config|package\\.json|cargo\\.toml|dockerfile|makefile|pyproject\\.toml|tsconfig\\.json|go\\.mod|requirements\\.txt|Cargo\\.lock|\\.gitignore|\\.env)|\\b[A-Za-z0-9_]+(?:Error|Exception|Fault|Warning)\\b|\\b_[a-zA-Z0-9_]{2,}\\b|\\b[a-zA-Z0-9_]+\\([^\\)]*\\)|(?:本工程|本项目|代码库|本地文件|本地脚本|脚本文件|架构实现|函数|方法|源码|接口定义|本机|本地代码|本地笔记|我的文件|我的笔记|我的电脑|我的代码|仓库里|仓库中|工程里|项目里|当前目录|工作目录|\\.agents/skills|\\.obsidian))')
 
 
 def has_local_code_intent(query: str) -> bool:

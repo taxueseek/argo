@@ -105,6 +105,14 @@ printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手�
     tests/test_zcode_bridge_daemon_state.py \
     tests/test_state_literal_drift.py
 
+# 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
+# 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。
+echo "[pre-commit] 派生件一致性校验..."
+if ! "$PY" scripts/sync_backends.py --check; then
+    echo "[pre-commit] 派生件过期，请运行: python3 scripts/sync_backends.py" >&2
+    exit 1
+fi
+
 if command -v node >/dev/null 2>&1 && [ -f packages/dsh-plugin/test/size-gate.test.js ]; then
     node --test packages/dsh-plugin/test/size-gate.test.js packages/dsh-plugin/test/client.test.js
 fi

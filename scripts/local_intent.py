@@ -91,27 +91,8 @@ def should_skip_local(domain: str | None, query: str) -> bool:
 # 新判据把默认翻转为信号驱动：**只有查询明确带本地意图才跑本机轨**。
 # 判据失败 fail-open（宁可多搜也不误杀）——见 should_run_local_by_signal。
 
-# 明确的本地意图信号：路径前缀、文件扩展名、工程文件、中文本地说法、
-# 本机能力目录（.agents/skills、.obsidian 等）。
-# 与 _LOCAL_SIGNAL_RE 的区别：这个正则**只收「强本地意图」**，不收
-# `def`/`class` 这类可能只是英文技术词的弱信号（"def" 出现在 "default" 里）。
-_STRONG_LOCAL_SIGNAL_RE = re.compile(
-    r"(?i)(?:"
-    # 路径前缀（最明确）
-    r"(?:^|[\s\"'`(])(?:~/|/Users/|/home/|file://|C:\\\\|\./|\.\./)|"
-    # 文件扩展名
-    r"\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|"
-    r"sql|docx|pptx|xlsx|pdf|csv|log|cfg|ini|conf)\b|"
-    # 工程/配置文件名
-    r"(?:readme|package\.json|cargo\.toml|dockerfile|makefile|"
-    r"\.gitignore|\.env|pyproject\.toml|tsconfig\.json|"
-    r"go\.mod|requirements\.txt|Cargo\.lock)|"
-    # 本机目录与说法
-    r"(?:\.agents/skills|\.obsidian|\.config/argo|本机|本地文件|本地脚本|"
-    r"本地代码|我的文件|我的笔记|我的电脑|代码库|本工程|本项目|"
-    r"这个仓库|这个工程|当前目录|工作目录|源码里|仓库里)"
-    r")"
-)
+# 单一真源：强弱工程意图信号统一由 _LOCAL_SIGNAL_RE 判定（单一事实来源，消除漂移）
+_STRONG_LOCAL_SIGNAL_RE = _LOCAL_SIGNAL_RE
 
 
 def has_strong_local_signal(query: str) -> bool:
@@ -119,17 +100,11 @@ def has_strong_local_signal(query: str) -> bool:
 
     为什么复用而不是新写正则：_LOCAL_SIGNAL_RE 已用 `\\b` 词边界处理了
     `def`/`class` 与 `default`/`classic` 的歧义（"default" 不匹配 `def`），
-    且覆盖扩展名、工程文件、中文本地说法三类信号。重写一份必然引入漂移。
-
-    实测（2026-11-10）：
-      「python asyncio error handling」→ False（纯英文技术问题，跳）
-      「def cache_key 怎么实现的」→ True（代码关键词 + 中文，跑）
-      「config.yaml 里的 engines 字段」→ True（扩展名，跑）
-      「红烧肉 做法」→ False（菜谱，跳）
+    且覆盖异常类、私有符号、扩展名、工程文件、中文本地说法。重写一份必然引入漂移。
     """
     if not query:
         return False
-    return bool(_STRONG_LOCAL_SIGNAL_RE.search(query))
+    return has_local_signal(query)
 
 
 def should_run_local_by_signal(query: str, domain: str | None = None) -> bool:
@@ -140,9 +115,25 @@ def should_run_local_by_signal(query: str, domain: str | None = None) -> bool:
         「域已确定是天气但查询写法不含强信号」的漏网情形）；
       - should_run_local_by_signal：默认路径的主判据（无域信息时靠它）。
 
-    若命中公域答案型白名单（天气、汇率等）且无强信号，坚决不跑（零公域污染）；
-    否则带本地意图信号则跑。
+    判据（两层信号，任一命中即跑）：
+      1. 强信号：路径前缀、文件扩展名、工程文件、中文本地说法；
+      2. 弱信号 + 中文：代码关键词（def/class/fn）+ 中文语境
+         —— 「def cache_key 怎么实现的」是明确的本地代码检索意图，
+         但纯英文「python asyncio error handling」不是。
+
+    公域答案型域（天气/汇率等）且无强信号时，即使有弱信号也不跑
+    ——这类查询的本机结果必然是噪声。
     """
+    if has_strong_local_signal(query):
+        return True
+    # 弱信号（代码词）+ 中文语境：中文出现时「def」几乎必然指代码
     if domain and domain in _PUBLIC_ONLY_DOMAINS:
         return False
-    return has_strong_local_signal(query)
+    if has_local_signal(query) and _has_cjk(query):
+        return True
+    return False
+
+
+def _has_cjk(query: str) -> bool:
+    """查询是否含中文（CJK 统一表意文字）。"""
+    return any('\u4e00' <= ch <= '\u9fff' for ch in query)

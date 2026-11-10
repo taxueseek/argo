@@ -1,5 +1,5 @@
 engine_id: mwmbl
-type: mwmbl
+type: http
 enabled: true
 label: Mwmbl 独立索引
 cost_tier: free
@@ -24,3 +24,16 @@ quality_queries:
     category: "general"
   - query: "climate change"
     category: "general"
+method: GET
+url: "https://mwmbl.org/api/v1/search/"
+query_param: s
+extra_params:
+  limit: 20
+format: json
+format_is_query_param: false
+response:
+  # L2 解析变体（P1-2 试点）：上游 title/extract 是 [{value, is_bold}]
+  # 高亮片段数组，标准 output_map 无法展平，引用注册的 mwmbl 解析器。
+  parser: mwmbl
+# 2026-11-10 P1-1 标准化试点：原 type=mwmbl + custom builder 改为
+# 标准 http + 声明式解析器。协议层完全标准，解析层注册复用。

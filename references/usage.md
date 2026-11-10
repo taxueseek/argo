@@ -3,7 +3,7 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（31 个，唯一事实=bin/argo 分发表）
+## 命令总览（32 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
@@ -37,7 +37,31 @@
 | `argo stats` | 使用日志与反馈状态（本地使用日志只读出口） |
 | `argo budget` | 按引擎的月度预算（原生币种；list/set/unset） |
 | `argo quota` | 知乎开放平台当日额度（官方 API，不消耗业务额度） |
+| `argo doctor` | 源健康度审计（基于使用日志给出去留建议；`--days`/`--json`） |
 | `argo local-image` | 本地图片检索（Vision 索引；默认关，见「图片检索」节） |
+
+## argo doctor — 源健康度审计（2026-11-10）
+
+300 个源只进不出会累积维护债：每个源都要维护 spec、派生件、文档、测试，
+但真正进自动路由的只有 ~250 个。`argo doctor` 用真实使用日志
+（`usage_log/query.jsonl` 与 `route.jsonl`）给出去留建议，而不是靠猜。
+
+```bash
+argo doctor                 # 审计最近 90 天
+argo doctor --days 30       # 缩短窗口
+argo doctor --json          # 机器可读（紧凑 JSON，走 cli_io.dumps）
+```
+
+判据（价值 = 命中率 × 交付率）：
+
+- **建议停用**：90 天 0 次路由命中且非显式专用
+- **建议降级为 explicit_only**：价值分 < 5（命中次数 × 交付率）
+- **建议隔离**：交付率 < 20% 且有命中
+- **提示**：需密钥未配置（本机未配 `required_env`）
+
+口径说明：`engine_results` 字段 2026-10-26（v2.13.0）才加入，历史日志里
+92% 是 null。因此交付率优先用 `engine_results`，缺失时用 `count > 0`
+作粗信号——**不要**只看 `engine_results`，会把主力源误判成低价值。
 
 > SKILL.md 只留核心命令；本页是参数大全与输出字段说明。
 

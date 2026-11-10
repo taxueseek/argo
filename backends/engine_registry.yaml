@@ -1572,7 +1572,7 @@ engines:
   desc: K10plus 联合目录（德国最大图书馆联合目录，SRU，免认证）
 - name: kaggle
   tier: T1
-  type: kaggle
+  type: http
   coverage:
   - dataset
   - ml
@@ -2114,7 +2114,7 @@ engines:
   desc: MusicBrainz 音乐人/作品元数据（免认证，限速 1rps）
 - name: mwmbl
   tier: T1
-  type: mwmbl
+  type: http
   coverage:
   - web
   - longtail

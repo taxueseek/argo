@@ -32,12 +32,26 @@ from search import _resolve_include_local  # noqa: E402
 # ── 1. 三态智能默认 ───────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("mode,expected", [
-    ("fast", True), ("budget", True),
-    ("auto", True), ("deep", True),
+    ("fast", False), ("budget", False),
+    ("auto", False), ("deep", False),
 ])
 def test_auto_default_by_mode(mode, expected):
-    """任意搜索均默认开启本地+联网双轨检索（None=True）。"""
+    """默认路径（None）改为信号驱动：无本地信号时跳过本机轨。
+
+    2026-11-10 P0-1：原行为是「任意搜索默认双轨」，但实测本机轨对纯公网
+    查询也返回 3 条噪声结果（总条数 8 条里 3 条是本地文件），还白付
+    100-160ms。翻转后默认不跑，查询带本地信号才跑。
+    """
     assert _resolve_include_local(None, mode) is expected
+
+
+@pytest.mark.parametrize("mode", ["fast", "budget", "auto", "deep"])
+def test_auto_default_runs_with_local_signal(mode):
+    """带本地信号的查询在任意模式下都跑本机轨。"""
+    assert _resolve_include_local(None, mode, "config.yaml 里的字段",
+                                  "general") is True
+    assert _resolve_include_local(None, mode, "本地文件里有没有笔记",
+                                  None) is True
 
 
 def test_explicit_overrides_auto():

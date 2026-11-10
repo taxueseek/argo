@@ -722,6 +722,9 @@ def main():
         # ui：settings 的别名——#44 公开承诺的唤起词是 `argo ui`，留别名让
         # 已发布的说法不落空；同一实现，不另起摊子。
         "ui":        ("settings_page.py", []),
+        # doctor：源健康度审计（基于真实使用日志给出去留建议）。
+        # 300 个源只进不出会累积维护债，这条命令让「该留谁」有数据可依。
+        "doctor":    ("source_audit.py", []),
     }
 
     if sub not in scripts:

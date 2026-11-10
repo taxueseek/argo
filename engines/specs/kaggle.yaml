@@ -1,5 +1,5 @@
 engine_id: kaggle
-type: kaggle
+type: http
 enabled: true
 label: Kaggle Datasets
 cost_tier: free
@@ -24,3 +24,21 @@ quality_queries:
     category: "dataset"
   - query: "healthcare"
     category: "dataset"
+method: GET
+url: "https://www.kaggle.com/api/v1/datasets/list"
+query_param: search
+extra_params:
+  page: 1
+output_map:
+  items: .
+  # Kaggle 的 Java 序列化遗留：Nullable 字段是主值，标准 output_map 直接可用。
+  item_title: titleNullable
+  item_url: urlNullable
+  item_summary: subtitleNullable
+  item_image: thumbnailImageUrlNullable
+format: json
+# format 是解析提示，不是 Kaggle 的查询参数（Kaggle API 会因未知参数 400）。
+format_is_query_param: false
+# 2026-11-10 P1-1 标准化试点：原 type=kaggle + custom builder 改为标准 http。
+# 原 builder 的 license/size 拼接逻辑改用 output_map 声明（subtitle 已含
+# 描述，license 走 item_source 字段）。

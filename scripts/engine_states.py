@@ -732,3 +732,252 @@ ADMISSION_REASONS = frozenset({
     ADMISSION_REASON_NONE,
 })
 
+
+# ── 26. 状态机注册表（强制注册机制）─────────────────────────────────────────
+# 为什么需要：25 台状态机已收进词表，但「新状态机」仍可能绕过词表直接写字面量。
+# 注册表让「新状态机必须显式注册」成为可执行约束——不注册就取不到状态，
+# 运行时直接报错，而不是静默失效。
+#
+# 设计原则：
+#   - 注册表只负责「登记与取用」，不负责「判定逻辑」（判定仍由各状态机的
+#     is_xxx / should_xxx 函数负责）。
+#   - 注册时必须提供 states（全集）与 routable（可路由子集，可选）。
+#   - 取用时用 get_states() / get_routable()，禁止裸字面量。
+
+STATE_REGISTRY: dict[str, dict] = {}
+
+
+class UnknownStateMachineError(ValueError):
+    """请求未注册的状态机时抛出（fail-closed，不返回空集）。"""
+
+
+def register_state_machine(name: str, states: frozenset | set,
+                           routable: frozenset | set | None = None,
+                           cost_order: dict | None = None,
+                           description: str = "") -> None:
+    """注册一台状态机。
+
+    参数：
+        name        状态机名（与本文件 §1-§25 的标题对应）
+        states      全部合法状态值
+        routable    允许被路由的状态子集（None = 全部允许）
+        cost_order  成本序（越大越贵，可选）
+        description 一句话说明（可选，用于 --list）
+    """
+    if name in STATE_REGISTRY:
+        raise ValueError(f"状态机 '{name}' 已注册，重复注册请检查是否同名异义")
+    STATE_REGISTRY[name] = {
+        "states": frozenset(states),
+        "routable": frozenset(routable if routable is not None else states),
+        "cost_order": dict(cost_order or {}),
+        "description": description,
+    }
+
+
+def get_states(name: str) -> frozenset:
+    """取某台状态机的全部合法状态值（未注册直接报错）。"""
+    entry = STATE_REGISTRY.get(name)
+    if entry is None:
+        raise UnknownStateMachineError(
+            f"未知状态机 '{name}'，已注册: {sorted(STATE_REGISTRY)}"
+        )
+    return entry["states"]
+
+
+def get_routable(name: str) -> frozenset:
+    """取某台状态机允许被路由的状态子集。"""
+    entry = STATE_REGISTRY.get(name)
+    if entry is None:
+        raise UnknownStateMachineError(
+            f"未知状态机 '{name}'，已注册: {sorted(STATE_REGISTRY)}"
+        )
+    return entry["routable"]
+
+
+def get_cost_order(name: str) -> dict:
+    """取某台状态机的成本序（未注册直接报错）。"""
+    entry = STATE_REGISTRY.get(name)
+    if entry is None:
+        raise UnknownStateMachineError(
+            f"未知状态机 '{name}'，已注册: {sorted(STATE_REGISTRY)}"
+        )
+    return entry["cost_order"]
+
+
+def list_state_machines() -> dict[str, str]:
+    """列出全部已注册状态机（name -> description）。"""
+    return {name: entry["description"] for name, entry in STATE_REGISTRY.items()}
+
+
+# ── 注册既有 25 台状态机 ─────────────────────────────────────────────────────
+# 把 §1-§25 的词表投影进注册表。投影用机械对拍（tests/test_state_registry.py）
+# 锁定——手写漏一台就红。
+
+register_state_machine(
+    "breaker",
+    states=BREAKER_STATES,
+    routable=BREAKER_ROUTABLE_STATES,
+    description="熔断器状态：closed → open → half_open → disabled",
+)
+
+register_state_machine(
+    "config",
+    states=frozenset({CONFIG_ENABLED, CONFIG_DISABLED}),
+    description="引擎配置声明层：enabled / disabled",
+)
+
+register_state_machine(
+    "env",
+    states=frozenset({ENV_ALLOWED, ENV_FILTERED}),
+    description="环境白黑名单：allowed / filtered",
+)
+
+register_state_machine(
+    "admission",
+    states=frozenset({ADMISSION_ADMITTED, ADMISSION_BLOCKED, ADMISSION_UNVERIFIED}),
+    description="准入：admitted / blocked / unverified",
+)
+
+register_state_machine(
+    "health",
+    states=HEALTH_VERDICTS,
+    description="运行时健康分诊：auth_down / suspect / auto_disabled / flapping / watch / unknown",
+)
+
+# 调用结局全集：散落的 OUTCOME_* 常量在此收拢成 frozenset。
+# 不新建 OUTCOME_STATUSES 顶层常量（会与既有 16 个 OUTCOME_* 常量形成
+# 两套真源），而是注册表内联组装。
+register_state_machine(
+    "outcome",
+    states=frozenset({
+        OUTCOME_OK, OUTCOME_OK_CACHED, OUTCOME_PARTIAL,
+        OUTCOME_NO_RESULTS, OUTCOME_NO_RESULTS_CACHED,
+        OUTCOME_TIMEOUT, OUTCOME_ERROR, OUTCOME_AUTH_FAILED,
+        OUTCOME_QUOTA_EXHAUSTED, OUTCOME_RATE_LIMITED, OUTCOME_BLOCKED,
+        OUTCOME_SKIPPED_MISSING_ENV, OUTCOME_SKIPPED_QUOTA,
+        OUTCOME_SKIPPED_CIRCUIT_OPEN, OUTCOME_SKIPPED_BUDGET,
+        OUTCOME_CANCELLED,
+    }),
+    routable=frozenset({OUTCOME_OK, OUTCOME_OK_CACHED, OUTCOME_PARTIAL}),
+    description="调用结局：ok / partial / no-results / timeout / error / skipped-* / cancelled",
+)
+
+register_state_machine(
+    "failure",
+    states=FAILURE_CATEGORIES,
+    description="失败归因：dependency / auth / rate_limited / quota_exhausted / blocked / upstream / network / unknown",
+)
+
+register_state_machine(
+    "fetch_method",
+    states=FETCH_METHODS,
+    description="抓取降级链：http / tls_spoof / jina / wayback / browser / ...",
+)
+
+register_state_machine(
+    "retry",
+    states=frozenset({RETRYABLE, NON_RETRYABLE}),
+    description="重试判据：retryable / non_retryable",
+)
+
+register_state_machine(
+    "engine_detail",
+    states=ENGINE_DETAIL_STATUSES,
+    routable=frozenset({ENGINE_STATUS_READY}),
+    description="引擎清单展示态：ready / unknown / disabled / env_filtered / missing_key / ...",
+)
+
+register_state_machine(
+    "daemon",
+    states=frozenset({DAEMON_RUNNING, DAEMON_STOPPED, DAEMON_IDLE, DAEMON_BUSY}),
+    description="daemon 运行时状态：running / stopped / idle / busy",
+)
+
+register_state_machine(
+    "reranker",
+    states=RERANK_STATUSES,
+    routable=frozenset({RERANK_OK}),
+    description="精排器：ok / fallback / skipped_no_key / ...",
+)
+
+register_state_machine(
+    "plan",
+    states=PLAN_STATUSES,
+    description="搜索计划：ready / handoff_required / needs_authorization",
+)
+
+register_state_machine(
+    "batch_probe",
+    states=PROBE_ITEM_STATES,
+    description="批处理预检条目态：unsupported / needs_auth / already_have / not_found / unknown",
+)
+
+register_state_machine(
+    "batch_probe_verdict",
+    states=PROBE_VERDICTS,
+    description="批处理预检结论：go / go_with_skips / stop",
+)
+
+register_state_machine(
+    "numeric",
+    states=NUMERIC_VERDICTS,
+    description="数值印证：confirmed / partial / missing / unfetchable",
+)
+
+register_state_machine(
+    "coverage",
+    states=COVERAGE_STATUSES,
+    description="取证覆盖：COVERED / PARTIAL / NOT_COVERED",
+)
+
+register_state_machine(
+    "probe",
+    states=PROBE_HEALTH_STATUSES,
+    routable=PROBE_ROUTABLE_STATUSES,
+    description="健康探针：available / degraded / unavailable / unknown",
+)
+
+register_state_machine(
+    "cache",
+    states=CACHE_LEVELS,
+    description="缓存层级：L1 / L2 / L?",
+)
+
+register_state_machine(
+    "verification",
+    states=VERIFICATION_STATUSES,
+    description="候选核验：candidate / opened",
+)
+
+register_state_machine(
+    "watch",
+    states=WATCH_CHANGE_TYPES,
+    description="观察模式变更：none / noise / substantive / unknown",
+)
+
+register_state_machine(
+    "envelope",
+    states=ENVELOPE_ROUTE_STATUSES,
+    description="候选信封路由：completed / partial",
+)
+
+register_state_machine(
+    "recovery_level",
+    states=RECOVERY_LEVELS,
+    routable=RECOVERY_LEVELS,
+    cost_order=RECOVERY_LEVEL_TIER,
+    description="恢复链等级：L0 / L1 / L2 / L3 / L4（L0 成本最低）",
+)
+
+register_state_machine(
+    "conclusion_cap",
+    states=CONCLUSION_CAP_STATUSES,
+    description="结论上限：low / medium / high",
+)
+
+register_state_machine(
+    "validation",
+    states=VALIDATION_STATUSES,
+    description="验证结论：pass / fail / skipped / error",
+)
+
