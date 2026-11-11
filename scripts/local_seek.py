@@ -218,7 +218,7 @@ def _seek_disk_cache_put(key: str, results: list[dict[str, Any]]) -> None:
 # 判据与 local_intent._LOCAL_SIGNAL_RE 逐字一致（红绿锁见
 # tests/test_local_intent.py::test_intent_pattern_matches_local_seek）。
 _LOCAL_INTENT_PATTERN = re.compile(
-    '(?i)(?:\\b(?:def|class|function|fn|import|export|const|var|struct|enum)\\b|\\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|sql|conf|cfg|ini|log)\\b|(?:readme|config|package\\.json|cargo\\.toml|dockerfile|makefile|pyproject\\.toml|tsconfig\\.json|go\\.mod|requirements\\.txt|Cargo\\.lock|\\.gitignore|\\.env)|\\b[A-Za-z0-9_]+(?:Error|Exception|Fault|Warning)\\b|\\b_[a-zA-Z0-9_]{2,}\\b|\\b[a-zA-Z0-9_]+\\([^\\)]*\\)|(?:本工程|本项目|代码库|本地文件|本地脚本|脚本文件|架构实现|函数|方法|源码|接口定义|本机|本地代码|本地笔记|我的文件|我的笔记|我的电脑|我的代码|仓库里|仓库中|工程里|项目里|当前目录|工作目录|\\.agents/skills|\\.obsidian))')
+    r'(?i)(?:\b(?:def|class|function|fn|import|export|const|var|struct|enum)\b|\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|sql|conf|cfg|ini|log)\b|(?:readme|config|package\.json|cargo\.toml|dockerfile|makefile|pyproject\.toml|tsconfig\.json|go\.mod|requirements\.txt|Cargo\.lock|\.gitignore|\.env)|\b[A-Za-z0-9_]+(?:Error|Exception|Fault)\b|\b(?:User|Deprecation|Runtime|Future|Syntax|Resource|Import)Warning\b|\b_[a-zA-Z0-9_]{2,}\b|\b[a-zA-Z_][a-zA-Z0-9_]*\((?!\s*(?:[0-9]+|[a-zA-Z])\s*\))[^\)]*\)|(?:本工程|本项目|代码库|本地文件|本地脚本|脚本文件|架构实现|函数|方法|源码|接口定义|本机|本地代码|本地笔记|我的文件|我的笔记|我的电脑|我的代码|仓库里|仓库中|工程里|项目里|当前目录|工作目录|\.agents/skills|\.obsidian))')
 
 
 def has_local_code_intent(query: str) -> bool:
@@ -317,7 +317,12 @@ def _local_seek_dir() -> str | None:
     return _detect_project_root(cwd) or cwd
 
 
-_CACHED_TARGETED_ROOTS: tuple[tuple[str, ...], list[str]] | None = None
+_CACHED_TARGETED_ROOTS: tuple[tuple[str, ...], float, list[str]] | None = None
+# 缓存有效期（秒）。为什么需要 TTL：缓存键只含环境变量，不含文件系统状态——
+# 进程内新建 ~/notes 这类标准根时，无 TTL 的缓存会让新目录在整个进程生命
+# 周期内都不可见（实测）。60s 是「同一轮检索内不重复探测」与「新目录能较快
+# 生效」的折中：检索是多目标串行的，单轮耗时远小于 60s，跨轮则能感知变化。
+_TARGETED_ROOTS_CACHE_TTL_S = 60.0
 
 
 def _candidate_targeted_roots() -> list[str]:
@@ -325,7 +330,8 @@ def _candidate_targeted_roots() -> list[str]:
 
     彻底消除特定机器/个人工作区硬编码（如 Documents/GPT），优先环境变量覆盖，
     自适应感知云端/容器工作区与跨平台 Agent 技能规范。
-    带环境变量感知的轻量缓存，消除每轮检索重复的文件系统 isdir/realpath 探测。
+    带环境变量感知与 TTL 的轻量缓存，消除每轮检索重复的文件系统 isdir/realpath
+    探测，同时不把新建目录锁死在进程生命周期内。
     """
     global _CACHED_TARGETED_ROOTS
     env_key = (
@@ -334,14 +340,16 @@ def _candidate_targeted_roots() -> list[str]:
         os.environ.get("PROJECT_DIR", ""),
         os.environ.get("CI_PROJECT_DIR", ""),
     )
-    if _CACHED_TARGETED_ROOTS is not None and _CACHED_TARGETED_ROOTS[0] == env_key:
-        return list(_CACHED_TARGETED_ROOTS[1])
+    if (_CACHED_TARGETED_ROOTS is not None
+            and _CACHED_TARGETED_ROOTS[0] == env_key
+            and time.time() - _CACHED_TARGETED_ROOTS[1] < _TARGETED_ROOTS_CACHE_TTL_S):
+        return list(_CACHED_TARGETED_ROOTS[2])
 
     raw = env_key[0].strip()
     if raw:
         cands = [p for p in re.split(r"[:;]", raw) if p.strip()]
         valid_roots = [c for c in cands if os.path.isdir(c) and not _is_own_install_root(c) and not _is_broad_local_root(c)]
-        _CACHED_TARGETED_ROOTS = (env_key, list(valid_roots))
+        _CACHED_TARGETED_ROOTS = (env_key, time.time(), list(valid_roots))
         return valid_roots
 
     cands: list[str] = []
@@ -379,7 +387,7 @@ def _candidate_targeted_roots() -> list[str]:
         seen.add(real_c)
         if os.path.isdir(real_c) and not _is_broad_local_root(real_c) and not _is_own_install_root(real_c):
             valid_roots.append(real_c)
-    _CACHED_TARGETED_ROOTS = (env_key, list(valid_roots))
+    _CACHED_TARGETED_ROOTS = (env_key, time.time(), list(valid_roots))
     return valid_roots
 
 

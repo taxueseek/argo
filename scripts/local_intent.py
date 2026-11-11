@@ -26,9 +26,12 @@ _LOCAL_SIGNAL_RE = re.compile(
     r"(?i)(?:\b(?:def|class|function|fn|import|export|const|var|struct|enum)\b|"
     r"\.(?:py|js|ts|tsx|jsx|json|yaml|yml|toml|md|rs|go|c|cpp|h|hpp|sh|sql|conf|cfg|ini|log)\b|"
     r"(?:readme|config|package\.json|cargo\.toml|dockerfile|makefile|pyproject\.toml|tsconfig\.json|go\.mod|requirements\.txt|Cargo\.lock|\.gitignore|\.env)|"
-    r"\b[A-Za-z0-9_]+(?:Error|Exception|Fault|Warning)\b|"
+    # 异常类：Error/Exception/Fault 是编程词；Warning 限定为编程常见警告类
+    # （气象/日常预警词如 StormWarning/FloodWarning 不算——bffdaf6 只改了强
+    # 信号正则，弱信号路径仍会让「StormWarning 发布」在中文语境下空跑本机轨）。
+    r"\b[A-Za-z0-9_]+(?:Error|Exception|Fault)\b|\b(?:User|Deprecation|Runtime|Future|Syntax|Resource|Import)Warning\b|"
     r"\b_[a-zA-Z0-9_]{2,}\b|"
-    r"\b[a-zA-Z0-9_]+\([^\)]*\)|"
+    r"\b[a-zA-Z_][a-zA-Z0-9_]*\((?!\s*(?:[0-9]+|[a-zA-Z])\s*\))[^\)]*\)|"
     r"(?:本工程|本项目|代码库|本地文件|本地脚本|脚本文件|架构实现|函数|方法|源码|接口定义|"
     # 2026-11-10 P0-1 补：实测「我的 .agents/skills 有哪些」「我的文件」
     # 「仓库里」「本机」这类说法在默认路径下被误判为公网查询，漏搜本机。

@@ -427,6 +427,40 @@ class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
         key2 = se._get_cache_key(t2, labels, instructions)
         self.assertEqual(key1, key2)
 
+    def test_cache_key_distinguishes_content_beyond_1200_chars(self):
+        """正文差异出现在 1200 字符之后时必须产生不同的键。
+
+        回归：原实现取 s[:1200] 作键，而送入判定的正文上限是 MAX_TEXT_CHARS=8000，
+        于是两段仅在后 6800 字符不同的文本共享同一 label/confidence——语义核验
+        的正确性缺陷，且错误结果会被缓存 TTL 7 天。
+        """
+        labels = ("labelA", "labelB")
+        instructions = "Test instructions"
+        a = "x" * 1200 + "DIFFERENT_A" + "y" * 500
+        b = "x" * 1200 + "DIFFERENT_B" + "y" * 500
+        self.assertNotEqual(se._get_cache_key(a, labels, instructions),
+                            se._get_cache_key(b, labels, instructions))
+
+        # 边界：差异恰在 1190 处本就应不同（确认修复没引入反向回归）
+        a2 = "x" * 1190 + "AAA" + "y" * 500
+        b2 = "x" * 1190 + "BBB" + "y" * 500
+        self.assertNotEqual(se._get_cache_key(a2, labels, instructions),
+                            se._get_cache_key(b2, labels, instructions))
+
+    def test_local_target_covers_relative_paths(self):
+        """本地隔离必须覆盖 ./ 相对路径——本机检索最常见的形态。
+
+        回归：原实现只匹配 ../ 与绝对路径，./notes.md 会被当成公网 URL 送进
+        JEV 队列，私域内容外发。
+        """
+        for p in ("file:///Users/x/secret.md", "/Users/x/s.md", "/home/x/s.md",
+                  "~/notes.md", "./relative.md", ".\\local.md", "../parent.md",
+                  "C:\\Users\\x\\a.doc", "/private/tmp/x"):
+            self.assertTrue(se.is_local_target(p), f"本地路径未被拦截: {p!r}")
+        for u in ("https://example.com/x", "http://example.com/x",
+                  "https://r.jina.ai/https://example.com"):
+            self.assertFalse(se.is_local_target(u), f"公网 URL 被误拦: {u!r}")
+
     def test_jev_deadline_default_is_safe(self):
         """测试 JEV deadline 默认提升至 1.2s，足够覆盖 0.55s 真实冷调用。"""
         self.assertGreaterEqual(se.DEFAULT_JEV_DEADLINE_S, 1.2)

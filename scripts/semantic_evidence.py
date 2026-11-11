@@ -112,11 +112,19 @@ SUBSTANTIVE_DISCUSSION_CRITERIA = {
 
 
 def is_local_target(url_or_path: str) -> bool:
-    """本地物理隔离屏障：任何本地文件系统路径/私域目标坚决不进 JEV 队列。"""
+    """本地物理隔离屏障：任何本地文件系统路径/私域目标坚决不进 JEV 队列。
+
+    2026-11-11 补 `./` 前缀：相对路径是本机检索最常见的形态
+    （`./notes.md`、`./scripts/x.py`），漏了等于私域内容可能外发。
+    保留 `http://` 与 `https://` 的判定优先级——带 scheme 的一律不算本地。
+    """
     if not url_or_path:
         return False
     u = str(url_or_path).strip()
-    if u.startswith(("file://", "/", "~", "C:\\", ".\\", "../")):
+    low = u.lower()
+    if low.startswith(("http://", "https://", "ftp://", "ws://", "wss://")):
+        return False
+    if u.startswith(("file://", "/", "~", "C:\\", ".\\", "./", "../")):
         return True
     return any(u.startswith(p) for p in ("/Users/", "/home/", "/private/", "\\"))
 
@@ -132,7 +140,14 @@ _RE_WHITESPACE = re.compile(r"\s+")
 
 
 def _normalize_cache_text(text: str) -> str:
-    """对正文进行稳态清洗以生成稳固的缓存键，消除时间戳/动态元数据导致的键漂移。"""
+    """对正文进行稳态清洗以生成稳固的缓存键，消除时间戳/动态元数据导致的键漂移。
+
+    不做长度截断（2026-11-11 修）：此前取前 1200 字符，而实际送入判定的
+    正文上限是 MAX_TEXT_CHARS=8000——两段仅在第 1200 字符后不同的文本会
+    得到同一个键，从而共享同一个 label/confidence。对语义核验这是正确性
+    缺陷（错误结果还会被缓存 TTL 7 天）。稳态清洗只改「动态元数据」
+    （HTML/时间戳/空白），不改语义内容，故全文入键是安全的。
+    """
     if not text:
         return ""
     # 1. 剥离 HTML 残留
@@ -141,8 +156,7 @@ def _normalize_cache_text(text: str) -> str:
     s = _RE_DYNAMIC_TIMESTAMPS.sub(" ", s)
     # 3. 规整空白
     s = _RE_WHITESPACE.sub(" ", s).strip()
-    # 4. 取前 1200 字符规范化主干
-    return s[:1200]
+    return s
 
 
 def _get_cache_key(text: str, labels: tuple[str, ...] | list[str],

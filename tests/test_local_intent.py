@@ -122,11 +122,18 @@ def test_auto_path_runs_with_local_signal():
 
 
 def test_public_queries_with_brackets_and_warning_do_not_trigger_local():
-    """严防误杀：公域自然语言警报词与带括号缩写/数学式不应误触发本机搜索。"""
+    """严防误杀：公域自然语言警报词与带括号缩写/数学式不应误触发本机搜索。
+
+    中英文都要覆盖：中文语境下「StormWarning 发布」走的是「弱信号 + 中文」
+    路径，只收窄强信号正则堵不住（bffdaf6 的实测缺口，2026-11-11 补）。
+    """
     for query in (
         "StormWarning in Florida",
         "EarlyWarning detection system",
         "FloodWarning alert",
+        "StormWarning 发布",
+        "FloodWarning 预警",
+        "StormWarning 是什么意思",
         "sin(x) derivative",
         "COVID(19) updates",
         "Vitamin(D) benefits",
@@ -153,6 +160,39 @@ def test_candidate_roots_cache_and_env_invalidation(monkeypatch, tmp_path):
     monkeypatch.setenv("ARGO_LOCAL_SEEK_ROOTS", str(d2))
     r3 = local_seek._candidate_targeted_roots()
     assert r3 == [str(d2)]
+
+
+def test_candidate_roots_cache_expires_after_ttl(monkeypatch, tmp_path):
+    """根缓存必须有过期时间：否则进程内新建的标准根永远不可见。
+
+    回归：bffdaf6 加的缓存键只含环境变量、不含文件系统状态，新建 ~/notes
+    这类标准根在进程生命周期内都不会被发现（实测）。TTL 到期后应重新探测。
+    """
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    for v in ("ARGO_LOCAL_SEEK_ROOTS", "WORKSPACE", "PROJECT_DIR", "CI_PROJECT_DIR"):
+        monkeypatch.delenv(v, raising=False)
+    local_seek._CACHED_TARGETED_ROOTS = None
+
+    notes = fake_home / "notes"
+    notes.mkdir()
+    first = local_seek._candidate_targeted_roots()
+    assert str(notes) in [str(p) for p in first]
+
+    # TTL 内：新建目录不可见（同轮检索不重复探测）
+    workspace = fake_home / "workspace"
+    workspace.mkdir()
+    cached = local_seek._candidate_targeted_roots()
+    assert str(workspace) not in [str(p) for p in cached], "TTL 内不该重探测"
+
+    # 把缓存时间戳调老，模拟 TTL 过期
+    env_key, ts, roots = local_seek._CACHED_TARGETED_ROOTS
+    local_seek._CACHED_TARGETED_ROOTS = (
+        env_key, ts - local_seek._TARGETED_ROOTS_CACHE_TTL_S - 1, roots)
+    refreshed = local_seek._candidate_targeted_roots()
+    assert str(workspace) in [str(p) for p in refreshed], \
+        "TTL 过期后必须重新探测并发现新建目录"
 
 
 def test_two_tier_engineering_signals_zero_pollution_on_public_domains():
