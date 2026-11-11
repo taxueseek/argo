@@ -5,14 +5,21 @@
 
 ## 未发布
 
-**定位**：Release 资产瘦身。调研同类项目（psf/requests、pandas、astral-sh/uv）的 Release 资产后，把三处冗余或不一致的产入口径收掉。
+**定位**：11-11 复核收口。复核 11-10 至 11-11 的 19 笔改动，修掉「提交信息里的效果数字与生产路径差一层」的六处接线缺陷，并给门禁补上对拍；同批收掉 Release 资产的三处冗余产入口径。
 
 **关键变更**：
-- **去掉运行时源码包**：`build_release_assets.sh` 不再产出 `argo-v<ver>.tar.gz`。GitHub 每个 Release 页面自动生成 Source code (tar.gz/zip)，「要源码」的需求已被平台覆盖；同类项目都是 wheel + sdist 两件套，没有一个手动传运行时源码包。那个包服务的需求没有安装路径能触达，保留它意味着每版多约 2 MB 下载、多一处版本号同步、多一个可能与 sdist 不一致的副本
+- **JEV 硬截止失效（P0）**：`_classify_jev` 用 `with ThreadPoolExecutor(...)`，退出时 `shutdown(wait=True)` 会把 `as_completed` 超时后仍在跑的请求全部 join 完——实测 sleep 3s 的任务让整轮耗时 3.01s，1.2s 硬截止形同虚设，且因结果全 None 退化成「语义层未开启」。改为显式建池 + `shutdown(wait=False, cancel_futures=True)`
+- **`sanitize_schema` 是死代码（P0）**：aedee08 逐条手工删掉 19 个工具的非标注解，但 tools/list 与 DSH 派生两条出口都没调净化函数。新增 `sanitize_tool` 并挂到 `mcp_transport.handle_rpc` 与 `gen_native_tools.build_native_tools`，重新生成 `native-tools.mjs`
+- **脱敏出口不全（P1）**：`secret_guard` 只在 `search_cli` 一处接线，而 MCP 是「结果交给 Agent 与 LLM」的那条路。`_ok` 覆盖成功分支，错误分支、surface 工具与兜底 except 仍是裸 return；`--list-engines` 在 search 之前 return 也走不到文件底部。在 `handle_rpc` 的 tools/call 边界统一再兜一层，`--list-engines` 补脱敏出口
+- **阶段2 加权没落到排序分（P1）**：`+0.20/+0.15/-0.10` 只改 `_record_verify` 新建的 `verified` 展示副本，而下游 `reorder_by_evidence` 读的是 `results` 原始行的 `post_fetch_absorption`。按 URL 定位原始行同步写回
+- **`argo_search(domain=social)` 软别名丢旧参数**：`platforms`、`mode`（含 `sentiment` 与 `social-sentiment` 双写法）、`num` 与 `max_results` 原样进来却不读，会静默退化成默认值；schema 的 `mode` enum 补入 `sentiment`
+- **文案与工具面漂移**：`initialize.instructions` 仍写 `argo_local_search` 并描述旧的 19 工具面，改为与 `CORE_TOOL_NAMES` 同源并补回「内建 topic、不调外部 skill」；`mcp_tools` / `mcp_server` 文件头、`references/operations.md`、`docs/MCP_SETUP.md`、`references/usage.md` 五处「三件套」改为「CORE 4 个正交集」
+- **快门禁扩容**：`scripts/pre-commit` 从 25 份补到 34 份 pytest，新增覆盖 MCP 工具面、MaaS 兼容净化接线、输出脱敏、JEV、解析器漂移诊断、智能推断与本地意图
+- **新增 `test_agents_md_precommit_file_count_matches`**：AGENTS.md 里的 pytest 文件数是纯手写的，改了清单忘改文案不会变红；现按 `pre-commit` 实际清单对拍，两个方向（文案写错、清单变更）都验证过会红
+- **去掉运行时源码包**：`build_release_assets.sh` 不再产出 `argo-v<ver>.tar.gz`。GitHub 每个 Release 页面自动生成 Source code (tar.gz/zip)，「要源码」的需求已被平台覆盖；同类项目都是 wheel + sdist 两件套。那个包服务的需求没有安装路径能触达，保留它意味着每版多约 2 MB 下载、多一处版本号同步、多一个可能与 sdist 不一致的副本
 - **sdist 排除 tests/**：`MANIFEST.in` 加 `recursive-exclude tests *`。tests/ 解包后约 4 MB、占 sdist 三分之一，而 sdist 服务「从源码构建」不服务「跑测试」——想跑测试的人用 `git clone`。sdist 从 3.1 MB 降到 2.2 MB
 - **校验和改为逐资产独立 `.sha256`**：不再产出合并的 `SHA256SUMS.txt`（照 astral-sh/uv 格式）。合并清单是单点，损坏则所有校验失效；独立文件可以边下边校，一个损坏不影响其余
-- **新增 `tests/test_release_assets_contract.py`** 锁住以上三条，三处都做了回退验证（把旧写法加回来，对应用例必须挂）。首次写的断言漏了「带路径前缀」的变体写法，回退时没抓到，已改为正则匹配
-- 资产总下载从 7.4 MB 降到约 4.7 MB
+- **新增 `tests/test_release_assets_contract.py`** 锁住以上三条，三处都做了回退验证（把旧写法加回来，对应用例必须挂）。首次写的断言漏了「带路径前缀」的变体写法，回退时没抓到，已改为正则匹配；资产总下载从 7.4 MB 降到约 4.7 MB
 
 **默认关闭**：无新增
 

@@ -20,7 +20,7 @@
 | 改抓取链 | `references/usage.md` 的降级链节 | `pytest tests/test_fetch_*.py` |
 | 改发版或依赖 | `docs/RELEASING.md` + `pyproject.toml`（真源） | `pytest tests/test_release_*.py tests/test_dependency_source_gate.py` |
 | 写提交 | `docs/COMMIT_STANDARD.md` | `scripts/check_commit_report.py --last` |
-| 提交前自检 | — | `bash scripts/pre-commit`（35 个 pytest 文件 + 2 个 node 测试，~13s） |
+| 提交前自检 | — | `bash scripts/pre-commit`（34 个 pytest 文件 + 2 个 node 测试，~13s） |
 | 全量回归 | — | `python3 -m pytest tests/ -q`（约 5 分钟，不放进 hook） |
 
 ## 不可回退的决定

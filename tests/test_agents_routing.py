@@ -142,3 +142,67 @@ def test_agents_md_points_to_commit_standard_not_inline_rules():
             "AGENTS.md 写了提交规范三段式，必须同时引用 docs/COMMIT_STANDARD.md，"
             "不要把规则抄进路由表"
         )
+
+
+# ── pre-commit 文件数的机械对拍 ──────────────────────────────────────────────
+#
+# 数字是纯手写的，改了 pre-commit 清单而忘了改路由表不会有任何信号。
+
+_HOOK_PYTEST_BLOCK = re.compile(r"-m pytest -q \\\n(.*?)(?=\n\n|\n#)", re.S)
+_HOOK_PYTEST_FILE = re.compile(r"(tests/test_[a-z_0-9]+\.py)")
+_AGENTS_COUNT = re.compile(r"`bash scripts/pre-commit`（(\d+) 个 pytest 文件")
+
+
+def _listed_pytest_files(hook_text: str) -> set[str]:
+    """pre-commit 里 `-m pytest -q` 之后续行声明的 pytest 文件（去重）。
+
+    口径只认 pytest：node 测试与 `scripts/sync_backends.py --check` 不算。
+    """
+    m = _HOOK_PYTEST_BLOCK.search(hook_text)
+    assert m, "pre-commit 里找不到 `-m pytest -q` 清单块"
+    return set(_HOOK_PYTEST_FILE.findall(m.group(1)))
+
+
+def _declared_pytest_count(agents_text: str) -> int:
+    """AGENTS.md 路由表里声称的 pytest 文件数。"""
+    counts = [int(c) for c in _AGENTS_COUNT.findall(agents_text)]
+    assert counts, "AGENTS.md 未写 pre-commit 的 pytest 文件数"
+    assert len(set(counts)) == 1, f"AGENTS.md 里出现多个不同的文件数: {counts}"
+    return counts[0]
+
+
+def test_agents_md_precommit_file_count_matches():
+    """AGENTS.md 声称的 pytest 文件数必须等于 pre-commit 的实际清单数。
+
+    为什么要有这道门：这个数字是**纯手写**的，改了 pre-commit 清单而忘了改
+    路由表时不会有任何信号——而它正是 agent 判断「提交前该跑什么、要多久」的
+    依据，数字虚高或虚低都会让 agent 对门禁的规模判断失真。
+
+    回退验证：把 AGENTS.md 的 34 改回 35，本条挂（实测 35 != 34）。
+    """
+    listed = _listed_pytest_files((ROOT / "scripts" / "pre-commit").read_text(encoding="utf-8"))
+    assert listed, "pre-commit 清单解析为空——正则或清单形态漂移了"
+    declared = _declared_pytest_count(AGENTS_MD.read_text(encoding="utf-8"))
+    assert declared == len(listed), (
+        f"AGENTS.md 写 {declared} 个 pytest 文件，pre-commit 实际清单是 "
+        f"{len(listed)} 个——改清单时同步这个数字，或把数字从文案里去掉")
+
+
+def test_precommit_count_gate_has_teeth():
+    """自检：判据必须能区分「一致」与「不一致」，否则它恒真、等于没检查。"""
+    sample_hook = (
+        "$PY -m pytest -q \\\n"
+        "    tests/test_a.py \\\n"
+        "    tests/test_b.py \\\n"
+        "    tests/test_a.py\n\n"
+        "echo done\n"
+    )
+    assert _listed_pytest_files(sample_hook) == {"tests/test_a.py", "tests/test_b.py"}, \
+        "清单解析把重复项或块边界算错了"
+    # 去掉非 pytest 行后仍只认 pytest 文件
+    assert "echo" not in " ".join(_listed_pytest_files(sample_hook))
+
+    assert _declared_pytest_count("`bash scripts/pre-commit`（2 个 pytest 文件）") == 2
+    # 数字不一致时必须不相等——这是上一条判据的全部意义
+    assert _declared_pytest_count("`bash scripts/pre-commit`（3 个 pytest 文件）") \
+        != len(_listed_pytest_files(sample_hook))
