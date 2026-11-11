@@ -50,6 +50,23 @@ _KNOWN_SWITCHES = [
     ("ARGO_FETCH_DEADLINE_S", "单次 fetch 总耗时上限（秒，0 关闭）"),
 ]
 
+# 核心全局与管线服务凭据（非单个引擎独占）
+_GLOBAL_SERVICES_KEYS = [
+    ("jev", "TypeSafe JEV 语义核验 (一手源加权/反驳预警)", ["ARGO_JEV_API_KEY", "TYPESAFE_API_KEY"]),
+    ("semantic_scholar", "Semantic Scholar 学术论文增强", ["SEMANTIC_SCHOLAR_API_KEY"]),
+    ("twitter_session", "X / Twitter 会话鉴权", ["TWITTER_AUTH_TOKEN", "TWITTER_CT0"]),
+    ("network_proxy", "出站网络代理通道", ["ARGO_PROXY", "HTTPS_PROXY"]),
+]
+
+# 可选增强引擎凭据（免 Key 可跑，配置后解除限频或解锁高级通道）
+_OPTIONAL_BOOST_KEYS = [
+    ("github", "GitHub 限频提升 (可选)", ["GITHUB_TOKEN", "ARGO_GITHUB_TOKEN"]),
+    ("exa", "Exa 语义搜索增强 (可选)", ["EXA_API_KEY", "ARGO_EXA_API_KEY"]),
+    ("firecrawl", "Firecrawl 深度清洗 (可选)", ["FIRECRAWL_API_KEY", "ARGO_FIRECRAWL_API_KEY"]),
+    ("anysearch", "AnySearch 搜索通道 (可选)", ["ANYSEARCH_API_KEY", "ARGO_ANYSEARCH_API_KEY"]),
+    ("pixiv", "Pixiv App OAuth (可选)", ["ARGO_PIXIV_REFRESH_TOKEN"]),
+]
+
 # MCP / CLI 接入示例（片段不含密钥；密钥由 mcp_launch.sh 启动时注入）
 _CLI_EXAMPLES = [
     ("搜索", 'argo search "查询词" --json'),
@@ -109,15 +126,29 @@ def collect() -> dict[str, Any]:
     except Exception:
         names = []
 
-    # 密钥状态只列「声明了 required_env」的引擎——这正是 #41 里
-    # 「装了 13 个引擎全 skipped」的痛点位；无密钥要求的引擎不上表。
-    # 判定与 runtime 同源：缺失与否以 missing_env_for（候选链）为准，
-    # 掩码值以 get_env 为准——显示层绝不自建第二套口径（#41/#42 的教训）。
+    # 密钥状态收集：覆盖全局核心服务、商业数据引擎、可选增强源
     try:
         from engines import get_engine_spec
         from engine_env import (required_env_for, missing_env_for, get_env,
                                 PLACEHOLDER_ALIASES)
 
+        # 1. 核心全局与管线服务
+        for s_id, s_label, s_vars in _GLOBAL_SERVICES_KEYS:
+            env_items = []
+            for var in s_vars:
+                val = get_env(var)
+                env_items.append({
+                    "name": var,
+                    "status": env_store.mask(val) if val else "缺失",
+                })
+            data["key_rows"].append({
+                "engine": s_id,
+                "label": s_label,
+                "kind": "service",
+                "envs": env_items,
+            })
+
+        # 2. 商业与声明 required_env 的引擎
         for name in names:
             spec = get_engine_spec(name) or {}
             try:
@@ -132,12 +163,30 @@ def collect() -> dict[str, Any]:
                 missing = set(reqs)
             data["key_rows"].append({
                 "engine": name,
+                "label": spec.get("label") or name,
+                "kind": "engine",
                 "envs": [{"name": r,
                           "status": (env_store.mask(
                               get_env(PLACEHOLDER_ALIASES.get(r) or _runtime_candidates(r))
                               or "")
                                      if r not in missing else "缺失")}
                          for r in reqs],
+            })
+
+        # 3. 可选增强源
+        for o_id, o_label, o_vars in _OPTIONAL_BOOST_KEYS:
+            env_items = []
+            for var in o_vars:
+                val = get_env(var)
+                env_items.append({
+                    "name": var,
+                    "status": env_store.mask(val) if val else "未配置(可选)",
+                })
+            data["key_rows"].append({
+                "engine": o_id,
+                "label": o_label,
+                "kind": "optional",
+                "envs": env_items,
             })
     except Exception:
         pass
@@ -369,12 +418,35 @@ def _run_list() -> int:
     env_in_use = (data.get("paths") or {}).get("env_file_in_use")
     if env_in_use:
         print(f"密钥文件：{env_in_use}")
-    for r in data.get("key_rows", []):
-        envs = "、".join(f"{v['name']} {v['status']}" for v in r["envs"])
-        print(f"  {r['engine']}: {envs}")
+
+    services = [r for r in data.get("key_rows", []) if r.get("kind") == "service"]
+    engines = [r for r in data.get("key_rows", []) if r.get("kind") == "engine"]
+    optionals = [r for r in data.get("key_rows", []) if r.get("kind") == "optional"]
+
+    if services:
+        print("\n[核心与管线服务凭据]")
+        for r in services:
+            envs = "、".join(f"{v['name']} {v['status']}" for v in r["envs"])
+            desc = f" ({r['label']})" if r.get("label") else ""
+            print(f"  {r['engine']}{desc}: {envs}")
+
+    if engines:
+        print("\n[商业搜索与数据源密钥]")
+        for r in engines:
+            envs = "、".join(f"{v['name']} {v['status']}" for v in r["envs"])
+            print(f"  {r['engine']}: {envs}")
+
+    if optionals:
+        print("\n[可选增强源凭据 (免 Key 可用，配置后提权)]")
+        for r in optionals:
+            envs = "、".join(f"{v['name']} {v['status']}" for v in r["envs"])
+            desc = f" ({r['label']})" if r.get("label") else ""
+            print(f"  {r['engine']}{desc}: {envs}")
+
+    print("\n[常用功能开关]")
     for s in data.get("switches", []):
         print(f"  [{s['name']}] {s['value']} — {s['desc']}")
-    print("修改：echo <值> | argo settings set <变量名>；"
+    print("\n修改：echo <值> | argo settings set <变量名>；"
           "清除：argo settings unset <变量名>。")
     return 0
 

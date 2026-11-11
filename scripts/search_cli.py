@@ -760,6 +760,13 @@ def main():
             _vw_ms = (time.perf_counter() - _t_verifywith0) * 1000.0
             _merge_verify_timing(results["timing"], _vw_ms, stage="verify_with")
 
+    # 敏感信息自动脱敏拦截（防止真实 API Key / 通用敏感凭据在输出流泄露）
+    try:
+        from secret_guard import redact_data
+        results = redact_data(results)
+    except Exception:
+        pass
+
     if args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}
         # Agent 消费自动瘦身：stdout 非 tty（管道/Agent 调用）且未显式指定
