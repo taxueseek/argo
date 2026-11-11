@@ -112,21 +112,24 @@ SUBSTANTIVE_DISCUSSION_CRITERIA = {
 
 
 def is_local_target(url_or_path: str) -> bool:
-    """本地物理隔离屏障：任何本地文件系统路径/私域目标坚决不进 JEV 队列。
+    """本地物理隔离屏障：只放行 http/https 公网 URL，其余一律视为本地。
 
-    2026-11-11 补 `./` 前缀：相对路径是本机检索最常见的形态
-    （`./notes.md`、`./scripts/x.py`），漏了等于私域内容可能外发。
-    保留 `http://` 与 `https://` 的判定优先级——带 scheme 的一律不算本地。
+    为什么改成白名单（2026-11-11）：黑名单靠枚举前缀（`file://`、`~/`、
+    `./`、`../`、盘符…），永远列不全。实测 `data:text/plain,...`、
+    `localhost:8080/notes.md`、`Users/me/notes.md`（不带 ./ 的相对路径）、
+    `C:/Users/x/a.txt`（正斜杠盘符）都会被当成公网 URL 送进 JEV 队列，
+    而 assess_* 送出去的是 title + 正文，等于私域内容外发。
+
+    判据反过来：带 scheme 且是 http/https 才算公网；其余（含 ftp/ws、
+    data:、无 scheme 的主机名、UNC、相对路径）一律拦。大小写不敏感。
     """
-    if not url_or_path:
+    u = str(url_or_path or "").strip()
+    if not u:
         return False
-    u = str(url_or_path).strip()
     low = u.lower()
-    if low.startswith(("http://", "https://", "ftp://", "ws://", "wss://")):
+    if low.startswith("http://") or low.startswith("https://"):
         return False
-    if u.startswith(("file://", "/", "~", "C:\\", ".\\", "./", "../")):
-        return True
-    return any(u.startswith(p) for p in ("/Users/", "/home/", "/private/", "\\"))
+    return True
 
 
 _RE_HTML_TAGS = re.compile(r"<[^>]+>", re.S)

@@ -39,6 +39,11 @@ from cli_io import dumps
 
 REQUIRED_KEYS = ("title", "url", "source")
 
+# --apply 的最低置信度：diagnose_schema_drift 对「容器位移或 title+url 同时
+# 命中」给 0.95，对「单字段启发式猜测」给 0.80。后者不足以自动改写 Spec
+# 真源——改错了没有回滚凭据，必须留给人核对 suggested_patch。
+_APPLY_MIN_CONFIDENCE = 0.95
+
 # 垂类引擎 health canary（通用词会误杀快讯/行情类）
 ENGINE_CANARY_QUERIES: dict[str, str] = {
     "fxtwitter": "OpenAI",
@@ -508,9 +513,13 @@ def validate_engine(
     write_doc: bool = False,
     profile: str = "default",
     diagnose: bool = False,
-    fix: bool = False,
+    apply: bool = False,
 ) -> dict[str, Any]:
-    """执行验证并可选写入 admission。"""
+    """执行验证并可选写入 admission。
+
+    apply：是否把结构漂移诊断建议的 output_map 补丁**写回 Spec 真源**。
+    默认 False 只输出预览（report["suggested_patch"]），不碰磁盘。
+    """
     stages = []
     if stage == "all":
         stages = [engine_states.VALIDATION_STAGE_CONTRACT,
@@ -623,9 +632,12 @@ def validate_engine(
         report["doc_path"] = str(path)
 
     # 结构漂移自省对拍（针对声明式 HTTP 源）
+    # --fix 是预览态：诊断结果进 report 供人过目，不写盘。
+    # --apply 才落盘，且要过置信度门槛——启发式选出的 0.80 建议不能
+    # 自动改写唯一真源 Spec（改错了没有回滚凭据）。
     spec = _get_spec(engine_id)
-    if (diagnose or fix or (report.get("status") == engine_states.VALIDATION_STATUS_FAIL
-                           and spec.get("type") == "http")):
+    if (diagnose or apply or (report.get("status") == engine_states.VALIDATION_STATUS_FAIL
+                              and spec.get("type") == "http")):
         if spec.get("type") == "http" and (spec.get("output_map") or spec.get("response")):
             try:
                 from engines_parsers import diagnose_schema_drift, apply_schema_patch
@@ -634,12 +646,22 @@ def validate_engine(
                 if raw_data is not None:
                     drift_diag = diagnose_schema_drift(raw_data, spec)
                     report["schema_drift"] = drift_diag
-                    if fix and drift_diag.get("drift_detected") and drift_diag.get("suggested_patch"):
-                        spec_path = ROOT / "engines" / "specs" / f"{engine_id}.yaml"
-                        ok, msg = apply_schema_patch(spec_path, drift_diag["suggested_patch"])
-                        if ok:
-                            report["fix_applied"] = True
-                            report["fix_msg"] = msg
+                    suggested = drift_diag.get("suggested_patch") or {}
+                    if suggested:
+                        report["suggested_patch"] = suggested
+                    if apply and drift_diag.get("drift_detected") and suggested:
+                        confidence = float(drift_diag.get("confidence") or 0.0)
+                        if confidence >= _APPLY_MIN_CONFIDENCE:
+                            spec_path = ROOT / "engines" / "specs" / f"{engine_id}.yaml"
+                            ok, msg = apply_schema_patch(spec_path, suggested)
+                            if ok:
+                                report["fix_applied"] = True
+                                report["fix_msg"] = msg
+                        else:
+                            report["fix_blocked_low_confidence"] = True
+                            report["fix_msg"] = (
+                                f"置信度 {confidence:.0%} 低于 {_APPLY_MIN_CONFIDENCE:.0%}，"
+                                "不自动改写 Spec；请人工核对 suggested_patch 后手动更新")
             except Exception as _ex:
                 report["schema_drift_error"] = str(_ex)
 
@@ -732,8 +754,13 @@ def main() -> int:
              "默认宽松：批量体检时跳过未配置的源不是故障。")
     parser.add_argument("--diagnose", action="store_true",
                         help="对声明式 HTTP 引擎执行深入结构漂移诊断")
-    parser.add_argument("--fix", action="store_true",
-                        help="自动将结构漂移诊断建议的 output_map 补丁写入对应 Spec 文件")
+    parser.add_argument("--fix", dest="fix_preview", action="store_true",
+                        help="诊断并输出建议的 output_map 补丁（预览，不写盘）；"
+                             "等同于 --diagnose，保留旧命令名")
+    parser.add_argument("--apply", action="store_true",
+                        help="将建议的 output_map 补丁写入对应 Spec 文件"
+                             "（需置信度不低于 95 个百分点）；"
+                             "不显式给这个参数就绝不改写真源")
     args = parser.parse_args()
 
     targets: list[str] = []
@@ -757,7 +784,7 @@ def main() -> int:
         rep = validate_engine(
             eng, stage=stage, admit=admit, timeout=args.timeout,
             write_doc=args.write_doc, profile=args.profile,
-            diagnose=args.diagnose, fix=args.fix,
+            diagnose=args.diagnose or args.fix_preview, apply=args.apply,
         )
         reports.append(rep)
         if rep.get("status") == engine_states.VALIDATION_STATUS_FAIL:
@@ -785,7 +812,12 @@ def main() -> int:
                 from engines_parsers import render_drift_report
                 print(render_drift_report(rep["schema_drift"], eng))
             if rep.get("fix_applied"):
-                print(f"       [fix] {rep.get('fix_msg', '已自动更新 Spec 文件')}")
+                print(f"       [apply] {rep.get('fix_msg', '已自动更新 Spec 文件')}")
+            elif rep.get("fix_blocked_low_confidence"):
+                print(f"       [apply 未落盘] {rep.get('fix_msg')}")
+            elif rep.get("suggested_patch") and not args.json:
+                print("       [fix] 已给出建议补丁（预览态，未写盘）；"
+                      "确认无误后加 --apply 才落盘")
 
     if args.json:
         payload = reports if len(reports) > 1 else reports[0]

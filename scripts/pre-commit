@@ -129,7 +129,8 @@ printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手�
     tests/test_smart_inference.py \
     tests/test_local_intent.py \
     tests/test_mcp_article_job.py \
-    tests/test_followup_fixes.py
+    tests/test_followup_fixes.py \
+    tests/test_p2_followup.py
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。
