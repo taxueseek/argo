@@ -1,4 +1,15 @@
-# Argo v2.14.0 发布说明
+# Argo v2.14.0
+
+## English Highlights (TL;DR)
+
+- **Smart Self-Introspecting Parsers**: Zero-config parser inference eliminates manual Python parsing code for new search engines. New sources declare their field paths, and the engine infers extraction rules automatically.
+- **Engine Capacity Expanded to 300 Sources**: Added 9 new engines including Mwmbl, Kaggle, HuggingFace Papers, grep.app (code search), OpenAIRE (academic research), Mojeek, Repology, DBpedia, and 4get, plus reviving ClinicalTrials, CoinGecko, and fxTwitter.
+- **Local Search Enhancements**: Adaptive root discovery across heterogeneous machines, FTS5 index slimming gate, morphology & acronym clustering, and pure standard library fallback.
+- **Badcase Ledger & Recurrence Gate**: Full attribution tracking for retrieval badcases with strict `Seen N×` gate to prevent regressions.
+
+---
+
+# Argo v2.14.0 发布说明（中文）
 
 **版本**：2.14.0
 **定位**：解析器层收口 + 引擎扩容 + 错题本机制落地。把「新引擎接入要手写解析」变成「声明字段即可推断」，源从 290 增到 300；同时把「失败可归因、经验可复用」从口号变成可执行机制。

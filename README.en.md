@@ -30,6 +30,11 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
+```bash
+# One-line MCP attach for Claude Code / Cursor / LibreChat
+npx -y github:taxueseek/argo
+```
+
 > **Part of the taxueseek skill series**, covering search and deep research. Other skills in the series: [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★ (AI-tone removal) · [session-digger](https://github.com/taxueseek/session-digger) 33★ (cross-environment session mining) · [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★ (investment analysis) · [taxueskills](https://github.com/taxueseek/taxueskills) 24★ (the taxue decision system) · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★ (creative illustration styles).
 >
 > Argo is also a DeepSeek Harness plugin, installed in one command (see "DSH Plugin" below). Best DSH plugins by the same author: [dsh-files](https://github.com/taxueseek/dsh-files) 41★ (folder upload + document parsing) · [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 7★ (plugin upgrade adapter) · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★ (pre-install audit).
@@ -202,6 +207,17 @@ All four forms run the same Python code underneath; CLI and MCP tools map one to
 | Multilingual | Follows the model | Follows the model | Follows the engine | **Language detect + engine locale params + multilingual routing** |
 
 > Mechanically, Argo treats search as an **evidence pipeline**: language detect → domain route → multi-engine recall → RRF fuse → evidence skim. The output is material an agent can rank, `fetch` to verify, and keep inside context.
+
+### Why choose Argo over Commercial Agent Search APIs (Tavily / Exa / Serper)
+
+| Feature | Commercial Search APIs (Tavily / Exa / Serper) | Argo (Open Source) |
+|---|---|---|
+| **Cost & Billing** | $20 - $100+/month (pay-per-query limits) | **100% Free & Open-Source (Apache-2.0 License)** |
+| **Search Sources & Depth** | Single proprietary index or fixed proxy | **Hundreds of curated vertical sources** (academic, code, finance, news, macro) |
+| **API Keys** | Mandatory paid API keys to start | **Zero-config keyless fallback** (all keys strictly optional) |
+| **Multilingual & Localization** | Heavily English-biased results | **18 languages native routing** with localized local engines |
+| **Modalities & Depth** | Plain text snippet summaries | **Text + Reverse Image Search + Papers + Live Data Cards** |
+| **Privacy & Control** | Cloud vendor lock-in, queries logged remotely | **Local CLI / MCP Server / Self-hosted pipelines, fully private** |
 
 ---
 

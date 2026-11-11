@@ -175,7 +175,7 @@ def ensure_whitelist(root: Path, old: str, new: str, dry: bool) -> str:
 
 
 def ensure_notes(root: Path, new: str, dry: bool) -> str:
-    """发布说明不存在时生成带 TODO 标记的骨架，避免结构性预检红。"""
+    """发布说明不存在时生成带 TODO 标记的骨架，避免结构性预检红。支持中英双语规范。"""
     rel = f"docs/RELEASE_NOTES_v{new}.md"
     path = root / rel
     if path.is_file():
@@ -183,11 +183,20 @@ def ensure_notes(root: Path, new: str, dry: bool) -> str:
     if not dry:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            f"# Argo v{new} 发布说明\n\n{NOTES_TODO}\n\n"
+            f"# Argo v{new}\n\n{NOTES_TODO}\n\n"
+            "## Highlights (English / TL;DR)\n\n"
+            "- **What's New**:\n"
+            "- **Key Improvements**:\n"
+            "- **Breaking Changes**:\n\n"
+            "---\n\n"
+            f"# Argo v{new} 发布说明（中文）\n\n"
             "**版本**：%s\n**定位**：\n\n---\n\n"
-            "## 这次更新有什么（通俗版）\n\n## 验证\n\n## 兼容性\n" % new,
+            "## 这次更新有什么（通俗版）\n\n## 验证\n\n## 兼容性\n\n"
+            "## 社区广播模板（Broadcast Snippets）\n\n"
+            "**X / Twitter (280 chars)**:\n\n"
+            "**开发者群广播**:\n" % new,
             encoding="utf-8", newline="\n")
-    return f"{rel}: 生成骨架（记得去掉 {NOTES_TODO}）"
+    return f"{rel}: 生成双语骨架（记得去掉 {NOTES_TODO}）"
 
 
 # ── 内容清单：脚本不写文案，但缺一段就不让发 ────────────────────────────────

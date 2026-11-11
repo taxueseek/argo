@@ -30,6 +30,11 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
+```bash
+# 通过 MCP 一键挂载到 Claude / Cursor / Claude Code / LibreChat
+npx -y github:taxueseek/argo
+```
+
 > 插件部分采用 [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 适配了最新版 Harness 0.2.2-rc.1。它是 DSH 插件升级适配与代码审查的主入口：核对官方最新版本与升级指南、扫插件的破坏性变更，按适配升级、造插件、启动排障、代码审查四条车道出 P0/P1 报告。后续每次宿主升级的适配也走这个 skill。
 >
 > **taxueseek 系列 skill 的一员**，负责「搜索与深度研究」。同系列技能：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★（去 AI 味写作）· [session-digger](https://github.com/taxueseek/session-digger) 33★（跨环境会话挖掘）· [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★（投资分析）· [taxueskills](https://github.com/taxueseek/taxueskills) 24★（踏雪决策系统）· [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★（创意风格插画）。
@@ -204,6 +209,17 @@ Argo 支持四种接入方式，按你的场景挑：
 | 多语言 | 随模型走 | 随模型走 | 随引擎走 | **语言检测 + 引擎语言参数 + 多国语言支持** |
 
 > 机制上，Argo 把搜索当成一条**证据管线**：语言检测 → 领域路由 → 多引擎召回 → RRF 融合 → 证据快评，交付的是 Agent 可直接排序、可 `fetch` 复核、不撑爆上下文的材料。工具链不用换，需要换的是「搜索结果应该长什么样」——再往下一层，还有和「再包一层搜索 API 的差别」，那是实现细节的对比。
+
+### 为什么选择 Argo 而不是商业付费搜索 API（Tavily / Exa / Serper）
+
+| 维度 | 商业搜索 API（Tavily / Exa / Serper） | Argo（开源） |
+|---|---|---|
+| **费用成本** | $20 - $100+/月（按次计费，容易超额） | **100% 开源免费（Apache-2.0 协议）** |
+| **搜索源与深度** | 单一商业专有索引或代理 | **数百个垂直领域搜索源**（覆盖金融/代码/学术/影视/宏观等） |
+| **API 密钥门槛** | 必须购买并配置付费 API Key | **免配置开箱即用**（免密钥源自动保底，Key 全可选） |
+| **多语言与本土化** | 严重偏向英文网页 | **18 种语言原生路由**（中/英/日/韩/西等本土垂直源） |
+| **多模态与格式** | 主要是网页文本摘要 | **文本 + 以图搜图 + 论文深度检索 + 垂直数据卡片** |
+| **隐私与控制权** | 云端黑盒，查询请求留存商业平台 | **本地 CLI / 本地 MCP 运行，完全私有可控** |
 
 ---
 

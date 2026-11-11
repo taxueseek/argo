@@ -45,3 +45,25 @@ python3 scripts/release.py publish 2.10.1 --yes
 - `check` 不过：按提示补内容，别绕过。
 - `publish` 在 npm 之前失败：重跑同一条命令即可（已提交的会跳过 commit，已存在的 tag 会复用）。
 - `publish` 在 npm 阶段失败：registry 已有该版本的包会自动跳过；单包失败时重跑只补没发出去的那个。
+
+## 双语发布说明与国际化宣发规范
+
+GitHub Release 面向全球开发者，而当前生态已具备 18 种语言检索与海外开源受众。后续每次发版须遵循以下双语结构规范：
+
+### 1. `docs/RELEASE_NOTES_v*.md` 结构规范
+
+每个版本的发布说明直接作为 GitHub Release 的正文，必须包含以下三个核心分区：
+
+1. **头部：English Highlights (TL;DR)**
+   - 供海外开发者、Claude/Cursor/MCP 社区快速获知更新内容
+   - 包含 3-5 条关键要点（What's new、Why it matters、Breaking changes/Key upgrades）
+2. **主体：这次更新有什么（通俗版，中文）**
+   - 保持既有的「以前 vs 现在」通俗大白话风格与定位说明
+   - 包含详细的功能改进、新增源、验证说明与兼容性
+3. **尾部：社区广播模板（Broadcast Snippets）**
+   - 提供 280 字符的英文社交媒体（X/Twitter、Reddit）摘要与中文开发者群广播文案，便于发版后一键复制宣发
+
+### 2. 骨架自动生成
+
+`python3 scripts/release.py bump <version>` 已自动集成该双语模板骨架。改号后只需在此骨架中填入英文 Highlights 与中文详情，去掉 `<!-- release-todo -->` 即可通过预检。
+
