@@ -110,14 +110,14 @@ class TestReleaseConsistency(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_fixture(root)
-            # 把英文 README 的徽标换成旧版本，模拟「发版只改了主 README」
-            readme = root / "README.en.md"
+            # 把中文 README 的徽标换成旧版本，模拟「发版只改了主 README」
+            readme = root / "README.zh.md"
             readme.write_text(
                 readme.read_text(encoding="utf-8").replace(
                     "badge/version-9.9.9-", "badge/version-9.9.8-"),
                 encoding="utf-8")
             problems = release_check.check(root)
-        self.assertTrue(any("README.en.md" in p for p in problems), problems)
+        self.assertTrue(any("README.zh.md" in p for p in problems), problems)
 
     def test_unlisted_release_notes_are_reported(self):
         with tempfile.TemporaryDirectory() as tmp:

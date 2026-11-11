@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="README.md">中文</a> ·
-  <a href="README.en.md">English</a> ·
+  <a href="README.md">English</a> ·
+  <a href="README.zh.md">中文</a> ·
   <a href="README.ja.md">日本語</a> ·
   <strong>한국어</strong> ·
   <a href="README.es.md">Español</a>
@@ -685,8 +685,8 @@ python3 scripts/search.py [options] query
 
 ```
 argo/
-├── README.md                # Chinese (default)
-├── README.en.md             # English
+├── README.md                # English (default)
+├── README.zh.md             # Chinese
 ├── README.ja.md             # Japanese
 ├── README.ko.md             # Korean
 ├── README.es.md             # Spanish

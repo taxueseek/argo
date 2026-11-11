@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="README.md">中文</a> ·
-  <a href="README.en.md">English</a> ·
+  <a href="README.md">English</a> ·
+  <a href="README.zh.md">中文</a> ·
   <a href="README.ja.md">日本語</a> ·
   <a href="README.ko.md">한국어</a> ·
   <strong>Español</strong>
@@ -685,8 +685,8 @@ No es gran solución única para: ranking nativo de engagement de plataforma, o 
 
 ```
 argo/
-├── README.md                # Chinese (default)
-├── README.en.md             # English
+├── README.md                # English (default)
+├── README.zh.md             # Chinese
 ├── README.ja.md             # Japanese
 ├── README.ko.md             # Korean
 ├── README.es.md             # Spanish

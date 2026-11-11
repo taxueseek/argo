@@ -121,7 +121,7 @@ class TestDocsWhitelist(unittest.TestCase):
         import re
         files = set(self._files())
         refs = set()
-        for rel in ("SKILL.md", "README.md", "README.en.md",
+        for rel in ("SKILL.md", "README.md", "README.zh.md",
                     "README.es.md", "README.ja.md", "README.ko.md"):
             text = (REPO / rel).read_text(encoding="utf-8")
             refs |= set(re.findall(r"docs/[\w\-.]+\.md", text))

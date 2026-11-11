@@ -48,7 +48,7 @@ _PUBLIC_GLOBS = (
     "package.json",
     "SKILL.md",
     "README.md",
-    "README.en.md",
+    "README.zh.md",
     "README.es.md",
     "README.ja.md",
     "README.ko.md",

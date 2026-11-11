@@ -168,7 +168,7 @@ class TestDocNumbersMatchCode:
     # 全部 README 变体：此前检查只查 SKILL.md 与 README.md，其余 4 个语种
     # 版本长期落后（es/ja/ko 停在 v2.8.5 + engines-150+，en 停在 175 源），
     # 而检查全绿。语言变体是同一份对外承诺，必须同源同校。
-    README_VARIANTS = ("README.md", "README.en.md", "README.es.md",
+    README_VARIANTS = ("README.md", "README.zh.md", "README.es.md",
                        "README.ja.md", "README.ko.md")
 
 
@@ -238,7 +238,7 @@ class TestDocNumbersMatchCode:
         n_mcp = len(TOOLS)
         # native = MCP 全量减 research（gen_native_tools 的排除规则见其 docstring）
         n_native = n_mcp - 1
-        readmes = ("README.md", "README.en.md", "README.es.md",
+        readmes = ("README.md", "README.zh.md", "README.es.md",
                    "README.ja.md", "README.ko.md")
         targets = (("package.json", "cordis.patch.yml", "SKILL.md",
                     "packages/dsh-plugin/package.json") + readmes)

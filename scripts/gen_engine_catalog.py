@@ -351,14 +351,14 @@ def _names(rows: list[dict[str, Any]]) -> str:
 # 10-20 个文件；改为单点后正文只写「数百个源」这类不随引擎增减而变的说法。
 # 版本号与工具数仍按句模板校正：它们变化少，且徽章、包描述需要精确值。
 COUNT_RULES: dict[str, list[tuple[str, str]]] = {
-    'README.md': [
+    'README.zh.md': [
         ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
         ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
         ('另有 1 个 `wide_research` 并行研究和 (?P<tools>\\d+) 个 MCP 工具按需开启', '另有 1 个 `wide_research` 并行研究和 {tools} 个 MCP 工具按需开启'),
         ('其余 (?P<n>\\d+) 个源不受影响', '其余源不受影响'),
         ('搜索、抓取、核验、本机文件检索走同一条管线，(?P<tools>\\d+) 个 MCP 工具和 CLI 命令一一对应', '搜索、抓取、核验、本机文件检索走同一条管线，{tools} 个 MCP 工具和 CLI 命令一一对应'),
     ],
-    'README.en.md': [
+    'README.md': [
         ('badge/version-(?P<version>[\\d.]+)-informational', 'badge/version-{version}-informational'),
         ('badge/MCP-(?P<tools>\\d+)%20tools-purple', 'badge/MCP-{tools}%20tools-purple'),
         ('and (?P<tools>\\d+) MCP tools you can enable on demand', 'and {tools} MCP tools you can enable on demand'),
