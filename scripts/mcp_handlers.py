@@ -194,7 +194,72 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     "isError": True,
                 }
 
+        # 兼容旧工具调用的软别名映射（向后兼容）：
+        if name == "argo_social_search":
+            args = dict(arguments)
+            args["domain"] = "social"
+            return execute_tool("argo_search", args)
+        elif name == "argo_job":
+            args = dict(arguments)
+            args["domain"] = "job"
+            return execute_tool("argo_search", args)
+        elif name == "argo_pdf":
+            args = dict(arguments)
+            args["mode"] = "pdf"
+            return execute_tool("argo_fetch", args)
+        elif name == "argo_article":
+            args = dict(arguments)
+            args["mode"] = "article"
+            return execute_tool("argo_fetch", args)
+
         if name == "argo_search":
+            domain = arguments.get("domain", "web")
+            if domain == "social":
+                platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
+                platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
+                query = arguments["query"]
+                n = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
+                platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
+                if arguments.get("mode", "text") == "sentiment":
+                    research_mod = _lazy_cached("research")
+                    output = research_mod.aggregate_social_sentiment(
+                        query=query, platforms=platforms, platform_results=platform_results,
+                    )
+                else:
+                    all_results: list = []
+                    for p in platforms:
+                        all_results.extend(platform_results.get(p) or [])
+                    output = {
+                        "query": query,
+                        "platforms": platforms,
+                        "results": all_results,
+                        "count": len(all_results),
+                        "engines_used": engines_used,
+                    }
+                if errors:
+                    output["errors"] = errors
+                return _ok(output, pretty=pretty)
+            elif domain == "job":
+                job_mod = _lazy_cached("job")
+                try:
+                    out = job_mod.search(
+                        arguments["query"],
+                        city=arguments.get("city", ""),
+                        num=_clamp_int(arguments.get("max_results", arguments.get("num", 5)), 5, 1, 20),
+                        platforms=arguments.get("platforms", ""),
+                        loose=bool(arguments.get("loose", False)),
+                        fetch_n=_clamp_int(arguments.get("fetch_detail", 0), 0, 0, 10),
+                    )
+                except ValueError as e:
+                    return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
+                            "isError": True}
+                return _ok(out, pretty=pretty)
+            elif domain == "local":
+                return handle_local_search(
+                    arguments, pretty=pretty, ok_fn=_ok,
+                    clamp_int_fn=_clamp_int, lazy_cached_fn=_lazy_cached,
+                )
+
             search_mod = _lazy_cached("search")
             result = search_mod.super_search(
                 query=arguments["query"],
@@ -282,32 +347,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 payload = result
             return _ok(payload, pretty=pretty)
 
-        elif name == "argo_social_search":
-            platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
-            platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
-            query = arguments["query"]
-            n = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
-            platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
-            if arguments.get("mode", "text") == "sentiment":
-                research_mod = _lazy_cached("research")
-                output = research_mod.aggregate_social_sentiment(
-                    query=query, platforms=platforms, platform_results=platform_results,
-                )
-            else:
-                all_results: list = []
-                for p in platforms:
-                    all_results.extend(platform_results.get(p) or [])
-                output = {
-                    "query": query,
-                    "platforms": platforms,
-                    "results": all_results,
-                    "count": len(all_results),
-                    "engines_used": engines_used,
-                }
-            if errors:
-                output["errors"] = errors
-            return _ok(output, pretty=pretty)
-
         elif name == "argo_evidence":
             results_json_str = arguments.get("results_json", "")
             if not results_json_str or not results_json_str.strip():
@@ -347,13 +386,45 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return _ok(result, pretty=pretty)
 
         elif name == "argo_fetch":
-            if arguments.get("mode", "text") == "extract":
+            url = arguments["url"]
+            mode = arguments.get("mode", "text")
+
+            # 微信公众号文章原生自适应
+            if "mp.weixin.qq.com" in url or mode == "article":
+                article_mod = _lazy_cached("article")
+                try:
+                    out = article_mod.fetch_article(
+                        url,
+                        timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH",
+                                         _int_param(arguments, "timeout", 30)),
+                    )
+                except ValueError as e:
+                    return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
+                            "isError": True}
+                if out.get("ok"):
+                    max_c = _int_param(arguments, "max_chars", 20000)
+                    if len(out.get("content", "")) > max_c:
+                        out["content"] = out["content"][:max_c]
+                        out["truncated"] = True
+                return _ok(out, pretty=pretty)
+
+            # PDF 文档原生自适应
+            if url.lower().endswith(".pdf") or ".pdf?" in url.lower() or mode == "pdf":
+                pdf_mod = _lazy_cached("pdf_extract")
+                result = pdf_mod.extract_pdf(
+                    url_or_path=url,
+                    pages=arguments.get("pages"),
+                    password=arguments.get("password"),
+                )
+                return _ok(result, pretty=pretty)
+
+            if mode == "extract":
                 extract_mod = _lazy_cached("extract")
                 fetch_mod = _lazy_cached("fetch_v3")
                 emode = arguments.get("extract_mode", "all")
                 max_chars = _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000)
                 fetch_result = fetch_mod.fetch_page_v3(
-                    arguments["url"], max_chars=max_chars,
+                    url, max_chars=max_chars,
                     timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH",
                                      _int_param(arguments, "timeout", 15)), raw=True)
                 if not fetch_result["success"]:
@@ -375,7 +446,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             focus_query = arguments.get("focus")
             fetch_v3_mod = _lazy_cached("fetch_v3")
             result = fetch_v3_mod.fetch_v3(
-                url=arguments["url"],
+                url=url,
                 max_chars=fetch_v3_mod._focus_fetch_chars(
                     _int_param(arguments, "max_chars", 8000), focus_query),
                 timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", _int_param(arguments, "timeout", 15)),
@@ -421,49 +492,6 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     "content": [{"type": "text", "text": _dumps({"success": False, "error": str(e)[:200]})}],
                     "isError": True,
                 }
-
-        elif name == "argo_pdf":
-            pdf_mod = _lazy_cached("pdf_extract")
-            result = pdf_mod.extract_pdf(
-                url_or_path=arguments["url"],
-                pages=arguments.get("pages"),
-                password=arguments.get("password"),
-            )
-            return _ok(result, pretty=pretty)
-
-        elif name == "argo_article":
-            article_mod = _lazy_cached("article")
-            try:
-                out = article_mod.fetch_article(
-                    arguments["url"],
-                    timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH",
-                                     _int_param(arguments, "timeout", 30)),
-                )
-            except ValueError as e:
-                return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
-                        "isError": True}
-            if out.get("ok"):
-                max_c = _int_param(arguments, "max_chars", 20000)
-                if len(out.get("content", "")) > max_c:
-                    out["content"] = out["content"][:max_c]
-                    out["truncated"] = True
-            return _ok(out, pretty=pretty)
-
-        elif name == "argo_job":
-            job_mod = _lazy_cached("job")
-            try:
-                out = job_mod.search(
-                    arguments["query"],
-                    city=arguments.get("city", ""),
-                    num=_clamp_int(arguments.get("num", 5), 5, 1, 20),
-                    platforms=arguments.get("platforms", ""),
-                    loose=bool(arguments.get("loose", False)),
-                    fetch_n=_clamp_int(arguments.get("fetch_detail", 0), 0, 0, 10),
-                )
-            except ValueError as e:
-                return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
-                        "isError": True}
-            return _ok(out, pretty=pretty)
 
         surface = _lazy_cached("mcp_handlers_surface")
         surface_result = surface.handle_surface_tool(name, arguments, pretty=pretty)

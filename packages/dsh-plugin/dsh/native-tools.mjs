@@ -12,7 +12,7 @@
 //
 export const NATIVE_TOOLS = {
   "argo_search": {
-    "description": "统一网络搜索：多引擎融合、支持时间过滤与域名过滤，返回带来源与摘要的结果。查资料、找答案、搜新闻/学术/代码/多语言内容等通用场景的首选工具。",
+    "description": "统一搜索（网络/社交/招聘/本地）：多引擎融合、支持时间过滤与域名过滤。默认网络搜索；按 domain 可切换社交 UGC、岗位招聘或本机文件。查资料、找答案、找人找帖的首选工具。",
     "parameters": {
       "type": "object",
       "properties": {
@@ -20,17 +20,23 @@ export const NATIVE_TOOLS = {
           "type": "string",
           "description": "搜索查询词"
         },
+        "domain": {
+          "type": "string",
+          "enum": [
+            "web",
+            "social",
+            "job",
+            "local"
+          ],
+          "description": "搜索领域：web 统一网络搜索（默认），social 社交媒体/论坛讨论，job 招聘岗位聚合，local 本机文件搜索"
+        },
         "engine": {
           "type": "string",
-          "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/deepseek_search/github/wikipedia/semantic_scholar/local_search 等；deepseek_search 为按次计费的官方 DeepSeek 搜索，结果带权威分级与发布时间，新闻时事类查询优先考虑）",
-          "default": "auto"
+          "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/deepseek_search/github/wikipedia/semantic_scholar/local_search 等，默认 auto；deepseek_search 为按次计费的官方 DeepSeek 搜索，结果带权威分级与发布时间，新闻时事类查询优先考虑）"
         },
         "max_results": {
           "type": "integer",
-          "description": "返回结果条数",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 20
+          "description": "返回结果条数（1-20，默认 5）"
         },
         "depth": {
           "type": "string",
@@ -39,8 +45,7 @@ export const NATIVE_TOOLS = {
             "balanced",
             "deep"
           ],
-          "description": "搜索深度：fast 快、deep 全（慢）",
-          "default": "fast"
+          "description": "搜索深度：fast 快、deep 全（慢），默认 fast"
         },
         "mode": {
           "type": "string",
@@ -50,8 +55,7 @@ export const NATIVE_TOOLS = {
             "deep",
             "budget"
           ],
-          "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制",
-          "default": "auto"
+          "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制，默认 auto"
         },
         "since": {
           "type": "string",
@@ -68,34 +72,29 @@ export const NATIVE_TOOLS = {
             "oldest",
             "newest"
           ],
-          "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前",
-          "default": "relevance"
+          "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前，默认 relevance"
         },
         "include_domains": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "仅保留这些域名（含子域），如 [\"github.com\"]",
-          "default": []
+          "description": "仅保留这些域名（含子域），如 [\"github.com\"]"
         },
         "exclude_domains": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "排除这些域名（含子域），如 [\"pinterest.com\"]",
-          "default": []
+          "description": "排除这些域名（含子域），如 [\"pinterest.com\"]"
         },
         "include_local": {
           "type": "boolean",
-          "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认开）",
-          "default": true
+          "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认开）"
         },
         "summary": {
           "type": "boolean",
-          "description": "精简输出：截断摘要、去掉重字段，省 token",
-          "default": true
+          "description": "精简输出：截断摘要、去掉重字段，省 token（默认开）"
         }
       },
       "required": [
@@ -105,6 +104,7 @@ export const NATIVE_TOOLS = {
     },
     "allowed": [
       "query",
+      "domain",
       "engine",
       "max_results",
       "depth",
@@ -129,20 +129,15 @@ export const NATIVE_TOOLS = {
         },
         "path": {
           "type": "string",
-          "description": "搜索目录；缩小范围更快更准",
-          "default": "~"
+          "description": "搜索目录；缩小范围更快更准（默认 \"~\"）"
         },
         "max_results": {
           "type": "integer",
-          "description": "返回结果条数",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 20
+          "description": "返回结果条数（1-20，默认 5）"
         },
         "exact": {
           "type": "boolean",
-          "description": "精确匹配，关闭中文扩展",
-          "default": false
+          "description": "精确匹配，关闭中文扩展（默认关）"
         }
       },
       "required": [
@@ -168,15 +163,11 @@ export const NATIVE_TOOLS = {
         },
         "max_chars": {
           "type": "integer",
-          "description": "预览字符数上限",
-          "default": 4000,
-          "minimum": 200,
-          "maximum": 20000
+          "description": "预览字符数上限（200-20000，默认 4000）"
         },
         "line_start": {
           "type": "integer",
-          "description": "起始行号（1 基，可选）",
-          "minimum": 1
+          "description": "起始行号（1 基，可选）"
         },
         "line_end": {
           "type": "integer",
@@ -210,20 +201,15 @@ export const NATIVE_TOOLS = {
         },
         "timeout_s": {
           "type": "integer",
-          "description": "超时秒数",
-          "default": 30,
-          "minimum": 1,
-          "maximum": 120
+          "description": "超时秒数（1-120，默认 30）"
         },
         "max_mem_mb": {
           "type": "integer",
-          "description": "内存上限 MB（尽力而为）",
-          "default": 512
+          "description": "内存上限 MB（尽力而为，默认 512）"
         },
         "allow_exec": {
           "type": "boolean",
-          "description": "是否授权运行（不授权就不执行；未授权时返回 skipped_reason）",
-          "default": false
+          "description": "是否授权运行（不授权就不执行；未授权时返回 skipped_reason，默认关）"
         }
       },
       "required": [
@@ -254,8 +240,7 @@ export const NATIVE_TOOLS = {
         },
         "max_results": {
           "type": "integer",
-          "description": "自动搜索时的结果条数",
-          "default": 10
+          "description": "自动搜索时的结果条数（默认 10）"
         }
       },
       "required": [
@@ -303,22 +288,15 @@ export const NATIVE_TOOLS = {
             "sitemap",
             "bfs"
           ],
-          "description": "爬取策略",
-          "default": "bfs"
+          "description": "爬取策略，默认 bfs"
         },
         "max_pages": {
           "type": "integer",
-          "description": "最大抓取页数",
-          "default": 10,
-          "minimum": 1,
-          "maximum": 50
+          "description": "最大抓取页数（1-50，默认 10）"
         },
         "max_depth": {
           "type": "integer",
-          "description": "BFS 最大深度",
-          "default": 2,
-          "minimum": 1,
-          "maximum": 5
+          "description": "BFS 最大深度（1-5，默认 2）"
         }
       },
       "required": [
@@ -334,22 +312,23 @@ export const NATIVE_TOOLS = {
     ]
   },
   "argo_fetch": {
-    "description": "智能页面抓取：HTTP 优先，遇 Cloudflare/JS 渲染自动升级反检测浏览器。支持 BM25 聚焦提取（focus 省 80%+ token）与结构化提取（mode=extract 抽表格/元数据/JSON-LD）。",
+    "description": "智能页面/长文/PDF抓取：HTTP 优先，遇反爬自动升级反检测浏览器；微信公众号文章（mp.weixin.qq.com）与 PDF 自动感知适配解析；支持 BM25 聚焦提取（focus 省 80%+ token）与结构化提取（mode=extract 抽表格/元数据/JSON-LD）。通读正文与获取文档的首选工具。",
     "parameters": {
       "type": "object",
       "properties": {
         "url": {
           "type": "string",
-          "description": "目标 URL"
+          "description": "目标 URL 或本地 PDF 路径"
         },
         "mode": {
           "type": "string",
           "enum": [
             "text",
-            "extract"
+            "extract",
+            "article",
+            "pdf"
           ],
-          "description": "text=正文/聚焦文本, extract=结构化提取",
-          "default": "text"
+          "description": "抓取模式：text=正文/聚焦文本（默认 text）, extract=结构化提取, article=公众号全文, pdf=PDF解析。微信与PDF链接自动识别"
         },
         "extract_mode": {
           "type": "string",
@@ -359,8 +338,7 @@ export const NATIVE_TOOLS = {
             "jsonld",
             "all"
           ],
-          "description": "mode=extract 时的提取子模式",
-          "default": "all"
+          "description": "mode=extract 时的提取子模式，默认 all"
         },
         "focus": {
           "type": "string",
@@ -368,20 +346,15 @@ export const NATIVE_TOOLS = {
         },
         "max_chars": {
           "type": "integer",
-          "description": "返回正文最大字符数",
-          "default": 8000,
-          "minimum": 500,
-          "maximum": 50000
+          "description": "返回正文最大字符数（500-50000，默认 8000）"
         },
         "use_browser": {
           "type": "boolean",
-          "description": "强制用反检测浏览器（HTTP 失败时已自动升级）",
-          "default": false
+          "description": "强制用反检测浏览器（HTTP 失败时已自动升级，默认关）"
         },
         "include_links": {
           "type": "boolean",
-          "description": "附带正文内链接（最多 30 条；默认只回 links_count，省 token）",
-          "default": false
+          "description": "附带正文内链接（最多 30 条；默认只回 links_count，省 token，默认关）"
         }
       },
       "required": [
@@ -410,8 +383,7 @@ export const NATIVE_TOOLS = {
         },
         "full_page": {
           "type": "boolean",
-          "description": "全页截图（默认仅当前视口）",
-          "default": false
+          "description": "全页截图（默认仅当前视口，默认关）"
         },
         "output_path": {
           "type": "string",
@@ -473,20 +445,15 @@ export const NATIVE_TOOLS = {
             "text",
             "sentiment"
           ],
-          "description": "text=帖子列表, sentiment=舆情聚合分析",
-          "default": "text"
+          "description": "text=帖子列表, sentiment=舆情聚合分析，默认 text"
         },
         "platforms": {
           "type": "string",
-          "description": "平台列表，逗号分隔；可选 hackernews,v2ex,zhihu,bilibili,twitter,reddit,xiaohongshu,weibo",
-          "default": "hackernews,zhihu,bilibili"
+          "description": "平台列表，逗号分隔；可选 hackernews,v2ex,zhihu,bilibili,twitter,reddit,xiaohongshu,weibo，默认 hackernews,zhihu,bilibili"
         },
         "max_results": {
           "type": "integer",
-          "description": "每个平台的结果条数",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 20
+          "description": "每个平台的结果条数（1-20，默认 5）"
         }
       },
       "required": [
@@ -512,10 +479,7 @@ export const NATIVE_TOOLS = {
         },
         "max_chars": {
           "type": "integer",
-          "description": "返回正文最大字符数",
-          "default": 20000,
-          "minimum": 500,
-          "maximum": 50000
+          "description": "返回正文最大字符数（500-50000，默认 20000）"
         }
       },
       "required": [
@@ -543,27 +507,19 @@ export const NATIVE_TOOLS = {
         },
         "num": {
           "type": "integer",
-          "description": "每后端条数",
-          "default": 5,
-          "minimum": 1,
-          "maximum": 20
+          "description": "每后端条数（1-20，默认 5）"
         },
         "platforms": {
           "type": "string",
-          "description": "逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp；空=全部",
-          "default": ""
+          "description": "逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp；空=全部"
         },
         "loose": {
           "type": "boolean",
-          "description": "宽松：异地岗位也保留；默认严格地区过滤",
-          "default": false
+          "description": "宽松：异地岗位也保留；默认严格地区过滤（默认关）"
         },
         "fetch_detail": {
           "type": "integer",
-          "description": "对前 N 条高命中结果抓详情页补全结构化字段（0=仅 snippet 提取）",
-          "default": 0,
-          "minimum": 0,
-          "maximum": 10
+          "description": "对前 N 条高命中结果抓详情页补全结构化字段（0=仅 snippet 提取，范围 0-10，默认 0）"
         }
       },
       "required": [
@@ -597,15 +553,11 @@ export const NATIVE_TOOLS = {
             "jsonld",
             "all"
           ],
-          "description": "提取内容：tables=HTML表格, metadata=Meta元数据, jsonld=JSON-LD, all=全部",
-          "default": "all"
+          "description": "提取内容：tables=HTML表格, metadata=Meta元数据, jsonld=JSON-LD, all=全部，默认 all"
         },
         "max_chars": {
           "type": "integer",
-          "description": "抓取页面最大字符数",
-          "default": 50000,
-          "minimum": 1000,
-          "maximum": 200000
+          "description": "抓取页面最大字符数（1000-200000，默认 50000）"
         }
       },
       "required": [
@@ -629,13 +581,11 @@ export const NATIVE_TOOLS = {
           "items": {
             "type": "string"
           },
-          "description": "待预检的 URL 列表",
-          "minItems": 1
+          "description": "待预检的 URL 列表"
         },
         "probe": {
           "type": "boolean",
-          "description": "联网探测存活（404/410 判死；默认纯本地规则）",
-          "default": false
+          "description": "联网探测存活（404/410 判死；默认纯本地规则，默认关）"
         }
       },
       "required": [
@@ -698,8 +648,7 @@ export const NATIVE_TOOLS = {
         },
         "note": {
           "type": "string",
-          "description": "备注（add 可选）",
-          "default": ""
+          "description": "备注（add 可选，默认空）"
         }
       },
       "required": [
@@ -723,8 +672,7 @@ export const NATIVE_TOOLS = {
           "items": {
             "type": "string"
           },
-          "description": "DOI 列表，如 [\"10.1038/s41586-024-0001-x\"]",
-          "minItems": 1
+          "description": "DOI 列表，如 [\"10.1038/s41586-024-0001-x\"]"
         },
         "style": {
           "type": "string",
@@ -734,8 +682,7 @@ export const NATIVE_TOOLS = {
             "apa",
             "bibtex"
           ],
-          "description": "引用格式",
-          "default": "gbt7714"
+          "description": "引用格式，默认 gbt7714"
         }
       },
       "required": [

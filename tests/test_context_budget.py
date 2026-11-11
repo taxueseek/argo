@@ -252,10 +252,11 @@ class TestContextGuidanceIsReal(unittest.TestCase):
 
 
 class TestMcpToolsListBudget(unittest.TestCase):
-    """tools/list 默认 CORE 三件套；全量 19（CLI 面对齐）；未知过滤不得吐全量。"""
+    """tools/list 默认 CORE 3+1 正交集；全量 19（CLI 面对齐）；未知过滤不得吐全量。"""
 
-    CORE = ("argo_search", "argo_fetch", "argo_local_search")
-    BUDGET_CORE_BYTES = 4000
+    from mcp_tools import CORE_TOOL_NAMES
+    CORE = CORE_TOOL_NAMES
+    BUDGET_CORE_BYTES = 5000
 
     def test_default_is_core_three(self):
         from mcp_tools import listed_tools, TOOLS

@@ -9,11 +9,14 @@ tools/list 默认只注入 CORE 三件套（search/fetch/local_search，约 3.6K
 全量设 ARGO_MCP_TOOLS=all。execute_tool / --call / DSH 原生规格仍吃全量 TOOLS，
 能力不删。未知名单不回退成全量（同类：过滤失败吐全量）。
 
-schema 设计原则（质量第一，token 第二）：
+schema 设计原则（质量第一，token 第二，严格兼容）：
 - 工具 description：第一句「做什么」，第二句「何时用 / 关键注意」。
   删除内部实现机制（引擎数、TF-IDF/RRF、协议文件引用）——模型不靠这些决策。
-- 参数 description：语义 + 何时用。默认值由 schema 的 default 字段表达，
-  不在 description 里重复；删除「下推到引擎」类实现细节。
+- 参数 description：语义 + 何时用 + 默认值与范围（如需）。
+  第一性原理与奥卡姆剃刀（issue #46）：MaaS / OpenAI 严格网关会拦截 JSON Schema
+  中的 default、minimum、maximum、minItems 等非标注解（报 400 The request is invalid）。
+  因此默认值与范围一律在 description 明确说明，schema 只保留最纯粹的
+  type / description / enum / properties / required / items。
 - 调试/运行配置（pretty / skip_cache / timeout）不暴露给模型：
   这些不是模型决策输入，由 server 层环境变量接管（见 mcp_handlers.execute_tool：
   ARGO_MCP_PRETTY / ARGO_MCP_SKIP_CACHE / ARGO_MCP_TIMEOUT[_CRAWL|_FETCH]）。
@@ -22,30 +25,84 @@ schema 设计原则（质量第一，token 第二）：
 
 from __future__ import annotations
 
+import copy
 import os
+from typing import Any
 
-# 日常 90% 调用只需要这 3 个；顺序即 tools/list 默认顺序。
-CORE_TOOL_NAMES = ("argo_search", "argo_fetch", "argo_local_search")
+# 日常高频与核心闭环工具（极简 3+1 正交集：Search 统一检索、Fetch 统一抓取/解析、Research 深度取证、Screenshot 视觉快照）
+CORE_TOOL_NAMES = ("argo_search", "argo_fetch", "argo_research", "argo_screenshot")
+
+# MaaS / OpenAI Function Calling 严格网关禁止的校验与注解键（见 issue #46：
+# 火山引擎方舟/腾讯云 MaaS 等严格网关遇到即报 400 The request is invalid）。
+FORBIDDEN_SCHEMA_KEYS = frozenset({
+    "default",
+    "minimum",
+    "maximum",
+    "exclusiveMinimum",
+    "exclusiveMaximum",
+    "minItems",
+    "maxItems",
+    "minLength",
+    "maxLength",
+    "pattern",
+})
+
+
+def sanitize_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """将 JSON Schema 净化为严格兼容 OpenAI / MaaS 网关的标准形式。
+
+    第一性原理与奥卡姆剃刀：
+      网关是白名单式语法解析器，非标注解（default/minimum/maximum/minItems 等）
+      会被严格网关直接判 400 阻断（issue #46）。模型阅读参数语义依赖
+      description 与 enum，默认值与范围已内嵌于 description 中，后端
+      执行层（mcp_handlers）自带默认值与 _clamp_int 兜底。
+
+      本函数做纯函数递归净化：
+        1. 剥离 FORBIDDEN_SCHEMA_KEYS 中所有非核心校验注解；
+        2. 若 type == 'object'，确保 properties 为 dict、required 为 list
+           （无必填项时显式补齐 required: []，防止网关报缺少字段）；
+        3. 递归清洗 properties 内每个字段及 items 结构。
+    """
+    if not isinstance(schema, dict):
+        return schema
+    out: dict[str, Any] = {}
+    for k, v in schema.items():
+        if k in FORBIDDEN_SCHEMA_KEYS:
+            continue
+        if k == "properties" and isinstance(v, dict):
+            out[k] = {pk: sanitize_schema(pv) for pk, pv in v.items()}
+        elif k == "items" and isinstance(v, dict):
+            out[k] = sanitize_schema(v)
+        else:
+            out[k] = v
+    if out.get("type") == "object":
+        if "properties" not in out:
+            out["properties"] = {}
+        if "required" not in out:
+            out["required"] = []
+    return out
+
 
 TOOLS = [
     {
         "name": "argo_search",
-        "description": "统一网络搜索：多引擎融合、支持时间过滤与域名过滤，返回带来源与摘要的结果。查资料、找答案、搜新闻/学术/代码/多语言内容等通用场景的首选工具。",
+        "description": "统一搜索（网络/社交/招聘/本地）：多引擎融合、支持时间过滤与域名过滤。默认网络搜索；按 domain 可切换社交 UGC、岗位招聘或本机文件。查资料、找答案、找人找帖的首选工具。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词"},
-                "engine": {"type": "string", "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/deepseek_search/github/wikipedia/semantic_scholar/local_search 等；deepseek_search 为按次计费的官方 DeepSeek 搜索，结果带权威分级与发布时间，新闻时事类查询优先考虑）", "default": "auto"},
-                "max_results": {"type": "integer", "description": "返回结果条数", "default": 5, "minimum": 1, "maximum": 20},
-                "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度：fast 快、deep 全（慢）", "default": "fast"},
-                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget"], "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制", "default": "auto"},
+                "domain": {"type": "string", "enum": ["web", "social", "job", "local"], "description": "搜索领域：web 统一网络搜索（默认），social 社交媒体/论坛讨论，job 招聘岗位聚合，local 本机文件搜索"},
+                "engine": {"type": "string", "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/deepseek_search/github/wikipedia/semantic_scholar/local_search 等，默认 auto；deepseek_search 为按次计费的官方 DeepSeek 搜索，结果带权威分级与发布时间，新闻时事类查询优先考虑）"},
+                "max_results": {"type": "integer", "description": "返回结果条数（1-20，默认 5）"},
+                "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度：fast 快、deep 全（慢），默认 fast"},
+                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget"], "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制，默认 auto"},
                 "since": {"type": "string", "description": "发布时间下限，如 7d / 2026-08-01"},
                 "until": {"type": "string", "description": "发布时间上限，如 7d / 2026-08-01"},
-                "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前", "default": "relevance"},
-                "include_domains": {"type": "array", "items": {"type": "string"}, "description": "仅保留这些域名（含子域），如 [\"github.com\"]", "default": []},
-                "exclude_domains": {"type": "array", "items": {"type": "string"}, "description": "排除这些域名（含子域），如 [\"pinterest.com\"]", "default": []},
-                "include_local": {"type": "boolean", "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认开）", "default": True},
-                "summary": {"type": "boolean", "description": "精简输出：截断摘要、去掉重字段，省 token", "default": True},
+                "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前，默认 relevance"},
+                "include_domains": {"type": "array", "items": {"type": "string"}, "description": "仅保留这些域名（含子域），如 [\"github.com\"]"},
+                "exclude_domains": {"type": "array", "items": {"type": "string"}, "description": "排除这些域名（含子域），如 [\"pinterest.com\"]"},
+                "include_local": {"type": "boolean", "description": "并入本机文件命中（seek 结果尾部，source=local_files，不参与融合评分；默认开）"},
+                "summary": {"type": "boolean", "description": "精简输出：截断摘要、去掉重字段，省 token（默认开）"},
             },
             "required": ["query"],
         },
@@ -57,9 +114,9 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词（中文自动扩展召回）"},
-                "path": {"type": "string", "description": "搜索目录；缩小范围更快更准", "default": "~"},
-                "max_results": {"type": "integer", "description": "返回结果条数", "default": 5, "minimum": 1, "maximum": 20},
-                "exact": {"type": "boolean", "description": "精确匹配，关闭中文扩展", "default": False},
+                "path": {"type": "string", "description": "搜索目录；缩小范围更快更准（默认 \"~\"）"},
+                "max_results": {"type": "integer", "description": "返回结果条数（1-20，默认 5）"},
+                "exact": {"type": "boolean", "description": "精确匹配，关闭中文扩展（默认关）"},
             },
             "required": ["query"],
         },
@@ -71,8 +128,8 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "文件路径（必须位于白名单目录内）"},
-                "max_chars": {"type": "integer", "description": "预览字符数上限", "default": 4000, "minimum": 200, "maximum": 20000},
-                "line_start": {"type": "integer", "description": "起始行号（1 基，可选）", "minimum": 1},
+                "max_chars": {"type": "integer", "description": "预览字符数上限（200-20000，默认 4000）"},
+                "line_start": {"type": "integer", "description": "起始行号（1 基，可选）"},
                 "line_end": {"type": "integer", "description": "结束行号（可选）"},
             },
             "required": ["path"],
@@ -86,9 +143,9 @@ TOOLS = [
             "properties": {
                 "script": {"type": "string", "description": "要运行的计算代码（Python）"},
                 "file_inputs": {"type": "string", "description": "白名单输入文件 JSON 数组：[{\"path\":\"...\",\"role\":\"原始数据\"}]"},
-                "timeout_s": {"type": "integer", "description": "超时秒数", "default": 30, "minimum": 1, "maximum": 120},
-                "max_mem_mb": {"type": "integer", "description": "内存上限 MB（尽力而为）", "default": 512},
-                "allow_exec": {"type": "boolean", "description": "是否授权运行（不授权就不执行；未授权时返回 skipped_reason）", "default": False},
+                "timeout_s": {"type": "integer", "description": "超时秒数（1-120，默认 30）"},
+                "max_mem_mb": {"type": "integer", "description": "内存上限 MB（尽力而为，默认 512）"},
+                "allow_exec": {"type": "boolean", "description": "是否授权运行（不授权就不执行；未授权时返回 skipped_reason，默认关）"},
             },
             "required": ["script"],
         },
@@ -101,15 +158,15 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string", "description": "研究问题（可以是复杂、多步骤的）"},
                 "topic": {"type": "string", "description": "选题 profile：ai/investment/finance/academic/tech/tool/internet/social；省略则自动推断"},
-                "auto_topic": {"type": "boolean", "description": "无 topic 时是否自动推断", "default": True},
-                "num_sub_queries": {"type": "integer", "description": "子查询数量；有 work_packages 时忽略", "minimum": 2, "maximum": 8},
-                "max_results": {"type": "integer", "description": "每个子查询的结果条数", "default": 5},
-                "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度", "default": "balanced"},
-                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget", "social-sentiment"], "description": "预算/模式；社交舆情用 social-sentiment", "default": "auto"},
+                "auto_topic": {"type": "boolean", "description": "无 topic 时是否自动推断（默认开）"},
+                "num_sub_queries": {"type": "integer", "description": "子查询数量（2-8；有 work_packages 时忽略）"},
+                "max_results": {"type": "integer", "description": "每个子查询的结果条数（默认 5）"},
+                "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度（默认 balanced）"},
+                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget", "social-sentiment"], "description": "预算/模式；社交舆情用 social-sentiment，默认 auto"},
                 "work_packages": {"type": "string", "description": "工作包 JSON 数组：id, question, query?, file_inputs?(本地一手数据, 白名单制), recompute?({script,budget{timeout_s,max_mem_mb}}), depends_on?。有则跳过扩词，按依赖分阶段取证"},
-                "allow_recompute": {"type": "boolean", "description": "授权执行工作包 recompute 计算脚本（不授权就不执行；未授权时 recompute 跳过并触发 recompute_skipped 门禁）", "default": False},
+                "allow_recompute": {"type": "boolean", "description": "授权执行工作包 recompute 计算脚本（不授权就不执行；未授权时 recompute 跳过并触发 recompute_skipped 门禁，默认关）"},
                 "platforms": {"type": "string", "description": "social-sentiment 平台列表，逗号分隔"},
-                "summary": {"type": "boolean", "description": "精简研究包，省 token", "default": True},
+                "summary": {"type": "boolean", "description": "精简研究包，省 token（默认开）"},
             },
             "required": ["query"],
         },
@@ -122,7 +179,7 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词（用于交叉验证）"},
                 "results_json": {"type": "string", "description": "待评估的搜索结果 JSON（为空时自动搜索）。格式：{\"results\": [{\"title\":\"...\",\"url\":\"...\",\"snippet\":\"...\",\"source\":\"...\",\"score\":0.8}]}"},
-                "max_results": {"type": "integer", "description": "自动搜索时的结果条数", "default": 10},
+                "max_results": {"type": "integer", "description": "自动搜索时的结果条数（默认 10）"},
             },
             "required": ["query"],
         },
@@ -145,26 +202,26 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "url": {"type": "string", "description": "站点根 URL"},
-                "strategy": {"type": "string", "enum": ["sitemap", "bfs"], "description": "爬取策略", "default": "bfs"},
-                "max_pages": {"type": "integer", "description": "最大抓取页数", "default": 10, "minimum": 1, "maximum": 50},
-                "max_depth": {"type": "integer", "description": "BFS 最大深度", "default": 2, "minimum": 1, "maximum": 5},
+                "strategy": {"type": "string", "enum": ["sitemap", "bfs"], "description": "爬取策略，默认 bfs"},
+                "max_pages": {"type": "integer", "description": "最大抓取页数（1-50，默认 10）"},
+                "max_depth": {"type": "integer", "description": "BFS 最大深度（1-5，默认 2）"},
             },
             "required": ["url"],
         },
     },
     {
         "name": "argo_fetch",
-        "description": "智能页面抓取：HTTP 优先，遇 Cloudflare/JS 渲染自动升级反检测浏览器。支持 BM25 聚焦提取（focus 省 80%+ token）与结构化提取（mode=extract 抽表格/元数据/JSON-LD）。",
+        "description": "智能页面/长文/PDF抓取：HTTP 优先，遇反爬自动升级反检测浏览器；微信公众号文章（mp.weixin.qq.com）与 PDF 自动感知适配解析；支持 BM25 聚焦提取（focus 省 80%+ token）与结构化提取（mode=extract 抽表格/元数据/JSON-LD）。通读正文与获取文档的首选工具。",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "url": {"type": "string", "description": "目标 URL"},
-                "mode": {"type": "string", "enum": ["text", "extract"], "description": "text=正文/聚焦文本, extract=结构化提取", "default": "text"},
-                "extract_mode": {"type": "string", "enum": ["tables", "metadata", "jsonld", "all"], "description": "mode=extract 时的提取子模式", "default": "all"},
+                "url": {"type": "string", "description": "目标 URL 或本地 PDF 路径"},
+                "mode": {"type": "string", "enum": ["text", "extract", "article", "pdf"], "description": "抓取模式：text=正文/聚焦文本（默认 text）, extract=结构化提取, article=公众号全文, pdf=PDF解析。微信与PDF链接自动识别"},
+                "extract_mode": {"type": "string", "enum": ["tables", "metadata", "jsonld", "all"], "description": "mode=extract 时的提取子模式，默认 all"},
                 "focus": {"type": "string", "description": "BM25 聚焦查询词：只返回相关段落，省 token（仅 mode=text）"},
-                "max_chars": {"type": "integer", "description": "返回正文最大字符数", "default": 8000, "minimum": 500, "maximum": 50000},
-                "use_browser": {"type": "boolean", "description": "强制用反检测浏览器（HTTP 失败时已自动升级）", "default": False},
-                "include_links": {"type": "boolean", "description": "附带正文内链接（最多 30 条；默认只回 links_count，省 token）", "default": False},
+                "max_chars": {"type": "integer", "description": "返回正文最大字符数（500-50000，默认 8000）"},
+                "use_browser": {"type": "boolean", "description": "强制用反检测浏览器（HTTP 失败时已自动升级，默认关）"},
+                "include_links": {"type": "boolean", "description": "附带正文内链接（最多 30 条；默认只回 links_count，省 token，默认关）"},
             },
             "required": ["url"],
         },
@@ -176,7 +233,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "url": {"type": "string", "description": "目标 URL"},
-                "full_page": {"type": "boolean", "description": "全页截图（默认仅当前视口）", "default": False},
+                "full_page": {"type": "boolean", "description": "全页截图（默认仅当前视口，默认关）"},
                 "output_path": {"type": "string", "description": "输出路径（默认写入系统临时目录：<temp>/argo_screenshot_<timestamp>.png）"},
             },
             "required": ["url"],
@@ -202,9 +259,9 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词"},
-                "mode": {"type": "string", "enum": ["text", "sentiment"], "description": "text=帖子列表, sentiment=舆情聚合分析", "default": "text"},
-                "platforms": {"type": "string", "description": "平台列表，逗号分隔；可选 hackernews,v2ex,zhihu,bilibili,twitter,reddit,xiaohongshu,weibo", "default": "hackernews,zhihu,bilibili"},
-                "max_results": {"type": "integer", "description": "每个平台的结果条数", "default": 5, "minimum": 1, "maximum": 20},
+                "mode": {"type": "string", "enum": ["text", "sentiment"], "description": "text=帖子列表, sentiment=舆情聚合分析，默认 text"},
+                "platforms": {"type": "string", "description": "平台列表，逗号分隔；可选 hackernews,v2ex,zhihu,bilibili,twitter,reddit,xiaohongshu,weibo，默认 hackernews,zhihu,bilibili"},
+                "max_results": {"type": "integer", "description": "每个平台的结果条数（1-20，默认 5）"},
             },
             "required": ["query"],
         },
@@ -216,7 +273,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "url": {"type": "string", "description": "mp.weixin.qq.com 文章链接"},
-                "max_chars": {"type": "integer", "description": "返回正文最大字符数", "default": 20000, "minimum": 500, "maximum": 50000},
+                "max_chars": {"type": "integer", "description": "返回正文最大字符数（500-50000，默认 20000）"},
             },
             "required": ["url"],
         },
@@ -229,10 +286,10 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string", "description": "职位关键词，如：工艺工程师、会计、电工"},
                 "city": {"type": "string", "description": "地区：省/市/县或海外城市（成都、昆山、新加坡…），空=不过滤地区"},
-                "num": {"type": "integer", "description": "每后端条数", "default": 5, "minimum": 1, "maximum": 20},
-                "platforms": {"type": "string", "description": "逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp；空=全部", "default": ""},
-                "loose": {"type": "boolean", "description": "宽松：异地岗位也保留；默认严格地区过滤", "default": False},
-                "fetch_detail": {"type": "integer", "description": "对前 N 条高命中结果抓详情页补全结构化字段（0=仅 snippet 提取）", "default": 0, "minimum": 0, "maximum": 10},
+                "num": {"type": "integer", "description": "每后端条数（1-20，默认 5）"},
+                "platforms": {"type": "string", "description": "逗号分隔平台: zhipin,liepin,zhaopin,51job,597,jrzp；空=全部"},
+                "loose": {"type": "boolean", "description": "宽松：异地岗位也保留；默认严格地区过滤（默认关）"},
+                "fetch_detail": {"type": "integer", "description": "对前 N 条高命中结果抓详情页补全结构化字段（0=仅 snippet 提取，范围 0-10，默认 0）"},
             },
             "required": ["query"],
         },
@@ -244,8 +301,8 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "url": {"type": "string", "description": "目标网页链接"},
-                "mode": {"type": "string", "enum": ["tables", "metadata", "jsonld", "all"], "description": "提取内容：tables=HTML表格, metadata=Meta元数据, jsonld=JSON-LD, all=全部", "default": "all"},
-                "max_chars": {"type": "integer", "description": "抓取页面最大字符数", "default": 50000, "minimum": 1000, "maximum": 200000},
+                "mode": {"type": "string", "enum": ["tables", "metadata", "jsonld", "all"], "description": "提取内容：tables=HTML表格, metadata=Meta元数据, jsonld=JSON-LD, all=全部，默认 all"},
+                "max_chars": {"type": "integer", "description": "抓取页面最大字符数（1000-200000，默认 50000）"},
             },
             "required": ["url"],
         },
@@ -256,8 +313,8 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "urls": {"type": "array", "items": {"type": "string"}, "description": "待预检的 URL 列表", "minItems": 1},
-                "probe": {"type": "boolean", "description": "联网探测存活（404/410 判死；默认纯本地规则）", "default": False},
+                "urls": {"type": "array", "items": {"type": "string"}, "description": "待预检的 URL 列表"},
+                "probe": {"type": "boolean", "description": "联网探测存活（404/410 判死；默认纯本地规则，默认关）"},
             },
             "required": ["urls"],
         },
@@ -283,7 +340,7 @@ TOOLS = [
             "properties": {
                 "action": {"type": "string", "enum": ["add", "check", "list", "remove"], "description": "add=登记快照, check=复查变化（可指定单个 url）, list=看清单, remove=取消关注"},
                 "url": {"type": "string", "description": "目标页面（add/remove 必填；check 可选=只查这一条）"},
-                "note": {"type": "string", "description": "备注（add 可选）", "default": ""},
+                "note": {"type": "string", "description": "备注（add 可选，默认空）"},
             },
             "required": ["action"],
         },
@@ -294,8 +351,8 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {
-                "dois": {"type": "array", "items": {"type": "string"}, "description": "DOI 列表，如 [\"10.1038/s41586-024-0001-x\"]", "minItems": 1},
-                "style": {"type": "string", "enum": ["gbt7714", "numeric", "apa", "bibtex"], "description": "引用格式", "default": "gbt7714"},
+                "dois": {"type": "array", "items": {"type": "string"}, "description": "DOI 列表，如 [\"10.1038/s41586-024-0001-x\"]"},
+                "style": {"type": "string", "enum": ["gbt7714", "numeric", "apa", "bibtex"], "description": "引用格式，默认 gbt7714"},
             },
             "required": ["dois"],
         },

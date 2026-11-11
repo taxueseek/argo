@@ -645,7 +645,7 @@ export function createWideResearchTool(ctx, config, options = {}) {
         perspective: { type: 'string', description: 'Optional decomposition lens such as technical, market, policy, or skeptical review.' },
         file_inputs: { type: 'string', description: '本地一手数据文件 JSON 数组（白名单制）：[{"path":"~/data/company.xlsx","role":"原始数据"}]。登记血缘（sha256/路径），内容不入账；供 recompute 重算。' },
         recompute: { type: 'string', description: '可复算契约 JSON 对象：{"script":"...","expect":"0.23左右","budget":{"timeout_s":30,"max_mem_mb":512}}。在编排器侧受限执行，验证重算数值。' },
-        include_local: { type: 'boolean', description: 'worker 搜索时并入本机文件命中（argo_search include_local，默认 false）。', default: false },
+        include_local: { type: 'boolean', description: 'worker 搜索时并入本机文件命中（argo_search include_local，默认 false）。' },
         max_workers: { type: 'number', description: 'Requested concurrent workers. Defaults to the configured default and is capped by the configured maximum.' },
         response_language: { type: 'string', description: 'Language for the final report. Defaults to the question language.' },
       },
