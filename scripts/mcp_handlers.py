@@ -99,6 +99,21 @@ def _err_is(message: str) -> dict[str, Any]:
 
 
 def _ok(payload: Any, pretty: bool = False) -> dict[str, Any]:
+    """所有 MCP 工具返回的唯一出口。
+
+    脱敏必须挂在这里，不能挂在各工具分支：分支有 19 个，漏一个就是一条
+    「凭据经 MCP 反射给 Agent 与 LLM」的通道，而漏了不会有任何信号。
+    入口处的 CLI 侧（search_cli）另有一处，是历史形态，不是本函数的理由。
+
+    代价实测（2026-11-11，本机）：get_active_secrets 0.07ms/次 +
+    redact_data(5 条结果) 0.43ms/次，相对搜索本身 78~82ms 是 0.6%，
+    相对深度研究分钟级是零头。
+    """
+    try:
+        from secret_guard import redact_data
+        payload = redact_data(payload)
+    except Exception:
+        pass
     return {"content": [{"type": "text", "text": _dumps(payload, pretty=pretty)}]}
 
 
@@ -215,12 +230,21 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "argo_search":
             domain = arguments.get("domain", "web")
             if domain == "social":
+                # 旧工具名 argo_social_search 的专属参数在这里仍要认（软别名
+                # 只补了 domain，platforms/mode/max_results 原样进来）：
+                #   platforms  → 平台名单（默认 hackernews,zhihu,bilibili）
+                #   mode       → text | sentiment（旧名直接给值，不叫 social-sentiment）
+                #   max_results→ 每平台条数（旧名 num 也认）
+                # 漏读任何一个，旧调用方的参数都会静默退化成默认值——调用成功、
+                # 结果不是他要的那批，没有任何信号。
                 platforms_str = arguments.get("platforms", "hackernews,zhihu,bilibili")
                 platforms = [p.strip() for p in platforms_str.split(",") if p.strip()]
                 query = arguments["query"]
-                n = _clamp_int(arguments.get("max_results", 5), 5, 1, 20)
+                n = _clamp_int(
+                    arguments.get("max_results", arguments.get("num", 5)), 5, 1, 20)
                 platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
-                if arguments.get("mode", "text") == "sentiment":
+                if str(arguments.get("mode", "text")).strip().lower() in (
+                        "sentiment", "social-sentiment"):
                     research_mod = _lazy_cached("research")
                     output = research_mod.aggregate_social_sentiment(
                         query=query, platforms=platforms, platform_results=platform_results,

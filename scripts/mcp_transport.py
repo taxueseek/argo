@@ -13,7 +13,24 @@ import sys
 from typing import Any
 
 from mcp_handlers import _warm_core_async, execute_tool
-from mcp_tools import listed_tools
+from mcp_tools import listed_tools, sanitize_tool
+
+try:
+    from secret_guard import redact_data
+except ImportError:  # pragma: no cover - 脱敏模块不可用时不得静默放行
+    def redact_data(data):
+        raise RuntimeError("secret_guard 不可用：拒绝输出未经脱敏的工具结果")
+
+
+def _redact_response(response: dict[str, Any]) -> dict[str, Any]:
+    """tools/call 出口统一脱敏：覆盖所有分支，而不只是 _ok 成功路径。
+
+    _ok 内部已有一层（成功结果），但错误信息、surface 工具与兜底 except
+    都是裸 return，异常里常带回上游响应体——那里恰恰最容易带凭据。
+    放在 RPC 边界是唯一能一次覆盖全部出口的位置；两层叠加的代价是
+    对已脱敏文本再跑一次正则，实测 <0.5ms。
+    """
+    return redact_data(response)
 
 try:
     import hot_state  # 代码/配置指纹自重启（失效则退化为旧行为：进程常驻）
@@ -31,6 +48,10 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
     """处理 JSON-RPC 请求。"""
     if method == "initialize":
         _warm_core_async()
+        # 工具面真源在 mcp_tools.CORE_TOOL_NAMES：文案在这里只写「CORE 指哪
+        # 几个」的语义，不逐个列名——列名就有了第二份真源，改一处忘另一处时
+        # 模型会按旧名单调工具。机械对拍见 test_mcp_consolidated_tools.py::
+        # test_instructions_matches_core。
         return {
             "protocolVersion": "2025-06-18",
             "capabilities": {"tools": {"listChanged": False}},
@@ -40,19 +61,30 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             },
             # 短指令：降 tools 上下文；细节在 tool schema。
             # URL 在 results[].url（默认 envelope=False，不生成 sources）。
+            #
+            # 文案只写「CORE 指哪几个」的语义，不逐个列全名单——全名单在
+            # tools/list 里，抄一份到这里就有了第二真源。机械对拍见
+            # test_mcp_consolidated_tools.py::test_instructions_matches_core。
+            #
+            # 不点名 argo_local_search：它是真工具（domain=local 也能用），但
+            # 已不在默认注入面，写进「日常」文案会让模型去调一个没挂的工具。
             "instructions": (
-                "Argo：日常 argo_search（精简 JSON，URL 在 results[].url）"
-                "、argo_fetch、argo_local_search。"
-                "深度研究只用 argo_research（内建 academic/finance topic，不调用外部 skill）。"
-                "其余默认不注入 schema，ARGO_MCP_TOOLS=all 打开："
-                "evidence/clarify/crawl/article/job/pdf/screenshot/social_search/"
-                "local_read/recompute。"
+                "Argo：日常四件套见 tools/list（argo_search 统一检索，URL 在 "
+                "results[].url；argo_fetch 抓取；argo_research 深度取证，"
+                "内建 academic/finance 等 topic profile、不调外部 skill；"
+                "argo_screenshot 截图）。argo_search 用 domain 切社交/招聘/本机。"
+                "其余工具默认不注入 schema，ARGO_MCP_TOOLS=all 打开："
+                "local_search/local_read/recompute/evidence/clarify/crawl/"
+                "extract/preflight/answer/watch/cite。"
             ),
         }
 
     elif method == "tools/list":
         _warm_core_async()
-        return {"tools": listed_tools()}
+        # 出口净化（issue #46）：严格网关（火山方舟/腾讯云 MaaS）会因 schema
+        # 里的 default/minimum/minItems 等非标注解直接 400。源头已写干净，
+        # 这里再兜一层——以后有人加回违规键时，拦住的是网关而不是用户。
+        return {"tools": [sanitize_tool(t) for t in listed_tools()]}
 
     elif method == "tools/call":
         tool_name = params.get("name", "")
@@ -63,7 +95,7 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             # 对账）。MCP 规范里 arguments 是 object，畸形一律按空对象走
             # 正常缺参校验。
             arguments = {}
-        return execute_tool(tool_name, arguments)
+        return _redact_response(execute_tool(tool_name, arguments))
 
     elif method == "ping":
         return {}

@@ -3,7 +3,7 @@
 mcp_server.py — Argo MCP 服务入口（P2-4 拆分后为聚合薄壳）
 
 原 970 行单文件已拆为三模块，本文件只做聚合与兼容导出：
-  mcp_tools.py      工具 schema 唯一来源（14 个工具；tools/list 默认 CORE 3 个）
+  mcp_tools.py      工具 schema 唯一来源（19 个工具；tools/list 默认 CORE 4 个）
   mcp_handlers.py   路径引导 + 延迟导入 + 结果压缩 + execute_tool + 预热
   mcp_transport.py  JSON-RPC 分发（handle_rpc）+ stdio 帧协议（run_stdio）
 

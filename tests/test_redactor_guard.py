@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT / "scripts") not in sys.path:
@@ -98,3 +98,66 @@ def test_settings_page_lists_all_services():
     assert "exa" in engines_listed
     # 商业引擎
     assert "bocha" in engines_listed
+
+
+# ── 出口覆盖：MCP 与 --list-engines ──────────────────────────────────────────
+
+def test_mcp_output_is_redacted():
+    """MCP 工具返回必须经过脱敏——它是「结果交给 Agent 与 LLM」的那条路。
+
+    回归（2026-11-11 审计）：a559fda 新增 secret_guard，但只在
+    search_cli.py 一处调用；mcp_handlers._ok（19 个工具的唯一返回出口）
+    里 redact 出现 0 次。secret_guard 文件头写的目标是「防止真实凭据反射
+    给 Agent 与 LLM」，而 MCP 恰是那条通道，覆盖却只有 CLI 一侧。
+
+    判据走真实出口 execute_tool，不直接测 _ok——否则把 _ok 换成别的返回
+    形态（如某个分支自己拼 content）就绕过了。
+    """
+    import mcp_handlers
+
+    leaked = "sk-" + "mcp" + ("9" * 28)
+    with patch.object(mcp_handlers, "_lazy_cached") as mock_lazy:
+        fake = MagicMock()
+        fake.super_search.return_value = {
+            "query": "q",
+            "results": [{"title": "t", "url": "https://x.example/a",
+                         "snippet": f"auth with {leaked} failed",
+                         "source": "anysearch", "score": 0.9}],
+        }
+        mock_lazy.return_value = fake
+        resp = mcp_handlers.execute_tool("argo_search", {"query": "q"})
+
+    text = resp["content"][0]["text"]
+    assert leaked not in text, "MCP 出口泄漏了 API Key"
+    assert "REDACTED" in text
+
+
+def test_list_engines_output_is_redacted(monkeypatch, capsys):
+    """`--list-engines` 出口必须脱敏。
+
+    为什么单列：引擎状态行含 runtime.failure.evidence 与 admission 等自由
+    文本字段，是 stdout 上唯一能带回真实凭据的出口（历史上引擎把 401 响应体
+    原样记进 failure.evidence）。而 --list-engines 在 search 之前就 return，
+    走不到 search_cli 文件底部那处脱敏——它是脱敏的盲区。
+    """
+    import search_cli
+
+    leaked = "sk-" + "list" + ("7" * 28)
+    row = {
+        "engine_id": "probe_engine", "status": "blocked",
+        "cost_tier": "api", "type": "http", "routable": False,
+        "env_ready": False, "missing_env": [],
+        "runtime": {"failure": {"category": "auth",
+                                "evidence": f"upstream said {leaked}"}},
+    }
+    monkeypatch.setattr("engine_status.list_engines_detail", lambda **kw: [row])
+    monkeypatch.setattr("engine_status.compact_engine_row", lambda r: r)
+    monkeypatch.setattr("engine_status.format_engines_table",
+                        lambda rows: "\n".join(
+                            str(r.get("runtime", {}).get("failure", {}).get("evidence"))
+                            for r in rows))
+    monkeypatch.setattr(sys, "argv", ["search.py", "--list-engines", "--detail",
+                                      "--engine", "probe_engine"])
+    search_cli.main()
+    out = capsys.readouterr().out
+    assert leaked not in out, "--list-engines 出口泄漏了 failure.evidence 里的凭据"

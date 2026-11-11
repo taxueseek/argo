@@ -594,6 +594,26 @@ def verify_results(results: list[dict[str, Any]],
                 primary_count = 0
                 substantive_count = 0
                 passing_count = 0
+                # 加权必须同时写回 results 原始行：verified 是 _record_verify
+                # 新建的展示副本，而下游 reorder_by_evidence 读的是
+                # r["post_fetch_absorption"]（原始行），只读副本的 +0.20/+0.15
+                # 不会改变任何排序分（2026-11-11 审计）。按 URL 定位，避免
+                # 再引入第二份顺序假设。
+                result_by_url = {r.get("url") or "": r for r in results}
+
+                def _apply_adjustment(url: str, delta: float) -> None:
+                    row = result_by_url.get(url)
+                    if row is None:
+                        return
+                    base = row.get("post_fetch_absorption")
+                    if base is None:
+                        base = row.get("absorption") or 0.0
+                    try:
+                        adjusted = max(0.0, min(1.0, float(base) + delta))
+                    except (TypeError, ValueError):
+                        return
+                    row["post_fetch_absorption"] = round(adjusted, 3)
+
                 if support:
                     for item in verified:
                         info = support.get(item.get("url") or "")
@@ -614,6 +634,7 @@ def verify_results(results: list[dict[str, Any]],
                                 item["post_absorption"] = min(1.0, (item.get("post_absorption") or 0.0) + 0.20)
                                 if "delta" in item:
                                     item["delta"] = round(item["post_absorption"] - (item.get("pre_absorption") or 0.0), 3)
+                                _apply_adjustment(item.get("url") or "", 0.20)
                     for r in results:
                         st = source_types.get(r.get("url") or "")
                         if st:
@@ -630,6 +651,7 @@ def verify_results(results: list[dict[str, Any]],
                                 item["post_absorption"] = min(1.0, (item.get("post_absorption") or 0.0) + 0.15)
                                 if "delta" in item:
                                     item["delta"] = round(item["post_absorption"] - (item.get("pre_absorption") or 0.0), 3)
+                                _apply_adjustment(item.get("url") or "", 0.15)
                             elif sub.get("is_passing_mention"):
                                 passing_count += 1
                                 item["passing_mention"] = True
@@ -637,6 +659,7 @@ def verify_results(results: list[dict[str, Any]],
                                 item["post_absorption"] = max(0.0, (item.get("post_absorption") or 0.0) - 0.10)
                                 if "delta" in item:
                                     item["delta"] = round(item["post_absorption"] - (item.get("pre_absorption") or 0.0), 3)
+                                _apply_adjustment(item.get("url") or "", -0.10)
                     for r in results:
                         sub = substantive_map.get(r.get("url") or "")
                         if sub:

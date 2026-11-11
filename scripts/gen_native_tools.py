@@ -31,7 +31,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import engine_states  # noqa: E402
-from mcp_tools import TOOLS  # noqa: E402
+from mcp_tools import TOOLS, sanitize_tool  # noqa: E402
 
 OUT_PATH = SCRIPT_DIR.parent / "packages" / "dsh-plugin" / "dsh" / "native-tools.mjs"
 
@@ -57,6 +57,7 @@ HEADER = """\
 def build_native_tools() -> dict:
     out: dict[str, dict] = {}
     for tool in TOOLS:
+        tool = sanitize_tool(tool)
         name = tool["name"]
         if name in _EXCLUDED:
             continue

@@ -409,6 +409,23 @@ def main():
         logging.disable(logging.WARNING)
 
     if args.list_engines:
+        # 引擎状态行里含 runtime.failure.evidence 与 admission 等自由文本字段，
+        # 是 stdout 上唯一能带回真实凭据的出口（历史上引擎把 401 响应体原样
+        # 记进 failure.evidence）。--list-engines 在 search 之前就 return，
+        # 走不到文件底部那处脱敏，所以这里必须自带一层。
+        # 契约见 tests/test_redactor_guard.py::test_list_engines_output_is_redacted。
+        try:
+            from secret_guard import redact_data as _redact
+        except Exception:
+            def _redact(x):
+                return x
+
+        def _emit_json(obj: Any) -> None:
+            print(dumps(_redact(obj)))
+
+        def _emit_text(text: str) -> None:
+            print(_redact(text))
+
         # --engine 兼作清单过滤（`--engine auto` 是搜索默认值，不算过滤）。
         # 全量详细行 2026-09-16 实测 151 KB（runtime/admission 嵌套是大头），
         # Agent 查单个引擎状态时不该付这个代价——实测此前
@@ -439,10 +456,10 @@ def main():
                     # 单引擎全量诊断仍走 --engine <名>（不受本分支影响）。
                     rows = [compact_engine_row(r) for r in rows]
                 if not _wanted and not args.list_all and args.json_output:
-                    print(dumps(_summarize_engine_rows(rows)))
+                    _emit_json(_summarize_engine_rows(rows))
                     return
                 if not _wanted and not args.list_all:
-                    print(_format_engine_summary(_summarize_engine_rows(rows)))
+                    _emit_text(_format_engine_summary(_summarize_engine_rows(rows)))
                     return
                 if _wanted:
                     # 未命中的名字要显式报出（走 stderr，保持 stdout 是纯 JSON）——
@@ -459,13 +476,13 @@ def main():
                     # 单引擎诊断（--engine <名>）仍给逐条全量对象——那一档
                     # 只有 1 条，键名成本可忽略，且需要嵌套的 runtime/admission。
                     if not _wanted:
-                        print(dumps(compact_engine_table(rows)))
+                        _emit_json(compact_engine_table(rows))
                     else:
-                        print(dumps(rows))
+                        _emit_json(rows)
                 else:
-                    print(format_engines_table(rows))
+                    _emit_text(format_engines_table(rows))
             except Exception as e:
-                print(dumps({"error": str(e), "engines": available_engines()}))
+                _emit_json({"error": str(e), "engines": available_engines()})
         else:
             # 不包 try/except TypeError：available_engines 已收 routable_only
             # （它当初没收，被这里的回退静默吞掉，于是 --routable-only 一直
@@ -473,7 +490,7 @@ def main():
             names = available_engines(routable_only=args.routable_only)
             if _wanted:
                 names = [n for n in names if n in set(_wanted)]
-            print(dumps(names))
+            _emit_json(names)
             # issue #34 第 6 条：本档只回答「有多少个有实现的源」，与
             # `paths --check` 的 engines=<总收录> 天然不等——差额里是
             # 停用/缺密钥/别名 spec。以前这层口径差没有任何对外说明，

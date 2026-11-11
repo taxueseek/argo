@@ -5,7 +5,9 @@
 
 ## MCP 工具清单（19 个）
 
-`tools/list` 默认只注入 `argo_search` / `argo_fetch` / `argo_local_search`（约 3.6KB/轮）。全量设 `ARGO_MCP_TOOLS=all`（或逗号名单）。`execute_tool` / `--call` 不受此限。URL 在 `results[].url`，默认不生成 `sources`。
+`tools/list` 默认只注入 CORE 4 个正交集（`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`，约 5KB/轮）。全量设 `ARGO_MCP_TOOLS=all`（或逗号名单）。`execute_tool` / `--call` 不受此限。URL 在 `results[].url`，默认不生成 `sources`。
+
+`argo_search` 的 `domain` 参数把旧工具名收进一个入口（`web` / `social` / `job` / `local`）；旧名 `argo_social_search` / `argo_job` / `argo_article` / `argo_pdf` 仍作为软别名可调用，但不再是默认注入面。
 
 | 工具 | 用途 |
 |------|------|

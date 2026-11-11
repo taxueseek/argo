@@ -5,9 +5,14 @@
 extract/preflight/answer/watch/cite 补齐）；mcp_transport 的 tools/list 与
 mcp_server 的兼容导出均从本模块取。改 schema 只动这一个文件。
 
-tools/list 默认只注入 CORE 三件套（search/fetch/local_search，约 3.6KB/轮）；
-全量设 ARGO_MCP_TOOLS=all。execute_tool / --call / DSH 原生规格仍吃全量 TOOLS，
-能力不删。未知名单不回退成全量（同类：过滤失败吐全量）。
+tools/list 默认只注入 CORE 4 个正交集（search/fetch/research/screenshot，
+约 5KB/轮）；全量设 ARGO_MCP_TOOLS=all。execute_tool / --call / DSH 原生规格
+仍吃全量 TOOLS，能力不删。未知名单不回退成全量（同类：过滤失败吐全量）。
+
+CORE 集合的变更必须同步四处（少一处就有一处文案在骗人）：本文件的
+CORE_TOOL_NAMES、mcp_transport 的 initialize instructions、
+references/operations.md 的工具清单节、docs/MCP_SETUP.md 的状态行。
+机械对拍见 tests/test_mcp_consolidated_tools.py::test_instructions_matches_core。
 
 schema 设计原则（质量第一，token 第二，严格兼容）：
 - 工具 description：第一句「做什么」，第二句「何时用 / 关键注意」。
@@ -62,6 +67,12 @@ def sanitize_schema(schema: dict[str, Any]) -> dict[str, Any]:
         2. 若 type == 'object'，确保 properties 为 dict、required 为 list
            （无必填项时显式补齐 required: []，防止网关报缺少字段）；
         3. 递归清洗 properties 内每个字段及 items 结构。
+
+    **必须挂在 tools/list 出口**（mcp_transport.handle_rpc）：只在源头写干净
+    schema 是「现在没问题」，挂上净化是「以后有人加回 default 也不会打到
+    严格网关」。本函数曾只被自己的测试调用——宣称修了 MaaS 兼容，实际是
+    一个没人调用的纯函数（2026-11-11 审计）。接线检查见
+    tests/test_mcp_schema_maas_compliance.py::test_sanitize_schema_is_wired。
     """
     if not isinstance(schema, dict):
         return schema
@@ -83,6 +94,20 @@ def sanitize_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def sanitize_tool(tool: dict[str, Any]) -> dict[str, Any]:
+    """单个工具的净化出口：只动 inputSchema，其余键原样。
+
+    单独成函数是为了让「接线」在 tools/list 里是一行可读的调用，而不是一段
+    内联的字典推导——内联形态下「有没有真的净化」要靠读代码判断。
+    """
+    if not isinstance(tool, dict):
+        return tool
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict):
+        return tool
+    return {**tool, "inputSchema": sanitize_schema(schema)}
+
+
 TOOLS = [
     {
         "name": "argo_search",
@@ -95,7 +120,7 @@ TOOLS = [
                 "engine": {"type": "string", "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/deepseek_search/github/wikipedia/semantic_scholar/local_search 等，默认 auto；deepseek_search 为按次计费的官方 DeepSeek 搜索，结果带权威分级与发布时间，新闻时事类查询优先考虑）"},
                 "max_results": {"type": "integer", "description": "返回结果条数（1-20，默认 5）"},
                 "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度：fast 快、deep 全（慢），默认 fast"},
-                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget"], "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制，默认 auto"},
+                "mode": {"type": "string", "enum": ["fast", "auto", "deep", "budget", "sentiment"], "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制，默认 auto；仅 domain=social 时可写 sentiment（舆情聚合），其余 domain 不认"},
                 "since": {"type": "string", "description": "发布时间下限，如 7d / 2026-08-01"},
                 "until": {"type": "string", "description": "发布时间上限，如 7d / 2026-08-01"},
                 "sort": {"type": "string", "enum": ["relevance", "oldest", "newest"], "description": "排序：relevance=相关度, oldest=最早在前, newest=最新在前，默认 relevance"},
@@ -361,7 +386,7 @@ TOOLS = [
 
 
 def listed_tools(spec: str | None = None) -> list[dict]:
-    """tools/list 返回集。默认 CORE 三件套；all 全量；逗号名单按名取。
+    """tools/list 返回集。默认 CORE 4 个正交集；all 全量；逗号名单按名取。
 
     未知名字忽略，空结果也不回退成全量——曾经「过滤失败吐全量」把 12KB
     schema 砸进每一轮。execute_tool 不受此限制。

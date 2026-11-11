@@ -134,3 +134,53 @@ def test_core_tools_contain_defaults_in_description():
     f_props = fetch_tool["inputSchema"]["properties"]
     assert "默认 8000" in f_props["max_chars"]["description"]
     assert "默认 text" in f_props["mode"]["description"]
+
+
+def test_sanitize_schema_is_wired_into_tools_list():
+    """净化函数必须真的挂在 tools/list 出口，不能只是被自己的测试调用。
+
+    回归（2026-11-11 审计）：aedee08 提交信息称「彻底修复 MaaS 网关 400 拦截」，
+    实际交付的是 sanitize_schema 纯函数 + 它自己的测试——服务端三条路径
+    （mcp_transport / mcp_server / mcp_local）一处都没调用它。源头写干净是
+    「现在没问题」，挂上净化才是「以后加回 default 也不会打到严格网关」。
+
+    判据用行为而非源码文本：往真源里塞一个违规键，tools/list 必须把它剥掉。
+    源码文本判据的弱点是「把 sanitize_tool 的名字改掉就绕过了」，而这条判据
+    只要净化没发生就红。
+    """
+    from mcp_transport import handle_rpc
+
+    target = next(t for t in TOOLS if t["name"] == "argo_search")
+    original = target["inputSchema"]["properties"]["max_results"]
+    try:
+        # 直接污染真源（模拟「以后有人加回 default」），不碰生产代码
+        target["inputSchema"]["properties"]["max_results"] = {
+            **original, "default": 5, "minimum": 1, "maximum": 20,
+        }
+        served = handle_rpc("tools/list", {})["tools"]
+        served_search = next(t for t in served if t["name"] == "argo_search")
+        prop = served_search["inputSchema"]["properties"]["max_results"]
+        assert "default" not in prop, (
+            "tools/list 出口没有净化：schema 里的 default 直达客户端，"
+            "严格 MaaS 网关会因此 400（issue #46）")
+        assert "minimum" not in prop and "maximum" not in prop
+        # 净化不得剥掉模型要读的语义
+        assert "description" in prop
+        assert "type" in prop
+    finally:
+        target["inputSchema"]["properties"]["max_results"] = original
+
+
+def test_gate_has_teeth_wiring():
+    """自检：确认净化函数本身会剥掉 default（否则上一条判据恒真、等于没检查）。"""
+    target = next(t for t in TOOLS if t["name"] == "argo_search")
+    original = target["inputSchema"]["properties"]["query"]
+    try:
+        target["inputSchema"]["properties"]["query"] = {**original, "default": "x"}
+        assert "default" in target["inputSchema"]["properties"]["query"], \
+            "造错样本没生效——等于没检查"
+        assert "default" not in sanitize_schema(
+            target["inputSchema"]["properties"]["query"]), \
+            "sanitize_schema 不剥 default，上一条判据失去意义"
+    finally:
+        target["inputSchema"]["properties"]["query"] = original

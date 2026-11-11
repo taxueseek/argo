@@ -400,10 +400,15 @@ def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
     from concurrent.futures import ThreadPoolExecutor, as_completed
     texts_kept = [t[:MAX_TEXT_CHARS] for _i, t in keep]
     deadline_s = DEFAULT_JEV_DEADLINE_S
-    start_t = time.time()
     results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
 
-    with ThreadPoolExecutor(max_workers=min(JEV_MAX_WORKERS, len(texts_kept))) as pool:
+    # 不能用 `with ThreadPoolExecutor(...)`：with 退出时 shutdown(wait=True)
+    # 会把 as_completed 超时后仍在跑的请求全部 join 完，硬截止形同虚设
+    # （实测 sleep 3s 的任务让整轮耗时 3.01s）。这里显式建池、超时后
+    # shutdown(wait=False, cancel_futures=True)，只保留已完成的结果就返回。
+    # 未完成的任务内部仍由 HttpClient 的 timeout 兜底，不阻塞调用方。
+    pool = ThreadPoolExecutor(max_workers=min(JEV_MAX_WORKERS, len(texts_kept)))
+    try:
         futures = {pool.submit(_jev_choice, t, labels, instructions, timeout, criteria): idx
                    for idx, t in enumerate(texts_kept)}
         try:
@@ -413,10 +418,10 @@ def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
                     results[orig_idx] = fut.result()
                 except Exception:
                     results[orig_idx] = None
-                if time.time() - start_t >= deadline_s:
-                    break
         except TimeoutError:
             pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
     if not any(r for r in results):
         return None

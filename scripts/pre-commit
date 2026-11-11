@@ -32,6 +32,13 @@
 # 仍直接调用已删除的 _build_xxx_engine，实测 9 项 AttributeError——而它们
 # 不在 hook 覆盖内，于是「门禁全绿 + 归一后解析路径零覆盖」并存。归一的
 # 风险不在新代码本身，而在「旧契约测试没跟着改」。两者合计 <1s。
+# 2026-11-11 补的七道（mcp_schema_maas_compliance / mcp_consolidated_tools /
+# redactor_guard / semantic_evidence_jev / schema_drift_diagnosis /
+# smart_inference / local_intent / mcp_article_job）：这七份是 11-10 至 11-11
+# 那批「还债」提交新写的用例，覆盖了 MCP 工具面收敛、MaaS 兼容净化接线、
+# 输出脱敏、JEV 语义层、解析器漂移诊断、智能推断与本地意图判据——全部不在
+# hook 覆盖内，于是那批改动里「新增能力零门禁」与「修了正确性缺陷」并存。
+# 八者合计 <2s（实测 0.6s），放进 hook 不触发 --no-verify 绕过。
 #
 # 安装：bash scripts/install.sh 自动装调度器 hooks/pre-commit（原有 hook 改名
 # pre-commit.user 先跑，再直接执行本文件，不拷贝）。手动跑：sh scripts/pre-commit
@@ -113,7 +120,16 @@ printf "[pre-commit] argo 快门禁（~13s，解释器 %s；全量回归请手�
     tests/test_badcase_ledger.py \
     tests/test_agents_routing.py \
     tests/test_intl_engines.py \
-    tests/test_image_sources.py
+    tests/test_image_sources.py \
+    tests/test_mcp_schema_maas_compliance.py \
+    tests/test_mcp_consolidated_tools.py \
+    tests/test_redactor_guard.py \
+    tests/test_semantic_evidence_jev.py \
+    tests/test_schema_drift_diagnosis.py \
+    tests/test_smart_inference.py \
+    tests/test_local_intent.py \
+    tests/test_mcp_article_job.py \
+    tests/test_followup_fixes.py
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。

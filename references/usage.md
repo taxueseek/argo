@@ -769,7 +769,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_MCP_TIMEOUT` | MCP 工具统一超时秒 | server 层接管，模型不可见 |
 | `ARGO_MCP_TIMEOUT_CRAWL` | crawl 专用超时秒 | server 层接管，模型不可见 |
 | `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时秒 | server 层接管，模型不可见 |
-| `ARGO_MCP_TOOLS` | tools/list 注入范围（core 三件套/all/逗号名单） | server 层接管，模型不可见 |
+| `ARGO_MCP_TOOLS` | tools/list 注入范围（CORE 4 个正交集/all/逗号名单） | server 层接管，模型不可见 |
 
 ### 抓取降级链分级开关（9）
 

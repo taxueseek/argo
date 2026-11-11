@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -174,3 +175,73 @@ def test_soft_aliases_backward_compatibility():
         assert not resp.get("isError")
         data = json.loads(resp["content"][0]["text"])
         assert "tables" in data
+
+
+def test_instructions_matches_core():
+    """initialize instructions 里的工具名必须与 CORE_TOOL_NAMES 一致。
+
+    回归（2026-11-11 审计）：aedee08 把 CORE 从「search/fetch/local_search」
+    改成 4 个正交集（含 screenshot、不含 local_search），但 mcp_transport 的
+    instructions 文案没跟着改，仍在教模型「日常 argo_search、argo_fetch、
+    argo_local_search」——而 local_search 已不在默认注入面，模型照文案去调
+    一个没挂的工具。同批还有 mcp_tools 文件头、mcp_server 文件头、
+    references/operations.md、docs/MCP_SETUP.md 四处同款漂移。
+
+    判据分两段：① CORE 里每个工具名都出现在 instructions 里；② instructions
+    里点名的 argo_* 工具不得含 CORE 之外的（防「文案列了一堆旧工具」）。
+    """
+    from mcp_transport import handle_rpc
+
+    instructions = handle_rpc("initialize", {})["instructions"]
+    for name in CORE_TOOL_NAMES:
+        assert name in instructions, (
+            f"CORE 工具 {name} 没写进 initialize instructions——"
+            "模型不知道默认面里有它，文案与 CORE_TOOL_NAMES 必须同源")
+
+    mentioned = set(re.findall(r"argo_[a-z_]+", instructions))
+    unknown = mentioned - set(CORE_TOOL_NAMES) - {
+        "argo_search", "argo_fetch", "argo_research", "argo_screenshot",
+        # 文案允许点名「all 才打开」的旧名，它们是真存在的工具
+        "argo_local_search", "argo_local_read", "argo_recompute",
+        "argo_evidence", "argo_clarify", "argo_crawl", "argo_extract",
+        "argo_preflight", "argo_answer", "argo_watch", "argo_cite",
+    }
+    assert not unknown, f"instructions 点名了不存在的工具：{unknown}"
+
+
+def test_social_domain_keeps_mode_and_platforms():
+    """domain=social 必须仍读 platforms 与 mode，且 sentiment 可达。
+
+    回归（2026-11-11 审计）：软别名把 argo_social_search 映射成
+    argo_search(domain=social)，但新 schema 的 mode enum 只有
+    fast/auto/deep/budget——旧调用方传 mode=sentiment 会静默走 text 分支，
+    返回帖子列表而不是舆情聚合，且没有任何信号。同时 max_results 之外
+    旧名 num 与 platforms 也必须继续可读。
+    """
+    # 1. mode=sentiment 走聚合分支（不真调 research，只看分流）
+    with patch("mcp_handlers._search_social_platforms") as mock_social, \
+         patch("mcp_handlers._lazy_cached") as mock_lazy:
+        mock_social.return_value = ({"zhihu": [{"title": "t"}]}, ["zhihu"], [])
+        mock_research = MagicMock()
+        mock_research.aggregate_social_sentiment.return_value = {
+            "query": "q", "sentiment": "positive", "count": 1}
+        mock_lazy.return_value = mock_research
+
+        resp = execute_tool("argo_search", {
+            "query": "q", "domain": "social", "mode": "sentiment",
+            "platforms": "zhihu,v2ex", "max_results": 3})
+        assert not resp.get("isError")
+        data = json.loads(resp["content"][0]["text"])
+        assert data["sentiment"] == "positive", "mode=sentiment 没走聚合分支"
+
+    # 2. platforms 与 num 继续被读到（旧参数名不丢）
+    with patch("mcp_handlers._search_social_platforms") as mock_social:
+        mock_social.return_value = ({}, [], [])
+        execute_tool("argo_search", {
+            "query": "q", "domain": "social",
+            "platforms": "twitter,reddit", "num": 3})
+        platforms_arg = mock_social.call_args[0][0]
+        n_arg = mock_social.call_args[0][2]
+        assert platforms_arg == ["twitter", "reddit"], \
+            f"platforms 被丢，实际传入 {platforms_arg}"
+        assert n_arg == 3, f"旧参数名 num 被丢，实际传入 {n_arg}"

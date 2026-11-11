@@ -53,9 +53,10 @@ export const NATIVE_TOOLS = {
             "fast",
             "auto",
             "deep",
-            "budget"
+            "budget",
+            "sentiment"
           ],
-          "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制，默认 auto"
+          "description": "预算模式：fast=免费优先, auto=成本感知, deep=质量优先, budget=配额控制，默认 auto；仅 domain=social 时可写 sentiment（舆情聚合），其余 domain 不认"
         },
         "since": {
           "type": "string",
