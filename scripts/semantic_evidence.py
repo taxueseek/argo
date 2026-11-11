@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -70,8 +71,8 @@ JEV_LONG_CONTEXT_CHARS = 24000
 # 并发上限。官方 cookbook（classifying_rag_passages）取 4，理由是端点限流；
 # 429/529 要求指数退避，所以不铺大。
 JEV_MAX_WORKERS = 4
-# 多并发整体截止时间（秒）：防止长尾慢请求拖垮整次搜索体验
-DEFAULT_JEV_DEADLINE_S = 0.45
+# 多并发整体截止时间（秒）：实测冷调用在 0.55s 左右，提高到 1.2s（覆盖 p95），防止网络抖动导致的误杀 fail-open
+DEFAULT_JEV_DEADLINE_S = 1.2
 
 # 结果级缓存（TTL 7 天）：常见事实与热点二次判定 0ms 响应，API 消耗清零
 _JEV_MEMORY_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -120,12 +121,37 @@ def is_local_target(url_or_path: str) -> bool:
     return any(u.startswith(p) for p in ("/Users/", "/home/", "/private/", "\\"))
 
 
+_RE_HTML_TAGS = re.compile(r"<[^>]+>", re.S)
+_RE_DYNAMIC_TIMESTAMPS = re.compile(
+    r"\b(?:\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?|"
+    r"\d+\s*(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?|秒|分钟|小时|天|周|月|年)\s*(?:ago|前)|"
+    r"(?:today|yesterday|just now|刚刚|今天|昨天))\b",
+    re.I,
+)
+_RE_WHITESPACE = re.compile(r"\s+")
+
+
+def _normalize_cache_text(text: str) -> str:
+    """对正文进行稳态清洗以生成稳固的缓存键，消除时间戳/动态元数据导致的键漂移。"""
+    if not text:
+        return ""
+    # 1. 剥离 HTML 残留
+    s = _RE_HTML_TAGS.sub(" ", text)
+    # 2. 剥离常见相对/绝对易变时间戳
+    s = _RE_DYNAMIC_TIMESTAMPS.sub(" ", s)
+    # 3. 规整空白
+    s = _RE_WHITESPACE.sub(" ", s).strip()
+    # 4. 取前 1200 字符规范化主干
+    return s[:1200]
+
+
 def _get_cache_key(text: str, labels: tuple[str, ...] | list[str],
                    instructions: str | None,
                    criteria: dict[str, str] | None = None) -> str:
     import hashlib
     crit_repr = str(sorted((criteria or {}).items())) if criteria else str(sorted(str(l) for l in labels))
-    raw = f"{instructions or ''}::{crit_repr}::{text[:1200]}"
+    norm_text = _normalize_cache_text(text)
+    raw = f"{instructions or ''}::{crit_repr}::{norm_text}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

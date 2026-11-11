@@ -417,6 +417,20 @@ class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
             assert v_items["https://podcast.example.com/ep1"].get("substantive_discussion") is True
             assert v_items["https://podcast.example.com/ep2"].get("passing_mention") is True
 
+    def test_cache_key_normalization_against_dynamic_content(self):
+        """测试缓存键在动态时间戳、HTML 残留与多余空白下保持稳态一致。"""
+        labels = ("labelA", "labelB")
+        instructions = "Test instructions"
+        t1 = "<div>Title</div>\nUpdated: 2026-11-11 08:30:15\nThis is core content about AI."
+        t2 = "Title\nUpdated: 3 minutes ago\nThis is core content about AI."
+        key1 = se._get_cache_key(t1, labels, instructions)
+        key2 = se._get_cache_key(t2, labels, instructions)
+        self.assertEqual(key1, key2)
+
+    def test_jev_deadline_default_is_safe(self):
+        """测试 JEV deadline 默认提升至 1.2s，足够覆盖 0.55s 真实冷调用。"""
+        self.assertGreaterEqual(se.DEFAULT_JEV_DEADLINE_S, 1.2)
+
 
 if __name__ == "__main__":
     unittest.main()
