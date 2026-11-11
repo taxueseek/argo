@@ -126,6 +126,30 @@ def test_classify_root_cause_by_evidence():
         "engine_disabled"
 
 
+def test_classify_root_cause_from_failure_kinds():
+    """failure_kinds 是当前日志的语义主来源，必须能归因。
+
+    回归（2026-11-11 实测）：生产日志的 errors 字段已全是 int 计数（不含错误
+    文本），原归因规则表匹配不到任何关键词，259 条坏例的 root_cause 全空。
+    真正的语义类别在 failure_kinds（search_attribution 写入）。
+    """
+    f = badcase_ledger.classify_root_cause
+    cases = [
+        ("failure_kinds=quota | 1", "quota_exhausted"),
+        ("failure_kinds=rate-limit,cooldown | 1", "rate_limited"),
+        ("failure_kinds=auth | 1", "auth_expired"),
+        ("failure_kinds=missing-key | 1", "auth_expired"),
+        ("failure_kinds=bot-wall,transient,unknown | 1", "source_blocked"),
+        ("failure_kinds=transient | 1", "network"),
+        ("failure_kinds=unknown | 1", "unattributed"),
+    ]
+    for detail, expected in cases:
+        got = f("query_error", detail, "", "")
+        assert got == expected, f"{detail!r} → {got}（期望 {expected}）"
+    # 无 kinds 也无文本时不得硬猜
+    assert f("query_error", "1", "", "") == "unattributed"
+
+
 def test_auth_not_misclassified_as_blocked():
     """带 auth 语义的 403 不得被判成被封锁——与 engine_failure 裁决顺序一致。"""
     f = badcase_ledger.classify_root_cause

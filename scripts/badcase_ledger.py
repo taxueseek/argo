@@ -131,6 +131,17 @@ def _connect() -> sqlite3.Connection:
 
 # detail 里的关键词 → 根因。顺序即裁决，先命中先算。
 _DETAIL_RULES: tuple[tuple[str, str], ...] = (
+    # ── failure_kinds 词表（search_attribution 写入，当前日志的语义主来源）──
+    # 顺序即优先级：先判更具体的类别，避免 "unknown" 这类泛词抢判。
+    ("missing-key", ROOT_CAUSE_AUTH),        # 未配置密钥 → 认证类
+    ("failure_kinds=auth", ROOT_CAUSE_AUTH),
+    ("failure_kinds=quota", ROOT_CAUSE_QUOTA),
+    ("failure_kinds=rate-limit", ROOT_CAUSE_RATE_LIMITED),
+    ("failure_kinds=cooldown", ROOT_CAUSE_RATE_LIMITED),  # 冷却=限流的同族
+    ("failure_kinds=bot-wall", ROOT_CAUSE_BLOCKED),
+    ("failure_kinds=transient", ROOT_CAUSE_NETWORK),      # 瞬时故障=网络层
+    ("failure_kinds=unknown", ROOT_CAUSE_UNKNOWN),
+    # ── 文本错误信息（早期日志的 errors 是字符串列表时）──
     # 认证（401/login required/cookie）先于 blocked —— 带 auth 语义的 403
     # 不得被误判成被封锁，与 engine_failure 的裁决顺序一致。
     ("login required", ROOT_CAUSE_AUTH),
@@ -213,17 +224,24 @@ def _rows_from_query_log(path: Path) -> list[dict[str, Any]]:
         if not used and raw_used:
             continue  # 表外名占满 → 夹具行，不入账（口径同 usage_log_clean）
         raw_errors = r.get("errors")
-        # 生产日志里 errors 有两种形态：字符串列表（主流）与 int 计数（部分
-        # 旧条目）——统一成字符串列表再取前几条
+        # 生产日志里 errors 有两种形态：字符串列表（早期）与 int 计数（现在
+        # 主流）——后者不含错误文本，归因规则表匹配不到任何关键词，259 条坏例
+        # 的 root_cause 全空（2026-11-11 实测）。真正的语义类别在 failure_kinds
+        # 字段（search_attribution 写入：quota / rate-limit / auth / bot-wall…），
+        # 故 detail 优先拼 failure_kinds，让归因有据可依。
+        raw_kinds = r.get("failure_kinds") or []
+        kinds = [str(k) for k in raw_kinds if k] if isinstance(raw_kinds, list) else []
         errors = (raw_errors if isinstance(raw_errors, list)
                   else ([str(raw_errors)] if raw_errors else []))
-        if not errors and r.get("count"):
+        if not errors and not kinds and r.get("count"):
             continue  # 正常条目不是坏例
-        if errors:
+        if errors or kinds:
+            parts = [f"failure_kinds={','.join(kinds)}"] if kinds else []
+            parts += [str(e)[:160] for e in errors[:3]]
             out.append({"kind": "query_error", "ts": r.get("ts", ""),
                         "query": r.get("query", ""),
                         "engine": ",".join(used[:3]),
-                        "detail": " | ".join(str(e)[:160] for e in errors[:3])})
+                        "detail": " | ".join(parts)})
         else:
             out.append({"kind": "empty_result", "ts": r.get("ts", ""),
                         "query": r.get("query", ""),
