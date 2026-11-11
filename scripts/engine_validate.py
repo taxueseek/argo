@@ -459,6 +459,42 @@ def check_contracts(engine_id: str) -> list[str]:
     return issues
 
 
+def probe_engine_raw(engine_id: str, query: str = "test", timeout: float = 10.0) -> Any:
+    """对 HTTP 引擎发起一次探测请求，返回解析后的原生 JSON 结构（供结构漂移诊断用）。"""
+    import urllib.request as _urllib_request
+    import urllib.parse as _up
+    import json as _json
+
+    spec = _get_spec(engine_id)
+    if not spec or spec.get("type") != "http":
+        return None
+    url_template = spec.get("url", "")
+    if not url_template:
+        return None
+
+    query_param = spec.get("query_param", "q")
+    extra_params = spec.get("extra_params", {})
+    headers = dict(spec.get("headers", {}))
+    headers.setdefault("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
+    headers.setdefault("Accept", "application/json")
+
+    parts: list[str] = []
+    if query_param:
+        parts.append(f"{query_param}={_up.quote(query)}")
+    for k, v in extra_params.items():
+        parts.append(f"{k}={_up.quote(str(v))}")
+
+    sep = "&" if "?" in url_template else "?"
+    full_url = url_template + (sep + "&".join(parts) if parts else "")
+    try:
+        req = _urllib_request.Request(full_url, headers=headers)
+        with _urllib_request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            return _json.loads(raw)
+    except Exception:
+        return None
+
+
 def validate_engine(
     engine_id: str,
     *,
@@ -467,6 +503,8 @@ def validate_engine(
     timeout: float = 10.0,
     write_doc: bool = False,
     profile: str = "default",
+    diagnose: bool = False,
+    fix: bool = False,
 ) -> dict[str, Any]:
     """执行验证并可选写入 admission。"""
     stages = []
@@ -580,6 +618,27 @@ def validate_engine(
         path = _write_engine_doc(engine_id, report)
         report["doc_path"] = str(path)
 
+    # 结构漂移自省对拍（针对声明式 HTTP 源）
+    spec = _get_spec(engine_id)
+    if (diagnose or fix or (report.get("status") == engine_states.VALIDATION_STATUS_FAIL
+                           and spec.get("type") == "http")):
+        if spec.get("type") == "http" and (spec.get("output_map") or spec.get("response")):
+            try:
+                from engines_parsers import diagnose_schema_drift, apply_schema_patch
+                canary = spec.get("canary_query") or ENGINE_CANARY_QUERIES.get(engine_id) or "test"
+                raw_data = probe_engine_raw(engine_id, query=canary, timeout=timeout)
+                if raw_data is not None:
+                    drift_diag = diagnose_schema_drift(raw_data, spec)
+                    report["schema_drift"] = drift_diag
+                    if fix and drift_diag.get("drift_detected") and drift_diag.get("suggested_patch"):
+                        spec_path = ROOT / "engines" / "specs" / f"{engine_id}.yaml"
+                        ok, msg = apply_schema_patch(spec_path, drift_diag["suggested_patch"])
+                        if ok:
+                            report["fix_applied"] = True
+                            report["fix_msg"] = msg
+            except Exception as _ex:
+                report["schema_drift_error"] = str(_ex)
+
     report["detail"] = engine_detail(engine_id)
     return report
 
@@ -667,6 +726,10 @@ def main() -> int:
         "--strict", action="store_true",
         help="skipped（缺 key/被禁用/源改名）也算失败——夜间交付门禁用。"
              "默认宽松：批量体检时跳过未配置的源不是故障。")
+    parser.add_argument("--diagnose", action="store_true",
+                        help="对声明式 HTTP 引擎执行深入结构漂移诊断")
+    parser.add_argument("--fix", action="store_true",
+                        help="自动将结构漂移诊断建议的 output_map 补丁写入对应 Spec 文件")
     args = parser.parse_args()
 
     targets: list[str] = []
@@ -690,6 +753,7 @@ def main() -> int:
         rep = validate_engine(
             eng, stage=stage, admit=admit, timeout=args.timeout,
             write_doc=args.write_doc, profile=args.profile,
+            diagnose=args.diagnose, fix=args.fix,
         )
         reports.append(rep)
         if rep.get("status") == engine_states.VALIDATION_STATUS_FAIL:
@@ -713,6 +777,11 @@ def main() -> int:
             if st == engine_states.VALIDATION_STATUS_FAIL:
                 err = h.get("error") or q.get("error") or rep.get("error")
                 print(f"       error: {err}")
+            if rep.get("schema_drift"):
+                from engines_parsers import render_drift_report
+                print(render_drift_report(rep["schema_drift"], eng))
+            if rep.get("fix_applied"):
+                print(f"       [fix] {rep.get('fix_msg', '已自动更新 Spec 文件')}")
 
     if args.json:
         payload = reports if len(reports) > 1 else reports[0]

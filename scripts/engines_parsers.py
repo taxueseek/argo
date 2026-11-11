@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import html as _htmllib
 import re
+from pathlib import Path
 from typing import Any, Callable
 
 # 解析器签名：(原始数据, spec) -> 标准结果行列表
@@ -633,3 +634,291 @@ def _migrate_builtin() -> None:
 
 
 _migrate_builtin()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 声明式架构自省与结构漂移诊断（第一性原理 + MECE 原则）
+# ─────────────────────────────────────────────────────────────────────────────
+
+_TITLE_SYNONYMS = (
+    "title", "name", "headline", "subject", "text", "label",
+    "caption", "item_title", "artwork_title", "track_name", "display_name",
+)
+_URL_SYNONYMS = (
+    "url", "link", "web_url", "html_url", "href", "uri",
+    "source_url", "landing_page", "target_url", "permalink", "page_url", "site_url",
+)
+_SUMMARY_SYNONYMS = (
+    "snippet", "summary", "description", "abstract", "body",
+    "content", "desc", "overview", "intro", "tombstone", "details", "comment",
+)
+_PUB_SYNONYMS = (
+    "published_at", "created_at", "pubdate", "pub_date", "date",
+    "time", "timestamp", "premiered", "first_air_date", "release_date",
+)
+
+
+def _flatten_item(item: Any, prefix: str = "", depth: int = 0, max_depth: int = 3) -> dict[str, Any]:
+    """将嵌套字典/列表展平为点分路径键值字典（深度受控，列表展开前 2 条）。"""
+    flat: dict[str, Any] = {}
+    if depth > max_depth or not isinstance(item, (dict, list)):
+        return flat
+    if isinstance(item, dict):
+        for k, v in item.items():
+            path = f"{prefix}.{k}" if prefix else str(k)
+            if isinstance(v, (dict, list)) and depth < max_depth:
+                flat.update(_flatten_item(v, path, depth + 1, max_depth))
+            else:
+                flat[path] = v
+    elif isinstance(item, list):
+        for i, v in enumerate(item[:2]):
+            path = f"{prefix}.{i}" if prefix else str(i)
+            if isinstance(v, (dict, list)) and depth < max_depth:
+                flat.update(_flatten_item(v, path, depth + 1, max_depth))
+            else:
+                flat[path] = v
+    return flat
+
+
+def _find_candidate_containers(data: Any, prefix: str = "", depth: int = 0, max_depth: int = 4) -> list[tuple[str, list, float]]:
+    """递归搜索全部字典列表，并按结构质量评分。"""
+    candidates: list[tuple[str, list, float]] = []
+    if depth > max_depth:
+        return candidates
+    if isinstance(data, list):
+        if data and isinstance(data[0], dict):
+            sample = data[0]
+            score = 0.5 + min(0.3, len(data) * 0.02)
+            keys = {str(k).lower() for k in sample.keys()}
+            if any(k in keys for k in ("title", "name", "id", "url", "link")):
+                score += 0.2
+            candidates.append((prefix or ".", data, score))
+        return candidates
+    if isinstance(data, dict):
+        for k, v in data.items():
+            path = f"{prefix}.{k}" if prefix else str(k)
+            if isinstance(v, list) and v and isinstance(v[0], dict):
+                sample = v[0]
+                score = 0.5 + min(0.3, len(v) * 0.02)
+                keys = {str(k).lower() for k in sample.keys()}
+                if any(syn in keys for syn in ("title", "name", "id", "url", "link")):
+                    score += 0.2
+                candidates.append((path, v, score))
+            elif isinstance(v, dict) and depth < max_depth:
+                candidates.extend(_find_candidate_containers(v, path, depth + 1, max_depth))
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    return candidates
+
+
+def _match_best_field(target_kind: str, flat: dict[str, Any]) -> tuple[str | None, Any, float]:
+    """根据目标类型和扁平键树，启发式匹配最优路径。"""
+    if target_kind == "title":
+        for path, val in flat.items():
+            if not isinstance(val, (str, int)) or not str(val).strip():
+                continue
+            seg = path.split(".")[-1].lower()
+            if seg in ("title", "name", "headline", "artwork_title"):
+                return path, val, 0.95
+            if seg in _TITLE_SYNONYMS:
+                return path, val, 0.85
+    elif target_kind == "url":
+        url_candidates: list[tuple[str, Any, float]] = []
+        for path, val in flat.items():
+            s = str(val or "").strip()
+            if not (s.startswith("http://") or s.startswith("https://") or s.startswith("/")):
+                continue
+            seg = path.split(".")[-1].lower()
+            score = 0.6
+            if seg in _URL_SYNONYMS:
+                score += 0.3
+            if any(s.lower().endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp")):
+                score -= 0.4
+            url_candidates.append((path, val, score))
+        if url_candidates:
+            url_candidates.sort(key=lambda x: x[2], reverse=True)
+            best = url_candidates[0]
+            if best[2] >= 0.5:
+                return best[0], best[1], best[2]
+        for path, val in flat.items():
+            seg = path.split(".")[-1].lower()
+            if seg in _URL_SYNONYMS and val:
+                return path, val, 0.75
+    elif target_kind == "summary":
+        for path, val in flat.items():
+            s = str(val or "").strip()
+            if not s or len(s) < 5:
+                continue
+            seg = path.split(".")[-1].lower()
+            if seg in ("snippet", "summary", "description", "abstract"):
+                return path, val, 0.90
+            if seg in _SUMMARY_SYNONYMS:
+                return path, val, 0.80
+    return None, None, 0.0
+
+
+def diagnose_schema_drift(raw_data: Any, spec_or_output_map: dict[str, Any]) -> dict[str, Any]:
+    """上游数据源结构漂移自省对拍诊断（第一性原理 + MECE 原则）。
+
+    层级覆盖：
+      1. Envelope: 业务错误封套、非结构化数据判定
+      2. Container: items 容器路径位移对拍与自动推荐
+      3. Field: item_title / item_url / item_summary 字段更名、层级下沉同义与特征对拍
+    """
+    omap = spec_or_output_map.get("output_map") if isinstance(spec_or_output_map.get("output_map"), dict) else spec_or_output_map
+    if not isinstance(omap, dict):
+        omap = {}
+
+    current_items_path = omap.get("items", "")
+    current_title = omap.get("item_title", "title")
+    current_url = omap.get("item_url", "url")
+    current_summary = omap.get("item_summary", "snippet")
+
+    issues: list[str] = []
+    container_drift: dict[str, Any] | None = None
+    field_drifts: dict[str, Any] = {}
+    suggested_patch: dict[str, str] = {}
+
+    # 1. Envelope 层
+    if not isinstance(raw_data, (dict, list)):
+        return {
+            "ok": False,
+            "drift_detected": False,
+            "stage": "envelope",
+            "issues": [f"响应非 JSON 结构 (类型: {type(raw_data).__name__})"],
+            "confidence": 0.0,
+            "suggested_patch": {},
+        }
+    if isinstance(raw_data, dict):
+        err_val = raw_data.get("error") or raw_data.get("err_msg") or raw_data.get("message")
+        if err_val and not raw_data.get("data") and not raw_data.get("results") and not raw_data.get("items"):
+            return {
+                "ok": False,
+                "drift_detected": False,
+                "stage": "envelope",
+                "issues": [f"上游返回业务错误封套: {err_val}"],
+                "confidence": 0.0,
+                "suggested_patch": {},
+            }
+
+    # 2. Container 层
+    items = extract_items(raw_data, current_items_path)
+    if not items or not isinstance(items[0], dict):
+        candidates = _find_candidate_containers(raw_data)
+        if candidates:
+            best_path, best_items, score = candidates[0]
+            container_drift = {
+                "from": current_items_path,
+                "to": best_path,
+                "count": len(best_items),
+                "score": score,
+            }
+            issues.append(f"容器路径失效: '{current_items_path}' 未提取到条目，候选路径 '{best_path}' (包含 {len(best_items)} 条)")
+            suggested_patch["items"] = best_path
+            items = best_items
+        else:
+            return {
+                "ok": False,
+                "drift_detected": False,
+                "stage": "container",
+                "issues": [f"未在响应中发现任何字典列表容器 (当前 items='{current_items_path}')"],
+                "confidence": 0.0,
+                "suggested_patch": {},
+            }
+
+    # 3. Field 层
+    sample = items[0]
+    flat = _flatten_item(sample, max_depth=3)
+
+    # 校验与对拍 title
+    val_title = _dig(sample, current_title) if current_title else None
+    if not val_title:
+        cand_p, cand_v, cand_s = _match_best_field("title", flat)
+        if cand_p and cand_p != current_title:
+            field_drifts["item_title"] = {"from": current_title, "to": cand_p, "sample": str(cand_v)[:50], "score": cand_s}
+            issues.append(f"标题字段失效: '{current_title}' 为空 -> 候选 '{cand_p}' (值: {cand_v!r})")
+            suggested_patch["item_title"] = cand_p
+
+    # 校验与对拍 url
+    val_url = _dig(sample, current_url) if current_url else None
+    if not val_url:
+        cand_p, cand_v, cand_s = _match_best_field("url", flat)
+        if cand_p and cand_p != current_url:
+            field_drifts["item_url"] = {"from": current_url, "to": cand_p, "sample": str(cand_v)[:50], "score": cand_s}
+            issues.append(f"链接字段失效: '{current_url}' 为空 -> 候选 '{cand_p}' (值: {cand_v!r})")
+            suggested_patch["item_url"] = cand_p
+
+    # 校验与对拍 summary
+    if current_summary:
+        val_sum = _dig(sample, current_summary)
+        if not val_sum:
+            cand_p, cand_v, cand_s = _match_best_field("summary", flat)
+            if cand_p and cand_p != current_summary:
+                field_drifts["item_summary"] = {"from": current_summary, "to": cand_p, "sample": str(cand_v)[:50], "score": cand_s}
+                issues.append(f"摘要字段失效: '{current_summary}' 为空 -> 候选 '{cand_p}'")
+                suggested_patch["item_summary"] = cand_p
+
+    drift_detected = bool(container_drift or field_drifts)
+    stage = "field" if field_drifts else ("container" if container_drift else "ok")
+    confidence = 0.0
+    if drift_detected:
+        confidence = 0.95 if (suggested_patch.get("items") or ("item_title" in suggested_patch and "item_url" in suggested_patch)) else 0.80
+
+    return {
+        "ok": not drift_detected,
+        "drift_detected": drift_detected,
+        "stage": stage,
+        "issues": issues,
+        "container_drift": container_drift,
+        "field_drifts": field_drifts,
+        "suggested_patch": suggested_patch,
+        "confidence": confidence,
+    }
+
+
+def render_drift_report(diagnosis: dict[str, Any], engine_id: str = "") -> str:
+    """渲染终端格式化的结构漂移诊断报告。"""
+    lines: list[str] = []
+    prefix = f"[{engine_id}] " if engine_id else ""
+    if not diagnosis.get("drift_detected"):
+        if diagnosis.get("issues"):
+            lines.append(f"{prefix}诊断发现异常 (Stage: {diagnosis.get('stage')}):")
+            for iss in diagnosis["issues"]:
+                lines.append(f"  • {iss}")
+        else:
+            lines.append(f"{prefix}结构正常，未检测到漂移。")
+        return "\n".join(lines)
+
+    lines.append(f"{prefix}检测到上游响应结构漂移 (Stage: {diagnosis.get('stage')}, 置信度: {diagnosis.get('confidence', 0):.0%}):")
+    for iss in diagnosis.get("issues", []):
+        lines.append(f"  • {iss}")
+
+    patch = diagnosis.get("suggested_patch") or {}
+    if patch:
+        lines.append("  建议 Spec 补丁 (output_map):")
+        for k, v in patch.items():
+            lines.append(f"    {k}: {v}")
+    return "\n".join(lines)
+
+
+def apply_schema_patch(spec_file: str | Path, patch: dict[str, str]) -> tuple[bool, str]:
+    """安全原子应用 Spec 补丁：保留所有注释和格式，仅改写 output_map 对应键。"""
+    import re as _re
+    p = Path(spec_file)
+    if not p.is_file():
+        return False, f"Spec 文件不存在: {p}"
+
+    text = p.read_text(encoding="utf-8")
+    if "output_map:" not in text:
+        return False, "Spec 中无 output_map 节点，不支持就地修改"
+
+    for k, v in patch.items():
+        pattern = _re.compile(rf"^([ \t]+){_re.escape(k)}:\s*.*$", _re.M)
+        if pattern.search(text):
+            text = pattern.sub(rf"\g<1>{k}: {v}", text)
+        else:
+            # 补在 output_map 之后
+            text = _re.sub(r"^(output_map:.*)$", rf"\1\n  {k}: {v}", text, count=1, flags=_re.M)
+
+    p.write_text(text, encoding="utf-8")
+    return True, f"已安全更新 {p.name} 中的 {len(patch)} 个字段"
+
