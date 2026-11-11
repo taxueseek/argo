@@ -974,6 +974,17 @@ engines:
   recommended: false
   explicit_only: false
   desc: 美国联邦公报全文检索（行政法规/提案/通告原文，免 key；一手法规源）
+- name: feed
+  tier: T1
+  type: rss_feed
+  coverage:
+  - news
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: RSS 种子注册表（美联储新闻稿、Nature 期刊新闻、Lobsters、Solidot；固定窗口本地过滤，显式调用）
 - name: felo
   tier: T1
   type: http

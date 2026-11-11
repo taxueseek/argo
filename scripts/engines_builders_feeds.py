@@ -21,6 +21,12 @@ hot_trending 排除在通用 combo 回填之外，理由是「产出非『查询
 「某个声明被判定为真伪」的查询型内容，用户问的是具体说法，所以本地关键词
 过滤是对的。种子里没有就返回空。
 
+**多份种子（spec 的 feeds）** —— 一个引擎订多份固定窗口，过滤后合并。
+每份自己带 url、label、langs。纯中文查询不下载英文种子，纯拉丁查询
+不下载只声明了 zh 的种子；一份下载失败只丢掉这一份。label 非空时，
+标题在输出上加「出处 · 」，不改缓存里的原文。没写 feeds 的旧引擎
+仍是单份 feed_url，标题不加前缀。热榜模式仍然忽略查询、不加前缀。
+
 ## 匹配口径（filter 模式）
 
 拉丁词走词边界，CJK 走子串——汉字全属 \\w，\\b 对中文无效（「俄乌冲突」
@@ -176,6 +182,64 @@ def _query_terms(query: str) -> list[str]:
     return [t for t in raw if t.lower() not in _STOPWORDS]
 
 
+# 多份种子时单份请求的上限。引擎级 timeout 是「这一次调用」的预算，
+# 四份串行若各吃满 12s 会到 48s。单份引擎不切片，超时与改前一致。
+_MULTI_SLICE_S = 8.0
+
+
+def _feed_sources(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """声明收成种子清单。feeds 非空时用它；否则退回单份 feed_url / url。
+
+    单份路径的 label 留空、langs 用引擎自己的声明，这样旧引擎的标题
+    不加出处前缀，语言守卫仍看得到。
+    """
+    sources: list[dict[str, Any]] = []
+    raw = spec.get("feeds")
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or item.get("feed_url") or "").strip()
+            if not url:
+                continue
+            langs = item.get("langs") or []
+            sources.append({
+                "url": url,
+                "label": str(item.get("label") or "").strip(),
+                "langs": [str(x) for x in langs] if isinstance(langs, list) else [],
+            })
+    if sources:
+        return sources
+    url = str(spec.get("feed_url") or spec.get("url") or "").strip()
+    if not url:
+        return []
+    langs = spec.get("langs") or []
+    return [{
+        "url": url,
+        "label": "",
+        "langs": [str(x) for x in langs] if isinstance(langs, list) else [],
+    }]
+
+
+def _feed_relevant(query: str, feed_langs: list[str]) -> bool:
+    """这份种子值不值得为这次查询下载。
+
+    没声明语言的一律下载。纯中文只下载声明了 zh 的；纯拉丁跳过
+    「语言集合只有 zh」的。中英混写两边都下载。
+    """
+    langs = {str(x).lower() for x in feed_langs if x}
+    if not langs or "*" in langs:
+        return True
+    text = query or ""
+    cjk = bool(_CJK_RE.search(text))
+    latin = bool(_LATIN_RE.search(text))
+    if cjk and not latin:
+        return "zh" in langs
+    if latin and not cjk:
+        return not (langs <= {"zh"})
+    return True
+
+
 def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
     """静态 RSS/Atom 种子引擎（spec 驱动，新增源只需一个 YAML）。
 
@@ -183,7 +247,9 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
     需要查询式行为的源（事实核查）显式声明 filter。
     """
     timeout = float(spec.get("timeout", 12))
-    feed_url = spec.get("feed_url") or spec.get("url", "")
+    sources = _feed_sources(spec)
+    # 单份保持声明里的 timeout；多份每份封顶，避免一份挂起吃完整段预算。
+    req_timeout = timeout if len(sources) <= 1 else min(timeout, _MULTI_SLICE_S)
     name = spec.get("_name", "") or spec.get("engine_id", "") or "rss_feed"
     langs = set(spec.get("langs") or [])
     mode = str(spec.get("feed_mode") or "hot").lower()
@@ -191,9 +257,13 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
     snippet_max = int(spec.get("snippet_max", 300))
     hot_base = float(spec.get("hot_base_score", 0.55))
 
-    def _row(it: dict[str, Any], rank: int, score: float) -> dict[str, Any]:
+    def _row(it: dict[str, Any], rank: int, score: float,
+             label: str = "") -> dict[str, Any]:
+        title = it["title"]
+        if label:
+            title = f"{label} · {title}"
         return {
-            "title": it["title"],
+            "title": title,
             "url": it["url"],
             "snippet": it["text"][:snippet_max],
             "source": name,
@@ -201,42 +271,88 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
             "score": rank_score(score, rank),
         }
 
-    def _load() -> list[dict[str, Any]]:
-        hit = _feed_cache.get(feed_url)
+    def _load_one(url: str, one_timeout: float) -> list[dict[str, Any]]:
+        hit = _feed_cache.get(url)
         if hit and (time.monotonic() - hit[0]) < _FEED_TTL_S:
             return hit[1]
-        req = urllib.request.Request(feed_url, headers={"User-Agent": _UA, "Accept": "*/*"})
-        with http_open(req, timeout=timeout, engine=name) as resp:
-            raw = resp.read().decode("utf-8", "replace")
-        items = _parse_feed(raw)
-        _feed_cache[feed_url] = (time.monotonic(), items)
-        return items
+        if one_timeout <= 0:
+            return []
+        # 实测 lobste.rs 会偶发 TLS EOF，重试一次；仍失败只丢这一份。
+        last_exc: Exception | None = None
+        for attempt in (1, 2):
+            try:
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": _UA, "Accept": "*/*"})
+                with http_open(req, timeout=one_timeout, engine=name) as resp:
+                    # utf-8-sig 去掉美联储 press_all.xml 开头的 BOM。
+                    # ElementTree 见到 U+FEFF 会整份解析失败。
+                    raw = resp.read().decode("utf-8-sig", "replace")
+                items = _parse_feed(raw)
+                _feed_cache[url] = (time.monotonic(), items)
+                return items
+            except Exception as exc:
+                last_exc = exc
+        logger.warning("rss 种子失败 %s: %s", url, last_exc)
+        return []
 
     @safe_search
     def _engine(query: str, n: int = 10, _timeout: float | None = None,
                 **kwargs) -> list[dict[str, Any]]:
-        items = _load()
-        if not items:
-            return []
-
-        # 热榜语义：种子即最新流，query 不参与过滤——返回的就是「此刻的最近条目」。
-        # 不在这里做关键词筛选，是因为「今日要闻」这类请求本身没有主题词，
-        # 硬筛只会返回空；话题检索应由查询驱动的引擎承担。
+        # 热榜语义：种子即最新流，query 与语言守卫都不参与。
+        # 「今日要闻」没有主题词，硬筛只会返回空。
         if mode == "hot":
-            return [_row(it, i, hot_base) for i, it in enumerate(items[:max(1, n)])]
-
-        # 纯 CJK 查询打到不含 zh 的英文种子：本地过滤必然全空，直接放弃，
-        # 把路由槽位让给中文源（同 GBIF 的 ASCII 守卫）。
-        if langs and "zh" not in langs and _is_pure_cjk(query):
+            chosen = sources
+            stamp = False
+        else:
+            # 引擎级 langs 不含 zh 时，纯中文查询整引擎放弃、一次都不下载。
+            # 多份种子要让中文源留下，引擎级 langs 必须含 zh，逐份再筛。
+            if langs and "zh" not in langs and _is_pure_cjk(query):
+                return []
+            chosen = [s for s in sources if _feed_relevant(query, s["langs"])]
+            stamp = True
+        if not chosen:
             return []
+
+        # 多份种子时，调用方传入的 _timeout 是整次预算（search 默认 10s），
+        # 不是每一份的超时。单份不看它，避免改掉卫报等旧引擎的超时语义。
+        deadline = None
+        if len(sources) > 1 and _timeout:
+            try:
+                budget = float(_timeout)
+            except (TypeError, ValueError):
+                budget = 0.0
+            if budget > 0:
+                deadline = time.monotonic() + budget
+
+        rows: list[tuple[dict[str, Any], str]] = []
+        pending = list(chosen)
+        while pending:
+            src = pending.pop(0)
+            if deadline is None:
+                one_timeout = req_timeout
+            else:
+                left = deadline - time.monotonic()
+                if left < 0.4:
+                    break
+                one_timeout = min(req_timeout, left / (len(pending) + 1))
+            label = src["label"] if stamp else ""
+            for it in _load_one(src["url"], one_timeout):
+                rows.append((it, label))
+        if not rows:
+            return []
+
+        if mode == "hot":
+            return [_row(it, i, hot_base, label)
+                    for i, (it, label) in enumerate(rows[:max(1, n)])]
+
         terms = _query_terms(query)
         if not terms:
-            # 全是虚词（"the" / "latest news" 这类无主题词）：本地过滤没有
-            # 可依据的信号，返回空而不是把整份种子当结果交出去。
+            # 全是虚词（"the" / "latest news"）：没有可依据的主题词，
+            # 返回空，不把整份种子当结果交出去。
             return []
 
-        scored: list[tuple[float, int, dict[str, Any]]] = []
-        for rank, it in enumerate(items):
+        scored: list[tuple[float, int, dict[str, Any], str]] = []
+        for rank, (it, label) in enumerate(rows):
             low = f"{it['title']} {it['text']}".lower()
             hits = sum(1 for t in terms if _term_hit(t, low))
             if not hits:
@@ -244,12 +360,14 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
             ratio = hits / len(terms)
             if ratio < min_ratio:
                 continue
-            # 标题命中额外加权：正文顺带提到的词不如标题直指主题
-            title_bonus = 0.15 if any(_term_hit(t, it["title"].lower()) for t in terms) else 0.0
-            scored.append((ratio + title_bonus, rank, it))
+            # 标题命中额外加权：正文顺带提到的词不如标题直指主题。
+            # 用缓存里的原标题，不用加过出处前缀的那份。
+            title_bonus = 0.15 if any(
+                _term_hit(t, it["title"].lower()) for t in terms) else 0.0
+            scored.append((ratio + title_bonus, rank, it, label))
 
         scored.sort(key=lambda x: (-x[0], x[1]))
-        return [_row(it, rank_i, min(0.6 + score * 0.2, 0.85))
-                for score, rank_i, it in scored[:n]]
+        return [_row(it, rank_i, min(0.6 + score * 0.2, 0.85), label)
+                for score, rank_i, it, label in scored[:n]]
 
     return _engine

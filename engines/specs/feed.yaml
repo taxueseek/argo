@@ -1,0 +1,62 @@
+# feed — 一份种子注册表，不是一个站一个引擎。
+#
+# 补的盲区：现有源答不了、而这四条固定窗口能给一手条目的四类问题。
+#   美联储 press_all   公开市场委员会与监管行动的原文（FRED 是时序，不是新闻稿）
+#   Nature nature.rss  期刊新闻与评论（论文正文已有 arxiv / openalex）
+#   Lobsters           技术讨论入口（站内搜索要登录；HN 已有 Algolia）
+#   Solidot            中文技术简讯（掘金 / CSDN 是教程检索，不是这条简讯流）
+#
+# 为什么不进自动路由：窗口只有最近几十条，本地关键词过滤命中面很窄。
+# 放进 combo 会占预算却经常返回空。explicit_only，调用：
+#   argo search "Federal Reserve" --engine feed
+#
+# 形态：feed_mode=filter。引擎级 langs 含 en 与 zh，否则纯中文查询会在
+# 下载前被整引擎放弃，Solidot 永远轮不到。逐份 langs 再决定下哪几条。
+# 归 misc_vertical：不是财经快讯（news_flash），也不是一国通讯社（world_news）。
+#
+# 召回边界：种子里没有就返回空。这是固定窗口的固有限制，不是缺陷。
+# canary 用 Federal：2026-11-11 实测美联储稿标题几乎条条含 Federal Reserve，
+# 比轮换中的 Solidot 标题稳。中文是否命中取决于 Solidot 当天的窗口。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine feed --stage health
+#   python3 scripts/search.py "Federal Reserve" --engine feed --json
+
+engine_id: feed
+type: rss_feed
+enabled: true
+explicit_only: true
+cost_tier: free
+label: RSS 种子注册表
+family: misc_vertical
+feed_mode: filter
+priority: 40
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+langs:
+- en
+- zh
+canary_query: "Federal"
+coverage:
+- news
+desc: "RSS 种子注册表（美联储新闻稿、Nature 期刊新闻、Lobsters、Solidot；固定窗口本地过滤，显式调用）"
+recommended: false
+feeds:
+  - url: https://www.federalreserve.gov/feeds/press_all.xml
+    label: 美联储
+    langs: [en]
+  - url: https://www.nature.com/nature.rss
+    label: Nature
+    langs: [en]
+  - url: https://lobste.rs/rss
+    label: Lobsters
+    langs: [en]
+  - url: https://www.solidot.org/index.rss
+    label: Solidot
+    langs: [zh]
+quality_queries:
+  - query: "Federal"
+  - query: "Reserve"
