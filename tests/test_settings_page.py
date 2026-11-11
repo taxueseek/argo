@@ -36,6 +36,14 @@ def test_mask_whitespace_only_is_missing():
 
 # ── collect（stub 注入，不读真实注册表/网络）────────────────────────────────
 
+def _row_for(data, engine):
+    """按 engine 名取 key_row——不能写死 [0]：设置页会插入服务段与可选源段。"""
+    for r in data["key_rows"]:
+        if r["engine"] == engine:
+            return r
+    raise AssertionError(f"{engine} 不在 key_rows：{[r['engine'] for r in data['key_rows']]}")
+
+
 def _install_stubs(monkeypatch, envfile, engines_spec):
     """把 engines / engine_env 换成受控 stub，collect 从此离线且确定。
 
@@ -99,7 +107,8 @@ def test_collect_missing_key_reports_missing(monkeypatch):
         engines_spec={"eng_a": {"required_env": ["ARGO_MISSING_KEY"]}},
     )
     data = settings_page.collect()
-    assert data["key_rows"][0]["envs"][0]["status"] == "缺失"
+    row = _row_for(data, "eng_a")
+    assert row["envs"][0]["status"] == "缺失"
 
 
 def test_process_env_wins_over_envfile(monkeypatch):
@@ -110,7 +119,8 @@ def test_process_env_wins_over_envfile(monkeypatch):
     )
     monkeypatch.setenv("ARGO_A_KEY", "from-process-123456789")
     data = settings_page.collect()
-    assert "…6789）" in data["key_rows"][0]["envs"][0]["status"]
+    row = _row_for(data, "eng_a")
+    assert "…6789）" in row["envs"][0]["status"]
     assert "from-envfile" not in str(data)
     monkeypatch.delenv("ARGO_A_KEY")
 
@@ -135,7 +145,8 @@ def test_legacy_unprefixed_key_counts_as_configured(monkeypatch, tmp_path):
 
     data = settings_page.collect()
     assert data["key_rows"], "bocha 必须上密钥表"
-    status = data["key_rows"][0]["envs"][0]["status"]
+    row = _row_for(data, "bocha")
+    status = row["envs"][0]["status"]
     assert status.startswith("已配置"), f"裸名密钥被误报缺失: {status}"
     assert "1234" in status and "legacy-key-1234" not in status
 

@@ -488,7 +488,11 @@ def probe_engine_raw(engine_id: str, query: str = "test", timeout: float = 10.0)
     full_url = url_template + (sep + "&".join(parts) if parts else "")
     try:
         req = _urllib_request.Request(full_url, headers=headers)
-        with _urllib_request.urlopen(req, timeout=timeout) as resp:
+        # 走代理感知出口（net_proxy.open_url）而非裸 urlopen：后者不认
+        # config.yaml 的 network.proxy，在必须经代理出网的环境里会连不上
+        # （issue #13 同类）。全仓门禁 test_http_attribution 会扫裸 urlopen。
+        from net_proxy import open_url as _open_url
+        with _open_url(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             return _json.loads(raw)
     except Exception:
