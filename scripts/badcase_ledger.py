@@ -501,6 +501,30 @@ def render_lessons() -> str:
     return "\n".join(lines)
 
 
+def mask_query(query: str) -> str:
+    """用户查询词掩码——账本唯一含隐私的字段。
+
+    为什么需要：账本存的是「统计」不是「内容」（无正文/结果/URL/凭据），
+    归因所需的证据（failure_kinds + engine）天然不含敏感信息。唯一例外是
+    `query`——它是用户真实搜索意图，实测样例有「不烧心盒饭 梗 起源 抖音
+    博主」「2026年10月 指数成分股调整 沪深300 调入调出名单」这类。
+
+    `list` 出口会把 query 原文打进终端/管道，`lessons --out` 若被提交进仓
+    或分享，查询词就外泄了。掩码保留前 4 字与长度感，仍能看出「这条坏例
+    长什么样」，但还原不出原词。
+
+    归因不需要 query 全文（failure_kinds + engine 已足够判定根因），故掩码
+    不影响机制有效性。stats/check/lessons 三个出口本就只用聚合统计、不含
+    query，无需处理。
+    """
+    q = (query or "").strip()
+    if not q:
+        return ""
+    if len(q) <= 4:
+        return q[0] + "…"
+    return q[:4] + f"…（{len(q)} 字）"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="坏例账本（badcase 管理）")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -524,6 +548,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(ingest(), ensure_ascii=False))
     elif args.cmd == "list":
         for row in _fetch(args.kind, None, args.limit):
+            row = dict(row)
+            row["query"] = mask_query(row.get("query", ""))
             print(json.dumps(row, ensure_ascii=False))
     elif args.cmd == "stats":
         print(json.dumps(stats(), ensure_ascii=False))

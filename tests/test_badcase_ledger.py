@@ -150,6 +150,27 @@ def test_classify_root_cause_from_failure_kinds():
     assert f("query_error", "1", "", "") == "unattributed"
 
 
+def test_mask_query_hides_user_intent():
+    """list 出口不得回显用户原始查询词——账本唯一含隐私的字段。
+
+    账本存的是统计不是内容（无正文/结果/URL/凭据），归因证据
+    （failure_kinds + engine）天然不含敏感信息；唯一例外是 query，它是
+    用户真实搜索意图。掩码保留前 4 字与长度感，仍能看出坏例形态但还原
+    不出原词。
+    """
+    m = badcase_ledger.mask_query
+    # 长查询：保留前 4 字 + 长度标注，不泄露后半
+    masked = m("不烧心盒饭 梗 起源 抖音 博主")
+    assert masked.startswith("不烧心盒"), masked
+    assert "抖音" not in masked and "博主" not in masked, masked
+    assert "16 字" in masked, masked
+    # 短查询：只留首字
+    assert m("天气") == "天…"
+    assert m("ab") == "a…"
+    # 空值原样返回
+    assert m("") == ""
+
+
 def test_auth_not_misclassified_as_blocked():
     """带 auth 语义的 403 不得被判成被封锁——与 engine_failure 裁决顺序一致。"""
     f = badcase_ledger.classify_root_cause
