@@ -6,8 +6,8 @@
 
 ## 一、总量与口径
 
-- **收录 301 个源**（`engines/specs/*.yaml` 声明总数）
-- **开箱可用 251 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **收录 304 个源**（`engines/specs/*.yaml` 声明总数）
+- **开箱可用 254 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
 - **需自备密钥 32 个**：`bocha`、`bocha_ai`、`byted`、`deepseek_search`、`em_miaoxiang`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 15 个**：`brave`、`digup`、`ecosia`、`europeana`、`felo`、`fourget`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`searxng`、`soilgrids`、`wolframalpha`
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 279 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 16 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 282 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 16 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
 - **计费档 22 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -242,6 +242,31 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_goodreads` | 已停用 | 免费 | 不限 | — | 域 book_search | Goodreads本地 |
 | `weread` | 需自备密钥 | 免费 | 不限 | ARGO_WEREAD_API_KEY | 域 book_search | 微信读书图书搜索（中文书目/评分/在读，需 WEREAD_API_KEY） |
 
+### 代码 / 包 / 文档（20）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `crates` | 可直接用 | 免费 | 不限 | — | 域 package_search、语义画像命中 | crates.io Rust 包搜索（免认证，需 UA） |
+| `deps_dev` | 可直接用 | 免费 | 不限 | — | 域 package_intel | deps.dev 包依赖（npm/pypi/go/maven/cargo；版本/弃用/发布时间） |
+| `devto` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community、语义画像命中 | DEV.to 技术文章搜索（免认证） |
+| `docker_hub` | 可直接用 | 免费 | 不限 | — | 域 package_search | Docker Hub 镜像搜索（免认证） |
+| `endoflife` | 可直接用 | 免费 | 不限 | — | 域 lifecycle_search | 产品生命周期（版本/最新/支持期/EOL，endoflife.date 200+ 产品） |
+| `github` | 可直接用 | 免费 | 1000/天 | — | 域 code_search、域 local_code、域 ml_models、域 package_search、域 tech_deep、深度研究 boost、语义画像命中 | GitHub 代码搜索 API |
+| `grep_app` | 可直接用 | 免费 | 不限 | — | 域 code_search | Grep.app 全球百万 GitHub 核心代码正则检索（官方 MCP 传输免认证） |
+| `huggingface` | 可直接用 | 免费 | 不限 | — | 域 ai_model、域 code_search、域 ml_models | Hugging Face 模型搜索（免认证） |
+| `local_github` | 可直接用 | 免费 | 1000/天 | — | 语义画像命中 | GitHub本地 |
+| `local_gitlab` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | GitLab本地 |
+| `local_npm` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | NPM本地 |
+| `local_stackoverflow` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | StackOverflow本地 |
+| `maven` | 可直接用 | 免费 | 不限 | — | 域 package_search | Maven Central 包搜索（Java/JVM，官方权威，含最新版本/版本数/发布时间） |
+| `mdn` | 可直接用 | 免费 | 不限 | — | 域 code_search、域 web_docs | MDN Web Docs 搜索（en/官方 API，免认证） |
+| `npm` | 可直接用 | 免费 | 不限 | — | 域 package_search | npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄） |
+| `nuget` | 可直接用 | 免费 | 不限 | — | 域 package_search | NuGet 包搜索（.NET，官方权威，含版本/下载量/认证/漏洞标记） |
+| `pypi` | 可直接用 | 免费 | 不限 | — | 域 package_search | PyPI 包查询（/pypi/{name}/json 精确解析，免认证） |
+| `repology` | 可直接用 | 免费 | 不限 | — | 域 package_intel | Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证） |
+| `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs | Stack Overflow（Stack Exchange API，编程问答） |
+| `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
+
 ### 百科 / 实体（20）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -266,29 +291,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `zh_wikipedia` | 可直接用 | 免费 | 不限 | — | 域 anime_encyclopedia、域 cn_encyclopedia、域 entity_search、域 geo_places、域 org_entity、域 sports_search | 中文维基百科（MediaWiki API，与 en.wikipedia 同构） |
 | `europeana` | 已停用 | 免费 | 不限 | — | 域 cn_encyclopedia、语义画像命中 | 欧洲 27 国文化遗产聚合（官方公开 demo key） |
 | `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
-
-### 代码 / 包 / 文档（18）
-
-| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
-|---|---|---|---|---|---|---|
-| `crates` | 可直接用 | 免费 | 不限 | — | 域 package_search、语义画像命中 | crates.io Rust 包搜索（免认证，需 UA） |
-| `deps_dev` | 可直接用 | 免费 | 不限 | — | 域 package_intel | deps.dev 包依赖（npm/pypi/go/maven/cargo；版本/弃用/发布时间） |
-| `devto` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community、语义画像命中 | DEV.to 技术文章搜索（免认证） |
-| `docker_hub` | 可直接用 | 免费 | 不限 | — | 域 package_search | Docker Hub 镜像搜索（免认证） |
-| `endoflife` | 可直接用 | 免费 | 不限 | — | 域 lifecycle_search | 产品生命周期（版本/最新/支持期/EOL，endoflife.date 200+ 产品） |
-| `github` | 可直接用 | 免费 | 1000/天 | — | 域 code_search、域 local_code、域 ml_models、域 package_search、域 tech_deep、深度研究 boost、语义画像命中 | GitHub 代码搜索 API |
-| `grep_app` | 可直接用 | 免费 | 不限 | — | 域 code_search | Grep.app 全球百万 GitHub 核心代码正则检索（官方 MCP 传输免认证） |
-| `huggingface` | 可直接用 | 免费 | 不限 | — | 域 ai_model、域 code_search、域 ml_models | Hugging Face 模型搜索（免认证） |
-| `local_github` | 可直接用 | 免费 | 1000/天 | — | 语义画像命中 | GitHub本地 |
-| `local_gitlab` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | GitLab本地 |
-| `local_npm` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | NPM本地 |
-| `local_stackoverflow` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | StackOverflow本地 |
-| `mdn` | 可直接用 | 免费 | 不限 | — | 域 code_search、域 web_docs | MDN Web Docs 搜索（en/官方 API，免认证） |
-| `npm` | 可直接用 | 免费 | 不限 | — | 域 package_search | npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄） |
-| `pypi` | 可直接用 | 免费 | 不限 | — | 域 package_search | PyPI 包查询（/pypi/{name}/json 精确解析，免认证） |
-| `repology` | 可直接用 | 免费 | 不限 | — | 域 package_intel | Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证） |
-| `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs | Stack Overflow（Stack Exchange API，编程问答） |
-| `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
 
 ### 社区 UGC（16）
 
@@ -468,6 +470,13 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `openfda` | 可直接用 | 免费 | 不限 | — | 域 medical | openFDA 药品标签（免认证） |
 | `pubchem` | 可直接用 | 免费 | 不限 | — | 域 chem_search | 化学/药学化合物检索（分子式/分子量/IUPAC/SMILES，pubchem.ncbi.nlm.nih.gov 免认证） |
 
+### dataset（2）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `hf_datasets` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | Hugging Face 数据集搜索（免认证，含 likes/作者/更新时间） |
+| `kaggle` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | Kaggle 数据集搜索（免认证，含许可证/大小/版本/URL 结构化元数据） |
+
 ### security（2）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -488,12 +497,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 |---|---|---|---|---|---|---|
 | `archive_org` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Internet Archive 高级搜索（免认证） |
 | `wayback_cdx` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Wayback Machine CDX 历史快照检索（web.archive.org 免认证） |
-
-### dataset（1）
-
-| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
-|---|---|---|---|---|---|---|
-| `kaggle` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | Kaggle 数据集搜索（免认证，含许可证/大小/版本/URL 结构化元数据） |
 
 ### 个人数据（1）
 
@@ -547,7 +550,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `standards` | `std_samr` | `std_samr`、`openstd` |
 | `law_text` | `flk_law` | `flk_law`、`anysearch`、`gov_regulations`、`wenshu`、`eu_opendata`、`fr_opendata`、`gov_policy` |
 | `art_museum` | `met_museum` | `met_museum`、`wikipedia`、`artic`、`cleveland`、`vam` |
-| `dataset_search` | `datacite` | `datacite`、`zenodo`、`kaggle`、`anysearch` |
+| `dataset_search` | `datacite` | `datacite`、`zenodo`、`kaggle`、`hf_datasets`、`anysearch` |
 | `financial_news` | `em_miaoxiang` | `em_miaoxiang`、`cninfo`、`wallstreetcn`、`byted`、`eastmoney`、`anysearch` |
 | `aviation_weather` | `—` | `aviation_weather` |
 | `weather_query` | `qweather` | `qweather`、`byted`、`weather_cn`、`weather`、`open_meteo` |
@@ -557,7 +560,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `hot_trending` | `baidu_hot` | `baidu_hot`、`toutiao_hot`、`bilibili_hot`、`weibo_hot`、`douyin_hot`、`ths_hot`、`zhihu_hot`、`zhihu_hot_app` |
 | `patent_search` | `google_patents` | `google_patents`、`semantic_scholar`、`local_arxiv` |
 | `crypto_search` | `coingecko` | `coingecko`、`defillama`、`anysearch` |
-| `package_search` | `pypi` | `pypi`、`npm`、`crates`、`docker_hub`、`github` |
+| `package_search` | `pypi` | `pypi`、`npm`、`crates`、`maven`、`nuget`、`docker_hub`、`github` |
 | `web_docs` | `mdn` | `mdn`、`stackoverflow` |
 | `ml_models` | `huggingface` | `huggingface`、`github` |
 | `ai_model` | `models_dev` | `models_dev`、`anysearch`、`huggingface` |
@@ -610,7 +613,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 301 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 304 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

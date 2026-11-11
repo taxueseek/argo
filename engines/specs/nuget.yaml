@@ -1,0 +1,57 @@
+# NuGet — .NET 包关键词发现（官方 V3 搜索 API，免认证）
+#
+# 补的盲区：与 maven 同批，package_search 域原先无任何 nuget/dotnet/.net
+# 触发词，「Newtonsoft.Json nuget」实测落进 org_entity 用 wikidata 答。
+# 返回字段含 totalDownloads/verified/vulnerabilities，与已有 OSV 漏洞情报
+# 可交叉（vulnerabilities 是包级漏洞标记）。
+#
+# 端点口径（2026-11-11 实测）：azuresearch-usnc.nuget.org/query 200 / 1004 条 /
+# 1.8s。q 透传关键词，take={n} 控制条数。返回 data 数组，字段
+# id/version/description/totalDownloads/verified/tags/projectUrl。
+#
+# format 是解析提示，不是查询参数：声明 format_is_query_param: false 退出注入。
+# 验证:
+#   python3 scripts/engine_validate.py --engine nuget --stage all --admit
+#   python3 scripts/search.py "Newtonsoft.Json" --engine nuget --json
+
+engine_id: nuget
+type: http
+enabled: true
+label: NuGet
+cost_tier: free
+family: code
+qps: 2
+priority: 40
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- dotnet
+- package
+desc: NuGet 包搜索（.NET，官方权威，含版本/下载量/认证/漏洞标记）
+format: json
+format_is_query_param: false
+method: GET
+query_param: q
+extra_params:
+  take: '{n}'
+output_map:
+  items: data
+  item_title: id
+  item_url: id
+  item_summary_template: "{version} · {description} · downloads {totalDownloads}"
+  item_upstream: projectUrl
+  url_template: https://www.nuget.org/packages/{id}
+timeout: 10
+url: https://azuresearch-usnc.nuget.org/query
+headers:
+  User-Agent: argo-search/2.5
+canary_query: Newtonsoft.Json
+quality_queries:
+- id: nuget_plain
+  query: Newtonsoft.Json
+  category: code
+- id: nuget_topic
+  query: json serializer
+  category: code

@@ -1110,6 +1110,16 @@
     "cost_tier": "free",
     "priority": 48
   },
+  "hf_datasets": {
+    "label": "Hugging Face Datasets",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 46
+  },
   "hf_papers": {
     "label": "Hugging Face Papers",
     "qps": 2,
@@ -1560,6 +1570,16 @@
     "cost_tier": "free",
     "priority": 48
   },
+  "maven": {
+    "label": "Maven Central",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 40
+  },
   "mdn": {
     "label": "MDN Web Docs",
     "qps": 3,
@@ -1789,6 +1809,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 43
+  },
+  "nuget": {
+    "label": "NuGet",
+    "qps": 2,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 40
   },
   "nvd": {
     "label": "nvd",

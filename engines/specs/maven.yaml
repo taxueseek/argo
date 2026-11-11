@@ -1,0 +1,61 @@
+# Maven Central — Java/JVM 包关键词发现（官方权威，免认证）
+#
+# 补的盲区：package_search 域原先只有 pypi/npm/crates/docker_hub/github，
+# 没有任何 maven/gradle/java 触发词，「guava 最新版本」这类查询落进泛化域
+# 用通用网页搜。deps.dev 是按包名查依赖图谱，不是关键词发现，口径不同。
+#
+# 端点口径（2026-11-11 实测）：
+#   · search.maven.org/solrsearch/select 200 / 386 条 / 2.5s，稳定
+#   · central.sonatype.com 的 internal browse API 是 403 Cloudflare，不可用
+#     （09-19 调研里「旧域名超时需换新域名」的结论已过时，勿按它绕路）
+#   · wt=json 必填；rows={n} 控制条数；q 透传关键词
+#   · 返回 response.docs，字段 g(group)/a(artifact)/latestVersion/versionCount/timestamp
+#
+# format 是解析提示，不是查询参数：声明 format_is_query_param: false 退出注入，
+# 否则 URL 会多出 &format=json（实测该 API 忽略它，但规范上应关掉）。
+# 验证:
+#   python3 scripts/engine_validate.py --engine maven --stage all --admit
+#   python3 scripts/search.py "guava" --engine maven --json
+
+engine_id: maven
+type: http
+enabled: true
+label: Maven Central
+cost_tier: free
+family: code
+qps: 2
+priority: 40
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- code
+- java
+- package
+desc: Maven Central 包搜索（Java/JVM，官方权威，含最新版本/版本数/发布时间）
+format: json
+format_is_query_param: false
+method: GET
+query_param: q
+extra_params:
+  rows: '{n}'
+  wt: json
+output_map:
+  items: response.docs
+  item_title: id
+  item_url: id
+  item_summary_template: "latest {latestVersion} · {versionCount} versions · group {g}"
+  item_published_at: timestamp
+  url_template: https://central.sonatype.com/artifact/{g}/{a}
+timeout: 12
+url: https://search.maven.org/solrsearch/select
+headers:
+  User-Agent: argo-search/2.5
+canary_query: guava
+quality_queries:
+- id: maven_plain
+  query: guava
+  category: code
+- id: maven_group
+  query: g:org.springframework
+  category: code

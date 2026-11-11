@@ -1,0 +1,59 @@
+# Hugging Face Datasets — ML 社区数据集检索（免认证）
+#
+# 补的盲区：现有 huggingface 引擎打 /api/models，只查模型不查数据集；
+# dataset_search 域是 DataCite/Zenodo/Kaggle 的机构仓储与竞赛数据集口径，
+# HF 这类「带 load_dataset 直连、任务标签、likes」的社区数据集此前空白。
+# 实测（2026-11-11）：search=squad 返回根数组，likes/lastModified/author 稳定。
+#
+# 端点与 /api/models 同族，声明直接克隆 huggingface.yaml，只换 url 与字段：
+#   · 根数组 → items: "."（与 kaggle.yaml 同形态）
+#   · id 是 "owner/name"，url_template 拼 datasets 路径
+#   · description 是数据集卡 README 全文，噪声大，故用结构化元数据拼 snippet
+#   · lastModified 作为 published_at，供 freshness 排序
+# 验证:
+#   python3 scripts/engine_validate.py --engine hf_datasets --stage all --admit
+#   python3 scripts/search.py "squad dataset" --engine hf_datasets --json
+
+engine_id: hf_datasets
+type: http
+enabled: true
+label: Hugging Face Datasets
+cost_tier: free
+family: dataset
+qps: 2
+priority: 46
+period: second
+cost_per_call: 0.0
+cost_unit: free
+coverage:
+- dataset
+- ml
+- data
+- huggingface
+desc: Hugging Face 数据集搜索（免认证，含 likes/作者/更新时间）
+format: json
+# format 是解析提示，不是 HF API 的查询参数（沿用 kaggle/huggingface 口径）。
+format_is_query_param: false
+method: GET
+query_param: search
+extra_params:
+  limit: '{n}'
+output_map:
+  items: .
+  item_title: id
+  item_url: id
+  item_summary_template: "likes {likes} · author {author} · updated {lastModified}"
+  item_published_at: lastModified
+  url_template: https://huggingface.co/datasets/{id}
+timeout: 10
+url: https://huggingface.co/api/datasets
+headers:
+  User-Agent: argo-search/2.5
+canary_query: squad
+quality_queries:
+- id: hf_datasets_plain
+  query: squad
+  category: dataset
+- id: hf_datasets_task
+  query: question answering
+  category: dataset

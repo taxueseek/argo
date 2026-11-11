@@ -2798,5 +2798,23 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "hf_datasets": {
+    "label": "Hugging Face Datasets",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "maven": {
+    "label": "Maven Central",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "nuget": {
+    "label": "NuGet",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

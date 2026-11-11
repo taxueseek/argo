@@ -203,6 +203,9 @@ class TestProbeActuallyRoutesToNewSource:
         # 补 datacite/zenodo 的「可直接下载」层）。探针用「数据集」——本域
         # patterns 的中文主词，稳定落域并选出新源。
         "dataset_search": ("数据集 下载", "climate dataset"),
+        # 2026-11-11：hf_datasets 接入 dataset_search（位次 4）。探针沿用
+        # 「数据集 下载」与加一条 HF 专名问法——两条都要选出 hf_datasets。
+        "package_search": ("maven central guava", "Newtonsoft.Json nuget"),
         # 2026-11-10（d00df55）：semantic_discovery 接入 mojeek + mwmbl
         # （独立索引，补 exa/anysearch 的大厂依赖）。探针用「有哪些值得关注」
         # ——本域中文主词，英文「find me」类同义。

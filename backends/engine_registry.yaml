@@ -1404,6 +1404,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
+- name: hf_datasets
+  tier: T1
+  type: http
+  coverage:
+  - dataset
+  - ml
+  - data
+  - huggingface
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Hugging Face 数据集搜索（免认证，含 likes/作者/更新时间）
 - name: hf_papers
   tier: T1
   type: http
@@ -1962,6 +1976,19 @@ engines:
   recommended: false
   explicit_only: false
   desc: 泰国民族报（Matichon，泰国主流日报，免 key）
+- name: maven
+  tier: T1
+  type: http
+  coverage:
+  - code
+  - java
+  - package
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: Maven Central 包搜索（Java/JVM，官方权威，含最新版本/版本数/发布时间）
 - name: mdn
   tier: T1
   type: http
@@ -2264,6 +2291,19 @@ engines:
   recommended: true
   explicit_only: false
   desc: 'npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄）'
+- name: nuget
+  tier: T1
+  type: http
+  coverage:
+  - code
+  - dotnet
+  - package
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: NuGet 包搜索（.NET，官方权威，含版本/下载量/认证/漏洞标记）
 - name: nvd
   tier: T1
   type: http

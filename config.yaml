@@ -728,11 +728,16 @@ domains:
   - (?i)(met museum|museum collection|art collection|painting|sculpture|van gogh|\bmonet\b|picasso|vermeer)
   primary: met_museum
 
-- desc: 科研数据集检索（DataCite + Zenodo；排在 academic 前，数据集≠论文）
+- desc: 科研数据集检索（DataCite + Zenodo + Kaggle + HF Datasets；排在 academic 前，数据集≠论文）
+  # 2026-11-11 接入 hf_datasets：Datacite/Zenodo 是机构仓储 DOI、Kaggle 是竞赛
+  # 社区，HF Datasets 是带 load_dataset 直连/任务标签/likes 的 ML 社区数据集，
+  # 三者口径互补。声明在 kaggle 之后由 route._VERTICAL_NEW_SOURCE 加槽，
+  # 不挤掉 datacite/zenodo 的既有位次。
   engines_combo:
   - datacite
   - zenodo
   - kaggle
+  - hf_datasets
   - anysearch
   fallback: datacite
   name: dataset_search
@@ -740,6 +745,7 @@ domains:
   patterns:
   - (?i)(数据集|科研数据|开放数据|数据仓库|数据下载|数据论文|数据共享)
   - (?i)\b(dataset|datasets|datacite|zenodo|figshare|dryad|dataverse|open\s+data)\b
+  - (?i)(hugging\s*face\s*(dataset|数据集)|hf\s*(dataset|数据集)|\bhf\.co/datasets\b|load_dataset)
   primary: datacite
 - desc: 财经资讯/研报/公告
   engines_combo:
@@ -897,11 +903,19 @@ domains:
   - (?i)\b(bitcoin|ethereum|btc|eth|crypto|altcoin|defi|nft|blockchain|coin)\b
   - (?i)(\btvl\b|总锁仓|锁仓量|链上资金|协议收入|defillama)
   primary: coingecko
-- desc: 包管理器/语言包查询（PyPI/npm/crates/Docker）
+- desc: 包管理器/语言包查询（PyPI/npm/crates/Docker/Maven/NuGet）
+  # 2026-11-11 接入 maven（Java/JVM）与 nuget（.NET）：原先本域无任何
+  # maven/gradle/nuget/dotnet 触发词，实测「guava maven 包」落泛化域、
+  # 「Newtonsoft.Json nuget」落 org_entity 用 wikidata 答。两源声明在
+  # crates 之后由 route._VERTICAL_NEW_SOURCE 加槽，不挤掉 pypi/npm 位次。
+  # 与 package_intel（deps.dev 按包名查依赖状态）分工：本域管关键词发现，
+  # 故 maven/nuget 触发词只收生态词，不收「最新版本/弃用」那类状态词。
   engines_combo:
   - pypi
   - npm
   - crates
+  - maven
+  - nuget
   - docker_hub
   - github
   fallback: pypi
@@ -913,11 +927,17 @@ domains:
   - (?i)(pypi|pip install|python 包|python package|python 库|python lib|npm 包|npm package|node 包|yarn add|pnpm add|docker.?hub|docker
     image|docker 镜像)
   - (?i)\b(pip|pypi|npm|npx|yarn|pnpm|docker\s+pull|dockerfile)\b
+  # Java/JVM 与 .NET 生态词。全部吃 \b：Maven Central/gradle/nuget/dotnet
+  # 是专名，裸子串会误伤（如 «monet» ⊂ «monetary» 那类事故）。
+  - (?i)(\bmaven\b|maven\s*central|\bgradle\b|\bjvm\b|java\s*(包|库|依赖)|\bartifact\s*id\b|\bgroup\s*id\b|\bpom\.xml\b)
+  - (?i)(\bnuget\b|\bdotnet\b|\.net\s*(包|库)|\bc\s*#\s*(包|库)|nuget\s*package|\bnupkg\b)
   # 点查域意图豁免词：长主题句（去重 token ≥5）下必须命中其一，否则让位。
   # 语义见 route_domains 模块 docstring（intent_required）。
   # 英文备选吃 \b；中文备选必须在 \b 外——CJK 字符全是 \w，「npm安装报错」
   # 这类无空格连写永远撞不上词边界（2026-09-06 审查实锤）。
-  intent_required: '(?i)\b(install|add|uninstall|download)\b|安装|下载|替代包|包名'
+  # 2026-11-11 补 maven/nuget/gradle/dotnet：这些词本身就是查包意图，
+  # 不写进豁免词会让「maven central guava」这类短查询被让位到泛化域。
+  intent_required: '(?i)\b(install|add|uninstall|download|maven|nuget|gradle|dotnet)\b|安装|下载|替代包|包名'
   primary: pypi
 - desc: Web 开发文档（MDN）
   engines_combo:

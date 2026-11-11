@@ -63,7 +63,12 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # kaggle 补社区数据集（DataCite/Zenodo 是机构仓储，Kaggle 是社区）；
     # hf_papers 补论文社交信号（upvotes/作者，arXiv/OpenAlex 无）。
     "semantic_discovery": ("mwmbl",),
-    "dataset_search": ("kaggle",),
+    # 2026-11-11：hf_datasets 声明在 kaggle 之后（位次 4），与 kaggle 一并加槽。
+    # 两者口径互补（机构仓储 DOI / 竞赛社区 / ML 社区数据集），不是同质重复。
+    "dataset_search": ("kaggle", "hf_datasets"),
+    # 2026-11-11：maven/nuget 补 Java/JVM 与 .NET 两个生态的关键词发现，
+    # 声明在 crates 之后（位次 4/5）。本域基础预算 3，两源需加槽通电。
+    "package_search": ("maven", "nuget"),
 }
 
 
