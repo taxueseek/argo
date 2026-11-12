@@ -6,7 +6,8 @@
 # 6 道门禁红 + 阻塞全量收集，故障在树里躺了幾小时才被人工发现。「改了没
 # 验证就提交」没有机制拦截，只靠自觉。本 hook 把拦截点放在提交层。
 #
-# 只跑快的几道（实测合计 ~17s）：static_lint（语法/重复键/未声明 env）、
+# 只跑快的几道（2026-11-13 实测合计 17.4s：500 用例无单一贵项，最贵
+# static_lint 单用例 1.7s，属广度成本、无挪项空间）：static_lint（语法/重复键/未声明 env）、
 # module_size_gate（1000 行门禁与祖父登记）、usage_doc（ARGO_* 开关总表）、
 # consistency（版本/徽章/工具数五语对账）、routing_snapshot（路由决策漂移）、
 # context_budget + engine_catalog（常驻文档预算、源文档/死源/声明一致）、
@@ -41,8 +42,10 @@
 # 八者合计 <2s（实测 0.6s），放进 hook 不触发 --no-verify 绕过。
 # 2026-11-12 补的一道（test_silent_catch_gate）：评审抓到 mcp_handlers._ok
 # 脱敏吞异常——全仓唯一「吞异常产生可利用后果」的实例，已改 fail-closed。
-# 同根因其余 187 处宽口径裸吞走 GRANDFATHERED 棘轮门禁（except Exception+
-# 裸 pass/continue 只准减不准增，AST 扫 <0.3s），窄化一处同步下调基线。
+# 同根因其余宽口径裸吞走 GRANDFATHERED 棘轮门禁（except Exception+
+# 裸 pass/continue 只准减不准增，AST 扫 <0.3s），窄化一处同步下调基线；
+# 2026-11-13 证据管线首批收口 24 处（187→162），余量集中在 cache/sqlite
+# 读写点（OperationalError 不在词汇表，见 badcase_ledger 基线注释）。
 # 同批把 static_lint 五处重复全仓 ast.parse 收进会话级缓存、本文件与
 # AGENTS.md 的「~13s」漂移注释修为实测值：hook 实测 20.8s（已超自设 20s
 # 红线）回到 ~17s，新门禁是在这个余量里加的。
