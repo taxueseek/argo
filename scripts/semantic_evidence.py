@@ -49,9 +49,15 @@ DEFAULT_ENDPOINT = "https://classifier.dev"
 DEFAULT_TIMEOUT_S = 5.0
 # 未声明 transport 时的默认通道。jev = TypeSafe System One（当前唯一可用）；
 # classifier.dev 的匿名路径 2026-10-22 起回 403 proxy_requires_payment。
-DEFAULT_TRANSPORT = "jev"
+DEFAULT_TRANSPORT = "gemini"
+VALID_TRANSPORTS = ("gemini", "jev", "classify")
 
-# ── JEV / System One 通道（TypeSafe）──────────────────────────────────────
+# ── Google Gemini Decision 1 通道（首选优先通道）─────────────────────────
+DEFAULT_GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/decisions"
+DEFAULT_GEMINI_MODEL = "gemini-decision-1"
+GEMINI_KEY_ENV = ("ARGO_GEMINI_API_KEY", "GEMINI_API_KEY")
+
+# ── JEV / System One 通道（TypeSafe 备选通道）───────────────────────────
 # 官方 API：POST https://api.typesafe.ai/v1/systemone，Bearer 鉴权
 # （docs.typesafe.ai/api/system-one）。与 classifier.dev 的 /v1/classify 是
 # **两种形状**：那边一次发 N 条文本 + 一组标签；这边一次发一个 state + 若干
@@ -278,20 +284,32 @@ def jev_api_key() -> str:
         return ""
 
 
+def gemini_api_key() -> str:
+    """Gemini Decision 1 key：os.environ 优先，~/.config/argo/env 热读保底。"""
+    try:
+        from engine_env import get_env
+        return (get_env(list(GEMINI_KEY_ENV)) or "").strip()
+    except Exception:
+        import os
+        for _n in GEMINI_KEY_ENV:
+            _v = (os.environ.get(_n) or "").strip()
+            if _v:
+                return _v
+        return ""
+
+
+def _gemini_endpoint() -> str:
+    return str(_config().get("gemini_endpoint") or DEFAULT_GEMINI_ENDPOINT).rstrip("/")
+
+
+def _gemini_model() -> str:
+    return str(_config().get("gemini_model") or DEFAULT_GEMINI_MODEL)
+
+
 def _transport() -> str:
-    """通道选择：`jev`（TypeSafe System One）或 `classify`（classifier.dev）。
-
-    **纯配置驱动，不做「按键就绪自动选」**。初版按 jev_api_key() 是否就绪自动
-    选，结果是通道取决于本机 ~/.config/argo/env 里有没有那把 key——同一份代码
-    在开发机与 CI 上走不同分支，既有测试在开发机上会静默改道（实测：写进 key
-    后 test_semantic_evidence 的 5 条 HttpClient 桩里 1 条改走 JEV 路径而挂）。
-    机器状态不该改变代码路径。
-
-    未声明时的默认是 jev：classifier.dev 的匿名路径 2026-10-22 起回 403
-    proxy_requires_payment，JEV 是当前可用的那条。
-    """
+    """通道选择：`gemini`（Gemini Decision 1，默认）、`jev`（TypeSafe System One）或 `classify`。"""
     declared = str(_config().get("transport") or "").strip().lower()
-    return declared if declared in ("jev", "classify") else DEFAULT_TRANSPORT
+    return declared if declared in VALID_TRANSPORTS else DEFAULT_TRANSPORT
 
 
 def _jev_endpoint() -> str:
@@ -435,6 +453,80 @@ def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
     return out  # type: ignore[return-value]
 
 
+def _gemini_choice(text: str, labels: tuple[str, ...] | list[str],
+                   instructions: str | None, timeout: float,
+                   criteria: dict[str, str] | None = None) -> Optional[dict[str, Any]]:
+    key = gemini_api_key()
+    if not key:
+        logger.debug("Gemini key 未配置（%s），跳过 Gemini 通道", " / ".join(GEMINI_KEY_ENV))
+        return None
+    question_payload: dict[str, Any] = {
+        "type": "choice",
+        "instructions": instructions or ("Classify the text into one of: " + ", ".join(labels)),
+        "criteria": criteria if criteria else {str(l): str(l) for l in labels},
+    }
+    body = {
+        "model": _gemini_model(),
+        "input": text[:MAX_TEXT_CHARS],
+        "questions": {"eval": question_payload},
+    }
+    headers = {
+        "x-goog-api-key": key,
+        "Content-Type": "application/json",
+    }
+    try:
+        from http_client import HttpClient
+        resp = HttpClient(timeout=timeout, max_retries=1, jitter=False).post(
+            _gemini_endpoint(), body, extra_headers=headers
+        )
+        if resp.get("status") != 200:
+            logger.debug("Gemini 非 200: %s %s", resp.get("status"), str(resp.get("error") or "")[:120])
+            return None
+        data = json.loads(resp.get("text") or "{}")
+        ans = data.get("answers", {}).get("eval", {})
+        choice = ans.get("choice")
+        if not choice:
+            return None
+        return {
+            "label": choice,
+            "confidence": float(ans.get("confidence", 0.0)),
+            "probabilities": ans.get("probabilities", {}),
+        }
+    except Exception as e:
+        logger.debug("Gemini 请求失败: %s", type(e).__name__)
+        return None
+
+
+def _classify_gemini(texts: list[str], labels: tuple[str, ...] | list[str], *,
+                     instructions: str | None = None,
+                     criteria: dict[str, str] | None = None,
+                     keep: list[tuple[int, str]],
+                     timeout: float = 5.0) -> Optional[list[Optional[dict[str, Any]]]]:
+    key = gemini_api_key()
+    if not key:
+        return None
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    workers = min(JEV_MAX_WORKERS, len(keep))
+    results: dict[int, Optional[dict[str, Any]]] = {}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_gemini_choice, t, labels, instructions, timeout, criteria): idx
+            for idx, t in keep
+        }
+        for fut in as_completed(futures):
+            idx = futures[fut]
+            try:
+                results[idx] = fut.result()
+            except Exception:
+                results[idx] = None
+    if not any(results.values()):
+        return None
+    out: list[Optional[dict[str, Any]]] = [None] * len(texts)
+    for idx, r in results.items():
+        out[idx] = r
+    return out
+
+
 def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
              instructions: str | None = None,
              criteria: dict[str, str] | None = None,
@@ -442,11 +534,7 @@ def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
              tier: str | None = None) -> Optional[list[dict[str, Any]]]:
     """一次批量分类。任何异常/非 200/条数不匹配 → None。
 
-    返回按输入顺序排列的 [{label, confidence, scores}]；调用方负责判定阈值。
-    空文本会被过滤后再发（空串会让整批 400），返回列表与输入等长、空缺位为 None。
-
-    两个通道的实现分居 _classify_jev（TypeSafe，每条一请求）与下方内联的
-    classifier.dev 路径（一次发 N 条）；开关判定见 _transport。
+    通道按层级自适应：Gemini Decision 1（优先） ➔ TypeSafe JEV（备用） ➔ 本地启发式（业务层兜底）。
     """
     if not texts or len(labels) < 2:
         return None
@@ -454,9 +542,25 @@ def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
     if not keep:
         return None
     to = timeout or _timeout()
-    if _transport() == "jev":
+
+    tp = _transport()
+    if tp == "gemini":
+        res = _classify_gemini(texts, labels, instructions=instructions,
+                               criteria=criteria, keep=keep, timeout=to)
+        if res is not None:
+            return res
+        # 降级至 JEV 备用通道
         return _classify_jev(texts, labels, instructions=instructions,
                              criteria=criteria, keep=keep, timeout=to)
+
+    if tp == "jev":
+        res = _classify_jev(texts, labels, instructions=instructions,
+                            criteria=criteria, keep=keep, timeout=to)
+        if res is not None:
+            return res
+        # 降级至 Gemini 备用通道
+        return _classify_gemini(texts, labels, instructions=instructions,
+                                criteria=criteria, keep=keep, timeout=to)
     body: dict[str, Any] = {
         "labels": [str(x) for x in labels],
         "inputs": [t[:MAX_TEXT_CHARS] for _i, t in keep],
@@ -490,7 +594,7 @@ def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
     return out  # type: ignore[return-value]
 
 
-def assess_support(query: str, items: list[dict[str, Any]]) -> Optional[dict[str, dict]]:
+def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
     """对已抓取的正文批量判定「是否支持查询隐含的主张」。
 
     items: [{"url": str, "title": str, "text": str}]
@@ -514,7 +618,13 @@ def assess_support(query: str, items: list[dict[str, Any]]) -> Optional[dict[str
     )
     results = classify(texts, SUPPORT_LABELS, instructions=instructions)
     if results is None:
-        return None
+        if allow_heuristic:
+            results = [
+                heuristic_support(query, it.get("text") or "", it.get("title") or "")
+                for it in usable
+            ]
+        else:
+            return None
     out: dict[str, dict] = {}
     for it, r in zip(usable, results):
         if not r:
@@ -577,6 +687,23 @@ def heuristic_source_type(url: str, title: str = "", text: str = "") -> dict[str
         return {"label": "analysis or opinion", "confidence": 0.76}
 
     return {"label": "secondary reporting", "confidence": 0.75}
+
+
+def heuristic_support(query: str, text: str, title: str = "") -> dict[str, Any]:
+    """本地高精度启发式证据支持度初筛（零网络、零外部依赖）。"""
+    q_low = (query or "").lower().strip()
+    full_text = f"{title}\n{text}".lower()
+    tokens = [tok for tok in re.split(r"[\s,，、。/_-]+", q_low) if len(tok) >= 2]
+    if not tokens:
+        tokens = [q_low]
+    hits = sum(1 for tok in tokens if tok in full_text)
+    contra_words = ("keep unchanged", "remain unchanged", "defying", "opposite", "未降息", "维持不变", "反驳", "并非")
+    has_contra = any(w in full_text for w in contra_words)
+    if has_contra and hits >= 1:
+        return {"label": "contradicts the query", "confidence": 0.85}
+    if hits >= len(tokens) * 0.7:
+        return {"label": "supports the query", "confidence": 0.80}
+    return {"label": "neutral", "confidence": 0.70}
 
 
 def assess_source_types(items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:

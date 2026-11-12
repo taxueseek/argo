@@ -64,6 +64,8 @@ class TestTransport(unittest.TestCase):
             assert se._transport() == "classify"
         with patch.object(se, "_config", return_value={"transport": "jev"}):
             assert se._transport() == "jev"
+        with patch.object(se, "_config", return_value={"transport": "gemini"}):
+            assert se._transport() == "gemini"
 
     def test_未声明时用默认且与_key_无关(self):
         for key in ("", "k"):
@@ -559,6 +561,60 @@ class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
         self.assertTrue(res["https://example.com/b"]["is_passing_mention"])  # 0.71 刚过 0.7
         self.assertFalse(res["https://example.com/b"]["is_substantive"])
         self.assertFalse(res["https://example.com/c"]["is_substantive"])  # label 对但 0.4 低于阈值
+
+
+class TestGeminiDecisionChannel(unittest.TestCase):
+    """Gemini Decision 1 专属决策通道测试。"""
+
+    def test_gemini_defaults(self):
+        self.assertEqual(se.DEFAULT_GEMINI_MODEL, "gemini-decision-1")
+        self.assertIn("decisions", se.DEFAULT_GEMINI_ENDPOINT)
+        self.assertEqual(se.DEFAULT_TRANSPORT, "gemini")
+
+    def test_gemini_choice_request_shape(self):
+        captured = {}
+
+        def mock_post(url, body, extra_headers=None):
+            captured["url"] = url
+            captured["body"] = body
+            captured["headers"] = extra_headers
+            return {
+                "status": 200,
+                "text": json.dumps({
+                    "answers": {
+                        "eval": {
+                            "choice": "substantive in-depth discussion",
+                            "confidence": 0.98,
+                            "probabilities": {"substantive in-depth discussion": 0.98},
+                            "type": "choice"
+                        }
+                    }
+                })
+            }
+
+        with patch.object(se, "gemini_api_key", return_value="fake_gemini_key"), \
+             patch("http_client.HttpClient.post", side_effect=mock_post):
+            res = se._gemini_choice("测试文本", ["substantive in-depth discussion", "passing mention"], "说明", 5.0)
+            self.assertIsNotNone(res)
+            self.assertEqual(res["label"], "substantive in-depth discussion")
+            self.assertEqual(res["confidence"], 0.98)
+            self.assertEqual(captured["headers"]["x-goog-api-key"], "fake_gemini_key")
+            self.assertEqual(captured["body"]["model"], "gemini-decision-1")
+            self.assertIn("eval", captured["body"]["questions"])
+
+    def test_gemini_fallback_to_jev_when_gemini_unavailable(self):
+        jev_called = []
+
+        def mock_jev(texts, labels, **kwargs):
+            jev_called.append(True)
+            return [{"label": "passing mention or brief reference", "confidence": 0.88}]
+
+        with patch.object(se, "_transport", return_value="gemini"), \
+             patch.object(se, "_classify_gemini", return_value=None), \
+             patch.object(se, "_classify_jev", side_effect=mock_jev):
+            res = se.classify(["短文"], ["substantive", "passing mention"])
+            self.assertIsNotNone(res)
+            self.assertTrue(jev_called, "Gemini 不可用时必须平滑回退至 JEV")
 
 
 if __name__ == "__main__":

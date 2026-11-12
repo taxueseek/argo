@@ -688,7 +688,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_RESPECT_ROBOTS` | 抓取遵守目标站点 robots.txt 协议 | 默认遵守；=0 强制忽略 |
 | `ARGO_ROUTE_CACHE` | 智能路由决策跨进程缓存 | 默认开；测试环境默认关，=0 强制关闭 |
 | `ARGO_RRF_WEIGHTED` | RRF 加权融合算法 | 默认关（逃生开关）；=1 启用权重调制融合 |
-| `ARGO_SEMANTIC_EVIDENCE` | 可选语义证据层（classifier.dev / TypeSafe JEV） | 默认关；配置 key 后可选开启 |
+| `ARGO_SEMANTIC_EVIDENCE` | 可选语义证据层（Gemini Decision 1 / TypeSafe JEV） | 默认关；配置 key 后可选开启 |
 | `ARGO_SERP_GUARD` | SERP 垃圾与壳链结果守卫（过滤无效跳转与空壳） | 默认开；=0 关闭 |
 | `ARGO_USAGE_LOG` | 本地使用日志流（JSONL，stats 统计数据源） | 默认开；=0 整体关闭 |
 | `ARGO_UNPAYWALL_EMAIL` | Unpaywall 学术开放获取 API 的联系人邮箱 | 遵循 polite pool 规范 |
@@ -696,7 +696,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_WOLFRAM_APPID` | WolframAlpha 知识计算引擎的 AppID | 缺省则跳过该引擎 |
 | `ARGO_XHS_TIMEOUT` | 小红书平台抓取请求超时上限（秒） | 默认 3.0s；慢网调试时可调大 |
 
-### API 密钥（值放 ~/.config/argo/env）（26）
+### API 密钥（值放 ~/.config/argo/env）（27）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -708,6 +708,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_EXA_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_FELO_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_FIRECRAWL_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
+| `ARGO_GEMINI_API_KEY` | Google Gemini Decision 1 key（语义证据层优先通道；官方名 `GEMINI_API_KEY` 同样识别） | 缺密钥=降级至 JEV 或本地启发式 |
 | `ARGO_GITHUB_TOKEN` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
 | `ARGO_JEV_API_KEY` | TypeSafe JEV key（语义证据层 `semantic_evidence`；官方名 `TYPESAFE_API_KEY` 同样识别） | 缺密钥=语义层静默跳过，核验链路照常 |
 | `ARGO_METASO_API_KEY` | 对应引擎/服务的凭据 | 缺密钥=该源跳过或降级 |
