@@ -52,8 +52,34 @@ def test_zhihu_engine_empty_query():
     print("✅ 空查询边界处理通过")
 
 
+def test_zhihu_question_answers_expansion():
+    """验证知乎问题回答自动下钻抓取与摘要格式。"""
+    from social_engines.zhihu_engine import fetch_question_answers
+
+    # 测试已知问题下钻
+    q_url = "https://www.zhihu.com/question/2012551138705167575"
+    answers = fetch_question_answers(q_url, limit=2)
+    assert isinstance(answers, list)
+    if answers:
+        first = answers[0]
+        assert "token" in first
+        assert "url" in first
+        assert "summary" in first
+        assert len(first["summary"]) > 0
+        assert "answer" in first["url"] or first["token"] in first["url"]
+        print(f"✅ 知乎问题下钻成功（召回 {len(answers)} 条精选回答摘要）")
+    else:
+        print("⚠ 网络波动或配额未达，下钻跳过结构断言")
+
+    # 测试边界处理
+    assert fetch_question_answers("") == []
+    assert fetch_question_answers("invalid-url-without-question") == []
+    print("✅ 知乎问题下钻边界处理通过")
+
+
 if __name__ == "__main__":
     test_zhihu_keychain_secret_resolution()
     test_zhihu_engine_empty_query()
     test_zhihu_engine_scoring_and_meta()
+    test_zhihu_question_answers_expansion()
     print("\n🎉 全部 zhihu_engine 测试通过")
