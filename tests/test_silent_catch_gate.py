@@ -29,9 +29,9 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-# 棘轮基线（2026-11-12 全量 AST 实测 187）。真源在 scripts/badcase_ledger.py
-# （BROAD_SILENT_CATCH_BASELINE，overview 输出同一常量）——同一数字只写
-# 一处，窄化一处就下调一格。
+# 棘轮基线（2026-11-13 收口 24 处后全量 AST 实测 162；首测 2026-11-12 为 187）。
+# 真源在 scripts/badcase_ledger.py（BROAD_SILENT_CATCH_BASELINE，overview
+# 输出同一常量）——同一数字只写一处，窄化一处就下调一格。
 from badcase_ledger import BROAD_SILENT_CATCH_BASELINE as BASELINE  # noqa: E402
 
 

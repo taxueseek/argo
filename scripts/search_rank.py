@@ -28,6 +28,7 @@ import engine_states  # 状态词表唯一真源（2026-11-09 收口）
 
 from engine_env import env_flag, get_env
 from url_canon import canonical_url as _canonical_url_impl
+from except_sets import IO_BENIGN, SHAPE_BENIGN  # 收窄词汇表（2026-11-13 裸吞收口）
 
 # cache 延迟到首次真正需要相似度时再导入（2026-09-27，方案 B3）：顶层 import
 # 会把 cache.py 连带 sqlite3/shutil/tempfile 整条拉进每次 import search 的
@@ -281,8 +282,12 @@ def _content_similarity(a: str, b: str) -> float:
     if _sim_fn is not None:
         try:
             return float(_sim_fn(a, b))
-        except Exception:
-            pass  # 单条相似度计算失败按「无相似度」处理，回退 Jaccard
+        except Exception as e:
+            # 单条相似度计算失败按「无相似度」处理，回退 Jaccard；相似度查
+            # cache 的 sqlite（OperationalError 不在词汇表），保持宽口径仅可见化。
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"query 相似度计算跳过: {type(e).__name__}")
     import re as _re
     sa, sb = set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", a.lower())), set(_re.findall(r"[\u4e00-\u9fff]|[a-zA-Z0-9]+", b.lower()))
     if not sa or not sb:
@@ -339,7 +344,7 @@ def minhash_dedupe(
     try:
         thr = float(os.environ.get("ARGO_MINHASH_THRESHOLD", str(threshold)))
         threshold = max(0.5, min(0.98, thr))
-    except Exception:
+    except SHAPE_BENIGN:
         pass
     pool = sorted(
         results,
@@ -470,7 +475,7 @@ def _note_rerank_failure(breaker, category: str, detail: str) -> None:
             attribution={"category": category,
                          "reason": "语义精排端点不可用", "detail": detail},
         )
-    except Exception:
+    except IO_BENIGN + SHAPE_BENIGN:
         pass
 
 def rerank_results(query: str, results: list[dict[str, Any]],
@@ -498,8 +503,13 @@ def rerank_results(query: str, results: list[dict[str, Any]],
         from quota import get_quota_manager
         if get_quota_manager().is_remote_exhausted("bocha"):
             return results, engine_states.RERANK_SKIPPED_QUOTA
-    except Exception:
-        pass
+    except Exception as e:
+        # quota 联动是侧信道：fail-open 是被测契约（test_quota_gate_fails_open
+        # _when_quota_unavailable 用 RuntimeError 桩验证），不收窄——except_sets
+        # 判定规则看 try 块失败的代价，quota 层可抛任意异常。
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"quota 联动检查跳过（fail-open）: {type(e).__name__}")
 
     # 端点熔断：先问「还该不该打这一枪」。
     #
@@ -546,7 +556,7 @@ def rerank_results(query: str, results: list[dict[str, Any]],
             if breaker is not None:
                 try:
                     breaker.record_success(_RERANK_BREAKER_KEY)
-                except Exception:
+                except IO_BENIGN + SHAPE_BENIGN:
                     pass
             rerank_results_list = data.get("data", {}).get("results", [])
             if not rerank_results_list:

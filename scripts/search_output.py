@@ -12,6 +12,7 @@ from search_rank import filter_results_by_domains
 from search_types import slot_record as dataclass
 from snippet_clean import clean_snippet
 import engine_states  # 状态词表唯一真源（2026-11-09 收口）
+from except_sets import OPT_IMPORT, SHAPE_BENIGN  # 收窄词汇表（2026-11-13 裸吞收口）
 from typing import Any
 from output_transparency import (  # noqa: F401
     _AGGREGATOR_HOSTS,
@@ -712,7 +713,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             result.setdefault("limitations", []).append(
                 f"证据门控本次跳过（{type(e).__name__}）：fetch_required/"
                 "evidence_loop 不可用，高后果域结论请自行核验")
-        except Exception:
+        except SHAPE_BENIGN:
             pass
 
     # 上游权威等级回填（DeepSeek 0-4）：单引擎/对冲路径不走五维精排，
@@ -768,7 +769,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
             from local_seek import local_seek_last_skipped
             if local_seek_last_skipped():
                 result["local_seek_skipped"] = True
-        except Exception:
+        except OPT_IMPORT + SHAPE_BENIGN:
             pass
         if local_hits:
             _seen_urls = {r.get("url") for r in (result.get("results") or [])
@@ -848,7 +849,7 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
                                       sanitize_results_boundary)
         sanitize_results_boundary(result.get("results"))
         result["content_trust"] = CONTENT_TRUST_UNTRUSTED
-    except Exception:
+    except OPT_IMPORT + SHAPE_BENIGN:
         pass
     # 搜索期告警（issue #34 第 7 条）：--json 下告警不能留在 stderr（调用方
     # 2>&1 合并会破坏 JSON 解析），统一收进响应的 warnings[] 字段。住在
@@ -858,6 +859,6 @@ def shape_response(ctx: _ShapeContext, result: dict[str, Any]) -> dict[str, Any]
         warns = [w.strip() for w in drain_search_warnings() if w.strip()]
         if warns:
             result.setdefault("warnings", []).extend(warns)
-    except Exception:
+    except OPT_IMPORT + SHAPE_BENIGN:
         pass
     return result

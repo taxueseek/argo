@@ -43,6 +43,7 @@
 from __future__ import annotations
 
 from typing import Callable
+from except_sets import IO_BENIGN, SHAPE_BENIGN  # 收窄词汇表（2026-11-13 裸吞收口）
 
 # 先验 = 实测延迟 + 词面相关 + 稳定性的人工压缩（0–1）。只列通用候选；
 # 未列出的源给 DEFAULT_PRIOR，不会凭名字占便宜。
@@ -193,12 +194,14 @@ def _usable(candidates: list[str], *, mode: str) -> list[str]:
         try:
             exhausted = qm.remote_exhausted_marks()
             out = [e for e in out if e not in exhausted]
-        except Exception:
+        except IO_BENIGN + SHAPE_BENIGN:
             pass
         if mode in ("fast", "budget"):
             out = [e for e in out if qm.is_available(e, mode=mode)]
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"quota 可用性过滤跳过（fail-open）: {type(e).__name__}")
     return out
 
 
@@ -226,14 +229,20 @@ def _paid_candidate_allowed(engine: str, mode: str) -> bool:
         from engine_env import is_engine_allowed_by_env
         if not is_engine_allowed_by_env(engine):
             return False
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"引擎 env 准入检查异常按禁止处理: {type(e).__name__}")
+        return False
     try:
         from engine_admission import is_blocked
         if is_blocked(engine):
             return False
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("unified_search").debug(
+            f"引擎准入 is_blocked 检查异常按禁止处理: {type(e).__name__}")
+        return False
     try:
         from quota import get_quota_manager
         return not get_quota_manager().is_hard_down(engine)

@@ -55,6 +55,7 @@ if SCRIPT_DIR not in sys.path:
 # engine_states 是状态词表唯一真源（2026-11-09 收口）
 import fetch_render_tinyfish as _render_tinyfish
 import engine_states
+from except_sets import IO_BENIGN, OPT_IMPORT, SHAPE_BENIGN  # 收窄词汇表（2026-11-13 裸吞收口）
 
 # 解码统一入口（2026-10-26，charset 是只依赖 re 的叶子模块，顶层导入无负担）：
 # urllib 兜底车道与主链共享「头声明 > meta 嗅探 > 猜测链」，GBK 老站不再满屏 U+FFFD
@@ -134,12 +135,12 @@ def extract_content(html: str, max_chars: int = 8000) -> tuple[str, str]:
         content, title = extract_readability(html, max_chars=max_chars)
         if content.strip():
             return _cut(content, max_chars), title.strip()
-    except Exception:
+    except OPT_IMPORT + SHAPE_BENIGN:
         pass
     ext = ContentExtractor()
     try:
         ext.feed(html)
-    except Exception:
+    except SHAPE_BENIGN:
         pass
     ext._blocks.sort(key=lambda x: x[0], reverse=True)
     content = "\n\n".join(text for _, text in ext._blocks[:10])
@@ -499,7 +500,7 @@ def _md_variant_fetch(url: str, max_chars: int = 8000,
                 "User-Agent": "argo-fetch-v3/1.0 (+local-research; md-variant)",
                 "Accept": "text/markdown, text/plain;q=0.9, */*;q=0.8",
             })
-        except Exception:
+        except OPT_IMPORT + IO_BENIGN:
             continue
         if resp.get("status", 0) != 200 or not resp.get("text"):
             continue
@@ -625,7 +626,7 @@ def _identity_remember_mobile(host: str) -> None:
         # 并发抓取进程会互相搬走临时文件，身份记忆静默丢失。
         _paths.atomic_write_json(Path(_identity_path()), _identity_mem, indent=None)
         _identity_dirty = False
-    except Exception:
+    except IO_BENIGN:
         pass
 
 
@@ -858,7 +859,7 @@ def _archive_truncated(url: str, text: str, delivered: str, kind: str,
             extra[f"full_{kind}_path"] = path
             if primary:
                 extra["full_text_path"] = path
-    except Exception:
+    except OPT_IMPORT + IO_BENIGN:
         pass
 
 
@@ -899,7 +900,7 @@ def _make_result(url: str, html: str, max_chars: int,
         try:
             from article_meta import extract_article_meta
             result.update(extract_article_meta(html, url))
-        except Exception:
+        except OPT_IMPORT + SHAPE_BENIGN:
             pass
     result.update(extra)
     return result
@@ -1306,7 +1307,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             _declared_ok = _video.get("content_ok")
             try:
                 _video = _assess_quality(_video)
-            except Exception:
+            except SHAPE_BENIGN:
                 pass
             _video["content_ok"] = bool(_declared_ok)
             _video["page_type"] = "video"
@@ -1352,7 +1353,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             }
             try:
                 _wx_result = _assess_quality(_wx_result)
-            except Exception:
+            except SHAPE_BENIGN:
                 pass
             _wx_result["cached"] = False
             return _strip_html_unless_needed(_wx_result, need_html)
@@ -1419,7 +1420,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                     if (out.get("quality_breakdown") or {}).get("version") != _v:
                         out = _quality.assess(out)
                         out["quality_basis"] = "rescored"
-                except Exception:
+                except SHAPE_BENIGN:
                     pass
                 out["cached"] = True
                 out["cache_level"] = hit.get("_cache_level", engine_states.CACHE_LEVEL_UNKNOWN)
@@ -1645,7 +1646,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             from article_meta import extract_article_meta
             for _mk, _mv in extract_article_meta(result["html"], url).items():
                 result.setdefault(_mk, _mv)
-        except Exception:
+        except OPT_IMPORT + SHAPE_BENIGN:
             pass
 
     # 写 URL 缓存（不存大块 html，省空间）
@@ -1677,7 +1678,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                 if ev:
                     to_store[FETCH_EVIDENCE_KEY] = {
                         k: v for k, v in ev.items() if k != "url"}
-            except Exception:
+            except OPT_IMPORT + SHAPE_BENIGN:
                 pass
             SearchCache().set_fetch(url, to_store, ttl=ttl)
         except Exception:
