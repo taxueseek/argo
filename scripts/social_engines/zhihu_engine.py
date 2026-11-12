@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -42,9 +44,11 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
     if not secret:
         return []
 
+    # 向上游知乎开放平台请求略多于 n 的候选池（至多 20 条），便于质量重排与去噪
+    fetch_count = max(1, min(max(int(n) * 2, int(n)), 20))
     params = urllib.parse.urlencode({
         "Query": query.strip(),
-        "Count": str(max(1, min(int(n), 20))),
+        "Count": str(fetch_count),
         "SearchDB": "zhihu",
     })
     url = f"{ZHIHU_API}?{params}"
@@ -69,9 +73,9 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
                           f"{str(data.get('Message') or '')[:100]}",
                  "source": "zhihu"}]
 
-    results: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     items = (data.get("Data") or {}).get("Items") or []
-    for item in items[:n]:
+    for rank, item in enumerate(items):
         if not isinstance(item, dict):
             continue
         title = (item.get("Title") or "").strip()
@@ -79,22 +83,35 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
         if title.endswith(" - 知乎"):
             title = title[: -len(" - 知乎")].rstrip()
         url_ = item.get("Url") or ""
-        snippet = (item.get("ContentText") or title or "")[:300]
+        raw_text = (item.get("ContentText") or title or "").strip()
+        snippet = re.sub(r"\s+", " ", raw_text)[:500]
         if not title and not url_:
             continue
         content_id = str(item.get("ContentID") or "")
         author = item.get("AuthorName") or ""
-        likes = item.get("VoteUpCount") or 0
-        comments = item.get("CommentCount") or 0
+        try:
+            likes = int(item.get("VoteUpCount") or 0)
+        except (ValueError, TypeError):
+            likes = 0
+        try:
+            comments = int(item.get("CommentCount") or 0)
+        except (ValueError, TypeError):
+            comments = 0
         edit_ts = item.get("EditTime")
         published = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(edit_ts)) if edit_ts else None
 
-        results.append({
+        # 结合上游相关性序位与社区点赞/评论做质量综合评分（第一性原理：高赞真实实测加权）
+        base_relevance = max(1.0 - rank * 0.05, 0.2)
+        like_boost = min(0.3, math.log10(likes + 1) * 0.08)
+        comment_boost = min(0.1, math.log10(comments + 1) * 0.03)
+        quality_score = round(min(1.0, base_relevance * 0.7 + like_boost + comment_boost), 4)
+
+        candidates.append({
             "title": title[:100] + ("..." if len(title) > 100 else ""),
             "url": url_,
             "snippet": snippet,
             "source": "zhihu",
-            "score": max(1.0 - len(results) * 0.1, 0.1),
+            "score": quality_score,
             "published_at": published,
             "social_meta": {
                 "platform": "zhihu",
@@ -102,11 +119,15 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
                 "id": content_id,
                 "author": author,
                 "likes": likes,
+                "upvotes": likes,
                 "comments": comments,
                 "provider": "zhihu_openapi",
             },
         })
-    return results
+
+    # 按综合得分降序微调，确保高赞高质量答案排在前面，并保留前 n 条
+    candidates.sort(key=lambda r: r["score"], reverse=True)
+    return candidates[:n]
 
 
 def main():

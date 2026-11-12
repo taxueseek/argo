@@ -158,10 +158,41 @@ def reset_envfile_cache() -> None:
     需要强制重读的调用方（测试隔离、密钥热更新）都走这里，别再各自操作
     那两个全局变量：只做一半的状态在测试里几乎看不出来，排查成本极高。
     """
-    global _envfile_cache, _envfile_sig
+    global _envfile_cache, _envfile_sig, _zhihu_keychain_cache
     with _envfile_lock:
         _envfile_cache = {}
         _envfile_sig = ()
+        _zhihu_keychain_cache = None
+
+
+_zhihu_keychain_cache: str | None = None
+
+
+def _read_zhihu_keychain() -> str:
+    """macOS Keychain 保底读取知乎官方 CLI 管理的 Access Secret。"""
+    global _zhihu_keychain_cache
+    if _zhihu_keychain_cache is not None:
+        return _zhihu_keychain_cache
+    import sys
+    if sys.platform != "darwin":
+        _zhihu_keychain_cache = ""
+        return ""
+    try:
+        import subprocess
+        import base64
+        raw = subprocess.check_output(
+            ["security", "find-generic-password", "-s", "zhihu-cli", "-a", "access-secret", "-w"],
+            stderr=subprocess.DEVNULL,
+            timeout=1.5,
+        ).decode("utf-8", "replace").strip()
+        if raw.startswith("go-keyring-base64:"):
+            _, b64_val = raw.split(":", 1)
+            _zhihu_keychain_cache = base64.b64decode(b64_val).decode("utf-8", "replace").strip()
+        else:
+            _zhihu_keychain_cache = raw
+    except Exception:
+        _zhihu_keychain_cache = ""
+    return _zhihu_keychain_cache
 
 # 引擎 → 候选环境变量（从左到右优先）
 # 第一项为推荐新名（ARGO_ 前缀），后续为历史兼容名
@@ -272,6 +303,14 @@ def get_env(names: str | list[str], default: str = "") -> str:
         val = file_env.get(name)
         if val is not None and str(val).strip() != "":
             return str(val)
+
+    # 凭证回退：macOS Keychain（zhihu-cli 统一凭据托管）
+    zhihu_keys = {"ZHIHU_ACCESS_SECRET", "ARGO_ZHIHU_ACCESS_SECRET"}
+    if any(n in zhihu_keys for n in names):
+        kc = _read_zhihu_keychain()
+        if kc:
+            return kc
+
     return default
 
 
