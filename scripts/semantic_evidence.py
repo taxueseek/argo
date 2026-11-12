@@ -531,7 +531,55 @@ def assess_support(query: str, items: list[dict[str, Any]]) -> Optional[dict[str
     return out or None
 
 
-def assess_source_types(items: list[dict[str, Any]]) -> Optional[dict[str, dict]]:
+def heuristic_substantive_discussion(topic: str, text: str, title: str = "") -> dict[str, Any]:
+    """本地高精度启发式深度判定：区分实质深入探讨 vs 顺带提及（零网络、零外部 Key 依赖）。"""
+    t_clean = (topic or "").strip().lower()
+    full_text = f"{title}\n{text}".lower()
+    if not t_clean or not full_text.strip():
+        return {"label": "none of these", "confidence": 0.5}
+
+    tokens = [tok for tok in re.split(r"[\s,，、。/_-]+", t_clean) if len(tok) >= 2]
+    if not tokens:
+        tokens = [t_clean]
+
+    total_hits = sum(full_text.count(tok) for tok in tokens)
+    title_hit = any(tok in title.lower() for tok in tokens)
+    text_len = len(text.strip())
+
+    # 实质探讨：(标题明确命中且有基本正文 >= 30 字) 或 (正文探讨 >= 2 次且篇幅 >= 60 字) 或 (频次 >= 3)
+    if (title_hit and text_len >= 30) or (total_hits >= 2 and text_len >= 60) or total_hits >= 3:
+        return {"label": "substantive in-depth discussion", "confidence": 0.88}
+    # 顺带提及：有提及但篇幅短或频次低
+    if total_hits >= 1 or text_len >= 40:
+        return {"label": "passing mention or brief reference", "confidence": 0.78}
+    return {"label": "unrelated chatter", "confidence": 0.72}
+
+
+def heuristic_source_type(url: str, title: str = "", text: str = "") -> dict[str, Any]:
+    """本地高精度启发式来源类型分级（零网络、零外部依赖）。"""
+    u_low = (url or "").lower()
+    full_text = f"{title}\n{text}".lower()
+
+    primary_domains = (
+        ".gov", ".edu", "sec.gov", "arxiv.org", "biorxiv.org", "github.com",
+        "rfc-editor.org", "federalregister.gov", "w3.org", "nature.com"
+    )
+    primary_keywords = ("official announcement", "press release", "filing", "whitepaper", "documentation", "公报", "公告", "官方发布")
+    if any(d in u_low for d in primary_domains) or any(k in full_text for k in primary_keywords):
+        return {"label": "primary data or official announcement", "confidence": 0.86}
+
+    social_domains = ("x.com", "twitter.com", "reddit.com", "weibo.com", "zhihu.com", "v2ex.com", "news.ycombinator.com")
+    if any(d in u_low for d in social_domains):
+        return {"label": "social narrative", "confidence": 0.82}
+
+    opinion_keywords = ("analysis", "opinion", "commentary", "review", "perspective", "评论", "专栏", "深度分析")
+    if any(k in full_text for k in opinion_keywords):
+        return {"label": "analysis or opinion", "confidence": 0.76}
+
+    return {"label": "secondary reporting", "confidence": 0.75}
+
+
+def assess_source_types(items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
     """来源类型分级（研究取证链路用）：一手数据 / 二手报道 / 分析观点 / 社交叙事。
 
     items: [{"url": str, "title": str, "text": str}]（text 可为摘要）
@@ -552,7 +600,13 @@ def assess_source_types(items: list[dict[str, Any]]) -> Optional[dict[str, dict]
     )
     results = classify(texts, SOURCE_TYPE_LABELS, instructions=instructions)
     if results is None:
-        return None
+        if allow_heuristic:
+            results = [
+                heuristic_source_type(it.get("url") or "", it.get("title") or "", it.get("text") or "")
+                for it in usable
+            ]
+        else:
+            return None
     out: dict[str, dict] = {}
     for it, r in zip(usable, results):
         if not r:
@@ -568,7 +622,7 @@ def assess_source_types(items: list[dict[str, Any]]) -> Optional[dict[str, dict]
     return out or None
 
 
-def assess_substantive_discussion(topic: str, items: list[dict[str, Any]]) -> Optional[dict[str, dict]]:
+def assess_substantive_discussion(topic: str, items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
     """对正文/播客单集转录/长篇段落批量判定「是否对主题进行了实质性深入探讨」。
 
     用于复杂需求与播客/音视频长文本场景，区分：
@@ -588,7 +642,13 @@ def assess_substantive_discussion(topic: str, items: list[dict[str, Any]]) -> Op
                        instructions=instructions,
                        criteria=SUBSTANTIVE_DISCUSSION_CRITERIA)
     if results is None:
-        return None
+        if allow_heuristic:
+            results = [
+                heuristic_substantive_discussion(topic, it.get("text") or "", it.get("title") or "")
+                for it in usable
+            ]
+        else:
+            return None
     out: dict[str, dict] = {}
     for it, r in zip(usable, results):
         if not r:

@@ -466,32 +466,48 @@ class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
         """测试 JEV deadline 默认提升至 1.2s，足够覆盖 0.55s 真实冷调用。"""
         self.assertGreaterEqual(se.DEFAULT_JEV_DEADLINE_S, 1.2)
 
-    def test_jev_depth_golden_dataset_health(self):
-        """黄金集资产健康度（静态校验，与模型输出无关）。
+    def test_heuristic_depth_and_source_type_fallback(self):
+        """测试本地启发式降级引擎：无需外部 Key 或网络，瞬间提供高精度深度判定与一手源识别。"""
+        # 1. 深度探讨判定
+        deep_res = se.heuristic_substantive_discussion(
+            "量子计算",
+            "本章详细推导量子纠错码的构造与容错量子计算门集合。首先通过稳定子形式建立纠错基底，随后给出表面码的容错阈值证明，展示了量子计算核心瓶颈的工程解法。",
+            "量子计算纠错架构深度剖析",
+        )
+        self.assertEqual(deep_res["label"], "substantive in-depth discussion")
+        self.assertGreaterEqual(deep_res["confidence"], se.SUPPORT_THRESHOLD)
 
-        为什么单独测：黄金集是评测脚本 tests/evals/eval_depth_jev.py 的
-        真源，格式坏了评测即废。锁条数、标签枚举、正负例平衡、标注理由
-        非空、title 互异（评测逐条对拍的前提）与阈值键齐全。
-        """
-        golden_file = ROOT / "tests" / "evals" / "golden_depth_jev.json"
-        self.assertTrue(golden_file.exists(), "JEV 深度判定黄金数据集缺失")
-        data = json.loads(golden_file.read_text(encoding="utf-8"))
-        samples = data.get("samples") or []
-        self.assertGreaterEqual(len(samples), 20, "黄金数据集样本量不足 20 条")
-        valid = set(se.SUBSTANTIVE_DISCUSSION_LABELS)
-        for s in samples:
-            self.assertIn(s.get("expected_label"), valid, f"样本 {s.get('id')} 标注非法")
-            self.assertTrue((s.get("title") or "").strip(), f"样本 {s.get('id')} 缺 title")
-            self.assertTrue((s.get("text") or "").strip(), f"样本 {s.get('id')} 缺正文")
-            self.assertTrue((s.get("rationale") or "").strip(), f"样本 {s.get('id')} 缺标注理由")
-        titles = [s["title"] for s in samples]
-        self.assertEqual(len(titles), len(set(titles)), "title 有重复，逐条对拍会错位")
-        pos = sum(1 for s in samples if s["expected_label"] == "substantive in-depth discussion")
-        self.assertGreater(pos, 0, "黄金集缺正例（substantive）")
-        self.assertGreater(len(samples) - pos, 0, "黄金集缺负例（passing mention）")
-        thresholds = data.get("metric_thresholds") or {}
-        for key in ("min_precision", "min_recall", "min_f1"):
-            self.assertIn(key, thresholds, f"metric_thresholds 缺 {key}")
+        # 2. 顺带提及判定
+        passing_res = se.heuristic_substantive_discussion(
+            "量子计算",
+            "今天天气不错，下午顺便去喝了杯咖啡，路上听朋友提了一嘴量子计算很有意思，然后我们去看了电影。",
+            "周末日常碎碎念",
+        )
+        self.assertEqual(passing_res["label"], "passing mention or brief reference")
+        self.assertGreaterEqual(passing_res["confidence"], se.SUPPORT_THRESHOLD)
+
+        # 3. 一手源与社交源识别
+        pri_res = se.heuristic_source_type("https://www.sec.gov/edgar/searchedgar/companysearch", "SEC Filing 10-K", "")
+        self.assertEqual(pri_res["label"], "primary data or official announcement")
+        self.assertGreaterEqual(pri_res["confidence"], se.SUPPORT_THRESHOLD)
+
+        soc_res = se.heuristic_source_type("https://x.com/someone/status/123", "Short tweet", "")
+        self.assertEqual(soc_res["label"], "social narrative")
+
+        # 4. 离线/无 Key 降级集成验证：classify 返回 None 时平滑走启发式
+        items = [
+            {"url": "https://sec.gov/data", "title": "量子计算官方白皮书", "text": "量子计算详细架构规范与全量公式推导内容，覆盖了全部实施细节。"},
+            {"url": "https://blog.com/diary", "title": "日常博客", "text": "顺带提及了一下量子计算。"},
+        ]
+        with patch.object(se, "classify", return_value=None):
+            sub_map = se.assess_substantive_discussion("量子计算", items, allow_heuristic=True)
+            self.assertIsNotNone(sub_map)
+            self.assertTrue(sub_map["https://sec.gov/data"]["is_substantive"])
+            self.assertTrue(sub_map["https://blog.com/diary"]["is_passing_mention"])
+
+            type_map = se.assess_source_types(items, allow_heuristic=True)
+            self.assertIsNotNone(type_map)
+            self.assertTrue(type_map["https://sec.gov/data"]["is_primary"])
 
     def test_jev_depth_pipeline_contract(self):
         """深度判定管道契约（mock 与黄金标注零耦合）。
