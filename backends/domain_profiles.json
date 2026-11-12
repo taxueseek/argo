@@ -2816,5 +2816,23 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "cisa_alerts": {
+    "label": "CISA 官方安全预警",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "eng_blogs": {
+    "label": "顶级工程博客",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "lobsters": {
+    "label": "Lobsters",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

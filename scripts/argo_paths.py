@@ -34,6 +34,8 @@ ENV_STATE_DIR = "ARGO_STATE_DIR"
 # 平台惯例变量（只读，不新增 argo 私有名字）
 ENV_XDG_CACHE = "XDG_CACHE_HOME"
 ENV_LOCALAPPDATA = "LOCALAPPDATA"
+# 研究结论归档的独立覆盖名（与缓存分离：缓存可清，结论不可丢）
+ENV_RESEARCH_DIR = "ARGO_RESEARCH_ROOT"
 
 # 历史默认目录（也是 config.yaml 中 db_path 的默认前缀）
 _LEGACY_ROOT = "~/.cache/unified-search"
@@ -112,6 +114,41 @@ def state_root() -> Path:
     return platform_cache_default()
 
 
+def research_root() -> Path:
+    """研究结论归档的**独立**根目录，与缓存分开（缓存可清，结论不可丢）。
+
+    为什么不复用 state_root：state_root 的语义是「可重建的派生状态」——
+    缓存、配额计数、健康度都能删，删了最多重跑。研究笔记是**用户产出**，
+    删掉不可恢复。两者放进同一个可清理区，用户清缓存时会连带丢掉全部
+    研究结论（第一性原理：保留策略不同的数据不该共享生命周期）。
+
+    优先级：
+      1. ARGO_RESEARCH_ROOT（显式覆盖，容器/多机指向挂载卷时用它）
+      2. 平台惯例的**文档**目录（不是缓存目录）：
+         macOS → ~/Documents/argo-research
+         Windows → %USERPROFILE%\\Documents\\argo-research
+         POSIX → $XDG_DOCUMENTS_DIR（未设则 ~/Documents/argo-research）
+
+    注意：工作区内的 docs/research 或 research/ 由 research_notes.resolve_root
+    负责，那是**项目级**归档（跟着仓库走、可提交、可共享给协作者）；本函数
+    是**用户级**兜底，只在没有工作区可锚定时使用，不参与项目内归档。
+    """
+    override = os.environ.get(ENV_RESEARCH_DIR, "").strip()
+    if override:
+        return Path(os.path.expanduser(override))
+
+    env = os.environ
+    platform = sys.platform
+    if platform == "darwin":
+        base = Path.home() / "Documents"
+    elif platform.startswith("win"):
+        base = Path(os.path.expanduser(str(env.get("USERPROFILE") or "~"))) / "Documents"
+    else:
+        xdg_docs = str(env.get("XDG_DOCUMENTS_DIR") or "").strip()
+        base = Path(os.path.expanduser(xdg_docs)) if xdg_docs else Path.home() / "Documents"
+    return base / "argo-research"
+
+
 def resolved_paths() -> dict[str, str]:
     """诊断用：把关键路径的**实际来源**摊开（`python3 scripts/argo_paths.py`）。
 
@@ -130,6 +167,7 @@ def resolved_paths() -> dict[str, str]:
     else:
         out["state_source"] = "平台惯例默认"
     out["state_root"] = str(state_root())
+    out["research_root"] = str(research_root())
     out["platform_cache_default"] = str(platform_cache_default())
     out["legacy_root"] = str(Path(os.path.expanduser(_LEGACY_ROOT)))
     try:

@@ -17,9 +17,8 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 
 from engines_base import (safe_search, _run, _resolve, _get_path, _coerce_field, rank_score,
-                          _http_get_raw, mcp_error_of as _mcp_error_of, http_open)
+                          _http_get_raw, mcp_error_of as _mcp_error_of, http_open, _note_http_failure)
 from engine_env import get_env
-
 
 class _LazyLogger:
     _logger = None
@@ -32,9 +31,7 @@ class _LazyLogger:
                 _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
         return getattr(_LazyLogger._logger, name)
 logger = _LazyLogger()
-
 # ── Exa 专用引擎 ──────────────────────────────────────────────────────────────
-
 _EXA_MCP_URL = "https://mcp.exa.ai/mcp"
 
 # Exa MCP 文本应答的字段行。Published 的实际标签是 "Published Date"，
@@ -273,6 +270,7 @@ def _build_anysearch_engine(spec: dict[str, Any]) -> Any:
         except ImportError:
             return []
         if resp.get("status", 0) >= 400 or not resp.get("text"):
+            _note_http_failure("anysearch", resp.get("status") or 0, resp.get("text") or resp.get("error", ""))
             return []
         try:
             data = json.loads(resp["text"])
@@ -310,6 +308,7 @@ def _build_anysearch_engine(spec: dict[str, Any]) -> Any:
         if (not has_result_blocks) and any(
                 k in joined for k in ("quota", "exhausted", "recharge",
                                       "rate limit", "429", "daily_free_quota")):
+            _note_http_failure("anysearch", 429, joined[:200])
             return []
         results = []
         for item in content:

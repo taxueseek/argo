@@ -79,6 +79,7 @@ import engine_states
 from stage_timing import tick as _tick, tock as _tock
 from time_utils import apply_time_window as _apply_time_window
 from time_utils import sort_results_by_time as _sort_results
+from time_utils import weather_chronological
 
 
 @dataclass(frozen=True)
@@ -641,6 +642,17 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
 
     if merged:
         merged = _apply_consensus_and_sort(merged, max_results)
+        # 天气结果按时间序收口：当前天气在前，逐日预报升序。放在最终截断
+        # 之后，避免五维 rerank 的新颖性把最远一天顶到最前（见函数 docstring）。
+        # 显式 `--engine open_meteo` 时 domain 会被置成 general，所以判据同时
+        # 看域、引擎列表与结果来源，不能只认 domain。
+        _weather_scope = (
+            domain == "weather_query"
+            or "open_meteo" in (engines or [])
+            or (bool(merged) and all(r.get("source") == "open_meteo" for r in merged))
+        )
+        if _weather_scope:
+            merged = weather_chronological(merged)
 
     _attach_selection_signals(merged, mode, depth)
 

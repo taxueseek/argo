@@ -100,7 +100,8 @@ def test_agents_md_covers_core_docs():
     for doc in ("docs/COMMIT_STANDARD.md", "docs/ADDING_NEW_ENGINE.md",
                 "references/operations.md", "references/engines.md",
                 "references/architecture.md", "docs/RELEASING.md",
-                "scripts/engine_states.py", "scripts/badcase_ledger.py"):
+                "scripts/engine_states.py", "scripts/badcase_ledger.py",
+                "docs/LEDGERS.md"):
         assert doc in text, f"AGENTS.md 缺路由: {doc}"
 
 

@@ -175,6 +175,11 @@ def _build_parallel_free_engine(spec: dict[str, Any]) -> Any:
         except ImportError:
             return []
         if resp.get("status", 0) >= 400 or not resp.get("text"):
+            try:
+                from engines_base import _note_http_failure
+                _note_http_failure("parallel_free", resp.get("status") or 0, resp.get("text") or resp.get("error", ""))
+            except Exception:
+                pass
             return []
         try:
             data = json.loads(resp["text"])

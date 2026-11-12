@@ -71,10 +71,14 @@ DORMANT_ALLOWLIST: dict[str, str] = {
     # 2026-10-14（7ca2f22）：osv/cisa_kev 从 security_search combo 移出并改为
     # explicit_only（本地插件按需提供），crt_sh 回到位次 3（进 auto/balanced 预算窗），
     # 故 cisa_kev 与 crt_sh 均从休眠台账撤账。
+    # 2026-11-11 接入 cisa_alerts：声明在 crt_sh 之后（位次 4）并由
+    # _VERTICAL_NEW_SOURCE 加槽扩容，crt_sh（位次 3）与 cisa_alerts（位次 4）
+    # 均在 auto/balanced 预算窗内，crt_sh 维持活跃，无需登记本台账。
     "dblp": "待接线：academic 位次 7",
     "docker_hub": "待接线：package_search 位次 4",
     "europepmc": "待接线：academic 位次 6；tech_deep 位次 5",
-    "eurostat": "待接线：macro_data 位次 4",
+    # 2026-11-11 撤账：macro_data 里摘掉已停用的 nbs_stats 后，eurostat
+    # 从位次 4 前移到位次 3，进入 auto/balanced 预算窗，不再是位置性休眠。
     # 2026-09-20：weather_query 域快源前置——weather_cn（国内城市实况两步
     # 直连 0.46s）提到位次 3，weather（CLI 子进程 wttr/open-meteo 双源
     # 1.5-4.3s）顺延到 4。fast 档 budget=2 下 weather 不参与自动路由；
@@ -82,9 +86,10 @@ DORMANT_ALLOWLIST: dict[str, str] = {
     # 城市 wttr 语义无替代源，保留在本域 + fallback 链/显式 --engine 触达。
     "weather": "weather_query 位次 4（快源前置让位 weather_cn）：海外城市仍主用，fast 档靠 fallback 链兜底",
     "fxtwitter": "social 域位次 6：社交引擎另有专用通道，待核实是否真休眠",
-    "keenable": "待接线：english_tech 位次 4",
-    "jikan": "anime_encyclopedia 位次 4：上游 /anime?q= 检索端点持续 504，"
-             "spec enabled=false 暂停启用；恢复后改回 true 并接入加槽表",
+    # 2026-11-12 撤账：english_tech 前置 keenable（位次 3），激活为免 key 补位源，不再休眠。
+    # 2026-11-11 撤账：jikan 已停用（上游 /anime?q= 持续 504），
+    # anime_encyclopedia 的 combo 引用本次摘除。恢复启用时按加槽表重新接线，
+    # 而不是把它放回「位置性休眠」台账。
     # 2026-09-19：local_pubmed 从本台账**撤销**——它此前不只是「位置性休眠」，
     # 而是根本不工作（请求被注入 format=json 而 NCBI 返回 400；output_map 又把
     # title/url/summary 全指向 pmid，且 esearch 的 idlist 是字符串数组、解析器
@@ -146,22 +151,25 @@ DORMANT_ALLOWLIST: dict[str, str] = {
     # 自动路由（评测 fe03 实测它作为 general_search 主源出结果），不再是位置性休眠
     "tavily": "semantic_discovery 位次 11（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
     "firecrawl": "semantic_discovery 位次 12（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
-    "brave": "semantic_discovery 位次 13（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
-    "felo": "semantic_discovery 位次 14（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
-    "searxng": "semantic_discovery 位次 15（budget=3+加槽4=7，位次 8+ 不参与自动路由）",
+    # 2026-11-11 撤账：brave / felo / searxng 是已停用源却仍挂在
+    # semantic_discovery 的 combo 尾部（位次 13/14/15），本次连同另外四处
+    # 悬空引用一起从 config.yaml 摘除。它们不再出现在任何域里，也就不再是
+    # 「位置性休眠」，而是「已停用」，由 --list-engines --detail 的 disabled
+    # 口径管理。tests/test_p0_dangling_combo.py 拦截这类引用复发。
     # social 域（社交引擎另有专用通道）
     "hatena_bookmark": "social 域位次 10：社交引擎另有专用通道，待核实是否真休眠",
     "qiita": "social 域位次 11：社交引擎另有专用通道，待核实是否真休眠",
     # 其它域（均为位次超预算窗口）
     "devto": "cn_tech_community 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
     "dnb": "book_search 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
-    "local_goodreads": "book_search 位次 9（budget=2~3，位次 4+ 不参与自动路由）",
+    # 2026-11-11 撤账：local_goodreads 已停用（enabled=false），book_search
+    # 的 combo 引用本次摘除，不再属于位置性休眠。
     "ndl": "book_search 位次 8（budget=2~3，位次 4+ 不参与自动路由）",
     "electricity_maps": "energy_grid 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
     "eu_opendata": "law_text 位次 5（budget=2~3，位次 4+ 不参与自动路由）",
     "fr_opendata": "law_text 位次 6（budget=2~3，位次 4+ 不参与自动路由）",
     "gov_policy": "law_text 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
-    "europeana": "cn_encyclopedia 位次 4（budget=2~3，位次 4+ 不参与自动路由）",
+    # 2026-11-11 撤账：europeana 已停用，cn_encyclopedia 的 combo 引用本次摘除。
     "local_imdb": "film_search 位次 7（budget=2~3，位次 4+ 不参与自动路由）",
     "metaso": "chinese_general 位次 10（budget=2~3，位次 4+ 不参与自动路由）",
     "open_meteo": "weather_query 位次 5（budget=2~3，位次 4+ 不参与自动路由）",

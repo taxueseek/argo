@@ -61,7 +61,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS))
 
 import argo_paths  # noqa: E402
 import badcase_causes  # 坏例根因词表（第 27 台状态机，2026-11-10 拆出）
@@ -261,14 +263,18 @@ def _rows_from_recovery_log(path: Path) -> list[dict[str, Any]]:
             r = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if not r.get("triggered"):
+        # recovery.jsonl 每行都 triggered=True（恢复链一进入就置位），
+        # 真正区分坏例的是 recovered：成功恢复不是坏例，旧口径把它一律记成
+        # recovery_missed，138/323 次成功被记账，seen_days 因此虚高到 15 天。
+        if r.get("recovered"):
             continue
         out.append({"kind": "recovery", "ts": r.get("ts", ""),
                     "query": r.get("query", ""),
                     "engine": "",
                     "detail": (f"level={r.get('level_used')} "
                                f"strategy={r.get('strategy_used')} "
-                               f"recovered={r.get('recovered')}")})
+                               f"recovered={r.get('recovered')} "
+                               f"note={r.get('note', '')}")})
     return out
 
 
@@ -525,6 +531,66 @@ def mask_query(query: str) -> str:
     return q[:4] + f"…（{len(q)} 字）"
 
 
+# 宽口径吞异常棘轮基线的单真源：tests/test_silent_catch_gate.py 消费同一
+# 常量做门禁断言，overview 输出同一常量做系统概览——同一数字只写一处
+# （首版 overview 手抄 187，棘轮每下调一格就会漂移一次，评审 2026-11-12
+# 修正）。窄化一处存量就下调一格。
+BROAD_SILENT_CATCH_BASELINE = 187
+
+
+def overview() -> dict[str, Any]:
+    """汇总四大系统台账（坏例、休眠源、技术债棘轮、存根日落）全局概览。
+
+    每一路都取真源：坏例读 <state>/badcase.db（SQLite），休眠走
+    dormant_ledger.dormant_engines() 派生计算（休眠没有 json 真源——首版
+    读 data/dormant_ledger.json 是读一个不存在的文件再静默当 0，评审
+    2026-11-12 修正），棘轮基线 import 上方单真源常量，存根扫 scripts 的
+    __sunset_version__ 声明。任何一路取不到都显式标 error，不静默降级成
+    假 0——概览的职责是让系统状态可见，包括「取不到状态」本身。
+    """
+    st = stats()
+
+    out: dict[str, Any] = {
+        "badcases": {
+            "total": st.get("total", 0),
+            "unattributed": sum(1 for c in st.get("by_root_cause", [])
+                                if c.get("root_cause") == "unattributed"),
+        },
+        "ratchets": {
+            "broad_silent_catch_baseline": BROAD_SILENT_CATCH_BASELINE,
+        },
+    }
+    try:
+        from dormant_ledger import check_dormant_ledger, dormant_engines
+        engines = sorted(dormant_engines())
+        out["dormant_sources"] = {
+            "status": "ok",
+            "count": len(engines),
+            "engines": engines[:5] + (["..."] if len(engines) > 5 else []),
+            "reconciliation_issues": check_dormant_ledger(),
+        }
+    except Exception as e:  # noqa: BLE001 —— 显式 error 上报，不静默当 0
+        out["dormant_sources"] = {
+            "status": "error",
+            "error": f"{type(e).__name__}: {e}",
+        }
+
+    stubs: list[dict[str, str]] = []
+    sunset_pattern = re.compile(r'^__sunset_version__\s*=\s*["\']([^"\']+)["\']', re.M)
+    for py in sorted(SCRIPTS.glob("*.py")):
+        if py.name == "badcase_ledger.py":
+            continue
+        try:
+            txt = py.read_text(encoding="utf-8")
+            m = sunset_pattern.search(txt)
+            if m:
+                stubs.append({"module": py.name, "sunset_version": m.group(1)})
+        except OSError:
+            continue
+    out["sunset_stubs"] = {"count": len(stubs), "modules": stubs}
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="坏例账本（badcase 管理）")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -535,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
                                  "recovery", "breaker"])
     p_list.add_argument("--limit", type=int, default=10)
     sub.add_parser("stats")
+    sub.add_parser("overview")
     p_check = sub.add_parser("check")
     p_check.add_argument("--since", default="7d")
     p_check.add_argument("--max", type=int, default=50)
@@ -553,6 +620,13 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(row, ensure_ascii=False))
     elif args.cmd == "stats":
         print(json.dumps(stats(), ensure_ascii=False))
+    elif args.cmd == "overview":
+        ov = overview()
+        print(json.dumps(ov, ensure_ascii=False))
+        if ov.get("dormant_sources", {}).get("status") == "error":
+            print("[overview] dormant_sources 取数失败（见输出 error 字段）",
+                  file=sys.stderr)
+            return 1
     elif args.cmd == "check":
         report = check(args.since, args.max, args.promote_days)
         print(json.dumps(report, ensure_ascii=False))

@@ -40,7 +40,12 @@ headers:
 output_map:
   items: hits.hits
   item_title: _source.display_names.0
-  # 文档本体 URL：Archives/edgar/data/{cik}/{accession_no_dashes}/{primary_doc}
-  # 如果 efts 返回 accession 字段则拼文档本体，否则回退到 browse 页
-  url_template: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={_source.ciks.0}&type={forms}&dateb=&owner=include&count=40
+  # 逐条目的申报列表页。占位符必须都取自 efts 响应条目本身：
+  # `_format_url_template` 只按点分路径从 item 取值，任一占位为空就把
+  # url 整个 pop 掉，下游按「无 URL 不可溯源」过滤，表现为「引擎有响应
+  # 但用户看到 0 条」。这里曾用 {forms}（spec 里的请求参数，非响应字段），
+  # 导致全部条目渲染为空串、0 条结果；2026-11-11 改用 _source.file_type。
+  # 不用 Archives 文档本体 URL 是因为它需要去前导零、去连字符等变换，
+  # 声明式模板做不了，需专门 builder；列表页同样可打开且随条目变化。
+  url_template: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={_source.ciks.0}&type={_source.file_type}&dateb=&owner=include&count=40
   item_summary: _source.file_description

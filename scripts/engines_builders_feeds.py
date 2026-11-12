@@ -11,11 +11,14 @@
 ## 两种形态，按数据性质分（spec 的 feed_mode 决定）
 
 **hot（热榜语义）** —— 新闻 RSS 走这条。种子是固定的最近 N 条，本质是
-实时流而不是检索索引，所以它**忽略 query、返回最新条目**，归入 hot_trending
-族。这是仓内既有分层的要求：engine_families._REFILL_EXCLUDED_FAMILIES 把
-hot_trending 排除在通用 combo 回填之外，理由是「产出非『查询相关』内容，
-回填只会引入噪声」。实时流应当由「热搜/今日要闻」这类域按需取用，
-不参与话题检索的槽位竞争。
+实时流而不是检索索引，所以它**忽略 query、返回最新条目**。新闻 RSS 归
+world_news 族（2026-11-11 从 hot_trending 移出：热榜族与百度/微博/抖音
+热榜共用 dedupe_by_family(max_per_family=2) 名额，国际新闻流不该争位）。
+engine_families._REFILL_EXCLUDED_FAMILIES 同时排除了 hot_trending 与
+world_news——两者都产出「非查询相关」内容，回填通用 combo 只会引入噪声。
+实时流应当由「热搜/今日要闻」这类域按需取用，不参与话题检索的槽位竞争。
+world_news 还是语言绑定族：只声明 en 的源在中文查询里会被语言互斥摘除，
+这点由 route._filter_lang_bound_family 决定，与本构建器无关。
 
 **filter（本地过滤）** —— 事实核查源走这条。核查文不是实时流，而是
 「某个声明被判定为真伪」的查询型内容，用户问的是具体说法，所以本地关键词
@@ -61,6 +64,48 @@ _LATIN_RE = re.compile(r"[A-Za-z]")
 # 种子进程内短缓存：同一 URL 被多个域引用时不重复下载（RSS 单份 50–110KB）
 _FEED_TTL_S = 300.0
 _feed_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+
+def _read_disk_feed(url: str) -> list[dict[str, Any]] | None:
+    """跨进程轻量磁盘缓存（TTL 300s，避免 CLI 进程频繁重拉 RSS）。"""
+    try:
+        import argo_paths
+        p = argo_paths.state_path("feed_cache.json")
+        if not p.is_file():
+            return None
+        import json
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        entry = data.get(url)
+        if isinstance(entry, dict) and (time.time() - float(entry.get("ts", 0))) < _FEED_TTL_S:
+            return entry.get("items")
+    except Exception:
+        pass
+    return None
+
+
+def _write_disk_feed(url: str, items: list[dict[str, Any]]) -> None:
+    """原子更新跨进程轻量磁盘缓存。"""
+    if not items or "example.test" in url:
+        return
+    try:
+        import argo_paths
+        import json
+        p = argo_paths.state_path("feed_cache.json")
+        data: dict[str, Any] = {}
+        if p.is_file():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {}
+        data[url] = {"ts": time.time(), "items": items}
+        now = time.time()
+        # 清理 24h 前历史条目，防无界膨胀
+        data = {k: v for k, v in data.items() if isinstance(v, dict) and (now - float(v.get("ts", 0))) < 86400}
+        argo_paths.atomic_write_json(p, data)
+    except Exception:
+        pass
 
 
 def _clean(text: str) -> str:
@@ -275,6 +320,10 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
         hit = _feed_cache.get(url)
         if hit and (time.monotonic() - hit[0]) < _FEED_TTL_S:
             return hit[1]
+        disk_hit = _read_disk_feed(url)
+        if disk_hit is not None:
+            _feed_cache[url] = (time.monotonic(), disk_hit)
+            return disk_hit
         if one_timeout <= 0:
             return []
         # 实测 lobste.rs 会偶发 TLS EOF，重试一次；仍失败只丢这一份。
@@ -289,6 +338,7 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
                     raw = resp.read().decode("utf-8-sig", "replace")
                 items = _parse_feed(raw)
                 _feed_cache[url] = (time.monotonic(), items)
+                _write_disk_feed(url, items)
                 return items
             except Exception as exc:
                 last_exc = exc

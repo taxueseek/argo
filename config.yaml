@@ -111,9 +111,10 @@ domains:
   - (?i)(公众号|微信文章|微信公众号|wechat.*article|mp\.weixin)
   - (?i)(搜狗微信|微信搜索|搜公众号)
   primary: wechat_sogou
-- desc: Hacker News 搜索
+- desc: 极客与技术讨论搜索（Hacker News + Lobste.rs）
   engines_combo:
   - hackernews
+  - lobsters
   - anysearch
   fallback: anysearch
   name: hackernews_search
@@ -121,6 +122,7 @@ domains:
   patterns:
   - (?i)(hacker.?news|\bhn\b|news\.ycombinator)
   - (?i)(hackernews|hn\s+search)
+  - (?i)(lobste\.?rs|lobsters)
   primary: hackernews
 - desc: Stack Overflow 搜索
   engines_combo:
@@ -372,7 +374,6 @@ domains:
   engines_combo:
   - fred
   - worldbank
-  - nbs_stats
   - eurostat
   - fx_rate
   - frankfurter
@@ -479,7 +480,6 @@ domains:
   - anysearch
   - nasa_cmr
   - nasa_images
-  - soilgrids
   fallback: usgs
   name: earth_science
   parallel: true
@@ -500,10 +500,14 @@ domains:
   # 三者互补构成完整判断链（严重度 → 影响范围 → 是否在野利用），彼此不重复。
   # 位置放在兜底源之后是刻意的：它们在小预算下不参与通用路由，只在 deep/
   # research 或用户显式点名时生效——避免用 1KB+ 的结构化事实挤掉中文召回。
+  #
+  # 2026-11-11 接入 cisa_alerts（CISA 官方预警）：
+  # 放在 crt_sh 之后，由 _VERTICAL_NEW_SOURCE 加槽扩容，不挤掉 crt_sh 位次。
   engines_combo:
   - nvd
   - anysearch
   - crt_sh
+  - cisa_alerts
   fallback: anysearch
   name: security_search
   parallel: false
@@ -662,15 +666,14 @@ domains:
   # 谚文是强信号：含韩文的法律查询一律归本域
   - '(?i)[가-힣].{0,10}(법령|법률|조문|판례|헌법|민법|형법)'
   - '(?i)(韩国|韩语|韩文).{0,6}第\s*\d+\s*条'
-- desc: 土壤/农业（ISRIC SoilGrids 土壤理化属性；当前上游降级，源已就位）
+- desc: 土壤/农业（USDA + Open Food Facts；ISRIC SoilGrids 上游降级，暂时摘除）
   engines_combo:
-  - soilgrids
   - usda
   - openfoodfacts
   - anysearch
   fallback: anysearch
   name: soil_agri
-  primary: soilgrids
+  primary: usda
   parallel: false
   patterns:
   - '(?i)(土壤|soil|土质|clay content|土壤属性|土壤类型)'
@@ -1114,7 +1117,6 @@ domains:
   - baidu_baike
   - zh_wikipedia
   - wikidata
-  - europeana
   fallback: baidu_baike
   name: cn_encyclopedia
   parallel: true
@@ -1146,7 +1148,6 @@ domains:
   - moegirl
   - bangumi
   - zh_wikipedia
-  - jikan
   fallback: moegirl
   name: anime_encyclopedia
   parallel: false
@@ -1168,7 +1169,6 @@ domains:
   - k10plus
   - dnb
   - ndl
-  - local_goodreads
   fallback: anysearch
   name: book_search
   parallel: true
@@ -1575,8 +1575,9 @@ domains:
   # 二者是独立索引（非大厂代理），能力与 exa 同类但来源独立，本就该紧挨
   # 语义引擎；此前追加到队尾导致位次 8/9 远超 auto/balanced 预算窗
   # （budget=3 + 加槽 4 = 7），「装了但路由不带它」，test_new_source_
-  # reachability 红。前移后两源落进基础预算（3），尾部 tavily/firecrawl/
-  # brave/felo/searxng 等付费与重型源顺延，它们本就靠 deep/research 触达。
+  # reachability 红。前移后两源落进基础预算（3），尾部 tavily/firecrawl
+  # 顺延，它们本就靠 deep/research 触达。brave/felo/searxng 已停用，
+  # 2026-11-11 从 combo 摘除（tests/test_p0_dangling_combo.py 拦截复发）。
   engines_combo:
   - exa
   - mwmbl
@@ -1590,9 +1591,6 @@ domains:
   - parallel_free
   - tavily
   - firecrawl
-  - brave
-  - felo
-  - searxng
   fallback: anysearch
   name: semantic_discovery
   parallel: false
@@ -1658,7 +1656,6 @@ domains:
   engines_combo:
   - wikipedia
   - byted
-  - wolframalpha
   fallback: wikipedia
   name: fact_check
   parallel: true
@@ -1785,17 +1782,19 @@ domains:
   - (?i)[一-鿿].*(?<![a-zA-Z0-9])(Rust|Python|Golang|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|LLMs?)(?![a-zA-Z0-9])
   - (?i)[一-鿿].*(AI编程|大模型|量子|神经网络|机器学习|深度学习)
   primary: byted
-- desc: 英文技术通用（octen 主搜，低延迟；anysearch #2 作 hedged 救援；先于 catch-all）
+- desc: 英文技术通用与工程博客（octen 主搜；anysearch #2 作 hedged 救援；keenable 免费补位；eng_blogs 架构博客）
   engines_combo:
   - octen
   - anysearch
-  - exa
   - keenable
+  - exa
+  - eng_blogs
   fallback: exa
   name: english_tech
   parallel: true
   patterns:
   - (?i)(async|performance|best practices|tutorial|guide|how to|internals|SDK|framework)
+  - (?i)(engineering\s+blog|tech\s+blog|engineering\s+blogs|architecture\s+design)
   # 2026-11-04 补 @local_channel：「wikipedia api」「arxiv api」这类显式选择
   # 本地免 key 通道的写法要让位 local_reference / local_academic。
   - match: '(?i)\b(API|api)\b'

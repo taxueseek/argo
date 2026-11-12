@@ -1,0 +1,41 @@
+# Lobste.rs — 独立系统技术与极客社区一手讨论流（免 key）
+#
+# 补的盲区：现有技术讨论主要依赖 Hacker News（hackernews.yaml），HN 偏向泛科技
+# 与创业创投；Lobste.rs 实行严格邀请制，内容更垂直聚焦于操作系统、编译器、
+# 分布式系统、底层网络、PL 等高信噪比技术与架构复盘。此前仅在 feed.yaml 种子中
+# 作为次要项，无法被显式检索或参与路由。
+#
+# 形态：feed_mode=filter（本地主题词过滤，支持精准检索近期深度技术讨论）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine lobsters --stage health
+#   python3 scripts/search.py "Rust" --engine lobsters --json
+
+engine_id: lobsters
+type: rss_feed
+enabled: true
+cost_tier: free
+label: Lobsters
+family: social
+feed_mode: filter
+priority: 35
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://lobste.rs/rss
+langs:
+- en
+canary_query: "Linux"
+coverage:
+- tech
+- programming
+- systems
+- discussion
+desc: "Lobste.rs 极客社区（高质量底层系统、语言与架构一手讨论实时流，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "Linux"
+  - query: "Rust"

@@ -22,6 +22,7 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
 import engines_builders_intl as intl  # noqa: E402
+import engines_builders_weather as weather  # noqa: E402
 
 
 def _mk(spec=None):
@@ -282,6 +283,14 @@ class TestEuOpendata(_SpecCase):
 
 
 class TestOpenMeteo(_BuilderCase):
+    """Open-Meteo 构建器测试。
+
+    构建器已拆到 engines_builders_weather（2026-11-11），网络层走该模块的
+    `_FETCH` 绑定，故本类的桩打在 weather 模块上（见各用例的
+    patch.object(weather, "_http_json")）。
+    """
+
+
     def test_parse(self):
         def fake_json(url, timeout, engine=""):
             if "geocoding" in url:
@@ -290,7 +299,7 @@ class TestOpenMeteo(_BuilderCase):
             return {"current_weather": {"temperature": 23.3, "windspeed": 4.0,
                                         "weathercode": 3}}
         engine = intl._build_open_meteo_engine({"timeout": 8})
-        with patch.object(intl, "_http_json", side_effect=fake_json):
+        with patch.object(weather, "_http_json", side_effect=fake_json):
             res = engine("Tokyo", 3)
         self.assertEqual(len(res), 1)
         self.assertIn("Tokyo", res[0]["title"])
@@ -298,10 +307,79 @@ class TestOpenMeteo(_BuilderCase):
 
     def test_geocode_empty(self):
         engine = intl._build_open_meteo_engine({"timeout": 8})
-        with patch.object(intl, "_http_json",
+        with patch.object(weather, "_http_json",
                           return_value={"generationtime_ms": 0.05}):
             res = engine("q", 3)
         self.assertEqual(res, [])
+
+    def test_forecast_span_parsing(self):
+        """跨度词 → forecast_days；无跨度回落默认，超窗口夹紧。"""
+        self.assertEqual(intl._forecast_span("北京未来3天天气"), 3)
+        self.assertEqual(intl._forecast_span("上海接下来5天"), 5)
+        self.assertEqual(intl._forecast_span("广州7天预报"), 7)
+        self.assertEqual(intl._forecast_span("北京天气"), 3)   # 默认
+        self.assertEqual(intl._forecast_span("北京30天天气"), 16)  # 夹紧
+        self.assertEqual(intl._forecast_span("北京0天天气"), 3)    # 非法回落
+
+    def test_span_stripped_before_geocode(self):
+        # 跨度词含数字，「未来3天」不先摘会让地名变成「北京未来3天」→ 零候选
+        self.assertEqual(intl._geo_core("北京未来3天天气"), "北京")
+        self.assertEqual(intl._geo_core("上海接下来5天"), "上海")
+
+    def test_daily_forecast_expanded_to_rows(self):
+        """逐日预报按日展开成多条，含气温区间与降雨概率。"""
+        def fake_json(url, timeout, engine=""):
+            if "geocoding" in url:
+                return {"results": [{"name": "北京", "country": "中国",
+                                     "latitude": 39.9, "longitude": 116.4}]}
+            return {
+                "current_weather": {"temperature": 12.0, "windspeed": 3.0,
+                                    "weathercode": 1, "time": "2026-11-11T10:00"},
+                "daily": {
+                    "time": ["2026-11-11", "2026-11-12", "2026-11-13"],
+                    "temperature_2m_max": [15.0, 16.0, 14.0],
+                    "temperature_2m_min": [5.0, 6.0, 4.0],
+                    "precipitation_probability_max": [10, 80, 0],
+                },
+            }
+        engine = intl._build_open_meteo_engine({"timeout": 8})
+        with patch.object(weather, "_http_json", side_effect=fake_json):
+            res = engine("北京未来3天天气", 5)
+        # 1 条当前 + 3 条逐日
+        self.assertEqual(len(res), 4)
+        self.assertIn("当前", res[0]["title"])
+        self.assertIn("12.0", res[0]["snippet"])
+        # 逐日行带日期与气温区间
+        daily = [r for r in res if "预报" in r["title"]]
+        self.assertEqual(len(daily), 3)
+        self.assertIn("2026-11-12", daily[1]["title"])
+        self.assertIn("6.0°C~16.0°C", daily[1]["snippet"])
+        self.assertIn("降雨概率 80%", daily[1]["snippet"])
+        # 分数严格递减（同一 place 内当前 > 逐日）
+        scores = [r["score"] for r in res]
+        self.assertTrue(all(scores[i] > scores[i + 1] for i in range(len(scores) - 1)),
+                        scores)
+
+    def test_daily_arrays_length_mismatch_safe(self):
+        """列式数组长度不齐时以最短为准，不 IndexError、不错位。"""
+        def fake_json(url, timeout, engine=""):
+            if "geocoding" in url:
+                return {"results": [{"name": "东京", "country": "日本",
+                                     "latitude": 35.68, "longitude": 139.69}]}
+            return {
+                "current_weather": {"temperature": 20.0, "windspeed": 2.0,
+                                    "weathercode": 0, "time": "2026-11-11T10:00"},
+                "daily": {"time": ["2026-11-11", "2026-11-12"],
+                          "temperature_2m_max": [22.0],      # 少一天
+                          "temperature_2m_min": [10.0, 11.0],
+                          "precipitation_probability_max": []},
+            }
+        engine = intl._build_open_meteo_engine({"timeout": 8})
+        with patch.object(weather, "_http_json", side_effect=fake_json):
+            res = engine("东京天气", 3)
+        self.assertEqual(len(res), 2)  # 当前 + 1 天（tmax 只有 1 个）
+        self.assertIn("2026-11-11", res[1]["title"])
+        self.assertNotIn("降雨概率", res[1]["snippet"])  # 空数组不写概率
 
     def test_geo_core_strips_colloquial_time_words(self):
         # 完整天气问句先剥时间/疑问词再 geocode：「今日北京天气」直接拼 name=
@@ -310,6 +388,28 @@ class TestOpenMeteo(_BuilderCase):
         self.assertEqual(intl._geo_core("明日上海天气"), "上海")
         self.assertEqual(intl._geo_core("北京"), "北京")
         self.assertEqual(intl._geo_core("31.23,121.47"), "31.23,121.47")
+
+    def test_geo_core_strips_english_weather_words(self):
+        """回退测试：英文天气问句必须清洗成纯地名再 geocode。
+
+        Open-Meteo 官方文档的 name 只吃「Location name or postal code」，
+        实测 "New York weather" / "weather in Tokyo" / "temperature in Paris"
+        全部 0 候选（2026-11-12 六种写法复测）。旧正则只有中文噪声词，
+        把旧实现放回来本用例必须挂；同时锁住含 in 的真实地名不被误剥。
+        """
+        self.assertEqual(intl._geo_core("New York weather"), "New York")
+        self.assertEqual(intl._geo_core("Shanghai weather"), "Shanghai")
+        self.assertEqual(intl._geo_core("weather in Tokyo"), "Tokyo")
+        self.assertEqual(intl._geo_core("temperature in Paris"), "Paris")
+        self.assertEqual(intl._geo_core("weather Tokyo"), "Tokyo")
+        self.assertEqual(intl._geo_core("New York City weather"), "New York City")
+        # 含 in 的地名与中文/坐标/日文原样不受影响
+        self.assertEqual(intl._geo_core("Innsbruck"), "Innsbruck")
+        self.assertEqual(intl._geo_core("Virginia"), "Virginia")
+        self.assertEqual(intl._geo_core("The Hague"), "The Hague")
+        self.assertEqual(intl._geo_core("北京未来3天天气"), "北京")
+        self.assertEqual(intl._geo_core("31.23,121.47"), "31.23,121.47")
+        self.assertEqual(intl._geo_core("東京の天気"), "東京の天気")
 
     def test_full_sentence_query_reaches_geocode_cleaned(self):
         # 问句「今日北京天气」最终送进 geocoding 的 name= 应是「北京」
@@ -322,11 +422,40 @@ class TestOpenMeteo(_BuilderCase):
             return {"current_weather": {"temperature": 27.3, "windspeed": 2.0,
                                         "weathercode": 3}}
         engine = intl._build_open_meteo_engine({"timeout": 8})
-        with patch.object(intl, "_http_json", side_effect=fake_json):
+        with patch.object(weather, "_http_json", side_effect=fake_json):
             res = engine("今日北京天气", 3)
         self.assertIn("name=%E5%8C%97%E4%BA%AC", seen_url["u"],
                       "geocode 的 name= 应是剥过时间词的地名")
         self.assertGreaterEqual(len(res), 1)
+
+
+    def test_forecast_uses_auto_timezone_and_respects_n(self):
+        """逐日预报必须用坐标时区（timezone=auto），并按调用方 n 截断。"""
+        seen = {}
+
+        def fake_json(url, timeout, engine=""):
+            if "geocoding" in url:
+                return {"results": [{"name": "纽约", "country": "美国",
+                                     "latitude": 40.71, "longitude": -74.01}]}
+            seen["url"] = url
+            return {
+                "current_weather": {"temperature": 12.0, "windspeed": 3.0,
+                                    "weathercode": 1, "time": "2026-11-11T10:00"},
+                "daily": {
+                    "time": ["2026-11-11", "2026-11-12", "2026-11-13"],
+                    "temperature_2m_max": [17.0, 15.0, 8.0],
+                    "temperature_2m_min": [8.0, 7.0, 4.0],
+                    "precipitation_probability_max": [0, 0, 0],
+                },
+            }
+
+        engine = intl._build_open_meteo_engine({"timeout": 8})
+        with patch.object(weather, "_http_json", side_effect=fake_json):
+            res = engine("纽约未来3天天气", 2)
+
+        self.assertIn("timezone=auto", seen["url"])
+        self.assertNotIn("Asia%2FShanghai", seen["url"])
+        self.assertEqual(len(res), 2, res)
 
 
 class TestConfigDrivenEngines(unittest.TestCase):

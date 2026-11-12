@@ -178,8 +178,13 @@ def _quota_cooldown_seconds(category: str | None, reason: str,
 def _looks_like_balance_error(reason: str) -> bool:
     """错误文本是否是「账户余额不足」（预充值用尽，充值即恢复）。"""
     m = str(reason or "").lower()
+    # 只留 "enough money" 这段公共子串：bocha 实际文案是
+    # "You do not have enough money or package quota"，原词表 "not enough money"
+    # 因多了 "do not have" 而不匹配，冷却从设计的 1h 退化成 24h，到期重新
+    # 403 再锁 24h（2026-11-11 实测跨 16 天滚动复发）。放宽一处即覆盖
+    # "do not have" / "don't have" / 裸 "not enough money" 全部变体。
     return any(k in m for k in ("insufficient balance", "insufficient funds",
-                                "not enough money", "余额不足", "402"))
+                                "enough money", "余额不足", "402"))
 
 
 def _required_candidates(engine: str, spec: dict[str, Any]) -> list[str]:

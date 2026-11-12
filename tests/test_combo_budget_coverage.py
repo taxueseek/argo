@@ -96,8 +96,19 @@ _NARROW_TOP2_DEBT = {
     # local_* 或 family_of(e)=="web_general"；缘由见 config.yaml 该域注释）。
     "anime_encyclopedia", "art_museum", "astro_space",
     "dataset_search", "earth_science", "energy_grid", "film_search",
-    "global_event", "outbreak_health", "patent_search", "soil_agri",
+    "global_event", "outbreak_health", "patent_search",
     "standards", "transport_rt",
+    # ── 2026-11-11：intl_news_flash 随三家 RSS 改归 world_news 登记 ────────
+    #
+    # 前 2 位是 guardian_rss + france24，均为 world_news 族的英文 RSS，
+    # 没有通用保底源。但本域不存在 0 结果风险：feed_mode=hot 是实时流，
+    # 忽略查询词、永远返回固定窗口的最新条目；非英文查询则由
+    # _filter_lang_bound_family 整族摘除后落到通用兜底链（anysearch 等）。
+    # 两条路径都不会空手，故不把 anysearch 塞进前 2 位（会挤掉本域的一手源）。
+    "intl_news_flash",
+    # 2026-11-11：soil_agri 移除——摘掉已停用的 soilgrids 后，
+    # openfoodfacts（family=web_general）进入前 2 位，本域已有通用兜底，
+    # 按 _has_general_fallback 判据从债务清单毕业。
     # ── 2026-10-16：fx_query 建域时登记 ───────────────────────────────────
     #
     # 前 2 位 fx_rate（open.er-api 即期汇率）+ eastmoney（财经资讯站内检索，

@@ -1,0 +1,40 @@
+# CISA Cybersecurity Advisories — 美国网络安全与基础设施安全局官方通报（免 key）
+#
+# 补的盲区：安全与基础设施领域的绝对一手源。此前 security 域依赖 NVD 与 GitHub 漏洞库，
+# 偏向代码组件维度的 CVE 库；CISA 是国家级关键基础设施安全预警，直接发布
+# 正在被实际利用的漏洞（KEV）、工业控制系统（ICS）安全公告与重大国家级威胁预警。
+#
+# 形态：feed_mode=filter（本地过滤，支持精确查询特定厂商或漏洞类型）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine cisa_alerts --stage health
+#   python3 scripts/search.py "Vulnerabilities" --engine cisa_alerts --json
+
+engine_id: cisa_alerts
+type: rss_feed
+enabled: true
+cost_tier: free
+label: CISA 官方安全预警
+family: security
+feed_mode: filter
+priority: 30
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 12
+feed_url: https://www.cisa.gov/cybersecurity-advisories/all.xml
+langs:
+- en
+canary_query: "Vulnerabilities"
+coverage:
+- security
+- vulnerability
+- infrastructure
+- gov
+desc: "CISA 官方网络安全警报（正在被实际利用的已知漏洞、工控安全与国家级安全公告，一手权威，免 key）"
+recommended: false
+
+quality_queries:
+  - query: "Vulnerabilities"
+  - query: "Catalog"

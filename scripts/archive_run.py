@@ -26,9 +26,8 @@ archive_run.py — 搜索/研究 run 工作区归档
 
 默认根目录解析顺序：
   1. ARGO_ARCHIVE_ROOT
-  2. 工作区存在 AGENTS.md 时 → <workspace>/数据/argo-search-archive
-  3. ./数据/argo-search-archive（若父级 数据/ 可建）
-  4. ./argo-search-archive
+  2. 兼容既有工作区目录：<workspace>/数据/argo-search-archive（若存在）
+  3. 规范化项目标准级惯例：<workspace>/docs/research/archive 或 <workspace>/research/archive
 """
 
 from __future__ import annotations
@@ -138,17 +137,35 @@ def resolve_archive_root(explicit: str | Path | None = None) -> Path:
     if env:
         return Path(env).expanduser().resolve()
 
-    # 向上找带 AGENTS.md 的工作区
-    cwd = Path.cwd().resolve()
-    for p in [cwd, *cwd.parents]:
-        if (p / "AGENTS.md").is_file():
-            root = p / "数据" / "argo-search-archive"
-            return root
-        if p == p.parent:
-            break
+    # 与 research_notes 共用同一个基目录，避免「笔记在 research/、归档在
+    # docs/research/archive/」的首次使用分叉。
+    from research_notes import find_workspace_root, resolve_research_base
+    ws = find_workspace_root()
 
-    data_local = cwd / "数据" / "argo-search-archive"
-    return data_local
+    # 1. 兼容既有特定工作区归档目录（如母仓历史沿用的 数据/argo-search-archive）
+    legacy_root = ws / "数据" / "argo-search-archive"
+    if legacy_root.is_dir():
+        return legacy_root
+
+    # 2. 笔记基目录下的 archive/（docs/research/archive 或 research/archive）
+    base = resolve_research_base(ws)
+    try:
+        from research_notes import workspace_anchorable
+        anchorable = workspace_anchorable()
+    except Exception:
+        # 探测不可用不赌工作区：结论进用户级持久区。与 research_notes 的
+        # 兜底同一口径（宁落持久区，不落易失区），见 workspace_anchorable。
+        anchorable = False
+    if base.is_dir() or anchorable:
+        return base / "archive"
+
+    # 3. 工作区不可锚定（容器、无持久盘）：退回用户级文档目录，随环境销毁
+    #    会丢掉全部归档证据。与缓存分开（缓存可清，归档不可丢）。
+    try:
+        from argo_paths import research_root
+        return research_root().expanduser().resolve() / "archive"
+    except Exception:
+        return base / "archive"
 
 
 def make_run_id(query: str, when: datetime | None = None) -> str:
@@ -160,57 +177,99 @@ def make_run_id(query: str, when: datetime | None = None) -> str:
 
 def search_archive(query: str, root: Path | None = None,
                    since: str | None = None, until: str | None = None,
-                   limit: int = 10) -> list[dict[str, Any]]:
+                   limit: int = 10,
+                   include_notes: bool = False) -> list[dict[str, Any]]:
     """检索归档索引（成果复用）：主题词命中的历史研究/搜索 run。
 
     - 数据源：{root}/index.jsonl（无索引时返回空）
     - 过滤：query/tag/note 子串命中（query 必需）；packed_at 日期窗可选
+    - include_notes=True 时并入 research_notes 的 research-index.jsonl，
+      让「上次得到的结论」也能被搜到——只搜证据不搜结论，等于每次从零开始
     - 返回：run_id / packed_at / query / tag / source / counts / run_dir
     """
     archive_root = (root or resolve_archive_root()).expanduser().resolve()
     index_path = archive_root / "index.jsonl"
-    if not index_path.exists():
-        return []
     kw = (query or "").strip().lower()
     out: list[dict[str, Any]] = []
-    try:
-        with index_path.open(encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
+    if index_path.exists():
+        try:
+            with index_path.open(encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        continue
+                    hay = " ".join([
+                        str(row.get("query") or ""),
+                        str(row.get("tag") or ""),
+                        str(row.get("note") or ""),
+                    ]).lower()
+                    if kw and kw not in hay:
+                        continue
+                    packed = str(row.get("packed_at") or "")
+                    day = packed[:10]
+                    if since and day and day < since:
+                        continue
+                    if until and day and day > until:
+                        continue
+                    out.append({
+                        "run_id": row.get("run_id"),
+                        "packed_at": packed,
+                        "query": row.get("query"),
+                        "tag": row.get("tag"),
+                        "source": row.get("source"),
+                        "status": row.get("status"),
+                        "counts": row.get("counts") or {},
+                        "run_dir": row.get("run_dir"),
+                    })
+                    if len(out) >= limit:
+                        break
+        except OSError:
+            return out
+
+    if include_notes and kw:
+        try:
+            from research_notes import search_index as _search_notes, resolve_root as _resolve_note_root
+            # 笔记索引根与归档根**不是同一个目录**：8ec0501 起归档在
+            # `<base>/archive/`，笔记在 `<base>/`，索引是 `<base>/research-index.jsonl`。
+            # 只传 archive_root 时 `_search_notes` 读不到索引，`--include-notes`
+            # 永远空结果（实测：传 archive_root 得 []，传 note root 得命中）。
+            # 候选根取「笔记根 + 归档根 + 归档根的父目录」：
+            #   - 笔记根：ARGO_RESEARCH_ROOT 与 ARGO_ARCHIVE_ROOT 分设时仍然命中
+            #   - 归档根 / 其父：共用基目录布局（archive 与笔记同基）
+            # 三者去重后合并，任一根有索引都能搜到。
+            candidates: list[Path] = []
+            for cand in (_resolve_note_root(), archive_root, archive_root.parent):
+                rc = cand.expanduser().resolve()
+                if rc not in candidates:
+                    candidates.append(rc)
+            seen: set[str] = set()
+            for cand in candidates:
+                if not (cand / "research-index.jsonl").is_file():
                     continue
-                try:
-                    row = json.loads(line)
-                except ValueError:
-                    continue
-                hay = " ".join([
-                    str(row.get("query") or ""),
-                    str(row.get("tag") or ""),
-                    str(row.get("note") or ""),
-                ]).lower()
-                if kw and kw not in hay:
-                    continue
-                packed = str(row.get("packed_at") or "")
-                day = packed[:10]
-                if since and day and day < since:
-                    continue
-                if until and day and day > until:
-                    continue
-                out.append({
-                    "run_id": row.get("run_id"),
-                    "packed_at": packed,
-                    "query": row.get("query"),
-                    "tag": row.get("tag"),
-                    "source": row.get("source"),
-                    "status": row.get("status"),
-                    "counts": row.get("counts") or {},
-                    "run_dir": row.get("run_dir"),
-                })
-                if len(out) >= limit:
-                    break
-    except OSError:
-        return []
-    return out
+                for row in _search_notes(kw, root=cand, limit=limit):
+                    key = f"{row.get('kind')}:{row.get('slug')}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append({
+                        "run_id": f"note:{row.get('kind')}:{row.get('slug')}",
+                        "packed_at": row.get("created_at"),
+                        "query": row.get("title"),
+                        "tag": row.get("kind"),
+                        "source": "research_note",
+                        "status": "completed",
+                        "counts": {},
+                        "run_dir": str(row.get("note_file")),
+                        "note_slug": row.get("slug"),
+                        "note_kind": row.get("kind"),
+                    })
+        except Exception:
+            pass
+    return out[:limit]
 
 
 def write_search_archive(

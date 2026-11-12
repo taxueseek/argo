@@ -249,3 +249,30 @@ if __name__ == "__main__":
     ):
         fn()
     print("\n🎉 能力族测试全部通过")
+
+
+def test_static_family_table_does_not_conflict_with_specs():
+    """静态覆盖表与 spec 声明不得互相矛盾（两份真源的对拍门禁）。
+
+    2026-11-11 的教训：三家国际新闻 RSS 改了 spec 的 family，静态表晚一步才
+    补，期间同一个查询的族归属取决于 registry 是否先加载。这里直接读磁盘
+    spec，把「声明 vs 保底」的冲突变成离线可测的硬门禁。
+    """
+    import yaml
+    from engine_families import _ENGINE_FAMILY_OVERRIDES
+
+    specs_dir = Path(__file__).resolve().parent.parent / "engines" / "specs"
+    conflicts = []
+    for path in sorted(specs_dir.glob("*.yaml")):
+        try:
+            spec = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        if not isinstance(spec, dict):
+            continue
+        engine_id = str(spec.get("engine_id") or path.stem)
+        declared = spec.get("family")
+        fallback = _ENGINE_FAMILY_OVERRIDES.get(engine_id)
+        if declared and fallback and declared != fallback:
+            conflicts.append((engine_id, declared, fallback))
+    assert not conflicts, f"spec family 与静态覆盖表冲突（engine, spec, static）: {conflicts}"

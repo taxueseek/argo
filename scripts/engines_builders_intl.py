@@ -26,52 +26,20 @@ from typing import Any
 
 from engines_base import safe_search, _http_get_raw, http_open, rank_score
 from bounded_run import run_bounded
+from engines_http import UA as _UA, encode_url as _encode_url, http_json as _http_json
 
 logger = logging.getLogger("unified_search.engines")
 
-_UA = "argo-search/2.4 (unified-search@local)"
 
-# 结构字符保留集：既有 %XX 编码、协议/路径/参数分隔符不重复转义
-_URL_SAFE = "/:?&=%,._~#+-"
-
-
-def _encode_url(url: str) -> str:
-    """URL 非 ASCII 安全编码：中文查询（如 open_meteo geocode name=北京）
-    直接拼接会让 urllib 报 ascii 编码错误；已有 %XX 与结构字符不动。"""
-    return urllib.parse.quote(url, safe=_URL_SAFE)
-
-
-# 地理编码类查询的自然语言噪声：open_meteo 的 geocoding 只吃地名，
-# 「今日北京天气」「北京今天多少度」这类完整问句会让 name= 带上时间词与
-# 疑问词，上游 0 候选 → 引擎静默返回空（wx.py / weather_cn 各有一份同型
-# 正则，漏掉任一处该查询在对应源就全军覆没）。
-# 只剥「查询表达」不碰地名本身：坐标串（lat,lon）、纯地名原样通过。
-_GEO_COORD_RE = re.compile(r"-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?")
-_GEO_NOISE_RE = re.compile(
-    r"(天气|气温|温度|多少度|预报|怎么样|如何|下雨|降水|雪|晴|阴|"
-    r"今[天日晚]|明[天日晚]|后[天日]|昨[天日]|现在|实时|当前|查询|"
-    r"的|了|呢|吗|\?|？|，|,|。|\s)+",
+# 天气查询的地名/跨度解析（未来N天）与 Open-Meteo 构建器已拆至
+# engines_builders_weather.py（2026-11-11 拆分，本文件越过 1000 行硬上限）。
+# 此处保留同名再导出，既有 `from engines_builders_intl import _geo_core`
+# 的调用面（tests/plan.py/batch_probe.py）不受影响。
+from engines_builders_weather import (  # noqa: E402
+    forecast_span as _forecast_span,
+    geo_core as _geo_core,
+    build_open_meteo_engine as _build_open_meteo_engine,
 )
-
-
-def _geo_core(query: str) -> str:
-    """剥掉天气问句的时间/疑问词，留地名；空则回退原查询（不猜）。"""
-    raw = (query or "").strip()
-    # 坐标串（lat,lon）不是问句，原样透传——剥了逗号反而毁掉它
-    if _GEO_COORD_RE.fullmatch(raw):
-        return raw
-    q = _GEO_NOISE_RE.sub(" ", raw).strip()
-    return q or raw
-
-
-def _http_json(url: str, timeout: float, engine: str = "") -> Any:
-    req = urllib.request.Request(_encode_url(url), headers={"User-Agent": _UA, "Accept-Encoding": "gzip"})
-    with http_open(req, timeout=timeout, engine=engine) as resp:
-        raw = resp.read()
-        if resp.headers.get("Content-Encoding") == "gzip":
-            import gzip
-            raw = gzip.decompress(raw)
-        return json.loads(raw.decode("utf-8", "replace"))
 
 
 def _http_text(url: str, timeout: float, engine: str = "") -> str:
@@ -277,77 +245,6 @@ def _build_dnb_engine(spec: dict[str, Any]) -> Any:
         return results
     return _engine
 
-
-# ── Open-Meteo 全球天气 ───────────────────────────────────────────────────────
-
-def _build_open_meteo_engine(spec: dict[str, Any]) -> Any:
-    """Open-Meteo 全球天气（geocoding + forecast，免认证）。
-
-    查询词视为城市名/地名，先 geocode 取坐标再取当前天气。
-    """
-    timeout = spec.get("timeout", 12)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
-        # geocoding 只吃地名：完整天气问句（「今日北京天气」）先剥时间/疑问词，
-        # 否则上游 0 候选、引擎静默返回空
-        place_q = _geo_core(query)
-        try:
-            geo = _http_json(
-                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(place_q)}&count=3&language=zh",
-                to, engine=spec.get("_name", ""))
-        except Exception as e:
-            logger.warning(f"Open-Meteo geocode 失败: {e}")
-            return []
-        results = []
-        places = [p for p in (geo.get("results") or [])[:n]
-                  if p.get("latitude") is not None and p.get("longitude") is not None]
-        if not places:
-            return results
-
-        def _fetch_place(item: tuple[int, dict[str, Any]]):
-            """单个 place 的 forecast；失败返回 None（与串行版逐个 except 一致）。"""
-            _rk9, place = item
-            lat, lon = place["latitude"], place["longitude"]
-            try:
-                wx = _http_json(
-                    f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true",
-                    to, engine=spec.get("_name", ""))
-            except Exception:
-                return None
-            cw = wx.get("current_weather") or {}
-            name = place.get("name", "")
-            country = place.get("country", "")
-            temp = cw.get("temperature")
-            windspeed = cw.get("windspeed")
-            wcode = cw.get("weathercode")
-            wmo = {0: "晴", 1: "基本晴", 2: "多云", 3: "阴", 45: "雾", 48: "雾凇",
-                   51: "毛毛雨", 61: "小雨", 63: "中雨", 65: "大雨", 71: "小雪",
-                   73: "中雪", 75: "大雪", 80: "阵雨", 95: "雷暴"}.get(wcode, f"code{wcode}")
-            return (_rk9, {
-                "title": f"{name} · {country} 天气",
-                "url": f"https://open-meteo.com/en/docs?latitude={lat}&longitude={lon}",
-                "snippet": (f"当前 {temp}°C · {wmo} · 风速 {windspeed}km/h"
-                            if temp is not None else "暂无数据")[:300],
-                "source": "open_meteo",
-                "score": rank_score(0.7, _rk9),
-            })
-
-        # 多 place 的 forecast 并行（2026-09-29）：串行版在 geocode 返回 3 个
-        # 候选时墙钟 = geocode + 3×forecast（实测 9.28s 恒定）；有界并发后
-        # = geocode + max(forecast)（实测 3.9-5.1s）。总上限 to+2s ≤ 串行
-        # 最坏 n×to；daemon 线程 + 轮询，卡住的 HTTP 读拖不垮止损
-        # （bounded_run 文档依据；与 wx.py:252「同坐标多端点并行」同哲学）。
-        finished, _unfinished = run_bounded(
-            list(enumerate(places)), _fetch_place,
-            wait_s=float(to) + 2.0, max_workers=3)
-        # 保序：按候选序号重排，与串行版输出逐位一致（rank_score 依赖 _rk9）
-        results = [r for _rk, r in sorted(
-            (v for _i, v in finished if isinstance(v, tuple)),
-            key=lambda t: t[0])]
-        return results
-    return _engine
 
 
 # ── SearchMySite 小型个人站索引（HTML）───────────────────────────────────────

@@ -348,6 +348,12 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "faz": "world_news", "nhk": "world_news", "matichon": "world_news",
     "vnpress": "world_news", "antara": "world_news", "hurriyet": "world_news",
     "ynet": "world_news", "ct24": "world_news",
+    # 2026-11-11：三家国际新闻 RSS 从 hot_trending 移到 world_news 后必须
+    # 同步登记这里。不登记时行为取决于 engines 是否已加载 registry：
+    # pytest 单跑（spec 快照为空）走静态表、族判成 web_general，三家原样
+    # 保留；全量回归里前序用例已加载 registry，族判成 world_news，中文查询
+    # 按语言互斥把英文源全摘掉。同一个查询两种结果，正是静态表要防的。
+    "guardian_rss": "world_news", "france24": "world_news", "dw_news": "world_news",
 }
 
 # 族 → 展示名

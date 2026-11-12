@@ -467,7 +467,7 @@ def check_limits(report: dict, doc: dict) -> list[str]:
 
 def save_baseline(report: dict, path: Path) -> None:
     path.write_text(dumps_pretty({
-        "_meta": {"saved_at": datetime.now().isoformat(timespec="seconds"),
+        "_meta": {"saved_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                   "note": "对照基准：--compare 用它算差异"},
         "report": report,
     }), encoding="utf-8")
@@ -567,7 +567,7 @@ def _cmd_record(args) -> int:
         return 1
     doc = {
         "_meta": {
-            "recorded_at": datetime.now().isoformat(timespec="seconds"),
+            "recorded_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "note": "真实引擎返回的录制数据。改动之后如果确定变好，"
                     "请更新各条的下限并在这里记一笔。",
             "usage": "录下来的引擎返回只属于录制那一天。重跑保证的是"

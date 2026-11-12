@@ -41,10 +41,12 @@ def _seed_sources(logs: Path):
                     "engines_used": ["slow_primary"], "count": 3,
                     "errors": [], "mode": "auto"}),  # 全表外名 → 不入账
     ]) + "\n", encoding="utf-8")
+    # 未恢复的恢复尝试才是坏例；成功恢复不入账（2026-11-12 口径修正）。
     (logs / "recovery.jsonl").write_text(json.dumps(
         {"ts": _NOW, "stream": "recovery", "query": "恢复查询",
-         "triggered": True, "recovered": True, "level_used": "L3",
-         "strategy_used": "switch_engine", "steps_tried": 1}) + "\n",
+         "triggered": True, "recovered": False, "level_used": None,
+         "strategy_used": None, "steps_tried": 0,
+         "note": "无可用恢复策略"}) + "\n",
         encoding="utf-8")
     (logs.parent / "circuit_breaker.json").write_text(json.dumps(
         {"engines": {"wikipedia": {"state": "open", "failures": 5,
@@ -79,6 +81,32 @@ def test_list_filter_by_kind(ledger_env):
     badcase_ledger.ingest()
     rows = badcase_ledger._fetch("breaker", None, 10)
     assert len(rows) == 1 and rows[0]["engine"] == "wikipedia"
+
+
+def test_successful_recovery_is_not_a_badcase(ledger_env):
+    """回退测试：成功恢复不算坏例，`recovered=True` 必须从账本消失。
+
+    旧实现只筛 `triggered`，而 recovery.jsonl 每行都 triggered=True，
+    于是 138/323 次成功恢复被记成 recovery_missed，把 seen_days 顶到 15 天。
+    把旧判据（`if not triggered: continue`）放回来，本用例必须挂。
+    """
+    (ledger_env / "query.jsonl").write_text("", encoding="utf-8")
+    (ledger_env / "recovery.jsonl").write_text("\n".join([
+        json.dumps({"ts": _NOW, "stream": "recovery", "query": "成功恢复",
+                    "triggered": True, "recovered": True, "level_used": "L3",
+                    "strategy_used": "switch_engine"}),
+        json.dumps({"ts": _NOW, "stream": "recovery", "query": "失败恢复",
+                    "triggered": True, "recovered": False, "level_used": None,
+                    "strategy_used": None, "note": "无可用恢复策略"}),
+    ]) + "\n", encoding="utf-8")
+    (ledger_env.parent / "circuit_breaker.json").write_text(
+        json.dumps({"engines": {}}), encoding="utf-8")
+    result = badcase_ledger.ingest()
+    assert result["sources"] == 1, "只该收未恢复的那一条"
+    rows = badcase_ledger._fetch("recovery", None, 10)
+    assert len(rows) == 1 and rows[0]["root_cause"] == "recovery_missed"
+    assert "成功恢复" not in {r["query"] for r in rows}
+    assert "note=无可用恢复策略" in rows[0]["detail"]
 
 
 # ── 归因层（2026-11-10 补）：root_cause + Seen N× ────────────────────────────
@@ -284,3 +312,60 @@ def test_old_schema_migrates_without_losing_rows(ledger_env, tmp_path):
     con2.close()
     assert "root_cause" in cols, "老库该被补上 root_cause 列"
     assert n == 1, "补列不该丢历史坏例"
+
+
+def test_overview_aggregates_system_ledgers(ledger_env):
+    """测试 overview 正确聚合四大系统台账状态。"""
+    res = badcase_ledger.overview()
+    assert "badcases" in res
+    assert "dormant_sources" in res
+    assert "ratchets" in res
+    assert "sunset_stubs" in res
+    # 棘轮基线断言引用单真源常量——手抄数字会随棘轮下调漂移（评审 2026-11-12）
+    assert (res["ratchets"]["broad_silent_catch_baseline"]
+            == badcase_ledger.BROAD_SILENT_CATCH_BASELINE)
+    stubs = res["sunset_stubs"]["modules"]
+    assert any(s["module"] == "engines_builders_batch16.py" for s in stubs)
+
+
+def test_overview_dormant_uses_derived_truth_not_missing_json(ledger_env, monkeypatch):
+    """休眠概览走 dormant_engines() 派生真值，取不到显式 error 不假 0。
+
+    首版读 data/dormant_ledger.json（不存在的文件）且 except 静默降级成
+    空列表——输出恒 count=0 假健康，评审 2026-11-12 修正。本测试锁两条
+    路径：派生成功映射进输出；派生失败输出 status=error。
+    """
+    import dormant_ledger
+
+    def fake_engines():
+        return {"some_engine": [("domain_a", 5)], "other_engine": [("domain_b", 4)]}
+
+    monkeypatch.setattr(dormant_ledger, "dormant_engines", fake_engines)
+    monkeypatch.setattr(dormant_ledger, "check_dormant_ledger", lambda: [])
+    res = badcase_ledger.overview()
+    assert res["dormant_sources"]["status"] == "ok"
+    assert res["dormant_sources"]["count"] == 2
+    assert res["dormant_sources"]["engines"] == ["other_engine", "some_engine"]
+    assert res["dormant_sources"]["reconciliation_issues"] == []
+
+    def boom():
+        raise RuntimeError("route 不可用")
+
+    monkeypatch.setattr(dormant_ledger, "dormant_engines", boom)
+    res = badcase_ledger.overview()
+    assert res["dormant_sources"]["status"] == "error"
+    assert "RuntimeError" in res["dormant_sources"]["error"]
+
+
+def test_overview_cli_exits_nonzero_on_dormant_error(ledger_env, monkeypatch, capsys):
+    """overview 子命令在 dormant 取数失败时打印 JSON 并以非零退出码上报。"""
+    import dormant_ledger
+
+    def boom():
+        raise RuntimeError("route 不可用")
+
+    monkeypatch.setattr(dormant_ledger, "dormant_engines", boom)
+    rc = badcase_ledger.main(["overview"])
+    assert rc == 1
+    assert "dormant_sources 取数失败" in capsys.readouterr().err
+

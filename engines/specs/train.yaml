@@ -3,6 +3,9 @@
 #         queryTrainInfo 查经停），免 Key，查询路径运行时解析跟随官方改版
 # 能力: 自然语言查询车次时刻与余票（"上海到北京 后天 G"）、中转换乘方案
 #         （"北京到拉萨 中转"，可「经西宁」指定换乘站）、全程经停（"G2 经停"）
+#         余票行含官方票价（字段 39 解析，含二等/一等/优选一等/商务/无座）与
+#         复兴号标记（字段 46 段 1），与携程 SSR 的 seatItemInfoList/isFuXingTrain
+#         逐字段对拍一致（2026-11-11）
 # 输出: 行 URL 带查询身份参数（train_code/first_train_no 等）——表格行不共享
 #         裸 URL，避免被 URL 去重折叠成一条（fred/worldbank 时序引擎同款约定）
 # 实现: scripts/train.py（纯标准库，站点表 station_name.js 解析 + 7 天缓存，输出结构化 YAML）

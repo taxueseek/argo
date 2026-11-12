@@ -7,9 +7,11 @@
 # 仅次于卫报（979 字），高于 NYT（147）/ BBC（106）。条目量偏少（24），
 # 所以它是互补位而不是主位。
 #
-# 形态：feed_mode=hot（热榜语义，同 guardian_rss）。归 hot_trending 族，
-# 不进话题检索域。注意同族在组合里有 max_per_family=2 上限，它与
-# guardian_rss 同族，两者在同一 combo 里至多同时出现两个。
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族，
+# 不进话题检索域。2026-11-11 从 hot_trending 移出：热榜族与百度/微博/抖音
+# 热榜共用 dedupe_by_family(max_per_family=2) 名额，国际新闻流不该争位。
+# 同族在组合里仍有 max_per_family=2 上限，它与 guardian_rss 同族，
+# 两者在同一 combo 里至多同时出现两个。
 #
 # 验证:
 #   python3 scripts/engine_validate.py --engine france24 --stage all --admit
@@ -20,7 +22,7 @@ type: rss_feed
 enabled: true
 cost_tier: free
 label: France 24 RSS
-family: hot_trending
+family: world_news
 feed_mode: hot
 relevance_check: false
 priority: 30

@@ -3,12 +3,13 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（32 个，唯一事实=bin/argo 分发表）
+## 命令总览（33 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
 | `argo search` | 统一搜索（多引擎融合；`--list-engines` 看源清单） |
 | `argo research` | 深度研究（问题分解→多源采集→综合报告，`--broaden`/`--deep-read`） |
+| `argo note` | 研究笔记归档（`study` 单篇精研 / `explore` 方向探索 / `list` 检索索引） |
 | `argo evidence` | 可信度评估（选拔×吸收两维） |
 | `argo clarify` | 意图消歧（歧义检测+意图分类+路由建议） |
 | `argo fetch` | 单页正文抓取（六级降级链，`--full` 全文存档） |
@@ -250,6 +251,33 @@ python3 scripts/research.py "查询" --work-packages '[{"id":"d","question":"定
 - `--budget N`：超限标记 `budget.exhausted=true`
 
 **社交舆情**：`--mode social-sentiment --platforms xiaohongshu,reddit,twitter` → `platform_breakdown` / `engagement_totals` / `top_topics` / `cross_platform_posts`。
+
+## argo note — 研究笔记归档（判断稿一等公民化）
+
+`research` 存证据（dossier），`note` 存结论（判断稿）。两者共用 `<root>` 但索引文件不同，互不写入对方目录。契约见 `references/research-protocol.md`。
+
+```bash
+argo note study  <url> [--title T] [--slug S] [--archive FILE] [--related slug] [--root DIR]
+argo note explore "<问题>" [--title T] [--slug S] [--related slug] [--root DIR]
+argo note list  [查询词] [--kind study|explore] [--limit N] [--root DIR]
+```
+
+- **study**：复制本地原文（`--archive`）或登记文本（`--archive-text`），算 sha256，生成五段式判断稿
+  - 目录：`<root>/study/<slug>/`，包含 `00_判断稿.md`、`manifest.json`、`sources/<slug>_原文版_<YYYYMMDD>.md`
+  - 旧名 `<slug>-研究.md` 与根目录原文名都是指向实体的相对软链，不是第二份内容
+- **explore**：生成五段式骨架，额外带「候选方向」段；结构同上，旧名 `<slug>-探索.md`
+- **list**：子串检索 `research-index.jsonl`（slug/title/url/related/正文首段）
+- 索引：`<root>/research-index.jsonl`，一行一条，含 kind / slug / url / sha256 / related / body_excerpt / created_at
+- 重跑不覆盖：同名 slug 会新建 `<slug>-<时分秒>` 目录，旧条目保留
+- `argo research --auto-note` 与 `argo note explore` 共用同一资产包写入函数，产出结构一致
+
+**与 `research --search-archive` 的衔接**：加 `--include-notes` 后，归档检索会并入笔记索引，让上次得到的结论也能被搜到。
+
+```bash
+argo research "主题" --search-archive "关键词" --include-notes
+```
+
+**边界**：只搬运与登记，不校验笔记内容质量（那是判断，不是机器）；sha256 只对原文存档算。
 
 ## evidence 输出字段
 
@@ -744,11 +772,12 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_STRAGGLER_GRACE_S` | 慢源（掉队者）等待宽限时间（秒） | 默认 0.5s，超期即截断早停 |
 | `ARGO_TOOL_CALL_COALESCE` | MCP 工具并发单飞合并（single-flight）开关 | 默认 1（同一毫秒内相同请求合并执行）；=0 关闭 |
 
-### 路径与数据位置（11）
+### 路径与数据位置（12）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
-| `ARGO_ARCHIVE_ROOT` | 研究与搜索完整候选归档根目录 | 默认数据/argo-search-archive/（argo paths 查看） |
+| `ARGO_ARCHIVE_ROOT` | 研究与搜索完整候选归档根目录 | 默认 `<工作区>/docs/research/archive/` 或 `<工作区>/research/archive/`；旧 `数据/argo-search-archive/` 存在时优先兼容 |
+| `ARGO_RESEARCH_ROOT` | 研究笔记归档根目录（`argo note`） | 默认与归档同一基目录（`docs/research/` 或 `research/`）；与 `ARGO_ARCHIVE_ROOT` 同设时两者索引合并检索 |
 | `ARGO_CLIENTS_PATH` | MCP 客户端配置声明文件路径覆盖 | 默认 mcp/clients.yaml |
 | `ARGO_FULLTEXT_DIR` | 网页全文抓取持久化存档目录 | 默认 <状态目录>/fulltext/ |
 | `ARGO_HOME_OVERRIDE` | 用户 Home 目录覆盖（测试/沙箱隔离） | 隔离 ~/.argo 与 ~/.config/argo，防污染真实环境 |

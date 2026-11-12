@@ -160,7 +160,11 @@ class TestVerticalKeepMapConsistency:
 
 
 class TestProbeActuallyRoutesToNewSource:
-    """端到端：声明了新专源的域，用典型查询真的要把该源选出来。
+    """路由级探针：声明了新专源的域，用典型查询真的要把该源选出来。
+
+    注意边界：本类只验证「查询 → 域 → combo」这一段，不发起网络请求，也不
+    验证上游可达与解析。新源的网络可达性靠 `engine_validate --stage health`
+    与 live 探针，别把这里的绿色当成「源一定能出结果」。
 
     上面的 test_new_source_within_budget 只在**策略函数**层面复刻计算方式，它
     无法发现「域根本没被任何 pattern 选中」（kor_law 的实例：引擎声明齐全、
@@ -181,8 +185,12 @@ class TestProbeActuallyRoutesToNewSource:
         "cn_tech_community": ("技术博客",),
         "financial_news": ("财经",),
         "weather_query": ("上海天气",),
-        # 2026-09-17：国际新闻实时流 + 声明核验两个新域的端到端探针
-        "intl_news_flash": ("今日国际要闻",),
+        # 2026-09-17：国际新闻实时流 + 声明核验两个新域的端到端探针。
+        # 2026-11-11：三家 RSS 改归 world_news 后是**语言绑定族**——中文查询
+        # 会按语言互斥把只声明 en 的源全部摘掉，退到通用兜底（设计如此，
+        # 见 _filter_lang_bound_family），所以探针改用英文问法。判定点是
+        # 「域选对了、源在 combo 里、语言匹配时真的被选中」。
+        "intl_news_flash": ("world news today",),
         "claim_check": ("疫苗谣言 是不是真的",),
         # 2026-09-19：academic 域接入 local_pubmed（修复）+ core（新增）。
         # 探针须落在 academic 且能选出新源——auto/balanced 档实测为
@@ -210,6 +218,13 @@ class TestProbeActuallyRoutesToNewSource:
         # （独立索引，补 exa/anysearch 的大厂依赖）。探针用「有哪些值得关注」
         # ——本域中文主词，英文「find me」类同义。
         "semantic_discovery": ("有哪些值得关注 行业格局", "find me emerging tools"),
+        # 2026-11-11：cisa_alerts 接入 security_search（位次 4，加槽扩容）。
+        # 探针用中文自然语言漏洞问法——本域 patterns 的主入口，nvd 会在语言
+        # 降级里让位，cisa_alerts 不受影响，正好验证「加了槽真的被选中」。
+        "security_search": ("log4j 漏洞 影响", "CVE-2024-38077 漏洞"),
+        # 2026-11-11：eng_blogs 接入 english_tech（位次 3）。探针用本域新补的
+        # 英文架构博客 pattern，稳定落域并选出聚合源。
+        "english_tech": ("engineering blog architecture",),
     }
 
     @pytest.mark.parametrize("domain", sorted(NEW_SOURCES))

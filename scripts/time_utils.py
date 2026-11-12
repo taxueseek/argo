@@ -231,3 +231,19 @@ def sort_results_by_time(results: list[dict[str, Any]], sort: str) -> list[dict[
         return (0, ts if sort == "oldest" else -ts)
 
     return sorted(results, key=_key)
+
+
+def weather_chronological(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """天气域的时间序：当前天气在前，逐日预报按日期升序。
+
+    逐日预报被拆成多条独立结果后，五维 rerank 的「新颖性」会把最远的一天
+    排到最前（实测「北京未来3天天气」返回 11-13、11-12、11-11、当前）。
+    天气查询的语义是「先看现在，再看未来」，这里在最终截断后做一次域内
+    稳定排序；只由 weather_query 的调用方使用，不影响其它域的排序。
+    """
+    def _key(row: dict[str, Any]) -> tuple[str, int]:
+        published = str(row.get("published_at") or "")
+        current_first = 0 if "当前" in str(row.get("title") or "") else 1
+        return published, current_first
+
+    return sorted(rows, key=_key)

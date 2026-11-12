@@ -73,6 +73,27 @@ class TestRemoteQuotaStateMachine(unittest.TestCase):
         self.assertFalse(mgr.is_remote_exhausted("byted"))
         self.assertFalse(mgr.is_hard_down("byted"))
 
+    def test_balance_error_cooldown_covers_real_bocha_wording(self):
+        """回退测试：bocha 真实 403 文案必须按 1h 余额冷却，不是 24h。
+
+        旧词表写的是 "not enough money"，而 bocha 实际返回
+        "You do not have enough money or package quota" —— 多了 "do not have"
+        就不匹配，实测 _looks_like_balance_error=False，冷却退化成 86400s，
+        每天到期重新 403 再锁一天，滚动复发了 16 天。把旧词表放回来，
+        本用例必须挂。
+        """
+        from quota import _looks_like_balance_error, _quota_cooldown_seconds
+        from engine_states import FAILURE_QUOTA_EXHAUSTED
+        real = "HTTP 403: You do not have enough money or package quota"
+        self.assertTrue(_looks_like_balance_error(real))
+        self.assertEqual(
+            _quota_cooldown_seconds(FAILURE_QUOTA_EXHAUSTED, real, "day"),
+            3600, "余额不足类固定 1h 冷却，与 day 周期解耦")
+        # 同义变体一并覆盖，且非余额错误不被误判
+        self.assertTrue(_looks_like_balance_error("HTTP 403 not enough money"))
+        self.assertTrue(_looks_like_balance_error("You don't have enough money"))
+        self.assertFalse(_looks_like_balance_error("10406: quota exhausted"))
+
     def test_balance_error_and_legacy_empty_key_fp_auto_heal(self):
         """存量 402 余额标记按 1h 冷却自愈；历史空 key_fp 在有效密钥就位时自愈。"""
         mgr = _fresh_manager()

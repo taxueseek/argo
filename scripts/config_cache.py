@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -386,6 +387,12 @@ def _sweep_orphan_cache_slots(keep: Path) -> None:
         siblings = list(keep.parent.glob("config-cache-*.json"))
     except OSError:
         return
+    keep_cfg = ""
+    try:
+        keep_payload = json.loads(keep.read_text(encoding="utf-8"))
+        keep_cfg = str(((keep_payload.get("key") or {}).get("config_path")) or "").strip()
+    except Exception:
+        pass
     for path in siblings:
         if path == keep:
             continue
@@ -400,3 +407,10 @@ def _sweep_orphan_cache_slots(keep: Path) -> None:
                 path.unlink()
             except OSError:
                 continue
+        elif cfg_path and keep_cfg and cfg_path == keep_cfg:
+            # 同一 checkout 历史指纹槽且已超 2 小时未动：安全回收，防多轮改配置无界泄漏
+            try:
+                if (time.time() - path.stat().st_mtime) > 7200:
+                    path.unlink()
+            except OSError:
+                pass

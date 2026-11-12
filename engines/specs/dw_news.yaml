@@ -7,7 +7,9 @@
 # 里最多的（卫报 45、NYT 23、BBC 32），代价是摘要密度中等（193 字，排中游）。
 # 条目多意味着实时流更长，这是它相对 france24（24 条）的取舍。
 #
-# 形态：feed_mode=hot（热榜语义，同 guardian_rss）。归 hot_trending 族。
+# 形态：feed_mode=hot（实时流语义，同 guardian_rss）。归 world_news 族。
+# 2026-11-11 从 hot_trending 移出：热榜族与百度/微博/抖音热榜共用
+# dedupe_by_family(max_per_family=2) 名额，国际新闻流不该与热榜争位。
 #
 # 可达性（实测 2026-09-17）：它是 intl_news_flash 域的第 3 位，fast 档的
 # combo 预算裁到 2 个引擎，所以 fast 下不出现；`--depth balanced` 起三个
@@ -23,7 +25,7 @@ type: rss_feed
 enabled: true
 cost_tier: free
 label: DW 德国之声 RSS
-family: hot_trending
+family: world_news
 feed_mode: hot
 relevance_check: false
 priority: 32

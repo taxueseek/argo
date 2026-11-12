@@ -29,6 +29,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -465,6 +466,85 @@ class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
         """测试 JEV deadline 默认提升至 1.2s，足够覆盖 0.55s 真实冷调用。"""
         self.assertGreaterEqual(se.DEFAULT_JEV_DEADLINE_S, 1.2)
 
+    def test_jev_depth_golden_dataset_health(self):
+        """黄金集资产健康度（静态校验，与模型输出无关）。
+
+        为什么单独测：黄金集是评测脚本 tests/evals/eval_depth_jev.py 的
+        真源，格式坏了评测即废。锁条数、标签枚举、正负例平衡、标注理由
+        非空、title 互异（评测逐条对拍的前提）与阈值键齐全。
+        """
+        golden_file = ROOT / "tests" / "evals" / "golden_depth_jev.json"
+        self.assertTrue(golden_file.exists(), "JEV 深度判定黄金数据集缺失")
+        data = json.loads(golden_file.read_text(encoding="utf-8"))
+        samples = data.get("samples") or []
+        self.assertGreaterEqual(len(samples), 20, "黄金数据集样本量不足 20 条")
+        valid = set(se.SUBSTANTIVE_DISCUSSION_LABELS)
+        for s in samples:
+            self.assertIn(s.get("expected_label"), valid, f"样本 {s.get('id')} 标注非法")
+            self.assertTrue((s.get("title") or "").strip(), f"样本 {s.get('id')} 缺 title")
+            self.assertTrue((s.get("text") or "").strip(), f"样本 {s.get('id')} 缺正文")
+            self.assertTrue((s.get("rationale") or "").strip(), f"样本 {s.get('id')} 缺标注理由")
+        titles = [s["title"] for s in samples]
+        self.assertEqual(len(titles), len(set(titles)), "title 有重复，逐条对拍会错位")
+        pos = sum(1 for s in samples if s["expected_label"] == "substantive in-depth discussion")
+        self.assertGreater(pos, 0, "黄金集缺正例（substantive）")
+        self.assertGreater(len(samples) - pos, 0, "黄金集缺负例（passing mention）")
+        thresholds = data.get("metric_thresholds") or {}
+        for key in ("min_precision", "min_recall", "min_f1"):
+            self.assertIn(key, thresholds, f"metric_thresholds 缺 {key}")
+
+    def test_jev_depth_pipeline_contract(self):
+        """深度判定管道契约（mock 与黄金标注零耦合）。
+
+        为什么 mock 不能抄黄金标注：首版（264b112）mock 按 title 返回
+        expected_label，预测恒等于标注、F1 恒满分——「F1>=0.90 门禁」对
+        判定质量退化零敏感，属循环论证（评审 2026-11-12 撤销）。真实 F1
+        评测走 tests/evals/eval_depth_jev.py 的真实模型通道；本测试只锁
+        管道契约：私域剔除、空正文过滤、输入构建与截断、label→字段映射、
+        SUPPORT_THRESHOLD 边界。
+        """
+        long_text = "超" * (se.MAX_TEXT_CHARS + 200)
+        items = [
+            {"url": "https://example.com/a", "title": "深入讲解", "text": "实质性正文"},
+            {"url": "https://example.com/b", "title": "", "text": "无标题正文"},
+            {"url": "https://example.com/c", "title": "超长文本", "text": long_text},
+            {"url": "file:///tmp/secret-notes.md", "title": "本地文件", "text": "私域内容"},
+            {"url": "https://example.com/e", "title": "空正文", "text": "   "},
+        ]
+        captured = {}
+
+        def contract_mock(texts, labels, instructions=None, criteria=None):
+            captured["texts"] = list(texts)
+            captured["labels"] = list(labels)
+            captured["instructions"] = instructions
+            captured["criteria"] = criteria
+            # 固定测试向量，与黄金标注零耦合；条数须与 usable 三条对齐
+            return [
+                {"label": "substantive in-depth discussion", "confidence": 0.95},
+                {"label": "passing mention or brief reference", "confidence": 0.71},
+                {"label": "substantive in-depth discussion", "confidence": 0.4},
+            ]
+
+        with patch.object(se, "classify", side_effect=contract_mock):
+            res = se.assess_substantive_discussion("量子计算", items)
+        self.assertIsNotNone(res)
+        # 本地文件（file://）与空正文被剔除，只有 3 条进模型
+        self.assertEqual(sorted(res),
+                         ["https://example.com/a", "https://example.com/b", "https://example.com/c"])
+        # 输入契约：title 拼在正文前、超长正文按 MAX_TEXT_CHARS 截断、instructions 带 topic
+        self.assertTrue(captured["texts"][0].startswith("深入讲解\n"))
+        self.assertLessEqual(len(captured["texts"][2]), len("超长文本\n") + se.MAX_TEXT_CHARS)
+        self.assertIn("量子计算", captured["instructions"])
+        self.assertEqual(captured["labels"], list(se.SUBSTANTIVE_DISCUSSION_LABELS))
+        self.assertEqual(captured["criteria"], se.SUBSTANTIVE_DISCUSSION_CRITERIA)
+        # 映射契约：label/conf 透传，is_substantive 受 SUPPORT_THRESHOLD 门控
+        self.assertEqual(res["https://example.com/a"]["confidence"], 0.95)
+        self.assertTrue(res["https://example.com/a"]["is_substantive"])
+        self.assertTrue(res["https://example.com/b"]["is_passing_mention"])  # 0.71 刚过 0.7
+        self.assertFalse(res["https://example.com/b"]["is_substantive"])
+        self.assertFalse(res["https://example.com/c"]["is_substantive"])  # label 对但 0.4 低于阈值
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -108,12 +108,16 @@ def _ok(payload: Any, pretty: bool = False) -> dict[str, Any]:
     代价实测（2026-11-11，本机）：get_active_secrets 0.07ms/次 +
     redact_data(5 条结果) 0.43ms/次，相对搜索本身 78~82ms 是 0.6%，
     相对深度研究分钟级是零头。
+
+    fail-closed（2026-11-12 评审）：脱敏不可用或失败即拒绝输出，绝不静默
+    放行未脱敏内容——与 mcp_transport 边界层同语义。这是全仓唯一一处
+    「吞异常产生可利用后果」的地方，两道出口都必须拒绝而非放行。
     """
     try:
         from secret_guard import redact_data
-        payload = redact_data(payload)
-    except Exception:
-        pass
+    except ImportError:
+        raise RuntimeError("secret_guard 不可用：拒绝输出未经脱敏的工具结果")
+    payload = redact_data(payload)
     return {"content": [{"type": "text", "text": _dumps(payload, pretty=pretty)}]}
 
 

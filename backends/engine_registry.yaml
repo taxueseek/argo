@@ -222,10 +222,10 @@ engines:
   - general
   latency_ms: 2000
   cost: api
-  status: disabled
+  status: ok
   recommended: true
-  explicit_only: false
-  desc: Brave Search API
+  explicit_only: true
+  desc: Brave Search API（需自备 API key，显式指定 --engine brave 时生效）
 - name: byted
   tier: T1
   type: http
@@ -268,6 +268,20 @@ engines:
   recommended: false
   explicit_only: false
   desc: 中国外汇交易中心人民币中间价（25 个币种，官方授权口径，免 key）
+- name: cisa_alerts
+  tier: T1
+  type: rss_feed
+  coverage:
+  - security
+  - vulnerability
+  - infrastructure
+  - gov
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: CISA 官方网络安全警报（正在被实际利用的已知漏洞、工控安全与国家级安全公告，一手权威，免 key）
 - name: clawhub
   tier: T1
   type: clawhub
@@ -862,6 +876,21 @@ engines:
   recommended: false
   explicit_only: false
   desc: Energy-Charts 欧洲发电结构/可再生占比（Fraunhofer ISE，免认证）
+- name: eng_blogs
+  tier: T1
+  type: rss_feed
+  coverage:
+  - tech
+  - architecture
+  - engineering
+  - system
+  - infrastructure
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: 全球顶尖工程团队博客聚合（Cloudflare/Netflix/GitHub/Fly.io/AWS/Dropbox 架构与系统实践一手源，免 key）
 - name: eu_opendata
   tier: T1
   type: http
@@ -993,10 +1022,10 @@ engines:
   - tech
   latency_ms: 2000
   cost: api
-  status: disabled
+  status: ok
   recommended: true
-  explicit_only: false
-  desc: Felo AI 搜索 API
+  explicit_only: true
+  desc: Felo AI 搜索 API（需自备 API key，显式指定 --engine felo 时生效）
 - name: figshare
   tier: T1
   type: http
@@ -1698,6 +1727,20 @@ engines:
   recommended: false
   explicit_only: false
   desc: 音乐收听趋势榜（ListenBrainz，免认证）
+- name: lobsters
+  tier: T1
+  type: rss_feed
+  coverage:
+  - tech
+  - programming
+  - systems
+  - discussion
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: false
+  desc: Lobste.rs 极客社区（高质量底层系统、语言与架构一手讨论实时流，免 key）
 - name: local_arxiv
   tier: T2
   type: http
@@ -2367,7 +2410,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: 全球天气（城市/地名 → 坐标 → 当前天气，免认证）
+  desc: 全球天气（城市/地名 → 坐标 → 当前天气 + 逐日预报，免认证；预报天数取查询跨度词，默认 3 天）
 - name: openaire
   tier: T1
   type: http
@@ -3615,10 +3658,10 @@ engines:
   - math
   latency_ms: 2000
   cost: free
-  status: disabled
+  status: ok
   recommended: true
-  explicit_only: false
-  desc: WolframAlpha 计算知识引擎
+  explicit_only: true
+  desc: WolframAlpha 计算知识引擎（需自备 APPID，显式指定 --engine wolframalpha 时生效）
 - name: worldbank
   tier: T1
   type: worldbank

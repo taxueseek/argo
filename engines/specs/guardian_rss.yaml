@@ -14,11 +14,13 @@
 # 即它的摘要密度是同侪的 3–9 倍——卫报的 <description> 直接给导语加前几段，
 # 其余媒体只给一句话。这是选它而不是选 NYT/BBC 的唯一理由，也是实测值。
 #
-# 形态：**feed_mode=hot（热榜语义）**。种子是固定的最近 45 条，这是实时流
-# 不是检索索引，所以忽略 query、返回最新条目，归 hot_trending 族。
+# 形态：**feed_mode=hot（实时流语义）**。种子是固定的最近 45 条，这是实时流
+# 不是检索索引，所以忽略 query、返回最新条目。2026-11-11 归族从
+# hot_trending 改为 world_news：热榜族与百度/微博/抖音热榜共用
+# dedupe_by_family(max_per_family=2) 名额，国际新闻流不该与热榜争位。
 # 不放进 global_event 之类的话题检索域——实时流混进查询检索会白占槽位
 # （话题词对固定窗口的部分命中本来就极低），仓内 _REFILL_EXCLUDED_FAMILIES
-# 对 hot_trending 的排除注释说的是同一件事。
+# 的排除注释说的是同一件事。
 #
 # 关于全文：本 RSS 不给全文（无 <content:encoded>）。卫报另有 Open Platform
 # Content API 可给 bodyText 全文（免费 developer key、500 次/天、190 万篇），
@@ -33,7 +35,7 @@ type: rss_feed
 enabled: true
 cost_tier: free
 label: 卫报 RSS
-family: hot_trending
+family: world_news
 feed_mode: hot
 # 热榜语义按设计忽略查询词，相关性词面判据对它不适用（用错标准）。
 # 实测：英文查询「world news today」打最新条目，词面交集为 0 而被误判语料选错。

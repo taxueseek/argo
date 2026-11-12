@@ -20,6 +20,13 @@
 - **sdist 排除 tests/**：`MANIFEST.in` 加 `recursive-exclude tests *`。tests/ 解包后约 4 MB、占 sdist 三分之一，而 sdist 服务「从源码构建」不服务「跑测试」——想跑测试的人用 `git clone`。sdist 从 3.1 MB 降到 2.2 MB
 - **校验和改为逐资产独立 `.sha256`**：不再产出合并的 `SHA256SUMS.txt`（照 astral-sh/uv 格式）。合并清单是单点，损坏则所有校验失效；独立文件可以边下边校，一个损坏不影响其余
 - **新增 `tests/test_release_assets_contract.py`** 锁住以上三条，三处都做了回退验证（把旧写法加回来，对应用例必须挂）。首次写的断言漏了「带路径前缀」的变体写法，回退时没抓到，已改为正则匹配；资产总下载从 7.4 MB 降到约 4.7 MB
+- **脱敏出口 fail-closed（P1，2026-11-12 评审）**：`mcp_handlers._ok` 唯一出口处 `except Exception: pass`——脱敏失败会静默放行原始 payload，是全仓唯一「吞异常产生可利用后果」的实例。改为 ImportError 即拒绝输出、`redact_data` 运行时异常同语义穿透（与 `mcp_transport` 边界层同语义），补两条负向测试
+- **宽口径吞异常棘轮门禁**：新增 `tests/test_silent_catch_gate.py`——`except Exception` + 裸 `pass/continue` 全仓实测 187 处，只准减不准增（与 `test_http_attribution` 管裸 urlopen 同范式；存量每处需判断正确异常类型，非机械改动，走棘轮不走零祖父）。同批：`replay_eval` 两处 naive `datetime.now()` 落盘补 `.astimezone()`（展示字段）；static_lint 门禁五处重复全仓 `ast.parse` 收进会话级缓存
+- **SKILL.md 补 explicit_only 引导**：34 个垂类强源（grep_app/openaire/feed/tracemoe 等）不进自动路由，此前零文档入口，agent 日常点不了名；补一行按名点用说明（不写死数字防漂移）
+- **存根生命周期日落门禁**：退役存根（`engines_builders_batch16.py` 等）声明 `__sunset_version__` 与 `__deprecation_reason__`，`tests/test_stub_targets.py` 锁住日落版本到达时强制阻断，杜绝存根无限期滞留
+- **JEV 语义深度判定黄金基准集（Evals-as-Code）**：新增 `tests/evals/golden_depth_jev.json` 固化 20 条人工标注样本；快门禁测数据集健康度与管道契约（mock 与标注零耦合），真实 Precision/Recall/F1 评测走 `tests/evals/eval_depth_jev.py` 真实模型通道（按 topic 分组、失败显式退出码），修正首版「离线 F1 门禁」的循环论证
+- **系统四大台账规范与概览收敛**：新增 `docs/LEDGERS.md` 统一坏例/休眠/棘轮/配额四大台账契约；`badcase_ledger.py overview` 提供一键系统全貌输出并接入 `AGENTS.md` 路由表
+- **概览与台账勘误（2026-11-12 评审）**：`overview` 的休眠数据改走 `dormant_engines()` 派生真值并暴露对账问题——首版读不存在的 `data/dormant_ledger.json` 且异常静默降级，输出恒 `count=0` 假健康，现取数失败显式 `status=error` 并退出非零；宽吞棘轮基线收口单真源 `BROAD_SILENT_CATCH_BASELINE`（门禁与概览消费同一常量，消手抄 187）；`LEDGERS.md` 真源路径列全面勘误（坏例实为 `<state>/badcase.db` SQLite、配额实为 `<state>/quota.json`、休眠为派生计算无 json、`--audit` 命令不存在）
 
 **默认关闭**：无新增
 

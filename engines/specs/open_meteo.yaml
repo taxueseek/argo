@@ -12,6 +12,6 @@ coverage:
 - weather
 - global
 - forecast
-desc: 全球天气（城市/地名 → 坐标 → 当前天气，免认证）
+desc: 全球天气（城市/地名 → 坐标 → 当前天气 + 逐日预报，免认证；预报天数取查询跨度词，默认 3 天）
 timeout: 12
 type: open_meteo

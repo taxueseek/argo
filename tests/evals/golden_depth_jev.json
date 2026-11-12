@@ -1,0 +1,171 @@
+{
+  "version": "1.0",
+  "description": "JEV 语义深度判定（实质探讨 vs 顺带提及）标准黄金测试集（Golden Set）——快门禁用它做数据集健康度与管道契约校验，真实 P/R/F1 评测由 tests/evals/eval_depth_jev.py 在真实模型通道执行",
+  "metric_thresholds": {
+    "min_precision": 0.90,
+    "min_recall": 0.90,
+    "min_f1": 0.90
+  },
+  "samples": [
+    {
+      "id": "sub_01",
+      "topic": "英伟达 GPU 架构与 Blackwell 芯片设计",
+      "title": "深入剖析 Blackwell 架构：从 NVLink 5 到 双芯互联与 FP4 张量计算",
+      "text": "本文深入剖析了英伟达最新发布的 Blackwell 架构。从物理设计上看，Blackwell 采用了双芯封装互联技术，通过 10TB/s 的高速接口将两颗芯片合二为一。文章详细推导了 FP4 张量计算核心在长上下文训练中的吞吐提升机制，并对第五代 NVLink 的集群拓扑进行了延迟量化评估，展示了其在 72 节点互联下相较 Hopper 架构实现的 30 倍推理吞吐提升...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "全文核心讨论英伟达架构与芯片物理设计，具备详细技术推导与核心机制展开"
+    },
+    {
+      "id": "sub_02",
+      "topic": "美联储降息对流动性传导的影响",
+      "title": "货币政策周期专题：降息后商业银行准备金与隔夜逆回购（RRP）资金流转机制",
+      "text": "美联储降息政策对金融体系的流动性传导主要通过资产负债表与准备金利率展开。本文系统跟踪了隔夜逆回购规模（RRP）从 2 万亿美元回落至 3000 亿过程中的资金流向，分析了国债收益率曲线倒挂修复对中小银行净息差的实质改善，测算了资金向实体信贷投放的时滞和乘数效应...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "围绕主题展开机制分析、资金流向测算与政策传导量化"
+    },
+    {
+      "id": "sub_03",
+      "topic": "Rust 借用检查与内存安全",
+      "title": "深入理解 Rust 借用检查器：从生命周期子类型化到 Polonius 算法原理",
+      "text": "Rust 的所有权模型是其内存安全的核心保证。本文详细剖析了当前基于 NLL（非词法作用域生命周期）的借用检查器工作流程，重点讲解了借用发生时 Loan 的生命周期生成、Active 状态维持以及路径冲突检测算法，随后深入对比了新一代 Polonius 算法在跨分支控制流中消解伪借用冲突的设计...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "对 Rust 借用检查器的核心算法、生命周期和底层实现进行完整剖析"
+    },
+    {
+      "id": "sub_04",
+      "topic": "Transformer 长上下文注意力机制缺陷",
+      "title": "播客第 88 期：为什么单纯堆叠上下文长度无法解决大模型的迷失中段（Lost in the Middle）",
+      "text": "嘉宾在节目中用了超过 50 分钟深入探讨 Transformer 结构处理长上下文时的注意力发散问题。通过实测不同层注意力权重的 U 型分布，嘉宾详细解释了为什么在 128k 窗口下模型对中段信息的检索准确率大幅衰减，并横向对比了 RoPE 频率扩展与外挂检索增强（RAG）在语义召回上的本质差异...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "播客单集针对核心主题展开深度讨论并进行了原理性横向对比"
+    },
+    {
+      "id": "sub_05",
+      "topic": "LSM-Tree 与 B+Tree 存储引擎",
+      "title": "存储系统底层对比：LSM-Tree 与 B+Tree 的写入放大、空间放大与点查开销",
+      "text": "本文深入对比了两种经典存储引擎的数据结构权衡。从数学模型上推导了 Levelled Compaction 与 Size-Tiered Compaction 在 LSM-Tree 中的写入放大系数，分析了布隆过滤器与 SSTable 块索引对点查延迟的压制作用；同时与 B+Tree 在随机写入时的 Page In-place Update 及 WAL 日志开销进行了实测对比...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "深入的架构原理对比，包含数学推导与实测机制展开"
+    },
+    {
+      "id": "sub_06",
+      "topic": "Raft 算法一致性与脑裂防御",
+      "title": "分布式系统基石：Raft 算法中 Term 递增、Leader 选举与网络分区恢复细节",
+      "text": "为了彻底搞清 Raft 在极端网络状况下的行为，本文重现了非对称分区与周期性网络闪断场景。深入分析了 RequestVote 阶段的最后日志 Term 与 Index 校验如何阻断旧日志覆盖，详解了 Pre-Vote 机制如何防止被隔离节点自增 Term 后重新连入扰乱集群稳定...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "聚焦分布式协议细节与脑裂场景的深层机制研究"
+    },
+    {
+      "id": "sub_07",
+      "topic": "大模型模型量化技术 AWQ 与 GPTQ",
+      "title": "LLM 量化实战与理论：激活感知权重量化（AWQ）与二阶海森矩阵优化（GPTQ）对比",
+      "text": "在大模型低比特部署中，纯权重量化与激活协同是保留精度的关键。本文详细解读了 AWQ 如何通过观察激活值分布保护 top 1% 显著权重通道（Salient Weights），推导了基于网格搜索寻找最优通道缩放比例的公式；同时分析了 GPTQ 逐层逆海森矩阵更新权重的误差补偿机理...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "深入阐述量化理论与数学公式推导"
+    },
+    {
+      "id": "sub_08",
+      "topic": "自动驾驶端到端控制模型",
+      "title": "自动驾驶行业技术演进：从模块化感知规划到端到端纯视觉 World Model 架构实测",
+      "text": "本文深度复盘了自动驾驶技术栈从级联管道向端到端大模型的跃迁过程。详细阐述了隐式时空特征表征如何取代传统感知目标框，分析了基于扩散模型的多模态轨迹预测在长尾障碍物交互中的生成式规划优势，并给出了实测中的控制抖动抑制与安全兜底规则的设计考量...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "对技术架构演变有系统性剖析与工程落地实测"
+    },
+    {
+      "id": "sub_09",
+      "topic": "小分子靶点筛选与计算化学",
+      "title": "计算生物学前沿：基于分子对接与自由能微扰（FEP）的高通量小分子虚拟筛选",
+      "text": "本研究利用分子动力学模拟与自由能微扰（FEP+）对激酶靶点结合口袋进行了纳秒级采样。论文详细讨论了口袋水分子置换效应带来的熵增贡献，分析了预测结合自由能与实测 IC50 的相关性系数，系统排除了虚假结合构象，为靶向抑制剂的化学结构修饰提供了清晰的结合构象指引...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "核心围绕计算化学与筛选实验数据深入论述"
+    },
+    {
+      "id": "sub_10",
+      "topic": "Linux 虚拟内存分页与置换算法",
+      "title": "内核源码剖析：Linux 内存管理中的 Active/Inactive LRU 双链表与页面回收机制",
+      "text": "本文深入剖析了 Linux 内核 mm/vmscan.c 的源码实现。详细追踪了 kswapd 内核线程的触发水位设定（high/low/min watermark），解释了 anonymous page 与 file-backed page 在不同 swappiness 权重下的扫描比例计算，分析了二次机会算法与多代 LRU（MGLRU）在冷热页判断上的吞吐优势...",
+      "expected_label": "substantive in-depth discussion",
+      "rationale": "深入内核代码级细节分析页面调度算法"
+    },
+    {
+      "id": "pass_01",
+      "topic": "英伟达 GPU 架构与 Blackwell 芯片设计",
+      "title": "科技早报：美股周三收盘微跌，纳指微涨 0.2%",
+      "text": "今天美股大盘震荡，科技股涨跌不一。微软涨 0.5%，苹果微跌 0.3%，英伟达由于早前发布了 Blackwell 芯片稍有微涨。此外今天油价由于中东局势反弹 1.2%，航空板块普跌。接下来我们关注明天将要公布的非农就业数据...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "仅在股市快报中顺带提了一句 Blackwell 芯片，无任何实质展开"
+    },
+    {
+      "id": "pass_02",
+      "topic": "美联储降息对流动性传导的影响",
+      "title": "周末生活分享：我的咖啡角升级与桌面收纳心得",
+      "text": "终于把家里的咖啡角整理好了！换了一个新的研磨机，萃取出来的浓缩油脂非常丰富。最近物价感觉还是有点高，听朋友说美联储降息之后可能会有些变化，不过生活还是要慢慢过。今天还去买了几盆绿植放在书桌旁...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "个人日常生活闲聊中顺嘴提了一句降息，完全偏题"
+    },
+    {
+      "id": "pass_03",
+      "topic": "Rust 借用检查与内存安全",
+      "title": "创业公司三个月历程：如何选定我们的首发产品形态",
+      "text": "回顾过去三个月的创业历程，最难的不是技术选型。虽然前端用 React，后端有同学开玩笑说要不要用 Rust 体验一下内存安全，但为了赶进度我们还是用了最熟悉的 Python。我们把精力全部放在了跑通第一批种子用户的商业闭环上...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "回忆创业历程中开玩笑顺口提及 Rust 内存安全，非技术文章"
+    },
+    {
+      "id": "pass_04",
+      "topic": "Transformer 长上下文注意力机制缺陷",
+      "title": "今天去看了最新科幻电影《星际遗迹》，视觉效果拉满！",
+      "text": "晚上去 IMAX 厅看了新上映的电影，特效做得非常逼真，尤其是飞船穿过虫洞的那一段。剧情节奏也很紧凑，完全没有某些长电影那种注意力跟不上的疲倦感，就像现在那些 Transformer 长文本一样看久了容易犯迷糊哈哈。总的来说值回票价，推荐大家去大屏幕观看！",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "电影影评中以 Transformer 借喻开玩笑，非实质讨论"
+    },
+    {
+      "id": "pass_05",
+      "topic": "LSM-Tree 与 B+Tree 存储引擎",
+      "title": "下厨记：教你做一份层次分明的手撕千层饼",
+      "text": "手撕千层饼的关键在于油酥的调制和面皮的反复折叠。要把面团擀得薄如蝉翼，像程序员朋友说的 LSM-Tree 分层合并一样一层层刷油压实，这样烤出来的饼才会外酥里嫩。注意烤箱温度一定要预热到 200 度...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "做饭教学中把面皮折叠借喻为 LSM-Tree，纯生活话题"
+    },
+    {
+      "id": "pass_06",
+      "topic": "Raft 算法一致性与脑裂防御",
+      "title": "公司团建游记：我们在千岛湖玩飞盘与皮划艇",
+      "text": "上周末全组去千岛湖团建，天气出奇的好。大家分成了四队打飞盘，战况激烈，中午吃鱼头汤的时候大家都饿坏了。下午队长分工时大家意见不合，有人笑称再争下去就要 Raft 脑裂了，最后猜拳决定去划皮划艇...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "团建游记中借用术语开玩笑，无技术内容"
+    },
+    {
+      "id": "pass_07",
+      "topic": "大模型模型量化技术 AWQ 与 GPTQ",
+      "title": "开源周报第 12 期：GitHub 本周热门项目速览",
+      "text": "本周推荐 5 个好玩的开源项目：1. 一个跨平台终端模拟器；2. 一个支持 AWQ 量化加载的个人小工具；3. 极简静态博客主题；4. 基于 WebAssembly 的图片压缩器；5. 一个 Rust 写的命令行记账工具。大家周末有空可以 Star 体验...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "项目清单一句话罗列推荐，无任何深度分析"
+    },
+    {
+      "id": "pass_08",
+      "topic": "自动驾驶端到端控制模型",
+      "title": "买车对比：预算 25 万提了某新能源车，谈谈一周后的提车感受",
+      "text": "上周终于提了车，外观选了哑光灰，内饰做工不错，音响效果超出预期。销售吹的天花乱坠的自动驾驶端到端大模型我试了一次自动泊车，停得还行，不过日常上下班我还是喜欢自己开。底盘偏硬，过减速带滤震一般...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "车主提车心得，仅对自动泊车功能一句话带过"
+    },
+    {
+      "id": "pass_09",
+      "topic": "小分子靶点筛选与计算化学",
+      "title": "医药板块每日复盘：创新药 ETF 逆势上涨 1.8%",
+      "text": "今日医药板块表现亮眼，CXO 与创新药领涨。消息面上，某药企宣布其小分子靶点筛选取得阶段性进展并进入临床申报。主力资金净流入明显，短期内建议投资者保持关注但注意追高风险...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "股市消息面通告，不涉及分子结构和实验细节"
+    },
+    {
+      "id": "pass_10",
+      "topic": "Linux 虚拟内存分页与置换算法",
+      "title": "二手笔记本选购指南：轻薄本如何选配置？",
+      "text": "预算 3000 元买二手轻薄本，建议优先关注 16G 内存。因为现在的浏览器动不动开几十个标签页，8G 内存容易把虚拟内存分页文件挤满导致系统卡顿。CPU 方面建议选十代 Core 或锐龙 4000 系列以上...",
+      "expected_label": "passing mention or brief reference",
+      "rationale": "选购电脑硬件的常识提及，非操作系统分页机制剖析"
+    }
+  ]
+}

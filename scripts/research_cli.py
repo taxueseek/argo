@@ -62,6 +62,11 @@ def main() -> None:
     parser.add_argument("--archive-tag", default=None)
     parser.add_argument("--archive-note", default=None)
     parser.add_argument(
+        "--auto-note",
+        action="store_true",
+        help="研究完成后自动生成研究笔记骨架并入库索引（打通 argo note）",
+    )
+    parser.add_argument(
         "--verify", nargs="?", const=3, type=int, default=None, metavar="TOP_K",
     )
     parser.add_argument(
@@ -78,6 +83,11 @@ def main() -> None:
     )
     parser.add_argument("--archive-since", default=None, help="归档检索起始日期")
     parser.add_argument("--archive-until", default=None, help="归档检索截止日期")
+    parser.add_argument(
+        "--include-notes", action="store_true",
+        help="归档检索时并入研究笔记索引（research-index.jsonl），"
+             "让上次得到的结论也能被搜到",
+    )
     args = parser.parse_args()
     do_archive = not args.no_archive
 
@@ -87,6 +97,7 @@ def main() -> None:
             hits = search_archive(
                 args.search_archive,
                 since=args.archive_since, until=args.archive_until,
+                include_notes=args.include_notes,
             )
         except Exception as e:
             print(f"[search-archive] {type(e).__name__}: {e}")
@@ -342,6 +353,35 @@ def main() -> None:
             report["archive"] = meta
             if not args.json:
                 print(f"  [archive] {meta.get('run_id')} → {meta.get('run_dir')}", file=sys.stderr)
+
+            if args.auto_note:
+                try:
+                    from research_notes import (
+                        create_explore_bundle,
+                        resolve_root as resolve_note_root,
+                        slugify,
+                    )
+                    n_root = resolve_note_root(args.archive_dir)
+                    run_ref = f"run:{meta.get('run_id')}" if meta else "无"
+                    # 与 `argo note explore` 共用同一个资产包写入函数：
+                    # 目录、00_判断稿、manifest、索引结构不会随入口而变。
+                    bundle = create_explore_bundle(
+                        root=n_root,
+                        slug=slugify(args.topic),
+                        title=args.topic,
+                        problem=args.topic,
+                        related=run_ref,
+                    )
+                    report["note"] = {
+                        "note": bundle["note"],
+                        "index": bundle["index"],
+                    }
+                    if not args.json:
+                        print(f"  [note] {bundle['note']}", file=sys.stderr)
+                except Exception as ne:
+                    msg = f"{type(ne).__name__}: {ne}"
+                    report.setdefault("errors", []).append(f"auto-note: {msg}")
+                    print(f"  [note error] {msg}", file=sys.stderr)
         except Exception as e:
             print(f"  [archive error] {type(e).__name__}: {e}", file=sys.stderr)
 

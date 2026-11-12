@@ -64,6 +64,7 @@
 from __future__ import annotations
 
 import ast
+from functools import lru_cache
 import io
 import json
 import os
@@ -174,6 +175,15 @@ def _module_level_names(tree: ast.Module) -> set[str]:
     return names
 
 
+@lru_cache(maxsize=None)
+def _parsed(path: Path) -> ast.Module:
+    """会话级解析缓存：本文件多道规则各自全量 ast.parse 同一批文件，曾是
+    hook 的耗时大头（实测 5 处规则合计 ≈14s）。单次 pytest 进程内文件不变，
+    缓存解析结果语义等价；SyntaxError 不被 lru_cache 缓存，各规则的
+    except 分支照常工作。"""
+    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+
 def _shadowed_reexports(paths: list[Path]) -> list[str]:
     """内建 ast 检测：模块级既 import 了 X，又自己赋值了 X。
 
@@ -190,7 +200,7 @@ def _shadowed_reexports(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = _parsed(path)
         except SyntaxError:
             continue
         imported: dict[str, int] = {}
@@ -239,7 +249,7 @@ def _globals_without_binding(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = _parsed(path)
         except SyntaxError:
             continue  # 语法错误交由 ruff/E9 报
         bound = _module_level_names(tree)
@@ -288,7 +298,7 @@ def _local_import_shadows_global(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = _parsed(path)
         except SyntaxError:
             continue  # 语法错误交由 ruff/E9 报
         module_bound = _module_level_names(tree)
@@ -422,7 +432,7 @@ def _duplicate_dict_keys(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = _parsed(path)
         except SyntaxError as e:  # 语法错误本身也是缺陷，交由 ruff/E9 报
             problems.append(f"{path.name}:{e.lineno} 语法错误：{e.msg}")
             continue
@@ -477,7 +487,7 @@ def _authorization_flags_are_explicit(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            tree = _parsed(path)
         except SyntaxError:
             continue  # 语法错误由 ruff/E9 报，这里不重复
         for node in ast.walk(tree):

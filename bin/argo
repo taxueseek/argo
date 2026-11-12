@@ -556,6 +556,9 @@ def _usage() -> str:
 Usage:
   argo search    "query"          统一搜索（{head}，TF-IDF路由+RRF融合）
   argo research  "query"          深度研究（问题分解→多源采集→综合报告）
+  argo note study  <url>          单篇精研归档（原文存档 + 五段式笔记骨架 + 索引）
+  argo note explore "<问题>"      方向探索归档（五段式笔记骨架 + 候选方向段）
+  argo note list  [查询词]         检索研究笔记索引
   argo evidence  "query"          可信度评估（自动搜索 → 评分，或 pipe 搜索结果）
   argo clarify   "query"          意图消歧（歧义检测+意图分类+路由建议）
   argo fetch     "url"            抓取单页正文（多级降级：HTTP 内容协商→md 变体回探→TLS 指纹→jina→Parallel→浏览器；--full 读全文存档）
@@ -656,6 +659,10 @@ def main():
     scripts = {
         "search":    ("search.py",     ["--json"]),
         "research":  ("research.py",   ["--json"]),
+        # note：研究笔记归档（判断稿一等公民化）。study/explore/list 三个子命令
+        # 与 SKILL.md 的 research-protocol 是同一条链的「沉淀」段：取证归 research，
+        # 判断归 note，两者共用 <root> 但索引文件不同。
+        "note":      ("research_notes.py", []),
         "evidence":  ("evidence.py",   ["--stdin", "--json"]),
         "clarify":   ("clarify.py",    ["--json"]),
         # fetch 对应 MCP 的 argo_fetch（正文抓取）：CLI 与 MCP 工具面保持一一对应，

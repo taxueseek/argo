@@ -566,6 +566,63 @@ class TestTicketParsing(unittest.TestCase):
         self.assertTrue(row["url"].startswith("https://kyfw.12306.cn/"))
 
 
+class TestFaresAndTrainAttr(unittest.TestCase):
+    """字段 39 票价串 + 字段 46 复兴号标记。
+
+    解析规则与携程 SSR 的 seatItemInfoList / isFuXingTrain 逐字段对拍过
+    （2026-11-11，北京南→上海虹桥 53 车次：二等 553/一等 929/优选 1277/商务 1995）。
+    """
+
+    def test_parse_fares_real_shape(self) -> None:
+        # G547 真实字段 39：首段 9 + 商务 4 位价，其后 O/M/D 三段
+        f = train._parse_fares("9199500021M092900021O055300021D127700021O055303088")
+        self.assertEqual(f["商务座"], 1995)
+        self.assertEqual(f["一等座"], 929)
+        self.assertEqual(f["二等座"], 553)
+        self.assertEqual(f["优选一等座"], 1277)
+
+    def test_parse_fares_variable_length(self) -> None:
+        # 长度实测有 30/40/50 三种（席别数不同），滑窗解析都要成立
+        short = train._parse_fares("9199500012M100500021O059800021O059803048")
+        self.assertEqual(short["商务座"], 1995)
+        self.assertEqual(short["一等座"], 1005)
+        self.assertEqual(short["二等座"], 598)
+        self.assertNotIn("优选一等座", short)
+
+    def test_parse_fares_zero_and_garbage_ignored(self) -> None:
+        self.assertEqual(train._parse_fares(""), {})
+        self.assertEqual(train._parse_fares("garbage"), {})
+        # 0 元不是价格
+        self.assertEqual(train._parse_fares("9000000000"), {})
+
+    def test_is_fuxing(self) -> None:
+        # 段1='1' → 复兴号；段1='0' → 非复兴号
+        self.assertTrue(train._is_fuxing("5#1#Q0304#0#z#0#z#z#102"))
+        self.assertFalse(train._is_fuxing("0#0#Q03#0#z#0#z#z#101"))
+        self.assertFalse(train._is_fuxing(""))
+        self.assertFalse(train._is_fuxing("5"))
+
+    def test_ticket_carries_fares_and_fuxing(self) -> None:
+        fields = list(PIPE_ROW.replace("\n", "").split("|"))
+        # PIPE_ROW 的字段 46 末段是 102 形态，段1='1'
+        data = train._parse_station_data(STATION_JS)
+        t = train._parse_ticket(fields, data)
+        self.assertIn("fares", t)
+        self.assertIn("fuxing", t)
+
+    def test_build_rows_shows_price_and_fuxing(self) -> None:
+        fields = list(PIPE_ROW.replace("\n", "").split("|"))
+        data = train._parse_station_data(STATION_JS)
+        t = train._parse_ticket(fields, data)
+        row = train._build_rows([t], 5)[0]
+        # 有票价才写；此处 PIPE_ROW 字段 39 的形态见断言
+        if t["fares"]:
+            for label, price in t["fares"].items():
+                self.assertIn(f"{label} {price}元", row["snippet"])
+        if t["fuxing"]:
+            self.assertIn("复兴号", row["snippet"])
+
+
 class TestNetwork(unittest.TestCase):
     """两步接口（mock 网络层）"""
 

@@ -649,6 +649,9 @@ def validate_engine(
                     suggested = drift_diag.get("suggested_patch") or {}
                     if suggested:
                         report["suggested_patch"] = suggested
+                    if drift_diag.get("shadow_verified") is not None:
+                        report["shadow_verified"] = drift_diag.get("shadow_verified")
+                        report["shadow_msg"] = drift_diag.get("shadow_msg")
                     if apply and drift_diag.get("drift_detected") and suggested:
                         confidence = float(drift_diag.get("confidence") or 0.0)
                         if confidence >= _APPLY_MIN_CONFIDENCE:
@@ -657,6 +660,9 @@ def validate_engine(
                             if ok:
                                 report["fix_applied"] = True
                                 report["fix_msg"] = msg
+                                bak_file = spec_path.with_suffix(spec_path.suffix + ".bak")
+                                if bak_file.is_file():
+                                    report["backup_path"] = str(bak_file)
                         else:
                             report["fix_blocked_low_confidence"] = True
                             report["fix_msg"] = (

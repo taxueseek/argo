@@ -1,12 +1,12 @@
 engine_id: wolframalpha
-enabled: false
-disabled_reason: 72fd95a 源治理轮批量停用；需 APPID，计算类查询占比低，重开前需实测对比
+enabled: true
+explicit_only: true
 label: WolframAlpha
 cost_tier: free
 coverage:
 - factual
 - math
-desc: WolframAlpha 计算知识引擎
+desc: WolframAlpha 计算知识引擎（需自备 APPID，显式指定 --engine wolframalpha 时生效）
 extra_params:
   appid: '{WOLFRAM_APPID}'
   output: json

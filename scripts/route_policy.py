@@ -69,6 +69,10 @@ _VERTICAL_NEW_SOURCE: dict[str, tuple[str, ...]] = {
     # 2026-11-11：maven/nuget 补 Java/JVM 与 .NET 两个生态的关键词发现，
     # 声明在 crates 之后（位次 4/5）。本域基础预算 3，两源需加槽通电。
     "package_search": ("maven", "nuget"),
+    # 2026-11-11：cisa_alerts 声明在 crt_sh 之后（位次 4），加槽扩容，不挤掉 crt_sh
+    "security_search": ("cisa_alerts",),
+    # 2026-11-11：eng_blogs 顶尖架构博客聚合加槽
+    "english_tech": ("eng_blogs",),
 }
 
 
@@ -252,9 +256,10 @@ def _apply_policy_with_new_source_slots(
     live = [e for e in _VERTICAL_NEW_SOURCE.get((domain or {}).get("name"), ())
             if e in declared and (enabled is None or e in enabled)]
     keep = list(must_keep or [])
-    for e in live:
-        if e not in engines_combo and e not in keep:
-            keep.append(e)
+    if (mode or "auto") not in ("fast", "budget"):
+        for e in live:
+            if e not in engines_combo and e not in keep:
+                keep.append(e)
     return _apply_engine_policy(
         engines_combo, mode=mode, depth=depth, context=context,
         engines_boost=engines_boost, enabled=enabled,

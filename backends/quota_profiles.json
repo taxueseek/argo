@@ -210,6 +210,16 @@
     "cost_tier": "free",
     "priority": 51
   },
+  "cisa_alerts": {
+    "label": "CISA 官方安全预警",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
+  },
   "clawhub": {
     "label": "ClawHub 技能目录",
     "qps": 2,
@@ -679,6 +689,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "eng_blogs": {
+    "label": "顶级工程博客",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
   },
   "eu_opendata": {
     "label": "EU Open Data Portal",
@@ -1329,6 +1349,16 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "lobsters": {
+    "label": "Lobsters",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 35
   },
   "local_arxiv": {
     "label": "arXiv本地",

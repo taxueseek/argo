@@ -73,13 +73,65 @@ _HEADERS = {
     "Accept": "application/json,text/javascript,*/*",
 }
 
-# 12306 余票查询结果每行为管道分隔的 58 字段，字段索引映射（社区整理的稳定结构）。
+# 12306 余票查询结果每行为管道分隔的 59 字段，字段索引映射（社区整理的稳定结构）。
 _F = {
     "trainNo": 2, "trainCode": 3, "fromCode": 6, "toCode": 7,
     "departTime": 8, "arriveTime": 9, "duration": 10, "canBuy": 11, "date": 13,
     "gr": 21, "rw": 23, "rz": 24, "tz": 25, "wz": 26, "yw": 28, "yz": 29,
     "ze": 30, "zy": 31, "swz": 32, "dw": 33,
+    # 39 = 席别票价串（见 _parse_fares）；46 = 车次属性串（段1 为复兴号标记）
+    "fares": 39, "trainAttr": 46,
 }
+
+# 字段 39 席别码 → 展示名。实测（2026-11-11，北京南→上海虹桥 53 车次）：
+#   O=二等座 M=一等座 D=优选一等座 W=无座；首段 4 位为商务座价。
+# 与携程 SSR 的 seatItemInfoList 逐字段对拍一致（二等 553/一等 929/优选 1277）。
+# 只登记与携程 SSR 逐字段对拍过的席别码。Z/Y 在社区资料里常被写成
+# 二等座/硬座，但没有实测样本支撑，宁可不标（返回数值但无标签）也不猜错。
+_FARE_CODE_LABEL = {
+    "O": "二等座", "M": "一等座", "D": "优选一等座",
+    "W": "无座",
+}
+
+
+def _parse_fares(raw: str) -> dict[str, int]:
+    """字段 39 → {席别: 票价(元)}。
+
+    结构：首段 10 字符 = 9 + 商务座 4 位价 + 5 位余量；其后每 10 字符一段，
+    每段 = 席别码 1 位 + 4 位票价 + 5 位余量。长度实测有 30/40/50 三种（席别
+    数不同），故按 10 字符滑窗解析，不硬编码段数。
+
+    只取「有价」的席别：无票/停售时 12306 仍可能填 0，0 不是价格。
+    解析失败返回空 dict（票价是增强项，缺失不该让整行失败）。
+    """
+    s = (raw or "").strip()
+    out: dict[str, int] = {}
+    if len(s) >= 5 and s[0] == "9" and s[1:5].isdigit():
+        price = int(s[1:5])
+        if price > 0:
+            out["商务座"] = price
+    for i in range(10, len(s) - 9, 10):
+        seg = s[i:i + 10]
+        code, digits = seg[0], seg[1:5]
+        if not code.isalpha() or not digits.isdigit():
+            continue
+        price = int(digits)
+        if price <= 0:
+            continue
+        label = _FARE_CODE_LABEL.get(code)
+        if label and label not in out:
+            out[label] = price
+    return out
+
+
+def _is_fuxing(attr: str) -> bool:
+    """字段 46 段 1 是否为「1」（复兴号）。
+
+    实测（2026-11-11，北京南→上海虹桥 53 车次，与携程 isFuXingTrain 对拍）：
+    段1='1' 的 46 条全部是复兴号；段1='0' 的 6 条全部不是。该位是稳定判据。
+    """
+    seg = (attr or "").split("#")
+    return len(seg) > 1 and seg[1] == "1"
 
 # 席别展示顺序与标签（软卧优先动卧、商务优先特等）
 _SEAT_LABELS = [
@@ -370,6 +422,7 @@ def _parse_ticket(fields: list[str], data: dict) -> dict:
     v = lambda key: fields[_F[key]] if len(fields) > _F[key] else ""
     from_code, to_code = v("fromCode"), v("toCode")
     stations = data["STATIONS"]
+    fares = _parse_fares(v("fares"))
     return {
         "trainCode": v("trainCode"),
         "fromStation": stations.get(from_code, {}).get("station_name", from_code),
@@ -379,6 +432,8 @@ def _parse_ticket(fields: list[str], data: dict) -> dict:
         "swz": v("swz"), "tz": v("tz"), "zy": v("zy"), "ze": v("ze"),
         "gr": v("gr"), "rw": v("rw"), "dw": v("dw"),
         "yw": v("yw"), "rz": v("rz"), "yz": v("yz"), "wz": v("wz"),
+        "fares": fares,
+        "fuxing": _is_fuxing(v("trainAttr")),
     }
 
 
@@ -422,10 +477,21 @@ def _build_rows(tickets: list[dict], limit: int,
         status = "可购" if t.get("canBuy") == "Y" else "停售"
         d = (t.get("date") or "")[:8]
         published_at = f"{d[:4]}-{d[4:6]}-{d[6:8]}" if len(d) == 8 else d
+        # 票价：只列「有价的席别」，按价格升序（无票席别不占位）
+        fare_parts = []
+        if t.get("fares"):
+            fare_parts = [f"{label} {price}元"
+                          for label, price in sorted(
+                              t["fares"].items(), key=lambda kv: kv[1])]
+        extra = []
+        if t.get("fuxing"):
+            extra.append("复兴号")
         rows.append({
             "title": f"{t['trainCode']} {t['fromStation']} {t['departTime']}→{t['toStation']} {t['arriveTime']}",
             "url": _row_url(route, t["trainCode"]),
-            "snippet": " · ".join(["历时 " + _fmt_duration(t.get("duration", ""))] + seats + [status]),
+            "snippet": " · ".join(
+                ["历时 " + _fmt_duration(t.get("duration", ""))] + seats
+                + fare_parts + extra + [status]),
             "published_at": published_at,
         })
     return rows

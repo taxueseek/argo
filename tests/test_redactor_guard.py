@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import sys
+import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,8 @@ if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
 from secret_guard import redact_text, redact_data, get_active_secrets
+import mcp_handlers
+import pytest
 import settings_page
 
 
@@ -161,3 +164,26 @@ def test_list_engines_output_is_redacted(monkeypatch, capsys):
     search_cli.main()
     out = capsys.readouterr().out
     assert leaked not in out, "--list-engines 出口泄漏了 failure.evidence 里的凭据"
+
+
+def test_ok_fail_closed_when_redact_raises(monkeypatch):
+    """_ok 出口脱敏失败必须拒绝输出，不得静默放行（2026-11-12 评审）。
+
+    回退验证：把 _ok 的 fail-closed 改回 `except Exception: pass`，本条挂。
+    """
+    bad = types.ModuleType("secret_guard")
+
+    def _boom(data):
+        raise RuntimeError("redact boom")
+
+    bad.redact_data = _boom
+    monkeypatch.setitem(sys.modules, "secret_guard", bad)
+    with pytest.raises(RuntimeError):
+        mcp_handlers._ok({"k": "v"})
+
+
+def test_ok_fail_closed_when_guard_missing(monkeypatch):
+    """secret_guard 模块缺失时同样拒绝输出（对齐 mcp_transport 边界语义）。"""
+    monkeypatch.setitem(sys.modules, "secret_guard", None)
+    with pytest.raises(RuntimeError):
+        mcp_handlers._ok({"k": "v"})

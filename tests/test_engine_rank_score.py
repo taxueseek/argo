@@ -37,6 +37,7 @@ BUILDER_FILES = [
     "engines_builders_cn.py",
     "engines_builders_tech.py",
     "engines_builders_data_macro.py",
+    "engines_builders_weather.py",
 ]
 
 
@@ -155,3 +156,22 @@ class TestBuildersEmitDescendingScores:
         assert scores
         assert all(scores[i] >= scores[i + 1] for i in range(len(scores) - 1)), scores
         assert scores[0] == 0.7
+
+
+def test_weather_rows_are_chronological():
+    """天气域最终序：当前天气在前，逐日预报按日期升序（不按分数）。"""
+    from time_utils import weather_chronological
+
+    rows = [
+        {"title": "北京 2026-11-13 预报", "published_at": "2026-11-13", "score": 0.48},
+        {"title": "北京 2026-11-12 预报", "published_at": "2026-11-12", "score": 0.44},
+        {"title": "北京 2026-11-11 预报", "published_at": "2026-11-11", "score": 0.43},
+        {"title": "北京 当前天气", "published_at": "2026-11-11", "score": 0.42},
+    ]
+    out = weather_chronological(rows)
+    assert [r["title"] for r in out] == [
+        "北京 当前天气",
+        "北京 2026-11-11 预报",
+        "北京 2026-11-12 预报",
+        "北京 2026-11-13 预报",
+    ]

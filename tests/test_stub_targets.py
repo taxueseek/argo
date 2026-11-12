@@ -68,3 +68,52 @@ def test_unimportable_module_is_skipped():
 def test_resolve_existing_target_passes():
     """模块与属性都在 → None（正向通过例）。"""
     assert resolve_target("config.load_config") is None
+
+
+def _parse_version(v_str: str) -> tuple[int, ...]:
+    clean = v_str.lstrip("v").strip()
+    return tuple(int(x) for x in clean.split(".") if x.isdigit())
+
+
+def test_retired_stubs_have_sunset_version_and_not_expired():
+    """生命周期门禁：已退役的代码存根必须显式声明日落版本与原因，且不得超期存留。
+
+    为什么需要：退役模块如果无限期保留为存根，日后没人知道何时可以物理删除，
+    导致死代码长期滞留。声明 __sunset_version__ 后，一旦版本推进到该版本，
+    门禁直接红，倒逼开发者物理清理。
+    """
+    import tomllib
+    root = SCRIPTS.parent
+    pyproj = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    current_ver = _parse_version(pyproj["project"]["version"])
+
+    import re
+    sunset_decl = re.compile(r"^__sunset_version__\s*=", re.M)
+    stubs_found = []
+    for py in sorted(SCRIPTS.glob("*.py")):
+        text = py.read_text(encoding="utf-8")
+        if "架构归一退役" in text or sunset_decl.search(text):
+            stubs_found.append(py)
+            assert "__sunset_version__" in text, f"{py.name} 声明退役却缺少 __sunset_version__"
+            assert "__deprecation_reason__" in text, f"{py.name} 缺少 __deprecation_reason__"
+
+            m = re.search(r'__sunset_version__\s*=\s*["\']([^"\']+)["\']', text)
+            assert m, f"{py.name} __sunset_version__ 格式非法"
+            sunset_ver = _parse_version(m.group(1))
+
+            assert current_ver < sunset_ver, (
+                f"{py.name} 已到日落版本 {m.group(1)}（当前版本 {pyproj['project']['version']}），"
+                f"根据生命周期契约，该存根文件必须彻底物理删除！"
+            )
+
+    assert len(stubs_found) >= 1, "未找到任何退役存根，需确认存根标识"
+
+
+def test_sunset_gate_has_teeth():
+    """自检：如果当前版本超过或等于日落版本，门禁必须红。"""
+    curr = _parse_version("2.16.0")
+    sunset = _parse_version("v2.16.0")
+    assert not (curr < sunset), "当前版本 >= 日落版本时判定未触发"
+    curr_old = _parse_version("2.14.0")
+    assert curr_old < sunset, "正常未到期版本误判"
+

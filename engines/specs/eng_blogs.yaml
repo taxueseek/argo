@@ -1,0 +1,63 @@
+# 顶级工程团队博客 — 架构实践与前沿工程设计一手信源（聚合多源，免 key）
+#
+# 补的盲区：顶级一线科技企业（Cloudflare、Netflix、GitHub、Fly.io、AWS Architecture、
+# Dropbox）关于大规模分布式系统、性能排查、网络与底层架构的一手复盘。
+# 传统搜索抓到的大多是二次洗稿或中继解读，本引擎直连官方 Engineering Feed 原文。
+#
+# 奥卡姆剃刀设计：不为每个博客建立独立引擎，而是抽象为一个顶级工程博客种子注册表，
+# 统一聚合过滤并自动打上出处标签（例如：GitHub · ... / Netflix · ...）。
+#
+# 形态：feed_mode=filter（本地主题词过滤，支持精准检索近期真实工程架构设计）。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine eng_blogs --stage health
+#   python3 scripts/search.py "architecture" --engine eng_blogs --json
+
+engine_id: eng_blogs
+type: rss_feed
+enabled: true
+cost_tier: free
+label: 顶级工程博客
+family: code
+feed_mode: filter
+priority: 30
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 15
+langs:
+- en
+canary_query: "architecture"
+coverage:
+- tech
+- architecture
+- engineering
+- system
+- infrastructure
+desc: "全球顶尖工程团队博客聚合（Cloudflare/Netflix/GitHub/Fly.io/AWS/Dropbox 架构与系统实践一手源，免 key）"
+recommended: false
+
+feeds:
+  - url: https://blog.cloudflare.com/rss/
+    label: Cloudflare
+    langs: [en]
+  - url: https://netflixtechblog.com/feed
+    label: Netflix
+    langs: [en]
+  - url: https://github.blog/engineering/feed/
+    label: GitHub
+    langs: [en]
+  - url: https://fly.io/blog/feed.xml
+    label: Fly.io
+    langs: [en]
+  - url: https://aws.amazon.com/blogs/architecture/feed/
+    label: AWS
+    langs: [en]
+  - url: https://dropbox.tech/feed
+    label: Dropbox
+    langs: [en]
+
+quality_queries:
+  - query: "architecture"
+  - query: "scale"
