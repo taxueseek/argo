@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 方法 1：ワンコマンドスクリプト（本機で長期利用に推奨）
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 方法 2：npm / npx（対応済み、現在 2.14.0。tag ごとに公開、バージョン固定）
+# 方法 2：npm / npx（対応済み、現在 2.14.1。tag ごとに公開、バージョン固定）
 npm install -g argo-search       # CLI をグローバルインストール
 npx -y argo-search               # またはインストールせず即時利用
 npx -y github:taxueseek/argo     # main の最新コミットに追従したい場合
@@ -283,7 +283,7 @@ freshness  ≈ 公開時刻（「2015 年以来」のような歴史比較年は
 
 ## クイックスタート
 
-どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.14.0**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
+どれか 1 つで十分です。**npm インストールに対応済みで、最新版は 2.14.1**。GitHub と同じく本リポジトリから公開しています。npm 経由は `npm install -g argo-search` または `npx -y argo-search`、tag ごとに公開され、バージョンが固定されダウンロードも小さい。GitHub 経由は `install.sh` / `install.ps1` または `npx github:taxueseek/argo` で main に追従。今後は tag を打つたびに CI が npm の 2 パッケージと GitHub Release をまとめて公開します。registry 上の古い v1.0.1 は履歴版なので、それに固定しないでください。
 
 **ゼロ設定で動く**：API Key なしなら無料エンジン + ローカル `local_*`。Key があるソースは品質が上がりやすく、無いものは自動スキップ。
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 調査・総説 | 品質優先、エンジン増可 |
 | `budget` | 枠が厳しい | クォータ制御、使い切ると劣化 |
 
-### 現時点の能力概要（v2.14.0）
+### 現時点の能力概要（v2.14.1）
 
 Argo のやることを一行で言うと、質問を領域と言語で適切なソースに振り分け、返ってきた結果を信頼度で並べ、エージェントには並べ替えられ検証できる素材を渡す。検索・取得・証拠確認・ローカルファイル検索は同じパイプラインを流れ、19 個の MCP ツールは CLI コマンドと一対一で対応するので、どの形态で入れても能力は欠けない。単独コマンドもいくつかある：argo tweet は X 投稿をまとめ、argo auth はログイン状态を管理し、argo job は採用情報を集約する。全ソースの費用・键・状态は docs/ENGINE_CATALOG.md に正確な数がある（生成器が維持）。
 
@@ -476,6 +476,8 @@ DSH プラグインとして入れると、これらの能力は宿主のネイ�
 
 最近数版が、それぞれ一类の問題を直した。
 
+
+v2.14.1 はソースアーキテクチャのスリム化、キー不要ソースの追加、MCP 3+1 への収束、およびセキュリティ編集を行いました。batch16 レガシーグルーコードを廃止し、≥14 個の専用ビルダーを宣言的 Spec に統合。MCP ツールを 4 つの直交コアツール（search/fetch/deep_research/manage_settings）に集約して MaaS 規格に準拠（Issue #46 解決）。ソースは 300 から 304 に拡大（Hugging Face Datasets、Maven Central、NuGet、中国鉄道公式運賃・復興号マーク、Open-Meteo 日別予報）。フェイルクローズの自動機密情報編集機能を追加し、リリース資産を wheel + sdist にスリム化しました。
 
 v2.14.0 はパーサー層の収束、ソースの拡充、バッドケース台帳ループを行いました。新しいソースの追加に Python パーサーの手書きが不要になりました：パーサーレジストリと「自己内省推論パーサー」が宣言されたフィールドパスから解析ルールを自動推論します（ゼロ設定・`output_map` 不要）。`argo doctor` が解析パスを監査するようになり、パーサー破損は「このソースは 0 件を返しました」という謎の結果ではなく実際のエラーとして表面化します——以前は本当の空結果と区別がつきませんでした。ソースは 290 → 300 に（Mwmbl、Kaggle、HuggingFace Papers、grep.app、OpenAIRE、Mojeek、Repology、DBpedia、4get、さらに 3 ソース復活）。ローカル取得は 4 つの改善（マシン固有パスハードコードの撤去とマルチ環境適応アセット検出、FTS5 スリム化と語形正規化、クロスプラットフォーム純標準ライブラリ保証）。今回の目玉はバッドケース台帳ループです：台帳に帰属層（12 種類の根本原因。証拠が不十分な場合は推測せず「未帰属」）と再発判定（同一根本原因が 3 つの異なる日付で出現するとハードルール昇格。ライブウェブのランキングドリフトは対象外）を追加。同じリリースで `AGENTS.md` ルーティングテーブルと `docs/COMMIT_STANDARD.md` も追加され、高リスクなコミットは「何を実行したか・どのコミットで・何を実行しなかったか」を明記する必要があります——これは pre-commit を通過したのに全量回帰で赤くなった 2 件の事故への対応です。
 
@@ -508,6 +510,13 @@ v2.9.4 が直したのは明示エンジン指定の経路。--engine X を指�
 ---
 
 ## 最近更新
+
+### v2.14.1：アーキテクチャのスリム化 + MCP 3+1 ツール + ソース 304 + セキュリティ編集
+
+- **アーキテクチャのスリム化**：batch16 を廃止し ≥14 個の専用ビルダーを宣言的 Spec に統合；汎用 feed エンジンで RSS を集約
+- **MCP 3+1 最小ツール面**：4 つの直交コアツール（search/fetch/deep_research/manage_settings）に集約、MaaS 準拠（Issue #46 解決）
+- **ソース 300 → 304**：Hugging Face Datasets、Maven Central、NuGet、中国鉄道運賃、Open-Meteo 日別予報を追加
+- **セキュリティと資産スリム化**：出力の自動機密情報編集；リリース資産を wheel + sdist にスリム化、個別 SHA256 検証
 
 ### v2.14.0：パーサー層の収束 + ソース 300 + バッドケース台帳ループ
 
@@ -789,6 +798,7 @@ argo/
 
 | 版 | 内容 |
 |----|------|
+| **v2.14.1** | **アーキテクチャのスリム化 + MCP 3+1 + ソース 304 + セキュリティ編集**：batch16 を廃止し ≥14 個の専用ビルダーを統合；MCP を 3+1 に集約（MaaS 準拠、#46 解決）；ソース 300→304（HF Datasets/Maven/NuGet/鉄道運賃/日別天気）；出力機密情報の自動編集；リリース資産スリム化。詳細は [リリースノート](docs/RELEASE_NOTES_v2.14.1.md) |
 | **v2.14.0** | **パーサー層の収束 + ソース 300 + バッドケース台帳ループ**：新しいエンジンに手書きパーサーが不要（レジストリ + 自己内省推論パーサー、ゼロ設定・`output_map` 不要）；`argo doctor` がソース監査を追加；ソース 290→300（Mwmbl/Kaggle/HF Papers/grep.app/OpenAIRE/Mojeek/Repology/DBpedia/4get + 3 ソース復活）；ローカル取得の 4 つの改善（マルチ環境適応アセット検出、FTS5 スリム化と語形正規化、クロスプラットフォーム純標準ライブラリ保証、コスト可視化）；ローカル意図シグナルを収束（英語クエリが日本語ソースを無駄に走る問題を修正）；バッドケース台帳に帰属層と Seen N× 再発ゲートを追加；`AGENTS.md` ルーティングテーブルと `docs/COMMIT_STANDARD.md` を追加；状態機械 22→27。詳細は [リリースノート](docs/RELEASE_NOTES_v2.14.0.md) |
 | **v2.13.0** | **ドキュメント整理 + 22 状態機械 SSOT + ディスパッチ尾幅修正**: `docs/` 87→26（`docs/engines/` 60 削除、18 件のプロセスレポートを归档、CHANGELOG 追加）；`scripts/engine_states.py` 12→22 状態機械、34 モジュール、リテラル残存 19→0；deep モード尾幅 10s→2.2s；165 のエンジン宣言を `engines/specs/` に移行；依存関係を uv に集約。詳細は [リリースノート](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **統一設定センター + pixiv/trace.moe 画像検索 + WeChat fetch**：`argo settings` によるゼロサービス設定ページと書き戻し（#44、@zooyoo）；pixiv デュアルチャネル画像検索（PR#45、@OMSociety）；trace.moe シーン認識；WeChat 記事の前置分岐；ソース 286→288。詳細は [リリースノート](docs/RELEASE_NOTES_v2.12.0.md)。 |

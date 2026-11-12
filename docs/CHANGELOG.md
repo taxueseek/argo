@@ -3,9 +3,9 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
-## 未发布
+## v2.14.1
 
-**定位**：11-11 复核收口。复核 11-10 至 11-11 的 19 笔改动，修掉「提交信息里的效果数字与生产路径差一层」的六处接线缺陷，并给门禁补上对拍；同批收掉 Release 资产的三处冗余产入口径。
+**定位**：信源架构精简 + 免认证新源接入 + MCP 3+1 收敛 + 安全脱敏与 Release 瘦身。用奥卡姆剃刀做架构减法，退役历史专用胶水并消减专用构建器；收敛极简 MCP 核心工具面以对齐 MaaS 规范；新增 Hugging Face、Maven、NuGet 等开发者免认证开放数据源；落地全链路输出脱敏与轻量 Release 打包。
 
 **关键变更**：
 - **JEV 硬截止失效（P0）**：`_classify_jev` 用 `with ThreadPoolExecutor(...)`，退出时 `shutdown(wait=True)` 会把 `as_completed` 超时后仍在跑的请求全部 join 完——实测 sleep 3s 的任务让整轮耗时 3.01s，1.2s 硬截止形同虚设，且因结果全 None 退化成「语义层未开启」。改为显式建池 + `shutdown(wait=False, cancel_futures=True)`

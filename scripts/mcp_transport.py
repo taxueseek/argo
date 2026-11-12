@@ -39,7 +39,7 @@ except Exception:  # pragma: no cover
 
 # 版本来源：与 package.json / SKILL.md 保持一致（发布时统一升版；
 # tests/test_consistency_gates.py 会四端对账，漂移即红）
-ARGO_MCP_VERSION = "2.14.0"
+ARGO_MCP_VERSION = "2.14.1"
 
 _response_format = "content-length"  # 根据客户端请求自动切换
 

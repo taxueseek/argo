@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 # 방식 1: 원클릭 스크립트(로컬 장기 사용 권장)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# 방식 2: npm / npx(지원됨, 현재 2.14.0, tag마다 배포·버전 고정)
+# 방식 2: npm / npx(지원됨, 현재 2.14.1, tag마다 배포·버전 고정)
 npm install -g argo-search       # CLI 전역 설치
 npx -y argo-search               # 또는 설치 없이 즉시 사용
 npx -y github:taxueseek/argo     # main 최신 커밋을 따라가려면 이 명령
@@ -283,7 +283,7 @@ composite  ≈ 0.40·selection + 0.35·absorption + 0.15·freshness + 0.10·engi
 
 ## 빠른 시작
 
-경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.14.0**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
+경로를 고르면 됩니다. **npm 설치를 지원하며 최신 버전은 2.14.1**, GitHub와 마찬가지로 이 저장소에서 배포합니다. npm 경로는 `npm install -g argo-search` 또는 `npx -y argo-search`로 tag마다 배포되어 버전이 고정되고 다운로드도 작습니다. GitHub 경로는 `install.sh` / `install.ps1` 또는 `npx github:taxueseek/argo`로 main을 따릅니다. 앞으로는 tag를 만들 때마다 CI가 npm 두 패키지와 GitHub Release를 함께 배포합니다. registry의 낡은 v1.0.1은 역사 버전이니 고정하지 마세요.
 
 **제로 설정으로 동작**: API 키 없이도 무료 엔진 + 로컬 `local_*` 엔진이 돌고, 키 없는 엔진은 스킵됩니다(키가 있으면 보통 더 좋습니다).
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | 연구, 조사 | 품질 우선, 엔진 더 허용 |
 | `budget` | 할당량 타이트 | 쿼터 제어, 소진 시 저하 |
 
-### 대략적인 능력 세트 (v2.14.0)
+### 대략적인 능力 세트 (v2.14.1)
 
 Argo가 하는 일을 한 줄로 말하면, 질문을 도메인과 언어로 알맞은 소스에 보내고, 돌아온 결과를 신뢰도로 줄세워, 에이전트에는 줄세우고 검증할 수 있는 재료를 넘긴다. 검색·긁기·증거 확인·로컬 파일 검색은 같은 파이프라인을 흐르고, 19개 MCP 도구는 CLI 명령과 일대일로 대응하므로 어떤 형태로 설치해도 능력이 빠지지 않는다. 단독 명령도 몇 개 있다: argo tweet은 X 게시물을 묶고, argo auth는 로그인 상태를 관리하며, argo job은 채용 정보를 모은다. 전체 소스의 비용·키·상태는 docs/ENGINE_CATALOG.md에 정확한 수가 있다(생성기가 유지).
 
@@ -476,6 +476,8 @@ DSH 플러그인으로 설치하면 이 능력들이 호스트의 네이티브 �
 
 최근 몇 판이 각자 한 부류의 문제를 고쳤다.
 
+
+v2.14.1은 소스 아키텍처 슬리밍, 무인증 소스 추가, MCP 3+1 수렴 및 보안 마스킹을 진행했습니다. batch16 레거시 글루 코드를 퇴역시키고 ≥14개 전용 빌더를 선언적 Spec으로 통합했습니다. MCP 도구 표면을 4개 직교 핵심 도구(search/fetch/deep_research/manage_settings)로 수렴하여 MaaS 규격을 엄격히 준수했습니다(이슈 #46 해결). 소스는 300에서 304로 확장(Hugging Face Datasets, Maven Central, NuGet, 중국 철도 공식 운임, Open-Meteo 일별 예보)되었습니다. 장애 시 차단되는 자동 자격 증명 마스킹(secret_guard.py)을 탑재하고 릴리스 배포 자산을 wheel + sdist로 슬리밍했습니다.
 
 v2.14.0은 파서 계층 수렴, 소스 확장, 배드케이스 장부 루프를 진행했습니다. 새 소스를 추가할 때 Python 파서를 직접 짤 필요가 없어졌습니다: 파서 레지스트리와 「자기 성찰 추론 파서」가 선언된 필드 경로에서 파싱 규칙을 자동 추론합니다(제로 설정·`output_map` 불필요). `argo doctor`가 파서 경로를 감사하도록 바뀌어 파서 파손은 「이 소스가 0건을 반환했습니다」라는 수수께끼 결과가 아니라 실제 오류로 표면화됩니다 — 이전에는 진짜 빈 결과와 구분할 수 없었습니다. 소스는 290 → 300으로(Mwmbl, Kaggle, HuggingFace Papers, grep.app, OpenAIRE, Mojeek, Repology, DBpedia, 4get, 그리고 3개 부활). 로컬 검색은 4가지 개선(기기 종속 경로 하드코딩 제거와 다중 환경 적응 에셋 발견, FTS5 슬리밍과 어형 정규화, 크로스 플랫폼 순수 표준 라이브러리 보증)을 받았습니다. 이번 핵심은 배드케이스 장부 루프입니다: 장부에 귀속 계층(12종 근본 원인. 증거가 불충분하면 추측하지 않고 「미귀속」)과 재발 판정(같은 근본 원인이 서로 다른 3일에 나타나면 하드 규칙 승격. 실시간 웹 순위 드리프트는 제외)을 추가했습니다. 같은 릴리스에서 `AGENTS.md` 라우팅 표와 `docs/COMMIT_STANDARD.md`도 추가되었고, 고위험 커밋은 「무엇을 실행했는지·어느 커밋에서·무엇을 실행하지 않았는지」를 명기해야 합니다 — 이는 pre-commit을 통과했는데 전체 회귀에서 빨간색이 되었던 2건의 실제 사고에 대한 대응입니다.
 
@@ -711,6 +713,13 @@ argo/
 
 최근 네 버전만 싣습니다. 전체 이력은 [변경 이력](#변경-이력), 각 버전의 상세는 [Releases](https://github.com/taxueseek/argo/releases)에서 볼 수 있습니다.
 
+### v2.14.1: 아키텍처 슬리밍 + MCP 3+1 도구 + 소스 304 + 보안 마스킹
+
+- **소스 아키텍처 슬리밍**: batch16 퇴역 및 ≥14개 전용 빌더 선언적 Spec 통합; 범용 feed 엔진 RSS 취합
+- **MCP 3+1 최소 도구 표면**: 4개 직교 핵심 도구로 수렴하여 MaaS 규격 완벽 준수 (이슈 #46 해결)
+- **소스 300 → 304**: Hugging Face Datasets, Maven Central, NuGet, 철도 운임, Open-Meteo 일별 예보 추가
+- **보안 마스킹 및 자산 슬리밍**: 출력 스트림 자동 자격 증명 마스킹; 릴리스 자산을 wheel + sdist로 슬리밍
+
 ### v2.14.0: 파서 계층 수렴 + 소스 300 + 배드케이스 장부 루프
 
 - **새 엔진에 직접 짠 파서가 필요 없어집니다**: 파서 레지스트리와 「자기 성찰 추론 파서」를 추가. 필드 경로를 선언하면 파싱 규칙이 자동 추론되어 제로 설정·`output_map` 불필요. `argo doctor`가 각 소스의 파서 경로를 감사하도록 바뀌어, 파서 파손은 「이 소스가 0건을 반환했습니다」라는 수수께끼 결과가 아니라 실제 오류로 표면화됩니다
@@ -787,6 +796,7 @@ argo/
 
 | 버전 | 비고 |
 |---------|-------|
+| **v2.14.1** | **아키텍처 슬리밍 + MCP 3+1 도구 + 소스 304 + 보안 마스킹**: batch16 퇴역 및 ≥14개 전용 빌더 선언적 Spec 통합; MCP 3+1 수렴(MaaS 준수, #46 해결); 소스 300→304(HF Datasets/Maven/NuGet/철도 운임/일별 날씨); 출력 자격 증명 자동 마스킹; 릴리스 자산 슬리밍. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.14.1.md) |
 | **v2.14.0** | **파서 계층 수렴 + 소스 300 + 배드케이스 장부 루프**: 새 엔진에 직접 짠 파서 불필요(레지스트리 + 자기 성찰 추론 파서, 제로 설정·`output_map` 불필요); `argo doctor` 소스 감사 추가; 소스 290→300(Mwmbl/Kaggle/HF Papers/grep.app/OpenAIRE/Mojeek/Repology/DBpedia/4get + 3개 부활); 로컬 검색 4가지 개선(다중 환경 적응 에셋 발견, FTS5 슬리밍와 어형 정규화, 크로스 플랫폼 순수 표준 라이브러리 보증, 비용 가시화); 로컬 의도 신호 수렴(영어 쿼리가 일본어 소스를 헛도는 문제 수정); 배드케이스 장부에 귀속 계층과 Seen N× 재발 게이트 추가; `AGENTS.md` 라우팅 표와 `docs/COMMIT_STANDARD.md` 추가; 상태 머신 22→27. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.14.0.md) |
 | **v2.13.0** | **문서 정리 + 22 상태 머신 SSOT + 디스패치 테일 그레이스**: `docs/` 87→26 (`docs/engines/` 60 삭제, 18개 프로세스 리포트 아카이브, CHANGELOG 추가); `scripts/engine_states.py` 12→22 상태 머신, 34 모듈, 리터럴 잔여 19→0; deep 모드 테일 그레이스 10s→2.2s; 165개 엔진 선언을 `engines/specs/`로 이전; 의존성을 uv로 통합. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **통합 설정 센터 + pixiv/trace.moe 이미지 검색 + WeChat fetch**: `argo settings` 제로 서비스 설정 페이지와 쓰기 되돌림(#44, @zooyoo); pixiv 이중 채널 이미지 검색(PR#45, @OMSociety); trace.moe 장면 인식; WeChat 글 선행 분기; 소스 286→288. 자세한 내용은 [릴리스 노트](docs/RELEASE_NOTES_v2.12.0.md). |

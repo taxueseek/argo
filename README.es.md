@@ -25,7 +25,7 @@
   <a href="https://github.com/taxueseek/argo/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/taxueseek/argo?style=social"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -148,7 +148,7 @@ Funciona sin configuración. Tres formas de instalarlo, elige la que te acomode:
 # Opción 1: script de instalación (recomendado para uso local a largo plazo)
 curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
 
-# Opción 2: npm / npx (soportado, versión actual 2.14.0; se publica por tag, versión fija)
+# Opción 2: npm / npx (soportado, versión actual 2.14.1; se publica por tag, versión fija)
 npm install -g argo-search       # instala la CLI globalmente
 npx -y argo-search               # o úsalo sin instalar
 npx -y github:taxueseek/argo     # para seguir el último commit de main
@@ -283,7 +283,7 @@ Los resultados incluyen `selection`, `absorption`, `credibility_fast`, `evidence
 
 ## Inicio rápido
 
-Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.14.0**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
+Elige cualquier camino. **La instalación por npm está soportada y la versión actual es 2.14.1**, publicada desde este repo igual que GitHub. La ruta npm usa `npm install -g argo-search` o `npx -y argo-search`, se publica por tag, con versión fija y menos descarga. La ruta GitHub usa `install.sh` / `install.ps1` o `npx github:taxueseek/argo` y sigue main. A partir de ahora, cada tag hace que la CI publique los dos paquetes npm junto con el GitHub Release; el v1.0.1 antiguo del registro es una versión histórica, no fijes esa.
 
 **Funciona sin configuración**: sin claves API corren motores gratis + `local_*` locales; los que requieren clave se omiten si faltan (y suelen mejorar cuando están).
 
@@ -468,7 +468,7 @@ python3 scripts/search.py --list-engines
 | `deep` | investigación, sondeos | calidad primero; más motores |
 | `budget` | cuota justa | control de cuota; degrada al agotarse |
 
-### Conjunto aproximado de capacidades (v2.14.0)
+### Conjunto aproximado de capacidades (v2.14.1)
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, 19 herramientas MCP se corresponden una a una con los comandos CLI, así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md (cifras exactas, mantenidas por el generador).
 
@@ -476,6 +476,8 @@ Instalado como plugin DSH, estas capacidades se convierten en herramientas nativ
 
 Las últimas versiones arreglaron cada una una clase de problemas.
 
+
+v2.14.1 se enfoca en el adelgazamiento de la arquitectura, la adición de fuentes sin clave, la consolidación MCP 3+1 y la redacción de seguridad. Se retira el código de pegamento de batch16 y se eliminan ≥14 constructores dedicados convergiendo en especificaciones declarativas. La superficie de herramientas MCP se consolida en 4 herramientas ortogonales (search/fetch/deep_research/manage_settings) con estricto cumplimiento de MaaS (resuelve #46). Las fuentes crecen de 300 a 304 (acceso sin clave a Hugging Face Datasets, Maven Central, NuGet, tarifas oficiales de ferrocarril de China, pronósticos diarios de Open-Meteo). Se añade interceptor de redacción de credenciales en salida (secret_guard.py) y se adelgazan los activos de distribución a wheel + sdist con sumas SHA256 independientes.
 
 v2.14.0 se enfoca en la consolidación de la capa de parsers, la expansión de fuentes y el bucle del libro de casos. Añadir una fuente nueva ya no requiere escribir un parser en Python: un registro de parsers y un "parser de inferencia autorreflexiva" infieren las reglas de parseo a partir de las rutas de campo declaradas — cero configuración, sin `output_map`; `argo doctor` ahora audita las rutas de parseo, así que un parser roto aparece como un error real en lugar de un misterioso "esta fuente devolvió 0 resultados", que antes era indistinguible de un vacío genuino. Las fuentes crecen de 290 a 300 (Mwmbl, Kaggle, HuggingFace Papers, grep.app, OpenAIRE, Mojeek, Repology, DBpedia, 4get, más tres reactivadas). La recuperación local recibe cuatro mejoras: hardcoding de rutas eliminado con descubrimiento adaptativo multi-entorno, adelgazamiento del índice FTS5 con lematización, y un respaldo puramente estándar multiplataforma. El bucle del libro de casos es lo destacado: el libro gana una capa de atribución (12 causas raíz; si la evidencia es insuficiente dice "sin atribuir" en vez de adivinar) y un gate de recurrencia — la misma causa raíz en 3 días distintos dispara "promover a regla dura", con la deriva de ranking de la web viva excluida. La misma versión añade la tabla de enrutamiento `AGENTS.md` y `docs/COMMIT_STANDARD.md`; los commits de riesgo alto deben declarar qué se ejecutó, en qué commit y qué no — la respuesta a dos incidentes reales donde un cambio pasó pre-commit pero falló la regresión completa.
 
@@ -711,6 +713,13 @@ argo/
 
 Solo las cuatro versiones más recientes. El historial completo está en el [historial de cambios](#historial-de-cambios) y el detalle de cada versión en [Releases](https://github.com/taxueseek/argo/releases).
 
+### v2.14.1: Adelgazamiento de Arquitectura + Herramientas MCP 3+1 + 304 Fuentes + Redacción de Seguridad
+
+- **Adelgazamiento de Arquitectura**: Retiro de batch16 y eliminación de ≥14 constructores dedicados hacia specs declarativos; motor feed unificado para fuentes RSS
+- **Herramientas MCP 3+1**: Consolidación a 4 primitivas ortogonales con estricto cumplimiento de MaaS (resuelve #46)
+- **Fuentes 300 → 304**: Adición de Hugging Face Datasets, Maven Central, NuGet, tarifas de tren, pronóstico diario Open-Meteo
+- **Seguridad y Adelgazamiento**: Redacción automática de credenciales en salida; distribución de release adelgazada a wheel + sdist con sumas SHA256 independientes
+
 ### v2.14.0: Consolidación de la Capa de Parsers + 300 Fuentes + Bucle del Libro de Casos
 
 - **Los motores nuevos ya no necesitan un parser escrito a mano**: se añade un registro de parsers y un "parser de inferencia autorreflexiva" — declara la ruta del campo y las reglas de parseo se infieren automáticamente, cero configuración, sin `output_map`; `argo doctor` ahora audita la ruta de parseo de cada fuente, así que un parser roto aparece como un error real en lugar de un misterioso "esta fuente devolvió 0 resultados"
@@ -787,6 +796,7 @@ Solo las cuatro versiones más recientes. El historial completo está en el [his
 
 | Versión | Notas |
 |---------|-------|
+| **v2.14.1** | **Adelgazamiento + MCP 3+1 + 304 Fuentes + Redacción de Seguridad**: retiro de batch16 y ≥14 constructores dedicados; MCP 3+1 (MaaS, resuelve #46); fuentes 300→304 (HF Datasets/Maven/NuGet/tren/clima diario); redacción de credenciales; activos adelgazados. Ver [Notas de Lanzamiento](docs/RELEASE_NOTES_v2.14.1.md) |
 | **v2.14.0** | **Consolidación de la Capa de Parsers + 300 Fuentes + Bucle del Libro de Casos**: los motores nuevos ya no necesitan parser escrito a mano (registro + parser de inferencia autorreflexiva, cero configuración, sin `output_map`); `argo doctor` gana auditoría de fuentes; fuentes 290→300 (Mwmbl/Kaggle/HF Papers/grep.app/OpenAIRE/Mojeek/Repology/DBpedia/4get + tres reactivadas); cuatro mejoras en recuperación local (descubrimiento adaptativo multi-entorno, adelgazamiento FTS5 y lematización, respaldo puramente estándar, coste observable); señales de intención local consolidadas (arregladas las consultas en inglés que ejecutaban fuentes japonesas); el libro de casos gana capa de atribución y gate de recurrencia Seen N×; nueva tabla `AGENTS.md` y `docs/COMMIT_STANDARD.md`; máquinas de estado 22→27. Ver [Notas de Lanzamiento](docs/RELEASE_NOTES_v2.14.0.md) |
 | **v2.13.0** | **Consolidación de Documentación + 22 Máquinas de Estado SSOT + Corrección de Cola de Despacho**: `docs/` 87→26 (eliminados `docs/engines/` 60, archivados 18 informes de proceso, añadido CHANGELOG); `scripts/engine_states.py` 12→22 máquinas de estado, 34 módulos, residuales literales 19→0; cola de despacho deep 10s→2.2s; 165 declaraciones migradas a `engines/specs/`; dependencias consolidadas en uv. Ver [Notas de Lanzamiento](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **Centro de configuración unificado + búsqueda de imagen pixiv/trace.moe + fetch de WeChat**: página de configuración sin servicio y escritura vía `argo settings` (#44, @zooyoo); búsqueda de imagen pixiv de canal doble (PR#45, @OMSociety); reconocimiento de escenas trace.moe; rama previa de fetch para WeChat; fuentes 286→288. Ver [notas de la versión](docs/RELEASE_NOTES_v2.12.0.md). |
