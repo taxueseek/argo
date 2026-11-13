@@ -641,6 +641,22 @@ def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: 
     return out or None
 
 
+_NON_CJK_EAST_ASIAN_RE = re.compile(r"[\u3040-\u30ff]{2,}|[\uac00-\ud7af]{2,}")
+_SENTENCE_SPLIT_RE = re.compile(r"[。！？.!?\n]+")
+
+
+def _heuristic_tokens(text: str) -> list[str]:
+    """复用 cjk_tokens 切分中英信号，并扩展日文假名/韩文音节重叠 2-gram。"""
+    from cjk_tokens import cjk_ngrams, signal_tokens
+    tokens = signal_tokens(text)
+    for run in _NON_CJK_EAST_ASIAN_RE.findall(text or ""):
+        tokens.extend(cjk_ngrams(run))
+    deduped = list(dict.fromkeys(t for t in tokens if len(t) >= 2))
+    if not deduped and (text or "").strip():
+        return [(text or "").strip().lower()]
+    return deduped
+
+
 def heuristic_substantive_discussion(topic: str, text: str, title: str = "") -> dict[str, Any]:
     """本地高精度启发式深度判定：区分实质深入探讨 vs 顺带提及（零网络、零外部 Key 依赖）。"""
     t_clean = (topic or "").strip().lower()
@@ -648,19 +664,19 @@ def heuristic_substantive_discussion(topic: str, text: str, title: str = "") -> 
     if not t_clean or not full_text.strip():
         return {"label": "none of these", "confidence": 0.5}
 
-    tokens = [tok for tok in re.split(r"[\s,，、。/_-]+", t_clean) if len(tok) >= 2]
-    if not tokens:
-        tokens = [t_clean]
-
-    total_hits = sum(full_text.count(tok) for tok in tokens)
-    title_hit = any(tok in title.lower() for tok in tokens)
+    tokens = _heuristic_tokens(topic)
+    title_low = (title or "").lower()
+    title_hit = any(tok in title_low for tok in tokens)
+    sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(text.lower()) if s.strip()]
+    sent_hits = sum(1 for s in sentences if any(tok in s for tok in tokens))
+    token_hits = sum(1 for tok in tokens if tok in full_text)
     text_len = len(text.strip())
 
-    # 实质探讨：(标题明确命中且有基本正文 >= 30 字) 或 (正文探讨 >= 2 次且篇幅 >= 60 字) 或 (频次 >= 3)
-    if (title_hit and text_len >= 30) or (total_hits >= 2 and text_len >= 60) or total_hits >= 3:
+    # 实质探讨：(标题明确命中且正文 >= 30 字) 或 (至少 2 个独立句命中主题且篇幅 >= 60 字)
+    if (title_hit and text_len >= 30) or (sent_hits >= 2 and text_len >= 60):
         return {"label": "substantive in-depth discussion", "confidence": 0.88}
-    # 顺带提及：有提及但篇幅短或频次低
-    if total_hits >= 1 or text_len >= 40:
+    # 顺带提及：单句提及或篇幅不足
+    if token_hits >= 1 or sent_hits >= 1 or text_len >= 40:
         return {"label": "passing mention or brief reference", "confidence": 0.78}
     return {"label": "unrelated chatter", "confidence": 0.72}
 
@@ -690,18 +706,28 @@ def heuristic_source_type(url: str, title: str = "", text: str = "") -> dict[str
 
 
 def heuristic_support(query: str, text: str, title: str = "") -> dict[str, Any]:
-    """本地高精度启发式证据支持度初筛（零网络、零外部依赖）。"""
-    q_low = (query or "").lower().strip()
+    """本地高精度启发式证据支持度初筛（零网络、零外部依赖，支持 CJK/多语 2-gram 与同句极性窗口）。"""
     full_text = f"{title}\n{text}".lower()
-    tokens = [tok for tok in re.split(r"[\s,，、。/_-]+", q_low) if len(tok) >= 2]
+    tokens = _heuristic_tokens(query)
     if not tokens:
-        tokens = [q_low]
+        return {"label": "neutral", "confidence": 0.70}
     hits = sum(1 for tok in tokens if tok in full_text)
-    contra_words = ("keep unchanged", "remain unchanged", "defying", "opposite", "未降息", "维持不变", "反驳", "并非")
-    has_contra = any(w in full_text for w in contra_words)
-    if has_contra and hits >= 1:
+    contra_words = (
+        "keep unchanged", "remain unchanged", "defying", "opposite", "denied", "contrary",
+        "未降息", "维持不变", "并未", "未如", "反驳", "并非", "否认",
+    )
+    sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(full_text) if s.strip()]
+    has_contra = any(
+        any(w in s for w in contra_words) and any(tok in s for tok in tokens)
+        for s in sentences
+    )
+    if has_contra:
         return {"label": "contradicts the query", "confidence": 0.85}
-    if hits >= len(tokens) * 0.7:
+    ratio = hits / len(tokens)
+    has_cjk = any(ord(c) > 0x2E80 for c in query)
+    min_hits = 2 if (has_cjk and len(tokens) > 2) else 1
+    threshold = 0.25 if has_cjk else 0.65
+    if ratio >= threshold and hits >= min_hits:
         return {"label": "supports the query", "confidence": 0.80}
     return {"label": "neutral", "confidence": 0.70}
 

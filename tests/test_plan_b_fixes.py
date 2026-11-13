@@ -107,6 +107,36 @@ class TestPlanBFixes(unittest.TestCase):
         self.assertGreater(b, 0.0)
         self.assertLessEqual(b, 0.05)
 
+    def test_heuristic_multilingual_cjk_and_polarity_window(self):
+        self.assertEqual(
+            se.heuristic_support(
+                "央行降准释放流动性",
+                "中国人民银行宣布下调金融机构存款准备金率0.5个百分点，向市场提供长期流动性约1万亿元。",
+            )["label"],
+            "supports the query",
+        )
+        self.assertEqual(
+            se.heuristic_support(
+                "美联储本周降息",
+                "美联储议息会议决定将联邦基金利率目标区间维持在当前水平不变，并未如部分机构预期那样在本周降息。",
+            )["label"],
+            "contradicts the query",
+        )
+        self.assertEqual(
+            se.heuristic_support(
+                "日本の最低賃金引き上げ",
+                "厚生労働省の審議会は今年度の全国平均の最低賃金を過去最大幅となる時給50円引き上げる方針を決定した。",
+            )["label"],
+            "supports the query",
+        )
+        self.assertEqual(
+            se.heuristic_substantive_discussion(
+                "삼성전자 파운드리",
+                "오늘 점심 메뉴는 김치찌개였고, 친구가 잠깐 삼성전자 파운드리 이야기를 꺼냈지만 바로 다른 화제로 넘어갔다.",
+            )["label"],
+            "passing mention or brief reference",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
