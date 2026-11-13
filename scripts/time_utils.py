@@ -51,33 +51,35 @@ _SPEC_TIME_ENGINES: frozenset[str] | None = None
 
 
 def _spec_time_engines() -> frozenset[str]:
-    """懒扫描 engines/specs/*.yaml 中声明了 item_published_at 或 rss_feed 的源。"""
+    """从 config 已合并的引擎声明派生时间能力集合（唯一真源）。
+
+    此前逐个 `yaml.safe_load` 扫 engines/specs/*.yaml（307 份、纯 Python
+    解析器约 130-150 ms），而 config.load_config() 早已把同一批声明解析并
+    合并进 engines 段，搜索路径里还会调用它多次。复用它既消掉重复解析，
+    也消掉「同一份声明两处口径」的漂移面：改 spec 后 config 的 mtime/内容
+    摘要缓存会自然失效，无需再维护第二套扫描与失效逻辑。
+
+    判据与旧实现逐位一致（rss_feed / feeds / request.feed_url /
+    output_map.item_published_at），见 tests/test_time_capable_hotpath.py
+    的等价性对拍。
+    """
     global _SPEC_TIME_ENGINES
     if _SPEC_TIME_ENGINES is not None:
         return _SPEC_TIME_ENGINES
+    from config import load_config
+
+    engines = load_config()["engines"]
     found: set[str] = set()
-    try:
-        from pathlib import Path
-        import yaml
-        specs_dir = Path(__file__).resolve().parent.parent / "engines" / "specs"
-        if specs_dir.is_dir():
-            for p in specs_dir.glob("*.yaml"):
-                try:
-                    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-                except (OSError, yaml.YAMLError, ValueError):
-                    continue
-                if not isinstance(data, dict):
-                    continue
-                eng_id = str(data.get("engine_id") or p.stem)
-                omap = data.get("output_map") or {}
-                req = data.get("request") or {}
-                if (data.get("type") == "rss_feed"
-                        or data.get("feeds")
-                        or (isinstance(req, dict) and req.get("feed_url"))
-                        or (isinstance(omap, dict) and omap.get("item_published_at"))):
-                    found.add(eng_id)
-    except (OSError, ImportError):
-        pass
+    for eng_id, spec in engines.items():
+        if not isinstance(spec, dict):
+            continue
+        omap = spec.get("output_map") or {}
+        req = spec.get("request") or {}
+        if (spec.get("type") == "rss_feed"
+                or spec.get("feeds")
+                or (isinstance(req, dict) and req.get("feed_url"))
+                or (isinstance(omap, dict) and omap.get("item_published_at"))):
+            found.add(eng_id)
     _SPEC_TIME_ENGINES = frozenset(found)
     return _SPEC_TIME_ENGINES
 

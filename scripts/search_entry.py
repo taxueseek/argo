@@ -164,7 +164,11 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
     # 用归一化 ISO（7d 与等价绝对日期共享缓存；相对窗跨天自然过期不串旧数据）。
     # 仅当组合内含带时间能力引擎时隔离：无时间字段引擎忽略时间窗、结果相同，
     # 隔离只会降低命中率（7d/30d 查 octen/anysearch 命中同一缓存）。
-    time_aware = any(_is_time_capable(e) for e in engines)
+    # 无时间窗时整段短路：`time_aware` 只被下面两行与后过滤读取，而两者
+    # 都以 since/until 非空为前提，此时无论如何取值都不影响结果。旧写法
+    # 无条件求值，让默认路径白付一次 307 份 spec 的全量解析。
+    time_aware = (bool(since_iso or until_iso)
+                  and any(_is_time_capable(e) for e in engines))
     if since_iso and time_aware:
         cache_engine_key += f"|since={since_iso}"
     if until_iso and time_aware:

@@ -394,9 +394,9 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 f"缺少环境变量：{' / '.join(missing_env)}（配置后重试）")
             return eng, [], outcome, lat
 
-        # 时间窗只隔离带时间能力引擎的 per-engine 缓存（与 combo 键同语义）
-        eng_since = since_iso if is_time_capable(eng) else None
-        eng_until = until_iso if is_time_capable(eng) else None
+        # 时间窗只隔离带时间能力引擎的 per-engine 缓存（与 combo 键同语义）；判空在前免白烧
+        eng_since = since_iso if (since_iso or until_iso) and is_time_capable(eng) else None
+        eng_until = until_iso if (since_iso or until_iso) and is_time_capable(eng) else None
 
         # 远端配额耗尽：配额状态机已标记的引擎不参与调用。
         # route_combo 的 F7 只覆盖 combo 路由；主路由（TF-IDF）/

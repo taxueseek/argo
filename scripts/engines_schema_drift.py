@@ -411,8 +411,9 @@ def apply_schema_patch(spec_file: str | Path, patch: dict[str, str]) -> tuple[bo
 
     # 4. 严格结构与语法门禁（Double-check validation）
     try:
-        before = yaml.safe_load(text)
-        parsed = yaml.safe_load(new_text)
+        from yaml_load import loads as _yaml_loads
+        before = _yaml_loads(text)
+        parsed = _yaml_loads(new_text)
     except yaml.YAMLError as exc:
         return False, f"YAML 语法校验未通过: {exc}"
 
