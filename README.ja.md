@@ -21,6 +21,8 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
+> **taxueseek スキルシリーズ**（検索・ディープリサーチ担当）：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 75★ · [session-digger](https://github.com/taxueseek/session-digger) 34★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★ · [taxueskills](https://github.com/taxueseek/taxueskills) 25★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★ · [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 15★ | **DSH プラグイン**：[dsh-files](https://github.com/taxueseek/dsh-files) 43★ · [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 15★ · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★
+
 **Argo（アルゴ）** は AI エージェント向けに設計されたオープンソースのマルチエンジン検索・Web 取得・エビデンス検証ツールです。**クレジットカードや有料 API キー不要**で即座に動作し、18 言語（日本語・英語・中国語・韓国語など）の一次ソースへ自動ルーティングします。
 
 ---
@@ -68,6 +70,7 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 
 ## 主な機能・ドキュメント
 
+- **AI 検索統合**：キー不要チャネル（`tavily_free`、`felo`、`parallel_free`）に加え、**DeepSeek Search**・**Tencent Yuanbao (混元)**・**Metaso**・**Bocha**・**Tavily**・**Exa** などの主要 AI 検索を単一インターフェースで統合ルーティング。
 - **19 個の MCP ツール**（`argo_search`、`argo_fetch`、`argo_research`、`argo_evidence`、`argo_local_search` など）および 4 つのサブスキル（`local-search`、`local-seek`、`ego-search`、`js-run`）を搭載。
 - **DSH プラグイン**（`dsh plugin --profile web add argo-search`）は 18 個のネイティブツールと並列リサーチを提供（詳細は [packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)）。
 - 詳細ドキュメント：[docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md) · [docs/MCP_SETUP.md](docs/MCP_SETUP.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md)

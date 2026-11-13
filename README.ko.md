@@ -21,6 +21,8 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
+> **taxueseek 스킬 시리즈** (검색·딥리서치): [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 75★ · [session-digger](https://github.com/taxueseek/session-digger) 34★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★ · [taxueskills](https://github.com/taxueseek/taxueskills) 25★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★ · [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 15★ | **DSH 플러그인**: [dsh-files](https://github.com/taxueseek/dsh-files) 43★ · [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 15★ · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★
+
 **Argo(아르고)**는 AI 에이전트를 위한 오픈소스 멀티 엔진 검색·웹 수집·증거 검증 도구입니다. **유료 API 키 없이도 무료 로컬 폴백으로 즉시 실행**되며, 18개 언어와 도메인(학술, 코드, 금융, 뉴스)에 맞춰 자동 라우팅하고 원문 기반 신뢰도 검증을 제공합니다.
 
 ---
@@ -68,6 +70,7 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 
 ## 주요 기능 및 문서
 
+- **AI 검색 통합**: 무료 채널(`tavily_free`, `felo`, `parallel_free`)과 **DeepSeek Search**, **Tencent Yuanbao (혼원)**, **Metaso**, **Bocha**, **Tavily**, **Exa** 등 주요 AI 검색 엔진을 단일 라우터로 통합.
 - **MCP 도구 19개** (`argo_search`, `argo_fetch`, `argo_research`, `argo_evidence`, `argo_local_search` 등) 및 4개 서브 스킬(`local-search`, `local-seek`, `ego-search`, `js-run`) 제공.
 - **DSH 플러그인** (`dsh plugin --profile web add argo-search`): 18개 네이티브 도구 및 병렬 리서치 오케스트레이션 지원 ([packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)).
 - 전체 문서: [docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md) · [docs/MCP_SETUP.md](docs/MCP_SETUP.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md)
