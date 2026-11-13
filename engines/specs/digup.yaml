@@ -1,4 +1,4 @@
-# DigUp 本地文件语义搜索（CLI 桥接）——默认关闭，按需启用
+# DigUp 本地文件语义搜索（CLI 桥接）——按需使用，未装 CLI 时自动标记为缺依赖
 #
 # 它搜什么：本机文件按「内容」而不是文件名——照片/截图按画面与图内文字、
 # PDF 按页、文档按块、音频/视频按 30s 窗口与抽帧（命中精确到页/秒/行）。
@@ -10,18 +10,19 @@
 #      （brew install --cask arahim3/tap/digup 或 DMG 装的 App 自带）
 #   2. 建索引：digup index <文件夹>…（或开 DigUp.app 选文件夹；索引默认
 #      ~/Library/Application Support/DigUp/index.noindex，$DIGUP_INDEX 可覆盖）
-#   3. 启用：本文件 enabled 改 true，然后跑一次健康门
-#      python3 scripts/engine_validate.py --engine digup --stage health --admit
-#      （canary 需命中你索引里真实存在的内容，可用 --query 覆盖探针词）
+#   3. 本机装好并建索引后即可直接调用；若只想在本机临时关闭，写入 config.local.yaml
 #
 # 调用：argo search "<用大白话描述文件内容>" --engine digup
 # 口径：强项是语义/多模态/跨语言召回；中文关键词精确查找仍以主链为准，
 # 两路结果在融合层按名次合并，本引擎不做额外降权。
 engine_id: digup
 type: cli
-enabled: false         # ← 默认关；开启步骤见文件头
-disabled_reason: 按需启用的本地引擎——需先装 digup CLI 并建索引（文件头三步），装好把 enabled 改 true 后跑 engine_validate 健康门；本机不装不影响任何主链功能
+enabled: true
+explicit_only: true
 cost_tier: free
+requires:
+- bin: digup
+  fix: 安装 DigUp CLI（`brew install --cask arahim3/tap/digup` 或 DMG 安装）并执行 `digup index <目录>` 建索引
 label: 本地文件语义搜索
 desc: DigUp（EmbeddingGemma 2 本地多模态嵌入，全程离线）——照片/截图/PDF/文档/音视频按内容检索
 canary_query: "test"

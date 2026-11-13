@@ -78,6 +78,7 @@ DSH_EN_LABELS: dict[str, str] = {
     "EASTMONEY_APIKEY": "Eastmoney Miaoxiang",
     "FELO_API_KEY": "Felo AI Search",
     "FIRECRAWL_API_KEY": "Firecrawl",
+    "FOURGET_URL": "4get",
     "GITHUB_TOKEN": "GitHub",
     "KEENABLE_API_KEY": "Keenable",
     "METASO_API_KEY": "Metaso",

@@ -1,6 +1,6 @@
 engine_id: searxng
-enabled: false
-disabled_reason: 已用内嵌本地引擎替代外挂 SearXNG 主路径（自包含部署，少一个外部依赖）；重开需自备 SearXNG 实例并把 ARGO_SEARXNG_URL 指向它
+enabled: true
+explicit_only: true
 label: SearXNG
 cost_tier: free
 coverage:

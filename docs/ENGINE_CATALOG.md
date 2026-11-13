@@ -7,11 +7,11 @@
 ## 一、总量与口径
 
 - **收录 307 个源**（`engines/specs/*.yaml` 声明总数）
-- **开箱可用 257 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
-- **需自备密钥 35 个**：`bocha`、`bocha_ai`、`brave`、`byted`、`deepseek_search`、`em_miaoxiang`、`felo`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`wolframalpha`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
-- **需装后端工具 3 个**：`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
-- **已停用 12 个**：`digup`、`ecosia`、`europeana`、`fourget`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`searxng`、`soilgrids`
-- **显式专用 34 个**：`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`doi`、`ecosia`、`feed`、`felo`、`gdelt`、`google_lens`、`local_baidu`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **开箱可用 258 个**：不需要你配任何密钥或装额外工具，自动路由就会用上
+- **需自备密钥 37 个**：`bocha`、`bocha_ai`、`brave`、`byted`、`deepseek_search`、`em_miaoxiang`、`felo`、`fourget`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`searxng`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`wolframalpha`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
+- **需装后端工具 4 个**：`digup`、`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
+- **已停用 8 个**：`ecosia`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`soilgrids`
+- **显式专用 37 个**：`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`local_baidu`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -114,10 +114,10 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `brave` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_BRAVE_API_KEY | 显式调用（--engine） | Brave Search API（需自备 API key，显式指定 --engine brave 时生效） |
 | `byted` | 需自备密钥 | 低价计费 | 不限 | ARGO_BYTED_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 fact_check、域 financial_news、域 legal、域 local_news、域 news_realtime、域 weather_query、语义画像命中 | 字节搜索 API，中文通用/news |
 | `deepseek_search` | 需自备密钥 + 显式专用 | 付费 | 不限 | DEEPSEEK_API_KEY | 显式调用（--engine） | DeepSeek Search |
-| `digup` | 已停用 | 免费 | 不限 | — | 已停用 | DigUp（EmbeddingGemma 2 本地多模态嵌入，全程离线）——照片/截图/PDF/文档/音视频按内容检索 |
+| `digup` | 需装后端工具 + 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | DigUp（EmbeddingGemma 2 本地多模态嵌入，全程离线）——照片/截图/PDF/文档/音视频按内容检索 |
 | `ecosia` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页 |
 | `felo` | 需自备密钥 + 显式专用 | 付费 | 不限 | ARGO_FELO_API_KEY | 语义画像命中 | Felo AI 搜索 API（需自备 API key，显式指定 --engine felo 时生效） |
-| `fourget` | 已停用 | 免费 | 不限 | ARGO_FOURGET_URL | 已停用 | 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG） |
+| `fourget` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_FOURGET_URL | 显式调用（--engine） | 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG） |
 | `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `local_baidu` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 百度本地 |
 | `local_yandex` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Yandex 本地通道（local-search 实测最稳后端，多语言兜底） |
@@ -125,7 +125,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
 | `parallel` | 需自备密钥 | 按调用计费 | 不限 | PARALLEL_API_KEY | 域 chinese_tech_deep | Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch） |
 | `qwant` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页 |
-| `searxng` | 已停用 | 免费 | 不限 | ARGO_SEARXNG_URL | 已停用 | SearXNG 直连（已废弃，由 T3 替代） |
+| `searxng` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SEARXNG_URL | 显式调用（--engine） | SearXNG 直连（已废弃，由 T3 替代） |
 | `tavily` | 需自备密钥 | 按调用计费 | 1000/月 | ARGO_TAVILY_API_KEY | 域 semantic_discovery、语义画像命中 | Tavily AI 搜索 API（免费层 1000 次/月，超出按美元计费；与 exa 同为 api 档） |
 | `tinyfish` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时网页搜索（免费，浏览器渲染，结果含原文摘要，X-API-Key 认证） |
 | `you` | 需自备密钥 | 按调用计费 | 不限 | YDC_API_KEY | 域 news_realtime | You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并） |
@@ -275,6 +275,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `baidu_baike` | 可直接用 | 免费 | 不限 | — | 域 cn_encyclopedia、域 company_search、域 entity_search、域 org_entity | 百度百科词条（suggest + OpenAPI 卡片，免认证） |
 | `dbpedia` | 可直接用 | 免费 | 不限 | — | 域 entity_search | DBpedia 维基百科结构化知识图谱与实体消歧（JSON 免认证） |
 | `dnb` | 可直接用 | 免费 | 不限 | — | 域 book_search、语义画像命中 | 德语出版物最全书目（SRU/RDF XML） |
+| `europeana` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | 欧洲 27 国文化遗产聚合（官方公开 demo key） |
 | `free_dictionary` | 可直接用 | 免费 | 不限 | — | 域 dictionary_search、语义画像命中 | dictionaryapi.dev 英英词典（免认证，响应为数组） |
 | `gleif` | 可直接用 | 免费 | 不限 | — | 域 company_search、域 org_entity | GLEIF 全球法人 LEI 注册库（法定名称/注册地/状态/母公司，免 key） |
 | `local_wikipedia` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Wikipedia本地 |
@@ -290,7 +291,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `wikisource` | 可直接用 | 免费 | 不限 | — | 域 local_reference | 维基文库（古文/公版文献全文检索，中文引文溯源，免认证） |
 | `zdic` | 可直接用 | 免费 | 不限 | — | 域 dictionary_search | 汉典（中文字词典：字义/音韵/字源，HTML 解析，免认证） |
 | `zh_wikipedia` | 可直接用 | 免费 | 不限 | — | 域 anime_encyclopedia、域 cn_encyclopedia、域 entity_search、域 geo_places、域 org_entity、域 sports_search | 中文维基百科（MediaWiki API，与 en.wikipedia 同构） |
-| `europeana` | 已停用 | 免费 | 不限 | — | 语义画像命中 | 欧洲 27 国文化遗产聚合（官方公开 demo key） |
 | `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
 
 ### 本地新闻流（17）

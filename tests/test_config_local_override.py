@@ -174,3 +174,22 @@ def test_example_file_committed():
     assert example.is_file()
     text = example.read_text(encoding="utf-8")
     assert "config.local.yaml" in text
+
+
+def test_optional_local_dep_engines_use_runtime_gating_not_static_disable():
+    """契约：依赖可选 CLI 或自建 URL 的引擎在公开配置中应由运行时条件门控，不静态写死停用。"""
+    cfg = C.load_config(force=True, include_local=False)
+    engines = cfg["engines"]
+
+    digup = engines["digup"]
+    assert digup.get("enabled") is True
+    assert digup.get("explicit_only") is True
+    assert any(req.get("bin") == "digup" for req in (digup.get("requires") or []))
+
+    from engine_env import required_env_for
+    for eng_id, expected_var in (("fourget", "ARGO_FOURGET_URL"), ("searxng", "ARGO_SEARXNG_URL")):
+        spec = engines[eng_id]
+        assert spec.get("enabled") is True, eng_id
+        assert spec.get("explicit_only") is True, eng_id
+        reqs = required_env_for(eng_id, spec)
+        assert any(expected_var in cands for cands in reqs), (eng_id, reqs)

@@ -1,6 +1,6 @@
 engine_id: fourget
-enabled: false
-disabled_reason: 公共 4get.ca 实例对公网存在 IP 封锁与限流；重开需自备 4get 实例（极简轻量无状态元搜索中继）并把 FOURGET_URL 指向它即可
+enabled: true
+explicit_only: true
 label: 4get 极简元搜索
 cost_tier: free
 coverage:
