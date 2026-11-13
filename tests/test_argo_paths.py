@@ -68,7 +68,6 @@ _EXPECT = {
     "adaptive": ("DB_PATH", "adaptive.db"),
     "lang_pref": ("STATE_PATH", "lang_habit.json"),
     "quota": ("QUOTA_STATE_DIR", "."),
-    "health_probe": ("DB_PATH", "health.db"),
 }
 
 

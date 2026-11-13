@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -447,6 +448,7 @@ class CircuitBreaker:
             st["last_kind"] = kind
             if attribution:
                 st["last_attribution"] = dict(attribution)
+            self._apply_flat_observation(st, attribution)
             # empty（无结果）与 blocked（被拦截）都是查询级/源站级信号，不驱动
             # open 熔断：否则「空结果→open 60s→half_open→再 open」无效 churn，
             # 还占主位阻塞 6s。仅 error/timeout 驱动稳定 state 切换（空结果由
@@ -525,9 +527,32 @@ class CircuitBreaker:
         def _m() -> None:
             st = self._engines.get(engine) or {"failures": 0, "state": engine_states.BREAKER_CLOSED}
             st["last_attribution"] = dict(attribution)
+            self._apply_flat_observation(st, attribution)
             self._engines[engine] = st
 
         self._mutate_locked(_m)
+
+    @staticmethod
+    def _apply_flat_observation(st: dict[str, Any],
+                                attribution: dict[str, Any] | None) -> None:
+        """把归因平铺成状态文件里可直接读的 last_http/last_error。
+
+        HTTP 码在 engine_failure.classify 的输出里编在 reason/evidence 字符串
+        （http-403 形态），诊断时得解析嵌套 dict——平铺后 403/401/402 一眼可见
+        （2026-11-14 运行时审计 C 类：bocha 欠费 403 只能碰巧从 quota.json
+        看到，熔断台账自己答不了「为什么」）。缺码或无归因时不写字段。
+        """
+        if not attribution:
+            return
+        blob = " ".join(str(attribution.get(k) or "")
+                        for k in ("reason", "evidence"))
+        m = re.search(r"http-(\d{3})", blob)
+        if m:
+            st["last_http"] = int(m.group(1))
+        err = (str(attribution.get("reason") or "")
+               or str(attribution.get("evidence") or "")).strip()
+        if err:
+            st["last_error"] = err[:120]
 
     def auto_disabled(self) -> list[str]:
         """返回所有处于自动禁用状态的引擎。"""

@@ -119,19 +119,13 @@ def network_profile(engines: list[str]) -> dict[str, Any]:
 
 
 def _probe_latency(engines: list[str]) -> float | None:
-    """无 adaptive 数据时，用 health_probe 的 last_latency_ms 估计。"""
-    try:
-        from health_probe import get_engine_status
-        lats = []
-        for e in engines:
-            st = get_engine_status(e)
-            lat = st.get("last_latency_ms")
-            if isinstance(lat, (int, float)) and lat > 0:
-                lats.append(float(lat))
-        if lats:
-            return sum(lats) / len(lats)
-    except Exception:
-        pass
+    """无 adaptive 数据时的延迟估计。
+
+    health_probe 回退已退役（2026-11-14）：health.db 从建库起零行写入
+    （探针写路径早已被 health_check 替代），这条回退生产上永远拿不到数据，
+    属「看起来有回退、实际恒 None」的死路。延迟估计现在只依赖 adaptive
+    观测数据，没有数据就不估（profile 留空，超时预算走默认 1.0 档）。
+    """
     return None
 
 

@@ -367,6 +367,10 @@ def _save_config_disk_cache(st: os.stat_result, scan: tuple[float, int, int, str
     _sweep_orphan_cache_slots(path)
 
 
+# 存活但陈旧 checkout 槽的回收阈值：槽 mtime = 该 checkout 最后一次加载配置。
+_SLOT_STALE_S = 7 * 86400
+
+
 def _sweep_orphan_cache_slots(keep: Path) -> None:
     """回收「config_path 已不存在」的缓存槽；任何失败静默。
 
@@ -377,6 +381,12 @@ def _sweep_orphan_cache_slots(keep: Path) -> None:
     安全所必需的**（见 _config_disk_cache_path 的说明），所以不能按「同一个
     config 的旧摘要」来删——那会误删另一个 checkout 正在用的槽。只删 config_path
     在盘上已消失的槽，既不误伤活着的 checkout，又能自愈任何来源的临时副本。
+
+    2026-11-14 补第三条：槽 7 天未写即回收。自愈机制曾被「还活着的 checkout」
+    绕过——~/tmp 评测 checkout 与 argo-history 归档的 config.yaml 永久存在，
+    它们的槽按旧判据永远够不着（生产库实测 6 槽约 1.4MB，4 槽属此类）。槽的
+    mtime 就是那个 checkout 最后一次加载配置的时刻，一周没写 = 一周没跑过
+    搜索；缓存本可再生（重建一次 16-50ms），陈槽无保留价值。
 
     时机：只在写缓存时顺带扫（缓存未命中才写，属低频）。临时 checkout 自己写槽
     时就会回收上一批的遗留，所以污染源活跃时回收也随之发生。
@@ -411,6 +421,13 @@ def _sweep_orphan_cache_slots(keep: Path) -> None:
             # 同一 checkout 历史指纹槽且已超 2 小时未动：安全回收，防多轮改配置无界泄漏
             try:
                 if (time.time() - path.stat().st_mtime) > 7200:
+                    path.unlink()
+            except OSError:
+                pass
+        elif cfg_path:
+            # 存活但陈旧的 checkout 槽（第三条判据，见 docstring）
+            try:
+                if (time.time() - path.stat().st_mtime) > _SLOT_STALE_S:
                     path.unlink()
             except OSError:
                 pass

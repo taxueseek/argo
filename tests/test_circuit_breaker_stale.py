@@ -67,3 +67,34 @@ class TestAllowUsesFreshState(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_flat_observation_exposes_http_and_error(tmp_path, monkeypatch):
+    """last_http/last_error 平铺进状态文件，403 一眼可见（2026-11-14 C 类收口）。
+
+    历史缺口：HTTP 码编在 last_attribution 的 reason 字符串里，诊断得解析
+    嵌套；bocha 欠费 403 只能碰巧从 quota.json 看到。
+    """
+    monkeypatch.setenv("ARGO_STATE_DIR", str(tmp_path / "state"))
+    (tmp_path / "state").mkdir()
+    import importlib
+    import circuit_breaker as cb_mod
+    importlib.reload(cb_mod)
+    cb = cb_mod.CircuitBreaker()
+    cb.record_note("bocha", {"category": "quota-exhausted",
+                             "reason": "http-403+quota-exhausted",
+                             "evidence": "HTTP 403: You do not have enough money",
+                             "action": "disable", "confidence": 0.9})
+    snap = cb.snapshot()["bocha"]
+    assert snap["last_http"] == 403, snap
+    assert "http-403" in snap["last_error"], snap
+    # record_failure 同样平铺
+    cb.record_failure("someeng", "error",
+                      attribution={"category": "auth", "reason": "http-401+bad-key",
+                                   "evidence": "HTTP 401 Unauthorized"})
+    snap2 = cb.snapshot()["someeng"]
+    assert snap2["last_http"] == 401 and "http-401" in snap2["last_error"], snap2
+    # 无归因不写字段
+    cb.record_failure("bare", "error")
+    snap3 = cb.snapshot()["bare"]
+    assert "last_http" not in snap3 and "last_error" not in snap3, snap3

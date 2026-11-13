@@ -211,6 +211,52 @@ def _is_binary(path: Path) -> bool:
         return True  # 读不了 = 当二进制跳过（软链断、权限洞都不放大成故障）
 
 
+# 死根回收的 VACUUM 阈值：VACUUM 全库重写不便宜（151M 级库数秒），只在
+# 累计死行数达到阈值才做。refresh 挂的自动清理永不 VACUUM（查询路径上
+# 不做重活），VACUUM 只由 CLI `prune` 显式触发。
+_PRUNE_VACUUM_MIN_ROWS = 100
+
+
+def prune_dead_roots(vacuum: bool = False) -> dict:
+    """清理已消失根的残留行：目录没了，该根的 files/content/meta 行永不回收
+    （DELETE 只在同名 root 重扫时触发，pytest/tmp 这类一次性目录死一行就是
+    一行）。返回 {pruned_roots, pruned_rows, vacuumed}。
+
+    refresh 每轮开头以 vacuum=False 调用（根数量级个位数，成本 = 每根一次
+    isdir）；磁盘回收走 CLI `prune`（按阈值 VACUUM）。
+    """
+    out = {"pruned_roots": [], "pruned_rows": 0, "vacuumed": 0}
+    try:
+        con = _connect()
+    except sqlite3.Error:
+        return out
+    try:
+        dead = [r for (r,) in con.execute("SELECT root FROM meta").fetchall()
+                if not os.path.isdir(r)]
+        for r in dead:
+            n = con.execute("SELECT COUNT(*) FROM files WHERE root = ?",
+                            (r,)).fetchone()[0]
+            con.execute("DELETE FROM files WHERE root = ?", (r,))
+            # content 无 root 列，按 _like_prefix 的目录前缀删（与查询过滤
+            # 同一模式转义，兄弟树不误删）。
+            con.execute("DELETE FROM content WHERE path LIKE ? ESCAPE '\\'",
+                        (_like_prefix(r),))
+            con.execute("DELETE FROM meta WHERE root = ?", (r,))
+            out["pruned_roots"].append(r)
+            out["pruned_rows"] += n
+        if out["pruned_rows"]:
+            con.commit()
+        if vacuum or (out["pruned_rows"] >= _PRUNE_VACUUM_MIN_ROWS):
+            con.execute("VACUUM")
+            out["vacuumed"] = 1
+        con.commit()
+    except sqlite3.Error:
+        pass  # 维护失败不放大成搜索故障（与本文件其余容错同纪律）
+    finally:
+        con.close()
+    return out
+
+
 def refresh(root: str, dots: bool = False, budget_s: float | None = None,
             force: bool = False) -> dict:
     """增量刷新一个根的索引：清单 diff → 重读改动文件 → 删除消失文件。
@@ -222,6 +268,7 @@ def refresh(root: str, dots: bool = False, budget_s: float | None = None,
     t0 = time.monotonic()
     budget = budget_s if budget_s is not None else _REFRESH_BUDGET_S
     root_abs = os.path.abspath(os.path.expanduser(root))
+    prune_dead_roots(vacuum=False)  # 顺手清消失根（成本=每根一次 isdir）
     out = {"root": root_abs, "indexed": 0, "changed": 0, "deleted": 0,
            "complete": 0, "elapsed_ms": 0}
     listing = _list_files(root_abs, dots)
@@ -417,11 +464,19 @@ def _like_prefix(root_abs: str) -> str:
 def _cli() -> int:
     import argparse
     ap = argparse.ArgumentParser(description="seek FTS 索引管理")
-    ap.add_argument("action", choices=["rebuild", "status"])
+    ap.add_argument("action", choices=["rebuild", "status", "prune"])
     ap.add_argument("path", nargs="?", default=".", help="索引根目录")
     ap.add_argument("--dots", action="store_true", help="含隐藏目录与软链")
+    ap.add_argument("--vacuum", action="store_true",
+                    help="prune 时无视死行阈值强制 VACUUM 回收磁盘")
     args = ap.parse_args()
     root = os.path.abspath(os.path.expanduser(args.path))
+    if args.action == "prune":
+        info = prune_dead_roots(vacuum=args.vacuum)
+        db_size = index_db_path().stat().st_size if index_db_path().is_file() else 0
+        info["db_bytes"] = db_size
+        print(json.dumps(info, ensure_ascii=False))
+        return 0
     if args.action == "rebuild":
         info = refresh(root, dots=args.dots, budget_s=_REBUILD_BUDGET_S, force=True)
         print(json.dumps(info, ensure_ascii=False))

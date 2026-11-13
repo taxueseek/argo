@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -180,3 +182,24 @@ def test_sweep_disabled_when_cache_disabled(tmp_path, monkeypatch):
     _write_slot(dead, "/tmp/argo-gone-forever/config.yaml")
     config._sweep_orphan_cache_slots(tmp_path / "config-cache-other.json")
     assert dead.exists(), "缓存整体关闭时不该做任何清扫"
+
+
+def test_sweep_recycles_stale_alive_checkout_slots(tmp_path, monkeypatch):
+    """存活 checkout 的陈槽（7 天未写）回收，新槽不动（2026-11-14 第三判据）。
+
+    历史缺口：自愈判据「config_path 已消失」被还活着的 checkout 绕过——
+    ~/tmp 评测 checkout 与 argo-history 归档的 config.yaml 永久存在，它们的
+    槽按旧判据永久占坑（生产库 6 槽 1.4MB，4 槽属此类）。
+    """
+    stale = tmp_path / "config-cache-aaaa000000000000.json"
+    fresh = tmp_path / "config-cache-bbbb000000000000.json"
+    alive_cfg = tmp_path / "still-alive-checkout" / "config.yaml"
+    alive_cfg.parent.mkdir()
+    alive_cfg.write_text("x: 1", encoding="utf-8")
+    _write_slot(stale, str(alive_cfg))
+    _write_slot(fresh, str(alive_cfg))
+    old = time.time() - 8 * 86400
+    os.utime(stale, (old, old))
+    config._sweep_orphan_cache_slots(tmp_path / "config-cache-keep.json")
+    assert not stale.exists(), "7 天未写的存活 checkout 槽应回收"
+    assert fresh.exists(), "新写的槽不能动"

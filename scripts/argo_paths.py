@@ -515,7 +515,6 @@ def _config_db_path() -> str | None:
 def state_path(*parts: str) -> Path:
     """返回状态根目录下的路径（不自动创建目录）。
 
-    state_path("health.db")        → <root>/health.db
     state_path("admission", "x.json") → <root>/admission/x.json
     """
     return state_root().joinpath(*parts)

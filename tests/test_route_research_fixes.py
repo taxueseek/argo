@@ -32,10 +32,11 @@ NBS_STATS_ENABLED = _nbs_stats_enabled()
 
 
 class TestRouteHealthFallbackConsistency(unittest.TestCase):
-    """route 的健康检查 fallback（health_probe）必须与主路径同语义：
-    只对 local_* 引擎做健康判定，非 local 引擎无条件保留。"""
+    """route 的健康过滤单一真源是 health_check（2026-11 收口；原 health_probe
+    fallback 已随死模块退役）：只对 local_* 引擎做健康判定，非 local 引擎
+    无条件保留，health_check 不可用时全部放行。"""
 
-    def test_non_local_engine_survives_health_probe_unavailable(self):
+    def test_non_local_engine_survives_health_unavailable(self):
         from route import _get_engines_combo
 
         domain = {
@@ -45,16 +46,30 @@ class TestRouteHealthFallbackConsistency(unittest.TestCase):
         }
         enabled = {"wikipedia", "byted"}
 
-        # 模拟 health_check 模块缺失 → route 落到 health_probe fallback
-        with patch.dict(sys.modules, {"health_check": None}), \
-             patch("health_probe.get_engine_status", side_effect=lambda e: {
-                 "available": False,
-             } if e == "wikipedia" else {"available": True}):
+        # health_check.is_available 连非 local 引擎也判 False 时，过滤仍只
+        # 针对 local_*：wikipedia 必须保留且居首。
+        with patch("health_check.is_available", return_value=False):
             combo = _get_engines_combo(domain, enabled, mode="auto")
 
-        # wikipedia 是非 local 引擎，health_probe 说 unavailable 也不得被过滤
         self.assertIn("wikipedia", combo)
         self.assertEqual(combo[0], "wikipedia")
+
+    def test_health_module_missing_passes_everything_through(self):
+        """health_check 模块缺失 → 过滤整体跳过，引擎一个不丢。"""
+        from route import _get_engines_combo
+
+        domain = {
+            "name": "fact_check",
+            "primary": "wikipedia",
+            "engines_combo": ["wikipedia", "byted"],
+        }
+        enabled = {"wikipedia", "byted"}
+
+        with patch.dict(sys.modules, {"health_check": None}):
+            combo = _get_engines_combo(domain, enabled, mode="auto")
+
+        self.assertIn("wikipedia", combo)
+        self.assertIn("byted", combo)
 
 
 class TestLocalFirstEfficiency(unittest.TestCase):

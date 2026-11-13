@@ -247,6 +247,54 @@ def _log_path() -> str:
     return str(state_path(LOG_NAME + "-" + _tree_tag()))
 
 
+# 日志轮转：daemon 生命周期短（空闲自杀），增长慢，启动时检查一次足够。
+# 曾完全无轮转（只靠空闲自杀间接限速），18 天积 405 行属侥幸而非机制。
+_LOG_MAX_BYTES = 1 * 1024 * 1024
+
+
+def _rotate_log_if_needed() -> None:
+    """日志超 1MB 时轮转为 .1（旧的 .1 直接淘汰，不保多代）。
+
+    轮转失败不拦启动：日志是观测件，写不进去也比起不来强。
+    """
+    p = _log_path()
+    try:
+        if os.path.exists(p) and os.path.getsize(p) > _LOG_MAX_BYTES:
+            old = p + ".1"
+            if os.path.exists(old):
+                os.unlink(old)
+            os.replace(p, old)
+    except OSError:
+        pass
+
+
+class _TimestampedStdout:
+    """行级时间戳包装：daemon.log 曾零时间戳，重启频率与崩溃间隔无法回答
+    （2026-11-14 运行时审计 C 类实锤）。服务输出统一加 [ISO-8601] 前缀。
+
+    只包装文本流；fd 重定向（dup2）不走这里，外部轮转不受影响。
+    """
+
+    def __init__(self, raw):
+        self._raw = raw
+        self._at_line_start = True
+
+    def write(self, s):
+        if not s:
+            return 0
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        out = []
+        for chunk in s.splitlines(keepends=True):
+            if self._at_line_start and chunk.strip():
+                out.append(f"[{now}] ")
+            out.append(chunk)
+            self._at_line_start = chunk.endswith("\n")
+        return self._raw.write("".join(out))
+
+    def flush(self):
+        self._raw.flush()
+
+
 def _atomic_write(path: str, text: str) -> None:
     d = os.path.dirname(path)
     if d:
@@ -754,6 +802,7 @@ def _start(args: argparse.Namespace) -> int:
         log_dir = os.path.dirname(_log_path())
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
+        _rotate_log_if_needed()
         log = open(_log_path(), "ab", buffering=0)
         os.dup2(log.fileno(), 0)
         os.dup2(log.fileno(), 1)
@@ -768,6 +817,10 @@ def _start(args: argparse.Namespace) -> int:
 
 
 def _serve_child(args: argparse.Namespace) -> None:
+    # stdio 已 dup2 到日志文件；文本流再包一层时间戳，所有 print 落日志带
+    # [ISO-8601] 前缀（观测缺失收口：无时间戳的日志无法回答重启频率）。
+    sys.stdout = _TimestampedStdout(sys.stdout)
+    sys.stderr = _TimestampedStdout(sys.stderr)
     try:
         from engine_env import sync_envfile_to_environ
         sync_envfile_to_environ()

@@ -153,17 +153,58 @@ def _evict() -> None:
     """
     items = entries()
     total = sum(e["bytes"] for e in items)
+    dropped = 0
 
     def _drop(seq: list) -> int:
-        removed = 0
+        nonlocal dropped
         try:
             os.unlink(seq["path"])
         except Exception:
             return 0
+        dropped += 1
         return seq["bytes"]
 
     while len(items) > MAX_FILES:
         total -= _drop(items.pop())
     while items and total > MAX_TOTAL_BYTES:
         total -= _drop(items.pop())
+
+    # 淘汰发生了才对账：台账与正文同生命周期。追加式台账曾只写不截断，
+    # 正文有 MAX_FILES/MAX_TOTAL 淘汰而台账没有——生产库实测 688 行里
+    # 386 行（56%）指向已淘汰文件，纯死行。
+    if dropped:
+        _reconcile_index()
+
+
+def _reconcile_index() -> None:
+    """把 index.jsonl 重写为与现存正文对齐的最小台账；失败不影响主流程。
+
+    回读只按 URL 哈希定位（见模块头），台账只是给人看的列举台账——重写
+    坏了最多丢列举能力，不丢回读能力。同一文件多次存档的记录保留最后一条
+    （追加序里最后出现的行元数据最新）。
+    """
+    try:
+        d = store_dir()
+        idx = d / "index.jsonl"
+        if not idx.is_file():
+            return
+        alive = {e["path"] for e in entries()}
+        last: dict[str, str] = {}
+        with idx.open(encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue  # 坏行丢弃，不让一行脏数据卡住整个台账
+                p = rec.get("path")
+                if isinstance(p, str):
+                    last[p] = line
+        kept = [last[p] for p in last if p in alive]
+        import argo_paths
+        argo_paths.atomic_write_text(idx, "".join(l + "\n" for l in kept))
+    except Exception:
+        pass
 

@@ -4,6 +4,7 @@
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -313,3 +314,73 @@ def test_like_prefix_dir_boundary(tmp_path):
     assert pat.endswith(os.sep + "%")
     # 根路径特判：//% 永不匹配（静默假空回归）
     assert seek_fts._like_prefix("/") == "/%"
+
+
+# ── 死根回收（2026-11-14 运行时生命周期收口）──────────────────────────────────
+
+def test_prune_dead_roots_removes_gone_root_rows(fts_env):
+    """目录消失后该根的 files/content/meta 行必须可回收。
+
+    历史缺口：DELETE 只在同名 root 重扫时触发，pytest/tmp 一次性目录的死行
+    在库里永留（151M 生产库里实挖出 13 个消失根 108 行）。
+    """
+    _state, tree = fts_env
+    gone = tmp_root(_state, "gone-tree")
+    _write(gone, "a.py", "gone root marker alpha\n")
+    info = seek_fts.refresh(str(gone))
+    assert info["complete"] == 1
+    # 根目录整体删除 → 行变死行
+    shutil.rmtree(gone)
+    rep = seek_fts.prune_dead_roots(vacuum=False)
+    assert rep["pruned_roots"] == [str(gone)], rep
+    assert rep["pruned_rows"] == 1 and rep["vacuumed"] == 0, rep
+    con = seek_fts._connect()
+    try:
+        assert con.execute("SELECT COUNT(*) FROM meta WHERE root = ?",
+                           (str(gone),)).fetchone()[0] == 0
+        assert con.execute("SELECT COUNT(*) FROM files WHERE root = ?",
+                           (str(gone),)).fetchone()[0] == 0
+        assert con.execute(
+            "SELECT COUNT(*) FROM content WHERE path LIKE ? ESCAPE '\\'",
+            (seek_fts._like_prefix(str(gone)),)).fetchone()[0] == 0
+    finally:
+        con.close()
+
+
+def test_prune_keeps_live_root_and_refresh_stays_working(fts_env):
+    """活根不动；refresh 顺手的轻量 prune 不得破坏正常增量刷新。"""
+    _state, tree = fts_env
+    _write(tree, "live.py", "live root marker beta\n")
+    _build(tree)
+    rep = seek_fts.prune_dead_roots()
+    assert rep["pruned_roots"] == [], rep
+    info = seek_fts.refresh(str(tree))
+    assert info["complete"] == 1 and info["changed"] == 0, info
+    hits = seek_fts.content_candidates("beta", str(tree))
+    assert hits and hits[0][0].endswith("live.py")
+
+
+def test_refresh_prunes_dead_roots_as_side_effect(fts_env):
+    """refresh 开头顺手清死根：死根不复活，活根数据不受影响。"""
+    _state, tree = fts_env
+    gone = tmp_root(_state, "gone-side")
+    _write(gone, "g.py", "gone side marker\n")
+    seek_fts.refresh(str(gone))
+    shutil.rmtree(gone)
+    _write(tree, "t.py", "fresh marker gamma\n")
+    _build(tree)
+    con = seek_fts._connect()
+    try:
+        roots = [r for (r,) in con.execute("SELECT root FROM meta").fetchall()]
+    finally:
+        con.close()
+    assert str(gone) not in roots and str(tree) in roots, roots
+
+
+def tmp_root(_state, name):
+    """fts_env 树外的独立索引根（用于制造可删除的消失根）。"""
+    import tempfile
+    base = Path(tempfile.mkdtemp(prefix="argo-prune-test-"))
+    root = base / name
+    root.mkdir(parents=True)
+    return root

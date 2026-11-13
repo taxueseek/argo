@@ -629,3 +629,44 @@ class TestTreeScopedDaemonFiles(unittest.TestCase):
         exec(compile(m.group(0), "bin-argo-tree-tag", "exec"), ns)
         self.assertEqual(ns["_tree_tag"](), daemon_mod._tree_tag(),
                          "bin/argo 与 daemon.py 的树指纹不一致（两端会找不到彼此的 daemon）")
+
+
+def test_log_rotation_at_startup(tmp_path, monkeypatch):
+    """启动时日志超 1MB 轮转为 .1，旧的 .1 直接淘汰（2026-11-14 收口）。
+
+    历史缺口：daemon.log 无轮转，只靠空闲自杀间接限速。
+    """
+    state = tmp_path / "state"
+    state.mkdir(parents=True)
+    monkeypatch.setenv("ARGO_STATE_DIR", str(state))
+    import importlib
+    import daemon as daemon_mod
+    importlib.reload(daemon_mod)
+    log = Path(daemon_mod._log_path())
+    log.write_bytes(b"x" * (daemon_mod._LOG_MAX_BYTES + 1))
+    Path(str(log) + ".1").write_bytes(b"old generation")
+    daemon_mod._rotate_log_if_needed()
+    assert not log.exists(), "超限日志必须改名让位（os.replace 语义）"
+    new_gen = Path(str(log) + ".1")
+    assert new_gen.read_bytes() == b"x" * (daemon_mod._LOG_MAX_BYTES + 1), \
+        "当前代内容成为 .1 历史"
+    assert new_gen.stat().st_size > 0
+    # 未超限时不动
+    log.write_bytes(b"fresh content")
+    daemon_mod._rotate_log_if_needed()
+    assert log.read_bytes() == b"fresh content"
+    assert Path(str(log) + ".1").read_bytes() != b"fresh content"
+
+
+def test_timestamped_stdout_prefixes_lines():
+    """时间戳包装：每行首加 [ISO-8601]，行内续写不重复加。"""
+    import io
+    import daemon as daemon_mod
+    buf = io.StringIO()
+    ts = daemon_mod._TimestampedStdout(buf)
+    ts.write("[daemon] 就绪\n已退出\n")
+    out = buf.getvalue()
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    assert len(lines) == 2, out
+    for ln in lines:
+        assert ln.startswith("[20") and "T" in ln[:20], out

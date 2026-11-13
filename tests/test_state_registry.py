@@ -27,15 +27,16 @@ import badcase_causes  # noqa: E402, F401 - 自注册 root_cause 状态机
 
 
 class TestRegistryCompleteness:
-    """注册表必须覆盖全部 27 台状态机。"""
+    """注册表必须覆盖全部 26 台状态机。"""
 
-    # 期望的 27 台状态机名（与 engine_states.py 文件头 §1-§27 一一对应）
+    # 期望的 26 台状态机名（与 engine_states.py 文件头 §1-§27 一一对应；
+    # 原 §18 probe 已随 health_probe 模块退役，2026-11-14）
     EXPECTED_MACHINES = frozenset({
         "breaker", "config", "env", "admission", "health",
         "outcome", "failure", "fetch_method", "retry",
         "engine_detail", "daemon", "reranker", "plan",
         "batch_probe", "batch_probe_verdict", "numeric",
-        "coverage", "probe", "cache", "verification",
+        "coverage", "cache", "verification",
         "watch", "envelope", "recovery_level", "conclusion_cap",
         "validation", "root_cause",
     })

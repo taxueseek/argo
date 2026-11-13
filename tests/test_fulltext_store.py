@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -81,6 +82,43 @@ class TestFulltextStore(unittest.TestCase):
             self.assertLessEqual(len(fs.entries()), 3)
         finally:
             fs.MAX_FILES = orig
+
+    def test_index_reconciles_after_eviction(self):
+        """淘汰发生后台账必须与现存正文对齐，死行清零（2026-11-14 收口）。
+
+        历史缺口：台账只追加不截断，正文有 MAX_FILES 淘汰而台账没有——
+        生产库实测 688 行里 386 行（56%）指向已淘汰文件。
+        """
+        import time
+        idx = Path(self.dir) / "index.jsonl"
+        orig = fs.MAX_FILES
+        fs.MAX_FILES = 2
+        try:
+            for i in range(5):
+                fs.save(f"https://y.com/{i}", f"body {i} " * 100, "text")
+                time.sleep(0.01)
+            alive = {e["path"] for e in fs.entries()}
+            self.assertTrue(alive)
+            lines = [ln for ln in
+                     idx.read_text(encoding="utf-8").splitlines() if ln]
+            self.assertEqual(
+                len(lines), len(alive),
+                f"台账行数 {len(lines)} != 现存正文数 {len(alive)}——死行未清")
+            for ln in lines:
+                self.assertIn(json.loads(ln)["path"], alive)
+        finally:
+            fs.MAX_FILES = orig
+
+    def test_reconcile_survives_corrupt_lines(self):
+        """台账里的脏行不得卡住对账：坏行丢弃，好行保留。"""
+        fs.save("https://z.com/a", "body a " * 100, "text")
+        idx = Path(self.dir) / "index.jsonl"
+        idx.write_text("{broken json\n" + idx.read_text(encoding="utf-8"),
+                       encoding="utf-8")
+        fs._reconcile_index()
+        lines = [ln for ln in idx.read_text(encoding="utf-8").splitlines() if ln]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0])["url"], "https://z.com/a")
 
     def test_save_never_raises(self):
         """写盘失败不得上抛——存档是增值能力，不是抓取的前置条件。"""

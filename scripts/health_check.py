@@ -39,7 +39,7 @@ if not logger.handlers:
 PROBE_TIMEOUT = 5.0
 # 本文件不实现失败阈值：它写注册表的布尔 available，连续失败计数由
 # argo_engine_registry.update_health 累加但无人按阈值读。阈值的唯一
-# 定义在 engine_states.PROBE_MAX_FAILURES（health_probe 消费）。此前这里
+# 此前这里
 # 另有一个 MAX_FAILURES = 2 却没有任何读取点，看着像有门限其实没有。
 HEALTH_TTL = 300  # 5 分钟
 

@@ -120,19 +120,6 @@ def test_plan_statuses_cover_exit_code_contract():
         sys.argv = argv
 
 
-def test_probe_availability_is_fail_open():
-    """探针可用性只认 unavailable 一票否决；未登记值必须放行（不静默过滤源）。"""
-    assert st.is_probe_available(st.PROBE_STATUS_AVAILABLE)
-    assert st.is_probe_available(st.PROBE_STATUS_DEGRADED)
-    assert st.is_probe_available(st.PROBE_STATUS_UNKNOWN)
-    assert st.is_probe_available("") is True
-    assert st.is_probe_available("some_future_status") is True
-    assert st.is_probe_available(None) is True
-    assert st.is_probe_available(st.PROBE_STATUS_UNAVAILABLE) is False
-    # 白名单集合是文档，判据是黑名单；两者不能互相替代
-    assert st.PROBE_STATUS_UNAVAILABLE not in st.PROBE_ROUTABLE_STATUSES
-
-
 def test_numeric_penalty_set_drives_reorder():
     """数值降权集合是 reorder_by_numeric 的唯一判据；confirmed/unfetchable 不动分。"""
     assert st.NUMERIC_PENALIZED == {st.NUMERIC_MISSING, st.NUMERIC_PARTIAL}
@@ -157,15 +144,6 @@ def test_coverage_vocabulary_stays_uppercase():
     assert research_dossier.coverage_status(_sr(9)) == st.COVERAGE_COVERED
     assert research_dossier.coverage_status(_sr(1)) == st.COVERAGE_PARTIAL
     assert research_dossier.coverage_status(_sr(0)) == st.COVERAGE_NOT_COVERED
-
-
-def test_probe_threshold_has_one_source():
-    """连续失败阈值只能有一处定义；health_check 不该再长一个没人读的同名常量。"""
-    import health_check
-    import health_probe
-
-    assert health_probe.MAX_FAILURES == st.PROBE_MAX_FAILURES
-    assert not hasattr(health_check, "MAX_FAILURES")
 
 
 def test_daemon_states_are_machine_readable():
@@ -291,9 +269,9 @@ def test_conclusion_cap_vocabulary_is_generated_to_js():
 
 
 def test_health_sources_align_to_circuit_breaker(monkeypatch):
-    """三套健康存储单一真源：熔断器判定不可用时，health_check 与 health_probe 均一票否决。"""
+    """健康存储单一真源（原三套，health_probe 已退役）：熔断器判定不可用时，
+    health_check 必须一票否决。"""
     import health_check
-    import health_probe
     from circuit_breaker import get_breaker
 
     class _MockBreaker:
@@ -304,10 +282,5 @@ def test_health_sources_align_to_circuit_breaker(monkeypatch):
 
     monkeypatch.setattr("circuit_breaker.get_breaker", lambda: _MockBreaker())
 
-    # 1. health_check.is_available 必须被熔断单一真源拦截
+    # health_check.is_available 必须被熔断单一真源拦截
     assert health_check.is_available("mock_down_engine") is False
-
-    # 2. health_probe.get_engine_status 必须对齐熔断不可用状态
-    st = health_probe.get_engine_status("mock_down_engine")
-    assert st["available"] is False
-    assert st["status"] == "unavailable"

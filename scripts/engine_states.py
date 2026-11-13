@@ -57,8 +57,6 @@ Python→JS 词表投影，堵住「登记完又退回裸字面量」与跨侧�
     not_found / unknown；结论 go / go_with_skips / stop
 16. 数值印证（numeric verdict）：confirmed / partial / missing / unfetchable
 17. 取证覆盖（coverage）：COVERED / PARTIAL / NOT_COVERED
-18. 健康探针（probe status）：available / degraded / unavailable / unknown
-    （health_probe 落库值；health_check 只写布尔 available）
 19. 缓存层级（cache level）：L1 / L2 / L?（未知兜底）
 20. 候选核验（verification）：candidate / opened
 21. 观察模式变更（watch change）：none / noise / substantive / unknown
@@ -566,45 +564,6 @@ COVERAGE_STATUSES = frozenset({
 })
 
 
-# ── 16. 健康探针（probe status）────────────────────────────────────────────
-# health_probe 的 engine_health.status 列：连续失败未达阈值记 degraded，
-# 达阈值记 unavailable，无记录记 unknown。health_check 另一条路径只写布尔
-# available，不写这一列——两套视图并存是接口事实，不要合并。
-
-PROBE_STATUS_AVAILABLE = "available"
-PROBE_STATUS_DEGRADED = "degraded"
-PROBE_STATUS_UNAVAILABLE = "unavailable"
-PROBE_STATUS_UNKNOWN = "unknown"
-
-PROBE_HEALTH_STATUSES = frozenset({
-    PROBE_STATUS_AVAILABLE, PROBE_STATUS_DEGRADED,
-    PROBE_STATUS_UNAVAILABLE, PROBE_STATUS_UNKNOWN,
-})
-
-# 连续失败达到该次数即判 unavailable（状态机转换条件，与状态名同源）。
-# 此前 health_probe 与 health_check 各写一个 MAX_FAILURES = 2，且 health_check
-# 那份没有任何读取点——改名也照样跑，等于两处「看起来有阈值」。
-PROBE_MAX_FAILURES = 2
-
-# 视为「可路由」的探针状态：只有 unavailable 是硬失败；degraded 是「连续
-# 失败但未达阈值」，unknown 是「没探过」。后两者都放行——与
-# health_probe.get_engine_status 的 available 判据（`!= "unavailable"`）逐位
-# 一致，包括对未登记状态值的 fail-open（宁可放行，不让词表演进把源静默过滤）。
-PROBE_ROUTABLE_STATUSES = frozenset({
-    PROBE_STATUS_AVAILABLE, PROBE_STATUS_DEGRADED, PROBE_STATUS_UNKNOWN,
-})
-
-
-def is_probe_available(status: str) -> bool:
-    """探针状态是否允许参与路由（唯一判据：不是 unavailable）。
-
-    刻意不看 PROBE_ROUTABLE_STATUSES 白名单——历史行为就是「只认
-    unavailable 一票否决」，改成白名单会让未登记值（旧库/新版本回滚）从
-    「可用」静默变成「不可用」，把源过滤掉。
-    """
-    return str(status or "") != PROBE_STATUS_UNAVAILABLE
-
-
 # ── 17. 缓存层级（cache level）─────────────────────────────────────────────
 CACHE_LEVEL_L1 = "L1"
 CACHE_LEVEL_L2 = "L2"
@@ -941,13 +900,6 @@ register_state_machine(
     "coverage",
     states=COVERAGE_STATUSES,
     description="取证覆盖：COVERED / PARTIAL / NOT_COVERED",
-)
-
-register_state_machine(
-    "probe",
-    states=PROBE_HEALTH_STATUSES,
-    routable=PROBE_ROUTABLE_STATUSES,
-    description="健康探针：available / degraded / unavailable / unknown",
 )
 
 register_state_machine(
