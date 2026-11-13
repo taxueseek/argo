@@ -1,6 +1,6 @@
 ---
 name: argo
-description: Argo 阿尔戈 — 统一搜索、网页抓取与证据核验。当需要搜索/查一下/核实/抓取网页/爬取/深度研究/论文检索/新闻/舆情/公众号文章/招聘聚合时使用；支持影视/体育/金融/宏观/学术等垂直域与多语言查询。
+description: Multi-engine metasearch, web fetch, and evidence verification for AI agents across 300+ sources and 18 languages (academic, finance, code, news, deep research dossiers). (统一搜索、网页抓取与证据核验)
 version: 2.14.1
 triggers:
   - 搜索
@@ -132,6 +132,3 @@ argo watch add|check|list|remove   # 观察模式（--json 供 cron）
 | 架构：文件结构、证据流水线、输出 JSON Schema、内容质量信号 | `references/architecture.md` |
 | MCP 多客户端注入详解 | `docs/MCP_SETUP.md` |
 | **搜索源使用文档**：全量清单（费用/密钥/状态/域组合）+ 特别能力 | `docs/ENGINE_CATALOG.md`（生成，勿手改） |
-
-
-> 工程纪律（每个事实只定义一处：代码看本仓库、引擎声明看 engines/specs/*.yaml、宿主入口用 link_source.py 建软链、新增源流程）见 `references/operations.md` 末尾。

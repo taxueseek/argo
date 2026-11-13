@@ -32,7 +32,7 @@
 
 ```bash
 # One-line MCP attach for Claude Code / Cursor / LibreChat
-npx -y github:taxueseek/argo
+npx -y argo-search
 ```
 
 > **Part of the taxueseek skill series**, covering search and deep research. Other skills in the series: [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 68★ (AI-tone removal) · [session-digger](https://github.com/taxueseek/session-digger) 33★ (cross-environment session mining) · [taxue-invest](https://github.com/taxueseek/taxue-invest) 28★ (investment analysis) · [taxueskills](https://github.com/taxueseek/taxueskills) 24★ (the taxue decision system) · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 13★ (creative illustration styles).
@@ -141,26 +141,11 @@ Saving takes effect immediately (all volatile config): the native tool set is re
 
 ## Install and run
 
-Zero config works. Three ways to install, pick your habit:
+Zero config works. Three ways to install — see [Quick start](#quick-start) for full commands and MCP client JSON:
 
-**Want your AI assistant to search on its own**: install the skill package into its skills directory. Then when you say "look this up" or "verify this", it goes and searches.
-
-**Want to try it casually**: one npx command, no install needed.
-
-**Want it always on**: attach it over MCP, 19 retrieval tools ready. There is also a one-command injector that configures Claude Code, Cursor and Windsurf automatically; Codex, OpenCode and Cline are on the list too. Your config is backed up before writing, so you can always roll back.
-
-```bash
-# Option 1: install script (recommended for long-term local use)
-curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash
-
-# Option 2: npm / npx (supported, currently 2.14.1; released per tag, version pinned)
-npm install -g argo-search       # install the CLI globally
-npx -y argo-search               # or run it without installing
-npx -y github:taxueseek/argo     # use this to follow the latest commit on main
-
-# Option 3: git clone (development / editing source)
-git clone https://github.com/taxueseek/argo.git
-```
+- **Skill / long-term local use**: `curl -fsSL https://raw.githubusercontent.com/taxueseek/argo/main/scripts/install.sh | bash`
+- **One-line MCP / casual try**: `npx -y argo-search` (or `npm install -g argo-search`)
+- **Development**: `git clone https://github.com/taxueseek/argo.git`
 
 Try one query right after install:
 
@@ -335,14 +320,14 @@ pip3 install pyyaml
 npx -y github:taxueseek/argo
 ```
 
-Client config (Claude Code / Cursor / Kimi, etc.):
+Client config (Claude Code / Cursor / Kimi, etc.; replace `"argo-search"` with `"github:taxueseek/argo"` to track `main`):
 
 ```json
 {
   "mcpServers": {
     "argo": {
       "command": "npx",
-      "args": ["-y", "github:taxueseek/argo"]
+      "args": ["-y", "argo-search"]
     }
   }
 }
@@ -536,7 +521,7 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### MCP tools (12)
+### MCP tools (19)
 
 | Tool | Purpose |
 |------|---------|
@@ -552,6 +537,13 @@ python3 scripts/search.py "same query" --json | \
 | `argo_screenshot` | page screenshot |
 | `argo_pdf` | PDF extract |
 | `argo_social_search` | multi-platform social (`mode=sentiment`) |
+| `argo_article` | structured article fetch (WeChat / long-form) |
+| `argo_job` | job-board aggregation |
+| `argo_extract` | structured field extraction from URLs |
+| `argo_preflight` | preflight check for engines, keys, and environment |
+| `argo_answer` | direct answer over scoped corpus |
+| `argo_watch` | watch / monitor mode (`add`, `check`, `list`, `remove`) |
+| `argo_cite` | citation formatting and verification |
 
 ---
 
