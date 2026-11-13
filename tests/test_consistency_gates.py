@@ -247,11 +247,14 @@ class TestDocNumbersMatchCode:
             r"(\d+)\s*个?\s*MCP\s*工具",          # zh：19 个 MCP 工具
             r"MCP\s*工具一览（(\d+)）",            # zh：表格标题
             r"(\d+)\s*MCP\s*tools",               # en
+            r"MCP\s*tools\s*\((\d+)",             # en：表格标题
             r"(\d+)\s*herramientas\s*MCP",        # es
             r"(\d+)\s*herramientas\s*mcp__",      # es：安装段 A 行
             r"ツール\s*(\d+)\s*個",               # ja
+            r"MCP\s*ツール(?:一覧)?[（(]\s*(\d+)",  # ja：表格标题
             r"MCP\s*ツール\s*(\d+)",              # ja
             r"도구\s*(\d+)개",                    # ko
+            r"MCP\s*도구\s*\((\d+)",              # ko：表格标题
             r"MCP\s*도구\s*(\d+)",                # ko
         ]
         # native 工具数的多语态（上下文都带 nativeTools/原生/네이티브）

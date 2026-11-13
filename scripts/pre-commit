@@ -78,6 +78,11 @@ cd "$root" || exit 1
 # fail closed，绝不静默放行。
 PY=""
 if [ -n "${ARGO_GATE_PYTHON:-}" ]; then
+    _probe_out=$("$ARGO_GATE_PYTHON" -c "import pytest, yaml; print('ARGO_PY_OK')" 2>/dev/null || true)
+    if [ "$_probe_out" != "ARGO_PY_OK" ]; then
+        echo "[pre-commit] ARGO_GATE_PYTHON=${ARGO_GATE_PYTHON} 不可用或缺少 pytest/yaml，拒绝静默放行" >&2
+        exit 1
+    fi
     PY="$ARGO_GATE_PYTHON"
 fi
 if [ -z "$PY" ] && [ -x .venv/bin/python ] && .venv/bin/python -c "import pytest, yaml" >/dev/null 2>&1; then
@@ -123,6 +128,9 @@ printf "[pre-commit] argo 快门禁（~17s，解释器 %s；全量回归请手�
     tests/test_install_script_contract.py \
     tests/test_deep_budget_tail_grace.py \
     tests/test_engine_states.py \
+    tests/test_state_registry.py \
+    tests/test_patch_target_gate.py \
+    tests/test_explicit_only_gate.py \
     tests/test_native_tools_sync.py \
     tests/test_zcode_bridge_daemon_state.py \
     tests/test_state_literal_drift.py \

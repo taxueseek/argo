@@ -23,6 +23,7 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 import engine_states as es  # noqa: E402
+import badcase_causes  # noqa: E402, F401 - 自注册 root_cause 状态机
 
 
 class TestRegistryCompleteness:

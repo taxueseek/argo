@@ -562,7 +562,7 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### MCP 도구 (12)
+### MCP 도구 (19, 기본 4; 주요 12개)
 
 | 도구 | 용도 |
 |------|---------|

@@ -7,7 +7,7 @@ argo/
 ├── SKILL.md              # 技能注册文档（路由壳，本文件指回）
 ├── config.yaml           # 路由规则（cache / domains / execution / output / semantic_evidence / network）
 │                         # engines: {} 保留空键仅为兼容顶层键读取；2059 行
-├── engines/specs/        # 290 个引擎声明（每引擎一文件，唯一声明源，人工维护）
+├── engines/specs/        # 引擎声明目录（每引擎一文件，唯一声明源，清单见 docs/ENGINE_CATALOG.md）
 │                         # config.py 运行时从这里加载，不再合并第二处
 ├── backends/             # 注册表派生（sync_backends.py 从引擎声明生成，勿手改）
 │   ├── domain_profiles.json   # TF-IDF 领域文档（67 条人工语料 + 生成器补的空模板）
@@ -62,7 +62,7 @@ test_state_literal_drift.py` 用 AST 扫「已登记状态值又退回裸字面�
 `tests/test_native_tools_sync.py` 把词表投影对拍到 JS 生成物；三者都进
 `scripts/pre-commit` 快门禁。
 
-登记的 27 台状态机（25 台 + 坏例根因 root_cause）：
+登记的 26 台状态机（25 台 + 坏例根因 root_cause）：
 
 | 分组 | 状态机 | 关键判据 |
 |------|--------|---------|

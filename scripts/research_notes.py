@@ -45,9 +45,6 @@ def slugify(text: str, fallback: str = "note") -> str:
     return tail[:80] or fallback
 
 
-_slugify = slugify  # 兼容历史私有别名
-
-
 _STRONG_MARKERS = (".git", "AGENTS.md", "WORKSPACE")
 _WEAK_MARKERS = ("pyproject.toml", "package.json", "Cargo.toml", "go.mod")
 WORKSPACE_MARKERS = _STRONG_MARKERS + _WEAK_MARKERS

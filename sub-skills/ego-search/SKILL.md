@@ -34,7 +34,7 @@ triggers:
 
 # ego-search（argo 子技能）
 
-ego-search 是 argo 的**登录态专业搜索**子技能（v1.4 完全态）：
+ego-search 是 argo 的**登录态专业搜索**子技能（v1.6 完全态）：
 
 - **双运行时保留**：ego lite（`ego-browser`）与 WebBridge（用户浏览器扩展桥）**互补，不互相替代**
 - **任一可用即可**：`search` / `fetch` / `act` / `api` 在至少一条运行时在线时可用

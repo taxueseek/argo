@@ -516,8 +516,7 @@ class TestPhaseTwoSubstantiveFilter(unittest.TestCase):
 
         为什么 mock 不能抄黄金标注：首版（264b112）mock 按 title 返回
         expected_label，预测恒等于标注、F1 恒满分——「F1>=0.90 门禁」对
-        判定质量退化零敏感，属循环论证（评审 2026-11-12 撤销）。真实 F1
-        评测走 tests/evals/eval_depth_jev.py 的真实模型通道；本测试只锁
+        判定质量退化零敏感，属循环论证（评审 2026-11-12 撤销）。本测试只锁
         管道契约：私域剔除、空正文过滤、输入构建与截断、label→字段映射、
         SUPPORT_THRESHOLD 边界。
         """

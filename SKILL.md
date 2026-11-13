@@ -62,9 +62,9 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 | `--numverify [N]` `--verify-with <引擎>` | 数值印证（对关键数字抓原文确认核对簇）+ 核对配对 |
 | `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域限定 / 关本地统计与查询落盘 |
 
-**按场景选引擎**：时事 → deepseek_search，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → skill_search/dsh_plugin_search。口径见 `references/usage.md`。
+**按场景选引擎**：时事 → `--engine deepseek_search`，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → skill_search/dsh_plugin_search。口径见 `references/usage.md`。
 
-**explicit_only 源不进自动路由**：grep_app（代码）、openaire（学术）、feed（一手稿）、tracemoe/vam/wallhaven（反搜与图源）等垂类强源要点名词用 `--engine <名>`（例：`argo search "x" --engine grep_app`），全量 `argo list-engines`。
+**explicit_only 源不进自动路由**：feed、deepseek_search、tracemoe/saucenao/google_lens/animetrace、wolframalpha、brave/ecosia/qwant/gdelt 等需显式 `--engine <名>`（例：`argo search "x" --engine deepseek_search`），全量见 `argo list-engines`。
 
 ### 图片检索
 
@@ -97,6 +97,7 @@ argo paper "1706.03762"  # 论文深读
 argo tweet "<x-url|id>"  # X 帖子打包（正文+串/引用/转发+媒体）
 argo answer "query" [--scope <语料>]   # 直答（语料见 usage.md）
 argo watch add|check|list|remove   # 观察模式（--json 供 cron）
+argo ego-search status|search|fetch|merge  # 登录态专业搜索（需先 enable）
 ```
 
 ## Agent 执行纪律

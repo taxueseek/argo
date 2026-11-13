@@ -413,7 +413,7 @@ def _run_choice_batch(texts_len: int,
     """每条文本一个请求，并发受限 + 总体硬截止预算（超时即取消未完成任务）。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
     texts_kept = [(idx, t[:MAX_TEXT_CHARS]) for idx, t in keep]
-    deadline_s = DEFAULT_JEV_DEADLINE_S
+    deadline_s = min(float(timeout), DEFAULT_JEV_DEADLINE_S) if timeout and timeout > 0 else DEFAULT_JEV_DEADLINE_S
     results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
 
     # 不能用 `with ThreadPoolExecutor(...)`：with 退出时 shutdown(wait=True)
@@ -527,9 +527,10 @@ def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
              criteria: dict[str, str] | None = None,
              timeout: float | None = None,
              tier: str | None = None) -> Optional[list[dict[str, Any]]]:
-    """一次批量分类。任何异常/非 200/条数不匹配 → None。
+    """一次批量远程语义分类。任何异常/非 200/条数不匹配 → None。
 
-    通道按层级自适应：Gemini Decision 1（优先） ➔ TypeSafe JEV（备用） ➔ 本地启发式（业务层兜底）。
+    远程通道按优先级自适应：Gemini Decision 1 ➔ TypeSafe JEV（互为备选），
+    或显式走 classify。本地启发式兜底由上层 assess_*（allow_heuristic=True）承担。
     """
     if not texts or len(labels) < 2:
         return None

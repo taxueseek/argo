@@ -21,7 +21,7 @@
 | 改发版或依赖 | `docs/RELEASING.md` + `pyproject.toml`（真源） | `pytest tests/test_release_*.py tests/test_dependency_source_gate.py` |
 | 写提交 | `docs/COMMIT_STANDARD.md` | `scripts/check_commit_report.py --last` |
 | 查看或维护系统台账/棘轮 | `docs/LEDGERS.md` + `scripts/badcase_ledger.py` | `python3 scripts/badcase_ledger.py stats` |
-| 提交前自检 | — | `bash scripts/pre-commit`（40 个 pytest 文件 + 2 个 node 测试，~17s） |
+| 提交前自检 | — | `bash scripts/pre-commit`（43 个 pytest 文件 + 2 个 node 测试，~17s） |
 | 全量回归 | — | `python3 -m pytest tests/ -q`（约 5 分钟，不放进 hook） |
 
 ## 不可回退的决定
@@ -34,7 +34,7 @@
 
 - `ARGO_CONCEPT_ROUTER`：概念语义路由。默认走纯词面 TF-IDF，开启后多一层向量
 - `ARGO_LOCAL_IMAGE`：本地图片检索。需要 macOS + swiftc + numpy
-- `ARGO_RRF_WEIGHTED`：加权 RRF 融合。标为**逃生开关**，正常路径不启用
+- `ARGO_RRF_WEIGHTED`：加权 RRF 融合。默认开；`=0` 作为逃生开关回退等权 RRF
 - `ARGO_SEMANTIC_EVIDENCE`：可选语义证据层。需配置 key
 - `ARGO_ADAPTIVE_TAIL`：尾宽分层。三轮 A/B 未证实收益，保留用于复现
 - `ARGO_GENERAL_FALLBACK_STATIC` / `ARGO_GENERAL_FALLBACK_LEGACY`：静态兜底链。

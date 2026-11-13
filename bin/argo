@@ -580,6 +580,7 @@ Usage:
   argo local-image index [目录...]  本地图片建库（Vision；默认关，需 ARGO_LOCAL_IMAGE=1）
   argo local-image search "词"      搜本地图片（--similar-to 给图找相似；--sheet 出联络表）
   argo local-image stats            索引概况
+  argo ego-search {{status|enable|disable|search|fetch|merge}}  登录态专业搜索（默认关，需先 enable）
   argo mcp       {{status|inject|undo}}   多客户端 MCP 一键注入/诊断/还原
   argo paths [--check] [--migrate]     路径自省 / 本机自检 / 搬历史状态到惯例目录
   argo daemon    {{start|status|stop}}   常驻进程（search 自动走 UDS 快路径，消每次 ~85ms 启动+import；ARGO_NO_DAEMON=1 关）
@@ -719,6 +720,8 @@ def main():
         # doctor：源健康度审计（基于真实使用日志给出去留建议）。
         # 300 个源只进不出会累积维护债，这条命令让「该留谁」有数据可依。
         "doctor":    ("source_audit.py", []),
+        # ego-search：登录态专业搜索子技能（默认关，需显式 enable 后使用）。
+        "ego-search": ("../sub-skills/ego-search/scripts/ego_search.py", []),
     }
 
     if sub not in scripts:
@@ -739,7 +742,7 @@ def main():
     py = sys.executable if inplace else _pick_python()
 
     script, defaults = scripts[sub]
-    path = os.path.join(SCRIPTS, script)
+    path = os.path.normpath(os.path.join(SCRIPTS, script))
 
     # evidence: auto search → evidence pipeline (when no stdin data)
     # 用法查询（-h/--help）不走这条管道判定：它既没有查询词也没有 stdin，
@@ -809,9 +812,13 @@ def main():
         # run_module 走 importlib 的缓存校验，同一份源码只在首次或改动后编译。
         # SCRIPTS 已在 sys.path 首位，模块名即去掉 .py 的文件名。
         sys.argv = [path] + args
+        script_dir = os.path.dirname(path)
+        if script_dir != SCRIPTS:
+            sys.path.insert(0, script_dir)
         sys.path.insert(0, SCRIPTS)
         import runpy
-        runpy.run_module(script[:-3], run_name="__main__")
+        mod_name = os.path.basename(path)[:-3] if script_dir != SCRIPTS else script[:-3]
+        runpy.run_module(mod_name, run_name="__main__")
         return
     os.execv(py, [py, path] + args)
 

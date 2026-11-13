@@ -3,7 +3,7 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（33 个，唯一事实=bin/argo 分发表）
+## 命令总览（34 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
@@ -40,10 +40,11 @@
 | `argo quota` | 知乎开放平台当日额度（官方 API，不消耗业务额度） |
 | `argo doctor` | 源健康度审计（基于使用日志给出去留建议；`--days`/`--json`） |
 | `argo local-image` | 本地图片检索（Vision 索引；默认关，见「图片检索」节） |
+| `argo ego-search` | 登录态专业搜索（默认关，见「ego-search」节） |
 
 ## argo doctor — 源健康度审计（2026-11-10）
 
-300 个源只进不出会累积维护债：每个源都要维护 spec、派生件、文档、测试，
+数百个源只进不出会累积维护债：每个源都要维护 spec、派生件、文档、测试，
 但真正进自动路由的只有 ~250 个。`argo doctor` 用真实使用日志
 （`usage_log/query.jsonl` 与 `route.jsonl`）给出去留建议，而不是靠猜。
 
@@ -500,13 +501,13 @@ URL 就在 `results[].url` 里（`--fields agent` 也保留），零额外成本
 |---|---|---|---|
 | `local-seek` | 本机文本与代码 | 纯本地无网络，rg/fd/Spotlight L1~L3 逐级定位 | `argo search --include-local`、MCP `argo_local_search`、CLI `seek.py` |
 | `local-image` | 本机图片多模态 | 离线 Vision OCR/分类/768 维特征矩阵（4ms 点积） | `argo local-image index/search`（需 `ARGO_LOCAL_IMAGE=1`） |
-| `local-search` | 公开网页聚合 | 免 Key SERP 直连聚合，33 本地源，健康探针自愈 | `argo search --local-first` 或主流程候选引擎 |
+| `local-search` | 公开网页聚合 | 免 Key SERP 直连聚合，30 本地源，健康探针自愈 | `argo search --local-first` 或主流程候选引擎 |
 | `ego-search` | 登录态受限网页 | 独立 Chromium profile/WebBridge，鉴权抓取与隔离缓存 | CLI `ego_search.py`（默认关，显式开启） |
 | `js-run` | 轻量纯计算沙箱 | V8 mini-racer 沙箱跑挑战 JS/解密，零网络 I/O | 无独立命令，fetch 降级链一级 E 自动触发（`ARGO_FETCH_JSRUN`） |
 
 ### local-search（本地零成本聚合）
 
-- 33 本地引擎、29 默认启用，覆盖 web_general/chinese/academic/news/code/reference/vertical 七大类
+- 30 本地引擎、27 默认启用，覆盖 web_general/chinese/academic/news/code/reference/vertical 七大类
 - 注册表：`sub-skills/local-search/engine_registry.py`（唯一来源，加载 config.yaml + parse_maps.yaml）
 - 健康探针：canary 查询 + 反爬检测，状态缓存 5 分钟；连续 2 次失败或单次 >8s 标记 unavailable
 - 智能路由：`sub-skills/local-search/smart_router.py` 按查询特征选引擎组合
@@ -602,10 +603,10 @@ python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --lines
 ### ego-search（登录态专业搜索）
 
 ```bash
-python3 sub-skills/ego-search/scripts/ego_search.py status
-python3 sub-skills/ego-search/scripts/ego_search.py search "AI 搜索" --runtime auto
-python3 sub-skills/ego-search/scripts/ego_search.py fetch "https://www.zhihu.com/..." --site zhihu.com
-python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json --login /tmp/l.json
+argo ego-search status
+argo ego-search search "AI 搜索" --runtime auto
+argo ego-search fetch "https://www.zhihu.com/..." --site zhihu.com
+argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 ```
 
 - 双运行时：ego lite + Kimi WebBridge，`--runtime auto|ego|webbridge`
@@ -687,7 +688,7 @@ python3 sub-skills/ego-search/scripts/ego_search.py merge --public /tmp/p.json -
 | `ARGO_REDSKILL_CACHE` | 小红书 Redskill 搜索引擎本地缓存路径覆盖 | 默认跟随系统状态目录 |
 | `ARGO_RESPECT_ROBOTS` | 抓取遵守目标站点 robots.txt 协议 | 默认遵守；=0 强制忽略 |
 | `ARGO_ROUTE_CACHE` | 智能路由决策跨进程缓存 | 默认开；测试环境默认关，=0 强制关闭 |
-| `ARGO_RRF_WEIGHTED` | RRF 加权融合算法 | 默认关（逃生开关）；=1 启用权重调制融合 |
+| `ARGO_RRF_WEIGHTED` | RRF 加权融合算法 | 默认开；`=0` 逃生回退等权融合 |
 | `ARGO_SEMANTIC_EVIDENCE` | 可选语义证据层（Gemini Decision 1 / TypeSafe JEV） | 默认关；配置 key 后可选开启 |
 | `ARGO_SERP_GUARD` | SERP 垃圾与壳链结果守卫（过滤无效跳转与空壳） | 默认开；=0 关闭 |
 | `ARGO_USAGE_LOG` | 本地使用日志流（JSONL，stats 统计数据源） | 默认开；=0 整体关闭 |

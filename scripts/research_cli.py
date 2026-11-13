@@ -363,8 +363,7 @@ def main() -> None:
                     )
                     n_root = resolve_note_root(args.archive_dir)
                     run_ref = f"run:{meta.get('run_id')}" if meta else "无"
-                    # 与 `argo note explore` 共用同一个资产包写入函数：
-                    # 目录、00_判断稿、manifest、索引结构不会随入口而变。
+                    # 与 `argo note explore` 共用同一个单文件落盘函数（内嵌 Frontmatter 与索引）。
                     note_topic = (args.topic or args.query or "").strip() or "research"
                     bundle = create_explore_bundle(
                         root=n_root,

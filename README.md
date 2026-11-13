@@ -53,7 +53,7 @@ Argo's capabilities are organized as four sub-skills, each a standalone pipeline
 
 | Sub-skill | Capability |
 |-----------|------------|
-| **local-search** | Local file search + local zero-cost aggregation engines (32 local engines). Search code symbols, filenames, document text and file structure. Can merge into web search results: flip one switch and local hits join the same search |
+| **local-search** | Local file search + local zero-cost aggregation engines (30 local engines). Search code symbols, filenames, document text and file structure. Can merge into web search results: flip one switch and local hits join the same search |
 | **local-seek** | Local semantic search (BM25 + vector hybrid) for notes, memories and knowledge bases. Three layers: locate the file, read the context, then read the passage closely |
 | **ego-search** | Logged-in professional search. Content behind logins on Zhihu, Xiaohongshu, WeChat public accounts and similar, searched with a real browser and a logged-in session. Off by default; turn it on when needed |
 | **js-run** | Run web JS without a browser. Run environment-probe and pure-compute page scripts without opening a browser; median single-run context is about 1ms |
@@ -94,7 +94,7 @@ The plugin ships a browser-side settings page with two entries: the settings pop
 </p>
 
 <p align="center">
-  <img src="assets/readme/settings-engines.webp" width="100%" alt="Argo settings, Engines: argo's 28 behaviour switches moved into the panel — cache / TF-IDF rerank / numeric cross-check / MinHash dedup / SERP guard and dedup threshold; unconfigured rows show the default and changes apply immediately">
+  <img src="assets/readme/settings-engines.webp" width="100%" alt="Argo settings, Engines: argo's 35 behaviour switches moved into the panel — cache / TF-IDF rerank / numeric cross-check / MinHash dedup / SERP guard and dedup threshold; unconfigured rows show the default and changes apply immediately">
 </p>
 
 <p align="center">
@@ -446,7 +446,7 @@ python3 scripts/search.py --list-engines
 
 What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the MCP surface injects 4 core tools by default (19 in total, mapped one-to-one onto CLI commands), so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **Hundreds of sources, most usable with no key; exact counts in [docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md)**.
 
-Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
+Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 35 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
 
@@ -536,7 +536,7 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### MCP tools (12)
+### MCP tools (19 total; 4 core by default, common 12 listed)
 
 | Tool | Purpose |
 |------|---------|
@@ -762,7 +762,7 @@ Only the four most recent versions. Full history in the [changelog](#changelog);
 - **Three more sources usable with no key**: `tavily_free`, `keenable_free` and the `exa` anonymous fallback
 - **Failures you can act on**: each failure names its source and class and says whether to retry, switch sources or configure a key, alongside a `meta.uncertainty` confidence level
 - **Local config overlay `config.local.yaml`**: machine-local tuning is no longer written into the public config
-- **A new "Engines" section on the DSH settings page**: argo's 28 behaviour switches move out of environment variables and into the panel
+- **A new "Engines" section on the DSH settings page**: argo's 35 behaviour switches move out of environment variables and into the panel
 
 ---
 

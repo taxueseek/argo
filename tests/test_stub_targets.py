@@ -91,6 +91,8 @@ def test_retired_stubs_have_sunset_version_and_not_expired():
     sunset_decl = re.compile(r"^__sunset_version__\s*=", re.M)
     stubs_found = []
     for py in sorted(SCRIPTS.glob("*.py")):
+        if py.name == "badcase_ledger.py":
+            continue
         text = py.read_text(encoding="utf-8")
         if "架构归一退役" in text or sunset_decl.search(text):
             stubs_found.append(py)
@@ -106,7 +108,11 @@ def test_retired_stubs_have_sunset_version_and_not_expired():
                 f"根据生命周期契约，该存根文件必须彻底物理删除！"
             )
 
-    assert len(stubs_found) >= 1, "未找到任何退役存根，需确认存根标识"
+    from badcase_ledger import overview
+    ov_stubs = overview().get("sunset_stubs", {}).get("modules", [])
+    assert len(stubs_found) == len(ov_stubs), (
+        f"存根扫描({len(stubs_found)})与 badcase_ledger.overview({len(ov_stubs)})不一致"
+    )
 
 
 def test_sunset_gate_has_teeth():

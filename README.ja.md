@@ -588,7 +588,7 @@ python3 scripts/search.py "同一クエリ" --json | \
   python3 scripts/evidence.py "同一クエリ" --stdin --json
 ```
 
-### MCP ツール一覧（12）
+### MCP ツール一覧（19、デフォルト 4；主要 12 件）
 
 | ツール | 用途 |
 |--------|------|

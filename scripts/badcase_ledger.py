@@ -553,14 +553,27 @@ def overview() -> dict[str, Any]:
     __sunset_version__ 声明。任何一路取不到都显式标 error，不静默降级成
     假 0——概览的职责是让系统状态可见，包括「取不到状态」本身。
     """
+    db_exists = db_path().is_file()
+    log_dir = usage_log_dir()
+    has_sources = any(p.is_file() for p in (
+        log_dir / "query.jsonl",
+        log_dir / "recovery.jsonl",
+        argo_paths.state_path("circuit_breaker.json"),
+    ))
     st = stats()
+    bc_status = "ok" if (db_exists or has_sources) else "error"
+
+    bc_block: dict[str, Any] = {
+        "status": bc_status,
+        "total": st.get("total", 0),
+        "unattributed": sum(c.get("count", 0) for c in st.get("by_root_cause", [])
+                            if c.get("root_cause") == "unattributed"),
+    }
+    if bc_status == "error":
+        bc_block["reason"] = "no_ledger_or_sources"
 
     out: dict[str, Any] = {
-        "badcases": {
-            "total": st.get("total", 0),
-            "unattributed": sum(c.get("count", 0) for c in st.get("by_root_cause", [])
-                                if c.get("root_cause") == "unattributed"),
-        },
+        "badcases": bc_block,
         "ratchets": {
             "broad_silent_catch_baseline": BROAD_SILENT_CATCH_BASELINE,
         },
