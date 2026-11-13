@@ -3,7 +3,7 @@
 ## Highlights (English / TL;DR)
 
 - **Architecture Slimming & Spec Unification**: Deprecated batch16 and eliminated ≥14 dedicated builder scripts, migrating sources to declarative schema specs and slashing redundant glue code.
-- **MCP Surface Consolidated (3+1 Core Tools)**: Streamlined MCP tools into 4 orthogonal primitives (`search`, `fetch`, `deep_research`, `manage_settings`), aligning strictly with MaaS compliance while preserving backward-compatible aliases (resolves #46).
+- **MCP Surface Consolidated (3+1 Core Tools)**: Streamlined MCP tools into 4 orthogonal core tools (`argo_search`, `argo_fetch`, `argo_research`, `argo_screenshot`, injected by default; the full 19 remain available via `ARGO_MCP_TOOLS=all`), aligning strictly with MaaS compliance while preserving backward-compatible aliases (resolves #46).
 - **New Free & Open Sources**: Integrated Hugging Face Datasets, Maven Central, NuGet, China Railway official fare indicators, and Open-Meteo daily forecasts (registered sources expanded from 300 to 304).
 - **Security Redaction & Release Asset Slimming**: Built-in fail-closed output stream credential redaction (`secret_guard.py`); slimmed release distribution down to standalone wheel + sdist packages with per-asset SHA256 checksums.
 
@@ -31,10 +31,10 @@
 **以前**：向外部 Agent 暴露 19 个独立工具接口，工具列表过长，不仅占用模型上下文，且非标 schema 在部分 MaaS 网关解析报错。
 
 **现在**：
-- 收敛为 4 个正交核心工具：`search`、`fetch`、`deep_research`，以及配置管理 `manage_settings`；
+- 收敛为 4 个正交核心工具：`argo_search`、`argo_fetch`、`argo_research`、`argo_screenshot`（默认注入；全量 19 个经 `ARGO_MCP_TOOLS=all` 开启）；
 - 所有专项能力通过参数分流，严格对齐 MaaS 参数规范，并为原有工具保留向后兼容别名，老客户端无感升级。
 
-### 3. 新增免认证开放数据源（源从 300 增至 304）
+### 3. 新增免认证开放数据源（源从 300 增至 307）
 
 - **开发与科研源**：免 API Key 直连 Hugging Face Datasets、Maven Central 与 NuGet 软件源；
 - **便民与气象**：补齐中国铁路官方票价与复兴号动车组标记；Open-Meteo 补全逐日天气预报；
@@ -57,7 +57,7 @@
 
 - `bash scripts/pre-commit` 快门禁全部绿灯（通过全部 24 项集成校验）
 - `python3 scripts/release_check.py` 结构化声明对账通过
-- 引擎目录一致性：`python3 scripts/gen_engine_catalog.py --check` 一致（304 源）
+- 引擎目录一致性：`python3 scripts/gen_engine_catalog.py --check` 一致（307 源）
 
 ## 兼容性
 

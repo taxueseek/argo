@@ -73,7 +73,7 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 | `argo_pdf` | PDF 提取 |
 | `argo_social_search` | 多平台社交搜索（`mode=sentiment` 舆情聚合） |
 
-完整 19 个工具含 `argo_tweet`、`argo_auth`、`argo_job`、`argo_stats` 等，见 `scripts/mcp_tools.py`。
+完整 19 个工具（默认注入 4 个核心，其余按需开启）含 `argo_tweet`、`argo_auth`、`argo_job`、`argo_stats` 等，见 `scripts/mcp_tools.py`。
 
 ### CLI 命令
 

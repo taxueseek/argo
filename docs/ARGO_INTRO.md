@@ -34,7 +34,7 @@ Claude / Codex / Kimi 等支持 MCP 的客户端，直接挂：
 }
 ```
 
-挂上后获得 19 个工具（与 CLI 能力面对齐）：`argo_search`、`argo_local_search`、`argo_local_read`、`argo_recompute`、`argo_research`、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_article`（公众号文章全文）、`argo_job`（招聘多平台聚合）、`argo_extract`（结构化提取）、`argo_preflight`（URL 批量预检）、`argo_answer`（直答）、`argo_watch`（网页变化监控）、`argo_cite`（DOI 引用条目）。
+挂上后默认获得 4 个核心工具（`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`），全量 19 个按需开启（`ARGO_MCP_TOOLS=all`）。全量清单：`argo_search`、`argo_local_search`、`argo_local_read`、`argo_recompute`、`argo_research`、`argo_evidence`、`argo_clarify`、`argo_crawl`、`argo_fetch`、`argo_screenshot`、`argo_pdf`、`argo_social_search`、`argo_article`（公众号文章全文）、`argo_job`（招聘多平台聚合）、`argo_extract`（结构化提取）、`argo_preflight`（URL 批量预检）、`argo_answer`（直答）、`argo_watch`（网页变化监控）、`argo_cite`（DOI 引用条目）。
 
 ### 依赖
 

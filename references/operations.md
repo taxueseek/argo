@@ -3,9 +3,11 @@
 > 本页承接 SKILL.md 已下沉的低频**操作型**细节：工具清单、MCP/DSH 接入、配额、子技能、本地打通、工程纪律。
 > 只在需要「配置 MCP / 接入 DSH 插件 / 用子技能 / 改引擎」时读，日常搜索/抓取/深度研究不必读。
 
-## MCP 工具清单（19 个）
+## MCP 工具清单（CORE 4 个默认注入，全量 19 个）
 
-`tools/list` 默认只注入 CORE 4 个正交集（`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`，约 5KB/轮）。全量设 `ARGO_MCP_TOOLS=all`（或逗号名单）。`execute_tool` / `--call` 不受此限。URL 在 `results[].url`，默认不生成 `sources`。
+`tools/list` 默认只注入 CORE 4 个正交集（`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`，约 5KB/轮）。全量 19 个设 `ARGO_MCP_TOOLS=all`（或逗号名单）。`execute_tool` / `--call` 不受此限。URL 在 `results[].url`，默认不生成 `sources`。
+
+下表为全量 19 个（含默认注入的 4 个与按需开启的 15 个）。
 
 `argo_search` 的 `domain` 参数把旧工具名收进一个入口（`web` / `social` / `job` / `local`）；旧名 `argo_social_search` / `argo_job` / `argo_article` / `argo_pdf` 仍作为软别名可调用，但不再是默认注入面。
 

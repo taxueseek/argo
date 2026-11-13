@@ -69,7 +69,7 @@ dsh plugin --profile web add argo-search                  # npm release
 dsh plugin --profile web add "github:taxueseek/argo"      # GitHub main
 ```
 
-Restart `dsh web` and it takes effect. Search and fetch become native first-class tools: no MCP connection, no standing context overhead. There is also one `wide_research` parallel researcher and 19 MCP tools you can enable on demand. See integration forms below.
+Restart `dsh web` and it takes effect. Search and fetch become native first-class tools: no MCP connection, no standing context overhead. There is also one `wide_research` parallel researcher, and an MCP surface that injects 4 core tools by default (19 in total, enabled on demand). See integration forms below.
 
 ### Three invocation channels, one capability set
 
@@ -79,7 +79,7 @@ The same argo retrieval core (same engines, same compression, same guards) opens
 |---------|---------|--------------|
 | **Native first-class tools** | On | `argo_search` / `argo_fetch` and friends register via `ctx.tools.register` and run as CLI single-shots (`--call`), reusing the exact engine and guard stack MCP uses — **no MCP connection, zero standing token overhead** |
 | **Native web seam** | On | Registers `argo` as both a search and a fetch provider, so the host's built-in `web_search` routes to argo's engine chain and `web_fetch` to argo's fetch chain (HTTP first, auto-escalating to an anti-detection browser on Cloudflare / JS-rendered pages) |
-| **MCP form** | On demand | The full 19-tool `mcp__argo__*` surface. Tool definitions are injected into context every round and survive compaction (measured ≈3.7K tokens/round for 19 tools), and the hot path is already covered by native tools and the web seam — so it is not mounted by default. Uncomment the `mcp-argo` line in the profile patch when you need the long-tail forensics tools |
+| **MCP form** | On demand | The full 19-tool `mcp__argo__*` surface, with CORE 4 (`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`) injected by default. Tool definitions are injected into context every round and survive compaction, and the hot path is already covered by native tools and the web seam — so the long-tail tools are not mounted by default. Uncomment the `mcp-argo` line in the profile patch when you need them |
 
 There is also one `wide_research`: it plans complementary tracks (`depends_on` staggers them, parallel by default) → bounded concurrent subagent evidence gathering → a source ledger (only http(s) URLs are recorded) → a synthesis report. Output carries `quality_gate_results` (`conclusion_cap`: low/medium/high); when `passed=false` the wording is downgraded and the ledger sources are verified before any conclusion. The worker evidence-tool allowlist writes both MCP and native tool names (allow semantics), so it works whether or not MCP is mounted: with MCP it uses the full surface, without it falls back to `argo_search` / `argo_fetch` and the host's `web_search` / `web_fetch`.
 
@@ -147,7 +147,7 @@ Zero config works. Three ways to install, pick your habit:
 
 **Want to try it casually**: one npx command, no install needed.
 
-**Want it always on**: attach it over MCP, 19 retrieval tools ready. There is also a one-command injector that configures Claude Code, Cursor and Windsurf automatically; Codex, OpenCode and Cline are on the list too. Your config is backed up before writing, so you can always roll back.
+**Want it always on**: attach it over MCP, 4 core tools ready by default (19 in total, enabled on demand). There is also a one-command injector that configures Claude Code, Cursor and Windsurf automatically; Codex, OpenCode and Cline are on the list too. Your config is backed up before writing, so you can always roll back.
 
 ```bash
 # Option 1: install script (recommended for long-term local use)
@@ -182,7 +182,7 @@ Argo supports four integration forms; pick by scenario:
 
 | Form | Best for | Notes |
 |------|----------|-------|
-| **MCP Server** | Always-on agent attachment | 19 retrieval tools ready; one command injects Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline, config backed up first |
+| **MCP Server** | Always-on agent attachment | 4 core tools by default (19 in total, on demand); one command injects Claude Code / Cursor / Windsurf / Codex / OpenCode / Cline, config backed up first |
 | **DSH plugin** | DeepSeek Harness users | One line `dsh plugin add`; search and fetch become native first-class tools, no MCP connection, no standing context overhead; ships a six-section settings page effective on save |
 | **Skill files** | Claude Code / Grok Build / Kimi, etc. | Drop the skill package into the agent's skills directory; say "look this up" or "verify this" and it searches |
 | **npx on demand** | Quick trial | `npx -y argo-search` (npm release) or `npx -y github:taxueseek/argo` (main), no install, good for temporarily attaching MCP to any client |
@@ -444,14 +444,14 @@ python3 scripts/search.py --list-engines
 
 ### Rough capability set (v2.14.1)
 
-What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the 19 MCP tools map one-to-one onto CLI commands, so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **Hundreds of sources, most usable with no key; exact counts in [docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md)**.
+What Argo does, in one sentence: it sends each question to the right sources by domain and language, ranks what comes back by credibility, and hands the agent material it can sort and verify. Search, fetch, evidence checking and local file search share one pipeline, the MCP surface injects 4 core tools by default (19 in total, mapped one-to-one onto CLI commands), so nothing is missing whichever form you install. A few standalone commands round it out: argo tweet packs an X post, argo auth handles login state, argo job aggregates job listings. The full catalog, with cost, key and status per source, sits in docs/ENGINE_CATALOG.md: **Hundreds of sources, most usable with no key; exact counts in [docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md)**.
 
 Installed as a DSH plugin, these capabilities become native host tools: the hot-path search and fetch are on by default, the long-tail forensics tools toggle on in the settings page, and argo's own 28 behaviour switches (cache, rerank, dedup, guard, proxy, TTLs and the rest) moved out of environment variables and into the panel. Keys go into the host credential store, are never echoed, and every change takes effect on save.
 
 The last few releases each fixed one class of problems.
 
 
-v2.14.1 focuses on architecture slimming, open source expansion, MCP 3+1 tool consolidation, and security redaction. Deprecated batch16 and eliminated ≥14 dedicated engine builders, converging on declarative schema specs and reducing redundant glue code; added unified feed engine subscribing to Fed, Nature, Lobsters, and Solidot. Consolidated MCP tool surface into 4 orthogonal primitives (search, fetch, deep_research, manage_settings) strictly complying with MaaS specs while preserving backward-compatible aliases (resolves #46). Sources expanded from 300 to 304 (keyless access to Hugging Face Datasets, Maven Central, NuGet, China Railway official fares and Fuxing markers, Open-Meteo daily forecasts). Added fail-closed automatic output credential redaction (secret_guard.py) and narrowed strong local intent regex. Slimmed release distribution to standalone wheel and sdist with per-asset SHA256 checksums.
+v2.14.1 focuses on architecture slimming, open source expansion, MCP tool consolidation, and security redaction. Deprecated batch16 and eliminated ≥14 dedicated engine builders, converging on declarative schema specs and reducing redundant glue code; added unified feed engine subscribing to Fed, Nature, Lobsters, and Solidot. Consolidated the MCP surface into 4 orthogonal core tools (`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`, injected by default; the full 19 remain available via `ARGO_MCP_TOOLS=all`) strictly complying with MaaS specs while preserving backward-compatible aliases (resolves #46). Sources expanded from 300 to 307 (keyless access to Hugging Face Datasets, Maven Central, NuGet, China Railway official fares and Fuxing markers, Open-Meteo daily forecasts). Added fail-closed automatic output credential redaction (secret_guard.py) and narrowed strong local intent regex. Slimmed release distribution to standalone wheel and sdist with per-asset SHA256 checksums.
 
 v2.14.0 focuses on parser layer consolidation, source expansion, and the badcase ledger loop. Adding a new source no longer requires writing a Python parser: a parser registry and a "self-reflective inference parser" infer the parsing rules from declared field paths — zero config, no `output_map`; `argo doctor` now audits parse paths so a broken parser surfaces as a real error instead of a mysterious "this source returned 0 results", which previously could not be distinguished from a genuine empty result. Sources grow 290 → 300 (Mwmbl, Kaggle, HuggingFace Papers, grep.app, OpenAIRE, Mojeek, Repology, DBpedia, 4get, plus three revived sources). Local retrieval gets four improvements: machine-specific path hardcoding removed, multi-environment adaptive asset discovery, FTS5 index slimming with lemmatization, and a cross-platform pure-stdlib fallback. The badcase ledger loop is the headline: the ledger gains an attribution layer (12 root causes; insufficient evidence yields "unattributed" rather than a guess) and a recurrence gate — the same root cause on 3 distinct days triggers "promote this to a hard rule", with live-web ranking drift excluded. The same release adds the `AGENTS.md` routing table and `docs/COMMIT_STANDARD.md`; high-risk commits must state what was run, on which commit, and what was not — the response to two real incidents where a change passed pre-commit yet failed the full regression suite.
 
@@ -687,11 +687,11 @@ argo/
 
 Only the four most recent versions. Full history in the [changelog](#changelog); per-release detail on [Releases](https://github.com/taxueseek/argo/releases).
 
-### v2.14.1: Architecture Slimming + MCP 3+1 Tools + 304 Sources + Security Redaction
+### v2.14.1: Architecture Slimming + MCP Core Tools + 307 Sources + Security Redaction
 
 - **Architecture Slimming**: Deprecated batch16 and eliminated ≥14 dedicated builder scripts, converging on declarative YAML specs; unified feed engine for RSS seeds
-- **MCP 3+1 Tools**: Streamlined MCP interface into 4 orthogonal core tools (search/fetch/deep_research/manage_settings) with full MaaS compliance (resolves #46)
-- **Sources 300 → 304**: Added Hugging Face Datasets, Maven Central, NuGet, China Railway official fares and Fuxing markers, Open-Meteo daily forecasts
+- **MCP Core Tools**: Streamlined MCP interface into 4 orthogonal core tools (`argo_search` / `argo_fetch` / `argo_research` / `argo_screenshot`, injected by default; the full 19 via `ARGO_MCP_TOOLS=all`) with full MaaS compliance (resolves #46)
+- **Sources 300 → 307**: Added Hugging Face Datasets, Maven Central, NuGet, China Railway official fares and Fuxing markers, Open-Meteo daily forecasts
 - **Security & Asset Slimming**: Built-in fail-closed output stream credential redaction; release assets slimmed to wheel + sdist with standalone SHA256 checksums
 
 ### v2.14.0: Parser Layer Consolidation + 300 Sources + Badcase Ledger Loop
@@ -770,7 +770,7 @@ Only the four most recent versions. Full history in the [changelog](#changelog);
 
 | Version | Notes |
 |---------|-------|
-| **v2.14.1** | **Architecture Slimming + MCP 3+1 Tools + 304 Sources + Security Redaction**: deprecated batch16 and eliminated ≥14 dedicated builders into declarative specs; consolidated MCP 3+1 minimal surface (MaaS compliance, fixes #46); sources 300→304 (HF Datasets/Maven/NuGet/China Railway fares/daily weather); fail-closed output credential redaction; release assets slimmed with per-asset SHA256. See [Release Notes](docs/RELEASE_NOTES_v2.14.1.md) |
+| **v2.14.1** | **Architecture Slimming + MCP Core Tools + 307 Sources + Security Redaction**: deprecated batch16 and eliminated ≥14 dedicated builders into declarative specs; consolidated MCP to 4 core tools (MaaS compliance, fixes #46); sources 300→307 (HF Datasets/Maven/NuGet/China Railway fares/daily weather); fail-closed output credential redaction; release assets slimmed with per-asset SHA256. See [Release Notes](docs/RELEASE_NOTES_v2.14.1.md) |
 | **v2.14.0** | **Parser Layer Consolidation + 300 Sources + Badcase Ledger Loop**: new engines no longer need a hand-written parser (registry + self-reflective inference parser, zero config, no `output_map`); `argo doctor` gains source audit; sources 290→300 (Mwmbl/Kaggle/HF Papers/grep.app/OpenAIRE/Mojeek/Repology/DBpedia/4get + three revived); four local-retrieval improvements (multi-environment adaptive asset discovery, FTS5 slimming and lemmatization, cross-platform pure-stdlib fallback, observable cost); local intent signals consolidated (fixed English queries running Japanese sources); badcase ledger gains attribution layer and Seen N× recurrence gate; new `AGENTS.md` routing table and `docs/COMMIT_STANDARD.md`; state machines 22→27. See [Release Notes](docs/RELEASE_NOTES_v2.14.0.md) |
 | **v2.13.0** | **Documentation Consolidation + 22-State-Machine SSOT + Dispatch Tail Grace**: `docs/` 87→26 (deleted `docs/engines/` 60, archived 18 process reports, added CHANGELOG); `scripts/engine_states.py` 12→22 state machines, 34 modules, literal residuals 19→0; deep-mode tail grace 10s→2.2s; 165 engine declarations migrated to `engines/specs/`; dependencies consolidated to uv. See [Release Notes](docs/RELEASE_NOTES_v2.13.0.md) |
 | **v2.12.0** | **Unified settings center + pixiv/trace.moe image search + WeChat fetch**: zero-service settings page and write-back via `argo settings` (#44, @zooyoo); pixiv dual-channel keyword image search (PR#45, @OMSociety); trace.moe scene recognition; dedicated WeChat fetch branch; sources 286→288. See [release notes](docs/RELEASE_NOTES_v2.12.0.md). |
