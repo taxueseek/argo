@@ -16,26 +16,14 @@ from mcp_handlers import (
     _err_is,
     _lazy_cached,
     _ok,
+    _required_params,
 )
 
-# 本模块五工具的必填参数，**从 mcp_tools 的 schema 真读**而不是另抄一份。
-# 抄一份的后果实测过：拆分本模块时五个新工具全都没进 mcp_handlers 的
-# _required 表，于是 execute_tool("argo_answer", {}) 走到 arguments["query"]
-# 抛 KeyError，被兜底的 except Exception 变成 -32000 KeyError: 'query'——
-# 而不是契约要求的 -32602 Missing required parameter(s)。schema 里
-# "required" 本来就写对了，只是没人去读；读它还顺带让 schema 与执行层
-# 不可能再漂移（新增参数只改 schema 一处）。
-def _required_params(name: str) -> tuple[str, ...]:
-    """该工具的必填参数名；读不到 schema 时保守返回空（不误拒合法调用）。"""
-    try:
-        from mcp_tools import TOOLS as _TOOLS
-    except Exception:
-        return ()
-    for entry in _TOOLS or ():
-        if isinstance(entry, dict) and entry.get("name") == name:
-            req = (entry.get("inputSchema") or {}).get("required")
-            return tuple(req) if isinstance(req, list) else ()
-    return ()
+# 必填参数校验已收口到 mcp_handlers._required_params（从 mcp_tools 的
+# schema 真读，单一真源）。历史教训保留：本模块刚拆分时曾自抄一份必填表
+# 且五个新工具全没进 mcp_handlers 的手抄表，execute_tool("argo_answer", {})
+# 抛 KeyError 变 -32000 而不是契约的 -32602。当时本模块的修法是自行读
+# schema；现在主表也改读 schema，两处消费同一函数，不再可能漂移。
 
 
 def _check_required(name: str, arguments: dict[str, Any]) -> list[str]:

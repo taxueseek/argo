@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""gate_manifest 一致性门禁：hook 测试清单单真源校验。
+
+scripts/pre-commit 的快门禁清单曾手工枚举在 hook 脚本里，每轮新门禁
+都要「漏一道加一道」（hook 头注释史至少 6 轮），且无防漏机制：env/config
+对账门里 test_env_alias_consistency / test_env_declaration_consistency /
+test_dsh_plugin_env_gate 三道长期不在册——双真源对账类反而漏册。本测试把
+清单收口到 tests/gate_manifest.txt 单真源，并反向断言：门禁命名类
+（*gate*/*consistency*/*drift*/*snapshot*/*registry*/*contract*/*sync*/*lint*）
+的测试必须入册或在同文件登记 skip 豁免——「漏一道」从靠人记变成直接红。
+"""
+
+import re
+from pathlib import Path
+
+TESTS_DIR = Path(__file__).resolve().parent
+MANIFEST = TESTS_DIR / "gate_manifest.txt"
+
+# 门禁命名约定：文件 stem 命中任一片段即视为「门禁类」，须入册或登记豁免。
+# 新门禁起名遵循该约定即可被自动发现；命名不含这些片段的功能测试不在此列。
+GATE_NAME_RE = re.compile(
+    r"(gate|consistency|drift|snapshot|registry|contract|sync|lint)")
+
+_SKIP_RE = re.compile(r"^#\s*skip\s+(tests/test_[a-z0-9_]+\.py)\s+(.+)$")
+
+
+def _load_manifest():
+    """返回 (条目列表, {skip 路径: 理由})；注释与空行忽略。"""
+    entries, skips = [], {}
+    for raw in MANIFEST.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            m = _SKIP_RE.match(line)
+            if m:
+                skips[m.group(1)] = m.group(2).strip()
+            continue
+        entries.append(line)
+    return entries, skips
+
+
+def test_manifest_entries_exist_and_unique():
+    entries, _ = _load_manifest()
+    assert entries, "gate_manifest.txt 不能为空"
+    assert len(entries) == len(set(entries)), "manifest 存在重复条目"
+    for rel in entries:
+        assert (TESTS_DIR.parent / rel).is_file(), \
+            f"manifest 条目文件不存在（路径写错或已删除）: {rel}"
+
+
+def test_manifest_sorted():
+    entries, _ = _load_manifest()
+    assert entries == sorted(entries), \
+        "manifest 条目必须排序（见文件头约定 1），减少 diff 冲突"
+
+
+def test_gate_named_tests_are_registered_or_exempted():
+    entries, skips = _load_manifest()
+    in_manifest = set(entries) | set(skips)
+    for path in sorted(TESTS_DIR.glob("test_*.py")):
+        rel = f"tests/{path.name}"
+        if rel == "tests/test_gate_manifest.py":
+            continue
+        if GATE_NAME_RE.search(path.stem):
+            assert rel in in_manifest, (
+                f"门禁命名类测试未入册: {rel} —— 进 tests/gate_manifest.txt "
+                "条目，或登记 '# skip ...' 豁免并写明理由")
+
+
+def test_skip_entries_point_to_real_files():
+    _, skips = _load_manifest()
+    for rel, reason in skips.items():
+        assert (TESTS_DIR.parent / rel).is_file(), \
+            f"skip 豁免指向不存在的文件（防死行累积）: {rel}"
+        assert reason, f"skip 豁免必须写明理由: {rel}"

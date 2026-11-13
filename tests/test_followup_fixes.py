@@ -176,7 +176,11 @@ class TestEvidenceSubstantiveBackfillsResults(unittest.TestCase):
 
 
 class TestPrecommitListsNewGates(unittest.TestCase):
-    """新增的回归门禁必须进快门禁，否则只有 CI 全量才拦得住退步。"""
+    """新增的回归门禁必须进快门禁清单，否则只有 CI 全量才拦得住退步。
+
+    2026-11-14 清单单真源收口后，断言对象从 pre-commit 文本改为
+    tests/gate_manifest.txt（hook 只消费 manifest，不再枚举文件）。
+    """
 
     _REQUIRED = (
         "test_semantic_evidence_jev.py", "test_mcp_schema_maas_compliance.py",
@@ -185,9 +189,11 @@ class TestPrecommitListsNewGates(unittest.TestCase):
     )
 
     def test_precommit_runs_all_new_gates(self):
-        text = (ROOT / "scripts" / "pre-commit").read_text(encoding="utf-8")
+        manifest = ROOT / "tests" / "gate_manifest.txt"
+        self.assertTrue(manifest.is_file(), "缺 tests/gate_manifest.txt")
+        text = manifest.read_text(encoding="utf-8")
         for name in self._REQUIRED:
-            self.assertIn(name, text, f"快门禁未包含 {name}")
+            self.assertIn(name, text, f"快门禁清单未包含 {name}")
 
     def test_gate_entries_point_to_real_test_files(self):
         """清单里的每份用例必须真实存在，不能写错名字让门禁静默漏跑。"""

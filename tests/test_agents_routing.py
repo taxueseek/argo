@@ -147,21 +147,28 @@ def test_agents_md_points_to_commit_standard_not_inline_rules():
 
 # ── pre-commit 文件数的机械对拍 ──────────────────────────────────────────────
 #
-# 数字是纯手写的，改了 pre-commit 清单而忘了改路由表不会有任何信号。
+# 数字是纯手写的，改了清单而忘了改路由表不会有任何信号。2026-11-14 清单
+# 单真源收口后，清单不再枚举在 pre-commit 里（那正是「漏一道加一道」的根），
+# 对拍真源改为 tests/gate_manifest.txt。
 
-_HOOK_PYTEST_BLOCK = re.compile(r"-m pytest -q \\\n(.*?)(?=\n\n|\n#)", re.S)
-_HOOK_PYTEST_FILE = re.compile(r"(tests/test_[a-z_0-9]+\.py)")
+_HOOK_PYTEST_FILE = re.compile(r"^(tests/test_[a-z_0-9]+\.py)$")
 _AGENTS_COUNT = re.compile(r"`bash scripts/pre-commit`（(\d+) 个 pytest 文件")
 
 
-def _listed_pytest_files(hook_text: str) -> set[str]:
-    """pre-commit 里 `-m pytest -q` 之后续行声明的 pytest 文件（去重）。
+def _listed_pytest_files(manifest_text: str) -> set[str]:
+    """tests/gate_manifest.txt 文本里的 pytest 文件条目（去重）。
 
+    忽略注释行与空行；skip 豁免是注释形态，天然不计入。
     口径只认 pytest：node 测试与 `scripts/sync_backends.py --check` 不算。
     """
-    m = _HOOK_PYTEST_BLOCK.search(hook_text)
-    assert m, "pre-commit 里找不到 `-m pytest -q` 清单块"
-    return set(_HOOK_PYTEST_FILE.findall(m.group(1)))
+    entries = set()
+    for raw in manifest_text.splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            assert _HOOK_PYTEST_FILE.match(line), \
+                f"manifest 条目形态漂移（整行必须是一个 tests/ 路径）: {line}"
+            entries.add(line)
+    return entries
 
 
 def _declared_pytest_count(agents_text: str) -> int:
@@ -173,40 +180,43 @@ def _declared_pytest_count(agents_text: str) -> int:
 
 
 def test_agents_md_precommit_file_count_matches():
-    """AGENTS.md 声称的 pytest 文件数必须等于 pre-commit 的实际清单数。
+    """AGENTS.md 声称的 pytest 文件数必须等于 gate_manifest 的实际条目数。
 
-    为什么要有这道门：这个数字是**纯手写**的，改了 pre-commit 清单而忘了改
-    路由表时不会有任何信号——而它正是 agent 判断「提交前该跑什么、要多久」的
-    依据，数字虚高或虚低都会让 agent 对门禁的规模判断失真。
+    为什么要有这道门：这个数字是**纯手写**的，改了 manifest 而忘了改路由表
+    时不会有任何信号——而它正是 agent 判断「提交前该跑什么、要多久」的依据，
+    数字虚高或虚低都会让 agent 对门禁的规模判断失真。
 
-    回退验证：把 AGENTS.md 的 34 改回 35，本条挂（实测 35 != 34）。
+    回退验证：把 AGENTS.md 的数字改错一位，本条挂。
     """
-    listed = _listed_pytest_files((ROOT / "scripts" / "pre-commit").read_text(encoding="utf-8"))
-    assert listed, "pre-commit 清单解析为空——正则或清单形态漂移了"
+    manifest = ROOT / "tests" / "gate_manifest.txt"
+    assert manifest.is_file(), "缺 tests/gate_manifest.txt——快门禁清单无真源"
+    listed = _listed_pytest_files(manifest.read_text(encoding="utf-8"))
+    assert listed, "gate_manifest 条目解析为空——manifest 形态漂移了"
     declared = _declared_pytest_count(AGENTS_MD.read_text(encoding="utf-8"))
     assert declared == len(listed), (
-        f"AGENTS.md 写 {declared} 个 pytest 文件，pre-commit 实际清单是 "
+        f"AGENTS.md 写 {declared} 个 pytest 文件，tests/gate_manifest.txt 实际 "
         f"{len(listed)} 个——改清单时同步这个数字，或把数字从文案里去掉")
 
 
 def test_precommit_count_gate_has_teeth():
     """自检：判据必须能区分「一致」与「不一致」，否则它恒真、等于没检查。"""
-    sample_hook = (
-        "$PY -m pytest -q \\\n"
-        "    tests/test_a.py \\\n"
-        "    tests/test_b.py \\\n"
-        "    tests/test_a.py\n\n"
-        "echo done\n"
+    sample = (
+        "# gate_manifest.txt\n"
+        "# skip tests/test_slow.py 性能基准，CI 兜底\n"
+        "\n"
+        "tests/test_a.py\n"
+        "tests/test_b.py\n"
+        "tests/test_a.py\n"
     )
-    assert _listed_pytest_files(sample_hook) == {"tests/test_a.py", "tests/test_b.py"}, \
-        "清单解析把重复项或块边界算错了"
-    # 去掉非 pytest 行后仍只认 pytest 文件
-    assert "echo" not in " ".join(_listed_pytest_files(sample_hook))
+    assert _listed_pytest_files(sample) == {"tests/test_a.py", "tests/test_b.py"}, \
+        "清单解析把重复项、注释行或豁免行算错了"
+    # 豁免行是注释形态，不算条目
+    assert "tests/test_slow.py" not in _listed_pytest_files(sample)
 
     assert _declared_pytest_count("`bash scripts/pre-commit`（2 个 pytest 文件）") == 2
     # 数字不一致时必须不相等——这是上一条判据的全部意义
     assert _declared_pytest_count("`bash scripts/pre-commit`（3 个 pytest 文件）") \
-        != len(_listed_pytest_files(sample_hook))
+        != len(_listed_pytest_files(sample))
 
 
 # ── 已停用引擎数的机械对拍 ──────────────────────────────────────────────────

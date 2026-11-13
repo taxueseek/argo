@@ -178,6 +178,26 @@ def _int_param(arguments: dict[str, Any], key: str, default: int) -> int:
         raise _InvalidParam(f"{key} 必须是整数，收到 {value!r}")
 
 
+def _required_params(name: str) -> tuple[str, ...]:
+    """工具的必填参数名，从 mcp_tools 的 schema 真读（单真源）。
+
+    曾在 execute_tool 里手抄 11 个工具的必填表，与 schema 双轨漂移：
+    mcp_handlers_surface 模块同因出过 KeyError→-32000 事故（拆分时五个
+    新工具全没进手抄表）后才改读 schema，主表当时没回改。现在两处消费
+    同一个函数，新增工具只改 mcp_tools 一处，执行层不可能再漂移。
+    读不到 schema 时保守返回空（不误拒合法调用）。
+    """
+    try:
+        from mcp_tools import TOOLS as _TOOLS
+    except Exception:
+        return ()
+    for entry in _TOOLS or ():
+        if isinstance(entry, dict) and entry.get("name") == name:
+            req = (entry.get("inputSchema") or {}).get("required")
+            return tuple(req) if isinstance(req, list) else ()
+    return ()
+
+
 def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """执行 MCP 工具，按需导入模块。
 
@@ -188,30 +208,19 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """
     pretty = _env_bool("ARGO_MCP_PRETTY", bool(arguments.get("pretty", False)))
     try:
-        _required = {
-            "argo_search": ("query",),
-            "argo_research": ("query",),
-            "argo_social_search": ("query",),
-            "argo_evidence": ("query",),
-            "argo_clarify": ("query",),
-            "argo_crawl": ("url",),
-            "argo_fetch": ("url",),
-            "argo_screenshot": ("url",),
-            "argo_pdf": ("url",),
-            "argo_article": ("url",),
-            "argo_job": ("query",),
-        }
-        if name in _required:
-            missing = [p for p in _required[name] if not arguments.get(p)]
-            if missing:
-                return {
-                    "content": [{"type": "text",
-                                 "text": _dumps({"error": {
-                                     "code": -32602,
-                                     "message": f"Missing required parameter(s): {', '.join(missing)}"
-                                 }})}],
-                    "isError": True,
-                }
+        # 必填校验读 schema 真源（_required_params），不再手抄：软别名
+        # （social_search/job/pdf/article）在校验之后重入，重入后的目标工具
+        # schema 已覆盖同一参数，行为不变。
+        missing = [p for p in _required_params(name) if not arguments.get(p)]
+        if missing:
+            return {
+                "content": [{"type": "text",
+                             "text": _dumps({"error": {
+                                 "code": -32602,
+                                 "message": f"Missing required parameter(s): {', '.join(missing)}"
+                             }})}],
+                "isError": True,
+            }
 
         # 兼容旧工具调用的软别名映射（向后兼容）：
         if name == "argo_social_search":

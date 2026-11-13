@@ -49,6 +49,10 @@
 # 同批把 static_lint 五处重复全仓 ast.parse 收进会话级缓存、本文件与
 # AGENTS.md 的「~13s」漂移注释修为实测值：hook 实测 20.8s（已超自设 20s
 # 红线）回到 ~17s，新门禁是在这个余量里加的。
+# 2026-11-14 清单单真源收口：42 文件手工枚举迁到 tests/gate_manifest.txt
+# （49 条：42 + env/config 对账门补册 6 + 本门禁自身 1；13 项登记 skip 豁免
+# 带理由），漏册由 test_gate_manifest.py 反向断言拦截，本文件不再随新门禁
+# 逐轮追加。补册 6 项实测 +1.7s，合计 ~19s，仍在 20s 红线内。
 #
 # 安装：bash scripts/install.sh 自动装调度器 hooks/pre-commit（原有 hook 改名
 # pre-commit.user 先跑，再直接执行本文件，不拷贝）。手动跑：sh scripts/pre-commit
@@ -109,50 +113,20 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-printf "[pre-commit] argo 快门禁（~17s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
-"$PY" -m pytest -q \
-    tests/test_static_lint_gate.py \
-    tests/test_module_size_gate.py \
-    tests/test_usage_doc_gates.py \
-    tests/test_consistency_gates.py \
-    tests/test_routing_snapshot.py \
-    tests/test_context_budget.py \
-    tests/test_engine_catalog.py \
-    tests/test_release_consistency.py \
-    tests/test_spec_contracts.py \
-    tests/test_stub_targets.py \
-    tests/test_env_binding_gate.py \
-    tests/test_local_search_registry.py \
-    tests/test_launch_passthrough_alignment.py \
-    tests/test_dependency_source_gate.py \
-    tests/test_install_script_contract.py \
-    tests/test_deep_budget_tail_grace.py \
-    tests/test_engine_states.py \
-    tests/test_state_registry.py \
-    tests/test_patch_target_gate.py \
-    tests/test_explicit_only_gate.py \
-    tests/test_native_tools_sync.py \
-    tests/test_state_literal_drift.py \
-    tests/test_check_commit_report.py \
-    tests/test_badcase_ledger.py \
-    tests/test_agents_routing.py \
-    tests/test_intl_engines.py \
-    tests/test_image_sources.py \
-    tests/test_mcp_schema_maas_compliance.py \
-    tests/test_mcp_consolidated_tools.py \
-    tests/test_redactor_guard.py \
-    tests/test_semantic_evidence_jev.py \
-    tests/test_schema_drift_diagnosis.py \
-    tests/test_smart_inference.py \
-    tests/test_local_intent.py \
-    tests/test_mcp_article_job.py \
-    tests/test_followup_fixes.py \
-    tests/test_p2_followup.py \
-    tests/test_p0_dangling_combo.py \
-    tests/test_p0_rss_family.py \
-    tests/test_p0_sec_edgar_url.py \
-    tests/test_research_notes.py \
-    tests/test_silent_catch_gate.py
+printf "[pre-commit] argo 快门禁（~19s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
+# 测试清单单真源：tests/gate_manifest.txt（2026-11-14 收口）。
+# 清单曾在此手工枚举 42 个文件，每轮新门禁「漏一道加一道」（头注释史
+# 至少 6 轮），env/config 对账门三道长期漏册——现由 tests/test_gate_manifest.py
+# 反向断言兜住：门禁命名类（gate/consistency/drift/snapshot/registry/
+# contract/sync/lint）必须入册或在 manifest 登记 skip 豁免（带理由）。
+# 新门禁只改 manifest 一行，hook 本文件不再动。manifest 缺失 fail-closed，
+# 绝不静默放行（与解释器选择同纪律）。
+MANIFEST="tests/gate_manifest.txt"
+if [ ! -f "$MANIFEST" ]; then
+    echo "[pre-commit] 缺 $MANIFEST，快门禁清单无真源，门禁视为失败" >&2
+    exit 1
+fi
+"$PY" -m pytest -q $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST")
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。

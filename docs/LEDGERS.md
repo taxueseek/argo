@@ -44,7 +44,7 @@
 - **防护原则**：Fail-closed 降级，触发熔断后转入备选开源/免费源，防止超额扣费。
 
 ### 4. 技术债棘轮（Quality & Size Ratchets）
-- **宽吞异常棘轮**（`tests/test_silent_catch_gate.py`）：全仓 AST 扫 `except Exception: pass/continue`，基线真源是 `scripts/badcase_ledger.py` 的 `BROAD_SILENT_CATCH_BASELINE`（测试与 `overview` 消费同一常量）。窄化存量时下调该常量一处即可。
+- **宽吞异常棘轮**（`tests/test_silent_catch_gate.py`）：AST 扫 scripts/ 的 `except Exception: pass/continue`（sub-skills 不在本棘轮口径），基线真源是 `scripts/badcase_ledger.py` 的 `BROAD_SILENT_CATCH_BASELINE`（测试与 `overview` 消费同一常量，任何地方不再手写该数字）。窄化存量时下调该常量一处即可。
 - **千行文件祖父清单**（`test_module_size_gate.py`）：登记已有的历史大文件，上限锁定为登记行数。新文件严禁超过 1000 行。
 - **存根日落到期门禁**（`test_stub_targets.py`）：退役存根必须显式声明 `__sunset_version__`，到达日落版本时门禁报错阻断，倒逼物理清退。
 

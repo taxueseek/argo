@@ -29,9 +29,11 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-# 棘轮基线（2026-11-13 收口 24 处后全量 AST 实测 162；首测 2026-11-12 为 187）。
-# 真源在 scripts/badcase_ledger.py（BROAD_SILENT_CATCH_BASELINE，overview
-# 输出同一常量）——同一数字只写一处，窄化一处就下调一格。
+# 棘轮基线：真源唯一在 scripts/badcase_ledger.py 的 BROAD_SILENT_CATCH_BASELINE
+# （overview 输出同一常量），本文件不写数字——手写数字两次漂移过（187 手抄、
+# 162 注释），这里是第三个消费点，不该再成为第四个副本。窄化一处就下调
+# badcase_ledger 一格。扫描范围：scripts/ 的 AST（sub-skills 不在本棘轮口径，
+# 见 docs/LEDGERS.md 技术债棘轮节）。
 from badcase_ledger import BROAD_SILENT_CATCH_BASELINE as BASELINE  # noqa: E402
 
 
@@ -59,7 +61,8 @@ def test_broad_silent_catches_do_not_grow():
     assert n <= BASELINE, (
         f"宽口径静默吞异常 {n} 处 > 棘轮基线 {BASELINE}：新增了"
         f"「except Exception + 裸 pass/continue」。修法：窄化异常类型，"
-        f"或让失败可见（raise/log）。窄化存量时同步下调本文件 BASELINE。")
+        f"或让失败可见（raise/log）。窄化存量时同步下调 "
+        f"scripts/badcase_ledger.py 的 BROAD_SILENT_CATCH_BASELINE。")
 
 
 def test_gate_has_teeth():
