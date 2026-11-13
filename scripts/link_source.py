@@ -63,27 +63,6 @@ def _load_local_targets() -> list[Path]:
     return out
 
 
-def _load_local_sub_links() -> list[tuple[Path, Path]]:
-    """读取 installs.local.yaml 的 sub_links（目标 -> 仓内子目录）。"""
-    if not LOCAL_INSTALLS.exists():
-        return []
-    try:
-        from yaml_load import load as _yaml_load
-    except ImportError:
-        return []
-    data = _yaml_load(LOCAL_INSTALLS) or {}
-    raw = data.get("sub_links") or {}
-    if not isinstance(raw, dict):
-        return []
-    out: list[tuple[Path, Path]] = []
-    for dst, rel_src in raw.items():
-        if not dst or not rel_src:
-            continue
-        src = (SOURCE / str(rel_src)).resolve()
-        out.append((_normalize_target(Path(str(dst))), src))
-    return out
-
-
 def _normalize_target(p: Path) -> Path:
     """规范化目标路径：展开 ~、补成绝对路径、消掉 . 与 ..，**但不跟随符号链接**。
 
@@ -98,13 +77,13 @@ def _normalize_target(p: Path) -> Path:
     return Path(os.path.normpath(str(p)))
 
 
-def _hops_to_source(target: Path, source: Path | None = None) -> int:
+def _hops_to_source(target: Path) -> int:
     """目标到来源的符号链接跳数。
 
     0 = 目标就是来源本体；1 = 直连；>1 = 间接链接（可解析但多一跳依赖）；
     -1 = 未指向来源 / 断链 / 成环（超过 8 跳按未指向处理，避免死循环）。
     """
-    src = (source or SOURCE).resolve()
+    src = SOURCE.resolve()
     cur = target
     for hops in range(8):
         try:
@@ -150,27 +129,27 @@ def resolve_targets(cli: list[Path] | None) -> list[Path]:
 
 # 判定「目录像 argo 来源/旧副本」的特征文件。用于 --force 迁走目录前的软校验，
 # 防止用户把 --to 错指到任意数据目录，--force 下整目录被 rename 迁走的误伤。
-_ARGO_MARKERS = ("scripts/search.py", "SKILL.md", ".zcode-plugin/plugin.json", "package.json")
+_ARGO_MARKERS = ("scripts/search.py", "SKILL.md")
 
 
 def _looks_like_argo_copy(path: Path) -> bool:
-    """路径是否为 argo 来源/旧副本（含脚本、SKILL 文档或插件清单），而非任意数据目录。"""
+    """路径是否为 argo 来源/旧副本（含脚本与 SKILL 文档），而非任意数据目录。"""
     if not path.is_dir():
         return False
     return any((path / marker).exists() for marker in _ARGO_MARKERS)
 
 
-def link_one(target: Path, *, dry_run: bool, force: bool, source: Path | None = None) -> int:
-    """将 target 设为指向 source（默认 SOURCE）的 symlink（间接链接会被重建为直连）。"""
-    src = (source or SOURCE).resolve()
-    depth = _hops_to_source(target, src)
+def link_one(target: Path, *, dry_run: bool, force: bool) -> int:
+    """将 target 设为指向 SOURCE 的 symlink（间接链接会被重建为直连）。"""
+    source = SOURCE.resolve()
+    depth = _hops_to_source(target)
 
     if depth == 0:
         print(f"[skip] 目标就是真源本体: {target}")
         return 0
 
     if depth == 1:
-        print(f"[ok]   已指向真源: {target} -> {src}")
+        print(f"[ok]   已指向真源: {target} -> {source}")
         return 0
 
     if depth > 1:
@@ -185,7 +164,7 @@ def link_one(target: Path, *, dry_run: bool, force: bool, source: Path | None = 
         try:
             if tmp.is_symlink() or tmp.exists():
                 tmp.unlink()
-            os.symlink(src, tmp, target_is_directory=True)
+            os.symlink(source, tmp, target_is_directory=True)
             os.replace(tmp, target)
         except OSError as e:
             try:
@@ -195,7 +174,7 @@ def link_one(target: Path, *, dry_run: bool, force: bool, source: Path | None = 
                 pass
             print(f"[fail] 重建直连失败: {target} ({e})", file=sys.stderr)
             return 1
-        print(f"[relink] {target} -> {src}（原为 {depth} 跳间接链接，已重建为直连）")
+        print(f"[relink] {target} -> {source}（原为 {depth} 跳间接链接，已重建为直连）")
         return 0
 
     if target.exists() or target.is_symlink():
@@ -233,50 +212,49 @@ def link_one(target: Path, *, dry_run: bool, force: bool, source: Path | None = 
 
     parent = target.parent
     if dry_run:
-        print(f"[dry]  ln -sfn {src} {target}")
+        print(f"[dry]  ln -sfn {source} {target}")
         return 0
     parent.mkdir(parents=True, exist_ok=True)
     # atomic-ish: symlink in place
     try:
-        os.symlink(src, target, target_is_directory=True)
+        os.symlink(source, target, target_is_directory=True)
     except OSError:
         # Windows 无开发者模式/管理员权限时 symlink 会失败：
         # 目录链接退化为 junction（mklink /J，不需要管理员权限），
         # 语义与 symlink 基本一致（resolve() 同样指向来源）。
         if os.name == "nt":
             r = subprocess.run(
-                ["cmd", "/c", "mklink", "/J", str(target), str(src)],
+                ["cmd", "/c", "mklink", "/J", str(target), str(source)],
                 capture_output=True, text=True,
                 encoding="utf-8", errors="replace", timeout=30,
             )
             # junction 不是 symlink（is_symlink() 为 False，_hops_to_source 会
             # 把它当普通目录），此处按「解析后是否等于来源」独立判定。
             try:
-                linked = target.resolve() == src
+                linked = target.resolve() == SOURCE.resolve()
             except OSError:
                 linked = False
             if r.returncode == 0 and linked:
-                print(f"[link] {target} -> {src} (junction)")
+                print(f"[link] {target} -> {source} (junction)")
                 return 0
-        print(f"[fail] 创建链接失败: {target} -> {src}", file=sys.stderr)
+        print(f"[fail] 创建链接失败: {target} -> {source}", file=sys.stderr)
         return 1
-    print(f"[link] {target} -> {src}")
+    print(f"[link] {target} -> {source}")
     return 0
 
 
-def check_targets(targets: list[Path], sub_links: list[tuple[Path, Path]] | None = None) -> int:
+def check_targets(targets: list[Path]) -> int:
     bad = 0
     print(f"真源: {SOURCE.resolve()}")
-    if not targets and not sub_links:
+    if not targets:
         print("[fail] 无校验目标（请 --to / ARGO_LINK_TARGETS / installs.local.yaml）")
         return 1
-    pairs = [(t, SOURCE.resolve()) for t in targets] + list(sub_links or [])
-    for t, src in pairs:
-        depth = _hops_to_source(t, src)
+    for t in targets:
+        depth = _hops_to_source(t)
         if depth == 0:
             print(f"[ok]   {t} 即真源本体")
         elif depth == 1:
-            print(f"[ok]   {t} -> {src}")
+            print(f"[ok]   {t} -> {SOURCE.resolve()}")
         elif depth > 1:
             # 间接链接仍能解析到来源，但多了一环依赖——按「校验不一致」计失败，
             # 提示直接重跑（不带 --check）即可重建为直连。
@@ -330,8 +308,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     targets = resolve_targets(args.to)
-    sub_links = _load_local_sub_links() if args.to is None else []
-    if not targets and not sub_links:
+    if not targets:
         print(
             "未指定任何链接目标。\n"
             "  方式 1: python3 scripts/link_source.py --to <path> [--to <path2>]\n"
@@ -343,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.check:
-        return check_targets(targets, sub_links)
+        return check_targets(targets)
 
     if args.with_backends:
         print(f"== sync_backends @ {SOURCE} ==")
@@ -354,11 +331,9 @@ def main(argv: list[str] | None = None) -> int:
     code = 0
     for t in targets:
         code = link_one(t, dry_run=args.dry_run, force=args.force) or code
-    for t, src in sub_links:
-        code = link_one(t, dry_run=args.dry_run, force=args.force, source=src) or code
     if args.dry_run:
         return code
-    return check_targets(targets, sub_links) if code == 0 else code
+    return check_targets(targets) if code == 0 else code
 
 
 if __name__ == "__main__":
