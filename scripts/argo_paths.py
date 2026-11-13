@@ -363,8 +363,8 @@ def run_checks(lock_hold_s: float = 0.15) -> list[dict[str, Any]]:
 
     `lock_hold_s` 是子进程持锁时长，判据是「第二个持有者等待 ≥100 ms」（见
     `_check_lock_roundtrip`），0.15 s 留足一倍余量即可。历史上这里写 0.6 s，
-    让每次自检固定空等 600 ms；同仓 `packages/argo-zcode/server/py_bridge.py`
-    与 `tests/test_platform_paths_conventions.py` 早已分别用 0.15 / 0.2，
+    让每次自检固定空等 600 ms；`tests/test_platform_paths_conventions.py` 早已
+    用 0.2（原插件桥测试用 0.15，随 2026-11-13 ZCode 插件剥离退出），
     此处对齐同一口径，自检结论不变。
     """
     checks: list[dict[str, Any]] = []

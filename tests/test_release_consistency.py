@@ -41,9 +41,6 @@ def _write_fixture(root: Path, ver: str = "9.9.9", drift: dict | None = None) ->
         "name": "@taxueseek/argo-dsh",
         "version": v("packages/dsh-plugin/package.json"),
     }), encoding="utf-8")
-    (root / "packages/marketplace.json").write_text(json.dumps({
-        "plugins": [{"name": "argo-zcode", "version": v("packages/marketplace.json")}],
-    }), encoding="utf-8")
     (root / "server.json").write_text(json.dumps({
         "name": "io.github.taxueseek/argo",
         "version": v("server.json"),
@@ -52,11 +49,6 @@ def _write_fixture(root: Path, ver: str = "9.9.9", drift: dict | None = None) ->
             "identifier": "argo-search",
             "version": drift.get("server.json#packages", v("server.json")),
         }],
-    }), encoding="utf-8")
-    (root / "packages/argo-zcode/.zcode-plugin").mkdir(parents=True)
-    (root / "packages/argo-zcode/.zcode-plugin/plugin.json").write_text(json.dumps({
-        "name": "argo-zcode",
-        "version": v("packages/argo-zcode/.zcode-plugin/plugin.json"),
     }), encoding="utf-8")
     (root / "scripts").mkdir()
     (root / "scripts/mcp_transport.py").write_text(

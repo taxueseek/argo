@@ -29,6 +29,8 @@ docs-local/
 scripts/image_vision/vision_probe
 # 本地个性化引擎插件（如 OSV / CISA KEV，不随公开仓提交）
 scripts/local_engines.py
+# 临时产物目录（一次性日志/探针脚本，严禁入库——d93eba6 曾夹带 pc.log）
+tmp/
 # packages/marketplace.json 曾在这里被忽略（当作本地产物）；2026-10-27 起入库：
 # TestZcodePluginConsistency（9f50a12 引入）直接读它校验版本与源计数，
 # gitignore 会让 fresh checkout / CI 必炸 FileNotFoundError。内容是公开插件

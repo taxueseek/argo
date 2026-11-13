@@ -3,7 +3,7 @@
 
 ## 为什么要它
 
-版本号散在 11 处机器声明、五语 README 的徽标 / 散文 / 发布表，外加发布说明
+版本号散在 8 处机器声明、五语 README 的徽标 / 散文 / 发布表，外加发布说明
 与 npm files 白名单。v2.10.0 发版时手改了 26 个文件，v2.9.8 更漏过 README
 「最近更新」条目——漏改往往等 npm 包发出去才发现。release_check.py 只能事后
 报错，本脚本把「改」和「发」也收成确定性步骤。
@@ -69,8 +69,8 @@ def parse_version(v: str) -> tuple[int, int, int]:
 
 
 # ── 改号规则 ────────────────────────────────────────────────────────────────
-# 2026-11-09 收口：机器声明（pyproject / package.json / server.json / plugin.json /
-# __version__ / SKILL.md / mcp_transport / panel.html）此前在 rules() 里手写一份
+# 2026-11-09 收口：机器声明（pyproject / package.json / server.json /
+# __version__ / SKILL.md / mcp_transport）此前在 rules() 里手写一份
 # 路径清单，release_check 另写一份 JSON_DECLS / SRC_DECLS，两份清单靠
 # check_rule_parity() 机械对账。a5cc97b 把 panel_server.mjs 改成运行时读版本后，
 # 源码常量删了、改号清单那行没删，bump 在第一步就中止（三连红）。

@@ -433,8 +433,9 @@ def is_degraded_fetch_method(method: str) -> bool:
 # ── 10. 平台/运行时状态（dsh-plugin / daemon）──────────────────────────────
 # 生产端已收口：`scripts/daemon.py` 的 ping 响应与 `status` 子命令都带
 # machine-readable 的 `state` 字段，值取自本表；进程停止时 status 报
-# DAEMON_STOPPED（此时没有 ping 可回）。`packages/argo-zcode/server/py_bridge.py`
-# 直接读这个字段，不再从中文文案反推 pid、也不再用布尔冒充三态。
+# DAEMON_STOPPED（此时没有 ping 可回）。ZCode 面板桥（py_bridge.py）此前直接
+# 读这个字段，不再从中文文案反推 pid、也不再用布尔冒充三态——桥随 2026-11-13
+# packages/argo-zcode 剥离退出，字段契约由 daemon.py 侧继续履行。
 #
 # 未收口的部分（JS 侧，本文件当前不是 JS 真源）：
 # - DSH 插件 `packages/dsh-plugin/dsh/client.js` 的 ready/loading/unavailable

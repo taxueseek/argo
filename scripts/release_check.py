@@ -13,7 +13,7 @@ MCP Registry 清单 / ZCode 插件清单 / argo_search.__version__ / SKILL.md �
 
 ## 检什么（全部是结构化事实，不做散文匹配）
 
-1. 十一处机器声明与 pyproject.toml 的 version 完全一致；
+1. 八处机器声明与 pyproject.toml 的 version 完全一致；
 2. 五语 README 的徽标 `badge/version-<v>-` 与发布表行 `| **v<v>** |` 都在；
 3. `docs/RELEASE_NOTES_v<v>.md` 存在；
 4. package.json 的 files 白名单包含当前发布说明，且**盘上每份**发布说明都在
@@ -38,20 +38,18 @@ import re
 import sys
 from pathlib import Path
 
-# 十一处机器声明的相对路径（顺序即报错输出顺序）
+# 八处机器声明的相对路径（顺序即报错输出顺序；2026-11-13 ZCode 插件随
+# packages/argo-zcode 剥离，插件清单/面板 UI/插件市场三处声明同步退出）
 JSON_DECLS = (
     "package.json",
     "packages/dsh-plugin/package.json",
     "server.json",
-    "packages/argo-zcode/.zcode-plugin/plugin.json",
 )
 README_LANGS = ("README.md", "README.zh.md", "README.ja.md", "README.ko.md", "README.es.md")
 
 # 源码里的版本常量（正则取，避免 import 副作用；panel_server.mjs 已改为运行时读 plugin.json）
 SRC_DECLS = (
     ("scripts/mcp_transport.py", r'ARGO_MCP_VERSION\s*=\s*"([^"]+)"'),
-    ("packages/argo-zcode/ui/panel.html",
-     r'new App\(\{\s*name:\s*"argo-panel",\s*version:\s*"([^"]+)"'),
 )
 
 # 机器声明规格：每条 (相对路径, 提取正则, 期望出现次数)。
@@ -62,13 +60,8 @@ MACHINE_DECL_SPECS: tuple[tuple[str, str, int], ...] = (
     ("pyproject.toml", r'(?m)^version\s*=\s*"([^"]+)"', 1),
     ("package.json", r'"version":\s*"([^"]+)"', 1),
     ("packages/dsh-plugin/package.json", r'"version":\s*"([^"]+)"', 1),
-    ("packages/marketplace.json", r'"version":\s*"([^"]+)"', 1),
     ("server.json", r'"version":\s*"([^"]+)"', 2),
-    ("packages/argo-zcode/.zcode-plugin/plugin.json",
-     r'"version":\s*"([^"]+)"', 1),
     ("scripts/mcp_transport.py", r'ARGO_MCP_VERSION\s*=\s*"([^"]+)"', 1),
-    ("packages/argo-zcode/ui/panel.html",
-     r'new App\(\{\s*name:\s*"argo-panel",\s*version:\s*"([^"]+)"', 1),
     ("argo_search/__init__.py", r'__version__\s*=\s*"([^"]+)"', 1),
     ("SKILL.md", r'(?m)^version:\s*(\S+)', 1),
 )
@@ -118,20 +111,7 @@ def check(root: Path) -> list[str]:
         if got != ver:
             problems.append(f"{rel}: {got} ≠ pyproject {ver}")
 
-    # 2) 插件市场清单（plugins[] 每个都要对上）
-    text = _safe_read(root, "packages/marketplace.json", problems)
-    if text is not None:
-        try:
-            market = json.loads(text)
-            for plugin in market.get("plugins") or []:
-                got = str(plugin.get("version") or "")
-                if got != ver:
-                    problems.append(
-                        f"packages/marketplace.json[{plugin.get('name')}]: {got} ≠ {ver}")
-        except (OSError, ValueError) as e:
-            problems.append(f"packages/marketplace.json: 读取失败（{e}）")
-
-    # 2b) MCP Registry 清单（packages[] 每条的版本也要对上）
+    # 2) MCP Registry 清单（packages[] 每条的版本也要对上）
     text = _safe_read(root, "server.json", problems)
     if text is not None:
         try:
@@ -218,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"  !! {p}", file=sys.stderr)
         return 1
-    print(f"release_check: v{ver} 一致（11 处机器声明 + 五语 README + 发布说明与白名单）")
+    print(f"release_check: v{ver} 一致（8 处机器声明 + 五语 README + 发布说明与白名单）")
     return 0
 
 
