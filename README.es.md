@@ -562,7 +562,7 @@ python3 scripts/search.py "same query" --json | \
   python3 scripts/evidence.py "same query" --stdin --json
 ```
 
-### Herramientas MCP (12)
+### Herramientas MCP (19 en total; 4 centrales por defecto, 12 comunes listadas)
 
 | Herramienta | Propósito |
 |------|---------|

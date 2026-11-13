@@ -77,7 +77,9 @@ JEV_LONG_CONTEXT_CHARS = 24000
 # 并发上限。官方 cookbook（classifying_rag_passages）取 4，理由是端点限流；
 # 429/529 要求指数退避，所以不铺大。
 JEV_MAX_WORKERS = 4
-# 多并发整体截止时间（秒）：实测冷调用在 0.55s 左右，提高到 1.2s（覆盖 p95），防止网络抖动导致的误杀 fail-open
+# 多并发**整批**硬截止（秒）：实测冷调用在 0.55s 左右，取 1.2s（覆盖 p95），
+# 防止网络抖动导致的误杀 fail-open，也防止某条卡死把整批拖住。
+# 注意与 config 的 `timeout_s` 区分：那是**每条请求**的超时，这是整批预算。
 DEFAULT_JEV_DEADLINE_S = 1.2
 
 # 结果级缓存（TTL 7 天）：常见事实与热点二次判定 0ms 响应，API 消耗清零
@@ -410,10 +412,19 @@ def _run_choice_batch(texts_len: int,
                       choice_fn: Any,
                       *,
                       timeout: float) -> Optional[list[dict[str, Any]]]:
-    """每条文本一个请求，并发受限 + 总体硬截止预算（超时即取消未完成任务）。"""
+    """每条文本一个请求，并发受限 + 总体硬截止预算（超时即取消未完成任务）。
+
+    `timeout` 是**每条请求**的超时（已通过 choice_fn 闭包传给 HttpClient），
+    不是整批预算。整批预算固定取 DEFAULT_JEV_DEADLINE_S：实测冷调用 0.55s、
+    p95 约 1.2s，这是一条保护性硬上限，防止某条卡死把整批拖住（也防止调用方
+    把 timeout_s 调大后整批无上限等待）。要改整批预算请改那个常量，
+    或后续把它提升为 config 的独立字段（与 timeout_s 分开，避免混用）。
+
+    保留 `timeout` 形参是为了兼容既有调用点与测试 patch，内部不再读它。
+    """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     texts_kept = [(idx, t[:MAX_TEXT_CHARS]) for idx, t in keep]
-    deadline_s = min(float(timeout), DEFAULT_JEV_DEADLINE_S) if timeout and timeout > 0 else DEFAULT_JEV_DEADLINE_S
+    deadline_s = DEFAULT_JEV_DEADLINE_S
     results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
 
     # 不能用 `with ThreadPoolExecutor(...)`：with 退出时 shutdown(wait=True)

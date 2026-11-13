@@ -196,16 +196,35 @@ class TestDocNumbersMatchCode:
         strict_units = (r"个源|个搜索源|个数据源|个这样的源头|个免密钥|个免配置|sources|keyless|fuentes|sin clave"
                         r"|ソース|無設定|の検索ソース|개 소스|개의 검색 소스|무설정")
         problems = []
+        current_ver = _skill_version()  # 形如 2.14.1
+        # 注意：不要用 f-string 拼 `#{2,4}`——花括号会被当成格式化字段解析成
+        # `(2, 4)`（Python 3.12+ 的 re 会把裸 { 当集合表达式），正则静默失配。
+        cur_title = re.compile(r"^\s*\#{2,4}\s*v" + re.escape(current_ver) + r"\b")
         for rel in files:
             for n, line in enumerate((SKILL_DIR / rel).read_text(encoding="utf-8").splitlines(), 1):
                 if "→" in line or re.match(r"\s*\|?\s*\*\*v2\.\d", line):
                     continue  # 发布历史里的数字是当时的事实
+                is_current_title = bool(cur_title.match(line))
+                if re.match(r"\s*#{2,4}\s*v2\.\d", line) and not is_current_title:
+                    continue  # 历史版本标题：数字是当时的事实
                 for num in {total, usable}:
                     if re.search(rf"(?<![\d.]){num}\**\s?(?:{units})", line):
                         problems.append(f"{rel}:{n} 写了当前数字 {num}")
                 m_any = re.search(rf"(?<![\d.])(2\d{{2}})\**\s?(?:{strict_units})", line)
                 if m_any and m_any.group(1) not in {total, usable}:
                     problems.append(f"{rel}:{n} 残留历史源数 {m_any.group(1)}")
+                # 反序形态：单位在前、数字在后（「ソース 304」「소스 304」）。
+                # 只查这几种「单位紧贴数字且数字独立」的写法，避免误伤
+                # 「300 → 307」这类被上面「→ 在行内则跳过」放过的合法历史行。
+                # 数字区间取 [2-3]\d\d：源数在 200-399 之间，不写死 2 开头
+                # （写死 2\d\d 会漏掉 307 这个真值本身，门禁恒真）。
+                # 只对**当前版本**的标题行应用：历史版本标题里的 300/304 是
+                # 当时的事实，不该被当前真值判错。
+                if is_current_title:
+                    m_rev = re.search(
+                        rf"(?:ソース|소스|sources|fuentes)\s+(?<![\d.])([2-3]\d{{2}})\b", line)
+                    if m_rev and m_rev.group(1) not in {total, usable}:
+                        problems.append(f"{rel}:{n} 残留历史源数（反序）{m_rev.group(1)}")
         assert not problems, ("当前引擎数只写在 docs/ENGINE_CATALOG.md 一处，"
                               "其他文件改成不带数字的说法：\n  " + "\n  ".join(problems))
 
@@ -250,6 +269,7 @@ class TestDocNumbersMatchCode:
             r"MCP\s*tools\s*\((\d+)",             # en：表格标题
             r"(\d+)\s*herramientas\s*MCP",        # es
             r"(\d+)\s*herramientas\s*mcp__",      # es：安装段 A 行
+            r"Herramientas\s*MCP\s*[（(]\s*(\d+)",  # es：表格标题（数字在括号内）
             r"ツール\s*(\d+)\s*個",               # ja
             r"MCP\s*ツール(?:一覧)?[（(]\s*(\d+)",  # ja：表格标题
             r"MCP\s*ツール\s*(\d+)",              # ja

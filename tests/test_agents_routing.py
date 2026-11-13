@@ -207,3 +207,52 @@ def test_precommit_count_gate_has_teeth():
     # 数字不一致时必须不相等——这是上一条判据的全部意义
     assert _declared_pytest_count("`bash scripts/pre-commit`（3 个 pytest 文件）") \
         != len(_listed_pytest_files(sample_hook))
+
+
+# ── 已停用引擎数的机械对拍 ──────────────────────────────────────────────────
+#
+# 同一形态的第三处数字（前两处是 pre-commit 的 pytest 文件数、README 徽章的
+# 源数）。AGENTS.md 的「已停用 N 个」此前从 ac4504f 写入起就是错的：当时写
+# 15，而生成物与代码实测都是 12，错了三个文档周期没有任何信号。
+
+_DISABLED_DECL = re.compile(r"已停用的引擎.*?当前\s*(\d+)\s*个")
+_CATALOG_DISABLED = re.compile(r"已停用\s*(\d+)\s*个")
+
+
+def _declared_disabled_count(agents_text: str) -> int:
+    counts = [int(c) for c in _DISABLED_DECL.findall(agents_text)]
+    assert counts, "AGENTS.md 未写已停用引擎数"
+    assert len(set(counts)) == 1, f"AGENTS.md 里出现多个不同的已停用数: {counts}"
+    return counts[0]
+
+
+def _catalog_disabled_count() -> int:
+    """真源：docs/ENGINE_CATALOG.md 的「已停用 N 个」。
+
+    口径与生成器一致（`load_config` 后的 enabled 判定，含 realtime_index
+    这类按 CLI 存在与否运行时翻转的源），不是直接读 spec 文件——后者会漏掉
+    运行时翻转，实测 11 vs 12。
+    """
+    text = (ROOT / "docs" / "ENGINE_CATALOG.md").read_text(encoding="utf-8")
+    m = _CATALOG_DISABLED.search(text)
+    assert m, "docs/ENGINE_CATALOG.md 里找不到「已停用 N 个」"
+    return int(m.group(1))
+
+
+def test_agents_md_disabled_engine_count_matches_catalog():
+    """AGENTS.md 的已停用数必须等于 docs/ENGINE_CATALOG.md 的声明。
+
+    回退验证：把 12 改回 15，本条挂（实测 15 != 12）。
+    """
+    declared = _declared_disabled_count(AGENTS_MD.read_text(encoding="utf-8"))
+    actual = _catalog_disabled_count()
+    assert declared == actual, (
+        f"AGENTS.md 写「已停用 {declared} 个」，docs/ENGINE_CATALOG.md 是 "
+        f"{actual} 个——改启用状态时同步这个数字")
+
+
+def test_disabled_count_gate_has_teeth():
+    """自检：判据能识别目标形态，否则恒真等于没检查。"""
+    assert _declared_disabled_count("已停用的引擎（当前 12 个）") == 12
+    assert _declared_disabled_count("已停用的引擎（当前 15 个）") != 12
+    assert _catalog_disabled_count() > 0, "catalog 解析出的已停用数为 0，形态可能漂移"

@@ -2059,7 +2059,9 @@ semantic_evidence:
   # classify 通道（classifier.dev）的端点；JEV 通道不读它。
   endpoint: "https://classifier.dev"
   # 单次请求的超时（秒）。服务不可达时核验链路最多多等这么久，然后静默降级。
-  # JEV 通道下这是**每条正文**的超时（每条一个请求，并发 4）。
+  # 这是**每条正文**的超时（每条一个请求，并发 4）；整批另有硬截止
+  # DEFAULT_JEV_DEADLINE_S（semantic_evidence.py，实测 p95 约 1.2s），
+  # 防止单条卡死拖住整批。调大这里只放宽单条，不会放宽整批。
   timeout_s: 5
   # fast：决策模型一次往返；smart：低置信度条目转推理模型复核（慢，配额小 10 倍）。
   # 仅 classify 通道认这个字段。

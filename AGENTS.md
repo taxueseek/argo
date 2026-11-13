@@ -47,7 +47,7 @@
 - `ARGO_PIXIV_ALLOW_R18`：pixiv 放行 R-18 作品
 - `ARGO_SAUCENAO_API_KEY` / `ARGO_SERPAPI_API_KEY`：反搜图引擎，仅显式反搜时需要
 
-**已停用的引擎**：`docs/ENGINE_CATALOG.md` 的「已停用」清单（当前 15 个）。
+**已停用的引擎**：`docs/ENGINE_CATALOG.md` 的「已停用」清单（当前 12 个）。
 重新启用需走 `docs/ADDING_NEW_ENGINE.md` 的准入流程，不是把 `enabled` 改回 true。
 
 **出口纪律**：SSRF 防护（`content_security` / `url_safety`）与 recompute
