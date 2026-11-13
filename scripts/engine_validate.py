@@ -640,11 +640,11 @@ def validate_engine(
                               and spec.get("type") == "http")):
         if spec.get("type") == "http" and (spec.get("output_map") or spec.get("response")):
             try:
-                from engines_parsers import diagnose_schema_drift, apply_schema_patch
+                import engines_schema_drift
                 canary = spec.get("canary_query") or ENGINE_CANARY_QUERIES.get(engine_id) or "test"
                 raw_data = probe_engine_raw(engine_id, query=canary, timeout=timeout)
                 if raw_data is not None:
-                    drift_diag = diagnose_schema_drift(raw_data, spec)
+                    drift_diag = engines_schema_drift.diagnose_schema_drift(raw_data, spec)
                     report["schema_drift"] = drift_diag
                     suggested = drift_diag.get("suggested_patch") or {}
                     if suggested:
@@ -656,7 +656,7 @@ def validate_engine(
                         confidence = float(drift_diag.get("confidence") or 0.0)
                         if confidence >= _APPLY_MIN_CONFIDENCE:
                             spec_path = ROOT / "engines" / "specs" / f"{engine_id}.yaml"
-                            ok, msg = apply_schema_patch(spec_path, suggested)
+                            ok, msg = engines_schema_drift.apply_schema_patch(spec_path, suggested)
                             if ok:
                                 report["fix_applied"] = True
                                 report["fix_msg"] = msg

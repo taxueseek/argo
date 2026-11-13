@@ -538,9 +538,9 @@ def mask_query(query: str) -> str:
 # 常量做门禁断言，overview 输出同一常量做系统概览——同一数字只写一处
 # （首版 overview 手抄 187，棘轮每下调一格就会漂移一次，评审 2026-11-12
 # 修正）。窄化一处存量就下调一格。2026-11-13 证据管线收口 24 处
-# （fetch_v3 11 + search_rank 5 + search_output 4 + source_selection 4），
+# （fetch_v3 11 + search_rank 5 + search_output 4 + source_selection 4 + semantic_evidence 2），
 # 余量集中在 cache/sqlite 读写点（OperationalError 不在词汇表）。
-BROAD_SILENT_CATCH_BASELINE = 162
+BROAD_SILENT_CATCH_BASELINE = 160
 
 
 def overview() -> dict[str, Any]:

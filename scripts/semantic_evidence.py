@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""semantic_evidence.py — 可选的语义证据层（classifier.dev，默认关闭）。
+"""semantic_evidence.py — 可选的语义证据层（三级阶梯降级，默认关闭）。
 
 ## 为什么存在
 
@@ -47,8 +47,8 @@ logger = logging.getLogger("unified_search.semantic_evidence")
 
 DEFAULT_ENDPOINT = "https://classifier.dev"
 DEFAULT_TIMEOUT_S = 5.0
-# 未声明 transport 时的默认通道。jev = TypeSafe System One（当前唯一可用）；
-# classifier.dev 的匿名路径 2026-10-22 起回 403 proxy_requires_payment。
+# 未声明 transport 时的默认通道。优先级：Gemini Decision 1 ➔ TypeSafe JEV ➔
+# 本地启发式（allow_heuristic=True 时）；classifier.dev 匿名路径自 2026-10-22 起回 403。
 DEFAULT_TRANSPORT = "gemini"
 VALID_TRANSPORTS = ("gemini", "jev", "classify")
 
@@ -208,8 +208,8 @@ def _get_cached_result(key: str) -> Optional[dict[str, Any]]:
                 if isinstance(res, dict):
                     _JEV_MEMORY_CACHE[key] = (rec.get("ts", time.time()), res)
                     return dict(res)
-    except Exception:
-        pass
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.debug("读取语义缓存失败: %s", type(e).__name__)
     return None
 
 
@@ -225,15 +225,15 @@ def _set_cached_result(key: str, result: dict[str, Any]) -> None:
         if p.is_file():
             try:
                 data_map = json.loads(p.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, json.JSONDecodeError, ValueError):
                 data_map = {}
         if len(data_map) > 500:
             data_map.clear()
         data_map[key] = {"ts": now, "result": result}
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(data_map, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
+    except (OSError, TypeError, ValueError) as e:
+        logger.debug("写入语义缓存失败: %s", type(e).__name__)
 
 
 def _config() -> dict[str, Any]:
@@ -272,32 +272,27 @@ def _timeout() -> float:
         return DEFAULT_TIMEOUT_S
 
 
-def jev_api_key() -> str:
-    """JEV（TypeSafe）key：os.environ 优先，~/.config/argo/env 热读保底。"""
+def _read_env_key(names: tuple[str, ...]) -> str:
+    """按候选名读取密钥：os.environ 优先，~/.config/argo/env 热读保底。"""
     try:
         from engine_env import get_env
-        return (get_env(list(JEV_KEY_ENV)) or "").strip()
+        return (get_env(list(names)) or "").strip()
     except Exception:  # pragma: no cover - 环境层不可用时不冒险
-        import os
-        for _n in JEV_KEY_ENV:
+        for _n in names:
             _v = (os.environ.get(_n) or "").strip()
             if _v:
                 return _v
         return ""
+
+
+def jev_api_key() -> str:
+    """JEV（TypeSafe）key：os.environ 优先，~/.config/argo/env 热读保底。"""
+    return _read_env_key(JEV_KEY_ENV)
 
 
 def gemini_api_key() -> str:
     """Gemini Decision 1 key：os.environ 优先，~/.config/argo/env 热读保底。"""
-    try:
-        from engine_env import get_env
-        return (get_env(list(GEMINI_KEY_ENV)) or "").strip()
-    except Exception:
-        import os
-        for _n in GEMINI_KEY_ENV:
-            _v = (os.environ.get(_n) or "").strip()
-            if _v:
-                return _v
-        return ""
+    return _read_env_key(GEMINI_KEY_ENV)
 
 
 def _gemini_endpoint() -> str:
@@ -594,6 +589,26 @@ def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,
     return out  # type: ignore[return-value]
 
 
+def _prepare_usable_texts(
+    items: list[dict[str, Any]], *, require_text: bool = True
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """过滤非本地目标并拼装截断文本，统一三路语义评估的前置隔离逻辑。"""
+    usable = []
+    for it in items:
+        url = it.get("url")
+        if not url or is_local_target(url):
+            continue
+        has_text = bool((it.get("text") or "").strip())
+        has_title = bool((it.get("title") or "").strip())
+        if has_text or (not require_text and has_title):
+            usable.append(it)
+    texts = [
+        f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
+        for it in usable
+    ]
+    return usable, texts
+
+
 def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
     """对已抓取的正文批量判定「是否支持查询隐含的主张」。
 
@@ -603,12 +618,9 @@ def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: 
     调用方可自行换阈值）。失败返回 None。
     自动剔除本地文件（is_local_target），严格物理阻断私域外发。
     """
-    usable = [it for it in items if (it.get("text") or "").strip() and it.get("url")
-              and not is_local_target(it.get("url", ""))]
+    usable, texts = _prepare_usable_texts(items, require_text=True)
     if not usable:
         return None
-    texts = [f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
-             for it in usable]
     instructions = (
         f"Judge whether each passage supports the claim implied by this query: {query!r}. "
         "Answer 'supports the query' when the passage backs the claim, "
@@ -738,13 +750,9 @@ def assess_source_types(items: list[dict[str, Any]], *, allow_heuristic: bool = 
     items: [{"url": str, "title": str, "text": str}]（text 可为摘要）
     自动剔除本地文件（is_local_target），严格物理阻断私域外发。
     """
-    usable = [it for it in items if it.get("url") and
-              ((it.get("text") or "").strip() or (it.get("title") or "").strip())
-              and not is_local_target(it.get("url", ""))]
+    usable, texts = _prepare_usable_texts(items, require_text=False)
     if not usable:
         return None
-    texts = [f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
-             for it in usable]
     instructions = (
         "Classify each source by its nature: 'primary data or official announcement' "
         "for original datasets, filings, official releases; 'secondary reporting' for "
@@ -784,12 +792,9 @@ def assess_substantive_discussion(topic: str, items: list[dict[str, Any]], *, al
     - unrelated chatter: 闲聊或偏离主题
     自动剔除本地文件（is_local_target），严格物理阻断私域外发。
     """
-    usable = [it for it in items if (it.get("text") or "").strip() and it.get("url")
-              and not is_local_target(it.get("url", ""))]
+    usable, texts = _prepare_usable_texts(items, require_text=True)
     if not usable:
         return None
-    texts = [f"{it.get('title') or ''}\n{(it.get('text') or '')[:MAX_TEXT_CHARS]}"
-             for it in usable]
     instructions = f"Determine the depth of discussion regarding the topic {topic!r} in the text."
     results = classify(texts, SUBSTANTIVE_DISCUSSION_LABELS,
                        instructions=instructions,

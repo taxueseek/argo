@@ -84,8 +84,8 @@ class TestFixIsPreviewByDefault(unittest.TestCase):
             with patch.object(engine_validate, "ROOT", tmp_root), \
                     patch.object(engine_validate, "_get_spec", return_value=spec), \
                     patch.object(engine_validate, "probe_engine_raw", return_value={"x": 1}), \
-                    patch("engines_parsers.diagnose_schema_drift", return_value=diag), \
-                    patch("engines_parsers.apply_schema_patch", wraps=_fake_apply) as applied:
+                    patch("engines_schema_drift.diagnose_schema_drift", return_value=diag), \
+                    patch("engines_schema_drift.apply_schema_patch", wraps=_fake_apply) as applied:
                 report = engine_validate.validate_engine(
                     "probe", stage="health", diagnose=True, apply=apply)
             return report, spec_path, applied

@@ -101,9 +101,10 @@ class TestMissingEnvOutcome(unittest.TestCase):
         from pathlib import Path
         for var in ("ARGO_ZHIHU_ACCESS_SECRET", "ZHIHU_ACCESS_SECRET"):
             os.environ.pop(var, None)
-        # 屏蔽密钥文件保底（本机 ~/.config/argo/env 真有 zhihu 密钥）
+        # 屏蔽密钥文件与 macOS Keychain 保底（本机可能已配 zhihu 密钥）
         with patch("engine_env._envfile_paths",
-                   lambda: [Path("/nonexistent/argo/env")]):
+                   lambda: [Path("/nonexistent/argo/env")]), \
+                patch("engine_env._read_zhihu_keychain", return_value=""):
             missing = _missing_env_for("zhihu")
         self.assertIn("ARGO_ZHIHU_ACCESS_SECRET", missing)
 

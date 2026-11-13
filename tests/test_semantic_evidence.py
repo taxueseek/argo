@@ -132,9 +132,19 @@ class TestVerifyIntegration(unittest.TestCase):
 
     def test_enabled_but_service_down_still_verifies(self):
         with patch.object(sem, "enabled", return_value=True), \
-                patch.object(sem, "assess_support", return_value=None):
+                patch.object(sem, "assess_support", return_value=None), \
+                patch.object(sem, "assess_source_types", return_value=None), \
+                patch.object(sem, "assess_substantive_discussion", return_value=None):
             out = verify_results(_results(), "q", fetch_fn=_fake_fetch, top_k=2)
         self.assertNotIn("semantic", out)
+        self.assertEqual(out["revision_summary"]["n"], 2)
+
+    def test_enabled_remote_down_falls_back_to_heuristic(self):
+        with patch.object(sem, "enabled", return_value=True), \
+                patch.object(sem, "classify", return_value=None):
+            out = verify_results(_results(), "q", fetch_fn=_fake_fetch, top_k=2)
+        self.assertIn("semantic", out)
+        self.assertEqual(out["semantic"]["scored"], 2)
         self.assertEqual(out["revision_summary"]["n"], 2)
 
 
