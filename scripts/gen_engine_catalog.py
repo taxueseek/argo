@@ -203,8 +203,8 @@ def render() -> str:
     L.append("## 一、总量与口径")
     L.append("")
     L.append(f"- **收录 {len(rows)} 个源**（`engines/specs/*.yaml` 声明总数）")
-    L.append(f"- **开箱可用 {len(usable)} 个**：不需要你配任何密钥或装额外工具，"
-             "自动路由就会用上")
+    L.append(f"- **开箱可用 {len(usable)} 个**：不需要你配任何密钥或装额外工具"
+             "（其中显式专用源需 `--engine` 调用，见下方「显式专用」清单）")
     L.append(f"- **需自备密钥 {len(keyed)} 个**：{_names(keyed)}"
              "（没配也不影响搜索，路由会跳过）")
     L.append(f"- **需装后端工具 {len(needs_dep)} 个**：{_names(needs_dep)}"

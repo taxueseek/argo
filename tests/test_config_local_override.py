@@ -193,3 +193,16 @@ def test_optional_local_dep_engines_use_runtime_gating_not_static_disable():
         assert spec.get("explicit_only") is True, eng_id
         reqs = required_env_for(eng_id, spec)
         assert any(expected_var in cands for cands in reqs), (eng_id, reqs)
+
+
+def test_public_demo_key_engine_is_explicit_only():
+    """契约：使用公共 demo key 的引擎不得进自动路由，避免共享限额被路由消耗。
+
+    europeana 用官方公共 wskey（api2demo），实测 HTTP 200 可用，但响应里
+    requestNumber 提示这是共享额度；自动路由选中会耗尽公共额度并静默空转
+    （401 或空结果），故与 digup、fourget、searxng 一致改为显式专用。
+    """
+    cfg = C.load_config(force=True, include_local=False)
+    spec = cfg["engines"]["europeana"]
+    assert spec.get("enabled") is True
+    assert spec.get("explicit_only") is True

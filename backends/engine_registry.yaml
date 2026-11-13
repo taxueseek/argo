@@ -914,8 +914,8 @@ engines:
   cost: free
   status: ok
   recommended: true
-  explicit_only: false
-  desc: 欧洲 27 国文化遗产聚合（官方公开 demo key）
+  explicit_only: true
+  desc: 欧洲 27 国文化遗产聚合（官方公共 demo key，共享限额，故显式调用）
 - name: europepmc
   tier: T1
   type: http

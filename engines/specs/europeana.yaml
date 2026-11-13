@@ -1,5 +1,6 @@
 engine_id: europeana
 enabled: true
+explicit_only: true
 label: Europeana 欧洲文化遗产
 cost_tier: free
 family: knowledge
@@ -12,7 +13,7 @@ coverage:
 - culture
 - europe
 - heritage
-desc: 欧洲 27 国文化遗产聚合（官方公开 demo key）
+desc: 欧洲 27 国文化遗产聚合（官方公共 demo key，共享限额，故显式调用）
 timeout: 12
 type: http
 method: GET

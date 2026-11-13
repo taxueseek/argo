@@ -81,6 +81,12 @@ JEV_MAX_WORKERS = 4
 # 防止网络抖动导致的误杀 fail-open，也防止某条卡死把整批拖住。
 # 注意与 config 的 `timeout_s` 区分：那是**每条请求**的超时，这是整批预算。
 DEFAULT_JEV_DEADLINE_S = 1.2
+# Gemini 通道的**整批**硬截止（秒）：与 JEV 分开，因为两者延迟特征不同。
+# 2026-11-13 本机实测（gemini-decision-1，10 条冷调用）：单条中位 689ms、
+# p95 2251ms；4 条并发批量 670~1652ms、8 条 910~1534ms。取 5.0s 覆盖 8 条
+# 两波的最坏情况（2×2.3s）并留抖动余量。沿用 1.2s 会截断：实测 6 组 4 条里
+# 1 组只回 3/4（静默丢结果），故独立取值。
+DEFAULT_GEMINI_DEADLINE_S = 5.0
 
 # 结果级缓存（TTL 7 天）：常见事实与热点二次判定 0ms 响应，API 消耗清零
 _JEV_MEMORY_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -411,20 +417,21 @@ def _run_choice_batch(texts_len: int,
                       keep: list[tuple[int, str]],
                       choice_fn: Any,
                       *,
-                      timeout: float) -> Optional[list[dict[str, Any]]]:
+                      timeout: float,
+                      deadline_s: float | None = None) -> Optional[list[dict[str, Any]]]:
     """每条文本一个请求，并发受限 + 总体硬截止预算（超时即取消未完成任务）。
 
     `timeout` 是**每条请求**的超时（已通过 choice_fn 闭包传给 HttpClient），
-    不是整批预算。整批预算固定取 DEFAULT_JEV_DEADLINE_S：实测冷调用 0.55s、
-    p95 约 1.2s，这是一条保护性硬上限，防止某条卡死把整批拖住（也防止调用方
-    把 timeout_s 调大后整批无上限等待）。要改整批预算请改那个常量，
-    或后续把它提升为 config 的独立字段（与 timeout_s 分开，避免混用）。
+    不是整批预算。整批预算取 `deadline_s`，缺省 DEFAULT_JEV_DEADLINE_S；
+    Gemini 通道传 DEFAULT_GEMINI_DEADLINE_S（实测延迟显著高于 JEV，见常量注释）。
+    这是一条保护性硬上限，防止某条卡死把整批拖住（也防止调用方把 timeout_s
+    调大后整批无上限等待）。
 
     保留 `timeout` 形参是为了兼容既有调用点与测试 patch，内部不再读它。
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     texts_kept = [(idx, t[:MAX_TEXT_CHARS]) for idx, t in keep]
-    deadline_s = DEFAULT_JEV_DEADLINE_S
+    budget_s = float(deadline_s) if deadline_s and deadline_s > 0 else DEFAULT_JEV_DEADLINE_S
     results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
 
     # 不能用 `with ThreadPoolExecutor(...)`：with 退出时 shutdown(wait=True)
@@ -434,7 +441,7 @@ def _run_choice_batch(texts_len: int,
         futures = {pool.submit(choice_fn, t): pos
                    for pos, (_orig_idx, t) in enumerate(texts_kept)}
         try:
-            for fut in as_completed(futures, timeout=max(0.1, deadline_s)):
+            for fut in as_completed(futures, timeout=max(0.1, budget_s)):
                 pos = futures[fut]
                 try:
                     results[pos] = fut.result()
@@ -524,12 +531,18 @@ def _classify_gemini(texts: list[str], labels: tuple[str, ...] | list[str], *,
                      criteria: dict[str, str] | None = None,
                      keep: list[tuple[int, str]],
                      timeout: float = 5.0) -> Optional[list[Optional[dict[str, Any]]]]:
+    """Gemini 通道：每条文本一个请求，并发 4，整批硬截止取 DEFAULT_GEMINI_DEADLINE_S。
+
+    与 JEV 的 1.2s 分开取值：Gemini 单条 p95 实测 2251ms（见常量注释），
+    沿用 1.2s 会在批量里静默截断（实测 6 组 4 条里 1 组只回 3/4）。
+    """
     if not gemini_api_key():
         return None
     return _run_choice_batch(
         len(texts), keep,
         lambda t: _gemini_choice(t, labels, instructions, timeout, criteria),
         timeout=timeout,
+        deadline_s=DEFAULT_GEMINI_DEADLINE_S,
     )
 
 

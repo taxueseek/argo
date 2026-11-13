@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -614,6 +615,37 @@ class TestGeminiDecisionChannel(unittest.TestCase):
             res = se.classify(["短文"], ["substantive", "passing mention"])
             self.assertIsNotNone(res)
             self.assertTrue(jev_called, "Gemini 不可用时必须平滑回退至 JEV")
+
+    def test_gemini_deadline_independent_from_jev(self):
+        """Gemini 通道的整批截止独立于 JEV，不复用 1.2s。
+
+        实测依据（2026-11-13 本机，gemini-decision-1）：单条 p95 2251ms，
+        沿用 JEV 的 1.2s 会在批量里静默截断（6 组 4 条里 1 组只回 3/4）。
+        用 sleep 模拟慢响应，验证 5s 截止不截断、1s 截止会截断。
+        """
+        self.assertGreater(se.DEFAULT_GEMINI_DEADLINE_S, se.DEFAULT_JEV_DEADLINE_S)
+
+        def slow_choice(text, labels, instructions, timeout, criteria=None):
+            time.sleep(2.0)
+            return {"label": labels[0], "confidence": 0.9}
+
+        texts = ["文本一", "文本二", "文本三", "文本四"]
+        keep = [(i, t) for i, t in enumerate(texts)]
+        with patch.object(se, "gemini_api_key", return_value="fake"), \
+             patch.object(se, "_gemini_choice", side_effect=slow_choice):
+            res = se._classify_gemini(texts, ("supports the query",), keep=keep)
+        got = sum(1 for r in (res or []) if r)
+        self.assertEqual(got, 4, "5s 截止下 4 条 2s 慢响应不应被截断")
+
+        # 对照：显式传 1.0s 截止必须截断，证明截止参数真的生效
+        with patch.object(se, "gemini_api_key", return_value="fake"), \
+             patch.object(se, "_gemini_choice", side_effect=slow_choice):
+            res_fast = se._run_choice_batch(
+                len(texts), keep,
+                lambda t: slow_choice(t, ("x",), None, 5.0),
+                timeout=5.0, deadline_s=1.0)
+        got_fast = sum(1 for r in (res_fast or []) if r)
+        self.assertLess(got_fast, 4, "1s 截止下必须截断")
 
 
 if __name__ == "__main__":
