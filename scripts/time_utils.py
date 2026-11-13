@@ -47,9 +47,44 @@ TIME_CAPABLE_ENGINES: frozenset[str] = frozenset({
 })
 
 
+_SPEC_TIME_ENGINES: frozenset[str] | None = None
+
+
+def _spec_time_engines() -> frozenset[str]:
+    """懒扫描 engines/specs/*.yaml 中声明了 item_published_at 或 rss_feed 的源。"""
+    global _SPEC_TIME_ENGINES
+    if _SPEC_TIME_ENGINES is not None:
+        return _SPEC_TIME_ENGINES
+    found: set[str] = set()
+    try:
+        from pathlib import Path
+        import yaml
+        specs_dir = Path(__file__).resolve().parent.parent / "engines" / "specs"
+        if specs_dir.is_dir():
+            for p in specs_dir.glob("*.yaml"):
+                try:
+                    data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+                except (OSError, yaml.YAMLError, ValueError):
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                eng_id = str(data.get("engine_id") or p.stem)
+                omap = data.get("output_map") or {}
+                req = data.get("request") or {}
+                if (data.get("type") == "rss_feed"
+                        or data.get("feeds")
+                        or (isinstance(req, dict) and req.get("feed_url"))
+                        or (isinstance(omap, dict) and omap.get("item_published_at"))):
+                    found.add(eng_id)
+    except (OSError, ImportError):
+        pass
+    _SPEC_TIME_ENGINES = frozenset(found)
+    return _SPEC_TIME_ENGINES
+
+
 def is_time_capable(eng: str) -> bool:
     """引擎是否可能返回 published_at（决定时间窗是否参与缓存键/后过滤）。"""
-    return eng in TIME_CAPABLE_ENGINES
+    return eng in TIME_CAPABLE_ENGINES or eng in _spec_time_engines()
 
 
 def published_ts(r: dict[str, Any]) -> float | None:

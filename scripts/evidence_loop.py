@@ -588,9 +588,10 @@ def verify_results(results: list[dict[str, Any]],
                 assess_substantive_discussion, enabled as _semantic_enabled,
             )
             if _semantic_enabled():
-                support = assess_support(query, scored_inputs)
-                source_types = assess_source_types(scored_inputs)
-                substantive_map = assess_substantive_discussion(query, scored_inputs)
+                # 三级阶梯兜底：Gemini 默认 → JEV 备用 → 本地启发式最终兜底
+                support = assess_support(query, scored_inputs, allow_heuristic=True)
+                source_types = assess_source_types(scored_inputs, allow_heuristic=True)
+                substantive_map = assess_substantive_discussion(query, scored_inputs, allow_heuristic=True)
                 primary_count = 0
                 substantive_count = 0
                 passing_count = 0

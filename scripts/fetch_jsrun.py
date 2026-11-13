@@ -21,20 +21,24 @@ def _jsrun_enabled() -> bool:
     return env_flag("ARGO_FETCH_JSRUN")
 
 
+_MINI_RACER_OK: bool | None = None
+
+
+def _mini_racer_available() -> bool:
+    """一次性探测 py_mini_racer 是否就绪，缺依赖时 O(1) 短路。"""
+    global _MINI_RACER_OK
+    if _MINI_RACER_OK is None:
+        import importlib.util
+        _MINI_RACER_OK = importlib.util.find_spec("py_mini_racer") is not None
+    return _MINI_RACER_OK
+
+
 def _jsrun_challenge_fetch(url: str, html: str, max_chars: int = 8000,
                            timeout: float = 8.0,
                            backoff_budget_s: float | None = None) -> dict:
-    """用 js-run 执行挑战页 JS，尝试获取 clearance cookie 后重试请求。
-
-    只处理「环境探测 + 纯计算」型挑战脚本（v0 面）。失败时返回空结果，
-    由调用方降级到 tinyfish/CDP。
-
-    重试请求用 curl_cffi Chrome 指纹 impersonate（站点按 TLS 指纹风控，
-    裸 Python 指纹被静默拦截）。退避重试 3 次（间隔 5s/10s）。
-    `backoff_budget_s`（秒）给整段重试设墙钟上界：传入时退避睡眠与后续
-    尝试都不得越过它——此前 sleep(5)+sleep(10) 不受链级预算约束，cookie
-    拿到而三连败时可在 fetch 链内部多耗 ~30s（2026-10-06 审查定位）。
-    """
+    """用 js-run 执行挑战页 JS，尝试获取 clearance cookie 后重试请求。"""
+    if not html or not _mini_racer_available():
+        return {}
     import re as _re
     import time as _time
 

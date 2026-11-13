@@ -305,6 +305,10 @@ def ingest() -> dict:
     con = _connect()
     added = 0
     try:
+        # 清理历史误入账的 recovered=True 行（口径修复前的遗留脏数据）
+        con.execute(
+            "DELETE FROM badcases WHERE kind = 'recovery' AND detail LIKE '%recovered=True%'"
+        )
         for r in rows:
             cause = classify_root_cause(r["kind"], r["detail"],
                                         r["query"], r["engine"])
@@ -493,7 +497,6 @@ def render_lessons() -> str:
     lines += ["## 按复发天数排序", ""]
     for a in stats_:
         label = _CAUSE_LABEL.get(a["root_cause"], a["root_cause"])
-        days = "、".join(sorted(a["days"] if "days" in a else [])) if "days" in a else ""
         engines = "、".join(a["engines"][:5]) or "（未记录）"
         mark = "**该挪进硬规则**" if (a["seen_days"] >= SEEN_PROMOTE_DAYS
                                     and a["root_cause"] != ROOT_CAUSE_EXTERNAL) else ""
@@ -555,7 +558,7 @@ def overview() -> dict[str, Any]:
     out: dict[str, Any] = {
         "badcases": {
             "total": st.get("total", 0),
-            "unattributed": sum(1 for c in st.get("by_root_cause", [])
+            "unattributed": sum(c.get("count", 0) for c in st.get("by_root_cause", [])
                                 if c.get("root_cause") == "unattributed"),
         },
         "ratchets": {

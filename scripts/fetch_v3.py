@@ -1625,7 +1625,7 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                             result = tf
                     # tinyfish 未命中（关闭/缺 key/失败/短内容）才起本地 Chrome——
                     # 内容过短的成功响应与失败同样需要继续降级
-                    if result.get("fetch_method") != _render_tinyfish.TINYFISH_METHOD:
+                    if result.get("fetch_method") not in (_render_tinyfish.TINYFISH_METHOD, engine_states.FETCH_JSRUN_CHALLENGE):
                         browser_result = _browser_fetch(
                             url, max_chars, timeout=_level_timeout(15.0))
                         if browser_result.get("success") or not result.get("success"):

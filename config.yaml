@@ -1506,7 +1506,6 @@ domains:
   - doaj
   - figshare
   - hal
-  - cnii
   fallback: openalex
   name: academic
   parallel: true

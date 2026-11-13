@@ -304,7 +304,7 @@ def search(query: str, n: int = 5) -> list[dict]:
             return valid
         fx_errors = [r for r in results
                      if isinstance(r, dict) and r.get("error")]
-    except Exception:
+    except (OSError, ValueError, TypeError):
         pass
 
     # 2) twitter-cli（`twitter`）/ `tw` CLI，两者参数形态不同，逐个试
@@ -337,7 +337,7 @@ def search(query: str, n: int = 5) -> list[dict]:
             argo_proxy = get_env(["ARGO_PROXY"])
             if argo_proxy and argo_proxy.lower() != "direct":
                 env["TWITTER_PROXY"] = argo_proxy
-    except Exception:
+    except (ImportError, OSError, ValueError, TypeError):
         pass
 
     for cmd in (

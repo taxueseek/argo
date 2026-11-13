@@ -14,15 +14,26 @@ import subprocess
 import sys
 from pathlib import Path
 
-SEEK_DIR = Path(__file__).resolve().parent.parent / "sub-skills" / "local-seek" / "scripts"
-SEEK = SEEK_DIR / "seek.py"
+_FALLBACK_SEEK = Path(__file__).resolve().parent.parent / "sub-skills" / "local-seek" / "scripts" / "seek.py"
+
+
+def _resolve_seek() -> Path:
+    try:
+        from seek_locator import resolve_seek_py
+        found = resolve_seek_py()
+        if found is not None:
+            return found
+    except ImportError:
+        pass
+    return _FALLBACK_SEEK
 
 
 def _run_seek(argv: list[str]) -> dict:
     """运行 seek.py，优先子进程隔离，受限环境降级为进程内调用。"""
+    seek_py = _resolve_seek()
     try:
         proc = subprocess.run(
-            [sys.executable, str(SEEK), *argv, "--json"],
+            [sys.executable, str(seek_py), *argv, "--json"],
             capture_output=True, text=True, timeout=60,
             encoding="utf-8", errors="replace",
         )
@@ -33,8 +44,9 @@ def _run_seek(argv: list[str]) -> dict:
 
     # 进程内容错降级
     try:
-        if str(SEEK_DIR) not in sys.path:
-            sys.path.insert(0, str(SEEK_DIR))
+        seek_dir = str(seek_py.parent)
+        if seek_dir not in sys.path:
+            sys.path.insert(0, seek_dir)
         import seek as seek_mod
         text, rc = seek_mod.run_query([*argv, "--json"], time_budget=30.0)
         if rc == 0 and text:

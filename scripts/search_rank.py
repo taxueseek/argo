@@ -73,6 +73,7 @@ from rank_signals import (  # noqa: E402,F401
     score_completeness as _score_completeness,
     score_relevance as _score_relevance,
     title_stuffing_penalty as _title_stuffing_penalty,
+    upstream_score_boost as _upstream_score_boost,
 )
 
 # 中文/英文混合分词用的正则，延迟编译（首次 _tokens 时建）
@@ -768,10 +769,9 @@ def local_five_dim_rerank(query: str, results: list[dict[str, Any]],
     # prior——浮点加法顺序与改造前一致，金标对拍才可能零差异。
     pool = enriched[:]
     for e in pool:
-        e["_static4"] = (w["relevance"] * e["relevance"]
-                         + w["authority"] * e["authority"]
-                         + w["freshness"] * e["freshness"]
-                         + w["completeness"] * e["completeness"])
+        e["_static4"] = (w["relevance"] * e["relevance"] + w["authority"] * e["authority"]
+                         + w["freshness"] * e["freshness"] + w["completeness"] * e["completeness"]
+                         + _upstream_score_boost(e["r"]))
         # 来源侧惩罚（域级集中 / 跨域同质）作为静态分乘子（≤1）在**贪心之前**
         # 应用：① 无需事后重排，且惩罚表为空时本行是 ×1.0、浮点上逐位无操作，
         # 「无惩罚时与旧实现逐位一致」的不变式不被破坏；② K 剪枝上界

@@ -817,3 +817,12 @@ def fuzzy_near_dup(sig_a: str, sig_b: str, minhash_sim: float,
     if not (band <= minhash_sim < thr):
         return False
     return _rf_token_set_ratio(sig_a, sig_b) >= thr
+
+
+def upstream_score_boost(row: dict[str, Any]) -> float:
+    """对显式带正数 upstream_score 的结果给微幅有界加权，无该字段时返回 0.0。"""
+    us = row.get("upstream_score")
+    if isinstance(us, (int, float)) and not isinstance(us, bool) and us > 0:
+        import math
+        return min(0.05, math.log10(float(us) + 1.0) * 0.015)
+    return 0.0

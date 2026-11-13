@@ -365,11 +365,12 @@ def main() -> None:
                     run_ref = f"run:{meta.get('run_id')}" if meta else "无"
                     # 与 `argo note explore` 共用同一个资产包写入函数：
                     # 目录、00_判断稿、manifest、索引结构不会随入口而变。
+                    note_topic = (args.topic or args.query or "").strip() or "research"
                     bundle = create_explore_bundle(
                         root=n_root,
-                        slug=slugify(args.topic),
-                        title=args.topic,
-                        problem=args.topic,
+                        slug=slugify(note_topic),
+                        title=note_topic,
+                        problem=args.query or note_topic,
                         related=run_ref,
                     )
                     report["note"] = {

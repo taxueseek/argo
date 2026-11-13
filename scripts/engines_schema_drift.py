@@ -172,7 +172,8 @@ def diagnose_schema_drift(raw_data: Any, spec_or_output_map: dict[str, Any]) -> 
         }
     if isinstance(raw_data, dict):
         err_val = raw_data.get("error") or raw_data.get("err_msg") or raw_data.get("message")
-        if err_val and not raw_data.get("data") and not raw_data.get("results") and not raw_data.get("items"):
+        if (err_val and not raw_data.get("data") and not raw_data.get("results")
+                and not raw_data.get("items") and not _find_candidate_containers(raw_data)):
             return {
                 "ok": False,
                 "drift_detected": False,
@@ -396,12 +397,14 @@ def apply_schema_patch(spec_file: str | Path, patch: dict[str, str]) -> tuple[bo
                 comment = ""
                 if len(parts) > 1 and "#" in parts[1]:
                     comment = "  #" + parts[1].split("#", 1)[1].rstrip()
+                val_str = '""' if val == "" else val
                 line_indent = line[:len(line) - len(stripped)]
-                line = f"{line_indent}{k}: {val}{comment}\n"
+                line = f"{line_indent}{k}: {val_str}{comment}\n"
         new_child_lines.append(line)
 
     for k, val in remaining_patch.items():
-        new_child_lines.append(f"{child_indent}{k}: {val}\n")
+        val_str = '""' if val == "" else val
+        new_child_lines.append(f"{child_indent}{k}: {val_str}\n")
 
     full_lines = lines[:output_map_idx + 1] + new_child_lines + lines[end_idx:]
     new_text = "".join(full_lines)

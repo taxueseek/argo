@@ -367,10 +367,9 @@ def _daemon_autostart(root, py):
     except OSError:
         pass
     try:
-        devnull = open(os.devnull, "wb")
         subprocess.Popen(
             [py or sys.executable, os.path.join(SCRIPTS, "daemon.py"), "start"],
-            stdout=devnull, stderr=devnull, stdin=devnull,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
             start_new_session=True, close_fds=True)
     except Exception:
         return 1
@@ -498,7 +497,7 @@ def _engine_count():
     """
     try:
         state_root = (os.environ.get("ARGO_STATE_DIR", "").strip()
-                      or os.path.expanduser("~/.cache/unified-search"))
+                      or _default_cache_root())
         cfg_path = os.path.join(ARGO_HOME, "config.yaml")
         cache_file = os.path.join(state_root, ".engine_count")
         try:
@@ -644,18 +643,6 @@ def main():
     # （line 32 早于 line 67），两个启动器对同一个文件给出不同答案，正是本仓
     # 反复踩过的「装了没通电」。这个变量只在「当前解释器不够用」时才被读到，
     # 而那恰恰是用户会去写它的情形。
-    try:
-        sys.path.insert(0, SCRIPTS)
-        from engine_env import sync_envfile_to_environ
-        sync_envfile_to_environ()
-    except Exception:
-        pass
-
-    # 达标就地执行；否则按 _pick_python 选解释器并 execv 重启。
-    # 判定前置于探测：达标时连 _pick_python 的子进程校验都省掉。
-    inplace = _self_capable()
-    py = sys.executable if inplace else _pick_python()
-
     scripts = {
         "search":    ("search.py",     ["--json"]),
         "research":  ("research.py",   ["--json"]),
@@ -738,6 +725,18 @@ def main():
         print(f"Unknown subcommand: {sub}", file=sys.stderr)
         print(_usage(), file=sys.stderr)
         sys.exit(1)
+
+    try:
+        sys.path.insert(0, SCRIPTS)
+        from engine_env import sync_envfile_to_environ
+        sync_envfile_to_environ()
+    except Exception:
+        pass
+
+    # 达标就地执行；否则按 _pick_python 选解释器并 execv 重启。
+    # 判定前置于探测：达标时连 _pick_python 的子进程校验都省掉。
+    inplace = _self_capable()
+    py = sys.executable if inplace else _pick_python()
 
     script, defaults = scripts[sub]
     path = os.path.join(SCRIPTS, script)

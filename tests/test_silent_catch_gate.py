@@ -37,7 +37,7 @@ from badcase_ledger import BROAD_SILENT_CATCH_BASELINE as BASELINE  # noqa: E402
 
 def _count_broad_silent_catches() -> int:
     n = 0
-    for p in sorted(SCRIPTS.glob("*.py")):
+    for p in sorted(SCRIPTS.rglob("*.py")):
         if "__pycache__" in p.parts:
             continue
         try:

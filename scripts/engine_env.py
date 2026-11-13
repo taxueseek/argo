@@ -171,12 +171,15 @@ _zhihu_keychain_cache: str | None = None
 def _read_zhihu_keychain() -> str:
     """macOS Keychain 保底读取知乎官方 CLI 管理的 Access Secret。"""
     global _zhihu_keychain_cache
-    if _zhihu_keychain_cache is not None:
-        return _zhihu_keychain_cache
+    with _envfile_lock:
+        if _zhihu_keychain_cache is not None:
+            return _zhihu_keychain_cache
     import sys
     if sys.platform != "darwin":
-        _zhihu_keychain_cache = ""
+        with _envfile_lock:
+            _zhihu_keychain_cache = ""
         return ""
+    val = ""
     try:
         import subprocess
         import base64
@@ -187,12 +190,14 @@ def _read_zhihu_keychain() -> str:
         ).decode("utf-8", "replace").strip()
         if raw.startswith("go-keyring-base64:"):
             _, b64_val = raw.split(":", 1)
-            _zhihu_keychain_cache = base64.b64decode(b64_val).decode("utf-8", "replace").strip()
+            val = base64.b64decode(b64_val).decode("utf-8", "replace").strip()
         else:
-            _zhihu_keychain_cache = raw
+            val = raw
     except Exception:
-        _zhihu_keychain_cache = ""
-    return _zhihu_keychain_cache
+        val = ""
+    with _envfile_lock:
+        _zhihu_keychain_cache = val
+        return _zhihu_keychain_cache
 
 # 引擎 → 候选环境变量（从左到右优先）
 # 第一项为推荐新名（ARGO_ 前缀），后续为历史兼容名
@@ -304,12 +309,14 @@ def get_env(names: str | list[str], default: str = "") -> str:
         if val is not None and str(val).strip() != "":
             return str(val)
 
-    # 凭证回退：macOS Keychain（zhihu-cli 统一凭据托管）
+    # 凭证回退：macOS Keychain（zhihu-cli 统一凭据托管）；显式置空 "" 时跳过回退
     zhihu_keys = {"ZHIHU_ACCESS_SECRET", "ARGO_ZHIHU_ACCESS_SECRET"}
     if any(n in zhihu_keys for n in names):
-        kc = _read_zhihu_keychain()
-        if kc:
-            return kc
+        explicit_empty = any(n in zhihu_keys and n in os.environ and os.environ[n] == "" for n in names)
+        if not explicit_empty:
+            kc = _read_zhihu_keychain()
+            if kc:
+                return kc
 
     return default
 

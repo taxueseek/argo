@@ -170,11 +170,13 @@ def _normalize_cache_text(text: str) -> str:
 
 def _get_cache_key(text: str, labels: tuple[str, ...] | list[str],
                    instructions: str | None,
-                   criteria: dict[str, str] | None = None) -> str:
+                   criteria: dict[str, str] | None = None,
+                   salt: str = "") -> str:
     import hashlib
     crit_repr = str(sorted((criteria or {}).items())) if criteria else str(sorted(str(l) for l in labels))
     norm_text = _normalize_cache_text(text)
-    raw = f"{instructions or ''}::{crit_repr}::{norm_text}"
+    prefix = f"{salt}::" if salt else ""
+    raw = f"{prefix}{instructions or ''}::{crit_repr}::{norm_text}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -408,37 +410,30 @@ def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
     return res
 
 
-def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
-                  instructions: str | None, criteria: dict[str, str] | None = None,
-                  keep: list[tuple[int, str]],
-                  timeout: float) -> Optional[list[dict[str, Any]]]:
-    """JEV 通道：每条文本一个请求，并发 4，带总体时间硬截止预算。
-
-    任一条失败就在该位留 None（与 classifier.dev 通道「整批失败即 None」
-    不同）：一次核验有几条正文，坏一条不该把其余判定的价值也丢掉。全部失败
-    时仍返回 None，调用方行为与未开启时一致。
-    """
+def _run_choice_batch(texts_len: int,
+                      keep: list[tuple[int, str]],
+                      choice_fn: Any,
+                      *,
+                      timeout: float) -> Optional[list[dict[str, Any]]]:
+    """每条文本一个请求，并发受限 + 总体硬截止预算（超时即取消未完成任务）。"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    texts_kept = [t[:MAX_TEXT_CHARS] for _i, t in keep]
+    texts_kept = [(idx, t[:MAX_TEXT_CHARS]) for idx, t in keep]
     deadline_s = DEFAULT_JEV_DEADLINE_S
     results: list[Optional[dict[str, Any]]] = [None] * len(texts_kept)
 
     # 不能用 `with ThreadPoolExecutor(...)`：with 退出时 shutdown(wait=True)
-    # 会把 as_completed 超时后仍在跑的请求全部 join 完，硬截止形同虚设
-    # （实测 sleep 3s 的任务让整轮耗时 3.01s）。这里显式建池、超时后
-    # shutdown(wait=False, cancel_futures=True)，只保留已完成的结果就返回。
-    # 未完成的任务内部仍由 HttpClient 的 timeout 兜底，不阻塞调用方。
+    # 会把 as_completed 超时后仍在跑的请求全部 join 完，硬截止形同虚设。
     pool = ThreadPoolExecutor(max_workers=min(JEV_MAX_WORKERS, len(texts_kept)))
     try:
-        futures = {pool.submit(_jev_choice, t, labels, instructions, timeout, criteria): idx
-                   for idx, t in enumerate(texts_kept)}
+        futures = {pool.submit(choice_fn, t): pos
+                   for pos, (_orig_idx, t) in enumerate(texts_kept)}
         try:
             for fut in as_completed(futures, timeout=max(0.1, deadline_s)):
-                orig_idx = futures[fut]
+                pos = futures[fut]
                 try:
-                    results[orig_idx] = fut.result()
+                    results[pos] = fut.result()
                 except Exception:
-                    results[orig_idx] = None
+                    results[pos] = None
         except TimeoutError:
             pass
     finally:
@@ -446,11 +441,23 @@ def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
 
     if not any(r for r in results):
         return None
-    out: list[Optional[dict[str, Any]]] = [None] * len(texts)
-    for (idx, _t), r in zip(keep, results):
+    out: list[Optional[dict[str, Any]]] = [None] * texts_len
+    for (orig_idx, _t), r in zip(texts_kept, results):
         if isinstance(r, dict):
-            out[idx] = r
+            out[orig_idx] = r
     return out  # type: ignore[return-value]
+
+
+def _classify_jev(texts: list[str], labels: tuple[str, ...] | list[str], *,
+                  instructions: str | None, criteria: dict[str, str] | None = None,
+                  keep: list[tuple[int, str]],
+                  timeout: float) -> Optional[list[dict[str, Any]]]:
+    """JEV 通道：每条文本一个请求，并发 4，带总体时间硬截止预算。"""
+    return _run_choice_batch(
+        len(texts), keep,
+        lambda t: _jev_choice(t, labels, instructions, timeout, criteria),
+        timeout=timeout,
+    )
 
 
 def _gemini_choice(text: str, labels: tuple[str, ...] | list[str],
@@ -460,6 +467,11 @@ def _gemini_choice(text: str, labels: tuple[str, ...] | list[str],
     if not key:
         logger.debug("Gemini key 未配置（%s），跳过 Gemini 通道", " / ".join(GEMINI_KEY_ENV))
         return None
+    cache_key = _get_cache_key(text, labels, instructions, criteria=criteria,
+                               salt=f"gemini:{_gemini_model()}")
+    cached = _get_cached_result(cache_key)
+    if cached is not None:
+        return cached
     question_payload: dict[str, Any] = {
         "type": "choice",
         "instructions": instructions or ("Classify the text into one of: " + ", ".join(labels)),
@@ -487,11 +499,15 @@ def _gemini_choice(text: str, labels: tuple[str, ...] | list[str],
         choice = ans.get("choice")
         if not choice:
             return None
-        return {
-            "label": choice,
+        probs = ans.get("probabilities", {})
+        res = {
+            "label": str(choice),
             "confidence": float(ans.get("confidence", 0.0)),
-            "probabilities": ans.get("probabilities", {}),
+            "scores": probs,
+            "probabilities": probs,
         }
+        _set_cached_result(cache_key, res)
+        return res
     except Exception as e:
         logger.debug("Gemini 请求失败: %s", type(e).__name__)
         return None
@@ -502,29 +518,13 @@ def _classify_gemini(texts: list[str], labels: tuple[str, ...] | list[str], *,
                      criteria: dict[str, str] | None = None,
                      keep: list[tuple[int, str]],
                      timeout: float = 5.0) -> Optional[list[Optional[dict[str, Any]]]]:
-    key = gemini_api_key()
-    if not key:
+    if not gemini_api_key():
         return None
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    workers = min(JEV_MAX_WORKERS, len(keep))
-    results: dict[int, Optional[dict[str, Any]]] = {}
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {
-            pool.submit(_gemini_choice, t, labels, instructions, timeout, criteria): idx
-            for idx, t in keep
-        }
-        for fut in as_completed(futures):
-            idx = futures[fut]
-            try:
-                results[idx] = fut.result()
-            except Exception:
-                results[idx] = None
-    if not any(results.values()):
-        return None
-    out: list[Optional[dict[str, Any]]] = [None] * len(texts)
-    for idx, r in results.items():
-        out[idx] = r
-    return out
+    return _run_choice_batch(
+        len(texts), keep,
+        lambda t: _gemini_choice(t, labels, instructions, timeout, criteria),
+        timeout=timeout,
+    )
 
 
 def classify(texts: list[str], labels: tuple[str, ...] | list[str], *,

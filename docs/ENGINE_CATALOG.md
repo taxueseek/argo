@@ -588,7 +588,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `entity_search` | `wikidata` | `baidu_baike`、`wikidata`、`wikipedia`、`zh_wikipedia`、`dbpedia` |
 | `zhihu_user_data` | `zhihu_user` | `zhihu_user` |
 | `zhihu_content` | `zhihu` | `zhihu`、`zhihu_global`、`anysearch` |
-| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`cnii`、`core`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal`、`cnii` |
+| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`cnii`、`core`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal` |
 | `tech_deep` | `openalex` | `openalex`、`arxiv`、`semantic_scholar`、`github`、`europepmc` |
 | `shopping` | `zhihu` | `zhihu`、`anysearch` |
 | `semantic_discovery` | `exa` | `exa`、`mwmbl`、`mojeek`、`anysearch`、`lieu`、`marginalia`、`searchmysite`、`wiby`、`uapi`、`parallel_free`、`tavily`、`firecrawl` |

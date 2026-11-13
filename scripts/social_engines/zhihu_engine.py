@@ -73,7 +73,7 @@ def fetch_question_answers(question_url: str, limit: int = 3, timeout: float = 2
                         "summary": summary,
                     })
             return answers
-    except Exception:
+    except (OSError, ValueError, KeyError, TypeError):
         pass
     return []
 
@@ -154,15 +154,20 @@ def search(query: str, n: int = 5, expand_questions: bool = True) -> list[dict[s
         except (ValueError, TypeError):
             comments = 0
         edit_ts = item.get("EditTime")
-        published = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(edit_ts)) if edit_ts else None
+        published = None
+        if edit_ts is not None:
+            try:
+                published = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(float(edit_ts)))
+            except (TypeError, ValueError, OSError):
+                published = None
 
         # 识别纯问题：支持自动下钻抓取 Top 精选回答摘要（方案 B：Question Answers Expansion）
         is_pure_question = (content_type == "question") or ("/question/" in url_ and "/answer/" not in url_)
         expanded_answers: list[dict[str, Any]] = []
         if is_pure_question and expand_questions and expanded_count < max_expand:
+            expanded_count += 1
             expanded_answers = fetch_question_answers(url_, limit=3)
             if expanded_answers:
-                expanded_count += 1
                 answer_summaries = [f"【回答 {i+1}】{a['summary']}" for i, a in enumerate(expanded_answers[:2]) if a.get("summary")]
                 if answer_summaries:
                     addon = " ".join(answer_summaries)
