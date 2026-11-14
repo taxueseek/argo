@@ -14,7 +14,7 @@ engines:
   status: ok
   recommended: false
   explicit_only: true
-  desc: AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Mistral/Apple ML/HF 官方公告与研究原文，免 key）
+  desc: AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Apple ML/HF 官方公告与研究原文，免 key）
 - name: aljazeera
   tier: T1
   type: rss_feed

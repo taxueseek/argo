@@ -1,0 +1,86 @@
+# AI 实验室与研究者一手博客 — 官方公告与研究原文直连（聚合多源，免 key）
+#
+# 补的盲区：OpenAI / DeepMind / Apple ML / HuggingFace 等实验室的
+# 模型发布、研究报告与官方工程复盘。通用搜索抓到的大多是媒体转述或洗稿，
+# 本引擎直连官方 Feed 原文。全部种子 2026-11-15 逐一实测 HTTP 200。
+#
+# 背景：issue #49 迁移 cn_ai_news 时对 AIHOT（aihot.news）做了上游摸底——
+# 它前 1000 条精选的 143 个去重来源里，官方实验室渠道约占三分之一。本引擎
+# 直接收编其中可 RSS 直连的头部源，绕开聚合层直达原文。
+#
+# 奥卡姆剃刀设计：同 eng_blogs——不为每个博客建立独立引擎，抽象为一份
+# AI 实验室博客种子注册表，统一过滤并自动打出处标签（例如：OpenAI · ...）。
+#
+# 形态：feed_mode=filter（本地主题词过滤）。官方博客窗口只有最近几十条，
+# 本地关键词过滤命中面窄，explicit_only——不占自动路由 combo 预算（同
+# feed.yaml 的教训），调用：argo search "OpenAI" --engine ai_labs
+#
+# 无公开 RSS 或不稳定的头部源不收（2026-11-15 实测）：Anthropic Newsroom
+# 404、Sam Altman 博客 404、xAI News 404、OpenRouter 404、Meta AI 404、
+# Microsoft Research 403、Mistral feed.xml 两小时内 200→404 翻转不稳定——
+# 这层留 AIHOT（cn_ai_news）与社媒引擎覆盖。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine ai_labs --stage all --admit
+#   python3 scripts/search.py "OpenAI" --engine ai_labs --json
+
+engine_id: ai_labs
+type: rss_feed
+enabled: true
+explicit_only: true
+cost_tier: free
+label: AI 实验室一手博客
+family: ai_labs
+feed_mode: filter
+priority: 30
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 15
+langs:
+- en
+canary_query: "OpenAI"
+coverage:
+- tech
+- ai
+- ml
+- news
+desc: "AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Apple ML/HF 官方公告与研究原文，免 key）"
+recommended: false
+
+feeds:
+  - url: https://openai.com/news/rss.xml
+    label: OpenAI
+    langs: [en]
+  - url: https://deepmind.google/blog/rss.xml
+    label: Google DeepMind
+    langs: [en]
+  - url: https://huggingface.co/blog/feed.xml
+    label: HuggingFace
+    langs: [en]
+  - url: https://blog.google/rss/
+    label: Google Blog
+    langs: [en]
+  - url: https://developers.googleblog.com/rss/
+    label: Google Developers
+    langs: [en]
+  - url: https://machinelearning.apple.com/rss.xml
+    label: Apple ML Research
+    langs: [en]
+  - url: https://epochai.substack.com/feed
+    label: Epoch AI
+    langs: [en]
+  - url: https://simonwillison.net/atom/everything/
+    label: Simon Willison
+    langs: [en]
+  - url: https://the-decoder.com/feed/
+    label: The Decoder
+    langs: [en]
+  - url: https://techcrunch.com/category/artificial-intelligence/feed/
+    label: TechCrunch AI
+    langs: [en]
+
+quality_queries:
+  - query: "OpenAI"
+  - query: "AI"

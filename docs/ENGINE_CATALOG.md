@@ -513,7 +513,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
-| `ai_labs` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Mistral/Apple ML/HF 官方公告与研究原文，免 key） |
+| `ai_labs` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Apple ML/HF 官方公告与研究原文，免 key） |
 
 ## 六、分发域清单（自动生成）
 
