@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """取信技巧回归门（2026-09-14）：fetch AI 变体扩展 + stackexchange/doi 引擎。
 
-对应 docs/取信技巧调研_URL直出与新源_2026-09-14.md 的落地项：
+对应取信技巧调研（2026-09-14，已归档）的落地项：
   1. fetch 第零级：{url}.md 之外新增站点根 /llms.txt 探测
   2. fetch 第一级C：r.jina.ai 阅读器（keyless，仅公网 URL，第三方代理边界）
   3. stackexchange 引擎（search/advanced，link 自带，匿名 300/天/IP）
