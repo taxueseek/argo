@@ -21,17 +21,17 @@ def _resolve_seek() -> Path:
     try:
         from seek_locator import resolve_seek_py
         found = resolve_seek_py()
-        if found is not None:
-            return found
+        if found:
+            return Path(found)
     except ImportError:
         pass
     return _FALLBACK_SEEK
 
 
-def _run_seek_inprocess(seek_py: Path, argv: list[str], budget_s: float = 8.0) -> dict | None:
+def _run_seek_inprocess(seek_py: Path | str, argv: list[str], budget_s: float = 8.0) -> dict | None:
     """进程内直接调 seek.run_query，省掉 Python 冷启动与 1,962 行脚本重解析开销。"""
     try:
-        seek_dir = str(seek_py.parent)
+        seek_dir = str(Path(seek_py).parent)
         if seek_dir not in sys.path:
             sys.path.insert(0, seek_dir)
         import seek as seek_mod

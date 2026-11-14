@@ -216,3 +216,21 @@ def test_local_seek_adapter_prefers_inprocess_unless_env_set(monkeypatch):
     assert res_fallback == {"ok": True, "hits": ["sub"]}
     assert calls == [("inprocess",), ("subprocess", ["baz"])]
 
+
+def test_local_seek_adapter_inprocess_end_to_end_without_mocks(monkeypatch):
+    """不打桩 _resolve_seek 与 _run_seek_inprocess，验证 resolve_seek_py() 返回 str 时真跑通。"""
+    import local_seek_adapter
+
+    monkeypatch.delenv("ARGO_SEEK_SUBPROCESS", raising=False)
+    monkeypatch.setattr(
+        local_seek_adapter,
+        "_run_seek_subprocess",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("不应回退子进程")),
+    )
+    data = local_seek_adapter._run_seek(
+        ["RATE_LIMIT_COOLDOWNS", "--path", str(SCRIPTS), "--max", "3"]
+    )
+    assert isinstance(data, dict)
+    assert data.get("results"), "真实进程内 local_seek_adapter 应命中结果"
+
+
