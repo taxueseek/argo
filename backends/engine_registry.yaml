@@ -1,6 +1,20 @@
 _generated: 由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。
 version: 2
 engines:
+- name: ai_labs
+  tier: T1
+  type: rss_feed
+  coverage:
+  - tech
+  - ai
+  - ml
+  - news
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Mistral/Apple ML/HF 官方公告与研究原文，免 key）
 - name: aljazeera
   tier: T1
   type: rss_feed
@@ -3831,7 +3845,7 @@ engines:
   desc: 中文维基百科（MediaWiki API，与 en.wikipedia 同构）
 - name: zhihu
   tier: T1
-  type: http
+  type: zhihu
   coverage:
   - chinese
   - review
@@ -3841,7 +3855,7 @@ engines:
   status: ok
   recommended: true
   explicit_only: false
-  desc: 知乎搜索，中文观点/评测
+  desc: 知乎站内搜索（结构化 AuthorityLevel/赞同数/时间 + 纯问题自动下钻精选回答；需 ZHIHU_ACCESS_SECRET）
 - name: zhihu_global
   tier: T1
   type: zhihu_global
@@ -3883,6 +3897,33 @@ engines:
   recommended: false
   explicit_only: false
   desc: 知乎热榜匿名通道（App JSON，免密钥；开放平台 hot_list 的免费替代）
+- name: zhihu_kb
+  tier: T1
+  type: zhihu_kb
+  coverage:
+  - chinese
+  - personal
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 知乎知识库只读 RAG 检索与列库（knowledge/search 与 knowledge/bases；支持 scope/kb 过滤与 bases
+    列库）；显式按需调用（需 ZHIHU_ACCESS_SECRET）
+- name: zhihu_questions
+  tier: T1
+  type: zhihu_questions
+  coverage:
+  - chinese
+  - opinion
+  - review
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: 知乎母问题推荐（question_recommendations）与问题下回答摘要（question_answers，传 q:<id> 或 answers
+    <问题URL>）；显式按需调用（需 ZHIHU_ACCESS_SECRET）
 - name: zhihu_user
   tier: T1
   type: zhihu_user

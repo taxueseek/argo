@@ -1,0 +1,18 @@
+engine_id: zhihu_kb
+type: zhihu_kb
+enabled: true
+explicit_only: true
+label: 知乎知识库只读检索
+cost_tier: free
+qps: 2
+priority: 10
+limit: 500
+period: day
+cost_per_call: 0.0
+cost_unit: free
+family: personal_data
+coverage:
+- chinese
+- personal
+desc: "知乎知识库只读 RAG 检索与列库（knowledge/search 与 knowledge/bases；支持 scope/kb 过滤与 bases 列库）；显式按需调用（需 ZHIHU_ACCESS_SECRET）"
+timeout: 10

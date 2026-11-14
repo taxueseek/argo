@@ -204,7 +204,10 @@ from engines_builders import (
 # zhihu_global 用别名：与上方 engines_builders 转出的 cn 旧版同名，F811 门禁
 # 禁止静默重定义；别名让「batch10 取代 cn 版」在注册表处显式可见。
 from engines_builders_batch10 import (  # noqa: F401
+    _build_zhihu_engine,
     _build_zhihu_global_engine as _build_zhihu_global_engine_v2,
+    _build_zhihu_kb_engine,
+    _build_zhihu_questions_engine,
 )
 # 批次十一（engines_builders_batch11）：图源补强。Wikimedia Commons 的
 # query.pages 是 pageid 字典，声明式 output_map 取不到字段，必须有 builder。
@@ -456,7 +459,10 @@ _BUILDERS = {
     "open_library": _build_open_library_engine,
     "weread": _build_weread_engine,
     "douban_book": _build_douban_book_engine,
+    "zhihu": _build_zhihu_engine,
     "zhihu_global": _build_zhihu_global_engine_v2,  # 补强版在 batch10（候选池取满 + 错误行动提示；cn 版被取代，cn 冻结在行数门禁上限）
+    "zhihu_questions": _build_zhihu_questions_engine,
+    "zhihu_kb": _build_zhihu_kb_engine,
     "zhihu_user": _build_zhihu_user_engine,
     "fred": _build_fred_engine,
     "so": _build_so_engine,

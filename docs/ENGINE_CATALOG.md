@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 307 个源**（`engines/specs/*.yaml` 声明总数）
-- **开箱可用 258 个**：不需要你配任何密钥或装额外工具（其中显式专用源需 `--engine` 调用，见下方「显式专用」清单）
-- **需自备密钥 37 个**：`bocha`、`bocha_ai`、`brave`、`byted`、`deepseek_search`、`em_miaoxiang`、`felo`、`fourget`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`searxng`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`wolframalpha`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_user`（没配也不影响搜索，路由会跳过）
+- **收录 310 个源**（`engines/specs/*.yaml` 声明总数）
+- **开箱可用 259 个**：不需要你配任何密钥或装额外工具（其中显式专用源需 `--engine` 调用，见下方「显式专用」清单）
+- **需自备密钥 39 个**：`bocha`、`bocha_ai`、`brave`、`byted`、`deepseek_search`、`em_miaoxiang`、`felo`、`fourget`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`searxng`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`wolframalpha`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_kb`、`zhihu_questions`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 4 个**：`digup`、`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 8 个**：`ecosia`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`soilgrids`
-- **显式专用 38 个**：`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`europeana`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`local_baidu`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 41 个**：`ai_labs`、`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`europeana`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`local_baidu`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`、`zhihu_kb`、`zhihu_questions`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 285 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 16 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_user
+- **免费档 288 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 18 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_kb、zhihu_questions、zhihu_user
 - **计费档 22 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -293,6 +293,29 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `europeana` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 欧洲 27 国文化遗产聚合（官方公共 demo key，共享限额，故显式调用） |
 | `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
 
+### 社区 UGC（18）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `bilibili` | 可直接用 | 免费 | 不限 | — | 域 social、域 video、语义画像命中 | B站 |
+| `csdn` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community | CSDN 搜索（so.csdn.net v3 JSON，免认证；标题与摘要的高亮标签、URL 追踪参数在引擎内清洗） |
+| `fxtwitter` | 可直接用 | 免费 | 不限 | — | 域 social | FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据） |
+| `hackernews` | 可直接用 | 免费 | 不限 | — | 域 hackernews_search、域 social | Hacker News（Algolia API，科技新闻+讨论） |
+| `hatena_bookmark` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | 日本技术圈书签搜索（RDF RSS，带收藏日期） |
+| `juejin` | 可直接用 | 免费 | 不限 | — | 域 chinese_tech_deep、域 cn_tech_community | 掘金技术文章搜索（免认证） |
+| `lobsters` | 可直接用 | 免费 | 不限 | — | 域 hackernews_search | Lobste.rs 极客社区（高质量底层系统、语言与架构一手讨论实时流，免 key） |
+| `qiita` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | Qiita 日本最大技术社区（匿名 60 req/h） |
+| `redskill` | 可直接用 | 免费 | 不限 | — | 域 redskill_search | 小红书 REDSkill 排行榜与全量技能检索（47650 技能，data.json 本地缓存，免认证） |
+| `sspai` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community | 少数派搜索（中文效率/数码/软件文章，免认证） |
+| `v2ex` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community、域 social、域 v2ex_search | V2EX（中文技术社区，官方 API 候选池 + 本地相关性过滤） |
+| `weibo` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | 微博 |
+| `reddit` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | Reddit |
+| `twitter` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | X/Twitter 关键词搜索（ego-browser 通道，原生布尔语法 from:/-is:retweet/lang:） |
+| `twitter_syndication` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X/Twitter 单条推文（syndication 通道，免登录零 key，含正文/作者/时间/媒体计数） |
+| `xiaohongshu` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | 小红书 |
+| `zhihu` | 需自备密钥 | 免费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 shopping、域 social、域 zhihu_content、域 zhihu_hot_list、语义画像命中 | 知乎站内搜索（结构化 AuthorityLevel/赞同数/时间 + 纯问题自动下钻精选回答；需 ZHIHU_ACCESS_SECRET） |
+| `zhihu_questions` | 需自备密钥 + 显式专用 | 免费 | 100/天 | ARGO_ZHIHU_ACCESS_SECRET | 显式调用（--engine） | 知乎母问题推荐（question_recommendations）与问题下回答摘要（question_answers，传 q:<id> 或 answers <问题URL>）；显式按需调用（需 ZHIHU_ACCESS_SECRET） |
+
 ### 本地新闻流（17）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -314,28 +337,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `vnpress` | 可直接用 | 免费 | 不限 | — | 域 world_news | VnExpress（越南最大网络新闻，免 key） |
 | `yna` | 可直接用 | 免费 | 不限 | — | 域 world_news | 韩联社（韩国国家通讯社（연합뉴스），韩半岛一手新闻，免 key） |
 | `ynet` | 可直接用 | 免费 | 不限 | — | 域 world_news | Ynet 新闻（以色列最大新闻站，希伯来语一手源，免 key） |
-
-### 社区 UGC（17）
-
-| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
-|---|---|---|---|---|---|---|
-| `bilibili` | 可直接用 | 免费 | 不限 | — | 域 social、域 video、语义画像命中 | B站 |
-| `csdn` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community | CSDN 搜索（so.csdn.net v3 JSON，免认证；标题与摘要的高亮标签、URL 追踪参数在引擎内清洗） |
-| `fxtwitter` | 可直接用 | 免费 | 不限 | — | 域 social | FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据） |
-| `hackernews` | 可直接用 | 免费 | 不限 | — | 域 hackernews_search、域 social | Hacker News（Algolia API，科技新闻+讨论） |
-| `hatena_bookmark` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | 日本技术圈书签搜索（RDF RSS，带收藏日期） |
-| `juejin` | 可直接用 | 免费 | 不限 | — | 域 chinese_tech_deep、域 cn_tech_community | 掘金技术文章搜索（免认证） |
-| `lobsters` | 可直接用 | 免费 | 不限 | — | 域 hackernews_search | Lobste.rs 极客社区（高质量底层系统、语言与架构一手讨论实时流，免 key） |
-| `qiita` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | Qiita 日本最大技术社区（匿名 60 req/h） |
-| `redskill` | 可直接用 | 免费 | 不限 | — | 域 redskill_search | 小红书 REDSkill 排行榜与全量技能检索（47650 技能，data.json 本地缓存，免认证） |
-| `sspai` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community | 少数派搜索（中文效率/数码/软件文章，免认证） |
-| `v2ex` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community、域 social、域 v2ex_search | V2EX（中文技术社区，官方 API 候选池 + 本地相关性过滤） |
-| `weibo` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | 微博 |
-| `reddit` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | Reddit |
-| `twitter` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | X/Twitter 关键词搜索（ego-browser 通道，原生布尔语法 from:/-is:retweet/lang:） |
-| `twitter_syndication` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X/Twitter 单条推文（syndication 通道，免登录零 key，含正文/作者/时间/媒体计数） |
-| `xiaohongshu` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | 小红书 |
-| `zhihu` | 需自备密钥 | 免费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 shopping、域 social、域 zhihu_content、域 zhihu_hot_list、语义画像命中 | 知乎搜索，中文观点/评测 |
 
 ### 行情 / 资金（15）
 
@@ -494,6 +495,13 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `factcheck_org` | 可直接用 | 免费 | 不限 | — | 域 claim_check | FactCheck.org（美国事实核查：声明级真伪判定，摘要密度仅次于卫报） |
 | `full_fact` | 可直接用 | 免费 | 不限 | — | 域 claim_check | Full Fact（英国事实核查：与 FactCheck.org 分属英美两法域口径） |
 
+### 个人数据（2）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `zhihu_kb` | 需自备密钥 + 显式专用 | 免费 | 500/天 | ARGO_ZHIHU_ACCESS_SECRET | 显式调用（--engine） | 知乎知识库只读 RAG 检索与列库（knowledge/search 与 knowledge/bases；支持 scope/kb 过滤与 bases 列库）；显式按需调用（需 ZHIHU_ACCESS_SECRET） |
+| `zhihu_user` | 需自备密钥 | 免费 | 10000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 zhihu_user_data | 知乎个人数据（本人创作内容/收藏/关注；Access Secret 直查本人无需 OAuth，user_data 池 10000/天） |
+
 ### 归档 / 历史（2）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -501,11 +509,11 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `archive_org` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Internet Archive 高级搜索（免认证） |
 | `wayback_cdx` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Wayback Machine CDX 历史快照检索（web.archive.org 免认证） |
 
-### 个人数据（1）
+### ai_labs（1）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
-| `zhihu_user` | 需自备密钥 | 免费 | 10000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 zhihu_user_data | 知乎个人数据（本人创作内容/收藏/关注；Access Secret 直查本人无需 OAuth，user_data 池 10000/天） |
+| `ai_labs` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | AI 实验室与研究者一手博客聚合（OpenAI/DeepMind/Mistral/Apple ML/HF 官方公告与研究原文，免 key） |
 
 ## 六、分发域清单（自动生成）
 
@@ -616,7 +624,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 307 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 310 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

@@ -338,7 +338,7 @@ window.__ModuleLoader__.load({
       { ref: "WEREAD_API_KEY", common: false, label: "微信读书", en: "WeRead", engines: ["weread"] },
       { ref: "WOLFRAM_APPID", common: false, label: "WolframAlpha", en: "WolframAlpha", engines: ["wolframalpha"] },
       { ref: "YDC_API_KEY", common: false, label: "You.com搜索", en: "You.com Search", engines: ["you"] },
-      { ref: "ZHIHU_ACCESS_SECRET", common: false, label: "知乎", en: "Zhihu", engines: ["zhihu", "zhihu_global", "zhihu_hot", "zhihu_user"] },
+      { ref: "ZHIHU_ACCESS_SECRET", common: false, label: "知乎", en: "Zhihu", engines: ["zhihu", "zhihu_global", "zhihu_hot", "zhihu_kb", "zhihu_questions", "zhihu_user"] },
     ];
     // </generated:keys>
 

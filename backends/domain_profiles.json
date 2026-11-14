@@ -2834,5 +2834,23 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "zhihu_questions": {
+    "label": "知乎问题发现与回答摘要",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "zhihu_kb": {
+    "label": "知乎知识库只读检索",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
+  },
+  "ai_labs": {
+    "label": "AI 实验室一手博客",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

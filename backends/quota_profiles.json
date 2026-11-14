@@ -1,5 +1,15 @@
 {
   "_description": "各引擎的配额/成本/限频配置。由 scripts/sync_backends.py 从运行时引擎声明派生，勿手工修改。",
+  "ai_labs": {
+    "label": "AI 实验室一手博客",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
+  },
   "aljazeera": {
     "label": "半岛电视台阿语 RSS",
     "qps": 1,
@@ -3059,6 +3069,26 @@
     "cost_unit": "free",
     "cost_tier": "free",
     "priority": 50
+  },
+  "zhihu_kb": {
+    "label": "知乎知识库只读检索",
+    "qps": 2,
+    "limit": 500,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 10
+  },
+  "zhihu_questions": {
+    "label": "知乎问题发现与回答摘要",
+    "qps": 2,
+    "limit": 100,
+    "period": "day",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 15
   },
   "zhihu_user": {
     "label": "知乎个人数据",

@@ -52,3 +52,36 @@
 
 ## 局限与未解
 ```
+
+## D. 知乎协同研究工作包范式（取证仍统一走 `argo_research`）
+
+以下三类高频问题可直接套用对应工作包模板；`zhihu_questions` 与 `zhihu_kb` 均属 `explicit_only` 源，仅在明确写入 `priority_sources` 或显式传 `--engine` 时触发（拉取某问题下的多方回答摘要传 `"q:<问题ID>"`，避免裸 URL 触发 `known-url` 拦截）：
+
+### 1. 选型对账型（官方账面 × 社区实测 × 私有约束）
+
+```json
+[
+  {"id": "wp-kb", "question": "用户或团队既有哪些硬约束与预算红线", "query": "scope:personal 选型 预算 约束", "priority_sources": ["zhihu_kb"]},
+  {"id": "wp-spec", "question": "官方规格、国标或一手技术文档怎么界定关键指标", "query": "<对象> 官方参数 规格 标准", "priority_sources": ["zhihu_global", "bocha"]},
+  {"id": "wp-field", "question": "过来人实测踩坑、长期衰减与隐性成本是什么", "query": "<对象> 实测 踩坑 后悔 缺点", "priority_sources": ["zhihu", "zhihu_questions"]}
+]
+```
+
+### 2. 观点交锋型（母问题锚定 → 正反切面拆解）
+
+```json
+[
+  {"id": "wp-hub", "question": "社区讨论最集中的母问题与争议焦点是什么", "query": "<议题>", "priority_sources": ["zhihu_questions", "zhihu_hot"]},
+  {"id": "wp-facts", "question": "截至当前的一手客观进展与基础数据是什么", "query": "<议题> 官方 进展 数据", "priority_sources": ["zhihu_global", "deepseek_search"], "depends_on": ["wp-hub"]},
+  {"id": "wp-procon", "question": "支持方与反对方的算账口径与前提条件分别是什么", "query": "<议题> 收益 成本 争议", "priority_sources": ["zhihu"], "depends_on": ["wp-hub"]}
+]
+```
+
+### 3. 动态追踪型（两段式：先 `db:realtime` 锁定新事件 → 再深挖内行解读）
+
+```json
+[
+  {"id": "wp-news", "question": "观察窗口内有哪些新发布、版本变化或关键事件", "query": "db:realtime <领域或产品>", "priority_sources": ["zhihu_global", "deepseek_search"]},
+  {"id": "wp-deep", "question": "针对上述新变化，一线开发者或内行实测给出了什么反馈", "query": "<事件词> 实测 拆解 影响", "priority_sources": ["zhihu", "zhihu_questions"], "depends_on": ["wp-news"]}
+]
+```

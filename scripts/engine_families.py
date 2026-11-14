@@ -138,6 +138,8 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "local_google_news": "news_flash",
     # 社区 UGC
     "zhihu": "social",
+    "zhihu_questions": "social",
+    "zhihu_kb": "personal_data",
     "v2ex": "social",
     "juejin": "social",
     "reddit": "social",
@@ -394,6 +396,11 @@ FAMILY_LABELS: dict[str, str] = {
     # 购物（2026-09-26 批次十）：电商站内搜索登录墙/强反爬，六源均为 DDG
     # site: 语法包装，回答「某商品在某平台的在售/价格」，不是通用网页检索。
     "shopping": "购物",
+    # AI 实验室一手博客（2026-11-15，随 ai_labs 引擎）：官方公告与研究原文
+    # 直连，回答「某实验室自己发布了什么」。单列一族：与 news_flash（财经
+    # 快讯）和 world_news（各国本地新闻流）都不同——它是机构第一方信源，
+    # 显式专用（explicit_only），不参与同族 max_per_family=2 的槽位竞争。
+    "ai_labs": "AI 实验室一手",
 }
 
 
@@ -422,6 +429,7 @@ ENGINE_LANGS: dict[str, list[str]] = {
     "openalex": ["en"], "europepmc": ["en"],
     # 中文专用（对 en/ja/ko 几乎零召回）
     "zhihu": ["zh"], "zhihu_global": ["zh"], "zhihu_hot": ["zh"],
+    "zhihu_questions": ["zh"], "zhihu_kb": ["zh"],
     "zhihu_user": ["zh"], "zhihu_content": ["zh"],
     "bilibili": ["zh"], "v2ex": ["zh"], "xiaohongshu": ["zh"],
     "weibo": ["zh"], "baidu_baike": ["zh"], "moegirl": ["zh"],
