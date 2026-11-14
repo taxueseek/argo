@@ -1,8 +1,10 @@
 # 中文 AI 垂直资讯检索（免 Key）
-# 数据源: https://aihot.virxact.com 公开 REST API（浏览器 UA 必需，否则 403）
+# 数据源: https://aihot.news 公开 REST API（匿名 GET，无需 Key）
 # 能力: 精选中文 AI 资讯（模型/产品/行业/论文），带发布时间 publishedAt 与上游来源
-# 端点: GET /api/public/items?mode=selected&q=<关键词>&take=<n>
-#   模式: selected=精选 / all=全量；since 需 ISO 且服务端上限 7 天（spec 不透传）
+# 端点: GET /api/v1/items?mode=selected&q=<关键词>&limit=<n>
+#   模式: selected=精选 / all=全量；窗口 window=24h|7d 默认 7d（spec 不透传）
+#   迁移: 旧站 aihot.virxact.com /api/public/* 已于 2026-10-31 停服（issue #49，
+#   站长通知）；take→limit，响应 url→links.original、source→source.name
 # 验证:
 #   python3 scripts/engine_validate.py --engine cn_ai_news --stage all --admit
 #   python3 scripts/search.py "大模型" --engine cn_ai_news --json
@@ -12,7 +14,7 @@ type: http
 enabled: true
 cost_tier: free
 method: GET
-url: https://aihot.virxact.com/api/public/items
+url: https://aihot.news/api/v1/items
 timeout: 10
 query_param: q
 canary_query: "人工智能"
@@ -28,16 +30,16 @@ headers:
 
 extra_params:
   mode: selected
-  take: "{n}"
+  limit: "{n}"
 
-# 上游来源（如「字节 Seed：Research Feed（网页内嵌数据）」）是真实发布方标注，
+# 上游来源（如「IT之家·人工智能」，v1 响应 source.name）是真实发布方标注，
 # 保留而非改写为引擎名
 preserve_source: true
 
 output_map:
   items: items
   item_title: title
-  item_url: url
+  item_url: links.original
   item_summary: summary
-  item_source: source
+  item_source: source.name
   item_published_at: publishedAt
