@@ -136,8 +136,8 @@ class TestZhihuMetaSignals(unittest.TestCase):
 
 
 class TestZhihuQuestionsAndKB(unittest.TestCase):
-    def test_zhihu_questions_url_and_profile_modes(self):
-        """zhihu_questions 区分问题 URL 回答摘要、主题推荐与画像推荐三种形态。"""
+    def test_zhihu_questions_url_and_topic_modes(self):
+        """zhihu_questions 区分问题 URL 回答摘要与主题推荐两种形态（画像推荐属创作侧，已移出搜索面）。"""
         import engines_builders_batch10 as b10
 
         seen_urls: list[str] = []
@@ -160,16 +160,15 @@ class TestZhihuQuestionsAndKB(unittest.TestCase):
             ans_res = eng("https://www.zhihu.com/question/1", n=3)
             qid_res = eng("q:1", n=3)
             rec_res = eng("空气净化器", n=5)
-            prof_res = eng("画像推荐", n=5)
 
         self.assertEqual(ans_res[0]["social_meta"]["mode"], "question_answers")
         self.assertEqual(ans_res[0]["snippet"], "实测有效")
         self.assertEqual(qid_res[0]["social_meta"]["question_url"], "https://www.zhihu.com/question/1")
         self.assertEqual(rec_res[0]["social_meta"]["mode"], "query")
-        self.assertEqual(prof_res[0]["social_meta"]["mode"], "profile")
-        # 关键词查询应携带 Query 参数，画像推荐不应携带 Query 参数，避免服务端 10001
+        # 荐题统一按关键词携带 Query；上游只回 Title/Url，不得造合成 snippet
         self.assertIn("Query=", seen_urls[2])
-        self.assertNotIn("Query=", seen_urls[3])
+        self.assertNotIn("snippet", rec_res[0])
+        self.assertNotIn("知乎母问题", json.dumps(rec_res, ensure_ascii=False))
 
     def test_zhihu_kb_list_and_search(self):
         """zhihu_kb 支持列库（bases）与 scope:/kb: 只读 RAG 检索，适配真实 DocName/Content 字段。"""
@@ -208,7 +207,9 @@ class TestZhihuQuestionsAndKB(unittest.TestCase):
         self.assertEqual(bases_out[0]["social_meta"]["knowledge_base_id"], "750")
         self.assertEqual(rag_out[0]["title"], "退款规则 v2")
         self.assertIn("7 天无理由", rag_out[0]["snippet"])
-        self.assertIn("recall_id=abc", rag_out[0]["url"])
+        # URL 指向公开可达的 knowledge-base 页；recall 定位符留 social_meta 不进 URL
+        self.assertEqual(rag_out[0]["url"], "https://www.zhihu.com/knowledge-base/750")
+        self.assertEqual(rag_out[0]["social_meta"]["recall_content_id"], "abc")
         sent_body = json.loads(captured_reqs[1][1].decode("utf-8"))
         self.assertEqual(sent_body["RecallScopes"], ["public"])
         self.assertEqual(sent_body["KnowledgeBaseIDs"], ["750"])

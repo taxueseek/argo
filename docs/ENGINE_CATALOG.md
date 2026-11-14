@@ -314,7 +314,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `twitter_syndication` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X/Twitter 单条推文（syndication 通道，免登录零 key，含正文/作者/时间/媒体计数） |
 | `xiaohongshu` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | 小红书 |
 | `zhihu` | 需自备密钥 | 免费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 shopping、域 social、域 zhihu_content、域 zhihu_hot_list、语义画像命中 | 知乎站内搜索（结构化 AuthorityLevel/赞同数/时间 + 纯问题自动下钻精选回答；需 ZHIHU_ACCESS_SECRET） |
-| `zhihu_questions` | 需自备密钥 + 显式专用 | 免费 | 100/天 | ARGO_ZHIHU_ACCESS_SECRET | 显式调用（--engine） | 知乎母问题推荐（question_recommendations）与问题下回答摘要（question_answers，传 q:<id> 或 answers <问题URL>）；显式按需调用（需 ZHIHU_ACCESS_SECRET） |
+| `zhihu_questions` | 需自备密钥 + 显式专用 | 免费 | 100/天 | ARGO_ZHIHU_ACCESS_SECRET | 显式调用（--engine） | 知乎主题荐题（question_recommendations，按关键词）与问题下回答摘要（question_answers，传 q:<id> 或 answers <问题URL>）；显式按需调用（需 ZHIHU_ACCESS_SECRET） |
 
 ### 本地新闻流（17）
 

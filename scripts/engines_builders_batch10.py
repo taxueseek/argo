@@ -47,7 +47,6 @@ _ZHIHU_COUNT_MAX = 20  # global_search / question_recommendations 官方上限
 _ZHIHU_KB_LIMIT_MAX = 10  # knowledge/search 官方上限
 _ZHIHU_QUESTION_URL_RE = re.compile(r"(https?://(?:www\.)?zhihu\.com/question/\d+)")
 _ZHIHU_QUESTION_ID_RE = re.compile(r"(?:^|\s)(?:q|question):(\d+)(?=\s|$)", re.I)
-_ZHIHU_PROFILE_QUERY_RE = re.compile(r"^(?:我的推荐|画像推荐|recommend|\*)$", re.I)
 _KB_LIST_QUERY_RE = re.compile(r"^(?:bases?|list|知识库列表|我的知识库)(?::\s*(.*))?$", re.I)
 _KB_SCOPE_OP_RE = re.compile(r"(?:^|\s)scope:(personal|subscription|public|all|created|subscribed)(?=\s|$)", re.I)
 _KB_ID_OP_RE = re.compile(r"(?:^|\s)kb:(\d+)(?=\s|$)", re.I)
@@ -277,13 +276,9 @@ def _build_zhihu_questions_engine(spec: dict[str, Any]) -> Any:
                 })
             return results
 
-        # 母问题推荐模式：占位词走画像推荐（不传 Query），否则按主题推荐
+        # 主题推荐模式：按关键词荐题（画像推荐属创作侧选题，2026-11-15 移出搜索面）
         count = max(1, min(int(n or 5), _ZHIHU_COUNT_MAX))
-        rec_params: dict[str, str] = {"Count": str(count)}
-        mode = "profile"
-        if not _ZHIHU_PROFILE_QUERY_RE.match(q):
-            rec_params["Query"] = q
-            mode = "query"
+        rec_params: dict[str, str] = {"Count": str(count), "Query": q}
         url = (
             "https://developer.zhihu.com/api/v1/user/question_recommendations?"
             + urllib.parse.urlencode(rec_params)
@@ -302,16 +297,16 @@ def _build_zhihu_questions_engine(spec: dict[str, Any]) -> Any:
             q_url = item.get("Url") or ""
             if not title and not q_url:
                 continue
+            # 上游荐题实测只回 Title/Url（2026-11-15 抓包），无源摘要就不造 snippet
             results.append({
                 "title": title[:200] or q_url,
                 "url": q_url,
-                "snippet": f"知乎母问题（{mode} 推荐）：{title}",
                 "source": "zhihu_questions",
                 "score": rank_score(0.8, rk),
                 "social_meta": {
                     "platform": "zhihu",
                     "content_type": "question",
-                    "mode": mode,
+                    "mode": "query",
                 },
             })
         return results
@@ -442,9 +437,9 @@ def _build_zhihu_kb_engine(spec: dict[str, Any]) -> Any:
                 continue
             if origin_url:
                 item_url = origin_url
-            elif kb_id and recall_id:
-                item_url = f"https://www.zhihu.com/knowledge-base/{kb_id}?recall_id={urllib.parse.quote(recall_id)}"
             elif kb_id:
+                # knowledge-base 页公开可达（2026-11-15 实测 200）；recall_id 属
+                # 服务端检索定位符，不是页面参数，留 social_meta 不进 URL
                 item_url = f"https://www.zhihu.com/knowledge-base/{kb_id}"
             else:
                 item_url = "https://developer.zhihu.com/profile"

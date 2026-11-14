@@ -15,5 +15,5 @@ coverage:
 - chinese
 - opinion
 - review
-desc: "知乎母问题推荐（question_recommendations）与问题下回答摘要（question_answers，传 q:<id> 或 answers <问题URL>）；显式按需调用（需 ZHIHU_ACCESS_SECRET）"
+desc: "知乎主题荐题（question_recommendations，按关键词）与问题下回答摘要（question_answers，传 q:<id> 或 answers <问题URL>）；显式按需调用（需 ZHIHU_ACCESS_SECRET）"
 timeout: 10
