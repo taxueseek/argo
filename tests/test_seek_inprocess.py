@@ -178,3 +178,41 @@ def test_run_local_seek_surfaces_missing_rg_grep_warning(monkeypatch):
     assert called == []
     warns = local_seek.drain_search_warnings()
     assert any("ripgrep" in w for w in warns)
+
+
+def test_local_seek_adapter_prefers_inprocess_unless_env_set(monkeypatch):
+    """local_seek_adapter._run_seek 默认先走进程内，设 ARGO_SEEK_SUBPROCESS=1 才改回子进程，且失败均回退。"""
+    import local_seek_adapter
+
+    monkeypatch.delenv("ARGO_SEEK_SUBPROCESS", raising=False)
+    calls = []
+
+    def fake_inprocess(seek_py, argv, budget_s=8.0):
+        calls.append(("inprocess", list(argv)))
+        return {"ok": True, "hits": ["inproc"]}
+
+    def fake_subprocess(seek_py, argv, timeout_s=15.0):
+        calls.append(("subprocess", list(argv)))
+        return {"ok": True, "hits": ["sub"]}
+
+    monkeypatch.setattr(local_seek_adapter, "_run_seek_inprocess", fake_inprocess)
+    monkeypatch.setattr(local_seek_adapter, "_run_seek_subprocess", fake_subprocess)
+
+    res = local_seek_adapter._run_seek(["foo"])
+    assert res == {"ok": True, "hits": ["inproc"]}
+    assert calls == [("inprocess", ["foo"])]
+
+    calls.clear()
+    monkeypatch.setenv("ARGO_SEEK_SUBPROCESS", "1")
+    res_sub = local_seek_adapter._run_seek(["bar"])
+    assert res_sub == {"ok": True, "hits": ["sub"]}
+    assert calls == [("subprocess", ["bar"])]
+
+    calls.clear()
+    monkeypatch.delenv("ARGO_SEEK_SUBPROCESS", raising=False)
+    monkeypatch.setattr(local_seek_adapter, "_run_seek_inprocess",
+                        lambda *a, **k: calls.append(("inprocess",)) or None)
+    res_fallback = local_seek_adapter._run_seek(["baz"])
+    assert res_fallback == {"ok": True, "hits": ["sub"]}
+    assert calls == [("inprocess",), ("subprocess", ["baz"])]
+

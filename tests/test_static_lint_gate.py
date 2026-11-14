@@ -176,12 +176,17 @@ def _module_level_names(tree: ast.Module) -> set[str]:
 
 
 @lru_cache(maxsize=None)
+def _read_src(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=None)
 def _parsed(path: Path) -> ast.Module:
     """会话级解析缓存：本文件多道规则各自全量 ast.parse 同一批文件，曾是
     hook 的耗时大头（实测 5 处规则合计 ≈14s）。单次 pytest 进程内文件不变，
     缓存解析结果语义等价；SyntaxError 不被 lru_cache 缓存，各规则的
     except 分支照常工作。"""
-    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return ast.parse(_read_src(path), filename=str(path))
 
 
 def _shadowed_reexports(paths: list[Path]) -> list[str]:
@@ -249,8 +254,10 @@ def _globals_without_binding(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
+            if "global" not in _read_src(path):
+                continue
             tree = _parsed(path)
-        except SyntaxError:
+        except (OSError, SyntaxError):
             continue  # 语法错误交由 ruff/E9 报
         bound = _module_level_names(tree)
         for node in ast.walk(tree):
@@ -298,8 +305,10 @@ def _local_import_shadows_global(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
+            if "import " not in _read_src(path):
+                continue
             tree = _parsed(path)
-        except SyntaxError:
+        except (OSError, SyntaxError):
             continue  # 语法错误交由 ruff/E9 报
         module_bound = _module_level_names(tree)
         for fn in ast.walk(tree):
@@ -314,6 +323,8 @@ def _local_import_shadows_global(paths: list[Path]) -> list[str]:
                             imported.setdefault(alias.name, []).append(node.lineno)
                 elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
                     reads.append((node.lineno, node.id))
+            if not imported:
+                continue
             conditional_imports = _imports_inside_branches(fn)
             for name, lines in imported.items():
                 first = min(lines)
@@ -487,8 +498,10 @@ def _authorization_flags_are_explicit(paths: list[Path]) -> list[str]:
         if not path.is_file():
             continue
         try:
+            if "ARGO_ALLOW_" not in _read_src(path):
+                continue
             tree = _parsed(path)
-        except SyntaxError:
+        except (OSError, SyntaxError):
             continue  # 语法错误由 ruff/E9 报，这里不重复
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -621,10 +634,12 @@ def _envfile_internal_writes(files: list[Path]) -> list[str]:
     """
     problems: list[str] = []
     for path in files:
-        if path.name == "engine_env.py":
+        if path.name == "engine_env.py" or not path.is_file():
             continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            if "_envfile_" not in _read_src(path):
+                continue
+            tree = _parsed(path)
         except (OSError, SyntaxError):
             continue
         for node in ast.walk(tree):

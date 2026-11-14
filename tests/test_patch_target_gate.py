@@ -36,6 +36,7 @@
 from __future__ import annotations
 
 import ast
+import functools
 import os
 import re
 from pathlib import Path
@@ -47,11 +48,23 @@ SCRIPTS = ROOT / "scripts"
 EXEMPT: dict[tuple[str, str], str] = {}
 
 
+def _is_patch_or_setattr(func: ast.AST) -> bool:
+    """快速判定 Call 是否为 patch / setattr 调用，避免对全仓每个 Call 调 ast.unparse。"""
+    if isinstance(func, ast.Name):
+        return func.id in ("patch", "setattr")
+    if isinstance(func, ast.Attribute):
+        if "patch" in func.attr or func.attr in ("setattr", "object"):
+            return "patch" in ast.unparse(func) or func.attr == "setattr"
+    return False
+
+
 def _patch_sites() -> list[tuple[str, int, str, str]]:
     sites: list[tuple[str, int, str, str]] = []
     files = list((ROOT / "tests").rglob("*.py")) + list(SCRIPTS.rglob("*.py"))
     for path in files:
         src = path.read_text(encoding="utf-8", errors="replace")
+        if "patch" not in src and "setattr" not in src:
+            continue
         try:
             tree = ast.parse(src)
         except SyntaxError:
@@ -59,7 +72,7 @@ def _patch_sites() -> list[tuple[str, int, str, str]]:
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            if not any(k in ast.unparse(node.func) for k in ("patch", "setattr")):
+            if not _is_patch_or_setattr(node.func):
                 continue
             for arg in node.args:  # 形式一：字符串 "mod.name"
                 if (isinstance(arg, ast.Constant) and isinstance(arg.value, str)
@@ -74,7 +87,7 @@ def _patch_sites() -> list[tuple[str, int, str, str]]:
                 if isinstance(target, ast.Name):
                     modname = target.id
                 elif isinstance(target, ast.Attribute):
-                    modname = ast.unparse(target).split(".")[-1]
+                    modname = target.attr
                 else:
                     modname = None
                 if modname:
@@ -97,13 +110,16 @@ def _module_body_without_imports(path: Path) -> str:
 
 def test_patch_targets_are_read_by_the_module_they_patch():
     problems = []
+    body_cache: dict[Path, str] = {}
     for path, line, mod, name in _patch_sites():
         if (mod, name) in EXEMPT:
             continue
         target = SCRIPTS / f"{mod}.py"
         if not target.is_file():
             continue  # 标准库 / 第三方 / 非本仓模块
-        body = _module_body_without_imports(target)
+        body = body_cache.get(target)
+        if body is None:
+            body = body_cache[target] = _module_body_without_imports(target)
         if not re.search(r"\b" + re.escape(name) + r"\b", body):
             problems.append(
                 f"{path}:{line} 打桩 {mod}.{name}——但 {mod}.py 只是转出它"

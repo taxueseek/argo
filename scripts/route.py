@@ -554,7 +554,7 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
         try:
             from circuit_breaker import get_breaker
             st = get_breaker().status(p)
-            if (st.get("state") == engine_states.BREAKER_OPEN and int(st.get("cooldown_remain") or 0) > 0):
+            if st.get("state") == engine_states.BREAKER_DISABLED or int(st.get("cooldown_remain") or 0) > 0:
                 p = None
         except Exception as _exc:  # 侧信道：熔断状态只影响 primary 扶正提示（规则见 except_sets）
             import logging

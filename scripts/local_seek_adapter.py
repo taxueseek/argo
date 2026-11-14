@@ -28,31 +28,51 @@ def _resolve_seek() -> Path:
     return _FALLBACK_SEEK
 
 
-def _run_seek(argv: list[str]) -> dict:
-    """运行 seek.py，优先子进程隔离，受限环境降级为进程内调用。"""
-    seek_py = _resolve_seek()
-    try:
-        proc = subprocess.run(
-            [sys.executable, str(seek_py), *argv, "--json"],
-            capture_output=True, text=True, timeout=60,
-            encoding="utf-8", errors="replace",
-        )
-        if proc.returncode == 0 and proc.stdout:
-            return json.loads(proc.stdout)
-    except (subprocess.TimeoutExpired, ValueError, OSError):
-        pass
-
-    # 进程内容错降级
+def _run_seek_inprocess(seek_py: Path, argv: list[str], budget_s: float = 8.0) -> dict | None:
+    """进程内直接调 seek.run_query，省掉 Python 冷启动与 1,962 行脚本重解析开销。"""
     try:
         seek_dir = str(seek_py.parent)
         if seek_dir not in sys.path:
             sys.path.insert(0, seek_dir)
         import seek as seek_mod
-        text, rc = seek_mod.run_query([*argv, "--json"], time_budget=30.0)
+        text, rc = seek_mod.run_query([*argv, "--json"], time_budget=budget_s)
         if rc == 0 and text:
             return json.loads(text)
-    except Exception:
-        pass
+    except (ImportError, OSError, ValueError, RuntimeError, TypeError, SystemExit):
+        return None
+    return None
+
+
+def _run_seek_subprocess(seek_py: Path, argv: list[str], timeout_s: float = 15.0) -> dict | None:
+    """子进程隔离运行 seek.py。"""
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(seek_py), *argv, "--json"],
+            capture_output=True, text=True, timeout=timeout_s,
+            encoding="utf-8", errors="replace",
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return json.loads(proc.stdout)
+    except (subprocess.TimeoutExpired, ValueError, OSError):
+        return None
+    return None
+
+
+def _run_seek(argv: list[str]) -> dict:
+    """运行 seek.py：默认优先进程内调用以压低尾延迟，失败或显式指定时回退子进程。"""
+    seek_py = _resolve_seek()
+    prefer_subproc = os.environ.get("ARGO_SEEK_SUBPROCESS", "").strip().lower() in (
+        "1", "true", "yes", "on"
+    )
+    order = (
+        (_run_seek_subprocess, _run_seek_inprocess)
+        if prefer_subproc
+        else (_run_seek_inprocess, _run_seek_subprocess)
+    )
+    for runner in order:
+        data = runner(seek_py, argv)
+        if isinstance(data, dict):
+            return data
     return {}
 
 

@@ -774,7 +774,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_STRAGGLER_GRACE_S` | 慢源（掉队者）等待宽限时间（秒） | 默认 0.5s，超期即截断早停 |
 | `ARGO_TOOL_CALL_COALESCE` | MCP 工具并发单飞合并（single-flight）开关 | 默认 1（同一毫秒内相同请求合并执行）；=0 关闭 |
 
-### 路径与数据位置（12）
+### 路径与数据位置（13）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -787,6 +787,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_LOCAL_READ_DIRS` | MCP argo_local_read 允许读取的本地白名单目录（逗号分隔） | 没配置就不放行任何本地路径，保证安全沙箱 |
 | `ARGO_LOCAL_SEEK_PATH` | 本机文件搜索 seek.py 脚本显式绝对路径 | 未设时按内置候选根自动寻找 |
 | `ARGO_LOCAL_SEEK_ROOTS` | seek.py 自动发现时的候选搜索根目录（os.pathsep 分隔） | 找不到显式路径时按此候选列表顺次探测 |
+| `ARGO_SEEK_SUBPROCESS` | 强制 `local_seek_adapter` 优先走子进程调用 seek.py | 默认关（优先进程内 `run_query` 降尾延迟）；=1 切回子进程隔离 |
 | `ARGO_STATE_DIR` | Argo 运行时状态主目录 | 默认 ~/.cache/unified-search（或平台缓存目录） |
 | `ARGO_TEMPLATES_FILE` | 用户查询模板注册表路径覆盖 | 默认 ~/.config/argo/query-templates.yaml（见 query-templates.md） |
 | `ARGO_USAGE_LOG_DIR` | 本地使用日志（JSONL 流）存放目录 | 默认 <状态目录>/usage_log/ |

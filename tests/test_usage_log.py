@@ -197,3 +197,22 @@ def test_guard_fail_open_when_registry_broken(tele_dir, monkeypatch):
     monkeypatch.setattr(engines_mod, "available_engines", _boom)
     # 注册表不可用：守卫失效放行——不能因守卫丢真日志（fail-open）
     assert usage_log.emit("query", {"query": "x", "engines_used": ["whatever"]})
+
+
+def test_route_sample_stateless_cli_and_dynamic_env(tele_dir, monkeypatch):
+    """单次 CLI 调用（counter=0->1）按无状态采样仍可落盘，且 ARGO_ROUTE_SAMPLE_RATE 运行期生效。"""
+    import route_log
+    monkeypatch.setattr("route_log._ROUTE_SAMPLE_RATE", route_log._DEFAULT_ROUTE_SAMPLE_RATE)
+    monkeypatch.setattr("route_log._route_sample_counter", 0)
+    monkeypatch.setenv("ARGO_ROUTE_SAMPLE_RATE", "1")
+    sample = {"domain": "academic", "engine": "arxiv", "engines": ["arxiv"],
+              "confidence": 0.9, "mode": "auto", "features": {"intents": ["academic"]}}
+    route_log.sample_route({}, sample)
+    assert len(_read_lines(tele_dir, "route")) == 1
+
+    # 未改 env，单次进程首调（counter 重置为 0）在 rate=20 时依赖 randrange==0 采样而非 1%20 永不命中
+    monkeypatch.delenv("ARGO_ROUTE_SAMPLE_RATE", raising=False)
+    monkeypatch.setattr("route_log._route_sample_counter", 0)
+    monkeypatch.setattr("random.randrange", lambda _n: 0)
+    route_log.sample_route({}, sample)
+    assert len(_read_lines(tele_dir, "route")) == 2

@@ -241,6 +241,19 @@ class TestRecovery(unittest.TestCase):
         self.assertFalse(rec.recovered)
         self.assertEqual(results, [])
 
+    def test_recovery_prefers_l3_before_l1_when_no_structured_syntax(self):
+        """无结构化语法时优先 L3 换引擎，避免在失效引擎上空转 L1/L2 RTT；有语法时仍先 drop_syntax。"""
+        plain = build_recovery_plan("attention mechanism please", ["semantic_scholar"],
+                                    ["arxiv"], mode="auto")
+        self.assertTrue(plain)
+        self.assertEqual(plain[0].level, "L3")
+        self.assertEqual(plain[0].strategy, "switch_engine")
+
+        syntax = build_recovery_plan('site:arxiv.org "attention mechanism" -blog',
+                                     ["semantic_scholar"], ["arxiv"], mode="auto")
+        self.assertTrue(syntax)
+        self.assertEqual(syntax[0].strategy, "drop_syntax")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # P0-003 本地五维 rerank

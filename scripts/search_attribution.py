@@ -49,24 +49,28 @@ def usage_log_attribution(engine_latency: dict[str, Any] | None,
                           top_n: int = DEFAULT_TOP_N,
                           engine_outcomes: Iterable[dict[str, Any]] | None = None
                           ) -> dict[str, Any]:
-    """usage_log query 流的归因字段（慢源 Top-N + 各引擎交付条数 + 失败类别）。
+    """usage_log query 流的归因字段（慢源 Top-N + 各引擎交付条数 + 失败归类）。
 
     返回 dict 以便调用方 **展开进日志记录**，未来新增归因维度（如
     「等待预算被谁耗掉」「缓存未命中的原因分布」）时只扩这里，
     主管线那一行 `**usage_log_attribution(...)` 不动——归因是会长大的，
     写入点不该跟着长（主管线有模块大小门禁，见模块 docstring）。
 
-    失败类别只记「哪类」不记条数：errors 已经记了条数，两者互补。
+    失败类别只记「哪类」不记条数，``engine_errors`` 补齐「哪家引擎因何失败」。
     """
+    outcomes = list(engine_outcomes) if engine_outcomes is not None else None
     out: dict[str, Any] = {
         "engine_latency_top": top_engine_latency(engine_latency, top_n),
     }
-    counts = engine_result_counts(engine_outcomes)
+    counts = engine_result_counts(outcomes)
     if counts:
         out["engine_results"] = counts
-    kinds = failure_kinds(engine_outcomes)
+    kinds = failure_kinds(outcomes)
     if kinds:
         out["failure_kinds"] = kinds
+    errs = engine_errors(outcomes)
+    if errs:
+        out["engine_errors"] = errs
     return out
 
 
@@ -166,6 +170,16 @@ def engine_result_counts(engine_outcomes: Iterable[dict[str, Any]] | None,
     return out
 
 
+def _failure_rows(engine_outcomes: Iterable[dict[str, Any]] | None,
+                  limit: int = 8) -> list[dict[str, Any]]:
+    try:
+        from output_transparency import build_failures
+    except ImportError:  # pragma: no cover - 单文件分发时的降级
+        return []
+    return build_failures({"engine_outcomes": list(engine_outcomes or [])},
+                          limit=limit)
+
+
 def failure_kinds(engine_outcomes: Iterable[dict[str, Any]] | None,
                   limit: int = 6) -> list[str]:
     """本次调用的失败类别（去重、稳定排序），写进 usage_log 供长期归因。
@@ -174,13 +188,22 @@ def failure_kinds(engine_outcomes: Iterable[dict[str, Any]] | None,
     output_transparency.build_failures（与 agent 档 failures 同一口径），
     不在日志侧另写一份分类。
     """
-    try:
-        from output_transparency import build_failures
-    except ImportError:  # pragma: no cover - 单文件分发时的降级
-        return []
-    rows = build_failures({"engine_outcomes": list(engine_outcomes or [])},
-                          limit=limit)
+    rows = _failure_rows(engine_outcomes, limit=limit)
     return sorted({str(r.get("category") or "unknown") for r in rows})
+
+
+def engine_errors(engine_outcomes: Iterable[dict[str, Any]] | None,
+                  limit: int = 8) -> dict[str, str]:
+    """按引擎提取失败归因映射 ``{engine: "category: detail"}``，供坏例账本定责。"""
+    out: dict[str, str] = {}
+    for r in _failure_rows(engine_outcomes, limit=limit):
+        eng = str(r.get("engine") or "").strip()
+        if not eng or eng in out:
+            continue
+        cat = str(r.get("category") or "unknown").strip()
+        detail = str(r.get("detail") or "").strip()
+        out[eng] = f"{cat}: {detail[:80]}" if detail else cat
+    return out
 
 
 def aggregate_slow_engines(rows: Iterable[dict[str, Any]],

@@ -31,15 +31,8 @@ const DSH_DIR = join(PKG_ROOT, 'dsh')
 
 const HARD_LIMIT = 1000
 
-// 路径 → [上限行数, 为什么不拆/拆到哪一步]
-const GRANDFATHERED = new Map([
-  ['dsh/client.js', [
-    1548,
-    'web 设置面板单页（接入/工具/密钥/研究/高级五段 UI + 状态机）；' +
-    '2026-11-09 同步新增独立引擎（mojeek、repology 等）声明密钥至 1,548；' +
-    '拆分候选：把各段表单渲染抽成 render-* 模块，状态机留在本文件',
-  ]],
-])
+// 路径 → [上限行数, 为什么不拆/拆到哪一步]（client.js 经 schema 驱动重构已降至千行以内，清单清零）
+const GRANDFATHERED = new Map()
 
 function lineCount(file) {
   const text = readFileSync(file, 'utf8')

@@ -354,3 +354,27 @@ class TestBlockedKindInBreaker:
         st = b.status("e")
         assert st["failures"] == 1
         assert st.get("last_kind") == "blocked"
+
+    def test_rate_limited_exponential_cooldown_and_recovery(self, tmp_path, monkeypatch):
+        """rate-limited 触发 60s -> 300s -> 900s 指数冷却，但不开闸不禁用；成功后清零。"""
+        from circuit_breaker import CircuitBreaker, RATE_LIMIT_COOLDOWNS
+        cb = self._fresh_breaker(tmp_path)
+        now = 1_000_000.0
+        monkeypatch.setattr("time.time", lambda: now)
+
+        for idx, want_cd in enumerate(RATE_LIMIT_COOLDOWNS, 1):
+            cb.record_failure("semantic_scholar", kind="rate-limited")
+            st = cb.status("semantic_scholar")
+            assert st["state"] == "closed"
+            assert st["opens"] == 0
+            assert st["cooldown_streak"] == idx
+            assert abs(st["cooldown_remain"] - want_cd) <= 1
+            allowed, reason = cb.allow("semantic_scholar")
+            assert not allowed and reason.startswith("rate_limit_cooldown:")
+            now += want_cd + 1
+            allowed_after, _ = cb.allow("semantic_scholar")
+            assert allowed_after
+
+        cb.record_success("semantic_scholar")
+        assert cb.status("semantic_scholar")["cooldown_streak"] == 0
+        assert cb.status("semantic_scholar")["cooldown_remain"] == 0

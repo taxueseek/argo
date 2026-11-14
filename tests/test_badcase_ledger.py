@@ -369,3 +369,36 @@ def test_overview_cli_exits_nonzero_on_dormant_error(ledger_env, monkeypatch, ca
     assert rc == 1
     assert "dormant_sources 取数失败" in capsys.readouterr().err
 
+
+def test_attribution_engine_errors_fixes_unattributed_badcase(ledger_env):
+    """search_attribution.engine_errors 写入按引擎失效语义，badcase_ledger 可精确归因。"""
+    from search_attribution import usage_log_attribution
+    attr = usage_log_attribution(
+        {"semantic_scholar": 420.0, "bing": 180.0},
+        engine_outcomes=[
+            {"engine": "semantic_scholar", "status": "rate-limited", "count": 0,
+             "detail": "429 too many requests"},
+            {"engine": "bing", "status": "error", "count": 0,
+             "detail": "404 endpoint not found"},
+        ],
+    )
+    assert "engine_errors" in attr
+    assert "rate-limit" in attr["engine_errors"]["semantic_scholar"]
+    assert "404" in attr["engine_errors"]["bing"]
+
+    (ledger_env / "query.jsonl").write_text(json.dumps({
+        "ts": _NOW,
+        "stream": "query",
+        "query": "attention mechanism",
+        "count": 0,
+        "errors": 2,
+        "engines_used": ["arxiv", "semantic_scholar", "bing"],
+        "mode": "auto",
+        **attr,
+    }) + "\n", encoding="utf-8")
+    badcase_ledger.ingest()
+    rows = badcase_ledger._fetch(None, None, 20)
+    assert len(rows) == 1
+    assert rows[0]["engine"] == "semantic_scholar,bing"
+    assert rows[0]["root_cause"] in {"rate_limited", "upstream_change"}
+

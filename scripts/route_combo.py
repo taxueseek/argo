@@ -108,8 +108,7 @@ def _breaker_blocked(engine_id: str) -> bool:
     state = st.get("state")
     if state == engine_states.BREAKER_DISABLED:
         return True
-    return (state == engine_states.BREAKER_OPEN
-            and int(st.get("cooldown_remain") or 0) > 0)
+    return int(st.get("cooldown_remain") or 0) > 0
 
 
 def _filter_breaker_blocked(engine_list: list[str]) -> list[str]:

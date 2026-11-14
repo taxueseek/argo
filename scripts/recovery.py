@@ -468,34 +468,40 @@ def build_recovery_plan(query: str, tried_engines: list[str],
     except ImportError:
         prefer = ["zh", "en"]
 
-    # L1 放宽
-    # 止损：显式指定单一引擎且无备选时，L1 放宽仍在同一引擎上重试，白烧一轮 RTT。
-    # 只在有备选引擎（L3 可能换引擎）时才做 L1 同引擎重试。
+    # L1 / L1.5 / L2 / L3 编排：
+    # - 含结构化语法（site:/引号/排除/日期等）时，先逐项撤语法（drop_syntax）再考虑换引擎；
+    # - 无结构化语法的普通查询，实测 83% 成功由 L3 换引擎贡献，故把 L3 置于 L1/L2 之前，
+    #   避免先在已失效引擎上空转同义/去停用词 RTT（fast/max_level 门控仍在末尾按 level 过滤）。
     _has_fallback = bool(engines_fallback) or len(tried_engines) > 1
     relaxed = relax_query(query)
+    structured_steps = [
+        rq for rq in structured_relax_steps(query, max_steps=4) if rq != query
+    ]
+    alt = pick_alternative_engines(tried_engines, engines_fallback, enabled, mode=mode)
+
+    if structured_steps:
+        for rq in structured_steps:
+            steps.append(RecoveryStep(
+                level="L1", strategy="drop_syntax", query=rq, engines=base_engines,
+                reason="结构化语法放宽（按「排除→热度→媒体→语言→日期→账号→短语」撤一类条件）"))
+    elif alt:
+        steps.append(RecoveryStep(
+            level="L3", strategy="switch_engine", query=relaxed or query,
+            engines=alt, reason=f"切换未试引擎: {','.join(alt)}"))
+
     if relaxed and relaxed != query and _has_fallback:
         steps.append(RecoveryStep(
             level="L1", strategy="relax", query=relaxed, engines=base_engines,
             reason="去停用词/引号/尾修饰后重试"))
 
-    # L1.5 结构化语法放宽（结果归零时逆序撤条件，每步只撤一类）
-    for _i, rq in enumerate(structured_relax_steps(query, max_steps=4)):
-        if rq == query:
-            continue
-        steps.append(RecoveryStep(
-            level="L1", strategy="drop_syntax", query=rq, engines=base_engines,
-            reason="结构化语法放宽（按「排除→热度→媒体→语言→日期→账号→短语」撤一类条件）"))
-
-    # L2 同义（fast 也允许，成本低）
+    # L2 同义（fast 末尾按 level 剔除）
     syn = synonym_expand(query)
     if syn and syn != query:
         steps.append(RecoveryStep(
             level="L2", strategy="synonym", query=syn, engines=base_engines,
             reason="同义词替换重试"))
 
-    # L3 换引擎
-    alt = pick_alternative_engines(tried_engines, engines_fallback, enabled, mode=mode)
-    if alt:
+    if structured_steps and alt:
         steps.append(RecoveryStep(
             level="L3", strategy="switch_engine", query=relaxed or query,
             engines=alt, reason=f"切换未试引擎: {','.join(alt)}"))

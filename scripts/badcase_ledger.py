@@ -229,20 +229,27 @@ def _rows_from_query_log(path: Path) -> list[dict[str, Any]]:
         # 生产日志里 errors 有两种形态：字符串列表（早期）与 int 计数（现在
         # 主流）——后者不含错误文本，归因规则表匹配不到任何关键词，259 条坏例
         # 的 root_cause 全空（2026-11-11 实测）。真正的语义类别在 failure_kinds
-        # 字段（search_attribution 写入：quota / rate-limit / auth / bot-wall…），
-        # 故 detail 优先拼 failure_kinds，让归因有据可依。
+        # 与 engine_errors（按引擎映射失败类别与紧凑细节）字段。
         raw_kinds = r.get("failure_kinds") or []
         kinds = [str(k) for k in raw_kinds if k] if isinstance(raw_kinds, list) else []
+        raw_eng_errors = r.get("engine_errors")
+        eng_errors = (
+            {str(k): str(v) for k, v in raw_eng_errors.items() if k and v}
+            if isinstance(raw_eng_errors, dict) else {}
+        )
         errors = (raw_errors if isinstance(raw_errors, list)
                   else ([str(raw_errors)] if raw_errors else []))
-        if not errors and not kinds and r.get("count"):
+        if not errors and not kinds and not eng_errors and r.get("count"):
             continue  # 正常条目不是坏例
-        if errors or kinds:
+        if errors or kinds or eng_errors:
             parts = [f"failure_kinds={','.join(kinds)}"] if kinds else []
+            if eng_errors:
+                parts.extend(f"{k}:{v[:80]}" for k, v in list(eng_errors.items())[:3])
             parts += [str(e)[:160] for e in errors[:3]]
+            failed_engs = list(eng_errors)[:3]
             out.append({"kind": "query_error", "ts": r.get("ts", ""),
                         "query": r.get("query", ""),
-                        "engine": ",".join(used[:3]),
+                        "engine": ",".join(failed_engs or used[:3]),
                         "detail": " | ".join(parts)})
         else:
             out.append({"kind": "empty_result", "ts": r.get("ts", ""),

@@ -55,6 +55,13 @@ OPEN_SECONDS = 60              # 熔断冷却
 EMPTY_NEGATIVE_TTL = 45        # 空结果负缓存（秒）
 ERROR_NEGATIVE_TTL = 30        # 错误负缓存（秒）
 HALF_OPEN_PROBE = True         # 冷却后允许一次探测
+# 限流/封锁类源站行为的指数冷却阶梯（秒）：不改变 closed 态、不累计 opens、不触发 auto_disabled，
+# 仅通过 cooldown_until 阻止同类 429/WAF 引擎每 60s 内无效空转。
+RATE_LIMIT_COOLDOWNS = (60, 300, 900)
+_COOLDOWN_KINDS = frozenset({
+    engine_states.BREAKER_KIND_RATE_LIMITED,
+    engine_states.BREAKER_KIND_BLOCKED,
+})
 
 # 自适应禁用（v2.7）
 DISABLE_AFTER_OPENS = 3        # 连续 open 达此次数 → 自动禁用（持久跳过）
@@ -183,11 +190,15 @@ class CircuitBreaker:
                 "suspected_stale": self._suspected_stale_locked(st),
                 "auth_disabled": bool(st.get("auth_disabled")),
                 "auth_streak": int(st.get("auth_streak") or 0),
+                "cooldown_streak": int(st.get("cooldown_streak") or 0),
                 # 用 time.time()（墙钟）而非 time.monotonic()：熔断状态持久化到文件，
                 # 跨进程恢复时 opened_at 必须可比较。monotonic 在不同进程间基准不同，
                 # 换用会导致跨进程冷却判断错误。时钟回拨风险可控（只会让冷却提前结束）。
-                "cooldown_remain": max(0, int(OPEN_SECONDS - (time.time() - opened_at)))
-                if state == engine_states.BREAKER_OPEN else 0,
+                "cooldown_remain": max(
+                    max(0, int(OPEN_SECONDS - (time.time() - opened_at)))
+                    if state == engine_states.BREAKER_OPEN else 0,
+                    max(0, int(float(st.get("cooldown_until") or 0) - time.time())),
+                ),
             }
 
     @staticmethod
@@ -278,6 +289,10 @@ class CircuitBreaker:
                     return True, "half_open_probe"
                 remain = int(OPEN_SECONDS - (time.time() - opened_at))
                 return False, f"circuit_open:{remain}s"
+            cooldown_until = float(st.get("cooldown_until") or 0)
+            soft_remain = cooldown_until - time.time()
+            if soft_remain > 0:
+                return False, f"rate_limit_cooldown:{max(1, int(soft_remain))}s"
             return True, engine_states.BREAKER_CLOSED
 
     def _mutate_locked(self, mutator) -> None:
@@ -341,6 +356,8 @@ class CircuitBreaker:
                     and not st.get("empty_streak")
                     and not st.get("empty_recent")
                     and not st.get("auth_streak")
+                    and not st.get("cooldown_streak")
+                    and not st.get("cooldown_until")
                     and st.get("ever_nonempty")):
                 # 已健康且无任何待清理状态：内存短路，零写盘。
                 # ever_nonempty 必须参与短路判定：升级前落盘的存量干净条目没有
@@ -454,6 +471,11 @@ class CircuitBreaker:
             # 还占主位阻塞 6s。仅 error/timeout 驱动稳定 state 切换（空结果由
             # 负缓存短 TTL 保底）。2026-08 修复；blocked 2026-09 并入同语义。
             # 已因 auth 直达 disabled 的不再被 opens 块盖回 open（禁用优先）。
+            if kind in _COOLDOWN_KINDS:
+                streak = int(st.get("cooldown_streak") or 0) + 1
+                st["cooldown_streak"] = streak
+                dur = RATE_LIMIT_COOLDOWNS[min(streak - 1, len(RATE_LIMIT_COOLDOWNS) - 1)]
+                st["cooldown_until"] = time.time() + dur
             if (drives_opens and st.get("state") != engine_states.BREAKER_DISABLED
                     and (st["failures"] >= FAILURE_THRESHOLD
                          or st.get("state") == engine_states.BREAKER_HALF_OPEN)):

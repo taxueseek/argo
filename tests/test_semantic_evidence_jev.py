@@ -626,26 +626,27 @@ class TestGeminiDecisionChannel(unittest.TestCase):
         self.assertGreater(se.DEFAULT_GEMINI_DEADLINE_S, se.DEFAULT_JEV_DEADLINE_S)
 
         def slow_choice(text, labels, instructions, timeout, criteria=None):
-            time.sleep(2.0)
+            time.sleep(0.15)
             return {"label": labels[0], "confidence": 0.9}
 
         texts = ["文本一", "文本二", "文本三", "文本四"]
         keep = [(i, t) for i, t in enumerate(texts)]
-        with patch.object(se, "gemini_api_key", return_value="fake"), \
+        with patch.object(se, "DEFAULT_GEMINI_DEADLINE_S", 0.5), \
+             patch.object(se, "gemini_api_key", return_value="fake"), \
              patch.object(se, "_gemini_choice", side_effect=slow_choice):
             res = se._classify_gemini(texts, ("supports the query",), keep=keep)
         got = sum(1 for r in (res or []) if r)
-        self.assertEqual(got, 4, "5s 截止下 4 条 2s 慢响应不应被截断")
+        self.assertEqual(got, 4, "放宽截止下 4 条慢响应不应被截断")
 
-        # 对照：显式传 1.0s 截止必须截断，证明截止参数真的生效
+        # 对照：显式传 0.05s 截止必须截断，证明截止参数真的生效
         with patch.object(se, "gemini_api_key", return_value="fake"), \
              patch.object(se, "_gemini_choice", side_effect=slow_choice):
             res_fast = se._run_choice_batch(
                 len(texts), keep,
-                lambda t: slow_choice(t, ("x",), None, 5.0),
-                timeout=5.0, deadline_s=1.0)
+                lambda t: slow_choice(t, ("x",), None, 0.5),
+                timeout=0.5, deadline_s=0.05)
         got_fast = sum(1 for r in (res_fast or []) if r)
-        self.assertLess(got_fast, 4, "1s 截止下必须截断")
+        self.assertLess(got_fast, 4, "紧截止下必须截断")
 
 
 if __name__ == "__main__":

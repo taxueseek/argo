@@ -82,7 +82,9 @@ def scan_text(source: str, minver: tuple[int, int]) -> list[tuple[int, str]]:
     """
     findings: list[tuple[int, str]] = []
     if minver < (3, 12):
-        findings.extend(_pep701_findings(source))
+        low = source.lower()
+        if 'f"' in low or "f'" in low:
+            findings.extend(_pep701_findings(source))
 
     try:
         tree = ast.parse(source)
@@ -94,8 +96,10 @@ def scan_text(source: str, minver: tuple[int, int]) -> list[tuple[int, str]]:
         return [(e.lineno or 0, f"语法错误：{e.msg}")]
 
     if minver < (3, 10):
-        findings.extend(_pep604_findings(tree, _has_future_annotations(tree)))
-        findings.extend(_match_findings(tree))
+        if "|" in source:
+            findings.extend(_pep604_findings(tree, _has_future_annotations(tree)))
+        if "match " in source or "match\t" in source:
+            findings.extend(_match_findings(tree))
     return sorted(set(findings))
 
 

@@ -26,247 +26,126 @@ window.__ModuleLoader__.load({
     const NS = 'wide-research';
     const SECTION_ID = 'argo';
 
-    const DICT = {
-      zh: {
-        title: 'Argo 搜索配置',
-        intro: '接入方式、原生工具、API 密钥与研究编排。保存后即时生效；工具名与 provider 属结构性字段，仍需在 profile patch 中修改。',
-        loading: '配置加载中…',
-        unavailable: '本插件的配置服务不可用（未挂载或只读）。',
-        readonly: '当前配置只读。',
-        saved: '已保存',
-        refused: '宿主拒绝写入（可能只读或字段不可热更新）',
-        save: '保存',
-        saving: '保存中…',
-        on: '开',
-        off: '关',
-        showMore: '显示更多',
-        showLess: '收起',
-        tabAccess: '接入',
-        tabTools: '工具',
-        tabKeys: '密钥',
-        tabResearch: '研究',
-        tabAdvanced: '高级',
-        tabDashboard: '看板',
-        dashboardTitle: '运行监控与健康态看板',
-        routeHealthTitle: '路由观测',
-        routeHealthHint: '最近的路由决策与引擎状态（宿主提供时显示）。',
-        routeHealthFallback: '在终端运行 `argo stats` 或 `argo engine list` 查看路由健康、引擎成功率与配额消耗。',
-        dashboardHint: '实时监控常驻 MCP 连接池、上游搜索源拓扑与额度状态，提供一键预设与快速调优。',
-        poolTitle: '常驻 MCP 连接池监控',
-        poolStatusHealthy: '按需连接 · 连接数不常驻',
-        presetTitle: '工作流快速预设',
-        presetHint: '一键对齐常用工作场景的并发与引擎策略，免去逐项手动调优。',
-        presetFast: '极速日常',
-        presetFastDesc: '免密免费源优先，关闭 TF-IDF 重排与数值交叉比对，超低延迟',
-        presetStandard: '平衡生产（推荐）',
-        presetStandardDesc: '开启 TF-IDF 重排、数值交叉核验、主流付费源，标准超时',
-        presetDeep: '深度调研',
-        presetDeepDesc: '激活更多取证工具、对冲自适应宽限、语义证据层、更大并发',
-        presetApplied: '已应用预设：',
-        matrixTitle: '核心引擎拓扑与覆盖全景',
-        matrixHint: '当前可用引擎的接入层级与角色分工。带免密标识的引擎无需密钥即可直接使用。',
-        matrixConfigured: '密钥已就绪',
-        matrixKeyless: '免密层可用',
-        matrixPending: '待配密钥',
-        searchFilterPlaceholder: '输入关键词快速筛选...',
-        summary: 'Argo · web_search {search} · web_fetch {fetch} · 原生工具 {tools} 个 · 研究 {workers}/{max}',
-        accessTitle: '接入方式',
-        searchSeam: '宿主 web_search 走 argo',
-        searchSeamHint: '关闭后 web_search 回到宿主默认搜索后端（web 行 searchProvider）。',
-        fetchSeam: '宿主 web_fetch 走 argo',
-        fetchSeamHint: '开启前必须在 web 配置行加 fetchProvider: argo；否则两个 provider 同时可用会报 WEB_PROVIDER_AMBIGUOUS。',
-        entryTitle: '引擎入口',
-        entryHint: 'npx 模式填 npx，参数 -y / github:taxueseek/argo；本机模式填 python3，参数填 mcp_server.py 的绝对路径。',
-        command: '命令',
-        args: '参数（一行一个）',
-        searchTimeout: '搜索超时 (ms)',
-        fetchTimeout: '抓取超时 (ms)',
-        fetchChars: '抓取正文上限（字符）',
-        idle: '连接空闲回收 (ms)',
-        concurrency: '并发连接数',
-        toolsTitle: '原生工具',
-        toolsHint: '勾选即注册为原生一等工具（CLI 单发，不依赖 MCP）。长尾工具只在需要时开，避免每轮工具面膨胀。',
-        toolPresetTitle: '推荐组合',
-        toolPresetHint: '按场景一键套用（会覆盖当前勾选）。工具分区见下方。',
-        coreTools: '高频路径',
-        longTools: '长尾取证',
-        nativeTimeout: '单次调用超时 (ms)',
-        nativeChars: '返回文本上限（字符）',
-        keysTitle: 'API 密钥',
-        keysHint: '密钥写入 DSH 凭证库（与 Models 页同一处），不会写进插件配置、不回显明文。只有勾选「转发」的引用才会作为环境变量传给 argo 子进程。「清除」只删凭证库里的值，环境变量或 .env 提供的 key 仍会生效。',
-        commonKeys: '常用引擎',
-        moreKeys: '更多引擎',
-        configured: '已配置',
-        notConfigured: '未配置',
-        forward: '转发',
-        keyPlaceholderSet: '输入新值（留空保留现有密钥）',
-        keyPlaceholderEmpty: '粘贴 API Key',
-        saveKey: '保存',
-        clearKey: '清除',
-        keySaved: '密钥已保存；下一次新建 argo 连接生效（池内旧连接最长 60s 回收）。',
-        keyCleared: '密钥已清除。',
-        keyUnavailable: '凭证服务不可用。',
-        researchTitle: '研究编排',
-        workers: '默认 worker 数',
-        maxWorkers: 'worker 上限',
-        tracks: '轨道上限',
-        sources: '每轨信源上限',
-        workerTokens: 'worker token 上限',
-        synthTokens: '综合 token 上限',
-        reportDir: '报告落盘目录',
-        advancedTitle: '高级',
-        allow: 'worker 工具白名单（一行一个）',
-        allowHint: '留空表示使用内置默认（MCP 与原生工具双写）。wide_research 自身与 argo_research 会被硬排除。',
-        deny: 'worker 工具拒绝名单（一行一个）',
-        keyRefs: '凭证转发名单（一行一个）',
-        keyRefsHint: '这些引用名会经 DSH credentials 解析后作为环境变量传给 argo 子进程；没有对应凭证的项会被跳过。',
-        structural: '结构性字段',
-        structuralHint: 'toolName / provider / searchProviderId / fetchProviderId 只能改 profile patch；watched patch 由官方 watcher 同 PID 重组，改后核对功能即可，不默认重启。',
-        mcpHint: 'MCP 全量工具面（mcp__argo__*）是 profile 里的独立 mcp-argo 行，不在本页开关；需要时在 patch 中取消注释后按 live activation 分支验证。',
-        noKey: '（未配置）',
-        tabEngines: '引擎',
-        enginesTitle: 'argo 引擎开关',
-        enginesHint: '这些开关原先是 argo 的环境变量，只能改 ~/.config/argo/env 或启动环境；现在写进插件配置，随 argo 子进程生效。改动对下一次新建连接生效（池内旧连接按「连接空闲回收」时长退出，默认 60s）。密钥不在这里配，请用「密钥」页；本页也不收授权类开关（可复算执行、内网 URL）。',
-        groupCache: '缓存与排序',
-        groupFetch: '抓取层',
-        groupSemantic: '语义与自适应',
-        groupEngines: '引擎启停',
-        groupNet: '网络出口',
-        groupLocal: '本机检索',
-        groupMisc: '其他',
-        groupPaid: '额度与预算',
-        groupPaidHint: '免费与付费源统一管理：金额计费的源设月度预算，按次数限额的源设日/月次数上限；0=不限制。额度或预算用尽后该源自动跳过并回落免费源。改动对下一次新建连接生效。',
-        envDefault: '默认',
-        envRange: '需在 {min}–{max} 之间',
-        keySourceFile: '凭证库',
-        keySourceEnv: '启动环境',
-        keySourceProjectEnv: '项目 .env',
-        keySourceUserEnv: '家目录 .env',
-        keySourceOther: '其他层',
-        keyReadonly: '只读',
-        keyOverrideHint: '保存后将覆盖当前层',
-        deepseekShared: '与宿主 web_search 官方后端共用同一把 key，改动同时影响两边',
-      },
-      en: {
-        title: 'Argo Search Settings',
-        intro: 'Access mode, native tools, API keys and research orchestration. Saves apply immediately; tool name and provider remain structural profile settings.',
-        loading: 'Loading configuration…',
-        unavailable: 'Configuration service unavailable (not mounted or read-only).',
-        readonly: 'Configuration is read-only.',
-        saved: 'Saved',
-        refused: 'Host refused the write (read-only or not live-editable)',
-        save: 'Save',
-        saving: 'Saving…',
-        on: 'on',
-        off: 'off',
-        showMore: 'Show more',
-        showLess: 'Show less',
-        tabAccess: 'Access',
-        tabTools: 'Tools',
-        tabKeys: 'Keys',
-        tabResearch: 'Research',
-        tabAdvanced: 'Advanced',
-        tabDashboard: 'Dashboard',
-        dashboardTitle: 'Runtime Monitoring & Health Dashboard',
-        routeHealthTitle: 'Routing telemetry',
-        routeHealthHint: 'Recent routing decisions and engine status (when provided by the host).',
-        routeHealthFallback: 'Run `argo stats` or `argo engine list` in a terminal to inspect routing health, engine success rates and quota usage.',
-        dashboardHint: 'Real-time overview of the resident MCP connection pool, upstream search engine matrix, and quick workflow presets.',
-        poolTitle: 'Resident MCP Pool Monitoring',
-        poolStatusHealthy: 'On demand · no resident connections',
-        presetTitle: 'Workflow Presets',
-        presetHint: 'One-click presets tailored for common research and search workflows.',
-        presetFast: 'Fast & Free',
-        presetFastDesc: 'Keyless & free sources, disable rerank & crosscheck for lowest latency',
-        presetStandard: 'Balanced (Recommended)',
-        presetStandardDesc: 'TF-IDF rerank, numeric crosscheck, mainstream paid sources, standard timeouts',
-        presetDeep: 'Deep Research',
-        presetDeepDesc: 'Full forensic tools, adaptive hedge grace, semantic evidence layer, max concurrency',
-        presetApplied: 'Preset applied:',
-        matrixTitle: 'Core Engine Topology & Coverage',
-        matrixHint: 'Access tiers and roles of available engines. Keyless engines work without an API key.',
-        matrixConfigured: 'Key Ready',
-        matrixKeyless: 'Keyless Ready',
-        matrixPending: 'Key Required',
-        searchFilterPlaceholder: 'Filter by keyword or engine...',
-        summary: 'Argo · web_search {search} · web_fetch {fetch} · {tools} native tools · research {workers}/{max}',
-        accessTitle: 'Access',
-        searchSeam: 'Route host web_search to argo',
-        searchSeamHint: 'When off, web_search falls back to the host provider configured on the web row.',
-        fetchSeam: 'Route host web_fetch to argo',
-        fetchSeamHint: 'Requires fetchProvider: argo on the web row; otherwise two available providers trigger WEB_PROVIDER_AMBIGUOUS.',
-        entryTitle: 'Engine entry',
-        entryHint: 'npx mode: command npx, args -y / github:taxueseek/argo. Local mode: python3 plus the absolute mcp_server.py path.',
-        command: 'Command',
-        args: 'Args (one per line)',
-        searchTimeout: 'Search timeout (ms)',
-        fetchTimeout: 'Fetch timeout (ms)',
-        fetchChars: 'Fetch body cap (chars)',
-        idle: 'Idle recycle (ms)',
-        concurrency: 'Concurrent connections',
-        toolsTitle: 'Native tools',
-        toolsHint: 'Checked tools register as native first-class tools (single-shot CLI, no MCP). Enable long-tail tools only when needed.',
-        toolPresetTitle: 'Recommended sets',
-        toolPresetHint: 'Apply a scenario preset in one click (replaces current selection). See the grouped tools below.',
-        coreTools: 'Hot path',
-        longTools: 'Long tail',
-        nativeTimeout: 'Per-call timeout (ms)',
-        nativeChars: 'Returned text cap (chars)',
-        keysTitle: 'API keys',
-        keysHint: 'Keys are stored in the DSH credential store (same place as the Models page), never in plugin config and never echoed. Only refs marked Forward reach the argo child process. Clear removes the stored value only; a key supplied by the environment or .env still applies.',
-        commonKeys: 'Common engines',
-        moreKeys: 'More engines',
-        configured: 'Configured',
-        notConfigured: 'Not configured',
-        forward: 'Forward',
-        keyPlaceholderSet: 'Enter a new value (leave blank to keep the current key)',
-        keyPlaceholderEmpty: 'Paste API key',
-        saveKey: 'Save',
-        clearKey: 'Clear',
-        keySaved: 'Key saved; effective on the next new argo connection (old pooled connections recycle within ~60s).',
-        keyCleared: 'Key cleared.',
-        keyUnavailable: 'Credential service unavailable.',
-        researchTitle: 'Research',
-        workers: 'Default workers',
-        maxWorkers: 'Worker cap',
-        tracks: 'Track cap',
-        sources: 'Sources per track',
-        workerTokens: 'Worker token cap',
-        synthTokens: 'Synthesis token cap',
-        reportDir: 'Report directory',
-        advancedTitle: 'Advanced',
-        allow: 'Worker tool allowlist (one per line)',
-        allowHint: 'Empty uses the built-in default (MCP + native tools). wide_research itself and argo_research are always excluded.',
-        deny: 'Worker tool denylist (one per line)',
-        keyRefs: 'Credential forwarding refs (one per line)',
-        keyRefsHint: 'These refs resolve through DSH credentials and reach the argo child process as environment variables. Missing refs are skipped.',
-        structural: 'Structural fields',
-        structuralHint: 'toolName / provider / searchProviderId / fetchProviderId are profile-patch only; the watched patch is reconciled by the official watcher on the same PID. Verify the behavior, no default restart.',
-        mcpHint: 'The full MCP tool face (mcp__argo__*) is a separate mcp-argo entry in the profile patch; enable it there and verify through the live activation branch.',
-        noKey: '(not configured)',
-        tabEngines: 'Engines',
-        enginesTitle: 'argo engine switches',
-        enginesHint: 'These switches used to be argo environment variables, editable only in ~/.config/argo/env or the launch environment. They now live in plugin config and reach the argo child process. Changes apply to the next new connection (pooled connections retire after the idle recycle window, 60s by default). Keys do not belong here; use the Keys tab. Authorization switches (recompute execution, private URLs) are deliberately not exposed.',
-        groupCache: 'Cache & ranking',
-        groupFetch: 'Fetch layer',
-        groupSemantic: 'Semantics & adaptivity',
-        groupEngines: 'Engine on-off',
-        groupNet: 'Network',
-        groupLocal: 'Local search',
-        groupMisc: 'Misc',
-        groupPaid: 'Quotas & budgets',
-        groupPaidHint: 'Free and paid sources share one manager: money-metered sources take a monthly budget, count-capped sources take daily/monthly call caps; 0 = unlimited. When a budget or cap is exhausted, that source is skipped and free fallbacks take over. Changes apply to the next new connection.',
-        envDefault: 'default',
-        envRange: 'must be between {min} and {max}',
-        keySourceFile: 'credential store',
-        keySourceEnv: 'launch environment',
-        keySourceProjectEnv: 'project .env',
-        keySourceUserEnv: 'home .env',
-        keySourceOther: 'other layer',
-        keyReadonly: 'read-only',
-        keyOverrideHint: 'saving overrides the current layer',
-        deepseekShared: 'Shared with the host web_search backend; changing it affects both',
-      },
+    // 双语字典：[zh, en] 单源表，避免两份拷贝各自漂移
+    const I18N = {
+      title: ['Argo 搜索配置', 'Argo Search Settings'],
+      intro: ['接入方式、原生工具、API 密钥与研究编排。保存后即时生效；工具名与 provider 属结构性字段，仍需在 profile patch 中修改。', 'Access mode, native tools, API keys and research orchestration. Saves apply immediately; tool name and provider remain structural profile settings.'],
+      loading: ['配置加载中…', 'Loading configuration…'],
+      unavailable: ['本插件的配置服务不可用（未挂载或只读）。', 'Configuration service unavailable (not mounted or read-only).'],
+      readonly: ['当前配置只读。', 'Configuration is read-only.'],
+      saved: ['已保存', 'Saved'],
+      refused: ['宿主拒绝写入（可能只读或字段不可热更新）', 'Host refused the write (read-only or not live-editable)'],
+      save: ['保存', 'Save'],
+      saving: ['保存中…', 'Saving…'],
+      on: ['开', 'on'],
+      off: ['关', 'off'],
+      showMore: ['显示更多', 'Show more'],
+      showLess: ['收起', 'Show less'],
+      tabAccess: ['接入', 'Access'],
+      tabTools: ['工具', 'Tools'],
+      tabKeys: ['密钥', 'Keys'],
+      tabResearch: ['研究', 'Research'],
+      tabAdvanced: ['高级', 'Advanced'],
+      tabDashboard: ['看板', 'Dashboard'],
+      tabEngines: ['引擎', 'Engines'],
+      dashboardTitle: ['运行监控与健康态看板', 'Runtime Monitoring & Health Dashboard'],
+      routeHealthTitle: ['路由观测', 'Routing telemetry'],
+      routeHealthHint: ['最近的路由决策与引擎状态（宿主提供时显示）。', 'Recent routing decisions and engine status (when provided by the host).'],
+      routeHealthFallback: ['在终端运行 `argo stats` 或 `argo engine list` 查看路由健康、引擎成功率与配额消耗。', 'Run `argo stats` or `argo engine list` in a terminal to inspect routing health, engine success rates and quota usage.'],
+      dashboardHint: ['实时监控常驻 MCP 连接池、上游搜索源拓扑与额度状态，提供一键预设与快速调优。', 'Real-time overview of the resident MCP connection pool, upstream search engine matrix, and quick workflow presets.'],
+      poolTitle: ['常驻 MCP 连接池监控', 'Resident MCP Pool Monitoring'],
+      poolStatusHealthy: ['按需连接 · 连接数不常驻', 'On demand · no resident connections'],
+      presetTitle: ['工作流快速预设', 'Workflow Presets'],
+      presetHint: ['一键对齐常用工作场景的并发与引擎策略，免去逐项手动调优。', 'One-click presets tailored for common research and search workflows.'],
+      presetFast: ['极速日常', 'Fast & Free'],
+      presetFastDesc: ['免密免费源优先，关闭 TF-IDF 重排与数值交叉比对，超低延迟', 'Keyless & free sources, disable rerank & crosscheck for lowest latency'],
+      presetStandard: ['平衡生产（推荐）', 'Balanced (Recommended)'],
+      presetStandardDesc: ['开启 TF-IDF 重排、数值交叉核验、主流付费源，标准超时', 'TF-IDF rerank, numeric crosscheck, mainstream paid sources, standard timeouts'],
+      presetDeep: ['深度调研', 'Deep Research'],
+      presetDeepDesc: ['激活更多取证工具、对冲自适应宽限、语义证据层、更大并发', 'Full forensic tools, adaptive hedge grace, semantic evidence layer, max concurrency'],
+      presetApplied: ['已应用预设：', 'Preset applied:'],
+      matrixTitle: ['核心引擎拓扑与覆盖全景', 'Core Engine Topology & Coverage'],
+      matrixHint: ['当前可用引擎的接入层级与角色分工。带免密标识的引擎无需密钥即可直接使用。', 'Access tiers and roles of available engines. Keyless engines work without an API key.'],
+      matrixConfigured: ['密钥已就绪', 'Key Ready'],
+      matrixKeyless: ['免密层可用', 'Keyless Ready'],
+      matrixPending: ['待配密钥', 'Key Required'],
+      searchFilterPlaceholder: ['输入关键词快速筛选...', 'Filter by keyword or engine...'],
+      summary: ['Argo · web_search {search} · web_fetch {fetch} · 原生工具 {tools} 个 · 研究 {workers}/{max}', 'Argo · web_search {search} · web_fetch {fetch} · {tools} native tools · research {workers}/{max}'],
+      accessTitle: ['接入方式', 'Access'],
+      searchSeam: ['宿主 web_search 走 argo', 'Route host web_search to argo'],
+      searchSeamHint: ['关闭后 web_search 回到宿主默认搜索后端（web 行 searchProvider）。', 'When off, web_search falls back to the host provider configured on the web row.'],
+      fetchSeam: ['宿主 web_fetch 走 argo', 'Route host web_fetch to argo'],
+      fetchSeamHint: ['开启前必须在 web 配置行加 fetchProvider: argo；否则两个 provider 同时可用会报 WEB_PROVIDER_AMBIGUOUS。', 'Requires fetchProvider: argo on the web row; otherwise two available providers trigger WEB_PROVIDER_AMBIGUOUS.'],
+      entryTitle: ['引擎入口', 'Engine entry'],
+      entryHint: ['npx 模式填 npx，参数 -y / github:taxueseek/argo；本机模式填 python3，参数填 mcp_server.py 的绝对路径。', 'npx mode: command npx, args -y / github:taxueseek/argo. Local mode: python3 plus the absolute mcp_server.py path.'],
+      command: ['命令', 'Command'],
+      args: ['参数（一行一个）', 'Args (one per line)'],
+      searchTimeout: ['搜索超时 (ms)', 'Search timeout (ms)'],
+      fetchTimeout: ['抓取超时 (ms)', 'Fetch timeout (ms)'],
+      fetchChars: ['抓取正文上限（字符）', 'Fetch body cap (chars)'],
+      idle: ['连接空闲回收 (ms)', 'Idle recycle (ms)'],
+      concurrency: ['并发连接数', 'Concurrent connections'],
+      toolsTitle: ['原生工具', 'Native tools'],
+      toolsHint: ['勾选即注册为原生一等工具（CLI 单发，不依赖 MCP）。长尾工具只在需要时开，避免每轮工具面膨胀。', 'Checked tools register as native first-class tools (single-shot CLI, no MCP). Enable long-tail tools only when needed.'],
+      toolPresetTitle: ['推荐组合', 'Recommended sets'],
+      toolPresetHint: ['按场景一键套用（会覆盖当前勾选）。工具分区见下方。', 'Apply a scenario preset in one click (replaces current selection). See the grouped tools below.'],
+      coreTools: ['高频路径', 'Hot path'],
+      longTools: ['长尾取证', 'Long tail'],
+      nativeTimeout: ['单次调用超时 (ms)', 'Per-call timeout (ms)'],
+      nativeChars: ['返回文本上限（字符）', 'Returned text cap (chars)'],
+      keysTitle: ['API 密钥', 'API keys'],
+      keysHint: ['密钥写入 DSH 凭证库（与 Models 页同一处），不会写进插件配置、不回显明文。只有勾选「转发」的引用才会作为环境变量传给 argo 子进程。「清除」只删凭证库里的值，环境变量或 .env 提供的 key 仍会生效。', 'Keys are stored in the DSH credential store (same place as the Models page), never in plugin config and never echoed. Only refs marked Forward reach the argo child process. Clear removes the stored value only; a key supplied by the environment or .env still applies.'],
+      commonKeys: ['常用引擎', 'Common engines'],
+      moreKeys: ['更多引擎', 'More engines'],
+      configured: ['已配置', 'Configured'],
+      notConfigured: ['未配置', 'Not configured'],
+      forward: ['转发', 'Forward'],
+      keyPlaceholderSet: ['输入新值（留空保留现有密钥）', 'Enter a new value (leave blank to keep the current key)'],
+      keyPlaceholderEmpty: ['粘贴 API Key', 'Paste API key'],
+      saveKey: ['保存', 'Save'],
+      clearKey: ['清除', 'Clear'],
+      keySaved: ['密钥已保存；下一次新建 argo 连接生效（池内旧连接最长 60s 回收）。', 'Key saved; effective on the next new argo connection (old pooled connections recycle within ~60s).'],
+      keyCleared: ['密钥已清除。', 'Key cleared.'],
+      keyUnavailable: ['凭证服务不可用。', 'Credential service unavailable.'],
+      researchTitle: ['研究编排', 'Research'],
+      workers: ['默认 worker 数', 'Default workers'],
+      maxWorkers: ['worker 上限', 'Worker cap'],
+      tracks: ['轨道上限', 'Track cap'],
+      sources: ['每轨信源上限', 'Sources per track'],
+      workerTokens: ['worker token 上限', 'Worker token cap'],
+      synthTokens: ['综合 token 上限', 'Synthesis token cap'],
+      reportDir: ['报告落盘目录', 'Report directory'],
+      advancedTitle: ['高级', 'Advanced'],
+      allow: ['worker 工具白名单（一行一个）', 'Worker tool allowlist (one per line)'],
+      allowHint: ['留空表示使用内置默认（MCP 与原生工具双写）。wide_research 自身与 argo_research 会被硬排除。', 'Empty uses the built-in default (MCP + native tools). wide_research itself and argo_research are always excluded.'],
+      deny: ['worker 工具拒绝名单（一行一个）', 'Worker tool denylist (one per line)'],
+      keyRefs: ['凭证转发名单（一行一个）', 'Credential forwarding refs (one per line)'],
+      keyRefsHint: ['这些引用名会经 DSH credentials 解析后作为环境变量传给 argo 子进程；没有对应凭证的项会被跳过。', 'These refs resolve through DSH credentials and reach the argo child process as environment variables. Missing refs are skipped.'],
+      structural: ['结构性字段', 'Structural fields'],
+      structuralHint: ['toolName / provider / searchProviderId / fetchProviderId 只能改 profile patch；watched patch 由官方 watcher 同 PID 重组，改后核对功能即可，不默认重启。', 'toolName / provider / searchProviderId / fetchProviderId are profile-patch only; the watched patch is reconciled by the official watcher on the same PID. Verify the behavior, no default restart.'],
+      mcpHint: ['MCP 全量工具面（mcp__argo__*）是 profile 里的独立 mcp-argo 行，不在本页开关；需要时在 patch 中取消注释后按 live activation 分支验证。', 'The full MCP tool face (mcp__argo__*) is a separate mcp-argo entry in the profile patch; enable it there and verify through the live activation branch.'],
+      noKey: ['（未配置）', '(not configured)'],
+      enginesTitle: ['argo 引擎开关', 'argo engine switches'],
+      enginesHint: ['这些开关原先是 argo 的环境变量，只能改 ~/.config/argo/env 或启动环境；现在写进插件配置，随 argo 子进程生效。改动对下一次新建连接生效（池内旧连接按「连接空闲回收」时长退出，默认 60s）。密钥不在这里配，请用「密钥」页；本页也不收授权类开关（可复算执行、内网 URL）。', 'These switches used to be argo environment variables, editable only in ~/.config/argo/env or the launch environment. They now live in plugin config and reach the argo child process. Changes apply to the next new connection (pooled connections retire after the idle recycle window, 60s by default). Keys do not belong here; use the Keys tab. Authorization switches (recompute execution, private URLs) are deliberately not exposed.'],
+      groupCache: ['缓存与排序', 'Cache & ranking'],
+      groupFetch: ['抓取层', 'Fetch layer'],
+      groupSemantic: ['语义与自适应', 'Semantics & adaptivity'],
+      groupEngines: ['引擎启停', 'Engine on-off'],
+      groupNet: ['网络出口', 'Network'],
+      groupLocal: ['本机检索', 'Local search'],
+      groupMisc: ['其他', 'Misc'],
+      groupPaid: ['额度与预算', 'Quotas & budgets'],
+      groupPaidHint: ['免费与付费源统一管理：金额计费的源设月度预算，按次数限额的源设日/月次数上限；0=不限制。额度或预算用尽后该源自动跳过并回落免费源。改动对下一次新建连接生效。', 'Free and paid sources share one manager: money-metered sources take a monthly budget, count-capped sources take daily/monthly call caps; 0 = unlimited. When a budget or cap is exhausted, that source is skipped and free fallbacks take over. Changes apply to the next new connection.'],
+      envDefault: ['默认', 'default'],
+      envRange: ['需在 {min}–{max} 之间', 'must be between {min} and {max}'],
+      keySourceFile: ['凭证库', 'credential store'],
+      keySourceEnv: ['启动环境', 'launch environment'],
+      keySourceProjectEnv: ['项目 .env', 'project .env'],
+      keySourceUserEnv: ['家目录 .env', 'home .env'],
+      keySourceOther: ['其他层', 'other layer'],
+      keyReadonly: ['只读', 'read-only'],
+      keyOverrideHint: ['保存后将覆盖当前层', 'saving overrides the current layer'],
+      deepseekShared: ['与宿主 web_search 官方后端共用同一把 key，改动同时影响两边', 'Shared with the host web_search backend; changing it affects both'],
     };
 
     // 工具分区（场景化）：核心 / 取证 / 本地 / 长尾。
@@ -406,8 +285,59 @@ window.__ModuleLoader__.load({
       workerMaxTokens: 5000, synthesisMaxTokens: 7000, reportDir: '',
     };
 
+    const FORM_FIELDS = {
+      access: [
+        { key: 'command', prop: 'searchCommand', type: 'text', label: 'command', layout: 'full' },
+        { key: 'argsText', prop: 'searchArgs', type: 'lines', label: 'args', fallbackNonEmpty: true, layout: 'full' },
+        { key: 'searchTimeoutMs', prop: 'searchTimeoutMs', type: 'num', min: 1000, label: 'searchTimeout' },
+        { key: 'fetchTimeoutMs', prop: 'fetchTimeoutMs', type: 'num', min: 1000, label: 'fetchTimeout' },
+        // argo_fetch 工具 schema 上限 50000：与 clamp 对齐防显示失真
+        { key: 'fetchMaxChars', prop: 'fetchMaxChars', type: 'num', min: 500, max: 50_000, step: 500, label: 'fetchChars' },
+        { key: 'searchIdleMs', prop: 'searchIdleMs', type: 'num', min: 0, step: 1000, label: 'idle' },
+        { key: 'searchConcurrency', prop: 'searchConcurrency', type: 'num', min: 1, label: 'concurrency' },
+      ],
+      tools: [
+        { key: 'nativeTimeoutMs', prop: 'nativeTimeoutMs', type: 'num', min: 1000, label: 'nativeTimeout' },
+        { key: 'nativeMaxChars', prop: 'nativeMaxChars', type: 'num', min: 500, step: 500, label: 'nativeChars' },
+      ],
+      research: [
+        { key: 'defaultWorkers', prop: 'defaultWorkers', type: 'num', min: 1, label: 'workers' },
+        { key: 'maxWorkers', prop: 'maxWorkers', type: 'num', min: 1, minDraft: 'defaultWorkers', label: 'maxWorkers' },
+        { key: 'maxTracks', prop: 'maxTracks', type: 'num', min: 2, label: 'tracks' },
+        { key: 'maxSourcesPerTrack', prop: 'maxSourcesPerTrack', type: 'num', min: 1, label: 'sources' },
+        { key: 'workerMaxTokens', prop: 'workerMaxTokens', type: 'num', min: 512, step: 512, label: 'workerTokens' },
+        { key: 'synthesisMaxTokens', prop: 'synthesisMaxTokens', type: 'num', min: 512, step: 512, label: 'synthTokens' },
+        { key: 'reportDir', prop: 'reportDir', type: 'text', allowEmpty: true, label: 'reportDir', layout: 'full' },
+      ],
+      advanced: [
+        { key: 'allowText', prop: 'childToolAllow', type: 'lines', label: 'allow', hint: 'allowHint', layout: 'full' },
+        { key: 'denyText', prop: 'childToolDeny', type: 'lines', label: 'deny', layout: 'full' },
+        { key: 'keyRefsText', prop: 'keyRefs', type: 'lines', label: 'keyRefs', hint: 'keyRefsHint', layout: 'full' },
+      ],
+    };
+
+    const PRESETS = [
+      {
+        id: 'fast', titleKey: 'presetFast', descKey: 'presetFastDesc', badge: '15s 超时', badgeColor: 'blue', active: false,
+        env: { ARGO_TFIDF_RERANK: '0', ARGO_NUMBER_CROSSCHECK: '0', ARGO_PAID_SEARCH: 'off', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.5' },
+        fields: { searchTimeoutMs: 15000, fetchTimeoutMs: 15000 },
+      },
+      {
+        id: 'standard', titleKey: 'presetStandard', descKey: 'presetStandardDesc', badge: '标准生产', badgeColor: 'green', active: true,
+        env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_PAID_SEARCH: 'auto', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.8' },
+        fields: { searchTimeoutMs: 30000, fetchTimeoutMs: 25000 },
+      },
+      {
+        id: 'deep', titleKey: 'presetDeep', descKey: 'presetDeepDesc', badge: '深度核验', badgeColor: 'blue', active: false,
+        env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_SEMANTIC_EVIDENCE: '1', ARGO_ADAPTIVE_GRACE: '1', ARGO_PAID_SEARCH: 'auto' },
+        fields: { searchTimeoutMs: 45000, fetchTimeoutMs: 35000, nativeTimeoutMs: 60000 },
+      },
+    ];
+
+    const col = (gap) => ({ display: 'flex', flexDirection: 'column', gap });
+    const rowBetween = (gap = 8) => ({ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap });
     const S = {
-      wrap: { display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 800, color: 'var(--dsw-alias-label-primary, #1f2328)' },
+      wrap: { ...col(14), maxWidth: 800, color: 'var(--dsw-alias-label-primary, #1f2328)' },
       title: { margin: 0, fontSize: 18, fontWeight: 600, lineHeight: '26px' },
       hint: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary, #7b818b)' },
       notice: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-state-business-primary, #3b6ef6)' },
@@ -419,10 +349,10 @@ window.__ModuleLoader__.load({
         color: active ? 'var(--dsw-alias-label-primary, #1f2328)' : 'var(--dsw-alias-label-tertiary, #7b818b)',
         borderBottom: active ? '2px solid var(--dsw-alias-state-business-primary, #3b6ef6)' : '2px solid transparent',
       }),
-      card: { display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 12, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-settings-card-fill, #fff)' },
+      card: { ...col(10), padding: '14px 16px', borderRadius: 12, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-settings-card-fill, #fff)' },
       cardTitle: { margin: 0, fontSize: 14, fontWeight: 600, lineHeight: '20px' },
-      row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-      field: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
+      row: rowBetween(12),
+      field: { ...col(4), minWidth: 0 },
       label: { fontSize: 13, fontWeight: 500, lineHeight: '18px' },
       sub: { fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary, #7b818b)' },
       input: { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 13, lineHeight: '20px', padding: '7px 9px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit' },
@@ -433,136 +363,83 @@ window.__ModuleLoader__.load({
       check: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' },
       btn: { padding: '6px 12px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', font: 'inherit', fontSize: 12, lineHeight: '18px', cursor: 'pointer' },
       btnPrimary: { padding: '6px 14px', borderRadius: 8, border: '.5px solid var(--dsw-alias-state-business-primary, #3b6ef6)', background: 'var(--dsw-alias-state-business-primary, #3b6ef6)', color: '#fff', font: 'inherit', fontSize: 12, lineHeight: '18px', cursor: 'pointer' },
-      chip: (on) => ({
-        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 999, fontSize: 11, lineHeight: '16px', background: 'transparent',
-        border: '.5px solid ' + (on ? 'var(--dsw-alias-state-business-primary, #3b6ef6)' : 'var(--dsw-alias-border-l3, #e5e7eb)'),
-        color: on ? 'var(--dsw-alias-state-business-primary, #3b6ef6)' : 'var(--dsw-alias-label-tertiary, #7b818b)',
-      }),
       status: { margin: 0, fontSize: 12, minHeight: 18, lineHeight: '18px' },
       keyRow: { display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(0, 1.5fr)', gap: 10, alignItems: 'start', padding: '10px 0', borderTop: '.5px solid var(--dsw-alias-border-l2, #eee)' },
-      keyHead: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
+      keyHead: { ...col(2), minWidth: 0 },
       code: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, color: 'var(--dsw-alias-label-tertiary, #7b818b)' },
       dot: (on) => ({ display: 'inline-block', width: 6, height: 6, borderRadius: 999, background: on ? '#2da44e' : 'var(--dsw-alias-border-l4, #d0d7de)', marginRight: 5 }),
       actions: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-      switchWrap: { display: 'flex', alignItems: 'center', gap: 8 },
       divider: { height: '.5px', background: 'var(--dsw-alias-border-l2, #eee)', margin: '2px 0' },
       metricGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 },
-      metricCard: { display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px', borderRadius: 10, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-bg-layer-2, #f8fafc)' },
+      metricCard: { ...col(6), padding: '12px 14px', borderRadius: 10, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-bg-layer-2, #f8fafc)' },
       metricLabel: { fontSize: 11, fontWeight: 500, color: 'var(--dsw-alias-label-tertiary, #7b818b)', textTransform: 'uppercase', letterSpacing: '0.04em' },
       metricValue: { fontSize: 18, fontWeight: 600, lineHeight: '22px', color: 'var(--dsw-alias-label-primary, #1f2328)' },
       metricSub: { fontSize: 11, lineHeight: '16px', color: 'var(--dsw-alias-label-secondary, #4b5563)' },
       presetGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 },
       presetCard: (active) => ({
-        display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+        ...col(6), padding: '12px 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
         border: active ? '1.5px solid var(--dsw-alias-state-business-primary, #3b6ef6)' : '.5px solid var(--dsw-alias-border-l3, #e5e7eb)',
         background: active ? 'var(--dsw-alias-bg-layer-1, #fff)' : 'var(--dsw-alias-settings-card-fill, #fff)',
         boxShadow: active ? '0 1px 3px rgba(59, 110, 246, 0.12)' : 'none',
       }),
       matrixGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 },
-      matrixCard: { display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-bg-layer-1, #fff)' },
-      badge: (color) => ({
+      matrixCard: { ...col(4), padding: '10px 12px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l3, #e5e7eb)', background: 'var(--dsw-alias-bg-layer-1, #fff)' },
+      badge: (c) => ({
         display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 500, lineHeight: '14px',
-        background: color === 'green' ? 'rgba(46, 160, 67, 0.12)' : (color === 'blue' ? 'rgba(59, 110, 246, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
-        color: color === 'green' ? '#2da44e' : (color === 'blue' ? '#3b6ef6' : '#64748b'),
-        border: '.5px solid ' + (color === 'green' ? '#2da44e' : (color === 'blue' ? '#3b6ef6' : '#64748b')),
+        background: c === 'green' ? 'rgba(46, 160, 67, 0.12)' : (c === 'blue' ? 'rgba(59, 110, 246, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
+        color: c === 'green' ? '#2da44e' : (c === 'blue' ? '#3b6ef6' : '#64748b'),
+        border: '.5px solid ' + (c === 'green' ? '#2da44e' : (c === 'blue' ? '#3b6ef6' : '#64748b')),
       }),
       filterInput: { width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 12, lineHeight: '18px', padding: '6px 10px', borderRadius: 8, border: '.5px solid var(--dsw-alias-border-l4, #d0d7de)', background: 'var(--dsw-alias-bg-layer-1, #fff)', color: 'inherit', marginBottom: 8 },
     };
 
-    function asString(value, fallback) {
-      return typeof value === 'string' ? value : (fallback ?? '');
-    }
-
-    function asNumber(value, fallback) {
-      const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
-      return Number.isFinite(n) ? n : fallback;
-    }
-
-    function asArray(value) {
-      return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
-    }
-
-    function lines(text) {
-      return String(text ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+    const asString = (v, fb) => (typeof v === 'string' ? v : (fb ?? ''));
+    const asArray = (v) => (Array.isArray(v) ? v.filter((item) => typeof item === 'string') : []);
+    const lines = (text) => String(text ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+    function asNumber(v, fb) {
+      const n = typeof v === 'number' ? v : Number.parseInt(String(v ?? ''), 10);
+      return Number.isFinite(n) ? n : fb;
     }
 
     function toDraft(value) {
-      return {
-        command: asString(value.searchCommand, DEFAULTS.searchCommand),
-        argsText: asArray(value.searchArgs).join('\n'),
-        searchTimeoutMs: String(asNumber(value.searchTimeoutMs, DEFAULTS.searchTimeoutMs)),
-        fetchTimeoutMs: String(asNumber(value.fetchTimeoutMs, DEFAULTS.fetchTimeoutMs)),
-        fetchMaxChars: String(asNumber(value.fetchMaxChars, DEFAULTS.fetchMaxChars)),
-        searchIdleMs: String(asNumber(value.searchIdleMs, DEFAULTS.searchIdleMs)),
-        searchConcurrency: String(asNumber(value.searchConcurrency, DEFAULTS.searchConcurrency)),
-        nativeTimeoutMs: String(asNumber(value.nativeTimeoutMs, DEFAULTS.nativeTimeoutMs)),
-        nativeMaxChars: String(asNumber(value.nativeMaxChars, DEFAULTS.nativeMaxChars)),
-        defaultWorkers: String(asNumber(value.defaultWorkers, DEFAULTS.defaultWorkers)),
-        maxWorkers: String(asNumber(value.maxWorkers, DEFAULTS.maxWorkers)),
-        maxTracks: String(asNumber(value.maxTracks, DEFAULTS.maxTracks)),
-        maxSourcesPerTrack: String(asNumber(value.maxSourcesPerTrack, DEFAULTS.maxSourcesPerTrack)),
-        workerMaxTokens: String(asNumber(value.workerMaxTokens, DEFAULTS.workerMaxTokens)),
-        synthesisMaxTokens: String(asNumber(value.synthesisMaxTokens, DEFAULTS.synthesisMaxTokens)),
-        reportDir: asString(value.reportDir, DEFAULTS.reportDir),
-        allowText: asArray(value.childToolAllow).join('\n'),
-        denyText: asArray(value.childToolDeny).join('\n'),
-        keyRefsText: asArray(value.keyRefs).join('\n'),
-      };
+      const out = {};
+      for (const specs of Object.values(FORM_FIELDS)) {
+        for (const f of specs) {
+          if (f.type === 'lines') out[f.key] = asArray(value[f.prop]).join('\n');
+          else if (f.type === 'num') out[f.key] = String(asNumber(value[f.prop], DEFAULTS[f.prop]));
+          else out[f.key] = asString(value[f.prop], DEFAULTS[f.prop]);
+        }
+      }
+      return out;
     }
 
-    function Card(props) {
-      return h('section', { style: S.card }, [
-        props.title ? h('h3', { key: 't', style: S.cardTitle }, props.title) : null,
-        props.hint ? h('p', { key: 'h', style: S.hint }, props.hint) : null,
-        props.children,
-      ]);
-    }
-
-    function Field(props) {
-      return h('label', { style: S.field }, [
-        h('span', { key: 'l', style: S.label }, props.label),
-        props.children,
-        props.hint ? h('span', { key: 'h', style: S.sub }, props.hint) : null,
-      ]);
-    }
-
-    function Switch(props) {
-      return h('div', { style: S.row }, [
-        h('div', { key: 'txt', style: { minWidth: 0 } }, [
-          h('div', { key: 'l', style: S.label }, props.label),
-          props.hint ? h('div', { key: 'h', style: S.sub }, props.hint) : null,
-        ]),
-        h('input', {
-          key: 'i',
-          type: 'checkbox',
-          checked: props.checked === true,
-          disabled: props.disabled === true,
-          onChange: (event) => props.onChange(event.target.checked),
-          'aria-label': props.label,
-        }),
-      ]);
-    }
-
-    function NumberField(props) {
-      return h(Field, { label: props.label, hint: props.hint }, h('input', {
-        type: 'number',
-        style: S.input,
-        value: props.value,
-        min: props.min,
-        step: props.step ?? 1,
-        disabled: props.disabled === true,
-        onChange: (event) => props.onChange(event.target.value),
-      }));
-    }
-
-    function PrimaryButton(props) {
-      return h('button', {
-        type: 'button',
-        style: props.primary ? S.btnPrimary : S.btn,
-        disabled: props.disabled === true,
-        onClick: props.onClick,
-      }, props.children);
-    }
+    const Card = (p) => h('section', { style: S.card }, [
+      p.title ? h('h3', { key: 't', style: S.cardTitle }, p.title) : null,
+      p.hint ? h('p', { key: 'h', style: S.hint }, p.hint) : null,
+      p.children,
+    ]);
+    const Field = (p) => h('label', { style: S.field }, [
+      h('span', { key: 'l', style: S.label }, p.label),
+      p.children,
+      p.hint ? h('span', { key: 'h', style: S.sub }, p.hint) : null,
+    ]);
+    const Switch = (p) => h('div', { style: S.row }, [
+      h('div', { key: 'txt', style: { minWidth: 0 } }, [
+        h('div', { key: 'l', style: S.label }, p.label),
+        p.hint ? h('div', { key: 'h', style: S.sub }, p.hint) : null,
+      ]),
+      h('input', {
+        key: 'i', type: 'checkbox', checked: p.checked === true, disabled: p.disabled === true,
+        onChange: (e) => p.onChange(e.target.checked), 'aria-label': p.label,
+      }),
+    ]);
+    const NumberField = (p) => h(Field, { label: p.label, hint: p.hint }, h('input', {
+      type: 'number', style: S.input, value: p.value, min: p.min, step: p.step ?? 1,
+      disabled: p.disabled === true, onChange: (e) => p.onChange(e.target.value),
+    }));
+    const PrimaryButton = (p) => h('button', {
+      type: 'button', style: p.primary ? S.btnPrimary : S.btn, disabled: p.disabled === true, onClick: p.onClick,
+    }, p.children);
 
     function ArgoPanel(props) {
       const state = props.useArgoForm((snapshot) => snapshot);
@@ -574,51 +451,36 @@ window.__ModuleLoader__.load({
       const locale = props.locale;
       const initialLang = locale && locale.getSnapshot && locale.getSnapshot().active === 'en' ? 'en' : 'zh';
       const [lang, setLang] = useState(initialLang);
-
-      const [tab, setTab] = useState('dashboard');
+      const [tab, setTab] = useState('dashboard'); // hooks[1]：测试按此索引注入页签
       const [draft, setDraft] = useState(() => toDraft(value));
       const [busy, setBusy] = useState('');
       const [message, setMessage] = useState('');
       const [error, setError] = useState(false);
-
       const [credentials, setCredentials] = useState({});
       const [keyDraft, setKeyDraft] = useState({});
       const [keyBusy, setKeyBusy] = useState('');
       const [showAllKeys, setShowAllKeys] = useState(false);
-
-      // argoEnv 引擎开关：bool 类即时写；num/str/list 类走草稿 + 分组保存。
+      // argoEnv 引擎开关：bool 类即时写；num/str/list 类走草稿 + 分组保存
       const [envDraft, setEnvDraft] = useState({});
       const [envBusy, setEnvBusy] = useState('');
       const [engineFilter, setEngineFilter] = useState('');
       const [keyFilter, setKeyFilter] = useState('');
-      // 路由观测（宿主经 remote 事件推送；无推送时卡片显示终端命令提示）
       const [routeHealth, setRouteHealth] = useState(null);
 
       const dirty = useRef(new Set());
-      // 读-改-写共享配置字段（keyRefs / nativeTools / argoEnv）时读实时快照，
-      // 不读渲染时快照：保存是 await 之后的异步写，连续两次操作都从渲染值出发
-      // 会把前一次的结果挤掉（丢一个转发勾选/工具勾选）。
-      const liveValue = () => {
-        const snapshot = typeof props.useArgoForm?.getSnapshot === 'function'
-          ? props.useArgoForm.getSnapshot()
-          : undefined;
-        return snapshot && snapshot.value ? snapshot.value : value;
-      };
-      // describe 往返乱序防护：只认最新一次请求的响应（同官方 settings 页口径）。
       const credSeq = useRef(0);
-
-      const dict = lang === 'en' ? DICT.en : DICT.zh;
-      const t = (key) => {
-        const text = dict[key] !== undefined ? dict[key] : DICT.zh[key];
-        return text !== undefined ? text : key;
+      // 读-改-写共享字段（keyRefs / nativeTools / argoEnv）读实时快照，防连点丢更新
+      const liveValue = () => {
+        const snap = typeof props.useArgoForm?.getSnapshot === 'function' ? props.useArgoForm.getSnapshot() : undefined;
+        return snap && snap.value ? snap.value : value;
       };
+
+      const langIdx = lang === 'en' ? 1 : 0;
+      const t = (key) => (I18N[key] ? (I18N[key][langIdx] ?? I18N[key][0]) : key);
 
       useEffect(() => {
         const off = locale && locale.subscribe
-          ? locale.subscribe(() => {
-            const next = locale.getSnapshot && locale.getSnapshot().active === 'en' ? 'en' : 'zh';
-            setLang(next);
-          })
+          ? locale.subscribe(() => setLang(locale.getSnapshot && locale.getSnapshot().active === 'en' ? 'en' : 'zh'))
           : undefined;
         return typeof off === 'function' ? off : undefined;
       }, [locale]);
@@ -637,12 +499,10 @@ window.__ModuleLoader__.load({
         if (!props.credentials || typeof props.credentials.describe !== 'function') return;
         const seq = ++credSeq.current;
         try {
-          const response = await props.credentials.describe(KEYS.map((entry) => entry.ref));
+          const res = await props.credentials.describe(KEYS.map((entry) => entry.ref));
           if (seq !== credSeq.current) return;
-          if (response && response.ok) setCredentials(response.value || {});
-        } catch {
-          /* 凭证服务暂不可用：保留上一次状态 */
-        }
+          if (res && res.ok) setCredentials(res.value || {});
+        } catch { /* 凭证服务暂不可用 */ }
       };
 
       useEffect(() => {
@@ -658,150 +518,94 @@ window.__ModuleLoader__.load({
         return () => { for (const off of offs) off(); };
       }, [state]);
 
-      const edit = (key, text) => {
-        dirty.current.add(key);
-        setDraft((previous) => ({ ...previous, [key]: text }));
-      };
+      const edit = (key, text) => { dirty.current.add(key); setDraft((p) => ({ ...p, [key]: text })); };
+      const report = (ok, text) => { setError(!ok); setMessage(text); };
 
-      const report = (ok, text) => {
-        setError(!ok);
-        setMessage(text);
-      };
-
-      const write = async (ops) => {
+      const runSave = async (key, fn) => {
         if (disabled) return false;
-        setBusy('save');
-        try {
-          const ok = await props.mutate(ops);
-          report(ok, ok ? t('saved') : t('refused'));
-          return ok;
-        } catch (cause) {
-          report(false, cause && cause.message ? cause.message : String(cause));
-          return false;
-        } finally {
-          setBusy('');
-        }
+        setBusy(key);
+        try { return await fn(); }
+        catch (cause) { report(false, cause && cause.message ? cause.message : String(cause)); return false; }
+        finally { setBusy(''); }
       };
 
-      const setField = async (field, next) => {
-        if (disabled) return;
-        setBusy(field);
-        try {
-          const ok = await props.set(field, next);
-          report(ok, ok ? t('saved') : t('refused'));
-        } catch (cause) {
-          report(false, cause && cause.message ? cause.message : String(cause));
-        } finally {
-          setBusy('');
-        }
-      };
+      const write = (ops) => runSave('save', async () => {
+        const ok = await props.mutate(ops);
+        report(ok, ok ? t('saved') : t('refused'));
+        return ok;
+      });
 
-      const atLeast = (text, fallback, min) => Math.max(min, asNumber(text, fallback));
-      const clearDirty = (keys) => {
-        for (const key of keys) dirty.current.delete(key);
-      };
+      const setField = (field, next) => runSave(field, async () => {
+        const ok = await props.set(field, next);
+        report(ok, ok ? t('saved') : t('refused'));
+        return ok;
+      });
 
-      const saveAccess = async () => {
-        const args = lines(draft.argsText);
-        const ok = await write([
-          { op: 'set', path: ['searchCommand'], value: draft.command.trim() || DEFAULTS.searchCommand },
-          { op: 'set', path: ['searchArgs'], value: args.length ? args : DEFAULTS.searchArgs },
-          { op: 'set', path: ['searchTimeoutMs'], value: atLeast(draft.searchTimeoutMs, DEFAULTS.searchTimeoutMs, 1000) },
-          { op: 'set', path: ['fetchTimeoutMs'], value: atLeast(draft.fetchTimeoutMs, DEFAULTS.fetchTimeoutMs, 1000) },
-          // argo_fetch 工具 schema 上限 50000（native-tools.mjs 由 mcp_tools.py
-          // 生成）：配更大会被 argo clamp 回 50000，面板显示值与实效不符，这里就地截断。
-          { op: 'set', path: ['fetchMaxChars'], value: Math.min(50_000, atLeast(draft.fetchMaxChars, DEFAULTS.fetchMaxChars, 500)) },
-          { op: 'set', path: ['searchIdleMs'], value: atLeast(draft.searchIdleMs, DEFAULTS.searchIdleMs, 0) },
-          { op: 'set', path: ['searchConcurrency'], value: atLeast(draft.searchConcurrency, DEFAULTS.searchConcurrency, 1) },
-        ]);
-        if (ok) clearDirty(['command', 'argsText', 'searchTimeoutMs', 'fetchTimeoutMs', 'fetchMaxChars', 'searchIdleMs', 'searchConcurrency']);
-      };
-
-      const saveTools = async () => {
-        const ok = await write([
-          { op: 'set', path: ['nativeTimeoutMs'], value: atLeast(draft.nativeTimeoutMs, DEFAULTS.nativeTimeoutMs, 1000) },
-          { op: 'set', path: ['nativeMaxChars'], value: atLeast(draft.nativeMaxChars, DEFAULTS.nativeMaxChars, 500) },
-        ]);
-        if (ok) clearDirty(['nativeTimeoutMs', 'nativeMaxChars']);
-      };
-
-      const saveResearch = async () => {
-        const workers = atLeast(draft.defaultWorkers, DEFAULTS.defaultWorkers, 1);
-        const maxWorkers = Math.max(workers, atLeast(draft.maxWorkers, DEFAULTS.maxWorkers, 1));
-        const ok = await write([
-          { op: 'set', path: ['defaultWorkers'], value: workers },
-          { op: 'set', path: ['maxWorkers'], value: maxWorkers },
-          { op: 'set', path: ['maxTracks'], value: atLeast(draft.maxTracks, DEFAULTS.maxTracks, 2) },
-          { op: 'set', path: ['maxSourcesPerTrack'], value: atLeast(draft.maxSourcesPerTrack, DEFAULTS.maxSourcesPerTrack, 1) },
-          { op: 'set', path: ['workerMaxTokens'], value: atLeast(draft.workerMaxTokens, DEFAULTS.workerMaxTokens, 512) },
-          { op: 'set', path: ['synthesisMaxTokens'], value: atLeast(draft.synthesisMaxTokens, DEFAULTS.synthesisMaxTokens, 512) },
-          { op: 'set', path: ['reportDir'], value: draft.reportDir.trim() },
-        ]);
-        if (ok) clearDirty(['defaultWorkers', 'maxWorkers', 'maxTracks', 'maxSourcesPerTrack', 'workerMaxTokens', 'synthesisMaxTokens', 'reportDir']);
-      };
-
-      const saveAdvanced = async () => {
-        const ok = await write([
-          { op: 'set', path: ['childToolAllow'], value: lines(draft.allowText) },
-          { op: 'set', path: ['childToolDeny'], value: lines(draft.denyText) },
-          { op: 'set', path: ['keyRefs'], value: lines(draft.keyRefsText) },
-        ]);
-        if (ok) clearDirty(['allowText', 'denyText', 'keyRefsText']);
+      const saveFormGroup = async (groupKey) => {
+        const specs = FORM_FIELDS[groupKey];
+        const parsed = {};
+        const ops = specs.map((f) => {
+          let val;
+          if (f.type === 'lines') {
+            const arr = lines(draft[f.key]);
+            val = f.fallbackNonEmpty && !arr.length ? DEFAULTS[f.prop] : arr;
+          } else if (f.type === 'num') {
+            const minVal = f.minDraft ? Math.max(f.min, parsed[f.minDraft]) : f.min;
+            val = Math.max(minVal, asNumber(draft[f.key], DEFAULTS[f.prop]));
+            if (f.max !== undefined) val = Math.min(f.max, val);
+          } else {
+            const trimmed = draft[f.key].trim();
+            val = f.allowEmpty ? trimmed : (trimmed || DEFAULTS[f.prop]);
+          }
+          parsed[f.key] = val;
+          return { op: 'set', path: [f.prop], value: val };
+        });
+        const ok = await write(ops);
+        if (ok) for (const f of specs) dirty.current.delete(f.key);
       };
 
       const toggleTool = (id) => {
         const current = new Set(asArray(liveValue().nativeTools));
         if (current.has(id)) current.delete(id);
         else current.add(id);
-        const ordered = TOOLS.map((tool) => tool.id).filter((toolId) => current.has(toolId));
+        const ordered = TOOLS.map((tool) => tool.id).filter((tid) => current.has(tid));
         for (const extra of current) if (!ordered.includes(extra)) ordered.push(extra);
         void setField('nativeTools', ordered);
       };
 
-      // 推荐组合：一键套用一组工具（场景化分区之上的快捷入口）。
-      // 只增不减会覆盖用户已有勾选，所以是「设为这组」而非「追加这组」。
       const applyToolPreset = async (tools) => {
-        const ordered = TOOLS.map((tool) => tool.id).filter((toolId) => tools.includes(toolId));
+        const ordered = TOOLS.map((tool) => tool.id).filter((tid) => tools.includes(tid));
         for (const extra of tools) if (!ordered.includes(extra)) ordered.push(extra);
         await props.set('nativeTools', ordered);
       };
 
-      const saveKey = async (ref) => {
+      const mutateKey = async (ref, action) => {
+        setKeyBusy(ref);
+        try { await action(); await refreshCredentials(); }
+        catch (cause) { report(false, cause && cause.message ? cause.message : String(cause)); }
+        finally { setKeyBusy(''); }
+      };
+
+      const saveKey = (ref) => {
         const key = asString(keyDraft[ref]).trim();
         if (!key || !props.credentials) return;
-        setKeyBusy(ref);
-        try {
-          const response = await props.credentials.set(ref, key);
-          if (!response || !response.ok) {
-            throw new Error(response && response.error ? response.error.message : t('keyUnavailable'));
-          }
-          setKeyDraft((previous) => ({ ...previous, [ref]: '' }));
+        return mutateKey(ref, async () => {
+          const res = await props.credentials.set(ref, key);
+          if (!res || !res.ok) throw new Error(res && res.error ? res.error.message : t('keyUnavailable'));
+          setKeyDraft((p) => ({ ...p, [ref]: '' }));
           const refs = asArray(liveValue().keyRefs);
           if (!refs.includes(ref)) await props.set('keyRefs', [...refs, ref]);
           report(true, t('keySaved'));
-          await refreshCredentials();
-        } catch (cause) {
-          report(false, cause && cause.message ? cause.message : String(cause));
-        } finally {
-          setKeyBusy('');
-        }
+        });
       };
 
-      const clearKey = async (ref) => {
+      const clearKey = (ref) => {
         if (!props.credentials) return;
-        setKeyBusy(ref);
-        try {
-          const response = await props.credentials.unset(ref);
-          if (!response || !response.ok) {
-            throw new Error(response && response.error ? response.error.message : t('keyUnavailable'));
-          }
+        return mutateKey(ref, async () => {
+          const res = await props.credentials.unset(ref);
+          if (!res || !res.ok) throw new Error(res && res.error ? res.error.message : t('keyUnavailable'));
           report(true, t('keyCleared'));
-          await refreshCredentials();
-        } catch (cause) {
-          report(false, cause && cause.message ? cause.message : String(cause));
-        } finally {
-          setKeyBusy('');
-        }
+        });
       };
 
       const setForward = (ref, on) => {
@@ -811,12 +615,7 @@ window.__ModuleLoader__.load({
         void setField('keyRefs', [...refs]);
       };
 
-      // ── argoEnv 引擎开关：KEY=VALUE 行 ↔ 控件 ──
-      // argoEnv 行集合是单一真源：每次写入都基于实时快照读-改-写，只碰白名单
-      // 内的名字。白名单外的行**被清掉**，不是原样保留——apply 期对白名单外
-      // 名字是 loud fail（整个插件加载失败），直接写 profile patch 写错的开关
-      // 会让人卡在「改不回来」；这里任何一次面板写入都顺手清毒，是最容易碰到
-      // 的恢复入口。
+      // argoEnv 单一真源：写入时过滤白名单外脏键，避免 apply 期 loud fail 卡死
       const envMap = () => {
         const map = {};
         for (const entry of asArray(liveValue().argoEnv)) {
@@ -825,31 +624,24 @@ window.__ModuleLoader__.load({
         }
         return map;
       };
-      // 与 argo 的 env_flag 判定对齐：空串/0/false/no/off/n/disable/disabled/none 算关。
       const ENV_FALSY = ['', '0', 'false', 'no', 'off', 'n', 'disable', 'disabled', 'none'];
-      const envBoolState = (spec, map) => {
-        const raw = map[spec.name];
-        return raw === undefined
+      const envBoolState = (spec, map) => (
+        map[spec.name] === undefined
           ? spec.def === true
-          : !ENV_FALSY.includes(String(raw).trim().toLowerCase());
-      };
+          : !ENV_FALSY.includes(String(map[spec.name]).trim().toLowerCase())
+      );
       const writeEnvLines = async (updates) => {
         const map = envMap();
         for (const name of Object.keys(updates)) {
-          const value = updates[name];
-          if (value === null || value === undefined || value === '') delete map[name];
-          else map[name] = value;
+          const val = updates[name];
+          if (val === null || val === undefined || val === '') delete map[name];
+          else map[name] = val;
         }
-        const lines = Object.keys(map)
-          .filter((name) => ENV_NAMES.has(name))
-          .map((name) => `${name}=${map[name]}`);
-        return props.set('argoEnv', lines);
+        return props.set('argoEnv', Object.keys(map).filter((n) => ENV_NAMES.has(n)).map((n) => `${n}=${map[n]}`));
       };
       const toggleEnv = (spec, on) => {
         if (disabled) return;
-        // 开关状态直接落 0/1：文案与 env 同向（开=1，关=0），不做反转。
-        const value = on ? '1' : '0';
-        void writeEnvLines({ [spec.name]: value })
+        void writeEnvLines({ [spec.name]: on ? '1' : '0' })
           .then((ok) => report(ok, ok ? t('saved') : t('refused')))
           .catch((cause) => report(false, cause && cause.message ? cause.message : String(cause)));
       };
@@ -857,14 +649,9 @@ window.__ModuleLoader__.load({
         if (disabled) return;
         const updates = {};
         for (const spec of ENGINE_TOGGLES) {
-          if (spec.group !== group || spec.kind === 'bool') continue;
-          const raw = envDraft[spec.name];
-          if (raw === undefined) continue;
-          const text = String(raw).trim();
-          if (text === '') {
-            updates[spec.name] = null;
-            continue;
-          }
+          if (spec.group !== group || spec.kind === 'bool' || envDraft[spec.name] === undefined) continue;
+          const text = String(envDraft[spec.name]).trim();
+          if (text === '') { updates[spec.name] = null; continue; }
           if (spec.kind === 'num') {
             const n = Number(text);
             if (!Number.isFinite(n) || n < spec.min || n > spec.max) {
@@ -880,71 +667,28 @@ window.__ModuleLoader__.load({
           const ok = await writeEnvLines(updates);
           report(ok, ok ? t('saved') : t('refused'));
           if (ok) setEnvDraft({});
-        } catch (cause) {
-          report(false, cause && cause.message ? cause.message : String(cause));
-        } finally {
-          setEnvBusy('');
-        }
+        } catch (cause) { report(false, cause && cause.message ? cause.message : String(cause)); }
+        finally { setEnvBusy(''); }
       };
 
-      const applyPreset = async (type) => {
-        if (disabled) return;
-        setBusy('preset');
-        try {
-          const map = envMap();
-          const ops = [];
-          if (type === 'fast') {
-            map.ARGO_TFIDF_RERANK = '0';
-            map.ARGO_NUMBER_CROSSCHECK = '0';
-            map.ARGO_PAID_SEARCH = 'off';
-            map.ARGO_ADAPTIVE_GRACE = '1';
-            map.ARGO_SERIAL_STAGGER_S = '0.5';
-            ops.push({ op: 'set', path: ['searchTimeoutMs'], value: 15000 });
-            ops.push({ op: 'set', path: ['fetchTimeoutMs'], value: 15000 });
-          } else if (type === 'standard') {
-            map.ARGO_TFIDF_RERANK = '1';
-            map.ARGO_NUMBER_CROSSCHECK = '1';
-            map.ARGO_MINHASH_DEDUPE = '1';
-            map.ARGO_PAID_SEARCH = 'auto';
-            map.ARGO_ADAPTIVE_GRACE = '1';
-            map.ARGO_SERIAL_STAGGER_S = '0.8';
-            ops.push({ op: 'set', path: ['searchTimeoutMs'], value: 30000 });
-            ops.push({ op: 'set', path: ['fetchTimeoutMs'], value: 25000 });
-          } else if (type === 'deep') {
-            map.ARGO_TFIDF_RERANK = '1';
-            map.ARGO_NUMBER_CROSSCHECK = '1';
-            map.ARGO_MINHASH_DEDUPE = '1';
-            map.ARGO_SEMANTIC_EVIDENCE = '1';
-            map.ARGO_ADAPTIVE_GRACE = '1';
-            map.ARGO_PAID_SEARCH = 'auto';
-            ops.push({ op: 'set', path: ['searchTimeoutMs'], value: 45000 });
-            ops.push({ op: 'set', path: ['fetchTimeoutMs'], value: 35000 });
-            ops.push({ op: 'set', path: ['nativeTimeoutMs'], value: 60000 });
-          }
-          const envLines = Object.keys(map)
-            .filter((name) => ENV_NAMES.has(name))
-            .map((name) => `${name}=${map[name]}`);
-          ops.push({ op: 'set', path: ['argoEnv'], value: envLines });
-          const ok = await props.mutate(ops);
-          const presetName = type === 'fast' ? t('presetFast') : (type === 'standard' ? t('presetStandard') : t('presetDeep'));
-          report(ok, ok ? `${t('presetApplied')} ${presetName}` : t('refused'));
-        } catch (cause) {
-          report(false, cause && cause.message ? cause.message : String(cause));
-        } finally {
-          setBusy('');
-        }
-      };
+      const applyPreset = (preset) => runSave('preset', async () => {
+        const map = { ...envMap(), ...preset.env };
+        const ops = Object.entries(preset.fields).map(([path, val]) => ({ op: 'set', path: [path], value: val }));
+        const envLines = Object.keys(map).filter((n) => ENV_NAMES.has(n)).map((n) => `${n}=${map[n]}`);
+        ops.push({ op: 'set', path: ['argoEnv'], value: envLines });
+        const ok = await props.mutate(ops);
+        report(ok, ok ? `${t('presetApplied')} ${t(preset.titleKey)}` : t('refused'));
+        return ok;
+      });
 
       if (props.view === 'summary') {
-        const summary = t('summary')
+        return t('summary')
           .replace('{search}', value.searchProviderEnabled !== false ? t('on') : t('off'))
           .replace('{fetch}', value.fetchProviderEnabled !== false ? t('on') : t('off'))
           .replace('{tools}', String(asArray(value.nativeTools).length))
           .replace('{workers}', String(asNumber(value.defaultWorkers, DEFAULTS.defaultWorkers)))
           .replace('{max}', String(asNumber(value.maxWorkers, DEFAULTS.maxWorkers)));
-        return summary;
       }
-
       if (!ready) {
         return h('div', { style: S.wrap }, [
           h('h2', { key: 't', style: S.title }, t('title')),
@@ -952,202 +696,113 @@ window.__ModuleLoader__.load({
         ]);
       }
 
-      const tabButton = (id, label) => h('button', {
-        key: id,
-        type: 'button',
-        style: S.tab(tab === id),
-        onClick: () => setTab(id),
-      }, label);
-
-      const statusLine = message
-        ? h('p', { style: error ? S.error : S.notice, role: 'status' }, message)
-        : h('p', { style: S.status }, disabled ? t('readonly') : '');
-
-      // 按 TOOL_GROUPS 顺序分组渲染（场景化分区，替代旧的 core/long 两分）
-      const toolsByGroup = (gid) => TOOLS.filter((tool) => tool.group === gid);
-      const toolCheckbox = (tool) => h('label', { key: tool.id, style: S.check }, [
-        h('input', {
-          key: 'i',
-          type: 'checkbox',
-          checked: asArray(value.nativeTools).includes(tool.id),
-          disabled,
-          onChange: () => toggleTool(tool.id),
-        }),
-        h('span', { key: 't' }, [
-          h('span', { key: 'n', style: S.mono }, tool.id),
-          h('span', { key: 'd', style: S.sub }, '  ' + (lang === 'en' ? tool.en : tool.zh)),
-        ]),
+      const renderField = (f) => {
+        if (f.type === 'num') {
+          return h(NumberField, {
+            key: f.key, label: t(f.label), min: f.min, step: f.step,
+            value: draft[f.key], disabled, onChange: (next) => edit(f.key, next),
+          });
+        }
+        const isLines = f.type === 'lines';
+        return h(Field, { key: f.key, label: t(f.label), hint: f.hint ? t(f.hint) : undefined }, h(isLines ? 'textarea' : 'input', {
+          type: isLines ? undefined : 'text',
+          style: isLines ? { ...S.input, ...S.textarea, ...S.mono } : { ...S.input, ...S.mono },
+          value: draft[f.key], disabled, spellCheck: false,
+          onChange: (e) => edit(f.key, e.target.value),
+        }));
+      };
+      const renderGroup = (groupKey) => {
+        const specs = FORM_FIELDS[groupKey];
+        const full = specs.filter((f) => f.layout === 'full').map(renderField);
+        const grid = specs.filter((f) => f.layout !== 'full').map(renderField);
+        return [
+          ...full,
+          grid.length ? h('div', { key: 'g', style: S.grid }, grid) : null,
+        ];
+      };
+      const saveBtn = (groupKey) => h('div', { key: 'save', style: S.actions }, [
+        h(PrimaryButton, {
+          primary: true, disabled: disabled || busy === 'save',
+          onClick: () => { void saveFormGroup(groupKey); },
+        }, busy === 'save' ? t('saving') : t('save')),
       ]);
 
       const keyRow = (entry) => {
         const info = credentials[entry.ref];
         const configured = info && info.configured === true;
-        const writable = !info || info.writable !== false;
-        const forwarded = asArray(value.keyRefs).includes(entry.ref);
-        // 来源层：回答「这把 key 从哪来」。保存写凭证库文件层，优先级高于
-        // 启动环境与 .env，所以来源不是 file 时提示保存后会覆盖当前层。
+        const rowWritable = !info || info.writable !== false;
         const sourceLabel = configured && typeof info.source === 'string'
-          ? t('keySource' + info.source.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(''))
+          ? t('keySource' + info.source.split('-').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(''))
           : '';
         const statusParts = [configured ? t('configured') : t('notConfigured')];
         if (sourceLabel && sourceLabel !== 'keySource' + info.source) statusParts.push(sourceLabel);
-        if (configured && !writable) statusParts.push(t('keyReadonly'));
-        if (configured && writable && info.source !== undefined && info.source !== 'file') statusParts.push(t('keyOverrideHint'));
+        if (configured && !rowWritable) statusParts.push(t('keyReadonly'));
+        if (configured && rowWritable && info.source !== undefined && info.source !== 'file') statusParts.push(t('keyOverrideHint'));
         return h('div', { key: entry.ref, style: S.keyRow }, [
           h('div', { key: 'head', style: S.keyHead }, [
-            h('span', { key: 'n', style: S.label }, [
-              h('span', { key: 'dot', style: S.dot(configured) }),
-              lang === 'en' ? (entry.en || entry.label) : entry.label,
-            ]),
+            h('span', { key: 'n', style: S.label }, [h('span', { key: 'dot', style: S.dot(configured) }), lang === 'en' ? (entry.en || entry.label) : entry.label]),
             h('span', { key: 'ref', style: S.code }, entry.ref),
             h('span', { key: 's', style: S.sub }, statusParts.join(' · ')),
-            entry.ref === 'DEEPSEEK_API_KEY'
-              ? h('span', { key: 'shared', style: S.sub }, t('deepseekShared'))
-              : null,
+            entry.ref === 'DEEPSEEK_API_KEY' ? h('span', { key: 'shared', style: S.sub }, t('deepseekShared')) : null,
           ]),
-          h('div', { key: 'body', style: { display: 'flex', flexDirection: 'column', gap: 6 } }, [
+          h('div', { key: 'body', style: col(6) }, [
             h('input', {
-              key: 'i',
-              type: 'password',
-              autoComplete: 'off',
-              spellCheck: false,
-              style: S.input,
-              value: asString(keyDraft[entry.ref]),
-              placeholder: configured ? t('keyPlaceholderSet') : t('keyPlaceholderEmpty'),
-              disabled: disabled || !props.credentials || !writable,
-              onChange: (event) => setKeyDraft((previous) => ({ ...previous, [entry.ref]: event.target.value })),
+              key: 'i', type: 'password', autoComplete: 'off', spellCheck: false, style: S.input,
+              value: asString(keyDraft[entry.ref]), placeholder: t(configured ? 'keyPlaceholderSet' : 'keyPlaceholderEmpty'),
+              disabled: disabled || !props.credentials || !rowWritable,
+              onChange: (e) => setKeyDraft((p) => ({ ...p, [entry.ref]: e.target.value })),
             }),
             h('div', { key: 'a', style: S.actions }, [
               h('label', { key: 'f', style: S.check }, [
-                h('input', {
-                  key: 'i',
-                  type: 'checkbox',
-                  checked: forwarded,
-                  disabled,
-                  onChange: (event) => setForward(entry.ref, event.target.checked),
-                }),
+                h('input', { key: 'i', type: 'checkbox', checked: asArray(value.keyRefs).includes(entry.ref), disabled, onChange: (e) => setForward(entry.ref, e.target.checked) }),
                 h('span', { key: 't' }, t('forward')),
               ]),
               h('span', { key: 'sp', style: { flex: 1 } }),
-              h('button', {
-                key: 's',
-                type: 'button',
-                style: S.btn,
-                disabled: disabled || !writable || keyBusy === entry.ref || asString(keyDraft[entry.ref]).trim() === '',
-                onClick: () => { void saveKey(entry.ref); },
-              }, keyBusy === entry.ref ? t('saving') : t('saveKey')),
-              configured ? h('button', {
-                key: 'c',
-                type: 'button',
-                style: S.btn,
-                disabled: disabled || !writable || keyBusy === entry.ref,
-                onClick: () => { void clearKey(entry.ref); },
-              }, t('clearKey')) : null,
+              h('button', { key: 's', type: 'button', style: S.btn, disabled: disabled || !rowWritable || keyBusy === entry.ref || asString(keyDraft[entry.ref]).trim() === '', onClick: () => { void saveKey(entry.ref); } }, t(keyBusy === entry.ref ? 'saving' : 'saveKey')),
+              configured ? h('button', { key: 'c', type: 'button', style: S.btn, disabled: disabled || !rowWritable || keyBusy === entry.ref, onClick: () => { void clearKey(entry.ref); } }, t('clearKey')) : null,
             ]),
           ]),
         ]);
       };
 
-      const commonKeys = KEYS.filter((entry) => entry.common);
-      const visibleKeys = showAllKeys ? KEYS : commonKeys;
-
       const panel = [];
-
       if (tab === 'dashboard') {
-        const configuredKeyCount = Object.values(credentials).filter((c) => c && c.configured).length;
-        const keylessEngineCount = CORE_ENGINES.filter((e) => e.keyless).length;
-        const seamSearchOn = value.searchProviderEnabled !== false;
-        const seamFetchOn = value.fetchProviderEnabled !== false;
-        const activeToolCount = asArray(value.nativeTools).length;
-        const poolConcurrency = asNumber(value.searchConcurrency, DEFAULTS.searchConcurrency);
-        const poolIdleMs = asNumber(value.searchIdleMs, DEFAULTS.searchIdleMs);
-
-        panel.push(h('div', { key: 'metrics', style: S.metricGrid }, [
-          h('div', { key: 'pool', style: S.metricCard }, [
-            h('span', { key: 'l', style: S.metricLabel }, t('poolTitle')),
-            h('div', { key: 'v', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
-              h('span', { key: 'dot', style: S.dot(poolConcurrency > 0) }),
-              h('span', { key: 'val', style: S.metricValue }, `${poolConcurrency} 并发`),
-            ]),
-            h('span', { key: 's', style: S.metricSub }, `${t('poolStatusHealthy')} · 空闲回收 ${poolIdleMs / 1000}s`),
-          ]),
-          h('div', { key: 'seam', style: S.metricCard }, [
-            h('span', { key: 'l', style: S.metricLabel }, t('accessTitle')),
-            h('span', { key: 'val', style: S.metricValue }, seamSearchOn && seamFetchOn ? '双路接管' : (seamSearchOn || seamFetchOn ? '单路接管' : '未接管')),
-            h('span', { key: 's', style: S.metricSub }, `Search: ${seamSearchOn ? 'ON' : 'OFF'} · Fetch: ${seamFetchOn ? 'ON' : 'OFF'}`),
-          ]),
-          h('div', { key: 'tools', style: S.metricCard }, [
-            h('span', { key: 'l', style: S.metricLabel }, t('toolsTitle')),
-            h('span', { key: 'val', style: S.metricValue }, `${activeToolCount} / ${TOOLS.length}`),
-            h('span', { key: 's', style: S.metricSub }, '已就绪原生 MCP 工具'),
-          ]),
-          h('div', { key: 'keys', style: S.metricCard }, [
-            h('span', { key: 'l', style: S.metricLabel }, t('keysTitle')),
-            h('span', { key: 'val', style: S.metricValue }, `${configuredKeyCount} 配置 · ${keylessEngineCount} 免密`),
-            h('span', { key: 's', style: S.metricSub }, '覆盖全局多源引擎'),
-          ]),
-        ]));
-
-        // 路由观测卡：宿主经 remote 事件推送 routeHealth 时展示最近路由决策；
-        // 未推送时给出终端命令提示——不让面板空白，也不假装有数据。
+        const configuredKeys = Object.values(credentials).filter((c) => c && c.configured).length;
+        const searchOn = value.searchProviderEnabled !== false;
+        const fetchOn = value.fetchProviderEnabled !== false;
+        const poolConc = asNumber(value.searchConcurrency, DEFAULTS.searchConcurrency);
+        const metrics = [
+          { k: 'pool', label: t('poolTitle'), val: `${poolConc} 并发`, dot: poolConc > 0, sub: `${t('poolStatusHealthy')} · 空闲回收 ${asNumber(value.searchIdleMs, DEFAULTS.searchIdleMs) / 1000}s` },
+          { k: 'seam', label: t('accessTitle'), val: searchOn && fetchOn ? '双路接管' : (searchOn || fetchOn ? '单路接管' : '未接管'), sub: `Search: ${searchOn ? 'ON' : 'OFF'} · Fetch: ${fetchOn ? 'ON' : 'OFF'}` },
+          { k: 'tools', label: t('toolsTitle'), val: `${asArray(value.nativeTools).length} / ${TOOLS.length}`, sub: '已就绪原生 MCP 工具' },
+          { k: 'keys', label: t('keysTitle'), val: `${configuredKeys} 配置 · ${CORE_ENGINES.filter((e) => e.keyless).length} 免密`, sub: '覆盖全局多源引擎' },
+        ];
+        panel.push(h('div', { key: 'metrics', style: S.metricGrid }, metrics.map((m) => h('div', { key: m.k, style: S.metricCard }, [
+          h('span', { key: 'l', style: S.metricLabel }, m.label),
+          m.dot !== undefined
+            ? h('div', { key: 'v', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [h('span', { key: 'd', style: S.dot(m.dot) }), h('span', { key: 'val', style: S.metricValue }, m.val)])
+            : h('span', { key: 'val', style: S.metricValue }, m.val),
+          h('span', { key: 's', style: S.metricSub }, m.sub),
+        ]))));
         panel.push(h(Card, { key: 'route', title: t('routeHealthTitle'), hint: t('routeHealthHint') }, [
           routeHealth && Array.isArray(routeHealth.samples) && routeHealth.samples.length > 0
-            ? h('div', { key: 'rows', style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-                routeHealth.samples.slice(0, 5).map((row, i) =>
-                  h('div', { key: 'r' + i, style: S.keyRow }, [
-                    h('span', { key: 'q', style: S.label }, String(row.query || '').slice(0, 40)),
-                    h('span', { key: 'd', style: S.sub }, `${row.domain || '-'} · ${row.engine || '-'}`),
-                  ])))
+            ? h('div', { key: 'rows', style: col(6) }, routeHealth.samples.slice(0, 5).map((r, i) =>
+                h('div', { key: 'r' + i, style: S.keyRow }, [h('span', { key: 'q', style: S.label }, String(r.query || '').slice(0, 40)), h('span', { key: 'd', style: S.sub }, `${r.domain || '-'} · ${r.engine || '-'}`)])))
             : h('p', { key: 'hint', style: S.hint }, t('routeHealthFallback')),
         ]));
-
         panel.push(h(Card, { key: 'presets', title: t('presetTitle'), hint: t('presetHint') }, [
-          h('div', { key: 'grid', style: S.presetGrid }, [
-            h('div', {
-              key: 'fast',
-              style: S.presetCard(false),
-              onClick: () => { void applyPreset('fast'); },
-            }, [
-              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
-                h('span', { key: 'title', style: S.label }, t('presetFast')),
-                h('span', { key: 'badge', style: S.badge('blue') }, '15s 超时'),
-              ]),
-              h('span', { key: 'd', style: S.sub }, t('presetFastDesc')),
-            ]),
-            h('div', {
-              key: 'standard',
-              style: S.presetCard(true),
-              onClick: () => { void applyPreset('standard'); },
-            }, [
-              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
-                h('span', { key: 'title', style: S.label }, t('presetStandard')),
-                h('span', { key: 'badge', style: S.badge('green') }, '标准生产'),
-              ]),
-              h('span', { key: 'd', style: S.sub }, t('presetStandardDesc')),
-            ]),
-            h('div', {
-              key: 'deep',
-              style: S.presetCard(false),
-              onClick: () => { void applyPreset('deep'); },
-            }, [
-              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
-                h('span', { key: 'title', style: S.label }, t('presetDeep')),
-                h('span', { key: 'badge', style: S.badge('blue') }, '深度核验'),
-              ]),
-              h('span', { key: 'd', style: S.sub }, t('presetDeepDesc')),
-            ]),
-          ]),
+          h('div', { key: 'grid', style: S.presetGrid }, PRESETS.map((p) => h('div', { key: p.id, style: S.presetCard(p.active), onClick: () => { void applyPreset(p); } }, [
+            h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, t(p.titleKey)), h('span', { key: 'badge', style: S.badge(p.badgeColor) }, p.badge)]),
+            h('span', { key: 'd', style: S.sub }, t(p.descKey)),
+          ]))),
         ]));
-
         panel.push(h(Card, { key: 'matrix', title: t('matrixTitle'), hint: t('matrixHint') }, [
           h('div', { key: 'grid', style: S.matrixGrid }, CORE_ENGINES.map((engine) => {
             const hasKey = engine.ref && credentials[engine.ref] && credentials[engine.ref].configured;
-            const badgeType = hasKey ? 'green' : (engine.keyless ? 'blue' : 'gray');
-            const badgeText = hasKey ? t('matrixConfigured') : (engine.keyless ? t('matrixKeyless') : t('matrixPending'));
             return h('div', { key: engine.id, style: S.matrixCard }, [
-              h('div', { key: 'h', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 } }, [
+              h('div', { key: 'h', style: rowBetween(6) }, [
                 h('span', { key: 'n', style: S.label }, lang === 'en' ? engine.nameEn : engine.nameZh),
-                h('span', { key: 'b', style: S.badge(badgeType) }, badgeText),
+                h('span', { key: 'b', style: S.badge(hasKey ? 'green' : (engine.keyless ? 'blue' : 'gray')) }, t(hasKey ? 'matrixConfigured' : (engine.keyless ? 'matrixKeyless' : 'matrixPending'))),
               ]),
               h('span', { key: 'r', style: S.sub }, lang === 'en' ? engine.roleEn : engine.roleZh),
             ]);
@@ -1157,337 +812,105 @@ window.__ModuleLoader__.load({
 
       if (tab === 'access') {
         panel.push(h(Card, { key: 'seam', title: t('accessTitle') }, [
-          h(Switch, {
-            key: 's',
-            checked: value.searchProviderEnabled !== false,
-            disabled,
-            label: t('searchSeam'),
-            hint: t('searchSeamHint'),
-            onChange: (next) => { void setField('searchProviderEnabled', next); },
-          }),
-          h(Switch, {
-            key: 'f',
-            checked: value.fetchProviderEnabled !== false,
-            disabled,
-            label: t('fetchSeam'),
-            hint: t('fetchSeamHint'),
-            onChange: (next) => { void setField('fetchProviderEnabled', next); },
-          }),
+          h(Switch, { key: 's', checked: value.searchProviderEnabled !== false, disabled, label: t('searchSeam'), hint: t('searchSeamHint'), onChange: (n) => { void setField('searchProviderEnabled', n); } }),
+          h(Switch, { key: 'f', checked: value.fetchProviderEnabled !== false, disabled, label: t('fetchSeam'), hint: t('fetchSeamHint'), onChange: (n) => { void setField('fetchProviderEnabled', n); } }),
         ]));
-        panel.push(h(Card, { key: 'entry', title: t('entryTitle'), hint: t('entryHint') }, [
-          h(Field, { key: 'c', label: t('command') }, h('input', {
-            type: 'text',
-            style: { ...S.input, ...S.mono },
-            value: draft.command,
-            disabled,
-            spellCheck: false,
-            onChange: (event) => edit('command', event.target.value),
-          })),
-          h(Field, { key: 'a', label: t('args') }, h('textarea', {
-            style: { ...S.input, ...S.textarea, ...S.mono },
-            value: draft.argsText,
-            disabled,
-            spellCheck: false,
-            onChange: (event) => edit('argsText', event.target.value),
-          })),
-          h('div', { key: 'g', style: S.grid }, [
-            h(NumberField, {
-              key: 'st', label: t('searchTimeout'), min: 1000, value: draft.searchTimeoutMs, disabled,
-              onChange: (next) => edit('searchTimeoutMs', next),
-            }),
-            h(NumberField, {
-              key: 'ft', label: t('fetchTimeout'), min: 1000, value: draft.fetchTimeoutMs, disabled,
-              onChange: (next) => edit('fetchTimeoutMs', next),
-            }),
-            h(NumberField, {
-              key: 'fc', label: t('fetchChars'), min: 500, step: 500, value: draft.fetchMaxChars, disabled,
-              onChange: (next) => edit('fetchMaxChars', next),
-            }),
-            h(NumberField, {
-              key: 'id', label: t('idle'), min: 0, step: 1000, value: draft.searchIdleMs, disabled,
-              onChange: (next) => edit('searchIdleMs', next),
-            }),
-            h(NumberField, {
-              key: 'cc', label: t('concurrency'), min: 1, value: draft.searchConcurrency, disabled,
-              onChange: (next) => edit('searchConcurrency', next),
-            }),
-          ]),
-          h('div', { key: 'a2', style: S.actions }, [
-            h(PrimaryButton, { primary: true, disabled: disabled || busy === 'save', onClick: () => { void saveAccess(); } },
-              busy === 'save' ? t('saving') : t('save')),
-          ]),
-        ]));
+        panel.push(h(Card, { key: 'entry', title: t('entryTitle'), hint: t('entryHint') }, [...renderGroup('access'), saveBtn('access')]));
       }
 
       if (tab === 'tools') {
         panel.push(h(Card, { key: 'presets', title: t('toolPresetTitle'), hint: t('toolPresetHint') }, [
-          h('div', { key: 'grid', style: S.presetGrid }, TOOL_PRESETS.map((preset) =>
-            h('button', {
-              key: preset.id, type: 'button', disabled,
-              style: S.presetCard(false),
-              onClick: () => { void applyToolPreset(preset.tools); },
-            }, [
-              h('div', { key: 't', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, [
-                h('span', { key: 'title', style: S.label }, lang === 'en' ? preset.en : preset.zh),
-                h('span', { key: 'badge', style: S.badge('blue') }, String(preset.tools.length) + ' 工具'),
-              ]),
-              h('span', { key: 'd', style: S.sub }, lang === 'en' ? preset.descEn : preset.descZh),
+          h('div', { key: 'grid', style: S.presetGrid }, TOOL_PRESETS.map((pr) =>
+            h('button', { key: pr.id, type: 'button', disabled, style: S.presetCard(false), onClick: () => { void applyToolPreset(pr.tools); } }, [
+              h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, lang === 'en' ? pr.en : pr.zh), h('span', { key: 'badge', style: S.badge('blue') }, `${pr.tools.length} 工具`)]),
+              h('span', { key: 'd', style: S.sub }, lang === 'en' ? pr.descEn : pr.descZh),
             ]))),
         ]));
         panel.push(h(Card, { key: 'tools', title: t('toolsTitle'), hint: t('toolsHint') }, [
           ...TOOL_GROUPS.map((grp, gi) => [
             gi > 0 ? h('div', { key: 'div' + gi, style: S.divider }) : null,
-            h('div', { key: grp.id, style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
+            h('div', { key: grp.id, style: col(4) }, [
               h('span', { key: 'l', style: S.label }, lang === 'en' ? grp.en : grp.zh),
-              h('div', { key: 'g', style: S.toolGrid }, toolsByGroup(grp.id).map(toolCheckbox)),
+              h('div', { key: 'g', style: S.toolGrid }, TOOLS.filter((tl) => tl.group === grp.id).map((tl) => h('label', { key: tl.id, style: S.check }, [
+                h('input', { key: 'i', type: 'checkbox', checked: asArray(value.nativeTools).includes(tl.id), disabled, onChange: () => toggleTool(tl.id) }),
+                h('span', { key: 't' }, [h('span', { key: 'n', style: S.mono }, tl.id), h('span', { key: 'd', style: S.sub }, '  ' + (lang === 'en' ? tl.en : tl.zh))]),
+              ]))),
             ]),
           ]),
-          h('div', { key: 'g2', style: S.grid }, [
-            h(NumberField, {
-              key: 'nt', label: t('nativeTimeout'), min: 1000, value: draft.nativeTimeoutMs, disabled,
-              onChange: (next) => edit('nativeTimeoutMs', next),
-            }),
-            h(NumberField, {
-              key: 'nc', label: t('nativeChars'), min: 500, step: 500, value: draft.nativeMaxChars, disabled,
-              onChange: (next) => edit('nativeMaxChars', next),
-            }),
-          ]),
-          h('div', { key: 'a', style: S.actions }, [
-            h(PrimaryButton, { primary: true, disabled: disabled || busy === 'save', onClick: () => { void saveTools(); } },
-              busy === 'save' ? t('saving') : t('save')),
-          ]),
+          ...renderGroup('tools'),
+          saveBtn('tools'),
         ]));
       }
 
       if (tab === 'engines') {
         const map = envMap();
-        // 渲染顺序即面板顺序。**不是**从 ENGINE_TOGGLES 去重推导——那样分组
-        // 顺序会随白名单增删而漂移，用户每次升级都看到重排的面板。
-        //
-        // 历史 bug（2026-10-21 定位）：`paid` 一度不在这个清单里，于是
-        // ARGO_PAID_SEARCH 与 ARGO_BUDGET_DEEPSEEK_SEARCH 两条开关在
-        // specs.js 白名单、client.js ENGINE_TOGGLES、双语文案三处都齐全，
-        // 却在面板上完全不显示——用户配好了预算却找不到入口，还以为是插件
-        // 没装。漂移门禁只核对「两边名单同集合、字段一致」，核对不到「这个
-        // 分组到底渲不渲染」；已由 test/client.test.js 的「engines tab renders
-        // a control for every ENGINE_TOGGLES switch」补上（见该测试注释）。
+        // 固定分组顺序防白名单增删导致面板乱序（test/client.test.js 校验每个开关都有控件）
         const groups = ['cache', 'fetch', 'semantic', 'engines', 'net', 'local', 'paid', 'misc'];
-        const groupTitle = (group) => t('group' + group.charAt(0).toUpperCase() + group.slice(1));
+        const groupTitle = (g) => t('group' + g.charAt(0).toUpperCase() + g.slice(1));
         panel.push(h('p', { key: 'hint', style: S.hint }, t('enginesHint')));
-        panel.push(h('input', {
-          key: 'filter',
-          type: 'text',
-          style: S.filterInput,
-          placeholder: t('searchFilterPlaceholder'),
-          value: engineFilter,
-          onChange: (event) => setEngineFilter(event.target.value),
-        }));
+        panel.push(h('input', { key: 'filter', type: 'text', style: S.filterInput, placeholder: t('searchFilterPlaceholder'), value: engineFilter, onChange: (e) => setEngineFilter(e.target.value) }));
         const query = engineFilter.trim().toLowerCase();
         for (const group of groups) {
-          let specs = ENGINE_TOGGLES.filter((spec) => spec.group === group);
-          if (query) {
-            const groupNameMatch = group.toLowerCase().includes(query) || groupTitle(group).toLowerCase().includes(query);
-            if (!groupNameMatch) {
-              specs = specs.filter((spec) => {
-                const name = spec.name.toLowerCase();
-                const zh = (spec.zh || '').toLowerCase();
-                const en = (spec.en || '').toLowerCase();
-                const hintZh = (spec.hintZh || '').toLowerCase();
-                const hintEn = (spec.hintEn || '').toLowerCase();
-                return name.includes(query) || zh.includes(query) || en.includes(query) || hintZh.includes(query) || hintEn.includes(query);
-              });
-            }
+          let specs = ENGINE_TOGGLES.filter((s) => s.group === group);
+          if (query && !group.toLowerCase().includes(query) && !groupTitle(group).toLowerCase().includes(query)) {
+            specs = specs.filter((s) => [s.name, s.zh, s.en, s.hintZh, s.hintEn].some((v) => (v || '').toLowerCase().includes(query)));
           }
-          if (specs.length === 0) continue;
-          const bools = specs.filter((spec) => spec.kind === 'bool');
-          const fields = specs.filter((spec) => spec.kind !== 'bool');
-          const children = [];
-          if (group === 'paid') {
-            children.push(h('p', { key: 'groupHint', style: S.hint }, t('groupPaidHint')));
-          }
+          if (!specs.length) continue;
+          const bools = specs.filter((s) => s.kind === 'bool');
+          const fields = specs.filter((s) => s.kind !== 'bool');
+          const children = group === 'paid' ? [h('p', { key: 'groupHint', style: S.hint }, t('groupPaidHint'))] : [];
           for (const spec of bools) {
-            // 未配置时显示 argo 默认态并标注「默认」，配置过的显示自定义值，
-            // 让「这一行到底生不生效」在面板上一眼可辨。
-            const custom = map[spec.name] !== undefined;
-            const suffix = custom ? '' : (lang === 'en' ? ` (${t('envDefault')})` : `（${t('envDefault')}）`);
-            children.push(h(Switch, {
-              key: spec.name,
-              checked: envBoolState(spec, map),
-              disabled,
-              label: (lang === 'en' ? spec.en : spec.zh) + suffix,
-              hint: lang === 'en' ? spec.hintEn : spec.hintZh,
-              onChange: (next) => toggleEnv(spec, next),
-            }));
+            const suffix = map[spec.name] !== undefined ? '' : (lang === 'en' ? ` (${t('envDefault')})` : `（${t('envDefault')}）`);
+            children.push(h(Switch, { key: spec.name, checked: envBoolState(spec, map), disabled, label: (lang === 'en' ? spec.en : spec.zh) + suffix, hint: lang === 'en' ? spec.hintEn : spec.hintZh, onChange: (next) => toggleEnv(spec, next) }));
           }
-          if (fields.length > 0) {
-            const fieldNodes = fields.map((spec) => {
-              const drafted = envDraft[spec.name];
-              const current = drafted !== undefined
-                ? drafted
-                : (map[spec.name] !== undefined ? map[spec.name] : (spec.kind === 'num' ? String(spec.def) : ''));
-              const control = spec.kind === 'num'
-                ? h('input', {
-                  key: 'i',
-                  type: 'number',
-                  style: S.input,
-                  value: current,
-                  min: spec.min,
-                  max: spec.max,
-                  step: spec.step ?? 1,
-                  disabled,
-                  onChange: (event) => setEnvDraft((previous) => ({ ...previous, [spec.name]: event.target.value })),
-                })
-                : h('input', {
-                  key: 'i',
-                  type: 'text',
-                  style: { ...S.input, ...S.mono },
-                  value: current,
-                  disabled,
-                  spellCheck: false,
-                  onChange: (event) => setEnvDraft((previous) => ({ ...previous, [spec.name]: event.target.value })),
-                });
-              return h(Field, {
-                key: spec.name,
-                label: lang === 'en' ? spec.en : spec.zh,
-                hint: lang === 'en' ? spec.hintEn : spec.hintZh,
-              }, control);
-            });
-            children.push(h('div', { key: 'fields', style: S.grid }, fieldNodes));
-            children.push(h('div', { key: 'save', style: S.actions }, [
-              h(PrimaryButton, {
-                key: 'b',
-                primary: true,
-                disabled: disabled || envBusy === group,
-                onClick: () => { void saveEnvGroup(group); },
-              }, envBusy === group ? t('saving') : t('save')),
-            ]));
+          if (fields.length) {
+            children.push(h('div', { key: 'fields', style: S.grid }, fields.map((spec) => {
+              const cur = envDraft[spec.name] !== undefined ? envDraft[spec.name] : (map[spec.name] !== undefined ? map[spec.name] : (spec.kind === 'num' ? String(spec.def) : ''));
+              const isNum = spec.kind === 'num';
+              return h(Field, { key: spec.name, label: lang === 'en' ? spec.en : spec.zh, hint: lang === 'en' ? spec.hintEn : spec.hintZh }, h('input', {
+                key: 'i', type: isNum ? 'number' : 'text', style: isNum ? S.input : { ...S.input, ...S.mono },
+                value: cur, min: isNum ? spec.min : undefined, max: isNum ? spec.max : undefined, step: isNum ? (spec.step ?? 1) : undefined,
+                disabled, spellCheck: isNum ? undefined : false, onChange: (e) => setEnvDraft((p) => ({ ...p, [spec.name]: e.target.value })),
+              }));
+            })));
+            children.push(h('div', { key: 'save', style: S.actions }, [h(PrimaryButton, { key: 'b', primary: true, disabled: disabled || envBusy === group, onClick: () => { void saveEnvGroup(group); } }, t(envBusy === group ? 'saving' : 'save'))]));
           }
           panel.push(h(Card, { key: group, title: groupTitle(group) }, children));
         }
       }
 
       if (tab === 'keys') {
-        const query = keyFilter.trim().toLowerCase();
-        const displayKeys = query
-          ? KEYS.filter((entry) => entry.ref.toLowerCase().includes(query) || entry.label.toLowerCase().includes(query) || (entry.en && entry.en.toLowerCase().includes(query)) || entry.engines.some((id) => id.includes(query)))
-          : visibleKeys;
+        const q = keyFilter.trim().toLowerCase();
+        const list = q
+          ? KEYS.filter((e) => [e.ref, e.label, e.en, ...e.engines].some((v) => (v || '').toLowerCase().includes(q)))
+          : (showAllKeys ? KEYS : KEYS.filter((e) => e.common));
         panel.push(h(Card, { key: 'keys', title: t('keysTitle'), hint: t('keysHint') }, [
-          h('input', {
-            key: 'filter',
-            type: 'text',
-            style: S.filterInput,
-            placeholder: t('searchFilterPlaceholder'),
-            value: keyFilter,
-            onChange: (event) => setKeyFilter(event.target.value),
-          }),
-          h('span', { key: 'l', style: S.label }, query ? t('keysTitle') : t('commonKeys')),
-          ...displayKeys.map(keyRow),
-          query ? null : h('div', { key: 'a', style: S.actions }, [
-            h('button', {
-              key: 'more',
-              type: 'button',
-              style: S.btn,
-              onClick: () => setShowAllKeys((previous) => !previous),
-            }, showAllKeys ? t('showLess') : t('showMore')),
+          h('input', { key: 'filter', type: 'text', style: S.filterInput, placeholder: t('searchFilterPlaceholder'), value: keyFilter, onChange: (e) => setKeyFilter(e.target.value) }),
+          h('span', { key: 'l', style: S.label }, t(q ? 'keysTitle' : 'commonKeys')),
+          ...list.map(keyRow),
+          q ? null : h('div', { key: 'a', style: S.actions }, [
+            h('button', { key: 'more', type: 'button', style: S.btn, onClick: () => setShowAllKeys((p) => !p) }, t(showAllKeys ? 'showLess' : 'showMore')),
             props.credentials ? null : h('span', { key: 'u', style: S.sub }, t('keyUnavailable')),
           ]),
         ]));
       }
 
-      if (tab === 'research') {
-        panel.push(h(Card, { key: 'research', title: t('researchTitle') }, [
-          h('div', { key: 'g', style: S.grid }, [
-            h(NumberField, {
-              key: 'dw', label: t('workers'), min: 1, value: draft.defaultWorkers, disabled,
-              onChange: (next) => edit('defaultWorkers', next),
-            }),
-            h(NumberField, {
-              key: 'mw', label: t('maxWorkers'), min: 1, value: draft.maxWorkers, disabled,
-              onChange: (next) => edit('maxWorkers', next),
-            }),
-            h(NumberField, {
-              key: 'mt', label: t('tracks'), min: 2, value: draft.maxTracks, disabled,
-              onChange: (next) => edit('maxTracks', next),
-            }),
-            h(NumberField, {
-              key: 'ms', label: t('sources'), min: 1, value: draft.maxSourcesPerTrack, disabled,
-              onChange: (next) => edit('maxSourcesPerTrack', next),
-            }),
-            h(NumberField, {
-              key: 'wt', label: t('workerTokens'), min: 512, step: 512, value: draft.workerMaxTokens, disabled,
-              onChange: (next) => edit('workerMaxTokens', next),
-            }),
-            h(NumberField, {
-              key: 'st', label: t('synthTokens'), min: 512, step: 512, value: draft.synthesisMaxTokens, disabled,
-              onChange: (next) => edit('synthesisMaxTokens', next),
-            }),
-          ]),
-          h(Field, { key: 'd', label: t('reportDir') }, h('input', {
-            type: 'text',
-            style: { ...S.input, ...S.mono },
-            value: draft.reportDir,
-            disabled,
-            spellCheck: false,
-            onChange: (event) => edit('reportDir', event.target.value),
-          })),
-          h('div', { key: 'a', style: S.actions }, [
-            h(PrimaryButton, { primary: true, disabled: disabled || busy === 'save', onClick: () => { void saveResearch(); } },
-              busy === 'save' ? t('saving') : t('save')),
-          ]),
-        ]));
-      }
+      if (tab === 'research') panel.push(h(Card, { key: 'research', title: t('researchTitle') }, [...renderGroup('research'), saveBtn('research')]));
+      if (tab === 'advanced') panel.push(h(Card, { key: 'adv', title: t('advancedTitle') }, [
+        ...renderGroup('advanced'), saveBtn('advanced'), h('div', { key: 'div', style: S.divider }),
+        h('div', { key: 'struct', style: col(4) }, [h('span', { key: 'l', style: S.label }, t('structural')), h('span', { key: 'h', style: S.sub }, t('structuralHint')), h('span', { key: 'm', style: S.sub }, t('mcpHint'))]),
+      ]));
 
-      if (tab === 'advanced') {
-        panel.push(h(Card, { key: 'adv', title: t('advancedTitle') }, [
-          h(Field, { key: 'allow', label: t('allow'), hint: t('allowHint') }, h('textarea', {
-            style: { ...S.input, ...S.textarea, ...S.mono },
-            value: draft.allowText,
-            disabled,
-            spellCheck: false,
-            onChange: (event) => edit('allowText', event.target.value),
-          })),
-          h(Field, { key: 'deny', label: t('deny') }, h('textarea', {
-            style: { ...S.input, ...S.textarea, ...S.mono },
-            value: draft.denyText,
-            disabled,
-            spellCheck: false,
-            onChange: (event) => edit('denyText', event.target.value),
-          })),
-          h(Field, { key: 'refs', label: t('keyRefs'), hint: t('keyRefsHint') }, h('textarea', {
-            style: { ...S.input, ...S.textarea, ...S.mono },
-            value: draft.keyRefsText,
-            disabled,
-            spellCheck: false,
-            onChange: (event) => edit('keyRefsText', event.target.value),
-          })),
-          h('div', { key: 'a', style: S.actions }, [
-            h(PrimaryButton, { primary: true, disabled: disabled || busy === 'save', onClick: () => { void saveAdvanced(); } },
-              busy === 'save' ? t('saving') : t('save')),
-          ]),
-          h('div', { key: 'div', style: S.divider }),
-          h('div', { key: 'struct', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
-            h('span', { key: 'l', style: S.label }, t('structural')),
-            h('span', { key: 'h', style: S.sub }, t('structuralHint')),
-            h('span', { key: 'm', style: S.sub }, t('mcpHint')),
-          ]),
-        ]));
-      }
-
+      const tabs = [['dashboard', 'tabDashboard'], ['access', 'tabAccess'], ['tools', 'tabTools'], ['engines', 'tabEngines'], ['keys', 'tabKeys'], ['research', 'tabResearch'], ['advanced', 'tabAdvanced']];
       return h('div', { style: S.wrap }, [
-        h('div', { key: 'head', style: { display: 'flex', flexDirection: 'column', gap: 4 } }, [
+        h('div', { key: 'head', style: col(4) }, [
           h('h2', { key: 't', style: S.title }, t('title')),
           h('p', { key: 'i', style: S.hint }, t('intro')),
         ]),
-        h('div', { key: 'tabs', style: S.tabs }, [
-          tabButton('dashboard', t('tabDashboard')),
-          tabButton('access', t('tabAccess')),
-          tabButton('tools', t('tabTools')),
-          tabButton('engines', t('tabEngines')),
-          tabButton('keys', t('tabKeys')),
-          tabButton('research', t('tabResearch')),
-          tabButton('advanced', t('tabAdvanced')),
-        ]),
-        statusLine,
+        h('div', { key: 'tabs', style: S.tabs }, tabs.map(([id, lk]) => h('button', {
+          key: id, type: 'button', style: S.tab(tab === id), onClick: () => setTab(id),
+        }, t(lk)))),
+        message ? h('p', { style: error ? S.error : S.notice, role: 'status' }, message) : h('p', { style: S.status }, disabled ? t('readonly') : ''),
         ...panel,
       ]);
     }

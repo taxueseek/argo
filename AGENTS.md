@@ -45,6 +45,7 @@
 - `ARGO_ALLOW_PRIVATE_URLS`：SSRF 防护放行。**安全边界，非必要不动**
 - `ARGO_ALLOW_RECOMPUTE`：调度器执行子进程。**安全边界，非必要不动**
 - `ARGO_PIXIV_ALLOW_R18`：pixiv 放行 R-18 作品
+- `ARGO_SEEK_SUBPROCESS`：强制 `local_seek_adapter` 优先走子进程隔离调用 `local-seek`（默认优先进程内降尾延迟）
 - `ARGO_SAUCENAO_API_KEY` / `ARGO_SERPAPI_API_KEY`：反搜图引擎，仅显式反搜时需要
 
 **已停用的引擎**：`docs/ENGINE_CATALOG.md` 的「已停用」清单（当前 8 个）。

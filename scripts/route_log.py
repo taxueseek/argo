@@ -11,18 +11,15 @@
 from __future__ import annotations
 
 import os
+import random
 from typing import Any
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
     """读整型环境变量，任何异常都退回 default。
 
-    为什么必须有：这一行原本裸写 `int(os.environ.get(...))`，于是
-    `ARGO_ROUTE_SAMPLE_RATE=abc` 在**模块导入期**抛 ValueError，经
-    route.py 的导入链直接把整个 `argo search` 打挂——与本模块 docstring
-    写的「必须永远 fail-open，使用日志写失败绝不能让一次搜索失败」正好相反，
-    而且触发它的只是一个拼错的采样率。mcp_handlers 早有同名 _env_int，
-    两处各写各的才是这个 bug 的成因。
+    调用期按需解析（不在模块导入期读 os.environ），避免导入链失败或测试改写
+    环境变量后仍沿用旧采样率。
     """
     try:
         return max(minimum, int(str(os.environ.get(name, "")).strip() or default))
@@ -30,7 +27,8 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
         return default
 
 
-_ROUTE_SAMPLE_RATE = _env_int("ARGO_ROUTE_SAMPLE_RATE", 20)
+_DEFAULT_ROUTE_SAMPLE_RATE = 20
+_ROUTE_SAMPLE_RATE = _DEFAULT_ROUTE_SAMPLE_RATE
 _route_sample_counter = 0
 
 
@@ -39,9 +37,21 @@ def sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
     global _route_sample_counter
     if "features" not in kw or not kw.get("features"):
         return  # engine_override 直通等无语义分支不采样
+    rate = (_env_int("ARGO_ROUTE_SAMPLE_RATE", _DEFAULT_ROUTE_SAMPLE_RATE)
+            if _ROUTE_SAMPLE_RATE == _DEFAULT_ROUTE_SAMPLE_RATE
+            and "ARGO_ROUTE_SAMPLE_RATE" in os.environ
+            else _ROUTE_SAMPLE_RATE)
+    rate = max(1, int(rate))
     _route_sample_counter += 1
-    if _route_sample_counter % _ROUTE_SAMPLE_RATE != 0:
-        return
+    if rate > 1:
+        # 单次 CLI 进程只有第 1 次调用：若只看 `_route_sample_counter % rate == 0`，
+        # 每次退出后计数器归零导致 CLI 路径零采样；首次调用用无状态随机采样，
+        # 长驻进程（daemon/MCP）第 2 次起继续按固定步长采样。
+        should_emit = (random.randrange(rate) == 0
+                       if _route_sample_counter == 1
+                       else (_route_sample_counter % rate == 0))
+        if not should_emit:
+            return
     f = kw.get("features") or {}
     try:
         from usage_log import emit
