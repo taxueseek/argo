@@ -750,7 +750,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_IMAGE_LOCAL_ROOTS` | 反搜图允许读取的本地目录（`os.pathsep` 分隔） | 默认空=不限目录（本机 CLI 由人直接调用）；MCP 宿主里设成收图目录，模型便只能把落盘的那几张图送去反搜，群消息无法驱动它读任意本地文件 |
 | `ARGO_TRACEMOE_PROXY` | trace.moe 反搜图的出口代理覆盖（api.trace.moe 按出口 IP 限频） | 默认空=直连；共享机场节点被别的客户端打到 429 时设成代理端口 |
 | `ARGO_PAID_BUDGET_BYPASS` | 单次绕过月度预算 | =1 时显式/自动调用都不检查预算；用于临时排障，不改变配置 |
-| `ARGO_ADAPTIVE_TAIL` | 尾宽按 backup 引擎历史 P75 分层（快源等满/慢源早收工） | 默认关；=1 开启（2026-10-16 三轮交错 A/B 未证实收益，对拍记录在本机 docs-local/调度对拍_尾宽分层与并发_2026-10-16.md，属本地归档不随发布件分发） |
+| `ARGO_ADAPTIVE_TAIL` | 尾宽按 backup 引擎历史 P75 分层（快源等满/慢源早收工） | 默认关；=1 开启（2026-10-16 三轮交错 A/B 未证实收益，墙钟有改善但统计不显著） |
 | `ARGO_TAIL_COMPLETE_S` | 早停后台补全的收割宽限（秒）：弃置引擎宽限内完成则记学习器真实成绩并把交付合并进 L2 缓存 | 默认 3；0=关闭（回到纯丢弃）。CLI 由 atexit 等待、输出已先行；MCP/daemon 常驻进程自然收割。证据见 docs/QUALITY_OF_SLOW_SOURCES.md |
 | `ARGO_ADMISSION_TTL_S` | 引擎准入缓存 TTL（秒） | 默认 1s，控制熔断与探针状态在进程间的同步延迟 |
 | `ARGO_DAEMON` | 允许 search 在 daemon 不在位时自动后台拉起（显式 opt-in） | 默认关；=1 开启。`argo daemon start` 手动启动的实例不受此开关影响；`ARGO_NO_DAEMON=1` 优先 |
