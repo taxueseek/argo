@@ -240,3 +240,21 @@ def test_resolve_direct_call_keeps_legacy_compat():
         out = engines_base._resolve("BAIDUID={UUID}:k={TAVILY_API_KEY}", "q", 5)
     assert "tvly-direct" in out
     assert "{UUID}" not in out
+
+
+def test_inferred_required_env_is_authorized_for_expansion():
+    """required_env_for 能推断出的占位符，必须同样进 allowed_placeholders_for。
+
+    unpaywall 的邮箱占位符此前只靠 required_env_for 的自动推断（无显式
+    required_env/allowed_env），67edf08 的授权集不含它 → 邮箱被阻断成空串，
+    请求恒 422，而状态机仍报 ready（状态说谎）。此用例锁死两个口径一致。
+    """
+    import yaml
+
+    spec = yaml.safe_load((ROOT / "engines" / "specs" / "unpaywall.yaml").read_text(encoding="utf-8"))
+    inferred = engine_env.required_env_for("unpaywall", spec)
+    assert inferred, "unpaywall 应能推断出必填 env"
+    allowed = engine_env.allowed_placeholders_for("unpaywall", spec)
+    for name in inferred:
+        assert name in allowed, f"{name} 被推断为必填却未授权展开"
+    assert "UNPAYWALL_EMAIL" in allowed

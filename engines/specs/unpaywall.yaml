@@ -39,6 +39,12 @@ url: https://api.unpaywall.org/v2/{query}?email={UNPAYWALL_EMAIL}
 query_param: ""
 timeout: 12
 format: json
+# 授权读取 ARGO_UNPAYWALL_EMAIL（67edf08 起的占位符白名单要求显式声明；
+# required_env_for 的自动推断不进授权集，漏声明会让邮箱被阻断成空串、
+# 请求恒 422，而状态机仍报 ready——必须与推断口径对齐）
+allowed_env:
+- ARGO_UNPAYWALL_EMAIL
+- UNPAYWALL_EMAIL
 canary_query: "10.1038/nature12373"
 coverage:
 - academic
