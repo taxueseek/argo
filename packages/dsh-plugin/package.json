@@ -38,6 +38,9 @@
   "engines": {
     "node": ">=18"
   },
+  "optionalDependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0"
+  },
   "scripts": {
     "check": "node --check dsh/index.js && node --check dsh/specs.js && node --check dsh/runner.js && node --check dsh/wide-research.js && node --check dsh/diagnostics.js && node --check dsh/client.js",
     "typecheck": "npm run check",
