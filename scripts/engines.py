@@ -47,6 +47,7 @@ from engines_base import (
     _ensure_engine_source,
     _CUSTOM_JSON_PARSERS,
 )
+from engines_mcp import _build_mcp_engine
 from recovery import strip_structured
 from cli_io import dumps
 
@@ -382,6 +383,7 @@ _BUILDERS = {
     "cli": _build_cli_engine,
     "http": _build_http_engine,
     "html": _build_html_engine,
+    "mcp": _build_mcp_engine,
     "local_search": _build_local_search_engine,
     "exa": _build_exa_engine,
     "keenable_free": _build_keenable_free_engine,

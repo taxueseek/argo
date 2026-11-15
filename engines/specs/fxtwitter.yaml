@@ -6,11 +6,21 @@
 
 engine_id: fxtwitter
 type: http
-# 状态注记（2026-10-21 实测）：上游 /2/search 搜索端点已停用（对任意查询返回
-# 空 results，强制调用 6.3s 零结果），status/profile 端点仍正常但不属本引擎职责。
-# X 关键词搜索走 `argo x-search`（ego-browser 通道，见 config.yaml 的 twitter 引擎）
-# 或 `--engine twitter`；单条推文按 URL 取正文仍走 `argo tweet`（twitter_syndication）。
-# 保留注册：上游若恢复搜索端点可直接复用，声明本身无需改动。
+# 状态注记（2026-11-15 复测更新，替换 2026-10-21 旧观察）：
+# /2/search 已恢复——连打 10 次全 200，单次 5 条，engine_validate 三段全过
+# （q=1.0，1727ms）。旧注记称「对任意查询返回空 results，强制 6.3s 零结果」
+# 已不成立，留着会让读者误判本源为死源（本次实测就差点被这样跳过）。
+#
+# 与 `twitter` 引擎的分工（同为 X 关键词搜索，两条独立通道）：
+#   fxtwitter（本引擎）：直连公开 HTTP，**免登录、零 Key、稳定性高**；
+#     短板是结果偏「近期热门」而非严格实时，单次延迟约 3.8s。
+#   twitter：走 scripts/x_search.py（ego-browser 复用已登录 X 会话），
+#     结果更贴实时讨论，但**依赖登录会话就绪**——未就绪时实测 6.0s 后
+#     返 0 条并写 45s 负缓存（EMPTY_NEGATIVE_TTL），期间同查询持续空。
+# 两者不是替代关系：会话可用时 twitter 更实时，不可用时 fxtwitter 是唯一
+# 稳定出数通道。社交域 combo 里两者并存即为此。
+#
+# 单条推文按 URL/ID 取正文仍走 `argo tweet`（twitter_syndication 引擎）。
 enabled: true
 cost_tier: free
 method: GET
@@ -18,7 +28,7 @@ url: https://api.fxtwitter.com/2/search
 timeout: 10
 query_param: q
 canary_query: "OpenAI"
-desc: "FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据）"
+desc: "FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据；免登录稳定通道）"
 coverage: [social, english]
 recommended: false
 

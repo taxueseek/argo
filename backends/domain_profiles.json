@@ -2852,5 +2852,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "grepapp_mcp": {
+    "label": "grep.app GitHub 代码搜索（MCP 连接器）",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

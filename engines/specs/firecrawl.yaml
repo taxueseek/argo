@@ -34,6 +34,9 @@ cost_per_call: 0.001
 cost_unit: usd
 
 # 可选密钥（OPTIONAL_ENV_ENGINES）：未配置时不发送 Authorization（keyless 直连免费层）
+# allowed_env 授权占位符展开（67edf08 起未声明即阻断；同 6bb3ef2 unpaywall 扫尾模式）
+allowed_env:
+- FIRECRAWL_API_KEY
 headers:
   Authorization: Bearer {FIRECRAWL_API_KEY}
   Content-Type: application/json

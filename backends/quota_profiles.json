@@ -1090,6 +1090,16 @@
     "cost_tier": "free",
     "priority": 45
   },
+  "grepapp_mcp": {
+    "label": "grep.app GitHub 代码搜索（MCP 连接器）",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 30
+  },
   "guardian_rss": {
     "label": "卫报 RSS",
     "qps": 1,

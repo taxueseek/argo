@@ -300,6 +300,9 @@ class TestPostHeaderKeyless(unittest.TestCase):
                 "Authorization": "Bearer {FIRECRAWL_API_KEY}",
                 "Content-Type": "application/json",
             },
+            # 67edf08 起占位符白名单 fail-closed：可选 key 也须声明才展开
+            # （allowed_env=授权但非必需，未配置时仍由 _header_meaningful 过滤）
+            "allowed_env": ["FIRECRAWL_API_KEY"],
             "body": {"query": "{query}", "limit": "{n}"},
             "output_map": {
                 "items": "data.web",

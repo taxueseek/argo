@@ -312,7 +312,7 @@ class TestCliEngine(unittest.TestCase):
             stderr = ""
 
         def fake_run(cmd, capture_output, text, timeout, encoding=None,
-                     errors=None):
+                     errors=None, env=None):
             captured["cmd"] = cmd
             return _R()
 

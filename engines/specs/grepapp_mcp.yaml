@@ -1,0 +1,62 @@
+# MCP 连接器首个接入样板（type: mcp 通用适配器，实现在 scripts/engines_mcp.py）
+#
+# 接入形态：经 Streamable HTTP 调 mcp.grep.app 的 searchGitHub 工具——GitHub
+# 全网代码字面模式搜索（不是关键词/自然语言搜索，query 必须像代码片段）。
+# 协议行为 2026-11-15 实测：initialize/tools/call 均以 SSE 帧返回
+# （event: message / data: {...}），无 Mcp-Session-Id；匿名可用，
+# GREP_APP_API_KEY 只提高限额（适配器对未配置的 key 自动不发认证头）。
+#
+# 内容层声明式：上游返回纯文本报告（Repository/Path/URL/Snippets 分块），
+# output_map 声明 mode: text + text_split 分块 + 逐块正则抽字段——
+# 不写每源解析代码。structuredContent/JSON 文本的连接器则走标准 output_map
+# （与 http 引擎同一套字段映射与 url_kind）。
+#
+# 安全边界：工具单一 allowlist（只可调 searchGitHub）；参数只来自
+# arguments 模板；远端 payload 不 eval；isError 结果不产出条目。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine grepapp_mcp --stage all --admit
+#   python3 scripts/search.py "def score_authority(" --engine grepapp_mcp --json
+
+engine_id: grepapp_mcp
+type: mcp
+enabled: true
+explicit_only: true
+synthesized: true
+cost_tier: free
+label: grep.app GitHub 代码搜索（MCP 连接器）
+family: code
+priority: 30
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 20
+langs:
+- en
+canary_query: "def score_authority("
+coverage:
+- tech
+- code
+desc: "GitHub 全网代码字面模式搜索，经 MCP 通用连接器接入 mcp.grep.app（免 key 匿名可用）"
+recommended: false
+
+transport: http
+url: https://mcp.grep.app
+tool: searchGitHub
+arguments:
+  query: "{query}"
+  perPage: "{n}"
+# key 只提限额、认证头格式未实测——不声明 required_env/headers，
+# 走已实测的匿名路径；实测出头格式后再加 allowed_env + headers。
+
+output_map:
+  mode: text
+  text_split: '\n(?=Repository: )'
+  item_title_regex: 'Path: (.+)'
+  item_url_regex: 'URL: (\S+)'
+  item_summary_regex: '(?s)--- Snippet 1 \(Line \d+\) ---\n(.*)'
+
+quality_queries:
+  - query: "def score_authority("
+  - query: "if __name__ == '__main__':"

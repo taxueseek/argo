@@ -64,7 +64,8 @@ from config import load_config  # noqa: E402
 import search  # noqa: E402
 
 # ── 分组：按「内部重试/调度形态」三分（实测确认）──────────────────────────
-HAS_INTERNAL_RETRY = ("weibo", "bilibili", "twitter", "anysearch")
+# twitter_engine 已随 78a7eb7 删除死代码退役，退出本分组
+HAS_INTERNAL_RETRY = ("weibo", "bilibili", "anysearch")
 # 自带调度的聚合引擎：内部自管预算/重试/共识，声明 timeout 换取收紧帽，
 # 外层重试不再叠加（重跑整个聚合无意义）
 SELF_SCHEDULED = ("local_search",)

@@ -1210,7 +1210,7 @@ engines:
   status: ok
   recommended: false
   explicit_only: false
-  desc: FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据）
+  desc: FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据；免登录稳定通道）
 - name: gbfs_nyc
   tier: T1
   type: http
@@ -1383,6 +1383,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: Grep.app 全球百万 GitHub 核心代码正则检索（官方 MCP 传输免认证）
+- name: grepapp_mcp
+  tier: T1
+  type: mcp
+  coverage:
+  - tech
+  - code
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: GitHub 全网代码字面模式搜索，经 MCP 通用连接器接入 mcp.grep.app（免 key 匿名可用）
 - name: guardian_rss
   tier: T1
   type: rss_feed

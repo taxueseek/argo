@@ -9,6 +9,7 @@
 | **L1 声明式 HTTP** | 标准 REST JSON 搜索 | `engines/specs/<id>.yaml` + 环境变量 | 否 |
 | **L2 增强声明式** | 特殊 header/body/output_map | 同上，补全 `output_map` / `required_env` | 通常否 |
 | **CLI 桥接** | 本机已装 CLI 输出 YAML/JSON（结构化） | `engines/specs/<id>.yaml`，`type: cli` + `cmd`/`search_args`/`output_format`/`filter_args` | 否 |
+| **MCP 连接器** | 任意 MCP server（stdio 子进程或 Streamable HTTP）暴露的搜索工具 | `engines/specs/<id>.yaml`，`type: mcp` + `transport`/`tool`/`arguments`/`output_map` | 否 |
 | **L3 插件** | 多端点、HTML、会话、非标协议 | `engines/plugins/<id>.py` + spec `type` | 是 |
 
 模板：
@@ -23,6 +24,14 @@ CLI 桥接关键字段：
 - `output_format: yaml`：走通用 YAML 解析，支持 `results`/`items`/`data` 或顶层 list，字段别名 `title|name`、`url|link`、`snippet|description|content`，并保留 `published_at` 发布时间维度。
 - `filter_args`：条件参数表。查询带 `--since`/`--until`（如 `7d` / `2026-08-01`）时自动追加对应 CLI 参数；未携带则不追加。缓存按时间窗隔离，不会串结果。
 
+MCP 连接器关键字段（适配器 `scripts/engines_mcp.py`，样板 `engines/specs/grepapp_mcp.yaml`）：
+
+- `transport: http | stdio`：http 走 Streamable HTTP（JSON-RPC，SSE 帧自动解析，`Mcp-Session-Id` 自动回传）；stdio 走子进程换行帧（`command` 必须是列表，禁 shell，env 走 `build_child_env` 白名单）。
+- `tool`：单一 allowlist，只可调用声明的那一个工具；`arguments` 参数模板支持 `{query}` / `{n}` 占位符并做 int/bool 类型保真。
+- 内容层二选一：`output_map.mode: json`（默认）——`structuredContent` 或 JSON 文本走与 http 引擎同一套字段映射；`mode: text`——纯文本工具用 `text_split` 分块正则 + `item_title_regex` / `item_url_regex` / `item_summary_regex` 逐块抽字段。
+- `isError` 的结果不产出条目（fail-visible）；json 模式收到非 JSON 文本同样返回空并告警，不编造条目。
+- 接入新连接器建议 spec 带 `synthesized: true` 标记，人工确认后摘除。
+
 ## 可选结果字段（图源 / 全文源必看）
 
 结果 dict 只要求 `title` / `url`，其余字段原样透传到融合、精排与 JSON 输出
@@ -34,6 +43,7 @@ CLI 桥接关键字段：
 | `image_url` | 可直接打开的图片地址 | 结果展示；判断「这是图源」的唯一依据 |
 | `image_license` | 该图的授权/权利状态 | 合规展示（如 `CC0`、`公有领域（NASA）`） |
 | `full_text_url` | **可确定性取到正文**的端点 | `evidence_loop.gate_results` 的取数建议优先用它，见下 |
+| `upstream_authority` | 上游原生权威档 0-4（只透传不赋权） | `search_rank`/`search_output` 合成 `authority_level`；`evidence.compute_credibility` 挂到 `credibility.authority.upstream_level` 供取证引用 |
 
 > **字段落点**：这些字段进的是 `results`（以及归档用的 `candidates` 视图），
 > **不进** `sources`。`build_sources` 是「底部相关链接」形态的**稳定 5 字段投影**
