@@ -40,7 +40,7 @@ if SCRIPTS_DIR not in sys.path:
 from config import load_config  # noqa: E402
 from engine_env import (  # noqa: E402
     KNOWN_ENV_ALIASES, PLACEHOLDER_ALIASES, required_env_for, get_env,
-    missing_env_for,
+    missing_env_for, allowed_placeholders_for, _NON_SECRET_PLACEHOLDERS,
 )
 
 # 密钥类变量名的形态：结尾为这些后缀
@@ -380,3 +380,45 @@ class TestEnvDeclarationConsistency:
                     f"{engine_id} 缺密钥但 missing_env 为空 → 状态会误报 ready")
                 assert any(secret in m or m.endswith(secret) for m in missing), (
                     f"{engine_id} 的 missing_env={missing} 未反映 {secret}")
+
+    def test_all_spec_placeholders_are_authorized(self):
+        """前向契约（2026-11-15，67edf08 fail-closed 闸配套）：spec 里出现的
+        {NAME} 占位符必须被运行时白名单授权。
+
+        背景：`resolve_env_placeholders` 自 67edf08 起对未声明名阻断展开
+        （返回空串，防 Confused Deputy 越权读其他引擎密钥）。副作用是
+        「声明缺失」不再报错，而是**静默丢认证头/参数**。实证案例是
+        unpaywall：邮箱占位符未声明被置空、请求恒 422（67edf08 引入、
+        6bb3ef2 五分钟内自查修复）。firecrawl 真实引擎经 KNOWN_ENV_ALIASES
+        兜底未实际丢头——丢的是 lifecycle 测试的内联 spec（fc_test 不在
+        别名表）。两起实例说明「靠人扫尾」不可靠，必须机械拦截。
+
+        判据与运行时**同一真源**：
+          - 白名单 = allowed_placeholders_for(engine_id, spec)——即
+            resolve_env_placeholders 实际检查的那个集合（required_env +
+            allowed_env + KNOWN_ENV_ALIASES 经 _expand_allowed_names 展开，
+            嵌套候选链 [ARGO_X, X] 与别名闭环都已含）；
+          - 豁免 = _NON_SECRET_PLACEHOLDERS（QUERY/N/TIMESTAMP/MODE/DEPTH/
+            UUID——运行时在白名单检查之前放行的动态参数）；
+          - 停用引擎跳过（与既有测试同口径）。
+        """
+        offenders: list[str] = []
+        for engine_id, spec in _candidate_engines():
+            if not spec.get("enabled", True):
+                continue
+            declared = set(allowed_placeholders_for(engine_id, spec))
+            undeclared = {
+                n for n in _spec_placeholder_names(spec)
+                if n not in _NON_SECRET_PLACEHOLDERS and n not in declared
+            }
+            if undeclared:
+                offenders.append(
+                    f"{engine_id}: 占位符 {sorted(undeclared)} 未在 "
+                    f"required_env/allowed_env/别名表声明 → fail-closed 静默置空")
+        assert not offenders, (
+            "以下引擎的占位符会被白名单闸静默置空（认证头/参数丢失，状态不报错）：\n  "
+            + "\n  ".join(offenders)
+            + "\n修法：spec 加 allowed_env（可选密钥）或 required_env（必需密钥），"
+              "嵌套候选链 [ARGO_X, X] 写法均可；非密钥动态参数应进"
+              " _NON_SECRET_PLACEHOLDERS 或改小写占位符。"
+        )
