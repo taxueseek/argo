@@ -82,7 +82,7 @@ jobs:
           --junitxml=junit-${{ matrix.group }}.xml
       - name: 保留 JUnit（失败也要留，flaky 历史靠它）
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-${{ matrix.group }}
           path: junit-${{ matrix.group }}.xml
@@ -106,6 +106,11 @@ jobs:
         with:
           python-version: "3.14"
           cache-dependency-glob: uv.lock
+          # v10 起缓存保存 fail-visible：本作业真正的缓存是下方 venv 整包
+          # （命中时跳过 uv sync，uv 从未运行、无缓存路径可存），uv 下载
+          # 缓存在此无用武之地，显式关闭（2026-11-15 实测 extras 三分片
+          # 因空缓存路径硬错）。
+          enable-cache: false
 
       # 缓存整个 venv，而不是 uv 的下载缓存：九件里 pymupdf/rapidocr 体积大，
       # 命中下载缓存仍要解包安装约 3 分钟；直接复用装好的 .venv 只花解压时间。
@@ -114,7 +119,7 @@ jobs:
       # 四个分片共用同一个 key，各自并行解压（实测命中后安装步骤整体跳过）。
       - name: 恢复 venv（命中则跳过安装）
         id: venv
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: extras-venv-${{ runner.os }}-py314-${{ hashFiles('uv.lock') }}
@@ -150,7 +155,7 @@ jobs:
           --timeout=120 -m "not live and not slow"
           --junitxml=junit-extras-${{ matrix.group }}.xml
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-extras-${{ matrix.group }}
           path: junit-extras-${{ matrix.group }}.xml
