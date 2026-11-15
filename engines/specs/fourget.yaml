@@ -1,6 +1,7 @@
 engine_id: fourget
 enabled: true
 explicit_only: true
+family: web_general  # 准入门禁要求显式声明；元搜索即通用族（explicit_only 不进组合竞争）
 label: 4get 极简元搜索
 cost_tier: free
 coverage:

@@ -51,7 +51,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_batch9.py": (1272, "批次九源构建器，方案 A 归一消减 artic/jikan 净瘦身 85 行"),
     "scripts/engines_builders_tech.py": (1182, "技术社区源构建器，方案 A 归一消减 hackernews/endoflife 净瘦身 98 行"),
     "scripts/fetch_v3.py": (1906, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段。2026-11-13 上调 +1：裸吞窄化引入 except_sets 词汇表导入"),
-    "scripts/engines_base.py": (1470, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；1470 含 2026-11-10 两轮拆分：通用智能推断解析器（方案三）与声明式字段映射/模板拼接（_make_field_parser 等）先后抽离至 engines_parsers，累计净瘦身 97 行"),
+    "scripts/engines_base.py": (1455, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；1470 含 2026-11-10 两轮拆分：通用智能推断解析器（方案三）与声明式字段映射/模板拼接（_make_field_parser 等）先后抽离至 engines_parsers，累计净瘦身 97 行；2026-11-15 收紧 -15：_coerce_field 去重（真源在 engines_fields，本模块复导出）"),
     "scripts/cache.py": (1373, "存储实现与门面；键、命中判据、准入策略已分别拆到 cache_key_vdom / cache_similarity / cache_guard"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),
     "scripts/search_rank.py": (986, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支。2026-11-13 上调 +10：裸吞收口（except_sets 导入 +1，相似度与 quota 联动两处 sqlite/侧信道保持宽口径仅可见化 +9）"),

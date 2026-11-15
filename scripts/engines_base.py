@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import engine_states as _st  # 失败归因词表唯一真源
+from engines_fields import _coerce_field  # 字段取值原语真源在 engines_fields（无依赖底层），本模块复导出
 
 import serp_kill_log  # noqa: E402  守卫接线+误杀账本（2026-10-10 拆出，stdlib 级轻量）
 import time
@@ -303,22 +304,6 @@ def _get_path(obj: Any, path: str) -> Any:
         else:
             return None
     return cur
-
-
-def _coerce_field(val: Any, *, max_len: int | None = None) -> str:
-    """把 API 字段压成字符串：list 取首项、dict 丢弃、其余 str。"""
-    if val is None:
-        return ""
-    if isinstance(val, list):
-        if not val:
-            return ""
-        val = val[0]
-    if isinstance(val, dict):
-        return ""
-    s = str(val).strip()
-    if max_len is not None and len(s) > max_len:
-        return s[:max_len]
-    return s
 
 
 def _format_url_template(template: str, item: dict) -> str:

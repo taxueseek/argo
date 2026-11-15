@@ -17,6 +17,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 from urllib.parse import urlparse
 
+from evidence_tier import _extract_host  # 主机名提取真源在 evidence_tier，本模块只复用
+
 
 # ── 数据结构 ────────────────────────────────────────────────────────
 
@@ -206,21 +208,6 @@ def infer_access_status(url: str, fetch_success: bool = True, http_status: int =
     if http_status >= 400:
         return "unavailable"
     return "unknown"
-
-
-def _extract_host(url: str) -> str:
-    """提取主机名"""
-    if not url:
-        return ""
-    try:
-        host = urlparse(url).netloc.lower()
-        if "@" in host:
-            host = host.rsplit("@", 1)[1]
-        if ":" in host:
-            host = host.split(":", 1)[0]
-        return host
-    except Exception:
-        return ""
 
 
 def create_source_record(

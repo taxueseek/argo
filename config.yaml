@@ -1506,6 +1506,11 @@ domains:
   - doaj
   - figshare
   - hal
+  # 2026-11-15：openaire 收编进本域尾部（EU 开放科学聚合，health+quality 已过）。
+  # 加槽表已满（local_pubmed/cnii/hf_papers 共 3 槽，extra cap=4），排尾部
+  # 不挤既有位次：auto/balanced 预算内不出现（行为零变化），deep/research
+  # 与恢复链可达——此前它唯一入口是 --engine。
+  - openaire
   fallback: openalex
   name: academic
   parallel: true

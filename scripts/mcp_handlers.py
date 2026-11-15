@@ -211,7 +211,7 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         # 必填校验读 schema 真源（_required_params），不再手抄：软别名
         # （social_search/job/pdf/article）在校验之后重入，重入后的目标工具
         # schema 已覆盖同一参数，行为不变。
-        missing = [p for p in _required_params(name) if not arguments.get(p)]
+        missing = [p for p in _required_params(name) if p not in arguments]
         if missing:
             return {
                 "content": [{"type": "text",
@@ -439,7 +439,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                     return {"content": [{"type": "text", "text": _dumps({"error": str(e)})}],
                             "isError": True}
                 if out.get("ok"):
-                    max_c = _int_param(arguments, "max_chars", 20000)
+                    # 与 extract 分支同口径：max_chars 过 _clamp_int（schema 声明
+                    # 500-50000），此前裸 _int_param 不设边界。
+                    max_c = _clamp_int(_int_param(arguments, "max_chars", 20000), 20000, 500, 50000)
                     if len(out.get("content", "")) > max_c:
                         out["content"] = out["content"][:max_c]
                         out["truncated"] = True
@@ -485,7 +487,8 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             result = fetch_v3_mod.fetch_v3(
                 url=url,
                 max_chars=fetch_v3_mod._focus_fetch_chars(
-                    _int_param(arguments, "max_chars", 8000), focus_query),
+                    _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000),
+                    focus_query),
                 timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", _int_param(arguments, "timeout", 15)),
                 use_browser_fallback=True,
                 force_browser=arguments.get("use_browser", False),
@@ -493,11 +496,12 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             if focus_query and result.get("success"):
                 focus_mod = _lazy_cached("focus_extract")
                 focus_mod.apply_focus(result, focus_query,
-                                      max_chars=_int_param(arguments, "max_chars", 8000))
+                                      max_chars=_clamp_int(
+                                          _int_param(arguments, "max_chars", 8000), 8000, 500, 50000))
                 if not result.get("focus_applied"):
                     result["focus_note"] = "内容未达聚焦阈值，返回全文"
             if arguments.get("summary", True) and isinstance(result.get("content"), str):
-                max_c = _int_param(arguments, "max_chars", 8000)
+                max_c = _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000)
                 if len(result["content"]) > max_c:
                     result["content"] = result["content"][:max_c]
                     result["truncated"] = True

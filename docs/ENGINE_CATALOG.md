@@ -85,7 +85,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 状态含义：**可直接用** = 自动路由会用上；**需自配密钥 / 需装后端工具** = 配好后即可用；**被上游封锁** = 源站当前拒绝；**已停用** = 配置层面关闭。
 
-### 全网搜索（42）
+### 全网搜索（41）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -114,7 +114,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `brave` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_BRAVE_API_KEY | 显式调用（--engine） | Brave Search API（需自备 API key，显式指定 --engine brave 时生效） |
 | `byted` | 需自备密钥 | 低价计费 | 不限 | ARGO_BYTED_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 fact_check、域 financial_news、域 legal、域 local_news、域 news_realtime、域 weather_query、语义画像命中 | 字节搜索 API，中文通用/news |
 | `deepseek_search` | 需自备密钥 + 显式专用 | 付费 | 不限 | DEEPSEEK_API_KEY | 显式调用（--engine） | DeepSeek Search |
-| `digup` | 需装后端工具 + 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | DigUp（EmbeddingGemma 2 本地多模态嵌入，全程离线）——照片/截图/PDF/文档/音视频按内容检索 |
 | `ecosia` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页 |
 | `felo` | 需自备密钥 + 显式专用 | 付费 | 不限 | ARGO_FELO_API_KEY | 语义画像命中 | Felo AI 搜索 API（需自备 API key，显式指定 --engine felo 时生效） |
 | `fourget` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_FOURGET_URL | 显式调用（--engine） | 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG） |
@@ -199,7 +198,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_crossref` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Crossref本地 |
 | `local_pubmed` | 可直接用 | 免费 | 不限 | — | 域 academic、域 medical | PubMed本地 |
 | `local_semantic_scholar` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | Semantic Scholar本地 |
-| `openaire` | 可直接用 | 免费 | 不限 | — | 深度研究 boost | OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口） |
+| `openaire` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | OpenAIRE 学术聚合（EU 资助项目维度，免 key，DOI 入口） |
 | `openalex` | 可直接用 | 免费 | 不限 | — | 域 academic、域 chem_search、域 tech_deep、深度研究 boost | OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto） |
 | `openreview` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | OpenReview 顶会论文（含评审可见性与 PDF，AI/ML 研究为主） |
 | `semantic_scholar` | 可直接用 | 免费 | 不限 | — | 域 academic、域 local_academic、域 patent_search、域 tech_deep、深度研究 boost、语义画像命中 | Semantic Scholar API（备选） |
@@ -473,6 +472,14 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `crt_sh` | 可直接用 | 免费 | 不限 | — | 域 security_search | crt.sh 证书透明度日志（子域名/证书情报，免认证，响应较慢） |
 | `nvd` | 可直接用 | 免费 | 不限 | — | 域 security_search | NVD 漏洞情报（CVE 编号/描述/CVSS 与 KEV 标记；免认证 5 请求/30 秒） |
 
+### 个人数据（3）
+
+| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
+|---|---|---|---|---|---|---|
+| `digup` | 需装后端工具 + 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | DigUp（EmbeddingGemma 2 本地多模态嵌入，全程离线）——照片/截图/PDF/文档/音视频按内容检索 |
+| `zhihu_kb` | 需自备密钥 + 显式专用 | 免费 | 500/天 | ARGO_ZHIHU_ACCESS_SECRET | 显式调用（--engine） | 知乎知识库只读 RAG 检索与列库（knowledge/search 与 knowledge/bases；支持 scope/kb 过滤与 bases 列库）；显式按需调用（需 ZHIHU_ACCESS_SECRET） |
+| `zhihu_user` | 需自备密钥 | 免费 | 10000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 zhihu_user_data | 知乎个人数据（本人创作内容/收藏/关注；Access Secret 直查本人无需 OAuth，user_data 池 10000/天） |
+
 ### 化学 / 药学（3）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
@@ -494,13 +501,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 |---|---|---|---|---|---|---|
 | `factcheck_org` | 可直接用 | 免费 | 不限 | — | 域 claim_check | FactCheck.org（美国事实核查：声明级真伪判定，摘要密度仅次于卫报） |
 | `full_fact` | 可直接用 | 免费 | 不限 | — | 域 claim_check | Full Fact（英国事实核查：与 FactCheck.org 分属英美两法域口径） |
-
-### 个人数据（2）
-
-| 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
-|---|---|---|---|---|---|---|
-| `zhihu_kb` | 需自备密钥 + 显式专用 | 免费 | 500/天 | ARGO_ZHIHU_ACCESS_SECRET | 显式调用（--engine） | 知乎知识库只读 RAG 检索与列库（knowledge/search 与 knowledge/bases；支持 scope/kb 过滤与 bases 列库）；显式按需调用（需 ZHIHU_ACCESS_SECRET） |
-| `zhihu_user` | 需自备密钥 | 免费 | 10000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 zhihu_user_data | 知乎个人数据（本人创作内容/收藏/关注；Access Secret 直查本人无需 OAuth，user_data 池 10000/天） |
 
 ### 归档 / 历史（2）
 
@@ -596,7 +596,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `entity_search` | `wikidata` | `baidu_baike`、`wikidata`、`wikipedia`、`zh_wikipedia`、`dbpedia` |
 | `zhihu_user_data` | `zhihu_user` | `zhihu_user` |
 | `zhihu_content` | `zhihu` | `zhihu`、`zhihu_global`、`anysearch` |
-| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`cnii`、`core`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal` |
+| `academic` | `arxiv` | `arxiv`、`openreview`、`biorxiv`、`openalex`、`hf_papers`、`local_pubmed`、`cnii`、`core`、`crossref`、`europepmc`、`dblp`、`semantic_scholar`、`doaj`、`figshare`、`hal`、`openaire` |
 | `tech_deep` | `openalex` | `openalex`、`arxiv`、`semantic_scholar`、`github`、`europepmc` |
 | `shopping` | `zhihu` | `zhihu`、`anysearch` |
 | `semantic_discovery` | `exa` | `exa`、`mwmbl`、`mojeek`、`anysearch`、`lieu`、`marginalia`、`searchmysite`、`wiby`、`uapi`、`parallel_free`、`tavily`、`firecrawl` |

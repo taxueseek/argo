@@ -398,15 +398,16 @@ class CircuitBreaker:
         「跨 ≥2 个不同查询」的去重（同一查询反复空不构成引擎失效证据）。
 
         empty 语义是「该查询无结果」——查询级信号，不是引擎级故障。
-        它仍可触发 60s 短冷却（防止重复打无效源），但不累计 opens，
-        因此永远不会驱动 auto-disable（否则聚合引擎/local 源等易空
-        引擎会被误判为持续故障而静默禁用）。
+        它只进 45s 负缓存（EMPTY_NEGATIVE_TTL，防止重复打无效源），
+        不设 cooldown、不累计 opens，因此永远不会驱动 auto-disable
+        （否则聚合引擎/local 源等易空引擎会被误判为持续故障而静默禁用）。
 
         blocked / rate-limited 语义是「源站行为，不是引擎坏了」——前者是
         请求在到达内容前被拦截（反爬/指纹/挑战页），后者是源端限流。
-        同样只做 60s 短冷却、不累计 opens：把封锁/限流当引擎故障累计到
-        auto-disable 是封错人——引擎实现没有问题，换客户端形态、
-        等冷却或等源站策略变化即可恢复。
+        走指数冷却阶梯（RATE_LIMIT_COOLDOWNS，60/300/900s，经 cooldown_until
+        拒绝探测）、不累计 opens：把封锁/限流当引擎故障累计到 auto-disable
+        是封错人——引擎实现没有问题，换客户端形态、等冷却或等源站策略
+        变化即可恢复。
         """
         self._mutate_locked(
             lambda: self._mutate_failure(engine, kind, attribution, query))

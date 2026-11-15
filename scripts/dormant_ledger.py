@@ -125,6 +125,12 @@ DORMANT_ALLOWLIST: dict[str, str] = {
     # local_pubmed 同属「开放获取全文」层，能力重叠，故让位给独特性更高的
     # cnii（本域唯一亚洲学术源）；deep/research 与恢复链仍可达。
     "core": "academic 位次 8：让位 cnii（加槽 cap 取舍），与 local_pubmed 能力重叠，deep/research 可达",
+    # 2026-11-15：openaire 收编进 academic 尾部（位次 16，此前唯一入口是
+    # --engine）。加槽表已满（local_pubmed/cnii/hf_papers 共 3 槽，extra
+    # cap=4），排尾部不挤既有位次：auto/balanced 预算窗（base 3 + 4 = 7）
+    # 外，deep/research 与恢复链可达。与 openalex/hal/doaj 同属开放学术
+    # 聚合层，EU 开放科学口径（项目/数据集/软件产出）有差异化增量。
+    "openaire": "academic 位次 16：加槽 cap 已满排尾部，deep/research 可达",
     # mojeek 原登记在此（semantic_discovery 位次 8），2026-11-10 前移到第 3 位
     # 后落进基础预算，已撤账——保留注释记录这笔账的来龙去脉。
     "so": "chinese_general 位次 8：新增观察期（9044621），待可用性数据",

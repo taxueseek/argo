@@ -19,6 +19,7 @@ engine_id: digup
 type: cli
 enabled: true
 explicit_only: true
+family: personal_data  # 准入门禁要求显式声明；本机文件检索归个人数据族（explicit_only 不进 auto 组合）
 cost_tier: free
 requires:
 - bin: digup

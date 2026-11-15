@@ -932,7 +932,8 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
         return _run_local_seek(q, max_n, search_dir, echo=not quiet)
 
     result = shape_response(_ShapeContext(
-        query=query, kind=kind, tier=tier, envelope=envelope, decision=decision,
+        # envelope 与 result["query"]（:823）同口径：候选交接包不收 site:/-词 操作符原串
+        query=original_query, kind=kind, tier=tier, envelope=envelope, decision=decision,
         extra_lim=extra_lim, cache=cache, include_domains=include_domains,
         exclude_domains=exclude_domains, include_local=include_local, n=n,
         run_local_seek=_local_seek_wrapper,

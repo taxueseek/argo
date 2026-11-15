@@ -151,11 +151,16 @@ def test_mcp_argo_article_success_and_truncate():
     assert payload["title"] == "测试文章标题"
     assert "truncated" not in payload
 
-    with patch.object(article, "fetch", return_value=_FIXTURE_HTML):
-        res = execute_tool("argo_article", {"url": _WX_URL, "max_chars": 2})
+    # max_chars 走 _clamp_int（schema 声明 500-50000）：旧写法 max_chars=2
+    # 依赖无夹取行为，schema 对齐后下限以下回 500、不触发截断。改用区间内的
+    # 600 配长夹具，截断语义断言不变。
+    _LONG_HTML = _FIXTURE_HTML.replace(
+        "<p>第一段正文内容。</p>", "<p>" + "第一段正文内容。" * 200 + "</p>")
+    with patch.object(article, "fetch", return_value=_LONG_HTML):
+        res = execute_tool("argo_article", {"url": _WX_URL, "max_chars": 600})
     payload = json.loads(res["content"][0]["text"])
     assert payload["truncated"] is True
-    assert len(payload["content"]) == 2
+    assert len(payload["content"]) == 600
 
 
 def test_mcp_argo_article_error_is_actionable():

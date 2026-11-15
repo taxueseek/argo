@@ -1,8 +1,11 @@
-# AI 实验室与研究者一手博客 — 官方公告与研究原文直连（聚合多源，免 key）
+# AI 实验室与研究者一手博客为主、辅以研究者窗口与二手媒体的聚合 Feed（免 key）
 #
 # 补的盲区：OpenAI / DeepMind / Apple ML / HuggingFace 等实验室的
 # 模型发布、研究报告与官方工程复盘。通用搜索抓到的大多是媒体转述或洗稿，
-# 本引擎直连官方 Feed 原文。全部种子 2026-11-15 逐一实测 HTTP 200。
+# 本引擎直连官方 Feed 原文；另收 Epoch AI / Simon Willison 两个研究者窗口，
+# 以及 The Decoder / TechCrunch AI 两家二手媒体（feed_mode=filter 主题词
+# 过滤兜底）——10 份种子里一手官方 6 份，「一手直连」不作绝对承诺。
+# 全部种子 2026-11-15 逐一实测 HTTP 200。
 #
 # 背景：issue #49 迁移 cn_ai_news 时对 AIHOT（aihot.news）做了上游摸底——
 # 它前 1000 条精选的 143 个去重来源里，官方实验室渠道约占三分之一。本引擎
