@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -179,16 +179,21 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 
 | 版本 | 核心更新 |
 | :--- | :--- |
+| **v2.15.0** | 知乎全链、证据层权威透传、无 key 语义兜底、MCP 通用连接器（`type: mcp`）、路由零基域评分、311 个源 |
 | **v2.14.1** | 信源架构精简、MCP 3+1 收敛与向后兼容别名、304 个源、`secret_guard.py` 故障安全脱敏 |
 | **v2.14.0** | 解析层收敛、300 个源、坏例账本闭环 |
 | **v2.13.0** | 文档收口、22 台状态机单一真源、派发尾宽宽限 |
 
 <details>
-<summary>v2.14.1 版本摘要与当前能力</summary>
+<summary>v2.15.0 版本摘要与当前能力</summary>
 
-### 当前大致能力（v2.14.1）
+### 当前大致能力（v2.15.0）
 
-v2.14.1 完成信源架构精简、免认证新源接入（Hugging Face Datasets、Maven Central、NuGet、Open-Meteo）、MCP 3+1 收敛与向后兼容别名，以及 `secret_guard.py` 故障安全脱敏。
+v2.15.0 完成知乎全链（问题下钻、精选回答、Keychain 凭证与点赞质量加权）、证据层 `upstream_authority` 只透传不赋权、无 API key 可用的三级语义兜底（本地 2-gram 启发式）、研报单文件链路、路由零基域评分，以及 MCP 通用连接器（`type: mcp`，首接 grep.app）。源 304→311，域 306→313。
+
+### v2.15.0：知乎全链 + 证据层权威透传 + MCP 连接器
+
+详见 [docs/RELEASE_NOTES_v2.15.0.md](docs/RELEASE_NOTES_v2.15.0.md) 与 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ### v2.14.1：信源架构精简 + MCP 3+1 收敛 + 安全脱敏
 

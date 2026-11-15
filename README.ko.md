@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -77,16 +77,21 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 
 | 버전 | 주요 업데이트 |
 | :--- | :--- |
+| **v2.15.0** | Zhihu 전체 체인, 증거 레이어 권위 전달, 키 없는 시맨틱 폴백, MCP 범용 커넥터(`type: mcp`), 라우팅 제로베이스 평가, 311개 소스 |
 | **v2.14.1** | 아키텍처 슬리밍, MCP 3+1 도구 수렴 및 호환 별칭, 304개 소스, `secret_guard.py` 보안 마스킹 |
 | **v2.14.0** | 파서 계층 통합, 300개 소스, 배드케이스 원장 루프 |
 | **v2.13.0** | 문서 통합, 22개 상태 머신 SSOT, 디스패치 테일 유예 |
 
 <details>
-<summary>v2.14.1 릴리스 요약 및 기능 개요</summary>
+<summary>v2.15.0 릴리스 요약 및 기능 개요</summary>
 
-### 현재 기능 개요 (v2.14.1)
+### 현재 기능 개요 (v2.15.0)
 
-v2.14.1에서는 소스 아키텍처 슬리밍, 무인증 소스 확장, MCP 3+1 수렴 및 호환 별칭, `secret_guard.py` 기반 보안 마스킹이 적용되었습니다.
+v2.15.0에서는 Zhihu 전체 체인(질문 드릴다운·답변 선별·Keychain 자격 증명·투표 품질 가중), 증거 레이어로의 `upstream_authority` 전달, API 키 없이도 동작하는 3단계 시맨틱 폴백(로컬 2-gram 휴리스틱), 보고서 단일 파일 파이프라인, 라우팅 제로베이스 도메인 평가, MCP 범용 커넥터(`type: mcp`, 첫 연결은 grep.app)를 구현했습니다. 소스 304→311, 도메인 306→313.
+
+### v2.15.0: Zhihu 전체 체인 + 증거 레이어 권위 전달 + MCP 커넥터
+
+자세한 내용은 [docs/RELEASE_NOTES_v2.15.0.md](docs/RELEASE_NOTES_v2.15.0.md)를 참고하세요.
 
 ### v2.14.1: 아키텍처 슬리밍 + MCP 3+1 도구 + 보안 마스킹
 

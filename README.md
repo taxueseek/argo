@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -182,16 +182,21 @@ The built-in settings UI exposes **18 native first-class tools**, **35 behaviour
 
 | Version | Highlights |
 | :--- | :--- |
+| **v2.15.0** | Zhihu full chain, evidence-layer authority passthrough, keyless 3-tier semantic fallback, MCP generic connector (`type: mcp`), route zero-based domain scoring, 311 sources |
 | **v2.14.1** | Architecture slimming, MCP 3+1 orthogonal tools + backward-compat aliases, 304 sources, fail-closed `secret_guard.py` redaction |
 | **v2.14.0** | Parser layer consolidation, 300 sources, badcase ledger loop |
 | **v2.13.0** | Documentation consolidation, 22-state-machine SSOT, dispatch tail grace |
 
 <details>
-<summary>v2.14.1 Release Summary &amp; Capability Snapshot</summary>
+<summary>v2.15.0 Release Summary &amp; Capability Snapshot</summary>
 
-### Capabilities (v2.14.1)
+### Capabilities (v2.15.0)
 
-v2.14.1 slims the source architecture, converges MCP tools to 3+1 orthogonal core interfaces with backward-compatible aliases, expands keyless sources (Hugging Face Datasets, Maven Central, NuGet, Open-Meteo), and adds fail-closed `secret_guard.py` output redaction.
+v2.15.0 delivers the Zhihu full chain (question drill-down, curated answers, Keychain credentials, vote-quality weighting), evidence-layer `upstream_authority` passthrough, a keyless 3-tier semantic fallback (local 2-gram heuristics), the single-file research-report pipeline, route zero-based domain scoring, and the MCP generic connector (`type: mcp`, first integration grep.app). Sources 304→311, domains 306→313.
+
+### v2.15.0: Zhihu Full Chain + Evidence Authority Passthrough + MCP Connector
+
+See [docs/RELEASE_NOTES_v2.15.0.md](docs/RELEASE_NOTES_v2.15.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ### v2.14.1: Architecture Slimming + MCP 3+1 Tools + Security Redaction
 

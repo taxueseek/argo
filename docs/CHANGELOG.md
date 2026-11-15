@@ -3,6 +3,22 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## v2.15.0
+
+**定位**：知乎全链 + 证据层权威透传 + MCP 连接器 + 路由零基域评分。把「路由命中之后」的能力做厚：证据层拿到上游权威档、无 key 用户走本地语义兜底、任意 MCP server 声明式接入为搜索源；同步还掉一批工程债（裸吞棘轮 187→160、运行时状态补生命周期、单真源收口）。源 304→311，域 306→313。
+
+**关键变更**：
+- **知乎全链**：`zhihu_questions`/`zhihu_kb` 接入、问题自动下钻与精选回答摘要、Keychain 凭证自省、点赞质量加权、画像推荐与合成 snippet 修复；上游 `AuthorityLevel` 解析并经 `upstream_authority` 全程透传
+- **证据层 authority 透传（方案C）**：`compute_credibility` 读结果行 `upstream_authority`（回落 `authority_level`）挂 `credibility.authority.upstream_level`——只透传不赋权，selection/final 逐位不变（测试锁死）
+- **无 key 语义兜底**：Gemini Decision 三级阶梯最后一级落本地启发式（CJK/日韩 2-gram、同句极性窗口）；JEV 改内置本地高精度判定，清退过度评测包袱
+- **MCP 通用连接器**：`type: mcp` 适配器（stdio 换行帧 / Streamable HTTP JSON-RPC+SSE 双传输，内容层声明式：JSON 走标准 output_map、纯文本走分块正则），首接 `grepapp_mcp`；HTTP 出口统一 `http_open`（egress 门禁）
+- **路由零基域评分**：域评分声明式下放、多语种概念表与脱敏遥测飞轮；标注路由集 13/13
+- **研报链路**：单文件标准化落盘、资产化与上游结构自愈、excerpt frontmatter 修复、去重收敛
+- **工程还债**：宽吞异常棘轮 187→160；运行时状态补生命周期（墓碑+观测）；`docs/LEDGERS.md` 统一台账真源；无时间窗搜索不再全量解析 307 份 spec；占位符白名单 fail-closed + 前向授权门禁；CLI 子进程 env 最小化；settings 页无 fd `/dev/tty` 阻塞修复；软链直连安装下 schemastery 面板修复
+- **修复**：mp.weixin 专用分支移到 robots 闸前（原闸门顺序使其 100% 不可达）；MCP 可选参数显式 null 炸 TypeError；cn_ai_news 迁 AIHOT v1（issue #49）；fxtwitter 搜索端点复测恢复；五语 README 计数与死链清理
+
+**默认关闭开关**：新增垂类源（`ai_labs`/`eng_blogs`/`cisa_alerts`/`lobsters`/`zhihu_questions`/`zhihu_kb`/`grepapp_mcp`）均 `explicit_only` 不占自动路由预算，点名调用（如 `argo search "..." --engine ai_labs`）；`grepapp_mcp` 带 `synthesized: true` 标记（人工确认后摘除）；语义兜底本地启发式为最后一级自动降级，无需配置。
+
 ## v2.14.1
 
 **定位**：信源架构精简 + 免认证新源接入 + MCP 3+1 收敛 + 安全脱敏与 Release 瘦身。用奥卡姆剃刀做架构减法，退役历史专用胶水并消减专用构建器；收敛极简 MCP 核心工具面以对齐 MaaS 规范；新增 Hugging Face、Maven、NuGet 等开发者免认证开放数据源；落地全链路输出脱敏与轻量 Release 打包。

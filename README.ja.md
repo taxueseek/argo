@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.14.1-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -77,16 +77,21 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 
 | バージョン | 主な変更点 |
 | :--- | :--- |
+| **v2.15.0** | Zhihu フルチェーン、証拠レイヤー権威透過、キー不要セマンティックフォールバック、MCP 汎用コネクタ（`type: mcp`）、ルーティング ゼロベース評価、311 ソース |
 | **v2.14.1** | ソースアーキテクチャのスリム化、MCP 3+1 ツール統合と互換エイリアス、304 ソース対応、`secret_guard.py` 機密マスキング |
 | **v2.14.0** | パーサー層統合、300 ソース到達、バッドケース台帳ループ |
 | **v2.13.0** | ドキュメント統合、22 ステートマシン SSOT、ディスパッチ待機改善 |
 
 <details>
-<summary>v2.14.1 リリース概要・機能サマリー</summary>
+<summary>v2.15.0 リリース概要・機能サマリー</summary>
 
-### 現時点の能力概要（v2.14.1）
+### 現時点の能力概要（v2.15.0）
 
-v2.14.1 ではソースアーキテクチャのスリム化、キー不要ソース追加、MCP 3+1 統合と互換エイリアス、および `secret_guard.py` による機密マスキングを実装しました。
+v2.15.0 では Zhihu フルチェーン（質問掘り下げ・回答精选・Keychain 認証・投票品質加重）、証拠レイヤーへの `upstream_authority` 透過、API キー不要の 3 段階セマンティックフォールバック（ローカル 2-gram ヒューリスティック）、レポート単一ファイルパイプライン、ルーティングのゼロベースドメイン評価、MCP 汎用コネクタ（`type: mcp`、最初の接続は grep.app）を実装しました。ソース 304→311、ドメイン 306→313。
+
+### v2.15.0：Zhihu フルチェーン + 証拠レイヤー権威透過 + MCP コネクタ
+
+詳細は [docs/RELEASE_NOTES_v2.15.0.md](docs/RELEASE_NOTES_v2.15.0.md) をご参照ください。
 
 ### v2.14.1：アーキテクチャのスリム化 + MCP 3+1 ツール + セキュリティ編集
 
