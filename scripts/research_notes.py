@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""research_notes.py — 研报标准化落盘与极简轻量索引。
-
-遵循奥卡姆剃刀与通行 Agent 规范：
-  - 研报以单一自包含 Markdown 文件落地（内嵌 YAML Frontmatter），不搞过度工程的
-    多层嵌套子目录、sources/ 原文副本搬运、相对软链别名与 manifest.json；
-  - 默认落盘至约定标准目录（工作区 docs/research/ 或当前 research/，可通过 -o/--output 显式指定）；
-  - 保留轻量索引与子串检索，为上层 Agent 提供清晰正交的研报生成与消费接口。
-"""
+"""research_notes.py — 研报标准化落盘与轻量索引。"""
 
 from __future__ import annotations
 
@@ -22,6 +15,7 @@ from typing import Any
 from cli_io import dumps
 
 KINDS = ("study", "explore")
+_KIND_SUFFIX = {"study": "研究", "explore": "探索"}
 
 SECTIONS = [
     ("0. 结论速览", "3-7 条，每条一句话；读完能回答「所以呢」"),
@@ -30,6 +24,10 @@ SECTIONS = [
     ("3. 可迁移判断", "对我们工作有什么用，写条件与风险；面向决策，不空谈"),
     ("4. 边界与后续", "未解决 / 待核验 / 后续动作；未知项写补证动作"),
 ]
+
+_STRONG_MARKERS = (".git", "AGENTS.md", "WORKSPACE")
+_WEAK_MARKERS = ("pyproject.toml", "package.json", "Cargo.toml", "go.mod")
+WORKSPACE_MARKERS = _STRONG_MARKERS + _WEAK_MARKERS
 
 
 def _now_iso() -> str:
@@ -43,11 +41,6 @@ def slugify(text: str, fallback: str = "note") -> str:
     tail = re.sub(r"\s+", "-", tail.strip())
     tail = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff._-]+", "-", tail).strip("-.")
     return tail[:80] or fallback
-
-
-_STRONG_MARKERS = (".git", "AGENTS.md", "WORKSPACE")
-_WEAK_MARKERS = ("pyproject.toml", "package.json", "Cargo.toml", "go.mod")
-WORKSPACE_MARKERS = _STRONG_MARKERS + _WEAK_MARKERS
 
 
 def find_workspace_root(start_path: Path | None = None) -> Path:
@@ -79,7 +72,7 @@ def workspace_anchorable() -> bool:
     """当前工作区是否可锚定。"""
     try:
         ws = find_workspace_root()
-        return any((ws / m).exists() for m in _STRONG_MARKERS + _WEAK_MARKERS)
+        return any((ws / m).exists() for m in WORKSPACE_MARKERS)
     except Exception:
         return False
 
@@ -135,7 +128,6 @@ def _body_excerpt(note_path: Path, limit: int = 200) -> str:
         text = note_path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
-    # 去掉 Frontmatter
     if text.startswith("---"):
         parts = text.split("---", 2)
         if len(parts) >= 3:
@@ -143,9 +135,8 @@ def _body_excerpt(note_path: Path, limit: int = 200) -> str:
     skip_prefixes = ("#", "<!--", "研究对象", "调研日期", "证据口径", "关联")
     for line in text.splitlines():
         s = line.strip()
-        if not s or any(s.startswith(p) for p in skip_prefixes):
-            continue
-        return s[:limit]
+        if s and not any(s.startswith(p) for p in skip_prefixes):
+            return s[:limit]
     return ""
 
 
@@ -172,27 +163,19 @@ def search_index(
                 continue
             if kind and row.get("kind") != kind:
                 continue
-            excerpt = str(row.get("body_excerpt") or "")
-            note_file = row.get("note_file")
-            hay = " ".join([
-                str(row.get("slug") or ""),
-                str(row.get("title") or ""),
-                str(row.get("url") or ""),
-                str(row.get("related") or ""),
-                excerpt,
-            ]).lower()
-            if kw and kw not in hay:
-                # 现场查验研报正文是否命中
+            hay = " ".join(
+                str(row.get(k) or "") for k in ("slug", "title", "url", "related", "body_excerpt")
+            ).lower()
+            matched = not kw or kw in hay
+            if not matched:
+                note_file = row.get("note_file")
                 if note_file and Path(note_file).is_file():
                     try:
-                        content = Path(note_file).read_text(encoding="utf-8", errors="replace").lower()
-                        if kw in content:
-                            out.append(row)
-                            continue
+                        matched = kw in Path(note_file).read_text(encoding="utf-8", errors="replace").lower()
                     except OSError:
                         pass
-                continue
-            out.append(row)
+            if matched:
+                out.append(row)
     return out[-limit:][::-1]
 
 
@@ -209,174 +192,102 @@ def build_markdown_report(
 ) -> Path:
     """生成标准化单一 Markdown 研报（含标准 YAML Frontmatter 与五段式结构）。"""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    created_at = _now_iso()
-
-    # 标准 YAML Frontmatter
+    fm = {
+        "title": title, "slug": slug, "kind": kind,
+        "target": url_or_problem, "date": date,
+        "created_at": _now_iso(), "related": related,
+    }
     lines = [
         "---",
-        f"title: {json.dumps(title, ensure_ascii=False)}",
-        f"slug: {json.dumps(slug, ensure_ascii=False)}",
-        f"kind: {json.dumps(kind, ensure_ascii=False)}",
-        f"target: {json.dumps(url_or_problem, ensure_ascii=False)}",
-        f"date: {json.dumps(date, ensure_ascii=False)}",
-        f"created_at: {json.dumps(created_at, ensure_ascii=False)}",
-        f"related: {json.dumps(related, ensure_ascii=False)}",
-        "---",
-        "",
-        f"# {title}",
-        "",
+        *[f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in fm.items()],
+        "---", "",
+        f"# {title}", "",
         f"研究对象：{url_or_problem}",
         f"调研日期：{date}",
         "证据口径：`[已验证]` = 直接读到原文内容；`[推断]` = 基于原文事实的判断，未直接证实",
-        f"关联：{related}",
-        "",
-        "---",
-        "",
+        f"关联：{related}", "", "---", "",
+        *[f"## {heading}\n\n<!-- {hint} -->\n" for heading, hint in SECTIONS],
     ]
-
-    for heading, hint in SECTIONS:
-        lines.append(f"## {heading}\n\n<!-- {hint} -->\n")
-
     if kind == "explore":
         lines.append("## 5. 候选方向\n\n<!-- 每条含：问题陈述 / 为什么值得 / 怎么证伪 / 第一步取证动作 -->\n")
-
     if archive_text.strip():
         lines.append("---\n\n## 附录：参考原文\n\n" + archive_text.strip() + "\n")
-
     output_path.write_text("\n".join(lines), encoding="utf-8")
     return output_path
 
 
-def create_study_bundle(
+def _create_note_bundle(
+    kind: str,
     *,
     root: Path | None = None,
     slug: str,
     title: str,
-    url: str,
-    archive_text: str = "",
+    target: str,
     related: str = "无",
+    archive_text: str = "",
     output: Path | None = None,
 ) -> dict[str, Any]:
-    """单篇精研研报标准化生成。"""
     rt = root or resolve_root()
-    date = datetime.now().strftime("%Y%m%d")
-    out_file = output or (rt / "study" / slug / f"{slug}-研究.md")
+    out_file = output or (rt / kind / slug / f"{slug}-{_KIND_SUFFIX[kind]}.md")
     build_markdown_report(
-        kind="study",
-        title=title or slug,
-        slug=slug,
-        url_or_problem=url,
-        date=date,
-        related=related,
-        archive_text=archive_text,
-        output_path=out_file,
+        kind=kind, title=title or slug, slug=slug, url_or_problem=target,
+        date=datetime.now().strftime("%Y%m%d"), related=related,
+        archive_text=archive_text, output_path=out_file,
     )
-
-    meta = append_index({
-        "schema_version": 2,
-        "kind": "study",
-        "slug": slug,
-        "title": title or slug,
-        "url": url,
-        "note_file": str(out_file),
-        "related": related or "",
-        "body_excerpt": _body_excerpt(out_file),
-        "archive_sha256": "embedded" if archive_text else "",
+    row: dict[str, Any] = {
+        "schema_version": 2, "kind": kind, "slug": slug,
+        "title": title or slug, "url": target, "note_file": str(out_file),
+        "related": related or "", "body_excerpt": _body_excerpt(out_file),
         "created_at": _now_iso(),
-    }, root=rt)
-
-    return {
-        "kind": "study",
-        "slug": slug,
-        "note": str(out_file),
-        "output": str(out_file),
-        "bundle_dir": str(out_file.parent),
-        "index": meta,
     }
+    if kind == "study":
+        row["archive_sha256"] = "embedded" if archive_text else ""
+    meta = append_index(row, root=rt)
+    return {
+        "kind": kind, "slug": slug, "note": str(out_file),
+        "output": str(out_file), "bundle_dir": str(out_file.parent), "index": meta,
+    }
+
+
+def create_study_bundle(
+    *, root: Path | None = None, slug: str, title: str, url: str,
+    archive_text: str = "", related: str = "无", output: Path | None = None,
+) -> dict[str, Any]:
+    """单篇精研研报标准化生成。"""
+    return _create_note_bundle(
+        "study", root=root, slug=slug, title=title, target=url,
+        related=related, archive_text=archive_text, output=output,
+    )
 
 
 def create_explore_bundle(
-    *,
-    root: Path | None = None,
-    slug: str,
-    title: str,
-    problem: str,
-    related: str = "无",
-    output: Path | None = None,
+    *, root: Path | None = None, slug: str, title: str, problem: str,
+    related: str = "无", output: Path | None = None,
 ) -> dict[str, Any]:
     """方向探索研报标准化生成。"""
-    rt = root or resolve_root()
-    date = datetime.now().strftime("%Y%m%d")
-    out_file = output or (rt / "explore" / slug / f"{slug}-探索.md")
-    build_markdown_report(
-        kind="explore",
-        title=title or slug,
-        slug=slug,
-        url_or_problem=problem,
-        date=date,
-        related=related,
-        output_path=out_file,
+    return _create_note_bundle(
+        "explore", root=root, slug=slug, title=title, target=problem,
+        related=related, output=output,
     )
 
-    meta = append_index({
-        "schema_version": 2,
-        "kind": "explore",
-        "slug": slug,
-        "title": title or slug,
-        "url": problem,
-        "note_file": str(out_file),
-        "related": related or "",
-        "body_excerpt": _body_excerpt(out_file),
-        "created_at": _now_iso(),
-    }, root=rt)
 
-    return {
-        "kind": "explore",
-        "slug": slug,
-        "note": str(out_file),
-        "output": str(out_file),
-        "bundle_dir": str(out_file.parent),
-        "index": meta,
-    }
-
-
-def _cmd_study(args: argparse.Namespace) -> int:
-    root = resolve_root(args.root)
-    slug = args.slug or slugify(args.url)
+def _cmd_create(args: argparse.Namespace) -> int:
+    kind = args.command
+    target = args.url if kind == "study" else args.problem
+    slug = args.slug or slugify(target)
     out_path = Path(args.output).expanduser().resolve() if args.output else None
-
-    archive_text = args.archive_text or ""
-    if not archive_text and args.archive and Path(args.archive).is_file():
-        try:
-            archive_text = Path(args.archive).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            pass
-
-    res = create_study_bundle(
-        root=root,
-        slug=slug,
-        title=args.title or slug,
-        url=args.url,
-        archive_text=archive_text,
-        related=args.related or "无",
-        output=out_path,
-    )
-    print(dumps(res))
-    return 0
-
-
-def _cmd_explore(args: argparse.Namespace) -> int:
-    root = resolve_root(args.root)
-    slug = args.slug or slugify(args.problem)
-    out_path = Path(args.output).expanduser().resolve() if args.output else None
-
-    res = create_explore_bundle(
-        root=root,
-        slug=slug,
-        title=args.title or slug,
-        problem=args.problem,
-        related=args.related or "无",
-        output=out_path,
+    archive_text = ""
+    if kind == "study":
+        archive_text = args.archive_text or ""
+        if not archive_text and args.archive and Path(args.archive).is_file():
+            try:
+                archive_text = Path(args.archive).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                pass
+    res = _create_note_bundle(
+        kind, root=resolve_root(args.root), slug=slug, title=args.title or slug,
+        target=target, related=args.related or "无",
+        archive_text=archive_text, output=out_path,
     )
     print(dumps(res))
     return 0
@@ -384,52 +295,32 @@ def _cmd_explore(args: argparse.Namespace) -> int:
 
 def _cmd_list(args: argparse.Namespace) -> int:
     root, root_source = resolve_root_with_source(args.root)
-    rows = search_index(
-        args.query or "",
-        root=root,
-        kind=args.kind,
-        limit=args.limit,
-    )
-    out: dict[str, Any] = {
-        "count": len(rows),
-        "notes": rows,
-        "root": str(root),
-        "root_source": root_source,
-    }
+    rows = search_index(args.query or "", root=root, kind=args.kind, limit=args.limit)
+    out: dict[str, Any] = {"count": len(rows), "notes": rows, "root": str(root), "root_source": root_source}
     if not rows:
-        out["hint"] = (
-            f"当前归档根 {root} 下没有命中。可指定 --dir 或设置 ARGO_RESEARCH_ROOT。"
-        )
+        out["hint"] = f"当前归档根 {root} 下没有命中。可指定 --dir 或设置 ARGO_RESEARCH_ROOT。"
     print(dumps(out))
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        prog="argo note",
-        description="研究笔记生成与归档：单一自包含 Markdown 研报输出",
-    )
+    p = argparse.ArgumentParser(prog="argo note", description="研究笔记生成与归档：单一自包含 Markdown 研报输出")
     sub = p.add_subparsers(dest="command", required=True)
-
-    ps = sub.add_parser("study", help="生成单篇精研研报（标准 Markdown + Frontmatter）")
-    ps.add_argument("url", help="研究对象 URL")
-    ps.add_argument("--title", help="标题（缺省用 slug）")
-    ps.add_argument("--slug", help="标识符（缺省从 URL 推导）")
-    ps.add_argument("-o", "--output", help="直接指定研报输出文件路径")
-    ps.add_argument("--archive", help="原文文件（直接作为附录内嵌）")
-    ps.add_argument("--archive-text", help="直接提供原文文本（作为附录内嵌）")
-    ps.add_argument("--related", help="关联引用")
-    ps.add_argument("--root", "--dir", dest="root", help="归档根目录（缺省自动锚定工作区）")
-    ps.set_defaults(func=_cmd_study)
-
-    pe = sub.add_parser("explore", help="生成方向探索研报（标准 Markdown + Frontmatter）")
-    pe.add_argument("problem", help="探索问题或主题")
-    pe.add_argument("--title", help="标题（缺省用 slug）")
-    pe.add_argument("--slug", help="标识符（缺省从问题推导）")
-    pe.add_argument("-o", "--output", help="直接指定研报输出文件路径")
-    pe.add_argument("--related", help="关联引用")
-    pe.add_argument("--root", "--dir", dest="root", help="归档根目录（缺省自动锚定工作区）")
-    pe.set_defaults(func=_cmd_explore)
+    for name, arg_name, arg_help, desc in (
+        ("study", "url", "研究对象 URL", "生成单篇精研研报（标准 Markdown + Frontmatter）"),
+        ("explore", "problem", "探索问题或主题", "生成方向探索研报（标准 Markdown + Frontmatter）"),
+    ):
+        sp = sub.add_parser(name, help=desc)
+        sp.add_argument(arg_name, help=arg_help)
+        sp.add_argument("--title", help="标题（缺省用 slug）")
+        sp.add_argument("--slug", help="标识符（缺省从对象推导）")
+        sp.add_argument("-o", "--output", help="直接指定研报输出文件路径")
+        if name == "study":
+            sp.add_argument("--archive", help="原文文件（直接作为附录内嵌）")
+            sp.add_argument("--archive-text", help="直接提供原文文本（作为附录内嵌）")
+        sp.add_argument("--related", help="关联引用")
+        sp.add_argument("--root", "--dir", dest="root", help="归档根目录（缺省自动锚定工作区）")
+        sp.set_defaults(func=_cmd_create)
 
     pl = sub.add_parser("list", help="检索研报索引")
     pl.add_argument("query", nargs="?", help="检索关键词")
@@ -437,13 +328,11 @@ def build_parser() -> argparse.ArgumentParser:
     pl.add_argument("--limit", type=int, default=10)
     pl.add_argument("--root", "--dir", dest="root", help="归档根目录")
     pl.set_defaults(func=_cmd_list)
-
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
     return int(args.func(args))
 
 

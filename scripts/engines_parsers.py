@@ -564,21 +564,3 @@ def _migrate_builtin() -> None:
 
 
 _migrate_builtin()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 声明式架构自省与结构漂移诊断（抽离至 engines_schema_drift 独立模块以恪守 1000 行限制）
-# ─────────────────────────────────────────────────────────────────────────────
-from engines_schema_drift import (
-    _TITLE_SYNONYMS,
-    _URL_SYNONYMS,
-    _SUMMARY_SYNONYMS,
-    _PUB_SYNONYMS,
-    _flatten_item,
-    _find_candidate_containers,
-    _match_best_field,
-    diagnose_schema_drift,
-    verify_schema_patch,
-    render_drift_report,
-    apply_schema_patch,
-)

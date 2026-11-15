@@ -58,22 +58,19 @@ class TestLocalTargetWhitelist(unittest.TestCase):
             self.assertTrue(se.is_local_target(p), f"本地路径未被拦截: {p!r}")
 
 
-class TestFixIsPreviewByDefault(unittest.TestCase):
-    """--fix 不写盘；--apply 才写，且低置信度建议不落盘。"""
+class TestFixIsPreviewOnly(unittest.TestCase):
+    """--fix 与 --diagnose 只读输出补丁建议，绝不自动改写 Spec 真源。"""
 
-    def _report(self, *, apply: bool, confidence: float):
+    def test_fix_outputs_suggested_patch_without_writing_spec(self):
         diag = {
             "ok": False,
             "drift_detected": True,
             "stage": "field",
-            "confidence": confidence,
+            "confidence": 0.95,
             "issues": ["标题字段失效"],
             "suggested_patch": {"item_title": "headline"},
         }
         spec = {"type": "http", "output_map": {"item_title": "title"}}
-        # 真实拼接路径是 ROOT/engines/specs/<engine_id>.yaml；夹具按这个形状
-        # 建目录，否则 apply_schema_patch 读不到文件、异常被吞掉，
-        # 测试会误报成「实现没落盘」。
         tmp_root = Path(tempfile.mkdtemp(prefix="argo-p2-spec-"))
         spec_dir = tmp_root / "engines" / "specs"
         spec_dir.mkdir(parents=True)
@@ -84,46 +81,14 @@ class TestFixIsPreviewByDefault(unittest.TestCase):
             with patch.object(engine_validate, "ROOT", tmp_root), \
                     patch.object(engine_validate, "_get_spec", return_value=spec), \
                     patch.object(engine_validate, "probe_engine_raw", return_value={"x": 1}), \
-                    patch("engines_schema_drift.diagnose_schema_drift", return_value=diag), \
-                    patch("engines_schema_drift.apply_schema_patch", wraps=_fake_apply) as applied:
+                    patch("engines_schema_drift.diagnose_schema_drift", return_value=diag):
                 report = engine_validate.validate_engine(
-                    "probe", stage="health", diagnose=True, apply=apply)
-            return report, spec_path, applied
-        except Exception:
-            import shutil
-            shutil.rmtree(tmp_root, ignore_errors=True)
-            raise
-
-    def test_fix_without_apply_never_writes_spec(self):
-        """用户没说 --apply 时，报告里必须带补丁预览但零写盘。"""
-        report, spec_path, applied = self._report(apply=False, confidence=0.95)
-        try:
-            self.assertFalse(report.get("fix_applied"), "预览态不得声称已落盘")
-            self.assertEqual(report.get("suggested_patch"), {"item_title": "headline"})
-            applied.assert_not_called()
-            self.assertIn("item_title: title", spec_path.read_text(encoding="utf-8"))
-        finally:
-            _cleanup(spec_path.parent.parent.parent)
-
-    def test_apply_writes_spec_on_high_confidence(self):
-        report, spec_path, applied = self._report(apply=True, confidence=0.95)
-        try:
-            self.assertTrue(report.get("fix_applied"))
-            applied.assert_called_once()
-            self.assertIn("item_title: headline", spec_path.read_text(encoding="utf-8"))
-        finally:
-            _cleanup(spec_path.parent.parent.parent)
-
-    def test_apply_refuses_low_confidence_patch(self):
-        """启发式选出的 0.80 建议不该自动改写唯一真源 Spec。"""
-        report, spec_path, applied = self._report(apply=True, confidence=0.80)
-        try:
+                    "probe", stage="health", diagnose=True)
             self.assertFalse(report.get("fix_applied"))
-            self.assertTrue(report.get("fix_blocked_low_confidence"))
-            applied.assert_not_called()
+            self.assertEqual(report.get("suggested_patch"), {"item_title": "headline"})
             self.assertIn("item_title: title", spec_path.read_text(encoding="utf-8"))
         finally:
-            _cleanup(spec_path.parent.parent.parent)
+            _cleanup(tmp_root)
 
 
 def _cleanup(tmp_root):
@@ -131,26 +96,18 @@ def _cleanup(tmp_root):
     shutil.rmtree(tmp_root, ignore_errors=True)
 
 
-def _fake_apply(spec_file, patch):
-    p = Path(spec_file)
-    text = p.read_text(encoding="utf-8")
-    for k, v in patch.items():
-        text = text.replace(f"{k}: title", f"{k}: {v}")
-    p.write_text(text, encoding="utf-8")
-    return True, "patched"
-
-
 class TestCliFlags(unittest.TestCase):
-    """CLI 必须同时认 --fix（预览）与 --apply（落盘）。"""
+    """CLI 保留只读 --fix / --diagnose，不再暴露自动改写真源的 --apply。"""
 
-    def test_main_help_exposes_apply(self):
+    def test_main_help_exposes_fix_without_apply(self):
         import subprocess
         proc = subprocess.run(
             [sys.executable, str(SCRIPTS / "engine_validate.py"), "--help"],
             capture_output=True, text=True, timeout=30)
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("--apply", proc.stdout)
         self.assertIn("--fix", proc.stdout)
+        self.assertIn("--diagnose", proc.stdout)
+        self.assertNotIn("--apply", proc.stdout)
 
 
 if __name__ == "__main__":

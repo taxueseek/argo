@@ -334,6 +334,23 @@ def _jev_model() -> str:
                or DEFAULT_JEV_MODEL)
 
 
+def _post_json(url: str, body: dict[str, Any], headers: dict[str, str],
+               timeout: float, tag: str) -> Optional[dict[str, Any]]:
+    """统一 JSON POST 请求与 fail-open 错误处理。"""
+    try:
+        from http_client import HttpClient
+        resp = HttpClient(timeout=timeout, max_retries=1, jitter=False).post(
+            url, body, extra_headers=headers)
+        if resp.get("status") != 200:
+            logger.debug("%s 非 200: %s %s", tag, resp.get("status"),
+                         str(resp.get("text") or resp.get("error") or "")[:160])
+            return None
+        return json.loads(resp.get("text") or "{}")
+    except Exception as e:  # fail-open：语义层任何问题都不阻断核验
+        logger.debug("%s 请求失败: %s", tag, type(e).__name__)
+        return None
+
+
 def _jev_post(path_state: Any, questions: dict[str, Any], *,
               timeout: float) -> Optional[dict[str, Any]]:
     """一次 System One 请求；失败返回 None（fail-open 的全部出口都在这里）。"""
@@ -346,28 +363,13 @@ def _jev_post(path_state: Any, questions: dict[str, Any], *,
         "state": path_state,
         "questions": questions,
     }
-    # Content-Type 必须显式给：HttpClient.post 会把 dict 做 json.dumps，
-    # 但**从不设 Content-Type**（头只来自浏览器 UA 模板 + extra_headers）。
-    # 缺它时 FastAPI 侧把 body 当字符串，回
-    #   422 {"loc":["body"],"msg":"Input should be a valid dictionary…"}
-    # ——报错指向「请求体不是对象」，而真因是少了一个头（2026-10-22 实测踩中）。
+    # Content-Type 必须显式给：HttpClient.post 从不自动设它；缺头时服务端把 body 当字符串返回 422。
     headers = {"Authorization": f"Bearer {key}",
                "Content-Type": "application/json"}
-    # 长上下文要显式带头，否则 state 一过 32K tokens 就 400 max_tokens_exceeded
+    # 长上下文显式带头，避免 >32K tokens 时触发 400 max_tokens_exceeded。
     if len(json.dumps(path_state, ensure_ascii=False)) > JEV_LONG_CONTEXT_CHARS:
         headers["TypeSafe-Danger-Zone-Long-Context"] = "true"
-    try:
-        from http_client import HttpClient
-        resp = HttpClient(timeout=timeout, max_retries=1, jitter=False).post(
-            _jev_endpoint(), body, extra_headers=headers)
-        if resp.get("status") != 200:
-            logger.debug("JEV 非 200: %s %s", resp.get("status"),
-                         str(resp.get("text") or resp.get("error") or "")[:200])
-            return None
-        return json.loads(resp.get("text") or "{}")
-    except Exception as e:  # fail-open：语义层任何问题都不阻断核验
-        logger.debug("JEV 请求失败: %s", type(e).__name__)
-        return None
+    return _post_json(_jev_endpoint(), body, headers, timeout, "JEV")
 
 
 def _jev_choice(text: str, labels: tuple[str, ...] | list[str],
@@ -499,31 +501,22 @@ def _gemini_choice(text: str, labels: tuple[str, ...] | list[str],
         "x-goog-api-key": key,
         "Content-Type": "application/json",
     }
-    try:
-        from http_client import HttpClient
-        resp = HttpClient(timeout=timeout, max_retries=1, jitter=False).post(
-            _gemini_endpoint(), body, extra_headers=headers
-        )
-        if resp.get("status") != 200:
-            logger.debug("Gemini 非 200: %s %s", resp.get("status"), str(resp.get("error") or "")[:120])
-            return None
-        data = json.loads(resp.get("text") or "{}")
-        ans = data.get("answers", {}).get("eval", {})
-        choice = ans.get("choice")
-        if not choice:
-            return None
-        probs = ans.get("probabilities", {})
-        res = {
-            "label": str(choice),
-            "confidence": float(ans.get("confidence", 0.0)),
-            "scores": probs,
-            "probabilities": probs,
-        }
-        _set_cached_result(cache_key, res)
-        return res
-    except Exception as e:
-        logger.debug("Gemini 请求失败: %s", type(e).__name__)
+    data = _post_json(_gemini_endpoint(), body, headers, timeout, "Gemini")
+    if not isinstance(data, dict):
         return None
+    ans = data.get("answers", {}).get("eval", {})
+    choice = ans.get("choice")
+    if not choice:
+        return None
+    probs = ans.get("probabilities", {})
+    res = {
+        "label": str(choice),
+        "confidence": float(ans.get("confidence", 0.0)),
+        "scores": probs,
+        "probabilities": probs,
+    }
+    _set_cached_result(cache_key, res)
+    return res
 
 
 def _classify_gemini(texts: list[str], labels: tuple[str, ...] | list[str], *,
@@ -634,34 +627,26 @@ def _prepare_usable_texts(
     return usable, texts
 
 
-def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
-    """对已抓取的正文批量判定「是否支持查询隐含的主张」。
-
-    items: [{"url": str, "title": str, "text": str}]
-    返回 {url: {label, confidence, supports, contradicts}}；未达阈值时
-    supports/contradicts 均为 False（原始 label 与 confidence 仍原样保留，
-    调用方可自行换阈值）。失败返回 None。
-    自动剔除本地文件（is_local_target），严格物理阻断私域外发。
-    """
-    usable, texts = _prepare_usable_texts(items, require_text=True)
+def _assess_batch(
+    items: list[dict[str, Any]],
+    *,
+    require_text: bool,
+    labels: tuple[str, ...],
+    instructions: str,
+    criteria: dict[str, str] | None = None,
+    heuristic_fn: Any,
+    allow_heuristic: bool,
+    build_extra: Any,
+) -> Optional[dict[str, dict]]:
+    """三路语义评估的统一批处理框架：隔离本地目标、调用远程分类、按需启发式兜底与阈值判定。"""
+    usable, texts = _prepare_usable_texts(items, require_text=require_text)
     if not usable:
         return None
-    instructions = (
-        f"Judge whether each passage supports the claim implied by this query: {query!r}. "
-        "Answer 'supports the query' when the passage backs the claim, "
-        "'contradicts the query' when it states the opposite or a conflicting figure, "
-        "'neutral' when it is on-topic but neither supports nor contradicts, "
-        "and 'none of these' when it is unrelated to the query."
-    )
-    results = classify(texts, SUPPORT_LABELS, instructions=instructions)
+    results = classify(texts, labels, instructions=instructions, criteria=criteria)
     if results is None:
-        if allow_heuristic:
-            results = [
-                heuristic_support(query, it.get("text") or "", it.get("title") or "")
-                for it in usable
-            ]
-        else:
+        if not allow_heuristic:
             return None
+        results = [heuristic_fn(it) for it in usable]
     out: dict[str, dict] = {}
     for it, r in zip(usable, results):
         if not r:
@@ -669,13 +654,33 @@ def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: 
         label = str(r.get("label") or "")
         conf = r.get("confidence")
         conf_f = float(conf) if isinstance(conf, (int, float)) else 0.0
-        out[str(it["url"])] = {
-            "label": label,
-            "confidence": conf_f,
+        entry: dict[str, Any] = {"label": label, "confidence": conf_f}
+        entry.update(build_extra(label, conf_f))
+        out[str(it["url"])] = entry
+    return out or None
+
+
+def assess_support(query: str, items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
+    """对已抓取的正文批量判定「是否支持查询隐含的主张」。"""
+    instructions = (
+        f"Judge whether each passage supports the claim implied by this query: {query!r}. "
+        "Answer 'supports the query' when the passage backs the claim, "
+        "'contradicts the query' when it states the opposite or a conflicting figure, "
+        "'neutral' when it is on-topic but neither supports nor contradicts, "
+        "and 'none of these' when it is unrelated to the query."
+    )
+    return _assess_batch(
+        items,
+        require_text=True,
+        labels=SUPPORT_LABELS,
+        instructions=instructions,
+        heuristic_fn=lambda it: heuristic_support(query, it.get("text") or "", it.get("title") or ""),
+        allow_heuristic=allow_heuristic,
+        build_extra=lambda label, conf_f: {
             "supports": label == "supports the query" and conf_f >= SUPPORT_THRESHOLD,
             "contradicts": label == "contradicts the query" and conf_f >= SUPPORT_THRESHOLD,
-        }
-    return out or None
+        },
+    )
 
 
 _NON_CJK_EAST_ASIAN_RE = re.compile(r"[\u3040-\u30ff]{2,}|[\uac00-\ud7af]{2,}")
@@ -770,80 +775,39 @@ def heuristic_support(query: str, text: str, title: str = "") -> dict[str, Any]:
 
 
 def assess_source_types(items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
-    """来源类型分级（研究取证链路用）：一手数据 / 二手报道 / 分析观点 / 社交叙事。
-
-    items: [{"url": str, "title": str, "text": str}]（text 可为摘要）
-    自动剔除本地文件（is_local_target），严格物理阻断私域外发。
-    """
-    usable, texts = _prepare_usable_texts(items, require_text=False)
-    if not usable:
-        return None
+    """来源类型分级（研究取证链路用）：一手数据 / 二手报道 / 分析观点 / 社交叙事。"""
     instructions = (
         "Classify each source by its nature: 'primary data or official announcement' "
         "for original datasets, filings, official releases; 'secondary reporting' for "
         "news coverage of someone else's work; 'analysis or opinion' for commentary; "
         "'social narrative' for forum/social posts."
     )
-    results = classify(texts, SOURCE_TYPE_LABELS, instructions=instructions)
-    if results is None:
-        if allow_heuristic:
-            results = [
-                heuristic_source_type(it.get("url") or "", it.get("title") or "", it.get("text") or "")
-                for it in usable
-            ]
-        else:
-            return None
-    out: dict[str, dict] = {}
-    for it, r in zip(usable, results):
-        if not r:
-            continue
-        label = str(r.get("label") or "")
-        conf = r.get("confidence")
-        conf_f = float(conf) if isinstance(conf, (int, float)) else 0.0
-        out[str(it["url"])] = {
-            "label": label,
-            "confidence": conf_f,
-            "is_primary": (label == "primary data or official announcement" and conf_f >= SUPPORT_THRESHOLD),
-        }
-    return out or None
+    return _assess_batch(
+        items,
+        require_text=False,
+        labels=SOURCE_TYPE_LABELS,
+        instructions=instructions,
+        heuristic_fn=lambda it: heuristic_source_type(it.get("url") or "", it.get("title") or "", it.get("text") or ""),
+        allow_heuristic=allow_heuristic,
+        build_extra=lambda label, conf_f: {
+            "is_primary": label == "primary data or official announcement" and conf_f >= SUPPORT_THRESHOLD,
+        },
+    )
 
 
 def assess_substantive_discussion(topic: str, items: list[dict[str, Any]], *, allow_heuristic: bool = False) -> Optional[dict[str, dict]]:
-    """对正文/播客单集转录/长篇段落批量判定「是否对主题进行了实质性深入探讨」。
-
-    用于复杂需求与播客/音视频长文本场景，区分：
-    - substantive in-depth discussion: 深入、实质性探讨或核心讲解
-    - passing mention or brief reference: 顺带提及、比喻借用或偏题带过
-    - unrelated chatter: 闲聊或偏离主题
-    自动剔除本地文件（is_local_target），严格物理阻断私域外发。
-    """
-    usable, texts = _prepare_usable_texts(items, require_text=True)
-    if not usable:
-        return None
-    instructions = f"Determine the depth of discussion regarding the topic {topic!r} in the text."
-    results = classify(texts, SUBSTANTIVE_DISCUSSION_LABELS,
-                       instructions=instructions,
-                       criteria=SUBSTANTIVE_DISCUSSION_CRITERIA)
-    if results is None:
-        if allow_heuristic:
-            results = [
-                heuristic_substantive_discussion(topic, it.get("text") or "", it.get("title") or "")
-                for it in usable
-            ]
-        else:
-            return None
-    out: dict[str, dict] = {}
-    for it, r in zip(usable, results):
-        if not r:
-            continue
-        label = str(r.get("label") or "")
-        conf = r.get("confidence")
-        conf_f = float(conf) if isinstance(conf, (int, float)) else 0.0
-        out[str(it["url"])] = {
-            "label": label,
-            "confidence": conf_f,
-            "is_substantive": (label == "substantive in-depth discussion" and conf_f >= SUPPORT_THRESHOLD),
-            "is_passing_mention": (label == "passing mention or brief reference" and conf_f >= SUPPORT_THRESHOLD),
-        }
-    return out or None
+    """批量判定正文对主题是否进行了实质性深入探讨（或顺带提及 / 闲聊）。"""
+    return _assess_batch(
+        items,
+        require_text=True,
+        labels=SUBSTANTIVE_DISCUSSION_LABELS,
+        instructions=f"Determine the depth of discussion regarding the topic {topic!r} in the text.",
+        criteria=SUBSTANTIVE_DISCUSSION_CRITERIA,
+        heuristic_fn=lambda it: heuristic_substantive_discussion(topic, it.get("text") or "", it.get("title") or ""),
+        allow_heuristic=allow_heuristic,
+        build_extra=lambda label, conf_f: {
+            "is_substantive": label == "substantive in-depth discussion" and conf_f >= SUPPORT_THRESHOLD,
+            "is_passing_mention": label == "passing mention or brief reference" and conf_f >= SUPPORT_THRESHOLD,
+        },
+    )
 

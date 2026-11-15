@@ -300,8 +300,8 @@ def render(report: dict, verbose: bool = False) -> str:
 
     lines.append("  运行 `argo doctor --fix` 自动执行停用与隔离；降级需人工判断。")
     lines.append("  对交付率异常的声明式源，可运行 `python3 scripts/engine_validate.py -e <id> --diagnose`"
-                 " (或 `--fix`) 探测结构漂移并输出建议补丁（预览态，不写盘）；"
-                 "确认无误后加 `--apply` 才落盘。")
+                 " (或 `--fix`) 探测结构漂移并输出建议补丁（只读预览）；"
+                 "确认无误后手动更新 `engines/specs/<id>.yaml`。")
     return "\n".join(lines)
 
 
