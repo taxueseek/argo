@@ -114,7 +114,7 @@ def rules(old: str, new: str) -> list[tuple[str, str, str, int]]:
         ("README.zh.md", f"### 当前大致能力（v{o}）", f"### 当前大致能力（v{n}）", 1),
         ("README.md", f"### Rough capability set (v{o})", f"### Rough capability set (v{n})", 1),
         ("README.ja.md", f"### 現時点の能力概要（v{o}）", f"### 現時点の能力概要（v{n}）", 1),
-        ("README.ko.md", f"### 대략적인 능력 세트 (v{o})", f"### 대략적인 능力 세트 (v{n})", 1),
+        ("README.ko.md", f"### 대략적인 능력 세트 (v{o})", f"### 대략적인 능력 세트 (v{n})", 1),
         ("README.es.md", f"### Conjunto aproximado de capacidades (v{o})",
          f"### Conjunto aproximado de capacidades (v{n})", 1),
     ]

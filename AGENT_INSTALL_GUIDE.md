@@ -35,7 +35,7 @@ dsh plugin --profile web add @taxueseek/argo-dsh                              # 
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"  # GitHub main
 ```
 
-`argo-search` 是 CLI 包，不是 DSH 插件包；两者不能互换。装完重启 `dsh web` 生效。本机用 `file:` 依赖指向同一仓库时，pnpm 安装会**复制**而非软链，改完源码必须跑 `packages/dsh-plugin/scripts/sync-local.sh`（先 `--check` 比对，再不带参数同步，最后 `--restart` 重启）才生效，详见 `packages/dsh-plugin/README.md`。
+`argo-search` 是 CLI 包，不是 DSH 插件包；两者不能互换。本地开发推荐用 `dsh plugin --profile web add "link:<仓库>/packages/dsh-plugin"` 直连源码（改完即生效，无需手动同步）；仅当旧环境用 `file:` 装成目录副本时，用 `packages/dsh-plugin/scripts/sync-local.sh`（先 `--check` 比对，再不带参数同步，改后按 Host 同 PID 热加载或刷新面板），详见 `packages/dsh-plugin/README.md`。
 
 ### 方式四：MCP 客户端直接填入（免预装）
 
@@ -73,7 +73,7 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 | `argo_pdf` | PDF 提取 |
 | `argo_social_search` | 多平台社交搜索（`mode=sentiment` 舆情聚合） |
 
-完整 19 个工具（默认注入 4 个核心，其余按需开启）含 `argo_tweet`、`argo_auth`、`argo_job`、`argo_stats` 等，见 `scripts/mcp_tools.py`。
+完整 19 个工具（默认注入 4 个核心，其余按需开启）还含 `argo_extract`、`argo_preflight`、`argo_answer`、`argo_watch`、`argo_cite`、`argo_job`、`argo_article` 等，见 `scripts/mcp_tools.py`（`tweet` / `auth` / `stats` 为 CLI 子命令）。
 
 ### CLI 命令
 
@@ -115,7 +115,8 @@ argo research "2026 公募基金二季报 持仓结构" --depth deep --json
 
 **搜本机文件**
 ```bash
-argo local_search "半年前记的那段话" --path ~/notes
+argo search "半年前记的那段话" --domain local
+python3 sub-skills/local-seek/scripts/seek.py "半年前记的那段话" --path ~/notes --context 2
 ```
 
 **抓网页**

@@ -83,3 +83,41 @@ def test_readme_stated_allowlist_count_matches_code():
         f"README 写「白名单 {','.join(wrong)} 个」，实际 ARGO_ENV_SPECS 有 {count} 个。"
         f" 增删开关时请同步 README（两处：设置界面的「引擎」分区、argoEnv 说明）"
     )
+
+
+def test_five_language_readmes_switch_count_matches_code():
+    """5 语根 README 里写的 DSH 行为开关白名单计数必须等于 ARGO_ENV_SPECS 实际条数。"""
+    count = len(_plugin_allowlist())
+    patterns = {
+        "README.md": [
+            r"curated allowlist of (\d+)",
+            r"(\d+)\s+behaviour switches",
+        ],
+        "README.zh.md": [
+            r"curated 白名单\s*(\d+)\s*个",
+            r"(\d+)\s*个行为开关",
+        ],
+        "README.es.md": [
+            r"lista curada de (\d+)",
+            r"(\d+)\s+interruptores de comportamiento",
+        ],
+        "README.ja.md": [
+            r"ホワイトリスト\s*(\d+)\s*個",
+            r"(\d+)\s*個の挙動スイッチ",
+        ],
+        "README.ko.md": [
+            r"허용 목록\s*(\d+)개",
+            r"(\d+)개\s*동작 스위치",
+        ],
+    }
+    drift: list[str] = []
+    for rel, pats in patterns.items():
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        matched = 0
+        for pat in pats:
+            for val in re.findall(pat, text):
+                matched += 1
+                if int(val) != count:
+                    drift.append(f"{rel}: 写 {val}，实际 ARGO_ENV_SPECS={count}（/{pat}/）")
+        assert matched > 0, f"{rel} 缺少行为开关计数锚点，请核对"
+    assert not drift, "5 语 README 行为开关计数与 ARGO_ENV_SPECS 不一致：\n  " + "\n  ".join(drift)

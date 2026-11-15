@@ -57,7 +57,7 @@ argo mcp inject --all --dry-run # 只预览不写
 
 ## DeepSeek Harness 插件接入
 
-一键安装（原生 `argo_search` / `argo_fetch` 工具 + `web_search` seam + `wide_research` 调度；MCP 完整工具面默认不挂、按需在 profile patch 中开启——搜索/抓取高频路径走 CLI 单发同引擎同守卫，零常驻 token 开销）：
+一键安装（18 个原生工具即 MCP 19 个剔除 `argo_research`，默认只开 `argo_search` / `argo_fetch` + `web_search` seam + `wide_research` 调度；MCP 完整工具面默认不挂、按需在 profile patch 中开启——搜索/抓取高频路径走 CLI 单发同引擎同守卫，零常驻 token 开销）：
 
 ```bash
 dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugin"

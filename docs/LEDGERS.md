@@ -26,10 +26,10 @@
 - **隐私保护**：对用户的实际查询词脱敏后存储，禁止明文凭据反射。
 - **管理命令**：
   ```bash
-  # 查看最近坏例统计与归因分布
+  # 查看最近坏例统计与归因分布（含 unattributed 计数）
   .venv/bin/python scripts/badcase_ledger.py stats
-  # 列出未归因坏例
-  .venv/bin/python scripts/badcase_ledger.py list --unattributed
+  # 列出最近坏例（可选 --kind query_error|empty_result|recovery|breaker）
+  .venv/bin/python scripts/badcase_ledger.py list --limit 20
   # 四大台账全局概览（含休眠真值与对账问题，取数失败显式 error 并退出非零）
   .venv/bin/python scripts/badcase_ledger.py overview
   ```

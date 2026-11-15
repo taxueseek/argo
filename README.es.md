@@ -89,7 +89,7 @@ El plugin incluye una página de ajustes del lado del navegador con dos entradas
 </p>
 
 <p align="center">
-  <img src="assets/readme/settings-engines.webp" width="100%" alt="Ajustes de Argo, Motores: los 28 interruptores de comportamiento del núcleo pasan al panel — caché / rerank TF-IDF / cotejo numérico / dedup MinHash / guardia SERP y umbral de dedup; las filas sin configurar muestran el valor por defecto y se aplican al guardar">
+  <img src="assets/readme/settings-engines.webp" width="100%" alt="Ajustes de Argo, Motores: los 35 interruptores de comportamiento del núcleo pasan al panel — caché / rerank TF-IDF / cotejo numérico / dedup MinHash / guardia SERP y umbral de dedup; las filas sin configurar muestran el valor por defecto y se aplican al guardar">
 </p>
 
 <p align="center">
@@ -100,7 +100,7 @@ El plugin incluye una página de ajustes del lado del navegador con dos entradas
 |---------|--------------|
 | **Acceso** | Interruptores del web seam `web_search` / `web_fetch`; comando y argumentos de entrada del motor (npx o `mcp_server.py` local); tiempos de espera de búsqueda/fetch, límite de cuerpo, recuperación de conexiones inactivas, conexiones concurrentes |
 | **Herramientas** | Casillas para las 18 herramientas nativas de primera clase (por defecto solo `argo_search` / `argo_fetch`); tiempo de espera por llamada y límite de texto devuelto |
-| **Motores** | Los interruptores de comportamiento del propio argo (antes variables de entorno, lista curada de 28: caché / reordenación TF-IDF / verificación cruzada numérica / deduplicación MinHash / guardia SERP, Jina / UA móvil / capa de fetch Parallel, capa de evidencia semántica, gracia de cobertura y anchura de cola, lista de motores activos, proxy, raíces de búsqueda local y lista de lectura permitida, calentamiento / registro de uso / pool de conexiones / TTL varios). Los de tipo interruptor se aplican al instante; los de número / texto / lista se guardan en grupo; las filas sin configurar muestran el valor por defecto de argo y se marcan como "default". Los interruptores de autorización (recompute, URLs intranet) quedan deliberadamente fuera del panel |
+| **Motores** | Los interruptores de comportamiento del propio argo (antes variables de entorno, lista curada de 35: caché / reordenación TF-IDF / verificación cruzada numérica / deduplicación MinHash / guardia SERP, Jina / UA móvil / capa de fetch Parallel, capa de evidencia semántica, gracia de cobertura y anchura de cola, lista de motores activos, proxy, raíces de búsqueda local y lista de lectura permitida, calentamiento / registro de uso / pool de conexiones / TTL varios). Los de tipo interruptor se aplican al instante; los de número / texto / lista se guardan en grupo; las filas sin configurar muestran el valor por defecto de argo y se marcan como "default". Los interruptores de autorización (recompute, URLs intranet) quedan deliberadamente fuera del panel |
 | **Claves** | Definir, actualizar y borrar claves de motores habituales; muestra "configurada / sin configurar + capa de origen (almacén de credenciales / entorno de arranque / .env) + estado de solo lectura", sin mostrar el texto plano; cada fila tiene una casilla Reenviar, equivalente a añadir el nombre de referencia a `keyRefs` |
 | **Investigación** | límites de worker / pistas / fuentes por pista / tokens y directorio de salida de informes |
 | **Avanzado** | listas allow / deny de herramientas del worker, lista de reenvío de credenciales |
@@ -472,7 +472,7 @@ python3 scripts/search.py --list-engines
 
 Lo que hace Argo, en una frase: manda cada pregunta a las fuentes adecuadas según dominio e idioma, ordena lo que vuelve por credibilidad y devuelve al agente material que puede ordenar y verificar. Búsqueda, captura, verificación de evidencia y búsqueda de archivos locales comparten una sola tubería, la superficie MCP inyecta 4 herramientas centrales por defecto (19 en total, correspondidas una a una con los comandos CLI), así que ninguna capacidad falta en la forma que instales. Algunos comandos sueltos completan el conjunto: argo tweet empaqueta un post de X, argo auth gestiona el estado de sesión y argo job agrega ofertas de empleo. El catálogo completo, con coste, clave y estado de cada fuente, está en docs/ENGINE_CATALOG.md (cifras exactas, mantenidas por el generador).
 
-Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 28 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
+Instalado como plugin DSH, estas capacidades se convierten en herramientas nativas del host: la búsqueda y el fetch de la ruta caliente vienen activos por defecto, las herramientas de forense de cola larga se activan en la página de ajustes y los 35 interruptores de comportamiento del propio argo (caché, reordenación, deduplicación, guardia, proxy, TTL y demás) salieron de las variables de entorno para entrar en el panel. Las claves van al almacén de credenciales del host, nunca se muestran y todo cambio surte efecto al guardar.
 
 Las últimas versiones arreglaron cada una una clase de problemas.
 
@@ -788,7 +788,7 @@ Solo las cuatro versiones más recientes. El historial completo está en el [his
 - **Tres fuentes más sin clave**: `tavily_free`, `keenable_free` y el retorno anónimo de `exa`
 - **Fallos sobre los que se puede actuar**: cada fallo indica su origen y su clase, y dice si reintentar, cambiar de fuente o configurar una clave, junto a un nivel de confianza `meta.uncertainty`
 - **Capa de configuración local `config.local.yaml`**: los ajustes de esta máquina ya no se escriben en la configuración pública
-- **Nueva sección «Engines» en la página de ajustes de DSH**: los 28 interruptores de comportamiento de argo salen de las variables de entorno y pasan al panel
+- **Nueva sección «Engines» en la página de ajustes de DSH**: los 35 interruptores de comportamiento de argo salen de las variables de entorno y pasan al panel
 
 ---
 
