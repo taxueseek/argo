@@ -72,6 +72,7 @@ def general_kwargs(features: dict | None, mode: str, depth: str,
     return {
         "mode": mode, "depth": depth, "context": context,
         "lang": lang,
+        "intents": tuple(feats.get("intents") or ()),
     }
 
 
@@ -119,6 +120,7 @@ def general_order() -> tuple[list[str], bool]:
 def ranked_general(enabled: set[str], *, mode: str = "auto",
                    depth: str = "fast", context: str = "search",
                    lang: str = "",
+                   intents: tuple[str, ...] | list[str] | None = None,
                    score_fn: Callable[[str, str, str, str],
                                       tuple[float, int]] | None = None
                    ) -> list[str]:
@@ -133,7 +135,7 @@ def ranked_general(enabled: set[str], *, mode: str = "auto",
         from source_selection import rank_general_candidates
         ranked = rank_general_candidates(
             order, enabled=enabled, mode=mode, depth=depth,
-            context=context, lang=lang, score_fn=score_fn)
+            context=context, lang=lang, intents=intents, score_fn=score_fn)
         if ranked:
             return ranked
     except Exception as exc:
@@ -151,7 +153,8 @@ def ranked_general(enabled: set[str], *, mode: str = "auto",
 
 def general_fallback(enabled: set[str], *, mode: str = "auto",
                      depth: str = "fast", context: str = "search",
-                     lang: str = "") -> list[str]:
+                     lang: str = "",
+                     intents: tuple[str, ...] | list[str] | None = None) -> list[str]:
     """通用候选池排序 + local_search 殿后。
 
     local_search 殿后（2026-10-15 实测定案）：日常档 combo_budget=2，它一旦
@@ -159,7 +162,8 @@ def general_fallback(enabled: set[str], *, mode: str = "auto",
     独跑 109 次、中位 2.9s、占墙钟 369s，82% 是纯英文技术查询）。
     """
     order = ranked_general(
-        enabled, mode=mode, depth=depth, context=context, lang=lang)
+        enabled, mode=mode, depth=depth, context=context, lang=lang,
+        intents=intents)
     if not order:
         # 最后一道 fail-open：池子与本轮 enabled 完全无交集时，任取两个
         # 可用源也比空 combo 好（执行层至少能暴露真实错误）。

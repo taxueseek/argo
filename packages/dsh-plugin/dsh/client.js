@@ -790,10 +790,14 @@ window.__ModuleLoader__.load({
         const topLangs = rhSummary && rhSummary.langCounts
           ? Object.entries(rhSummary.langCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k}:${n}`).join(' · ')
           : '';
+        const topDomains = rhSummary && Array.isArray(rhSummary.topDomains)
+          ? rhSummary.topDomains.slice(0, 3).map((d) => `${d.name}:${d.count}`).join(' · ')
+          : '';
         panel.push(h(Card, { key: 'route', title: t('routeHealthTitle'), hint: t('routeHealthHint') }, [
           routeHealth && Array.isArray(routeHealth.samples) && routeHealth.samples.length > 0
             ? h('div', { key: 'rows', style: col(6) }, [
                 rhSummary ? h('div', { key: 'sum', style: S.sub }, `${rhSummary.total} 条 · 兜底 ${Math.round((rhSummary.fallbackRate || 0) * 100)}%${topLangs ? ' · ' + topLangs : ''}`) : null,
+                topDomains ? h('div', { key: 'doms', style: S.sub }, `高频域：${topDomains}`) : null,
                 ...routeHealth.samples.slice(-5).reverse().map((r, i) => {
                   const langTag = r.effective_lang || r.primary_lang || '-';
                   const intentTag = Array.isArray(r.intents) && r.intents.length > 0 ? ` · ${r.intents.join(',')}` : '';

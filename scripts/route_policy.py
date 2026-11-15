@@ -267,7 +267,81 @@ def _apply_policy_with_new_source_slots(
         budget_extra=_new_source_budget_extra(
             domain, declared or engines_combo, enabled or set(),
             mode=mode, depth=depth, context=context,
-            # 传当前 combo：新源还在里面但被重排推出窗口时，额度要按它在
-            # 当前 combo 的位次算（只在声明位次上算会得到 0，见该函数说明）
-            live_combo=engines_combo),
+        # 传当前 combo：新源还在里面但被重排推出窗口时，额度要按它在
+        # 当前 combo 的位次算（只在声明位次上算会得到 0，见该函数说明）
+        live_combo=engines_combo),
     )
+
+
+def is_pure_combo_domain(domain: dict[str, Any] | None) -> bool:
+    """域是否声明 pure_combo（保持纯结构化路径，不混入通用/地理/次域源）。"""
+    d = domain or {}
+    return bool(d.get("pure_combo")) or d.get("name") == "modal_card"
+
+
+def apply_domain_combo_rules(
+    domain: dict[str, Any],
+    engines_combo: list[str],
+    query: str,
+    enabled: set[str],
+    specs: dict[str, Any],
+) -> list[str]:
+    """应用声明式域策略（zh_filter_en_only / 宏观区域前置），减轻 route.py 负担。"""
+    zh_filter = bool(domain.get("zh_filter_en_only")) or (
+        domain.get("name") in ("tech_deep", "academic")
+    )
+    if zh_filter and any("\u4e00" <= ch <= "\u9fff" for ch in query):
+        from engine_families import engine_langs
+        engines_combo = [
+            e for e in engines_combo
+            if engine_langs(e, specs.get(e)) != {"en"}
+        ]
+        if not engines_combo:
+            engines_combo = [e for e in ["arxiv", "anysearch", "local_search"] if e in enabled]
+
+    if domain.get("name") == "macro_data":
+        from macro_countries import is_foreign_macro_query
+        if is_foreign_macro_query(query) and "worldbank" in engines_combo:
+            engines_combo = ["worldbank"] + [e for e in engines_combo if e != "worldbank"]
+        if "nbs_stats" in engines_combo and ("中国" in query or "china" in query.lower()):
+            engines_combo = ["nbs_stats"] + [e for e in engines_combo if e != "nbs_stats"]
+    return engines_combo
+
+
+def resolve_pure_combo_fallback(domain: dict[str, Any]) -> list[str]:
+    """pure_combo 域（如 modal_card）缺可用引擎时保留声明组合，避免误入通用兜底。"""
+    declared = list(domain.get("engines_combo") or [])
+    if not declared and domain.get("primary"):
+        declared = [domain["primary"]]
+    try:
+        from engine_env import is_engine_allowed_by_env
+        return [e for e in declared if is_engine_allowed_by_env(e)] or declared
+    except ImportError:
+        return declared
+
+
+def build_domain_must_keep(
+    domain: dict[str, Any],
+    features: dict[str, Any] | None,
+    enabled: set[str],
+    pure_combo: bool,
+    is_dead_fn,
+) -> list[str]:
+    """组装域级保底列表（地理特征 + 垂直域主源 + modal_card/geo_places 专属项）。"""
+    must_keep: list[str] = []
+    if (features or {}).get("has_geo") and "local_openstreetmap" in enabled and not pure_combo:
+        must_keep.append("local_openstreetmap")
+    if domain.get("name") in _VERTICAL_KEEP:
+        p = domain.get("primary")
+        if p and p not in must_keep and (p in enabled or pure_combo) and not is_dead_fn(p):
+            must_keep.append(p)
+        if domain.get("name") == "modal_card":
+            for e in domain.get("engines_combo") or []:
+                if e not in must_keep and (e in enabled or pure_combo):
+                    must_keep.append(e)
+        elif p and p in enabled and p not in must_keep and not is_dead_fn(p):
+            must_keep.append(p)
+        if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
+            if "local_openstreetmap" not in must_keep:
+                must_keep.append("local_openstreetmap")
+    return must_keep

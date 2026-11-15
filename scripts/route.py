@@ -157,6 +157,10 @@ from route_policy import (  # noqa: E402
     _new_source_budget_extra,
     _apply_engine_policy,
     _apply_policy_with_new_source_slots,
+    is_pure_combo_domain,
+    apply_domain_combo_rules,
+    resolve_pure_combo_fallback,
+    build_domain_must_keep,
 )
 
 # ── 特征提取 ──────────────────────────────────────────────────────────────────
@@ -365,49 +369,16 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
             _specs_snapshot()))
         _filtered = [e for e in engines_combo if e not in _drop]
         engines_combo = _filtered or [e for e in ["anysearch"] if e in enabled] or engines_combo
-    # 🔑 中文查询 + 学术类域 → 剔除纯英文论文源（ENGINE_LANGS 声明 langs=["en"]）
-    if (domain.get("name") in ("tech_deep", "academic")
-            and any("\u4e00" <= ch <= "\u9fff" for ch in query)):
-        engines_combo = [e for e in engines_combo
-                         if engine_langs(e, _specs_snapshot().get(e)) != {"en"}]
-        if not engines_combo:
-            engines_combo = [e for e in ["arxiv", "anysearch", "local_search"]
-                             if e in enabled]
-    # 🔑 macro_data 域 + 非美国国家词 → worldbank 前置（FRED 无该国数据，
-    # 且错误结果会触发 early-stop 短路，导致「中国GDP」只回美国数据）
-    if (domain.get("name") == "macro_data"
-            and is_foreign_macro_query(query)
-            and "worldbank" in engines_combo):
-        engines_combo = ["worldbank"] + [e for e in engines_combo if e != "worldbank"]
-    # 🔑 macro_data 域 + 中国宏观词 → nbs_stats（国家统计局）前置：
-    # 本国宏观数据权威源，最新年份比 worldbank 全（worldbank 有 1-2 年
-    # 数据滞后，「2025 年 GDP」类查询会空手）。与上方 worldbank 前置
-    # 配合，中国查询最终位次 [nbs_stats, worldbank, ...]
-    if (domain.get("name") == "macro_data"
-            and "nbs_stats" in engines_combo
-            and ("中国" in query or "china" in query.lower())):
-        engines_combo = ["nbs_stats"] + [e for e in engines_combo if e != "nbs_stats"]
-    # 🔑 为中文/学术查询追加本地引擎
-    # modal_card 保持纯结构化路径：只走 bocha_ai → bocha，不混 web/geo 补充源
-    _pure_combo = domain.get("name") == "modal_card"
+    engines_combo = apply_domain_combo_rules(
+        domain, engines_combo, query, enabled, _specs_snapshot())
+    _pure_combo = is_pure_combo_domain(domain)
     if not _pure_combo:
         engines_combo = _merge_language_engines(engines_combo, features, lang_engines)
         engines_combo = _lang_aware_combo_order(
             engines_combo, features, domain.get("name"), enabled, query)
     if not engines_combo:
         if _pure_combo:
-            # 密钥缺失时 env_ready 会踢 combo；仍保留域声明引擎，
-            # 执行层返回 error item，避免静默改走 anysearch 污染结构化语义
-            declared = list(domain.get("engines_combo") or [])
-            if not declared and domain.get("primary"):
-                declared = [domain["primary"]]
-            try:
-                from engine_env import is_engine_allowed_by_env
-                engines_combo = [
-                    e for e in declared if is_engine_allowed_by_env(e)
-                ] or declared
-            except ImportError:
-                engines_combo = declared
+            engines_combo = resolve_pure_combo_fallback(domain)
         if not engines_combo:
             # 域内引擎全被过滤，回退（本地优先 + 通用免费源唯一来源）
             engines_combo = _general_fallback(
@@ -482,32 +453,8 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
     # 注意：本分支的 must_keep 组装**不能**并成一次调用——geo 项与 lang 项
     # 之间夹着垂直域主源保护，而 policy 是按 must_keep 的**顺序**补位的
     # （见 _apply_engine_policy 的 `for e in must_keep`），合并会改变 combo 次序。
-    must_keep = []
-    if features.get("has_geo") and "local_openstreetmap" in enabled and not _pure_combo:
-        must_keep.append("local_openstreetmap")
-    # 垂直域主源保护（名单见模块级 _VERTICAL_KEEP）：这些域的专属源在
-    # combo 里不是「通用源」，被 budget 截断后该域等于没源可用（实测
-    # medical 的 who_don、japan_law 的 egov_law 均因 budget=2 被裁掉
-    # → 路由命中但零结果）。
-    if domain.get("name") in _VERTICAL_KEEP:
-        p = domain.get("primary")
-        # modal_card 可在缺 key（不在 enabled）时仍 must_keep，避免 budget 再裁
-        # primary 受死源地板约束（engine_is_dead，与 GEC 同口径）：
-        # 死源进 must_keep 会被策略层强制补回 combo，撤销 GEC 地板过滤
-        if p and p not in must_keep and (p in enabled or _pure_combo) \
-                and not engine_is_dead(p):
-            must_keep.append(p)
-        # modal_card 整 combo 保底（bocha_ai 无配额时 bocha 必须在位）
-        if domain.get("name") == "modal_card":
-            for e in domain.get("engines_combo") or []:
-                if e not in must_keep and (e in enabled or _pure_combo):
-                    must_keep.append(e)
-        elif (p and p in enabled and p not in must_keep
-                and not engine_is_dead(p)):
-            must_keep.append(p)
-        if domain.get("name") == "geo_places" and "local_openstreetmap" in enabled:
-            if "local_openstreetmap" not in must_keep:
-                must_keep.append("local_openstreetmap")
+    must_keep = build_domain_must_keep(
+        domain, features, enabled, _pure_combo, engine_is_dead)
 
     if not _pure_combo:
         must_keep.extend(_lang_must_keep(features, enabled, engines_combo, query))

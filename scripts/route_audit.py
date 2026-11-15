@@ -181,6 +181,32 @@ def audit(queries: list[str]) -> dict[str, Any]:
     }
 
 
+def check_order_invariance(queries: list[str]) -> dict[str, Any]:
+    """验证 match_domains 在 config.domains 正序与倒序下主域及前 3 域完全一致。"""
+    from config import load_config
+    from route import extract_features
+    from route_domains import match_domains
+
+    domains = load_config().get("domains") or []
+    reversed_domains = list(reversed(domains))
+    samples = queries or [
+        "AAPL stock price", "华为 总部在哪", "Twitter X 上 热议 LLM",
+        "Python asyncio tutorial", "東京 天気 予報",
+    ]
+    mismatches = []
+    for q in samples:
+        feat = extract_features(q)
+        lang = feat.get("primary_lang")
+        intents = feat.get("intents")
+        fwd = [d.get("name") for d in match_domains(
+            q, domains=domains, max_n=3, primary_lang=lang, intents=intents)]
+        rev = [d.get("name") for d in match_domains(
+            q, domains=reversed_domains, max_n=3, primary_lang=lang, intents=intents)]
+        if fwd != rev:
+            mismatches.append({"forward": fwd, "reversed": rev})
+    return {"checked": len(samples), "mismatch_count": len(mismatches), "mismatches": mismatches[:10]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="路由误判度量")
     ap.add_argument("--all", action="store_true", help="打印全部可疑条目")
@@ -188,9 +214,18 @@ def main() -> int:
                     help="真实查询抽样上限（0=全部）")
     ap.add_argument("--json", metavar="BASELINE", help="把结果落盘为基线")
     ap.add_argument("--compare", metavar="BASELINE", help="与基线对比")
+    ap.add_argument("--check-order-invariance", action="store_true",
+                    help="验证 domains 列表倒序时命中结果是否顺序无关")
     args = ap.parse_args()
 
     queries = _real_queries(args.limit)
+    if args.check_order_invariance:
+        inv = check_order_invariance(queries)
+        print(f"顺序无关性检查：{inv['checked']} 条，差异 {inv['mismatch_count']} 条")
+        if inv["mismatch_count"]:
+            print(f"  前 10 例：{inv['mismatches']}")
+            return 1
+        return 0
     result = audit(queries)
 
     print(f"真实查询 {result['total']} 条；命中域分布 Top10：")

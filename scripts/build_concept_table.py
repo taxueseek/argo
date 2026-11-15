@@ -57,19 +57,24 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "concurrency", "words": [
         "concurrency", "parallel", "concurrent", "thread", "worker", "async", "await",
         "coroutine", "goroutine", "fiber", "task", "future", "eventloop", "multithreading",
-        "并发", "并行", "异步", "线程", "协程", "多线程", "纤程", "事件循环", "任务调度"
+        "并发", "并行", "异步", "线程", "协程", "多线程", "纤程", "事件循环", "任务调度",
+        "並行", "並列", "非同期", "スレッド", "병행", "비동기",
+        "parallelität", "asynchron", "concurrence", "asíncrono", "многопоточность", "асинхронность",
     ]},
     # 1: 流量控制与配额
     {"name": "ratelimit", "words": [
         "ratelimit", "throttle", "rate_limit", "quota", "token_bucket", "leaky_bucket",
         "qps", "tps", "bandwidth", "burst", "congestion",
-        "限流", "节流", "流量控制", "令牌桶", "漏桶", "配额", "频次", "限频", "拥塞控制"
+        "限流", "节流", "流量控制", "令牌桶", "漏桶", "配额", "频次", "限频", "拥塞控制",
+        "レート制限", "スロットル", "처리량", "속도제한", "drosselung", "limitation", "ограничение",
     ]},
     # 2: 容错与可用性
     {"name": "resilience", "words": [
         "timeout", "deadline", "retry", "backoff", "fallback", "degrade", "circuit",
         "breaker", "failover", "recovery", "heal", "reclaim", "fault_tolerant",
-        "超时", "重试", "退避", "降级", "熔断", "熔断器", "容灾", "故障转移", "恢复", "容错"
+        "超时", "重试", "退避", "降级", "熔断", "熔断器", "容灾", "故障转移", "恢复", "容错",
+        "タイムアウト", "リトライ", "타임아웃", "재시도",
+        "zeitüberschreitung", "wiederholung", "délai", "reintento", "таймаут", "повтор",
     ]},
     # 3: 缓存与暂存
     {"name": "cache", "words": [
@@ -87,7 +92,9 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "index_search", "words": [
         "index", "indexing", "fts", "search", "query", "seek", "btree", "inverted",
         "fulltext", "bm25", "tfidf", "token", "lexer", "scan", "lookup",
-        "索引", "全文检索", "倒排索引", "分词", "查询", "扫描", "词频", "检索", "查表"
+        "索引", "全文检索", "倒排索引", "分词", "查询", "扫描", "词频", "检索", "查表",
+        "検索", "インデックス", "全文検索", "검색", "색인", "인덱스",
+        "suche", "volltextsuche", "recherche", "búsqueda", "поиск", "индекс",
     ]},
     # 6: 向量检索与嵌入
     {"name": "vector_embedding", "words": [
@@ -177,13 +184,16 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "ml_core", "words": [
         "ai", "ml", "machine_learning", "deeplearning", "neural", "gradient",
         "loss", "epoch", "dataset", "feature", "classification", "regression",
-        "机器学习", "深度学习", "人工智能", "神经网络", "训练集", "特征工程", "梯度"
+        "机器学习", "深度学习", "人工智能", "神经网络", "训练集", "特征工程", "梯度",
+        "機械学習", "深層学習", "기계학습", "딥러닝", "인공지능",
+        "ki", "apprentissage", "нейросеть", "машинное",
     ]},
     # 21: 大语言模型与自然语言
     {"name": "llm", "words": [
         "llm", "gpt", "claude", "deepseek", "qwen", "llama", "gemini", "chatgpt",
         "openai", "transformer", "attention", "generation", "nlp",
-        "大模型", "大语言模型", "生成式", "自然语言", "上下文窗口", "对话模型"
+        "大模型", "大语言模型", "生成式", "自然语言", "上下文窗口", "对话模型",
+        "大規模言語モデル", "生成ai", "자연어처리", "sprachmodell", "modèle", "modelo",
     ]},
     # 22: 提示词工程与对话
     {"name": "prompt_eng", "words": [
@@ -206,13 +216,17 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "academic", "words": [
         "academic", "scholar", "paper", "research", "study", "thesis", "journal",
         "arxiv", "pubmed", "citation", "doi", "peer_review", "conference",
-        "学术", "论文", "期刊", "文献", "预印本", "引用", "文献综述", "开题报告", "科研"
+        "学术", "论文", "期刊", "文献", "预印本", "引用", "文献综述", "开题报告", "科研",
+        "論文", "学術", "研究", "学会", "논문", "학술", "학회",
+        "forschung", "wissenschaft", "article", "investigación", "revista", "исследование", "статья", "наука",
     ]},
     # 26: 股票与证券交易
     {"name": "stock_market", "words": [
         "stock", "share", "equity", "market", "ticker", "nasdaq", "nyse", "sec",
         "exchange", "bull", "bear", "portfolio", "stock_price",
-        "股票", "股市", "证券", "大盘", "A股", "港股", "美股", "交易所", "持仓", "投资组合", "股价"
+        "股票", "股市", "证券", "大盘", "A股", "港股", "美股", "交易所", "持仓", "投资组合", "股价",
+        "株式", "株価", "証券", "주식", "주가", "증권", "코스피",
+        "aktien", "aktienkurs", "börse", "bourse", "actions", "acciones", "bolsa", "акции", "биржа",
     ]},
     # 27: 实时行情与分时K线
     {"name": "market_quote", "words": [
@@ -236,7 +250,9 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "macro_economy", "words": [
         "macro", "economy", "economic", "gdp", "cpi", "ppi", "pmi", "inflation",
         "deflation", "interest_rate", "central_bank", "fed",
-        "宏观", "宏观经济", "国民生产总值", "通胀", "物价指数", "利率", "央行", "美联储", "加息", "降息"
+        "宏观", "宏观经济", "国民生产总值", "通胀", "物价指数", "利率", "央行", "美联储", "加息", "降息",
+        "インフレ", "金利", "인플레이션", "금리",
+        "konjunktur", "zinsen", "économie", "economía", "inflación", "инфляция", "экономика",
     ]},
     # 31: 外汇汇率与法币
     {"name": "forex_currency", "words": [
@@ -248,13 +264,16 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "news_media", "words": [
         "news", "breaking", "headline", "press", "journalism", "media", "agency",
         "broadcast", "report", "dispatch",
-        "新闻", "头条", "快讯", "突发", "报道", "媒体", "通讯社", "早报", "简讯"
+        "新闻", "头条", "快讯", "突发", "报道", "媒体", "通讯社", "早报", "简讯",
+        "ニュース", "速報", "報道", "뉴스", "속보", "보도",
+        "nachrichten", "aktuell", "actualités", "nouvelles", "noticias", "últimas", "новости", "сми",
     ]},
     # 33: 法律条文与法规规范
     {"name": "law_statute", "words": [
         "law", "legal", "statute", "regulation", "article", "clause", "civil_law",
         "criminal_law", "contract", "ordinance",
-        "法律", "法规", "法条", "条例", "条款", "民法", "刑法", "合同法", "行政法规"
+        "法律", "法规", "法条", "条例", "条款", "民法", "刑法", "合同法", "行政法规",
+        "法令", "条文", "법률", "법령", "gesetz", "recht", "loi", "droit", "ley", "derecho", "закон", "право",
     ]},
     # 34: 法院诉讼与司法判决
     {"name": "court_litigation", "words": [
@@ -266,7 +285,9 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "medical_clinic", "words": [
         "medical", "medicine", "clinical", "hospital", "doctor", "physician",
         "patient", "outpatient", "surgery", "therapy",
-        "医疗", "医学", "临床", "医院", "医生", "患者", "病患", "门诊", "手术", "就医"
+        "医疗", "医学", "临床", "医院", "医生", "患者", "病患", "门诊", "手术", "就医",
+        "医療", "病院", "医師", "의료", "병원", "의사",
+        "medizin", "krankenhaus", "arzt", "médecine", "hôpital", "medicina", "médico", "медицина", "больница",
     ]},
     # 36: 疾病诊断与病理症状
     {"name": "disease_pathology", "words": [
@@ -332,7 +353,9 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "weather_forecast", "words": [
         "weather", "forecast", "meteorology", "climate", "temperature", "celsius",
         "humidity", "barometer", "uv_index", "air_quality",
-        "天气", "预报", "气象", "气候", "气温", "温度", "湿度", "空气质量", "天气预报"
+        "天气", "预报", "气象", "气候", "气温", "温度", "湿度", "空气质量", "天气预报",
+        "天気", "天気予報", "気温", "날씨", "일기예보", "기온",
+        "wetter", "wettervorhersage", "temperatur", "météo", "prévisions", "tiempo", "pronóstico", "погода", "прогноз",
     ]},
     # 47: 极端降水与台风风雨
     {"name": "storm_disaster", "words": [
@@ -380,7 +403,9 @@ CLUSTERS: list[dict[str, list[str]]] = [
     {"name": "cyber_security", "words": [
         "cve", "vulnerability", "exploit", "payload", "injection", "xss",
         "csrf", "pentest", "malware", "patch", "zero_day",
-        "漏洞", "攻防", "渗透测试", "注入", "补丁", "木马", "零日漏洞", "安全合规"
+        "漏洞", "攻防", "渗透测试", "注入", "补丁", "木马", "零日漏洞", "安全合规",
+        "脆弱性", "セキュリティ", "취약점", "보안",
+        "sicherheit", "schwachstelle", "cybersécurité", "vulnérabilité", "seguridad", "vulnerabilidad", "уязвимость", "безопасность",
     ]},
     # 55: Linux 与操作系统环境
     {"name": "linux_system", "words": [
@@ -449,10 +474,42 @@ def get_context_dim_indices() -> frozenset[int]:
 
 
 
-def build():
-    if np is None:
-        raise RuntimeError("构建概念表需要 numpy 环境，请确保 python3 安装了 numpy")
+def _quantize_pure_python(
+    vocab: list[str],
+    word_to_clusters: dict[str, list[int]],
+    cluster_to_meta: dict[int, list[int]],
+) -> list[list[int]]:
+    """无 numpy 环境下的纯标准库稀疏词表→64 维 SIF 去均值 + int8 量化构建。"""
+    import random
+    rng = random.Random(42)
+    rows: list[list[float]] = []
+    col_sums = [0.0] * DIM
+    for w in vocab:
+        row = [rng.gauss(0.0, 0.1) for _ in range(DIM)]
+        cids = word_to_clusters[w]
+        if not cids:
+            row[0] += 5.0
+        else:
+            for cid in cids:
+                if cid < DIM:
+                    row[cid] += 5.0
+                    for rc in cluster_to_meta.get(cid, ()):
+                        if rc < DIM and rc != cid:
+                            row[rc] += 0.2
+        for d in range(DIM):
+            col_sums[d] += row[d]
+        rows.append(row)
+    n = max(len(rows), 1)
+    means = [s / n for s in col_sums]
+    out: list[list[int]] = []
+    for row in rows:
+        centered = [row[d] - means[d] for d in range(DIM)]
+        norm = math.sqrt(sum(v * v for v in centered)) or 1.0
+        out.append([max(-127, min(127, int(round((v / norm) * NORM_TARGET)))) for v in centered])
+    return out
 
+
+def build():
     # 1. 建立词汇表与所属族映射
     word_to_clusters: dict[str, list[int]] = {}
     for cid, c in enumerate(CLUSTERS):
@@ -506,34 +563,33 @@ def build():
         for cid in cids:
             cluster_to_meta[cid] = cids
 
-    mat = np.zeros((vocab_size, DIM), dtype=np.float32)
-    for i, w in enumerate(vocab):
-        cids = word_to_clusters[w]
-        if not cids:
-            mat[i, 0] = 5.0
-            continue
-        for cid in cids:
-            if cid < DIM:
-                mat[i, cid] += 5.0
-                # 同一大域内的相关族注入适度亲和力 (0.2)
-                for related_cid in cluster_to_meta.get(cid, []):
-                    if related_cid < DIM and related_cid != cid:
-                        mat[i, related_cid] += 0.2
+    if np is not None:
+        mat = np.zeros((vocab_size, DIM), dtype=np.float32)
+        for i, w in enumerate(vocab):
+            cids = word_to_clusters[w]
+            if not cids:
+                mat[i, 0] = 5.0
+                continue
+            for cid in cids:
+                if cid < DIM:
+                    mat[i, cid] += 5.0
+                    for related_cid in cluster_to_meta.get(cid, []):
+                        if related_cid < DIM and related_cid != cid:
+                            mat[i, related_cid] += 0.2
 
-    # 注入微小确定性扰动以增强各词区分度 (固定随机种子)
-    rng = np.random.RandomState(42)
-    noise = rng.randn(vocab_size, DIM).astype(np.float32) * 0.1
-    mat += noise
-
-    # SIF/Model2Vec 核心步骤：去均值中心化（消除公共背景语境偏置，防止非负正交坍缩）
-    mean_vec = np.mean(mat, axis=0, keepdims=True)
-    mat = mat - mean_vec
-
-    # L2 归一化并缩放到目标模长 100.0，量化为 int8
-    norms = np.linalg.norm(mat, axis=1, keepdims=True)
-    norms[norms == 0] = 1.0
-    scaled = np.round((mat / norms) * NORM_TARGET)
-    int8_vecs = np.clip(scaled, -127, 127).astype(np.int8)
+        rng = np.random.RandomState(42)
+        noise = rng.randn(vocab_size, DIM).astype(np.float32) * 0.1
+        mat += noise
+        mean_vec = np.mean(mat, axis=0, keepdims=True)
+        mat = mat - mean_vec
+        norms = np.linalg.norm(mat, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        scaled = np.round((mat / norms) * NORM_TARGET)
+        int8_list = np.clip(scaled, -127, 127).astype(np.int8).tolist()
+        vec_payload = np.clip(scaled, -127, 127).astype(np.int8).tobytes()
+    else:
+        int8_list = _quantize_pure_python(vocab, word_to_clusters, cluster_to_meta)
+        vec_payload = b"".join(struct.pack(f"<{DIM}b", *row) for row in int8_list)
 
     # 3. 写入紧凑二进制文件
     # Header: 32 字节
@@ -551,7 +607,7 @@ def build():
     with open(BIN_OUT, "wb") as f:
         f.write(header)
         f.write(vocab_bytes)
-        f.write(int8_vecs.tobytes())
+        f.write(vec_payload)
 
     file_size_kb = BIN_OUT.stat().st_size / 1024.0
     print(f"[build_concept_table] 导出二进制概念表: {BIN_OUT} ({file_size_kb:.2f} KB)")
@@ -566,7 +622,6 @@ def build():
             for eng, p in profs.items():
                 if eng.startswith("_"):
                     continue
-                # 收集该引擎代表词
                 tokens: list[str] = []
                 tokens.extend(p.get("boost_keywords", {}).keys())
                 for doc in p.get("documents", []):
@@ -574,30 +629,32 @@ def build():
                         p_low = part.lower().strip()
                         if p_low in vocab_to_idx:
                             tokens.append(p_low)
-                # 求平均向量
-                v_sum = np.zeros(DIM, dtype=np.float32)
+                v_sum = [0.0] * DIM
                 cnt = 0
                 for t in tokens:
                     idx = vocab_to_idx.get(t.lower())
                     if idx is not None:
-                        v_sum += int8_vecs[idx].astype(np.float32)
+                        row = int8_list[idx]
+                        for d in range(DIM):
+                            v_sum[d] += row[d]
                         cnt += 1
                 if cnt >= 3:
-                    v_norm = np.linalg.norm(v_sum)
+                    v_norm = math.sqrt(sum(v * v for v in v_sum))
                     if v_norm > 0:
-                        v_eng = np.round((v_sum / v_norm) * NORM_TARGET).astype(int).tolist()
-                        engine_vecs[eng] = v_eng
+                        engine_vecs[eng] = [int(round((v / v_norm) * NORM_TARGET)) for v in v_sum]
             ENGINE_VECS_OUT.write_text(json.dumps(engine_vecs, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"[build_concept_table] 导出引擎概念向量: {ENGINE_VECS_OUT} ({len(engine_vecs)} 个引擎)")
         except Exception as e:
             print(f"[build_concept_table] 预计算引擎向量警告: {e}")
 
     # 5. 校验双语内积与相关性
-    v_map = {w: int8_vecs[i] for i, w in enumerate(vocab)}
+    v_map = {w: int8_list[i] for i, w in enumerate(vocab)}
     def _cos(w1, w2):
         if w1 not in v_map or w2 not in v_map:
             return 0.0
-        return float(np.dot(v_map[w1].astype(int), v_map[w2].astype(int))) / (NORM_TARGET * NORM_TARGET)
+        va, vb = v_map[w1], v_map[w2]
+        dot = sum(a * b for a, b in zip(va, vb))
+        return float(dot) / (NORM_TARGET * NORM_TARGET)
 
     print("[build_concept_table] 语义对齐校验:")
     print("  并发 vs concurrency:", round(_cos("并发", "concurrency"), 4))

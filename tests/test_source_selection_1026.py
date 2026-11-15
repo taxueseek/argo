@@ -211,3 +211,26 @@ class TestCoverageFloorAndLanguageGate(unittest.TestCase):
         """非中英脚本不参与分层：语言覆盖源仍按既有 boost 排在 top-2。"""
         out = self._rank(_POOL, "cyrillic")
         self.assertTrue({"anysearch", "local_bing"} & set(out[:2]), out)
+
+    def test_european_langs_demote_chinese_only_and_prefer_multilingual(self):
+        """es/de 等明确非中文语种查询不应让仅声明 chinese 的 yuanbao 领跑。"""
+        for lang in ("es", "de"):
+            out = self._rank(["yuanbao", "parallel_free"], lang)
+            self.assertEqual(out[0], "parallel_free", f"lang={lang}: {out}")
+
+    def test_intent_differentiated_general_ranking(self):
+        """同语言层下，news 意图应把 anysearch 推到 firecrawl 前面；compare 保持结构源在前。"""
+        base = rank_general_candidates(
+            ["firecrawl", "anysearch"],
+            enabled={"firecrawl", "anysearch"},
+            mode="auto", depth="fast", context="search", lang="en",
+            score_fn=lambda *a: (0.5, 0),
+        )
+        news = rank_general_candidates(
+            ["firecrawl", "anysearch"],
+            enabled={"firecrawl", "anysearch"},
+            mode="auto", depth="fast", context="search", lang="en",
+            intents=["news"], score_fn=lambda *a: (0.5, 0),
+        )
+        self.assertEqual(base[0], "firecrawl", base)
+        self.assertEqual(news[0], "anysearch", news)

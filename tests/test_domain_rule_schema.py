@@ -49,7 +49,8 @@ DOMAINS = [d for d in (load_config().get("domains") or []) if isinstance(d, dict
 # 域声明允许出现的字段。**新增字段必须同时改这里与 route_domains 的模块 docstring**，
 # 否则字段会被静默忽略（读 config 的人以为它生效了）。
 ALLOWED_FIELDS = frozenset({
-    "name", "desc", "patterns", "intent_required",
+    "name", "desc", "patterns", "intent_required", "priority", "intents",
+    "zh_lang_gated", "pure_combo", "zh_filter_en_only",
     "engines_combo", "primary", "fallback", "parallel",
     "no_early_stop", "early_stop_min_results", "quote", "research_only",
     # search.py 的 `_domain_score_floors()` 消费：按域/源设相关性地板

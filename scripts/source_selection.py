@@ -131,13 +131,16 @@ def _coverage_of(engine: str) -> tuple[str, ...]:
 
 
 def _lang_misfit(engine: str, lang: str) -> bool:
-    """查询语言与源声明语言错配（只认 chinese/english 两种标记）。"""
-    pair = _LANG_PAIR.get(lang)
-    if not pair:
-        return False
-    own, other = pair
+    """查询语言与源声明语言错配（覆盖中文/英文及明确非中文语种对中文专源错配）。"""
     cov = {str(c).lower() for c in _coverage_of(engine)}
-    return other in cov and own not in cov
+    pair = _LANG_PAIR.get(lang)
+    if pair:
+        own, other = pair
+        return other in cov and own not in cov
+    if lang and lang not in ("zh", "mixed", "other"):
+        # 非中文语种查询避免把仅声明 chinese 的源当首选
+        return "chinese" in cov and "english" not in cov and "multilingual" not in cov
+    return False
 
 
 # 非中英脚本（西里尔/阿拉伯/日韩…）不参与覆盖地板与语言门：那些语言下
@@ -148,29 +151,41 @@ _TIERED_LANGS = frozenset({"zh", "en", "mixed", "other", ""})
 def _tier(engine: str, lang: str) -> int:
     """排序层级：0 合格（覆盖够 + 语言适配）/ 1 语言错配 / 2 交付太薄。"""
     if lang not in _TIERED_LANGS:
-        return 0
+        return 1 if _lang_misfit(engine, lang) else 0
     if GENERAL_COVERAGE.get(engine, COVERAGE_FLOOR) < COVERAGE_FLOOR:
         return 2
     return 1 if _lang_misfit(engine, lang) else 0
 
 # 非中英查询的语言覆盖加成。先验表是在中英查询上测的；西里尔/阿拉伯/
-# 日韩等脚本下，语言无关的覆盖源（anysearch/local_bing 带动态 setlang）
-# 比英文快源更有召回价值。2026-10-26 全量测试的 cyrillic 用例暴露：
-# 不做这层加成，top-2 会全被 tavily/parallel 占掉，语言源被预算截断。
+# 日韩及欧洲小语种查询下，多语言覆盖源（anysearch/local_bing 带动态 setlang）
+# 比英文或中文单语快源更有召回价值。
 _NON_LATIN_LANG_BOOST: dict[str, float] = {
     "anysearch": 0.35,
     "local_bing": 0.40,
 }
 _LATIN_OR_CN_LANGS = frozenset({"zh", "en", "mixed", "other", ""})
 
+# 意图微调权重（零基兜底分化：同语言层级下，新闻偏时效多源，对比/事实偏结构摘要）
+_INTENT_PRIOR_BOOST: dict[str, dict[str, float]] = {
+    "news": {"anysearch": 0.08, "local_bing": 0.04},
+    "compare": {"parallel_free": 0.06, "tavily_free": 0.04, "uapi": 0.04},
+    "definition": {"parallel_free": 0.06, "tavily_free": 0.04, "uapi": 0.04},
+    "fact": {"parallel_free": 0.06, "tavily_free": 0.04},
+    "social": {"anysearch": 0.05},
+}
+
 # 有 ≥3 条自适应样本时，先验与自适应分各占一半；否则先验做主。
 _ADAPTIVE_BLEND_SAMPLES = 3
 
 
-def _prior_for(engine: str, lang: str) -> float:
+def _prior_for(engine: str, lang: str,
+               intents: list[str] | tuple[str, ...] | None = None) -> float:
     prior = GENERAL_PRIORS.get(engine, DEFAULT_PRIOR)
     if lang not in _LATIN_OR_CN_LANGS:
         prior += _NON_LATIN_LANG_BOOST.get(engine, 0.0)
+    if intents:
+        bonus = max((_INTENT_PRIOR_BOOST.get(it, {}).get(engine, 0.0) for it in intents), default=0.0)
+        prior += bonus
     return prior
 
 
@@ -268,9 +283,10 @@ def rank_general_candidates(
     depth: str = "fast",
     context: str = "search",
     lang: str = "",
+    intents: list[str] | tuple[str, ...] | None = None,
     score_fn: Callable[[str, str, str, str], tuple[float, int]] | None = None,
 ) -> list[str]:
-    """按「先验 × 自适应 × 用途」排序通用候选源。
+    """按「先验 × 自适应 × 用途 × (语言/意图分化)」排序通用候选源。
 
     `score_fn(engine, domain, lang, purpose) -> (score, samples)` 可注入，
     测试用假学习器即可确定性断言，不依赖本机 adaptive.db 的时点数据。
@@ -290,7 +306,7 @@ def rank_general_candidates(
 
     ranked: list[tuple[int, float, int, str]] = []
     for idx, engine in enumerate(pool):
-        prior = _prior_for(engine, lang)
+        prior = _prior_for(engine, lang, intents=intents)
         try:
             adaptive_score, samples = score_fn(
                 engine, "general_search", lang, purpose)

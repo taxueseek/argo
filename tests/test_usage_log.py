@@ -287,3 +287,44 @@ def test_route_sample_records_effective_lang(tele_dir, monkeypatch):
     rows = _read_lines(tele_dir, "route")
     assert len(rows) == 1
     assert rows[0]["effective_lang"] == "es"
+
+
+def test_export_anonymized_telemetry_strips_queries_and_paths(tmp_path):
+    """遥测导出仅输出聚合统计与指纹，绝不泄露原始 query 与本机绝对路径。"""
+    import sqlite3
+    import route_telemetry_export
+
+    state = tmp_path / "argo_state"
+    log_dir = state / "usage_log"
+    log_dir.mkdir(parents=True)
+    secret_query = "private-token-query-xyz-98765"
+    (log_dir / "route.jsonl").write_text(
+        json.dumps({"domain": "general_search", "engine": "anysearch",
+                    "effective_lang": "es", "intents": ["news"]}) + "\n"
+        + json.dumps({"domain": "academic", "engine": "arxiv",
+                      "effective_lang": "en", "intents": []}) + "\n",
+        encoding="utf-8",
+    )
+    (log_dir / "query.jsonl").write_text(
+        json.dumps({"query": secret_query, "final_query": secret_query, "count": 0}) + "\n",
+        encoding="utf-8",
+    )
+    db_path = state / "adaptive.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE engine_perf (engine TEXT, domain TEXT, lang TEXT, empty INTEGER)")
+    for _ in range(5):
+        conn.execute("INSERT INTO engine_perf VALUES ('broken_eng', 'general', '', 1)")
+    conn.commit()
+    conn.close()
+
+    report = route_telemetry_export.export_anonymized_telemetry(state, min_samples=5)
+    dumped = json.dumps(report, ensure_ascii=False)
+    assert secret_query not in dumped
+    assert str(tmp_path) not in dumped
+    assert report["summary"]["route_events"] == 2
+    assert report["summary"]["query_events"] == 1
+    assert report["summary"]["query_zero_result_rate"] == 1.0
+    assert report["summary"]["route_fallback_rate"] == 0.5
+    assert report["summary"]["adaptive"]["empty_lang_rows"] == 5
+    assert len(report["summary"]["adaptive"]["high_empty_buckets"]) == 1
+    assert len(report["anonymized_fingerprints"]) == 2

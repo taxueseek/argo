@@ -264,6 +264,7 @@ def tfidf_lead_combo(tfidf_best: str | None, tfidf_best_score: float,
                      enabled: set[str], *, mode: str = "auto",
                      depth: str = "fast", context: str = "search",
                      lang: str = "",
+                     intents: tuple[str, ...] | list[str] | None = None,
                      score_fn: Callable[[str, str, str, str],
                                         tuple[float, int]] | None = None
                      ) -> list[str]:
@@ -281,7 +282,7 @@ def tfidf_lead_combo(tfidf_best: str | None, tfidf_best_score: float,
     strong = bool(tfidf_best and tfidf_best_score > TFIDF_STRONG_SCORE)
     generals = _ranked_general(
         enabled, mode=mode, depth=depth, context=context, lang=lang,
-        score_fn=score_fn)
+        intents=intents, score_fn=score_fn)
     lead: list[str] = []
     if strong:
         lead = [tfidf_best]

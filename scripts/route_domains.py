@@ -19,8 +19,13 @@
 | `patterns` | 触发词列表，每项是字符串或 `{match, unless}` |
 | `patterns[].match` | 正向触发词：命中即候选 |
 | `patterns[].unless` | **该触发词**的否决词：命中则这一条不算（**不要**手写 `^(?!.*...)`） |
+| `priority` | 域优先级分（零基/乱序无关的主域裁决权重，未写按配置序兜底） |
+| `intents` | 域回答的查询意图标签列表（如 `social` / `news` / `compare`） |
+| `zh_lang_gated` | 是否开启非中文查询屏蔽门（跳过日/韩/英等非中文查询） |
+| `pure_combo` | 保持纯结构化路径，不混入通用/地理/次域补充源（如 `modal_card`） |
+| `zh_filter_en_only` | 中文查询时剔除 `langs=["en"]` 纯英文专源（如 `academic`/`tech_deep`） |
 | `intent_required` | 点查域意图豁免词：长主题句下必须命中其一，否则让位 |
-| `engines_combo` / `primary` / `parallel` / `no_early_stop` | 命中之后怎么执行（route_combo 消费） |
+| `engines_combo` / `primary` / `parallel` / `no_early_stop` | 命中之后怎么执行（route_combo / route_policy 消费） |
 
 `unless` 与 `intent_required` 是同一件事的两面，都在回答「什么情况下这条命中
 是假的」：前者是「查询里出现了别的语义」，后者是「查询里缺了本域的语义」。
@@ -822,88 +827,110 @@ _DOMAIN_INTENTS: dict[str, tuple[str, ...]] = {
 _INTENT_BONUS = 1.5
 
 
+def _is_zh_lang_gated(domain: dict[str, Any]) -> bool:
+    """判定域是否受非中文屏蔽门约束（优先读 config 声明 zh_lang_gated）。"""
+    flag = domain.get("zh_lang_gated")
+    if flag is not None:
+        return bool(flag)
+    return domain.get("name") in _ZH_LANG_GATED_DOMAINS
+
+
 def _intent_bonus(domain: dict[str, Any], intents: list[str] | None) -> float:
     """查询 intent 命中该域声明 intent 时的加分；无交集返回 0。"""
-    want = _DOMAIN_INTENTS.get(domain.get("name") or "")
+    want = domain.get("intents") or _DOMAIN_INTENTS.get(domain.get("name") or "")
     if not want or not intents:
         return 0.0
     return _INTENT_BONUS if any(i in want for i in intents) else 0.0
+
+
+def _domain_priority(domain: dict[str, Any], idx: int, total: int) -> float:
+    """返回域优先级分：显式声明 priority 优先，缺省按配置顺序派生。"""
+    raw = domain.get("priority")
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        return float(raw)
+    return float((total - idx) * 10)
+
+
+def score_domain(
+    domain: dict[str, Any],
+    idx: int,
+    total: int,
+    query: str,
+    q_lower: str,
+    q_len: int,
+    intents: list[str] | None = None,
+) -> tuple[float, float, int, int] | None:
+    """统一零基域打分：未命中返回 None，命中返回 (priority, sec_score, span_start, span_len)。"""
+    fires, span_start, span_len = _domain_fires_with_span(domain, query, q_lower)
+    if not fires:
+        return None
+    prio = _domain_priority(domain, idx, total)
+    pos_ratio = span_start / max(q_len, 1)
+    sec_score = (
+        (span_len * 2.0)
+        + (prio * 0.01)
+        + (pos_ratio * 0.01)
+        + _intent_bonus(domain, intents)
+    )
+    return prio, sec_score, span_start, span_len
 
 
 def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
                   max_n: int = 3,
                   primary_lang: str | None = None,
                   intents: list[str] | None = None) -> list[dict[str, Any]]:
-    """按 config.yaml domains 顺序返回全部命中域（多意图，主域 1 + 次域 max_n-1）。
+    """按域声明 priority 与统一零基评分返回命中域（主域 1 + 次域 max_n-1）。
 
-    旧 match_domain 单射只取首个命中域，多意图查询（如「北京 AI 公司融资」同时
-    命中 geo/finance/tech）只走一个域。本函数返回命中列表供 route 主域执行 +
-    次域按预算补充。catch-all（无 patterns）只做垫底：有命中时不掺入。
-    max_n 限制命中数，防止正则宽泛的域批量命中稀释主域。
+    旧实现按 config.yaml 物理遍历首命中为主域并在 max_n 处截断，任何物理顺序
+    调整都会引发漂移。现改为扫描全部非门控候选后按 `priority` 取主域、按
+    `sec_score`（span 跨度 + priority + 位置 + intent 加成）排次域并做意图让位，
+    配置重排时保持路由决策逐位一致。
 
     primary_lang：查询主语言（来自 extract_features）。当为明确的非中文语言
     （ja/ko/en/latin/cyrillic/thai 等）时，跳过中文内容域白名单，避免韩/日查询
     被中文泛内容域误捕获。传 None 时不做门控（兼容旧调用方）。
 
-    三阶段顺序（截断 → 结构化域提前 → 意图门）是契约，见模块 docstring。
+    三阶段顺序（候选截断 → 结构化域提前 → 意图门）是契约，见模块 docstring。
     """
     if domains is None:
         domains = get_domains()
     compiled = _get_compiled_domains(domains)
     hits: list[dict[str, Any]] = []
-    secondary_hits: list[tuple[dict[str, Any], float]] = []
+    fired: list[tuple[float, int, dict[str, Any], float]] = []
     catch_all: dict[str, Any] | None = None
     non_zh = bool(primary_lang and primary_lang not in ("zh", "mixed", "other"))
     candidates = _get_candidate_domain_indices(query)
     q_len = max(len(query), 1)
     q_lower = query.lower()
+    total = len(compiled)
 
     for idx, domain in enumerate(compiled):
         if not domain.get("patterns", []):
             catch_all = domain
             continue
-        if non_zh and domain.get("name") in _ZH_LANG_GATED_DOMAINS:
+        if non_zh and _is_zh_lang_gated(domain):
             continue
         if candidates is not None and idx not in candidates:
             continue
-        fires, span_start, span_len = _domain_fires_with_span(domain, query, q_lower)
-        if fires:
-            if not hits:
-                # 主域取**首个命中**（既有语义，保持逐位一致）。
-                hits.append(domain)
-            pos_ratio = span_start / q_len
-            # 打分（2026-11-15 加 intent 一致项）：
-            #   span_len*2.0      跨度高（特异性强）优先——仍是主导项
-            #   -idx*0.1         同跨度下保持前序特化域顺位稳定
-            #   pos_ratio*0.01   位置微权
-            #   intent +1.5      查询 intent 命中该域声明的 intents 时加分。
-            #                     1.5 足以压过域序差（0.1/token），但不足以推翻
-            #                     span 主导（span 差 1 = 2.0）——只在同跨度量级
-            #                     上做 tiebreak。
-            #
-            # 主域仍是**首个命中**（既有语义，不动）：本轮实测把它改成「全命中
-            # 按分排序」会引入 5 处真回归（AAPL stock price 从 us_stock 掉到
-            # stock_query、华为 总部在哪 从 org_entity 掉到 entity_search），
-            # 因为那等于让 span 主导替代域序优先。intent 项只作用于次域排序与
-            # `_intent_bonus` 的显式让位（见下），不动主域产生方式。
-            score = (span_len * 2.0) - (idx * 0.1) + (pos_ratio * 0.01) \
-                + _intent_bonus(domain, intents)
-            secondary_hits.append((domain, score))
-            if len(secondary_hits) >= max_n:
-                break
+        scored = score_domain(domain, idx, total, query, q_lower, q_len, intents)
+        if scored is not None:
+            prio, sec_score, _, _ = scored
+            fired.append((prio, -idx, domain, sec_score))
 
-    if secondary_hits:
+    if fired:
+        # 显式优先级（同分保持配置顺序）决定主域与进入次域竞选的前 max_n 候选
+        fired.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        top_fired = fired[:max_n]
+        hits.append(top_fired[0][2])
+        secondary_hits = [(item[2], item[3]) for item in top_fired]
         secondary_hits.sort(key=lambda x: x[1], reverse=True)
         # intent 让位（2026-11-15）：主域本身没拿到 intent 加分，而某个次域
-        # 拿到了 —— 说明查询意图明确指向那个域，但域序让主域先命中。此时让位。
-        # 判据严格：只在这一个条件下发生，不重排其它情况（保持逐位一致）。
+        # 拿到了 —— 说明查询意图明确指向那个域，但域优先级让主域先命中。此时让位。
         if hits and secondary_hits:
             primary_bonus = _intent_bonus(hits[0], intents)
             best_bonus = _intent_bonus(secondary_hits[0][0], intents)
-            # 不抢「比 social 更具体」的域的主位：video/hot_trending/
-            # redskill_search/zhihu_user_data 与 `_social_domain_first` 的
-            # `_SPECIFIC_BEFORE_SOCIAL` 同名单——两处必须一致，否则
-            # 「B站 视频 合集」会被 social 顶掉（实测漂移，2026-11-15）。
+            # 不抢「比 social 更具体」的域的主位：与 `_social_domain_first` 的
+            # `_SPECIFIC_BEFORE_SOCIAL` 同名单。
             _specific = {"redskill_search", "zhihu_user_data",
                          "hot_trending", "video"}
             primary_specific = hits[0].get("name") in _specific

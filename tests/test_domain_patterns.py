@@ -123,6 +123,37 @@ class TestDomainWiringInvariants(unittest.TestCase):
                 bad.append(f"{d.get('name')}: combo={combo[:4]} 内无启用引擎 → 命中即零结果")
         self.assertFalse(bad, "\n  ".join(["这些域命中后必然零结果："] + bad))
 
+    def test_match_domains_order_invariant(self):
+        """domains 正序与倒序传入 match_domains 应产出完全一致的前 3 命中域。"""
+        from route import extract_features
+        from route_domains import match_domains
+
+        reversed_domains = list(reversed(self.domains))
+        for q in ("AAPL stock price", "华为 总部在哪", "Twitter X 上 热议 LLM",
+                  "huggingface dataset llm", "pypi package requests"):
+            feat = extract_features(q)
+            fwd = [d.get("name") for d in match_domains(
+                q, domains=self.domains, max_n=3,
+                primary_lang=feat.get("primary_lang"), intents=feat.get("intents"))]
+            rev = [d.get("name") for d in match_domains(
+                q, domains=reversed_domains, max_n=3,
+                primary_lang=feat.get("primary_lang"), intents=feat.get("intents"))]
+            self.assertEqual(fwd, rev, f"domains 倒序后命中变化: {q!r} -> {fwd} vs {rev}")
+
+    def test_declarative_domain_policy_offload(self):
+        """声明式 pure_combo 与 zh_filter_en_only 由 route_policy 统一执行。"""
+        from route_policy import apply_domain_combo_rules, is_pure_combo_domain
+
+        self.assertTrue(is_pure_combo_domain({"name": "custom_x", "pure_combo": True}))
+        filtered = apply_domain_combo_rules(
+            {"name": "custom_zh", "zh_filter_en_only": True},
+            ["en_only", "bilingual"],
+            "中文研究问题",
+            {"en_only", "bilingual"},
+            {"en_only": {"langs": ["en"]}, "bilingual": {"langs": ["en", "zh"]}},
+        )
+        self.assertEqual(filtered, ["bilingual"])
+
 
 if __name__ == "__main__":
     unittest.main()

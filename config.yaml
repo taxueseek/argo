@@ -44,6 +44,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: redskill_search
+  priority: 990
   parallel: false
   patterns:
   - '(?i)(REDSkill|红[书薯]技能|小红书.*(skill|技能))'
@@ -63,6 +64,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: skill_search
+  priority: 980
   parallel: true
   patterns:
   - '(?i)(agent\s*skills?|技能(搜索|检索|市场|目录|库)|找(个|一?个)?技能|装(个|一?个)?技能|claude\s*skill|codex\s*skill|dsh\s*skill|skills?\.sh|skillsmp|clawhub)'
@@ -83,6 +85,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: dsh_plugin_search
+  priority: 970
   parallel: true
   patterns:
   - '(?i)(dsh\s*(插件|plugin)|deepseek\s*harness\s*(插件|plugin)|dshopen)'
@@ -106,6 +109,9 @@ domains:
   - anysearch
   fallback: anysearch
   name: wechat_search
+  priority: 960
+  intents: [news]
+  zh_lang_gated: true
   parallel: false
   patterns:
   - (?i)(公众号|微信文章|微信公众号|wechat.*article|mp\.weixin)
@@ -118,6 +124,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: hackernews_search
+  priority: 950
   parallel: false
   patterns:
   - (?i)(hacker.?news|\bhn\b|news\.ycombinator)
@@ -131,6 +138,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: stackoverflow_search
+  priority: 940
   parallel: false
   patterns:
   - (?i)(stack.?overflow|stackoverflow|编程问题|代码问题|技术问答)
@@ -142,6 +150,7 @@ domains:
   - arxiv
   fallback: google_scholar
   name: scholar_search
+  priority: 930
   parallel: false
   patterns:
   - (?i)(google.?scholar|学术论文|论文搜索|research.*paper|journal.*article)
@@ -158,6 +167,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: v2ex_search
+  priority: 920
   parallel: false
   patterns:
   - (?i)(v2ex|v2ex\.com)
@@ -169,6 +179,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: ths_hot_search
+  priority: 910
   parallel: false
   patterns:
   - (?i)(同花顺热点|强势股|涨停原因|题材归因|热点板块|今日强势)
@@ -180,6 +191,7 @@ domains:
   - jin10
   fallback: jin10
   name: cls_telegraph_search
+  priority: 900
   parallel: false
   patterns:
   # 「金十」让位给 jin10_flash（2026-10-22）：本域 patterns 含「快讯/财经快讯」，
@@ -194,6 +206,7 @@ domains:
   - cls_telegraph
   fallback: cls_telegraph
   name: em_news_search
+  priority: 890
   parallel: false
   patterns:
   # 「金十」让位给 jin10_flash（2026-10-22）：本域 patterns 含 `7x24`，jin10_flash
@@ -209,6 +222,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: fund_query
+  priority: 880
   parallel: false
   patterns:
   - match: '(?i)(基金净值|基金排行|基金经理|公募基金|私募基金|公募|私募|选基|买基金|基金定投|基金收益|基金持仓|基金代码|基金份额代码)'
@@ -222,6 +236,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: sec_filings
+  priority: 870
   parallel: false
   patterns:
   - (?i)\b(10-K|10-Q|8-K|13F|DEF 14A|S-1)\b
@@ -234,6 +249,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: hk_filings
+  priority: 860
   parallel: false
   patterns:
   - (?i)(港股|港交所|披露易|hkex|H股|红筹|同股不同权)
@@ -245,6 +261,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: futures_market
+  priority: 850
   parallel: false
   patterns:
   - (沪铜|沪铝|沪锌|沪铅|沪镍|沪锡|沪金|沪银|螺纹钢|热轧卷板|热卷|黄金期货|白银期货|原油期货|上期所|上海期货交易所)
@@ -256,6 +273,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: us_fundamentals
+  priority: 840
   parallel: false
   patterns:
   # 2026-10-25 补 unless：zh 词形的财务查询一律让位 stock_query（sina/eastmoney
@@ -288,6 +306,7 @@ domains:
   - tencent_kline
   fallback: anysearch
   name: us_stock
+  priority: 830
   parallel: true
   patterns:
   - (?i)(NASDAQ|NYSE|美股|盘前|盘后|premarket|afterhours)
@@ -303,6 +322,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: stock_query
+  priority: 820
   parallel: false
   patterns:
   - (?i)(股价|行情|涨跌|K线|大盘|大盘指数|指数行情|股票指数|沪深指数|上证指数|涨停|跌停|行业板块|板块行情|概念板块|板块轮动|概念股)
@@ -347,6 +367,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: fx_query
+  priority: 810
   parallel: true
   patterns:
   - match: '(?i)(中间价|牌价|汇率|外币兑换|换汇)'
@@ -380,6 +401,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: macro_data
+  priority: 800
   parallel: false
   patterns:
   - (?i)(美国|美).{0,4}(CPI|通胀|失业率|非农|PPI|GDP增速|零售销售|M2|PCE)
@@ -399,6 +421,7 @@ domains:
   - openalex
   fallback: openalex
   name: chem_search
+  priority: 790
   parallel: false
   patterns:
   - match: '(化学式|分子式|摩尔质量|分子量|IUPAC|CAS号|化合物|药物分子|结构式|CAS\s*[- ]?\d)'
@@ -416,6 +439,7 @@ domains:
   - worms
   fallback: wikipedia
   name: species_search
+  priority: 780
   parallel: false
   patterns:
   - (物种|学名|生物分类|拉丁名|界门纲|科属种|动物志|植物志|濒危)
@@ -427,6 +451,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: rfc_search
+  priority: 770
   parallel: false
   patterns:
   - (?i)\b(rfc\s*\d{2,5}|internet\s+standard|request\s+for\s+comments)\b
@@ -438,6 +463,7 @@ domains:
   - rcsb_pdb
   fallback: uniprot
   name: protein_search
+  priority: 760
   parallel: true
   patterns:
   # 2026-10-29（issue #34.1）：蛋白/基因/靶点词与「市场规模/集采/医保/销售额」同现时
@@ -460,6 +486,7 @@ domains:
   - anysearch
   fallback: courtlistener
   name: us_legal
+  priority: 750
   parallel: false
   patterns:
   - (?i)(supreme\s+court|court\s+of\s+appeals|circuit\s+court|case\s+law|precedent|docket\s+number|courtlistener)
@@ -482,6 +509,7 @@ domains:
   - nasa_images
   fallback: usgs
   name: earth_science
+  priority: 740
   parallel: true
   patterns:
   - (地震|震级|余震|地质|遥感|卫星数据|震中)
@@ -510,6 +538,7 @@ domains:
   - cisa_alerts
   fallback: anysearch
   name: security_search
+  priority: 730
   parallel: false
   patterns:
   # 裸 CVE 此前不认：第一条要求写成完整的 CVE-2024-1234，于是「CVE 漏洞」
@@ -532,6 +561,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: lifecycle_search
+  priority: 720
   parallel: false
   patterns:
   - (?i)(生命周期|停止维护|停止支持|停止更新|停更|end.of.life|\beol\b|何时停止|支持到)
@@ -544,6 +574,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: package_intel
+  priority: 710
   parallel: false
   patterns:
   - (?i)((npm|pypi|cargo|maven)\s+\S+\s+(最新版本|弃用|版本历史|发布时间))
@@ -556,6 +587,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: trade_stats
+  priority: 700
   parallel: false
   patterns:
   - (?i)(进出口|贸易额|双边贸易|贸易数据|进口额|出口额|comtrade)
@@ -574,6 +606,7 @@ domains:
   - wikipedia
   fallback: wikipedia
   name: astro_space
+  priority: 690
   primary: noaa_swpc
   parallel: false
   patterns:
@@ -589,6 +622,7 @@ domains:
   - electricity_maps
   fallback: anysearch
   name: energy_grid
+  priority: 680
   primary: energy_charts
   parallel: false
   patterns:
@@ -603,6 +637,7 @@ domains:
   - opensky
   fallback: anysearch
   name: transport_rt
+  priority: 670
   primary: gbfs_nyc
   parallel: false
   patterns:
@@ -620,6 +655,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: vehicle_data
+  priority: 660
   primary: nhtsa_vpic
   parallel: false
   patterns:
@@ -636,6 +672,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: japan_law
+  priority: 650
   primary: egov_law
   parallel: false
   patterns:
@@ -655,6 +692,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: kor_law
+  priority: 640
   primary: kor_law
   parallel: false
   patterns:
@@ -673,6 +711,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: soil_agri
+  priority: 630
   primary: usda
   parallel: false
   patterns:
@@ -684,6 +723,7 @@ domains:
   - openstd
   fallback: std_samr
   name: standards
+  priority: 620
   parallel: true
   patterns:
   - (?i)(国家标准|国标|标准号|标准全文|GB/?T?\s?\d{4,5}|GB\s?\d{4,5})
@@ -705,6 +745,7 @@ domains:
   - gov_policy
   fallback: gov_regulations
   name: law_text
+  priority: 610
   parallel: true
   patterns:
   - (法条|法律条文|条文全文|法规全文|法规原文|法规检索)
@@ -721,6 +762,7 @@ domains:
   - vam
   fallback: wikipedia
   name: art_museum
+  priority: 600
   parallel: true
   patterns:
   - (博物馆|藏品|美术馆|文物|艺术品|雕塑|名画|油画|画作|画家|谁画的)
@@ -744,6 +786,7 @@ domains:
   - anysearch
   fallback: datacite
   name: dataset_search
+  priority: 590
   parallel: true
   patterns:
   - (?i)(数据集|科研数据|开放数据|数据仓库|数据下载|数据论文|数据共享)
@@ -762,6 +805,8 @@ domains:
   - anysearch
   fallback: eastmoney
   name: financial_news
+  priority: 580
+  intents: [news]
   parallel: true
   patterns:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降准|降息|加息|CPI|GDP|PMI)
@@ -775,6 +820,7 @@ domains:
   - aviation_weather
   fallback: aviation_weather
   name: aviation_weather
+  priority: 570
   parallel: false
   patterns:
   - (?i)(metar|taf|aviation\s*weather|airport\s*weather|aviationweather\.gov|航空气象|机场天气|机场气象|飞行气象|通航气象)
@@ -790,6 +836,7 @@ domains:
   - open_meteo
   fallback: qweather
   name: weather_query
+  priority: 560
   parallel: false
   patterns:
   # 「天气/温度」是气候议题的高频子串（气候变化、极端天气、全球变暖），
@@ -831,6 +878,8 @@ domains:
   - train
   fallback: bocha_ai
   name: modal_card
+  priority: 550
+  pure_combo: true
   parallel: false
   patterns:
   - (?i)(火车票|高铁|(?<!电)动车|车次|火车时刻|高铁票价|高铁时刻)
@@ -850,6 +899,7 @@ domains:
   - cls_telegraph
   fallback: cls_telegraph
   name: jin10_flash
+  priority: 540
   parallel: false
   patterns:
   - (?i)(金十|jin10|财经快讯|市场快讯|7x24快讯)
@@ -860,6 +910,9 @@ domains:
   - zhihu
   fallback: zhihu
   name: zhihu_hot_list
+  priority: 530
+  intents: [social]
+  zh_lang_gated: true
   parallel: false
   patterns:
   - (?i)(知乎热榜|知乎热搜|知乎热点|知乎今日热|zhihu\s*hot|zhihu\s*trending|zhihu\s*hotlist)
@@ -876,6 +929,8 @@ domains:
   - zhihu_hot_app
   fallback: baidu_hot
   name: hot_trending
+  priority: 520
+  intents: [social, news]
   parallel: true
   patterns:
   - (?i)(热搜|热榜|热搜榜|实时热搜|今日热搜|今天热搜|微博热搜|百度热搜|B站热搜|bilibili热搜|头条热榜|抖音热榜|热门话题|trending now|hot search|top trends)
@@ -887,6 +942,7 @@ domains:
   - local_arxiv
   fallback: google_patents
   name: patent_search
+  priority: 510
   parallel: false
   patterns:
   - (?i)(专利|patent|发明|实用新型|外观设计|权利要求|IPC分类|技术方案|优先权)
@@ -900,6 +956,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: crypto_search
+  priority: 500
   parallel: false
   patterns:
   - (?i)(比特币|以太坊|莱特币|狗狗币|加密货币|虚拟货币|数字货币|币价|币种|山寨币|空气币|代币|区块链|挖矿|钱包地址|token 经济|稳定币)
@@ -923,6 +980,7 @@ domains:
   - github
   fallback: pypi
   name: package_search
+  priority: 490
   parallel: true
   patterns:
   - (?i)(crates\.io|cargo 包|rust 包|rust 库|crate 库|rust crate|rust 依赖|rust 生态|rust.*\bcrate|好用的 crate)
@@ -948,6 +1006,7 @@ domains:
   - stackoverflow
   fallback: mdn
   name: web_docs
+  priority: 480
   parallel: false
   patterns:
   - (?i)(mdn|mozilla developer|web api|dom api|css 属性|html 元素|javascript api|js api|fetch api|web docs)
@@ -959,6 +1018,7 @@ domains:
   - github
   fallback: huggingface
   name: ml_models
+  priority: 470
   parallel: false
   patterns:
   - (?i)(hugging\s*face|huggingface|hf\.co|hf model|预训练模型|开源模型|llm 模型|embedding 模型|数据集 dataset)
@@ -975,6 +1035,7 @@ domains:
   - huggingface
   fallback: anysearch
   name: ai_model
+  priority: 460
   parallel: false
   patterns:
   - (?i)\b(LLM|GPT|Claude|Gemini|GLM|Llama|Mistral|DeepSeek|Qwen|Grok)\b
@@ -1002,6 +1063,8 @@ domains:
   - devto
   fallback: juejin
   name: cn_tech_community
+  priority: 450
+  zh_lang_gated: true
   parallel: true
   patterns:
   - (?i)(掘金|juejin|稀土掘金|技术博客|前端文章|后端文章|dev\.to|devto)
@@ -1016,6 +1079,7 @@ domains:
   - wenshu
   fallback: byted
   name: legal
+  priority: 440
   parallel: true
   patterns:
   # 「裁判文书/判决书/裁定书」让位给 wenshu_query（2026-10-22）：本域 patterns 含
@@ -1036,6 +1100,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: wenshu_query
+  priority: 430
   parallel: false
   patterns:
   - (?i)(裁判文书|判决书|裁定书|wenshu|court\.gov)
@@ -1047,6 +1112,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: outbreak_health
+  priority: 420
   primary: who_don
   parallel: false
   patterns:
@@ -1065,6 +1131,8 @@ domains:
   - who_gho
   fallback: clinicaltrials
   name: medical
+  priority: 410
+  zh_lang_gated: true
   parallel: true
   patterns:
   - (?i)(临床试验|clinical trial|nct\d+|clinicaltrials\.gov|openfda|fda 药品|药品说明书|药物标签|drug label|适应症|不良反应)
@@ -1086,6 +1154,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: game_search
+  priority: 400
   parallel: false
   patterns:
   - (?i)(steam|steam 游戏|steam 商店|3a 游戏| indies? 游戏|好玩的游戏|游戏推荐|metacritic)
@@ -1097,6 +1166,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: prediction_market
+  priority: 390
   parallel: false
   patterns:
   - (?i)(polymarket|预测市场|prediction market|博彩盘口|事件合约|谁会当选|会不会发生)
@@ -1108,6 +1178,7 @@ domains:
   - wikipedia
   fallback: archive_org
   name: web_archive
+  priority: 380
   parallel: false
   patterns:
   - (?i)(internet archive|archive\.org|wayback|网页快照|历史网页|数字图书馆 archive)
@@ -1119,6 +1190,8 @@ domains:
   - wikidata
   fallback: baidu_baike
   name: cn_encyclopedia
+  priority: 370
+  zh_lang_gated: true
   parallel: true
   patterns:
   - (?i)(百度百科|baike\.baidu|百科词条|查百科|词条解释)
@@ -1138,6 +1211,7 @@ domains:
   - tatoeba
   fallback: wikipedia
   name: dictionary_search
+  priority: 360
   parallel: false
   patterns:
   - (?i)(词典|字典|英英|英汉词典|英文单词|单词.*意思|英文.*意思|怎么读|咋读|读音|查词|define|definition|dictionary|meaning of|the word)
@@ -1150,6 +1224,7 @@ domains:
   - zh_wikipedia
   fallback: moegirl
   name: anime_encyclopedia
+  priority: 350
   parallel: false
   patterns:
   - (?i)(萌娘百科|二次元|ACG|动漫|番剧|新番|番组|声优|手办|同人|轻小说|漫画|日本动画|新番动画|动画番剧|动画推荐|看动画|galgame|vtuber|虚拟主播|东方project|(?-i:\bFate\b))
@@ -1171,6 +1246,7 @@ domains:
   - ndl
   fallback: anysearch
   name: book_search
+  priority: 340
   parallel: true
   no_early_stop: true
   patterns:
@@ -1194,6 +1270,7 @@ domains:
   - local_imdb
   fallback: imdb
   name: film_search
+  priority: 330
   parallel: true
   patterns:
   # 中文影视强信号；「主演/导演/编剧」覆盖 LoHo 类事实问
@@ -1222,6 +1299,7 @@ domains:
   - zh_wikipedia
   fallback: thesportsdb
   name: sports_search
+  priority: 320
   parallel: true
   patterns:
   # 拉丁缩写必须带字母数字边界（lookaround 而非 \b——CJK 与拉丁之间
@@ -1255,6 +1333,7 @@ domains:
   - zh_wikipedia
   fallback: local_openstreetmap
   name: geo_places
+  priority: 310
   parallel: true
   patterns:
   # 「在哪里」在软件语境里是最常见的疑问句开头（在哪里改配置/在哪里看日志），
@@ -1317,6 +1396,7 @@ domains:
   - gleif
   fallback: wikidata
   name: org_entity
+  priority: 300
   parallel: true
   patterns:
   # 政府/国际组织
@@ -1370,6 +1450,7 @@ domains:
   - qq_music
   fallback: itunes
   name: media_search
+  priority: 290
   parallel: true
   patterns:
   - (?i)(歌曲|音乐|专辑|新歌|单曲|\bMV\b|mp3|歌词|歌手|乐队|音乐人|主唱|好听的歌|好歌推荐|听歌|歌单|的歌|主题曲|片尾曲|插曲|播客|有声书|演唱会|巡演)
@@ -1384,6 +1465,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: image_search
+  priority: 280
   parallel: true
   patterns:
   # 「雨景/雪景/夜景」这类**景观词本身就是图片意图**：中文用户说「雨景 摄影」
@@ -1421,6 +1503,7 @@ domains:
   - dbpedia
   fallback: baidu_baike
   name: entity_search
+  priority: 270
   parallel: true
   patterns:
   - (?i)(维基数据|wikidata|知识实体|实体查询|词条实体|QID|SPARQL|知识图谱|百度百科)
@@ -1431,6 +1514,7 @@ domains:
   - zhihu_user
   fallback: zhihu_user
   name: zhihu_user_data
+  priority: 260
   parallel: false
   patterns:
   - (?i)(我的知乎|知乎我的|我的创作|个人主页数据)
@@ -1443,6 +1527,9 @@ domains:
   - anysearch
   fallback: anysearch
   name: zhihu_content
+  priority: 250
+  intents: [social]
+  zh_lang_gated: true
   parallel: true
   patterns:
   # 2026-10-21：只认「明确指向知乎/站内观点」的词。此前的 体验|评测|对比|
@@ -1513,6 +1600,8 @@ domains:
   - openaire
   fallback: openalex
   name: academic
+  priority: 240
+  zh_filter_en_only: true
   parallel: true
   patterns:
   # 中文论文语境词此前是缺口：规则里有英文 preprint，却没有「预印本」。
@@ -1562,6 +1651,8 @@ domains:
   - europepmc
   fallback: openalex
   name: tech_deep
+  priority: 230
+  zh_filter_en_only: true
   parallel: true
   patterns:
   - (?i)(research|deep dive|综述|survey|state of the art|SOTA)
@@ -1572,6 +1663,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: shopping
+  priority: 220
   parallel: true
   patterns:
   # 注意：不要用裸 \bbest\b / review / comparison，会误伤 "best practices" 等技术查询
@@ -1604,6 +1696,7 @@ domains:
   - firecrawl
   fallback: anysearch
   name: semantic_discovery
+  priority: 210
   parallel: false
   patterns:
   - (?i)(find me|discover|explore|landscape|ecosystem|what are the best|top.*tools|emerging|trending.*202[56])
@@ -1618,6 +1711,7 @@ domains:
   - anysearch
   fallback: github
   name: code_search
+  priority: 200
   parallel: true
   patterns:
   # 裸「开源」太宽：品牌/产品句（「雪原 开源 投研 搜索工具」）也会
@@ -1658,6 +1752,7 @@ domains:
   - anysearch
   fallback: itotii
   name: meme_slang
+  priority: 190
   parallel: true
   patterns:
   - (?i)(梗(?!概)|meme|俚语|slang|黑话|流行语|网络用语|网络热词|玩梗|出圈|抽象话|缩写|圈层用语|语录|表情包|梗百科|热梗)
@@ -1669,6 +1764,7 @@ domains:
   - byted
   fallback: wikipedia
   name: fact_check
+  priority: 180
   parallel: true
   patterns:
   - (?i)(what is|who is|when did|where is|how many|how much)
@@ -1684,6 +1780,7 @@ domains:
   - cls_telegraph
   fallback: em_global_news
   name: global_event
+  priority: 170
   parallel: false
   patterns:
   - (?i)(全球事件|国际事件|地缘政治|地缘|局势|冲突|抗议|政变|选举|公投|恐怖袭击|军事行动|制裁|外交|停火|谈判|全球舆情|全球动态|worldwide|global\s*event)
@@ -1701,6 +1798,7 @@ domains:
   - dw_news
   fallback: guardian_rss
   name: intl_news_flash
+  priority: 160
   parallel: true
   patterns:
   - (?i)(国际新闻|国际要闻|今日国际|国外新闻|国际动态|国际头条|外媒|海外新闻)
@@ -1727,6 +1825,7 @@ domains:
   - seltz
   fallback: anysearch
   name: world_news
+  priority: 150
   parallel: true
   patterns:
   - (?i)(뉴스|новости|أخبار|noticias|notícias|nouvelles|actualités|Nachrichten|ニュース|ข่าว|tin tức|berita|haberler|חדשות|zprávy)
@@ -1739,6 +1838,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: claim_check
+  priority: 140
   parallel: true
   patterns:
   - (?i)(辟谣|谣言|传言|不实信息|假消息|误导性|事实核查|是真的吗|是否属实)
@@ -1756,6 +1856,8 @@ domains:
   - realtime_index
   fallback: byted
   name: news_realtime
+  priority: 130
+  intents: [news]
   parallel: true
   patterns:
   - (?i)(最新新闻|最新进展|今天发生|突发|breaking)
@@ -1779,6 +1881,9 @@ domains:
   - parallel
   fallback: byted
   name: chinese_tech_deep
+  priority: 120
+  intents: [compare]
+  zh_lang_gated: true
   parallel: true
   patterns:
   - match: '(?i)[一-鿿].*(编程|代码|算法|架构|框架|框架对比|性能优化|源码分析|实现原理|教程|指南|原理|底层|综述|深入|深挖|架构设计|实现|用法)'
@@ -1807,6 +1912,7 @@ domains:
   - eng_blogs
   fallback: exa
   name: english_tech
+  priority: 110
   parallel: true
   patterns:
   - (?i)(async|performance|best practices|tutorial|guide|how to|internals|SDK|framework)
@@ -1834,6 +1940,7 @@ domains:
   - baidu_baike
   fallback: opencorporates
   name: company_search
+  priority: 100
   parallel: false
   patterns:
   - (?i)(公司注册|注册号|统一社会信用代码|工商信息|股东|法人|注册资本|经营范围|尽调|工商登记|企业信息)
@@ -1860,6 +1967,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: video
+  priority: 90
   parallel: true
   no_early_stop: true
   patterns:
@@ -1893,6 +2001,8 @@ domains:
   - metaso
   fallback: byted
   name: chinese_general
+  priority: 80
+  zh_lang_gated: true
   parallel: true
   patterns:
   # catch-all 中文兜底：任意汉字即命中。但「本地/免 key 镜像通道」是用户
@@ -1914,6 +2024,8 @@ domains:
   - bocha
   fallback: local_search
   name: local_chinese
+  priority: 70
+  zh_lang_gated: true
   parallel: true
   patterns:
   - (?i)(百度|搜狗|site:baidu.com|site:sogou.com)
@@ -1924,6 +2036,7 @@ domains:
   - byted
   fallback: byted
   name: local_news
+  priority: 60
   parallel: true
   patterns:
   - (?i)(本地新闻|bing news|google news|news rss)
@@ -1935,6 +2048,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: local_code
+  priority: 50
   parallel: true
   patterns:
   - (?i)(stackoverflow|npm package|gitlab repo|github repo|site:stackoverflow.com)
@@ -1946,6 +2060,7 @@ domains:
   - semantic_scholar
   fallback: arxiv
   name: local_academic
+  priority: 40
   parallel: true
   patterns:
   - (?i)(arxiv api|semantic scholar|crossref|pubmed|site:arxiv.org)
@@ -1957,6 +2072,7 @@ domains:
   - wikisource
   fallback: wikipedia
   name: local_reference
+  priority: 30
   parallel: true
   patterns:
   - (?i)(wikipedia api|wiktionary|wikiquote|nominatim|openstreetmap)
@@ -1968,6 +2084,7 @@ domains:
   - anysearch
   fallback: anysearch
   name: local_general
+  priority: 20
   parallel: true
   patterns:
   - (?i)(本地搜索|local search|零成本|free search)
@@ -1992,6 +2109,8 @@ domains:
   # 防止「提到平台词 ≠ 搜平台」的查询被 bilibili 噪声短路
   no_early_stop: true
   name: social
+  priority: 10
+  intents: [social]
   parallel: true
   patterns:
   # `v2ex` 让位给 v2ex_search（2026-10-22）：本域 patterns 含 v2ex，且

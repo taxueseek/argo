@@ -132,6 +132,21 @@ class TestConceptLookup(unittest.TestCase):
         # 命中并发语义的文件应该排在第 1
         self.assertEqual(ranked[0][0], "scripts/concurrency_pool.py")
 
+    def test_multilingual_concept_alignment(self):
+        """多语种核心词（ja/de/ru）应与英文概念保持高相似度，且与无关概念正交。"""
+        for foreign, english in (
+            ("論文", "paper"),
+            ("株価", "stock"),
+            ("ニュース", "news"),
+            ("nachrichten", "news"),
+            ("акции", "stock"),
+        ):
+            sim = self.lookup.concept_similarity(foreign, english)
+            self.assertGreaterEqual(
+                sim, 0.85, f"{foreign} vs {english} 概念相似度不足：{sim}"
+            )
+        self.assertLess(self.lookup.concept_similarity("株価", "paper"), 0.25)
+
 
 if __name__ == "__main__":
     unittest.main()
