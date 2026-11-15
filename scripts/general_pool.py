@@ -62,9 +62,16 @@ def general_kwargs(features: dict | None, mode: str, depth: str,
     选源按用途（日常/研究）与语言排序；把四个参数散在各调用点复制，既容易
     漏传，也把 route.py 顶过行数门禁。放在池模块，因为它只服务选源。
     """
+    feats = features or {}
+    lang = str(
+        feats.get("lang_override")
+        or feats.get("effective_lang")
+        or feats.get("primary_lang")
+        or ""
+    )
     return {
         "mode": mode, "depth": depth, "context": context,
-        "lang": str((features or {}).get("primary_lang") or ""),
+        "lang": lang,
     }
 
 

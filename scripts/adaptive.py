@@ -128,9 +128,15 @@ def scenario_of(decision: dict | None) -> dict[str, str]:
     """
     d = decision or {}
     feats = d.get("features") or {}
+    lang = str(
+        feats.get("lang_override")
+        or feats.get("effective_lang")
+        or feats.get("primary_lang")
+        or ""
+    )
     return {
         "domain": str(d.get("domain") or ""),
-        "lang": str(feats.get("primary_lang") or ""),
+        "lang": lang,
     }
 
 

@@ -35,7 +35,14 @@ DOMAIN_PROFILES_PATH = BACKENDS_DIR / "domain_profiles.json"
 
 # ── 分词 ──────────────────────────────────────────────────────────────────────
 
-_TOKEN_PATTERN = re.compile(r"[一-鿿\u3040-\u30ff\uac00-\ud7af]|[a-zA-Z0-9]+")
+_CJK_SINGLE_CHAR = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
+_THAI_RUN_RE = re.compile(r"^[\u0e00-\u0e7f]+$")
+_TOKEN_PATTERN = re.compile(
+    r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]"
+    r"|[\u0e00-\u0e7f]+"
+    r"|[a-zA-Z0-9\u00c0-\u024f\u1e00-\u1eff\u0400-\u04ff"
+    r"\u0600-\u06ff\u0590-\u05ff\u0370-\u03ff\u0900-\u097f]+"
+)
 
 # 通用搜索泛域（与 route_combo._GENERAL_ENGINES 的 catch-all 部分对齐，但不含
 # arxiv/wikipedia 这类有明确用途的宽域源）：这些引擎的 domain_profiles 文档
@@ -47,21 +54,26 @@ _CATCH_ALL_CONCEPT = frozenset({
 
 
 def tokenize(text: str) -> list[str]:
-    """简单分词：中文/日文/韩文单字 + 英文单词，统一小写。
+    """多语种分词：CJK 单字 + 泰语 2-gram + 西里尔/阿拉伯/希伯来/希腊/天城文/拉丁扩展词。
 
-    扩展 v2.8：并入假名（\\u3040-\\u30ff）与谚文（\\uac00-\\ud7af），否则韩/日
-    查询 tokenize 恒空、TF-IDF 语义路由对多语言整体失明。单字拉丁仍丢弃（词袋无关）。
+    扩展 v2.8：并入假名（\\u3040-\\u30ff）与谚文（\\uac00-\\ud7af）；
+    扩展 v2.14：补全泰语滑动双字及俄/阿/希/希伯来/天城文/越南语等 Unicode 语系词切分，
+    单字拉丁与单字标点仍丢弃。
     """
-    tokens = []
+    tokens: list[str] = []
     for match in _TOKEN_PATTERN.finditer(text.lower()):
         token = match.group()
-        if len(token) > 1:
+        if len(token) == 1:
+            if _CJK_SINGLE_CHAR.match(token):
+                tokens.append(token)
+            continue
+        if _THAI_RUN_RE.match(token):
+            if len(token) <= 8:
+                tokens.append(token)
+            if len(token) > 2:
+                tokens.extend(token[i:i + 2] for i in range(len(token) - 1))
+        else:
             tokens.append(token)
-        elif len(token) == 1:
-            ch = token[0]
-            if ('一' <= ch <= '鿿' or '\u3040' <= ch <= '\u30ff'
-                    or '\uac00' <= ch <= '\ud7af'):
-                tokens.append(ch)
     return tokens
 
 

@@ -830,17 +830,16 @@ def route_query(query: str, engine_override: str = "auto",
         # → 熔断器空键 ''），MCP/外部调用可能传入空 engine 参数
         # 显式引擎也补 domain 判定：让缓存 TTL 按真实域分域（财经 5min /
         # 新闻 10min / 学术 2h），usage_log 统计不再全糊成 general。
-        _domain = None
-        _hits = match_domains(
-            query, max_n=1,
-            intents=extract_features(query).get("intents"))
-        if _hits:
-            _domain = _hits[0].get("name")
+        _feats = extract_features(query)
+        if lang_override:
+            _feats = apply_lang_override(_feats, lang_override)
+        _hits = match_domains(query, max_n=1, intents=_feats.get("intents"))
+        _domain = _hits[0].get("name") if _hits else None
         return _done(
             engine=engines[0], engines=engines,
             engines_combo=engines,
             reason=f"用户指定: {', '.join(engines)}", confidence=1.0,
-            features={}, domain=_domain, parallel=False, mode=mode,
+            features=_feats, domain=_domain, parallel=False, mode=mode,
             depth=depth, context=context,
             login_hint=_detect_login_intent(query, None),
         )

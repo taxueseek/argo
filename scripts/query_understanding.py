@@ -275,17 +275,41 @@ def parse_geo(query: str) -> dict[str, Any] | None:
 
 _INTENT_PATTERNS: dict[str, re.Pattern] = {
     "compare": re.compile(
-        r"\b(vs|versus)\b|(对比|比较|区别|相比|哪个好|哪个更|谁更|优缺点|pk)", re.I),
+        r"\b(vs|versus|vergleich|unterschied|comparaison|différence|"
+        r"comparación|diferencia|сравнение|разница)\b|"
+        r"(对比|比较|比較|区别|相比|哪个好|哪个更|谁更|优缺点|pk|"
+        r"違い|どちらが|비교|차이|어느\s*것)",
+        re.I,
+    ),
     "definition": re.compile(
-        r"\b(what is|what are|define|definition)\b|(是什么|什么是|定义|含义|概念|指的是)", re.I),
+        r"\b(what is|what are|define|definition|was ist|bedeutung|"
+        r"qu'est-ce|définition|qué es|definición|что такое|определение)\b|"
+        r"(是什么|什么是|定义|含义|概念|指的是|とは|意味|定義|이란|무엇|정의)",
+        re.I,
+    ),
     "news": re.compile(
-        r"\b(news|latest|breaking)\b|(最新|新闻|快讯|突发|今天|近期|最近|进展|动态)", re.I),
+        r"\b(news|latest|breaking|nachrichten|aktuell|actualités|"
+        r"nouvelles|noticias|últimas|новости|сегодня)\b|"
+        r"(最新|新闻|快讯|突发|今天|近期|最近|进展|动态|"
+        r"ニュース|速報|뉴스|속보|최신)",
+        re.I,
+    ),
     "fact": re.compile(
-        r"\b(how many|how much|when did|where is|who is)\b|"
-        r"(多少|几个|几号|什么时候|哪一年|哪里|谁是|是谁)", re.I),
+        r"\b(how many|how much|when did|where is|who is|wie viele|wann|"
+        r"wo ist|wer ist|combien|quand|où est|qui est|cuántos|cuándo|"
+        r"dónde|quién|сколько|когда|где|кто)\b|"
+        r"(多少|几个|几号|什么时候|哪一年|哪里|谁是|是谁|"
+        r"いくつ|いつ|どこ|誰|몇\s*개|언제|어디|누구)",
+        re.I,
+    ),
     "social": re.compile(
+        r"\b(kritik|erfahrungen|avis|témoignages|reseñas|opiniones|"
+        r"отзывы|обсуждение)\b|"
         r"(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|舆情|舆论|"
-        r"网友|口碑|种草|拔草|评价|讨论|热议)", re.I),
+        r"网友|口碑|种草|拔草|评价|讨论|热议|口コミ|評判|レビュー|"
+        r"반응|후기|리뷰)",
+        re.I,
+    ),
 }
 
 

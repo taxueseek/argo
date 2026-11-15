@@ -786,10 +786,24 @@ window.__ModuleLoader__.load({
             : h('span', { key: 'val', style: S.metricValue }, m.val),
           h('span', { key: 's', style: S.metricSub }, m.sub),
         ]))));
+        const rhSummary = routeHealth && routeHealth.summary;
+        const topLangs = rhSummary && rhSummary.langCounts
+          ? Object.entries(rhSummary.langCounts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => `${k}:${n}`).join(' · ')
+          : '';
         panel.push(h(Card, { key: 'route', title: t('routeHealthTitle'), hint: t('routeHealthHint') }, [
           routeHealth && Array.isArray(routeHealth.samples) && routeHealth.samples.length > 0
-            ? h('div', { key: 'rows', style: col(6) }, routeHealth.samples.slice(0, 5).map((r, i) =>
-                h('div', { key: 'r' + i, style: S.keyRow }, [h('span', { key: 'q', style: S.label }, String(r.query || '').slice(0, 40)), h('span', { key: 'd', style: S.sub }, `${r.domain || '-'} · ${r.engine || '-'}`)])))
+            ? h('div', { key: 'rows', style: col(6) }, [
+                rhSummary ? h('div', { key: 'sum', style: S.sub }, `${rhSummary.total} 条 · 兜底 ${Math.round((rhSummary.fallbackRate || 0) * 100)}%${topLangs ? ' · ' + topLangs : ''}`) : null,
+                ...routeHealth.samples.slice(-5).reverse().map((r, i) => {
+                  const langTag = r.effective_lang || r.primary_lang || '-';
+                  const intentTag = Array.isArray(r.intents) && r.intents.length > 0 ? ` · ${r.intents.join(',')}` : '';
+                  const confTag = r.confidence !== '' && r.confidence !== undefined ? ` (${r.confidence})` : '';
+                  return h('div', { key: 'r' + i, style: S.keyRow }, [
+                    h('span', { key: 'q', style: S.label }, `${r.domain || 'fallback'} · ${langTag}${intentTag}`),
+                    h('span', { key: 'd', style: S.sub }, `${r.engine || '-'}${confTag}`),
+                  ]);
+                }),
+              ])
             : h('p', { key: 'hint', style: S.hint }, t('routeHealthFallback')),
         ]));
         panel.push(h(Card, { key: 'presets', title: t('presetTitle'), hint: t('presetHint') }, [

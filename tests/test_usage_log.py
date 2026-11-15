@@ -239,3 +239,51 @@ def test_route_sample_env_change_takes_effect_without_module_cache(tele_dir, mon
     # rate=2 时第 2、3 次调用（counter=2、3）只有 counter%2==0 那次落盘
     assert route_log._resolve_rate() == 2
     assert len(_read_lines(tele_dir, "route")) == 2
+
+
+def test_emit_scrubs_credentials_and_url_params(tele_dir):
+    """落盘前即使未开掩码也必须剔除查询中的密钥与敏感 URL 参数。"""
+    fake_sk = "sk-" + "unitestkey" * 3
+    fake_bearer = "Bearer " + "bearerval" * 3
+    usage_log.emit("query", {
+        "query": f"debug {fake_sk} https://x.test?api_key=secret999",
+        "final_query": fake_bearer,
+        "engines_used": ["anysearch"],
+    })
+    rows = _read_lines(tele_dir, "query")
+    assert len(rows) == 1
+    assert fake_sk not in rows[0]["query"]
+    assert "secret999" not in rows[0]["query"]
+    assert fake_bearer.split()[-1] not in rows[0]["final_query"]
+
+
+def test_emit_mask_replaces_query_with_hash_when_enabled(tele_dir, monkeypatch):
+    """开启 ARGO_USAGE_LOG_MASK=1 时，query/final_query 落盘只留长度与 SHA-256 摘要。"""
+    monkeypatch.setenv("ARGO_USAGE_LOG_MASK", "1")
+    usage_log.emit("query", {
+        "query": "confidential project alpha",
+        "final_query": "confidential project alpha",
+        "count": 3,
+        "engines_used": ["anysearch"],
+    })
+    rows = _read_lines(tele_dir, "query")
+    assert len(rows) == 1
+    assert rows[0]["query"].startswith("[masked:26:")
+    assert "confidential" not in rows[0]["query"]
+    assert rows[0]["final_query"] == rows[0]["query"]
+    assert rows[0]["count"] == 3
+
+
+def test_route_sample_records_effective_lang(tele_dir, monkeypatch):
+    import route_log
+    monkeypatch.setattr("route_log._ROUTE_SAMPLE_RATE", route_log._DEFAULT_ROUTE_SAMPLE_RATE)
+    monkeypatch.setattr("route_log._route_sample_counter", 0)
+    monkeypatch.setenv("ARGO_ROUTE_SAMPLE_RATE", "1")
+    route_log.sample_route({}, {
+        "domain": "general_search", "engine": "anysearch", "engines": ["anysearch"],
+        "confidence": 0.7, "mode": "auto",
+        "features": {"primary_lang": "en", "effective_lang": "es", "intents": ["news"]},
+    })
+    rows = _read_lines(tele_dir, "route")
+    assert len(rows) == 1
+    assert rows[0]["effective_lang"] == "es"

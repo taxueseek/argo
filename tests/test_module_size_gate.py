@@ -57,7 +57,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/search_rank.py": (986, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支。2026-11-13 上调 +10：裸吞收口（except_sets 导入 +1，相似度与 quota 联动两处 sqlite/侧信道保持宽口径仅可见化 +9）"),
     "scripts/job.py": (1150, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
     "scripts/matrix_search_eval.py": (1313, "离线路由矩阵，用例表占多数"),
-    "scripts/route.py": (1013, "路由决策主干（route_query + 三个判定器）；2026-11-15 上调 +3：match_domains 调用补传 intents（方案二 intent 让位）"),
+    "scripts/route.py": (1012, "路由决策主干（route_query + 三个判定器）；engine_override 分支复用 extract_features 净行数 1013→1012"),
 }
 
 

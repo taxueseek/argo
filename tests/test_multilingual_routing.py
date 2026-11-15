@@ -151,5 +151,51 @@ class TestJaKoTfidfSkip(unittest.TestCase):
         self.assertEqual(d["engines_combo"][0], "anysearch")
 
 
+class TestPlan1MultilingualFixes(unittest.TestCase):
+    """方案一多语种词法、有效语言分桶、分词与意图回归门。"""
+
+    def test_lang_hint_expanded_and_word_boundary(self):
+        from engine_families import lang_hint_from_query
+        self.assertEqual(lang_hint_from_query("últimas noticias Madrid"), "es")
+        self.assertEqual(lang_hint_from_query("was ist Künstliche Intelligenz"), "de")
+        self.assertEqual(lang_hint_from_query("actualités economie France"), "fr")
+        self.assertEqual(lang_hint_from_query("gündem ekonomi"), "tr")
+        # ASCII 词边界防误伤英文词根
+        self.assertEqual(lang_hint_from_query("haberdasher shop near me"), "")
+
+    def test_effective_lang_and_engine_override_bucket(self):
+        import adaptive
+        from route import route_query
+        d_override = route_query("latest ai news", engine_override="anysearch")
+        self.assertEqual(d_override["features"].get("effective_lang"), "en")
+        self.assertEqual(adaptive.scenario_of(d_override)["lang"], "en")
+
+        d_es = route_query("noticias Madrid hoy")
+        self.assertEqual(d_es["features"].get("effective_lang"), "es")
+        self.assertEqual(adaptive.scenario_of(d_es)["lang"], "es")
+
+    def test_tfidf_tokenize_covers_non_latin_and_thai(self):
+        from tfidf_router import tokenize
+        for sample in (
+            "новости искусственного интеллекта",
+            "ข่าวเทคโนโลยีวันนี้",
+            "أخبار التكنولوجيا الحديثة",
+            "τι είναι η τεχνητή νοημοσύνη",
+            "tiếng việt lịch sử",
+            "कृत्रिम बुद्धिमत्ता",
+        ):
+            toks = tokenize(sample)
+            self.assertTrue(len(toks) >= 2, f"分词过少: {sample} -> {toks}")
+
+    def test_multilingual_intents_cover_major_languages(self):
+        from query_understanding import classify_intents
+        self.assertIn("definition", classify_intents("Was ist Quantencomputing"))
+        self.assertIn("news", classify_intents("actualités IA aujourd'hui"))
+        self.assertIn("compare", classify_intents("Python vs Rust Vergleich"))
+        self.assertIn("social", classify_intents("製品 レビュー 評判"))
+        self.assertIn("news", classify_intents("한국 경제 뉴스 최신"))
+        self.assertIn("definition", classify_intents("Что такое нейросеть"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -649,7 +649,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 > 123 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
-### 能力开关（43）
+### 能力开关（44）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -692,6 +692,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_SEMANTIC_EVIDENCE` | 可选语义证据层（Gemini Decision 1 / TypeSafe JEV） | 默认关；配置 key 后可选开启 |
 | `ARGO_SERP_GUARD` | SERP 垃圾与壳链结果守卫（过滤无效跳转与空壳） | 默认开；=0 关闭 |
 | `ARGO_USAGE_LOG` | 本地使用日志流（JSONL，stats 统计数据源） | 默认开；=0 整体关闭 |
+| `ARGO_USAGE_LOG_MASK` | 使用日志原文脱敏掩码（仅留长度与 SHA-256 前 12 位摘要） | 默认关；=1 开启（未开启时仍自动过 `secret_guard` 凭据脱敏） |
 | `ARGO_UNPAYWALL_EMAIL` | Unpaywall 学术开放获取 API 的联系人邮箱 | 遵循 polite pool 规范 |
 | `ARGO_VIDEO_ASR_CMD` | 视频语音转写兜底命令模板（无字幕时调用） | 默认空，含 {url} 或自动追加 URL；shlex.split 执行 |
 | `ARGO_WOLFRAM_APPID` | WolframAlpha 知识计算引擎的 AppID | 缺省则跳过该引擎 |

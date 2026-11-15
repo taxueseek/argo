@@ -105,6 +105,7 @@ def apply_lang_override(features: dict[str, Any],
         return features
     out = dict(features)
     out["primary_lang"] = valid[0]
+    out["effective_lang"] = valid[0]
     out["operator_langs"] = valid
     return out
 
@@ -183,6 +184,7 @@ def extract_features(query: str) -> dict[str, Any]:
         import logging
         logging.getLogger("unified_search.route").debug(
             f"查询理解特征跳过: {type(e).__name__}")
+    features["effective_lang"] = effective_lang(features, query)
     return features
 
 
@@ -244,7 +246,7 @@ def _inject_multilingual_backup(engines_combo: list[str], enabled: set[str],
     通用保底源被截断剪掉）在声明来源层修，见 config.yaml 各域 engines_combo
     的顺序约定与 tests/test_combo_budget_coverage.py 检查。
     """
-    if features.get("primary_lang") not in ("ja", "ko"):
+    if effective_lang(features) not in ("ja", "ko"):
         return engines_combo
     if "anysearch" not in enabled or not engines_combo:
         return engines_combo
@@ -356,7 +358,7 @@ def _merge_language_engines(engine_list: list[str], features: dict | None,
         return engine_list
     result = list(engine_list)
     # P2-3：显式语言覆盖 ja/ko 与主语言 ja/ko 同等对待（噪声剔除同一套规则）
-    if (features.get("lang_override") or features.get("primary_lang")) in ("ja", "ko"):
+    if effective_lang(features) in ("ja", "ko"):
         cn_noise = {"bocha", "byted", "wechat_sogou", "zhihu", "zhihu_global", "baidu_baike"}
         result = [e for e in result if e not in cn_noise]
         for eng in lang_engines[:2]:
@@ -468,18 +470,29 @@ def _lang_aware_combo_order(combo: list[str], features: dict | None,
     return _filter_lang_bound_family(ordered, features, _specs_snapshot(), query)
 
 
-def _family_lang(features: dict | None, query: str = "") -> str:
-    """选源用的查询语言：lang_override > primary_lang > 查询实词兜底。
+def effective_lang(features: dict | None, query: str = "") -> str:
+    """统一的路由、选源与学习器分桶有效语言解析。
 
-    第三档专门补拉丁字母语言的判定缺口（lang_detect 对 noticias/berita/
-    tin tức 只给 en/latin），见 engine_families._LANG_HINT_WORDS 的说明。
+    优先级：lang_override > primary_lang（非笼统值）> 查询实词兜底。
     """
-    lang = (features or {}).get("lang_override") or (features or {}).get("primary_lang") or ""
+    feats = features or {}
+    override = str(feats.get("lang_override") or "").strip().lower()
+    if override:
+        return override
+    lang = str(feats.get("primary_lang") or "").strip().lower()
     if lang in ("", "en", "latin", "mixed", "other"):
         hint = lang_hint_from_query(query)
         if hint:
             return hint
+        cached = str(feats.get("effective_lang") or "").strip().lower()
+        if cached and cached not in ("", "en", "latin", "mixed", "other"):
+            return cached
     return lang
+
+
+def _family_lang(features: dict | None, query: str = "") -> str:
+    """选源用的查询语言（委托给 effective_lang 单一真源）。"""
+    return effective_lang(features, query)
 
 
 def _filter_lang_bound_family(combo: list[str], features: dict | None,

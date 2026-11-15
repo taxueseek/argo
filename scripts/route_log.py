@@ -69,6 +69,7 @@ def sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
             "mode": kw.get("mode"),
             "lang_override": f.get("lang_override"),
             "primary_lang": f.get("primary_lang"),
+            "effective_lang": f.get("effective_lang"),
             "script": f.get("script"),
             "has_compare": f.get("has_compare"),
             "has_technical": f.get("has_technical"),

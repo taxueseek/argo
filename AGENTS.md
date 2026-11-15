@@ -33,6 +33,7 @@
 **默认关闭的能力开关**（口径唯一真源：`references/usage.md` 的开关总表）：
 
 - `ARGO_CONCEPT_ROUTER`：概念语义路由。默认走纯词面 TF-IDF，开启后多一层向量
+- `ARGO_USAGE_LOG_MASK`：使用日志原文掩码（query/final_query 落盘改存长度与哈希摘要）
 - `ARGO_LOCAL_IMAGE`：本地图片检索。需要 macOS + swiftc + numpy
 - `ARGO_RRF_WEIGHTED`：加权 RRF 融合。默认开；`=0` 作为逃生开关回退等权 RRF
 - `ARGO_SEMANTIC_EVIDENCE`：可选语义证据层。需配置 key

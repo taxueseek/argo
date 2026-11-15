@@ -15,6 +15,7 @@ Schema（每条一行 JSON，UTF-8）：
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -122,6 +123,29 @@ def _fixture_engines(record: dict[str, Any]) -> list[str]:
     return [e for e in used if not isinstance(e, str) or e not in canon]
 
 
+def _sanitize_record(record: dict[str, Any]) -> dict[str, Any]:
+    """落盘前脱敏：先清洗凭据签名，按需对 query 原文做不可逆长度+哈希掩码。"""
+    if not isinstance(record, dict):
+        return {}
+    clean = dict(record)
+    try:
+        from secret_guard import redact_text
+    except ImportError:
+        redact_text = None  # 脱敏模块缺失时退回原文本与可选掩码
+    mask = env_flag("ARGO_USAGE_LOG_MASK", default=False)
+    for field in ("query", "final_query"):
+        val = clean.get(field)
+        if not isinstance(val, str) or not val:
+            continue
+        if redact_text is not None:
+            val = redact_text(val)
+        if mask:
+            digest = hashlib.sha256(val.encode("utf-8", errors="ignore")).hexdigest()[:12]
+            val = f"[masked:{len(val)}:{digest}]"
+        clean[field] = val
+    return clean
+
+
 def emit(stream: str, record: dict[str, Any]) -> bool:
     """追加一条日志记录到 <usage_log_dir>/<stream>.jsonl。
 
@@ -139,13 +163,14 @@ def emit(stream: str, record: dict[str, Any]) -> bool:
         # 只拦 query 流：route/recovery 的字段形态与测试惯例不同（route 的
         # 格式测试本身用 e0..e14 假名），且实测污染只发生在 query 流。
         return False
+    safe_record = _sanitize_record(record)
     try:
         line = json.dumps(
             {
                 "ts": datetime.now().astimezone().isoformat(timespec="microseconds"),
                 "stream": stream,
                 "version": _STREAM_VERSION,
-                **record,
+                **safe_record,
             },
             ensure_ascii=False,
         )

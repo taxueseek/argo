@@ -517,7 +517,13 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     # 桶无样本时 adaptive.get_score 自动回退全局分。判据与旧口径一致，
     # 只是多了一个维度——「引擎在 A 域强、B 域弱」现在可被路由区分。
     _dom_name = str(domain.get("name") or "")
-    _q_lang = str((features or {}).get("primary_lang") or "")
+    _feats = features or {}
+    _q_lang = str(
+        _feats.get("lang_override")
+        or _feats.get("effective_lang")
+        or _feats.get("primary_lang")
+        or ""
+    )
     _score_memo: dict[str, float] = {}
 
     def _score_of(e: str) -> float:

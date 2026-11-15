@@ -41,6 +41,7 @@ engine_families.py — 搜索源能力族分类（第一性原理重构）
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # ── 引擎 → 能力族 映射（config.yaml 引擎声明的 family 字段优先，本表保底） ──
@@ -500,28 +501,48 @@ _SCRIPT_FAMILY_LANGS: dict[str, tuple[str, ...]] = {
 # 这类词在查询里出现，说明用户就是在用那种语言问「有什么新闻」。方向仍然是
 # 单向的——只在路由层做「查询语言 → 该语言源」的候选收窄，不改写查询、
 # 不参与语言能力加权，判定失误的代价仅限于选源顺序。
+# 拉丁/常见多语种实词兜底表：仅用于 `lang_detect` 只给不出具体语种时的选源与分桶
+# 细化；短 ASCII 词走全词边界匹配，避免误伤英文（如 haberdasher）。
 _LANG_HINT_WORDS: dict[str, tuple[str, ...]] = {
     "ko": ("뉴스",), "ru": ("новости",), "ar": ("أخبار",),
-    "es": ("noticias",), "pt": ("notícias",), "fr": ("actualités", "nouvelles"),
-    "de": ("nachrichten",), "ja": ("ニュース",), "th": ("ข่าว",),
-    "vi": ("tin tức",), "id": ("berita",), "tr": ("haberler", "haber"),
+    "es": ("noticias", "últimas noticias", "español", "qué es"),
+    "pt": ("notícias", "português", "o que é"),
+    "fr": ("actualités", "nouvelles", "français", "qu'est-ce"),
+    "de": ("nachrichten", "aktuell", "deutsch", "was ist", "warum"),
+    "ja": ("ニュース",), "th": ("ข่าว",),
+    "vi": ("tin tức", "tiếng việt", "là gì"),
+    "id": ("berita", "terbaru", "bahasa indonesia", "apa itu"),
+    "tr": ("haberler", "gündem", "türkçe", "nedir"),
+    "it": ("notizie", "italiano", "cos'è", "che cos'è"),
     "he": ("חדשות",), "cs": ("zprávy",),
 }
+
+_LANG_HINT_MATCHERS: list[tuple[str, re.Pattern[str] | None, str]] = [
+    (
+        lang,
+        re.compile(rf"\b{re.escape(w.lower())}\b") if w.isascii() else None,
+        w.lower(),
+    )
+    for lang, words in _LANG_HINT_WORDS.items()
+    for w in words
+]
 
 
 def lang_hint_from_query(query: str) -> str:
     """从查询文本里的实词推断语言；无命中返回 ""。
 
-    只服务「本地语言源选源」这一个场景，不替代 lang_detect：调用方应在
+    只服务「本地语言源选源与分桶」场景，不替代 lang_detect：调用方应在
     语言判定给不出具体语种（en/latin/mixed）时才用它。
     """
     low = (query or "").lower()
     if not low:
         return ""
-    for lang, words in _LANG_HINT_WORDS.items():
-        for w in words:
-            if w.lower() in low:
+    for lang, pattern, needle in _LANG_HINT_MATCHERS:
+        if pattern is not None:
+            if pattern.search(low):
                 return lang
+        elif needle in low:
+            return lang
     return ""
 
 
