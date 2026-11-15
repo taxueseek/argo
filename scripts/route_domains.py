@@ -798,9 +798,42 @@ def _channel_intent_gate(hits: list[dict[str, Any]], query: str) -> list[dict[st
 
 # ── 对外入口 ──────────────────────────────────────────────────────────────────
 
+# 域 → 它回答的意图（query_understanding._INTENT_PATTERNS 的子集）。
+# 只登记语义明确的域；未登记的域 bonus 恒为 0（等价旧行为）。
+#
+# 为什么放代码表而不是 config 字段：`intents` 是 query_understanding 的
+# 分类产物，域与它的对应关系当前只有一处消费者（本打分），且需要与
+# `_INTENT_PATTERNS` 的词表保持同步——放 config 会变成第三份要同步的真源。
+# 判据同 `_ZH_LANG_GATED_DOMAINS`：成员若各自有理由再上 config。
+_DOMAIN_INTENTS: dict[str, tuple[str, ...]] = {
+    "social": ("social",),
+    "zhihu_content": ("social",),
+    "zhihu_hot_list": ("social",),
+    "hot_trending": ("social", "news"),
+    "news_realtime": ("news",),
+    "financial_news": ("news",),
+    "wechat_search": ("news",),
+    # 比较决策题：中文技术社区（V2EX/掘金）与知乎讨论是主要答案面，
+    # 「最好用的 AI 编程助手 X/Y 对比」类查询由它们承接（实测 chinese_tech_deep
+    # 的 byted 能交付，非误判）。2026-11-15 补，与度量的 product_daily 语境对齐。
+    "chinese_tech_deep": ("compare",),
+}
+
+_INTENT_BONUS = 1.5
+
+
+def _intent_bonus(domain: dict[str, Any], intents: list[str] | None) -> float:
+    """查询 intent 命中该域声明 intent 时的加分；无交集返回 0。"""
+    want = _DOMAIN_INTENTS.get(domain.get("name") or "")
+    if not want or not intents:
+        return 0.0
+    return _INTENT_BONUS if any(i in want for i in intents) else 0.0
+
+
 def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
                   max_n: int = 3,
-                  primary_lang: str | None = None) -> list[dict[str, Any]]:
+                  primary_lang: str | None = None,
+                  intents: list[str] | None = None) -> list[dict[str, Any]]:
     """按 config.yaml domains 顺序返回全部命中域（多意图，主域 1 + 次域 max_n-1）。
 
     旧 match_domain 单射只取首个命中域，多意图查询（如「北京 AI 公司融资」同时
@@ -836,17 +869,48 @@ def match_domains(query: str, domains: list[dict[str, Any]] | None = None,
         fires, span_start, span_len = _domain_fires_with_span(domain, query, q_lower)
         if fires:
             if not hits:
+                # 主域取**首个命中**（既有语义，保持逐位一致）。
                 hits.append(domain)
-            else:
-                pos_ratio = span_start / q_len
-                # 方案二：跨度高（特异性强）优先提拔；同跨度下严格保持前序特化域顺位稳定
-                score = (span_len * 2.0) - (idx * 0.1) + (pos_ratio * 0.01)
-                secondary_hits.append((domain, score))
-            if len(hits) + len(secondary_hits) >= max_n:
+            pos_ratio = span_start / q_len
+            # 打分（2026-11-15 加 intent 一致项）：
+            #   span_len*2.0      跨度高（特异性强）优先——仍是主导项
+            #   -idx*0.1         同跨度下保持前序特化域顺位稳定
+            #   pos_ratio*0.01   位置微权
+            #   intent +1.5      查询 intent 命中该域声明的 intents 时加分。
+            #                     1.5 足以压过域序差（0.1/token），但不足以推翻
+            #                     span 主导（span 差 1 = 2.0）——只在同跨度量级
+            #                     上做 tiebreak。
+            #
+            # 主域仍是**首个命中**（既有语义，不动）：本轮实测把它改成「全命中
+            # 按分排序」会引入 5 处真回归（AAPL stock price 从 us_stock 掉到
+            # stock_query、华为 总部在哪 从 org_entity 掉到 entity_search），
+            # 因为那等于让 span 主导替代域序优先。intent 项只作用于次域排序与
+            # `_intent_bonus` 的显式让位（见下），不动主域产生方式。
+            score = (span_len * 2.0) - (idx * 0.1) + (pos_ratio * 0.01) \
+                + _intent_bonus(domain, intents)
+            secondary_hits.append((domain, score))
+            if len(secondary_hits) >= max_n:
                 break
 
     if secondary_hits:
         secondary_hits.sort(key=lambda x: x[1], reverse=True)
+        # intent 让位（2026-11-15）：主域本身没拿到 intent 加分，而某个次域
+        # 拿到了 —— 说明查询意图明确指向那个域，但域序让主域先命中。此时让位。
+        # 判据严格：只在这一个条件下发生，不重排其它情况（保持逐位一致）。
+        if hits and secondary_hits:
+            primary_bonus = _intent_bonus(hits[0], intents)
+            best_bonus = _intent_bonus(secondary_hits[0][0], intents)
+            # 不抢「比 social 更具体」的域的主位：video/hot_trending/
+            # redskill_search/zhihu_user_data 与 `_social_domain_first` 的
+            # `_SPECIFIC_BEFORE_SOCIAL` 同名单——两处必须一致，否则
+            # 「B站 视频 合集」会被 social 顶掉（实测漂移，2026-11-15）。
+            _specific = {"redskill_search", "zhihu_user_data",
+                         "hot_trending", "video"}
+            primary_specific = hits[0].get("name") in _specific
+            if (primary_bonus == 0.0 and best_bonus > 0.0
+                    and not primary_specific):
+                promoted = secondary_hits.pop(0)[0]
+                hits.insert(0, promoted)
         hits.extend(h[0] for h in secondary_hits)
 
     hits = _social_domain_first(hits)

@@ -2010,7 +2010,7 @@ domains:
   #      语境词**的复合否决（测评归入内容词一侧）：只有「找内容」单独出现
   #      才否决，同句带评价/讨论/舆情则保留本域。实测「小红书 露营 攻略」
   #      仍归内容域，「小红书 GPT-6 测评/评价/热议」归本域。
-  - match: '(?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑|(?<![A-Za-z0-9])X(?![A-Za-z0-9])\s*(?:上|平台)|\bTwitter\s+上)'
+  - match: '(?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑|社区讨论|社区评价|(?<![A-Za-z0-9])X(?![A-Za-z0-9])\s*(?:上|平台)|\bTwitter\s+上)'
     unless: '(?i)(?:(?:攻略|推荐|路线|景点|美食|做法|教程|怎么玩|清单)(?![\s\S]*(?:评价|测评|热议|讨论|评论|舆情|口碑|用户体验))|(?:论文|paper|综述|文献|期刊|arXiv|DOI|研究|实验|数据集|dataset|survey|preprint|引用|学报|学术))'
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   - (?i)(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)

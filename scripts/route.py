@@ -831,7 +831,9 @@ def route_query(query: str, engine_override: str = "auto",
         # 显式引擎也补 domain 判定：让缓存 TTL 按真实域分域（财经 5min /
         # 新闻 10min / 学术 2h），usage_log 统计不再全糊成 general。
         _domain = None
-        _hits = match_domains(query, max_n=1)
+        _hits = match_domains(
+            query, max_n=1,
+            intents=extract_features(query).get("intents"))
         if _hits:
             _domain = _hits[0].get("name")
         return _done(
@@ -871,7 +873,8 @@ def route_query(query: str, engine_override: str = "auto",
     # （见 route_domains 模块 docstring）：域精度的全部规则只有那一个实现，
     # 这里不再各调一次，避免「某个守卫忘了在另一条路径上施加」。
     _domain_hits = match_domains(query, domains_cfg,
-                                 primary_lang=features.get("primary_lang"))
+                                 primary_lang=features.get("primary_lang"),
+                                 intents=features.get("intents"))
     domain = _domain_hits[0] if _domain_hits else None
     secondary = _domain_hits[1:] if len(_domain_hits) > 1 else []
     hard_domain = bool(domain and domain.get("patterns"))
