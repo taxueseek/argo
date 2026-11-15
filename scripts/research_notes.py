@@ -132,7 +132,9 @@ def _body_excerpt(note_path: Path, limit: int = 200) -> str:
         parts = text.split("---", 2)
         if len(parts) >= 3:
             text = parts[2]
-    skip_prefixes = ("#", "<!--", "研究对象", "调研日期", "证据口径", "关联")
+    # 纯横线行（frontmatter 结束后的水平线 "---"）不是正文——实测骨架与填实
+    # 两种形态都会在标题块后紧跟一条水平线，不跳过它 excerpt 恒为 "---"。
+    skip_prefixes = ("#", "<!--", "研究对象", "调研日期", "证据口径", "关联", "---")
     for line in text.splitlines():
         s = line.strip()
         if s and not any(s.startswith(p) for p in skip_prefixes):

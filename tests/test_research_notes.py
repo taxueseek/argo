@@ -242,6 +242,15 @@ class BodyExcerptSearchTest(unittest.TestCase):
         p.write_text("# 标题\n\n## 0. 结论速览\n\n<!-- 提示注释 -->\n\n真正的正文首行\n", encoding="utf-8")
         self.assertEqual(rn._body_excerpt(p), "真正的正文首行")
 
+    def test_body_excerpt_skips_horizontal_rule_after_frontmatter(self):
+        """frontmatter 结束后的水平线 "---" 不是正文（2026-11-15 研报实跑
+        发现：骨架与填实两种形态 excerpt 恒为 "---"，索引检索拿到的是横线）。"""
+        p = self.root / "note_fm.md"
+        p.write_text(
+            "---\ntitle: x\n---\n\n# 标题\n\n---\n\n生态分四层且本轮全部命中。\n",
+            encoding="utf-8")
+        self.assertEqual(rn._body_excerpt(p), "生态分四层且本轮全部命中。")
+
 
 class ExploreBundleEntryPointTest(unittest.TestCase):
     def test_bundle_entrypoint_compatibility(self):
