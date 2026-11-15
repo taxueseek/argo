@@ -696,6 +696,17 @@ def compute_credibility(
         snippet = r.get("snippet", "") or ""
 
         auth = score_authority(url, source, query)
+        # 方案C（upstream_authority 只透传不赋权）：排序层已拿到的上游权威档
+        # （zhihu builder 解析 AuthorityLevel / spec output_map 的
+        # item_upstream_authority）原样挂到 credibility.authority.upstream_level，
+        # 供取证侧与研报引用；不参与 selection/final 计算——上游档只补充
+        # 上下文，不替代本仓基于 URL/域名的评分。无上游档则不加键（不编造）。
+        _upstream = r.get("upstream_authority")
+        if _upstream is None or _upstream == "":
+            _upstream = r.get("authority_level")
+        if _upstream is not None and _upstream != "":
+            auth = dict(auth)
+            auth["upstream_level"] = _upstream
         fresh = score_freshness(r, query_time)
         density = score_evidence_density(snippet, title)
 
@@ -838,6 +849,8 @@ def main():
             flag_s = ",".join(flags) if flags else "-"
             print(f"{level} [{c['final']:.2f}] sel={c['selection']:.2f} abs={c['absorption']:.2f} [{flag_s}] {r['title'][:48]}")
             print(f"   权威：{c['authority']['score']:.2f} ({c['authority']['reason']})")
+            if c["authority"].get("upstream_level") is not None:
+                print(f"   上游档：{c['authority']['upstream_level']}（upstream_authority 只透传）")
             print(f"   时效：{c['freshness']['score']:.2f} ({c['freshness']['reason']})")
             print()
 
