@@ -210,8 +210,13 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     try:
         # 必填校验读 schema 真源（_required_params），不再手抄：软别名
         # （social_search/job/pdf/article）在校验之后重入，重入后的目标工具
-        # schema 已覆盖同一参数，行为不变。
-        missing = [p for p in _required_params(name) if p not in arguments]
+        # schema 已覆盖同一参数，行为不变。判据是 JSON Schema required 的
+        # 「键存在」语义的工程化收口：缺键与显式 null 算缺参（null 是客户端
+        # 序列化可选参数的常见形态，漏到下游只会炸 TypeError）；显式
+        # 0/[]/""（如 dois=[]）是「有意义的空值」，放行——此前按真值判定会把
+        # 它们误报成缺参。
+        missing = [p for p in _required_params(name)
+                   if p not in arguments or arguments[p] is None]
         if missing:
             return {
                 "content": [{"type": "text",

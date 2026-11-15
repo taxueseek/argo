@@ -66,6 +66,17 @@ class TestNumericParamTypes:
         text = resp["content"][0]["text"]
         assert "Missing required parameter(s): query" in text
 
+    def test_required_null_is_missing_but_empty_value_passes(self):
+        """缺参判据（2026-11-15 收口）：缺键与显式 null 算缺参——null 是客户端
+        序列化可选参数的常见形态，放行会在下游炸 TypeError（-32000）；
+        显式空串是「有意义的空值」，放行（旧真值判定会误报缺参）。"""
+        for args in ({}, {"query": None}):
+            resp = execute_tool("argo_search", args)
+            assert _error_code(resp) == -32602, f"{args}: {str(resp)[:150]}"
+            assert "Missing required parameter(s): query" in resp["content"][0]["text"]
+        resp = execute_tool("argo_search", {"query": ""})
+        assert "Missing required" not in resp["content"][0]["text"]
+
     def test_max_chars_string_gets_param_error(self):
         """max_chars 各处收口（2026-10-03 补齐）：坏类型报参数错误，不再掉进
         各分支的兜底 except——argo_fetch 的裸值会流进 fetch 函数炸成
