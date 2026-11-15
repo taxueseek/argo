@@ -17,10 +17,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = ROOT / "scripts"
@@ -78,6 +80,71 @@ class TestSearchSideStatusIdThreshold(unittest.TestCase):
     def test_explicit_id_still_accepted_by_packager_side(self):
         # `argo tweet "20"` 是用户显式给的 ID，min_digits=1 必须认
         self.assertEqual(extract_status_id("20"), "20")
+
+
+class TestFxTwitterRichFieldMapping(unittest.TestCase):
+    """上游富字段必须落进结果（2026-11-15 补映射后锁死）。
+
+    此前 spec 只映射 text/url，导致结果里没有 published_at、source 是引擎名
+    而非作者、互动量全部丢失——时间线排序与「谁发的」都拿不到。
+    """
+
+    def _rows(self, payload):
+        import engines_base
+        spec = {
+            "_name": "fxtwitter",
+            "type": "http",
+            "method": "GET",
+            "url": "https://api.fxtwitter.com/2/search",
+            "query_param": "q",
+            "preserve_source": True,
+            "output_map": {
+                "items": "results",
+                "item_title": "text",
+                "item_url": "url",
+                "item_summary": "text",
+                "item_published_at": "created_timestamp",
+                "item_upstream_authority": "likes",
+                "item_upstream_score": "views",
+                "item_source": "author.screen_name",
+            },
+        }
+        body = json.dumps(payload)
+
+        def fake_get(url, headers, timeout, engine="?", tls_profiles=None):
+            return body
+
+        with patch.object(engines_base, "_http_get_raw", side_effect=fake_get):
+            return engines_base._build_http_engine(spec)("x", n=5, timeout=10)
+
+    def test_author_beats_engine_name_as_source(self):
+        rows = self._rows({"results": [{
+            "text": "hello", "url": "https://x.com/alice/status/1",
+            "created_timestamp": 1794736508, "likes": 7, "views": 42,
+            "author": {"screen_name": "alice"},
+        }]})
+        self.assertEqual(rows[0]["source"], "alice",
+                         "preserve_source 未生效，作者名被纠正回引擎名")
+
+    def test_published_at_and_interactions_present(self):
+        rows = self._rows({"results": [{
+            "text": "hello", "url": "https://x.com/alice/status/1",
+            "created_timestamp": 1794736508, "likes": 7, "views": 42,
+            "author": {"screen_name": "alice"},
+        }]})
+        self.assertEqual(rows[0]["published_at"], "2026-11-15")
+        self.assertEqual(rows[0]["upstream_authority"], "7")
+        self.assertEqual(rows[0]["upstream_score"], "42")
+
+    def test_zero_interactions_not_dropped(self):
+        """点赞为 0 是真实值，不得因 falsy 判据被丢掉（否则零互动帖永远无信号）。"""
+        rows = self._rows({"results": [{
+            "text": "hello", "url": "https://x.com/bob/status/2",
+            "created_timestamp": 1794736508, "likes": 0, "views": 0,
+            "author": {"screen_name": "bob"},
+        }]})
+        self.assertEqual(rows[0]["upstream_authority"], "0")
+        self.assertEqual(rows[0]["upstream_score"], "0")
 
 
 @unittest.skipUnless(LIVE, "set ARGO_LIVE=1 for live FxTwitter calls")

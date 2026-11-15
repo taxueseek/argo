@@ -31,6 +31,8 @@ canary_query: "OpenAI"
 desc: "FxTwitter 公开 API：X/Twitter 推文搜索（零认证，含互动元数据；免登录稳定通道）"
 coverage: [social, english]
 recommended: false
+# 保留上游真实发布方（author.screen_name）作 source，见 output_map.item_source
+preserve_source: true
 
 headers:
   User-Agent: argo-search/1.0 (+fxtwitter)
@@ -44,3 +46,14 @@ output_map:
   item_title: text
   item_url: url
   item_summary: text
+  # 上游返回的富字段此前全部丢弃（2026-11-15 实测）：结果里没有 published_at
+  # 也没有 social_meta，导致时间线排序、互动量加权、「谁发的」全部缺失。
+  # created_timestamp 是秒级 Unix 时间戳，走 item_published_at 后由输出层统一
+  # 转 ISO；author 整体是 dict（_coerce_field 会丢成空串），故取 .screen_name。
+  item_published_at: created_timestamp
+  item_upstream_authority: likes
+  item_upstream_score: views
+  # 作者名落 source：上游 author.screen_name 是真实发布方（如 yituihi），
+  # 比引擎名更有信息量。_ensure_engine_source 默认会把非引擎名的 source
+  # 纠正回引擎名，故必须声明 preserve_source（同 cn_ai_news 口径）才留得住。
+  item_source: author.screen_name
