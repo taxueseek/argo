@@ -26,25 +26,12 @@ from engines_base import (
     rank_score,
     safe_search,
     http_open,
-    _http_get_raw,
 )
 
 
-class _LazyLogger:
-    """延迟创建 logger，避免 import logging 的重量级 import 链（traceback→dataclasses→inspect）。"""
-    _logger = None
+from engines_http import lazy_logger
 
-    def __getattr__(self, name: str):
-        if _LazyLogger._logger is None:
-            import logging
-            _LazyLogger._logger = logging.getLogger("unified_search.engines")
-            if not _LazyLogger._logger.handlers:
-                _LazyLogger._logger.setLevel(logging.WARNING)
-                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
-        return getattr(_LazyLogger._logger, name)
-
-
-logger = _LazyLogger()
+logger = lazy_logger()
 
 _UA = "argo-search/2.9 (+batch11; wikimedia_commons)"
 _API = "https://commons.wikimedia.org/w/api.php"
@@ -173,64 +160,4 @@ def _build_wikimedia_commons_engine(spec: dict[str, Any]) -> Any:
         # 保证两类引擎交付的字段契约完全一致。
         return finalize_image_fields(results, spec.get("image_license") or "")
 
-    return _engine
-
-
-def _build_vam_engine(spec: dict[str, Any]) -> Any:
-    """V&A 博物馆馆藏（api.vam.ac.uk/v2/objects/search，免 key，单跳）。
-
-    装饰艺术/设计垂直，与 met/artic/cleveland 同面。records._images 只给 IIIF
-    base 与 !100,100 缩略图，800px 直链按 IIIF 尺寸语法组装：
-    `{base}full/!800,800/0/default.jpg`（实测 2026-11-08 200 可取图）。
-    落地页用短链 `collections.vam.ac.uk/item/{systemNumber}/`（自带 O 前缀，无 slug 200 直开）。
-    上游不逐件给许可字段，不造 image_license；商用判定照 ddgs_images 口径（未判定）。
-    """
-    timeout = spec.get("timeout", 15)
-
-    @safe_search
-    def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        q = query.strip()
-        if not q:
-            return []
-        to = _timeout or timeout
-        engine_name = spec.get("_name", "vam")
-        headers = {"User-Agent": "argo-search/1.0 (+vam)", "Accept": "application/json"}
-        url = (f"https://api.vam.ac.uk/v2/objects/search?q={urllib.parse.quote(q)}"
-               f"&images_exist=1&page_size={min(max(int(n), 1), 8)}")
-        raw = _http_get_raw(url, headers, to, engine=engine_name)
-        if raw is None:
-            return []
-        try:
-            d = json.loads(raw) or {}
-        except (json.JSONDecodeError, ValueError):
-            return []
-        out = []
-        for r in d.get("records") or []:
-            if not isinstance(r, dict):
-                continue
-            title = str(r.get("_primaryTitle") or "").strip()
-            imgs = r.get("_images") or {}
-            base = str(imgs.get("_iiif_image_base_url") or "").strip()
-            if not title and not base:
-                continue
-            row: dict[str, Any] = {}
-            if title:
-                row["title"] = title[:80]
-                maker = r.get("_primaryMaker") or {}
-                row["snippet"] = " · ".join(b for b in (
-                    str(maker.get("name") or "").strip(),
-                    str(r.get("_primaryDate") or "").strip(),
-                    str(r.get("objectType") or "").strip()) if b)[:300]
-            if base:
-                row["image_url"] = base + "full/!800,800/0/default.jpg"
-            # systemNumber 自带 O 前缀（如 O417199）；再拼一个 O 会变成
-            # OO417199（302 跳转），直接用原值才是 200 的规范落地页。
-            sn = str(r.get("systemNumber") or "").strip()
-            if sn:
-                row["url"] = f"https://collections.vam.ac.uk/item/{sn}/"
-            row["source"] = engine_name
-            out.append(row)
-            if len(out) >= max(int(n), 1):
-                break
-        return out
     return _engine

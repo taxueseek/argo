@@ -53,9 +53,20 @@ def _coerce_field(val: Any, *, max_len: int | None = None) -> str:
     return s
 
 
+def _resolve_template_token(item: dict, key: str) -> str:
+    """取模板占位值：支持点分路径与 `|url` URL 百分号编码后缀。"""
+    if key.endswith("|url"):
+        val = _coerce_field(_dig(item, key[:-4]))
+        if not val:
+            return ""
+        import urllib.parse
+        return urllib.parse.quote(val, safe="")
+    return _coerce_field(_dig(item, key))
+
+
 def _format_url_template(template: str, item: dict) -> str:
-    """支持 {field} 与 {a.b.c} 点分路径的 URL 模板；任一占位为空则返回空串。"""
-    vals = {m.group(1): _coerce_field(_dig(item, m.group(1)))
+    """支持 {field}、{a.b.c} 与 {field|url} URL 编码占位的模板；任一为空则返回空串。"""
+    vals = {m.group(1): _resolve_template_token(item, m.group(1))
             for m in re.finditer(r"\{([^}]+)\}", template)}
     if any(not v for v in vals.values()):
         return ""

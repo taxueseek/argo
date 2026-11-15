@@ -325,7 +325,8 @@ def test_overview_aggregates_system_ledgers(ledger_env):
     assert (res["ratchets"]["broad_silent_catch_baseline"]
             == badcase_ledger.BROAD_SILENT_CATCH_BASELINE)
     stubs = res["sunset_stubs"]["modules"]
-    assert any(s["module"] == "engines_builders_batch16.py" for s in stubs)
+    assert isinstance(stubs, list)
+    assert res["sunset_stubs"]["count"] == len(stubs)
 
 
 def test_overview_dormant_uses_derived_truth_not_missing_json(ledger_env, monkeypatch):

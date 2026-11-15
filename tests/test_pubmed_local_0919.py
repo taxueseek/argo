@@ -234,11 +234,12 @@ class TestAcademicDomainWiring:
         dom, combo = self._combo("machine learning survey", "fast")
         assert dom == "academic", f"查询未落 academic 域，实际 {dom}"
         assert "local_pubmed" in combo, f"local_pubmed 被预算裁掉了：{combo}"
-        # 2026-11-10：core 不再断言必须在 fast combo 里——它已移出加槽表
-        # （取舍见 route_policy._VERTICAL_NEW_SOURCE 注释：cinii 的亚洲学术
-        # 独特性高于 core 与 local_pubmed 的重叠全文层）。core 仍随声明
-        # combo 在 deep/research 与恢复链可达，本用例不再代表它的契约。
-        assert "hf_papers" in combo, f"hf_papers 被预算裁掉了：{combo}"
+        # 6a77b7d 起 fast/budget 不在策略层反插被意图裁剪掉的新专源（锁 fast 延迟）；
+        # auto 模式走加槽扩容，hf_papers 与 local_pubmed 均须可达。
+        dom_auto, combo_auto = self._combo("machine learning survey", "auto")
+        assert dom_auto == "academic"
+        assert "local_pubmed" in combo_auto, f"local_pubmed 在 auto 下被裁掉：{combo_auto}"
+        assert "hf_papers" in combo_auto, f"hf_papers 在 auto 下被裁掉：{combo_auto}"
 
     def test_existing_sources_not_displaced(self):
         """加槽而非顶位：既有的前排源必须仍在声明 combo 的前列。

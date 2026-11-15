@@ -27,21 +27,9 @@ from engines_base import safe_search, http_open, mcp_error_of as _mcp_error_of
 from engine_env import get_env
 
 
-class _LazyLogger:
-    """延迟创建 logger，避免 import logging 的重量级 import 链（traceback→dataclasses→inspect）。"""
-    _logger = None
+from engines_http import lazy_logger
 
-    def __getattr__(self, name: str):
-        if _LazyLogger._logger is None:
-            import logging
-            _LazyLogger._logger = logging.getLogger("unified_search.engines")
-            if not _LazyLogger._logger.handlers:
-                _LazyLogger._logger.setLevel(logging.WARNING)
-                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
-        return getattr(_LazyLogger._logger, name)
-
-
-logger = _LazyLogger()
+logger = lazy_logger()
 
 # ── Parallel 搜索（api.parallel.ai）────────────────────────────────────────────
 

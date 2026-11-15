@@ -1,5 +1,15 @@
 engine_id: douyin_hot
-type: douyin_hot
+type: http
+url: https://www.iesdouyin.com/web/api/v2/hotsearch/billboard/word/
+query_param: ""
+headers:
+  User-Agent: Mozilla/5.0
+  Referer: https://www.douyin.com/
+output_map:
+  items: word_list
+  item_title: word
+  url_template: "https://www.douyin.com/search/{word|url}"
+  item_summary_template: "抖音热榜 · 热度 {hot_value}"
 family: hot_trending
 enabled: true
 label: 抖音热榜

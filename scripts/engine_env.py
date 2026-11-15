@@ -168,31 +168,45 @@ def reset_envfile_cache() -> None:
 _zhihu_keychain_cache: str | None = None
 
 
+def _decode_keyring_secret(raw: str) -> str:
+    raw = (raw or "").strip()
+    if raw.startswith("go-keyring-base64:"):
+        import base64
+        _, b64_val = raw.split(":", 1)
+        return base64.b64decode(b64_val).decode("utf-8", "replace").strip()
+    return raw
+
+
 def _read_zhihu_keychain() -> str:
-    """macOS Keychain 保底读取知乎官方 CLI 管理的 Access Secret。"""
+    """跨平台读取系统凭证库中知乎官方 CLI 管理的 Access Secret（macOS Keychain / Linux secret-tool / Windows keyring）。"""
     global _zhihu_keychain_cache
     with _envfile_lock:
         if _zhihu_keychain_cache is not None:
             return _zhihu_keychain_cache
+    import shutil
     import sys
-    if sys.platform != "darwin":
-        with _envfile_lock:
-            _zhihu_keychain_cache = ""
-        return ""
     val = ""
     try:
         import subprocess
-        import base64
-        raw = subprocess.check_output(
-            ["security", "find-generic-password", "-s", "zhihu-cli", "-a", "access-secret", "-w"],
-            stderr=subprocess.DEVNULL,
-            timeout=1.5,
-        ).decode("utf-8", "replace").strip()
-        if raw.startswith("go-keyring-base64:"):
-            _, b64_val = raw.split(":", 1)
-            val = base64.b64decode(b64_val).decode("utf-8", "replace").strip()
-        else:
-            val = raw
+        if sys.platform == "darwin":
+            raw = subprocess.check_output(
+                ["security", "find-generic-password", "-s", "zhihu-cli", "-a", "access-secret", "-w"],
+                stderr=subprocess.DEVNULL, timeout=1.5,
+            ).decode("utf-8", "replace")
+            val = _decode_keyring_secret(raw)
+        elif sys.platform.startswith("linux") and shutil.which("secret-tool"):
+            raw = subprocess.check_output(
+                ["secret-tool", "lookup", "service", "zhihu-cli", "account", "access-secret"],
+                stderr=subprocess.DEVNULL, timeout=1.5,
+            ).decode("utf-8", "replace")
+            val = _decode_keyring_secret(raw)
+        elif sys.platform.startswith("win"):
+            try:
+                import keyring  # 可选系统依赖，不强绑
+                got = keyring.get_password("zhihu-cli", "access-secret")
+                val = _decode_keyring_secret(got or "")
+            except ImportError:
+                val = ""
     except Exception:
         val = ""
     with _envfile_lock:

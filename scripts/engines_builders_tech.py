@@ -20,17 +20,9 @@ from engines_base import (safe_search, _run, _resolve, _get_path, _coerce_field,
                           _http_get_raw, mcp_error_of as _mcp_error_of, http_open, _note_http_failure)
 from engine_env import get_env
 
-class _LazyLogger:
-    _logger = None
-    def __getattr__(self, name):
-        if _LazyLogger._logger is None:
-            import logging
-            _LazyLogger._logger = logging.getLogger("unified_search.engines")
-            if not _LazyLogger._logger.handlers:
-                _LazyLogger._logger.setLevel(logging.WARNING)
-                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
-        return getattr(_LazyLogger._logger, name)
-logger = _LazyLogger()
+from engines_http import lazy_logger
+
+logger = lazy_logger()
 # ── Exa 专用引擎 ──────────────────────────────────────────────────────────────
 _EXA_MCP_URL = "https://mcp.exa.ai/mcp"
 

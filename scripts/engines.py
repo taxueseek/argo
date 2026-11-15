@@ -104,10 +104,7 @@ from engines_builders import (
     _build_cls_telegraph_engine,
     _build_em_global_news_engine,
     _build_eastmoney_engine,
-    _build_itotii_engine,
     _build_baidu_hot_engine,
-    _build_toutiao_hot_engine,
-    _build_bilibili_hot_engine,
     _build_zhihu_global_engine,
     _build_zhihu_user_engine,
     _build_bocha_engine,
@@ -125,14 +122,11 @@ from engines_builders import (
     _build_people_daily_engine,
     _build_flk_law_engine,
     _build_wikisource_engine,
-    _build_weibo_hot_engine,
-    _build_douyin_hot_engine,
     _build_csdn_engine,
     _build_wallstreetcn_engine,
     _build_weather_cn_engine,
     _build_google_news_engine,
     _build_met_museum_engine,    _build_open_library_engine,
-    _build_vam_engine,
     _build_weread_engine,
     _build_douban_book_engine,
     _build_fred_engine,
@@ -227,21 +221,9 @@ from engines_builders_pixiv import _build_pixiv_engine  # noqa: F401
 
 
 
-class _LazyLogger:
-    """延迟创建 logger，避免 import logging 的重量级 import 链（traceback→dataclasses→inspect）。"""
-    _logger = None
+from engines_http import lazy_logger
 
-    def __getattr__(self, name: str):
-        if _LazyLogger._logger is None:
-            import logging
-            _LazyLogger._logger = logging.getLogger("unified_search.engines")
-            if not _LazyLogger._logger.handlers:
-                _LazyLogger._logger.setLevel(logging.WARNING)
-                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
-        return getattr(_LazyLogger._logger, name)
-
-
-logger = _LazyLogger()
+logger = lazy_logger()
 
 
 # 「未知引擎」警告按名字每进程只报一次。
@@ -420,14 +402,11 @@ _BUILDERS = {
     "people_daily": _build_people_daily_engine,
     "flk_law": _build_flk_law_engine,
     "wikisource": _build_wikisource_engine,
-    "weibo_hot": _build_weibo_hot_engine,
-    "douyin_hot": _build_douyin_hot_engine,
     "csdn": _build_csdn_engine,
     "wallstreetcn": _build_wallstreetcn_engine,
     "weather_cn": _build_weather_cn_engine,
     "google_news": _build_google_news_engine,
     "met_museum": _build_met_museum_engine,
-    "vam": _build_vam_engine,
     "github": _build_github_engine,
     "dshopen": _build_dshopen_engine,
     "explainx": _build_explainx_engine,
@@ -452,10 +431,7 @@ _BUILDERS = {
     "un_comtrade": _build_un_comtrade_engine,
     "em_global_news": _build_em_global_news_engine,
     "eastmoney": _build_eastmoney_engine,
-    "itotii": _build_itotii_engine,
     "baidu_hot": _build_baidu_hot_engine,
-    "toutiao_hot": _build_toutiao_hot_engine,
-    "bilibili_hot": _build_bilibili_hot_engine,
     "open_library": _build_open_library_engine,
     "weread": _build_weread_engine,
     "douban_book": _build_douban_book_engine,

@@ -3,8 +3,8 @@
 # 与 met/artic/cleveland 同面的第四家博物馆图源；伦敦 V&A 是装饰艺术与设计
 # 藏品最全的机构（ukiyo-e、海报、时尚、工艺）。官方文档明确免 key：
 #   https://developers.vam.ac.uk/guide/v2
-# `images_exist=1` 只回有图对象；records._images 给 IIIF base，800px 直链由
-# builder 组装（声明式拼不了 IIIF 尺寸语法）。单跳 1.2-1.6s（2026-11-08
+# `images_exist=1` 只回有图对象；800px IIIF 直链由声明式 `item_image_template`
+# 组装，短链落地页由 `url_template` 组装。单跳 1.2-1.6s（2026-11-08
 # 质量探针 6/6 出图，~/tmp/argo-img-bench/candidates.json）。
 # 注意：正确路径是 /v2/objects/search（/v2/museumobject/search 404，勿改回）。
 # 许可：上游不逐件给许可字段，商用判定照 ddgs_images 口径（未判定）。
@@ -12,7 +12,21 @@
 #   python3 scripts/engine_validate.py --engine vam --stage all --admit
 
 engine_id: vam
-type: vam
+type: http
+url: https://api.vam.ac.uk/v2/objects/search
+query_param: q
+extra_params:
+  images_exist: 1
+  page_size: "{n}"
+headers:
+  User-Agent: "argo-search/1.0 (+vam)"
+  Accept: application/json
+output_map:
+  items: records
+  item_title: _primaryTitle
+  url_template: "https://collections.vam.ac.uk/item/{systemNumber}/"
+  item_summary_template: "{_primaryMaker.name} · {_primaryDate} · {objectType}"
+  item_image_template: "{_images._iiif_image_base_url}full/!800,800/0/default.jpg"
 enabled: true
 cost_tier: free
 label: V&A馆藏

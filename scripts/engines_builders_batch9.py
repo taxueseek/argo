@@ -48,7 +48,13 @@ from engines_base import (
     http_open,
 )
 
-logger = logging.getLogger("unified_search.engines")
+from engines_http import (
+    http_json as _shared_http_json,
+    http_text as _shared_http_text,
+    lazy_logger,
+)
+
+logger = lazy_logger()
 
 _UA = "argo-search/2.8 (+batch9)"
 
@@ -74,33 +80,18 @@ def _terms(q: str) -> list[str]:
 
 
 
-def _read(resp, engine: str = "") -> bytes:
-    """读取响应体，容忍 IncompleteRead。
-
-    大体积响应（e-Gov 法令列表实测 2.7MB）在 http.client 上偶发
-    `IncompleteRead` —— 此时已读到的部分数据仍然可用（我们先拿头部/整体结构），
-    所以接受 partial 而不是直接失败。
-    """
-    try:
-        return resp.read()
-    except Exception as e:  # http.client.IncompleteRead 等
-        partial = getattr(e, "partial", None)
-        if partial:
-            logger.warning(f"{engine} 响应不完整，使用已读部分 {len(partial)}B")
-            return partial
-        raise
-
-
 def _json(url: str, to: float, engine: str = "") -> Any:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
-    with http_open(req, timeout=to, engine=engine) as resp:
-        return json.loads(_read(resp, engine).decode("utf-8", "replace"))
+    return _shared_http_json(
+        url, to, engine=engine, headers={"Accept": "application/json"},
+        ua=_UA, accept_partial=True, opener=http_open,
+    )
 
 
 def _text(url: str, to: float, engine: str = "", accept: str = "*/*") -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": accept})
-    with http_open(req, timeout=to, engine=engine) as resp:
-        return _read(resp, engine).decode("utf-8", "replace")
+    return _shared_http_text(
+        url, to, engine=engine, headers={"Accept": accept},
+        ua=_UA, accept_partial=True, opener=http_open,
+    )
 
 
 # ── WHO DON 疫情暴发通报 ──────────────────────────────────────────────────────

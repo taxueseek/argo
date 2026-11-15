@@ -26,7 +26,12 @@ from typing import Any
 
 from engines_base import safe_search, _http_get_raw, http_open, rank_score
 from bounded_run import run_bounded
-from engines_http import UA as _UA, encode_url as _encode_url, http_json as _http_json
+from engines_http import (
+    UA as _UA,
+    encode_url as _encode_url,
+    http_json as _http_json,
+    http_text as _shared_http_text,
+)
 
 logger = logging.getLogger("unified_search.engines")
 
@@ -43,9 +48,7 @@ from engines_builders_weather import (  # noqa: E402
 
 
 def _http_text(url: str, timeout: float, engine: str = "") -> str:
-    req = urllib.request.Request(_encode_url(url), headers={"User-Agent": _UA})
-    with http_open(req, timeout=timeout, engine=engine) as resp:
-        return resp.read().decode("utf-8", "replace")
+    return _shared_http_text(url, timeout, engine=engine, opener=http_open)
 
 
 # ── NDL Search（OpenSearch RSS）───────────────────────────────────────────────

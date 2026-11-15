@@ -150,13 +150,13 @@ def resolve_archive_root(explicit: str | Path | None = None) -> Path:
     # 2. 笔记基目录下的 archive/（docs/research/archive 或 research/archive）
     base = resolve_research_base(ws)
     try:
-        from research_notes import workspace_anchorable
-        anchorable = workspace_anchorable()
+        from research_notes import should_anchor_workspace
+        anchor = should_anchor_workspace(ws)
     except Exception:
         # 探测不可用不赌工作区：结论进用户级持久区。与 research_notes 的
         # 兜底同一口径（宁落持久区，不落易失区），见 workspace_anchorable。
-        anchorable = False
-    if base.is_dir() or anchorable:
+        anchor = False
+    if anchor:
         return base / "archive"
 
     # 3. 工作区不可锚定（容器、无持久盘）：退回用户级文档目录，随环境销毁

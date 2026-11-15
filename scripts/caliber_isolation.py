@@ -92,6 +92,63 @@ def group_by_caliber(ranked_lists: list[list[dict[str, Any]]]) -> dict[str, list
     return caliber_groups
 
 
+def _dedupe_key(r: dict[str, Any], canonical_url, fallback: str) -> str:
+    """按归一 URL -> 标题 -> 卡片类型 -> 兜底唯一键 生成融合/去重主键。"""
+    return (
+        canonical_url(r.get("url", ""))
+        or (f"__title__:{r.get('title', '')}" if r.get("title") else "")
+        or (f"__card__:{r.get('card_type', '')}" if r.get("card_type") else "")
+        or fallback
+    )
+
+
+def _merge_evidence(
+    cur: dict[str, Any], r: dict[str, Any], extra_eng: str | None = None,
+) -> None:
+    """保留更长的标题/摘要，合并 source 与去重后的 consensus_engines。"""
+    new_txt = f"{r.get('title', '')} {r.get('snippet', '')}"
+    cur_txt = f"{cur.get('title', '')} {cur.get('snippet', '')}"
+    if len(new_txt) > len(cur_txt):
+        cur["title"] = r.get("title", cur.get("title"))
+        cur["snippet"] = r.get("snippet", cur.get("snippet"))
+    sources = {cur.get("source", ""), r.get("source", "")}
+    cur["source"] = "/".join(s for s in sources if s)
+    cons = list(cur.get("consensus_engines") or [])
+    incoming = [extra_eng] if extra_eng is not None else list(r.get("consensus_engines") or [])
+    for eng in incoming:
+        if eng and eng not in cons:
+            cons.append(eng)
+    cur["consensus_engines"] = cons
+
+
+def merge_cross_caliber_duplicates(
+    rows: list[dict[str, Any]],
+    canonical_url=None,
+) -> list[dict[str, Any]]:
+    """按归一 URL 合并跨口径重复条；保留共识证据并叠加跨口径边际共振增益。"""
+    if not rows or len(rows) <= 1:
+        return rows
+    if canonical_url is None:
+        from url_canon import canonical_url
+    index: dict[str, dict[str, Any]] = {}
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        key = _dedupe_key(r, canonical_url, f"__idx__:{id(r)}")
+        cur = index.get(key)
+        if cur is None:
+            index[key] = r
+            out.append(r)
+            continue
+        s_cur = float(cur.get("_rrf_score") or 0.0)
+        s_new = float(r.get("_rrf_score") or 0.0)
+        # IASF 跨口径独立共振：不同口径独立命中同一 URL 时叠加次口径 0.35 边际共振增益
+        cur["_rrf_score"] = round(max(s_cur, s_new) + 0.35 * min(s_cur, s_new), 6)
+        _merge_evidence(cur, r)
+    return out
+
+
 def merge_within_caliber(
     groups: list[list[dict[str, Any]]],
     k: int = 60,
@@ -113,12 +170,7 @@ def merge_within_caliber(
 
     for group in groups:
         for i, r in enumerate(group):
-            key = (
-                _canonical_url(r.get("url", ""))
-                or (f"__title__:{r.get('title', '')}" if r.get("title") else "")
-                or (f"__card__:{r.get('card_type', '')}" if r.get("card_type") else "")
-                or f"__idx__:{id(r)}"
-            )
+            key = _dedupe_key(r, _canonical_url, f"__idx__:{id(r)}")
             eng = r.get("_engine") or r.get("source", "") or ""
             w = _engine_weight(eng, lang=lang) if weighted else 1.0
             m = len(items[key].get("consensus_engines") or []) if key in items else 0
@@ -127,24 +179,10 @@ def merge_within_caliber(
             if key not in items:
                 item = dict(r)
                 item["_rrf_score"] = 0.0
-                cons: list[str] = []
-                if eng:
-                    cons.append(eng)
-                item["consensus_engines"] = cons
+                item["consensus_engines"] = [eng] if eng else []
                 items[key] = item
             else:
-                cur = items[key]
-                new_txt = f"{r.get('title', '')} {r.get('snippet', '')}"
-                cur_txt = f"{cur.get('title', '')} {cur.get('snippet', '')}"
-                if len(new_txt) > len(cur_txt):
-                    cur["title"] = r.get("title", cur.get("title"))
-                    cur["snippet"] = r.get("snippet", cur.get("snippet"))
-                sources = {cur.get("source", ""), r.get("source", "")}
-                cur["source"] = "/".join(s for s in sources if s)
-                cons = list(cur.get("consensus_engines") or [])
-                if eng and eng not in cons:
-                    cons.append(eng)
-                cur["consensus_engines"] = cons
+                _merge_evidence(items[key], r, extra_eng=eng)
 
     ranked = sorted(scores.items(), key=lambda x: -x[1])
     out = []
@@ -193,5 +231,4 @@ def merge_by_caliber(
     for cal in sorted(merged_by_caliber.keys(),
                      key=lambda c: _CALIBER_PRIORITY.get(c, 8)):
         out.extend(merged_by_caliber[cal])
-    from caliber_dedupe import merge_cross_caliber_duplicates
     return merge_cross_caliber_duplicates(out, _canonical_url)

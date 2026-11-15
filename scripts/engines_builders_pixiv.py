@@ -26,23 +26,9 @@ from engine_env import env_flag, get_env
 from engines_base import finalize_image_fields, http_open, rank_score, safe_search
 
 
-class _LazyLogger:
-    """延迟创建 logger，避免 import logging 的重量级 import 链。"""
+from engines_http import lazy_logger
 
-    _logger = None
-
-    def __getattr__(self, name: str):
-        if _LazyLogger._logger is None:
-            import logging
-
-            _LazyLogger._logger = logging.getLogger("unified_search.engines")
-            if not _LazyLogger._logger.handlers:
-                _LazyLogger._logger.setLevel(logging.WARNING)
-                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
-        return getattr(_LazyLogger._logger, name)
-
-
-logger = _LazyLogger()
+logger = lazy_logger()
 
 _WEB_API = "https://www.pixiv.net/ajax/search/artworks"
 _APP_API = "https://app-api.pixiv.net/v1/search/illust"

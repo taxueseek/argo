@@ -32,7 +32,6 @@ task.finish()（ego-browser「默认关闭空间」之例外：结果必须留�
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import os
 import re
@@ -40,6 +39,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+
+from argo_paths import file_lock
 import time
 from datetime import datetime
 from urllib.parse import quote
@@ -241,11 +243,8 @@ def main(argv: list | None = None) -> int:
               file=sys.stderr)
         return 1
 
-    # 文件锁串行化：并发调用会争抢同一浏览器页（goto 竞态）与节流窗口
-    lock_path = state_path + ".lock"
-    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
-    with open(lock_path, "w", encoding="utf-8") as lock_f:
-        fcntl.flock(lock_f, fcntl.LOCK_EX)
+    # 文件锁串行化：并发调用会争抢同一浏览器页（goto 竞态）与节流窗口（复用 argo_paths 跨平台锁）
+    with file_lock(Path(state_path), timeout=30.0):
         state = _load_state(state_path)
         last_ts = float(state.get("last_ts") or 0)
         wait = args.min_interval - (time.time() - last_ts)

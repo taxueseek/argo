@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from caliber_isolation import _dedupe_key, _merge_evidence
+
 
 def rrf_classic(
     ranked_lists: list[list[dict[str, Any]]],
@@ -28,35 +30,16 @@ def rrf_classic(
     items: dict[str, dict[str, Any]] = {}
     for _li, results in enumerate(ranked_lists):
         for i, r in enumerate(results):
-            key = (
-                _canonical_url(r.get("url", ""))
-                or (f"__title__:{r.get('title', '')}" if r.get("title") else "")
-                or (f"__card__:{r.get('card_type', '')}" if r.get("card_type") else "")
-                or f"__idx__:{_li}:{i}"
-            )
+            key = _dedupe_key(r, _canonical_url, f"__idx__:{_li}:{i}")
             scores[key] = scores.get(key, 0.0) + 1.0 / (k + i + 1)
             eng = r.get("_engine") or r.get("source", "") or ""
             if key not in items:
                 item = dict(r)
                 item["_rrf_score"] = 0.0
-                cons: list[str] = []
-                if eng:
-                    cons.append(eng)
-                item["consensus_engines"] = cons
+                item["consensus_engines"] = [eng] if eng else []
                 items[key] = item
             else:
-                cur = items[key]
-                new_txt = f"{r.get('title', '')} {r.get('snippet', '')}"
-                cur_txt = f"{cur.get('title', '')} {cur.get('snippet', '')}"
-                if len(new_txt) > len(cur_txt):
-                    cur["title"] = r.get("title", cur.get("title"))
-                    cur["snippet"] = r.get("snippet", cur.get("snippet"))
-                sources = {cur.get("source", ""), r.get("source", "")}
-                cur["source"] = "/".join(s for s in sources if s)
-                cons = list(cur.get("consensus_engines") or [])
-                if eng and eng not in cons:
-                    cons.append(eng)
-                cur["consensus_engines"] = cons
+                _merge_evidence(items[key], r, extra_eng=eng)
     ranked = sorted(scores.items(), key=lambda x: -x[1])
     out = []
     for key, _ in ranked:

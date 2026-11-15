@@ -1,5 +1,15 @@
 engine_id: toutiao_hot
-type: toutiao_hot
+type: http
+url: https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc
+query_param: ""
+headers:
+  User-Agent: Mozilla/5.0
+  Referer: https://www.toutiao.com/
+output_map:
+  items: data
+  item_title: Title
+  item_url: Url
+  item_summary_template: "热度 {HotValue}"
 enabled: true
 label: 今日头条热榜
 cost_tier: free

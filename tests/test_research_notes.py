@@ -196,6 +196,18 @@ class CrossEnvironmentRootTest(unittest.TestCase):
         explicit = Path(self.tmp.name) / "explicit"
         self.assertEqual(rn.resolve_root(str(explicit)), explicit.resolve())
 
+    def test_argo_self_repo_does_not_pollute_workspace(self):
+        os.chdir(ROOT)
+        for var in ("ARGO_RESEARCH_ROOT", "ARGO_ARCHIVE_ROOT"):
+            os.environ.pop(var, None)
+        self.assertFalse(rn.workspace_anchorable(ROOT))
+        notes_root = rn.resolve_root()
+        archive_root = ar.resolve_archive_root()
+        self.assertNotEqual(notes_root, ROOT / "docs" / "research")
+        self.assertIn("argo-research", str(notes_root))
+        self.assertNotEqual(archive_root, ROOT / "docs" / "research" / "archive")
+        self.assertIn("argo-research", str(archive_root))
+
 
 class WorkspaceRootAndBaseTest(unittest.TestCase):
     def setUp(self):

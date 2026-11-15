@@ -168,7 +168,7 @@ engines:
   desc: B站
 - name: bilibili_hot
   tier: T1
-  type: bilibili_hot
+  type: http
   coverage:
   - chinese
   - hot
@@ -714,7 +714,7 @@ engines:
   desc: 豆瓣电影搜索（中文片名/年份/类型，免认证，suggest 接口）
 - name: douyin_hot
   tier: T1
-  type: douyin_hot
+  type: http
   coverage:
   - chinese
   - hot
@@ -1546,7 +1546,7 @@ engines:
   desc: iPlant 植物智（中文植物名/俗名 → 学名 + 分类，中科院植物所，免认证）
 - name: itotii
   tier: T1
-  type: itotii
+  type: http
   coverage:
   - chinese
   - meme
@@ -3246,7 +3246,7 @@ engines:
   desc: TLE 轨道根数镜像（第三方，Celestrak 不可达时替代，免认证）
 - name: toutiao_hot
   tier: T1
-  type: toutiao_hot
+  type: http
   coverage:
   - chinese
   - hot
@@ -3420,7 +3420,7 @@ engines:
   desc: V2EX（中文技术社区，官方 API 候选池 + 本地相关性过滤）
 - name: vam
   tier: T1
-  type: vam
+  type: http
   coverage:
   - art
   - museum
@@ -3535,7 +3535,7 @@ engines:
   desc: 微博
 - name: weibo_hot
   tier: T1
-  type: weibo_hot
+  type: http
   coverage:
   - chinese
   - hot

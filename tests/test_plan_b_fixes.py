@@ -34,7 +34,7 @@ class TestPlanBFixes(unittest.TestCase):
 
         t0 = time.monotonic()
         with patch.object(se, "gemini_api_key", return_value="k"), \
-                patch.object(se, "DEFAULT_JEV_DEADLINE_S", 0.15), \
+                patch.object(se, "DEFAULT_GEMINI_DEADLINE_S", 0.15), \
                 patch.object(se, "_gemini_choice", side_effect=slow_choice):
             out = se._classify_gemini(
                 ["fast item", "slow item"], ["a", "b"],

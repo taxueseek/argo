@@ -182,8 +182,10 @@ def make_field_parser(path: str, fields: dict[str, str], url_template: str | Non
                 if not tmpl:
                     continue
                 std = {"item_title_template": "title",
-                       "item_summary_template": "snippet"}.get(ok, ok)
-                rendered = _render_field_template(tmpl, item)
+                       "item_summary_template": "snippet",
+                       "item_image_template": "image_url"}.get(ok, ok)
+                rendered = (_format_url_template(tmpl, item) if std == "image_url"
+                            else _render_field_template(tmpl, item))
                 if rendered:
                     r[std] = rendered[:300 if std == "snippet" else 500]
             if url_template and (not r.get("url") or not str(r["url"]).startswith(("http://", "https://"))):

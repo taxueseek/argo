@@ -68,13 +68,41 @@ def resolve_research_base(workspace: Path | None = None) -> Path:
     return ws / "research"
 
 
-def workspace_anchorable() -> bool:
-    """当前工作区是否可锚定。"""
+_ARGO_SELF_ROOT = Path(__file__).resolve().parent.parent
+
+
+def is_argo_self_workspace(workspace: Path | None = None) -> bool:
+    """判断工作区是否为 argo 工具自身仓库，避免把个人探索产物落进工具仓。"""
     try:
-        ws = find_workspace_root()
+        ws = (workspace or find_workspace_root()).resolve()
+        return ws == _ARGO_SELF_ROOT
+    except OSError:
+        return False
+
+
+def workspace_anchorable(workspace: Path | None = None) -> bool:
+    """当前工作区是否可锚定（argo 工具自身仓库不作为个人研究落盘工作区）。"""
+    try:
+        ws = workspace or find_workspace_root()
+        if is_argo_self_workspace(ws):
+            return False
         return any((ws / m).exists() for m in WORKSPACE_MARKERS)
     except Exception:
         return False
+
+
+def should_anchor_workspace(workspace: Path | None = None) -> bool:
+    """统一判断默认解析是否应落到工作区（而非用户级 research_root）。"""
+    ws = workspace or find_workspace_root()
+    if is_argo_self_workspace(ws):
+        return False
+    base = resolve_research_base(ws)
+    try:
+        if base.is_dir():
+            return True
+    except OSError:
+        pass
+    return workspace_anchorable(ws)
 
 
 def resolve_root(explicit: str | Path | None = None) -> Path:
@@ -91,12 +119,10 @@ def resolve_root_with_source(explicit: str | Path | None = None) -> tuple[Path, 
         if val:
             return Path(val).expanduser().resolve(), f"{env}={val}"
 
-    base = resolve_research_base()
-    try:
-        if base.is_dir() or workspace_anchorable():
-            return base, f"工作区锚定 {base}"
-    except OSError:
-        pass
+    ws = find_workspace_root()
+    base = resolve_research_base(ws)
+    if should_anchor_workspace(ws):
+        return base, f"工作区锚定 {base}"
 
     try:
         from argo_paths import research_root

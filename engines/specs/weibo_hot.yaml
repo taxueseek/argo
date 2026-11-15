@@ -1,5 +1,15 @@
 engine_id: weibo_hot
-type: weibo_hot
+type: http
+url: https://weibo.com/ajax/side/hotSearch
+query_param: ""
+headers:
+  User-Agent: Mozilla/5.0
+  Referer: https://weibo.com/
+output_map:
+  items: data.realtime
+  item_title: word
+  url_template: "https://s.weibo.com/weibo?q=%23{word|url}%23"
+  item_summary_template: "微博热搜 · 热度 {num} · {label_name}"
 family: hot_trending
 enabled: true
 label: 微博热搜

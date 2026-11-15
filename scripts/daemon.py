@@ -207,29 +207,43 @@ def _pid_path() -> str:
     return str(state_path(PID_NAME + "-" + _tree_tag()))
 
 
-def _pid_is_daemon(pid: int) -> bool:
-    """核实 pid 的命令行确实是本 daemon（macOS/Linux ps，Windows 视为不是）。
-
-    误杀的代价不对称：漏杀只是留一个下次 start 时 ping 不到、自己会空闲退出的
-    进程；错杀是 SIGTERM 一个无关进程。所以判据从紧——单独出现 "daemon.py"
-    子串不够（编辑器/别仓同名脚本都会中）。
-
-    必须识别两种启动形态（2026-10-13 实测发现第二种此前漏判）：
-      A. `python <本仓>/scripts/daemon.py start`——直接调用与 autostart 派生；
-      B. `./bin/argo daemon start`——bin/argo 经 runpy 原地执行时，Python 层的
-         sys.argv 被改写但**内核记录的 argv 不变**，ps 里始终是 bin/argo 形态。
-         此前只认 A，B 形态下 stop 的 pid 兜底补刀会漏判，留孤儿进程。
-    """
+def _pid_alive(pid: int) -> bool:
     if os.name == "nt":
-        return False
-    import subprocess
+        import subprocess
+        try:
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                               capture_output=True, text=True, timeout=5,
+                               encoding="utf-8", errors="replace")
+            return f'"{pid}"' in (r.stdout or "")
+        except OSError:
+            return False
     try:
-        r = subprocess.run(["ps", "-p", str(pid), "-o", "command="],
-                           capture_output=True, text=True, timeout=5,
-                           encoding="utf-8", errors="replace")
-        cmd = (r.stdout or "").strip()
-    except Exception:
+        os.kill(pid, 0)
+        return True
+    except OSError:
         return False
+
+
+def _pid_is_daemon(pid: int) -> bool:
+    """核实 pid 的命令行确实是本 daemon（POSIX ps / Windows PowerShell CIM）。"""
+    import subprocess
+    if os.name == "nt":
+        try:
+            ps_cmd = f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"
+            r = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd],
+                               capture_output=True, text=True, timeout=5,
+                               encoding="utf-8", errors="replace")
+            cmd = (r.stdout or "").strip()
+        except OSError:
+            return False
+    else:
+        try:
+            r = subprocess.run(["ps", "-p", str(pid), "-o", "command="],
+                               capture_output=True, text=True, timeout=5,
+                               encoding="utf-8", errors="replace")
+            cmd = (r.stdout or "").strip()
+        except OSError:
+            return False
     if not cmd:
         return False
     toks = cmd.split()
@@ -688,6 +702,56 @@ def _quiet_stop(sp: str) -> bool:
     return False
 
 
+def _terminate_pid(pid: int) -> None:
+    if os.name == "nt":
+        import subprocess
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                       capture_output=True, timeout=5)
+        return
+    os.kill(pid, signal.SIGTERM)
+
+
+def _redirect_stdio_to_log() -> None:
+    log_dir = os.path.dirname(_log_path())
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    _rotate_log_if_needed()
+    log = open(_log_path(), "ab", buffering=0)
+    os.dup2(log.fileno(), 0)
+    os.dup2(log.fileno(), 1)
+    os.dup2(log.fileno(), 2)
+    with contextlib.suppress(OSError):
+        log.close()
+
+
+def _wait_ready_and_report(args: argparse.Namespace) -> int:
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            info = ping(_sock_path(), 0.5)
+            msg = {"ok": True, "pid": info.get("pid")}
+            print(json.dumps(msg, ensure_ascii=False) if args.json
+                  else f"argo daemon 已启动 pid={info.get('pid')} socket={_sock_path()}")
+            return 0
+        except Exception:
+            time.sleep(0.05)
+    print(json.dumps({"ok": False, "error": "启动超时", "log": _log_path()},
+                     ensure_ascii=False) if args.json
+          else f"argo daemon 启动超时，看日志：{_log_path()}", file=sys.stderr)
+    return 1
+
+
+def _start_detached_windows(args: argparse.Namespace) -> int:
+    import subprocess
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0x00000008) | getattr(
+        subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+    cmd = [sys.executable, os.path.abspath(__file__), "start",
+           "--foreground", "--detached-log", "--idle-exit", str(args.idle_exit)]
+    subprocess.Popen(cmd, creationflags=flags, close_fds=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return _wait_ready_and_report(args)
+
+
 def _start(args: argparse.Namespace) -> int:
     alive = _alive()
     if alive:
@@ -776,39 +840,18 @@ def _start(args: argparse.Namespace) -> int:
             except Exception:
                 pass
 
-        if args.foreground or os.name == "nt":  # Windows 无 fork：只支持前台
+        if args.foreground:
+            if getattr(args, "detached_log", False):
+                _redirect_stdio_to_log()
             _serve_child(args)
             return 0
-
+        if os.name == "nt":
+            return _start_detached_windows(args)
         pid = os.fork()
         if pid > 0:
-            # 父进程：等 socket 就绪后报告（子进程 bind 完成即视为成功）
-            deadline = time.time() + 10
-            while time.time() < deadline:
-                try:
-                    info = ping(_sock_path(), 0.5)
-                    msg = {"ok": True, "pid": info.get("pid")}
-                    print(json.dumps(msg, ensure_ascii=False) if args.json
-                          else f"argo daemon 已启动 pid={info.get('pid')} socket={_sock_path()}")
-                    return 0
-                except Exception:
-                    time.sleep(0.05)
-            print(json.dumps({"ok": False, "error": "启动超时", "log": _log_path()},
-                             ensure_ascii=False) if args.json
-                  else f"argo daemon 启动超时，看日志：{_log_path()}", file=sys.stderr)
-            return 1
+            return _wait_ready_and_report(args)
         os.setsid()
-        # 重定向 stdio 到日志：daemon 不再依赖终端（日志目录同样可能还不存在）
-        log_dir = os.path.dirname(_log_path())
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-        _rotate_log_if_needed()
-        log = open(_log_path(), "ab", buffering=0)
-        os.dup2(log.fileno(), 0)
-        os.dup2(log.fileno(), 1)
-        os.dup2(log.fileno(), 2)
-        with contextlib.suppress(OSError):
-            log.close()
+        _redirect_stdio_to_log()
         _serve_child(args)
         return 0
     finally:
@@ -860,9 +903,7 @@ def _stop(args: argparse.Namespace) -> int:
         if pid:
             grace = time.time() + _STOP_GRACE_S
             while time.time() < grace:
-                try:
-                    os.kill(pid, 0)
-                except OSError:
+                if not _pid_alive(pid):
                     break  # 进程已退出：真停
                 time.sleep(0.1)
         with contextlib.suppress(OSError):
@@ -879,7 +920,7 @@ def _stop(args: argparse.Namespace) -> int:
             with open(_pid_path(), encoding="utf-8") as f:
                 pid = int(f.read().strip())
             if _pid_is_daemon(pid):
-                os.kill(pid, signal.SIGTERM)
+                _terminate_pid(pid)
                 killed = pid
         except (OSError, ValueError):
             pass
@@ -912,6 +953,7 @@ def _cli() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_start = sub.add_parser("start", help="启动 daemon（默认后台化）")
     p_start.add_argument("--foreground", action="store_true", help="前台运行（调试用）")
+    p_start.add_argument("--detached-log", action="store_true", help=argparse.SUPPRESS)
     p_start.add_argument("--idle-exit", type=float, default=1800.0,
                          help="空闲 N 秒后自杀退出；0=常驻不退（默认 1800）")
     for p in (p_start, sub.add_parser("status"), sub.add_parser("stop")):

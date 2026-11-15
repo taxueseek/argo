@@ -27,21 +27,9 @@ from engines_builders_cn import _parse_site_filter
 from social_engines import zhihu_engine as _ze
 
 
-class _LazyLogger:
-    """延迟创建 logger，避免 import logging 的重量级 import 链。"""
-    _logger = None
+from engines_http import lazy_logger
 
-    def __getattr__(self, name: str):
-        if _LazyLogger._logger is None:
-            import logging
-            _LazyLogger._logger = logging.getLogger("unified_search.engines")
-            if not _LazyLogger._logger.handlers:
-                _LazyLogger._logger.setLevel(logging.WARNING)
-                _LazyLogger._logger.addHandler(logging.StreamHandler(sys.stderr))
-        return getattr(_LazyLogger._logger, name)
-
-
-logger = _LazyLogger()
+logger = lazy_logger()
 
 _ZHIHU_COUNT_MAX = 20  # global_search / question_recommendations 官方上限
 _ZHIHU_KB_LIMIT_MAX = 10  # knowledge/search 官方上限

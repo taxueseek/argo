@@ -786,7 +786,7 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
             templates={
                 # 多字段拼接模板（2026-11-10）：声明后覆盖同名单字段映射，
                 # 把原 builder 的「tombstone · 授权 CC0」这类拼接变成声明式能力。
-                k: output_map.get(k) for k in ("item_title_template", "item_summary_template")
+                k: output_map.get(k) for k in ("item_title_template", "item_summary_template", "item_image_template")
             },
             url_item_template=output_map.get("item_url_template"))(data)
         # spec 级授权常量：授权不随条目变化的源（如 NASA 公版）在 spec 上写一次
@@ -797,15 +797,14 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
                 r["published_at"] = _normalize_epoch(r["published_at"])
             if _lic and r.get("image_url"):
                 r.setdefault("image_license", _lic)
-            sn = r.get("snippet")
-            if isinstance(sn, str):
-                if _TAGISH_RE.search(sn):
-                    sn = _TAGISH_RE.sub("", sn)
-                if "&" in sn:
-                    sn = _htmllib.unescape(sn)
-                if len(sn) > 300:
-                    sn = sn[:300]
-                r["snippet"] = sn
+            for _fk, _cap in (("title", 500), ("snippet", 300)):
+                _fv = r.get(_fk)
+                if isinstance(_fv, str):
+                    if _TAGISH_RE.search(_fv):
+                        _fv = _TAGISH_RE.sub("", _fv)
+                    if "&" in _fv:
+                        _fv = _htmllib.unescape(_fv)
+                    r[_fk] = (_fv.strip() if _fk == "title" else _fv)[:_cap]
         # 图片元数据收尾（尺寸转 int / 许可归一 / 商用判据）——落在这个共同
         # 出口而不是各 parser 里：图源有三条产出路径（声明式 output_map、
         # 自定义 builder、通用兜底），只覆盖一条会让契约对一半结果生效。

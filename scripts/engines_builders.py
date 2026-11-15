@@ -47,10 +47,7 @@ from engines_builders_cn import (
     _build_cls_telegraph_engine,
     _build_em_global_news_engine,
     _build_eastmoney_engine,
-    _build_itotii_engine,
     _build_baidu_hot_engine,
-    _build_toutiao_hot_engine,
-    _build_bilibili_hot_engine,
     _build_zhihu_global_engine,
     _build_zhihu_user_engine,
     _build_bocha_engine,
@@ -64,8 +61,6 @@ from engines_builders_cn import (
     _build_people_daily_engine,
     _build_flk_law_engine,
     _build_wikisource_engine,
-    _build_weibo_hot_engine,
-    _build_douyin_hot_engine,
     _build_csdn_engine,
     _build_wallstreetcn_engine,
     _build_weather_cn_engine,
@@ -165,10 +160,6 @@ from engines_builders_intl import (
     _build_google_news_engine,
     _build_met_museum_engine,
 )
-# vam 与 wikimedia_commons 同属图源补强模块（batch11），不进 intl 组
-from engines_builders_batch11 import (
-    _build_vam_engine,
-)
 from engines_builders_feeds import (
     _build_rss_feed_engine,
 )
@@ -200,14 +191,11 @@ __all__ = [
     "_build_people_daily_engine",
     "_build_flk_law_engine",
     "_build_wikisource_engine",
-    "_build_weibo_hot_engine",
-    "_build_douyin_hot_engine",
     "_build_csdn_engine",
     "_build_wallstreetcn_engine",
     "_build_weather_cn_engine",
     "_build_google_news_engine",
     "_build_met_museum_engine",
-    "_build_vam_engine",
     "_build_google_scholar_engine",
     "_build_v2ex_engine",
     "_build_github_engine",
@@ -215,10 +203,7 @@ __all__ = [
     "_build_cls_telegraph_engine",
     "_build_em_global_news_engine",
     "_build_eastmoney_engine",
-    "_build_itotii_engine",
     "_build_baidu_hot_engine",
-    "_build_toutiao_hot_engine",
-    "_build_bilibili_hot_engine",
     "_build_open_library_engine",
     "_build_weread_engine",
     "_build_douban_book_engine",

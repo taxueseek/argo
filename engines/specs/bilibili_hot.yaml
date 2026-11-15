@@ -1,5 +1,15 @@
 engine_id: bilibili_hot
-type: bilibili_hot
+type: http
+url: https://api.bilibili.com/x/web-interface/search/square?limit=20
+query_param: ""
+headers:
+  User-Agent: Mozilla/5.0
+  Referer: https://www.bilibili.com
+output_map:
+  items: data.trending.list
+  item_title: keyword
+  url_template: "https://search.bilibili.com/all?keyword={keyword|url}"
+  item_summary_template: "B站热搜"
 enabled: true
 label: B站热搜
 cost_tier: free

@@ -1,5 +1,17 @@
 engine_id: itotii
-type: itotii
+type: http
+url: https://geng.itotii.com/wp-json/wp/v2/posts
+query_param: search
+extra_params:
+  per_page: "{n}"
+headers:
+  User-Agent: Mozilla/5.0
+output_map:
+  items: "."
+  item_title: title.rendered
+  item_url: link
+  item_summary_template: "{date} | {content.rendered}"
+  item_published_at: date
 enabled: true
 label: itotii梗百科
 cost_tier: free
