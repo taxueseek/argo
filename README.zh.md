@@ -201,6 +201,23 @@ v2.15.0 完成知乎全链（问题下钻、精选回答、Keychain 凭证与点
 
 </details>
 
+---
+
+> 好的搜索不仅仅让你看得更多更广，能够消除信息差，找出你最关心的地方。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+    <img alt="Star History Chart" width="560"
+      src="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+  </picture>
+</p>
+
+如果 Argo 帮你下过一次更踏实的结论，[点个 Star](https://github.com/taxueseek/argo/stargazers) 让更多人看到它。
+
 ## 参与贡献与开源协议
 
 欢迎提交 Issue 与 PR（新增搜索源请见 [docs/ADDING_NEW_ENGINE.md](docs/ADDING_NEW_ENGINE.md)）。项目采用 [Apache-2.0](LICENSE) 协议开源。

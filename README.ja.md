@@ -98,3 +98,20 @@ v2.15.0 では Zhihu フルチェーン（質問掘り下げ・回答精选・Ke
 詳細は [docs/RELEASE_NOTES_v2.14.1.md](docs/RELEASE_NOTES_v2.14.1.md) をご参照ください。
 
 </details>
+
+---
+
+> 良い検索は、もっと多く見せることではない。自信を持って結論できること——そしてまだ結論してはいけないときを知ることだ。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+    <img alt="Star History Chart" width="560"
+      src="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+  </picture>
+</p>
+
+Argo がより確かな結論を下す助けになったなら、[Star](https://github.com/taxueseek/argo/stargazers) を押して、より多くの人に届けてください。

@@ -98,3 +98,20 @@ Consulta [docs/RELEASE_NOTES_v2.15.0.md](docs/RELEASE_NOTES_v2.15.0.md) para má
 Consulta [docs/RELEASE_NOTES_v2.14.1.md](docs/RELEASE_NOTES_v2.14.1.md) para más detalles.
 
 </details>
+
+---
+
+> Una buena búsqueda no es ver más: es concluir con confianza, y saber cuándo aún no debes.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+    <img alt="Star History Chart" width="560"
+      src="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+  </picture>
+</p>
+
+Si Argo te ha ayudado a llegar a una conclusión más sólida, [dale una Star](https://github.com/taxueseek/argo/stargazers) para que más gente lo descubra.

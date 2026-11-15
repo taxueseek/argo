@@ -98,3 +98,20 @@ v2.15.0에서는 Zhihu 전체 체인(질문 드릴다운·답변 선별·Keychai
 자세한 내용은 [docs/RELEASE_NOTES_v2.14.1.md](docs/RELEASE_NOTES_v2.14.1.md)를 참고하세요.
 
 </details>
+
+---
+
+> 좋은 검색은 더 많이 보는 것이 아니라, 자신 있게 결론 내리고, 아직 결론 내리면 안 될 때를 아는 것입니다.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)"
+      srcset="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+    <img alt="Star History Chart" width="560"
+      src="https://api.star-history.com/svg?repos=taxueseek/argo&type=Date" />
+  </picture>
+</p>
+
+Argo가 한 번이라도 더 확실한 결론을 내리는 데 도움이 되었다면, [Star](https://github.com/taxueseek/argo/stargazers)를 눌러 더 많은 사람에게 알려 주세요.
