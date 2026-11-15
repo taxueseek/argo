@@ -16,3 +16,5 @@ type: http
 # 走引擎 spec 既有的 {VAR} 占位符（engines_base._resolve 经 engine_env 解析，
 # os.environ 优先 + env 文件保底）：未配置时该源不可用，不会假装能用。
 url: "{SEARXNG_URL}"
+allowed_env:
+- SEARXNG_URL

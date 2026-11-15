@@ -32,3 +32,9 @@ recommended: false
 latency_ms: 300
 quality_queries:
   - query: "engine_validate"
+allowed_env:
+- ARGO_SEEK_SUBPROCESS
+- ARGO_SEEK_CONTENT_RERANK
+- ARGO_LOCAL_FTS
+- ARGO_SEEK_FRECENCY
+- ARGO_SEEK_FRECENCY_DB

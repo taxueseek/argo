@@ -22,3 +22,5 @@ search_args:
 - '-n'
 - '{n}'
 env: {}
+allowed_env:
+- ARGO_REDSKILL_CACHE

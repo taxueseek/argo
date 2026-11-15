@@ -43,8 +43,9 @@ class TestCliEngineUsesArgoInterpreter(unittest.TestCase):
         """跑一次引擎，返回它实际要执行的 argv；不发真实子进程。"""
         seen: dict[str, list[str]] = {}
 
-        def fake_run(cmd, timeout=8, engine_name="?"):
+        def fake_run(cmd, timeout=8, engine_name="?", env=None):
             seen["cmd"] = list(cmd)
+            seen["env"] = env
             return ""  # 空 stdout → 解析出 []，本用例只关心 argv
 
         engine = engines_base._build_cli_engine(spec)

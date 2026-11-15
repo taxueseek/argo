@@ -32,3 +32,5 @@ output_map:
   item_summary: snippet
   item_source: site_name
   item_published_at: date
+allowed_env:
+- TINYFISH_API_KEY

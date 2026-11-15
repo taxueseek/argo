@@ -314,7 +314,6 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
     输出与 unified-search 一致的 schema。安全降级：import 失败时回退
     原 subprocess 调用，保证功能不丢。
     """
-    import os as _os
     import subprocess as _subprocess
 
     cmd_template = spec.get("cmd", [])
@@ -328,6 +327,7 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
         # （ef4e509 同类：分支内 import 污染同函数后续读取，静态门禁
         # test_local_import_shadows_global 依赖此处不报）。
         from engines_base import _resolve as _resolve_tpl
+        from engine_env import allowed_placeholders_for, build_child_env
         # 进程内优先（省 subprocess 冷启动）
         try:
             sub_dir = Path(__file__).resolve().parent.parent / "sub-skills" / "local-search"
@@ -355,12 +355,12 @@ def _build_local_search_engine(spec: dict[str, Any]) -> Any:
         except Exception:
             pass  # 进程内失败回退 subprocess
         # 回退：subprocess 调用（原行为）
-        cmd = _resolve_tpl(cmd_template, query, n, mode=mode)
-        args = _resolve_tpl(search_args, query, n, mode=mode)
+        _allowed = allowed_placeholders_for("local_search", spec)
+        cmd = _resolve_tpl(cmd_template, query, n, allowed_env=_allowed, mode=mode)
+        args = _resolve_tpl(search_args, query, n, allowed_env=_allowed, mode=mode)
         if not cmd:
             return []
-        env = _os.environ.copy()
-        env.update(spec.get("env", {}) or {})
+        env = build_child_env("local_search", spec)
         proc = _subprocess.run(cmd + args, capture_output=True, text=True,
                                encoding="utf-8", errors="replace",
                                timeout=timeout, env=env)

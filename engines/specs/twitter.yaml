@@ -24,6 +24,10 @@ search_args:
 - '{n}'
 - --json
 env: {}
+allowed_env:
+- TWITTER_AUTH_TOKEN
+- TWITTER_CT0
+- TWITTER_PROXY
 # 通道变更（2026-10-21）：旧脚本 twitter_engine.py 的三个通道当时全失效——
 # FxTwitter /2/search 上游已停用、nitter 公共实例实测零结果、tw CLI 未装，
 # 强制调用 6s 超时且结果为空。x_search.py 是仓库内既有的可用替代，

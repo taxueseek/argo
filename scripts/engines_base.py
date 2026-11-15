@@ -197,11 +197,13 @@ def rank_score(base: float, rank: int) -> float:
     return round(b / (1.0 + r * RANK_DECAY), 4)
 
 
-def _run(cmd: list[str], timeout: float = 8, engine_name: str = "?") -> str:
+def _run(cmd: list[str], timeout: float = 8, engine_name: str = "?",
+         env: dict[str, str] | None = None) -> str:
     """执行命令，超时/异常不抛。"""
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=timeout)
+                           encoding="utf-8", errors="replace",
+                           timeout=timeout, env=env)
         if r.returncode == 0:
             return r.stdout
         tail = (r.stderr or "").strip()[:200]
@@ -234,10 +236,10 @@ def _proc_uuid() -> str:
     return _PROC_UUID
 
 
-def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> list[str] | str:
+def _resolve(template: list[str] | str, query: str, n: int, allowed_env: frozenset[str] | set[str] | None = None, **extra: Any) -> list[str] | str:
     """替换模板占位符。"""
     if isinstance(template, list):
-        return [_resolve(item, query, n, **extra) for item in template]
+        return [_resolve(item, query, n, allowed_env=allowed_env, **extra) for item in template]
     s = template.replace("{query_quoted}", urllib.parse.quote(str(query))).replace("{query}", query).replace("{n}", str(n))
     if "{query_slug}" in s:
         _slug = next((_t for _tok in re.split(r"[\s,，。/?]+", str(query)) if (_t := _tok.strip().lower()) and re.fullmatch(r"[a-z][a-z0-9.\-_]{1,30}", _t) and not any(_w in _t for _w in ("生命周期", "支持到", "eol", "support", "lifecycle", "什么时候", "停更"))), "")
@@ -253,16 +255,10 @@ def _resolve(template: list[str] | str, query: str, n: int, **extra: Any) -> lis
     # 历史兼容名）：os.environ 优先 + ~/.config/argo/env 热读保底
     # （密钥轮换改文件即生效，无需重启）。
     try:
-        from engine_env import PLACEHOLDER_ALIASES as _PA, get_env as _get_env
-        return re.sub(
-            r"\{([A-Z_][A-Z0-9_]*)\}",
-            lambda m: _get_env(
-                _PA.get(m.group(1), [f"ARGO_{m.group(1)}", m.group(1)]), ""
-            ),
-            s,
-        )
+        from engine_env import resolve_env_placeholders
+        return resolve_env_placeholders(s, allowed_env=allowed_env)
     except ImportError:
-        return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), ""), s)
+        return re.sub(r"\{([A-Z_][A-Z0-9_]*)\}", lambda m: os.environ.get(m.group(1), "") if (allowed_env is None or m.group(1) in allowed_env) else "", s)
 
 
 _AUTH_PREFIXES = ("Bearer", "token", "Basic", "Key", "Api-Key", "X-Key", "Secret", "Appid")
@@ -327,14 +323,16 @@ def _make_field_parser(path: str, fields: dict[str, str], url_template: str | No
 def _build_cli_engine(spec: dict[str, Any]) -> Any:
     cmd_template = spec.get("cmd", [])
     search_args = spec.get("search_args", [])
-    env_overrides = spec.get("env", {})
     output_format = spec.get("output_format", "")   # "yaml" | ""（JSON/文本自动）
     filter_args = spec.get("filter_args", {})       # {kwarg: [参数模板...]}，kwargs 携带时追加
+    eng = spec.get("_name", "cli")
+    from engine_env import allowed_placeholders_for, build_child_env
+    _allowed = allowed_placeholders_for(eng, spec)
 
     @safe_search
     def _engine(query: str, n: int = 5, timeout: float = 8, mode: str = "fast", **kwargs) -> list[dict[str, Any]]:
-        cmd = _resolve(cmd_template, query, n, mode=mode, **kwargs)
-        args = _resolve(search_args, query, n, mode=mode, **kwargs)
+        cmd = _resolve(cmd_template, query, n, allowed_env=_allowed, mode=mode, **kwargs)
+        args = _resolve(search_args, query, n, allowed_env=_allowed, mode=mode, **kwargs)
         if not cmd:
             return []
         # 跨平台解释器：优先 sys.executable（bin/argo 已验证它带 PyYAML）；
@@ -344,12 +342,10 @@ def _build_cli_engine(spec: dict[str, Any]) -> Any:
             cmd[0] = sys.executable or shutil.which("python3") or shutil.which("python")
         for key, tmpl in filter_args.items():
             if kwargs.get(key) not in (None, ""):
-                args += _resolve(tmpl, query, n, mode=mode, **kwargs)
-        env = os.environ.copy()
-        env.update(env_overrides)
+                args += _resolve(tmpl, query, n, allowed_env=_allowed, mode=mode, **kwargs)
         return _apply_url_kind(
-            _parse_text_output(_run(cmd + args, timeout=timeout, engine_name=spec.get("_name", "cli")),
-                               spec.get("_name", "cli"), output_format=output_format, n=n),
+            _parse_text_output(_run(cmd + args, timeout=timeout, engine_name=eng, env=build_child_env(eng, spec)),
+                               eng, output_format=output_format, n=n),
             spec)
     return _engine
 
@@ -382,6 +378,8 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
     is_get = spec.get("method", "GET") == "GET"
     body_template = spec.get("body", {})
     eng = spec.get("_name", "")
+    from engine_env import allowed_placeholders_for, env_flag
+    _allowed = allowed_placeholders_for(eng, spec)
     # spec 显式节流覆盖（max_concurrency / min_interval_ms），声明即契约
     if spec.get("max_concurrency") is not None or \
             spec.get("min_interval_ms") is not None:
@@ -399,7 +397,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
         import urllib.parse as up
 
         if is_get:
-            resolved_url = _resolve(url_template, query, n, **kwargs)
+            resolved_url = _resolve(url_template, query, n, allowed_env=_allowed, **kwargs)
             parts: list[str] = []
             if query_param:  # 空字符串表示该 API 不用查询参数名（仅 extra_params）
                 parts.append(f"{query_param}={up.quote(query)}")
@@ -409,7 +407,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang/mkt
                 if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                     v = _lang_param(k, query) or v
-                parts.append(f"{k}={up.quote(_resolve(str(v), query, n, **kwargs))}")
+                parts.append(f"{k}={up.quote(_resolve(str(v), query, n, allowed_env=_allowed, **kwargs))}")
             if parts:
                 separator = "&" if "?" in resolved_url else "?"
                 full_url = resolved_url + separator + "&".join(parts)
@@ -417,7 +415,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 full_url = resolved_url
             resolved_headers = {
                 k: v for k, v in (
-                    (k, _resolve(v, query, n, **kwargs))
+                    (k, _resolve(v, query, n, allowed_env=_allowed, **kwargs))
                     for k, v in headers.items()
                 ) if _header_meaningful(v)  # 过滤空/认证前缀残留头（未配置的 {ENV} 不发送）
             }
@@ -430,7 +428,7 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
         else:
             body: dict[str, Any] = {}
             for k, v in body_template.items():
-                resolved = _resolve(str(v), query, n, **kwargs)
+                resolved = _resolve(str(v), query, n, allowed_env=_allowed, **kwargs)
                 if k == "search_depth":
                     body[k] = {"fast": "fast", "balanced": "basic", "deep": "advanced", "basic": "basic", "advanced": "advanced", "ultra-fast": "ultra-fast"}.get(str(depth), resolved or "basic")
                 elif resolved.lower() == "true":
@@ -446,19 +444,19 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                         except ValueError:
                             body[k] = resolved
             # 与 GET 路径保持一致：过滤空/认证前缀残留头；POST 默认走 HttpClient 连接池
-            resolved_headers = {k: v for k, v in ((k, _resolve(v, query, n, **kwargs))
+            resolved_url = _resolve(url_template, query, n, allowed_env=_allowed, **kwargs)
+            resolved_headers = {k: v for k, v in ((k, _resolve(v, query, n, allowed_env=_allowed, **kwargs))
                                                   for k, v in headers.items()) if _header_meaningful(v)}
-            from engine_env import env_flag
             import urllib.request as _urllib_request
             if env_flag("ARGO_ENGINE_HTTP_CLIENT") and getattr(_urllib_request.urlopen, "__module__", "") == "urllib.request":
                 from http_client import HttpClient
-                resp = HttpClient(timeout=to, max_retries=0, jitter=False).post(url_template, body=body, extra_headers=resolved_headers, engine=eng)
+                resp = HttpClient(timeout=to, max_retries=0, jitter=False).post(resolved_url, body=body, extra_headers=resolved_headers, engine=eng)
                 raw = (resp.get("text") or "") if resp.get("status") == 200 else ""
                 if not raw:
                     _note_http_failure(eng, resp.get("status") or 0, resp.get("text") or resp.get("error", ""))
                     return []
             else:
-                req = _urllib_request.Request(url_template, data=json.dumps(body).encode("utf-8"), headers=resolved_headers)
+                req = _urllib_request.Request(resolved_url, data=json.dumps(body).encode("utf-8"), headers=resolved_headers)
                 try:
                     with http_open(req, timeout=to, engine=eng) as resp:
                         raw = resp.read().decode("utf-8")
@@ -916,6 +914,8 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
     timeout = spec.get("timeout", 8)
     extra_params = spec.get("extra_params", {})
     engine_name = spec.get("_name", "html")
+    from engine_env import allowed_placeholders_for
+    _allowed = allowed_placeholders_for(engine_name, spec)
     # spec 显式节流覆盖（max_concurrency / min_interval_ms），声明即契约
     if spec.get("max_concurrency") is not None or \
             spec.get("min_interval_ms") is not None:
@@ -943,17 +943,17 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         import urllib.parse as up
         to = _timeout or timeout
-        resolved_url = _resolve(url_template, query, n)
+        resolved_url = _resolve(url_template, query, n, allowed_env=_allowed)
         separator = "&" if "?" in resolved_url else "?"
         full_url = f"{resolved_url}{separator}{query_param}={up.quote(query)}"
         for k, v in extra_params.items():
             # 语言参数动态化：按查询主语言覆盖 setlang/hl/lang/mkt（此前漏 mkt）
             if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                 v = _lang_param(k, query) or v
-            full_url += f"&{k}={up.quote(_resolve(str(v), query, n, **kwargs))}"  # **kwargs 必传（声明式路径 :441 传了）：否则 {MODE}/{DEPTH} 带字面量花括号进 URL
+            full_url += f"&{k}={up.quote(_resolve(str(v), query, n, allowed_env=_allowed, **kwargs))}"  # **kwargs 必传（声明式路径 :441 传了）：否则 {MODE}/{DEPTH} 带字面量花括号进 URL
         resolved_headers = {
             k: v for k, v in (
-                (k, _resolve(v, query, n))
+                (k, _resolve(v, query, n, allowed_env=_allowed))
                 for k, v in headers.items()
             ) if _header_meaningful(v)  # 过滤空/认证前缀残留头（未配置的 {ENV} 不发送）
         }

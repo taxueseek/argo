@@ -592,6 +592,125 @@ def env_status_for(engine_id: str, spec: dict[str, Any] | None = None) -> dict[s
     }
 
 
+# ── 子进程最小环境白名单 & 占位符作用域隔离 ──────────────────────────────────
+# CLI 子进程只继承运行必需的非敏感环境变量 + 该引擎显式声明的 required_env /
+# allowed_env / KNOWN_ENV_ALIASES，避免无关 API key 随 os.environ.copy() 泄露。
+BASE_CHILD_ENV_ALLOWLIST: frozenset[str] = frozenset({
+    "PATH", "HOME", "USER", "LOGNAME", "USERNAME", "SHELL",
+    "TMPDIR", "TEMP", "TMP", "PWD",
+    "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TERM", "COLORTERM", "NO_COLOR",
+    "PYTHONUTF8", "PYTHONIOENCODING", "PYTHONPATH", "VIRTUAL_ENV",
+    "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME",
+    "APPDATA", "LOCALAPPDATA", "USERPROFILE", "SYSTEMROOT", "COMSPEC", "PATHEXT",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+    "ARGO_STATE_DIR", "ARGO_ADMISSION_DIR", "ARGO_PROXY",
+    "ARGO_ALLOW_PRIVATE_URLS", "ARGO_ENGINE_HTTP_CLIENT", "ARGO_ENV_FILE",
+})
+
+
+def _flatten_env_names(raw: Any) -> list[str]:
+    out: list[str] = []
+    if isinstance(raw, str):
+        s = raw.strip()
+        if s:
+            out.append(s)
+    elif isinstance(raw, (list, tuple, set, frozenset)):
+        for item in raw:
+            out.extend(_flatten_env_names(item))
+    return out
+
+
+def _expand_allowed_names(names: list[str]) -> frozenset[str]:
+    allowed: set[str] = set()
+    for name in names:
+        allowed.add(name)
+        allowed.update(_name_variants(name))
+        for alias in PLACEHOLDER_ALIASES.get(name, ()):
+            allowed.add(alias)
+            allowed.update(_name_variants(alias))
+        for ph_key, candidates in PLACEHOLDER_ALIASES.items():
+            if name in candidates:
+                allowed.add(ph_key)
+                allowed.update(candidates)
+    return frozenset(allowed)
+
+
+def allowed_placeholders_for(engine_id: str, spec: dict[str, Any] | None = None) -> frozenset[str]:
+    """返回单引擎被授权读取/展开的 env 变量与占位符白名单。
+
+    来源仅限 spec.required_env、spec.allowed_env 与 KNOWN_ENV_ALIASES[engine_id]，
+    不反推模板里的 {VAR}，从而阻止 Confused Deputy 越权展开其他引擎密钥。
+    """
+    names: list[str] = []
+    if isinstance(spec, dict):
+        names.extend(_flatten_env_names(spec.get("required_env")))
+        names.extend(_flatten_env_names(spec.get("allowed_env")))
+    if engine_id and engine_id in KNOWN_ENV_ALIASES:
+        names.extend(KNOWN_ENV_ALIASES[engine_id])
+    return _expand_allowed_names(names)
+
+
+def resolve_env_placeholders(
+    text: str,
+    allowed_env: frozenset[str] | set[str] | None = None,
+    engine_id: str = "",
+) -> str:
+    """展开模板中残留的 {ENV_VAR} 占位符；传入 allowed_env 时强制白名单校验。"""
+    def _sub(m: re.Match[str]) -> str:
+        key = m.group(1)
+        if key in _NON_SECRET_PLACEHOLDERS:
+            return get_env([f"ARGO_{key}", key], "")
+        if allowed_env is not None and key not in allowed_env:
+            import logging
+            logging.getLogger("argo.env").warning(
+                f"引擎 {engine_id or '?'} 模板占位符 {{{key}}} 未在 required_env/allowed_env 中声明，已阻断展开"
+            )
+            return ""
+        candidates = PLACEHOLDER_ALIASES.get(key) or _name_variants(key)
+        return get_env(candidates, "")
+
+    return _PLACEHOLDER_RE.sub(_sub, text)
+
+
+def build_child_env(
+    engine_id: str,
+    spec: dict[str, Any] | None = None,
+    *,
+    extra_env: dict[str, str | None] | None = None,
+    base_env: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """构建隔离后的 CLI 子进程环境变量字典（最小基础集 + 引擎授权集）。"""
+    source = base_env if base_env is not None else os.environ
+    allowed = allowed_placeholders_for(engine_id, spec)
+    out: dict[str, str] = {}
+    for k in BASE_CHILD_ENV_ALLOWLIST:
+        if k in source:
+            out[k] = source[k]
+    envfile = _envfile_load() if base_env is None else {}
+    for k in sorted(allowed):
+        if k in source:
+            out[k] = source[k]
+        elif k in envfile and envfile[k]:
+            out[k] = envfile[k]
+    if isinstance(spec, dict):
+        spec_env = spec.get("env")
+        if isinstance(spec_env, dict):
+            for k, v in spec_env.items():
+                if v is not None:
+                    out[str(k)] = resolve_env_placeholders(
+                        str(v), allowed_env=allowed, engine_id=engine_id
+                    )
+    if extra_env:
+        for k, v in extra_env.items():
+            if v is None:
+                out.pop(str(k), None)
+            else:
+                out[str(k)] = str(v)
+    return out
+
+
 # ── CLI 入口的 env 文件自动同步 ──────────────────────────────────────────────
 # MCP server 在入口显式调 sync_envfile_to_environ()；CLI 的 scripts/*.py 此前
 # 没有任何同步点，导致约 22 处 os.environ 直读的 ARGO_* 开关在 CLI 下不认

@@ -13,6 +13,8 @@ search_args:
 - -n
 - '{n}'
 env: {}
+allowed_env:
+- ARGO_XHS_TIMEOUT
 # 不声明 timeout（2026-10-06 回归策略门禁）：本引擎内部无重试，声明 ≥8s
 # 会按 search._engine_retries 约定关掉外层重试（execution.retry_count=1），
 # 一次失败即弃、成功率下降。不声明时单次尝试吃 default_timeout=8s。

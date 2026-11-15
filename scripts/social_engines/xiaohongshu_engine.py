@@ -35,7 +35,8 @@ def _child_env() -> dict:
       ② 宿主注入 NO_PROXY=...,[::1] 时 xhs 内部 httpx 抛
          InvalidURL: Invalid port ':1]' → 从 NO_PROXY/no_proxy 里剔掉 [::1]。
     """
-    env = os.environ.copy()
+    from engine_env import build_child_env
+    env = build_child_env("xiaohongshu", {"allowed_env": ["ARGO_XHS_TIMEOUT"]})
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
     for key in ("NO_PROXY", "no_proxy"):

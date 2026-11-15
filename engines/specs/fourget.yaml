@@ -22,3 +22,5 @@ output_map:
 timeout: 8
 type: http
 url: "{FOURGET_URL}"
+allowed_env:
+- FOURGET_URL

@@ -35,4 +35,7 @@ search_args:
 - '{query}'
 - -n
 - '{n}'
+allowed_env:
+- DIGUP_BIN
+- DIGUP_INDEX
 timeout: 30             # digup 首查冷启要加载 ~250MB text 模型（实测 0.4–0.8s），留足
