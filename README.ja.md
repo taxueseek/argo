@@ -71,7 +71,7 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 ## 主な機能・ドキュメント
 
 - **AI 検索統合**：キー不要チャネル（`tavily_free`、`parallel_free`、`anysearch`）に加え、**DeepSeek Search**・**Tencent Yuanbao (混元)**・**Metaso**・**Bocha**・**Tavily**・**Exa** などの主要 AI 検索を単一インターフェースで統合ルーティング。
-- **19 個の MCP ツール**（`argo_search`、`argo_fetch`、`argo_research`、`argo_evidence`、`argo_local_search` など）および 4 つのサブスキル（`local-search`、`local-seek`、`ego-search`、`js-run`）を搭載。
+- **19 個の MCP ツール**（`argo_search`、`argo_fetch`、`argo_research`、`argo_evidence`、`argo_local_search` など）および 7 つのサブスキル（`local-search`、`local-seek`、`ego-search`、`js-run`、`argo-wide-research`、`argo-deep-research`、`argo-local-search`）を搭載。
 - **DSH プラグイン**（`dsh plugin --profile web add argo-search`）は 18 個のネイティブツール・35 個の挙動スイッチ・並列リサーチを提供（詳細は [packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)）。
 - 詳細ドキュメント：[docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md) · [docs/MCP_SETUP.md](docs/MCP_SETUP.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md)
 

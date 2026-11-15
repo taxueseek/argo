@@ -144,7 +144,9 @@ Search engines optimize for clicks; agents need **verifiable facts**. Argo score
 
 ## AI Search &amp; Sub-skills
 
-### Sub-skills (4 Built-in Pipelines)
+### Sub-skills (7, Single Directory)
+
+All sub-skills live in `sub-skills/`. Four are built-in pipelines driven by the main skill; three are standalone entry points (wide research orchestration, and two scenario bundles for deep research / zero-cost local search).
 
 | Sub-skill | Capability |
 | :--- | :--- |
@@ -152,6 +154,9 @@ Search engines optimize for clicks; agents need **verifiable facts**. Argo score
 | **local-seek** | Hybrid BM25 + vector semantic search for local notes, markdown, and knowledge bases |
 | **ego-search** | Real-browser logged-in search for Zhihu, Xiaohongshu, WeChat Official Accounts (off by default) |
 | **js-run** | Sub-millisecond headless JS execution for environment probes and pure-compute pages |
+| **argo-wide-research** | Multi-track parallel deep research & forensics orchestration with citation ledger and quality gates |
+| **argo-deep-research** | Scenario entry: research dossier + multi-source fact/number verification (`research.py`, `evidence.py`, `--verify`) |
+| **argo-local-search** | Scenario entry: zero-cost keyless search bundle (`--local-first`, `seek.py`, `--include-local`) |
 
 ### 19 MCP Tools
 
