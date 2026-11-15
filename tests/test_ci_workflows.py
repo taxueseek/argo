@@ -165,7 +165,7 @@ def test_extras_reuses_cached_venv_but_self_heals():
     （依赖真源），且不能只信 cache-hit（镜像换 Python 补丁版后旧 venv 会失效，
     而 cache-hit 仍为 true）。这里锁这两个约束。"""
     raw = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
-    assert "actions/cache@v4" in raw
+    assert "actions/cache@v6" in raw
     assert "hashFiles('uv.lock')" in raw, (
         "缓存 key 必须覆盖 uv.lock：lock 变了要重建，否则会装上旧依赖集"
     )
