@@ -613,6 +613,14 @@ def engines_demote_for_lang(engines: list[str], lang: str,
         langs = engine_langs(e, spec)
         if "*" in langs or lang in langs:
             continue
+        # 查询语言只判到书写系统时（cyrillic/arabic/hebrew/thai…）先按语系
+        # 展开判定：cyrillic 查询曾把声明 ru 的 tass 自己移尾（ru 既不含
+        # 字面 cyrillic 也不含 en），匹配语言源被挤出预算窗口（2026-11-15
+        # world_news ru 两红）。展开判据与 lang_allows/_SCRIPT_FAMILY_LANGS
+        # 同源，只在此处补判定、不改 langs 本身。
+        if _SCRIPT_FAMILY_LANGS.get(lang) and any(
+                code in langs for code in _SCRIPT_FAMILY_LANGS[lang]):
+            continue
         if lang == "zh":
             if family_of(e, spec) == "social":
                 out.append(e)

@@ -526,6 +526,26 @@ _UNLESS_MACROS: dict[str, str] = {
     ),
 }
 
+# 平台语境 → 平台原生源（2026-11-15）：@social_context 守卫把平台查询从
+# 论文/技术域救回 social 后，主位仍是域默认的 zhihu——「推特上大家对 GPT
+# 的评价」主位给 zhihu 等于没接平台。原生源在 combo 内则扶正主位，不在则
+# 顶替注入（见 route._route_by_domain 的消费点）。触发词收窄判据与
+# @social_context 一致：裸「X」会撞 X(1870) 粒子物理与变量名，必须带
+# 「上/平台/热帖/帖子」等语境修饰；论文词已被 @social_context 的负向前瞻
+# 排除，本表不再重复。
+_PLATFORM_NATIVE_ENGINES: tuple[tuple[str, "re.Pattern[str]"], ...] = (
+    ("fxtwitter", re.compile(r"(?i)(推特|twitter|\bX\s*(?:上|平台|热帖|帖子))")),
+    ("reddit", re.compile(r"(?i)reddit")),
+)
+
+
+def platform_native_engine(query: str) -> str | None:
+    """社交平台语境查询的平台原生源引擎名（无平台语境返回 None）。"""
+    for eng, pat in _PLATFORM_NATIVE_ENGINES:
+        if pat.search(query or ""):
+            return eng
+    return None
+
 
 def _split_pattern_entry(entry: Any) -> tuple[Any, Any]:
     """触发词条目的两种形态：字符串，或 `{match, unless}`（unless 支持 @宏名 展开）。

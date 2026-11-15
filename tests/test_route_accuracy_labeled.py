@@ -45,6 +45,12 @@ CASES = [
     ("小红书 露营 评论", "social", None, "评论是舆情"),
     # ── 技能目录：缺依赖的引擎不得占 primary ──
     ("小红书 技能 排行榜", "redskill_search", "redskill", "缺 xhs CLI 时让位 redskill"),
+    # ── 平台语境主源原生优先（2026-11-15）：@social_context 救回 social 后，
+    #    主位还得是平台原生通道而非 zhihu——「推特上大家对 GPT 的评价」主位
+    #    给知乎等于没接平台。裸「X」不收（撞 X(1870) 粒子物理）。──
+    ("推特 大家怎么评价 GPT", "social", "fxtwitter", "平台语境主源=原生通道"),
+    ("X 上关于 AI 的讨论", "social", "fxtwitter", "平台语境主源=原生通道"),
+    ("reddit AI 工具 讨论", "social", "reddit", "平台语境主源=原生通道"),
     # ── 行情 vs 财报：primary 必须是行情族 ──
     ("贵州茅台股价", "stock_query", "finance_market", "行情"),
     ("宁德时代 股价", "stock_query", "finance_market", "行情"),

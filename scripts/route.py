@@ -76,6 +76,7 @@ from route_domains import (  # noqa: E402
     _ZH_LANG_GATED_DOMAINS,
     _DIFFUSE_SIGNAL_RE,
     _INTENT_MIN_TOKENS,
+    platform_native_engine,
 )
 
 # 路由决策缓存（存储层）住在 route_cache；route_query_cached 是本模块的编排
@@ -509,6 +510,18 @@ def _route_by_domain(ctx: _RouteCtx, domain: dict[str, Any], secondary: list[dic
                 f"breaker.status({p!r}) 读取失败，按未熔断处理: {_exc!r}")
         if p and p in engines_combo:
             engines_combo = [p] + [e for e in engines_combo if e != p]
+
+    # 平台原生主源（2026-11-15）：X/推特/reddit 语境查询的主位应是平台原生
+    # 通道而非同域通用社区源——「推特上大家对 GPT 的评价」主位给 zhihu 等于
+    # 没接平台（实测公开版还把这类查询劫持到 academic/arXiv，@social_context
+    # 守卫已救回 social，这里是最后一步：原生源扶正/注入主位）。原生源未
+    # 启用或熔断时保持原序；注入时顶掉末位成员，预算窗口内保住原生主位。
+    _native = platform_native_engine(query) if domain.get("name") == "social" else None
+    if _native and _native in enabled and engines_combo \
+            and _native != engines_combo[0]:
+        _pre_len = len(engines_combo)
+        engines_combo = [_native] + [e for e in engines_combo if e != _native]
+        engines_combo = engines_combo[:max(_pre_len, 1)]
 
     # 强语义注入（v2.7.10）：判据与「为什么放在 primary 扶正之后」见
     # route_combo.inject_strong_semantic 的 docstring。
