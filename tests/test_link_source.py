@@ -301,5 +301,49 @@ class TestCheckTargets(unittest.TestCase):
         self.assertIn("[fail]", out)
 
 
+class TestSubLinks(unittest.TestCase):
+    """sub_links 子技能直连与越界防护。"""
+
+    def test_sub_links_link_and_check(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            repo = _make_repo(root)
+            sub_src = repo / "sub-skills" / "argo-wide-research"
+            sub_src.mkdir(parents=True)
+            (sub_src / "SKILL.md").write_text("# wide\n", encoding="utf-8")
+            dst = root / "host" / "argo-wide-research"
+            local_yaml = repo / "installs.local.yaml"
+            local_yaml.write_text(
+                f"sub_links:\n  {dst}: sub-skills/argo-wide-research\n",
+                encoding="utf-8",
+            )
+            with patch.object(link_source, "SOURCE", repo), \
+                 patch.object(link_source, "LOCAL_INSTALLS", local_yaml):
+                subs = link_source._load_local_sub_links()
+                self.assertEqual(subs, [(dst, sub_src.resolve())])
+                code, _ = _run(link_source.link_one, dst, dry_run=False, force=False, source=sub_src)
+                self.assertEqual(code, 0)
+                chk_code, out = _run(link_source.check_targets, [], subs)
+                self.assertEqual(chk_code, 0)
+                self.assertIn("[ok]", out)
+
+    def test_sub_links_rejects_escape_and_absolute(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            repo = _make_repo(root)
+            outside = root / "outside"
+            outside.mkdir()
+            local_yaml = repo / "installs.local.yaml"
+            local_yaml.write_text(
+                "sub_links:\n"
+                f"  {root / 'a'}: ../outside\n"
+                f"  {root / 'b'}: {outside}\n",
+                encoding="utf-8",
+            )
+            with patch.object(link_source, "SOURCE", repo), \
+                 patch.object(link_source, "LOCAL_INSTALLS", local_yaml):
+                self.assertEqual(link_source._load_local_sub_links(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

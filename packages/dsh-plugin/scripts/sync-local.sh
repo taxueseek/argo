@@ -45,9 +45,21 @@ drift=0
 
 for p in "${PROFILES[@]}"; do
   DEST="$DSH_HOME/profiles/$p/node_modules/@taxueseek/argo-dsh"
-  if [ ! -d "$DEST" ]; then
+  if [ ! -e "$DEST" ] && [ ! -L "$DEST" ]; then
     echo "[skip] $p: 未安装 $DEST"
     continue
+  fi
+  if [ -L "$DEST" ]; then
+    REAL_DEST="$(cd "$DEST" 2>/dev/null && pwd -P || true)"
+    REAL_SRC="$(cd "$SRC" && pwd -P)"
+    if [ "$REAL_DEST" = "$REAL_SRC" ]; then
+      if [ "$MODE" = check ]; then
+        echo "[ok] $p (symlink)"
+      else
+        echo "[skip] $p: 已是直连 symlink，无需拷贝同步"
+      fi
+      continue
+    fi
   fi
   if [ "$MODE" = check ]; then
     if diff -rq "$SRC/dsh" "$DEST/dsh" >/dev/null 2>&1 \

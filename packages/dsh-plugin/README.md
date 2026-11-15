@@ -13,25 +13,20 @@ dsh plugin --profile web add "github:taxueseek/argo#main&path:packages/dsh-plugi
 
 `@taxueseek/argo-dsh` 是 DSH 插件包，`argo-search` 是 CLI 包，两者不能互换。安装由官方 plugin manager 应用；RC2 profile HMR 可同 PID 重组 bundle，默认保持同一个 DSH PID，不需要也不应默认重启 Host。本机 `dsh` CLI 只有 `dsh plugin --profile <name> add|remove`，没有 `restart` 子命令；`activation-plan` / `restart-supervised` 属于外部工作台 `dshx`（需单独安装，本机当前未装），不要把它们写成官方命令。激活证据要分开报：`ARTIFACT_SYNCED`、`HOST_TREE_ACTIVE`、`CLIENT_LOADED`、`VISUAL_BEHAVIOR_VERIFIED`；只看到安装成功、配置行、HTTP 200 或 boot manifest 都不算插件已生效。见 `dsh-external-plugin-devkit/knowledge/contracts/live-activation.md`。
 
-### 本地开发：改完源码必须同步进 profile（改动收尾固定步骤）
+### 本地开发：改完源码直接生效（推荐 `link:` 直连）
 
-profile 里的依赖是 `file:` / `github:`，pnpm 安装时**复制**进
-`node_modules/@taxueseek/argo-dsh`，不是软链。只改本仓源码、不跑同步，
-DSH 设置页读到的仍是旧 bundle（2026-10-22 实测：缓存开关与付费额度已改，
-面板仍显示旧版；2026-11-08 复核：web 与 desktop 两个 profile 均已漂移）。
+若用 `dsh plugin --profile <name> add "link:<packages/dsh-plugin 的绝对目录>"` 安装，pnpm 会直接在 `node_modules/@taxueseek/argo-dsh` 建立直连源码的软链，改完源码立即生效，无需任何手动同步脚本（`web` 等 CLI 可管 profile 推荐优先用 `link:`）。
+
+若部分 profile（例如由 Electron 应用独占管理的 `desktop`，或此前用 `file:` / `github:` 安装的旧环境）落成了目录副本，`dsh plugin add` 对同路径 `file:` 会打印 `Already up to date` 不重拷，见 `dsh-external-plugin-devkit/knowledge/pitfalls/file-copy-stale.md`。此时可用兜底脚本比对或同步：
 
 ```bash
-packages/dsh-plugin/scripts/sync-local.sh --check    # 1. 比对源码与已安装 bundle，有漂移退出 1
-packages/dsh-plugin/scripts/sync-local.sh            # 2. 同步 web/desktop（只到 ARTIFACT_SYNCED）
+packages/dsh-plugin/scripts/sync-local.sh --check    # 1. 比对源码与已安装 bundle（symlink 直连也会报 [ok]）
+packages/dsh-plugin/scripts/sync-local.sh            # 2. 仅对目录副本做同步（到 ARTIFACT_SYNCED，symlink 自动跳过）
 ```
 
-`sync-local.sh` 只同步产物，输出 `ARTIFACT_SYNCED; LIVE_ACTIVATION_UNPROVEN`，不是插件生效证明；它没有 `--restart` 参数，也不该有。同步脚本存在的原因是本机依赖装成了 `file:`（pnpm 复制而非软链），而官方 `dsh plugin add` 对同路径的 `file:` 依赖会打印 `Already up to date` 不重拷，见 `dsh-external-plugin-devkit/knowledge/pitfalls/file-copy-stale.md`。
+`sync-local.sh` 只同步产物，输出 `ARTIFACT_SYNCED; LIVE_ACTIVATION_UNPROVEN`，不是插件生效证明；它没有 `--restart` 参数，也不该有。官方明确禁止手改 profile `node_modules` 后直接串重启。激活要核对同 PID 的 Host 行与页面功能；本机没有 `activation-plan`，装了 `dshx` 工作台才可用，且它是外部工具，不是 `dsh` 的一部分（本机当前未装）。
 
-**结构性修法**：把 web 与 desktop profile 的依赖改成 `link:`（`dsh plugin --profile <name> add "link:<packages/dsh-plugin 的绝对目录>"`），源码直接可见，本脚本及其备份逻辑即可整体删除；这一步改的是本机 profile，需在宿主空闲时做并单独验证。改之前不要用 `dsh plugin add "file:..."` 冒充同步，它不会重拷。
-
-官方明确禁止手改 profile `node_modules` 后直接串重启。激活要核对同 PID 的 Host 行与页面功能；本机没有 `activation-plan`，装了 `dshx` 工作台才可用，且它是外部工具，不是 `dsh` 的一部分（本机当前未装）。
-
-**改完源码或文档后，必须跑到 `sync-local.sh --check` 输出 `[ok]` 才算交付完成**；不适用 `--check` 的场景（例如只改仓库内文档、不影响已安装 bundle）要在交付说明里写明跳过理由。同步会先备份到 `~/.dsh/backups/argo-dsh-sync-<时间>-<profile>`；浏览器如仍显示旧面板，做一次硬刷新（Cmd+Shift+R）。
+**改完源码后，运行 `sync-local.sh --check` 确认全部相关 profile 输出 `[ok]` 即达标**（不适用 `--check` 的纯仓库文档改动可在交付说明里写明跳过）。目录副本模式下同步前会自动备份到 `~/.dsh/backups/argo-dsh-sync-<时间>-<profile>`；浏览器如仍显示旧面板，做一次硬刷新（Cmd+Shift+R）。
 
 ### 当前启用状态（web profile）
 
@@ -59,7 +54,7 @@ packages/dsh-plugin/scripts/sync-local.sh            # 2. 同步 web/desktop（�
 六个分区：
 
 - **接入**：`web_search` / `web_fetch` seam 开关；引擎入口命令与参数（npx 或本机 `mcp_server.py`）；搜索/抓取超时、正文上限、连接空闲回收、并发连接数
-- **工具**：18 个原生一等工具的勾选（默认只开 `argo_search` / `argo_fetch`）；单次调用超时与返回文本上限
+- **工具**：18 个原生一等工具的勾选（即 MCP 全量 19 个剔除长耗时编排 `argo_research`，默认只开 `argo_search` / `argo_fetch`）；单次调用超时与返回文本上限
 - **引擎**：argo 本体的行为开关（原环境变量，curated 白名单 35 个，分八组：缓存与排序 / 抓取层 / 语义与自适应 / 引擎启停 / 网络出口 / 本机检索 / **额度与预算** / 其他）。「缓存与排序」组第一项是**测试模式（关闭结果缓存）**，默认关、日常结果缓存 1 小时；只有改进 Skill/插件、需要实时结果时才打开。「额度与预算」组把免费与付费源放在同一套 QuotaManager 下：金额计费的源设月度预算（DeepSeek 元 / Exa 美元），按次数限额的源设日/月次数上限（AnySearch / 知乎按日，元宝默认 2000/月、Tavily 按月）；博查按量付费，不设固定次数上限，由服务商侧结算。额度或预算用尽后该源自动跳过并回落免费源。开关类即时生效，数字 / 文本 / 名单类分组保存；未配置行显示 argo 默认态并标注「默认」。授权类开关（可复算执行、内网 URL）刻意不进面板
 - **密钥**：常用引擎 key 的填写、更新、清除；显示「已配置 / 未配置 + 来源层（凭证库 / 启动环境 / .env）+ 只读态」，明文不回显；每行可勾选「转发」，等价于把引用名加进 `keyRefs`
 - **研究**：worker / 轨道 / 每轨信源 / token 上限与报告落盘目录
