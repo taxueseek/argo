@@ -326,7 +326,11 @@ class TestFastTotalBudget(unittest.TestCase):
 
     def test_budget_stops_serial_rescue_after_deadline(self):
         """fast + 预算 0.25s：首引擎 0.3s 垃圾（守卫拒）→ deadline 已过，
-        串行救援不再起第二引擎（原行为会跑满）。"""
+        串行救援不再起第二引擎（原行为会跑满）。
+
+        契约不变量是「不得超过 1 次」：慢机上 setup 耗光预算时首引擎也可能
+        拿不到调用窗口（2026-11-15 CI 实测 0 次），0 与 1 都合法，≥2 才是
+        预算被绕过。"""
         def fake(_q, eng):
             time.sleep(0.3)
             return _GARBAGE
@@ -335,7 +339,8 @@ class TestFastTotalBudget(unittest.TestCase):
             {"engines_combo": ["g1", "g2", "g3"], "engines": ["g1", "g2", "g3"],
              "parallel": False, "domain": "general_search", "engine": "g1"},
             fake, mode="fast", patch_budget=0.25)
-        self.assertEqual(len(calls), 1, f"预算耗尽后不应再起新引擎，实际调用 {calls}")
+        self.assertLessEqual(
+            len(calls), 1, f"预算耗尽后不得再起新引擎，实际调用 {calls}")
 
     def test_auto_mode_has_no_budget_cutoff(self):
         """对照：auto 无预算截断，串行救援路径完整（行为不回退）。"""
