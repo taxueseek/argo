@@ -1543,7 +1543,14 @@ domains:
     # 2026-11-02 补「原理/是什么/解释」复合守卫：求解释不是查论文，实测
     # 「Transformer 模型 原理」返回 NLP 综述与医学 EEG 论文。守卫只拦
     # 「解释词命中且不含论文词」的查询，「Transformer 原理 论文」仍归本域。
-    unless: '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙|工程实践|实践|博客|文章|官方博客|公司|团队|案例|(?!.*(论文|paper|综述|文献|期刊|arXiv|DOI)).*(原理|是什么|解释|入门|科普|详解))'
+    # 2026-11-15 补 @social_context：平台名是内容来源不是论文主题。实测
+    # 「X 上对 GPT-6 的评价」落本域，arXiv 返回粒子物理的 X(1870)/X(2370)
+    # 论文；「小红书 上 GPT-6 测评」同样被抢。复合守卫（社交语境 ∧ 无论文词）
+    # 实测 0/8 误伤真论文查询（「基于微博数据的舆情分析 论文」仍归本域）。
+    # 与上面的 unless 用列表并列（OR 语义：任一命中即否决这一条触发词）。
+    unless:
+    - '(?i)(技巧|教程|怎么用|如何|使用|入口|官网|注册|充值|账号|订阅|价格|发布|下载|安装|对比|哪个好|好用|推荐|周报|写作|助手|插件|镜像|平替|魔法|翻墙|工程实践|实践|博客|文章|官方博客|公司|团队|案例|(?!.*(论文|paper|综述|文献|期刊|arXiv|DOI)).*(原理|是什么|解释|入门|科普|详解))'
+    - '@social_context'
   - (?i)(論文|ジャーナル|学会誌|査読|研究論文|プレプリント)
   primary: arxiv
 - desc: 技术深度研究
@@ -1783,7 +1790,12 @@ domains:
   # 拉丁语言名必须有字母数字边界：裸 alternation 会让 Go 命中 argo、让
   # Java 命中 JavaScript（顺序靠前会截断）。实测「重启后 django 自检」被
   # 「Go ⊂ argo」锁进本域。
-  - (?i)[一-鿿].*(?<![a-zA-Z0-9])(Rust|Python|Golang|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|LLMs?)(?![a-zA-Z0-9])
+  # 2026-11-15 补 @social_context：平台名是内容来源不是技术主题。实测
+  # 「reddit 上对 rust 的讨论」落本域（span 7 胜过 social 的 6，域序 87
+  # 远早于 98），byted 返回技术文章而非社区讨论。复合守卫实测不误伤
+  # 「rust 内存安全 深入研究」这类真技术查询。
+  - match: '(?i)[一-鿿].*(?<![a-zA-Z0-9])(Rust|Python|Golang|Go|Java|JavaScript|TypeScript|React|Vue|Docker|K8s|Cursor|Copilot|Windsurf|LLMs?)(?![a-zA-Z0-9])'
+    unless: '@social_context'
   - (?i)[一-鿿].*(AI编程|大模型|量子|神经网络|机器学习|深度学习)
   primary: byted
 - desc: 英文技术通用与工程博客（octen 主搜；anysearch #2 作 hedged 救援；keenable 免费补位；eng_blogs 架构博客）
@@ -1990,8 +2002,16 @@ domains:
   # 不是舆情监听。实测「小红书 露营 攻略」返回「露营季广告」「露营经济
   # 红利」这类营销稿；平台名在内容语境里只是来源限定。反例「小红书 露营
   # 舆情/评论」仍归本域（unless 不命中）。
-  - match: '(?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑)'
-    unless: '(?i)(攻略|推荐|路线|景点|美食|做法|教程|测评|怎么玩|清单)'
+  # 2026-11-15 两处修正：
+  #   ① 平台词表补「X 上 / X 平台 / Twitter 上」——实测「X 上对 GPT-6 的
+  #      评价」整条 patterns 无一命中，直接掉进 chinese_general 兜底。
+  #   ② 本条 unless 的「测评」过宽：「小红书 上 GPT-6 测评」要的是社区评价
+  #      与讨论（属本域），却被当「找内容」否决。改为**内容意图词 + 无社交
+  #      语境词**的复合否决（测评归入内容词一侧）：只有「找内容」单独出现
+  #      才否决，同句带评价/讨论/舆情则保留本域。实测「小红书 露营 攻略」
+  #      仍归内容域，「小红书 GPT-6 测评/评价/热议」归本域。
+  - match: '(?i)(小红书|抖音|推特|twitter|reddit|b站|bilibili|微博|评论|帖子|热门|trending|viral|public opinion|public sentiment|market sentiment|舆论|舆情|种草|拔草|用户体验|口碑|(?<![A-Za-z0-9])X(?![A-Za-z0-9])\s*(?:上|平台)|\bTwitter\s+上)'
+    unless: '(?i)(?:(?:攻略|推荐|路线|景点|美食|做法|教程|怎么玩|清单)(?![\s\S]*(?:评价|测评|热议|讨论|评论|舆情|口碑|用户体验))|(?:论文|paper|综述|文献|期刊|arXiv|DOI|研究|实验|数据集|dataset|survey|preprint|引用|学报|学术))'
   - (?i)(xhs|douyin|tweet|retweet|up主|博主|粉丝|点赞|转发|收藏)
   - (?i)(from\s*:|to\s*:|subreddit\s*:|lang\s*:|filter\s*:images|min_faves\s*:|min_retweets\s*:|since\s*:|until\s*:|nitter\b|via\s*:)
   primary: zhihu

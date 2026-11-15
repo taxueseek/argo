@@ -215,6 +215,11 @@ class TestCache(unittest.TestCase):
         self.assertIn("fact_check", DOMAIN_TIER_MAP)
         self.assertEqual(SearchCache.resolve_ttl("chinese_general"), 3600)
         self.assertEqual(SearchCache.resolve_ttl("fact_check"), 7200)
+        # 2026-11-15：social 必须是 realtime。社交 UGC 结果漂移极快（X 搜索
+        # 同查询间隔 0s/5s 重合 0/5），general=3600s 会把 1 小时前的旧帖当
+        # 新结果返回——实测复现过 no-cache 与缓存命中给出完全不同的 5 条。
+        self.assertEqual(DOMAIN_TIER_MAP.get("social"), "realtime")
+        self.assertEqual(SearchCache.resolve_ttl("social"), CACHE_TIERS["realtime"])
 
     def test_freshness_ttl_cap(self):
         """时效敏感查询强制 TTL ≤ 900，即使 domain 是 general。"""

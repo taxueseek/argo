@@ -479,6 +479,22 @@ _UNLESS_MACROS: dict[str, str] = {
     "@compare_or_award": (
         r"(?i)(区别|比较|对比|怎么选|哪个好|优劣|利弊|差异|权衡|\bvs\b|得主|获奖)"
     ),
+    # 社交平台语境否决集（2026-11-15）：X/小红书/reddit 等平台名是**内容来源**，
+    # 不是论文主题。「X 上对 GPT-6 的评价」实测落 academic，arXiv 返回粒子物理
+    # 的 X(1870)/X(2370) 论文；「reddit 上对 rust 的讨论」落 chinese_tech_deep。
+    # 根因是主域打分 `span_len*2 - idx*0.1`：两域 span 相同时域序决定胜负，
+    # 而 academic(idx 75) 排在 social(idx 98) 前 23 位。
+    #
+    # **必须是「社交语境 ∧ 无论文词」的复合守卫**：实测裸社交词作 unless 会
+    # 误伤 6/8 真论文查询（「基于微博数据的舆情分析 论文」「Twitter 情感分析
+    # 研究综述」「GPT 评价指标 综述」）。本宏用负向前瞻把论文词排除在外。
+    # 复用方式：触发词条目的 unless 引用 `@social_context`，不要展开。
+    "@social_context": (
+        r"(?i)(?:推特|twitter|小红书|reddit|微博|知乎|\bX\s+上\b|\bX\s+平台\b|网友|热议|"
+        r"评价|测评|讨论|评论|帖子|点评|口碑)"
+        r"(?![\s\S]*(?:论文|paper|综述|文献|期刊|arXiv|DOI|研究|实验|数据集|dataset|"
+        r"survey|preprint|引用|学报|学术))"
+    ),
     # 本地/免 key 镜像通道否决集（2026-11-04）：`local_*` 六个域是用户**显式
     # 选择**本地化通道的意图（`references/usage.md`：「local_ 前缀是本地化/免 key
     # 镜像通道」），但它们在 config 里排在末尾（idx 92-97），而域匹配先到先得——

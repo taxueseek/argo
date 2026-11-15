@@ -126,6 +126,15 @@ LEGITIMATE_ROUTES = [
     ("药品 说明书", "medical"),
     ("阿司匹林 分子式", "chem_search"),
     ("苹果股价 行情", "stock_query"),
+    # 2026-11-15：平台语境复合守卫的对照面——加守卫不得把社交语境改废
+    ("X 上对 GPT-6 的评价", "social"),
+    ("小红书 上 GPT-6 测评", "social"),
+    ("reddit 上对 rust 的讨论", "social"),
+    ("Twitter 情感分析 研究综述", "academic"),
+    ("rust 内存安全 深入研究", "chinese_tech_deep"),
+    # 平台词是内容来源，但同句有论文词时仍须归 academic（复合守卫不误伤）
+    ("X 射线 论文", "academic"),                                     # X ⊂ 粒子物理 X(1870)
+    ("基于微博数据的舆情分析 论文", "academic"),                        # 微博 ⊂ social 触发词
     # B 类修复点的真查询（意图词必须仍然豁免让位）
     ("北京 今天 天气", "weather_query"),
     ("上海 天气 怎么样", "weather_query"),

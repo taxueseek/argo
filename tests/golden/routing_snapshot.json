@@ -184,6 +184,14 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "Twitter 情感分析 研究综述",
+   "domain": "academic",
+   "kind": "regex",
+   "expect": "academic",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
+  },
+  {
    "query": "US CPI",
    "domain": "macro_data",
    "kind": "regex",
@@ -198,6 +206,22 @@
    "expect": "sports_search",
    "forbid": null,
    "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "X 上对 GPT-6 的评价",
+   "domain": "social",
+   "kind": "regex",
+   "expect": "social",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "X 射线 论文",
+   "domain": "academic",
+   "kind": "regex",
+   "expect": "academic",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
   },
   {
    "query": "agent skills 市场 目录",
@@ -424,12 +448,28 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "reddit 上对 rust 的讨论",
+   "domain": "social",
+   "kind": "regex",
+   "expect": "social",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
+  },
+  {
    "query": "requests pypi",
    "domain": "package_search",
    "kind": "regex",
    "expect": "package_search",
    "forbid": null,
    "src": "ROUTE_MATRIX"
+  },
+  {
+   "query": "rust 内存安全 深入研究",
+   "domain": "chinese_tech_deep",
+   "kind": "regex",
+   "expect": "chinese_tech_deep",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
   },
   {
    "query": "settlement 结算 周期",
@@ -840,6 +880,14 @@
    "src": "ROUTE_MATRIX"
   },
   {
+   "query": "基于微博数据的舆情分析 论文",
+   "domain": "academic",
+   "kind": "regex",
+   "expect": "academic",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
+  },
+  {
    "query": "塔罗牌 入门教程",
    "domain": "chinese_tech_deep",
    "kind": "regex",
@@ -892,6 +940,14 @@
    "domain": "geo_places",
    "kind": "regex",
    "expect": "geo_places",
+   "forbid": null,
+   "src": "LEGITIMATE_ROUTES"
+  },
+  {
+   "query": "小红书 上 GPT-6 测评",
+   "domain": "social",
+   "kind": "regex",
+   "expect": "social",
    "forbid": null,
    "src": "LEGITIMATE_ROUTES"
   },

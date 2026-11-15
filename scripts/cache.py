@@ -101,7 +101,11 @@ DOMAIN_TIER_MAP = {
     "wechat_search": "news",
     "shopping": "general",
     "reference": "evergreen",
-    "social": "general",
+    # 2026-11-15：social 原为 general=3600s，但社交 UGC 结果漂移极快——实测
+    # X 搜索同查询间隔 0s 重合 0/5、5s 重合 0/5、15s 才重合 4/5。1 小时缓存
+    # 会把旧帖当新结果返回（实测复现：no-cache 拿到的 5 条与缓存命中完全不同）。
+    # 改 realtime=900s，与社交平台时效语义一致（同 zhihu_hot_list/hot_trending）。
+    "social": "realtime",
     "local_chinese": "general",
     "local_news": "news",
     "local_academic": "research",
