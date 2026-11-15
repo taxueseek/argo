@@ -1315,22 +1315,9 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             _video["cached"] = False
             return _strip_html_unless_needed(_video, need_html)
 
-    # robots.txt 尊重（合规检查）：被禁路径直接拒绝，抓取失败放行
-    try:
-        from robots_guard import robots_blocked
-        if robots_blocked(url, timeout=min(timeout, 5.0)):
-            result = _make_result(url, "", 0, engine_states.FETCH_ROBOTS_BLOCKED, ok=False,
-                                  error="robots.txt 禁止抓取")
-            result = _assess_quality(result)
-            result["cached"] = False
-            return _strip_html_unless_needed(result, need_html)
-    except ImportError:
-        pass
-
-    # 微信公众号文章走专用降级链（HTTP→CDP→搜狗，唯一来源 wechat_article.py，
-    # 即 `argo wx` 同一实现）：通用 HTML 链对 mp.weixin 只能拿到 JS 骨架，
-    # 正文全空（2026-11-01 实测缺口：fetch 对 mp.weixin 零处理）。robots 已在
-    # 上方拦截，这里只做域名分流；need_html/actions/force_browser 同视频分支让路。
+    # 微信专用降级链（HTTP→CDP→搜狗，wechat_article.py，`argo wx` 同实现——用户
+    # 显式取文不走匿名爬虫 robots 口径）【必须在 robots 闸前】mp.weixin/robots.txt
+    # 是 Disallow: /（11-15 实测），闸先跑分支永不可达（6ebb625 实跑复现）。让路同前。
     if (_is_wechat_article_url(url) and not need_html and not actions
             and not force_browser):
         try:
@@ -1368,6 +1355,18 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             "fetch_method": engine_states.FETCH_WECHAT_FAILED,
             "cached": False,
         }, need_html)
+
+    # robots.txt 尊重（合规检查）：被禁路径直接拒绝，抓取失败放行
+    try:
+        from robots_guard import robots_blocked
+        if robots_blocked(url, timeout=min(timeout, 5.0)):
+            result = _make_result(url, "", 0, engine_states.FETCH_ROBOTS_BLOCKED, ok=False,
+                                  error="robots.txt 禁止抓取")
+            result = _assess_quality(result)
+            result["cached"] = False
+            return _strip_html_unless_needed(result, need_html)
+    except ImportError:
+        pass
 
     # 登录态车道（A2）：站点有 argo auth 持久 profile → 跳过匿名链直进浏览器。
     # 匿名 HTTP 对已登录站只会拿到「登出态」内容——那是成功的假象，比失败更糟。

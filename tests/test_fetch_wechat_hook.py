@@ -110,6 +110,22 @@ def test_wechat_failure_is_structured_not_generic_fallback(wx_stub):
     assert "所有通道均失败" in out["error"]
 
 
+def test_wechat_branch_runs_before_robots_gate(wx_stub, monkeypatch):
+    """顺序回归（2026-11-15 实跑抓到）：mp.weixin.qq.com/robots.txt 是
+    User-agent: * Disallow: /，robots 闸若先于专用分支执行，分支对它唯一
+    服务的 URL 永不可达（6ebb625 曾放闸后，实跑复现 robots_blocked）。
+    robots 判 blocked 也必须先走微信专用链；其余 URL 的 robots 合规不变。"""
+    monkeypatch.setitem(sys.modules, "robots_guard",
+                        types.SimpleNamespace(robots_blocked=lambda *a, **k: True))
+    wx_stub["result"] = _ok_result()
+    out = fetch_v3.fetch_v3(WX_URL, skip_cache=True,
+                            use_browser_fallback=False)
+    assert wx_stub["calls"] == [WX_URL]
+    assert out["success"] is True
+    assert out["fetch_method"].startswith("wechat:")
+    assert out["title"] == "标题"
+
+
 def test_explicit_html_intent_bypasses_wx_branch(wx_stub, offline_http):
     """need_html 是调用方的显式抓取意图：结构化提取车道必须让路。
     通用链以离线桩走完（599 全败），断言只关心 wx 链未被触发。"""
