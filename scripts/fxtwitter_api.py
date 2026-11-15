@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """FxTwitter / FxEmbed 原始客户端（零 Key，只读）。
 
-与 `social_engines/twitter_engine.py` 的分工：那个是**搜索引擎**，把推文压成
-统一结果 schema 参与 RRF 融合；本模块是**原始接口层**，原样返回上游 JSON 的
-各端点（status / thread / conversation / quotes / reposts），供 `argo tweet`
-做完整打包用。两者的公共出口纪律一致（都走 net_proxy + url_safety），但形状
-不同——搜索要的是「一行结果」，打包要的是「整份内容」，不做归一。
+本模块是**原始接口层**，原样返回上游 JSON 的各端点（status / thread /
+conversation / quotes / reposts），供 `argo tweet` 做完整打包用。搜索结果
+的归一 schema 由声明式 `fxtwitter` 引擎（engines/specs/fxtwitter.yaml）
+承担；关键词搜索走 `twitter` 引擎的 `scripts/x_search.py`。旧
+`social_engines/twitter_engine.py` 已删（2026-11-15：三个通道全失效、零生产
+调用者）；公共出口纪律不变——都走 net_proxy + url_safety。
 
 公共实例：api.fxtwitter.com（备镜像 api.fixupx.com）
 文档：https://docs.fxembed.com/api/twitter/
@@ -76,8 +77,8 @@ def http_get(url: str, *, headers: dict[str, str] | None = None,
              max_retries: int = 2) -> tuple[bytes, int]:
     """GET 一个 URL，带 429/网络重试。发请求前过 SSRF 守卫。
 
-    FxTwitter 侧**唯一**的 HTTP 出口：搜索引擎（twitter_engine）与打包器
-    （tweet.py）都走这里，不再各写一份重试与代理处理。
+    FxTwitter 侧**唯一**的 HTTP 出口：打包器（tweet.py）与需要原始响应的
+    抓取处都走这里，不再各写一份重试与代理处理。
     """
     ok, reason = check_url(url)
     if not ok:

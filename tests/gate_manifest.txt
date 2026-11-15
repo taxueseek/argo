@@ -34,6 +34,7 @@ tests/test_agents_routing.py
 tests/test_badcase_ledger.py
 tests/test_caliber_registry_sync.py
 tests/test_check_commit_report.py
+tests/test_child_env_gate.py
 tests/test_config_integrity_gate.py
 tests/test_consistency_gates.py
 tests/test_context_budget.py

@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""FxTwitter 接入测试 — 离线解析 + 配置注册 + live 连通（可 skip）。
+"""FxTwitter 接入测试 — 声明式引擎注册 + 解析器阈值 + live 连通（可 skip）。
+
+`sources` 已删（2026-11-15）：旧 `social_engines/twitter_engine.py` 的搜索通道
+三处全失效、零生产调用者，`twitter` 引擎自 2026-10-21 改走 `scripts/x_search.py`
+（见 engines/specs/twitter.yaml 头注）。保留本文件守两件事：
+  1. fxtwitter / twitter 两个声明式引擎仍注册可用；
+  2. 搜索侧 `min_digits=10` 阈值仍在世——`argo search "20"` 的 20 是页码/数量，
+     不该被当成推文 ID（解析器唯一实现在 fxtwitter_api.extract_status_id）。
 
 运行：
-  cd ~/.workbuddy/skills/argo
   python3 -m pytest tests/test_fxtwitter.py -v
   python3 tests/test_fxtwitter.py
   # 含真实 API：
@@ -11,56 +17,19 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
-sys.path.insert(0, str(SCRIPT_DIR / "social_engines"))
 
-from social_engines import twitter_engine as tw  # noqa: E402
 from config import load_config, get_engines  # noqa: E402
+from fxtwitter_api import extract_status_id  # noqa: E402
 
 LIVE = os.environ.get("ARGO_LIVE", "").strip() in {"1", "true", "yes"}
-
-
-SAMPLE_SEARCH = {
-    "code": 200,
-    "results": [
-        {
-            "type": "status",
-            "url": "https://x.com/jack/status/20",
-            "id": "20",
-            "text": "just setting up my twttr",
-            "author": {
-                "screen_name": "jack",
-                "name": "jack",
-            },
-            "likes": 100,
-            "reposts": 50,
-            "replies": 10,
-            "views": 1000,
-            "created_at": "Tue Mar 21 20:50:14 +0000 2006",
-            "lang": "en",
-        },
-        {
-            "type": "status",
-            "url": "https://x.com/demo/status/21",
-            "id": "21",
-            "text": "second tweet about Python asyncio",
-            "author": {"screen_name": "demo", "name": "Demo"},
-            "likes": 3,
-            "reposts": 1,
-            "replies": 0,
-        },
-    ],
-    "cursor": {"bottom": "x"},
-}
 
 
 class TestFxTwitterRegistration(unittest.TestCase):
@@ -78,83 +47,41 @@ class TestFxTwitterRegistration(unittest.TestCase):
         self.assertIn("twitter", engines)
         self.assertTrue(engines["twitter"].get("enabled", True))
 
+    def test_twitter_engine_uses_x_search_not_legacy_script(self):
+        """twitter 引擎不得再指向已删的 social_engines/twitter_engine.py。"""
+        load_config(force=True)
+        spec = get_engines()["twitter"]
+        cmd = " ".join(str(c) for c in (spec.get("cmd") or []))
+        self.assertIn("x_search.py", cmd)
+        self.assertNotIn("twitter_engine", cmd)
 
-class TestFxTwitterParsers(unittest.TestCase):
-    def test_status_to_result_schema(self):
-        item = SAMPLE_SEARCH["results"][0]
-        r = tw._status_to_result(item, rank=0)
-        self.assertIsNotNone(r)
-        assert r is not None
-        for key in ("title", "url", "snippet", "source", "score", "social_meta"):
-            self.assertIn(key, r)
-        self.assertEqual(r["source"], "twitter")
-        self.assertTrue(r["url"].startswith("http"))
-        self.assertIn("just setting up", r["snippet"])
-        meta = r["social_meta"]
-        self.assertEqual(meta["platform"], "twitter")
-        self.assertEqual(meta["author"], "jack")
-        self.assertEqual(meta["likes"], 100)
-        self.assertEqual(meta["provider"], "fxtwitter")
+
+class TestSearchSideStatusIdThreshold(unittest.TestCase):
+    """搜索侧阈值 min_digits=10：短数字是页码/数量，不是推文 ID。"""
 
     def test_extract_status_id_from_url(self):
         self.assertEqual(
-            tw._extract_status_id("https://x.com/jack/status/20"),
+            extract_status_id("https://x.com/jack/status/20", min_digits=10),
             "20",
         )
         self.assertEqual(
-            tw._extract_status_id("https://twitter.com/jack/status/1548602399862013953"),
+            extract_status_id(
+                "https://twitter.com/jack/status/1548602399862013953", min_digits=10),
             "1548602399862013953",
         )
-        self.assertEqual(tw._extract_status_id("20"), None)  # too short (<10)
-        self.assertEqual(tw._extract_status_id("1548602399862013953"), "1548602399862013953")
-        self.assertIsNone(tw._extract_status_id("OpenAI research"))
 
-    def test_search_fxtwitter_parses_mock(self):
-        body = json.dumps(SAMPLE_SEARCH).encode("utf-8")
+    def test_short_digits_rejected_on_search_side(self):
+        # `argo search "20"` 的 20 不该被当成推文 ID
+        self.assertIsNone(extract_status_id("20", min_digits=10))
+        self.assertIsNone(extract_status_id("OpenAI research", min_digits=10))
 
-        def fake_get(url, headers=None, timeout=10, max_retries=2):
-            return body, 200
-
-        with patch.object(tw, "_http_get_with_retry", side_effect=fake_get):
-            results = tw.search_fxtwitter("twttr", n=5)
-        self.assertEqual(len(results), 2)
-        self.assertEqual(results[0]["social_meta"]["author"], "jack")
-        self.assertEqual(results[0]["source"], "twitter")
-        self.assertTrue(results[0]["title"])
-
-    def test_search_routes_to_status_for_url(self):
-        status_payload = {
-            "code": 200,
-            "status": SAMPLE_SEARCH["results"][0],
-        }
-        body = json.dumps(status_payload).encode("utf-8")
-
-        def fake_get(url, headers=None, timeout=10, max_retries=2):
-            self.assertIn("/status/", url)
-            return body, 200
-
-        with patch.object(tw, "_http_get_with_retry", side_effect=fake_get):
-            results = tw.search_fxtwitter("https://x.com/jack/status/20", n=3)
-        self.assertEqual(len(results), 1)
-        self.assertIn("twttr", results[0]["snippet"])
+    def test_explicit_id_still_accepted_by_packager_side(self):
+        # `argo tweet "20"` 是用户显式给的 ID，min_digits=1 必须认
+        self.assertEqual(extract_status_id("20"), "20")
 
 
 @unittest.skipUnless(LIVE, "set ARGO_LIVE=1 for live FxTwitter calls")
 class TestFxTwitterLive(unittest.TestCase):
-    def test_live_search(self):
-        results = tw.search_fxtwitter("OpenAI", n=3, timeout=12)
-        self.assertIsInstance(results, list)
-        self.assertGreater(len(results), 0, "live search 空结果")
-        r = results[0]
-        self.assertTrue(r.get("title") or r.get("url"))
-        self.assertEqual(r.get("source"), "twitter")
-        self.assertEqual((r.get("social_meta") or {}).get("provider"), "fxtwitter")
-
-    def test_live_status(self):
-        results = tw.fetch_status("20", timeout=12)
-        self.assertEqual(len(results), 1)
-        self.assertIn("twttr", results[0]["snippet"].lower())
-
     def test_live_engine_search_twitter(self):
         from engines import search as engine_search
 

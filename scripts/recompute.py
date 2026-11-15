@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 from typing import Any
 from cli_io import dumps
+from engine_env import build_child_env
 
 _TAIL_STDOUT = 3000  # 超时/被杀时保留尾部输出（大任务不至于白跑全丢）
 _TAIL_STDERR = 2000
@@ -276,11 +277,20 @@ def run_recompute(
     full_code = prelude + "\n" + script
 
     py = python or sys.executable
-    env = dict(os.environ)
-    env.pop("HTTP_PROXY", None)
-    env.pop("HTTPS_PROXY", None)
-    env.pop("http_proxy", None)
-    env.pop("https_proxy", None)
+    # 子进程环境走最小集，不再继承全量 os.environ。
+    # 为什么：这里执行的是研究包携带的脚本（非本仓代码），脚本可自由
+    # os.environ 读取；全量继承等于把父进程的全部 API 密钥交给一段
+    # 来源不可控的代码（与 CLI 引擎白名单同一判据，见 engine_env
+    # BASE_CHILD_ENV_ALLOWLIST）。断网意图保留：代理类一律不进子进程，
+    # 与既有 pop 行为等价（-I 隔离模式下 PYTHONPATH/PYTHONUTF8 本就失效，
+    # 脚本只依赖 stdlib，编码由 -X utf8 显式指定）。
+    env = build_child_env(
+        "recompute", None,
+        extra_env={
+            "HTTP_PROXY": None, "HTTPS_PROXY": None,
+            "http_proxy": None, "https_proxy": None,
+        },
+    )
 
     def _limits():
         try:
