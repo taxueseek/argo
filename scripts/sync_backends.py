@@ -62,6 +62,15 @@ _KEYREFS_END = "  // </generated:keyrefs>\n"
 # 旧面板手写名单里与候选链规则不一致的 ref（候选链里确实有这个名字，运行时
 # get_env 能读到）：保留旧名，否则 DSH 凭证库里已存的 key 改名后面板显示未配置
 DSH_LEGACY_REFS = {"ARGO_BYTED_API_KEY": "WEB_SEARCH_API_KEY"}
+# 语义证据层（非引擎）凭证：Gemini Decision 1 首选通道与 TypeSafe JEV 备用
+# 通道（semantic_evidence.py 三级阶梯的钥匙）。它们不是引擎、引擎声明派生不
+# 到，这里显式补录，密钥页与 keyRefs 转发才不漏；ref 用裸名（凭证库存名习惯），
+# argo 侧候选链（ARGO_GEMINI_API_KEY/GEMINI_API_KEY、ARGO_JEV_API_KEY/
+# TYPESAFE_API_KEY）第二位即命中。
+DSH_SEMANTIC_KEYS = [
+    {"ref": "GEMINI_API_KEY", "label": "语义证据·Gemini 决策", "en": "Semantic Evidence · Gemini Decision"},
+    {"ref": "TYPESAFE_API_KEY", "label": "语义证据·JEV（TypeSafe）", "en": "Semantic Evidence · JEV (TypeSafe)"},
+]
 DSH_COMMON_KEYS = ("DEEPSEEK_API_KEY", "ARGO_YUANBAO_API_KEY", "ARGO_TAVILY_API_KEY",
                    "ARGO_EXA_API_KEY", "ARGO_BOCHA_API_KEY", "ARGO_BRAVE_API_KEY",
                    "ARGO_TINYFISH_API_KEY")
@@ -305,6 +314,13 @@ def derive_dsh_keys(engines: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
         en = DSH_EN_LABELS.get(ref) or g["engines"][0].replace("_", " ").title()
         out.append({"ref": ref, "common": primary in DSH_COMMON_KEYS,
                     "label": g["label"], "en": en, "engines": g["engines"]})
+    # 非引擎凭证补录（语义证据层）：engines 留空，密钥页按「不覆盖引擎」渲染；
+    # 已与某引擎派生 ref 撞名时让位（known 去重），避免同 ref 两行。
+    known = {r["ref"] for r in out}
+    for row in DSH_SEMANTIC_KEYS:
+        if row["ref"] not in known:
+            out.append({"ref": row["ref"], "common": False, "label": row["label"],
+                        "en": row["en"], "engines": []})
     out.sort(key=lambda r: (not r["common"],
                             DSH_COMMON_KEYS.index(next(p for p in DSH_COMMON_KEYS
                                                        if p in (r["ref"], "ARGO_" + r["ref"])))
