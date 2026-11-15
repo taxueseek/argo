@@ -452,10 +452,10 @@ def _run_list() -> int:
 
 
 def _read_secret(prompt: str) -> str:
-    """值只从 stdin 进来：tty 用 getpass 不回显，管道直接读一行。
+    """值只从 stdin 进来：tty 用 getpass 不回显，管道或内存流直接读一行。
     值不进 argv——进程列表与 shell history 都不会留痕。"""
-    from cli_io import stdin_is_piped
-    if stdin_is_piped():
+    from cli_io import stdin_is_memory_stream, stdin_is_piped
+    if stdin_is_piped() or stdin_is_memory_stream():
         return sys.stdin.readline().rstrip("\r\n").strip()
     import getpass
     return getpass.getpass(prompt).strip()

@@ -219,6 +219,18 @@ def test_set_rejects_empty_value(monkeypatch, tmp_path, capsys, env_target):
     assert "失败" in capsys.readouterr().err
 
 
+def test_read_secret_does_not_open_tty_for_stringio(monkeypatch):
+    import getpass
+    import io
+
+    def _boom(_prompt=""):
+        raise AssertionError("getpass.getpass must not touch /dev/tty for StringIO")
+
+    monkeypatch.setattr(getpass, "getpass", _boom)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("  from-memory-stream \n"))
+    assert settings_page._read_secret("Key: ") == "from-memory-stream"
+
+
 def test_unset_removes_from_envfile(monkeypatch, tmp_path, capsys, env_target):
     env_target.write_text("ARGO_A_KEY=keepme-123456789\nARGO_B_KEY=byeeee-12345\n",
                           encoding="utf-8")

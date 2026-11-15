@@ -55,8 +55,8 @@ import sys
 import time
 from typing import Any
 
-__all__ = ["stdin_is_piped", "read_stdin_if_piped", "dumps", "dumps_pretty",
-           "ensure_utf8_stdio"]
+__all__ = ["stdin_is_piped", "stdin_is_memory_stream", "read_stdin_if_piped",
+           "dumps", "dumps_pretty", "ensure_utf8_stdio"]
 
 # stdout 的紧凑分隔符（无冗余空格）：与 mcp_handlers._dumps 的默认计算方式一致。
 _COMPACT = (",", ":")
@@ -141,6 +141,24 @@ def stdin_is_piped() -> bool:
     """stdin 是否接了管道或文件重定向（而非终端 / /dev/null / 未打开）。"""
     mode = _stdin_mode()
     return mode is not None and (stat.S_ISFIFO(mode) or stat.S_ISREG(mode))
+
+
+def stdin_is_memory_stream() -> bool:
+    """stdin 是否为无 OS fd 但仍打开的非 TTY 文本流（如单测 io.StringIO）。
+
+    ``stdin_is_piped()`` 依 ``fstat(fileno())`` 判定，对 ``io.StringIO`` 返回 False；
+    调用方如需在无真实 fd 的单测里同样走读流路径而非打开 ``/dev/tty``（如
+    ``getpass.getpass``），可叠加本判据。"""
+    import io
+
+    stdin = getattr(sys, "stdin", None)
+    if not isinstance(stdin, io.TextIOBase) or getattr(stdin, "closed", False):
+        return False
+    try:
+        stdin.fileno()
+        return False
+    except (OSError, ValueError, AttributeError):
+        return not stdin.isatty()
 
 
 def _stdin_mode() -> int | None:
