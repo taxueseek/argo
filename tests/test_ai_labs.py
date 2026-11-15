@@ -2,10 +2,10 @@
 """test_ai_labs.py — AI 实验室一手博客聚合引擎（rss_feed/filter）离线契约。
 
 种子全部 2026-11-15 实测 HTTP 200 直连（OpenAI/DeepMind/HF/Google/Apple ML/
-Mistral/Epoch/Simon Willison/The Decoder/TechCrunch AI）。锁六件事，全部
+Epoch/Simon Willison/The Decoder/TechCrunch AI）。锁六件事，全部
 打桩 http_open，不碰网络：
   1. spec 注册与契约字段（explicit_only、family、feed_mode、canary）
-  2. 种子注册表完整性：11 份、全 https、全 en、域名逐一在册
+  2. 种子注册表完整性：10 份、全 https、全 en、域名逐一在册
   3. 不接任何域 combo（explicit_only 语义：不占自动路由预算）
   4. filter 语义：查询命中返回条目，标题加「出处 · 」前缀
   5. 纯中文查询不下载英文种子（语言门）
