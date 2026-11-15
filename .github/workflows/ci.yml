@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           # 与仓内 .python-version 一致：门禁的判定标准必须可复现，解释器版本
           # 漂移会让同一份代码在不同作业里跑出不同结果。
@@ -66,7 +66,7 @@ jobs:
         group: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.14"
           cache-dependency-glob: uv.lock
@@ -102,7 +102,7 @@ jobs:
         group: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.14"
           cache-dependency-glob: uv.lock
@@ -162,7 +162,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.14"
           cache-dependency-glob: uv.lock
