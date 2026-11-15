@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -232,5 +233,41 @@ def test_local_seek_adapter_inprocess_end_to_end_without_mocks(monkeypatch):
     )
     assert isinstance(data, dict)
     assert data.get("results"), "真实进程内 local_seek_adapter 应命中结果"
+
+
+def test_local_seek_adapter_inprocess_does_not_pollute_sys_modules(monkeypatch):
+    """进程内加载必须走 local_seek._load_seek_module（模块名 argo_seek_impl），
+    不得裸 `import seek` 占住通用模块名——常驻 MCP 进程里后续任何 import seek
+    都会命中残留模块（2026-11-15 收口）。"""
+    import local_seek_adapter
+
+    monkeypatch.delenv("ARGO_SEEK_SUBPROCESS", raising=False)
+    monkeypatch.delitem(sys.modules, "seek", raising=False)
+    monkeypatch.setattr(
+        local_seek_adapter,
+        "_run_seek_subprocess",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("不应回退子进程")),
+    )
+    local_seek_adapter._run_seek(
+        ["RATE_LIMIT_COOLDOWNS", "--path", str(SCRIPTS), "--max", "1"]
+    )
+    assert "seek" not in sys.modules, "裸 import seek 污染了 sys.modules"
+
+
+def test_local_seek_adapter_swallows_narrow_whitelist_miss(monkeypatch):
+    """进程内执行抛白名单外异常（seek.py 的 outline/lines/git 分支无顶层 try）
+    必须吞掉返回 None 交回退链，不得穿透到 CLI 引擎调用方。"""
+    import local_seek
+    import local_seek_adapter
+
+    def _boom(argv, time_budget=None):
+        raise KeyError("simulated non-whitelisted failure")
+
+    fake = types.ModuleType("argo_seek_impl")
+    fake.run_query = _boom
+    monkeypatch.setattr(local_seek, "_load_seek_module", lambda p: fake)
+
+    assert local_seek_adapter._run_seek_inprocess(
+        str(SEEK), ["whatever"]) is None
 
 

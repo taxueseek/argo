@@ -216,3 +216,26 @@ def test_route_sample_stateless_cli_and_dynamic_env(tele_dir, monkeypatch):
     monkeypatch.setattr("random.randrange", lambda _n: 0)
     route_log.sample_route({}, sample)
     assert len(_read_lines(tele_dir, "route")) == 2
+
+
+def test_route_sample_env_change_takes_effect_without_module_cache(tele_dir, monkeypatch):
+    """采样率每次调用现读 env：长驻进程改 env 后必须立即生效。
+
+    此前实现把 env 解析结果缓存进模块级 `_ROUTE_SAMPLE_RATE`，于是
+    「先设 1、后改 5」的进程在第 2 次调用起静默沿用 1（实测）；删掉 env
+    也会退回被缓存的旧值而非默认 20。修后：显式覆盖槽（测试注入）优先，
+    否则每次现读。"""
+    import route_log
+    monkeypatch.setattr("route_log._ROUTE_SAMPLE_RATE", route_log._DEFAULT_ROUTE_SAMPLE_RATE)
+    monkeypatch.setattr("route_log._route_sample_counter", 0)
+    sample = {"domain": "academic", "engine": "arxiv", "engines": ["arxiv"],
+              "confidence": 0.9, "mode": "auto", "features": {"intents": ["academic"]}}
+
+    monkeypatch.setenv("ARGO_ROUTE_SAMPLE_RATE", "1")
+    route_log.sample_route({}, sample)
+    monkeypatch.setenv("ARGO_ROUTE_SAMPLE_RATE", "2")
+    route_log.sample_route({}, sample)
+    route_log.sample_route({}, sample)
+    # rate=2 时第 2、3 次调用（counter=2、3）只有 counter%2==0 那次落盘
+    assert route_log._resolve_rate() == 2
+    assert len(_read_lines(tele_dir, "route")) == 2

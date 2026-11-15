@@ -28,8 +28,18 @@ def _env_int(name: str, default: int, minimum: int = 1) -> int:
 
 
 _DEFAULT_ROUTE_SAMPLE_RATE = 20
+# 模块级覆盖槽：仅测试用 monkeypatch 注入确定采样率（=1 时每调必落）。
+# 运行期**不做 env→本值的缓存**：一旦缓存，「先设 env 再删」的进程会在后续调用
+# 静默退回缓存值（实测 1 → 20），与「运行期生效」的意图相反。
 _ROUTE_SAMPLE_RATE = _DEFAULT_ROUTE_SAMPLE_RATE
 _route_sample_counter = 0
+
+
+def _resolve_rate() -> int:
+    """采样率：显式覆盖槽优先（测试注入），否则每次调用现读 env。"""
+    if _ROUTE_SAMPLE_RATE != _DEFAULT_ROUTE_SAMPLE_RATE:
+        return _ROUTE_SAMPLE_RATE
+    return _env_int("ARGO_ROUTE_SAMPLE_RATE", _DEFAULT_ROUTE_SAMPLE_RATE)
 
 
 def sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
@@ -37,11 +47,7 @@ def sample_route(done: dict[str, Any], kw: dict[str, Any]) -> None:
     global _route_sample_counter
     if "features" not in kw or not kw.get("features"):
         return  # engine_override 直通等无语义分支不采样
-    rate = (_env_int("ARGO_ROUTE_SAMPLE_RATE", _DEFAULT_ROUTE_SAMPLE_RATE)
-            if _ROUTE_SAMPLE_RATE == _DEFAULT_ROUTE_SAMPLE_RATE
-            and "ARGO_ROUTE_SAMPLE_RATE" in os.environ
-            else _ROUTE_SAMPLE_RATE)
-    rate = max(1, int(rate))
+    rate = max(1, int(_resolve_rate()))
     _route_sample_counter += 1
     if rate > 1:
         # 单次 CLI 进程只有第 1 次调用：若只看 `_route_sample_counter % rate == 0`，

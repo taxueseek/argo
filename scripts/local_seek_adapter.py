@@ -29,16 +29,24 @@ def _resolve_seek() -> Path:
 
 
 def _run_seek_inprocess(seek_py: Path | str, argv: list[str], budget_s: float = 8.0) -> dict | None:
-    """进程内直接调 seek.run_query，省掉 Python 冷启动与 1,962 行脚本重解析开销。"""
+    """进程内直接调 seek.run_query，省掉 Python 冷启动与 1,962 行脚本重解析开销。
+
+    加载走 local_seek._load_seek_module（spec_from_file_location + 模块名
+    argo_seek_impl）：**不占通用模块名 `seek`**。裸 `import seek` 会把该名写进
+    sys.modules，常驻 MCP 进程里后续任何 `import seek` 都命中这个残留模块，
+    与 local_seek.py 的隔离契约（「不占通用模块名」）冲突。异常一律吞掉返回
+    None 交回退链——seek.py 的 outline/lines/git/structural 分支没有顶层
+    try，白名单外的异常（如 KeyError）会直接穿透到 CLI 引擎调用方。
+    """
     try:
-        seek_dir = str(Path(seek_py).parent)
-        if seek_dir not in sys.path:
-            sys.path.insert(0, seek_dir)
-        import seek as seek_mod
-        text, rc = seek_mod.run_query([*argv, "--json"], time_budget=budget_s)
+        from local_seek import _load_seek_module
+        mod = _load_seek_module(str(seek_py))
+        if mod is None:
+            return None
+        text, rc = mod.run_query([*argv, "--json"], time_budget=budget_s)
         if rc == 0 and text:
             return json.loads(text)
-    except (ImportError, OSError, ValueError, RuntimeError, TypeError, SystemExit):
+    except Exception:
         return None
     return None
 
