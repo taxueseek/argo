@@ -11,7 +11,7 @@
 - **需自备密钥 39 个**：`bocha`、`bocha_ai`、`brave`、`byted`、`deepseek_search`、`em_miaoxiang`、`felo`、`fourget`、`google_lens`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`searxng`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`wolframalpha`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_kb`、`zhihu_questions`、`zhihu_user`（没配也不影响搜索，路由会跳过）
 - **需装后端工具 4 个**：`digup`、`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 8 个**：`ecosia`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`soilgrids`
-- **显式专用 42 个**：`ai_labs`、`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`europeana`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`grepapp_mcp`、`local_baidu`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`、`zhihu_kb`、`zhihu_questions`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 43 个**：`ai_labs`、`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`europeana`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`grepapp_mcp`、`local_baidu`、`local_npm`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`、`zhihu_kb`、`zhihu_questions`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -256,7 +256,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `huggingface` | 可直接用 | 免费 | 不限 | — | 域 ai_model、域 code_search、域 ml_models | Hugging Face 模型搜索（免认证） |
 | `local_github` | 可直接用 | 免费 | 1000/天 | — | 语义画像命中 | GitHub本地 |
 | `local_gitlab` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | GitLab本地 |
-| `local_npm` | 可直接用 | 免费 | 不限 | — | 经 local_search 展开 | NPM本地 |
 | `local_stackoverflow` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | StackOverflow本地 |
 | `maven` | 可直接用 | 免费 | 不限 | — | 域 package_search | Maven Central 包搜索（Java/JVM，官方权威，含最新版本/版本数/发布时间） |
 | `mdn` | 可直接用 | 免费 | 不限 | — | 域 code_search、域 web_docs | MDN Web Docs 搜索（en/官方 API，免认证） |
@@ -266,6 +265,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `repology` | 可直接用 | 免费 | 不限 | — | 域 package_intel | Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证） |
 | `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs | Stack Overflow（Stack Exchange API，编程问答） |
 | `grepapp_mcp` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | GitHub 全网代码字面模式搜索，经 MCP 通用连接器接入 mcp.grep.app（免 key 匿名可用） |
+| `local_npm` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | NPM本地 |
 | `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
 
 ### 百科 / 实体（20）

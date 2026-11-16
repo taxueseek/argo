@@ -11,10 +11,16 @@ spec、派生件、文档、测试。
 
 ## 判据（第一性原理：价值 = 命中率 × 结果质量 / 成本）
 
-- `route_hits`：过去 N 天被路由命中的次数
-- `result_rate`：命中后返回非空结果的比例
+- `route_hits`：过去 N 天被路由命中**或**在真实查询里被调用的次数
+- `result_rate`：被调用后返回非空结果的比例
 - `value_score`：route_hits × result_rate（命中率 × 交付率）
 - `cost`：总调用成本（按 spec.cost_per_call 累加）
+
+`route_hits` 必须由两路证据合并，不能只看 route 流：route 流是**采样**日志
+（默认 1/20），而 query 流是每次搜索都写。只认 route 流时，采样一断
+（2026-11-11 至 11-16 生产日志实测零条）就会把全部源判成「0 次命中」——
+实测 163 个源被建议停用，其中 69 个在 query 流里有真实调用记录。
+query 流的 `engines_used` 是「这次搜索真的打了它」，比采样命中更强的证据。
 
 去留规则：
 - 90 天 route_hits == 0 且非显式专用 → 建议停用（demote）
@@ -106,23 +112,35 @@ def _load_route_log(days: int) -> list[dict]:
     return rows
 
 
+def _query_fingerprint(row: dict[str, Any]) -> str:
+    """查询指纹：同一查询的多次重跑算一次命中，避免 route_hits 被刷虚高。
+
+    用 query 原文（已由 usage_log 脱敏）+ 域，不做哈希：日志在本机、不进报告，
+    可读性比省几个字节有用。字段缺失时退回 ts，保证每条都拿到稳定值。
+    """
+    q = str(row.get("query") or "").strip()
+    if q:
+        return f"{q}\x00{row.get('domain') or ''}"
+    return str(row.get("ts") or "")
+
+
 def _engine_usage(days: int = 90) -> dict[str, dict[str, Any]]:
     """统计每个引擎的使用情况。"""
     queries = _load_query_log(days)
     routes = _load_route_log(days)
 
     stats: dict[str, dict[str, Any]] = defaultdict(lambda: {
-        "route_hits": 0, "calls": 0, "results": 0, "errors": 0,
-        "domains": set(),
+        "route_hits": 0, "sampled_hits": 0, "calls": 0, "results": 0,
+        "errors": 0, "domains": set(), "hit_fps": set(),
     })
 
-    # route 流：被路由命中
+    # route 流：被路由命中（**采样**日志，1/20）
     for r in routes:
         engines = r.get("engines") or r.get("engines_used") or []
         if isinstance(engines, str):
             engines = [engines]
         for e in engines:
-            stats[e]["route_hits"] += 1
+            stats[e]["sampled_hits"] += 1
             dom = r.get("domain")
             if dom:
                 stats[e]["domains"].add(dom)
@@ -140,6 +158,14 @@ def _engine_usage(days: int = 90) -> dict[str, dict[str, Any]]:
         er = r.get("engine_results") or {}
         for e in used:
             stats[e]["calls"] += 1
+            # 实调用同样计入 route_hits：engines_used 是「这次真的打了它」，
+            # 比采样命中更强的证据。去重按 (查询指纹, 引擎) ——同一查询重跑
+            # 多次（缓存失效、A/B 复跑）不该把命中数刷成虚高。
+            _fp = _query_fingerprint(r)
+            _seen = stats[e]["hit_fps"]
+            if _fp not in _seen:
+                _seen.add(_fp)
+                stats[e]["route_hits"] += 1
             # 优先用 engine_results（精确），缺失时用 count > 0（粗）
             n = er.get(e)
             if isinstance(n, int):
@@ -187,7 +213,14 @@ def audit(days: int = 90, verbose: bool = False) -> dict[str, Any]:
         cost_per_call = spec.get("cost_per_call", 0.0) or 0.0
 
         u = usage.get(name, {})
-        route_hits = u.get("route_hits", 0)
+        # 两路证据相加：route 流是采样命中，query 流是按查询去重后的实调用。
+        # 跨源无法去重——route 记录按设计不含 query 原文（只有 domain/engines），
+        # 同一查询若同时被采样命中又实调用会被计两次。对「去留判定」而言，
+        # 多计只会让源更不容易被误停用，方向是安全的：本模块此前的问题正是
+        # 反向（少计 → 163 个源被建议停用，其中 69 个有真实调用）。
+        sampled_hits = u.get("sampled_hits", 0)
+        flow_hits = u.get("route_hits", 0)
+        route_hits = sampled_hits + flow_hits
         calls = u.get("calls", 0)
         results = u.get("results", 0)
         errors = u.get("errors", 0)
@@ -200,6 +233,8 @@ def audit(days: int = 90, verbose: bool = False) -> dict[str, Any]:
             "explicit_only": explicit,
             "enabled": enabled,
             "route_hits": route_hits,
+            "sampled_hits": sampled_hits,
+            "flow_hits": flow_hits,
             "calls": calls,
             "results": results,
             "errors": errors,

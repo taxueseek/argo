@@ -1,6 +1,12 @@
 engine_id: local_npm
 type: http
 enabled: true
+# 与 npm 引擎同端点同参数（registry.npmjs.org/-/v1/search + text/size），
+# output_map 字段也刻意保持一致——两条同时进自动池时，一次搜索可能对同一
+# 上游打两次并占两个候选位，召回完全重复。保留本源是因为 local-search 子
+# 技能的本地聚合通道按名字引用它，但自动路由只该留 npm（T1、coverage 更准）。
+# 实测 1179 条生产查询里 local_npm 被调用 0 次。
+explicit_only: true
 label: NPM本地
 cost_tier: free
 qps: 5

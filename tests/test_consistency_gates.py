@@ -352,7 +352,19 @@ class TestDocNumbersMatchCode:
         assert hardcoded is None, (
             "插件的 clientInfo.version 又写死成字面量"
             f"（{hardcoded.group(1) if hardcoded else ''}）——请用 PLUGIN_VERSION，"
-            "否则发布升版时会静默漂移")# ── 4. 派生件与运行时真源一致 ────────────────────────────────────────────────
+            "否则发布升版时会静默漂移")
+        # 第六面：MCP 连接器适配器（engines_mcp）向第三方 MCP server 自报的
+        # clientInfo.version。与上一面同一个病，同一个治法：真源改为
+        # argo_search.__version__（release_check 已覆盖该文件），这里确保
+        # **不再出现硬编码版本字面量**。实测它一路停在 2.14.1 而包已是 2.15.0
+        # ——release_check 的八处声明扫描不含本文件，升版永远查不出。
+        em = (SKILL_DIR / "scripts/engines_mcp.py").read_text(encoding="utf-8")
+        assert "_client_info" in em, "engines_mcp 未使用 _client_info（版本可能又被写死）"
+        em_hardcoded = re.search(
+            r"clientInfo\s*:\s*\{[^}]*version\s*:\s*['\"]([^'\"]+)['\"]", em)
+        assert em_hardcoded is None, (
+            "engines_mcp 的 clientInfo.version 又写死成字面量"
+            f"（{em_hardcoded.group(1) if em_hardcoded else ''}）——请用 _client_info()")# ── 4. 派生件与运行时真源一致 ────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
 def sb():

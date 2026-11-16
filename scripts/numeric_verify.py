@@ -209,7 +209,8 @@ def numeric_verify_results(results: list[dict[str, Any]],
         return page, method
 
     # 墙钟预算与 verify 同一开关（ARGO_VERIFY_BUDGET_S，默认 5s）：到点未回的
-    # URL 记 pending，语义与 fetch 失败一致
+    # URL 记 pending，语义与 fetch 失败一致。worker 上限 6 同理——核验是纯
+    # I/O 等待，3 个 worker 装不下更多 URL，预算会全花在排队上（见 evidence_loop）。
     from evidence_loop import _verify_budget_s
     budget_s = _verify_budget_s()
 
@@ -220,7 +221,7 @@ def numeric_verify_results(results: list[dict[str, Any]],
     elif budget_s > 0 and len(targets) > 1:
         from bounded_run import TaskError, run_bounded
         finished, unfinished = run_bounded(
-            targets, _fetch_one, budget_s, max_workers=min(len(targets), 3))
+            targets, _fetch_one, budget_s, max_workers=min(len(targets), 6))
         for item, value in finished:
             if isinstance(value, TaskError):
                 pending.append(item[0].get("url") or "")

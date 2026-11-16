@@ -1,6 +1,9 @@
 # NHTSA vPIC 车辆厂商/车型本体（免认证）
-# 补 shopping 域：车辆厂商/车型标准命名（12361 个厂商），
-# 「某车型属于哪个厂商」类查询的权威答案源。
+# 「某车型属于哪个厂商」类查询的权威答案源（12361 个厂商）。
+# coverage 原先含 shopping 是错标：本源是车辆型式认证本体，不出商品与价格。
+# 全仓只有它一个源声明 shopping，于是购物域「看起来有源、实际零覆盖」——
+# 实测「买 空气净化器 推荐」「洗发水 哪个牌子好」都落到 chinese_general 的
+# 通用源。engine_families 本就把 nhtsa_vpic 归 legal，两处真源不一致，此处对齐。
 # 验证:
 #   python3 scripts/engine_validate.py --engine nhtsa_vpic --stage all --admit --write-doc
 
@@ -11,7 +14,7 @@ cost_tier: free
 timeout: 20
 canary_query: "tesla"
 desc: "车辆厂商/车型本体（NHTSA vPIC，免认证）"
-coverage: [shopping, vehicle, reference, official]
+coverage: [vehicle, reference, official]
 recommended: false
 latency_ms: 2500
 

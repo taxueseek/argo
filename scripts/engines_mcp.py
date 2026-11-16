@@ -44,6 +44,7 @@ import json
 import re
 import select
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -92,6 +93,21 @@ def _parse_jsonrpc_body(text: str) -> dict[str, Any] | None:
 
 
 # ── Streamable HTTP 通道 ─────────────────────────────────────────────────────
+
+def _client_info() -> dict[str, str]:
+    """握手用的 clientInfo：版本读单源，不再手抄字面量。
+
+    此前这里写死 "2.14.1"，v2.15.0 升版时没人改——而 release_check 的八处
+    机器声明扫描不含本文件，升版盲区就是这么来的。真源与 mcp_transport
+    同口径：argo_search.__version__（release_check 已把它列为声明之一）。
+    """
+    try:
+        import argo_search
+        version = str(argo_search.__version__)
+    except Exception:
+        version = "unknown"
+    return {"name": "argo", "version": version}
+
 
 class _HttpChannel:
     """Streamable HTTP JSON-RPC 通道（握手/回执/工具调用按 MCP 2025-06-18）。
@@ -142,7 +158,7 @@ class _HttpChannel:
         self._request("initialize", {
             "protocolVersion": _PROTOCOL_VERSION,
             "capabilities": {},
-            "clientInfo": {"name": "argo", "version": "2.14.1"},
+            "clientInfo": _client_info(),
         })
         self._request("notifications/initialized", notify=True)
 
@@ -182,12 +198,18 @@ class _StdioChannel:
         self._proc.stdin.flush()
         if notify:
             return None
-        deadline = self._timeout
+        # 预算按墙钟而不是「未就绪的次数」：旧实现只在 select 超时未就绪时
+        # deadline -= 1.0，只要对端持续吐帧（日志通知、其它 id 的响应、空行、
+        # 解析失败的行）就永远不减，MCP 通知流可以把一次 tools/call 挂死到
+        # 线程被杀。截止期在这里唯一，任何读到的行都不得延长它。
+        deadline = time.monotonic() + max(0.0, float(self._timeout))
         stream = self._proc.stdout
-        while deadline > 0:
-            ready, _, _ = select.select([stream], [], [], min(deadline, 1.0))
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            ready, _, _ = select.select([stream], [], [], min(remaining, 1.0))
             if not ready:
-                deadline -= 1.0
                 continue
             line = stream.readline()
             if not line:
@@ -209,7 +231,7 @@ class _StdioChannel:
             "params": {
                 "protocolVersion": _PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {"name": "argo", "version": "2.14.1"},
+                "clientInfo": _client_info(),
             },
         }, notify=False)
         self._next_id += 1

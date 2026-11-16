@@ -91,6 +91,42 @@ def test_verify_budget_env_invalid_falls_back(monkeypatch):
     assert evidence_loop._verify_budget_s() == 5.0
 
 
+def test_verify_workers_scale_with_targets_not_budget(monkeypatch):
+    """提高核验条数靠放开并发，不靠加时间。
+
+    --verify 10 只能核到 2-4 条，第一反应是「5s 太短」，实测把预算按 top_k
+    放大到 13.4s：受控 A/B（同批查询、同一批 URL、每次独立证据缓存）核验
+    31→38 条（1.2x），耗时却 25.0→42.2s（1.7x），每条核验成本 0.8→1.1s
+    **涨 37%**——不划算，已回退。真瓶颈是 max_workers=3：10 个 URL 排 3 个
+    worker，预算全花在排队。只把并发放到 6、预算维持 5s，三轮冷启动 A/B
+    （每臂互不重叠的唯一 URL，绕开证据缓存复用）实测：核验 15.0→23.0 条
+    （1.5x）、耗时 25.0→24.5s（持平略降）、每条核验成本 1.67→1.06s（降 36%）。
+
+    本用例锁两件事：① 预算仍与 top_k 无关（不许再引入随条数放大的逻辑）；
+    ② 核验确实按目标数放宽 worker（不再被 3 卡死）。
+    """
+    monkeypatch.delenv("ARGO_VERIFY_BUDGET_S", raising=False)
+    # ① 预算与 top_k 无关
+    assert evidence_loop._verify_budget_s() == 5.0
+
+    # ② worker 上限：7 个目标时应起 6 个并发（原实现卡在 3）
+    import bounded_run
+    seen: dict[str, int] = {}
+    real = bounded_run.run_bounded
+
+    def _spy(items, fn, wait_s, max_workers=3, **kw):
+        seen["workers"] = max_workers
+        seen["n"] = len(items)
+        return real(items, fn, wait_s, max_workers=max_workers, **kw)
+
+    monkeypatch.setattr(bounded_run, "run_bounded", _spy)
+    results = [{"url": f"https://w.test/{i}", "title": f"t{i}",
+                "absorption": 0.2} for i in range(7)]
+    evidence_loop.verify_results(results, "q", fetch_fn=_ok_fetch, top_k=7)
+    assert seen["n"] == 7
+    assert seen["workers"] == 6, f"worker 上限应为 6，实际 {seen['workers']}"
+
+
 # ── 2. 时间账与 agent 可见性 ─────────────────────────────────────────────────
 
 def test_verify_timing_keeps_three_totals_consistent():

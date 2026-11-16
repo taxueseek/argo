@@ -933,6 +933,14 @@ def route_query_cached(query: str, engine_override: str = "auto",
         decision["route_cached"] = True
         # 用真实耗时覆盖存档值：这个字段会经 plan 输出给用户，报旧值就是撒谎
         decision["elapsed_ms"] = round((time.time() - t0) * 1000, 2)
+        # 采样旁路必须覆盖命中路径。此前只在 route_query._done 里采样，命中
+        # 直接 return 不经过它——于是「同一查询第二次起」全都不留路由记录。
+        # 生产日志实测：route.jsonl 停在 2026-11-11，此后 5 天零条，而 query
+        # 流同期 700+ 条；source_audit 的 route_hits 因此恒为 0，把 163 个源
+        # 判成「0 次路由命中，建议停用」，其中 69 个在 query 流里有真实调用。
+        # 采样率语义不变（仍受 ARGO_ROUTE_SAMPLE_RATE 控制），只是把「算过的
+        # 决策」从「未命中才算」改成「命中与未命中都算」。
+        sample_route(decision, decision)
         return decision
 
     decision = route_query(query, engine_override=engine_override, mode=mode,

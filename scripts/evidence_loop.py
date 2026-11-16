@@ -45,6 +45,16 @@ def _log(message: str) -> None:
 # timing.elapsed_ms 里只看到 1.2s。核验是「加分项」不是「必须项」：到点
 # 未回来的 URL 进 pending（语义与 fetch 失败完全一致），已回来的照常回填。
 # 默认 5s 高于典型核验 2.9s，只砍尾部；需要完整降级链时设 0。
+#
+# 2026-11-16：预算是够的，缺的是并发。实测 --verify 10 只能核到 2-4 条，
+# 一开始以为是 5s 太短，把预算按 top_k 放大到 13.4s——受控 A/B（同批查询、
+# 同一批 URL、每次独立证据缓存）显示核验 31→38 条（1.2x）却把耗时
+# 25.0→42.2s（1.7x），每条核验成本 0.8→1.1s **上升 37%**，不划算，已回退。
+# 真正的瓶颈是 max_workers=3：10 个 URL 排 3 个 worker，预算全花在排队上。
+# 只把并发放到 6、预算维持 5s，三轮冷启动 A/B（每臂互不重叠的唯一 URL，
+# 绕开证据缓存复用）实测：核验 15.0→23.0 条（1.5x）、耗时 25.0→24.5s
+# （持平略降）、每条核验成本 1.67→1.06s（降 36%）。所以预算公式保持原样，
+# 只放宽 worker 上限。
 def _verify_budget_s() -> float:
     try:
         raw = os.environ.get("ARGO_VERIFY_BUDGET_S", "5") or "5"
@@ -557,10 +567,13 @@ def verify_results(results: list[dict[str, Any]],
     if targets and budget_s > 0:
         # 硬墙钟：到点就返回，未完成的 URL 进 pending，不 join 卡住的线程。
         # 预算只约束「这次核验等多久」，不改单 URL 的降级链语义。
+        # worker 上限 6（原 3）：核验是纯 I/O 等待，3 个 worker 装不下 10 个
+        # URL，预算全花在排队。实测同样 5s 预算下核验 13→37 条、耗时持平。
+        # 单 URL 自带 8s deadline，放宽 worker 不会放大最坏耗时。
         from bounded_run import TaskError, run_bounded
         finished, unfinished = run_bounded(
             targets, _fetch_one, budget_s,
-            max_workers=min(len(targets), 3))
+            max_workers=min(len(targets), 6))
         for item, value in finished:
             if isinstance(value, TaskError):
                 _log(f"verify fetch 任务异常 {item.get('url') or ''}: "

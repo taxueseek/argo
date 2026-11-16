@@ -1888,7 +1888,7 @@ engines:
   cost: free
   status: ok
   recommended: true
-  explicit_only: false
+  explicit_only: true
   desc: NPM本地（http）
 - name: local_openstreetmap
   tier: T2
@@ -2323,7 +2323,6 @@ engines:
   tier: T1
   type: nhtsa_vpic
   coverage:
-  - shopping
   - vehicle
   - reference
   - official
