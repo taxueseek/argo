@@ -118,3 +118,12 @@ Argo 遵循 **Single Source of Truth** 设计哲学：
 - [x] 单测 `tests/test_mcp_setup.py`（15 例）全过。
 - [x] 客户端矩阵补全：Claude Code、Claude Desktop、Cursor、Windsurf、Codex、Zed、Roo Code、Cline、OpenCode、WorkBuddy。
 - [x] 跨平台声明支持：针对 macOS / Windows / Linux 支持 `config_path_*` 与 `detect_*` 平台适配。
+
+## 9. 输出字段语义备忘（消费者注意）
+
+宿主侧代理读 argo 工具的 JSON 输出时，两个字段的名字与语义**不直觉**，按字面读会读反（2026-11-17 外部审计实录）：
+
+- `meta.uncertainty.level` 是**可信度**等级，不是不确定度：`high` = 可信（多源可交叉验证），`low` = 不可信（0/1 个来源、引擎失败）。具体原因在 `notes[]`（如「没有返回结果」「只有 1 个来源」）。
+- `funnel.serp_dropped` 是**损耗**计数：SERP/跳转页守卫丢弃的条数，`0` 是正常；其余六格（routed/called/returned/deduped/filtered/kept）是存活数，`0` 才是塌陷。
+
+升级相关（重启长驻进程、缓存库自动迁移）见 `docs/UPGRADE.md`。

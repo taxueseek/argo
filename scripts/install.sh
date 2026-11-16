@@ -139,6 +139,8 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
   run git -C "$INSTALL_DIR" fetch --depth 1 origin "$BRANCH"
   run git -C "$INSTALL_DIR" checkout "$BRANCH"
   git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH" 2>/dev/null || warn "pull 失败（可能有本地改动），继续使用当前版本"
+  # 升级三提醒（2026-11-17）：新码落盘 ≠ 生效；缓存库迁移已随代码自动化。
+  info "升级提醒：MCP 宿主里的 argo 连接器与 argo daemon 若在运行，重启以加载新代码（详见 docs/UPGRADE.md）"
 elif [[ -d "$INSTALL_DIR" && -f "$INSTALL_DIR/scripts/search.py" ]]; then
   info "目录已存在且含 Argo 源码，跳过克隆: $INSTALL_DIR"
 else
