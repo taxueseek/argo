@@ -228,6 +228,11 @@ domains:
   - match: '(?i)(基金净值|基金排行|基金经理|公募基金|私募基金|公募|私募|选基|买基金|基金定投|基金收益|基金持仓|基金代码|基金份额代码)'
     unless: '(?i)(管理办法|条例|法规|规定|征求意见|证监会令|逐条解读|政策解读|立方米|平米)'
   - (?i)\b(ETF|LOF|FOF)\b
+  # QDII/外管局额度类（2026-11-17 外部审计：此类查询此前掉进 chinese_general
+  # 用通用源打，而 eastmoney 点名实测 1.0s 5 条相关。unless 沿用首条口径——
+  # 「QDII 管理办法」类法规查询让位政策/新闻域，额度/限额类数据查询留在这里。
+  - match: '(?i)(QDII|外管局|外汇管理局)'
+    unless: '(?i)(管理办法|条例|法规|规定|征求意见|证监会令|逐条解读|政策解读|立方米|平米)'
   primary: eastmoney
   quote: true
 - desc: 美股申报文件（SEC EDGAR 官方全文检索）
@@ -811,6 +816,9 @@ domains:
   patterns:
   - (?i)(研报|财报|公告|财经|宏观|央行政策|降准|降息|加息|CPI|GDP|PMI)
   - (?i)(financial|earnings report|annual report|announcement)
+  # QDII/外管局（2026-11-17）：fund_query 的同词款带 unless，法规类问法落到
+  # 本域走新闻源；额度/限额数据问法由 fund_query（priority 880）先截。
+  - (?i)(QDII|外管局|外汇管理局)
   primary: em_miaoxiang
   # 源保底分：cninfo 是官方公告源（标题是「年报」而非网页，token 覆盖低）
   score_floors:

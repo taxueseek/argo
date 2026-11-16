@@ -138,6 +138,12 @@ COLLISION_ANCHORS: list[tuple[str, str, str, str]] = [
     # v2.10.2：学术检索正例
     ("科研数据集 开放数据 下载", "dataset_search", "academic", "v2.10.2"),
     ("google scholar 学术论文 期刊", "scholar_search", "academic", "v2.10.2"),
+    # 外部审计 2026-11-16：QDII/外管局额度类查询此前掉进 chinese_general 用
+    # 通用源打（fund_query/financial_news 词表均无这些词），而 eastmoney 点名
+    # 实测 1.0s 5 条相关。额度/限额数据问法归 fund_query；法规解读问法让位
+    # financial_news（fund_query 的 QDII 款带同款 unless）。
+    ("QDII 额度 外管局 最新限额", "fund_query", "factual", "audit-2026-11-16"),
+    ("QDII 管理办法 解读", "financial_news", "factual", "audit-2026-11-16"),
 ]
 
 
