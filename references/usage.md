@@ -3,7 +3,7 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（34 个，唯一事实=bin/argo 分发表）
+## 命令总览（35 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
@@ -40,6 +40,7 @@
 | `argo quota` | 知乎开放平台当日额度（官方 API，不消耗业务额度） |
 | `argo doctor` | 源健康度审计（基于使用日志给出去留建议；`--days`/`--json`） |
 | `argo local-image` | 本地图片检索（Vision 索引；默认关，见「图片检索」节） |
+| `argo seek` | 本机文件与代码三层检索（rg/fd/mdfind/FTS5，见「local-seek」节） |
 | `argo ego-search` | 登录态专业搜索（默认关，见「ego-search」节） |
 
 ## argo doctor — 源健康度审计（2026-11-10）
@@ -56,10 +57,16 @@ argo doctor --json          # 机器可读（紧凑 JSON，走 cli_io.dumps）
 
 判据（价值 = 命中率 × 交付率）：
 
-- **建议停用**：90 天 0 次路由命中且非显式专用
+- **建议停用**：90 天 0 次命中且非显式专用
 - **建议降级为 explicit_only**：价值分 < 5（命中次数 × 交付率）
 - **建议隔离**：交付率 < 20% 且有命中
 - **提示**：需密钥未配置（本机未配 `required_env`）
+
+命中次数由两路证据合并：`route.jsonl` 的采样命中（默认 1/20）+ `query.jsonl`
+里按查询去重的实调用（`engines_used`）。只看 route 流不行——采样一断就会被
+全判成 0 命中：2026-11-11 起 route 流实测断流 5 天，而同期 query 流 700+ 条，
+当时 163 个源被列入「建议停用」，其中 69 个在 query 流里有真实调用。`--json`
+每条同时给 `sampled_hits` 与 `flow_hits`，用来区分「采样没抽到」与「真没用」。
 
 口径说明：`engine_results` 字段 2026-10-26（v2.13.0）才加入，历史日志里
 92% 是 null。因此交付率优先用 `engine_results`，缺失时用 `count > 0`
@@ -589,9 +596,9 @@ SerpAPI Image API 上传；`tracemoe` 只收公网 URL，本地图在入口返�
 ### local-seek（本机文件搜索）
 
 ```bash
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --count   # L1 定位
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --context # L2 上下文
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes --lines  # L3 精读
+argo seek "查询词" --path ~/notes --count   # L1 定位（或 python3 sub-skills/local-seek/scripts/seek.py）
+argo seek "查询词" --path ~/notes --context # L2 上下文
+argo seek "查询词" --path ~/notes --lines   # L3 精读
 ```
 
 - 路由：rg（正文）→ fd（文件名）→ mdfind（Spotlight 全盘保底）；中文「精确优先、2-gram 扩展保底」

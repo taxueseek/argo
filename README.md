@@ -50,7 +50,7 @@ Zero-config works out of the box (API keys are optional). Pick your client:
 - **Agent Skill (`skills.sh` — Claude Code, Cursor, Codex, Antigravity)**:
   ```bash
   npx skills add taxueseek/argo
-  # Or install all scenario skills (argo, argo-deep-research, argo-local-search):
+  # Or install all 3 standalone Skills (argo, argo-wide-research, local-seek):
   npx skills add taxueseek/argo --full-depth --all
   ```
 - **Cursor / Windsurf / LibreChat (`mcpServers` JSON)**:
@@ -144,19 +144,17 @@ Search engines optimize for clicks; agents need **verifiable facts**. Argo score
 
 ## AI Search &amp; Sub-skills
 
-### Sub-skills (7, Single Directory)
+### Skills &amp; Internal Modules
 
-All sub-skills live in `sub-skills/`. Four are built-in pipelines driven by the main skill; three are standalone entry points (wide research orchestration, and two scenario bundles for deep research / zero-cost local search).
+Argo exposes **3 orthogonal Skills** (`argo`, `argo-wide-research`, `local-seek`) and bundles **3 internal pipelines** under `sub-skills/` driven via CLI flags or fallbacks:
 
-| Sub-skill | Capability |
-| :--- | :--- |
-| **local-search** | Local file search + 32 zero-cost local aggregation engines (`--local-first`) |
-| **local-seek** | Hybrid BM25 + vector semantic search for local notes, markdown, and knowledge bases |
-| **ego-search** | Real-browser logged-in search for Zhihu, Xiaohongshu, WeChat Official Accounts (off by default) |
-| **js-run** | Sub-millisecond headless JS execution for environment probes and pure-compute pages |
-| **argo-wide-research** | Multi-track parallel deep research & forensics orchestration with citation ledger and quality gates |
-| **argo-deep-research** | Scenario entry: research dossier + multi-source fact/number verification (`research.py`, `evidence.py`, `--verify`) |
-| **argo-local-search** | Scenario entry: zero-cost keyless search bundle (`--local-first`, `seek.py`, `--include-local`) |
+| Module | Type | Capability |
+| :--- | :--- | :--- |
+| **argo-wide-research** | Standalone Skill | Multi-track parallel deep research &amp; forensics orchestration with citation ledger and quality gates |
+| **local-seek** | Standalone Skill | Hybrid BM25 + vector semantic search for local notes, markdown, and code (`argo seek`) |
+| **local-search** | Internal Pipeline | 30 zero-cost local aggregation engines (`--local-first`) |
+| **ego-search** | Subcommand (`argo ego-search`) | Real-browser logged-in search for Zhihu, Xiaohongshu, WeChat Official Accounts (off by default) |
+| **js-run** | Internal Pipeline | Sub-millisecond headless JS execution for environment probes and pure-compute pages |
 
 ### 19 MCP Tools
 

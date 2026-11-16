@@ -44,7 +44,7 @@ def _ls_engines() -> dict:
 
 
 def _skill_md() -> str:
-    return (LS_DIR / "SKILL.md").read_text(encoding="utf-8")
+    return (LS_DIR / "README.md").read_text(encoding="utf-8")
 
 
 def _table_rows(md: str) -> list[str]:

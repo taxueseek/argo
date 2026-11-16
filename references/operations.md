@@ -92,15 +92,16 @@ export TINYFISH_API_KEY="sk-tinyfish-..."   # 去 agent.tinyfish.ai/api-keys 申
 
 未配置 `TINYFISH_API_KEY` 时，search 引擎不进路由（`env_ready=false`），抓取渲染层自动回退浏览器，不崩、不改变既有抓取行为。
 
-## 子技能
+## 子技能与内部模块
 
-| 子技能 | 位置 | 入口 |
-|--------|------|------|
-| local-search（本地零成本聚合） | `sub-skills/local-search/` | `python3 scripts/search.py "查询" --local-first` |
-| local-seek（本机文件搜索） | `sub-skills/local-seek/` | `python3 sub-skills/local-seek/scripts/seek.py "查询" --path ~/notes --count`（MCP: `argo_local_search`） |
-| local-image（本机图片多模态） | `scripts/local_image.py` | `argo local-image search "查询"`（需 `ARGO_LOCAL_IMAGE=1`） |
-| ego-search（登录态专业搜索） | `sub-skills/ego-search/` | `python3 sub-skills/ego-search/scripts/ego_search.py search "AI 搜索" --runtime auto` |
-| js-run（V8 算车道） | `sub-skills/js-run/` | 无独立入口：fetch 降级链第一级 E 自动触发（`fetch_jsrun.py`），开关 `ARGO_FETCH_JSRUN`（默认开，=0 关闭） |
+| 名称 | 类型 | 位置 | 入口 |
+|------|------|------|------|
+| local-seek（本机文件搜索） | 独立 Skill | `sub-skills/local-seek/` | `argo seek "查询" --path ~/notes --count`（MCP: `argo_local_search`） |
+| argo-wide-research（多轨并行编排） | 独立 Skill | `sub-skills/argo-wide-research/` | 多视角并行取证编排（含来源账本与质量门） |
+| local-search（本地零成本聚合） | 内部模块 | `sub-skills/local-search/` | `argo search "查询" --local-first` |
+| ego-search（登录态专业搜索） | 主 Skill 子通道 | `sub-skills/ego-search/` | `argo ego-search search "AI 搜索" --runtime auto` |
+| js-run（V8 算车道） | 内部模块 | `sub-skills/js-run/` | 无独立入口：fetch 降级链第一级 E 自动触发（`fetch_jsrun.py`），开关 `ARGO_FETCH_JSRUN`（默认开，=0 关闭） |
+| local-image（本机图片多模态） | CLI 子命令 | `scripts/local_image.py` | `argo local-image search "查询"`（需 `ARGO_LOCAL_IMAGE=1`） |
 
 细节见 `references/usage.md`（子技能章节）。
 

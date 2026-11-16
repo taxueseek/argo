@@ -48,7 +48,7 @@
 - **Agent Skill（`skills.sh` — Claude Code / Cursor / Codex / Antigravity）**：
   ```bash
   npx skills add taxueseek/argo
-  # 或一次安装全部场景 Skill（argo / argo-deep-research / argo-local-search）：
+  # 或一次安装全部 3 个独立 Skill（argo / argo-wide-research / local-seek）：
   npx skills add taxueseek/argo --full-depth --all
   ```
 - **Cursor / Windsurf / LibreChat（`mcpServers` JSON）**：
@@ -141,19 +141,17 @@ Argo 会在派发前识别查询的**域与语种**，直击一手垂直源并�
 
 ## AI 搜索与子技能矩阵
 
-### 七个子技能（统一目录）
+### Skill 入口与内部模块
 
-全部子技能收于 `sub-skills/`：四个内置管线由主技能调度，三个可独立触发的入口（多轨研究编排与深度研究、零成本搜索两个场景包）。
+Argo 对外只暴露 **3 个正交 Skill**（`argo`、`argo-wide-research`、`local-seek`），其余能力收归 `sub-skills/` 内部管线或子命令：
 
-| 子技能 | 核心能力 |
-| :--- | :--- |
-| **local-search** | 本机文件检索 + 32 个零成本本地聚合引擎（`--local-first`） |
-| **local-seek** | 本地笔记、Markdown 与知识库的 BM25 + 向量混合语义检索 |
-| **ego-search** | 基于真实浏览器的登录态垂直搜索（知乎、小红书、微信公众号，默认关闭） |
-| **js-run** | 无浏览器毫秒级沙箱跑网页 JS（环境探测与纯计算页面） |
-| **argo-wide-research** | 多轨并行深度研究与取证编排（引用来源账本与质量门） |
-| **argo-deep-research** | 场景入口：研究档案生成与多源事实核验（`research.py`、`evidence.py`、`--verify`） |
-| **argo-local-search** | 场景入口：零成本零密钥搜索包（`--local-first`、`seek.py`、`--include-local`） |
+| 模块 | 定位 | 核心能力 |
+| :--- | :--- | :--- |
+| **argo-wide-research** | 独立 Skill | 多轨并行深度研究与取证编排（引用来源账本与质量门） |
+| **local-seek** | 独立 Skill | 本地笔记、Markdown 与代码的三层高效检索（`argo seek`） |
+| **local-search** | 内部管线 | 30 个零成本本地聚合引擎（`--local-first`） |
+| **ego-search** | 主技能子命令 | 基于真实浏览器的登录态垂直搜索（`argo ego-search`，默认关闭） |
+| **js-run** | 内部管线 | 无浏览器毫秒级沙箱跑网页 JS（环境探测与纯计算页面） |
 
 ### 19 个 MCP 工具
 

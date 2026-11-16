@@ -64,9 +64,10 @@ BUDGET_SKILL_MD_BYTES = 7600
 # local-search 的同轮治理：设计原则只留操作性判据、删文件结构树（保留两条
 # 不显然的约定），6.3 KB → 5.2 KB。
 BUDGET_SUBSKILL_MD_BYTES = {
-    "sub-skills/ego-search/SKILL.md": 13500,
-    "sub-skills/local-search/SKILL.md": 5600,
+    "sub-skills/ego-search/README.md": 13500,
+    "sub-skills/local-search/README.md": 5600,
     "sub-skills/local-seek/SKILL.md": 7000,
+    "sub-skills/argo-wide-research/SKILL.md": 4000,
 }
 
 
@@ -130,7 +131,7 @@ class TestSerializedSizeBudget(unittest.TestCase):
     def test_moved_content_still_exists(self):
         """从 SKILL.md 搬出的内容必须在 references 里有承接（防「搬走=删掉」）。"""
         moved = {
-            "sub-skills/ego-search/SKILL.md": [
+            "sub-skills/ego-search/README.md": [
                 "references/browser-runtime.md",
             ],
         }
@@ -164,6 +165,7 @@ class TestNoSelfDescriptionInSkillDocs(unittest.TestCase):
     def _skill_docs(self):
         docs = [ROOT / "SKILL.md"]
         docs += sorted((ROOT / "sub-skills").glob("*/SKILL.md"))
+        docs += sorted((ROOT / "sub-skills").glob("*/README.md"))
         return [d for d in docs if d.exists()]
 
     def test_no_filesystem_tree(self):

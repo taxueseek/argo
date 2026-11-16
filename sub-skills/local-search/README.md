@@ -1,11 +1,6 @@
----
-name: local-search
-parent: argo
-description: argo 的本地/零成本兜底子技能。封装基于公开页面/HTML/RSS/JSON/CLI 的 30 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 --local-first 调用。
-version: 1.1.0
----
+## Local Search 内部模块（非独立 Skill）
 
-## Local Search 子技能
+> argo 的本地零成本兜底子模块。封装基于公开页面/HTML/RSS/JSON/CLI 的 30 个本地搜索引擎，不单独响应触发词，仅由 argo 通过 `--local-first` 调用。
 
 Local Search 是 argo 的「零成本兜底适配器」，用于：
 

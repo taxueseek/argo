@@ -1,23 +1,6 @@
----
-name: js-run
-description: >-
-  js-run 是 argo 的 JS 运行时车道子技能：不开浏览器跑网页 JS。基于 mini-racer（ISC）
-  + 自研浏览器环境垫片，让「环境探测 + 纯计算」型网页脚本（反爬挑战通行证、混淆数据
-  解算、JS 内嵌状态提取）在毫秒级、可复现、无真实网络的沙箱里执行。定位是取数链
-  curl_cffi 与渲染级之间的「算」车道，不替代浏览器（登录态/视觉/真实网络数据不在此车道）。
-  已接入 fetch 降级链第一级 E（scripts/fetch_jsrun.py，ARGO_FETCH_JSRUN 默认开启，=0
-  关闭）；能力面仍为 v0：只保「探测+计算」型脚本，不碰 DOM/真实网络/登录态/视觉。
-  Triggers include 跑网页JS、挑战脚本、通行证、JS解密、
-  逻辑时间、无浏览器执行。
-metadata:
-  version: "0.1.0"
-  date: "2026-10-03"
-  parent: argo
-  upstream: 原创（底座 py-mini-racer ISC；设计参照 iv8 思路，未使用其代码/二进制）
-  license_note: 底座 mini-racer 为 ISC；本目录代码为原创
----
+# js-run（argo 内部 V8 算车道，v0 骨架）
 
-# js-run（argo 子技能，v0 骨架）
+> argo 的 JS 运行时车道：不开浏览器跑网页 JS（`mini-racer` + 环境垫片），已接入 fetch 降级链第一级 E（`scripts/fetch_jsrun.py`，`ARGO_FETCH_JSRUN` 默认开启）。无独立 Skill 触发入口。
 
 **一句话**：给 HTML 与资源，还你 JS 算完的结果——不开浏览器。
 

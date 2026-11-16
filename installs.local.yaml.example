@@ -10,7 +10,9 @@ link_targets:
   # - ~/.claude/skills/argo
   # - ~/.agents/skills/argo
 
-# 可选：子技能目录直连（目标路径: 仓内相对路径）
+# 可选：正交子技能目录直连（目标路径: 仓内相对路径）
 # sub_links:
 #   ~/.agents/skills/argo-wide-research: sub-skills/argo-wide-research
 #   ~/.claude/skills/argo-wide-research: sub-skills/argo-wide-research
+#   ~/.agents/skills/local-seek: sub-skills/local-seek
+#   ~/.claude/skills/local-seek: sub-skills/local-seek

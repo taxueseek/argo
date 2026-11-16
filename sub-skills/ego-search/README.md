@@ -1,40 +1,8 @@
----
-name: ego-search
-description: >-
-  ego-search 是 argo 的浏览器态搜索增强子技能，基于真实 Chromium 浏览器运行时，提供
-  登录态继承、JS 渲染、反爬（尽力而为，未验证可穿透重度防护）、动态交互与同源接口数据直取（api 模式）能力。专业搜索
-  模式默认关闭，需用户明确要求并执行开启指令后启用。当 argo 的 API/HTML 引擎覆盖不到
-  时启用：登录墙后的内容（知乎/小红书/微博/X/公众号）、JS 渲染与 SPA 页面、反爬与 Cloudflare 保护页（尽力而为，重度防护可能失败）、需要交互（翻页/展开/滚动加载）的动态搜索、SPA/XHR 接口数据直取、
-  以及需要真实登录态才能搜到的私有内容。输出对齐 argo 统一 JSON schema，可直接进入
-  evidence 评分与 RRF 融合。Triggers include 浏览器搜索、登录后才能搜到、JS 渲染页面、
-  SERP 补充、动态内容抓取、登录态抓取、API 数据直取、接口数据。
-metadata:
-  version: "1.6.0"
-  date: "2026-08-07"
-  upstream: ego lite（ego-browser）+ WebBridge 扩展桥（双运行时）
-  parent: argo
-  pro_mode: 默认关闭，手动开启（enable/disable）
-  cache: 登录态结果 cache_eligible=false，禁止写入 argo 公共缓存
-  architecture: dual_runtime_complete
-  security: URL 守卫 + 任务空间收尾 + 专业模式闸门 + 登录墙质量信号
-triggers:
-  - 专业搜索模式
-  - 开启专业搜索模式
-  - 浏览器搜索
-  - 登录态
-  - 登录墙
-  - JS渲染
-  - SERP
-  - 动态内容
-  - 反爬（尽力而为）
-  - 浏览器抓取
-  - API数据直取
-  - 接口数据
----
+# ego-search（argo 登录态专业搜索子通道）
 
-# ego-search（argo 子技能）
+> 本能力作为 `argo ego-search` 子命令接入（默认关闭 pro-mode，由主 Skill 按需调用），不再作为独立顶层 Skill 触发。
 
-ego-search 是 argo 的**登录态专业搜索**子技能（v1.6 完全态）：
+ego-search 是 argo 的**登录态专业搜索**通道（v1.6 完全态）：
 
 - **双运行时保留**：ego lite（`ego-browser`）与 WebBridge（用户浏览器扩展桥）**互补，不互相替代**
 - **任一可用即可**：`search` / `fetch` / `act` / `api` 在至少一条运行时在线时可用
@@ -47,11 +15,11 @@ ego-search 是 argo 的**登录态专业搜索**子技能（v1.6 完全态）：
 
 ```bash
 # 开启（必须由用户明确要求「开启专业搜索模式」后执行）
-python3 sub-skills/ego-search/scripts/ego_search.py enable
+argo ego-search enable
 # 关闭
-python3 sub-skills/ego-search/scripts/ego_search.py disable
+argo ego-search disable
 # 查看状态
-python3 sub-skills/ego-search/scripts/ego_search.py status
+argo ego-search status
 ```
 
 - **纪律**：Agent 不得自行开启——只有用户明确表达开启意图时才运行 `enable`。
@@ -94,26 +62,26 @@ python3 sub-skills/ego-search/scripts/ego_search.py status
 
 ```bash
 # 首次使用：先开启专业搜索模式（需用户确认；开启后长期生效）
-python3 sub-skills/ego-search/scripts/ego_search.py enable
+argo ego-search enable
 
 # 探测运行时与专业模式（--fix 幂等启 WebBridge 桥）
-python3 sub-skills/ego-search/scripts/ego_search.py status [--fix]
+argo ego-search status [--fix]
 
 # 浏览器态搜索（真实 SERP，输出 argo JSON schema）
 #   --runtime auto(默认: 有 ego 用 ego，否则 webbridge) | ego | webbridge
-python3 sub-skills/ego-search/scripts/ego_search.py search "AI agent 浏览器自动化" --engine bing --n 8
+argo ego-search search "AI agent 浏览器自动化" --engine bing --n 8
 
 # 强制登录态站点搜索（如知乎/小红书，需登录态）
-python3 sub-skills/ego-search/scripts/ego_search.py search "site:zhihu.com AI 搜索" --engine bing
+argo ego-search search "site:zhihu.com AI 搜索" --engine bing
 
 # 浏览器态正文提取（JS 渲染/反爬/登录墙页面）
-python3 sub-skills/ego-search/scripts/ego_search.py fetch "https://example.com/article" --focus 关键词
+argo ego-search fetch "https://example.com/article" --focus 关键词
 
 # 同源 API 数据直取（登录态站点接口）
-python3 sub-skills/ego-search/scripts/ego_search.py api "https://www.zhihu.com/api/v4/search_v3?t=general&q=AI代理&limit=5" --origin "https://www.zhihu.com"
+argo ego-search api "https://www.zhihu.com/api/v4/search_v3?t=general&q=AI代理&limit=5" --origin "https://www.zhihu.com"
 
 # 指定任务空间名（同一目标的多轮操作复用同名空间）
-python3 sub-skills/ego-search/scripts/ego_search.py search "竞品分析" --task-space "竞品调研"
+argo ego-search search "竞品分析" --task-space "竞品调研"
 ```
 
 输出约定：**JSON 到 stdout**（机器可读，可管道给 `evidence.py` / 解析喂 RRF），日志到 stderr。

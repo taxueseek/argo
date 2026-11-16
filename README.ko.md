@@ -71,7 +71,7 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 ## 주요 기능 및 문서
 
 - **AI 검색 통합**: 무료 채널(`tavily_free`, `parallel_free`, `anysearch`)과 **DeepSeek Search**, **Tencent Yuanbao (혼원)**, **Metaso**, **Bocha**, **Tavily**, **Exa** 등 주요 AI 검색 엔진을 단일 라우터로 통합.
-- **MCP 도구 19개** (`argo_search`, `argo_fetch`, `argo_research`, `argo_evidence`, `argo_local_search` 등) 및 4개 서브 스킬(`local-search`, `local-seek`, `ego-search`, `js-run`) 제공.
+- **MCP 도구 19개** (`argo_search`, `argo_fetch`, `argo_research`, `argo_evidence`, `argo_local_search` 등), 3개 독립 스킬(`argo`, `argo-wide-research`, `local-seek`) 및 내부 파이프라인(`local-search`, `ego-search`, `js-run`) 제공.
 - **DSH 플러그인** (`dsh plugin --profile web add argo-search`): 18개 네이티브 도구, 35개 동작 스위치 및 병렬 리서치 오케스트레이션 지원 ([packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)).
 - 전체 문서: [docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md) · [docs/MCP_SETUP.md](docs/MCP_SETUP.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md)
 

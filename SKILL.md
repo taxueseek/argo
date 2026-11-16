@@ -34,7 +34,7 @@ triggers:
 argo search "查询词"                     # 自动路由搜索（daemon 需显式启动）
 argo search "查询词" --json --fields agent  # Agent 消费档
 argo search "查询词" --verify 3           # 核验 top-3 并回填证据分
-python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工作包 → dossier）
+argo research "复杂问题" --json           # 取证包（扩词或多工作包 → dossier）
 ```
 
 默认不附 candidates/sources；`--fields agent` 只留答案（~4.3 KB），要追溯或归档才加 `--envelope`（`--archive` 自动带）。
@@ -76,13 +76,13 @@ python3 scripts/research.py "复杂问题" --json  # 取证包（扩词或多工
 # research — 取证（扩词或 --work-packages → 取证包 + 引用 + 达标检查）
 #   工作包可带 file_inputs / recompute（默认拒绝，需显式授权）
 #   社交舆情：--mode social-sentiment --platforms xiaohongshu,reddit,twitter
-python3 scripts/research.py "查询" [--work-packages PATH|JSON] [--depth deep] [--json] [--verify N]
+argo research "查询" [--work-packages PATH|JSON] [--depth deep] [--json] [--verify N]
 
 # evidence — 可信度评估（选拔×吸收两维）
-echo '{"results": [...]}' | python3 scripts/evidence.py "查询词" --stdin --json [--high-stakes]
+echo '{"results": [...]}' | argo evidence "查询词" --high-stakes
 
 # clarify — 意图消歧
-python3 scripts/clarify.py "有歧义的查询" --json
+argo clarify "有歧义的查询" --json
 ```
 
 

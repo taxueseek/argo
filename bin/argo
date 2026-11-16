@@ -580,6 +580,7 @@ Usage:
   argo local-image index [目录...]  本地图片建库（Vision；默认关，需 ARGO_LOCAL_IMAGE=1）
   argo local-image search "词"      搜本地图片（--similar-to 给图找相似；--sheet 出联络表）
   argo local-image stats            索引概况
+  argo seek        "查询词" [选项]  本机文件与代码三层检索（--path/--count/--outline/--lines）
   argo ego-search {{status|enable|disable|search|fetch|merge}}  登录态专业搜索（默认关，需先 enable）
   argo mcp       {{status|inject|undo}}   多客户端 MCP 一键注入/诊断/还原
   argo paths [--check] [--migrate]     路径自省 / 本机自检 / 搬历史状态到惯例目录
@@ -720,6 +721,8 @@ def main():
         # doctor：源健康度审计（基于真实使用日志给出去留建议）。
         # 300 个源只进不出会累积维护债，这条命令让「该留谁」有数据可依。
         "doctor":    ("source_audit.py", []),
+        # seek：本机文件与代码三层检索（rg/fd/mdfind/FTS5 统一入口）
+        "seek":      ("../sub-skills/local-seek/scripts/seek.py", []),
         # ego-search：登录态专业搜索子技能（默认关，需显式 enable 后使用）。
         "ego-search": ("../sub-skills/ego-search/scripts/ego_search.py", []),
     }

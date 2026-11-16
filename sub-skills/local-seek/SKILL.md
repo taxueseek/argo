@@ -23,28 +23,26 @@ description: 本机文件与代码内容搜索（rg/fd/mdfind/grep 统一入口 
 
 ## 统一入口
 
-统一走 `scripts/seek.py`（相对 argo 根：`sub-skills/local-seek/scripts/seek.py`），
-由它选工具，不要自己拼 rg/fd 参数：
+统一走全局命令 `argo seek`（任意目录直接可用；若未装 `argo` CLI，改用本技能目录下的 `python3 <skill-dir>/scripts/seek.py`），由它选工具，不要自己拼 rg/fd 参数：
 
 ```bash
-# 以下以 argo 安装根为 cwd；或写死 $ARGO_HOME/sub-skills/local-seek/scripts/seek.py
-python3 sub-skills/local-seek/scripts/seek.py "查询词"                 # 默认：当前目录全文
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --path ~/notes   # 指定目录
-python3 sub-skills/local-seek/scripts/seek.py "词" --path ~/.agents --dot  # 连 . 开头目录与软链一起搜
-python3 sub-skills/local-seek/scripts/seek.py "词" --path . --include-noise  # 噪声目录与真源平权
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --count          # 先数命中数
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --filename       # 按文件名
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --spotlight      # 全盘兜底
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --type py,ts
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --json           # 结构化输出
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --exact          # 精确匹配（关扩展）
-python3 sub-skills/local-seek/scripts/seek.py "符号名" --symbol          # 精确符号/词边界匹配
-python3 sub-skills/local-seek/scripts/seek.py "查询词" --exclude 某文件 # 额外排除（可重复）
-python3 sub-skills/local-seek/scripts/seek.py --outline 文件路径        # 文件结构（def/class/标题/顶层key）
-python3 sub-skills/local-seek/scripts/seek.py --lines 10-50 文件路径    # 按行读取，替代 read_file 全文
-python3 sub-skills/local-seek/scripts/seek.py "裸except" --structural   # 结构搜索（空catch/裸except/装饰函数等）
-python3 sub-skills/local-seek/scripts/seek.py --git-log 文件路径        # 文件的最近提交历史
-python3 sub-skills/local-seek/scripts/seek.py --git-blame 12 文件路径   # 第 12 行的提交归属
+argo seek "查询词"                 # 默认：当前目录全文
+argo seek "查询词" --path ~/notes   # 指定目录
+argo seek "词" --path ~/.agents --dot  # 连 . 开头目录与软链一起搜
+argo seek "词" --path . --include-noise  # 噪声目录与真源平权
+argo seek "查询词" --count          # 先数命中数
+argo seek "查询词" --filename       # 按文件名
+argo seek "查询词" --spotlight      # 全盘兜底
+argo seek "查询词" --type py,ts
+argo seek "查询词" --json           # 结构化输出
+argo seek "查询词" --exact          # 精确匹配（关扩展）
+argo seek "符号名" --symbol          # 精确符号/词边界匹配
+argo seek "查询词" --exclude 某文件 # 额外排除（可重复）
+argo seek --outline 文件路径        # 文件结构（def/class/标题/顶层key）
+argo seek --lines 10-50 文件路径    # 按行读取，替代 read_file 全文
+argo seek "裸except" --structural   # 结构搜索（空catch/裸except/装饰函数等）
+argo seek --git-log 文件路径        # 文件的最近提交历史
+argo seek --git-blame 12 文件路径   # 第 12 行的提交归属
 ```
 
 内置智能行为（固定字符串回退、中文 2-gram 扩展、PCRE2 检测、结构搜索、
@@ -95,8 +93,8 @@ references/auto-behaviors.md。
 
 ## 配置
 
-排除规则与知识域：`sub-skills/local-seek/config/domains.yaml`
-查看当前规则：`python3 sub-skills/local-seek/scripts/seek.py --domains`
+排除规则与知识域：本技能目录下的 `config/domains.yaml`
+查看当前规则：`argo seek --domains`
 
 ## 参考
 

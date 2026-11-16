@@ -71,7 +71,7 @@ argo search "arquitectura de agentes RAG 2026" --verify 2 --json --fields agent
 ## Capacidades y Documentación
 
 - **Agregación de Búsqueda IA**: combina canales gratuitos sin clave (`tavily_free`, `parallel_free`, `anysearch`) con **DeepSeek Search**, **Tencent Yuanbao (Hunyuan)**, **Metaso**, **Bocha**, **Tavily** y **Exa** bajo un mismo enrutador.
-- **19 herramientas MCP** (`argo_search`, `argo_fetch`, `argo_research`, `argo_evidence`, `argo_local_search`, etc.) y 4 sub-habilidades (`local-search`, `local-seek`, `ego-search`, `js-run`).
+- **19 herramientas MCP** (`argo_search`, `argo_fetch`, `argo_research`, `argo_evidence`, `argo_local_search`, etc.), 3 Skills independientes (`argo`, `argo-wide-research`, `local-seek`) y módulos internos (`local-search`, `ego-search`, `js-run`).
 - **Plugin DSH** (`dsh plugin --profile web add argo-search`) con 18 herramientas nativas, 35 interruptores de comportamiento y orquestación paralela ([packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)).
 - Documentación completa: [docs/ENGINE_CATALOG.md](docs/ENGINE_CATALOG.md) · [docs/MCP_SETUP.md](docs/MCP_SETUP.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
