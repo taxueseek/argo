@@ -178,7 +178,7 @@ def test_soft_aliases_backward_compatibility():
 
 
 def test_instructions_matches_core():
-    """initialize instructions 里的工具名必须与 CORE_TOOL_NAMES 一致。
+    """initialize instructions 里的工具名必须与 CORE_TOOL_NAMES / TOOLS 全集一致。
 
     回归（2026-11-11 审计）：aedee08 把 CORE 从「search/fetch/local_search」
     改成 4 个正交集（含 screenshot、不含 local_search），但 mcp_transport 的
@@ -187,8 +187,13 @@ def test_instructions_matches_core():
     一个没挂的工具。同批还有 mcp_tools 文件头、mcp_server 文件头、
     references/operations.md、docs/MCP_SETUP.md 四处同款漂移。
 
-    判据分两段：① CORE 里每个工具名都出现在 instructions 里；② instructions
-    里点名的 argo_* 工具不得含 CORE 之外的（防「文案列了一堆旧工具」）。
+    回归（2026-11-17）：附加名单只抄了 11/15，漏 pdf/social_search/article/
+    job——宿主不透传上下文时模型永远发现不了这四个工具。此前本测试用手工
+    白名单，抄漏了照样绿；现改为从 TOOLS 全集机械派生，抄多抄少都不许。
+
+    判据分两段：① CORE 里每个工具名都出现在 instructions 里；② 「all 打开」
+    名单与 TOOLS 全集 − CORE 精确相等（防再漂移），且 argo_* 点名不得含
+    TOOLS 之外的（防「文案列了一堆旧工具」）。
     """
     from mcp_transport import handle_rpc
 
@@ -198,14 +203,19 @@ def test_instructions_matches_core():
             f"CORE 工具 {name} 没写进 initialize instructions——"
             "模型不知道默认面里有它，文案与 CORE_TOOL_NAMES 必须同源")
 
+    # ② 「all 打开」名单 == TOOLS 全集 − CORE（短名，去 argo_ 前缀）
+    segment = re.search(r"ARGO_MCP_TOOLS=all 打开：(\S+?)。", instructions)
+    assert segment, "instructions 缺少「ARGO_MCP_TOOLS=all 打开」名单段"
+    listed = {n for n in segment.group(1).split("/") if n}
+    expected = {t["name"].removeprefix("argo_") for t in TOOLS} - {
+        n.removeprefix("argo_") for n in CORE_TOOL_NAMES}
+    assert listed == expected, (
+        f"instructions 附加名单漂移：多了 {sorted(listed - expected)}，"
+        f"少了 {sorted(expected - listed)}（TOOLS 全集 − CORE 为准）")
+
     mentioned = set(re.findall(r"argo_[a-z_]+", instructions))
-    unknown = mentioned - set(CORE_TOOL_NAMES) - {
-        "argo_search", "argo_fetch", "argo_research", "argo_screenshot",
-        # 文案允许点名「all 才打开」的旧名，它们是真存在的工具
-        "argo_local_search", "argo_local_read", "argo_recompute",
-        "argo_evidence", "argo_clarify", "argo_crawl", "argo_extract",
-        "argo_preflight", "argo_answer", "argo_watch", "argo_cite",
-    }
+    all_names = {t["name"] for t in TOOLS}
+    unknown = mentioned - all_names
     assert not unknown, f"instructions 点名了不存在的工具：{unknown}"
 
 

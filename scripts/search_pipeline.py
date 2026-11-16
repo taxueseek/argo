@@ -388,11 +388,11 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     if merged:
         try:
             from serp_guard import is_unusable_row as _is_unusable_row  # SERP + 内容农场，标定见 test_content_farm_guard.py
-            # url_kind: none（issue #29 口径 B）：spec 显式声明条目不以 url 为身份，
-            # 缺 url 的题录/语义片段不再被当壳页整批吞
+            # url_kind: none（issue #29 口径 B）：spec 显式声明条目不以 url 为身份，缺 url 的题录/语义片段不再被当壳页整批吞；serp_dropped 丢弃落账见 build_funnel docstring
             merged = [r for r in merged if not _is_unusable_row(r)]
         except ImportError:
             pass  # serp_guard 不可用时跳过（本地五维 rerank 已对 SERP 降权）
+    _funnel_serp_dropped = _funnel_deduped - len(merged)
 
     # ── minhash 近重复去重（结果级，RRF 后 / SERP 后）─────────────────────
     # max_keep 与下方放宽截断同源：去重只需要保证「前 N 条非重复」正确，
@@ -689,7 +689,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
         sum(1 for items in raw_results.values() if isinstance(items, list)
             for it in items
             if isinstance(it, dict) and "error" not in it),
-        _funnel_deduped, _funnel_filtered, len(merged),
+        _funnel_deduped, _funnel_filtered, len(merged), serp_dropped=_funnel_serp_dropped,
     )
 
     result_payload = {

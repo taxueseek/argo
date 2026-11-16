@@ -29,7 +29,7 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from serp_guard import is_content_farm, is_unusable_url  # noqa: E402
+from serp_guard import is_content_farm, is_unusable_row, is_unusable_url  # noqa: E402
 
 # 流水线稿：序数连接词 + AI 套话同时出现
 FARM_CONNECTORS = (
@@ -96,6 +96,49 @@ def test_unusable_url_covers_both_serp_and_farm():
     assert is_unusable_url("https://www.baidu.com/link?url=abc") is True
     assert is_unusable_url(*FARM_CONNECTORS) is True
     assert is_unusable_url(*NORMAL_GUIDE) is False
+
+
+# ── 引擎显式标注豁免（url_resolved，2026-11-17）──────────────────────────────
+
+def _wechat_row(url: str, **extra) -> dict:
+    return {"title": "公众号文章标题", "url": url,
+            "snippet": "正文摘要", "source": "wechat_sogou", **extra}
+
+
+def test_explicit_unresolved_intermediate_link_is_kept():
+    """引擎标注 url_resolved=False 的搜狗中间链不得当 SERP 吞掉。
+
+    外部报告（2026-11-16）：--mode fast 下 wechat_sogou 返回 10 条全部带
+    weixin.sogou.com/weixin 中间链，被本闸整批吞掉——count=0、errors 为空、
+    漏斗 deduped 10 → filtered 0，唯一线索是漏斗差值。fast 档该引擎由此
+    必然 0 结果。引擎已显式声明「这是文章条目、URL 是跳转链」，形状判据
+    无法区分它与真搜索结果页，只有声明能区分。
+    """
+    row = _wechat_row("https://weixin.sogou.com/weixin?type=2&query=x&link=abc",
+                      url_resolved=False)
+    assert is_unusable_row(row) is False
+
+
+def test_explicit_resolved_row_is_kept():
+    """解析成功的行（真实 mp.weixin.qq.com 链接）本就不撞判据，锁住不回归。"""
+    row = _wechat_row("https://mp.weixin.qq.com/s/abc", url_resolved=True)
+    assert is_unusable_row(row) is False
+
+
+def test_unmarked_sogou_search_page_still_swallowed():
+    """未标注的野生搜狗链照吞——豁免只认显式声明，不放宽形状判据。"""
+    assert is_unusable_row(
+        _wechat_row("https://weixin.sogou.com/weixin?type=2&query=x")) is True
+    assert is_unusable_url(
+        "https://weixin.sogou.com/weixin?type=2&query=x") is True
+
+
+def test_explicit_marked_farm_still_swallowed():
+    """显式标注豁免只跳过 SERP/跳转判据：农场判据恒走。"""
+    row = {"title": FARM_CONNECTORS[1], "url": FARM_CONNECTORS[0],
+           "snippet": FARM_CONNECTORS[2], "source": "x",
+           "url_resolved": False}
+    assert is_unusable_row(row) is True
 
 
 def test_escape_hatch_disables_farm_detection(monkeypatch):

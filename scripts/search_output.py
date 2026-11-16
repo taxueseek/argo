@@ -277,7 +277,8 @@ def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_funnel(routed: int, called: int, returned: int,
-                 deduped: int, filtered: int, kept: int) -> dict[str, int]:
+                 deduped: int, filtered: int, kept: int,
+                 serp_dropped: int = 0) -> dict[str, int]:
     """阶段漏斗账：一次调用在管线每一层还剩多少条。
 
     why（GLM 密集反馈那篇的核心）：端到端指标只能说明「变差了」，说明不了
@@ -292,17 +293,26 @@ def build_funnel(routed: int, called: int, returned: int,
     routed   = 路由选出的引擎数（engines_combo）
     called   = 实际发起调用的引擎数（早停时小于 routed）
     returned = 引擎返回的原始条数（跨引擎去重前）
-    deduped  = 跨引擎合并 + 近重复去重后（SERP/跳转页过滤的损耗已计入本格
-               之差，取值点在 SERP 过滤之前、minhash 之后；此前取值点在
-               minhash 之后，把 SERP 丢弃也算成「去重削掉了」，会让 0 结果
-               的首要诊断入口给出错误归因）
+    deduped  = 跨引擎合并后（取值点在 SERP 过滤之前；此前取值点在 minhash
+               之后，把 SERP 丢弃也算成「去重削掉了」，会让 0 结果的首要
+               诊断入口给出错误归因）
     filtered = 否定词过滤 + 时间窗过滤后
     kept     = 最终输出条数
+    serp_dropped = SERP/跳转页守卫丢弃的条数（损耗计数，0 是好事）。
+               2026-11-17 增设：此前 SERP 丢弃只体现为 deduped→filtered 的
+               无名差值，外部实测 wechat_sogou fast 档「returned 10 →
+               deduped 10 → filtered 0 → kept 0」无一格指明真凶。注意它是
+               损耗不是存活数，语义与其余六格相反，故不入 funnel_collapse
+               的塌陷归因（0 在那里会被误读成塌陷点）。
     """
     return {"routed": routed, "called": called, "returned": returned,
-            "deduped": deduped, "filtered": filtered, "kept": kept}
+            "deduped": deduped, "serp_dropped": serp_dropped,
+            "filtered": filtered, "kept": kept}
 
 
+# 注意：serp_dropped 刻意不在此列——它是损耗计数（0 = 没丢任何条目，正常），
+# 混进存活数序列会被 funnel_collapse 把「没丢条目」误报成塌陷点；describe_funnel
+# 展示时按管线顺序临时插在 deduped 与 filtered 之间。
 FUNNEL_STAGES = ("routed", "called", "returned", "deduped", "filtered", "kept")
 
 
@@ -310,7 +320,8 @@ def describe_funnel(funnel: dict[str, Any] | None) -> str:
     """把漏斗压成一行 `routed 2→called 2→returned 0→…`（给局限声明用）。"""
     if not isinstance(funnel, dict):
         return ""
-    return "→".join(f"{k} {funnel.get(k)}" for k in FUNNEL_STAGES
+    stages = list(FUNNEL_STAGES[:4]) + ["serp_dropped"] + list(FUNNEL_STAGES[4:])
+    return "→".join(f"{k} {funnel.get(k)}" for k in stages
                     if k in funnel)
 
 

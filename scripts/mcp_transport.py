@@ -62,9 +62,13 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
             # 短指令：降 tools 上下文；细节在 tool schema。
             # URL 在 results[].url（默认 envelope=False，不生成 sources）。
             #
-            # 文案只写「CORE 指哪几个」的语义，不逐个列全名单——全名单在
-            # tools/list 里，抄一份到这里就有了第二真源。机械对拍见
-            # test_mcp_consolidated_tools.py::test_instructions_matches_core。
+            # 文案只写「CORE 指哪几个」的语义；all 才打开的附加名单抄在这里，
+            # 是因为不少宿主不把 initialize instructions 之外的上下文透给模型，
+            # 不抄它们就永远不知道这些工具存在（2026-11-17 补全：此前抄了
+            # 11/15，漏 pdf/social_search/article/job 四个）。抄写漂移由机械
+            # 对拍锁死——test_mcp_consolidated_tools.py::
+            # test_instructions_matches_core 断言本名单 == TOOLS 全集 − CORE，
+            # 增删工具忘了改这里即红。
             #
             # 不点名 argo_local_search：它是真工具（domain=local 也能用），但
             # 已不在默认注入面，写进「日常」文案会让模型去调一个没挂的工具。
@@ -75,7 +79,8 @@ def handle_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
                 "argo_screenshot 截图）。argo_search 用 domain 切社交/招聘/本机。"
                 "其余工具默认不注入 schema，ARGO_MCP_TOOLS=all 打开："
                 "local_search/local_read/recompute/evidence/clarify/crawl/"
-                "extract/preflight/answer/watch/cite。"
+                "pdf/social_search/article/job/extract/preflight/answer/"
+                "watch/cite。"
             ),
         }
 

@@ -250,7 +250,7 @@ class LRUCache:
 class SQLiteCache:
     """SQLite 持久化缓存，支持 TTL 过期、大小限制、gzip 压缩。"""
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3  # 2026-11-17 bump：加列/改表必须与 bump 同提交（加列不 bump+版本早退曾让旧库升级即炸，test_cache_schema_migration 锁）
 
     def __init__(self, db_path: str = DEFAULT_DB_PATH, ttl: int = DEFAULT_TTL,
                  max_size_mb: float | None = None):

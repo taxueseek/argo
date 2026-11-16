@@ -320,11 +320,23 @@ def is_unusable_url(url: str, title: str = "", snippet: str = "") -> bool:
 
 def is_unusable_row(row: dict) -> bool:
     """条目级闸（issue #29 口径 B）：spec 声明 url_kind: none 的条目不以 url 为
-    身份，空 url 不判壳页；一旦有 url，SERP 判据照走；内容农场判据恒走。"""
+    身份，空 url 不判壳页；一旦有 url，SERP 判据照走；内容农场判据恒走。
+
+    引擎显式标注豁免（url_resolved，2026-11-17）：wechat_sogou 在 fast 跳过
+    解析、解析预算耗尽、解析熔断时都会给中间链打 url_resolved=False——这是
+    引擎对「这是文章条目、URL 是跳转链」的显式声明。形状判据无法区分它与真
+    搜索结果页（前缀同为 weixin.sogou.com/weixin），只有声明能区分；此前一概
+    吞掉，fast 档该引擎必然 0 结果且 errors 为空（2026-11-16 外部报告实测：
+    returned 10 → filtered 0 → kept 0）。声明过的条目跳过 SERP/跳转判据，
+    农场判据恒走；未声明的野生链照吞。与 url_kind: none 同一哲学：显式声明
+    优先于形状推断。"""
     if row.get("url_kind") == "none":
         url = row.get("url", "")
         if url and is_serp_or_jump_url(url):
             return True
+        return is_content_farm(url, row.get("title", ""), row.get("snippet", ""))
+    if "url_resolved" in row:
+        url = row.get("url", "")
         return is_content_farm(url, row.get("title", ""), row.get("snippet", ""))
     return is_unusable_url(row.get("url", ""), row.get("title", ""), row.get("snippet", ""))
 

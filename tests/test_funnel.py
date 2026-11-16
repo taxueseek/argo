@@ -88,10 +88,12 @@ def _run(backend, engines, n=5, query=None):
 # ── 纯函数 ────────────────────────────────────────────────────────────────────
 
 def test_build_funnel_shape_and_order():
-    f = search.build_funnel(2, 1, 10, 9, 9, 5)
-    assert list(f) == list(search.FUNNEL_STAGES)
-    assert f == {"routed": 2, "called": 1, "returned": 10,
-                 "deduped": 9, "filtered": 9, "kept": 5}
+    f = search.build_funnel(2, 1, 10, 9, 9, 5, serp_dropped=1)
+    # 存活六格按管线序，serp_dropped（损耗计数）插在 deduped 与 filtered 之间
+    assert list(f) == ["routed", "called", "returned", "deduped",
+                       "serp_dropped", "filtered", "kept"]
+    assert f == {"routed": 2, "called": 1, "returned": 10, "deduped": 9,
+                 "serp_dropped": 1, "filtered": 9, "kept": 5}
 
 
 def test_funnel_collapse_names_first_zero():
@@ -108,6 +110,11 @@ def test_funnel_collapse_names_first_zero():
     assert search.funnel_collapse(
         {"routed": 2, "called": 2, "returned": 10, "deduped": 10,
          "filtered": 10, "kept": 5}) is None
+    # serp_dropped 是损耗计数：0 = 没丢条目（正常），不参与塌陷归因——
+    # 否则每条没有 SERP 丢弃的查询都会被误报成「serp_dropped 塌了」
+    assert search.funnel_collapse(
+        {"routed": 2, "called": 2, "returned": 10, "deduped": 10,
+         "serp_dropped": 0, "filtered": 10, "kept": 5}) is None
     # 无漏斗（引入该字段之前写入的缓存条目）
     assert search.funnel_collapse(None) is None
     assert search.funnel_collapse({}) is None
@@ -118,6 +125,12 @@ def test_describe_funnel_is_compact_line():
         {"routed": 2, "called": 1, "returned": 10, "deduped": 9,
          "filtered": 9, "kept": 5})
     assert line == "routed 2→called 1→returned 10→deduped 9→filtered 9→kept 5"
+    # 带损耗格的漏斗：serp_dropped 按管线序插在 deduped 与 filtered 之间
+    line = search.describe_funnel(
+        {"routed": 1, "called": 1, "returned": 10, "deduped": 10,
+         "serp_dropped": 10, "filtered": 0, "kept": 0})
+    assert line == ("routed 1→called 1→returned 10→deduped 10→"
+                    "serp_dropped 10→filtered 0→kept 0")
     assert search.describe_funnel(None) == ""
 
 
@@ -128,8 +141,27 @@ def test_funnel_counts_every_stage(backend):
     backend.docs["engine_b"] = [_doc("engine_b", "b1"), _doc("engine_b", "b2")]
     out = _run(backend, ["engine_a", "engine_b"])
     assert out["funnel"] == {"routed": 2, "called": 2, "returned": 4,
-                            "deduped": 4, "filtered": 4, "kept": 4}
+                            "deduped": 4, "serp_dropped": 0,
+                            "filtered": 4, "kept": 4}
     assert out["count"] == 4
+
+
+def test_funnel_accounts_serp_drops(backend):
+    """SERP 守卫丢弃要单独落账：不再只体现为 deduped→filtered 的无名差值。
+
+    外部实测（2026-11-16）：wechat_sogou fast 档搜到 10 条、全被闸掉，
+    漏斗报 deduped 10 → filtered 0，六格里没有一格指明真凶。现在这批丢弃
+    必须出现在 serp_dropped，且 count/funnel_collapse 不受影响。
+    """
+    serp_row = {"title": "百度搜索结果页", "url": "https://www.baidu.com/link?url=abc",
+                "snippet": "jump page", "source": "engine_a"}
+    backend.docs["engine_a"] = [_doc("engine_a", "a1"), serp_row]
+    out = _run(backend, ["engine_a"])
+    assert out["funnel"]["returned"] == 2
+    assert out["funnel"]["deduped"] == 2
+    assert out["funnel"]["serp_dropped"] == 1
+    assert out["funnel"]["kept"] == 1
+    assert out["count"] == 1
 
 
 def test_funnel_localizes_empty_engines(backend):
@@ -272,7 +304,7 @@ def test_funnel_survives_cache_roundtrip(backend, tmp_path, monkeypatch):
     assert second.get("cached") is True
     assert second.get("funnel") == first.get("funnel") == {
         "routed": 1, "called": 1, "returned": 2, "deduped": 2,
-        "filtered": 2, "kept": 2}
+        "serp_dropped": 0, "filtered": 2, "kept": 2}
 
 
 def test_funnel_called_counts_recovery_engines(backend):
