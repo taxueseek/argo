@@ -19,6 +19,10 @@ from engines_base import (
     rank_score,
     safe_search, http_open,
 )
+from retry_policy import (
+    NON_RETRYABLE_STATUS as _NON_RETRYABLE_STATUS,
+    classify_error_status,
+)
 
 logger = logging.getLogger("unified_search.engines")
 
@@ -464,9 +468,13 @@ def _build_itunes_engine(spec: dict[str, Any]) -> Any:
     return _engine
 
 
-# ── TheSportsDB 体育（免认证 test key=3） ────────────────────────────────────
+# ── TheSportsDB 体育（免认证 test key=123） ──────────────────────────────────
+# 旧免费 key=3 已被厂方永久停用（403 正文："The old '3' Free Sports API key is
+# permanently disabled, Please use the new test key \"123\""）。2026-11-17 实测
+# key=123 对 searchplayers/searchteams 返回 200，key=3 恒 403、key=1 报
+# "Invalid Premium API key"。换 key 前该源对任何查询都是确定性 403。
 
-_SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/3"
+_SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123"
 _SPORTSDB_UA = "argo-search/2.6 (unified-search@local)"
 
 # 高频中文球员/球队 → TheSportsDB 英文检索名（公开 API 基本只认拉丁文）
@@ -623,12 +631,19 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
 
         q_token_set = {t.lower() for t in meaningful}
 
+        # 确定性失败（配额/鉴权/封锁）不重试：变体与端点只是同一堵墙的不同叫法。
+        fatal = False
         for v in variants:
+            if fatal:
+                break
             for path, param_k, kind, title_k, id_k, snip_fn in endpoints:
                 try:
                     data = _fetch(path, {param_k: v}, to)
                 except Exception as e:
                     logger.warning(f"TheSportsDB {path} 失败: {e}")
+                    if classify_error_status(str(e)) in _NON_RETRYABLE_STATUS:
+                        fatal = True
+                        break
                     continue
                 items = data.get(list_keys[path]) if isinstance(data, dict) else None
                 if not items:

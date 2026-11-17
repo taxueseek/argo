@@ -40,6 +40,7 @@ tests/test_consistency_gates.py
 tests/test_context_budget.py
 tests/test_deep_budget_tail_grace.py
 tests/test_dependency_source_gate.py
+tests/test_deterministic_failure_gate.py
 tests/test_dsh_plugin_env_gate.py
 tests/test_engine_catalog.py
 tests/test_engine_states.py

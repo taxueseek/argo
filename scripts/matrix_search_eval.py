@@ -985,15 +985,19 @@ LIVE_CASES: list[dict[str, Any]] = [
 ]
 
 
-def _blob_from_results(results: list[dict], used: list, eng: str) -> str:
+def _blob_from_results(results: list[dict]) -> str:
+    """只拼结果正文证据。
+
+    `engines_used` / `engine` 是「谁答的」元数据，不是答案内容：拼进来会让
+    gold 里的源名（pubchem、nasa 这类）命中在引擎标识上，一条正文毫不相关
+    的结果也能判 hit。引擎维度由 `eng_ok` 单独把关。
+    """
     parts: list[str] = []
     for x in results:
         for k in ("title", "snippet", "content", "url", "source", "engine"):
             v = x.get(k)
             if v:
                 parts.append(str(v))
-    parts.extend(str(u) for u in used)
-    parts.append(eng or "")
     return " ".join(parts).lower()
 
 
@@ -1024,7 +1028,7 @@ def run_live(c: Checker) -> None:
         domain_got = r.get("domain")
         combo = r.get("engines_combo") or r.get("engines") or []
         recovery = r.get("recovery")
-        blob = _blob_from_results(results, used, eng)
+        blob = _blob_from_results(results)
 
         dom_ok = case.get("domain") is None or domain_got == case["domain"]
         primary = case.get("primary")
@@ -1052,12 +1056,6 @@ def run_live(c: Checker) -> None:
             for p in pollute_keys:
                 if p in src and p not in pollute_hit:
                     pollute_hit.append(p)
-        for u in used:
-            ul = str(u).lower()
-            for p in pollute_keys:
-                if p == ul and p not in pollute_hit:
-                    # 若仅作为 recovery 未进 results 可不算污染；仅 results 源算
-                    pass
 
         # 严格：top results 的 source 不得为 pollute
         pollute_ok = not pollute_hit

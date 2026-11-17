@@ -53,8 +53,17 @@ def run_pipeline_recovery(
                 and (rec_level is None or rec_level < "L3"):
             rec_level = "L3"
 
+        # routable_only=True：只要「当前可路由」的源。全量名单里含熔断、禁用、
+        # 缺密钥的引擎，让它们进 L3 候选等于白跑一次注定失败的调用。
+        # 旧调用方可能不收参数（历史 TypeError 陷阱）：单独兜 TypeError，
+        # 回退全量而不是整个恢复链不跑。
         try:
-            enabled_set = set(available_engines_fn())
+            enabled_set = set(available_engines_fn(routable_only=True))
+        except TypeError:
+            try:
+                enabled_set = set(available_engines_fn())
+            except Exception:
+                enabled_set = None
         except Exception:
             enabled_set = None
 
