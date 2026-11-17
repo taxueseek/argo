@@ -99,6 +99,32 @@ class _Prepared:
 
 
 
+def _emit_cache_hit(query: str, payload: dict[str, Any]) -> None:
+    """命中写内部 cache_hit 流。不改 payload。
+
+    query 流只在 finalize 记非缓存搜索；命中在 execute_search 直接返回，
+    那本账上看不到。这里补一条内部记录，响应 JSON 与 argo stats 的时延
+    均值都不读它。emit 自身失败静默。不在这里 import engines：命中热路径
+    的契约是不拖引擎构建栈，表外名由 usage_log 在注册表已加载时拒写。
+    """
+    q = query[:60] if isinstance(query, str) else ""
+    used = payload.get("engines_used")
+    record: dict[str, Any] = {
+        "query": q,
+        "elapsed_ms": payload.get("elapsed_ms"),
+        "count": payload.get("count"),
+        "engines_used": list(used)[:8] if isinstance(used, list) else [],
+        "domain": payload.get("domain"),
+        "mode": payload.get("mode"),
+        "depth": payload.get("depth"),
+        "cache_level": payload.get("cache_level"),
+        "cached": True,
+    }
+    if payload.get("semantic_hit"):
+        record["semantic_hit"] = True
+    _emit_usage("cache_hit", record)
+
+
 def prepare(query: str, decision: dict[str, Any], max_results: int,
             timeout: int, depth: str, cache: Any, skip_cache: bool,
             *, mode: str = "auto", since: str | None = None,
@@ -254,6 +280,7 @@ def prepare(query: str, decision: dict[str, Any], max_results: int,
                 on_progress(Stage.DONE, {"count": len(hit_results),
                                          "elapsed_ms": cache_elapsed,
                                          "cached": True})
+            _emit_cache_hit(query, _hit)
             return _Prepared(cached=_hit)
 
     # 缓存未命中才拉起查询理解、词形规范化与网络感知超时（缓存命中热路径零开销）

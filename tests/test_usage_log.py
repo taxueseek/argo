@@ -183,9 +183,207 @@ def test_guard_alias_and_missing_field_pass(tele_dir):
 
 def test_guard_scoped_to_query_stream(tele_dir):
     # route 流的格式测试本身用假名（e0..e14，见 test_tail_reads_recent），
-    # 守卫不得越界拦截其他流
+    # 守卫不得越界拦截 route。cache_hit 与 query 同形态，另有用例锁它被拦。
     assert usage_log.emit("route", {"engine": "e0", "engines": ["e0", "slow_backup"]})
     assert len(_read_lines(tele_dir, "route")) == 1
+    assert usage_log.emit("route", {"engines_used": ["engine_a", "slow_backup"]})
+    assert len(_read_lines(tele_dir, "route")) == 2
+
+
+def test_guard_drops_fixture_engine_cache_hit(tele_dir):
+    """cache_hit 与 query 同一道注册表守卫：表外名整条拒写。"""
+    import engines  # 守卫只在 engines 已加载时判定；本用例要的就是已加载
+    assert "yuanbao" in engines.available_engines()
+    assert usage_log.emit("cache_hit", {
+        "query": "夹具", "elapsed_ms": 1, "cached": True,
+        "engines_used": ["engine_a"],
+    }) is False
+    assert usage_log.emit("cache_hit", {
+        "query": "夹具", "engines_used": ["slow_backup", "yuanbao"],
+    }) is False
+    assert _read_lines(tele_dir, "cache_hit") == []
+
+
+def test_guard_keeps_registry_engine_cache_hit(tele_dir):
+    assert usage_log.emit("cache_hit", {
+        "query": "真实查询", "elapsed_ms": 3, "count": 2, "cached": True,
+        "engines_used": ["yuanbao"], "cache_level": "L1",
+        "domain": "general", "mode": "auto", "depth": "fast",
+    })
+    rows = _read_lines(tele_dir, "cache_hit")
+    assert len(rows) == 1
+    assert rows[0]["stream"] == "cache_hit"
+    assert rows[0]["elapsed_ms"] == 3
+    assert rows[0]["cached"] is True
+    assert rows[0]["engines_used"] == ["yuanbao"]
+
+
+def _hit_cache(engines_used, **extra):
+    class _Cache:
+        def get(self, *_a, **_k):
+            hit = {
+                "results": [{"title": "t", "url": "https://example.invalid/x",
+                             "snippet": "s"}],
+                "engines_used": list(engines_used),
+                "engines_combo": list(engines_used[:1] or ["anysearch"]),
+                "_cache_level": "L1",
+                "engine_outcomes": [],
+            }
+            hit.update(extra)
+            return hit
+
+        def set(self, *_a, **_k):
+            return None
+
+    return _Cache()
+
+
+def _fixed_decision(engines):
+    return {
+        "engine": engines[0], "engines": engines, "engines_combo": engines,
+        "reason": "测试固定决策", "domain": "general", "parallel": False,
+        "tfidf_scores": [], "mode": "auto", "depth": "fast",
+        "features": {}, "login_hint": {"needs_login": False, "reason": ""},
+    }
+
+
+_HIT_KEYS = {
+    "query", "engine", "engines", "engines_combo", "cached", "cache_level",
+    "domain", "elapsed_ms", "tfidf_scores", "route_reason", "login_hint",
+    "results", "count", "engines_used", "mode", "depth", "reranker",
+    "engine_outcomes", "errors", "time_filtered",
+}
+
+
+def test_execute_search_cache_hit_logs_without_new_response_keys(tele_dir):
+    """命中写 cache_hit.jsonl，响应键集合与加日志前相同，且不写 query 流。"""
+    import search
+    q = "缓存命中记账" + ("长" * 80)
+    out = search.execute_search(
+        q, _fixed_decision(["yuanbao"]), 5, 20, "fast",
+        _hit_cache(["yuanbao"]), False)
+    assert out.get("cached") is True
+    assert out["query"] == q
+    assert set(out) == _HIT_KEYS
+    assert "semantic_hit" not in out
+    rows = _read_lines(tele_dir, "cache_hit")
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["stream"] == "cache_hit"
+    assert row["cached"] is True
+    assert row["query"] == q[:60]
+    assert isinstance(row["elapsed_ms"], int)
+    assert row["count"] == 1
+    assert row["engines_used"] == ["yuanbao"]
+    assert row["cache_level"] == "L1"
+    assert "semantic_hit" not in row
+    assert _read_lines(tele_dir, "query") == []
+
+
+def test_execute_search_cache_hit_drops_fixture_engine(tele_dir, monkeypatch):
+    """命中路径必须尝试记账，表外引擎被守卫丢掉。删掉 emit 或撤掉守卫都会红。"""
+    import engines  # noqa: F401
+    import search
+    import search_entry
+    calls = []
+    real = search_entry._emit_usage
+
+    def _wrap(stream, record):
+        calls.append((stream, dict(record)))
+        return real(stream, record)
+
+    monkeypatch.setattr(search_entry, "_emit_usage", _wrap)
+    out = search.execute_search(
+        "夹具命中", _fixed_decision(["engine_a"]), 5, 20, "fast",
+        _hit_cache(["engine_a"]), False)
+    assert out.get("cached") is True
+    assert set(out) == _HIT_KEYS
+    assert calls and calls[0][0] == "cache_hit"
+    assert calls[0][1]["engines_used"] == ["engine_a"]
+    assert _read_lines(tele_dir, "cache_hit") == []
+    assert _read_lines(tele_dir, "query") == []
+
+
+def test_execute_search_semantic_hit_logs_flag_only(tele_dir):
+    import search
+    out = search.execute_search(
+        "语义命中", _fixed_decision(["yuanbao"]), 5, 20, "fast",
+        _hit_cache(["yuanbao"], _semantic_hit=True,
+                   _semantic_query="另一条", _semantic_similarity=0.9),
+        False)
+    assert out.get("semantic_hit") is True
+    assert out.get("semantic_query") == "另一条"
+    rows = _read_lines(tele_dir, "cache_hit")
+    assert len(rows) == 1
+    assert rows[0]["semantic_hit"] is True
+    assert "semantic_query" not in rows[0]
+
+
+def test_cache_hit_silent_when_usage_log_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARGO_USAGE_LOG", "0")
+    monkeypatch.setenv("ARGO_USAGE_LOG_DIR", str(tmp_path))
+    import search
+    out = search.execute_search(
+        "关闭日志", _fixed_decision(["yuanbao"]), 5, 20, "fast",
+        _hit_cache(["yuanbao"]), False)
+    assert out.get("cached") is True
+    assert set(out) == _HIT_KEYS
+    assert not (tmp_path / "cache_hit.jsonl").exists()
+
+
+def test_cache_hit_log_does_not_import_engines(tmp_path):
+    """命中账打开时仍不得为守卫 import engines。"""
+    import os
+    import subprocess
+    script = r'''
+import json, os, sys
+os.environ["ARGO_USAGE_LOG"] = "1"
+os.environ["ARGO_USAGE_LOG_DIR"] = os.environ["LOGDIR"]
+os.environ["ARGO_STATE_DIR"] = os.environ["STATEDIR"]
+os.environ["ARGO_NO_DAEMON"] = "1"
+sys.path.insert(0, os.environ["SCRIPTS"])
+import search
+
+class Cache:
+    def get(self, *a, **k):
+        return {
+            "results": [{"title": "t", "url": "https://example.invalid/x",
+                         "snippet": "s"}],
+            "engines_used": ["anysearch"],
+            "engines_combo": ["anysearch"],
+            "_cache_level": "L1",
+            "engine_outcomes": [],
+        }
+    def set(self, *a, **k):
+        return None
+
+decision = {
+    "engine": "anysearch", "engines": ["anysearch"],
+    "engines_combo": ["anysearch"], "reason": "fixed",
+    "domain": "general", "parallel": False, "tfidf_scores": [],
+    "mode": "auto", "depth": "fast", "features": {},
+    "login_hint": {"needs_login": False, "reason": ""},
+}
+out = search.execute_search("GitHub", decision, 5, 20, "fast", Cache(), False)
+assert out.get("cached") is True, out.get("cached")
+assert "engines" not in sys.modules
+assert "stream" not in out and "semantic_hit" not in out
+path = os.path.join(os.environ["LOGDIR"], "cache_hit.jsonl")
+rows = [json.loads(x) for x in open(path, encoding="utf-8")]
+assert len(rows) == 1 and rows[0]["stream"] == "cache_hit"
+assert rows[0]["cached"] is True and rows[0]["engines_used"] == ["anysearch"]
+print("ok")
+'''
+    env = os.environ.copy()
+    env["LOGDIR"] = str(tmp_path / "logs")
+    env["STATEDIR"] = str(tmp_path / "state")
+    env["SCRIPTS"] = str(SCRIPT_DIR)
+    env["ARGO_USAGE_LOG"] = "1"
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        env=env, capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
 def test_guard_fail_open_when_registry_broken(tele_dir, monkeypatch):
@@ -328,3 +526,22 @@ def test_export_anonymized_telemetry_strips_queries_and_paths(tmp_path):
     assert report["summary"]["adaptive"]["empty_lang_rows"] == 5
     assert len(report["summary"]["adaptive"]["high_empty_buckets"]) == 1
     assert len(report["anonymized_fingerprints"]) == 2
+
+
+def test_cache_hit_guard_fail_open_before_engines_loaded():
+    """cache_hit 守卫在 engines 未加载时 fail-open：表外名也放行。
+
+    判据是「engines 不在 sys.modules」。改名或重构会让守卫静默失效
+    （fail-open 方向安全，但守卫等于没有），这里把行为钉住。
+    """
+    import sys as _sys
+    saved = _sys.modules.get("engines")
+    _sys.modules.pop("engines", None)
+    try:
+        assert usage_log._canonical_engines("cache_hit") == frozenset()
+        # 表外夹具名在 fail-open 下不被判为夹具 → 整条记录照常落盘
+        assert usage_log._fixture_engines(
+            {"engines_used": ["definitely_not_a_real_engine"]}, "cache_hit") == []
+    finally:
+        if saved is not None:
+            _sys.modules["engines"] = saved

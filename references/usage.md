@@ -926,8 +926,9 @@ argo quota --refresh  # 跳过 10 分钟缓存
 
 ### 数据在哪、有什么
 
-`<状态目录>/usage_log/`（`argo stats` 首行给出实际路径）下四个 append-only JSONL 流，
-单流 1MB/2000 行自动回缩，**本地数据不出本机**：
+`<状态目录>/usage_log/`（`argo stats` 首行给出实际路径）下 append-only JSONL 流，
+单流 1MB/2000 行自动回缩，**本地数据不出本机**。`argo stats` 的时延与命中率只读
+`query`；`cache_hit` 只记缓存命中，不进响应 JSON，也不进这条均值：
 
 | 流 | 一条 = | 用途 |
 |----|--------|------|
@@ -935,6 +936,7 @@ argo quota --refresh  # 跳过 10 分钟缓存
 | `recovery` | 救援链触发概览 | 看救援是否过度 |
 | `route` | 路由采样（域/引擎/置信/语言） | 路由质量分析 |
 | `merge` | 本地数据融合概览 | 数据融合审计 |
+| `cache_hit` | 一次缓存命中：query(截断60字)/elapsed_ms/count/cache_level/domain/mode/depth | 核对命中是否发生；不进 `argo stats` |
 
 ### 怎么读
 

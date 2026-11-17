@@ -6,7 +6,7 @@
   - 失败静默：任何异常都吞掉返回 False，绝不拖累搜索主路径
   - 目录可注入：ARGO_USAGE_LOG_DIR 覆盖（测试隔离），默认 <状态目录>/usage_log/
   - 总开关：ARGO_USAGE_LOG=0 / false 完全关闭
-  - 夹具守卫：query 流 engines_used 出现注册表外引擎名即判测试夹具，整条拒写
+  - 夹具守卫：query 与 cache_hit 流的 engines_used 出现注册表外引擎名即判测试夹具，整条拒写
   - 脱敏：query 等敏感字段由调用方截断，本模块不放大
 
 Schema（每条一行 JSON，UTF-8）：
@@ -93,14 +93,28 @@ def _enabled() -> bool:
 _RENAMED_ALIAS_KEEP = frozenset({"openlibrary", "bing"})
 
 
-def _canonical_engines() -> frozenset[str]:
+# query：非缓存搜索总账。cache_hit：缓存命中内部账，字段形态与 query 相同
+# （都有 engines_used），表外夹具名会同样污染「谁在被用」的核对。
+# route/recovery/merge 不在此列：route 的格式测试本身用 e0..e14 假名。
+_FIXTURE_GUARDED_STREAMS = frozenset({"query", "cache_hit"})
+
+
+def _canonical_engines(stream: str = "query") -> frozenset[str]:
     """注册表引擎名全集（含历史别名豁免）。注册表加载失败返回空集——
     守卫随之失效放行（fail-open）：守卫是防脏数据的，不能反过来丢真日志。
 
     不做外层缓存：available_engines 走 get_registry 的 mtime 指纹自愈，每次
     现取才能看见「daemon 常驻期间新增的本地引擎」；外层冻结只会把新引擎的
-    真日志误杀成夹具。每次构建 frozenset 是微秒级，query 流每搜索只写一条。
+    真日志误杀成夹具。每次构建 frozenset 是微秒级，每条搜索只写一条。
+
+    cache_hit 落在命中热路径上。engines 是整棵构建栈，这条路径的契约是
+    不 import 它（search.py 惰性代理，tests/test_hotpath_import_lint.py）。
+    模块还没加载就 fail-open，不为守卫付那一次 import。query 流走到落盘时
+    引擎已经用过，照常加载。
     """
+    import sys
+    if stream == "cache_hit" and "engines" not in sys.modules:
+        return frozenset()
     try:
         from engines import available_engines
         return frozenset(available_engines()) | _RENAMED_ALIAS_KEEP
@@ -108,8 +122,8 @@ def _canonical_engines() -> frozenset[str]:
         return frozenset()
 
 
-def _fixture_engines(record: dict[str, Any]) -> list[str]:
-    """query 记录里的注册表外引擎名（别名豁免后）。
+def _fixture_engines(record: dict[str, Any], stream: str = "query") -> list[str]:
+    """query / cache_hit 记录里的注册表外引擎名（别名豁免后）。
 
     engines_used 缺失/非列表/为空一律视为无夹具信号：真实搜索的该字段
     永远是引擎 id 列表，守卫只对「有列表且含表外名」的形态做判定。
@@ -117,7 +131,7 @@ def _fixture_engines(record: dict[str, Any]) -> list[str]:
     used = record.get("engines_used")
     if not isinstance(used, list) or not used:
         return []
-    canon = _canonical_engines()
+    canon = _canonical_engines(stream)
     if not canon:
         return []
     return [e for e in used if not isinstance(e, str) or e not in canon]
@@ -153,15 +167,16 @@ def emit(stream: str, record: dict[str, Any]) -> bool:
     """
     if not _enabled():
         return False
-    if stream == "query" and _fixture_engines(record):
+    if stream in _FIXTURE_GUARDED_STREAMS and _fixture_engines(record, stream):
         # 夹具守卫（2026-10-25）：测试夹具引擎名（fast / slow / quick_primary
         # 这类注册表外名）屡次写进生产 query.jsonl（conftest 的
         # ARGO_USAGE_LOG=0 与 is_synthetic_run 的黑名单各漏过一批，最近一次
         # 2026-10-24），stats 的均值与最慢/高频引擎榜随之失真。黑名单永远
         # 追不全新夹具名，这里在唯一落盘口用注册表白名单反向判定：表外名
         # 即夹具，整条拒写。存量清理走 usage_log_clean.py（隔离不删除）。
-        # 只拦 query 流：route/recovery 的字段形态与测试惯例不同（route 的
-        # 格式测试本身用 e0..e14 假名），且实测污染只发生在 query 流。
+        # 拦 query 与 cache_hit：两者都带 engines_used，表外名写进命中账会让
+        # 「谁在被命中」失真。route/recovery 的字段形态与测试惯例不同
+        # （route 的格式测试本身用 e0..e14 假名），不在这道守卫里。
         return False
     safe_record = _sanitize_record(record)
     try:
