@@ -476,6 +476,10 @@ def _build_itunes_engine(spec: dict[str, Any]) -> Any:
 
 _SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123"
 _SPORTSDB_UA = "argo-search/2.6 (unified-search@local)"
+# 实体问早停线：player/team 单条 rel 到这条线就说明主实体已到手，继续扇出
+# 只是同一答案的重复请求（旧实现最多 15 次串行请求，实测 34s 直接吃掉引擎
+# 超时）。赛事问不套这条线——「World Cup 2022」要的是多实体多样性。
+_ENTITY_HIT_FLOOR = 0.9
 
 # 高频中文球员/球队 → TheSportsDB 英文检索名（公开 API 基本只认拉丁文）
 _SPORTS_ZH_ALIASES: dict[str, str] = {
@@ -519,7 +523,7 @@ def _sports_expand_aliases(query: str) -> list[str]:
 
 
 def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
-    """TheSportsDB 球员/球队/赛事搜索（api key=3 公开测试钥，免认证）。
+    """TheSportsDB 球员/球队/赛事搜索（api key=123 公开测试钥，免认证）。
 
     并行查 searchplayers / searchteams / searchevents，合并去重。
     """
@@ -528,11 +532,21 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
 
     def _fetch(path: str, params: dict[str, str], to: float) -> Any:
         url = f"{_SPORTSDB_BASE}/{path}?" + urllib.parse.urlencode(params)
-        req = urllib.request.Request(
-            url, headers={"User-Agent": _SPORTSDB_UA, "Accept": "application/json"},
-        )
-        with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
-            return json.loads(resp.read().decode("utf-8", "replace"))
+        # 瞬时错误（SSL EOF、握手超时、5xx）重试一次：实体问早停后整台引擎只剩
+        # 一次请求，一次网络抖动就是全盘 0 结果，而 403/配额这类确定性失败不重试。
+        last: Exception | None = None
+        for _attempt in range(2):
+            req = urllib.request.Request(
+                url, headers={"User-Agent": _SPORTSDB_UA, "Accept": "application/json"},
+            )
+            try:
+                with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
+                    return json.loads(resp.read().decode("utf-8", "replace"))
+            except Exception as e:
+                last = e
+                if classify_error_status(str(e)) in _NON_RETRYABLE_STATUS:
+                    raise
+        raise last  # type: ignore[misc]
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -633,10 +647,13 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
 
         # 确定性失败（配额/鉴权/封锁）不重试：变体与端点只是同一堵墙的不同叫法。
         fatal = False
+        strong_hit = False
         for v in variants:
-            if fatal:
+            if fatal or strong_hit:
                 break
             for path, param_k, kind, title_k, id_k, snip_fn in endpoints:
+                if strong_hit:
+                    break
                 try:
                     data = _fetch(path, {param_k: v}, to)
                 except Exception as e:
@@ -700,8 +717,13 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
                         rel = 0.35 + 0.25 * overlap
                         if v.lower() in title.lower():
                             rel += 0.25
-                        # 全名变体（Stephen Curry）精确命中加权
-                        if " " in v and v.lower() == title.lower():
+                        # 全名变体（Stephen Curry）精确命中加权。整句变体带停用词
+                        # （club/球队）时与 title 不等，但剥掉停用词后全等，同样算
+                        # 精确命中——否则首个变体永远吃不到这条加权。
+                        v_norm = " ".join(meaningful).lower()
+                        if (" " in v and v.lower() == title.lower()) or (
+                            v_norm and v_norm == title.lower()
+                        ):
                             rel += 0.3
                     seen.add(key)
                     href = url_tpl[kind].format(id=iid) if iid else ""
@@ -715,6 +737,9 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
                         "_kind": kind,
                         "_rel": rel,
                     })
+                    if prefer_entity and rel >= _ENTITY_HIT_FLOOR:
+                        strong_hit = True
+                        break
             # 已有高相关实体则早停
             if sum(1 for r in bucket if r.get("_rel", 0) >= 0.5) >= n:
                 break

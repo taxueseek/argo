@@ -19,6 +19,7 @@
 """
 from __future__ import annotations
 
+import json
 import sys
 import urllib.error
 from pathlib import Path
@@ -86,6 +87,94 @@ def test_thesportsdb_keeps_fanout_on_transient_failure(monkeypatch):
         {"_name": "thesportsdb", "timeout": 5})
     assert engine("Cristiano Ronaldo", n=5) == []
     assert len(calls) > 1, "瞬时网络错误应继续扇出，不应被误判为确定性失败"
+
+
+class _FakeResp:
+    """http_open 的上下文管理器替身：只提供 .read()。"""
+
+    def __init__(self, payload: dict):
+        self._raw = json.dumps(payload).encode("utf-8")
+
+    def read(self) -> bytes:
+        return self._raw
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_thesportsdb_entity_query_stops_after_strong_hit(monkeypatch):
+    """实体问拿到一条强命中就停：继续扇出只是同一答案的重复请求。
+
+    旧实现把「变体 × 端点」打满（最多 15 次串行请求），实测
+    `Cristiano Ronaldo club` 34.45s，直接吃掉 10s 引擎超时 → 0 结果。
+    新口径：player/team 单条 rel ≥ 0.9 即停。
+    """
+    calls: list[str] = []
+    payload = {"player": [{
+        "idPlayer": "34145985", "strPlayer": "Cristiano Ronaldo",
+        "strTeam": "Al-Nassr", "strSport": "Soccer",
+        "strPosition": "Centre-Forward", "strNationality": "Portugal",
+    }]}
+
+    def fake_open(req, timeout=10.0, engine=""):
+        calls.append(str(req))
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(media, "http_open", fake_open)
+    engine = media._build_thesportsdb_engine(
+        {"_name": "thesportsdb", "timeout": 5})
+    out = engine("Cristiano Ronaldo club", n=5)
+    assert out, "强命中应产出结果"
+    assert len(calls) == 1, f"强命中后仍扇出 {len(calls)} 次: {calls}"
+
+
+def test_thesportsdb_retries_transient_failure_once(monkeypatch):
+    """瞬时错误重试一次：早停后只剩一次请求，一次抖动不该让整台引擎归零。
+
+    旧实现无重试，首个请求 SSL EOF 后只能靠后续变体/端点碰运气。
+    """
+    calls: list[str] = []
+    payload = {"player": [{
+        "idPlayer": "34145985", "strPlayer": "Cristiano Ronaldo",
+        "strTeam": "Al-Nassr", "strSport": "Soccer",
+        "strPosition": "Centre-Forward", "strNationality": "Portugal",
+    }]}
+
+    def fake_open(req, timeout=10.0, engine=""):
+        calls.append(str(req))
+        if len(calls) == 1:
+            raise urllib.error.URLError("SSL EOF")
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(media, "http_open", fake_open)
+    engine = media._build_thesportsdb_engine(
+        {"_name": "thesportsdb", "timeout": 5})
+    out = engine("Cristiano Ronaldo club", n=5)
+    assert out, "重试后应拿到结果"
+    assert len(calls) == 2, f"重试次数不对: {len(calls)}"
+
+
+def test_thesportsdb_event_query_keeps_fanout_after_hit(monkeypatch):
+    """赛事问不套实体早停线：一条命中不代表「问齐了」，多样性优先。"""
+    calls: list[str] = []
+    payload = {"event": [{
+        "idEvent": "1", "strEvent": "World Cup", "strSport": "Soccer",
+        "strLeague": "FIFA", "dateEvent": "2022-11-20",
+    }]}
+
+    def fake_open(req, timeout=10.0, engine=""):
+        calls.append(str(req))
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(media, "http_open", fake_open)
+    engine = media._build_thesportsdb_engine(
+        {"_name": "thesportsdb", "timeout": 5})
+    out = engine("World Cup 2022 final", n=5)
+    assert out, "赛事结果应产出"
+    assert len(calls) > 1, "赛事问被误套实体早停线，扇出被提前截断"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
