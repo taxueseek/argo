@@ -35,7 +35,7 @@ recommended: false
 preserve_source: true
 
 headers:
-  User-Agent: argo-search/1.0 (+fxtwitter)
+  User-Agent: argo-search
   Accept: application/json
 
 extra_params:

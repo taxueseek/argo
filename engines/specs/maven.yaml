@@ -50,7 +50,7 @@ output_map:
 timeout: 12
 url: https://search.maven.org/solrsearch/select
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search
 canary_query: guava
 quality_queries:
 - id: maven_plain

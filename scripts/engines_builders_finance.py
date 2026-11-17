@@ -16,6 +16,7 @@ import urllib.request
 from typing import Any
 
 from engine_env import get_env
+from engines_http import UA
 from engines_base import (
     rank_score,
     safe_search, _detect_anti_bot,
@@ -220,7 +221,7 @@ def _build_opencorporates_engine(spec: dict[str, Any]) -> Any:
             f"?q={urllib.parse.quote(q2)}&per_page={min(n, 10)}"
             + (f"&api_token={urllib.parse.quote(_token)}" if _token else "")
         )
-        headers = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+        headers = {"User-Agent": UA, "Accept": "application/json"}
         try:
             with http_open(urllib.request.Request(url, headers=headers), timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))

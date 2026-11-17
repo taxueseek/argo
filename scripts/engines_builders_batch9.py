@@ -49,14 +49,14 @@ from engines_base import (
 )
 
 from engines_http import (
-    http_json as _shared_http_json,
+    UA, http_json as _shared_http_json,
     http_text as _shared_http_text,
     lazy_logger,
 )
 
 logger = lazy_logger()
 
-_UA = "argo-search/2.8 (+batch9)"
+_UA = UA
 
 # e-Gov 法令列表进程内缓存（体积大、变动低频）
 _EGOV_ENTRIES: list[str] | None = None

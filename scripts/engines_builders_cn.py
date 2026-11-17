@@ -15,7 +15,7 @@ from typing import Any
 
 from engine_env import get_env
 
-from engines_base import safe_search, _run, _resolve, _get_path, _coerce_field, _http_get_raw, http_open, rank_score
+from engines_base import safe_search, _run, _resolve, _get_path, _coerce_field, _http_get_raw, http_open, rank_score, UA
 
 logger = logging.getLogger("unified_search.engines")
 
@@ -204,7 +204,7 @@ def _build_em_miaoxiang_engine(spec: dict[str, Any]) -> Any:
             headers={
                 "apikey": key,
                 "Content-Type": "application/json",
-                "User-Agent": "argo-search/2.4 (unified-search@local)",
+                "User-Agent": UA,
             },
         )
         try:
@@ -979,7 +979,7 @@ def _build_zhihu_global_engine(spec: dict[str, Any]) -> Any:
             "Authorization": f"Bearer {secret}",
             "X-Request-Timestamp": str(int(time.time())),
             "Content-Type": "application/json",
-            "User-Agent": "argo-search/2.6 (unified-search@local)",
+            "User-Agent": UA,
         }
         try:
             with http_open(urllib.request.Request(url, headers=headers), timeout=to, engine=spec.get("_name", "")) as resp:
@@ -1116,7 +1116,7 @@ def _build_zhihu_user_engine(spec: dict[str, Any]) -> Any:
             "Authorization": f"Bearer {secret}",
             "X-Request-Timestamp": str(int(time.time())),
             "Content-Type": "application/json",
-            "User-Agent": "argo-search/2.6 (unified-search@local)",
+            "User-Agent": UA,
         }
         try:
             with http_open(urllib.request.Request(url, headers=headers), timeout=to, engine=spec.get("_name", "")) as resp:
@@ -1349,7 +1349,7 @@ def _build_std_samr_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         url = ("https://std.samr.gov.cn/gb/search/gbQueryPage"
                f"?searchText={urllib.parse.quote(q)}&pageNumber=1&pageSize={min(max(int(n), 1), 50)}")
-        raw = _http_get_raw(url, {"User-Agent": "argo-search/1.0 (+std_samr)", "Accept": "application/json"},
+        raw = _http_get_raw(url, {"User-Agent": UA, "Accept": "application/json"},
                             to, engine=spec.get("_name", "std_samr"))
         if raw is None:
             return []
@@ -1752,7 +1752,7 @@ def _build_people_daily_engine(spec: dict[str, Any]) -> Any:
                 "hasTitle": True, "hasContent": True, "isFuzzy": True,
                 "type": 0, "sortType": 2, "startTime": 0, "endTime": 0,
             }).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "argo-search/1.0 (+people_daily)"},
+            headers={"Content-Type": "application/json", "User-Agent": UA},
             method="POST",
         )
         try:
@@ -1888,7 +1888,7 @@ def _build_wikisource_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         url = ("https://zh.wikisource.org/w/api.php?action=query&format=json&list=search"
                f"&srsearch={urllib.parse.quote(q)}&srlimit={min(max(int(n), 1), 20)}")
-        raw = _http_get_raw(url, {"User-Agent": "argo-search/1.0 (+wikisource)", "Accept": "application/json"},
+        raw = _http_get_raw(url, {"User-Agent": UA, "Accept": "application/json"},
                             to, engine=spec.get("_name", "wikisource"))
         if raw is None:
             return []

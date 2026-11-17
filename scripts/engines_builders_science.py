@@ -16,6 +16,7 @@ import urllib.request
 from typing import Any
 
 from cjk_tokens import cjk_term_grams
+from engines_http import UA
 from engines_base import (
     rank_score,
     safe_search, http_open,
@@ -44,7 +45,7 @@ def _build_openfda_engine(spec: dict[str, Any]) -> Any:
             "search": search, "limit": min(n, 20)})
         try:
             with http_open(urllib.request.Request(
-                    url, headers={"User-Agent": "argo-search/2.5", "Accept": "application/json"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                    url, headers={"User-Agent": UA, "Accept": "application/json"}), timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))
         except Exception as e:
             # 回退：全文检索
@@ -53,7 +54,7 @@ def _build_openfda_engine(spec: dict[str, Any]) -> Any:
                     "search": q, "limit": min(n, 20),
                 })
                 with http_open(urllib.request.Request(
-                        url2, headers={"User-Agent": "argo-search/2.5"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                        url2, headers={"User-Agent": UA}), timeout=to, engine=spec.get("_name", "")) as resp:
                     data = json.loads(resp.read().decode("utf-8", "replace"))
             except Exception as e2:
                 logger.warning(f"openfda 失败: {e2}")
@@ -199,7 +200,7 @@ def _build_pubchem_engine(spec: dict[str, Any]) -> Any:
     质量闸门：ChEMBL 结果须与查询 token 重叠，否则丢弃当 no-results（宁空勿假）。
     """
     timeout = spec.get("timeout", 10)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     def _jget(url: str, to: float) -> dict:
         req = urllib.request.Request(url, headers=_HEADERS)
@@ -329,7 +330,7 @@ def _build_gbif_engine(spec: dict[str, Any]) -> Any:
     学名/俗名搜索，优先学名包含查询词的 ACCEPTED 物种条目。
     """
     timeout = spec.get("timeout", 12)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)"}
+    _HEADERS = {"User-Agent": UA}
 
     def _jget(url: str, to: float) -> dict:
         req = urllib.request.Request(url, headers=_HEADERS)
@@ -426,7 +427,7 @@ def _build_uniprot_engine(spec: dict[str, Any]) -> Any:
     中英混合查询只取 ASCII token（UniProt 不索引中文），纯中文查高频蛋白名映射表。
     """
     timeout = spec.get("timeout", 12)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -482,7 +483,7 @@ def _build_rcsb_pdb_engine(spec: dict[str, Any]) -> Any:
     全文搜索返回 PDB ID 列表，链接到 rcsb.org/structure/{id}。
     """
     timeout = spec.get("timeout", 15)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)",
+    _HEADERS = {"User-Agent": UA,
                 "Accept": "application/json", "Content-Type": "application/json"}
 
     @safe_search
@@ -550,7 +551,7 @@ def _build_usgs_engine(spec: dict[str, Any]) -> Any:
     按 place 字段过滤，命中地点相关地震。
     """
     timeout = spec.get("timeout", 12)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:

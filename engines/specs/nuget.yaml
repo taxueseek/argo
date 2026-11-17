@@ -46,7 +46,7 @@ output_map:
 timeout: 10
 url: https://azuresearch-usnc.nuget.org/query
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search
 canary_query: Newtonsoft.Json
 quality_queries:
 - id: nuget_plain

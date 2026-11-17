@@ -21,6 +21,7 @@ import urllib.request
 
 from cli_io import dumps
 from engine_env import get_env
+from engines_http import UA
 from engines_base import http_open
 
 API_URL = "https://developer.zhihu.com/api/v1/quota"
@@ -84,7 +85,7 @@ def fetch_quota(*, refresh: bool = False, timeout: float = 8.0) -> dict:
         "Authorization": f"Bearer {secret}",
         "X-Request-Timestamp": str(int(time.time())),
         "Content-Type": "application/json",
-        "User-Agent": "argo-search/2.6 (unified-search@local)",
+        "User-Agent": UA,
     })
     try:
         with http_open(req, timeout=timeout, engine="zhihu_quota") as resp:

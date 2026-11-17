@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from engines_http import UA
 from engines_base import safe_search, http_open, rank_score
 
 # ── 面向英文技能目录（explainx/skills.sh/skillsmp/clawhub）的轻量中英概念映射 ──
@@ -130,7 +131,7 @@ def _normalize_epoch(val: Any) -> str:
 
 def _get_json(url: str, timeout: float, engine: str) -> Any:
     req = urllib.request.Request(
-        url, headers={"User-Agent": "argo-search/1.0", "Accept": "application/json"}
+        url, headers={"User-Agent": UA, "Accept": "application/json"}
     )
     with http_open(req, timeout=timeout, engine=engine) as resp:
         return json.loads(resp.read())

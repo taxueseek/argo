@@ -19,7 +19,7 @@ recommended: false
 latency_ms: 1500
 
 headers:
-  User-Agent: argo-search/1.0 (+gov_regulations)
+  User-Agent: argo-search
 
 extra_params:
   t: zhengcelibrary_bm

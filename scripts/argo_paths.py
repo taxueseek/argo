@@ -14,8 +14,8 @@ health.db 等文件，测试也难以整体隔离。
   - 各模块只声明「文件名」，不再各自拼目录
   - `python3 scripts/argo_paths.py [--json]` 可打印关键路径的实际来源
 
-注意：User-Agent 里的 unified-search@local 是邮箱标识，与状态目录无关，
-不在此处管理。
+注意：历史 User-Agent 里的邮箱标识与状态目录命名无关，不在此处管理；
+UA 已收敛到 engines_http.UA 单源（2026-11-18）。
 """
 
 from __future__ import annotations

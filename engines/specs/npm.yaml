@@ -59,4 +59,4 @@ quality_queries:
 timeout: 8
 url: https://registry.npmjs.org/-/v1/search
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search

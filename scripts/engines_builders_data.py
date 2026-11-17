@@ -17,6 +17,7 @@ from typing import Any
 
 from cjk_tokens import cjk_term_grams, signal_tokens
 from engine_env import get_env
+from engines_http import UA
 from engines_base import (
     rank_score,
     safe_search, _run, _resolve, _get_path, _coerce_field, _detect_anti_bot,
@@ -42,7 +43,7 @@ def _build_open_library_engine(spec: dict[str, Any]) -> Any:
         })
         try:
             with http_open(urllib.request.Request(
-                    url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                    url, headers={"User-Agent": UA}), timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))
         except Exception as e:
             logger.warning(f"Open Library 失败: {e}")
@@ -96,7 +97,7 @@ def _build_weread_engine(spec: dict[str, Any]) -> Any:
             headers={
                 "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
-                "User-Agent": "argo-search/2.4 (unified-search@local)",
+                "User-Agent": UA,
             },
         )
         try:
@@ -225,7 +226,7 @@ def _build_free_dictionary_engine(spec: dict[str, Any]) -> Any:
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{up.quote(word)}"
         try:
             with http_open(urllib.request.Request(
-                    url, headers={"User-Agent": "argo-search/2.4"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                    url, headers={"User-Agent": UA}), timeout=to, engine=spec.get("_name", "")) as resp:
                 entries = json.loads(resp.read().decode("utf-8", "replace"))
         except Exception:
             return []
@@ -362,7 +363,7 @@ def _build_pypi_engine(spec: dict[str, Any]) -> Any:
         to = _timeout or timeout
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
-        headers = {"User-Agent": "argo-search/2.5 (unified-search@local)", "Accept": "application/json"}
+        headers = {"User-Agent": UA, "Accept": "application/json"}
         for _rk4, name in enumerate(_candidates(query)):
             if len(results) >= n:
                 break
@@ -479,7 +480,7 @@ def _build_models_dev_engine(spec: dict[str, Any]) -> Any:
         if cached is None or (now - ts) > _MODELS_DEV_TTL:
             req = urllib.request.Request(
                 "https://models.dev/api.json",
-                headers={"User-Agent": "argo-search/1.0 (+models.dev)"},
+                headers={"User-Agent": UA},
             )
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
                 cached = json.loads(resp.read().decode("utf-8"))
@@ -592,7 +593,7 @@ def _build_qweather_engine(spec: dict[str, Any]) -> Any:
 
         # 1) GeoAPI: 城市 → LocationID
         geo_url = f"https://geoapi.qweather.com/v2/city/lookup?location={up.quote(city)}&key={key}"
-        req = urllib.request.Request(geo_url, headers={"User-Agent": "argo-search/1.0"})
+        req = urllib.request.Request(geo_url, headers={"User-Agent": UA})
         with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
             geo = json.loads(resp.read().decode("utf-8"))
         locations = geo.get("location") or []
@@ -604,7 +605,7 @@ def _build_qweather_engine(spec: dict[str, Any]) -> Any:
 
         # 2) 实时天气
         now_url = f"https://devapi.qweather.com/v7/weather/now?location={loc_id}&key={key}"
-        req2 = urllib.request.Request(now_url, headers={"User-Agent": "argo-search/1.0"})
+        req2 = urllib.request.Request(now_url, headers={"User-Agent": UA})
         with http_open(req2, timeout=to, engine=spec.get("_name", "")) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         now = data.get("now") or {}
@@ -731,7 +732,7 @@ def _build_rfc_editor_engine(spec: dict[str, Any]) -> Any:
     「RFC 9000」直接定位单篇；「QUIC RFC」按标题搜索 RFC 类型文档。
     """
     timeout = spec.get("timeout", 15)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     def _jget(url: str, to: float) -> dict:
         req = urllib.request.Request(url, headers=_HEADERS)
@@ -813,7 +814,7 @@ def _build_marginalia_engine(spec: dict[str, Any]) -> Any:
         url = f"{base}/search?query={up.quote(query)}"
         try:
             with http_open(urllib.request.Request(
-                    url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                    url, headers={"User-Agent": UA}), timeout=to, engine=spec.get("_name", "")) as resp:
                 page = resp.read().decode("utf-8", "replace")
         except Exception as e:
             logger.warning(f"Marginalia 失败: {e}")
@@ -824,7 +825,7 @@ def _build_marginalia_engine(spec: dict[str, Any]) -> Any:
             try:
                 with http_open(urllib.request.Request(
                         base + gate.group(1).replace("&amp;", "&"),
-                        headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                        headers={"User-Agent": UA}), timeout=to, engine=spec.get("_name", "")) as resp:
                     page = resp.read().decode("utf-8", "replace")
             except Exception as e:
                 logger.warning(f"Marginalia sst 复访失败: {e}")
@@ -885,7 +886,7 @@ def _build_wiby_engine(spec: dict[str, Any]) -> Any:
         url = f"https://wiby.me/json/?q={up.quote(query)}"
         try:
             with http_open(urllib.request.Request(
-                    url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"}), timeout=to, engine=spec.get("_name", "")) as resp:
+                    url, headers={"User-Agent": UA}), timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))
         except Exception as e:
             logger.warning(f"Wiby 失败: {e}")

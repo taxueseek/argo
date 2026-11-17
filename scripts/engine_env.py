@@ -165,7 +165,11 @@ def reset_envfile_cache() -> None:
         _zhihu_keychain_cache = None
 
 
-_zhihu_keychain_cache: str | None = None
+# (monotonic 读取时刻, 值)。非空值黏进程生命周期（envfile 写回 reset 时清除，
+# 与密钥轮换联动）；空值（Keychain 超时/未录入）只黏短 TTL——否则 daemon/MCP
+# 长驻进程首次读失败（如安全弹窗未应答）会让知乎全族整进程判缺钥且无自愈。
+_ZHIHU_KEYCHAIN_NEG_TTL_S = 60.0
+_zhihu_keychain_cache: tuple[float, str] | None = None
 
 
 def _decode_keyring_secret(raw: str) -> str:
@@ -180,9 +184,14 @@ def _decode_keyring_secret(raw: str) -> str:
 def _read_zhihu_keychain() -> str:
     """跨平台读取系统凭证库中知乎官方 CLI 管理的 Access Secret（macOS Keychain / Linux secret-tool / Windows keyring）。"""
     global _zhihu_keychain_cache
+    import time as _time
     with _envfile_lock:
         if _zhihu_keychain_cache is not None:
-            return _zhihu_keychain_cache
+            _ts, _val = _zhihu_keychain_cache
+            # 非空值长期有效；空值短 TTL 后重探（自愈对称：envfile 有签名
+            # 热读，keychain 也不能黏死）
+            if _val or (_time.monotonic() - _ts) < _ZHIHU_KEYCHAIN_NEG_TTL_S:
+                return _val
     import shutil
     import sys
     val = ""
@@ -210,8 +219,8 @@ def _read_zhihu_keychain() -> str:
     except Exception:
         val = ""
     with _envfile_lock:
-        _zhihu_keychain_cache = val
-        return _zhihu_keychain_cache
+        _zhihu_keychain_cache = (_time.monotonic(), val)
+        return val
 
 # 引擎 → 候选环境变量（从左到右优先）
 # 第一项为推荐新名（ARGO_ 前缀），后续为历史兼容名

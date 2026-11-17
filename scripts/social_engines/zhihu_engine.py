@@ -22,6 +22,7 @@ from typing import Any
 import sys as _sys
 _sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from net_proxy import http_get  # noqa: E402
+from engines_http import UA  # noqa: E402
 
 ZHIHU_API = "https://developer.zhihu.com/api/v1/content/zhihu_search"
 ZHIHU_QUESTION_ANSWERS_API = "https://developer.zhihu.com/api/v1/content/question_answers"
@@ -96,7 +97,7 @@ def zhihu_headers(secret: str) -> dict[str, str]:
         "Authorization": f"Bearer {secret}",
         "Content-Type": "application/json",
         "X-Request-Timestamp": str(int(time.time())),
-        "User-Agent": "argo-search/2.6 (unified-search@local)",
+        "User-Agent": UA,
     }
 
 

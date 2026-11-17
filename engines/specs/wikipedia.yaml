@@ -28,7 +28,7 @@ output_map:
   url_template: https://en.wikipedia.org/wiki/{title}
 format: json
 headers:
-  User-Agent: argo-search/1.0
+  User-Agent: argo-search
 method: GET
 query_param: srsearch
 timeout: 8

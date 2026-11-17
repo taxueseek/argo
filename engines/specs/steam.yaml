@@ -27,4 +27,4 @@ output_map:
 timeout: 10
 url: https://store.steampowered.com/api/storesearch/
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search

@@ -19,7 +19,7 @@ extra_params:
   images_exist: 1
   page_size: "{n}"
 headers:
-  User-Agent: "argo-search/1.0 (+vam)"
+  User-Agent: argo-search
   Accept: application/json
 output_map:
   items: records

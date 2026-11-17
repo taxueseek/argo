@@ -17,7 +17,7 @@ format: json
 method: GET
 query_param: search
 headers:
-  User-Agent: argo-search/2.4 (unified-search@local)
+  User-Agent: argo-search
 extra_params:
   action: wbsearchentities
   format: json

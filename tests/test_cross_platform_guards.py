@@ -121,3 +121,38 @@ def test_daemon_windows_process_helpers(tmp_path):
         subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
     )
     assert popen_kw["creationflags"] == expected_flags
+
+
+def test_zhihu_keychain_empty_value_self_heals():
+    """空值（Keychain 超时/未录入）只黏 60s 短 TTL，过期重探。
+
+    旧实现把失败空串写进进程级永久缓存：daemon/MCP 首次读失败（如安全弹窗
+    未应答）后知乎全族整进程判缺钥且无自愈。回退验证：把缓存改回
+    `str | None` 并无条件返回，本测试第二段（TTL 过期重探）挂。
+    """
+    import engine_env
+
+    orig_cache = engine_env._zhihu_keychain_cache
+    calls = []
+
+    def _boom(*_a, **_kw):
+        calls.append(1)
+        raise subprocess.TimeoutExpired(cmd="security", timeout=1.5)
+
+    try:
+        engine_env._zhihu_keychain_cache = None
+        with patch.object(engine_env.sys, "platform", "darwin"), \
+                patch.object(subprocess, "check_output", side_effect=_boom):
+            assert engine_env._read_zhihu_keychain() == ""
+            assert engine_env._read_zhihu_keychain() == ""
+        assert len(calls) == 1, "TTL 内不应重复探 Keychain"
+
+        # 时间倒拨越过负 TTL：应重探（仍失败，但确实又调了一次）
+        ts, _val = engine_env._zhihu_keychain_cache
+        engine_env._zhihu_keychain_cache = (ts - 61.0, _val)
+        with patch.object(engine_env.sys, "platform", "darwin"), \
+                patch.object(subprocess, "check_output", side_effect=_boom):
+            assert engine_env._read_zhihu_keychain() == ""
+        assert len(calls) == 2, "TTL 过期应重探（自愈对称：envfile 有签名热读，keychain 不能黏死）"
+    finally:
+        engine_env._zhihu_keychain_cache = orig_cache

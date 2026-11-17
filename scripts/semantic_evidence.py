@@ -227,19 +227,28 @@ def _set_cached_result(key: str, result: dict[str, Any]) -> None:
     now = time.time()
     _JEV_MEMORY_CACHE[key] = (now, result)
     try:
-        from argo_paths import state_path
+        import argo_paths
+        from argo_paths import file_lock, state_path
         p = Path(state_path("semantic_cache.json"))
-        data_map = {}
-        if p.is_file():
-            try:
-                data_map = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError, ValueError):
-                data_map = {}
-        if len(data_map) > 500:
-            data_map.clear()
-        data_map[key] = {"ts": now, "result": result}
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(data_map, ensure_ascii=False), encoding="utf-8")
+        # 读改写全程持锁 + 原子写：此前裸 write_text 且无锁，并发 CLI 互丢
+        # 缓存、崩溃残留半截 JSON 让后续全部读到 miss（与 usage_log 同教训）
+        with file_lock(p):
+            data_map: dict = {}
+            if p.is_file():
+                try:
+                    data_map = json.loads(p.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError, ValueError):
+                    data_map = {}
+            data_map[key] = {"ts": now, "result": result}
+            if len(data_map) > 500:
+                # 淘汰最旧而非清空：悬崖式 clear() 会把全部新鲜条目一次丢光
+                data_map = dict(sorted(
+                    data_map.items(),
+                    key=lambda kv: kv[1].get("ts", 0) if isinstance(kv[1], dict) else 0.0,
+                    reverse=True,
+                )[:500])
+            argo_paths.atomic_write_json(p, data_map)
     except (OSError, TypeError, ValueError) as e:
         logger.debug("写入语义缓存失败: %s", type(e).__name__)
 

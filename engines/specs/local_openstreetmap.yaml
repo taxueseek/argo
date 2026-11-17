@@ -21,7 +21,7 @@ format: json
 method: GET
 query_param: q
 headers:
-  User-Agent: argo-search/2.6 (unified-search@local)
+  User-Agent: argo-search
   Accept: application/json
   Accept-Language: zh-CN,zh;q=0.9,en;q=0.8
 extra_params:

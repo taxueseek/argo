@@ -15,6 +15,7 @@ import urllib.request
 from datetime import datetime
 from typing import Any
 
+from engines_http import UA
 from engines_base import (
     rank_score,
     safe_search, _detect_anti_bot,
@@ -87,7 +88,7 @@ def _build_courtlistener_engine(spec: dict[str, Any]) -> Any:
     注意 2026-05 起限额骤降（免费档约 5 次/分、125 次/天），qps 已压到 1。
     """
     timeout = spec.get("timeout", 12)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -135,7 +136,7 @@ def _build_gutenberg_engine(spec: dict[str, Any]) -> Any:
     返回书名/作者/语言与 Gutenberg 书目页链接；Gutenberg 提供结构化全文。
     """
     timeout = spec.get("timeout", 15)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
@@ -188,7 +189,7 @@ def _build_wayback_cdx_engine(spec: dict[str, Any]) -> Any:
     输入域名/URL，返回历史快照时间戳与状态码，是查已删除页面的唯一路径。
     """
     timeout = spec.get("timeout", 20)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
 
     @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:

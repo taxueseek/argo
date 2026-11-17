@@ -22,6 +22,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from net_proxy import http_get  # noqa: E402
+from engines_http import UA  # noqa: E402
 
 
 _ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
@@ -39,7 +40,7 @@ def search_reddit_api(query: str, n: int = 5) -> list[dict]:
     try:
         # 单次 GET（stdlib，不重试）：无 key 端点按 IP「一次一发」，2026-10 实测
         # 首次 200 后即连续 429、Retry-After 达分钟级，短间隔重试必然再 429。
-        body, _ = http_get(url, {"User-Agent": "argo-search/1.0 (by taxueseek)"}, timeout=10)
+        body, _ = http_get(url, {"User-Agent": UA}, timeout=10)
         return _parse_reddit_rss(body, n)
     except Exception as e:
         # 吞异常返空会让 MCP 社交搜索把网络故障静默报成「平台成功、0 结果」

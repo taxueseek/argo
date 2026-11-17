@@ -23,6 +23,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import engine_states
 from engine_env import env_flag, get_env
+from engines_http import lazy_logger
 
 
 def enabled() -> bool:
@@ -61,7 +62,11 @@ def fetch(url: str, max_chars: int = 8000, timeout: float = 8.0) -> dict | None:
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         resp = client.get(f"https://r.jina.ai/{url}", extra_headers=headers)
-    except Exception:
+    except Exception as e:
+        # 失败可见化：jina 是降级链一级，静默 return None 让故障无法归因
+        #（静默棘轮口径只数 Pass/Continue，return None 形态在此补日志）
+        lazy_logger("unified_search.fetch_jina").warning(
+            "jina reader 失败（%s），降级 Parallel/Wayback/浏览器", e)
         return None
     if resp.get("status", 0) != 200 or not resp.get("text"):
         return None

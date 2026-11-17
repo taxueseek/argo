@@ -40,7 +40,7 @@ desc: "GLEIF 全球法人 LEI 注册库（法定名称/注册地/状态/母公�
 coverage: [company, business, legal, org_entity]
 
 headers:
-  User-Agent: argo-search/2.9 (+gleif)
+  User-Agent: argo-search
   Accept: application/json
 
 output_map:

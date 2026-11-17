@@ -38,6 +38,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import argo_paths  # noqa: E402
 from net_proxy import http_get  # noqa: E402  出口调度唯一入口（issue #13 同类修复）
+from engines_http import UA  # noqa: E402
 
 DATA_URL = "https://cowork.xiaohongshu.com/s/redskill-rank/data.json"
 PAGE_URL = "https://cowork.xiaohongshu.com/s/redskill-rank/"
@@ -68,7 +69,7 @@ def __getattr__(name: str):
     if name == "CACHE_FILE":
         return _cache_file()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-USER_AGENT = "argo-search/1.0 (+https://github.com/taxueseek/argo; redskill)"
+USER_AGENT = UA
 DOWNLOAD_TIMEOUT = 120  # 14.6MB 全量，首次下载需要更长时间
 
 RANK_LISTS = {

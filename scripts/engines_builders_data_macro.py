@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from engines_http import UA
 from engines_base import (
     safe_search, _run, _resolve, _get_path, _coerce_field, _detect_anti_bot,
     http_open, rank_score,
@@ -94,7 +95,7 @@ def _build_fred_engine(spec: dict[str, Any]) -> Any:
             return []
         url = f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"})
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
                 text = resp.read().decode("utf-8", "replace")
         except Exception as e:
@@ -258,7 +259,7 @@ def _build_fx_rate_engine(spec: dict[str, Any]) -> Any:
         if not base or not target:
             return []
         try:
-            req = urllib.request.Request(api_url + base, headers={"User-Agent": "argo-search/2.4 (unified-search@local)"})
+            req = urllib.request.Request(api_url + base, headers={"User-Agent": UA})
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))
         except Exception as e:
@@ -331,7 +332,7 @@ def _build_worldbank_engine(spec: dict[str, Any]) -> Any:
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         import urllib.parse as up
         to = _timeout or timeout
-        headers = {"User-Agent": "argo-search/2.4 (unified-search@local)"}
+        headers = {"User-Agent": UA}
         cc, ind, ind_label = _parse(query)
         if not cc or not ind:
             return []
@@ -693,7 +694,7 @@ def _build_eurostat_engine(spec: dict[str, Any]) -> Any:
     支持 EU 国家/欧盟/欧元区的 GDP、人均GDP、失业率、人口年度查询。
     """
     timeout = spec.get("timeout", 15)
-    _HEADERS = {"User-Agent": "argo-search/2.6 (unified-search@local)", "Accept": "application/json"}
+    _HEADERS = {"User-Agent": UA, "Accept": "application/json"}
     _BASE = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data"
 
     def _jget(url: str, to: float) -> dict:

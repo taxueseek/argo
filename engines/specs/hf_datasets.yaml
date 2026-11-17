@@ -48,7 +48,7 @@ output_map:
 timeout: 10
 url: https://huggingface.co/api/datasets
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search
 canary_query: squad
 quality_queries:
 - id: hf_datasets_plain

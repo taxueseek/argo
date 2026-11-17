@@ -122,13 +122,20 @@ def run_pipeline_recovery(
 
         if emit_usage_fn is not None:
             try:
+                _steps = recovery_info.get("steps_tried") or []
                 emit_usage_fn("recovery", {
                     "query": (query[:60] if query else query),
                     "triggered": recovery_info.get("triggered"),
                     "recovered": recovery_info.get("recovered"),
                     "level_used": recovery_info.get("level_used"),
                     "strategy_used": recovery_info.get("strategy_used"),
-                    "steps_tried": len(recovery_info.get("steps_tried") or []),
+                    "steps_tried": len(_steps),
+                    # 恢复链试过谁：此前 switch_engine 全部匿名，恢复质量
+                    # 无法归因（2026-11-18 可观测性审计盲区修复）
+                    "engines_tried": sorted({
+                        str(e) for s in _steps if isinstance(s, dict)
+                        for e in (s.get("engines") or [])
+                    })[:8],
                     "final_query": (recovery_info.get("final_query") or "")[:60],
                     "note": recovery_info.get("note", ""),
                 })

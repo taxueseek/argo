@@ -25,5 +25,5 @@ output_map:
 timeout: 12
 url: https://dblp.uni-trier.de/search/publ/api
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search
   Accept: application/json

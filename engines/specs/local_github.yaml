@@ -16,7 +16,7 @@ extra_params:
   per_page: '{n}'
 headers:
   Accept: application/vnd.github.v3+json
-  User-Agent: argo-search/2.1
+  User-Agent: argo-search
 output_map:
   items: items
   item_title: full_name

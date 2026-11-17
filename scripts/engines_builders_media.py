@@ -15,6 +15,7 @@ import urllib.request
 from html import unescape as _unescape
 from typing import Any
 
+from engines_http import UA
 from engines_base import (
     rank_score,
     safe_search, http_open,
@@ -217,7 +218,7 @@ def _build_itunes_engine(spec: dict[str, Any]) -> Any:
     base = spec.get("url") or "https://itunes.apple.com/search"
     lookup_base = (base.replace("/search", "/lookup") if "/search" in base
                    else "https://itunes.apple.com/lookup")
-    ua_headers = {"User-Agent": "argo-search/2.6 (itunes)", "Accept": "application/json"}
+    ua_headers = {"User-Agent": UA, "Accept": "application/json"}
 
     def _get_json(url: str, to: float) -> dict[str, Any]:
         req = urllib.request.Request(url, headers=ua_headers)
@@ -475,7 +476,7 @@ def _build_itunes_engine(spec: dict[str, Any]) -> Any:
 # "Invalid Premium API key"。换 key 前该源对任何查询都是确定性 403。
 
 _SPORTSDB_BASE = "https://www.thesportsdb.com/api/v1/json/123"
-_SPORTSDB_UA = "argo-search/2.6 (unified-search@local)"
+_SPORTSDB_UA = UA
 # 实体问早停线：player/team 单条 rel 到这条线就说明主实体已到手，继续扇出
 # 只是同一答案的重复请求（旧实现最多 15 次串行请求，实测 34s 直接吃掉引擎
 # 超时）。赛事问不套这条线——「World Cup 2022」要的是多实体多样性。

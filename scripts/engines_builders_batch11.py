@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from engines_http import UA
 from engines_base import (
     finalize_image_fields,
     rank_score,
@@ -33,7 +34,7 @@ from engines_http import lazy_logger
 
 logger = lazy_logger()
 
-_UA = "argo-search/2.9 (+batch11; wikimedia_commons)"
+_UA = UA
 _API = "https://commons.wikimedia.org/w/api.php"
 
 # Commons 的 extmetadata 是一层「字段 → {value, source, hidden}」的包装，

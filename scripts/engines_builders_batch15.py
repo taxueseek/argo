@@ -41,9 +41,10 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from engines_http import UA
 from engines_base import http_open, note_failure, safe_search
 
-_UA = "argo-search/2.9 (unified-search@local)"
+_UA = UA
 _YUANBAO_URL = "https://api.wsa.cloud.tencent.com/SearchPro"
 # 腾讯侧公布的中间价/新闻口径都按北京时间；本机可能不在东八区，日期归一
 # 必须显式指定偏移，否则跨时区机器上「今天」会错一天。

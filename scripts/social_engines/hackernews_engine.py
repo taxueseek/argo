@@ -17,6 +17,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from net_proxy import http_get  # noqa: E402
+from engines_http import UA  # noqa: E402
 
 HN_API = "https://hn.algolia.com/api/v1/search"
 
@@ -32,7 +33,7 @@ def search(query: str, n: int = 5) -> list[dict[str, Any]]:
     })
     url = f"{HN_API}?{params}"
     try:
-        body, _ = http_get(url, {"User-Agent": "argo-search/1.0 (+https://github.com/taxueseek/argo)",
+        body, _ = http_get(url, {"User-Agent": UA,
                                    "Accept": "application/json"})
         data = json.loads(body.decode("utf-8"))
     except Exception as e:

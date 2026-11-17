@@ -34,7 +34,7 @@ family: finance_market
 recommended: false
 
 headers:
-  User-Agent: argo-search/1.0 (research contact@example.com)
+  User-Agent: argo-search
   Accept: application/json
 
 output_map:

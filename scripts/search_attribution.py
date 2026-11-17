@@ -71,6 +71,9 @@ def usage_log_attribution(engine_latency: dict[str, Any] | None,
     errs = engine_errors(outcomes)
     if errs:
         out["engine_errors"] = errs
+    statuses = engine_error_status(outcomes)
+    if statuses:
+        out["engine_error_status"] = statuses
     return out
 
 
@@ -203,6 +206,23 @@ def engine_errors(engine_outcomes: Iterable[dict[str, Any]] | None,
         cat = str(r.get("category") or "unknown").strip()
         detail = str(r.get("detail") or "").strip()
         out[eng] = f"{cat}: {detail[:80]}" if detail else cat
+    return out
+
+
+def engine_error_status(engine_outcomes: Iterable[dict[str, Any]] | None,
+                        limit: int = 8) -> dict[str, int]:
+    """按引擎提取原始 HTTP 状态码 ``{engine: status}``。
+
+    403/404/429 这类数字此前只埋在 engine_errors 的自由文本里（要正则才能
+    挖，404 甚至全链路零样本）；outcome 透传 http_status 后这里即可结构化
+    落账（2026-11-18 可观测性审计盲区修复）。
+    """
+    out: dict[str, int] = {}
+    for r in _failure_rows(engine_outcomes, limit=limit):
+        eng = str(r.get("engine") or "").strip()
+        st = r.get("http_status")
+        if eng and st is not None and eng not in out:
+            out[eng] = int(st)
     return out
 
 

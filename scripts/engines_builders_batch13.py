@@ -19,6 +19,7 @@ import time
 import urllib.request
 from typing import Any
 
+from engines_http import UA, UA_EDGAR
 from engines_base import http_open, safe_search
 
 
@@ -140,7 +141,7 @@ def _sec_cf_ticker_map(to: float, state_dir: str = "") -> dict[str, str]:
         pass
     try:
         req = urllib.request.Request("https://www.sec.gov/files/company_tickers.json",
-                                     headers={"User-Agent": "argo-search/2.9 (research contact@example.com)",
+                                     headers={"User-Agent": UA_EDGAR,
                                               "Accept": "application/json"})
         with http_open(req, timeout=max(to, 10), engine="sec_companyfacts") as resp:
             raw = json.loads(resp.read().decode("utf-8", "replace"))
@@ -186,7 +187,7 @@ def _build_sec_companyfacts_engine(spec: dict[str, Any]) -> Any:
     全文回答「哪些文件提到 X」，本引擎回答「这家公司历年财务数字」。
     """
     timeout = spec.get("timeout", 15)
-    ua = "argo-search/2.9 (research contact@example.com)"
+    ua = UA_EDGAR
 
     def _ticker_candidates(query: str) -> list[str]:
         q = (query or "").strip()
@@ -314,7 +315,7 @@ def _build_frankfurter_engine(spec: dict[str, Any]) -> Any:
                + up.urlencode({"base": base, "symbols": ",".join(symbols)}))
         try:
             req = urllib.request.Request(url, headers={
-                "User-Agent": "argo-search/2.9 (unified-search@local)",
+                "User-Agent": UA,
                 "Accept": "application/json"})
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8", "replace"))

@@ -31,6 +31,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from engines_http import UA
 from engines_base import safe_search, http_open, rank_score
 
 # 上游：静态全量目录。Cloudflare 前置，支持 ETag（本 builder 刻意不用，见文件头）。
@@ -116,7 +117,7 @@ def _load_plugins(timeout: float) -> list[dict[str, Any]]:
     try:
         req = urllib.request.Request(
             _DSHOPEN_INDEX_URL,
-            headers={"User-Agent": "argo-search/1.0", "Accept": "application/json"},
+            headers={"User-Agent": UA, "Accept": "application/json"},
         )
         with http_open(req, timeout=timeout, engine="dshopen") as resp:
             payload = json.loads(resp.read())

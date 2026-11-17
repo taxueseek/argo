@@ -541,6 +541,11 @@ class _Server:
                     else:
                         resp = {"ok": False, "error": f"未知 op: {op!r}"}
                 except Exception as e:
+                    # 错误级落日志：daemon.log 此前零错误行，进程级故障不可检
+                    #（2026-11-18 可观测性审计盲区修复）。stdout 已被时间戳
+                    # 包装器接住，print 即带 [ISO] 前缀落盘。
+                    print(f"[ERROR] op={op!r} handler {type(e).__name__}: {e}",
+                          file=sys.stderr)
                     resp = {"ok": False, "error": f"{type(e).__name__}: {e}"}
             # sendall 用的超时与 recv 的那把（60s）分开，且以**客户端声明
             # 的预算**为准：一笔 run 超过 60s 时 sendall 抛 socket.timeout

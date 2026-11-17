@@ -24,6 +24,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from engines_http import UA
 from engines_base import safe_search, _http_get_raw, http_open, rank_score
 from bounded_run import run_bounded
 from engines_http import (
@@ -710,7 +711,7 @@ def _build_google_news_engine(spec: dict[str, Any]) -> Any:
         hl, gl, ceid = _news_locale(q)
         url = (f"https://news.google.com/rss/search?q={urllib.parse.quote(q)}"
                f"&hl={hl}&gl={gl}&ceid={ceid}")
-        raw = _http_get_raw(url, {"User-Agent": "argo-search/1.0 (+google_news)", "Accept": "application/rss+xml"},
+        raw = _http_get_raw(url, {"User-Agent": UA, "Accept": "application/rss+xml"},
                             to, engine=spec.get("_name", "google_news"))
         if raw is None:
             return []
@@ -763,7 +764,7 @@ def _build_met_museum_engine(spec: dict[str, Any]) -> Any:
             return []
         to = _timeout or timeout
         engine_name = spec.get("_name", "met_museum")
-        headers = {"User-Agent": "argo-search/1.0 (+met_museum)", "Accept": "application/json"}
+        headers = {"User-Agent": UA, "Accept": "application/json"}
         search_url = f"{_SEARCH_BASE}/search?q={urllib.parse.quote(q)}&hasImages=true"
         raw = _http_get_raw(search_url, headers, to, engine=engine_name)
         if raw is None:

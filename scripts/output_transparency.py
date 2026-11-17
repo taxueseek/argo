@@ -112,6 +112,9 @@ def build_failures(result: dict[str, Any], limit: int = 6) -> list[dict[str, Any
         # 周期边界前不会因重试改变。标出来，避免 Agent 立刻重试同一个源。
         if status.startswith(engine_states.OUTCOME_SKIPPED_PREFIX):
             item["persistent"] = True
+        if o.get("http_status") is not None:
+            # 原始 HTTP 状态码（403/404/429…）：语义 status 之外的事实层
+            item["http_status"] = o.get("http_status")
         detail = str(o.get("detail") or "").strip()
         if detail:
             item["detail"] = detail[:160]

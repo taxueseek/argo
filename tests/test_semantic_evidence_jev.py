@@ -649,6 +649,33 @@ class TestGeminiDecisionChannel(unittest.TestCase):
         self.assertLess(got_fast, 4, "紧截止下必须截断")
 
 
+
+
+def test_语义磁盘缓存_最旧淘汰与原子写(tmp_path, monkeypatch):
+    """超 500 条淘汰最旧而非清空，且落盘为合法 JSON。
+
+    旧实现 `len>500 时 data_map.clear()`（悬崖式清光全部新鲜条目）+ 裸
+    write_text 非原子写（并发残留半截 JSON 让后续全 miss）。回退验证：把
+    _set_cached_result 换回 clear()+write_text 旧实现，本测试淘汰断言挂。
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    import semantic_evidence as se
+
+    monkeypatch.setenv("_TEST_ENABLE_SEMANTIC_CACHE", "1")
+    monkeypatch.setenv("ARGO_STATE_DIR", str(tmp_path))
+    se._JEV_MEMORY_CACHE.clear()
+    for i in range(505):
+        se._set_cached_result(f"k{i:04d}", {"i": i})
+    disk = _json.loads((tmp_path / "semantic_cache.json").read_text(encoding="utf-8"))
+    assert len(disk) == 500, f"应恰好保留 500 条（旧 clear() 实现每次只剩 1 条），实际 {len(disk)}"
+    assert "k0504" in disk, "最新条目必须保留"
+    assert "k0503" in disk, "次新条目必须保留（旧 clear() 实现盘上只剩最后一条）"
+    assert "k0000" not in disk, "最旧条目应被淘汰"
+    se._JEV_MEMORY_CACHE.clear()
+    assert se._get_cached_result("k0503") == {"i": 503}, "清内存后从盘回读应命中"
+
+
 if __name__ == "__main__":
     unittest.main()
 

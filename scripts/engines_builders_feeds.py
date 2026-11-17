@@ -85,25 +85,26 @@ def _read_disk_feed(url: str) -> list[dict[str, Any]] | None:
 
 
 def _write_disk_feed(url: str, items: list[dict[str, Any]]) -> None:
-    """原子更新跨进程轻量磁盘缓存。"""
+    """原子更新跨进程轻量磁盘缓存（读改写全程持锁，防并发互覆盖）。"""
     if not items or "example.test" in url:
         return
     try:
         import argo_paths
         import json
         p = argo_paths.state_path("feed_cache.json")
-        data: dict[str, Any] = {}
-        if p.is_file():
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except Exception:
-                data = {}
-        data[url] = {"ts": time.time(), "items": items}
-        now = time.time()
-        # 清理 24h 前历史条目，防无界膨胀
-        data = {k: v for k, v in data.items() if isinstance(v, dict) and (now - float(v.get("ts", 0))) < 86400}
-        argo_paths.atomic_write_json(p, data)
+        with argo_paths.file_lock(p):
+            data: dict[str, Any] = {}
+            if p.is_file():
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+            data[url] = {"ts": time.time(), "items": items}
+            now = time.time()
+            # 清理 24h 前历史条目，防无界膨胀
+            data = {k: v for k, v in data.items() if isinstance(v, dict) and (now - float(v.get("ts", 0))) < 86400}
+            argo_paths.atomic_write_json(p, data)
     except Exception:
         pass
 

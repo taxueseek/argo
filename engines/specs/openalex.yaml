@@ -11,7 +11,9 @@ coverage:
 - academic
 desc: OpenAlex 2.5亿+论文索引（免认证，礼貌池 mailto）
 extra_params:
-  mailto: unified-search@local
+  # mailto 运行时由 engines_http.contact_email() 注入（ARGO_CONTACT_EMAIL）；
+  # 未配置则参数不发送，礼貌池降级为普通池。此键只声明礼貌池意图。
+  mailto: ''
   per_page: '{n}'
 method: GET
 query_param: search
@@ -24,4 +26,4 @@ output_map:
   item_url: id
   item_summary: publication_year
 headers:
-  User-Agent: argo-search/2.5 (mailto:unified-search@local)
+  User-Agent: argo-search

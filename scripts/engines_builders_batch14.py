@@ -28,9 +28,10 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from engines_http import UA
 from engines_base import http_open, safe_search
 
-_UA = "argo-search/2.9 (unified-search@local)"
+_UA = UA
 _CST = timezone(timedelta(hours=8))   # 三个中国市场源都按北京时间取「今天」
 
 

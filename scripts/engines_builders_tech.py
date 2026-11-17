@@ -16,7 +16,7 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
-from engines_base import (safe_search, _run, _resolve, _get_path, _coerce_field, rank_score,
+from engines_base import (safe_search, _run, _resolve, _get_path, _coerce_field, rank_score, UA,
                           _http_get_raw, mcp_error_of as _mcp_error_of, http_open, _note_http_failure)
 from engine_env import get_env
 
@@ -533,7 +533,7 @@ def _build_stackoverflow_engine(spec: dict[str, Any]) -> Any:
         if not q:
             return []
         url = f"https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q={up.quote(q)}&site={site}&pagesize={min(n, 10)}"
-        headers = {"User-Agent": "argo-search/1.0", "Accept-Encoding": "gzip"}
+        headers = {"User-Agent": UA, "Accept-Encoding": "gzip"}
         req = urllib.request.Request(url, headers=headers)
         try:
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
@@ -667,7 +667,7 @@ def _build_github_engine(spec: dict[str, Any]) -> Any:
         endpoint = _github_endpoint(query, bool(token))
         url = _github_url(endpoint, query, n)
         headers = {
-            "User-Agent": "argo-search/1.0 (+github)",
+            "User-Agent": UA,
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }

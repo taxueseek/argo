@@ -62,11 +62,19 @@ def test_sec_cf_ascii_guard_returns_empty_for_pure_chinese(monkeypatch):
 
 
 def test_sec_cf_ua_has_valid_email_domain():
-    """SEC 对 UA 里的邮箱域做校验：@local 拒（403），@example.com 过。"""
+    """SEC 对 UA 里的邮箱域做校验：@local 拒（403），@example.com 过。
+
+    2026-11-18 UA 单源化后，SEC 专用 UA 收敛到 engines_http.UA_EDGAR
+    （版本走 _pkg_version 单源，邮箱哨兵不再内联进 builder 源码——
+    哨兵写死在两处正是单源门禁要消灭的形态）。
+    """
     import inspect
+    from engines_http import UA_EDGAR
     src = inspect.getsource(ebd._build_sec_companyfacts_engine)
     assert "@local" not in src
-    assert "contact@example.com" in src
+    assert "UA_EDGAR" in src, "SEC builder 必须引用 EDGAR 专用 UA 单源"
+    assert "contact@example.com" in UA_EDGAR, "EDGAR 单源 UA 必须带合法联系邮箱"
+    assert "@local" not in UA_EDGAR
 
 
 # ── frankfurter：币种解析 ─────────────────────────────────────────────────────

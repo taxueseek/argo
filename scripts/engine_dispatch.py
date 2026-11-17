@@ -537,8 +537,11 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 outcome["status"] = _mapped
             outcome["detail"] = _text or outcome.get("detail")
         if _note:
-            # 归因随熔断状态一起持久化：「为什么坏」必须在失败现场写下来，
-            # 事后只能看到 kind 粗标签（把 kind 当响应文本再归类只会得到 unknown）
+            # 归因随熔断状态一起持久化（「为什么坏」必须在失败现场写下来，
+            # 事后只能看到 kind 粗标签）；原始 HTTP 状态码同时透传进 outcome，
+            # 台账结构化可检 403/404/429，不再只埋在 detail 自由文本里。
+            if _note.get("status"):
+                outcome["http_status"] = int(_note["status"])
             try:
                 from engine_failure import from_note
                 _attr = from_note(_note, eng)

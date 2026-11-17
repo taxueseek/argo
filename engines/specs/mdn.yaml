@@ -29,4 +29,4 @@ output_map:
 timeout: 8
 url: https://developer.mozilla.org/api/v1/search
 headers:
-  User-Agent: argo-search/2.5
+  User-Agent: argo-search

@@ -14,6 +14,8 @@ import subprocess
 import sys
 import threading
 import engine_states as _st  # 失败归因词表唯一真源
+# UA 与礼貌池邮箱单源（engines_http 顶层无反向依赖，不成环）
+from engines_http import UA, contact_email as _contact_email, normalize_ua_headers
 from engines_fields import _coerce_field  # 字段取值原语真源在 engines_fields（无依赖底层），本模块复导出
 
 import serp_kill_log  # noqa: E402  守卫接线+误杀账本（2026-10-10 拆出，stdlib 级轻量）
@@ -81,12 +83,15 @@ except Exception:  # pragma: no cover - archive_run 不可用时退化为基本�
         return text
 
 
-def note_failure(engine: str, category: str, reason: str, detail: str = "") -> None:
+def note_failure(engine: str, category: str, reason: str, detail: str = "",
+                 status: int | None = None) -> None:
     """记录引擎最近一次失败的归因（覆盖式：只留最后一次）。
 
     detail 在写入前脱敏：这里聚合了引擎名、状态码与**响应体**，是唯一能把
     上游回显的凭证带进持久化状态的位置（会写进 circuit_breaker.json 并出现在
     --list-engines 输出）。脱敏在唯一的写入点做，消费者无需各自处理。
+    status：原始 HTTP 状态码（可选）。透传进 outcome 后台账可结构化检索
+    403/404/429，不再只埋在 reason 自由文本里。
     """
     if not engine:
         return
@@ -96,6 +101,7 @@ def note_failure(engine: str, category: str, reason: str, detail: str = "") -> N
             "reason": reason,
             "detail": _redact_secrets(detail or "")[:200],
             "ts": time.time(),
+            **({"status": int(status)} if status else {}),
         }
 
 
@@ -361,6 +367,8 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
     """
     url_template = spec.get("url", "")
     headers = spec.get("headers", {"Content-Type": "application/json"})
+    # UA 单源归一：spec 手抄版本号字面量统一指向 engines_http.UA
+    headers = normalize_ua_headers(headers)
     query_param = spec.get("query_param", "q")
     fmt = spec.get("format", "")
     # format 的双重身份：它本来是**解析提示**（_parse_http_payload 用它区分
@@ -407,6 +415,12 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 # 语言参数动态化（v2.7）：按查询主语言覆盖静态 setlang/hl/lang/mkt
                 if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                     v = _lang_param(k, query) or v
+                if k == "mailto":
+                    # 礼貌池联系方式运行时注入（ARGO_CONTACT_EMAIL）；未配置则
+                    # 参数不发送——发保留域假邮箱会被降权，不发只降级为普通池
+                    v = _contact_email()
+                    if not v:
+                        continue
                 parts.append(f"{k}={up.quote(_resolve(str(v), query, n, allowed_env=_allowed, **kwargs))}")
             if parts:
                 separator = "&" if "?" in resolved_url else "?"
@@ -539,11 +553,12 @@ def _note_http_failure(engine: str, status: int, body: str) -> None:
     try:
         from engine_failure import classify
     except ImportError:  # 模块缺失时退化为最小事实，不猜类别
-        note_failure(engine, _st.FAILURE_UNKNOWN, f"http-{status}", (body or "")[:120])
+        note_failure(engine, _st.FAILURE_UNKNOWN, f"http-{status}",
+                     (body or "")[:120], status=status)
         return
     res = classify(status_code=status, output=(body or "")[:2000])
     note_failure(engine, res["category"], res["reason"],
-                 res.get("evidence") or (body or "")[:120])
+                 res.get("evidence") or (body or "")[:120], status=status)
 
 
 @contextmanager
@@ -910,6 +925,7 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
     }
     # 覆盖自定义 headers
     headers.update(spec.get("headers", {}))
+    headers = normalize_ua_headers(headers)  # UA 单源归一：同 _build_http_engine
     query_param = spec.get("query_param", "q")
     timeout = spec.get("timeout", 8)
     extra_params = spec.get("extra_params", {})
@@ -950,6 +966,11 @@ def _build_html_engine(spec: dict[str, Any]) -> Any:
             # 语言参数动态化：按查询主语言覆盖 setlang/hl/lang/mkt（此前漏 mkt）
             if k in ("setlang", "hl", "lang", "uselang", "mkt"):
                 v = _lang_param(k, query) or v
+            if k == "mailto":
+                # 礼貌池联系方式运行时注入；未配置不发送（同 _build_http_engine）
+                v = _contact_email()
+                if not v:
+                    continue
             full_url += f"&{k}={up.quote(_resolve(str(v), query, n, allowed_env=_allowed, **kwargs))}"  # **kwargs 必传（声明式路径 :441 传了）：否则 {MODE}/{DEPTH} 带字面量花括号进 URL
         resolved_headers = {
             k: v for k, v in (

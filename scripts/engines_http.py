@@ -18,7 +18,56 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable
 
-UA = "argo-search/2.4 (unified-search@local)"
+def _pkg_version() -> str:
+    """版本单源：优先包内 __version__，兜底安装元数据。"""
+    try:
+        from argo_search import __version__ as _v
+        return _v
+    except Exception:
+        try:
+            from importlib.metadata import version as _meta_version
+            return _meta_version("argo-search")
+        except Exception:
+            return "unknown"
+
+
+# 全仓唯一 User-Agent 真源（2026-11-18 收口）：此前 55 处手抄字面量漂移出
+# 7 个版本号（1.0~2.9，无一等于当前版），且多处带 RFC 6762 保留域假邮箱，
+# 拿不到 Crossref/OpenAlex 礼貌池待遇、升版必漏改。新代码一律引用本常量，
+# 版本字面量回潮由 tests/test_ua_single_source_gate.py 拦截。
+UA = f"argo-search/{_pkg_version()} (+https://github.com/taxueseek/argo)"
+
+# SEC EDGAR 强制 UA 带联系方式（官方政策：缺联系方式/假域会被 403），
+# contact@example.com 是 SEC 官方文档认可的示例域。版本部分仍走 _pkg_version
+# 单源；本常量只供 SEC 族 builder 引用，不进通用 UA 轮换。
+UA_EDGAR = f"argo-search/{_pkg_version()} (contact@example.com)"
+
+
+def contact_email() -> str:
+    """礼貌池联系方式（ARGO_CONTACT_EMAIL），未配置返回空串。
+
+    Crossref/OpenAlex 的 mailto 查询参数由此注入（engines_base 的
+    extra_params 循环）；未配置时参数整体不发送——发保留域假邮箱会被官方
+    降权/封锁，不发只是降级为普通池，是诚实默认。
+    """
+    from engine_env import get_env
+    return get_env("ARGO_CONTACT_EMAIL").strip()
+
+
+def normalize_ua_headers(headers: dict) -> dict:
+    """把 spec 声明的历史手抄 UA 字面量统一指向单源。
+
+    spec/registry 里 `User-Agent: argo-search`（无版本号）是「用应用 UA」的
+    声明意图；历史 yaml 里的 argo-search/陈旧版本号 等字面量在构造期被归一
+    到本模块单源，避免每次升版手改几十份 yaml 与 builder。
+    """
+    out: dict = {}
+    for k, v in headers.items():
+        if str(k).lower() == "user-agent" and str(v).strip().startswith("argo-search"):
+            out[k] = UA
+        else:
+            out[k] = v
+    return out
 
 # 结构字符保留集：既有 %XX 编码、协议/路径/参数分隔符不重复转义
 URL_SAFE = "/:?&=%,._~#+-"

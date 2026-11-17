@@ -19,7 +19,7 @@ recommended: false
 latency_ms: 1200
 
 headers:
-  User-Agent: argo-search/1.0 (+carbon_intensity)
+  User-Agent: argo-search
   Accept: application/json
 
 output_map:
