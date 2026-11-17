@@ -50,7 +50,7 @@ argo research "复杂问题" --json           # 取证包（扩词或多工作�
 | 参数 | 说明 |
 |------|------|
 | `--engine <name>` | 强制引擎（见 `argo list-engines`） |
-| `--local-first` | 本地零成本聚合优先（local_search 子技能） |
+| `--local-first` | 本地零成本聚合优先（local_search 内部管线） |
 | `--include-local` / `--no-local` | 本机文件命中（fast/budget 默认开） |
 | `--mode fast|auto|deep|budget` | fast 免费 / auto 成本感知（默认）/ deep 质量 / budget 配额 |
 | `--explain` / `--no-cache` | 解释路由决策 / 跳过缓存 |
@@ -62,7 +62,7 @@ argo research "复杂问题" --json           # 取证包（扩词或多工作�
 | `--numverify [N]` `--verify-with <引擎>` | 数值印证（对关键数字抓原文确认核对簇）+ 核对配对 |
 | `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域限定 / 关本地统计与查询落盘 |
 
-**按场景选引擎**：时事 → `--engine deepseek_search`，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → skill_search/dsh_plugin_search。口径见 `references/usage.md`。
+**按场景选引擎**：时事 → `--engine deepseek_search`，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → 自动路由（skill_search/dsh_plugin_search 域）。口径见 `references/usage.md`。
 
 **explicit_only 源不进自动路由**：feed、deepseek_search、tracemoe/saucenao/google_lens/animetrace、wolframalpha、brave/ecosia/qwant/gdelt 等需显式 `--engine <名>`（例：`argo search "x" --engine deepseek_search`），全量见 `argo list-engines`。
 

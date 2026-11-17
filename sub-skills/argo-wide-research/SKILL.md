@@ -1,6 +1,6 @@
 ---
 name: argo-wide-research
-version: 2.14.1
+version: 2.15.0
 description: 多轨并行深度研究与取证编排。当问题需要多视角对比、跨语言覆盖、引用来源账本、可核验的综合报告时使用；产出带质量门的取证报告，结论按证据封顶。适用于 wide research、多轨研究、对照研究、事实核查报告、争议问题核证。单代理取证用 argo research，日常一问用 argo search，均不是本技能的活。
 ---
 
@@ -16,7 +16,7 @@ description: 多轨并行深度研究与取证编排。当问题需要多视角�
 
 ## 编排流程
 
-### 1. 规划轨道（3-4 轨上限）
+### 1. 规划轨道
 
 轨道之间**互补不重叠**，每轨一个独立视角。常用拆法：
 
@@ -26,11 +26,13 @@ description: 多轨并行深度研究与取证编排。当问题需要多视角�
 
 轨道可带 `depends_on` 声明依赖（被依赖轨进入后续阶段再跑），无依赖的默认并行。
 
-### 2. 派发 worker（有界并发 2-3）
+### 2. 派发与执行（数字单源 protocol.md）
 
-用原生 Agent 工具派发，`subagent_type` 优先用 `argo-researcher`（DSH/Claude 插件自带，工具白名单已机制化：只能调 argo 原子命令 + 读文件，调不了研究编排命令，不会递归套娃）；若宿主无该类型，改用通用/只读子代理并显式约束其只调 `argo search`、`argo fetch` 与读文件工具。并发控制在 2-3 个，防引擎限流。
+- DSH 宿主：直接走 `wide_research` 工具（runner 已固化 worker 白名单：只调 argo 原子命令 + 读文件，不会递归套娃）。
+- 其余宿主：走 `scripts/wide_research.py stage/merge` 确定性管道（URL 归一去重、整轨门禁、conclusion_cap），worker 用通用/只读子代理并显式约束其只调 `argo search`、`argo fetch` 与读文件工具。
+- 人工编排仅作两管都不可用时的兜底。轨道数、并发 worker 数、每轨信源上限一律以 `references/research-protocol.md` 为准，本文不复述（防止 skill、协议与 DSH runner 三方数字漂移）。
 
-给 worker 的输入三件：轨道描述（要什么证据）、约束（每轨信源上限建议 ≤8、禁止只报叙事不报来源）、返回格式（见下）。
+给 worker 的输入三件：轨道描述（要什么证据）、约束（禁止只报叙事不报来源）、返回格式（见下）。
 
 ### 3. worker 返回结构（逐轨收齐）
 

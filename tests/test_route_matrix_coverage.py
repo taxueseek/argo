@@ -46,8 +46,8 @@ import matrix_search_eval as mse  # noqa: E402
 #
 # local_* 六个域——设计上不进自动路由。chinese_general 的 `[一-鿿]`
 # catch-all 排在它们之前（config.yaml 1545 行 vs 1555 行起），任何中文查询
-# 都被 catch-all 截走；这六个域是 local-search 子技能的零成本兜底层，靠
-# `--local-first` 显式启用（见 sub-skills/local-search/SKILL.md）。
+# 都被 catch-all 截走；这六个域是 local-search 内部管线的零成本兜底层，靠
+# `--local-first` 显式启用（见 sub-skills/local-search/README.md）。
 #
 # 【已修·2026-10-22 晚】原登记的三个域冲突（jin10_flash / wenshu_query /
 # v2ex_search，触发词被更宽泛的域覆盖）已在宽泛侧让位并各补一条用例，从本

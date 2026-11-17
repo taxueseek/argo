@@ -656,7 +656,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 > 123 个开关按六类 MECE。原则：调试/运行配置不进模型上下文（MCP schema 不暴露）；
 > 本表由门禁与源码双向锁定——文档里的开关必须代码实存，代码新增开关必须入表。
 
-### 能力开关（44）
+### 能力开关（45）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -666,6 +666,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_CONCEPT_ROUTER` | 概念语义路由（Model2Vec 零依赖静态向量） | 默认关；=1 开启，回退纯词面 TF-IDF |
 | `ARGO_CONFIG_CACHE` | 配置解析与合并结果的文件缓存 | 默认开；=0/false/no/off 关闭并回退实时解析 |
 | `ARGO_CONFIG_STAMP_TTL_S` | 配置时间戳与签名缓存的有效期（秒） | 默认 5s；设 0 即关闭记忆、每次即时扫描 |
+| `ARGO_CONTACT_EMAIL` | Crossref/OpenAlex 礼貌池联系方式（运行时注入 mailto 查询参数，真源 engines_http.contact_email） | 可选；未配置则 mailto 参数整体不发送，礼貌池降级为普通池（发保留域假邮箱会被官方降权，故诚实缺省） |
 | `ARGO_CONTENT_RISK_GATE` | 内容风险安全门禁（高风险正文隔离清洗替换） | 默认开；=0 放行高风险内容（应急排障用） |
 | `ARGO_CONTENT_RISK_THRESHOLD` | 内容风险判定阈值（risk_score ≥ 此值即隔离清洗） | 默认 0.5 |
 | `ARGO_COMPLETENESS_V2` | 完整性维度 QSDM 信息/噪声比评估算子 | 默认开；=0 退回旧长度启发式 |

@@ -3,7 +3,7 @@
 
 ## 守的是什么
 
-`sub-skills/local-search/SKILL.md` 长期写着「33 个本地搜索引擎」，而同目录
+`sub-skills/local-search/README.md`（7508fa7 收敛前为 SKILL.md）长期写着「33 个本地搜索引擎」，而同目录
 `config.yaml` 实际是 **32 个**（2026-09-13 实查）。表里的 32 行是对的，只有
 散文计数错——这类漂移没有任何机械检查，只能靠人读出来。
 

@@ -568,7 +568,8 @@ def verify_results(results: list[dict[str, Any]],
         # 硬墙钟：到点就返回，未完成的 URL 进 pending，不 join 卡住的线程。
         # 预算只约束「这次核验等多久」，不改单 URL 的降级链语义。
         # worker 上限 6（原 3）：核验是纯 I/O 等待，3 个 worker 装不下 10 个
-        # URL，预算全花在排队。实测同样 5s 预算下核验 13→37 条、耗时持平。
+        # URL，预算全花在排队。实测同样 5s 预算下核验 15→23 条（1.5x）、
+        # 耗时持平（唯一 URL 三轮冷启动 A/B，数字以文件头记录为准）。
         # 单 URL 自带 8s deadline，放宽 worker 不会放大最坏耗时。
         from bounded_run import TaskError, run_bounded
         finished, unfinished = run_bounded(

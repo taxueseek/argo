@@ -151,7 +151,7 @@ Argo exposes **3 orthogonal Skills** (`argo`, `argo-wide-research`, `local-seek`
 | Module | Type | Capability |
 | :--- | :--- | :--- |
 | **argo-wide-research** | Standalone Skill | Multi-track parallel deep research &amp; forensics orchestration with citation ledger and quality gates |
-| **local-seek** | Standalone Skill | Hybrid BM25 + vector semantic search for local notes, markdown, and code (`argo seek`) |
+| **local-seek** | Standalone Skill | Hybrid BM25F rerank + FTS5 + fzf search for local notes, markdown, and code (`argo seek`) |
 | **local-search** | Internal Pipeline | 30 zero-cost local aggregation engines (`--local-first`) |
 | **ego-search** | Subcommand (`argo ego-search`) | Real-browser logged-in search for Zhihu, Xiaohongshu, WeChat Official Accounts (off by default) |
 | **js-run** | Internal Pipeline | Sub-millisecond headless JS execution for environment probes and pure-compute pages |
