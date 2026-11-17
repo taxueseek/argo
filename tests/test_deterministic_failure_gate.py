@@ -131,6 +131,33 @@ def test_thesportsdb_entity_query_stops_after_strong_hit(monkeypatch):
     assert len(calls) == 1, f"强命中后仍扇出 {len(calls)} 次: {calls}"
 
 
+def test_thesportsdb_bare_entity_query_stops_after_strong_hit(monkeypatch):
+    """裸实体名也要早停：调度层剥掉 club/球队 后引擎收不到属性词。
+
+    `_entity_core_query` 把「Cristiano Ronaldo club」剥成「Cristiano
+    Ronaldo」，引擎的 prefer_entity 判据（team/club/球队）随之失效；
+    只按 prefer_entity 早停会退化成反复扇出（实测 10 次请求 8s，管道 6s
+    预算下直接 0 结果）。
+    """
+    calls: list[str] = []
+    payload = {"player": [{
+        "idPlayer": "34145985", "strPlayer": "Cristiano Ronaldo",
+        "strTeam": "Al-Nassr", "strSport": "Soccer",
+        "strPosition": "Centre-Forward", "strNationality": "Portugal",
+    }]}
+
+    def fake_open(req, timeout=10.0, engine=""):
+        calls.append(str(req))
+        return _FakeResp(payload)
+
+    monkeypatch.setattr(media, "http_open", fake_open)
+    engine = media._build_thesportsdb_engine(
+        {"_name": "thesportsdb", "timeout": 5})
+    out = engine("Cristiano Ronaldo", n=5)
+    assert out, "强命中应产出结果"
+    assert len(calls) == 1, f"裸实体名强命中后仍扇出 {len(calls)} 次: {calls}"
+
+
 def test_thesportsdb_retries_transient_failure_once(monkeypatch):
     """瞬时错误重试一次：早停后只剩一次请求，一次抖动不该让整台引擎归零。
 

@@ -737,7 +737,13 @@ def _build_thesportsdb_engine(spec: dict[str, Any]) -> Any:
                         "_kind": kind,
                         "_rel": rel,
                     })
-                    if prefer_entity and rel >= _ENTITY_HIT_FLOOR:
+                    # 实体问早停：球员/球队强命中即收工。判据不能只看 prefer_entity——
+                    # 调度层 _entity_core_query 会剥掉 club/球队 等属性词，「Cristiano
+                    # Ronaldo」这类裸实体名到引擎时已无属性词，仍必须早停，否则扇出
+                    # 十几次请求（实测 8s，管道 6s 预算下直接 0 结果）。赛事问
+                    # （prefer_event）不套这条线，保持多实体多样性。
+                    if (kind in ("player", "team") and not prefer_event
+                            and rel >= _ENTITY_HIT_FLOOR):
                         strong_hit = True
                         break
             # 已有高相关实体则早停
