@@ -1360,6 +1360,16 @@
     "cost_tier": "free",
     "priority": 56
   },
+  "linux_do": {
+    "label": "linux.do 社区",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 20
+  },
   "listenbrainz": {
     "label": "listenbrainz",
     "qps": 2,

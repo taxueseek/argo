@@ -1,0 +1,63 @@
+# linux.do 社区（Discourse）——热帖池 + 本地相关性过滤
+#
+# 补的盲区：**中文 Linux／自建／AI 应用社区的一手讨论**。定位同 V2EX
+# （见 engines/specs/v2ex.yaml），差异在 linux.do 偏运维、自建与 AI 应用。
+#
+# 为什么走 RSS 而不是站内搜索：linux.do 全站有人机门（2026-11-17 实测
+# /latest.json 与 /search.json 均 403「Just a moment...」），而 Discourse
+# 的 /latest.rss 与 /top.rss 免门可用（实测 HTTP 200）。故形态=热帖池 +
+# 本地相关性过滤，与 v2ex 同构；不引入外部 MCP，也不自打 Cloudflare。
+#
+# 实测（2026-11-17）：latest.rss 30 条、top.rss 30 条，字段含
+# title/link/description/pubDate/dc:creator/category。
+#
+# 验证:
+#   python3 scripts/engine_validate.py --engine linux_do --stage all --admit
+#   python3 scripts/search.py "Nginx 配置" --engine linux_do --json
+
+engine_id: linux_do
+type: rss_feed
+enabled: true
+cost_tier: free
+label: linux.do 社区
+family: social
+feed_mode: filter
+priority: 20
+# top.rss 实测会 429（重试可救回），两份种子并发取，qps 收 1。
+qps: 1
+period: second
+cost_per_call: 0.0
+cost_unit: free
+timeout: 14
+langs:
+- zh
+match_min_ratio: 0.3
+# linux.do 的 Cloudflare 按 TLS 指纹拦 Python 客户端（urllib 403、
+# curl_cffi 200），故本源走 impersonate 通道。
+tls_impersonate: true
+feeds:
+- url: https://linux.do/latest.rss
+  label: 最新
+  langs:
+  - zh
+- url: https://linux.do/top.rss
+  label: 热门
+  langs:
+  - zh
+canary_query: "人工智能"
+coverage:
+- chinese
+- community
+- tech
+- discussion
+quality_queries:
+- id: linuxdo_ai
+  query: 人工智能
+  category: community
+- id: linuxdo_selfhost
+  query: 自建 部署
+  category: community
+- id: linuxdo_vibe
+  query: VIBE CODING
+  category: community
+desc: linux.do 中文技术社区（Discourse 热帖池 + 本地相关性过滤，RSS 免人机门）

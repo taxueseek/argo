@@ -301,6 +301,10 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
     min_ratio = float(spec.get("match_min_ratio", 0.34))
     snippet_max = int(spec.get("snippet_max", 300))
     hot_base = float(spec.get("hot_base_score", 0.55))
+    # 部分站点（如 linux.do）的 Cloudflare 按 TLS 指纹拦 Python 客户端：
+    # urllib 403、curl/curl_cffi 200。声明 tls_impersonate: true 的源走
+    # curl_cffi 指纹伪造；其余源保持 urllib 路径，行为不变。
+    tls_impersonate = bool(spec.get("tls_impersonate"))
 
     def _row(it: dict[str, Any], rank: int, score: float,
              label: str = "") -> dict[str, Any]:
@@ -330,12 +334,22 @@ def _build_rss_feed_engine(spec: dict[str, Any]) -> Any:
         last_exc: Exception | None = None
         for attempt in (1, 2):
             try:
-                req = urllib.request.Request(
-                    url, headers={"User-Agent": _UA, "Accept": "*/*"})
-                with http_open(req, timeout=one_timeout, engine=name) as resp:
-                    # utf-8-sig 去掉美联储 press_all.xml 开头的 BOM。
-                    # ElementTree 见到 U+FEFF 会整份解析失败。
-                    raw = resp.read().decode("utf-8-sig", "replace")
+                if tls_impersonate:
+                    from http_client import HttpClient
+                    client = HttpClient(timeout=one_timeout, max_retries=0)
+                    resp = client.get_impersonated(
+                        url, extra_headers={"User-Agent": _UA,
+                                            "Accept": "*/*"})
+                    if resp.get("status") != 200:
+                        raise IOError(f"HTTP {resp.get('status')}")
+                    raw = resp.get("text") or ""
+                else:
+                    req = urllib.request.Request(
+                        url, headers={"User-Agent": _UA, "Accept": "*/*"})
+                    with http_open(req, timeout=one_timeout, engine=name) as resp:
+                        # utf-8-sig 去掉美联储 press_all.xml 开头的 BOM。
+                        # ElementTree 见到 U+FEFF 会整份解析失败。
+                        raw = resp.read().decode("utf-8-sig", "replace")
                 items = _parse_feed(raw)
                 _feed_cache[url] = (time.monotonic(), items)
                 _write_disk_feed(url, items)

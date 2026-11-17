@@ -1740,6 +1740,20 @@ engines:
   recommended: true
   explicit_only: false
   desc: webring 专用搜索（只索引加入 webring 的小众站点，HTML 解析）
+- name: linux_do
+  tier: T1
+  type: rss_feed
+  coverage:
+  - chinese
+  - community
+  - tech
+  - discussion
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: true
+  explicit_only: false
+  desc: linux.do 中文技术社区（Discourse 热帖池 + 本地相关性过滤，RSS 免人机门）
 - name: listenbrainz
   tier: T1
   type: listenbrainz

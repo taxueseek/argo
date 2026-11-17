@@ -2939,5 +2939,25 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "linux_do": {
+    "label": "linux.do 社区",
+    "documents": [
+      "中文技术社区 论坛 讨论 求助 分享 经验",
+      "Linux 运维 服务器 部署 配置 故障排查",
+      "自建 NAS Docker 容器 内网穿透 家庭网络",
+      "AI 编程 Vibe Coding 大模型 应用 实践",
+      "搞七捻三 闲聊 摸鱼 站务 新人"
+    ],
+    "boost_keywords": {
+      "社区": 1.3,
+      "求助": 1.3,
+      "部署": 1.3,
+      "自建": 1.3,
+      "运维": 1.2,
+      "论坛": 1.2,
+      "Linux": 1.2
+    },
+    "boost_combos": {}
   }
 }
