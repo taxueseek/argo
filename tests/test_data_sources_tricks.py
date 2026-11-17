@@ -25,6 +25,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import fetch_v3  # noqa: E402
+import fetch_jina  # noqa: E402
 from engines_base import _parse_doi, _parse_http_payload  # noqa: E402
 
 
@@ -89,7 +90,7 @@ class TestJinaReader(unittest.TestCase):
 
     def test_disabled_via_env(self):
         with patch.dict("os.environ", {"ARGO_FETCH_JINA": "0"}):
-            self.assertFalse(fetch_v3._jina_enabled())
+            self.assertFalse(fetch_jina.enabled())
 
     def test_success_parses_title_and_strips_preamble(self):
         raw = ("Title: Testing Agent Skills\n"
@@ -97,7 +98,7 @@ class TestJinaReader(unittest.TestCase):
                "Markdown Content:\n"
                "# Testing Agent Skills\n\n" + "正文段落。" * 60)
         with patch("http_client.HttpClient", _fake_client_response(200, raw)):
-            r = fetch_v3._jina_reader_fetch("https://example.com/a")
+            r = fetch_jina.fetch("https://example.com/a")
         self.assertIsNotNone(r)
         self.assertTrue(r["success"])
         self.assertEqual(r["fetch_method"], "jina_reader")
@@ -108,7 +109,7 @@ class TestJinaReader(unittest.TestCase):
     def test_rate_limited_returns_none(self):
         with patch("http_client.HttpClient", _fake_client_response(429, "")):
             self.assertIsNone(
-                fetch_v3._jina_reader_fetch("https://example.com/a"))
+                fetch_jina.fetch("https://example.com/a"))
 
 
 # ── 3. stackexchange 引擎声明与解析 ───────────────────────────────────────────

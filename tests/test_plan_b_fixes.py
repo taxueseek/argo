@@ -51,7 +51,7 @@ class TestPlanBFixes(unittest.TestCase):
         fake_jsrun = {"url": "https://example.com", "content": "x" * 200,
                       "success": True, "fetch_method": engine_states.FETCH_JSRUN_CHALLENGE}
         with patch.object(fv3, "_http_fetch", return_value=fake_http), \
-                patch.object(fv3, "_jina_enabled", return_value=False), \
+                patch.object(fv3._fetch_jina, "enabled", return_value=False), \
                 patch.object(fv3, "_needs_browser", return_value=True), \
                 patch.object(fv3, "_jsrun_enabled", return_value=True), \
                 patch.object(fv3, "_jsrun_challenge_fetch", return_value=fake_jsrun) as mock_jsrun, \
