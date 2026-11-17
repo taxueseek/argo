@@ -811,7 +811,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_MCP_TIMEOUT_FETCH` | fetch 专用超时秒 | server 层接管，模型不可见 |
 | `ARGO_MCP_TOOLS` | tools/list 注入范围（CORE 4 个正交集/all/逗号名单） | server 层接管，模型不可见 |
 
-### 抓取降级链分级开关（9）
+### 抓取降级链分级开关（10）
 
 | 变量 | 作用 | 默认/备注 |
 |------|------|----------|
@@ -823,6 +823,7 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_FETCH_MOBILE` | 移动端端点与移动 UA 降级直取车道 | 默认自动降级开启；=0 关闭 |
 | `ARGO_FETCH_PARALLEL` | 多车道并发竞速抓取优化 | 默认自动降级开启；=0 关闭 |
 | `ARGO_FETCH_TINYFISH` | TinyFish 原生直连提取与动态渲染车道 | 配置 key 后默认开启；=0 关闭 |
+| `ARGO_JINA_API_KEY` | Jina Reader 密钥（配置后走 Key 档 500 RPM；缺失时降级为免 Key 匿名档，可能因 IP 信誉被拒） | 可选；写入 `~/.config/argo/env` |
 | `ARGO_AUTH_FETCH`（别名 `ARGO_FETCH_AUTH`） | 登录态车道（站点有 argo auth profile 时跳过匿名链直进 Chromium） | 默认开启；=0 关闭。不影响 auth 子命令本身 |
 
 ### argo auth — 浏览器登录态（A2，2026-10）

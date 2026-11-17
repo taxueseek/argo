@@ -54,6 +54,7 @@ if SCRIPT_DIR not in sys.path:
 # 渲染层（第二级A）：TinyFish 直连渲染，独立模块以保持本文件聚焦主链调度；
 # engine_states 是状态词表唯一真源（2026-11-09 收口）
 import fetch_render_tinyfish as _render_tinyfish
+import fetch_jina as _fetch_jina
 import engine_states
 from except_sets import IO_BENIGN, OPT_IMPORT, SHAPE_BENIGN  # 收窄词汇表（2026-11-13 裸吞收口）
 
@@ -71,7 +72,7 @@ import fetch_quality as _quality
 # 本地状态目录唯一来源（env ARGO_STATE_DIR → config cache.db_path 父目录 → 旧路径）
 import argo_paths as _paths
 from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
-from engine_env import env_flag  # 布尔开关统一判断（见 env_flag 的说明）
+from engine_env import env_flag, get_env  # env_flag 判开关；get_env 读密钥（os.environ 优先，env 文件热读保底）
 from cli_io import dumps
 from fetch_jsrun import _jsrun_challenge_fetch, _jsrun_enabled  # js-run 轻量车道（拆出独立模块）
 
@@ -906,19 +907,14 @@ def _make_result(url: str, html: str, max_chars: int,
     return result
 
 
-# ─── 第一级C：r.jina.ai 阅读器（keyless 免费层，远端 JS 渲染转 markdown）─────
+# ─── 第三方代理公网边界（jina 与 Parallel 共用；请求层见 fetch_jina.py）─────
 
 _JINA_PRIVATE_HOST = re.compile(
     r"^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.)")
 
 
-def _jina_enabled() -> bool:
-    """r.jina.ai 阅读器级开关：ARGO_FETCH_JINA=0 关闭，默认开启。"""
-    return env_flag("ARGO_FETCH_JINA")
-
-
 def _is_public_host(host: str) -> bool:
-    """r.jina.ai 是第三方代理：只把公网 URL 交给它。
+    """第三方代理（r.jina.ai / Parallel）只接公网 URL。
 
     内网/本机/裸 IP 一律跳过——把内部地址送出第三方 = 拓扑泄露；
     域名形 IP（全数字）与含冒号的 IPv6 字面量同判为裸地址。
@@ -932,42 +928,6 @@ def _is_public_host(host: str) -> bool:
     if host.replace(".", "").isdigit() or ":" in host:
         return False
     return "." in host
-
-
-def _jina_reader_fetch(url: str, max_chars: int = 8000,
-                       timeout: float = 8.0) -> dict | None:
-    """r.jina.ai 阅读器（keyless 免费层）。
-
-    定位：HTTP/TLS 直连全败后的免浏览器快速路径——jina 在远端渲染并返回
-    markdown，命中则免去 CDP 冷启动。免费层有速率限制，失败/429 返回 None
-    静默放行走 Wayback/浏览器。调用方须先过 _is_public_host（第三方代理边界）。
-    """
-    try:
-        from http_client import HttpClient
-        client = HttpClient(timeout=min(timeout, 10.0), max_retries=0,
-                            jitter=False)
-        resp = client.get(f"https://r.jina.ai/{url}", extra_headers={
-            "User-Agent": "argo-fetch-v3/1.0 (+local-research; jina-reader)",
-            "Accept": "text/plain",
-        })
-    except Exception:
-        return None
-    if resp.get("status", 0) != 200 or not resp.get("text"):
-        return None
-    raw = resp["text"]
-    title = ""
-    m = re.search(r"^Title:\s*(.+)$", raw[:2000], re.MULTILINE)
-    if m:
-        title = m.group(1).strip()[:200]
-    if "Markdown Content:" in raw:
-        raw = raw.split("Markdown Content:", 1)[1].lstrip()
-    if not _looks_like_markdown(raw):
-        return None
-    result = _make_result(url, "", max_chars, engine_states.FETCH_JINA_READER)
-    result["content"] = raw[:max_chars]
-    result["length"] = len(result["content"])
-    result["title"] = title
-    return result
 
 
 # ─── 第一级D：Parallel 免费 MCP web_fetch（keyless 云端渲染+提取）────────────
@@ -1560,15 +1520,15 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
                         result = spoof
 
             if not result.get("stop_signal") and _budget_left() > 0:
-                # 第一级C：r.jina.ai 阅读器（keyless 免费层，远端 JS 渲染）。
+                # 第一级C：r.jina.ai 阅读器（请求层见 fetch_jina.py）。
                 # HTTP/TLS 直连全败时的免浏览器快速路径；markdown-only 同
                 # tinyfish，need_html 场景跳过；第三方代理只接公网 URL。
-                if (not gated and not need_html and _jina_enabled()
+                if (not gated and not need_html and _fetch_jina.enabled()
                         and _is_public_host(host)
                         and (not result.get("success")
                              or _needs_browser(result))):
                     # 超时受剩余预算约束：deadline 场景本级不得击穿总预算
-                    jina = _jina_reader_fetch(
+                    jina = _fetch_jina.fetch(
                         url, max_chars, timeout=_level_timeout(timeout))
                     if jina is not None and jina.get("success"):
                         jina["http_fallback"] = True

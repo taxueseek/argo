@@ -50,7 +50,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_cn.py": (2089, "中文源构建器，itotii/toutiao_hot/bilibili_hot/weibo_hot/douyin_hot 转声明式 YAML 净瘦身 194 行"),
     "scripts/engines_builders_batch9.py": (1263, "批次九源构建器，方案 A 归一 + 共用 engines_http 净瘦身 94 行"),
     "scripts/engines_builders_tech.py": (1174, "技术社区源构建器，方案 A 归一 + 共用 lazy_logger 净瘦身 106 行"),
-    "scripts/fetch_v3.py": (1905, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段。2026-11-13 上调 +1：裸吞窄化引入 except_sets 词汇表导入；2026-11-15 收紧 -1：微信分支移到 robots 闸前（顺序修复），净行数 1906→1905"),
+    "scripts/fetch_v3.py": (1865, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段。2026-11-13 上调 +1：裸吞窄化引入 except_sets 词汇表导入；2026-11-15 收紧 -1：微信分支移到 robots 闸前（顺序修复），净行数 1906→1905；2026-11-17 收紧 -40：jina 请求层拆到 fetch_jina.py（与 fetch_jsrun / fetch_render_tinyfish 同构），净行数 1905→1865"),
     "scripts/engines_base.py": (1454, "引擎基类 + HTTP 出口 + 输出映射，与全部源声明的字段契约绑在一起；title/snippet 标签与实体清洗合并循环，净行数 1455→1454"),
     "scripts/cache.py": (1377, "存储实现与门面；键、命中判据、准入策略已分别拆到 cache_key_vdom / cache_similarity / cache_guard；2026-11-15 上调 +4：social 域 tier 由 general 改 realtime 的理由注记（UGC 结果 0-5s 漂移实测）"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),

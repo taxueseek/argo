@@ -64,6 +64,7 @@ _OPTIONAL_BOOST_KEYS = [
     ("exa", "Exa 语义搜索增强 (可选)", ["EXA_API_KEY", "ARGO_EXA_API_KEY"]),
     ("firecrawl", "Firecrawl 深度清洗 (可选)", ["FIRECRAWL_API_KEY", "ARGO_FIRECRAWL_API_KEY"]),
     ("anysearch", "AnySearch 搜索通道 (可选)", ["ANYSEARCH_API_KEY", "ARGO_ANYSEARCH_API_KEY"]),
+    ("jina", "Jina Reader 抓取通道 (可选，解除免 Key 的 IP 信誉限频)", ["ARGO_JINA_API_KEY"]),
     ("pixiv", "Pixiv App OAuth (可选)", ["ARGO_PIXIV_REFRESH_TOKEN"]),
 ]
 
