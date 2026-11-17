@@ -1333,6 +1333,14 @@ domains:
   - (?i)(サッカー|野球|バスケ|テニス|サッカー選手|リーグ|ワールドカップ|オリンピック|クラブ|チーム|監督|選手)
   - (?i)(축구|야구|농구|테니스|월드컵|올림픽|리그|클럽|팀|감독|선수)
   primary: thesportsdb
+  # 源保底分（score_floors）：thesportsdb 是结构化体育库，实体问答案是
+  # 「[player] Stephen Curry」这类英文标题；中文查询（「库里 球队」）对英文
+  # 标题词面零交集，relevance 被打成 0，被 F1 积分榜、比分页挤出 top-5
+  # （2026-11-18 活网 L_zh_sports 实测，精排第 12）。relevance 保底让主源
+  # 答案不被纯文本匹配埋没，与 dsh_plugin_search 同口径。
+  score_floors:
+    thesportsdb: {relevance: 0.9}
+
 - desc: 地理/地点/地标（OSM + 百科，先于中文 catch-all）
   engines_combo:
   - local_openstreetmap

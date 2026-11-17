@@ -304,3 +304,38 @@ class TestConsensusSignalSingleEntry:
         assert merged[0]["selection"] == merged2[0]["selection"], (
             "10 引擎共识与 3 引擎共识的 selection 应相同（min(n-1, 2) 封顶）"
         )
+
+
+class TestDomainSourceScoreFloor:
+    """域级源保底分（config.yaml 各域 score_floors）的回归锁。
+
+    2026-11-18 活网 L_zh_sports：「库里 球队」的正确答案是 thesportsdb 的英文
+    标题（Stephen Curry 所属球队），中文查询对英文标题词面零交集，relevance
+    被打成 0，被 jolpica 的积分榜挤出 top-5。sports_search 域在 config.yaml
+    声明 thesportsdb relevance 保底 0.9，让主源答案不被纯文本匹配埋没。
+    该保底只由排序层消费（`search_rank.local_five_dim_rerank` 读
+    `_domain_score_floors`），故本用例必须走真实 domain 配置。
+    """
+
+    def test_sportsdb_floor_promotes_primary_source(self):
+        from search import local_five_dim_rerank
+        results = [
+            {"url": "https://www.thesportsdb.com/player/1",
+             "title": "Stephen Curry", "snippet": "Golden State Warriors",
+             "source": "thesportsdb"},
+            {"url": "https://api.jolpica.org/1",
+             "title": "2025 赛季 球队 积分 榜",
+             "snippet": "车队 积分 排名 完整榜单",
+             "source": "jolpica"},
+        ]
+        ranked = local_five_dim_rerank("库里 球队", [dict(x) for x in results],
+                                       domain="sports_search", top_n=2)
+        assert ranked[0]["source"] == "thesportsdb", (
+            "sports_search 域 thesportsdb 的 relevance 保底未生效，top1 被 "
+            f"{ranked[0]['source']} 占据。排序："
+            f"{[(r['source'], r['rerank_dims']['relevance']) for r in ranked]}"
+        )
+        assert ranked[0]["rerank_dims"]["relevance"] >= 0.9, (
+            "thesportsdb relevance 保底 0.9 未写入 dims："
+            f"{ranked[0]['rerank_dims']}"
+        )
