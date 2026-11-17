@@ -1,7 +1,7 @@
 # Keenable 搜索引擎（需 ARGO_KEENABLE_API_KEY）
 # 文档: https://docs.keenable.ai/api-reference/search
 # 认证: X-API-Key: keen_<key>（POST /v1/search）；keyless 走 /public（公共池限流，此处不用）
-# 额度: 按组织限流 + 消费 credits；响应带 X-RateLimit-* 头，429 带 Retry-After
+# 额度: 官方免费档 100,000 次/月（按组织创建日重置），超出 $4/1000；响应带 X-RateLimit-* 头，429 带 Retry-After
 # 定位: 通用网络搜索（ranked results：URL/title/description/snippet/published_at）
 # 验证:
 #   export ARGO_KEENABLE_API_KEY=<key>
@@ -15,6 +15,12 @@ enabled: true
 # 不预设「到期后改回 api」——免费期结束或冒问题（额度/报错/变慢）时，
 # 直接置 enabled: false 停用即可（灵活，别为它写自动切换的脆弱逻辑）。
 cost_tier: free
+# 2026-11-17：补运营元数据。此前未声明 limit/period/priority，派生为
+# limit=null、period=second、priority=50（最低档），通用搜索路由里排最后。
+# 官方免费档 10 万次/月，与 anysearch 同属通用网页搜索主力，给 priority 2。
+priority: 2
+limit: 100000
+period: month
 method: POST
 url: https://api.keenable.ai/v1/search
 timeout: 12

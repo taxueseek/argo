@@ -92,7 +92,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `anysearch` | 可直接用 | 免费 | 1000/天 | — | 域 ai_model、域 book_search、域 chinese_general、域 claim_check、域 code_search、域 crypto_search、域 dataset_search、域 dsh_plugin_search、域 earth_science、域 energy_grid、域 english_tech、域 financial_news、域 fund_query、域 futures_market、域 fx_query、域 game_search、域 hackernews_search、域 hk_filings、域 image_search、域 japan_law、域 kor_law、域 law_text、域 legal、域 lifecycle_search、域 local_code、域 local_general、域 macro_data、域 medical、域 meme_slang、域 outbreak_health、域 package_intel、域 prediction_market、域 redskill_search、域 rfc_search、域 sec_filings、域 security_search、域 semantic_discovery、域 shopping、域 skill_search、域 soil_agri、域 sports_search、域 stackoverflow_search、域 stock_query、域 ths_hot_search、域 trade_stats、域 transport_rt、域 us_fundamentals、域 us_legal、域 us_stock、域 v2ex_search、域 vehicle_data、域 video、域 wechat_search、域 wenshu_query、域 world_news、域 zhihu_content、深度研究 boost、语义画像命中、通用兜底链 | 通用搜索主力，进程内 JSON-RPC（HttpClient），零 token |
 | `exa` | 可直接用 | 按调用计费 | 1000/月 | — | 域 english_tech、域 semantic_discovery、域 us_stock、深度研究 boost | Exa 语义搜索（embedding 匹配 + 内容摘要，新户 $20 赠金 + 每月 $10 赠金） |
 | `firecrawl` | 可直接用 | 免费 | 1000/月 | — | 域 semantic_discovery、通用兜底链 | Firecrawl 云搜索（search+全文markdown，JS渲染/学术/PDF垂直，keyless 免费层 1000 credits/月） |
-| `keenable_free` | 可直接用 | 免费 | 不限 | — | 通用兜底链 | Keenable 官方免 key 匿名通道（通用网页搜索，无需注册） |
+| `keenable_free` | 可直接用 | 免费 | 不限 | — | 语义画像命中、通用兜底链 | Keenable 官方免 key 匿名通道（通用网页搜索，无需注册） |
 | `lieu` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | webring 专用搜索（只索引加入 webring 的小众站点，HTML 解析） |
 | `local_bing` | 可直接用 | 免费 | 不限 | — | 深度研究 boost、通用兜底链 | Bing本地 |
 | `local_search` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 local_academic、域 local_chinese、域 local_code、域 local_general、域 local_news、域 local_reference、语义画像命中 | Local Search 聚合 |
@@ -105,7 +105,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `shenma` | 可直接用 | 免费 | 不限 | — | 域 chinese_general | 神马搜索（m.sm.cn/s 移动端 HTML 解析），中文通用网页 |
 | `so` | 可直接用 | 免费 | 不限 | — | 域 chinese_general | 360 搜索（so.com/s HTML 解析），中文通用网页 |
 | `sogou_weixin_browser` | 可直接用 | 免费 | 不限 | — | 域 wechat_search | 搜狗微信搜索·浏览器兜底通道（ego-browser 真实会话，HTTP 车道被反爬时保底；中间链会话内解析为微信真实链接） |
-| `tavily_free` | 可直接用 | 免费 | 不限 | — | 通用兜底链 | Tavily 官方免 key 匿名通道（通用网页搜索，无需注册） |
+| `tavily_free` | 可直接用 | 免费 | 不限 | — | 语义画像命中、通用兜底链 | Tavily 官方免 key 匿名通道（通用网页搜索，无需注册） |
 | `uapi` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中、通用兜底链 | UAPI 聚合搜索 |
 | `wechat_sogou` | 可直接用 | 免费 | 不限 | — | 域 chinese_general、域 wechat_search | 搜狗微信搜索引擎（公众号文章，免登录，中间链自动解析为微信真实链接可引用；fast 跳过解析） |
 | `wiby` | 可直接用 | 免费 | 不限 | — | 域 semantic_discovery、语义画像命中 | Wiby 老式手工网页索引（专收非商业化页面，JSON 免认证） |
@@ -117,7 +117,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `ecosia` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Ecosia（ecosia.org HTML 解析），环保隐私取向通用网页 |
 | `felo` | 需自备密钥 + 显式专用 | 付费 | 不限 | ARGO_FELO_API_KEY | 语义画像命中 | Felo AI 搜索 API（需自备 API key，显式指定 --engine felo 时生效） |
 | `fourget` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_FOURGET_URL | 显式调用（--engine） | 4get 极简无状态隐私元搜索引擎（支持自建节点，替代重型 SearXNG） |
-| `keenable` | 需自备密钥 | 免费 | 不限 | ARGO_KEENABLE_API_KEY | 域 english_tech | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
+| `keenable` | 需自备密钥 | 免费 | 100000/月 | ARGO_KEENABLE_API_KEY | 域 english_tech、语义画像命中 | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `local_baidu` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 百度本地 |
 | `local_yandex` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Yandex 本地通道（local-search 实测最稳后端，多语言兜底） |
 | `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |

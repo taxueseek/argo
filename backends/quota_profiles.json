@@ -1303,12 +1303,12 @@
   "keenable": {
     "label": "Keenable",
     "qps": 2,
-    "limit": null,
-    "period": "second",
+    "limit": 100000,
+    "period": "month",
     "cost_per_call": 0.0,
     "cost_unit": "free",
     "cost_tier": "free",
-    "priority": 50
+    "priority": 2
   },
   "keenable_free": {
     "label": "Keenable (keyless)",
