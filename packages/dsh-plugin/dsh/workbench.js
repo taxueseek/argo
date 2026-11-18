@@ -219,7 +219,7 @@ function buildEvidenceContext(cards, maxChars = 14000) {
   return lines.join('\n\n')
 }
 
-function buildFallbackSummary(query, mode, cards) {
+function buildFallbackSummary(query, mode, cards, failure = null) {
   const label = MODE_LABELS[mode] || '全网综合'
   if (cards.length === 0) {
     return `### 未检索到相关结果\n\n针对「${query}」在 **${label}** 模式下未命中有效网页结果，建议精简关键词或点击右上角「强制刷新」重试。`
@@ -228,7 +228,11 @@ function buildFallbackSummary(query, mode, cards) {
     const text = (c.verifiedText || c.snippet || '').slice(0, 180).replace(/\n+/g, ' ')
     return `- **${c.title}** [${c.index}]（${c.domain || c.source}）\n  ${text || '点击右侧卡片查看原文'}`
   })
-  return `### ${label} · 聚合检索结果（零模型直出模式）\n\n当前宿主未配置可用默认模型，已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：\n\n${rows.join('\n\n')}`
+  const hasRealFailure = failure && failure.reason && failure.reason !== 'no_model'
+  const header = hasRealFailure
+    ? `### ${label} · 聚合检索结果（模型调用未完成，已切回直出视图）\n\n默认模型（\`${failure.model || 'unknown'}\`）暂不可用：${failure.message || failure.reason}。已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：`
+    : `### ${label} · 聚合检索结果（零模型直出模式）\n\n当前宿主未配置可用默认模型，已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：`
+  return `${header}\n\n${rows.join('\n\n')}`
 }
 
 async function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, signal = null } = {}) {
@@ -446,14 +450,27 @@ async function streamLlmAnswer(ctx, { system, messages, maxTokens, signal, onDel
   let usage = null
   let finish = null
   try {
-    const stream = llm.stream({
-      provider: selection.provider,
-      model: selection.model,
-      maxTokens,
-      signal,
-      system,
-      messages,
-    })
+    let stream
+    if (typeof llm.prepareCall === 'function') {
+      const call = await llm.prepareCall(
+        { provider: selection.provider, model: selection.model, maxTokens },
+        signal,
+        (controls, model) => {
+          const effort = model?.reasoning?.efforts?.[0]?.id
+          return { ...controls, ...(effort === undefined ? {} : { reasoningEffort: effort }) }
+        },
+      )
+      stream = call.stream({ ...call.config, signal, system, messages })
+    } else {
+      stream = llm.stream({
+        provider: selection.provider,
+        model: selection.model,
+        maxTokens,
+        signal,
+        system,
+        messages,
+      })
+    }
     for await (const chunk of stream) {
       if (signal?.aborted) break
       if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') {
@@ -534,11 +551,11 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
             role: 'user',
             content: [{ type: 'text', text: `定时追踪任务：${watch.query}\n\n最新检索证据：\n\n${evidence}\n\n请用简明结构概括最新动态，并在句末标注 [1]、[2] 引用编号。` }],
           }],
-          maxTokens: 1800,
+          maxTokens: 4096,
           signal: AbortSignal.timeout(35000),
           onDelta: () => {},
         })
-        summary = llmRes.text || buildFallbackSummary(watch.query, watch.mode, cards)
+        summary = llmRes.text || buildFallbackSummary(watch.query, watch.mode, cards, llmRes)
       } else {
         summary = buildFallbackSummary(watch.query, watch.mode, cards)
       }
@@ -795,7 +812,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
           const llmRes = await streamLlmAnswer(ctx, {
             system,
             messages: [{ role: 'user', content: [{ type: 'text', text: userPrompt }] }],
-            maxTokens: mode === 'research' ? 6000 : 3500,
+            maxTokens: mode === 'research' ? 16384 : 8192,
             signal: ac.signal,
             onDelta: (delta) => sendSse(res, 'answer', { delta }),
           })
@@ -808,7 +825,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
                 message: `默认模型（${llmRes.model || 'unknown'}）暂不可用：${llmRes.message || llmRes.reason}，已自动切换为多源聚合直出视图`,
               })
             }
-            finalText = buildFallbackSummary(query, mode, cards)
+            finalText = buildFallbackSummary(query, mode, cards, llmRes)
             sendSse(res, 'answer', { delta: finalText })
           } else if (!llmRes.ok && llmRes.reason !== 'aborted') {
             sendSse(res, 'answer-status', {
@@ -908,13 +925,16 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         const llmRes = await streamLlmAnswer(ctx, {
           system: buildSystemPrompt(mode),
           messages,
-          maxTokens: 2500,
+          maxTokens: 6144,
           signal: ac.signal,
           onDelta: (delta) => sendSse(res, 'answer', { delta }),
         })
 
-        if (!llmRes.ok && llmRes.reason === 'no_model') {
-          sendSse(res, 'answer', { delta: '当前宿主未配置默认模型，无法进行多轮追问推理。' })
+        if (!llmRes.ok && !llmRes.text) {
+          const msg = llmRes.reason === 'no_model'
+            ? '当前宿主未配置默认模型，无法进行多轮追问推理。'
+            : `默认模型（${llmRes.model || 'unknown'}）调用未完成：${llmRes.message || llmRes.reason}`
+          sendSse(res, 'answer', { delta: msg })
         }
         sendSse(res, 'citations', extractCitations(llmRes.text || '', cards))
         sendSse(res, 'done', { ok: llmRes.ok })

@@ -1,17 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import { Readable } from 'node:stream'
 import { createWorkbenchHandler } from '../dsh/workbench.js'
 
 function mockReq(method, url, bodyObj = null) {
-  const req = new EventEmitter()
+  const req = bodyObj !== null ? Readable.from([Buffer.from(JSON.stringify(bodyObj))]) : new EventEmitter()
   req.method = method
   req.url = url
   req.headers = { host: '127.0.0.1:8080' }
-  queueMicrotask(() => {
-    if (bodyObj !== null) req.emit('data', Buffer.from(JSON.stringify(bodyObj)))
-    req.emit('end')
-  })
   return req
 }
 
@@ -23,6 +20,11 @@ function mockRes() {
     writableEnded: false,
     destroyed: false,
     setHeader(k, v) { headers[k.toLowerCase()] = v },
+    writeHead(code, hdrs = {}) {
+      this.statusCode = code
+      for (const [k, v] of Object.entries(hdrs)) headers[k.toLowerCase()] = v
+    },
+    write(data = '') { chunks += String(data); return true },
     end(data = '') {
       chunks += String(data)
       this.writableEnded = true
@@ -38,7 +40,7 @@ test('workbench /argo/api/health exposes local mode, egoSearch and breaker summa
   try {
     const res = mockRes()
     await handler(mockReq('GET', '/argo/api/health'), res)
-    assert.equal(res.statusCode, 200)
+    assert.equal(res.statusCode, 200, res.text())
     const data = res.json()
     assert.equal(data.ok, true)
     assert.ok(Array.isArray(data.modes))
@@ -86,6 +88,47 @@ test('workbench /argo/api/suggestions adapts to mode and DSH locale', async () =
     assert.equal(en.ok, true)
     assert.equal(en.lang, 'en')
     assert.ok(en.items.some(it => it.tag === 'Mode'))
+  } finally {
+    handler.dispose()
+  }
+})
+
+test('workbench uses prepareCall low reasoningEffort and surfaces real LLM failure instead of no_model', async () => {
+  let capturedEffort
+  const mockCtx = {
+    get(name) {
+      if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'commandcode', model: 'deepseek/deepseek-v4.1-flash' }) }
+      if (name === 'llm') {
+        return {
+          async prepareCall(base, _signal, adjust) {
+            const cfg = adjust(base, { reasoning: { efforts: [{ id: 'low' }, { id: 'high' }] } })
+            capturedEffort = cfg.reasoningEffort
+            return {
+              config: cfg,
+              async *stream() {
+                yield { type: 'finish', reason: { kind: 'error', failure: { message: 'finish_reason=length' } } }
+              },
+            }
+          },
+        }
+      }
+      return undefined
+    },
+  }
+  const handler = createWorkbenchHandler(mockCtx, {}, () => ({}))
+  try {
+    const res = mockRes()
+    await handler(mockReq('POST', '/argo/api/followup', {
+      query: 'test',
+      mode: 'general',
+      question: 'why?',
+      cards: [{ index: 1, title: 'T', url: 'https://example.com', domain: 'example.com', snippet: 'S' }],
+    }), res)
+    assert.equal(res.statusCode, 200, res.text())
+    assert.equal(capturedEffort, 'low')
+    assert.ok(res.text().includes('commandcode/deepseek/deepseek-v4.1-flash'))
+    assert.ok(res.text().includes('finish_reason=length'))
+    assert.ok(!res.text().includes('未配置默认模型'))
   } finally {
     handler.dispose()
   }
