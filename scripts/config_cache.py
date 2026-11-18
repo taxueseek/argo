@@ -139,7 +139,7 @@ def _config_disk_cache_path() -> Path:
     override = os.environ.get(argo_paths.ENV_STATE_DIR, "").strip()
     root = (Path(os.path.expanduser(override)) if override
             else argo_paths.legacy_root())
-    slot = hashlib.sha256(str(_config_path()).encode("utf-8")).hexdigest()[:16]
+    slot = hashlib.sha256(str(_config_path().resolve()).encode("utf-8")).hexdigest()[:16]
     return root / f"config-cache-{slot}.json"
 
 
@@ -367,8 +367,9 @@ def _save_config_disk_cache(st: os.stat_result, scan: tuple[float, int, int, str
     _sweep_orphan_cache_slots(path)
 
 
-# 存活但陈旧 checkout 槽的回收阈值：槽 mtime = 该 checkout 最后一次加载配置。
-_SLOT_STALE_S = 7 * 86400
+# 存活但陈旧 checkout 槽的回收阈值：槽 mtime = 该 checkout 最后一次加载配置（重建仅 16-50ms）。
+_SLOT_STALE_S = 3 * 86400
+_TMP_SLOT_STALE_S = 86400
 
 
 def _sweep_orphan_cache_slots(keep: Path) -> None:
@@ -403,6 +404,15 @@ def _sweep_orphan_cache_slots(keep: Path) -> None:
         keep_cfg = str(((keep_payload.get("key") or {}).get("config_path")) or "").strip()
     except Exception:
         pass
+    def _norm_cfg(raw: str) -> str:
+        if not raw:
+            return ""
+        try:
+            return str(Path(raw).resolve())
+        except OSError:
+            return raw
+
+    keep_cfg = _norm_cfg(keep_cfg)
     for path in siblings:
         if path == keep:
             continue
@@ -412,22 +422,24 @@ def _sweep_orphan_cache_slots(keep: Path) -> None:
         except (OSError, ValueError, AttributeError):
             # 读不动或结构不认识：一律不动。判定不了就不删，是这里的保守选择。
             continue
+        norm_cfg = _norm_cfg(cfg_path)
         if cfg_path and not Path(cfg_path).exists():
             try:
                 path.unlink()
             except OSError:
                 continue
-        elif cfg_path and keep_cfg and cfg_path == keep_cfg:
-            # 同一 checkout 历史指纹槽且已超 2 小时未动：安全回收，防多轮改配置无界泄漏
+        elif norm_cfg and keep_cfg and norm_cfg == keep_cfg:
+            # 同一物理仓库（含 symlink / .. 相对路径）的历史槽且超 2h 未动：安全回收
             try:
                 if (time.time() - path.stat().st_mtime) > 7200:
                     path.unlink()
             except OSError:
                 pass
         elif cfg_path:
-            # 存活但陈旧的 checkout 槽（第三条判据，见 docstring）
+            # 存活但陈旧的 checkout 槽（/tmp 或 ~/tmp 下 24h，其余 3 天）
+            ttl = _TMP_SLOT_STALE_S if ("/tmp/" in cfg_path or "\\tmp\\" in cfg_path) else _SLOT_STALE_S
             try:
-                if (time.time() - path.stat().st_mtime) > _SLOT_STALE_S:
+                if (time.time() - path.stat().st_mtime) > ttl:
                     path.unlink()
             except OSError:
                 pass

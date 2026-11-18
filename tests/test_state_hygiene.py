@@ -203,3 +203,20 @@ def test_sweep_recycles_stale_alive_checkout_slots(tmp_path, monkeypatch):
     config._sweep_orphan_cache_slots(tmp_path / "config-cache-keep.json")
     assert not stale.exists(), "7 天未写的存活 checkout 槽应回收"
     assert fresh.exists(), "新写的槽不能动"
+
+
+def test_sweep_normalizes_symlink_and_relative_same_repo(tmp_path):
+    """同一物理仓库的 symlink / .. 相对路径历史槽超 2h 应被回收。"""
+    repo = tmp_path / "real_repo"
+    (repo / "tests").mkdir(parents=True)
+    cfg = repo / "config.yaml"
+    cfg.write_text("x: 1", encoding="utf-8")
+    keep = tmp_path / "config-cache-keep000000000000.json"
+    rel_slot = tmp_path / "config-cache-rel0000000000000.json"
+    _write_slot(keep, str(cfg))
+    _write_slot(rel_slot, str(repo / "tests" / ".." / "config.yaml"))
+    old = time.time() - 7300
+    os.utime(rel_slot, (old, old))
+    config._sweep_orphan_cache_slots(keep)
+    assert not rel_slot.exists(), "同一物理路径的相对路径旧槽应回收"
+    assert keep.exists()
