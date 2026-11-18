@@ -72,12 +72,12 @@ def run_pipeline_recovery(
 
         dk = engine_domain_extra or {}
 
-        def _fire(eng: str) -> list[dict[str, Any]]:
+        def _fire(eng: str, rq: str = query) -> list[dict[str, Any]]:
             if recovery_engines_set is not None:
                 recovery_engines_set.add(eng)
             try:
                 res = engine_search_fn(
-                    query, eng, n=max_results,
+                    rq, eng, n=max_results,
                     timeout=timeout, depth=depth, mode=mode,
                     since=since_iso, until=until_iso,
                     skip_cache=skip_cache, **dk,
@@ -100,7 +100,7 @@ def run_pipeline_recovery(
 
         def _recovery_executor(rq: str, rengines: list[str]) -> list[dict[str, Any]]:
             if len(rengines) <= 1:
-                return _fire(rengines[0]) if rengines else []
+                return _fire(rengines[0], rq) if rengines else []
             grace = max(0.0, float(primary_grace_s or 0.0))
             wait_s = grace * (len(rengines) - 1) + max(1.0, float(timeout)) + 1.0
 
@@ -108,7 +108,7 @@ def run_pipeline_recovery(
                 return any(isinstance(v, list) and v for _i, v in finished)
 
             finished, _unfinished = run_bounded(
-                rengines, _fire, wait_s, max_workers=3,
+                rengines, lambda eng: _fire(eng, rq), wait_s, max_workers=3,
                 enough=_enough, stagger_s=grace,
             )
             for _item, value in finished:

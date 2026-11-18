@@ -57,6 +57,10 @@ import {
   getRouteHealth,
 } from './diagnostics.js'
 
+import {
+  registerArgoWorkbench,
+} from './workbench.js'
+
 /**
  * Schemastery 是可选依赖：装进 DSH profile 后由宿主依赖树提供，仓内单测
  * 没有 node_modules。导入失败时 Config 保持 undefined，宿主按「无 schema」
@@ -395,6 +399,8 @@ export function apply(ctx, providedConfig = {}) {
       return settings.configure({ auto: false }, ctx.fiber)
     })
   } catch { /* ignore */ }
+
+  registerArgoWorkbench(ctx, config, () => readHostCredentials(ctx))
 
   return { childIds, syncNativeTools }
 }

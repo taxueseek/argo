@@ -1,16 +1,6 @@
-/*
- * @taxueseek/argo-dsh — 浏览器端设置页（无需构建步骤）
- *
- * 由 DSH ModuleLoader 以 lazy-CJS 方式加载：工厂函数里只 require('react')，
- * 其余能力（slots / configForms / remote.credentials / locale）全部由宿主
- * 通过 cordis 服务注入。设置值走 configForms（settings namespace =
- * 'wide-research'），密钥走 credentials 域——两者都不经过插件配置文件，
- * 密钥更不会回显明文。
- *
- * 注册两个位置：
- *   settings.section —— 设置弹窗左侧一级菜单（主入口）
- *   plugins.item     —— 设置 > 插件 页里的卡片（摘要 + 同一面板）
- */
+/* @taxueseek/argo-dsh — 浏览器端设置页与工作台入口（无需构建步骤）
+ * 由 DSH ModuleLoader 以 lazy-CJS 加载，注册 settings.section / plugins.item，
+ * 并在浏览器环境按需挂载 /argo/workbench-client.js 搜索分析工作台。 */
 window.__ModuleLoader__.load({
   id: '@taxueseek/argo-dsh',
   factory: (require) => {
@@ -973,6 +963,17 @@ window.__ModuleLoader__.load({
           for (const off of offs) if (typeof off === 'function') off();
         };
       }), 'argo-dsh: settings page');
+
+      if (typeof window !== 'undefined' && typeof document !== 'undefined' && ctx.slots) {
+        ctx.effect(() => {
+          let disposed = false;
+          let unmount = null;
+          import('/argo/workbench-client.js').then((mod) => {
+            if (!disposed && typeof mod?.mountArgoWorkbench === 'function') unmount = mod.mountArgoWorkbench(ctx, react);
+          }).catch(() => {});
+          return () => { disposed = true; if (typeof unmount === 'function') unmount(); };
+        }, 'argo-dsh: workbench');
+      }
     }
 
     exports.apply = apply;

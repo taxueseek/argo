@@ -10,11 +10,13 @@
     "./dsh": "./dsh/index.js",
     "./specs": "./dsh/specs.js",
     "./client": "./dsh/client.js",
+    "./icon": "./icon.svg",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "dsh",
+    "icon.svg",
     "cordis.patch.yml",
     "README.md"
   ],

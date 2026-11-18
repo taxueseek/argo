@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
+  <defs>
+    <linearGradient id="v2-bg" x1="10" y1="8" x2="118" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FAF6F0"/>
+      <stop offset="100%" stop-color="#EFE7DA"/>
+    </linearGradient>
+    <linearGradient id="v2-red" x1="34" y1="24" x2="94" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#DC2626"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 暖砂纸底座 -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#v2-bg)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="27.25" stroke="#1E293B" stroke-opacity="0.10" stroke-width="1.5"/>
+
+  <!-- 平面构成：深炭黑圆环 + 赤陶红航帆 -->
+  <circle cx="58" cy="58" r="29" stroke="#1E293B" stroke-width="8"/>
+  <path d="M79 79L99 99" stroke="#1E293B" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- 赤陶红立体帆面 -->
+  <path d="M58 34L75 73L58 66L41 73L58 34Z" fill="url(#v2-red)"/>
+</svg>

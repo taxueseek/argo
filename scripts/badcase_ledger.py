@@ -196,6 +196,7 @@ _DETAIL_RULES: tuple[tuple[str, str], ...] = (
 _KIND_CAUSE: dict[str, str] = {
     "recovery": ROOT_CAUSE_RECOVERY,
     "breaker": ROOT_CAUSE_BREAKER,
+    "empty_result": ROOT_CAUSE_PARSE_EMPTY,
 }
 
 
