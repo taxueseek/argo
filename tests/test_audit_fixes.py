@@ -64,13 +64,18 @@ def test_quota_corrupted_state_keeps_old(tmp_path, monkeypatch, capsys):
     assert "保留旧状态" in err or "损坏" in err
 
 
-def test_quota_save_is_atomic(tmp_path, monkeypatch):
+def test_quota_mutate_locked_writes_atomically(tmp_path, monkeypatch):
+    """唯一写入路径 _mutate_locked（file_lock 内重读→改→原子写）落盘即合法 JSON。
+
+    2026-11-19 收口：删除仅测试引用的 _save_state（无锁读改写+30s 节流，
+    留着只会被未来调用方误用、复刻 017b01a 修掉的跨进程丢更新）。本用例
+    从直调 _save_state 迁移到生产唯一路径 _mutate_locked。
+    """
     import quota as quota_mod
     monkeypatch.setattr(quota_mod, "QUOTA_STATE_DIR", tmp_path)
     monkeypatch.setattr(quota_mod, "QUOTA_STATE_PATH", tmp_path / "quota.json")
     qm = quota_mod.QuotaManager()
-    qm._state = {"a": {"used": 1}}
-    qm._save_state()
+    qm._mutate_locked(lambda: qm._state.update({"a": {"used": 1}}))
     assert (tmp_path / "quota.json").exists()
     assert json.loads((tmp_path / "quota.json").read_text())["a"]["used"] == 1
 

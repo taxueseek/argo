@@ -28,7 +28,6 @@ def _fresh_manager() -> QuotaManager:
     """不写入文件的 QuotaManager（隔离真实 quota.json 状态与热读监视器）。"""
     mgr = QuotaManager()
     mgr._state = {}
-    mgr._save_state = lambda: None
     mgr._profiles_hot = None  # 屏蔽热读：真实 quota.json 不得污染测试态
     mgr._state_hot = None
     return mgr

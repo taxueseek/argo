@@ -223,8 +223,6 @@ class QuotaManager:
         self._lock = threading.RLock()
         self._profiles: dict = {}
         self._state: dict = {}
-        self._last_save_ts: float = 0.0  # 写盘节流时间戳
-        self._last_save_interval: float = 30.0  # 写盘节流间隔（秒）
         self._load_profiles()
         self._load_state()
         # 热读监视器（跨进程）：其他进程（CLI/另一客户端 server）改写
@@ -325,30 +323,6 @@ class QuotaManager:
                 print(f"[quota] 状态文件损坏，保留旧状态: {_state_path()}",
                       file=sys.stderr)
 
-    def _save_state(self, force: bool = False) -> None:
-        """原子写状态（临时文件名进程内唯一，见 argo_paths.atomic_write_json）。
-
-        ⚠️ 生产写入一律走 _mutate_locked（文件锁内「重读→改→写」）。本方法
-        是**无锁读改写 + 30s 节流**：在锁序列里调用它，节流窗口内的变更会被
-        后写者整体覆盖——复刻 017b01a 在 circuit_breaker 修掉的跨进程丢更新。
-        当前仅测试引用（test_audit_fixes 直调、其余打桩跳写）；接入任何生产
-        路径前必须先包 file_lock 并去掉节流语义。
-
-        旧实现用固定 `quota.json.tmp`：多进程（CLI 与 MCP server 并行、
-        或评测脚本）同时写时互相搬走/删除对方的 tmp，replace 抛
-        FileNotFoundError，且失败方本次计数直接丢失。
-
-        写盘节流（2026-09-27）：identity memory 已有 30s 节流，quota 此前没有。
-        一次 5 引擎搜索触发 5 次 record_many，每次都是全量序列化 + rename。
-        加节流后，30s 内的多次写只落盘最后一次，磁盘 I/O 降 60-80%。
-        状态丢失窗口 30s（进程崩溃时），可接受：配额计数是观测层，不是安全边界。
-        """
-        now = time.time()
-        if not force and (now - self._last_save_ts) < self._last_save_interval:
-            return
-        argo_paths.atomic_write_json(_state_path(), self._state)
-        self._last_save_ts = now
-
     def _mutate_locked(self, mutator) -> None:
         """跨进程安全的「重读 → 改 → 写入文件」序列。
 
@@ -430,7 +404,7 @@ class QuotaManager:
         """周期重置的 load-modify-write，**调用方须已持文件锁**。
 
         get_remaining_ratio / is_available 此前各抄了一份这段逻辑，也各抄了
-        一份「threading.Lock 下改完就 _save_state」的写法——于是周期边界那一刻
+        一份「threading.Lock 下改完就地写盘」的写法——于是周期边界那一刻
         的并发写会互相覆盖整个状态文件。统一走这里：先判是否过期，过期才在
         锁内重读并归零。
         """
@@ -589,7 +563,7 @@ class QuotaManager:
     def _refresh_remote_state_locked(self, engine: str, now: float) -> None:
         """周期边界或换 Key 自愈（调用方须已持锁）。
 
-        走 _mutate_locked 而非就地 _save_state：这是 load-modify-write，
+        走 _mutate_locked 而非锁外就地写盘：这是 load-modify-write，
         只用 threading.Lock 时 CLI 与 MCP 并发会互相覆盖整个状态文件。
         """
         st = self._state.get(engine) or {}

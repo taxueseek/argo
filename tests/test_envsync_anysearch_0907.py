@@ -182,7 +182,9 @@ class TestQuotaProfilesAligned(unittest.TestCase):
             "used": 123, "errors": 0, "calls": [],
             "last_reset": time.time() - 2 * 86400,
         }
-        with patch.object(qm, "_save_state", lambda: None):
+        # 写盘已收敛到 _mutate_locked（2026-11-19 删除 test-only _save_state）：
+        # 这里抑制磁盘写入改为短路 _mutate_locked（mutator 直跑，仅内存态归零）
+        with patch.object(qm, "_mutate_locked", lambda mutator: mutator()):
             ratio = qm.get_remaining_ratio("_test_null_eng")
         try:
             self.assertEqual(ratio, 1.0)
