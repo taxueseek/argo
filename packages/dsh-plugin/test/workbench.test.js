@@ -93,22 +93,16 @@ test('workbench /argo/api/suggestions adapts to mode and DSH locale', async () =
   }
 })
 
-test('workbench uses prepareCall low reasoningEffort and surfaces real LLM failure instead of no_model', async () => {
-  let capturedEffort
+test('workbench uses host default model without overriding maxTokens and surfaces real LLM failure', async () => {
+  let capturedOpts
   const mockCtx = {
     get(name) {
       if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'commandcode', model: 'deepseek/deepseek-v4.1-flash' }) }
       if (name === 'llm') {
         return {
-          async prepareCall(base, _signal, adjust) {
-            const cfg = adjust(base, { reasoning: { efforts: [{ id: 'low' }, { id: 'high' }] } })
-            capturedEffort = cfg.reasoningEffort
-            return {
-              config: cfg,
-              async *stream() {
-                yield { type: 'finish', reason: { kind: 'error', failure: { message: 'finish_reason=length' } } }
-              },
-            }
+          async *stream(opts) {
+            capturedOpts = opts
+            yield { type: 'finish', reason: { kind: 'error', failure: { message: 'finish_reason=length' } } }
           },
         }
       }
@@ -125,7 +119,10 @@ test('workbench uses prepareCall low reasoningEffort and surfaces real LLM failu
       cards: [{ index: 1, title: 'T', url: 'https://example.com', domain: 'example.com', snippet: 'S' }],
     }), res)
     assert.equal(res.statusCode, 200, res.text())
-    assert.equal(capturedEffort, 'low')
+    assert.equal(capturedOpts.provider, 'commandcode')
+    assert.equal(capturedOpts.model, 'deepseek/deepseek-v4.1-flash')
+    assert.equal(capturedOpts.maxTokens, undefined)
+    assert.equal(capturedOpts.reasoningEffort, undefined)
     assert.ok(res.text().includes('commandcode/deepseek/deepseek-v4.1-flash'))
     assert.ok(res.text().includes('finish_reason=length'))
     assert.ok(!res.text().includes('未配置默认模型'))

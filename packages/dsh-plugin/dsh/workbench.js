@@ -431,7 +431,7 @@ async function runEvidenceScoring(query, cards, env, signal) {
   }
 }
 
-async function streamLlmAnswer(ctx, { system, messages, maxTokens, signal, onDelta }) {
+async function streamLlmAnswer(ctx, { system, messages, signal, onDelta }) {
   const llm = ctx.get?.('llm')
   const modelService = ctx.get?.('agentDefaultModel')
   if (!llm || !modelService) return { ok: false, reason: 'no_model' }
@@ -450,27 +450,14 @@ async function streamLlmAnswer(ctx, { system, messages, maxTokens, signal, onDel
   let usage = null
   let finish = null
   try {
-    let stream
-    if (typeof llm.prepareCall === 'function') {
-      const call = await llm.prepareCall(
-        { provider: selection.provider, model: selection.model, maxTokens },
-        signal,
-        (controls, model) => {
-          const effort = model?.reasoning?.efforts?.[0]?.id
-          return { ...controls, ...(effort === undefined ? {} : { reasoningEffort: effort }) }
-        },
-      )
-      stream = call.stream({ ...call.config, signal, system, messages })
-    } else {
-      stream = llm.stream({
-        provider: selection.provider,
-        model: selection.model,
-        maxTokens,
-        signal,
-        system,
-        messages,
-      })
-    }
+    const stream = llm.stream({
+      provider: selection.provider,
+      model: selection.model,
+      ...(selection.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {}),
+      signal,
+      system,
+      messages,
+    })
     for await (const chunk of stream) {
       if (signal?.aborted) break
       if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') {
@@ -551,7 +538,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
             role: 'user',
             content: [{ type: 'text', text: `定时追踪任务：${watch.query}\n\n最新检索证据：\n\n${evidence}\n\n请用简明结构概括最新动态，并在句末标注 [1]、[2] 引用编号。` }],
           }],
-          maxTokens: 4096,
           signal: AbortSignal.timeout(35000),
           onDelta: () => {},
         })
@@ -812,7 +798,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
           const llmRes = await streamLlmAnswer(ctx, {
             system,
             messages: [{ role: 'user', content: [{ type: 'text', text: userPrompt }] }],
-            maxTokens: mode === 'research' ? 16384 : 8192,
             signal: ac.signal,
             onDelta: (delta) => sendSse(res, 'answer', { delta }),
           })
@@ -925,7 +910,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         const llmRes = await streamLlmAnswer(ctx, {
           system: buildSystemPrompt(mode),
           messages,
-          maxTokens: 6144,
           signal: ac.signal,
           onDelta: (delta) => sendSse(res, 'answer', { delta }),
         })
