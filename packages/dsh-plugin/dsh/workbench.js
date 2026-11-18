@@ -35,50 +35,14 @@ const CITATION_RULE = [
 ].join('\n')
 
 const MODE_SPECS = {
-  general: {
-    label: '全网搜索',
-    searchArgs: { max_results: 12, verify: 2, depth: 'balanced' },
-    awaitVerify: false,
-    prompt: '当前模式为「全网搜索」：先用 2 到 3 句话给出直接结论，再用清晰小标题展开关键依据与延伸信息。',
-  },
-  hotspot: {
-    label: '热点分析',
-    searchArgs: { max_results: 14, sort: 'newest', since: '14d', depth: 'balanced', verify: 2 },
-    socialSupplement: true,
-    prompt: '当前模式为「热点分析」：按「一、核心结论与现状」「二、事件脉络」「三、核心争议与各方立场」「四、影响与后续关注点」组织输出。',
-  },
-  verify: {
-    label: '真假核验',
-    searchArgs: { max_results: 12, verify: 5, depth: 'deep', mode: 'deep' },
-    prompt: '当前模式为「真假核验」：按「一、核验结论（明确给出可信度判断：可信 / 存疑 / 失实 / 证据不足）」「二、关键证据链（优先引用已核验正文）」「三、冲突点与核验边界」组织输出。',
-  },
-  research: {
-    label: '深度研究',
-    searchArgs: { max_results: 16, verify: 5, depth: 'deep', mode: 'deep' },
-    prompt: '当前模式为「深度研究」：按「一、执行摘要」「二、多维拆解与关键发现」「三、数据与案例支撑」「四、风险、局限与待验证项」组织详尽研究报告。',
-  },
-  compare: {
-    label: '选型对比',
-    searchArgs: { max_results: 14, verify: 3, depth: 'balanced' },
-    prompt: '当前模式为「选型对比」：按「一、选型结论与推荐」「二、核心维度对比表（Markdown 表格）」「三、各自优缺点与适用人群」「四、替代方案与踩坑提示」组织输出。',
-  },
-  academic: {
-    label: '学术文献',
-    searchArgs: { max_results: 14, domain: 'academic', depth: 'deep', mode: 'deep', verify: 3 },
-    prompt: '当前模式为「学术文献」：按「一、核心研究结论与共识」「二、代表性论文与方法拆解」「三、实验证据与关键数据」「四、局限性与延伸方向」组织输出。',
-  },
-  plugin: {
-    label: '插件评测',
-    searchArgs: { max_results: 14, domain: 'dsh_plugin_search', verify: 3, depth: 'balanced' },
-    socialSupplement: true,
-    prompt: '当前模式为「插件评测」：按「一、是否值得安装（结论）」「二、核心能力与亮点」「三、社区真实反馈与局限」「四、替代方案与安装配置注意」组织输出。',
-  },
-  local: {
-    label: '本机检索',
-    searchArgs: { max_results: 16 },
-    awaitVerify: false,
-    prompt: '当前模式为「本机检索」：基于本机文件与代码命中证据回答，标明文件路径、行号与上下文关联，禁止编造未命中的本地文件。',
-  },
+  general: { label: '全网搜索', searchArgs: { max_results: 12, verify: 2, depth: 'balanced' }, prompt: '当前模式为「全网搜索」：先用 2 到 3 句话给出直接结论，再用清晰小标题展开关键依据与延伸信息。' },
+  hotspot: { label: '热点分析', searchArgs: { max_results: 14, sort: 'newest', since: '14d', depth: 'balanced', verify: 2 }, socialSupplement: true, prompt: '当前模式为「热点分析」：按「一、核心结论与现状」「二、事件脉络」「三、核心争议与各方立场」「四、影响与后续关注点」组织输出。' },
+  verify: { label: '真假核验', searchArgs: { max_results: 12, verify: 5, depth: 'deep', mode: 'deep' }, prompt: '当前模式为「真假核验」：按「一、核验结论（明确给出可信度判断：可信 / 存疑 / 失实 / 证据不足）」「二、关键证据链（优先引用已核验正文）」「三、冲突点与核验边界」组织输出。' },
+  research: { label: '深度研究', searchArgs: { max_results: 16, verify: 5, depth: 'deep', mode: 'deep' }, prompt: '当前模式为「深度研究」：按「一、执行摘要」「二、多维拆解与关键发现」「三、数据与案例支撑」「四、风险、局限与待验证项」组织详尽研究报告。' },
+  compare: { label: '选型对比', searchArgs: { max_results: 14, verify: 3, depth: 'balanced' }, prompt: '当前模式为「选型对比」：按「一、选型结论与推荐」「二、核心维度对比表（Markdown 表格）」「三、各自优缺点与适用人群」「四、替代方案与踩坑提示」组织输出。' },
+  academic: { label: '学术文献', searchArgs: { max_results: 14, domain: 'academic', depth: 'deep', mode: 'deep', verify: 3 }, prompt: '当前模式为「学术文献」：按「一、核心研究结论与共识」「二、代表性论文与方法拆解」「三、实验证据与关键数据」「四、局限性与延伸方向」组织输出。' },
+  plugin: { label: '插件评测', searchArgs: { max_results: 14, domain: 'dsh_plugin_search', verify: 3, depth: 'balanced' }, socialSupplement: true, prompt: '当前模式为「插件评测」：按「一、是否值得安装（结论）」「二、核心能力与亮点」「三、社区真实反馈与局限」「四、替代方案与安装配置注意」组织输出。' },
+  local: { label: '本机检索', searchArgs: { max_results: 16 }, prompt: '当前模式为「本机检索」：基于本机文件与代码命中证据回答，标明文件路径、行号与上下文关联，禁止编造未命中的本地文件。' },
 }
 
 const MODES = new Set(Object.keys(MODE_SPECS))
@@ -268,10 +232,13 @@ function buildFallbackSummary(query, mode, cards) {
 }
 
 async function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, signal = null } = {}) {
+  const extraPath = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')].join(':')
+  const basePath = env.PATH || process.env.PATH || ''
+  const mergedPath = basePath ? `${extraPath}:${basePath}` : extraPath
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(new Error('aborted')); return }
     const child = spawn(ARGO_BIN, args, {
-      env: { ...process.env, ...env },
+      env: { ...process.env, ...env, PATH: mergedPath },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     const out = []
