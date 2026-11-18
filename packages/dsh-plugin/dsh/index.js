@@ -44,7 +44,9 @@ import {
   resetEnvResolver,
   makeNativeTool,
   disposeSharedMcp,
+  searchViaArgoMCP,
   fetchViaArgo,
+  resolveEntry,
   mapArgoToWebResult,
   classifyFetchError,
 } from './runner.js'
@@ -220,6 +222,81 @@ function runEffect(ctx, fn) {
 
 const asString = (value, fallback = '') => typeof value === 'string' ? value.trim() : fallback
 
+const DEEPSEEK_MODEL_ROUTES = new Set(['deepseek-official', 'deepseek-account'])
+
+export function capWebSearchSources(result, maxResults) {
+  if (!result || !Array.isArray(result.sources)) return result
+  if (typeof maxResults !== 'number' || !Number.isFinite(maxResults) || maxResults < 0) return result
+  if (result.sources.length <= maxResults) return result
+  return {
+    ...result,
+    sources: result.sources.slice(0, maxResults),
+    truncated: true,
+  }
+}
+
+function readConfiguredSearchProvider(web) {
+  try {
+    const raw = typeof web?.config?.searchProvider?.get === 'function'
+      ? web.config.searchProvider.get()
+      : web?.config?.searchProvider
+    const configured = typeof raw === 'string' && raw !== '' ? raw : web?.searchProviderEnv
+    return typeof configured === 'string' && configured !== '' ? configured : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * DSH v0.2.2-rc.5 起，未 pin `web.searchProvider` 时宿主默认把 DeepSeek 路由
+ * 交给免费的 `deepseek-official` 服务端搜索，把其他路由写死回落到按次计费的
+ * `deepseek-search-api`。这里在不抢占配置位的前提下按 `llmProvider` 透明分流：
+ * DeepSeek 路由透传宿主原生搜索；其余路由改由 argo 承接，用户显式 pin 时让位。
+ */
+export function installWebSearchRouteDecorator(ctx, web, config, runArgoSearch) {
+  if (!web || typeof web.search !== 'function') return undefined
+
+  const shouldRouteToArgo = (llmProvider) =>
+    config.searchProviderEnabled !== false
+    && readConfiguredSearchProvider(web) === undefined
+    && !DEEPSEEK_MODEL_ROUTES.has(llmProvider)
+
+  const hadOwnSearch = Object.prototype.hasOwnProperty.call(web, 'search')
+  const rawOrigSearch = web.search
+  const wrappedSearch = async (request, signal) => {
+    if (shouldRouteToArgo(request?.llmProvider)) {
+      return capWebSearchSources(await runArgoSearch(request, signal), request?.maxResults)
+    }
+    return rawOrigSearch.call(web, request, signal)
+  }
+  web.search = wrappedSearch
+
+  const hasSearchReady = typeof web.searchReady === 'function'
+  const hadOwnSearchReady = hasSearchReady && Object.prototype.hasOwnProperty.call(web, 'searchReady')
+  const rawOrigSearchReady = hasSearchReady ? web.searchReady : undefined
+  let wrappedSearchReady
+  if (hasSearchReady) {
+    wrappedSearchReady = async (llmProvider) => {
+      if (shouldRouteToArgo(llmProvider)) return true
+      return rawOrigSearchReady.call(web, llmProvider)
+    }
+    web.searchReady = wrappedSearchReady
+  }
+
+  const restore = () => {
+    if (web.search === wrappedSearch) {
+      if (hadOwnSearch) web.search = rawOrigSearch
+      else delete web.search
+    }
+    if (hasSearchReady && web.searchReady === wrappedSearchReady) {
+      if (hadOwnSearchReady) web.searchReady = rawOrigSearchReady
+      else delete web.searchReady
+    }
+  }
+  runEffect(ctx, () => restore)
+  return restore
+}
+
 // 注入执行器的动态环境变量解析逻辑
 setEnvResolver(async (options, config) => {
   return resolveArgoEnv(config, options)
@@ -290,24 +367,26 @@ export function apply(ctx, providedConfig = {}) {
 
   const web = ctx.get?.('web') ?? ctx.web
   if (web && typeof web.registerSearchProvider === 'function') {
+    const runArgoSearch = (request, signal) => {
+      const entry = resolveEntry(config)
+      return searchViaArgoMCP(request.query, request.maxResults, signal, {
+        command: entry.command,
+        args: entry.args,
+        timeoutMs: config.searchTimeoutMs,
+        idleMs: config.searchIdleMs,
+        max: config.searchConcurrency,
+        config,
+        // issue #41：显式带上宿主凭证服务，否则池内连接 envResolver 解析
+        // keyRefs 时 provider 为 undefined，所有需 key 引擎静默 skipped。
+        credentials: hostCredentials,
+      })
+    }
     web.registerSearchProvider({
       id: asString(config.searchProviderId, DEFAULTS.searchProviderId),
       available: () => config.searchProviderEnabled !== false,
-      search: (request, signal) => {
-        const entry = resolveEntry(config)
-        return searchViaArgoMCP(request.query, request.maxResults, signal, {
-          command: entry.command,
-          args: entry.args,
-          timeoutMs: config.searchTimeoutMs,
-          idleMs: config.searchIdleMs,
-          max: config.searchConcurrency,
-          config,
-          // issue #41：显式带上宿主凭证服务，否则池内连接 envResolver 解析
-          // keyRefs 时 provider 为 undefined，所有需 key 引擎静默 skipped。
-          credentials: hostCredentials,
-        })
-      },
+      search: runArgoSearch,
     })
+    installWebSearchRouteDecorator(ctx, web, config, runArgoSearch)
     if (typeof web.registerFetchProvider === 'function') {
       web.registerFetchProvider({
         id: asString(config.fetchProviderId, DEFAULTS.fetchProviderId),

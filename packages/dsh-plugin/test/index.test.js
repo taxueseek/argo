@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../dsh/index.js'
+import { apply, installWebSearchRouteDecorator, capWebSearchSources } from '../dsh/index.js'
 import { buildChildToolFilters, resolveArgoEnv } from '../dsh/specs.js'
 import {
   normalizeTracks,
@@ -1470,5 +1470,154 @@ test('pool: changing argoEnv evicts idle connection with stale configKey', async
   )
   await tool2.execute({ query: 'after-preset' })
   assert.equal(spawnCount(), 2, 'argoEnv 变更后空闲旧连接应被淘汰并按新配置重建')
+})
+
+test('web_search route decorator: DeepSeek routes pass through, other routes use argo, and dispose restores', async () => {
+  const disposers = []
+  const origSearchCalls = []
+  const argoCalls = []
+  let configuredProvider
+
+  const origSearch = async (req) => {
+    origSearchCalls.push(req)
+    return { sources: [{ url: 'https://deepseek.example/1', title: 'DS' }], truncated: false }
+  }
+  const origSearchReady = async (llmProvider) => llmProvider === 'deepseek-official' || llmProvider === 'deepseek-account'
+
+  const web = {
+    config: { searchProvider: { get: () => configuredProvider } },
+    search: origSearch,
+    searchReady: origSearchReady,
+  }
+  const ctx = {
+    effect(fn) {
+      const cleanup = fn()
+      if (typeof cleanup === 'function') disposers.push(cleanup)
+    },
+  }
+  const config = { searchProviderEnabled: true }
+  const runArgo = async (req) => {
+    argoCalls.push(req)
+    return {
+      sources: [
+        { url: 'https://argo.example/1', title: 'A1' },
+        { url: 'https://argo.example/2', title: 'A2' },
+        { url: 'https://argo.example/3', title: 'A3' },
+      ],
+      truncated: false,
+    }
+  }
+
+  installWebSearchRouteDecorator(ctx, web, config, runArgo)
+
+  // 1. DeepSeek 路由透传原生搜索与就绪检查
+  assert.equal(await web.searchReady('deepseek-official'), true)
+  assert.equal(await web.searchReady('deepseek-account'), true)
+  const dsRes = await web.search({ query: 'q1', maxResults: 5, llmProvider: 'deepseek-official' })
+  assert.equal(dsRes.sources[0].title, 'DS')
+  assert.equal(origSearchCalls.length, 1)
+  assert.equal(argoCalls.length, 0)
+
+  // 2. 非 DeepSeek 路由与无模型请求路由到 Argo，并按 maxResults 截断
+  assert.equal(await web.searchReady('anthropic'), true)
+  assert.equal(await web.searchReady(undefined), true)
+  const otherRes = await web.search({ query: 'q2', maxResults: 2, llmProvider: 'anthropic' })
+  assert.equal(otherRes.sources.length, 2)
+  assert.equal(otherRes.truncated, true)
+  assert.equal(argoCalls.length, 1)
+  assert.equal(origSearchCalls.length, 1)
+
+  // 3. 显式 pin 了 searchProvider 时让位给宿主
+  configuredProvider = 'deepseek-search-api'
+  assert.equal(await web.searchReady('anthropic'), false)
+  await web.search({ query: 'q3', maxResults: 5, llmProvider: 'anthropic' })
+  assert.equal(origSearchCalls.length, 2)
+  assert.equal(argoCalls.length, 1)
+  configuredProvider = undefined
+
+  // 4. searchProviderEnabled=false 时让位给宿主
+  config.searchProviderEnabled = false
+  assert.equal(await web.searchReady('openai'), false)
+  await web.search({ query: 'q4', maxResults: 5, llmProvider: 'openai' })
+  assert.equal(origSearchCalls.length, 3)
+  assert.equal(argoCalls.length, 1)
+
+  // 5. effect 卸载（HMR）应完整还原原始方法
+  for (const cleanup of disposers) cleanup()
+  assert.equal(web.search, origSearch)
+  assert.equal(web.searchReady, origSearchReady)
+})
+
+test('capWebSearchSources truncates only when sources exceed positive maxResults', () => {
+  const sample = { sources: [{ url: '1' }, { url: '2' }, { url: '3' }], truncated: false }
+  assert.equal(capWebSearchSources(sample, undefined), sample)
+  assert.equal(capWebSearchSources(sample, 5), sample)
+  assert.deepEqual(capWebSearchSources(sample, 2), {
+    sources: [{ url: '1' }, { url: '2' }],
+    truncated: true,
+  })
+})
+
+test('apply: wires route-aware web.search decorator end-to-end with searchViaArgoMCP', async () => {
+  const disposers = []
+  const origCalls = []
+  const web = {
+    registerSearchProvider: () => () => {},
+    registerFetchProvider: () => () => {},
+    async search(req) {
+      origCalls.push(req)
+      return { sources: [{ url: 'https://host.example', title: 'Host' }], truncated: false }
+    },
+    async searchReady(llmProvider) {
+      return llmProvider === 'deepseek-official'
+    },
+  }
+  const ctx = {
+    tools: { register: () => () => {}, guard: () => {} },
+    subagents: { getProvider: () => null, list: () => [] },
+    effect(fn) {
+      const cleanup = fn()
+      if (typeof cleanup === 'function') disposers.push(cleanup)
+    },
+    get: (svc) => svc === 'web' ? web : null,
+  }
+  const jsonMcpScript = `
+    let buf = ''
+    process.stdin.on('data', (c) => {
+      buf += c.toString()
+      const lines = buf.split('\\n')
+      buf = lines.pop()
+      for (const line of lines) {
+        if (!line.trim()) continue
+        const msg = JSON.parse(line)
+        if (msg.method === 'initialize') {
+          process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: '2024-11-05', capabilities: {} } }) + '\\n')
+        } else if (msg.method === 'tools/call') {
+          const payload = { query: msg.params?.arguments?.query, results: [{ title: 'ArgoHit', url: 'https://argo.example/hit', snippet: 'from argo' }] }
+          process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: JSON.stringify(payload) }] } }) + '\\n')
+        }
+      }
+    })
+  `
+  apply(ctx, {
+    searchCommand: process.execPath,
+    searchArgs: ['-e', jsonMcpScript],
+    searchIdleMs: 200,
+    nativeTools: [],
+  })
+
+  // DeepSeek 路由走宿主
+  const hostRes = await web.search({ query: 'ds', maxResults: 5, llmProvider: 'deepseek-official' })
+  assert.equal(hostRes.sources[0].title, 'Host')
+  assert.equal(origCalls.length, 1)
+
+  // 非 DeepSeek 路由走 Argo MCP 池（验证 searchViaArgoMCP/resolveEntry 导入与调用全链路）
+  assert.equal(await web.searchReady('anthropic'), true)
+  const argoRes = await web.search({ query: 'other', maxResults: 5, llmProvider: 'anthropic' })
+  assert.equal(argoRes.sources[0].title, 'ArgoHit')
+  assert.equal(origCalls.length, 1)
+
+  for (const cleanup of disposers) cleanup()
+  await disposeSharedMcp()
 })
 

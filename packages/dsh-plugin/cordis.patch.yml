@@ -8,7 +8,10 @@
 #   多个可用则 WEB_PROVIDER_AMBIGUOUS 直接报错」。web profile 默认挂着
 #   dsh-web-fetch-http（免 key、永远可用），我们再注册一个 fetch provider
 #   就是两个可用——不 pin 的话 web_fetch 整个挂掉。故启用 fetch seam 的
-#   profile 必须在 web 服务行配 fetchProvider: argo（searchProvider 同理）。
+#   profile 必须在 web 服务行配 fetchProvider: argo。
+#   searchProvider 建议留空：DSH v0.2.2-rc.5 起，未 pin 时 DeepSeek 路由
+#   自动走免费的 deepseek-official 服务端搜索，其余路由由本插件路由装饰器
+#   自动转交 argo（替代按次收费的 deepseek-search-api）。
 #
 # MCP 形态（mcp-argo，19 个 mcp__argo__* 完整工具面）默认不挂载：
 # 工具定义每轮注入上下文且压缩清不掉（实测 19 工具 ≈3.7K token/轮），而搜索 /
