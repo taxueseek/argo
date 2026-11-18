@@ -6,17 +6,18 @@
  * 搜索分析工作台（5 种专题模式 + 左答右证 SSE + 原文核验 + 多轮追问）。
  */
 
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEFAULTS, acquireMcp, resolveEntry, stripBoundary } from './runner.js'
+import { DEFAULTS, stripBoundary } from './runner.js'
 import { resolveArgoEnv } from './specs.js'
 import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
 import { buildSuggestions } from './workbench-suggestions.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+const ARGO_BIN = join(HERE, '..', '..', '..', 'bin', 'argo')
 const CLIENT_FILE = join(HERE, 'workbench-client.js')
 const MD_FILE = join(HERE, 'workbench-md.js')
 const WATCH_STORE_FILE = join(homedir(), '.config', 'argo', 'workbench-watches.json')
@@ -42,38 +43,34 @@ const MODE_SPECS = {
   },
   hotspot: {
     label: '热点分析',
-    searchArgs: { max_results: 14, sort: 'newest', since: '14d', depth: 'balanced' },
-    awaitVerify: false,
+    searchArgs: { max_results: 14, sort: 'newest', since: '14d', depth: 'balanced', verify: 2 },
+    socialSupplement: true,
     prompt: '当前模式为「热点分析」：按「一、核心结论与现状」「二、事件脉络」「三、核心争议与各方立场」「四、影响与后续关注点」组织输出。',
   },
   verify: {
     label: '真假核验',
-    searchArgs: { max_results: 12, verify: 5, depth: 'deep' },
-    awaitVerify: true,
+    searchArgs: { max_results: 12, verify: 5, depth: 'deep', mode: 'deep' },
     prompt: '当前模式为「真假核验」：按「一、核验结论（明确给出可信度判断：可信 / 存疑 / 失实 / 证据不足）」「二、关键证据链（优先引用已核验正文）」「三、冲突点与核验边界」组织输出。',
   },
   research: {
     label: '深度研究',
-    searchArgs: { max_results: 16, verify: 5, depth: 'deep' },
-    awaitVerify: true,
+    searchArgs: { max_results: 16, verify: 5, depth: 'deep', mode: 'deep' },
     prompt: '当前模式为「深度研究」：按「一、执行摘要」「二、多维拆解与关键发现」「三、数据与案例支撑」「四、风险、局限与待验证项」组织详尽研究报告。',
   },
   compare: {
     label: '选型对比',
     searchArgs: { max_results: 14, verify: 3, depth: 'balanced' },
-    awaitVerify: true,
     prompt: '当前模式为「选型对比」：按「一、选型结论与推荐」「二、核心维度对比表（Markdown 表格）」「三、各自优缺点与适用人群」「四、替代方案与踩坑提示」组织输出。',
   },
   academic: {
     label: '学术文献',
-    searchArgs: { max_results: 14, domain: 'academic', depth: 'deep', verify: 3 },
-    awaitVerify: false,
+    searchArgs: { max_results: 14, domain: 'academic', depth: 'deep', mode: 'deep', verify: 3 },
     prompt: '当前模式为「学术文献」：按「一、核心研究结论与共识」「二、代表性论文与方法拆解」「三、实验证据与关键数据」「四、局限性与延伸方向」组织输出。',
   },
   plugin: {
     label: '插件评测',
     searchArgs: { max_results: 14, domain: 'dsh_plugin_search', verify: 3, depth: 'balanced' },
-    awaitVerify: true,
+    socialSupplement: true,
     prompt: '当前模式为「插件评测」：按「一、是否值得安装（结论）」「二、核心能力与亮点」「三、社区真实反馈与局限」「四、替代方案与安装配置注意」组织输出。',
   },
   local: {
@@ -165,13 +162,6 @@ function normalizeCandidates(payload) {
     if (cards.length >= 16) break
   }
   return cards
-}
-
-function buildSearchArgs(query, mode, overrideDomain) {
-  const spec = MODE_SPECS[mode] || MODE_SPECS.general
-  const args = { query, summary: false, ...spec.searchArgs }
-  if (overrideDomain) args.domain = overrideDomain
-  return args
 }
 
 function buildSystemPrompt(mode) {
@@ -277,56 +267,99 @@ function buildFallbackSummary(query, mode, cards) {
   return `### ${label} · 聚合检索结果（零模型直出模式）\n\n当前宿主未配置可用默认模型，已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：\n\n${rows.join('\n\n')}`
 }
 
-async function runMcpTool(config, credentials, toolName, args, timeoutMs, signal, normalizer = normalizeCandidates) {
-  const entry = resolveEntry(config)
-  const conn = await acquireMcp({
-    command: entry.command,
-    args: entry.args,
-    idleMs: config.searchIdleMs ?? DEFAULTS.searchIdleMs,
-    max: config.searchConcurrency ?? DEFAULTS.searchConcurrency,
-    initMs: config.searchTimeoutMs ?? DEFAULTS.searchTimeoutMs,
-    credentials,
-    config,
-  }, signal)
-  try {
-    const result = await conn.request('tools/call', {
-      name: toolName,
-      arguments: args,
+async function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, signal = null } = {}) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) { reject(new Error('aborted')); return }
+    const child = spawn(ARGO_BIN, args, {
+      env: { ...process.env, ...env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const out = []
+    const err = []
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      reject(new Error(`argo ${args[0] || ''} timeout (${timeoutMs}ms)`))
     }, timeoutMs)
-    const rawText = result?.content?.[0]?.text
-    const payload = typeof rawText === 'string' ? JSON.parse(rawText) : {}
-    return { payload, cards: normalizer(payload) }
-  } finally {
-    conn.release?.()
-  }
+    const onAbort = () => {
+      clearTimeout(timer)
+      child.kill('SIGTERM')
+      reject(new Error('aborted'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    child.stdout.on('data', d => out.push(d))
+    child.stderr.on('data', d => err.push(d))
+    child.on('error', (e) => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      reject(e)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      const text = Buffer.concat(out).toString('utf8').trim()
+      if (code !== 0 && !text) {
+        reject(new Error(Buffer.concat(err).toString('utf8').trim() || `argo exit ${code}`))
+        return
+      }
+      try {
+        resolve(JSON.parse(text || '{}'))
+      } catch {
+        reject(new Error(`invalid json from argo ${args[0] || ''}`))
+      }
+    })
+    if (stdin !== null && stdin !== undefined) {
+      child.stdin.end(typeof stdin === 'string' ? stdin : JSON.stringify(stdin))
+    } else {
+      child.stdin.end()
+    }
+  })
 }
 
-async function callLocalSeek(config, credentials, query, maxResults = 16, signal) {
+function buildSearchCliArgs(query, mode, refresh = false, overrides = {}) {
+  const spec = MODE_SPECS[mode] || MODE_SPECS.general
+  const merged = { ...spec.searchArgs, ...overrides }
+  const args = ['search', query, '--json', '--envelope']
+  if (merged.max_results) args.push('-n', String(merged.max_results))
+  if (merged.depth) args.push('--depth', String(merged.depth))
+  if (merged.mode) args.push('--mode', String(merged.mode))
+  if (merged.domain) args.push('--domain', String(merged.domain))
+  if (merged.since) args.push('--since', String(merged.since))
+  if (merged.sort) args.push('--sort', String(merged.sort))
+  if (merged.verify) args.push('--verify', String(merged.verify))
+  if (refresh) args.push('--no-cache')
+  return args
+}
+
+function mergeDedupCards(lists, maxCards = 16) {
+  const seen = new Set()
+  const merged = []
+  for (const list of lists) {
+    for (const card of list || []) {
+      if (!card?.url || seen.has(card.url)) continue
+      seen.add(card.url)
+      merged.push({ ...card, id: `c${merged.length + 1}`, index: merged.length + 1 })
+      if (merged.length >= maxCards) return merged
+    }
+  }
+  return merged
+}
+
+async function callLocalSeek(config, env, query, maxResults = 16, signal) {
   const searchPath = config?.localSearchPath || process.env.ARGO_LOCAL_SEARCH_PATH || join(homedir(), 'Documents')
   try {
-    return await runMcpTool(
-      config,
-      credentials,
-      'argo_local_search',
-      { query, path: searchPath, max_results: Math.min(20, Math.max(1, maxResults)) },
-      15000,
-      signal,
-      normalizeLocalCards,
+    const payload = await runArgoCli(
+      ['seek', query, '--path', searchPath, '--json', '--max', String(Math.min(20, Math.max(1, maxResults)))],
+      { env, timeoutMs: 15000, signal },
     )
+    return { payload, cards: normalizeLocalCards(payload) }
   } catch (err) {
     return { payload: { errors: [String(err?.message ?? err)] }, cards: [] }
   }
 }
 
-async function runMcpSearch(config, credentials, args, timeoutMs, signal) {
-  return runMcpTool(config, credentials, 'argo_search', args, timeoutMs, signal, normalizeCandidates)
-}
-
-async function callArgoSearch(config, credentials, query, mode, refresh, signal, tracks = null) {
-  const extraEnv = refresh ? { ARGO_NO_CACHE: '1' } : undefined
+async function callArgoSearch(config, env, query, mode, refresh, signal, tracks = null) {
   if (mode === 'local') {
-    const res = await callLocalSeek(config, credentials, query, MODE_SPECS.local.searchArgs.max_results, signal)
-    return { ...res, extraEnv }
+    return callLocalSeek(config, env, query, MODE_SPECS.local.searchArgs.max_results, signal)
   }
 
   const timeoutMs = mode === 'research'
@@ -335,78 +368,95 @@ async function callArgoSearch(config, credentials, query, mode, refresh, signal,
 
   if (mode === 'research' && Array.isArray(tracks) && tracks.length > 1) {
     const trackRuns = await boundedMap(tracks, 3, async (track) => {
-      const args = buildSearchArgs(track.question || query, 'research')
-      args.max_results = 10
-      if (refresh) args.no_cache = true
-      return runMcpSearch(config, credentials, args, timeoutMs, signal).catch(() => ({ payload: {}, cards: [] }))
+      const cliArgs = buildSearchCliArgs(track.question || query, 'research', refresh, { max_results: 10, verify: 3 })
+      const payload = await runArgoCli(cliArgs, { env, timeoutMs, signal }).catch(() => ({}))
+      return { payload, cards: normalizeCandidates(payload) }
     })
-    const seen = new Set()
-    const merged = []
-    for (const run of trackRuns) {
-      for (const card of run.cards || []) {
-        if (seen.has(card.url)) continue
-        seen.add(card.url)
-        merged.push({ ...card, id: `c${merged.length + 1}`, index: merged.length + 1 })
-        if (merged.length >= 16) break
-      }
-      if (merged.length >= 16) break
+    return {
+      payload: trackRuns[0]?.payload || {},
+      cards: mergeDedupCards(trackRuns.map(r => r.cards), 16),
     }
-    return { payload: trackRuns[0]?.payload || {}, cards: merged, extraEnv }
   }
 
-  const args = buildSearchArgs(query, mode)
-  if (refresh) args.no_cache = true
-  const primary = await runMcpSearch(config, credentials, args, timeoutMs, signal)
+  const primaryTask = runArgoCli(buildSearchCliArgs(query, mode, refresh), { env, timeoutMs, signal })
+    .then(payload => ({ payload, cards: normalizeCandidates(payload) }))
 
-  // 插件评测：主域 dsh_plugin_search 命中不足时补发通用评测检索，避免单域冷场或仅出元宝/知乎
-  if (mode === 'plugin' && primary.cards.length < 6) {
-    const fallbackArgs = buildSearchArgs(`${query} 评测 替代`, 'general')
-    if (refresh) fallbackArgs.no_cache = true
-    const extra = await runMcpSearch(config, credentials, fallbackArgs, timeoutMs, signal).catch(() => ({ cards: [] }))
-    const seen = new Set(primary.cards.map(c => c.url))
-    const combined = [...primary.cards]
-    for (const c of extra.cards || []) {
-      if (seen.has(c.url)) continue
-      seen.add(c.url)
-      combined.push({ ...c, id: `c${combined.length + 1}`, index: combined.length + 1 })
-      if (combined.length >= 16) break
-    }
-    return { payload: primary.payload, cards: combined, extraEnv }
+  // 热点分析与插件评测并行补充社区/社交域召回，避免单靠网页引擎错过一手讨论
+  const socialTask = MODE_SPECS[mode]?.socialSupplement
+    ? runArgoCli(buildSearchCliArgs(query, 'general', refresh, { domain: 'social', max_results: 6, verify: 0 }), { env, timeoutMs: Math.min(timeoutMs, 15000), signal })
+        .then(payload => normalizeCandidates(payload))
+        .catch(() => [])
+    : Promise.resolve([])
+
+  const [primary, socialCards] = await Promise.all([primaryTask, socialTask])
+  let combined = mergeDedupCards([primary.cards, socialCards], 16)
+
+  if (mode === 'plugin' && combined.length < 6) {
+    const fallbackPayload = await runArgoCli(
+      buildSearchCliArgs(`${query} 评测 替代`, 'general', refresh, { verify: 2 }),
+      { env, timeoutMs, signal },
+    ).catch(() => ({}))
+    combined = mergeDedupCards([combined, normalizeCandidates(fallbackPayload)], 16)
   }
 
-  return { ...primary, extraEnv }
+  return { payload: primary.payload, cards: combined }
 }
 
-async function verifyCardWithFetch(config, credentials, card, signal) {
-  const entry = resolveEntry(config)
-  const conn = await acquireMcp({
-    command: entry.command,
-    args: entry.args,
-    idleMs: config.searchIdleMs ?? DEFAULTS.searchIdleMs,
-    max: config.searchConcurrency ?? DEFAULTS.searchConcurrency,
-    initMs: config.fetchTimeoutMs ?? DEFAULTS.fetchTimeoutMs,
-    credentials,
-    config,
-  }, signal)
-
+async function runClarifyIfShort(query, mode, env, signal) {
+  if (mode === 'local' || query.length > 18) return null
   try {
-    const result = await conn.request('tools/call', {
-      name: 'argo_fetch',
-      arguments: { url: card.url, max_chars: 2500 },
-    }, Math.min(config.fetchTimeoutMs ?? 30000, 20000))
-    const rawText = result?.content?.[0]?.text
-    const payload = typeof rawText === 'string' ? JSON.parse(rawText) : {}
-    const excerpt = stripBoundary(payload?.content || payload?.text || payload?.markdown || '')
-    if (!excerpt || excerpt.length < 40) return null
+    const data = await runArgoCli(['clarify', query, '--json'], { env, timeoutMs: 3000, signal })
+    if (!data || (!data.ambiguities?.length && !data.routing?.explanation)) return null
     return {
-      ...card,
-      verified: true,
-      verifiedText: excerpt.slice(0, 700),
+      ambiguities: data.ambiguities || [],
+      explanation: data.routing?.explanation || '',
+      recommendedStrategy: data.recommended_strategy || '',
     }
   } catch {
     return null
-  } finally {
-    conn.release?.()
+  }
+}
+
+async function runEvidenceScoring(query, cards, env, signal) {
+  if (!cards.length) return { cards, evidenceSummary: null }
+  try {
+    const payload = await runArgoCli(
+      ['evidence', query],
+      {
+        env,
+        stdin: {
+          results: cards.map(c => ({
+            title: c.title,
+            url: c.url,
+            source: c.source,
+            snippet: c.verifiedText || c.snippet,
+            published_at: c.publishedAt,
+          })),
+        },
+        timeoutMs: 5000,
+        signal,
+      },
+    )
+    const scored = Array.isArray(payload?.results) ? payload.results : []
+    const enriched = cards.map((c, idx) => {
+      const ev = scored[idx]?.credibility
+      if (!ev) return c
+      return {
+        ...c,
+        credibility: typeof ev.final === 'number' ? ev.final : c.credibility,
+        authorityTier: ev.authority?.tier || null,
+        authorityReason: ev.authority?.reason || '',
+      }
+    })
+    return {
+      cards: enriched,
+      evidenceSummary: {
+        crossValidation: payload?.cross_validation || null,
+        summary: payload?.summary || null,
+      },
+    }
+  } catch {
+    return { cards, evidenceSummary: null }
   }
 }
 
@@ -506,8 +556,8 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
     const started = Date.now()
     const credentials = typeof getCredentials === 'function' ? getCredentials() : undefined
     try {
-      await resolveArgoEnv(config, { credentials }).catch(() => ({}))
-      const { cards } = await callArgoSearch(config, credentials, watch.query, watch.mode, true, AbortSignal.timeout(45000))
+      const env = await resolveArgoEnv(config, { credentials }).catch(() => ({}))
+      const { cards } = await callArgoSearch(config, env, watch.query, watch.mode, true, AbortSignal.timeout(45000))
       let summary = ''
       if (cards.length > 0) {
         const evidence = buildEvidenceContext(cards, 9000)
@@ -725,6 +775,10 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
               : (mode === 'local' ? ['本机 FTS/rg 索引检索'] : ['智能路由检索', '证据梳理与引用']),
           })
 
+          const credentials = typeof getCredentials === 'function' ? getCredentials() : undefined
+          const env = await resolveArgoEnv(config, { credentials }).catch(() => ({}))
+          const clarifyPromise = runClarifyIfShort(query, mode, env, ac.signal)
+
           let cards
           let payload
           let cached = !refresh ? getCached(cacheKey) : null
@@ -734,10 +788,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
           } else {
             let pending = !refresh ? inflight.get(cacheKey) : null
             if (!pending) {
-              const credentials = typeof getCredentials === 'function' ? getCredentials() : undefined
-              // 同步一次环境变量，避免池化前首次调用缺省环境
-              await resolveArgoEnv(config, { credentials }).catch(() => ({}))
-              pending = callArgoSearch(config, credentials, query, mode, refresh, ac.signal, researchTracks)
+              pending = callArgoSearch(config, env, query, mode, refresh, ac.signal, researchTracks)
                 .finally(() => inflight.delete(cacheKey))
               if (!refresh) inflight.set(cacheKey, pending)
             }
@@ -749,30 +800,21 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
 
           if (ac.signal.aborted) return
 
+          const clarify = await clarifyPromise
+          if (clarify) sendSse(res, 'clarify', clarify)
+
+          if (mode !== 'local' && cards.length > 0) {
+            sendSse(res, 'status', { stage: 'verifying', message: '正在计算证据可信度与交叉验证…' })
+            const scored = await runEvidenceScoring(query, cards, env, ac.signal)
+            cards = scored.cards
+            if (scored.evidenceSummary) sendSse(res, 'evidence', scored.evidenceSummary)
+          }
+
           sendSse(res, 'cards', {
             cards,
             funnel: payload?.funnel || null,
             engines: [...new Set(cards.map(c => c.source))],
           })
-
-          // 对未核验的 top-3 卡片做原文核验；需等待核验完成再进入合成，确保 LLM 上下文拿到正文摘录且无 SSE 竞态
-          const credentials = typeof getCredentials === 'function' ? getCredentials() : undefined
-          if (MODE_SPECS[mode]?.awaitVerify && cards.length > 0) {
-            const toVerify = cards.filter(c => !c.verified).slice(0, 3)
-            if (toVerify.length > 0) {
-              sendSse(res, 'status', { stage: 'verifying', message: '正在并行核验高优先原文…' })
-              await Promise.allSettled(
-                toVerify.map(async (card) => {
-                  const updated = await verifyCardWithFetch(config, credentials, card, ac.signal)
-                  if (updated && !ac.signal.aborted) {
-                    const idx = cards.findIndex(c => c.id === updated.id)
-                    if (idx >= 0) cards[idx] = updated
-                    sendSse(res, 'verify-update', { card: updated })
-                  }
-                }),
-              )
-            }
-          }
           if (ac.signal.aborted) return
 
           sendSse(res, 'status', { stage: 'synthesizing', message: '正在结合检索证据生成结构化分析…' })

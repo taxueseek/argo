@@ -164,6 +164,8 @@ export function mountArgoWorkbench(ctx, react) {
     const [diagItems, setDiagItems] = useState([])
     const [healthInfo, setHealthInfo] = useState(null)
     const [gateResult, setGateResult] = useState(null)
+    const [clarifyInfo, setClarifyInfo] = useState(null)
+    const [evidenceSummary, setEvidenceSummary] = useState(null)
     const [watches, setWatches] = useState([])
     const [watchQuery, setWatchQuery] = useState('')
     const [watchInterval, setWatchInterval] = useState(1440)
@@ -221,6 +223,8 @@ export function mountArgoWorkbench(ctx, react) {
       setFilter('all')
       setPopover(null)
       setGateResult(null)
+      setClarifyInfo(null)
+      setEvidenceSummary(null)
 
       const url = `/argo/api/stream?q=${encodeURIComponent(q)}&mode=${encodeURIComponent(targetMode)}&refresh=${refresh ? '1' : '0'}`
       const es = new EventSource(url)
@@ -228,6 +232,8 @@ export function mountArgoWorkbench(ctx, react) {
 
       const parse = (ev) => { try { return JSON.parse(ev.data) } catch { return {} } }
       es.addEventListener('status', (ev) => { const d = parse(ev); if (d.message) setStageText(d.message) })
+      es.addEventListener('clarify', (ev) => { const d = parse(ev); if (d && (d.explanation || d.ambiguities?.length)) setClarifyInfo(d) })
+      es.addEventListener('evidence', (ev) => { const d = parse(ev); if (d && (d.crossValidation || d.summary)) setEvidenceSummary(d) })
       es.addEventListener('cards', (ev) => { const d = parse(ev); if (Array.isArray(d.cards)) setCards(d.cards) })
       es.addEventListener('gate', (ev) => { const d = parse(ev); if (typeof d.passed === 'boolean') setGateResult(d) })
       es.addEventListener('verify-update', (ev) => {
@@ -653,11 +659,20 @@ export function mountArgoWorkbench(ctx, react) {
           h('div', { className: 'aw-q-head' },
             h('h2', { className: 'aw-q-title' }, activeQuery),
             h('span', { className: 'aw-badge' }, currentModeObj.label),
+            evidenceSummary?.crossValidation ? h('span', {
+              className: 'aw-badge',
+              title: evidenceSummary.crossValidation.detail || '',
+            }, `交叉验证：${evidenceSummary.crossValidation.corroboration_level || 'unknown'}${evidenceSummary.summary ? ` · 高可信 ${evidenceSummary.summary.high_credibility || 0}` : ''}`) : null,
             gateResult ? h('span', {
               className: 'aw-badge',
               title: (gateResult.warnings || []).join('；'),
               style: { background: gateResult.passed ? 'var(--aw-sunken)' : '#fef2f2', color: gateResult.passed ? 'var(--aw-text-2)' : '#b91c1c' },
             }, gateResult.passed ? '质量门禁通过' : '质量门禁未达标') : null),
+          clarifyInfo ? h('div', { style: { fontSize: '12px', color: 'var(--aw-text-2)', padding: '6px 10px', marginBottom: '10px', borderRadius: '8px', background: 'var(--aw-sunken)' } },
+            clarifyInfo.explanation || '',
+            Array.isArray(clarifyInfo.ambiguities) && clarifyInfo.ambiguities.length > 0
+              ? ` · 歧义提示：${clarifyInfo.ambiguities.slice(0, 2).map(a => a.term || a).join(' / ')}`
+              : '') : null,
           loading || stageText ? h('div', { className: 'aw-progress' },
             loading ? h('span', { className: 'aw-dot' }) : null,
             h('span', null, stageText || '处理中…')) : null,
