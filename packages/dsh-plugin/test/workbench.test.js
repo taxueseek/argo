@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { Readable } from 'node:stream'
-import { createWorkbenchHandler } from '../dsh/workbench.js'
+import { buildSearchCliArgs, createWorkbenchHandler } from '../dsh/workbench.js'
 
 function mockReq(method, url, bodyObj = null) {
   const req = bodyObj !== null ? Readable.from([Buffer.from(JSON.stringify(bodyObj))]) : new EventEmitter()
@@ -19,7 +19,13 @@ function mockRes() {
     statusCode: 200,
     writableEnded: false,
     destroyed: false,
-    setHeader(k, v) { headers[k.toLowerCase()] = v },
+    headersSent: false,
+    // 保真 Node 语义：flushHeaders 后再 setHeader 抛 ERR_HTTP_HEADERS_SENT
+    flushHeaders() { this.headersSent = true },
+    setHeader(k, v) {
+      if (this.headersSent) throw new Error('ERR_HTTP_HEADERS_SENT')
+      headers[k.toLowerCase()] = v
+    },
     writeHead(code, hdrs = {}) {
       this.statusCode = code
       for (const [k, v] of Object.entries(hdrs)) headers[k.toLowerCase()] = v
@@ -129,4 +135,56 @@ test('workbench uses host default model without overriding maxTokens and surface
   } finally {
     handler.dispose()
   }
+})
+
+test('workbench followup tolerates null cards/history entries without hanging the SSE response', async () => {
+  // 2026-11-18 实跑复现：cards:[null] 在 flushHeaders 后于 buildEvidenceContext
+  // 抛 TypeError → catch 落 sendJson → setHeader 二次抛 ERR_HTTP_HEADERS_SENT
+  // → 响应永久悬挂。修复=入口元素过滤 + sendJson 判 headersSent 改发 SSE failure。
+  let capturedMessages
+  const mockCtx = {
+    get(name) {
+      if (name === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'p', model: 'm' }) }
+      if (name === 'llm') {
+        return {
+          async *stream(opts) {
+            capturedMessages = opts.messages
+            yield { type: 'finish', reason: { kind: 'stop' } }
+          },
+        }
+      }
+      return undefined
+    },
+  }
+  const handler = createWorkbenchHandler(mockCtx, {}, () => ({}))
+  try {
+    const res = mockRes()
+    await handler(mockReq('POST', '/argo/api/followup', {
+      query: 'test',
+      mode: 'general',
+      question: 'why?',
+      cards: [null, 'garbage', { index: 1, title: 'T', url: 'https://example.com', domain: 'example.com', snippet: 'S' }],
+      history: [null, { role: 'user', text: 'previous turn' }],
+    }), res)
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.writableEnded, true, '响应必须干净收尾，不得悬挂')
+    assert.ok(res.text().includes('event: done'), `应以 done 事件收尾，实际: ${res.text().slice(-160)}`)
+    // 合法 history 条目应过滤后到达模型（null 条目被剔除、合法条目保留）
+    const flattened = JSON.stringify(capturedMessages)
+    assert.ok(flattened.includes('previous turn'), '合法 history 条目应到达模型')
+    assert.ok(!flattened.includes('null'), 'null 条目不得混入 messages')
+  } finally {
+    handler.dispose()
+  }
+})
+
+test('workbench CLI args keep every flag before `--` so dash-leading queries stay literal', () => {
+  const args = buildSearchCliArgs('--list-engines', 'general', true, { verify: 2 })
+  const sep = args.indexOf('--')
+  assert.ok(sep > 0, `必须存在 -- 分隔，实际 ${JSON.stringify(args)}`)
+  assert.equal(args[sep + 1], '--list-engines', 'query 必须紧跟 -- 之后')
+  assert.equal(args[args.length - 1], '--list-engines')
+  assert.ok(args.slice(0, sep).includes('--json'), 'flag 必须全部前置到 -- 之前')
+  assert.ok(args.slice(0, sep).includes('--no-cache'), 'refresh 的 --no-cache 也须前置')
+  assert.ok(!args.slice(0, sep).includes('--list-engines'), 'query 不得混入 flag 区')
 })

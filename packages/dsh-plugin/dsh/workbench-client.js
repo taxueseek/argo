@@ -236,10 +236,6 @@ export function mountArgoWorkbench(ctx, react) {
       es.addEventListener('evidence', (ev) => { const d = parse(ev); if (d && (d.crossValidation || d.summary)) setEvidenceSummary(d) })
       es.addEventListener('cards', (ev) => { const d = parse(ev); if (Array.isArray(d.cards)) setCards(d.cards) })
       es.addEventListener('gate', (ev) => { const d = parse(ev); if (typeof d.passed === 'boolean') setGateResult(d) })
-      es.addEventListener('verify-update', (ev) => {
-        const d = parse(ev)
-        if (d.card) setCards(prev => prev.map(c => c.id === d.card.id ? d.card : c))
-      })
       es.addEventListener('answer', (ev) => {
         const d = parse(ev)
         if (!d.delta) return
@@ -335,7 +331,7 @@ export function mountArgoWorkbench(ctx, react) {
         const data = await res.json()
         if (Array.isArray(data.items)) setWatches(data.items)
         setWatchQuery('')
-        setWatchOpen(true)
+        setPopover('watch') // 抽屉可见性由 popover 状态管（此前引用未定义的 setWatchOpen）
       } catch { /* ignore */ }
     }
 
@@ -369,7 +365,7 @@ export function mountArgoWorkbench(ctx, react) {
       setMode(w.mode || 'general')
       setCards(Array.isArray(w.lastCards) ? w.lastCards : [])
       setTurns([{ role: 'assistant', text: w.lastSummary || '该定时任务尚未生成摘要，可点击「立即执行」或「强制刷新」。' }])
-      setWatchOpen(false)
+      setPopover(null)
     }
 
     const scrollToCard = (cardId) => {

@@ -50,6 +50,15 @@ const MODE_LABELS = Object.fromEntries(Object.entries(MODE_SPECS).map(([k, v]) =
 
 function sendJson(res, status, data) {
   if (res.writableEnded) return
+  if (res.headersSent) {
+    // SSE 头已 flush 后再 setHeader 会抛 ERR_HTTP_HEADERS_SENT（2026-11-18
+    // 实跑复现：followup 传 cards:[null] 在 flushHeaders 后抛 TypeError，
+    // 落到这里二次抛 → 响应悬挂 + 异常逃出 async handler）。改发 SSE
+    // failure 事件收尾，让客户端与连接都能干净结束。
+    sendSse(res, 'failure', data)
+    if (!res.writableEnded) res.end()
+    return
+  }
   res.statusCode = status
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.setHeader('Cache-Control', 'no-store')
@@ -205,6 +214,7 @@ function buildEvidenceContext(cards, maxChars = 14000) {
   const lines = []
   let used = 0
   for (const c of cards) {
+    if (!c || typeof c !== 'object') continue
     const body = c.verifiedText || c.snippet || '(无摘要)'
     const block = [
       `[${c.index}] 标题：${c.title}`,
@@ -286,21 +296,6 @@ async function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, sig
   })
 }
 
-function buildSearchCliArgs(query, mode, refresh = false, overrides = {}) {
-  const spec = MODE_SPECS[mode] || MODE_SPECS.general
-  const merged = { ...spec.searchArgs, ...overrides }
-  const args = ['search', query, '--json', '--envelope']
-  if (merged.max_results) args.push('-n', String(merged.max_results))
-  if (merged.depth) args.push('--depth', String(merged.depth))
-  if (merged.mode) args.push('--mode', String(merged.mode))
-  if (merged.domain) args.push('--domain', String(merged.domain))
-  if (merged.since) args.push('--since', String(merged.since))
-  if (merged.sort) args.push('--sort', String(merged.sort))
-  if (merged.verify) args.push('--verify', String(merged.verify))
-  if (refresh) args.push('--no-cache')
-  return args
-}
-
 function mergeDedupCards(lists, maxCards = 16) {
   const seen = new Set()
   const merged = []
@@ -319,7 +314,7 @@ async function callLocalSeek(config, env, query, maxResults = 16, signal) {
   const searchPath = config?.localSearchPath || process.env.ARGO_LOCAL_SEARCH_PATH || join(homedir(), 'Documents')
   try {
     const payload = await runArgoCli(
-      ['seek', query, '--path', searchPath, '--json', '--max', String(Math.min(20, Math.max(1, maxResults)))],
+      ['seek', '--path', searchPath, '--json', '--max', String(Math.min(20, Math.max(1, maxResults))), '--', query],
       { env, timeoutMs: 15000, signal },
     )
     return { payload, cards: normalizeLocalCards(payload) }
@@ -376,7 +371,7 @@ async function callArgoSearch(config, env, query, mode, refresh, signal, tracks 
 async function runClarifyIfShort(query, mode, env, signal) {
   if (mode === 'local' || query.length > 18) return null
   try {
-    const data = await runArgoCli(['clarify', query, '--json'], { env, timeoutMs: 3000, signal })
+    const data = await runArgoCli(['clarify', '--json', '--', query], { env, timeoutMs: 3000, signal })
     if (!data || (!data.ambiguities?.length && !data.routing?.explanation)) return null
     return {
       ambiguities: data.ambiguities || [],
@@ -392,7 +387,7 @@ async function runEvidenceScoring(query, cards, env, signal) {
   if (!cards.length) return { cards, evidenceSummary: null }
   try {
     const payload = await runArgoCli(
-      ['evidence', query],
+      ['evidence', '--', query],
       {
         env,
         stdin: {
@@ -514,6 +509,26 @@ function saveWatches(items) {
     writeFileSync(tmp, JSON.stringify(items, null, 2), 'utf8')
     renameSync(tmp, WATCH_STORE_FILE)
   } catch { /* ignore */ }
+}
+
+// 供测试断言「flag 全部前置、query 经 `--` 分隔殿后」的参数形态
+export function buildSearchCliArgs(query, mode, refresh = false, overrides = {}) {
+  const spec = MODE_SPECS[mode] || MODE_SPECS.general
+  const merged = { ...spec.searchArgs, ...overrides }
+  const args = ['search', '--json', '--envelope']
+  if (merged.max_results) args.push('-n', String(merged.max_results))
+  if (merged.depth) args.push('--depth', String(merged.depth))
+  if (merged.mode) args.push('--mode', String(merged.mode))
+  if (merged.domain) args.push('--domain', String(merged.domain))
+  if (merged.since) args.push('--since', String(merged.since))
+  if (merged.sort) args.push('--sort', String(merged.sort))
+  if (merged.verify) args.push('--verify', String(merged.verify))
+  if (refresh) args.push('--no-cache')
+  // `--` 后的全部 token 被 argparse 当位置参数：flag 必须全部前置，否则
+  // 以 `-` 开头的 query（如 `--list-engines`）会被 CLI 当 flag 吃掉
+  // （2026-11-18 实跑复现：`argo search "--list-engines"` 返回引擎清单）
+  args.push('--', query)
+  return args
 }
 
 export function createWorkbenchHandler(ctx, config, getCredentials) {
@@ -873,8 +888,14 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         }
         const body = await readJsonBody(req)
         const question = String(body.question || '').trim()
-        const cards = Array.isArray(body.cards) ? body.cards : []
-        const history = Array.isArray(body.history) ? body.history : []
+        // 元素级过滤：null/非对象条目会在 buildEvidenceContext 与 history
+        // 映射处抛 TypeError（2026-11-18 实跑复现 cards:[null] 崩溃链）
+        const cards = Array.isArray(body.cards)
+          ? body.cards.filter(c => c && typeof c === 'object')
+          : []
+        const history = Array.isArray(body.history)
+          ? body.history.filter(h => h && typeof h === 'object')
+          : []
         const mode = MODES.has(body.mode) ? body.mode : 'general'
 
         if (!question) {
