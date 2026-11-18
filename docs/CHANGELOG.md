@@ -3,6 +3,21 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## v2.16.0
+
+**定位**：DSH 插件搜索工作台 + 直调 4 阶段查证管线 + `linux.do`/Keenable 信源扩展 + 并发状态机收敛。在 CLI 与 MCP 之外补齐浏览器端可视化搜索工作台，接入 `local-seek` 本机检索与首页自适应推荐，并系统性收敛缓存、熔断、配额与抓取并发路径。源 311→312。
+
+**关键变更**：
+- **DSH 插件搜索工作台（Argo Workbench）**：新增工作台界面（全网搜索 / 热点分析 / 深度研究 / 本机检索 / 定时搜索），支持首页自适应推荐词条、五大特定主题卡片（真假核验 / 选型对比 / 学术文献 / 插件评测 / 本机检索）与「左文右证」双栏核验视图；后端去 MCP 化直调 `bin/argo` CLI 四阶段查证管线并补齐 launchd PATH 兼容
+- **新源与抓取优化**：新增 `linux.do` 社区源（RSS 热帖池 + 本地过滤）；激活 `keenable` 免费通道（10 万次/月）；Jina Reader 改为「有 Key 用 Key、无 Key 兜底」并拆模块；TheSportsDB 裸实体名强命中早停、瞬时错误单次重试与 `sports_search` 相关性保底
+- **路由与排序接线**：`QDII`/外管局词表纳入 `fund_query` 与 `financial_news`；`route_combo.py` 接入 spec 的 `recommended` 优先与 `latency_ms` 升序排序
+- **缓存与并发状态机收敛**：缓存 schema bump 自动自愈旧库；`config_cache.py` 规范化 `config_path` 槽位并收紧过期回收（3 天 / 临时目录 24 小时）；`cache_hit` 写入内部使用账；`circuit_breaker.py` half-open 30s 单探测门控、`quota.py` RLock、`fetch_v3.py` 身份锁与 `file_lock`、`runner.js` 异常定时器清理、`single_flight.py` 覆盖 `BaseException`；UA/mailto 单源化门禁
+- **子技能与升级体验**：子技能 7→5 收敛并统一 `argo seek` 入口；新增 `docs/UPGRADE.md` 与 `install.sh` 重启提醒
+
+**默认关闭开关**：无新增
+
+---
+
 ## v2.15.0
 
 **定位**：知乎全链 + 证据层权威透传 + MCP 连接器 + 路由零基域评分。把「路由命中之后」的能力做厚：证据层拿到上游权威档、无 key 用户走本地语义兜底、任意 MCP server 声明式接入为搜索源；同步还掉一批工程债（裸吞棘轮 187→160、运行时状态补生命周期、单真源收口）。源 304→311，域 306→313。

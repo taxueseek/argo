@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.16.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -169,13 +169,37 @@ Argo ships a first-class **DeepSeek Harness (DSH)** plugin (`@taxueseek/argo-dsh
 2. **Search + `wide_research` parallel orchestration** (subpackage).
 3. **Host `web_search` / `web_fetch` seam replacement** (requires explicit provider pin in the web profile; see [packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)).
 
-The built-in settings UI exposes **18 native first-class tools**, **35 behaviour switches**, and shares DSH's native `DEEPSEEK_API_KEY` credential store with zero plaintext echoing:
+The built-in **Argo Workbench** provides a browser UI with 5 modes (Web Search, Hot Topics, Deep Research, Local Search, Scheduled Search), adaptive home suggestions, and a side-by-side verified evidence panel; the settings UI exposes **18 native first-class tools**, **35 behaviour switches**, and shares DSH's native `DEEPSEEK_API_KEY` credential store with zero plaintext echoing:
 
-<p align="center">
-  <img src="assets/readme/settings-tools.webp" width="32%" alt="DSH Tools settings tab">
-  <img src="assets/readme/settings-engines.webp" width="32%" alt="DSH Engines settings tab">
-  <img src="assets/readme/settings-keys.webp" width="32%" alt="DSH Keys settings tab">
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/readme/workbench-home.webp" width="100%" alt="Argo Workbench home with 5 modes, adaptive suggestions, and theme cards"><br>
+      <sub><b>Argo Workbench — Home</b>: 5 search modes, adaptive suggestions &amp; specialized theme cards</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/readme/workbench-evidence.webp" width="100%" alt="Argo Workbench results with side-by-side verified evidence and local-seek line citations"><br>
+      <sub><b>Argo Workbench — Evidence View</b>: structured synthesis + verified source &amp; line-level citations</sub>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/readme/settings-tools.webp" width="100%" alt="DSH Tools settings tab"><br>
+      <sub><b>Settings — Tools</b> (18 native tools)</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/readme/settings-engines.webp" width="100%" alt="DSH Engines settings tab"><br>
+      <sub><b>Settings — Engines</b> (35 switches &amp; quotas)</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/readme/settings-keys.webp" width="100%" alt="DSH Keys settings tab"><br>
+      <sub><b>Settings — Keys</b> (shared DSH store)</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -185,17 +209,22 @@ The built-in settings UI exposes **18 native first-class tools**, **35 behaviour
 
 | Version | Highlights |
 | :--- | :--- |
+| **v2.16.0** | DSH Argo Workbench UI, direct 4-stage CLI verification, `linux.do` + Keenable free channel (312 sources), Jina keyless fallback, concurrency &amp; cache hardening |
 | **v2.15.0** | Zhihu full chain, evidence-layer authority passthrough, keyless 3-tier semantic fallback, MCP generic connector (`type: mcp`), route zero-based domain scoring, 311 sources |
 | **v2.14.1** | Architecture slimming, MCP 3+1 orthogonal tools + backward-compat aliases, 304 sources, fail-closed `secret_guard.py` redaction |
 | **v2.14.0** | Parser layer consolidation, 300 sources, badcase ledger loop |
 | **v2.13.0** | Documentation consolidation, 22-state-machine SSOT, dispatch tail grace |
 
 <details>
-<summary>v2.15.0 Release Summary &amp; Capability Snapshot</summary>
+<summary>v2.16.0 Release Summary &amp; Capability Snapshot</summary>
 
-### Capabilities (v2.15.0)
+### Capabilities (v2.16.0)
 
-v2.15.0 delivers the Zhihu full chain (question drill-down, curated answers, Keychain credentials, vote-quality weighting), evidence-layer `upstream_authority` passthrough, a keyless 3-tier semantic fallback (local 2-gram heuristics), the single-file research-report pipeline, route zero-based domain scoring, and the MCP generic connector (`type: mcp`, first integration grep.app). Sources 304→311, domains 306→313.
+v2.16.0 introduces the browser-based **Argo Workbench** in the DSH plugin (5 modes, adaptive home suggestions, theme cards, and side-by-side verified citations) backed by a direct `bin/argo` CLI 4-stage verification pipeline and `local-seek` integration; adds the `linux.do` community source (311→312 sources) and activates the `keenable` free channel (100k/mo); refactors Jina Reader to keyed-with-keyless-fallback; and hardens circuit-breaker, quota, cache-slot, and routing-latency behaviour.
+
+### v2.16.0: Argo Workbench UI + Direct 4-Stage Pipeline + Sources &amp; Concurrency Hardening
+
+See [docs/RELEASE_NOTES_v2.16.0.md](docs/RELEASE_NOTES_v2.16.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ### v2.15.0: Zhihu Full Chain + Evidence Authority Passthrough + MCP Connector
 

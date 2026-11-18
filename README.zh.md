@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.15.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.16.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -166,13 +166,37 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 2. **搜索工具 + `wide_research` 并行研究编排**（子包）。
 3. **接管宿主 `web_search` / `web_fetch` 接缝**（在 web profile 中需显式指定 provider pin，避免 `WEB_PROVIDER_AMBIGUOUS`，详见 [packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)）。
 
-内置图形设置中心覆盖 **18 个原生一级工具开关**、**35 个行为开关**，并与宿主原生共享 `DEEPSEEK_API_KEY` 凭据库（永不明文回显）：
+内置 **Argo 搜索工作台** 提供浏览器端五大模式（全网搜索、热点分析、深度研究、本机检索、定时搜索）、首页自适应推荐与「左文右证」核验视图；图形设置中心覆盖 **18 个原生一级工具开关**、**35 个行为开关**，并与宿主原生共享 `DEEPSEEK_API_KEY` 凭据库（永不明文回显）：
 
-<p align="center">
-  <img src="assets/readme/settings-tools.webp" width="32%" alt="DSH 工具开关面板">
-  <img src="assets/readme/settings-engines.webp" width="32%" alt="DSH 引擎开关面板">
-  <img src="assets/readme/settings-keys.webp" width="32%" alt="DSH 密钥管理面板">
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="assets/readme/workbench-home.webp" width="100%" alt="Argo 搜索工作台首页：五大模式、自适应推荐与特定主题卡片"><br>
+      <sub><b>Argo 工作台 — 首页</b>：五大搜索模式、自适应推荐与特定主题卡片</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="assets/readme/workbench-evidence.webp" width="100%" alt="Argo 搜索工作台结果页：左文右证双栏与 local-seek 行号级出处核验"><br>
+      <sub><b>Argo 工作台 — 核验视图</b>：结构化综述 + 左侧引用编号与右侧原文出处面板</sub>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="assets/readme/settings-tools.webp" width="100%" alt="DSH 工具开关面板"><br>
+      <sub><b>设置中心 — 工具</b>（18 个原生工具）</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/readme/settings-engines.webp" width="100%" alt="DSH 引擎开关面板"><br>
+      <sub><b>设置中心 — 引擎</b>（35 个开关与配额）</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src="assets/readme/settings-keys.webp" width="100%" alt="DSH 密钥管理面板"><br>
+      <sub><b>设置中心 — 密钥</b>（共享宿主凭据库）</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -182,17 +206,22 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 
 | 版本 | 核心更新 |
 | :--- | :--- |
+| **v2.16.0** | DSH 插件 Argo 搜索工作台、直调 CLI 四阶段查证管线、`linux.do` 与 Keenable 免费通道（312 个源）、Jina 无 Key 兜底、并发与缓存状态机收敛 |
 | **v2.15.0** | 知乎全链、证据层权威透传、无 key 语义兜底、MCP 通用连接器（`type: mcp`）、路由零基域评分、311 个源 |
 | **v2.14.1** | 信源架构精简、MCP 3+1 收敛与向后兼容别名、304 个源、`secret_guard.py` 故障安全脱敏 |
 | **v2.14.0** | 解析层收敛、300 个源、坏例账本闭环 |
 | **v2.13.0** | 文档收口、22 台状态机单一真源、派发尾宽宽限 |
 
 <details>
-<summary>v2.15.0 版本摘要与当前能力</summary>
+<summary>v2.16.0 版本摘要与当前能力</summary>
 
-### 当前大致能力（v2.15.0）
+### 当前大致能力（v2.16.0）
 
-v2.15.0 完成知乎全链（问题下钻、精选回答、Keychain 凭证与点赞质量加权）、证据层 `upstream_authority` 只透传不赋权、无 API key 可用的三级语义兜底（本地 2-gram 启发式）、研报单文件链路、路由零基域评分，以及 MCP 通用连接器（`type: mcp`，首接 grep.app）。源 304→311，域 306→313。
+v2.16.0 在 DSH 插件中上线浏览器端 **Argo 搜索工作台**（五大模式、首页自适应推荐、特定主题卡片与「左文右证」核验视图），直调 `bin/argo` CLI 四阶段查证管线并接入 `local-seek` 本机检索；新增 `linux.do` 社区源（源 311→312）并激活 `keenable` 免费通道（10 万次/月）；Jina Reader 支持有 Key 用 Key、无 Key 兜底；同步收敛熔断、配额、缓存槽位与路由延迟排序。
+
+### v2.16.0：DSH 搜索工作台 + 直调四阶段管线 + 信源与并发收敛
+
+详见 [docs/RELEASE_NOTES_v2.16.0.md](docs/RELEASE_NOTES_v2.16.0.md) 与 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ### v2.15.0：知乎全链 + 证据层权威透传 + MCP 连接器
 

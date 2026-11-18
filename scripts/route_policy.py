@@ -258,7 +258,7 @@ def _apply_policy_with_new_source_slots(
     keep = list(must_keep or [])
     if (mode or "auto") not in ("fast", "budget"):
         for e in live:
-            if e not in engines_combo and e not in keep:
+            if e not in keep:
                 keep.append(e)
     return _apply_engine_policy(
         engines_combo, mode=mode, depth=depth, context=context,
