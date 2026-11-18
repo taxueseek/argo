@@ -301,3 +301,47 @@ class TestDormantEngineLedger:
     def test_ledger_entries_have_reasons(self):
         for e, reason in _DORMANT_ALLOWLIST.items():
             assert reason and reason.strip(), f"台账条目 {e} 缺原因说明"
+
+
+class TestSqueezedNewSourceStillPinned:
+    """新源「还在 combo 里、只是被自适应重排挤出预算窗口」也必须保底。
+
+    2026-09-16 wallstreetcn 实测（route_policy._apply_policy_with_new_source_slots
+    docstring 记载）：声明位次 3 = auto/balanced 预算 3，被重排挤到 eastmoney
+    之后而落选。旧条件 `e not in engines_combo and e not in keep` 对「没被摘掉、
+    只是排到窗口外」的源不触发补回，而声明位次恰等于预算时 extra 也是 0——
+    两处保护同时失效，源被预算静默截断。该行为变更随 v2.16.0 发布提交
+    （0647a33）入库但发布说明未提及，本用例把它钉成显式契约。
+    回退验证：把 route_policy.py 的 live 过滤条件改回
+    `e not in engines_combo and e not in keep`，本测试必挂。
+    """
+
+    def test_squeezed_but_present_new_source_is_pinned(self):
+        from route_policy import _apply_policy_with_new_source_slots
+
+        domain = {
+            "name": "financial_news",
+            "engines_combo": ["wallstreetcn", "eastmoney", "jin10_flash", "cls_telegraph"],
+        }
+        # 自适应重排后的 combo：wallstreetcn 仍在其中，只是被挤到预算窗口之外
+        combo = ["eastmoney", "jin10_flash", "cls_telegraph", "wallstreetcn"]
+        out = _apply_policy_with_new_source_slots(
+            domain, combo, mode="auto", depth="balanced", context="search", enabled=None)
+        assert "wallstreetcn" in out, (
+            f"被重排挤出窗口的新专源必须被 must_keep 保底，实际 {out}")
+        # 保底不得把既有源挤出窗口外（腾位只发生在预算内）
+        assert "eastmoney" in out, f"既有主源不得被保底逻辑挤掉，实际 {out}"
+
+    def test_missing_new_source_still_pinned(self):
+        """反例对照：新源被前置裁剪整个摘掉时，旧逻辑本就补回——修复不得回退此能力。"""
+        from route_policy import _apply_policy_with_new_source_slots
+
+        domain = {
+            "name": "financial_news",
+            "engines_combo": ["wallstreetcn", "eastmoney", "jin10_flash", "cls_telegraph"],
+        }
+        combo = ["eastmoney", "jin10_flash", "cls_telegraph"]  # wallstreetcn 被族去重摘掉
+        out = _apply_policy_with_new_source_slots(
+            domain, combo, mode="auto", depth="balanced", context="search", enabled=None)
+        assert "wallstreetcn" in out, (
+            f"被摘掉的新专源必须补回（v2.16.0 前既有能力），实际 {out}")
