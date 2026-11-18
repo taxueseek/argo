@@ -67,3 +67,26 @@ test('workbench serves workbench-client.js and rejects missing query on /argo/ap
     handler.dispose()
   }
 })
+
+test('workbench /argo/api/suggestions adapts to mode and DSH locale', async () => {
+  const handler = createWorkbenchHandler({}, {}, () => ({}))
+  try {
+    const resZh = mockRes()
+    await handler(mockReq('GET', '/argo/api/suggestions?mode=hotspot&lang=zh'), resZh)
+    assert.equal(resZh.statusCode, 200)
+    const zh = resZh.json()
+    assert.equal(zh.ok, true)
+    assert.equal(zh.lang, 'zh')
+    assert.ok(zh.items.length > 0)
+
+    const resEn = mockRes()
+    await handler(mockReq('GET', '/argo/api/suggestions?mode=plugin&lang=en'), resEn)
+    assert.equal(resEn.statusCode, 200)
+    const en = resEn.json()
+    assert.equal(en.ok, true)
+    assert.equal(en.lang, 'en')
+    assert.ok(en.items.some(it => it.tag === 'Mode'))
+  } finally {
+    handler.dispose()
+  }
+})

@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULTS, acquireMcp, resolveEntry, stripBoundary } from './runner.js'
 import { resolveArgoEnv } from './specs.js'
 import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
+import { buildSuggestions } from './workbench-suggestions.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CLIENT_FILE = join(HERE, 'workbench-client.js')
@@ -186,10 +187,12 @@ function normalizeLocalCards(payload) {
   const cards = []
   for (const item of rawList) {
     const filePath = String(item?.path || item?.file || item?.url || '').trim()
-    if (!filePath || seen.has(filePath)) continue
-    seen.add(filePath)
-    const index = cards.length + 1
+    if (!filePath) continue
     const line = item?.line ? `:${item.line}` : ''
+    const dedupKey = `${filePath}${line}`
+    if (seen.has(dedupKey)) continue
+    seen.add(dedupKey)
+    const index = cards.length + 1
     const snippet = stripBoundary(item?.snippet || item?.text || item?.preview || (Array.isArray(item?.lines) ? item.lines.join('\n') : '')) || ''
     cards.push({
       id: `c${index}`,
@@ -202,7 +205,7 @@ function normalizeLocalCards(payload) {
       verifiedText: '',
       verified: true,
       credibility: 1,
-      publishedAt: '',
+      publishedAt: item?.mtime || '',
     })
     if (cards.length >= 16) break
   }
@@ -274,25 +277,7 @@ function buildFallbackSummary(query, mode, cards) {
   return `### ${label} · 聚合检索结果（零模型直出模式）\n\n当前宿主未配置可用默认模型，已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：\n\n${rows.join('\n\n')}`
 }
 
-async function callLocalSeek(query, maxResults = 16, signal) {
-  return new Promise((resolve) => {
-    const child = execFile('argo', ['seek', query, '--json', '--limit', String(maxResults)], { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
-      if (err) {
-        resolve({ payload: { error: err.message }, cards: [] })
-        return
-      }
-      try {
-        const payload = JSON.parse(stdout || '{}')
-        resolve({ payload, cards: normalizeLocalCards(payload) })
-      } catch {
-        resolve({ payload: {}, cards: [] })
-      }
-    })
-    if (signal) signal.addEventListener('abort', () => child.kill(), { once: true })
-  })
-}
-
-async function runMcpSearch(config, credentials, args, timeoutMs, signal) {
+async function runMcpTool(config, credentials, toolName, args, timeoutMs, signal, normalizer = normalizeCandidates) {
   const entry = resolveEntry(config)
   const conn = await acquireMcp({
     command: entry.command,
@@ -305,21 +290,42 @@ async function runMcpSearch(config, credentials, args, timeoutMs, signal) {
   }, signal)
   try {
     const result = await conn.request('tools/call', {
-      name: 'argo_search',
+      name: toolName,
       arguments: args,
     }, timeoutMs)
     const rawText = result?.content?.[0]?.text
     const payload = typeof rawText === 'string' ? JSON.parse(rawText) : {}
-    return { payload, cards: normalizeCandidates(payload) }
+    return { payload, cards: normalizer(payload) }
   } finally {
     conn.release?.()
   }
 }
 
+async function callLocalSeek(config, credentials, query, maxResults = 16, signal) {
+  const searchPath = config?.localSearchPath || process.env.ARGO_LOCAL_SEARCH_PATH || join(homedir(), 'Documents')
+  try {
+    return await runMcpTool(
+      config,
+      credentials,
+      'argo_local_search',
+      { query, path: searchPath, max_results: Math.min(20, Math.max(1, maxResults)) },
+      15000,
+      signal,
+      normalizeLocalCards,
+    )
+  } catch (err) {
+    return { payload: { errors: [String(err?.message ?? err)] }, cards: [] }
+  }
+}
+
+async function runMcpSearch(config, credentials, args, timeoutMs, signal) {
+  return runMcpTool(config, credentials, 'argo_search', args, timeoutMs, signal, normalizeCandidates)
+}
+
 async function callArgoSearch(config, credentials, query, mode, refresh, signal, tracks = null) {
   const extraEnv = refresh ? { ARGO_NO_CACHE: '1' } : undefined
   if (mode === 'local') {
-    const res = await callLocalSeek(query, MODE_SPECS.local.searchArgs.max_results, signal)
+    const res = await callLocalSeek(config, credentials, query, MODE_SPECS.local.searchArgs.max_results, signal)
     return { ...res, extraEnv }
   }
 
@@ -653,6 +659,14 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
           egoSearch: readEgoSearchStatus(),
           breaker: readBreakerSummary(),
         })
+        return
+      }
+
+      if (path === '/argo/api/suggestions' && req.method === 'GET') {
+        const reqMode = MODES.has(url.searchParams.get('mode')) ? url.searchParams.get('mode') : 'general'
+        const lang = url.searchParams.get('lang') || 'zh'
+        const shuffle = url.searchParams.get('shuffle') === '1'
+        sendJson(res, 200, buildSuggestions(reqMode, lang, shuffle))
         return
       }
 

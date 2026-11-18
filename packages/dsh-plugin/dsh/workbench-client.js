@@ -137,14 +137,22 @@ export function mountArgoWorkbench(ctx, react) {
     return true
   }
 
+  const resolveLang = () => {
+    const loc = ctx?.locale ?? (typeof ctx?.get === 'function' ? ctx.get('locale') : null)
+    const active = loc?.getSnapshot?.()?.active || (typeof navigator !== 'undefined' ? navigator.language : 'zh')
+    return String(active).toLowerCase().startsWith('en') ? 'en' : 'zh'
+  }
+
   function WorkbenchApp() {
     const saved = readStorage(STATE_KEY, null)
     const [prefs, setPrefs] = useState(() => readStorage(PREFS_KEY, { selection: true }))
+    const [lang, setLang] = useState(resolveLang)
     const [view, setView] = useState('home')
     const [input, setInput] = useState('')
     const [activeQuery, setActiveQuery] = useState(saved?.query || '')
     const [mode, setMode] = useState('general')
     const [topicSamples, setTopicSamples] = useState(() => Object.fromEntries(TOPIC_CARDS.map(t => [t.id, pickSample(t.samples)])))
+    const [suggestions, setSuggestions] = useState([])
     const [cards, setCards] = useState(saved?.cards || [])
     const [turns, setTurns] = useState(saved?.turns || [])
     const [stageText, setStageText] = useState('')
@@ -175,6 +183,24 @@ export function mountArgoWorkbench(ctx, react) {
         if (Array.isArray(data.items)) setWatches(data.items)
       } catch { /* ignore */ }
     }
+
+    const refreshSuggestions = async (targetMode = mode, targetLang = lang, shuffle = false) => {
+      try {
+        const res = await fetch(`/argo/api/suggestions?mode=${encodeURIComponent(targetMode)}&lang=${encodeURIComponent(targetLang)}&shuffle=${shuffle ? '1' : '0'}`)
+        const data = await res.json()
+        if (Array.isArray(data?.items)) setSuggestions(data.items)
+      } catch { /* ignore */ }
+    }
+
+    useEffect(() => {
+      const loc = ctx?.locale ?? (typeof ctx?.get === 'function' ? ctx.get('locale') : null)
+      if (!loc?.subscribe) return undefined
+      return loc.subscribe(() => setLang(resolveLang()))
+    }, [])
+
+    useEffect(() => {
+      refreshSuggestions(mode, lang, false)
+    }, [mode, lang])
 
     useEffect(() => { refreshWatches() }, [])
 
@@ -456,8 +482,8 @@ export function mountArgoWorkbench(ctx, react) {
             h('button', { type: 'button', className: 'aw-icon-btn', onClick: toggleWatchPanel }, `定时搜索 (${watches.length})`)),
           renderWatchDrawer(),
           h('div', { className: 'aw-hero-inner' },
-            h('h1', { className: 'aw-slogan' }, '搜得到，查得快'),
-            h('p', { className: 'aw-sub' }, '全网搜索，热点分析，深度研究，定时搜索'),
+            h('h1', { className: 'aw-slogan' }, lang === 'en' ? 'Search Wide, Verify Fast' : '搜得到，查得快'),
+            h('p', { className: 'aw-sub' }, lang === 'en' ? 'Multi-source search, hotspot brief, deep research & scheduled watch' : '全网搜索，热点分析，深度研究，定时搜索'),
             h('form', {
               className: 'aw-box',
               onSubmit: (e) => { e.preventDefault(); startSearch(input, mode) },
@@ -485,7 +511,7 @@ export function mountArgoWorkbench(ctx, react) {
                     onClick: () => setMode(m.id),
                   }, m.label)),
                   lockedTopic ? h('span', { className: 'aw-topic-chip' },
-                    `主题：${lockedTopic.label}`,
+                    `${lang === 'en' ? 'Topic' : '主题'}：${lockedTopic.label}`,
                     h('button', { type: 'button', title: '取消特定主题', onClick: () => setMode('general') }, '×')) : null),
                 h('button', {
                   type: 'submit',
@@ -493,6 +519,22 @@ export function mountArgoWorkbench(ctx, react) {
                   disabled: !input.trim(),
                   title: '开始检索分析',
                 }, '→'))),
+            suggestions.length > 0 ? h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '14px', alignItems: 'center' } },
+              suggestions.map((s, idx) => h('button', {
+                key: `${s.source}-${idx}`,
+                type: 'button',
+                className: 'aw-filter',
+                style: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', maxWidth: '100%' },
+                onClick: () => startSearch(s.query, mode),
+              },
+                h('span', { style: { opacity: 0.7, fontSize: '11px' } }, `[${s.tag}]`),
+                h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '240px' } }, s.query))),
+              h('button', {
+                type: 'button',
+                className: 'aw-preset-try',
+                style: { color: 'var(--aw-text-3)', marginLeft: 'auto' },
+                onClick: () => refreshSuggestions(mode, lang, true),
+              }, lang === 'en' ? 'Shuffle' : '换一批')) : null,
             h('div', { className: 'aw-sec-head' },
               h('span', null, '特定主题'),
               h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
