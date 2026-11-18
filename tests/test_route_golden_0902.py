@@ -49,6 +49,9 @@ class _AllowAllBreaker:
     def allow(self, eng: str) -> tuple[bool, str]:
         return True, "closed"
 
+    def status(self, eng: str) -> dict:
+        return {"state": "closed"}
+
     def get_negative(self, *args: Any, **kwargs: Any) -> None:
         return None
 
@@ -245,7 +248,10 @@ class TestEarlyStopRescueIntegration(unittest.TestCase):
         with (
             patch("search.engine_search", side_effect=_spy),
             patch("circuit_breaker.get_breaker", return_value=_AllowAllBreaker()),
-            patch("quota.get_quota_manager", return_value=MagicMock()),
+            patch("quota.get_quota_manager", return_value=MagicMock(**{
+                "is_hard_down.return_value": False,
+                "remote_exhausted_marks.return_value": {},
+            })),
         ):
             out = execute_search(
                 query, decision, max_results=5, timeout=5, depth="fast",
