@@ -130,9 +130,10 @@ def build_open_meteo_engine(spec: dict[str, Any]) -> Any:
         # geocoding 只吃地名：完整天气问句（「今日北京天气」）先剥时间/疑问词，
         # 否则上游 0 候选、引擎静默返回空
         place_q = geo_core(query)
+        lang = "zh" if any("\u4e00" <= c <= "\u9fff" for c in place_q) else "en"
         try:
             geo = _http_json(
-                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(place_q)}&count=3&language=zh",
+                f"https://geocoding-api.open-meteo.com/v1/search?name={urllib.parse.quote(place_q)}&count=3&language={lang}",
                 to, engine=spec.get("_name", ""))
         except Exception as e:
             logger.warning(f"Open-Meteo geocode 失败: {e}")
@@ -211,9 +212,13 @@ def build_open_meteo_engine(spec: dict[str, Any]) -> Any:
         # = geocode + max(forecast)（实测 3.9-5.1s）。总上限 to+2s ≤ 串行
         # 最坏 n×to；daemon 线程 + 轮询，卡住的 HTTP 读拖不垮止损
         # （bounded_run 文档依据；与 wx.py:252「同坐标多端点并行」同哲学）。
-        finished, _unfinished = run_bounded(
-            list(enumerate(places)), _fetch_place,
-            wait_s=float(to) + 2.0, max_workers=3)
+        if len(places) == 1:
+            one = _fetch_place((0, places[0]))
+            finished = [(0, one)] if one is not None else []
+        else:
+            finished, _unfinished = run_bounded(
+                list(enumerate(places)), _fetch_place,
+                wait_s=float(to) + 2.0, max_workers=3)
         # 保序 + 打分：place 档位用 rank_score 的 rank（跨候选递减，与并行前
         # 一致）；组内逐日预报再用全局累积 rank 续排，保证整个结果序列严格
         # 递减（同一 place 内 当前 > 第1天 > 第2天…，且下一个 place 的首条

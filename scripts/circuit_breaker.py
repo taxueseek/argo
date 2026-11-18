@@ -249,19 +249,32 @@ class CircuitBreaker:
                         self._mutate_locked(_key_healed)
                         return True, "auth_key_changed"
                 disabled_at = float(st.get("disabled_at") or 0)
-                if disabled_at == 0 or \
-                        (time.time() - disabled_at) >= DISABLE_COOLDOWN_SECONDS:
+                last_probe = float(st.get("reenable_probed_at") or 0)
+                if max(disabled_at, last_probe) == 0 or \
+                        (time.time() - max(disabled_at, last_probe)) >= DISABLE_COOLDOWN_SECONDS:
                     def _reenable_probe() -> None:
                         # 锁内重读后再改：_reload_engines 刚整体替换过
                         # self._engines，闭包里的旧 st 会把另一进程刚落盘的
                         # 状态盖回去（017b01a 修的那类丢更新在 allow() 的漏网处）。
                         fresh = self._engines.get(engine) or {}
                         fresh["state"] = engine_states.BREAKER_HALF_OPEN
-                        fresh["disabled_at"] = time.time()  # 本次探测起点，失败则重新计冷却
+                        fresh["reenable_probed_at"] = time.time()  # 不覆盖 disabled_at，防探测失败后 1h 内无法再 disabled
+                        fresh["half_open_probe_at"] = time.time()
                         self._engines[engine] = fresh
                     self._mutate_locked(_reenable_probe)
                     return True, "half_open_reenable"
                 return False, "auto_disabled"
+
+            if state == engine_states.BREAKER_HALF_OPEN:
+                probe_at = float(st.get("half_open_probe_at") or 0)
+                if probe_at > 0 and (time.time() - probe_at) < min(OPEN_SECONDS, 30):
+                    return False, "half_open_probe_busy"
+                def _claim_probe() -> None:
+                    fresh = self._engines.get(engine) or {}
+                    fresh["half_open_probe_at"] = time.time()
+                    self._engines[engine] = fresh
+                self._mutate_locked(_claim_probe)
+                return True, engine_states.BREAKER_HALF_OPEN
 
             if state == engine_states.BREAKER_OPEN:
                 # 冷却期已过 → half-open 探测（除非已连续多次 open 触发自动禁用）

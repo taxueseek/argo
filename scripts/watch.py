@@ -49,10 +49,10 @@ def _load() -> dict[str, Any]:
 
 
 def _save(data: dict[str, Any]) -> None:
+    from argo_paths import atomic_write_text, file_lock
     p = _store_path()
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(dumps_pretty(data), encoding="utf-8")
-    tmp.replace(p)
+    with file_lock(p):
+        atomic_write_text(p, dumps_pretty(data))
 
 
 # ── 快照 ─────────────────────────────────────────────────────────────────────

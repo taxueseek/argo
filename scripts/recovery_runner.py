@@ -45,13 +45,16 @@ def run_pipeline_recovery(
         tried = list(raw_results.keys()) or list(engines)
         fallback_engines = decision.get("engines_fallback") or []
 
+        import engine_states
         rec_level = max_rec_level
+        l3_tier = engine_states.recovery_level_tier(engine_states.RECOVERY_LEVEL_L3) or 2
+        cur_tier = engine_states.recovery_level_tier(rec_level) if rec_level else None
         if echo_triggered:
-            rec_level = "L3"
+            rec_level = engine_states.RECOVERY_LEVEL_L3
         elif fallback_engines and decision.get("domain") not in (
                 None, "", "general", "general_search") \
-                and (rec_level is None or rec_level < "L3"):
-            rec_level = "L3"
+                and (cur_tier is None or cur_tier < l3_tier):
+            rec_level = engine_states.RECOVERY_LEVEL_L3
 
         # routable_only=True：只要「当前可路由」的源。全量名单里含熔断、禁用、
         # 缺密钥的引擎，让它们进 L3 候选等于白跑一次注定失败的调用。
@@ -120,7 +123,7 @@ def run_pipeline_recovery(
         )
         recovery_info = rec_result.to_dict()
 
-        if emit_usage_fn is not None:
+        if emit_usage_fn is not None and recovery_info.get("steps_tried"):
             try:
                 _steps = recovery_info.get("steps_tried") or []
                 emit_usage_fn("recovery", {

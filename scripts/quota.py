@@ -220,7 +220,7 @@ class QuotaManager:
     _PERIOD_SECONDS = {"hour": 3600, "day": 86400, "month": 30 * 86400}
 
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._profiles: dict = {}
         self._state: dict = {}
         self._last_save_ts: float = 0.0  # 写盘节流时间戳
@@ -773,34 +773,35 @@ class QuotaManager:
 
     def get_stats(self) -> dict:
         """获取所有引擎的配额统计。"""
-        stats = {}
-        for engine in self._profiles:
-            if engine.startswith("_") or not isinstance(self._profiles[engine], dict):
-                continue
-            profile = self._profiles[engine]
-            # 残缺状态防御：state JSON 手工编辑/截断时 mark 可能非 dict，
-            # 与 _refresh_remote_state_locked 的 .get 计算方式保持一致
-            raw_mark = (self._state.get(engine) or {}).get("remote_exhausted")
-            mark = raw_mark if isinstance(raw_mark, dict) else None
-            stats[engine] = {
-                "remaining_ratio": round(self.get_remaining_ratio(engine), 2),
-                "rpm": self.get_current_rpm(engine),
-                "error_rate": round(self.get_error_rate(engine), 3),
-                "available": self.is_available(engine),
-                "cost_per_call": self.get_cost_per_call(engine),
-                "total_cost": round(self.get_total_cost(engine), 6),
-                "used": self._state.get(engine, {}).get("used", 0),
-                "limit": profile.get("limit", "∞"),
-                "period": profile.get("period"),
-                # 月度预算（原生币种）：amount=None 表示未设预算、沿用次数额度
-                "budget": profile.get("budget_amount"),
-                "budget_currency": profile.get("budget_currency"),
-                "cost_used": round((self._state.get(engine) or {}).get("cost_used", 0.0), 6),
-                "cost_tier": profile.get("cost_tier", "free"),
-                "remote_exhausted_until": (
-                    round(float(mark["until"])) if mark else None),
-            }
-        return stats
+        with self._lock:
+            stats = {}
+            for engine in self._profiles:
+                if engine.startswith("_") or not isinstance(self._profiles[engine], dict):
+                    continue
+                profile = self._profiles[engine]
+                # 残缺状态防御：state JSON 手工编辑/截断时 mark 可能非 dict，
+                # 与 _refresh_remote_state_locked 的 .get 计算方式保持一致
+                raw_mark = (self._state.get(engine) or {}).get("remote_exhausted")
+                mark = raw_mark if isinstance(raw_mark, dict) else None
+                stats[engine] = {
+                    "remaining_ratio": round(self.get_remaining_ratio(engine), 2),
+                    "rpm": self.get_current_rpm(engine),
+                    "error_rate": round(self.get_error_rate(engine), 3),
+                    "available": self.is_available(engine),
+                    "cost_per_call": self.get_cost_per_call(engine),
+                    "total_cost": round(self.get_total_cost(engine), 6),
+                    "used": self._state.get(engine, {}).get("used", 0),
+                    "limit": profile.get("limit", "∞"),
+                    "period": profile.get("period"),
+                    # 月度预算（原生币种）：amount=None 表示未设预算、沿用次数额度
+                    "budget": profile.get("budget_amount"),
+                    "budget_currency": profile.get("budget_currency"),
+                    "cost_used": round((self._state.get(engine) or {}).get("cost_used", 0.0), 6),
+                    "cost_tier": profile.get("cost_tier", "free"),
+                    "remote_exhausted_until": (
+                        round(float(mark["until"])) if mark else None),
+                }
+            return stats
 
 
 # ── 模块级单例 ─────────────────────────────────────────────────────────────────

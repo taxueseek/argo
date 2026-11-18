@@ -240,7 +240,7 @@ export function createMcpConnection(options) {
         proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
       } catch (err) {
         pending.delete(id)
-        rej(err)
+        entry.rej(err)
       }
     })
     const result = chain.then(run)

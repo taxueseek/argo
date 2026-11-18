@@ -112,8 +112,13 @@ class EngineRegistry:
 
     def _sync_health_path(self) -> None:
         cur = self.health_state_path
-        if self._loaded_health_path != cur:
+        try:
+            cur_mtime = cur.stat().st_mtime
+        except OSError:
+            cur_mtime = 0.0
+        if self._loaded_health_path != cur or getattr(self, "_loaded_health_mtime", 0.0) != cur_mtime:
             self._health = self._load_health()
+            self._loaded_health_mtime = cur_mtime
 
     def _load(self) -> None:
         """加载配置、解析映射和健康状态缓存。"""
@@ -151,22 +156,42 @@ class EngineRegistry:
         try:
             hp = self.health_state_path
             self._loaded_health_path = hp
-            # 写回前套用与 _load_health 相同的陈旧过滤：内存快照是全量写回的，
-            # 不过滤会让 30 天未刷新的条目复活并覆盖他进程新写的条目。
             cutoff = time.time() - _HEALTH_STALE_S
-            payload = {k: v for k, v in self._health.items()
-                       if isinstance(v, dict) and v.get("last_checked", 0) >= cutoff}
             hp.parent.mkdir(parents=True, exist_ok=True)
+
+            def _merged_payload() -> dict[str, Any]:
+                disk: dict[str, Any] = {}
+                if hp.exists():
+                    try:
+                        raw = json.loads(hp.read_text(encoding="utf-8"))
+                        if isinstance(raw, dict):
+                            disk = raw
+                    except Exception:
+                        pass
+                merged = {k: v for k, v in disk.items()
+                          if isinstance(v, dict) and v.get("last_checked", 0) >= cutoff}
+                for k, v in self._health.items():
+                    if not isinstance(v, dict) or v.get("last_checked", 0) < cutoff:
+                        continue
+                    prev = merged.get(k)
+                    if not isinstance(prev, dict) or v.get("last_checked", 0) >= prev.get("last_checked", 0):
+                        merged[k] = v
+                return merged
+
             try:
                 _ensure_root_scripts()
                 from argo_paths import atomic_write_json, file_lock
                 with file_lock(hp):
-                    atomic_write_json(hp, payload)
+                    atomic_write_json(hp, _merged_payload())
             except ImportError:
                 tmp = hp.with_name(hp.name + f".{os.getpid()}.tmp")
                 with tmp.open("w", encoding="utf-8") as f:
-                    json.dump(payload, f, ensure_ascii=False, indent=2)
+                    json.dump(_merged_payload(), f, ensure_ascii=False, indent=2)
                 os.replace(tmp, hp)
+            try:
+                self._loaded_health_mtime = hp.stat().st_mtime
+            except OSError:
+                pass
         except Exception as e:
             logger.warning(f"保存健康状态失败: {e}")
 

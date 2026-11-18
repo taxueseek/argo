@@ -717,9 +717,18 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
                         laggards = [x for x, s in scored if top_score - s >= 0.15]
                         if laggards and len(laggards) < len(scored):
                             fast = [x for x, s in scored if top_score - s < 0.15]
-                            grouped.extend(fast + laggards)
                         else:
-                            grouped.extend(members)
+                            fast, laggards = list(members), []
+                        # 同族同分档内，优先前置 spec 标为 recommended 且 latency_ms 更低的源（稳定排序保原序）
+                        if len(fast) > 1 and _specs:
+                            fast = sorted(
+                                fast,
+                                key=lambda x: (
+                                    0 if (_specs.get(x) or {}).get("recommended") else 1,
+                                    int((_specs.get(x) or {}).get("latency_ms") or 2000),
+                                ),
+                            )
+                        grouped.extend(fast + laggards)
                     else:
                         grouped.extend(members)
             rest = grouped

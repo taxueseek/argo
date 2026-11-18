@@ -75,7 +75,7 @@ class SingleFlightCoalescer:
                 step = min(1.0, wait_timeout - waited)
                 event.wait(timeout=step)
                 waited += step
-            if event.is_set() and slots and not isinstance(slots[0], Exception):
+            if event.is_set() and slots and not isinstance(slots[0], BaseException):
                 return slots[0]  # type: ignore[return-value]
             # leader 失败或超时 → 独立执行（韧性）
             return fn()

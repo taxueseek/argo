@@ -32,11 +32,13 @@ TLS 指纹伪造层（第一级B）：
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import re
 import signal
 import sys
+import threading
 import time
 import traceback
 import urllib.parse
@@ -550,11 +552,8 @@ def _mobile_first_host(url: str) -> bool:
 
 
 # ─── 身份记忆（per-host 成功档位，跨进程小文件）─────────────────────────────
-#
-# 首次访问未知分流站：桌面失败 → 移动成功（2 次触碰）；记忆生效后（TTL 24h）
-# 直接移动首发（1 次触碰）。实测依据：抖音类站点按 IP 递进限速，请求节奏比
-# 身份选择重要一个数量级，省掉的每次试错都是真实的封禁风险。
 _IDENTITY_TTL = 86400
+_identity_lock = threading.Lock()
 
 
 def _identity_path() -> str:
@@ -562,18 +561,11 @@ def _identity_path() -> str:
     patched = globals().get("_IDENTITY_PATH")
     if patched is not None:
         return patched
-    return os.environ.get(
-        "ARGO_IDENTITY_MEMORY",
-        str(_paths.state_path("fetch-identity.json")))
+    return os.environ.get("ARGO_IDENTITY_MEMORY", str(_paths.state_path("fetch-identity.json")))
 
 
 def __getattr__(name: str):
-    """`_IDENTITY_PATH` 每次访问按当前 ARGO_IDENTITY_MEMORY 解析（PEP 562）。
-
-    290d3d8 同口径：状态根在导入后被改写是常态（测试临时目录、多工作树）。
-    模块内裸名查找不触发本函数（LOAD_GLOBAL 语义），函数体一律走
-    _identity_path()；这里只维持外部属性访问与 monkeypatch 契约。
-    """
+    """`_IDENTITY_PATH` 每次访问按当前 ARGO_IDENTITY_MEMORY 解析（PEP 562）。"""
     if name == "_IDENTITY_PATH":
         return _identity_path()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -583,60 +575,67 @@ _identity_mem: dict[str, float] = {}
 _identity_loaded = False
 _identity_dirty = False
 _identity_last_flush = 0.0
-_IDENTITY_FLUSH_INTERVAL = 30.0  # 最多每 30s 写一次文件
+_IDENTITY_FLUSH_INTERVAL = 30.0
+_identity_atexit_registered = False
 
 
-def _identity_load() -> None:
+def _identity_load_locked() -> None:
     global _identity_loaded, _identity_mem
     if _identity_loaded:
         return
     _identity_loaded = True
     try:
-        with open(_identity_path(), encoding="utf-8") as f:  # 写侧 atomic_write_text 恒 UTF-8，读侧同编码
-            raw = json.load(f)
+        raw = json.loads(Path(_identity_path()).read_text(encoding="utf-8"))
         now = time.time()
-        mem: dict[str, float] = {}
-        for h, t in raw.items():
-            try:
-                exp = float(t)
-                if exp > now:
-                    mem[str(h)] = exp
-            except (TypeError, ValueError):
-                continue  # 单条脏数据不拖垮整表（旧版本/手改字段）
-        _identity_mem = mem
+        _identity_mem = {str(h): float(t) for h, t in raw.items() if isinstance(t, (int, float)) and float(t) > now}
     except Exception:
         _identity_mem = {}
 
 
-def _identity_remember_mobile(host: str) -> None:
-    """记录「该 host 移动端身份成功过」，最多每 30s 写一次文件。失败静默（纯增益层）。"""
+def _identity_flush() -> None:
     global _identity_dirty, _identity_last_flush
+    with _identity_lock:
+        if not _identity_dirty:
+            return
+        snap, p = dict(_identity_mem), Path(_identity_path())
+        _identity_dirty, _identity_last_flush = False, time.monotonic()
+    try:
+        now = time.time()
+        with _paths.file_lock(p):
+            raw = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+            merged = {str(h): float(t) for h, t in raw.items() if isinstance(t, (int, float)) and float(t) > now} if isinstance(raw, dict) else {}
+            merged.update({h: exp for h, exp in snap.items() if exp > max(now, merged.get(h, 0.0))})
+            _paths.atomic_write_json(p, merged, indent=None)
+    except (*IO_BENIGN, ValueError):
+        pass
+
+
+def _identity_remember_mobile(host: str) -> None:
+    """记录「该 host 移动端身份成功过」，最多每 30s 写盘 + atexit 兜底。"""
+    global _identity_dirty, _identity_atexit_registered
     if not host:
         return
-    _identity_load()
-    if len(_identity_mem) >= 512:  # 有界：内存表防长驻进程无限增长（磁盘侧有 TTL）
-        _identity_mem.pop(next(iter(_identity_mem)), None)
-    _identity_mem[host] = time.time() + _IDENTITY_TTL
-    _identity_dirty = True
-    now = time.monotonic()
-    if _identity_last_flush > 0.0 and now - _identity_last_flush < _IDENTITY_FLUSH_INTERVAL:
-        return
-    _identity_last_flush = now
-    try:
-        # 原子写走 argo_paths 唯一来源（唯一 tmp 名）；旧实现固定 `.tmp` 名，
-        # 并发抓取进程会互相搬走临时文件，身份记忆静默丢失。
-        _paths.atomic_write_json(Path(_identity_path()), _identity_mem, indent=None)
-        _identity_dirty = False
-    except IO_BENIGN:
-        pass
+    with _identity_lock:
+        _identity_load_locked()
+        if len(_identity_mem) >= 512:
+            _identity_mem.pop(next(iter(_identity_mem)), None)
+        _identity_mem[host] = time.time() + _IDENTITY_TTL
+        _identity_dirty = True
+        if not _identity_atexit_registered:
+            atexit.register(_identity_flush)
+            _identity_atexit_registered = True
+        need_flush = _identity_last_flush == 0.0 or (time.monotonic() - _identity_last_flush) >= _IDENTITY_FLUSH_INTERVAL
+    if need_flush:
+        _identity_flush()
 
 
 def _identity_is_mobile(host: str) -> bool:
     """该 host 近 24h 内移动身份是否成功过。"""
     if not host:
         return False
-    _identity_load()
-    return _identity_mem.get(host, 0) > time.time()
+    with _identity_lock:
+        _identity_load_locked()
+        return _identity_mem.get(host, 0) > time.time()
 
 
 def _mobile_http_fetch(url: str, max_chars: int = 8000,

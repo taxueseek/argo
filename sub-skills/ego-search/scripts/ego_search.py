@@ -619,13 +619,22 @@ def _load_state() -> dict:
 
 
 def _save_state(enabled: bool) -> None:
-    """持久化模式状态。"""
-    os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+    """持久化模式状态（原子写 + 进程安全）。"""
+    import tempfile
+    parent = os.path.dirname(STATE_PATH)
+    os.makedirs(parent, exist_ok=True)
     state: dict[str, Any] = {"enabled": enabled}
     if enabled:
         state["enabled_at"] = datetime.now().isoformat(timespec="seconds")
-    with open(STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+    fd, tmp_path = tempfile.mkstemp(dir=parent, prefix=".pro-mode.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, STATE_PATH)
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def mode_enabled() -> bool:

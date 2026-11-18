@@ -482,28 +482,28 @@ def build_recovery_plan(query: str, tried_engines: list[str],
     if structured_steps:
         for rq in structured_steps:
             steps.append(RecoveryStep(
-                level="L1", strategy="drop_syntax", query=rq, engines=base_engines,
+                level=engine_states.RECOVERY_LEVEL_L1, strategy="drop_syntax", query=rq, engines=base_engines,
                 reason="结构化语法放宽（按「排除→热度→媒体→语言→日期→账号→短语」撤一类条件）"))
     elif alt:
         steps.append(RecoveryStep(
-            level="L3", strategy="switch_engine", query=relaxed or query,
+            level=engine_states.RECOVERY_LEVEL_L3, strategy="switch_engine", query=relaxed or query,
             engines=alt, reason=f"切换未试引擎: {','.join(alt)}"))
 
     if relaxed and relaxed != query and _has_fallback:
         steps.append(RecoveryStep(
-            level="L1", strategy="relax", query=relaxed, engines=base_engines,
+            level=engine_states.RECOVERY_LEVEL_L1, strategy="relax", query=relaxed, engines=base_engines,
             reason="去停用词/引号/尾修饰后重试"))
 
     # L2 同义（fast 末尾按 level 剔除）
     syn = synonym_expand(query)
     if syn and syn != query:
         steps.append(RecoveryStep(
-            level="L2", strategy="synonym", query=syn, engines=base_engines,
+            level=engine_states.RECOVERY_LEVEL_L2, strategy="synonym", query=syn, engines=base_engines,
             reason="同义词替换重试"))
 
     if structured_steps and alt:
         steps.append(RecoveryStep(
-            level="L3", strategy="switch_engine", query=relaxed or query,
+            level=engine_states.RECOVERY_LEVEL_L3, strategy="switch_engine", query=relaxed or query,
             engines=alt, reason=f"切换未试引擎: {','.join(alt)}"))
 
     # L4 跨语言回退（fast 禁止）
@@ -512,7 +512,7 @@ def build_recovery_plan(query: str, tried_engines: list[str],
         cross_q, cross_engines = cross_lang_query(query, primary_lang=primary_lang)
         if cross_engines:
             steps.append(RecoveryStep(
-                level="L4", strategy="cross_lang",
+                level=engine_states.RECOVERY_LEVEL_L4, strategy="cross_lang",
                 query=cross_q or query, engines=cross_engines.split(","),
                 reason="跨语言回退：非英文主语言用通用源补搜"))
         # 中英基线反向：英文查询 + 偏好含 zh → 中文源补搜
@@ -524,7 +524,7 @@ def build_recovery_plan(query: str, tried_engines: list[str],
             if not eng_list:
                 eng_list = base_engines_s.split(",")
             steps.append(RecoveryStep(
-                level="L4", strategy="baseline_zh",
+                level=engine_states.RECOVERY_LEVEL_L4, strategy="baseline_zh",
                 query=base_q or query, engines=eng_list,
                 reason="中英基线：英文主查询零结果，偏好含 zh 时补中文源"))
         # 中英互译启发式（有英文 token / 同义表映射时）
@@ -534,7 +534,7 @@ def build_recovery_plan(query: str, tried_engines: list[str],
                 [], engines_fallback,
                 enabled, max_n=2, mode=mode) or ["duckduckgo", "wikipedia"]
             steps.append(RecoveryStep(
-                level="L4", strategy="translate", query=trans,
+                level=engine_states.RECOVERY_LEVEL_L4, strategy="translate", query=trans,
                 engines=trans_engines, reason="中英互译启发式重试"))
 
     # fast 模式：仅保留 L1 + L3
@@ -542,18 +542,21 @@ def build_recovery_plan(query: str, tried_engines: list[str],
         steps = [s for s in steps if s.level in engine_states.RECOVERY_FAST_LEVELS]
 
     # 复杂度门控：low 查询只保留低成本放宽（L1/L2），禁高价多源/跨语言（L3/L4）。
-    # 词表见 engine_states §23：L0 是恢复车道专用，成本序 -1；未登记的
-    # max_level 一律 fail-closed 返回空计划，绝不能回退到最高档 3（旧实现
-    # `.get(..., 3)` 让 max_level="L0" 放行全部高价策略，门控形同虚设）。
+    # 若 L1/L2 无可用步且 max_level 允许 L2（tier>=1），保留 1 个备选引擎的 L3 兜底，
+    # 避免简单查询在主源偶发空结果时整条恢复链退化成空计划。
     if max_level:
         cut = engine_states.recovery_level_tier(max_level)
         if cut is None:
             return []
-        # 步骤等级同样 fail-closed：未登记等级一律剔除，不用 `or 0` 把
-        # None 当 L1 放行（那会重演本条注释要堵的静默回退）。
-        steps = [s for s in steps
-                 if (tier := engine_states.recovery_level_tier(s.level)) is not None
-                 and tier <= cut]
+        filtered = [s for s in steps
+                    if (tier := engine_states.recovery_level_tier(s.level)) is not None
+                    and tier <= cut]
+        if not filtered and cut >= 1 and alt:
+            filtered = [RecoveryStep(
+                level=engine_states.RECOVERY_LEVEL_L3, strategy="switch_engine",
+                query=relaxed or query, engines=alt[:1],
+                reason=f"低复杂度单源兜底: {alt[0]}")]
+        steps = filtered
 
     return steps
 
