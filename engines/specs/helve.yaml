@@ -1,0 +1,44 @@
+# Helve web search API (/v1/search)
+# Docs: https://helve.dev
+# OpenAPI: https://helve.dev/openapi.json
+# Verify:
+#   export HELVE_API_KEY=hlv_...
+#   python3 scripts/search.py "climate change" --engine helve --json
+
+engine_id: helve
+type: http
+enabled: true
+label: Helve
+cost_tier: api
+family: web_general
+priority: 10
+qps: 5
+cost_per_call: 0.005
+cost_unit: usd
+coverage:
+- general
+canary_query: "climate change"
+desc: "Helve web search API (/v1/search)"
+method: POST
+url: https://helve.dev/v1/search
+timeout: 15
+
+required_env:
+- HELVE_API_KEY
+allowed_env:
+- HELVE_API_KEY
+
+headers:
+  Authorization: Bearer {HELVE_API_KEY}
+  Content-Type: application/json
+
+body:
+  query: "{query}"
+  max_results: "{n}"
+
+# Helve /v1/search returns {results: [{title, url, snippets: [...], ...}], ...}
+output_map:
+  items: results
+  item_title: title
+  item_url: url
+  item_summary: snippets.0

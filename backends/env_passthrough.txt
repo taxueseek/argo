@@ -1,5 +1,5 @@
-# 由 scripts/sync_backends.py 从引擎声明派生，勿手工修改。
 # scripts/mcp_launch.sh 读取本文件，把这些变量从 launchctl 透传给 MCP 子进程。
+# 由 scripts/sync_backends.py 从引擎声明派生，勿手工修改。
 ALL_PROXY
 ANYSEARCH_API_KEY
 ARGO_ANYSEARCH_API_KEY
@@ -45,6 +45,7 @@ FELO_API_KEY
 FIRECRAWL_API_KEY
 FOURGET_URL
 GITHUB_TOKEN
+HELVE_API_KEY
 HTTPS_PROXY
 HTTP_PROXY
 KEENABLE_API_KEY
