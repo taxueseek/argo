@@ -25,5 +25,7 @@ output_map:
   item_title: title
   item_url: URL
   item_summary: publisher
+  # 被引次数（Crossref 原生字段）
+  item_upstream_authority: is-referenced-by-count
 headers:
   User-Agent: argo-search

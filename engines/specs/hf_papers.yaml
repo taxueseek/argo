@@ -31,6 +31,8 @@ output_map:
   # 拼接模板：原 builder 输出 `摘要 · 发布日期 · upvotes: N · 作者`。
   # 社交信号（upvotes）是本源相对 arXiv/OpenAlex 的差异化价值，不能丢。
   item_summary_template: "{paper.summary} · {publishedAt} · upvotes: {paper.upvotes} · {paper.authors.0.name} · {paper.authors.1.name} · {paper.authors.2.name}"
+  # HF 社区 upvotes（社交信号,与摘要模板同字段）
+  item_upstream_authority: paper.upvotes
   item_published_at: paper.publishedAt
 canary_query: "attention"
 quality_queries:

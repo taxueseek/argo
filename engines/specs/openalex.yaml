@@ -30,5 +30,7 @@ output_map:
   # (abstract_inverted_index)是 dict 需代码重组,声明式给不出,退而拼
   # 「年份 · 期刊名」;缺期刊名的条目由模板折叠分隔符,退化为年份
   item_summary_template: "{publication_year} · {primary_location.source.display_name}"
+  # 被引次数（学术权威量化,OpenAlex 原生字段）
+  item_upstream_authority: cited_by_count
 headers:
   User-Agent: argo-search
