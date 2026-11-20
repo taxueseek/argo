@@ -51,6 +51,7 @@ tests/test_envsync_anysearch_0907.py
 tests/test_explicit_only_gate.py
 tests/test_followup_fixes.py
 tests/test_gate_manifest.py
+tests/test_http_attribution.py
 tests/test_image_sources.py
 tests/test_install_script_contract.py
 tests/test_intl_engines.py
