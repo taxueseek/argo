@@ -40,11 +40,11 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `brave` | 低价计费 | 否，仅显式调用 | ARGO_BRAVE_API_KEY |
 | `byted` | 低价计费 | 是 | ARGO_BYTED_API_KEY |
 | `metaso` | 低价计费 | 是 | ARGO_METASO_API_KEY |
-| `metaso_doc` | 低价计费 | 否，仅显式调用 | ARGO_METASO_API_KEY |
-| `metaso_image` | 低价计费 | 否，仅显式调用 | ARGO_METASO_API_KEY |
-| `metaso_podcast` | 低价计费 | 否，仅显式调用 | ARGO_METASO_API_KEY |
-| `metaso_scholar` | 低价计费 | 否，仅显式调用 | ARGO_METASO_API_KEY |
-| `metaso_video` | 低价计费 | 否，仅显式调用 | ARGO_METASO_API_KEY |
+| `metaso_doc` | 低价计费 | 是 | ARGO_METASO_API_KEY |
+| `metaso_image` | 低价计费 | 是 | ARGO_METASO_API_KEY |
+| `metaso_podcast` | 低价计费 | 是 | ARGO_METASO_API_KEY |
+| `metaso_scholar` | 低价计费 | 是 | ARGO_METASO_API_KEY |
+| `metaso_video` | 低价计费 | 是 | ARGO_METASO_API_KEY |
 | `exa` | 按调用计费 | 是 | — |
 | `octen` | 按调用计费 | 是 | ARGO_OCTEN_API_KEY |
 | `parallel` | 按调用计费 | 是 | PARALLEL_API_KEY |
@@ -55,7 +55,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `yuanbao` | 按调用计费 | 是 | ARGO_YUANBAO_API_KEY |
 | `zhihu_global` | 按调用计费 | 是 | ARGO_ZHIHU_ACCESS_SECRET |
 
-**结论**：付费档里有 1 个进了自动路由（felo），用之前先确认额度；低价/按量计费的源有 12 个在自动路由路径上，多数带免费额度或已配密钥。额度记在本地配额表（`backends/quota_profiles.json` 的 limit / period，用量存在本机状态库），用尽后该源在语义路由里被降权；本地表统计的是 argo 自己的调用，若同一密钥还被别的工具用，实际额度以服务商侧为准。想彻底避开计费源，用 `--engine` 显式指定免费源，或走 `--mode budget`。
+**结论**：付费档里有 1 个进了自动路由（felo），用之前先确认额度；低价/按量计费的源有 17 个在自动路由路径上，多数带免费额度或已配密钥。额度记在本地配额表（`backends/quota_profiles.json` 的 limit / period，用量存在本机状态库），用尽后该源在语义路由里被降权；本地表统计的是 argo 自己的调用，若同一密钥还被别的工具用，实际额度以服务商侧为准。想彻底避开计费源，用 `--engine` 显式指定免费源，或走 `--mode budget`。
 
 ## 三、特别能力（不是普通网页搜索）
 
@@ -122,7 +122,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `keenable` | 需自备密钥 | 免费 | 100000/月 | ARGO_KEENABLE_API_KEY | 域 english_tech、语义画像命中 | Keenable 通用网页搜索（ranked results，含 published_at，按 credits 计费） |
 | `local_baidu` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 百度本地 |
 | `local_yandex` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Yandex 本地通道（local-search 实测最稳后端，多语言兜底） |
-| `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general | 秘塔搜索 API（中文 AI 搜索） |
+| `metaso` | 需自备密钥 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 域 chinese_general、语义画像命中 | 秘塔搜索 API（中文 AI 搜索） |
 | `octen` | 需自备密钥 | 按调用计费 | 不限 | ARGO_OCTEN_API_KEY | 域 chinese_general、域 chinese_tech_deep、域 english_tech、域 news_realtime、深度研究 boost、通用兜底链 | Octen AI 高速搜索（需 OCTEN_API_KEY；支持 broad-search） |
 | `parallel` | 需自备密钥 | 按调用计费 | 不限 | PARALLEL_API_KEY | 域 chinese_tech_deep | Parallel AI 批量搜索（excerpts 长文摘录，结果自带正文省 fetch） |
 | `qwant` | 已停用 | 免费 | 不限 | — | 显式调用（--engine） | Qwant（qwant.com HTML 解析），欧盟 GDPR 合规通用网页 |
@@ -154,11 +154,11 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `know_your_meme` | 可直接用 | 免费 | 不限 | — | 域 meme_slang、语义画像命中 | Know Your Meme（英文 meme 词条溯源，HTML 解析） |
 | `models_dev` | 可直接用 | 免费 | 不限 | — | 域 ai_model | models.dev AI 模型目录（全量缓存，免认证） |
 | `openfoodfacts` | 可直接用 | 免费 | 不限 | — | 域 soil_agri | Open Food Facts 全球食品成分库（200+ 国家，多语言，免 key） |
-| `polymarket` | 可直接用 | 免费 | 不限 | — | 域 prediction_market | Polymarket 预测市场搜索（叙事源，非事实真值） |
+| `polymarket` | 可直接用 | 免费 | 不限 | — | 域 prediction_market、语义画像命中 | Polymarket 预测市场搜索（叙事源，非事实真值） |
 | `rfc_editor` | 可直接用 | 免费 | 不限 | — | 域 rfc_search | RFC/互联网标准文档检索（datatracker.ietf.org 免认证） |
 | `skills_sh` | 可直接用 | 免费 | 不限 | — | 域 skill_search | skills.sh 技能目录（57k+，免认证，Vercel 官方安装遥测） |
 | `skillsmp` | 可直接用 | 免费 | 不限 | — | 域 skill_search | SkillsMP Agent 技能聚合目录（200万+ 开源技能独立索引，免认证，带仓库星数与可安装的 GitHub 目录） |
-| `steam` | 可直接用 | 免费 | 不限 | — | 域 game_search | Steam 商店搜索（免认证） |
+| `steam` | 可直接用 | 免费 | 不限 | — | 域 game_search、语义画像命中 | Steam 商店搜索（免认证） |
 | `train` | 可直接用 | 免费 | 不限 | — | 域 modal_card、域 transport_rt | 火车余票/中转/经停查询（免 Key：12306 官方接口） |
 | `urban_dictionary` | 可直接用 | 免费 | 不限 | — | 域 meme_slang、语义画像命中 | Urban Dictionary（英文俚语定义与例句，官方 API） |
 | `wallhaven` | 可直接用 | 免费 | 不限 | — | 域 image_search | Wallhaven 壁纸图库（免 key，匿名仅 SFW，45 req/min；原图直链+分辨率，无许可标注） |
@@ -169,9 +169,9 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `datagov_uk` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | data.gov.uk 英国政府开放数据目录（CKAN，免 key） |
 | `feed` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | RSS 种子注册表（美联储新闻稿、Nature 期刊新闻、Lobsters、Solidot；固定窗口本地过滤，显式调用） |
 | `google_lens` | 需自备密钥 + 显式专用 | 付费 | 不限 | ARGO_SERPAPI_API_KEY | 显式调用（--engine） | Google Lens 通用视觉反查（query 为公网图片 URL 或本地图片路径，本地图经 SerpAPI Image API 上传，付费档 250 次/月免费额度，回精确匹配/视觉相似/相关网页三档）；cost_per_call ¥0.11 按 Developer 计划 $75/5000 次折算，仅面板估算，不代表实扣 |
-| `metaso_image` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（图片） |
-| `metaso_podcast` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（播客） |
-| `metaso_video` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔搜索（视频） |
+| `metaso_image` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 语义画像命中 | 秘塔搜索（图片） |
+| `metaso_podcast` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 语义画像命中 | 秘塔搜索（播客） |
+| `metaso_video` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 语义画像命中 | 秘塔搜索（视频） |
 | `pixiv` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | Pixiv 作品检索：关键词搜图或按画师（user:<id>、画师主页链接、画师:<名>）列作品；结果标通道，默认过滤 R-18 |
 | `qweather` | 需自备密钥 | 免费 | 不限 | ARGO_QWEATHER_KEY | 域 weather_query | 和风天气实时天气（需 QWEATHER_KEY） |
 | `realtime_index` | 已停用 | 免费 | 不限 | — | 域 news_realtime | 实时索引数据源（免 Key，结构化输出，带发布时间维度与时间窗过滤） |
@@ -188,11 +188,11 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `core` | 可直接用 | 免费 | 不限 | — | 域 academic | CORE 开放获取全文（含 PDF 直链，覆盖机构仓储灰色文献） |
 | `crossref` | 可直接用 | 免费 | 不限 | — | 域 academic、深度研究 boost | Crossref DOI 元数据 API（免认证，礼貌池 mailto） |
 | `datacite` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | DataCite 科研数据集搜索（Dryad/Figshare/Dataverse/OSF 等仓储，免认证） |
-| `dblp` | 可直接用 | 免费 | 不限 | — | 域 academic | DBLP 计算机科学文献（免认证，偶发 SSL 抖动） |
+| `dblp` | 可直接用 | 免费 | 不限 | — | 域 academic、语义画像命中 | DBLP 计算机科学文献（免认证，偶发 SSL 抖动） |
 | `doaj` | 可直接用 | 免费 | 不限 | — | 域 academic、语义画像命中 | 开放获取期刊全球总库（80+ 语种，元数据统一英文） |
 | `europepmc` | 可直接用 | 免费 | 不限 | — | 域 academic、域 tech_deep | Europe PMC 生物医学文献（免认证，SS 429 后备） |
 | `figshare` | 可直接用 | 免费 | 不限 | — | 域 academic、语义画像命中 | 科研数据集检索（论文/数据/图表） |
-| `google_scholar` | 可直接用 | 免费 | 不限 | — | 域 scholar_search、深度研究 boost | Google Scholar（学术论文搜索，HTTP 页面解析） |
+| `google_scholar` | 可直接用 | 免费 | 不限 | — | 域 scholar_search、深度研究 boost、语义画像命中 | Google Scholar（学术论文搜索，HTTP 页面解析） |
 | `hal` | 可直接用 | 免费 | 不限 | — | 域 academic、语义画像命中 | 法国全国科研机构开放仓储（Solr JSON） |
 | `hf_papers` | 可直接用 | 免费 | 不限 | — | 域 academic | Hugging Face Papers 论文检索（免认证，含 upvotes/作者/发布日期，arXiv 与 OpenAlex 无的社交信号） |
 | `k10plus` | 可直接用 | 免费 | 不限 | — | 域 book_search | K10plus 联合目录（德国最大图书馆联合目录，SRU，免认证） |
@@ -206,8 +206,8 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `semantic_scholar` | 可直接用 | 免费 | 不限 | — | 域 academic、域 local_academic、域 patent_search、域 tech_deep、深度研究 boost、语义画像命中 | Semantic Scholar API（备选） |
 | `zenodo` | 可直接用 | 免费 | 不限 | — | 域 dataset_search | Zenodo 科研数据集搜索（CERN 托管，免认证，DOI 可引用） |
 | `doi` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | DOI 内容协商（doi.org 官方解析器，Accept 头直出 CSL JSON 结构化元数据，keyless 免 key 免限次，查询词传裸 DOI） |
-| `metaso_doc` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔文档（原文） |
-| `metaso_scholar` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 显式调用（--engine） | 秘塔学术（题录） |
+| `metaso_doc` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 语义画像命中 | 秘塔文档（原文） |
+| `metaso_scholar` | 需自备密钥 + 显式专用 | 低价计费 | 不限 | ARGO_METASO_API_KEY | 语义画像命中 | 秘塔学术（题录） |
 | `ncpssd` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | NCPSSD（国家哲学社会科学文献中心）——中文期刊/集刊题录与摘要，命中常带全文 PDF 直链（表单 POST 经 CLI 桥） |
 | `opencitations` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | OpenCitations 引用计数（DOI → 被引次数，免 key 无限次；查询词传裸 DOI） |
 | `sciverse` | 需自备密钥 + 显式专用 | 按调用计费 | 不限 | ARGO_SCIVERSE_API_TOKEN | 显式调用（--engine） | Sciverse（题录） |
@@ -250,7 +250,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `crates` | 可直接用 | 免费 | 不限 | — | 域 package_search、语义画像命中 | crates.io Rust 包搜索（免认证，需 UA） |
 | `deps_dev` | 可直接用 | 免费 | 不限 | — | 域 package_intel | deps.dev 包依赖（npm/pypi/go/maven/cargo；版本/弃用/发布时间） |
 | `devto` | 可直接用 | 免费 | 不限 | — | 域 cn_tech_community、语义画像命中 | DEV.to 技术文章搜索（免认证） |
-| `docker_hub` | 可直接用 | 免费 | 不限 | — | 域 package_search | Docker Hub 镜像搜索（免认证） |
+| `docker_hub` | 可直接用 | 免费 | 不限 | — | 域 package_search、语义画像命中 | Docker Hub 镜像搜索（免认证） |
 | `endoflife` | 可直接用 | 免费 | 不限 | — | 域 lifecycle_search | 产品生命周期（版本/最新/支持期/EOL，endoflife.date 200+ 产品） |
 | `eng_blogs` | 可直接用 | 免费 | 不限 | — | 域 english_tech | 全球顶尖工程团队博客聚合（Cloudflare/Netflix/GitHub/Fly.io/AWS/Dropbox 架构与系统实践一手源，免 key） |
 | `github` | 可直接用 | 免费 | 1000/天 | — | 域 code_search、域 local_code、域 ml_models、域 package_search、域 tech_deep、深度研究 boost、语义画像命中 | GitHub 代码搜索 API |
@@ -261,11 +261,11 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `local_stackoverflow` | 可直接用 | 免费 | 不限 | — | 语义画像命中 | StackOverflow本地 |
 | `maven` | 可直接用 | 免费 | 不限 | — | 域 package_search | Maven Central 包搜索（Java/JVM，官方权威，含最新版本/版本数/发布时间） |
 | `mdn` | 可直接用 | 免费 | 不限 | — | 域 code_search、域 web_docs | MDN Web Docs 搜索（en/官方 API，免认证） |
-| `npm` | 可直接用 | 免费 | 不限 | — | 域 package_search | npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄） |
+| `npm` | 可直接用 | 免费 | 不限 | — | 域 package_search、语义画像命中 | npm 包搜索（registry.npmjs.org，免认证，支持 keywords: 等限定符按生态收窄） |
 | `nuget` | 可直接用 | 免费 | 不限 | — | 域 package_search | NuGet 包搜索（.NET，官方权威，含版本/下载量/认证/漏洞标记） |
 | `pypi` | 可直接用 | 免费 | 不限 | — | 域 package_search | PyPI 包查询（/pypi/{name}/json 精确解析，免认证） |
 | `repology` | 可直接用 | 免费 | 不限 | — | 域 package_intel | Repology 全网 Linux/UNIX 跨包管理器生态版本真相（Debian/Arch/Nix/Homebrew 等，免认证） |
-| `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs | Stack Overflow（Stack Exchange API，编程问答） |
+| `stackoverflow` | 可直接用 | 免费 | 300/天 | — | 域 stackoverflow_search、域 web_docs、语义画像命中 | Stack Overflow（Stack Exchange API，编程问答） |
 | `grepapp_mcp` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | GitHub 全网代码字面模式搜索，经 MCP 通用连接器接入 mcp.grep.app（免 key 匿名可用） |
 | `local_npm` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | NPM本地 |
 | `local_seek` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | 本机技能与文件检索（seek.py，rg/fd/Spotlight，毫秒级免网络） |
@@ -359,7 +359,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `sina_quote` | 可直接用 | 免费 | 不限 | — | 域 stock_query | 新浪实时行情快照（现价/涨跌/成交量，免认证） |
 | `tencent_kline` | 可直接用 | 免费 | 不限 | — | 域 us_stock、语义画像命中 | 腾讯财经前复权日 K 线（A股+港股+美股） |
 | `tencent_quote` | 可直接用 | 免费 | 不限 | — | 域 stock_query | 腾讯实时行情（qt.gtimg.cn 免认证，含换手率/市盈率/五档） |
-| `yahoo_finance` | 可直接用 | 免费 | 不限 | — | 域 us_stock | Yahoo Finance 美股代码解析+实时行情（search/chart 免认证，2026-10-06 接入） |
+| `yahoo_finance` | 可直接用 | 免费 | 不限 | — | 域 us_stock、语义画像命中 | Yahoo Finance 美股代码解析+实时行情（search/chart 免认证，2026-10-06 接入） |
 
 ### 快讯 / 电报（13）
 
@@ -443,7 +443,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
 | `cfets` | 可直接用 | 免费 | 不限 | — | 域 fx_query | 中国外汇交易中心人民币中间价（25 个币种，官方授权口径，免 key） |
-| `eurostat` | 可直接用 | 免费 | 不限 | — | 域 macro_data | 欧盟统计局宏观数据（EU 国家 GDP/人均GDP/失业率/人口，ec.europa.eu SDMX 免认证） |
+| `eurostat` | 可直接用 | 免费 | 不限 | — | 域 macro_data、语义画像命中 | 欧盟统计局宏观数据（EU 国家 GDP/人均GDP/失业率/人口，ec.europa.eu SDMX 免认证） |
 | `fred` | 可直接用 | 免费 | 不限 | — | 域 macro_data | FRED 宏观时序数据（CPI/失业率/国债收益率/GDP/M2，免认证） |
 | `fx_rate` | 可直接用 | 免费 | 不限 | — | 域 fx_query、域 macro_data | 实时汇率（open.er-api.com 免认证） |
 | `un_comtrade` | 可直接用 | 免费 | 不限 | — | 域 trade_stats | UN Comtrade 双边贸易（国家+HS 码+年份+流向；preview 免 key） |
@@ -490,7 +490,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 |---|---|---|---|---|---|---|
 | `clinicaltrials` | 可直接用 | 免费 | 不限 | — | 域 medical | ClinicalTrials.gov v2 临床试验（免认证） |
 | `openfda` | 可直接用 | 免费 | 不限 | — | 域 medical | openFDA 药品标签（免认证） |
-| `pubchem` | 可直接用 | 免费 | 不限 | — | 域 chem_search | 化学/药学化合物检索（分子式/分子量/IUPAC/SMILES，pubchem.ncbi.nlm.nih.gov 免认证） |
+| `pubchem` | 可直接用 | 免费 | 不限 | — | 域 chem_search、语义画像命中 | 化学/药学化合物检索（分子式/分子量/IUPAC/SMILES，pubchem.ncbi.nlm.nih.gov 免认证） |
 
 ### dataset（2）
 
@@ -510,8 +510,8 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
-| `archive_org` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Internet Archive 高级搜索（免认证） |
-| `wayback_cdx` | 可直接用 | 免费 | 不限 | — | 域 web_archive | Wayback Machine CDX 历史快照检索（web.archive.org 免认证） |
+| `archive_org` | 可直接用 | 免费 | 不限 | — | 域 web_archive、语义画像命中 | Internet Archive 高级搜索（免认证） |
+| `wayback_cdx` | 可直接用 | 免费 | 不限 | — | 域 web_archive、语义画像命中 | Wayback Machine CDX 历史快照检索（web.archive.org 免认证） |
 
 ### ai_labs（1）
 

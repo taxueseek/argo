@@ -875,7 +875,13 @@
   },
   "google_scholar": {
     "label": "GoogleScholar",
-    "documents": [],
+    "documents": [
+      "学术论文 文献检索 Google Scholar 学术搜索 期刊论文",
+      "引用次数 citations 被引量 h指数 学术影响力",
+      "作者主页 学者档案 研究方向 论文列表",
+      "paper search academic research scholarly articles publication",
+      "研究进展 综述 review survey 领域论文"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -887,7 +893,13 @@
   },
   "stackoverflow": {
     "label": "StackOverflow",
-    "documents": [],
+    "documents": [
+      "编程报错 报错解决 exception traceback 错误排查 Stack Overflow",
+      "代码示例 代码片段 best practice 编程问答 how to",
+      "Python JavaScript Java Go 编程语言问题",
+      "API 用法 库使用 函数报错 配置问题",
+      "programming error fix code snippet developer Q&A"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -911,7 +923,12 @@
   },
   "metaso": {
     "label": "秘塔",
-    "documents": [],
+    "documents": [
+      "秘塔搜索 中文搜索 AI 搜索 网页检索 无广告",
+      "中文资料 资料查找 研究资料 学习资源",
+      "metaso Chinese AI search clean results",
+      "深度搜索 学术搜索 中文互联网 内容聚合"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -1090,7 +1107,12 @@
   },
   "npm": {
     "label": "npm",
-    "documents": [],
+    "documents": [
+      "npm 包 Node.js 模块 JS 库 package search",
+      "依赖 dependencies package.json 版本 node_modules",
+      "前端框架 React Vue 库 工具包",
+      "npm registry JavaScript library node package install"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -1120,7 +1142,12 @@
   },
   "dblp": {
     "label": "DBLP",
-    "documents": [],
+    "documents": [
+      "计算机科学 文献 dblp 会议论文 CVPR NeurIPS ICML",
+      "学者主页 发表列表 DBLP profile 研究者论文",
+      "computer science bibliography conference paper venue",
+      "数据库 机器学习 系统安全 网络 学术会议"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -1138,7 +1165,12 @@
   },
   "docker_hub": {
     "label": "Docker Hub",
-    "documents": [],
+    "documents": [
+      "Docker 镜像 docker image 容器 container registry",
+      "镜像版本 image tag 拉取 docker pull",
+      "部署环境 容器化 DevOps dockerhub",
+      "docker container image repository containerization"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -1161,19 +1193,34 @@
   },
   "archive_org": {
     "label": "Internet Archive",
-    "documents": [],
+    "documents": [
+      "互联网档案馆 网页存档 Wayback Machine 历史网页",
+      "公版书籍 有声书 老电影 音像档案 public domain",
+      "archive.org 互联网历史 网站快照 旧版网页",
+      "internet archive historical pages digitized media library"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
   "steam": {
     "label": "Steam",
-    "documents": [],
+    "documents": [
+      "Steam 游戏 游戏价格 打折 史低 SteamDB",
+      "游戏评测 好评差评 玩家评价 游戏库",
+      "steam store game price discount reviews",
+      "新游发售 发售日期 DLC 游戏更新"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
   "polymarket": {
     "label": "Polymarket",
-    "documents": [],
+    "documents": [
+      "预测市场 Polymarket 事件概率 赔率 下注",
+      "选举预测 大选 赔率盘口 事件合约",
+      "prediction market odds event contracts probability",
+      "地缘政治预测 加密行情预测 体育竞猜"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -1275,13 +1322,23 @@
   },
   "pubchem": {
     "label": "PubChem/ChEMBL 化合物",
-    "documents": [],
+    "documents": [
+      "化合物 化学物质 PubChem CAS号 分子式",
+      "分子结构 化学性质 毒性 药理 compound properties",
+      "化学数据库 药物分子 有机化合物 InChI SMILES",
+      "chemical compound molecule bioactivity chemistry database"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
   "eurostat": {
     "label": "Eurostat 欧盟统计",
-    "documents": [],
+    "documents": [
+      "欧盟统计 欧洲数据 Eurostat 人口 GDP 统计指标",
+      "宏观经济 欧盟各国 比较 数据集 统计年鉴",
+      "european statistics demographic economic indicators dataset",
+      "失业率 通胀 贸易数据 能源统计 环境"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -1341,7 +1398,12 @@
   },
   "wayback_cdx": {
     "label": "Wayback CDX 快照",
-    "documents": [],
+    "documents": [
+      "历史网页 网页快照 Wayback CDX URL 存档记录",
+      "网页时光机 旧版页面 已删除网页 历史版本",
+      "wayback machine CDX archive snapshot url history",
+      "取证 网页变迁 存档时间线 原始页面"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -2559,7 +2621,12 @@
   },
   "yahoo_finance": {
     "label": "Yahoo Finance",
-    "documents": [],
+    "documents": [
+      "美股 股价 stock price 行情 报价 Yahoo Finance",
+      "公司财报 earnings 营收 市值 财务数据",
+      "股票分析 市场行情 ticker 纳斯达克 纽交所",
+      "finance market data stock quote shares dividend"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -2732,7 +2799,12 @@
   },
   "metaso_doc": {
     "label": "秘塔文档（原文）",
-    "documents": [],
+    "documents": [
+      "文档搜索 秘塔文档 Word PPT PDF 公文",
+      "合同模板 方案书 报告文档 范文",
+      "metaso document search 文书 模板下载",
+      "行业报告 白皮书 研究报告 中文文档"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
@@ -2744,25 +2816,44 @@
   },
   "metaso_image": {
     "label": "秘塔搜索（图片）",
-    "documents": [],
+    "documents": [
+      "图片搜索 秘塔图片 高清图 插图 素材",
+      "壁纸 海报 设计参考 图像素材",
+      "metaso image search 图片检索 视觉素材"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
   "metaso_podcast": {
     "label": "秘塔搜索（播客）",
-    "documents": [],
+    "documents": [
+      "播客搜索 播客节目 音频 泛用型 播客平台",
+      "访谈 节目单 音频内容 电台",
+      "metaso podcast search 中文播客 音频节目",
+      "科技播客 商业播客 对谈 聊天节目"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
   "metaso_scholar": {
     "label": "秘塔学术（题录）",
-    "documents": [],
+    "documents": [
+      "秘塔学术 中文论文 学术搜索 文献检索",
+      "开题 文献综述 引文 期刊 学位论文",
+      "metaso scholar academic 中文期刊 知网补充",
+      "研究成果 学术动态 论文全文 中文文献"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
   "metaso_video": {
     "label": "秘塔搜索（视频）",
-    "documents": [],
+    "documents": [
+      "视频搜索 秘塔视频 教程视频 课程 讲解",
+      "演讲 公开课 纪录片 视频资料",
+      "metaso video search 视频教程 学习视频",
+      "技术分享 会议视频 演示 影像资料"
+    ],
     "boost_keywords": {},
     "boost_combos": {}
   },
