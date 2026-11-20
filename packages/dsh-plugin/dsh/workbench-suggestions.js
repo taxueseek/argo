@@ -1,70 +1,137 @@
 /*
- * @taxueseek/argo-dsh — 工作台默认推荐引擎（热点 + DSH 语言自适应 + 分模式模板 + 近期检索）
+ * @taxueseek/argo-dsh — 工作台推荐引擎（方案二：每日实时热榜 + 零 LLM 兴趣重排 + 个人信号 + 冷启动兜底）
+ *
+ * 设计原则：
+ *  1. 真实信号优先：我的追踪（watches）+ 近期真实检索 + 每日实时热榜；
+ *  2. 零 LLM 轻兴趣重排：从历史查询与追踪词抽取实词，将与用户兴趣相关的热点置顶；
+ *  3. 每日定时更新一次：仅暴露 refreshTime（HH:MM，默认 08:30），其余全部固定；
+ *  4. 静态模板仅作冷启动兜底（真实信号不足 3 条时补位），不抢占正常用户首屏。
  */
 
-import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { resolveStateDir } from './diagnostics.js'
 
-const SUGGESTION_CACHE_TTL_MS = 15 * 60 * 1000
 const RECENT_CACHE_TTL_MS = 30 * 1000
 const RECENT_TAIL_BYTES = 24576
 const CJK_RE = /[\u4e00-\u9fff]/
+const DEFAULT_REFRESH_TIME = '08:30'
+const TIME_HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 
-const MODE_SUGGESTIONS = {
+const HOTSPOT_ENGINES = {
+  zh: ['zhihu_hot', 'bilibili_hot'],
+  en: ['hackernews', 'x_trending'],
+}
+
+// 仅在冷启动（无热榜且无历史/追踪）时兜底，绝不与真实信号抢位
+const COLD_START_FALLBACK = {
   general: {
-    zh: ['AI 编程助手最新工程实践', '2026 主流开源模型推理成本对比', 'Mac 本地知识库与全文检索工具推荐'],
-    en: ['Best open-source local RAG architectures 2026', 'LLM inference latency optimization techniques', 'Agentic coding benchmarks and real-world reviews'],
+    zh: ['今日科技与 AI 行业重要进展', '近期值得关注的开源工具发布'],
+    en: ['Major AI and engineering updates today', 'Notable open-source releases this week'],
   },
   hotspot: {
-    zh: ['最近一周 AI 行业重大发布与社区争议', '近期大模型价格战与开源生态动态', '本周开发者社区高热技术议题汇总'],
-    en: ['Top AI engineering discussions this week', 'Recent open-weight model releases and community reaction', 'Major cloud & devtool announcements this week'],
+    zh: ['今日全网热议技术与财经事件梳理'],
+    en: ['Top trending tech and market discussions today'],
   },
   verify: {
-    zh: ['核验某项行业数据的原始官方报告出处', '核实近期热门开源协议变更公告时间线', '查证某 AI 基准测试成绩的官方复现口径'],
-    en: ['Verify official benchmark methodology for latest reasoning models', 'Fact-check recent open-source license change announcements', 'Trace primary source for reported developer productivity stats'],
+    zh: ['核验近期热点传闻的官方原始出处'],
+    en: ['Fact-check trending claims against primary sources'],
   },
   research: {
-    zh: ['端侧模型量化与低延迟推理技术全景调研', '多智能体协作框架的可靠性与评测体系研究', '本地优先软件架构与同步引擎深度对比'],
-    en: ['Comprehensive survey of local-first sync engines', 'Multi-agent orchestration reliability and evaluation gates', 'On-device LLM quantization trade-offs and benchmarks'],
+    zh: ['选择一个主题展开多源深度调研'],
+    en: ['Start a multi-source deep research topic'],
   },
   compare: {
-    zh: ['SQLite FTS5 与 Tantivy / Meilisearch 选型对比', '主流终端 AI Agent 工具能力与成本对比', '向量数据库与混合检索方案优缺点对比'],
-    en: ['SQLite FTS5 vs Tantivy vs Meilisearch comparison', 'Local vector search vs hybrid BM25 trade-offs', 'Self-hosted search engines benchmark comparison'],
+    zh: ['对比两个候选技术或产品的优缺点与成本'],
+    en: ['Compare two candidate tools on trade-offs and cost'],
   },
   academic: {
-    zh: ['推理时计算扩展（Test-time Compute）最新综述', '检索增强生成（RAG）幻觉抑制与引用溯源论文', '长上下文注意力机制高效实现研究进展'],
-    en: ['Test-time compute scaling laws recent papers', 'Citation-grounded RAG and faithfulness verification', 'Efficient long-context attention mechanisms survey'],
+    zh: ['检索近期代表性论文与基准评测'],
+    en: ['Survey recent benchmark papers on your topic'],
   },
   plugin: {
-    zh: ['dsh-zsearch 与 argo-dsh 插件功能对比与评价', '常用代码编辑器 AI 扩展真实口碑与避坑', '浏览器自动化与网页提取插件安全性评估'],
-    en: ['Compare DSH search plugins capabilities and reliability', 'Top developer productivity extensions security audit', 'Open-source browser automation plugins comparison'],
+    zh: ['检索并对比目标插件的功能与社区评价'],
+    en: ['Evaluate candidate plugins and community feedback'],
   },
   local: {
-    zh: ['circuit_breaker', 'engine_states', 'workbench'],
-    en: ['circuit_breaker', 'engine_states', 'wide-research'],
+    zh: ['README', 'AGENTS'],
+    en: ['README', 'AGENTS'],
   },
 }
 
-const feedCache = { ts: 0, dir: '', zh: [], en: [] }
-const recentCache = { ts: 0, dir: '', zh: [], en: [] }
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'what', 'how', 'why', 'are', 'was',
+  '最新', '近期', '今天', '今日', '推荐', '对比', '分析', '如何', '怎么', '什么', '一下',
+])
 
-function readFileTailSync(filePath, maxBytes) {
-  let fd
-  try {
-    const size = statSync(filePath).size
-    if (size <= 0) return ''
-    const len = Math.min(size, maxBytes)
-    const offset = size - len
-    const buf = Buffer.allocUnsafe(len)
-    fd = openSync(filePath, 'r')
-    const bytesRead = readSync(fd, buf, 0, len, offset)
-    return buf.subarray(0, bytesRead).toString('utf8')
-  } finally {
-    if (fd !== undefined) {
-      try { closeSync(fd) } catch { /* ignore */ }
-    }
+const recentCache = { ts: 0, dir: '', zh: [], en: [], all: [] }
+
+function hotspotStoreFile() {
+  return join(resolveStateDir(), 'workbench-hotspots.json')
+}
+
+export function normalizeRefreshTime(raw) {
+  const s = String(raw || '').trim()
+  return TIME_HHMM_RE.test(s) ? s : null
+}
+
+export function localDateKey(now = new Date()) {
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function loadHotspotStore() {
+  const empty = {
+    refreshTime: DEFAULT_REFRESH_TIME,
+    lastRefreshedDate: '',
+    lastRefreshedAt: '',
+    zh: [],
+    en: [],
   }
+  try {
+    const raw = JSON.parse(readFileSync(hotspotStoreFile(), 'utf8'))
+    if (!raw || typeof raw !== 'object') return empty
+    return {
+      refreshTime: normalizeRefreshTime(raw.refreshTime) || DEFAULT_REFRESH_TIME,
+      lastRefreshedDate: typeof raw.lastRefreshedDate === 'string' ? raw.lastRefreshedDate : '',
+      lastRefreshedAt: typeof raw.lastRefreshedAt === 'string' ? raw.lastRefreshedAt : '',
+      zh: Array.isArray(raw.zh) ? raw.zh.filter((x) => typeof x === 'string' && x.trim()) : [],
+      en: Array.isArray(raw.en) ? raw.en.filter((x) => typeof x === 'string' && x.trim()) : [],
+    }
+  } catch {
+    return empty
+  }
+}
+
+export function saveHotspotStore(store) {
+  const file = hotspotStoreFile()
+  try {
+    mkdirSync(dirname(file), { recursive: true })
+    const tmp = `${file}.tmp.${process.pid}.${Date.now()}`
+    writeFileSync(tmp, JSON.stringify(store, null, 2), 'utf8')
+    renameSync(tmp, file)
+  } catch { /* ignore */ }
+}
+
+export function updateRefreshTime(rawTime) {
+  const normalized = normalizeRefreshTime(rawTime)
+  if (!normalized) return null
+  const store = loadHotspotStore()
+  store.refreshTime = normalized
+  saveHotspotStore(store)
+  return store
+}
+
+/** 固定一天更新一次：当天未更新且当前本地时间已达到设定 HH:MM 时到期。 */
+export function isDailyRefreshDue(store, now = new Date()) {
+  const today = localDateKey(now)
+  if (store?.lastRefreshedDate === today) return false
+  const target = normalizeRefreshTime(store?.refreshTime) || DEFAULT_REFRESH_TIME
+  const [hh, mm] = target.split(':').map(Number)
+  const curMinutes = now.getHours() * 60 + now.getMinutes()
+  return curMinutes >= hh * 60 + mm
 }
 
 function cleanTitle(raw) {
@@ -75,87 +142,181 @@ function cleanTitle(raw) {
     .slice(0, 44)
 }
 
-function readFeedHotspots(lang, limit = 4) {
-  const now = Date.now()
-  const dir = resolveStateDir()
-  if (feedCache.dir === dir && now - feedCache.ts < SUGGESTION_CACHE_TTL_MS) {
-    return (lang === 'en' ? feedCache.en : feedCache.zh).slice(0, limit)
+export async function refreshDailyHotspots({ runCli, now = new Date() } = {}) {
+  const store = loadHotspotStore()
+  if (typeof runCli !== 'function') return store
+  const nextZh = []
+  const nextEn = []
+  const seen = new Set()
+
+  const collect = async (lang, engines, bucket) => {
+    const query = lang === 'zh' ? '今日热点' : 'trending'
+    const settled = await Promise.allSettled(
+      engines.map((eng) => runCli(['search', query, '--engine', eng, '-n', '8', '--json', '--fields', 'agent'])),
+    )
+    for (const res of settled) {
+      if (res.status !== 'fulfilled' || !res.value) continue
+      const list = Array.isArray(res.value.results) ? res.value.results : []
+      for (const item of list) {
+        const title = cleanTitle(item?.title)
+        if (title.length < 5 || seen.has(title)) continue
+        seen.add(title)
+        if (bucket.length < 16) bucket.push(title)
+      }
+    }
   }
-  const zh = []
-  const en = []
+
+  await Promise.all([
+    collect('zh', HOTSPOT_ENGINES.zh, nextZh),
+    collect('en', HOTSPOT_ENGINES.en, nextEn),
+  ])
+
+  const updated = {
+    refreshTime: store.refreshTime || DEFAULT_REFRESH_TIME,
+    lastRefreshedDate: localDateKey(now),
+    lastRefreshedAt: now.toISOString(),
+    zh: nextZh.length > 0 ? nextZh : store.zh,
+    en: nextEn.length > 0 ? nextEn : store.en,
+  }
+  saveHotspotStore(updated)
+  return updated
+}
+
+function readFileTailSync(filePath, maxBytes) {
+  let fd
+  try {
+    const size = statSync(filePath).size
+    if (size <= 0) return ''
+    const len = Math.min(size, maxBytes)
+    const buf = Buffer.allocUnsafe(len)
+    fd = openSync(filePath, 'r')
+    const bytesRead = readSync(fd, buf, 0, len, size - len)
+    return buf.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd) } catch { /* ignore */ }
+    }
+  }
+}
+
+function readLegacyFeedHotspots(lang) {
+  const out = []
   const seen = new Set()
   try {
-    const raw = JSON.parse(readFileSync(join(dir, 'feed_cache.json'), 'utf8'))
+    const raw = JSON.parse(readFileSync(join(resolveStateDir(), 'feed_cache.json'), 'utf8'))
     const entries = Object.entries(raw && typeof raw === 'object' ? raw : {})
       .sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0))
     for (const [, feed] of entries) {
-      const items = Array.isArray(feed?.items) ? feed.items : []
-      for (const item of items.slice(0, 8)) {
+      for (const item of (Array.isArray(feed?.items) ? feed.items : []).slice(0, 6)) {
         const title = cleanTitle(item?.title)
         if (title.length < 6 || seen.has(title)) continue
+        const isZh = CJK_RE.test(title)
+        if ((lang === 'en' && isZh) || (lang === 'zh' && !isZh)) continue
         seen.add(title)
-        if (CJK_RE.test(title)) {
-          if (zh.length < 12) zh.push(title)
-        } else if (en.length < 12) {
-          en.push(title)
-        }
+        out.push(title)
+        if (out.length >= 8) return out
       }
-      if (zh.length >= 12 && en.length >= 12) break
     }
   } catch { /* ignore */ }
-  feedCache.ts = now
-  feedCache.dir = dir
-  feedCache.zh = zh
-  feedCache.en = en
-  return (lang === 'en' ? en : zh).slice(0, limit)
+  return out
 }
 
-function readRecentQueries(lang, limit = 3) {
+function readRecentQueries(lang, limit = 5) {
   const now = Date.now()
   const dir = resolveStateDir()
   if (recentCache.dir === dir && now - recentCache.ts < RECENT_CACHE_TTL_MS) {
-    return (lang === 'en' ? recentCache.en : recentCache.zh).slice(0, limit)
+    return {
+      list: (lang === 'en' ? recentCache.en : recentCache.zh).slice(0, limit),
+      all: recentCache.all,
+    }
   }
   const zh = []
   const en = []
+  const all = []
   const seen = new Set()
   try {
     const tail = readFileTailSync(join(dir, 'usage_log', 'query.jsonl'), RECENT_TAIL_BYTES)
-    const lines = tail.split('\n').reverse()
-    for (const line of lines) {
+    for (const line of tail.split('\n').reverse()) {
       if (!line.trim()) continue
       try {
         const row = JSON.parse(line)
         const q = cleanTitle(row?.query)
-        if (q.length < 4 || q.length > 40 || (row?.count || 0) <= 0 || seen.has(q)) continue
+        if (q.length < 3 || q.length > 40 || (row?.count || 0) <= 0 || seen.has(q)) continue
         seen.add(q)
+        all.push(q)
         if (CJK_RE.test(q)) {
-          if (zh.length < 8) zh.push(q)
-        } else if (en.length < 8) {
+          if (zh.length < 10) zh.push(q)
+        } else if (en.length < 10) {
           en.push(q)
         }
-        if (zh.length >= 8 && en.length >= 8) break
-      } catch { /* ignore malformed tail line */ }
+        if (zh.length >= 10 && en.length >= 10) break
+      } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
-  recentCache.ts = now
-  recentCache.dir = dir
-  recentCache.zh = zh
-  recentCache.en = en
-  return (lang === 'en' ? en : zh).slice(0, limit)
+  Object.assign(recentCache, { ts: now, dir, zh, en, all })
+  return { list: (lang === 'en' ? en : zh).slice(0, limit), all }
 }
 
-export function buildSuggestions(mode = 'general', rawLang = 'zh', shuffle = false) {
+export function extractInterestTokens(queries = [], watches = []) {
+  const freq = new Map()
+  const addText = (text, weight) => {
+    const raw = String(text || '').toLowerCase()
+    for (const m of raw.match(/[a-z][a-z0-9_-]{2,}/g) || []) {
+      if (!STOP_WORDS.has(m)) freq.set(m, (freq.get(m) || 0) + weight)
+    }
+    for (const m of raw.match(/[\u4e00-\u9fff]{2,4}/g) || []) {
+      if (!STOP_WORDS.has(m)) freq.set(m, (freq.get(m) || 0) + weight)
+    }
+  }
+  for (const w of watches) addText(w?.query || w, 3)
+  for (const q of queries) addText(q, 1)
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 24)
+    .map(([tok]) => tok)
+}
+
+export function rankHotspotsByInterest(hotspots, interestTokens) {
+  if (!Array.isArray(hotspots) || hotspots.length === 0) return []
+  if (!interestTokens.length) return hotspots.map((q) => ({ query: q, score: 0 }))
+  return hotspots
+    .map((q, idx) => {
+      const low = q.toLowerCase()
+      let score = 0
+      for (const tok of interestTokens) {
+        if (low.includes(tok)) score += 1
+      }
+      return { query: q, score, idx }
+    })
+    .sort((a, b) => (b.score - a.score) || (a.idx - b.idx))
+}
+
+function readLocalWorkspaceHints(cwd = process.cwd(), limit = 5) {
+  try {
+    const entries = readdirSync(cwd, { withFileTypes: true })
+      .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== '__pycache__')
+      .map((e) => {
+        try {
+          return { name: e.name, mtime: statSync(join(cwd, e.name)).mtimeMs }
+        } catch {
+          return { name: e.name, mtime: 0 }
+        }
+      })
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, limit)
+    return entries.map((e) => e.name)
+  } catch {
+    return []
+  }
+}
+
+export function buildSuggestions(mode = 'general', rawLang = 'zh', shuffle = false, options = {}) {
   const lang = String(rawLang || '').toLowerCase().startsWith('en') ? 'en' : 'zh'
-  const specPool = MODE_SUGGESTIONS[mode] || MODE_SUGGESTIONS.general
-  const baseList = [...(specPool[lang] || specPool.zh)]
-  if (shuffle) baseList.sort(() => Math.random() - 0.5)
-
-  const hotspots = mode === 'local' ? [] : readFeedHotspots(lang, 4)
-  const recent = mode === 'local' ? [] : readRecentQueries(lang, 3)
-
+  const store = options.hotspotStore || loadHotspotStore()
+  const watches = Array.isArray(options.watches) ? options.watches : []
   const items = []
   const seen = new Set()
+
   const push = (query, tag, source) => {
     const q = String(query || '').trim()
     if (!q || seen.has(q)) return
@@ -163,19 +324,68 @@ export function buildSuggestions(mode = 'general', rawLang = 'zh', shuffle = fal
     items.push({ query: q, tag, source })
   }
 
-  const hotTag = lang === 'en' ? 'Hot' : '热点'
-  const modeTag = lang === 'en' ? 'Mode' : '推荐'
-  const recentTag = lang === 'en' ? 'Recent' : '近期'
-
-  if (mode === 'hotspot' || mode === 'general' || mode === 'verify') {
-    for (const q of hotspots.slice(0, 3)) push(q, hotTag, 'feed')
-    for (const q of baseList) push(q, modeTag, 'template')
-    for (const q of recent) push(q, recentTag, 'history')
-  } else {
-    for (const q of baseList) push(q, modeTag, 'template')
-    for (const q of hotspots.slice(0, 2)) push(q, hotTag, 'feed')
-    for (const q of recent.slice(0, 2)) push(q, recentTag, 'history')
+  const meta = {
+    refreshTime: store.refreshTime || DEFAULT_REFRESH_TIME,
+    lastRefreshedAt: store.lastRefreshedAt || '',
+    lastRefreshedDate: store.lastRefreshedDate || '',
   }
 
-  return { ok: true, mode, lang, items: items.slice(0, 7) }
+  if (mode === 'local') {
+    const localTag = lang === 'en' ? 'Workspace' : '工作区'
+    const dirs = readLocalWorkspaceHints(options.cwd, 5)
+    for (const d of dirs) push(d, localTag, 'workspace')
+    if (items.length < 3) {
+      const fb = (COLD_START_FALLBACK.local[lang] || COLD_START_FALLBACK.local.zh)
+      for (const q of fb) push(q, lang === 'en' ? 'Hint' : '引导', 'fallback')
+    }
+    return { ok: true, mode, lang, items: items.slice(0, 7), meta }
+  }
+
+  const { list: recentList, all: recentAll } = options.recentQueries
+    ? { list: options.recentQueries, all: options.recentQueries }
+    : readRecentQueries(lang, 4)
+
+  const rawHotspots = (lang === 'en' ? store.en : store.zh)
+  const hotspotPool = rawHotspots.length > 0 ? [...rawHotspots] : readLegacyFeedHotspots(lang)
+  const interestTokens = extractInterestTokens(recentAll, watches)
+  const rankedHotspots = rankHotspotsByInterest(hotspotPool, interestTokens)
+  if (shuffle && rankedHotspots.length > 2) {
+    const head = rankedHotspots.slice(0, 2)
+    const rest = rankedHotspots.slice(2).sort(() => Math.random() - 0.5)
+    rankedHotspots.splice(0, rankedHotspots.length, ...head, ...rest)
+  }
+
+  const relatedTag = lang === 'en' ? 'For You' : '相关热点'
+  const hotTag = lang === 'en' ? 'Hot' : '实时热点'
+  const watchTag = lang === 'en' ? 'Watch' : '我的追踪'
+  const recentTag = lang === 'en' ? 'Recent' : '近期常搜'
+  const fallbackTag = lang === 'en' ? 'Guide' : '引导'
+
+  // 1. 优先展示与用户兴趣重合的实时热点（最多 3 条）
+  for (const h of rankedHotspots.filter((x) => x.score > 0).slice(0, 3)) {
+    push(h.query, relatedTag, 'hotspot-matched')
+  }
+  // 2. 用户正在追踪的 Watch 主题（最多 2 条）
+  for (const w of watches.slice(0, 2)) {
+    if (w?.query) push(w.query, watchTag, 'watch')
+  }
+  // 3. 其余实时热点（补足到 4 条热点位）
+  for (const h of rankedHotspots.filter((x) => x.score === 0).slice(0, 4)) {
+    if (items.length >= 5) break
+    push(h.query, hotTag, 'hotspot')
+  }
+  // 4. 用户近期真实搜索记录
+  for (const q of recentList) {
+    if (items.length >= 7) break
+    push(q, recentTag, 'history')
+  }
+  // 5. 仅在冷启动（真实信号不足 3 条）时用极简引导补位
+  if (items.length < 3) {
+    const fbPool = COLD_START_FALLBACK[mode] || COLD_START_FALLBACK.general
+    for (const q of fbPool[lang] || fbPool.zh) {
+      push(q, fallbackTag, 'fallback')
+    }
+  }
+
+  return { ok: true, mode, lang, items: items.slice(0, 7), meta }
 }

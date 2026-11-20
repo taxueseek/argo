@@ -93,7 +93,9 @@ test('workbench /argo/api/suggestions adapts to mode and DSH locale', async () =
     const en = resEn.json()
     assert.equal(en.ok, true)
     assert.equal(en.lang, 'en')
-    assert.ok(en.items.some(it => it.tag === 'Mode'))
+    assert.ok(en.items.length > 0)
+    const enTags = new Set(['For You', 'Hot', 'Watch', 'Recent', 'Guide'])
+    assert.ok(en.items.every(it => enTags.has(it.tag)))
   } finally {
     handler.dispose()
   }
@@ -289,6 +291,44 @@ test('workbench /argo/api/auth-status triggers background live verification once
     const rAuth2 = mockRes()
     await handler(mockReq('GET', '/argo/api/auth-status'), rAuth2)
     assert.equal(rAuth2.json().profiles[0].verification.state, 'ready')
+  } finally {
+    handler.dispose()
+  }
+})
+
+test('workbench suggestions rank daily hotspots by user interest and enforce once-daily schedule', async () => {
+  const { buildSuggestions, isDailyRefreshDue } = await import('../dsh/workbench-suggestions.js')
+  const store = {
+    refreshTime: '09:00',
+    lastRefreshedDate: '2026-11-19',
+    lastRefreshedAt: '2026-11-19T01:00:00.000Z',
+    zh: ['某明星新剧官宣定档', 'DeepSeek 新一代推理模型架构解析', '今日全国天气降温预警'],
+    en: [],
+  }
+  const out = buildSuggestions('general', 'zh', false, {
+    hotspotStore: store,
+    watches: [{ query: 'DeepSeek 推理模型进展' }],
+    recentQueries: ['DeepSeek 成本对比'],
+  })
+  assert.equal(out.items[0].query, 'DeepSeek 新一代推理模型架构解析', '命中用户兴趣词的热点应置顶')
+  assert.equal(out.items[0].source, 'hotspot-matched')
+  assert.equal(out.items.some((x) => x.source === 'fallback'), false, '有真实信号时静态兜底模板不得抢位')
+
+  // 一天更新一次判据：未到点 false、到点且未刷 true、当天已刷 false
+  assert.equal(isDailyRefreshDue(store, new Date('2026-11-20T08:59:00')), false)
+  assert.equal(isDailyRefreshDue(store, new Date('2026-11-20T09:00:00')), true)
+  assert.equal(isDailyRefreshDue({ ...store, lastRefreshedDate: '2026-11-20' }, new Date('2026-11-20T18:00:00')), false)
+
+  // /argo/api/suggestions/config 校验非法时间并返回更新后的每日时间
+  const handler = createWorkbenchHandler({}, {}, () => ({}))
+  try {
+    const rBad = mockRes()
+    await handler(mockReq('POST', '/argo/api/suggestions/config', { refreshTime: '25:99' }), rBad)
+    assert.equal(rBad.statusCode, 400)
+    const rOk = mockRes()
+    await handler(mockReq('POST', '/argo/api/suggestions/config', { refreshTime: '09:00' }), rOk)
+    assert.equal(rOk.statusCode, 200)
+    assert.equal(rOk.json().refreshTime, '09:00')
   } finally {
     handler.dispose()
   }

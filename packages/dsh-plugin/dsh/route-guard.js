@@ -68,3 +68,28 @@ export function checkLoopbackAndOrigin(ctx, req) {
     return false
   }
 }
+
+/** 查询登录态 Profile 列表，并对冷启动未核验站点后台静默触发一次活体复核（60s 缓存）。 */
+export async function resolveAuthStatusWithBgVerify({ runCli, verifyCache, inflight, allowVerify = true }) {
+  let profiles = []
+  try {
+    const out = await runCli(['auth', 'status', '--json'])
+    profiles = Array.isArray(out?.profiles) ? out.profiles : []
+  } catch {
+    profiles = []
+  }
+  const now = Date.now()
+  return profiles.map((p) => {
+    const site = String(p?.site || '')
+    const cached = verifyCache.get(site)
+    const fresh = cached && (now - cached.ts < 60_000) ? cached.data : null
+    if (site && !fresh && !inflight.has(site) && allowVerify) {
+      inflight.add(site)
+      runCli(['auth', 'verify', site, '--json'])
+        .then((v) => { verifyCache.set(site, { ts: Date.now(), data: v }) })
+        .catch(() => {})
+        .finally(() => { inflight.delete(site) })
+    }
+    return { ...p, verification: fresh || { pending: Boolean(site) } }
+  })
+}

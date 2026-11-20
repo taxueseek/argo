@@ -14,8 +14,14 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULTS, stripBoundary } from './runner.js'
 import { resolveArgoEnv } from './specs.js'
 import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
-import { buildSuggestions } from './workbench-suggestions.js'
-import { checkLoopbackAndOrigin } from './route-guard.js'
+import {
+  buildSuggestions,
+  isDailyRefreshDue,
+  loadHotspotStore,
+  refreshDailyHotspots,
+  updateRefreshTime,
+} from './workbench-suggestions.js'
+import { checkLoopbackAndOrigin, resolveAuthStatusWithBgVerify } from './route-guard.js'
 import {
   breakerFilePath,
   loadWatches,
@@ -463,6 +469,17 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
   const diagnostics = []
   let watches = loadWatches()
   let watchBusy = false
+  let hotspotBusy = false
+
+  const triggerDailyHotspotRefresh = () => {
+    if (hotspotBusy) return
+    hotspotBusy = true
+    const runCli = async (cliArgs) => {
+      const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
+      return runArgoCli(cliArgs, { env, timeoutMs: 12000 })
+    }
+    refreshDailyHotspots({ runCli }).catch(() => {}).finally(() => { hotspotBusy = false })
+  }
 
   const executeWatch = async (watch) => {
     const started = Date.now()
@@ -503,6 +520,9 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
   }
 
   const timer = setInterval(async () => {
+    if (!hotspotBusy && isDailyRefreshDue(loadHotspotStore())) {
+      triggerDailyHotspotRefresh()
+    }
     if (watchBusy) return
     const now = Date.now()
     const due = watches.find(w => w.enabled !== false && (!w.nextRunAt || Date.parse(w.nextRunAt) <= now))
@@ -566,28 +586,11 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
       if (path === '/argo/api/auth-status' && req.method === 'GET') {
         const runCli = options.runAuthCli || (async (cliArgs) => {
           const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
-          return runArgoCli(resolveArgoBin(), cliArgs, { env, timeoutMs: 8000 })
+          return runArgoCli(cliArgs, { env, timeoutMs: 8000 })
         })
-        let profiles = []
-        try {
-          const out = await runCli(['auth', 'status', '--json'])
-          profiles = Array.isArray(out?.profiles) ? out.profiles : []
-        } catch {
-          profiles = []
-        }
-        const now = Date.now()
-        const items = profiles.map((p) => {
-          const site = String(p?.site || '')
-          const cached = authVerifyCache.get(site)
-          const fresh = cached && (now - cached.ts < 60_000) ? cached.data : null
-          if (site && !fresh && !authVerifyInflight.has(site) && url.searchParams.get('verify') !== '0') {
-            authVerifyInflight.add(site)
-            runCli(['auth', 'verify', site, '--json'])
-              .then((v) => { authVerifyCache.set(site, { ts: Date.now(), data: v }) })
-              .catch(() => {})
-              .finally(() => { authVerifyInflight.delete(site) })
-          }
-          return { ...p, verification: fresh || { pending: Boolean(site) } }
+        const items = await resolveAuthStatusWithBgVerify({
+          runCli, verifyCache: authVerifyCache, inflight: authVerifyInflight,
+          allowVerify: url.searchParams.get('verify') !== '0',
         })
         sendJson(res, 200, { ok: true, profiles: items })
         return
@@ -651,12 +654,14 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
 
       if (path === '/argo/api/health' && req.method === 'GET') {
         const hasLlm = Boolean(ctx.get?.('llm') && ctx.get?.('agentDefaultModel')?.currentSelection?.()?.model)
+        const hs = loadHotspotStore()
         sendJson(res, 200, {
           ok: true,
           modes: Object.entries(MODE_LABELS).map(([id, label]) => ({ id, label })),
           hasLlm,
           egoSearch: readEgoSearchStatus(),
           breaker: readBreakerSummary(),
+          hotspotSchedule: { refreshTime: hs.refreshTime, lastRefreshedAt: hs.lastRefreshedAt },
         })
         return
       }
@@ -665,7 +670,29 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
         const reqMode = MODES.has(url.searchParams.get('mode')) ? url.searchParams.get('mode') : 'general'
         const lang = url.searchParams.get('lang') || 'zh'
         const shuffle = url.searchParams.get('shuffle') === '1'
-        sendJson(res, 200, buildSuggestions(reqMode, lang, shuffle))
+        const store = loadHotspotStore()
+        if (isDailyRefreshDue(store)) triggerDailyHotspotRefresh()
+        sendJson(res, 200, buildSuggestions(reqMode, lang, shuffle, { watches, hotspotStore: store }))
+        return
+      }
+
+      if (path === '/argo/api/suggestions/config' && req.method === 'POST') {
+        const body = await readJsonBody(req)
+        let store = loadHotspotStore()
+        if (body.refreshTime !== undefined) {
+          const updated = updateRefreshTime(body.refreshTime)
+          if (!updated) { sendJson(res, 400, { error: 'invalid_refresh_time' }); return }
+          store = updated
+        }
+        if (body.refreshNow === true) {
+          triggerDailyHotspotRefresh()
+        }
+        sendJson(res, 200, {
+          ok: true,
+          refreshTime: store.refreshTime,
+          lastRefreshedAt: store.lastRefreshedAt,
+          refreshing: hotspotBusy,
+        })
         return
       }
 

@@ -431,6 +431,34 @@ export function mountArgoWorkbench(ctx, react) {
       if (next === 'settings') refreshHealth()
     }
 
+    const updateHotspotRefreshTime = async (refreshTime) => {
+      try {
+        const res = await fetch('/argo/api/suggestions/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshTime }),
+        })
+        const data = await res.json()
+        if (data?.ok) {
+          setHealthInfo(prev => ({
+            ...(prev || {}),
+            hotspotSchedule: { refreshTime: data.refreshTime, lastRefreshedAt: data.lastRefreshedAt },
+          }))
+        }
+      } catch { /* ignore */ }
+    }
+
+    const refreshHotspotsNow = async () => {
+      try {
+        await fetch('/argo/api/suggestions/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshNow: true }),
+        })
+        setTimeout(() => refreshSuggestions(modeRef.current, lang, false), 1500)
+      } catch { /* ignore */ }
+    }
+
     const toggleEgoSearch = async () => {
       const current = Boolean(healthInfo?.egoSearch?.enabled)
       try {
@@ -658,9 +686,18 @@ export function mountArgoWorkbench(ctx, react) {
         h('label', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '8px' } },
           h('span', null, '对话划词浮层（Argo 分析）'),
           h('input', { type: 'checkbox', checked: Boolean(prefs.selection), onChange: toggleSelectionPref })),
-        h('label', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' } },
+        h('label', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '8px' } },
           h('span', null, '登录态专业搜索（ego-search）'),
           h('input', { type: 'checkbox', checked: Boolean(healthInfo?.egoSearch?.enabled), onChange: toggleEgoSearch })),
+        h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '8px' } },
+          h('span', null, '每日热点更新'),
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+            h('select', {
+              value: healthInfo?.hotspotSchedule?.refreshTime || '08:30',
+              onChange: (e) => updateHotspotRefreshTime(e.target.value),
+              style: { fontSize: '12px', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--aw-border)', background: 'var(--aw-sunken)', color: 'inherit' },
+            }, ['07:00', '08:00', '08:30', '09:00', '12:00', '18:00', '20:00', '22:00'].map(t => h('option', { key: t, value: t }, t))),
+            h('button', { type: 'button', className: 'aw-pill-btn', onClick: refreshHotspotsNow, style: { fontSize: '11px', padding: '2px 8px' } }, '刷新'))),
         h('button', {
           type: 'button',
           className: 'aw-icon-btn',
