@@ -241,18 +241,27 @@ def numeric_verify_results(results: list[dict[str, Any]],
     # 顺序固定为 export 契约（调用方按这些键读 summary）；词表值来自
     # engine_states，键序留在这里。
     counts = {v: 0 for v in VERDICTS}
+    from evidence_grounding import extract_anchored_context
+
     for r, nums, val in outcomes:
         page, method = val
+        anchored: list[dict[str, Any]] = []
         if not page or len(page.strip()) < 100:
             # 正文过短：无数可比，不伪造 verdict（unfetchable，不惩罚）
             verdict, hits, misses = (
                 engine_states.NUMERIC_UNFETCHABLE, [], [n["raw"] for n in nums])
         else:
             verdict, hits, misses = _verdict_for(nums, page)
+            entity_hint = (query or "").strip() or str(r.get("title") or "")[:40]
+            for h in hits[:3]:
+                ctx = extract_anchored_context(page, h, entity=entity_hint)
+                if ctx.get("excerpt"):
+                    anchored.append({"value": h, **ctx})
         counts[verdict] += 1
         r["numeric_verification"] = {
             "verdict": verdict,
             "checked": [n["raw"] for n in nums],
+            **({"anchored_excerpts": anchored} if anchored else {}),
             "hits": hits,
             "misses": misses,
             "fetch_method": method,

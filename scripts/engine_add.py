@@ -570,6 +570,15 @@ def _build_parser() -> argparse.ArgumentParser:
         description="新引擎一键接入：spec → 探测 → 派生 → 语料 → 验证 → 准入 → 同步")
     p.add_argument("--from-yaml", help="从现有 spec 文件接入")
     p.add_argument("--from-url", help="从 API URL 生成 L1 模板接入")
+    p.add_argument("--probe-domain", help="自动探测域名的零维护协议（Discourse/MediaWiki/OpenSearch/llms.txt/RSS）")
+    p.add_argument("--from-har", help="从浏览器 HAR 抓包自动合成脱敏 YAML Spec 草稿")
+    p.add_argument("--query-hint", default="", help="配合 --from-har 过滤包含该查询词的 XHR 请求")
+    p.add_argument("--transport", default="http", choices=["http", "ego_inpage_api"],
+                   help="配合 --from-har 指定传输方式（默认 http）")
+    p.add_argument("--discover-gaps", action="store_true",
+                   help="从本地使用日志聚合高频零召回域与候选直连域名")
+    p.add_argument("--verify-draft", action="store_true",
+                   help="配合 --probe-domain / --from-har：隔离烟测草稿，失败自动归档至拒绝档案")
     p.add_argument("--engine", help="已声明的引擎 id（只补元数据/验证/准入）")
     p.add_argument("--demo", help="探测用的查询词（垂类引擎给更贴的词）")
     p.add_argument("--desc", help="--from-url 时的引擎描述")
@@ -617,6 +626,40 @@ def cmd_revive(engine: str) -> int:
     return 0
 
 
+def _cmd_discovery(args: argparse.Namespace) -> int:
+    import source_discovery
+    if args.probe_domain:
+        try:
+            rep = source_discovery.probe_domain_protocols(args.probe_domain, timeout=args.timeout)
+        except ValueError as exc:
+            print(dumps({"ok": False, "error": str(exc)}))
+            return 2
+        if args.verify_draft and rep.get("spec_draft"):
+            rep["smoke_verification"] = source_discovery.verify_spec_draft_isolated(
+                rep["spec_draft"], timeout=args.timeout,
+            )
+        print(dumps(rep))
+        return 0
+    if args.from_har:
+        try:
+            har_doc = json.loads(Path(args.from_har).read_text(encoding="utf-8"))
+            spec = source_discovery.spec_from_har(
+                har_doc, engine_id=args.engine, query_hint=args.query_hint, transport=args.transport,
+            )
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            print(dumps({"ok": False, "error": str(exc)}))
+            return 2
+        out: dict[str, Any] = {"ok": True, "spec_draft": spec}
+        if args.verify_draft:
+            out["smoke_verification"] = source_discovery.verify_spec_draft_isolated(
+                spec, timeout=args.timeout,
+            )
+        print(dumps(out))
+        return 0
+    print(dumps(source_discovery.discover_gaps_from_logs()))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # `argo engine add ...` 与 `argo engine ...` 等价：剥掉首个 "add"
@@ -627,6 +670,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_revive(argv[1] if len(argv) > 1 else "")
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.probe_domain or args.from_har or args.discover_gaps:
+        return _cmd_discovery(args)
     return cmd_add(args)
 
 

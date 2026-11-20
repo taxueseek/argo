@@ -20,28 +20,247 @@ _EMPTY_MIN_CHARS = 80
 
 
 def assess_body(payload: dict[str, Any]) -> dict[str, Any]:
-    """对 fetch/detail 类 payload 附加 quality 字段。"""
+    """对 fetch/detail/api 类 payload 附加 quality 与 Cookie 鉴权归因字段。"""
     if not isinstance(payload, dict):
         return payload
-    content = payload.get("content")
-    if content is None and isinstance(payload.get("detail"), dict):
+    cookie_names = payload.get("cookie_names")
+    strict_cookie = bool(payload.get("cookie_names_complete", False))
+    if payload.get("content") is None and isinstance(payload.get("detail"), dict):
         # act 结构：评估 detail
         d = payload["detail"]
         if isinstance(d, dict):
             d = dict(d)
-            d["quality"] = _score_text(d.get("content") or "", d.get("title") or "")
+            d_url = str(d.get("url") or payload.get("url") or "")
+            d_cookies = d.get("cookie_names") if d.get("cookie_names") is not None else cookie_names
+            d["quality"] = assess_auth_with_cookies(
+                _score_text(d.get("content") or "", d.get("title") or ""),
+                url=d_url,
+                present_cookie_names=d_cookies,
+                strict_cookie_check=strict_cookie,
+            )
             payload = dict(payload)
             payload["detail"] = d
             # 顶层也挂一份摘要
             payload["quality"] = d["quality"]
+            if d["quality"].get("handoff_required"):
+                payload["handoff_required"] = True
+                payload["login_url"] = d["quality"].get("login_url") or ""
         return payload
 
-    text = content if isinstance(content, str) else ""
+    if payload.get("content") is None and payload.get("api_url"):
+        # api 结构：评估同源 API 返回 + Cookie 存在性 + 静默限权探针
+        api_err = payload.get("data_type") == "error" or payload.get("data") in (None, "", {}, [])
+        raw_preview = str(payload.get("data") or "")[:600]
+        base = {
+            "content_chars": len(raw_preview),
+            "empty_or_thin": api_err,
+            "auth_wall_suspected": bool(_AUTH_WALL_RE.search(raw_preview)),
+            "login_likely_ok": not api_err and not bool(_AUTH_WALL_RE.search(raw_preview)),
+            "hint": "api_error_or_empty" if api_err else "api_ok",
+        }
+        target_url = str(payload.get("api_url") or payload.get("page_url") or "")
+        q = assess_auth_with_cookies(
+            base,
+            url=target_url,
+            present_cookie_names=cookie_names,
+            strict_cookie_check=strict_cookie,
+        )
+        # 若携带懒触发的 health_probe 响应或接口本身内联返回限权码，优先判定 account_restricted
+        probe_res = assess_health_probe(
+            payload.get("health_probe") if payload.get("health_probe") is not None else payload.get("data"),
+            url=target_url,
+        )
+        if probe_res.get("auth_state") in ("account_restricted", "auth_failed"):
+            q.update(probe_res)
+        out = dict(payload)
+        out["quality"] = q
+        if q.get("handoff_required"):
+            out["handoff_required"] = True
+            out["login_url"] = q.get("login_url") or ""
+            out["handoff"] = build_handoff(q, url=target_url)
+        return out
+
+    text = payload.get("content") if isinstance(payload.get("content"), str) else ""
     title = payload.get("title") or ""
-    q = _score_text(text, str(title))
+    target_url = str(payload.get("url") or "")
+    q = assess_auth_with_cookies(
+        _score_text(text, str(title)),
+        url=target_url,
+        present_cookie_names=cookie_names,
+        strict_cookie_check=strict_cookie,
+    )
     out = dict(payload)
     out["quality"] = q
+    if q.get("handoff_required"):
+        out["handoff_required"] = True
+        out["login_url"] = q.get("login_url") or ""
+        out["handoff"] = build_handoff(q, url=target_url)
     return out
+
+
+def assess_health_probe(probe_data: Any, *, url: str = "", site: str = "") -> dict[str, Any]:
+    """判定静默限权（Shadow Restriction）探针或内联接口响应。
+
+    核心区分：
+      - account_restricted：Cookie 仍在但账号被平台暗中风控限权（如小红书 code=300011），
+        重登同账号无效，需换活跃小号或退回 L0 公开检索。
+      - auth_failed：凭证过期或未登录（如 HTTP 401 / isLogin=false / code=-101）。
+      - healthy：探针正常。
+    """
+    import site_profiles
+
+    profile = site_profiles.get_profile(site) if site else site_profiles.match_site(url)
+    if profile is None or probe_data is None:
+        return {"auth_state": "unknown"}
+
+    blob = ""
+    code: int | None = None
+    if isinstance(probe_data, dict):
+        raw_code = probe_data.get("code")
+        if isinstance(raw_code, int):
+            code = raw_code
+        elif isinstance(raw_code, str) and raw_code.lstrip("-").isdigit():
+            code = int(raw_code)
+        # B 站 nav 接口 data.isLogin=False 明确表未登录
+        data_obj = probe_data.get("data")
+        if isinstance(data_obj, dict) and data_obj.get("isLogin") is False:
+            return {
+                "site": profile.name,
+                "login_url": profile.login_url,
+                "auth_state": "auth_failed",
+                "login_likely_ok": False,
+                "handoff_required": True,
+                "hint": f"{profile.name} 身份探针返回未登录（isLogin=false），请在 {profile.login_url} 登录后重试",
+            }
+        blob = f"{probe_data.get('msg', '')} {probe_data.get('message', '')} {probe_data.get('error', '')}"
+    else:
+        blob = str(probe_data)[:500]
+
+    hit_code = code is not None and code in profile.restricted_codes
+    hit_kw = any(kw.lower() in blob.lower() for kw in profile.restricted_keywords)
+    if hit_code or hit_kw:
+        # B 站 -101 属于未登录，其余限权码归 account_restricted
+        is_unauth_only = (profile.name == "bilibili" and code == -101)
+        state = "auth_failed" if is_unauth_only else "account_restricted"
+        hint = (
+            f"{profile.name} 未登录（code={code}），请在 {profile.login_url} 登录后重试"
+            if is_unauth_only
+            else (
+                f"检测到 {profile.name} 账号被平台静默限权（code={code}），重登同账号通常无效；"
+                "建议切换正常活跃小号，或退回 L0 公开检索（argo search）。"
+            )
+        )
+        return {
+            "site": profile.name,
+            "login_url": profile.login_url,
+            "auth_state": state,
+            "restricted_code": code,
+            "login_likely_ok": False,
+            "handoff_required": True,
+            "hint": hint,
+        }
+    return {
+        "site": profile.name,
+        "auth_state": "healthy",
+        "login_likely_ok": True,
+        "handoff_required": False,
+    }
+
+
+def build_handoff(quality_info: dict[str, Any], *, url: str = "") -> dict[str, Any]:
+    """构造统一的 L3 人工接管契约载荷（含 L0 公开降级建议，绝不绕过反爬/验证码）。"""
+    import site_profiles
+
+    site_name = str(quality_info.get("site") or "")
+    profile = site_profiles.get_profile(site_name) if site_name else site_profiles.match_site(url)
+    auth_state = str(quality_info.get("auth_state") or "auth_failed")
+    login_url = str(quality_info.get("login_url") or (profile.login_url if profile else ""))
+    scopes = list(profile.public_web_scopes) if profile else []
+    scope_expr = " OR ".join(f"site:{s}" for s in scopes) if scopes else ""
+    return {
+        "handoff_required": True,
+        "auth_state": auth_state,
+        "site": profile.name if profile else (site_name or "unknown"),
+        "login_url": login_url,
+        "clear_cooldown_cmd": (
+            f"argo ego-search status --clear-cooldown {profile.domains[0]}"
+            if profile and profile.domains
+            else "argo ego-search status --clear-cooldown"
+        ),
+        "public_fallback": {
+            "tier": "L0",
+            "available": bool(scopes),
+            "site_scopes": scopes,
+            "suggested_query_filter": f"({scope_expr})" if scope_expr else "",
+        },
+        "action_required": (
+            "切换活跃小号或在浏览器人工完成登录/验证后，再清除冷却重试；"
+            "不尝试绕过验证码或风控。"
+        ),
+    }
+
+
+def assess_auth_with_cookies(
+    base_quality: dict[str, Any],
+    *,
+    url: str = "",
+    present_cookie_names: list[str] | set[str] | None = None,
+    strict_cookie_check: bool = False,
+) -> dict[str, Any]:
+    """结合站点声明的登录 Cookie 名，精准区分登录失效与普通内容异常。
+
+    规则（只查键名存在性，绝不接触 Cookie 值）：
+      - 若未匹配到站点画像或未采集到 Cookie 列表，保持文本启发式结论，不误报。
+      - strict_cookie_check=True（如 CDP 全量含 HttpOnly 键名）：关键 Cookie 全部缺失时
+        即使页面返回 200 壳子也判定为 auth_failed + handoff_required。
+      - strict_cookie_check=False（如页面 document.cookie，看不到 HttpOnly）：仅在
+        正文/API 已出现异常（auth_wall_suspected 或 empty_or_thin）且关键 Cookie 未命中时，
+        才升级为 auth_failed + handoff_required，避免误杀 HttpOnly 登录态。
+    """
+    import site_profiles
+
+    q = dict(base_quality)
+    profile = site_profiles.match_site(url)
+    if profile is None:
+        if q.get("auth_wall_suspected"):
+            q["auth_state"] = "auth_failed"
+            q["handoff_required"] = True
+        return q
+
+    q["site"] = profile.name
+    q["login_url"] = profile.login_url
+
+    if present_cookie_names is None:
+        if q.get("auth_wall_suspected"):
+            q["auth_state"] = "auth_failed"
+            q["handoff_required"] = True
+        return q
+
+    present = {str(n).strip() for n in present_cookie_names if str(n).strip()}
+    expected = list(profile.cookie_names)
+    matched = [c for c in expected if c in present]
+    missing = [c for c in expected if c not in present]
+
+    q["cookie_probe"] = {
+        "site": profile.name,
+        "matched_count": len(matched),
+        "missing_cookies": missing,
+    }
+    all_missing = bool(expected) and not matched
+    body_suspect = bool(q.get("auth_wall_suspected") or q.get("empty_or_thin"))
+
+    if (strict_cookie_check and all_missing) or (all_missing and body_suspect) or q.get("auth_wall_suspected"):
+        q["auth_state"] = "auth_failed"
+        q["login_likely_ok"] = False
+        q["handoff_required"] = True
+        q["hint"] = (
+            f"检测到 {profile.name} 登录态失效（缺少关键 Cookie: {', '.join(missing) or 'auth'}），"
+            f"请在浏览器打开 {profile.login_url} 人工登录后重试"
+        )
+    else:
+        q["auth_state"] = "ok"
+        q["handoff_required"] = False
+    return q
 
 
 def _score_text(text: str, title: str = "") -> dict[str, Any]:

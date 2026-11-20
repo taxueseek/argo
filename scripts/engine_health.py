@@ -153,6 +153,123 @@ def _render_text(rep: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _baseline_path(override: str | Path | None = None) -> Path:
+    if override:
+        return Path(override)
+    import argo_paths as _paths
+    return _paths.state_path("engine_health_baseline.json")
+
+
+def _load_baseline(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def _save_baseline(path: Path, pic: dict[str, dict[str, Any]]) -> None:
+    import argo_paths as _paths
+    from engine_fingerprint import compute_engine_fingerprint
+    snap = {
+        eng: {
+            "verdict": info["verdict"],
+            "failures": info.get("failures", 0),
+            "env_fp": compute_engine_fingerprint(eng),
+        }
+        for eng, info in pic.items()
+    }
+    _paths.atomic_write_json(path, {"generated_at": time.time(), "engines": snap})
+
+
+def diff_regressions(
+    *,
+    baseline_path: str | Path | None = None,
+    save_baseline: bool = False,
+) -> dict[str, Any]:
+    """对比当前健康画像与上次基线，只报告真回归与已恢复引擎。"""
+    path = _baseline_path(baseline_path)
+    prev_doc = _load_baseline(path)
+    prev_engines: dict[str, dict[str, Any]] = prev_doc.get("engines") or {}
+    cur = picture()
+
+    regressions: list[dict[str, Any]] = []
+    recovered: list[dict[str, Any]] = []
+
+    for eng, info in cur.items():
+        cur_v = info["verdict"]
+        if cur_v in (engine_states.HEALTH_WATCH, engine_states.HEALTH_UNKNOWN):
+            continue
+        prev = prev_engines.get(eng) or {}
+        prev_v = prev.get("verdict") or engine_states.HEALTH_UNKNOWN
+        cur_rank = engine_states.health_severity_index(cur_v)
+        prev_rank = engine_states.health_severity_index(prev_v)
+        if prev_v in (engine_states.HEALTH_WATCH, engine_states.HEALTH_UNKNOWN) or cur_rank < prev_rank:
+            regressions.append({
+                "engine": eng,
+                "previous_verdict": prev_v,
+                "current_verdict": cur_v,
+                "failures": info.get("failures", 0),
+                "reason": info.get("reason", ""),
+                "last_attribution": info.get("last_attribution"),
+            })
+
+    for eng, prev in prev_engines.items():
+        prev_v = prev.get("verdict") or engine_states.HEALTH_UNKNOWN
+        if prev_v in (engine_states.HEALTH_WATCH, engine_states.HEALTH_UNKNOWN):
+            continue
+        cur_info = cur.get(eng)
+        cur_v = (cur_info or {}).get("verdict") or engine_states.HEALTH_UNKNOWN
+        if cur_info is None or engine_states.health_severity_index(cur_v) > engine_states.health_severity_index(prev_v):
+            recovered.append({
+                "engine": eng,
+                "previous_verdict": prev_v,
+                "current_verdict": cur_v,
+            })
+
+    regressions.sort(
+        key=lambda r: (engine_states.health_severity_index(r["current_verdict"]), -int(r.get("failures") or 0))
+    )
+    recovered.sort(key=lambda r: r["engine"])
+
+    if save_baseline:
+        _save_baseline(path, cur)
+
+    return {
+        "generated_at": time.time(),
+        "baseline_exists": bool(prev_doc),
+        "baseline_generated_at": prev_doc.get("generated_at"),
+        "baseline_saved": bool(save_baseline),
+        "regression_count": len(regressions),
+        "recovered_count": len(recovered),
+        "regressions": regressions,
+        "recovered": recovered,
+    }
+
+
+def _render_regressions_text(rep: dict[str, Any]) -> str:
+    lines: list[str] = []
+    if not rep["regressions"] and not rep["recovered"]:
+        note = "（首次建立基线）" if not rep["baseline_exists"] else ""
+        lines.append(f"无新增回归或恢复引擎{note}。")
+        return "\n".join(lines)
+    lines.append(
+        f"引擎健康回归差分：新增回归 {rep['regression_count']} · 已恢复 {rep['recovered_count']}"
+    )
+    for r in rep["regressions"]:
+        lines.append(
+            f"  [回归] {r['engine']}  {r['previous_verdict']} → {r['current_verdict']}  "
+            f"fail={r['failures']}"
+        )
+        if r.get("reason"):
+            lines.append(f"      {r['reason']}")
+    for r in rep["recovered"]:
+        lines.append(
+            f"  [恢复] {r['engine']}  {r['previous_verdict']} → {r['current_verdict']}"
+        )
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="argo engine-health",
@@ -160,7 +277,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="JSON 输出")
     ap.add_argument("--engine", default=None,
                     help="只看指定引擎（诊断单源；默认全量分诊）")
+    ap.add_argument("--regressions", action="store_true",
+                    help="对比上次健康基线，只输出真回归与已恢复引擎")
+    ap.add_argument("--save-baseline", action="store_true",
+                    help="将当前健康画像写入基线（可与 --regressions 合用）")
+    ap.add_argument("--baseline-path", default=None,
+                    help="自定义基线文件路径（测试用）")
     args = ap.parse_args(argv)
+    if args.regressions or args.save_baseline:
+        rep = diff_regressions(
+            baseline_path=args.baseline_path,
+            save_baseline=args.save_baseline,
+        )
+        print(dumps(rep) if args.json else _render_regressions_text(rep))
+        return 0
     rep = summary()
     if args.engine:
         rep["offenders"] = [o for o in rep["offenders"]

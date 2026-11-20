@@ -80,6 +80,15 @@ argo ego-search fetch "https://example.com/article" --focus 关键词
 # 同源 API 数据直取（登录态站点接口）
 argo ego-search api "https://www.zhihu.com/api/v4/search_v3?t=general&q=AI代理&limit=5" --origin "https://www.zhihu.com"
 
+# 声明式同源 API 预设（zhihu / xueqiu / bilibili / weibo / xiaohongshu）
+argo ego-search api --preset zhihu --query "AI 搜索" --n 8
+
+# 清除站点冷却期（人工登录恢复后解除 auth_failed / account_restricted 冷却）
+argo ego-search status --clear-cooldown zhihu.com
+
+# 主动体检围墙站账号是否被静默限权（L1 探针：healthy / account_restricted / auth_failed）
+argo ego-search status --check-health xiaohongshu
+
 # 指定任务空间名（同一目标的多轮操作复用同名空间）
 argo ego-search search "竞品分析" --task-space "竞品调研"
 ```

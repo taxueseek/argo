@@ -261,6 +261,16 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
                 "detail": "有 source_grades 但零一手命中",
             })
 
+    if dossier.get("stall_state") and isinstance(dossier["stall_state"], dict):
+        if dossier["stall_state"].get("stop_recommended"):
+            warnings.append({
+                "id": "coverage_stalled",
+                "detail": (
+                    f"研究覆盖连续停滞（{dossier['stall_state'].get('stop_reason') or 'coverage_stalled'}），"
+                    "建议停止扩展检索并直接基于现有已验证证据收尾汇总"
+                ),
+            })
+
     if failures:
         cap = engine_states.CONCLUSION_CAP_LOW
     elif warnings:
@@ -268,9 +278,83 @@ def evaluate_dossier_gates(dossier: dict[str, Any]) -> dict[str, Any]:
     else:
         cap = engine_states.CONCLUSION_CAP_HIGH
 
-    return {
+    out = {
         "passed": not failures,
         "conclusion_cap": cap,
         "failures": failures,
         "warnings": warnings,
     }
+    stall = dossier.get("stall_state")
+    if isinstance(stall, dict) and stall.get("stop_recommended"):
+        out["stop_recommended"] = True
+        out["stop_reason"] = str(stall.get("stop_reason") or "coverage_stalled")
+    return out
+
+
+class CoverageStallTracker:
+    """研究覆盖高水位线停滞传感器。
+
+    铁律：仅新增 SERP 摘要或重复 URL 不算进展；只有新增 opened 正文阅读、
+    新覆盖工作包/实体属性格、或新锚定事实时才重置停滞计数。
+    连续 max_stalled_rounds 轮全零增长即返回 stop_recommended=True。
+    """
+
+    def __init__(self, max_stalled_rounds: int = 2) -> None:
+        self._max_stalled_rounds = max(0, int(max_stalled_rounds))
+        self._stalled_rounds = 0
+        self._stopped = False
+        self._seen_opened: set[str] = set()
+        self._seen_slots: set[str] = set()
+        self._seen_facts: set[str] = set()
+        # 多对多证据绑定：同一 opened URL 可支撑多个工作包任务（supports/contradicts/context）
+        self._task_bindings: list[dict[str, str]] = []
+
+    def bind_evidence(self, task_id: str, evidence_id: str, relation: str = "supports") -> None:
+        rel = relation if relation in ("supports", "contradicts", "context") else "context"
+        rec = {"task_id": str(task_id), "evidence_id": str(evidence_id), "relation": rel}
+        if rec not in self._task_bindings:
+            self._task_bindings.append(rec)
+
+    @property
+    def task_bindings(self) -> list[dict[str, str]]:
+        return list(self._task_bindings)
+
+    def observe_round(
+        self,
+        *,
+        opened_urls: list[str] | set[str] = (),
+        covered_slots: list[str] | set[str] = (),
+        grounded_facts: list[str] | set[str] = (),
+    ) -> dict[str, Any]:
+        """记录一轮完整检索波次的结果快照，返回停滞状态与增量统计。"""
+        opened = {str(u).strip() for u in opened_urls if str(u).strip()}
+        slots = {str(s).strip() for s in covered_slots if str(s).strip()}
+        facts = {str(f).strip() for f in grounded_facts if str(f).strip()}
+
+        new_opened = opened - self._seen_opened
+        new_slots = slots - self._seen_slots
+        new_facts = facts - self._seen_facts
+
+        self._seen_opened.update(opened)
+        self._seen_slots.update(slots)
+        self._seen_facts.update(facts)
+
+        if new_opened or new_slots or new_facts:
+            self._stalled_rounds = 0
+        elif self._max_stalled_rounds > 0:
+            self._stalled_rounds += 1
+
+        if self._max_stalled_rounds > 0 and self._stalled_rounds >= self._max_stalled_rounds:
+            self._stopped = True
+
+        return {
+            "new_opened_count": len(new_opened),
+            "new_slots_count": len(new_slots),
+            "new_facts_count": len(new_facts),
+            "stalled_rounds": self._stalled_rounds,
+            "stop_recommended": self._stopped,
+            "stop_reason": f"coverage_stalled_x{self._stalled_rounds}" if self._stopped else "",
+            "total_opened": len(self._seen_opened),
+            "total_slots": len(self._seen_slots),
+            "total_facts": len(self._seen_facts),
+        }

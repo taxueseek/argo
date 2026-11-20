@@ -35,9 +35,11 @@ if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
 import merge as merge_mod  # noqa: E402
+import pacing as pacing  # noqa: E402
 import quality as quality  # noqa: E402
 import runtime as rt  # noqa: E402
 import safety as safety  # noqa: E402
+import site_profiles as site_profiles  # noqa: E402
 import webbridge_adapter as wb  # noqa: E402
 
 # argo 核心 scripts：query_enhance 归一化（词形规范化，保留平台语法）；核心不可用时降级
@@ -120,11 +122,23 @@ def stamp_login_provenance(payload: dict[str, Any], *, runtime: str | None = Non
 
 
 def emit_json(payload: dict[str, Any], *, runtime: str | None = None) -> None:
-    """stdout 输出已打 provenance + 质量信号的 JSON。"""
+    """stdout 输出已打 provenance + 质量信号的 JSON；触发登录墙/handoff 自动记站点冷却。"""
     p = stamp_login_provenance(payload, runtime=runtime)
-    # fetch / act 正文挂 quality（登录墙/空页）
-    if p.get("content") is not None or p.get("detail") is not None:
+    # fetch / act / api 挂 quality（登录墙/空页/Cookie 存在性）
+    if p.get("content") is not None or p.get("detail") is not None or p.get("api_url"):
         p = quality.assess_body(p)
+    q_info = p.get("quality") if isinstance(p.get("quality"), dict) else {}
+    if p.get("handoff_required") or q_info.get("auth_wall_suspected"):
+        site_key = q_info.get("site") or p.get("url") or p.get("api_url") or p.get("page_url")
+        auth_state = str(q_info.get("auth_state") or "auth_failed")
+        cd_secs = 7200 if auth_state == "account_restricted" else pacing.DEFAULT_COOLDOWN_SECONDS
+        if site_key:
+            pacing.record_cooldown(
+                str(site_key),
+                auth_state,
+                seconds=cd_secs,
+                login_url=str(p.get("login_url") or q_info.get("login_url") or ""),
+            )
     print(json.dumps(p, ensure_ascii=False, indent=2))
 
 
@@ -258,11 +272,17 @@ await openOrReuseTab('%%URL%%', { wait: true, timeout: 25 })
 const info = await pageInfo()
 const raw = await js(`%%BODY_IIFE%%`)
 const d = JSON.parse(raw)
+let cookieNames = []
+try {
+  const ck = await js(`JSON.stringify((document.cookie || '').split(';').map(s => s.split('=')[0].trim()).filter(Boolean))`)
+  cookieNames = JSON.parse(ck)
+} catch (e) {}
 let body = d.content.replace(/\n{3,}/g, '\n\n').trim()
 %%FOCUS_FILTER%%
 cliLog('EGO_RESULT|' + JSON.stringify({
   url: info.url, title: d.title,
   content: body, word_count: body.split(/\s+/).length,
+  cookie_names: cookieNames,
   fetch_method: 'browser',
   task_space: '%%TASK_SPACE%%', task_id: task && task.id,
 }))
@@ -309,12 +329,30 @@ try {
   dataType = 'error'
   data = String(e).slice(0, 300)
 }
+let cookieNames = []
+try {
+  const ck = await js(`JSON.stringify((document.cookie || '').split(';').map(s => s.split('=')[0].trim()).filter(Boolean))`)
+  cookieNames = JSON.parse(ck)
+} catch (e) {}
+let healthProbe = null
+const probeUrl = '%%HEALTH_PROBE_URL%%'
+const looksEmpty = (dataType === 'error' || !data || (typeof data === 'object' && Array.isArray(data.items) && data.items.length === 0))
+if (probeUrl && looksEmpty) {
+  try {
+    const pr = await browserFetch(probeUrl, {})
+    healthProbe = typeof pr === 'string' ? (() => { try { return JSON.parse(pr) } catch (e) { return pr.slice(0, 300) } })() : pr
+  } catch (e) {
+    healthProbe = String(e).slice(0, 200)
+  }
+}
 cliLog('EGO_RESULT|' + JSON.stringify({
   api_url: '%%API_URL%%',
   page_url: info.url,
   page_title: info.title,
   data: data,
   data_type: dataType,
+  cookie_names: cookieNames,
+  health_probe: healthProbe,
   fetch_method: 'browser_api',
   task_space: '%%TASK_SPACE%%', task_id: task && task.id,
 }))
@@ -341,6 +379,20 @@ def _require_url(url: str, context: str) -> str:
     return v["url"]
 
 
+def _target_site_key(args: argparse.Namespace) -> str:
+    for attr in ("site", "preset", "url", "api_url", "origin"):
+        val = getattr(args, attr, None)
+        if val:
+            return pacing.normalize_site(str(val))
+    ts = getattr(args, "task_space", None)
+    if ts and str(ts).startswith("site:"):
+        return pacing.normalize_site(str(ts))
+    eng = getattr(args, "engine", None)
+    if eng:
+        return pacing.normalize_site(str(eng))
+    return "default"
+
+
 def run_with_fallback(
     args: argparse.Namespace,
     *,
@@ -348,17 +400,52 @@ def run_with_fallback(
     wb_fn,
     label: str,
 ) -> tuple[dict[str, Any], str]:
-    """统一双运行时：ego 优先 + auto 降级 WebBridge（删掉各 cmd 重复分支）。"""
-    runtime = _pick_runtime(args)
-    if runtime == "webbridge":
-        return wb_fn(), "webbridge"
+    """统一双运行时：冷却检查 → 跨进程槽位 + 同站节奏锁 → ego 优先 / auto 降级 WebBridge。"""
+    site_key = _target_site_key(args)
+    cd = pacing.check_cooldown(site_key)
+    if cd:
+        handoff = quality.build_handoff(
+            {"site": cd["site"], "auth_state": cd["reason"], "login_url": cd.get("login_url") or ""},
+            url=cd.get("login_url") or cd["site"],
+        )
+        print(json.dumps(
+            stamp_login_provenance({
+                "ok": False,
+                "cooldown_active": True,
+                "handoff_required": True,
+                "handoff": handoff,
+                "site": cd["site"],
+                "reason": cd["reason"],
+                "retry_after_seconds": cd["retry_after_seconds"],
+                "login_url": cd.get("login_url") or "",
+                "hint": (
+                    f"站点 {cd['site']} 处于冷却期（{cd['reason']}，剩余 {cd['retry_after_seconds']}s）。"
+                    f"人工处理后运行 `{handoff['clear_cooldown_cmd']}`，或按 handoff.public_fallback 退回 L0 公开检索。"
+                ),
+            }),
+            ensure_ascii=False, indent=2,
+        ))
+        sys.exit(2)
 
-    r = ego_fn()
-    auto = (getattr(args, "runtime", "auto") or "auto") == "auto"
-    if not r.get("ok") and auto and rt.webbridge_available(try_start=True).get("available"):
-        log(f"ego 失败，降级 WebBridge ({label}): {r.get('error')}")
-        return wb_fn(), "webbridge"
-    return r, "ego"
+    runtime = _pick_runtime(args)
+    try:
+        with pacing.browser_slot(site_key) as slot_meta:
+            if label in ("search", "act", "api"):
+                pacing.pace_site(site_key)
+            if runtime == "webbridge":
+                res, used = wb_fn(), "webbridge"
+            else:
+                res = ego_fn()
+                used = "ego"
+                auto = (getattr(args, "runtime", "auto") or "auto") == "auto"
+                if not res.get("ok") and auto and rt.webbridge_available(try_start=True).get("available"):
+                    log(f"ego 失败，降级 WebBridge ({label}): {res.get('error')}")
+                    res, used = wb_fn(), "webbridge"
+            if isinstance(res, dict) and isinstance(res.get("payload"), dict):
+                res["payload"].setdefault("slot_wait_ms", slot_meta["wait_ms"])
+            return res, used
+    except pacing.SlotBusyError as exc:
+        return {"ok": False, "error": f"浏览器并发槽位已满: {exc}"}, runtime
 
 
 def _search_ego(args: argparse.Namespace) -> dict[str, Any]:
@@ -566,17 +653,35 @@ def _origin_from_url(url: str) -> str:
 
 
 def cmd_api(args: argparse.Namespace) -> None:
+    if getattr(args, "preset", None):
+        if not getattr(args, "query", None):
+            sys.exit("错误: 使用 --preset 时必须提供 --query")
+        try:
+            spec = site_profiles.resolve_preset_api(
+                args.preset, args.query, n=getattr(args, "n", 10) or 10
+            )
+        except ValueError as exc:
+            sys.exit(f"错误: {exc}")
+        args.api_url = spec["api_url"]
+        if not args.origin:
+            args.origin = spec["origin"]
+        if not getattr(args, "site", None):
+            args.site = spec["site"]
+    elif not getattr(args, "api_url", None):
+        sys.exit("错误: 请提供 api_url 或 --preset <site> --query <q>")
     apply_site_space(args)
     args.api_url = _require_url(args.api_url, "api")
     origin = args.origin or _origin_from_url(args.api_url)
     origin = _require_url(origin, "api_origin")
 
     def ego_fn():
+        prof = site_profiles.match_site(args.api_url) or site_profiles.match_site(origin)
         js = build_js(
             JS_API,
             TASK_SPACE=args.task_space,
             ORIGIN=origin,
             API_URL=args.api_url,
+            HEALTH_PROBE_URL=(prof.health_probe_url if prof else ""),
             KEEP_SPACE=_keep_js(args),
         )
         r = run_ego(js, args.timeout)
@@ -672,7 +777,39 @@ def cmd_disable(args: argparse.Namespace) -> None:
     print("专业搜索模式已关闭：登录态专业搜索已禁用。")
 
 
+def _run_site_health_check(site_name: str, args: argparse.Namespace) -> dict[str, Any]:
+    prof = site_profiles.get_profile(site_name) or site_profiles.match_site(site_name)
+    if prof is None or not prof.health_probe_url:
+        return {"ok": False, "site": site_name, "error": "该站点暂未声明 health_probe_url"}
+    if not mode_enabled():
+        return {"ok": False, "site": prof.name, "error": "专业搜索模式未开启，请先运行 argo ego-search enable"}
+    origin = prof.api_origin or _origin_from_url(prof.health_probe_url)
+    js = build_js(
+        JS_API, TASK_SPACE=f"site:{prof.domains[0]}", ORIGIN=origin,
+        API_URL=prof.health_probe_url, HEALTH_PROBE_URL="", KEEP_SPACE="true",
+    )
+    r = run_ego(js, DEFAULT_TIMEOUT)
+    if not r.get("ok"):
+        return {"ok": False, "site": prof.name, "error": r.get("error")}
+    verdict = quality.assess_health_probe(r["payload"].get("data"), site=prof.name)
+    out = {"ok": verdict.get("auth_state") == "healthy", "site": prof.name, "probe_url": prof.health_probe_url, **verdict}
+    if verdict.get("handoff_required"):
+        out["handoff"] = quality.build_handoff(verdict, url=prof.login_url)
+    return out
+
+
 def cmd_status(args: argparse.Namespace) -> None:
+    check_site = getattr(args, "check_health", None)
+    if check_site:
+        res = _run_site_health_check(check_site, args)
+        print(json.dumps(stamp_login_provenance(res), ensure_ascii=False, indent=2))
+        if not res.get("ok"):
+            sys.exit(1)
+        return
+    cleared: list[str] = []
+    clear_target = getattr(args, "clear_cooldown", None)
+    if clear_target is not None:
+        cleared = pacing.clear_cooldown(None if clear_target == "__ALL__" else clear_target)
     try_start = bool(getattr(args, "fix", False))
     runtimes = rt.detect_runtimes(try_start_webbridge=try_start)
     print(json.dumps(
@@ -680,8 +817,11 @@ def cmd_status(args: argparse.Namespace) -> None:
             "pro_mode": mode_enabled(),
             "state_file": STATE_PATH,
             "architecture": "dual_runtime_complete",
-            "version": "1.6.0",
+            "version": "1.7.0",
             "runtimes": runtimes,
+            "active_cooldowns": pacing.active_cooldowns(),
+            **({"cleared_cooldowns": cleared} if clear_target is not None else {}),
+            "api_presets": site_profiles.list_api_presets(),
             "isolation": {
                 "public_search_cache": "~/.cache/unified-search/cache.db",
                 "login_partition": "cache_eligible=false / SearchCache 硬拒绝",
@@ -692,6 +832,8 @@ def cmd_status(args: argparse.Namespace) -> None:
                 "default_close_space": True,
                 "keep_space_flag": "--keep-space",
                 "site_sticky": "--site example.com → task-space site:example.com + keep",
+                "site_slots": pacing.SITE_SLOTS,
+                "browser_slots": pacing.BROWSER_SLOTS,
             },
         },
         ensure_ascii=False, indent=2,
@@ -725,6 +867,14 @@ def main() -> None:
     p_status.add_argument(
         "--fix", action="store_true",
         help="探测前幂等尝试启动 WebBridge 本地桥（永不 stop）",
+    )
+    p_status.add_argument(
+        "--clear-cooldown", nargs="?", const="__ALL__", default=None,
+        help="清除站点冷却期（不带参数清全部，或传站点名如 zhihu.com）",
+    )
+    p_status.add_argument(
+        "--check-health", default=None,
+        help="主动体检指定围墙站账号是否被静默限权（如 xiaohongshu/zhihu/xueqiu/bilibili）",
     )
     p_status.set_defaults(fn=cmd_status)
 
@@ -768,8 +918,14 @@ def main() -> None:
     p_act.set_defaults(fn=cmd_act)
 
     p_api = sub.add_parser("api", help="浏览器上下文数据直取（同源 API，继承登录态）")
-    p_api.add_argument("api_url", help="API 完整 URL（须与 --origin 同源）")
+    p_api.add_argument("api_url", nargs="?", default=None, help="API 完整 URL（与 --preset 二选一）")
     p_api.add_argument("--origin", help="登录态上下文页面 URL（默认取 API URL 同源）")
+    p_api.add_argument(
+        "--preset", choices=site_profiles.list_api_presets(), default=None,
+        help="高频围墙站声明式同源搜索 API 预设（如 zhihu/xueqiu/bilibili/weibo）",
+    )
+    p_api.add_argument("--query", default=None, help="配合 --preset 使用的搜索词")
+    p_api.add_argument("--n", type=int, default=10, help="配合 --preset 使用的条数上限（默认 10）")
     p_api.set_defaults(fn=cmd_api)
 
     for p in (p_search, p_fetch, p_act, p_api):

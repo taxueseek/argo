@@ -99,7 +99,16 @@ def _engine_key_fp_safe(engine: str) -> str:
     try:
         from quota import get_quota_manager
         return get_quota_manager()._engine_key_fp(engine)
-    except Exception:
+    except (ImportError, OSError, RuntimeError, ValueError):
+        return ""
+
+
+def _engine_env_fp_safe(engine: str) -> str:
+    """引擎当前环境指纹（spec + key + proxy + CLI 依赖）；失败返回空串。"""
+    try:
+        from engine_fingerprint import compute_engine_fingerprint
+        return compute_engine_fingerprint(engine)
+    except (ImportError, OSError, RuntimeError, ValueError):
         return ""
 
 
@@ -231,6 +240,31 @@ class CircuitBreaker:
             # 自适应禁用：disabled 引擎直接拒绝（不再 half-open 探测，省超时）。
             # 但冷却期（DISABLE_COOLDOWN_SECONDS）过后自动转 half_open 探测，
             # 避免引擎恢复后永久无入口（B4）。disabled_at=0 视为旧数据，直接放行探测。
+            # 环境指纹变更自愈（spec / key / proxy / CLI 依赖任一变化即失效旧故障态）
+            if (state in (engine_states.BREAKER_DISABLED, engine_states.BREAKER_OPEN)
+                    or float(st.get("cooldown_until") or 0) > time.time()):
+                saved_env_fp = st.get("env_fp")
+                if saved_env_fp:
+                    cur_env_fp = _engine_env_fp_safe(engine)
+                    if cur_env_fp and cur_env_fp != saved_env_fp:
+                        def _env_healed() -> None:
+                            fresh = self._engines.get(engine) or {}
+                            fresh.update({
+                                "state": engine_states.BREAKER_HALF_OPEN,
+                                "failures": 0,
+                                "opens": 0,
+                                "auth_streak": 0,
+                                "cooldown_streak": 0,
+                                "half_open_probe_at": time.time(),
+                                "env_fp": cur_env_fp,
+                            })
+                            fresh.pop("auth_disabled", None)
+                            fresh.pop("key_fp", None)
+                            fresh.pop("cooldown_until", None)
+                            self._engines[engine] = fresh
+                        self._mutate_locked(_env_healed)
+                        return True, "env_fingerprint_changed"
+
             if state == engine_states.BREAKER_DISABLED:
                 # auth 禁用的换 key 自愈：401/403 的恢复方式是「修好凭证」，
                 # 而配 key 是离散事件——指纹变了就说明修好了，立即放行，
@@ -495,6 +529,9 @@ class CircuitBreaker:
             st["failures"] = int(st.get("failures") or 0) + 1
             st["last_fail"] = time.time()
             st["last_kind"] = kind
+            env_fp = _engine_env_fp_safe(engine)
+            if env_fp:
+                st["env_fp"] = env_fp
             if attribution:
                 st["last_attribution"] = dict(attribution)
             self._apply_flat_observation(st, attribution)
