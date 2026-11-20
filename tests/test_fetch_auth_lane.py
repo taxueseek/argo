@@ -80,6 +80,10 @@ def test_browser_fetch_marks_login_provenance(authed_env):
     fake_cdp.get_html.return_value = "<html>x</html>"
     fake_cdp.get_text.return_value = "hello world"
     fake_cdp.get_title.return_value = "T"
+    # get_url 必须钉成 str：真实 CDP 恒返回 str，漏 stub 时 MagicMock 会
+    # 流进 detect_page_auth_state 的 regex（browser_auth 侧已加 str 收敛兜底，
+    # 这里钉住契约本身的形状）。
+    fake_cdp.get_url.return_value = "https://example.com/x"
     with patch("chrome_cdp.ChromeCDP") as cls:
         cls.return_value = fake_cdp
         out = browser_fetch("https://example.com/x", auth_profile=authed_env)

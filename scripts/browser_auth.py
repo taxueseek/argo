@@ -275,8 +275,11 @@ def detect_page_auth_state(
     """四态(+搜索受限)判别纯函数：全部返回 engine_states.PAGE_AUTH_* 常量。"""
     import engine_states as _es
 
-    href = url or ""
-    combined = f"{title or ''}\n{(body_text or '')[:4000]}"
+    # 入口统一收敛 str：调用方可能传非 str（测试桩的 MagicMock 等），
+    # regex 收到非 str 会 TypeError 顺异常链拖垮整条 fetch
+    # （tests/test_fetch_auth_lane.py::test_browser_fetch_marks_login_provenance 回归）。
+    href = str(url) if url else ""
+    combined = "{}\n{}".format(str(title or ""), str(body_text or "")[:4000])
     if has_security_modal or _SEC_VERIFY_URL_RE.search(href) or _SEC_VERIFY_TEXT_RE.search(combined):
         return _es.PAGE_AUTH_SECURITY_VERIFY
     if _SIGNED_OUT_URL_RE.search(href):
