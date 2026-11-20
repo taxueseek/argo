@@ -98,7 +98,8 @@ def _breaker_blocked(engine_id: str) -> bool:
     """
     try:
         from circuit_breaker import get_breaker
-        st = get_breaker().status(engine_id)
+        breaker = get_breaker()
+        st = breaker.status(engine_id)
     except Exception as _exc:
         import logging
         logging.getLogger("unified_search").debug(
@@ -107,6 +108,17 @@ def _breaker_blocked(engine_id: str) -> bool:
     import engine_states
     state = st.get("state")
     if state == engine_states.BREAKER_DISABLED:
+        # 打通熔断恢复环（2026-11-20 审计：3/5 disabled 引擎 2-12 天无探测字段，
+        # 路由硬跳过 → allow() 永不被调用 → 超冷却探测/env_fp/key_fp 自愈全部
+        # 死代码化）。这里只触发 allow() 的状态翻转（disabled→half_open 或指纹
+        # 自愈，锁内判冷却，零网络请求），本 combo 仍按 blocked 剔除（行为不变）；
+        # 翻转后下次 status 读到 half_open 自然放行，真实调用走 allow() 正常探测。
+        try:
+            breaker.allow(engine_id)
+        except Exception as _exc:  # 翻转失败不阻塞路由，但留痕（防再吞成静默）
+            import logging
+            logging.getLogger("unified_search").debug(
+                f"breaker.allow({engine_id!r}) 探测翻转失败，按 disabled 处理: {_exc!r}")
         return True
     return int(st.get("cooldown_remain") or 0) > 0
 
