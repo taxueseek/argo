@@ -1150,6 +1150,16 @@
     "cost_tier": "free",
     "priority": 48
   },
+  "helve": {
+    "label": "Helve",
+    "qps": 5,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.005,
+    "cost_unit": "usd",
+    "cost_tier": "paid",
+    "priority": 60
+  },
   "hf_datasets": {
     "label": "Hugging Face Datasets",
     "qps": 2,

@@ -1459,6 +1459,17 @@ engines:
   recommended: true
   explicit_only: false
   desc: 日本技术圈书签搜索（RDF RSS，带收藏日期）
+- name: helve
+  tier: T1
+  type: http
+  coverage:
+  - general
+  latency_ms: 2000
+  cost: api
+  status: ok
+  recommended: true
+  explicit_only: true
+  desc: Helve web search API (/v1/search，按次付费，仅 --engine helve 显式调用)
 - name: hf_datasets
   tier: T1
   type: http

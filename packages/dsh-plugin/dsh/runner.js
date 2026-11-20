@@ -80,6 +80,7 @@ export const DEFAULTS = Object.freeze({
     'FOURGET_URL',
     'GEMINI_API_KEY',
     'GITHUB_TOKEN',
+    'HELVE_API_KEY',
     'KEENABLE_API_KEY',
     'METASO_API_KEY',
     'OCTEN_API_KEY',

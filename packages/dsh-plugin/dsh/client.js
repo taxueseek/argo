@@ -192,6 +192,7 @@ window.__ModuleLoader__.load({
       { ref: "FOURGET_URL", common: false, label: "4get 极简元搜索", en: "4get", engines: ["fourget"] },
       { ref: "GEMINI_API_KEY", common: false, label: "语义证据·Gemini 决策", en: "Semantic Evidence · Gemini Decision", engines: [] },
       { ref: "GITHUB_TOKEN", common: false, label: "GitHub", en: "GitHub", engines: ["github"] },
+      { ref: "HELVE_API_KEY", common: false, label: "Helve", en: "Helve", engines: ["helve"] },
       { ref: "KEENABLE_API_KEY", common: false, label: "Keenable", en: "Keenable", engines: ["keenable"] },
       { ref: "METASO_API_KEY", common: false, label: "秘塔", en: "Metaso", engines: ["metaso", "metaso_doc", "metaso_image", "metaso_podcast", "metaso_scholar", "metaso_video"] },
       { ref: "OCTEN_API_KEY", common: false, label: "Octen", en: "Octen", engines: ["octen"] },
