@@ -930,47 +930,43 @@ window.__ModuleLoader__.load({
 
     const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.credentials'];
 
+    // 局部 ErrorBoundary：设置页渲染异常时降级为局部报错卡，绝不拖垮宿主界面。
+    const PanelBoundary = typeof react.Component === 'function'
+      ? class ArgoErrorBoundary extends react.Component {
+        constructor(p) { super(p); this.state = { error: null }; }
+        static getDerivedStateFromError(error) { return { error }; }
+        render() {
+          if (this.state.error) {
+            return h('div', { style: { padding: 12, color: '#dc2626', fontSize: 12, whiteSpace: 'pre-wrap' } },
+              '[argo-dsh] 设置页渲染异常：' + String(this.state.error?.message ?? this.state.error));
+          }
+          return this.props.children;
+        }
+      }
+      : null;
+
+    function SafeArgoPanel(props) {
+      return PanelBoundary ? h(PanelBoundary, null, h(ArgoPanel, props)) : h(ArgoPanel, props);
+    }
+
     function apply(ctx) {
       const form = ctx.configForms.get(NS);
       const locale = ctx.locale ?? (typeof ctx.get === 'function' ? ctx.get('locale') : undefined);
       const credentials = ctx.remote ? ctx.remote.credentials : undefined;
       const label = () => 'Argo 搜索';
-
-      const injected = () => ({
-        hooks: { argoForm: form },
-        set: (field, next) => form.set(field, next),
-        mutate: (ops) => form.mutate(ops),
-        credentials,
-        remote: ctx.remote,
-        locale,
-      });
+      const injected = () => ({ hooks: { argoForm: form }, set: (f, n) => form.set(f, n), mutate: (ops) => form.mutate(ops), credentials, remote: ctx.remote, locale });
 
       ctx.effect(() => ctx.configForms.whileServed([NS], () => {
         const offs = [
-          ctx.slots.inject('settings.section', () => ctx.slots.register({
-            name: 'settings.section',
-            id: SECTION_ID,
-            order: 26,
-            label,
-            inject: injected,
-          }, ArgoPanel)),
-          ctx.slots.inject('plugins.item', () => ctx.slots.register({
-            name: 'plugins.item',
-            id: SECTION_ID,
-            order: 50,
-            label,
-            inject: injected,
-          }, ArgoPanel)),
+          ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: SECTION_ID, order: 26, label, inject: injected }, SafeArgoPanel)),
+          ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: SECTION_ID, order: 50, label, inject: injected }, SafeArgoPanel)),
         ];
-        return () => {
-          for (const off of offs) if (typeof off === 'function') off();
-        };
+        return () => { for (const off of offs) if (typeof off === 'function') off(); };
       }), 'argo-dsh: settings page');
 
       if (typeof window !== 'undefined' && typeof document !== 'undefined' && ctx.slots) {
         ctx.effect(() => {
-          let disposed = false;
-          let unmount = null;
+          let disposed = false, unmount = null;
           import('/argo/workbench-client.js').then((mod) => {
             if (!disposed && typeof mod?.mountArgoWorkbench === 'function') unmount = mod.mountArgoWorkbench(ctx, react);
           }).catch(() => {});
@@ -979,17 +975,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    exports.apply = apply;
-    exports.inject = inject;
-    exports.ArgoPanel = ArgoPanel;
-    // 静态数据导出供漂移门禁核对：TOOLS 必须与 native-tools.mjs（mcp_tools.py
-    // 生成产物）同名同集合，ENGINE_TOGGLES 必须与 specs.js 的 ARGO_ENV_SPECS
-    // 同名同集合——两边任何一边增删而另一边没跟上，测试即红。
-    exports.TOOLS = TOOLS;
-    exports.TOOL_GROUPS = TOOL_GROUPS;
-    exports.ENGINE_TOGGLES = ENGINE_TOGGLES;
-    exports.KEYS = KEYS;
-
+    Object.assign(exports, { apply, inject, ArgoPanel, SafeArgoPanel, PanelBoundary, TOOLS, TOOL_GROUPS, ENGINE_TOGGLES, KEYS });
     return module.exports;
   }
 });

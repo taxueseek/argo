@@ -422,3 +422,29 @@ test('dashboard tab renders metrics, workflow presets, and engine topology matri
   assert.ok(flat.some((node) => node.props && node.props.key === 'presets'), 'dashboard 应包含工作流预设')
   assert.ok(flat.some((node) => node.props && node.props.key === 'matrix'), 'dashboard 应包含核心引擎拓扑矩阵')
 })
+
+test('SafeArgoPanel wraps ArgoPanel in an ErrorBoundary that isolates render failures', () => {
+  const definition = loadBundle()
+  class FakeComponent {
+    constructor(props) { this.props = props; this.state = {} }
+  }
+  const react = {
+    Component: FakeComponent,
+    createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+    useState: () => [undefined, () => {}],
+    useEffect: () => {},
+    useRef: () => ({ current: new Set() }),
+  }
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error(`unexpected require: ${id}`)
+  })
+  assert.equal(typeof mod.PanelBoundary, 'function')
+  const tree = mod.SafeArgoPanel({ view: 'page' })
+  assert.equal(tree.type, mod.PanelBoundary)
+  const inst = new mod.PanelBoundary({ children: 'ok' })
+  inst.state = mod.PanelBoundary.getDerivedStateFromError(new Error('boom'))
+  const fallback = inst.render()
+  assert.equal(fallback.type, 'div')
+  assert.match(String(fallback.children[0]), /boom/)
+})

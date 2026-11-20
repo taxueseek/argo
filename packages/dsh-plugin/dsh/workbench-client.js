@@ -796,6 +796,57 @@ export function mountArgoWorkbench(ctx, react) {
     }, 'Argo 分析')
   }
 
+  function SearchModeControl({ sessionId }) {
+    const sid = String(sessionId || 'default')
+    const [mode, setMode] = useState('auto')
+    const [busy, setBusy] = useState(false)
+
+    useEffect(() => {
+      let alive = true
+      fetch(`/argo/api/search-mode?sessionId=${encodeURIComponent(sid)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d && d.mode) setMode(d.mode) })
+        .catch(() => {})
+      return () => { alive = false }
+    }, [sid])
+
+    const cycle = async () => {
+      if (busy) return
+      const next = mode === 'auto' ? 'required' : mode === 'required' ? 'off' : 'auto'
+      setBusy(true)
+      try {
+        const res = await fetch('/argo/api/search-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: sid, mode: next }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setMode(data.mode || next)
+        }
+      } catch {
+        /* 保持原态 */
+      } finally {
+        setBusy(false)
+      }
+    }
+
+    const label = mode === 'required' ? '始终联网' : mode === 'off' ? '关闭联网' : '智能联网'
+    const color = mode === 'required' ? '#ea580c' : mode === 'off' ? '#64748b' : 'currentColor'
+    return h('button', {
+      type: 'button',
+      title: `Argo 联网策略：${label}（点击切换）`,
+      disabled: busy,
+      onClick: cycle,
+      style: {
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '3px 8px', borderRadius: '6px', border: '1px solid currentColor',
+        background: 'transparent', color, fontSize: '12px', cursor: busy ? 'wait' : 'pointer',
+        opacity: mode === 'off' ? 0.65 : 0.92,
+      },
+    }, label)
+  }
+
   const offs = [
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'argo-workbench' }, WorkbenchApp)),
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
@@ -810,6 +861,10 @@ export function mountArgoWorkbench(ctx, react) {
         h('path', { d: 'M11 7.2 13.8 13.8 11 12.3 8.2 13.8 11 7.2Z', fill: '#ea580c', stroke: 'none' })),
     )),
     ctx.slots.inject('global', () => ctx.slots.register({ name: 'global', key: 'argo-workbench-pill' }, SelectionPill)),
+    ctx.slots.inject('conversation.input.left', () => ctx.slots.register(
+      { name: 'conversation.input.left', id: 'argo-search-mode', order: 28, label: () => 'Argo 联网模式' },
+      SearchModeControl,
+    )),
   ]
 
   return () => {

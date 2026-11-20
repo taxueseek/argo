@@ -235,3 +235,75 @@ test('index apply re-registers envResolver after dispose (HMR safe) and sets rc.
   assert.equal(typeof searchProv?.ready, 'function')
   while (cleanups.length) cleanups.pop()()
 })
+
+test('workbench /argo/api/* enforces TCP peer loopback fence against spoofed headers', async () => {
+  const handler = createWorkbenchHandler({}, {}, () => ({}))
+  try {
+    // 局域网对端即使伪造 Host: 127.0.0.1 + X-Forwarded-For: 127.0.0.1 且不带 Origin 也必须被拒
+    const lanReq = mockReq('GET', '/argo/api/health')
+    lanReq.socket = { remoteAddress: '192.168.1.50' }
+    lanReq.headers = { host: '127.0.0.1:8080', 'x-forwarded-for': '127.0.0.1' }
+    const lanRes = mockRes()
+    await handler(lanReq, lanRes)
+    assert.equal(lanRes.statusCode, 403)
+    assert.equal(lanRes.json().error, 'forbidden_origin')
+
+    // 本机 IPv4-mapped 回环放行，但跨站 Origin 仍被拦（防 DNS rebinding）
+    const okReq = mockReq('GET', '/argo/api/health')
+    okReq.socket = { remoteAddress: '::ffff:127.0.0.1' }
+    const okRes = mockRes()
+    await handler(okReq, okRes)
+    assert.equal(okRes.statusCode, 200)
+
+    const badOriginReq = mockReq('GET', '/argo/api/health')
+    badOriginReq.socket = { remoteAddress: '127.0.0.1' }
+    badOriginReq.headers = { host: '127.0.0.1:8080', origin: 'https://evil.example' }
+    const badOriginRes = mockRes()
+    await handler(badOriginReq, badOriginRes)
+    assert.equal(badOriginRes.statusCode, 403)
+  } finally {
+    handler.dispose()
+  }
+})
+
+test('workbench /argo/api/search-mode and /argo/api/auth-status work end-to-end', async () => {
+  const { SearchModeRuntime } = await import('../dsh/search-mode.js')
+  const searchMode = new SearchModeRuntime()
+  const verifyCalls = []
+  const handler = createWorkbenchHandler({}, {}, () => ({}), {
+    searchMode,
+    runAuthCli: async (cliArgs) => {
+      if (cliArgs[1] === 'status') return { profiles: [{ site: 'x.com', created: '2026-11-20' }] }
+      if (cliArgs[1] === 'verify') {
+        verifyCalls.push(cliArgs[2])
+        return { ok: true, site: cliArgs[2], state: 'ready' }
+      }
+      return {}
+    },
+  })
+  try {
+    const rGet = mockRes()
+    await handler(mockReq('GET', '/argo/api/search-mode?sessionId=s9'), rGet)
+    assert.equal(rGet.statusCode, 200)
+    assert.equal(rGet.json().mode, 'auto')
+
+    const rPost = mockRes()
+    await handler(mockReq('POST', '/argo/api/search-mode', { sessionId: 's9', mode: 'required' }), rPost)
+    assert.equal(rPost.statusCode, 200)
+    assert.equal(rPost.json().mode, 'required')
+    assert.equal(searchMode.getMode('s9'), 'required')
+
+    const rAuth1 = mockRes()
+    await handler(mockReq('GET', '/argo/api/auth-status'), rAuth1)
+    assert.equal(rAuth1.statusCode, 200)
+    assert.equal(rAuth1.json().profiles[0].site, 'x.com')
+    await new Promise((r) => setTimeout(r, 10))
+    assert.deepEqual(verifyCalls, ['x.com'], '冷启动未核验站点应在后台静默触发一次活体复核')
+
+    const rAuth2 = mockRes()
+    await handler(mockReq('GET', '/argo/api/auth-status'), rAuth2)
+    assert.equal(rAuth2.json().profiles[0].verification.state, 'ready')
+  } finally {
+    handler.dispose()
+  }
+})

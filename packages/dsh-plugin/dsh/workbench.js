@@ -15,6 +15,7 @@ import { DEFAULTS, stripBoundary } from './runner.js'
 import { resolveArgoEnv } from './specs.js'
 import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
 import { buildSuggestions } from './workbench-suggestions.js'
+import { checkLoopbackAndOrigin } from './route-guard.js'
 import {
   breakerFilePath,
   loadWatches,
@@ -74,19 +75,6 @@ function sendJson(res, status, data) {
 function sendSse(res, event, data) {
   if (res.writableEnded || res.destroyed) return
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-}
-
-function checkSameOrigin(ctx, req) {
-  const origin = req.headers?.origin
-  if (!origin) return true
-  try {
-    const expected = ctx.webServer?.getOrigin?.()
-    if (expected && origin === expected) return true
-    const parsed = new URL(origin)
-    return parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '::1'
-  } catch {
-    return false
-  }
 }
 
 async function readJsonBody(req, maxBytes = 256 * 1024) {
@@ -467,7 +455,10 @@ export function buildSearchCliArgs(query, mode, refresh = false, overrides = {})
   return args
 }
 
-export function createWorkbenchHandler(ctx, config, getCredentials) {
+export function createWorkbenchHandler(ctx, config, getCredentials, options = {}) {
+  const searchMode = options.searchMode || null
+  const authVerifyCache = new Map()
+  const authVerifyInflight = new Set()
   const cache = new Map()
   const inflight = new Map()
   const diagnostics = []
@@ -568,13 +559,61 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         return
       }
 
+      if (path.startsWith('/argo/api/') && !checkLoopbackAndOrigin(ctx, req)) {
+        sendJson(res, 403, { error: 'forbidden_origin' })
+        return
+      }
+
+      if (path === '/argo/api/search-mode' && req.method === 'GET') {
+        const sid = url.searchParams.get('sessionId') || 'default'
+        sendJson(res, 200, searchMode ? { ok: true, sessionId: sid, ...searchMode.view(sid) } : { ok: true, sessionId: sid, mode: 'auto', available: false })
+        return
+      }
+
+      if (path === '/argo/api/search-mode' && req.method === 'POST') {
+        const body = await readJsonBody(req)
+        const sid = String(body.sessionId || 'default')
+        const next = searchMode ? searchMode.setMode(sid, body.mode) : 'auto'
+        sendJson(res, 200, { ok: true, sessionId: sid, mode: next, available: Boolean(searchMode?.available?.()) })
+        return
+      }
+
+      if (path === '/argo/api/auth-status' && req.method === 'GET') {
+        const runCli = options.runAuthCli || (async (cliArgs) => {
+          const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
+          return runArgoCli(resolveArgoBin(), cliArgs, { env, timeoutMs: 8000 })
+        })
+        let profiles = []
+        try {
+          const out = await runCli(['auth', 'status', '--json'])
+          profiles = Array.isArray(out?.profiles) ? out.profiles : []
+        } catch {
+          profiles = []
+        }
+        const now = Date.now()
+        const items = profiles.map((p) => {
+          const site = String(p?.site || '')
+          const cached = authVerifyCache.get(site)
+          const fresh = cached && (now - cached.ts < 60_000) ? cached.data : null
+          if (site && !fresh && !authVerifyInflight.has(site) && url.searchParams.get('verify') !== '0') {
+            authVerifyInflight.add(site)
+            runCli(['auth', 'verify', site, '--json'])
+              .then((v) => { authVerifyCache.set(site, { ts: Date.now(), data: v }) })
+              .catch(() => {})
+              .finally(() => { authVerifyInflight.delete(site) })
+          }
+          return { ...p, verification: fresh || { pending: Boolean(site) } }
+        })
+        sendJson(res, 200, { ok: true, profiles: items })
+        return
+      }
+
       if (path === '/argo/api/watches' && req.method === 'GET') {
         sendJson(res, 200, { ok: true, items: watches })
         return
       }
 
       if (path === '/argo/api/watches' && req.method === 'POST') {
-        if (!checkSameOrigin(ctx, req)) { sendJson(res, 403, { error: 'forbidden_origin' }); return }
         const body = await readJsonBody(req)
         const query = String(body.query || '').trim()
         const mode = MODES.has(body.mode) ? body.mode : 'general'
@@ -603,7 +642,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       }
 
       if (path === '/argo/api/watches/run' && req.method === 'POST') {
-        if (!checkSameOrigin(ctx, req)) { sendJson(res, 403, { error: 'forbidden_origin' }); return }
         const body = await readJsonBody(req)
         const target = watches.find(w => w.id === body.id)
         if (!target) { sendJson(res, 404, { error: 'watch_not_found' }); return }
@@ -619,7 +657,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       }
 
       if (path === '/argo/api/watches' && req.method === 'DELETE') {
-        if (!checkSameOrigin(ctx, req)) { sendJson(res, 403, { error: 'forbidden_origin' }); return }
         const id = url.searchParams.get('id') || ''
         watches = watches.filter(w => w.id !== id)
         saveWatches(watches)
@@ -648,7 +685,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       }
 
       if (path === '/argo/api/ego-search' && req.method === 'POST') {
-        if (!checkSameOrigin(ctx, req)) { sendJson(res, 403, { error: 'forbidden_origin' }); return }
         const body = await readJsonBody(req)
         const action = body.enabled ? 'enable' : 'disable'
         await new Promise((resolve) => {
@@ -669,10 +705,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       }
 
       if (path === '/argo/api/stream' && req.method === 'GET') {
-        if (!checkSameOrigin(ctx, req)) {
-          sendJson(res, 403, { error: 'forbidden_origin' })
-          return
-        }
         const query = (url.searchParams.get('q') || '').trim()
         const rawMode = (url.searchParams.get('mode') || 'general').trim()
         const mode = MODES.has(rawMode) ? rawMode : 'general'
@@ -836,10 +868,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       }
 
       if (path === '/argo/api/followup' && req.method === 'POST') {
-        if (!checkSameOrigin(ctx, req)) {
-          sendJson(res, 403, { error: 'forbidden_origin' })
-          return
-        }
         const body = await readJsonBody(req)
         const question = String(body.question || '').trim()
         // 元素级过滤：null/非对象条目会在 buildEvidenceContext 与 history
@@ -919,7 +947,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
   return workbenchHandler
 }
 
-export function registerArgoWorkbench(ctx, config, getCredentials) {
+export function registerArgoWorkbench(ctx, config, getCredentials, options = {}) {
   const attach = (targetCtx) => {
     let webServer
     try {
@@ -928,7 +956,7 @@ export function registerArgoWorkbench(ctx, config, getCredentials) {
       return undefined
     }
     if (!webServer || typeof webServer.register !== 'function') return undefined
-    const handler = createWorkbenchHandler(targetCtx, config, getCredentials)
+    const handler = createWorkbenchHandler(targetCtx, config, getCredentials, options)
     const off = webServer.register({ kind: 'prefix', path: '/argo', handler })
     return () => {
       handler.dispose?.()
