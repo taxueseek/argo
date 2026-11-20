@@ -11,6 +11,9 @@ import { resolveStateDir } from './diagnostics.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MONOREPO_ARGO_BIN = join(HERE, '..', '..', '..', 'bin', 'argo')
+// install.sh 默认安装根（ARGO_HOME 可改，此处只探测默认路径——探测不到就走
+// console script 的 PATH 兜底，不猜 site-packages 里的 wheel _data 布局）
+const INSTALL_VENV_ARGO_BIN = join(homedir(), '.local', 'share', 'argo', '.venv', 'bin', 'argo')
 const WATCH_STORE_FILE = join(homedir(), '.config', 'argo', 'workbench-watches.json')
 
 export function mergedLaunchdPath(env = {}) {
@@ -19,8 +22,15 @@ export function mergedLaunchdPath(env = {}) {
   return basePath ? `${extraPath}:${basePath}` : extraPath
 }
 
-export function resolveArgoBin() {
+// 2026-11-20 审计：npm 发布版插件装在 DSH 缓存目录时 MONOREPO_ARGO_BIN 不存在，
+// 裸名 'argo' 又依赖 PATH——launchd/受限 PATH 下 venv console script 可能不可达。
+// 修法加候选不重排：显式 ARGO_BIN 最优先（用户指路零猜测），其次 monorepo、
+// install.sh 默认 venv，最后裸名走 PATH。
+export function resolveArgoBin(env = {}) {
+  const explicit = env.ARGO_BIN || process.env.ARGO_BIN
+  if (explicit) return explicit
   if (existsSync(MONOREPO_ARGO_BIN)) return MONOREPO_ARGO_BIN
+  if (existsSync(INSTALL_VENV_ARGO_BIN)) return INSTALL_VENV_ARGO_BIN
   return 'argo'
 }
 
@@ -28,7 +38,7 @@ export function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, si
   const mergedPath = mergedLaunchdPath(env)
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(new Error('aborted')); return }
-    const child = spawn(resolveArgoBin(), args, {
+    const child = spawn(resolveArgoBin({ ...env, PATH: mergedPath }), args, {
       env: { ...process.env, ...env, PATH: mergedPath },
       stdio: ['pipe', 'pipe', 'pipe'],
     })

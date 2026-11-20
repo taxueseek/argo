@@ -700,7 +700,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
         const action = body.enabled ? 'enable' : 'disable'
         await new Promise((resolve) => {
           execFile(
-            resolveArgoBin(),
+            resolveArgoBin({ PATH: mergedLaunchdPath() }),
             ['ego-search', action],
             { timeout: 8000, env: { ...process.env, PATH: mergedLaunchdPath() } },
             () => resolve(),

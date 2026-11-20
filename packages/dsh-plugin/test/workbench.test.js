@@ -399,3 +399,22 @@ test('refreshDailyHotspots: 跨进程锁让路——他进程持锁时不重复�
     process.env.ARGO_STATE_DIR = prevState
   }
 })
+
+test('resolveArgoBin: ARGO_BIN 显式覆盖 > monorepo > install venv > PATH 裸名', async () => {
+  const { existsSync } = await import('node:fs')
+  const { homedir } = await import('node:os')
+  const { dirname, join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const { resolveArgoBin } = await import('../dsh/workbench-io.js')
+  // 显式覆盖最优先(用户指路,零猜测)
+  assert.equal(resolveArgoBin({ ARGO_BIN: '/custom/argo' }), '/custom/argo')
+  // 无覆盖时按候选链取第一个存在的:monorepo > install.sh 默认 venv > 裸名走 PATH
+  const here = join(dirname(dirname(fileURLToPath(import.meta.url))), 'dsh')
+  const chain = [
+    join(here, '..', '..', '..', 'bin', 'argo'),
+    join(homedir(), '.local', 'share', 'argo', '.venv', 'bin', 'argo'),
+    'argo',
+  ]
+  const expected = chain.find((p, i) => i === chain.length - 1 || existsSync(p))
+  assert.equal(resolveArgoBin({}), expected)
+})
