@@ -16,9 +16,8 @@ import { resolveArgoEnv } from './specs.js'
 import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
 import {
   buildSuggestions,
-  isDailyRefreshDue,
+  createHotspotRefresher,
   loadHotspotStore,
-  refreshDailyHotspots,
   updateRefreshTime,
 } from './workbench-suggestions.js'
 import { checkLoopbackAndOrigin, resolveAuthStatusWithBgVerify } from './route-guard.js'
@@ -469,16 +468,16 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
   const diagnostics = []
   let watches = loadWatches()
   let watchBusy = false
-  let hotspotBusy = false
 
-  const triggerDailyHotspotRefresh = async () => {
-    if (hotspotBusy) return loadHotspotStore()
-    hotspotBusy = true
-    try {
+  // 热榜触发端（inflight 复用 + 全失败 1h 退避）实现在 workbench-suggestions.js
+  const hotspotRefresher = createHotspotRefresher({
+    buildRunner: async () => {
       const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
-      return await refreshDailyHotspots({ runCli: (cliArgs) => runArgoCli(cliArgs, { env, timeoutMs: 12000 }) })
-    } catch { return loadHotspotStore() } finally { hotspotBusy = false }
-  }
+      return (cliArgs) => runArgoCli(cliArgs, { env, timeoutMs: 12000 })
+    },
+  })
+  const triggerDailyHotspotRefresh = hotspotRefresher.trigger
+  const hotspotRetryDue = hotspotRefresher.retryDue
 
   const executeWatch = async (watch) => {
     const started = Date.now()
@@ -519,7 +518,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
   }
 
   const timer = setInterval(async () => {
-    if (!hotspotBusy && isDailyRefreshDue(loadHotspotStore())) {
+    if (!hotspotRefresher.isBusy() && hotspotRetryDue(loadHotspotStore())) {
       triggerDailyHotspotRefresh()
     }
     if (watchBusy) return
@@ -670,7 +669,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
         const lang = url.searchParams.get('lang') || 'zh'
         const shuffle = url.searchParams.get('shuffle') === '1'
         const store = loadHotspotStore()
-        if (isDailyRefreshDue(store)) triggerDailyHotspotRefresh()
+        if (hotspotRetryDue(store)) triggerDailyHotspotRefresh()
         sendJson(res, 200, buildSuggestions(reqMode, lang, shuffle, { watches, hotspotStore: store }))
         return
       }
@@ -691,7 +690,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
           refreshTime: store.refreshTime,
           lastRefreshedAt: store.lastRefreshedAt,
           hotspotCount: (store.zh?.length || 0) + (store.en?.length || 0),
-          refreshing: hotspotBusy,
+          refreshing: hotspotRefresher.isBusy(),
         })
         return
       }

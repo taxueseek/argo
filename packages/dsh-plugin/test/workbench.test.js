@@ -333,3 +333,69 @@ test('workbench suggestions rank daily hotspots by user interest and enforce onc
     handler.dispose()
   }
 })
+
+test('refreshDailyHotspots: 全失败不盖当日章并记 lastFailedAt,拿到新数据才盖章', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const prevState = process.env.ARGO_STATE_DIR
+  process.env.ARGO_STATE_DIR = mkdtempSync(join(tmpdir(), 'argo-wb-hotspot-'))
+  try {
+    const { refreshDailyHotspots } = await import('../dsh/workbench-suggestions.js')
+    const now = new Date('2026-11-20T09:00:00')
+    const emptyCli = async () => ({ results: [] })
+
+    // 全失败:保留旧章(当日仍 due,定时器可重试),写 lastFailedAt 供 1h 退避
+    const failed = await refreshDailyHotspots({
+      runCli: emptyCli, now,
+    })
+    assert.equal(failed.lastRefreshedDate, '', '全失败不得盖当日章')
+    assert.ok(failed.lastFailedAt, '全失败须记 lastFailedAt')
+    assert.equal(failed.lastRefreshedAt, '')
+
+    // 成功:盖当日章,清除 lastFailedAt
+    const okCli = async () => ({ results: [{ title: '今日全新热搜条目测试样例' }] })
+    const ok = await refreshDailyHotspots({ runCli: okCli, now })
+    assert.equal(ok.lastRefreshedDate, '2026-11-20')
+    assert.ok(ok.lastRefreshedAt)
+    assert.equal(ok.lastFailedAt, undefined, '成功后不得残留失败标记')
+    assert.equal(ok.zh.length, 1)
+  } finally {
+    process.env.ARGO_STATE_DIR = prevState
+  }
+})
+
+test('refreshDailyHotspots: 跨进程锁让路——他进程持锁时不重复抓取', async () => {
+  const { closeSync, mkdtempSync, openSync, unlinkSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const prevState = process.env.ARGO_STATE_DIR
+  const stateDir = mkdtempSync(join(tmpdir(), 'argo-wb-lock-'))
+  process.env.ARGO_STATE_DIR = stateDir
+  try {
+    const { refreshDailyHotspots } = await import('../dsh/workbench-suggestions.js')
+    // 模拟另一宿主持锁:先造锁文件,再触发刷新
+    const lockPath = join(stateDir, 'workbench-hotspots.json.lock')
+    const lockFd = openSync(lockPath, 'wx')
+    try {
+      let cliCalls = 0
+      const out = await refreshDailyHotspots({
+        runCli: async () => { cliCalls += 1; return { results: [{ title: '不该被抓取的条目样例' }] } },
+        now: new Date('2026-11-21T09:00:00'),
+      })
+      assert.equal(cliCalls, 0, '持锁期间他进程不得发起 CLI 抓取')
+      assert.equal(out.zh.length, 0, '让路时返回现有 store')
+    } finally {
+      closeSync(lockFd)
+      unlinkSync(lockPath)
+    }
+    // 锁释放后正常抓取
+    const out2 = await refreshDailyHotspots({
+      runCli: async () => ({ results: [{ title: '锁释放后的真实热搜条目' }] }),
+      now: new Date('2026-11-21T09:01:00'),
+    })
+    assert.equal(out2.zh.length, 1)
+  } finally {
+    process.env.ARGO_STATE_DIR = prevState
+  }
+})

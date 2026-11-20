@@ -8,7 +8,7 @@
  *  4. 静态模板仅作冷启动兜底（真实信号不足 3 条时补位），不抢占正常用户首屏。
  */
 
-import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { resolveStateDir } from './diagnostics.js'
 
@@ -82,11 +82,41 @@ export function localDateKey(now = new Date()) {
   return `${y}-${m}-${d}`
 }
 
+// 跨进程刷新互斥：多个 DSH 宿主各有 60s 定时器，裸跑会双份抓取 4 引擎并
+// last-write-wins 互踩 workbench-hotspots.json（2026-11-20 审计）。Node 无原生
+// flock，用 wx 独占创建等价实现（语义对齐 scripts/pacing.py 的非阻塞文件锁）：
+// 抢不到直接让路——另一宿主当日会刷好并盖章，无需排队等待。
+const HOTSPOT_LOCK_STALE_MS = 5 * 60 * 1000
+
+function acquireHotspotLock() {
+  const lockFile = `${hotspotStoreFile()}.lock`
+  try {
+    return { fd: openSync(lockFile, 'wx'), lockFile }
+  } catch (err) {
+    if (err?.code !== 'EEXIST') return null
+    try {
+      // stale 残留：上次进程崩溃未释放，超 5 分钟（≈40 倍最坏刷新耗时）强取
+      if (Date.now() - statSync(lockFile).mtimeMs > HOTSPOT_LOCK_STALE_MS) {
+        unlinkSync(lockFile)
+        return { fd: openSync(lockFile, 'wx'), lockFile }
+      }
+    } catch { /* 对方刚释放或刚重建，本轮回让路 */ }
+    return null
+  }
+}
+
+function releaseHotspotLock(lock) {
+  if (!lock) return
+  try { closeSync(lock.fd) } catch { /* ignore */ }
+  try { unlinkSync(lock.lockFile) } catch { /* ignore */ }
+}
+
 export function loadHotspotStore() {
   const empty = {
     refreshTime: DEFAULT_REFRESH_TIME,
     lastRefreshedDate: '',
     lastRefreshedAt: '',
+    lastFailedAt: '',
     zh: [],
     en: [],
   }
@@ -97,6 +127,8 @@ export function loadHotspotStore() {
       refreshTime: normalizeRefreshTime(raw.refreshTime) || DEFAULT_REFRESH_TIME,
       lastRefreshedDate: typeof raw.lastRefreshedDate === 'string' ? raw.lastRefreshedDate : '',
       lastRefreshedAt: typeof raw.lastRefreshedAt === 'string' ? raw.lastRefreshedAt : '',
+      // 全失败退避标记：读侧白名单必须透传，否则触发端永远读不到（2026-11-20 退避方案）
+      lastFailedAt: typeof raw.lastFailedAt === 'string' ? raw.lastFailedAt : '',
       zh: Array.isArray(raw.zh) ? raw.zh.filter((x) => typeof x === 'string' && x.trim()) : [],
       en: Array.isArray(raw.en) ? raw.en.filter((x) => typeof x === 'string' && x.trim()) : [],
     }
@@ -145,6 +177,16 @@ function cleanTitle(raw) {
 export async function refreshDailyHotspots({ runCli, now = new Date() } = {}) {
   const store = loadHotspotStore()
   if (typeof runCli !== 'function') return store
+  const lock = acquireHotspotLock()
+  if (!lock) return store
+  try {
+    return await collectHotspots(store, runCli, now)
+  } finally {
+    releaseHotspotLock(lock)
+  }
+}
+
+async function collectHotspots(store, runCli, now) {
   const nextZh = []
   const nextEn = []
   const seen = new Set()
@@ -171,15 +213,60 @@ export async function refreshDailyHotspots({ runCli, now = new Date() } = {}) {
     collect('en', HOTSPOT_ENGINES.en, nextEn),
   ])
 
+  // 盖章判据：任何语言拿到新数据才算当日已刷。全失败不盖章（当日保持 due，
+  // 定时器还会再试），但记 lastFailedAt 供触发端做 1h 退避——否则源长时间挂掉
+  // 时会变成每 60s × 4 引擎的重试风暴。
   const updated = {
     refreshTime: store.refreshTime || DEFAULT_REFRESH_TIME,
-    lastRefreshedDate: localDateKey(now),
-    lastRefreshedAt: now.toISOString(),
     zh: nextZh.length > 0 ? nextZh : store.zh,
     en: nextEn.length > 0 ? nextEn : store.en,
   }
+  if (nextZh.length + nextEn.length > 0) {
+    updated.lastRefreshedDate = localDateKey(now)
+    updated.lastRefreshedAt = now.toISOString()
+  } else {
+    updated.lastRefreshedDate = store.lastRefreshedDate
+    updated.lastRefreshedAt = store.lastRefreshedAt
+    updated.lastFailedAt = now.toISOString()
+  }
   saveHotspotStore(updated)
   return updated
+}
+
+/**
+ * 触发端工厂：inflight 复用 + 全失败退避，与 refreshDailyHotspots 同住一文件。
+ *
+ * - inflight 复用：定时刷新进行中手动点「立即刷新」时等待同一次刷新拿真数据，
+ *   而不是返回旧 store 让前端误显示「刚刷新过」（2026-11-20 审计：手动刷新假成功）。
+ * - 全失败退避：refreshDailyHotspots 全失败时不盖当日章（保持 due 可重试），
+ *   retryDue 用 lastFailedAt 把重试频率压到 ≥1h 一次，避免源挂掉时 60s × 4 引擎风暴。
+ *
+ * buildRunner 每次触发时调用，返回当次生效的 runCli（可 async，内部先取 env/凭证）。
+ */
+export function createHotspotRefresher({
+  buildRunner,
+  loadStore = loadHotspotStore,
+  failRetryMs = 60 * 60 * 1000,
+} = {}) {
+  let busy = false
+  let inflight = null
+  const retryDue = (store) =>
+    isDailyRefreshDue(store) &&
+    !(store?.lastFailedAt && Number.isFinite(Date.parse(store.lastFailedAt)) &&
+      Date.now() - Date.parse(store.lastFailedAt) < failRetryMs)
+  const trigger = () => {
+    if (inflight) return inflight
+    busy = true
+    inflight = (async () => {
+      try {
+        const runCli = typeof buildRunner === 'function' ? await buildRunner() : undefined
+        return await refreshDailyHotspots({ runCli })
+      } catch { return loadStore() }
+      finally { busy = false; inflight = null }
+    })()
+    return inflight
+  }
+  return { trigger, retryDue, isBusy: () => busy }
 }
 
 function readFileTailSync(filePath, maxBytes) {
