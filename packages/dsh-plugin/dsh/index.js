@@ -297,12 +297,12 @@ export function installWebSearchRouteDecorator(ctx, web, config, runArgoSearch) 
   return restore
 }
 
-// 注入执行器的动态环境变量解析逻辑
-setEnvResolver(async (options, config) => {
-  return resolveArgoEnv(config, options)
-})
+const _envResolverImpl = async (options, config) => resolveArgoEnv(config, options)
+// 模块导入时预注册，apply() 内也会重注册以保证同进程 HMR 重载不丢失
+setEnvResolver(_envResolverImpl)
 
 export function apply(ctx, providedConfig = {}) {
+  setEnvResolver(_envResolverImpl)
   const config = liveConfig(providedConfig)
   const toolName = asString(config.toolName, DEFAULTS.toolName)
   const providerName = asString(config.provider, DEFAULTS.provider)
@@ -323,7 +323,7 @@ export function apply(ctx, providedConfig = {}) {
     }
   }
 
-  for (const ref of asStringArray(config.keyRefs, 20)) {
+  for (const ref of asStringArray(config.keyRefs, 64)) {
     if (!CREDENTIAL_REF_PATTERN.test(ref)) {
       throw new Error(`argo-dsh: keyRefs entry "${ref}" must be a POSIX-style identifier (e.g. DEEPSEEK_API_KEY)`)
     }
@@ -383,14 +383,20 @@ export function apply(ctx, providedConfig = {}) {
     }
     web.registerSearchProvider({
       id: asString(config.searchProviderId, DEFAULTS.searchProviderId),
+      title: 'Argo Multi-Engine Search',
+      description: '多引擎融合搜索、证据核验与中文增强（通过本机 argo-search 路由）',
       available: () => config.searchProviderEnabled !== false,
+      ready: () => config.searchProviderEnabled !== false,
       search: runArgoSearch,
     })
     installWebSearchRouteDecorator(ctx, web, config, runArgoSearch)
     if (typeof web.registerFetchProvider === 'function') {
       web.registerFetchProvider({
         id: asString(config.fetchProviderId, DEFAULTS.fetchProviderId),
+        title: 'Argo Web Fetch',
+        description: '多级降级网页全文提取与反爬绕过（通过本机 argo-search）',
         available: () => config.fetchProviderEnabled !== false,
+        ready: () => config.fetchProviderEnabled !== false,
         fetch: (request, signal) => {
           const entry = resolveEntry(config)
           return fetchViaArgo(request.url, signal, {
@@ -411,10 +417,14 @@ export function apply(ctx, providedConfig = {}) {
 
   const nativeRegistrations = new Map()
   // 路由观测推送：原生工具执行后读 argo 使用日志，经 remote 事件推给设置面板。
-  // 失败静默（诊断是增值，不是依赖）；无 remote 事件总线时跳过。
+  // 节流 3s 避免高频搜索连续读盘；失败静默，无 remote 事件总线时跳过。
+  let lastRouteEmitAt = 0
   const emitRouteHealth = async () => {
     try {
       if (!ctx.remote || typeof ctx.remote.$emit !== 'function') return
+      const now = Date.now()
+      if (now - lastRouteEmitAt < 3000) return
+      lastRouteEmitAt = now
       const data = await getRouteHealth()
       if (Array.isArray(data.samples) && data.samples.length > 0) {
         ctx.remote.$emit('route-health/updated', data)
@@ -453,7 +463,6 @@ export function apply(ctx, providedConfig = {}) {
     }
     nativeRegistrations.clear()
     resetEnvResolver()
-    disposeSharedMcp()
   })
 
   ctx.tools.register(createWideResearchTool(ctx, config, {

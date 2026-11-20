@@ -2,13 +2,13 @@
  * @taxueseek/argo-dsh — 工作台默认推荐引擎（热点 + DSH 语言自适应 + 分模式模板 + 近期检索）
  */
 
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { resolveStateDir } from './diagnostics.js'
 
-const FEED_CACHE_FILE = join(homedir(), '.cache', 'unified-search', 'feed_cache.json')
-const QUERY_LOG_FILE = join(homedir(), '.cache', 'unified-search', 'usage_log', 'query.jsonl')
 const SUGGESTION_CACHE_TTL_MS = 15 * 60 * 1000
+const RECENT_CACHE_TTL_MS = 30 * 1000
+const RECENT_TAIL_BYTES = 24576
 const CJK_RE = /[\u4e00-\u9fff]/
 
 const MODE_SUGGESTIONS = {
@@ -46,7 +46,26 @@ const MODE_SUGGESTIONS = {
   },
 }
 
-const feedCache = { ts: 0, zh: [], en: [] }
+const feedCache = { ts: 0, dir: '', zh: [], en: [] }
+const recentCache = { ts: 0, dir: '', zh: [], en: [] }
+
+function readFileTailSync(filePath, maxBytes) {
+  let fd
+  try {
+    const size = statSync(filePath).size
+    if (size <= 0) return ''
+    const len = Math.min(size, maxBytes)
+    const offset = size - len
+    const buf = Buffer.allocUnsafe(len)
+    fd = openSync(filePath, 'r')
+    const bytesRead = readSync(fd, buf, 0, len, offset)
+    return buf.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    if (fd !== undefined) {
+      try { closeSync(fd) } catch { /* ignore */ }
+    }
+  }
+}
 
 function cleanTitle(raw) {
   return String(raw || '')
@@ -58,14 +77,15 @@ function cleanTitle(raw) {
 
 function readFeedHotspots(lang, limit = 4) {
   const now = Date.now()
-  if (now - feedCache.ts < SUGGESTION_CACHE_TTL_MS && (feedCache.zh.length || feedCache.en.length)) {
+  const dir = resolveStateDir()
+  if (feedCache.dir === dir && now - feedCache.ts < SUGGESTION_CACHE_TTL_MS) {
     return (lang === 'en' ? feedCache.en : feedCache.zh).slice(0, limit)
   }
   const zh = []
   const en = []
   const seen = new Set()
   try {
-    const raw = JSON.parse(readFileSync(FEED_CACHE_FILE, 'utf8'))
+    const raw = JSON.parse(readFileSync(join(dir, 'feed_cache.json'), 'utf8'))
     const entries = Object.entries(raw && typeof raw === 'object' ? raw : {})
       .sort((a, b) => (b[1]?.ts || 0) - (a[1]?.ts || 0))
     for (const [, feed] of entries) {
@@ -84,32 +104,45 @@ function readFeedHotspots(lang, limit = 4) {
     }
   } catch { /* ignore */ }
   feedCache.ts = now
+  feedCache.dir = dir
   feedCache.zh = zh
   feedCache.en = en
   return (lang === 'en' ? en : zh).slice(0, limit)
 }
 
 function readRecentQueries(lang, limit = 3) {
-  const out = []
+  const now = Date.now()
+  const dir = resolveStateDir()
+  if (recentCache.dir === dir && now - recentCache.ts < RECENT_CACHE_TTL_MS) {
+    return (lang === 'en' ? recentCache.en : recentCache.zh).slice(0, limit)
+  }
+  const zh = []
+  const en = []
   const seen = new Set()
   try {
-    const raw = readFileSync(QUERY_LOG_FILE, 'utf8')
-    const lines = raw.slice(-24576).split('\n').reverse()
+    const tail = readFileTailSync(join(dir, 'usage_log', 'query.jsonl'), RECENT_TAIL_BYTES)
+    const lines = tail.split('\n').reverse()
     for (const line of lines) {
       if (!line.trim()) continue
       try {
         const row = JSON.parse(line)
         const q = cleanTitle(row?.query)
         if (q.length < 4 || q.length > 40 || (row?.count || 0) <= 0 || seen.has(q)) continue
-        const isCjk = CJK_RE.test(q)
-        if ((lang === 'en' && isCjk) || (lang === 'zh' && !isCjk)) continue
         seen.add(q)
-        out.push(q)
-        if (out.length >= limit) break
+        if (CJK_RE.test(q)) {
+          if (zh.length < 8) zh.push(q)
+        } else if (en.length < 8) {
+          en.push(q)
+        }
+        if (zh.length >= 8 && en.length >= 8) break
       } catch { /* ignore malformed tail line */ }
     }
   } catch { /* ignore */ }
-  return out
+  recentCache.ts = now
+  recentCache.dir = dir
+  recentCache.zh = zh
+  recentCache.en = en
+  return (lang === 'en' ? en : zh).slice(0, limit)
 }
 
 export function buildSuggestions(mode = 'general', rawLang = 'zh', shuffle = false) {

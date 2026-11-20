@@ -10,7 +10,29 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const MAX_BYTES = 1024 * 1024 // 显式读取上限 1MB，防超大日志文件撑爆内存
-const BYTE_LIMIT_GUARD = 'maxBytes guard: 1024 * 1024'
+
+async function readTailUtf8(filePath, maxBytes) {
+  let fh
+  try {
+    fh = await fs.open(filePath, 'r')
+    const { size } = await fh.stat()
+    if (size <= 0) return ''
+    const len = Math.min(size, maxBytes)
+    const offset = size - len
+    const buf = Buffer.allocUnsafe(len)
+    const { bytesRead } = await fh.read(buf, 0, len, offset)
+    const text = buf.subarray(0, bytesRead).toString('utf8')
+    if (offset > 0) {
+      const firstNl = text.indexOf('\n')
+      return firstNl >= 0 ? text.slice(firstNl + 1) : text
+    }
+    return text
+  } finally {
+    if (fh) {
+      try { await fh.close() } catch { /* ignore */ }
+    }
+  }
+}
 
 /**
  * 解析 argo 运行时状态目录，遵循 argo_paths.py 跨平台约定：
@@ -52,8 +74,7 @@ export async function getRouteHealth(stateDir, limit = 10) {
   try {
     const routePath = join(dir, 'usage_log', 'route.jsonl')
     if (existsSync(routePath)) {
-      const text = await fs.readFile(routePath, 'utf8')
-      const truncated = text.length > MAX_BYTES ? text.slice(-MAX_BYTES) : text
+      const truncated = await readTailUtf8(routePath, MAX_BYTES)
       const lines = truncated.split('\n').filter(Boolean)
       for (const line of lines) {
         try {
@@ -114,7 +135,7 @@ export function getMcpPoolStats(pool = []) {
   const connections = pool.map((conn, index) => ({
     index,
     load: typeof conn.load === 'function' ? conn.load() : 0,
-    hasProcess: Boolean(conn.proc ?? true),
+    hasProcess: Boolean(conn.proc),
   }))
 
   const totalLoad = connections.reduce((sum, item) => sum + item.load, 0)

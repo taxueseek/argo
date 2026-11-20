@@ -144,17 +144,17 @@ export function mountArgoWorkbench(ctx, react) {
   }
 
   function WorkbenchApp() {
-    const saved = readStorage(STATE_KEY, null)
+    const [initialSaved] = useState(() => readStorage(STATE_KEY, null))
     const [prefs, setPrefs] = useState(() => readStorage(PREFS_KEY, { selection: true }))
     const [lang, setLang] = useState(resolveLang)
     const [view, setView] = useState('home')
     const [input, setInput] = useState('')
-    const [activeQuery, setActiveQuery] = useState(saved?.query || '')
+    const [activeQuery, setActiveQuery] = useState(() => initialSaved?.query || '')
     const [mode, setMode] = useState('general')
     const [topicSamples, setTopicSamples] = useState(() => Object.fromEntries(TOPIC_CARDS.map(t => [t.id, pickSample(t.samples)])))
     const [suggestions, setSuggestions] = useState([])
-    const [cards, setCards] = useState(saved?.cards || [])
-    const [turns, setTurns] = useState(saved?.turns || [])
+    const [cards, setCards] = useState(() => initialSaved?.cards || [])
+    const [turns, setTurns] = useState(() => initialSaved?.turns || [])
     const [stageText, setStageText] = useState('')
     const [loading, setLoading] = useState(false)
     const [filter, setFilter] = useState('all')
@@ -173,10 +173,18 @@ export function mountArgoWorkbench(ctx, react) {
     const inputRef = useRef(null)
     const esRef = useRef(null)
     const abortRef = useRef(null)
+    const modeRef = useRef(mode)
+    const startSearchRef = useRef(null)
+    const suggestSeqRef = useRef(0)
+    modeRef.current = mode
 
     useEffect(() => {
-      writeStorage(STATE_KEY, { query: activeQuery, mode, cards, turns })
-    }, [activeQuery, mode, cards, turns])
+      if (loading) return undefined
+      const t = setTimeout(() => {
+        writeStorage(STATE_KEY, { query: activeQuery, mode, cards, turns })
+      }, 400)
+      return () => clearTimeout(t)
+    }, [activeQuery, mode, cards, turns, loading])
 
     const refreshWatches = async () => {
       try {
@@ -187,10 +195,11 @@ export function mountArgoWorkbench(ctx, react) {
     }
 
     const refreshSuggestions = async (targetMode = mode, targetLang = lang, shuffle = false) => {
+      const seq = ++suggestSeqRef.current
       try {
         const res = await fetch(`/argo/api/suggestions?mode=${encodeURIComponent(targetMode)}&lang=${encodeURIComponent(targetLang)}&shuffle=${shuffle ? '1' : '0'}`)
         const data = await res.json()
-        if (Array.isArray(data?.items)) setSuggestions(data.items)
+        if (seq === suggestSeqRef.current && Array.isArray(data?.items)) setSuggestions(data.items)
       } catch { /* ignore */ }
     }
 
@@ -249,14 +258,19 @@ export function mountArgoWorkbench(ctx, react) {
       es.addEventListener('answer-status', (ev) => { const d = parse(ev); if (d.message) setStageText(d.message) })
       es.addEventListener('done', () => { setLoading(false); setStageText(''); es.close(); esRef.current = null })
       es.addEventListener('failure', (ev) => { const d = parse(ev); setLoading(false); setStageText(`检索出错：${d.message || '未知错误'}`); es.close(); esRef.current = null })
-      es.onerror = () => { if (es.readyState === EventSource.CLOSED) setLoading(false) }
+      es.onerror = () => {
+        es.close()
+        if (esRef.current === es) esRef.current = null
+        setLoading(false)
+      }
     }
+    startSearchRef.current = startSearch
 
     useEffect(() => {
       const handler = (req) => {
         if (!req) return
         pendingExternal = null
-        startSearch(req.query, req.mode || mode)
+        startSearchRef.current?.(req.query, req.mode || modeRef.current)
       }
       listeners.add(handler)
       if (pendingExternal) handler(pendingExternal)
@@ -287,6 +301,10 @@ export function mountArgoWorkbench(ctx, react) {
           body: JSON.stringify({ query: activeQuery, mode, cards, history: historySnapshot, question: q }),
           signal: ac.signal,
         })
+        if (!res.ok || !res.body) {
+          setStageText(`追问失败（HTTP ${res.status}）`)
+          return
+        }
         const reader = res.body.getReader()
         const dec = new TextDecoder()
         let buf = ''
@@ -301,7 +319,8 @@ export function mountArgoWorkbench(ctx, react) {
             const dataMatch = chunk.match(/^data:\s*(.+)$/m)
             if (!dataMatch) continue
             const evName = evMatch ? evMatch[1].trim() : 'message'
-            const payload = JSON.parse(dataMatch[1])
+            let payload
+            try { payload = JSON.parse(dataMatch[1]) } catch { continue }
             if (evName === 'answer' && payload.delta) {
               setTurns(prev => {
                 const next = [...prev]
@@ -309,6 +328,8 @@ export function mountArgoWorkbench(ctx, react) {
                 if (last && last.role === 'assistant') next[next.length - 1] = { ...last, text: last.text + payload.delta }
                 return next
               })
+            } else if (evName === 'failure' && payload.message) {
+              setStageText(`追问出错：${payload.message}`)
             }
           }
         }
@@ -661,7 +682,7 @@ export function mountArgoWorkbench(ctx, react) {
             }, `交叉验证：${evidenceSummary.crossValidation.corroboration_level || 'unknown'}${evidenceSummary.summary ? ` · 高可信 ${evidenceSummary.summary.high_credibility || 0}` : ''}`) : null,
             gateResult ? h('span', {
               className: 'aw-badge',
-              title: (gateResult.warnings || []).join('；'),
+              title: (gateResult.warnings || []).map(w => (typeof w === 'string' ? w : (w?.detail || w?.id || ''))).filter(Boolean).join('；'),
               style: { background: gateResult.passed ? 'var(--aw-sunken)' : '#fef2f2', color: gateResult.passed ? 'var(--aw-text-2)' : '#b91c1c' },
             }, gateResult.passed ? '质量门禁通过' : '质量门禁未达标') : null),
           clarifyInfo ? h('div', { style: { fontSize: '12px', color: 'var(--aw-text-2)', padding: '6px 10px', marginBottom: '10px', borderRadius: '8px', background: 'var(--aw-sunken)' } },
@@ -732,6 +753,7 @@ export function mountArgoWorkbench(ctx, react) {
     const [hit, setHit] = useState(null)
 
     useEffect(() => {
+      let timerId = null
       const checkSelection = () => {
         const prefs = readStorage(PREFS_KEY, { selection: true })
         if (!prefs.selection) { setHit(null); return }
@@ -744,10 +766,14 @@ export function mountArgoWorkbench(ctx, react) {
         if (!rect || (rect.width === 0 && rect.height === 0)) { setHit(null); return }
         setHit({ text, top: Math.max(12, rect.top - 38), left: Math.min(window.innerWidth - 130, Math.max(12, rect.left)) })
       }
-      const onUp = () => setTimeout(checkSelection, 20)
+      const onUp = () => {
+        if (timerId) clearTimeout(timerId)
+        timerId = setTimeout(checkSelection, 20)
+      }
       document.addEventListener('mouseup', onUp)
       document.addEventListener('keyup', onUp)
       return () => {
+        if (timerId) clearTimeout(timerId)
         document.removeEventListener('mouseup', onUp)
         document.removeEventListener('keyup', onUp)
       }

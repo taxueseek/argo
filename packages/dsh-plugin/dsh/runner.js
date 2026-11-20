@@ -295,8 +295,9 @@ export function createMcpConnection(options) {
       return initPromise
     },
     request: (method, params, timeoutMs = 0) => {
+      const p = send(method, params, timeoutMs)
       if (claims > 0) claims -= 1
-      return send(method, params, timeoutMs)
+      return p
     },
     claim: () => {
       claims += 1
@@ -361,10 +362,13 @@ export async function acquireMcp(options, signal) {
       if (mcpPool.length >= max) throw err
     }
   }
+  const envCfg = (options.config && ('keyRefs' in options.config || 'argoEnv' in options.config))
+    ? options.config
+    : undefined
   if (mcpPool.length < max) {
     const conn = createMcpConnection({
       ...options,
-      envResolver: () => resolveEnv(options),
+      envResolver: () => resolveEnv(options, envCfg),
       configKey: targetConfigKey,
     })
     mcpPool.push(conn)
@@ -378,7 +382,26 @@ export async function acquireMcp(options, signal) {
     }
     return conn
   }
-  const least = mcpPool.reduce((a, b) => (a.load() <= b.load() ? a : b))
+  const matching = mcpPool.filter(entry => entry.configKey === undefined || entry.configKey === targetConfigKey)
+  if (matching.length === 0) {
+    // 满池且全部为旧 configKey：新建匹配新配置的连接并替换当前最闲旧连接
+    const conn = createMcpConnection({
+      ...options,
+      envResolver: () => resolveEnv(options, envCfg),
+      configKey: targetConfigKey,
+    })
+    mcpPool.push(conn)
+    conn.claim()
+    try {
+      await initializeWithSignal(conn, initMs, signal)
+    } catch (err) {
+      dropFromPool(conn)
+      conn.close()
+      throw err
+    }
+    return conn
+  }
+  const least = matching.reduce((a, b) => (a.load() <= b.load() ? a : b))
   least.claim()
   try {
     await initializeWithSignal(least, initMs, signal)
@@ -477,7 +500,11 @@ export async function fetchViaArgo(url, signal, options = {}, deps = {}) {
           return
         }
         const text = value?.content?.[0]?.text
-        resolve(typeof text === 'string' ? JSON.parse(text) : {})
+        try {
+          resolve(typeof text === 'string' ? JSON.parse(text) : {})
+        } catch (parseErr) {
+          reject(argoToolError(`argo_fetch returned invalid JSON: ${parseErr.message}`))
+        }
       }, (err) => {
         if (signal !== undefined) signal.removeEventListener('abort', onAbort)
         reject(err)
@@ -616,12 +643,24 @@ export function runNativeCall({ command, args, env }, timeoutMs, signal) {
       signal.addEventListener('abort', onAbort, { once: true })
       detachAbort = () => signal.removeEventListener('abort', onAbort)
     }
+    const MAX_NATIVE_BYTES = 4 * 1024 * 1024
+    let stdoutBytes = 0
+    let stderrBytes = 0
     timer = setTimeout(() => {
       try { child.kill('SIGKILL') } catch { /* already gone */ }
       settle(reject, new Error(`argo native call timed out after ${timeoutMs}ms`))
     }, timeoutMs)
-    child.stdout.on('data', (chunk) => { stdout += chunk })
-    child.stderr.on('data', (chunk) => { stderr += chunk })
+    if (typeof timer.unref === 'function') timer.unref()
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdoutBytes += Buffer.byteLength(chunk, 'utf8')
+      if (stdoutBytes <= MAX_NATIVE_BYTES) stdout += chunk
+    })
+    child.stderr.on('data', (chunk) => {
+      stderrBytes += Buffer.byteLength(chunk, 'utf8')
+      if (stderrBytes <= 256 * 1024) stderr += chunk
+    })
     child.on('error', (err) => settle(reject, err))
     child.on('close', (code) => {
       if (code === 0) { settle(resolve, stdout); return }

@@ -9,13 +9,16 @@ test('diagnostics: getMcpPoolStats returns pool status and active loads', () => 
   const dummyPool = [
     { load: () => 0, proc: {} },
     { load: () => 2, proc: {} },
+    { load: () => 0, proc: null },
   ]
   const stats = getMcpPoolStats(dummyPool)
-  assert.equal(stats.poolSize, 2)
+  assert.equal(stats.poolSize, 3)
   assert.equal(stats.activeConnections, 1)
   assert.equal(stats.totalLoad, 2)
-  assert.equal(stats.connections.length, 2)
+  assert.equal(stats.connections.length, 3)
   assert.equal(stats.connections[1].load, 2)
+  assert.equal(stats.connections[0].hasProcess, true)
+  assert.equal(stats.connections[2].hasProcess, false)
 })
 
 test('diagnostics: resetMcpPool evicts connections safely', () => {

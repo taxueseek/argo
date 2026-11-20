@@ -309,21 +309,9 @@ window.__ModuleLoader__.load({
     };
 
     const PRESETS = [
-      {
-        id: 'fast', titleKey: 'presetFast', descKey: 'presetFastDesc', badge: '15s 超时', badgeColor: 'blue', active: false,
-        env: { ARGO_TFIDF_RERANK: '0', ARGO_NUMBER_CROSSCHECK: '0', ARGO_PAID_SEARCH: 'off', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.5' },
-        fields: { searchTimeoutMs: 15000, fetchTimeoutMs: 15000 },
-      },
-      {
-        id: 'standard', titleKey: 'presetStandard', descKey: 'presetStandardDesc', badge: '标准生产', badgeColor: 'green', active: true,
-        env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_PAID_SEARCH: 'auto', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.8' },
-        fields: { searchTimeoutMs: 30000, fetchTimeoutMs: 25000 },
-      },
-      {
-        id: 'deep', titleKey: 'presetDeep', descKey: 'presetDeepDesc', badge: '深度核验', badgeColor: 'blue', active: false,
-        env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_SEMANTIC_EVIDENCE: '1', ARGO_ADAPTIVE_GRACE: '1', ARGO_PAID_SEARCH: 'auto' },
-        fields: { searchTimeoutMs: 45000, fetchTimeoutMs: 35000, nativeTimeoutMs: 60000 },
-      },
+      { id: 'fast', titleKey: 'presetFast', descKey: 'presetFastDesc', badge: '15s 超时', badgeColor: 'blue', env: { ARGO_TFIDF_RERANK: '0', ARGO_NUMBER_CROSSCHECK: '0', ARGO_PAID_SEARCH: 'off', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.5' }, fields: { searchTimeoutMs: 15000, fetchTimeoutMs: 15000 } },
+      { id: 'standard', titleKey: 'presetStandard', descKey: 'presetStandardDesc', badge: '标准生产', badgeColor: 'green', env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_PAID_SEARCH: 'auto', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.8' }, fields: { searchTimeoutMs: 30000, fetchTimeoutMs: 25000 } },
+      { id: 'deep', titleKey: 'presetDeep', descKey: 'presetDeepDesc', badge: '深度核验', badgeColor: 'blue', env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_SEMANTIC_EVIDENCE: '1', ARGO_ADAPTIVE_GRACE: '1', ARGO_PAID_SEARCH: 'auto' }, fields: { searchTimeoutMs: 45000, fetchTimeoutMs: 35000, nativeTimeoutMs: 60000 } },
     ];
 
     const col = (gap) => ({ display: 'flex', flexDirection: 'column', gap });
@@ -508,7 +496,7 @@ window.__ModuleLoader__.load({
           if (typeof offRoute === 'function') offs.push(offRoute);
         }
         return () => { for (const off of offs) off(); };
-      }, [state]);
+      }, [props.view, props.remote]);
 
       const edit = (key, text) => { dirty.current.add(key); setDraft((p) => ({ ...p, [key]: text })); };
       const report = (ok, text) => { setError(!ok); setMessage(text); };
@@ -565,11 +553,13 @@ window.__ModuleLoader__.load({
         void setField('nativeTools', ordered);
       };
 
-      const applyToolPreset = async (tools) => {
+      const applyToolPreset = (tools) => runSave('nativeTools', async () => {
         const ordered = TOOLS.map((tool) => tool.id).filter((tid) => tools.includes(tid));
         for (const extra of tools) if (!ordered.includes(extra)) ordered.push(extra);
-        await props.set('nativeTools', ordered);
-      };
+        const ok = await props.set('nativeTools', ordered);
+        report(ok, ok ? t('saved') : t('refused'));
+        return ok;
+      });
 
       const mutateKey = async (ref, action) => {
         setKeyBusy(ref);
@@ -658,7 +648,13 @@ window.__ModuleLoader__.load({
         try {
           const ok = await writeEnvLines(updates);
           report(ok, ok ? t('saved') : t('refused'));
-          if (ok) setEnvDraft({});
+          if (ok) {
+            setEnvDraft((prev) => {
+              const next = { ...prev };
+              for (const spec of specs) delete next[spec.name];
+              return next;
+            });
+          }
         } catch (cause) { report(false, cause && cause.message ? cause.message : String(cause)); }
         finally { setEnvBusy(''); }
       };
@@ -801,10 +797,16 @@ window.__ModuleLoader__.load({
             : h('p', { key: 'hint', style: S.hint }, t('routeHealthFallback')),
         ]));
         panel.push(h(Card, { key: 'presets', title: t('presetTitle'), hint: t('presetHint') }, [
-          h('div', { key: 'grid', style: S.presetGrid }, PRESETS.map((p) => h('div', { key: p.id, style: S.presetCard(p.active), onClick: () => { void applyPreset(p); } }, [
-            h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, t(p.titleKey)), h('span', { key: 'badge', style: S.badge(p.badgeColor) }, p.badge)]),
-            h('span', { key: 'd', style: S.sub }, t(p.descKey)),
-          ]))),
+          h('div', { key: 'grid', style: S.presetGrid }, PRESETS.map((p) => {
+            const cur = liveValue();
+            const em = envMap();
+            const isMatch = Object.entries(p.fields || {}).every(([k, v]) => cur[k] === v)
+              && Object.entries(p.env || {}).every(([k, v]) => String(em[k] ?? '') === String(v));
+            return h('div', { key: p.id, style: S.presetCard(isMatch), onClick: () => { void applyPreset(p); } }, [
+              h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, t(p.titleKey)), h('span', { key: 'badge', style: S.badge(p.badgeColor) }, p.badge)]),
+              h('span', { key: 'd', style: S.sub }, t(p.descKey)),
+            ]);
+          })),
         ]));
         panel.push(h(Card, { key: 'matrix', title: t('matrixTitle'), hint: t('matrixHint') }, [
           h('div', { key: 'grid', style: S.matrixGrid }, CORE_ENGINES.map((engine) => {

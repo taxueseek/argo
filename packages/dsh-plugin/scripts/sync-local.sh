@@ -63,7 +63,9 @@ for p in "${PROFILES[@]}"; do
   fi
   if [ "$MODE" = check ]; then
     if diff -rq "$SRC/dsh" "$DEST/dsh" >/dev/null 2>&1 \
-       && cmp -s "$SRC/package.json" "$DEST/package.json"; then
+       && cmp -s "$SRC/package.json" "$DEST/package.json" \
+       && cmp -s "$SRC/cordis.patch.yml" "$DEST/cordis.patch.yml" \
+       && cmp -s "$SRC/icon.svg" "$DEST/icon.svg"; then
       echo "[ok] $p"
     else
       echo "[drift] $p: 源码与已安装 bundle 不一致，跑一次不带 --check 的同步"
@@ -73,7 +75,7 @@ for p in "${PROFILES[@]}"; do
   fi
   cp -a "$DEST" "$DSH_HOME/backups/argo-dsh-sync-$TS-$p"
   rsync -a --delete "$SRC/dsh/" "$DEST/dsh/"
-  rsync -a "$SRC/package.json" "$SRC/cordis.patch.yml" "$SRC/README.md" "$DEST/"
+  rsync -a "$SRC/package.json" "$SRC/cordis.patch.yml" "$SRC/README.md" "$SRC/icon.svg" "$DEST/"
   echo "[synced] $p"
 done
 

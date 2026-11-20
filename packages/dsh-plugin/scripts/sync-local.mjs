@@ -64,7 +64,9 @@ for (const p of profiles) {
   }
   if (mode === 'check') {
     const same = filesEqual(path.join(SRC, 'dsh'), path.join(dest, 'dsh'))
-      && filesEqual(path.join(SRC, 'package.json'), path.join(dest, 'package.json'));
+      && ['package.json', 'cordis.patch.yml', 'icon.svg'].every(
+        (f) => filesEqual(path.join(SRC, f), path.join(dest, f)),
+      );
     if (same) console.log(`[ok] ${p}`);
     else {
       console.log(`[drift] ${p}: 源码与已安装 bundle 不一致，请运行 npm run sync-local`);
@@ -77,7 +79,7 @@ for (const p of profiles) {
   fs.cpSync(dest, bakDir, { recursive: true, force: true });
   fs.rmSync(path.join(dest, 'dsh'), { recursive: true, force: true });
   fs.cpSync(path.join(SRC, 'dsh'), path.join(dest, 'dsh'), { recursive: true, force: true });
-  for (const f of ['package.json', 'cordis.patch.yml', 'README.md']) {
+  for (const f of ['package.json', 'cordis.patch.yml', 'README.md', 'icon.svg']) {
     fs.copyFileSync(path.join(SRC, f), path.join(dest, f));
   }
   console.log(`[synced] ${p}`);

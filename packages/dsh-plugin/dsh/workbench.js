@@ -6,8 +6,8 @@
  * 搜索分析工作台（5 种专题模式 + 左答右证 SSE + 原文核验 + 多轮追问）。
  */
 
-import { execFile, spawn } from 'node:child_process'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,13 +15,19 @@ import { DEFAULTS, stripBoundary } from './runner.js'
 import { resolveArgoEnv } from './specs.js'
 import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
 import { buildSuggestions } from './workbench-suggestions.js'
+import {
+  breakerFilePath,
+  loadWatches,
+  mergedLaunchdPath,
+  readStaticAssetCached,
+  resolveArgoBin,
+  runArgoCli,
+  saveWatches,
+} from './workbench-io.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const ARGO_BIN = join(HERE, '..', '..', '..', 'bin', 'argo')
 const CLIENT_FILE = join(HERE, 'workbench-client.js')
 const MD_FILE = join(HERE, 'workbench-md.js')
-const WATCH_STORE_FILE = join(homedir(), '.config', 'argo', 'workbench-watches.json')
-const BREAKER_FILE = join(homedir(), '.cache', 'unified-search', 'circuit_breaker.json')
 
 const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_ENTRIES = 32
@@ -187,7 +193,7 @@ function readEgoSearchStatus() {
 
 function readBreakerSummary() {
   try {
-    const raw = JSON.parse(readFileSync(BREAKER_FILE, 'utf8'))
+    const raw = JSON.parse(readFileSync(breakerFilePath(), 'utf8'))
     const engines = raw?.engines && typeof raw.engines === 'object' ? raw.engines : {}
     const tripped = []
     let total = 0
@@ -243,57 +249,6 @@ function buildFallbackSummary(query, mode, cards, failure = null) {
     ? `### ${label} · 聚合检索结果（模型调用未完成，已切回直出视图）\n\n默认模型（\`${failure.model || 'unknown'}\`）暂不可用：${failure.message || failure.reason}。已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：`
     : `### ${label} · 聚合检索结果（零模型直出模式）\n\n当前宿主未配置可用默认模型，已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：`
   return `${header}\n\n${rows.join('\n\n')}`
-}
-
-async function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, signal = null } = {}) {
-  const extraPath = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')].join(':')
-  const basePath = env.PATH || process.env.PATH || ''
-  const mergedPath = basePath ? `${extraPath}:${basePath}` : extraPath
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) { reject(new Error('aborted')); return }
-    const child = spawn(ARGO_BIN, args, {
-      env: { ...process.env, ...env, PATH: mergedPath },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    const out = []
-    const err = []
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM')
-      reject(new Error(`argo ${args[0] || ''} timeout (${timeoutMs}ms)`))
-    }, timeoutMs)
-    const onAbort = () => {
-      clearTimeout(timer)
-      child.kill('SIGTERM')
-      reject(new Error('aborted'))
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-    child.stdout.on('data', d => out.push(d))
-    child.stderr.on('data', d => err.push(d))
-    child.on('error', (e) => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      reject(e)
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      const text = Buffer.concat(out).toString('utf8').trim()
-      if (code !== 0 && !text) {
-        reject(new Error(Buffer.concat(err).toString('utf8').trim() || `argo exit ${code}`))
-        return
-      }
-      try {
-        resolve(JSON.parse(text || '{}'))
-      } catch {
-        reject(new Error(`invalid json from argo ${args[0] || ''}`))
-      }
-    })
-    if (stdin !== null && stdin !== undefined) {
-      child.stdin.end(typeof stdin === 'string' ? stdin : JSON.stringify(stdin))
-    } else {
-      child.stdin.end()
-    }
-  })
 }
 
 function mergeDedupCards(lists, maxCards = 16) {
@@ -492,25 +447,6 @@ function extractCitations(text, cards) {
   }
 }
 
-function loadWatches() {
-  try {
-    const raw = readFileSync(WATCH_STORE_FILE, 'utf8')
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function saveWatches(items) {
-  try {
-    mkdirSync(dirname(WATCH_STORE_FILE), { recursive: true })
-    const tmp = `${WATCH_STORE_FILE}.tmp.${process.pid}`
-    writeFileSync(tmp, JSON.stringify(items, null, 2), 'utf8')
-    renameSync(tmp, WATCH_STORE_FILE)
-  } catch { /* ignore */ }
-}
-
 // 供测试断言「flag 全部前置、query 经 `--` 分隔殿后」的参数形态
 export function buildSearchCliArgs(query, mode, refresh = false, overrides = {}) {
   const spec = MODE_SPECS[mode] || MODE_SPECS.general
@@ -615,7 +551,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       const path = url.pathname
 
       if (path === '/argo/workbench-client.js' && req.method === 'GET') {
-        const source = readFileSync(CLIENT_FILE, 'utf8')
+        const source = readStaticAssetCached(CLIENT_FILE)
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
         res.setHeader('Cache-Control', 'no-store')
@@ -624,7 +560,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
       }
 
       if (path === '/argo/workbench-md.js' && req.method === 'GET') {
-        const source = readFileSync(MD_FILE, 'utf8')
+        const source = readStaticAssetCached(MD_FILE)
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/javascript; charset=utf-8')
         res.setHeader('Cache-Control', 'no-store')
@@ -671,8 +607,14 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         const body = await readJsonBody(req)
         const target = watches.find(w => w.id === body.id)
         if (!target) { sendJson(res, 404, { error: 'watch_not_found' }); return }
-        const updated = await executeWatch(target)
-        sendJson(res, 200, { ok: true, item: updated, items: watches })
+        if (watchBusy) { sendJson(res, 409, { error: 'watch_busy' }); return }
+        watchBusy = true
+        try {
+          const updated = await executeWatch(target)
+          sendJson(res, 200, { ok: true, item: updated, items: watches })
+        } finally {
+          watchBusy = false
+        }
         return
       }
 
@@ -710,7 +652,12 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         const body = await readJsonBody(req)
         const action = body.enabled ? 'enable' : 'disable'
         await new Promise((resolve) => {
-          execFile('argo', ['ego-search', action], { timeout: 8000 }, () => resolve())
+          execFile(
+            resolveArgoBin(),
+            ['ego-search', action],
+            { timeout: 8000, env: { ...process.env, PATH: mergedLaunchdPath() } },
+            () => resolve(),
+          )
         })
         sendJson(res, 200, { ok: true, egoSearch: readEgoSearchStatus() })
         return
@@ -773,7 +720,9 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
           } else {
             let pending = !refresh ? inflight.get(cacheKey) : null
             if (!pending) {
-              pending = callArgoSearch(config, env, query, mode, refresh, ac.signal, researchTracks)
+              // 共享去重任务使用独立 signal，防止客户端 A 断连误杀同 key 并发等待的客户端 B
+              const searchSignal = refresh ? ac.signal : new AbortController().signal
+              pending = callArgoSearch(config, env, query, mode, refresh, searchSignal, researchTracks)
                 .finally(() => inflight.delete(cacheKey))
               if (!refresh) inflight.set(cacheKey, pending)
             }
@@ -842,6 +791,11 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
               sources: cards.map(c => ({ url: c.url, title: c.title, domain: c.domain })),
               tracks: researchTracks || [],
               warnings: [],
+              stats: {
+                sourceCount: cards.length,
+                completedTracks: Math.max(1, (researchTracks || []).length),
+                failedTracks: 0,
+              },
             })
             sendSse(res, 'gate', gate)
           }
@@ -910,40 +864,49 @@ export function createWorkbenchHandler(ctx, config, getCredentials) {
         res.flushHeaders?.()
 
         const ac = new AbortController()
-        req.on('close', () => ac.abort())
+        const onClose = () => { if (!res.writableEnded) ac.abort() }
+        if (typeof res.on === 'function') res.on('close', onClose)
+        else if (typeof req.on === 'function') req.on('close', onClose)
 
-        const evidence = buildEvidenceContext(cards)
-        const messages = [
-          {
-            role: 'user',
-            content: [{ type: 'text', text: `原始问题：${body.query || ''}\n\n已检索证据：\n${evidence}` }],
-          },
-          ...history.slice(-6).map(item => ({
-            role: item.role === 'assistant' ? 'assistant' : 'user',
-            content: [{ type: 'text', text: String(item.text || '') }],
-          })),
-          {
-            role: 'user',
-            content: [{ type: 'text', text: `基于上述已检索证据继续追问：${question}\n请继续使用 [1]、[2] 引用编号；若当前证据未覆盖，请明确说明。` }],
-          },
-        ]
+        try {
+          const evidence = buildEvidenceContext(cards)
+          const messages = [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: `原始问题：${body.query || ''}\n\n已检索证据：\n${evidence}` }],
+            },
+            ...history.slice(-6).map(item => ({
+              role: item.role === 'assistant' ? 'assistant' : 'user',
+              content: [{ type: 'text', text: String(item.text || '') }],
+            })),
+            {
+              role: 'user',
+              content: [{ type: 'text', text: `基于上述已检索证据继续追问：${question}\n请继续使用 [1]、[2] 引用编号；若当前证据未覆盖，请明确说明。` }],
+            },
+          ]
 
-        const llmRes = await streamLlmAnswer(ctx, {
-          system: buildSystemPrompt(mode),
-          messages,
-          signal: ac.signal,
-          onDelta: (delta) => sendSse(res, 'answer', { delta }),
-        })
+          const llmRes = await streamLlmAnswer(ctx, {
+            system: buildSystemPrompt(mode),
+            messages,
+            signal: ac.signal,
+            onDelta: (delta) => sendSse(res, 'answer', { delta }),
+          })
 
-        if (!llmRes.ok && !llmRes.text) {
-          const msg = llmRes.reason === 'no_model'
-            ? '当前宿主未配置默认模型，无法进行多轮追问推理。'
-            : `默认模型（${llmRes.model || 'unknown'}）调用未完成：${llmRes.message || llmRes.reason}`
-          sendSse(res, 'answer', { delta: msg })
+          if (!llmRes.ok && !llmRes.text) {
+            const msg = llmRes.reason === 'no_model'
+              ? '当前宿主未配置默认模型，无法进行多轮追问推理。'
+              : `默认模型（${llmRes.model || 'unknown'}）调用未完成：${llmRes.message || llmRes.reason}`
+            sendSse(res, 'answer', { delta: msg })
+          }
+          sendSse(res, 'citations', extractCitations(llmRes.text || '', cards))
+          sendSse(res, 'done', { ok: llmRes.ok })
+        } catch (err) {
+          if (!ac.signal.aborted) {
+            sendSse(res, 'failure', { message: String(err?.message ?? err) })
+          }
+        } finally {
+          if (!res.writableEnded) res.end()
         }
-        sendSse(res, 'citations', extractCitations(llmRes.text || '', cards))
-        sendSse(res, 'done', { ok: llmRes.ok })
-        if (!res.writableEnded) res.end()
         return
       }
 

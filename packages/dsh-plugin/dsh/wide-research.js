@@ -704,16 +704,21 @@ export function createWideResearchTool(ctx, config, options = {}) {
       const localSources = buildLocalSources(fileInputs)
       let recomputedValues = []
       let recomputeExpected = false
+      let recomputeWarning = null
       if (recomputeSpec && recomputeSpec.script) {
         recomputeExpected = true
-        recomputedValues = await runRecomputeForResearch(recomputeSpec, fileInputs, {
-          command: config.searchCommand,
-          args: config.searchArgs,
-          timeoutMs: config.searchTimeoutMs,
-          idleMs: config.searchIdleMs,
-          max: config.searchConcurrency,
-          config,
-        }, exec.signal)
+        try {
+          recomputedValues = await runRecomputeForResearch(recomputeSpec, fileInputs, {
+            command: config.searchCommand,
+            args: config.searchArgs,
+            timeoutMs: config.searchTimeoutMs,
+            idleMs: config.searchIdleMs,
+            max: config.searchConcurrency,
+            config,
+          }, exec.signal)
+        } catch (err) {
+          recomputeWarning = `recompute_skipped: ${clip(String(err?.message || err), 200)}`
+        }
       }
 
       const planPrompt = [
@@ -768,12 +773,16 @@ export function createWideResearchTool(ctx, config, options = {}) {
 
       const completed = outcomes.filter(outcome => outcome.result)
       const failed = outcomes.filter(outcome => outcome.error)
-      const warnings = [...stageWarnings, ...failed.map(outcome => `${outcome.track.title}: ${outcome.error}`)]
+      const warnings = [
+        ...(recomputeWarning ? [recomputeWarning] : []),
+        ...stageWarnings,
+        ...failed.map(outcome => `${outcome.track.title}: ${outcome.error}`),
+      ]
       if (!completed.length) throw new Error(`wide_research could not complete any research tracks: ${warnings.join('; ')}`)
 
       const sources = []
       const seenUrls = new Set()
-      completed.map(outcome => {
+      const researchLedger = completed.map(outcome => {
         const sourceKeys = []
         for (const source of outcome.result.sources) {
           const normalizedUrl = normalizeSourceUrl(source.url)
@@ -797,14 +806,7 @@ export function createWideResearchTool(ctx, config, options = {}) {
         question,
         scope,
         responseLanguage: language,
-        researchLedger: completed.map(outcome => ({
-          track: outcome.track,
-          summary: outcome.result.summary,
-          findings: outcome.result.findings,
-          sourceKeys: outcome.result.sources.map(s => s.key).filter(Boolean),
-          disagreements: outcome.result.disagreements,
-          gaps: outcome.result.gaps,
-        })),
+        researchLedger,
         sources,
         localSources,
         recomputedValues,

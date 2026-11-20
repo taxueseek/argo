@@ -30,7 +30,9 @@ packages/dsh-plugin/scripts/sync-local.sh            # 2. 仅对目录副本做�
 
 ### 当前启用状态（web profile）
 
-`wide_research` 编排、原生 `argo_search` / `argo_fetch` 与 `web` 服务行的 `searchProvider: argo` 已在用户层 `~/.dsh/profiles/web/cordis.patch.yml` 默认启用，无需取消任何注释即可使用。profile patch 里 `mcp-argo` 段注释掉的「按需开启」只针对 MCP 完整工具面，不代表整个插件未启用。
+`wide_research` 编排、原生 `argo_search` / `argo_fetch`、搜索分析工作台（`/argo`）与 DSH `v0.2.2-rc.5` 路由感知 `web_search` 装饰器均已默认启用：
+- **DSH `v0.2.2-rc.5` 及以上**：`web` 服务行的 `searchProvider` 建议**留空**（自动选择）——DeepSeek 模型路由透传宿主原生 `deepseek-official` 免费搜索，其他模型路由由本插件的路由装饰器透明转交 `argo`；如希望所有模型一律走 `argo`，仍可在 `web` 行显式设置 `searchProvider: argo`。
+- `mcp-argo` 段注释掉的「按需开启」只针对 MCP 完整工具面，不代表整个插件未启用。
 
 该 patch 的 `fetchProviderEnabled: false` 是主动关闭 fetch seam，因此 `web` 服务行不 pin `fetchProvider`；若改为启用 fetch seam，必须按本文「web seam 的 pin 必读」一节在 `web` 服务行加 `fetchProvider: argo`，否则多个可用 provider 会触发 `WEB_PROVIDER_AMBIGUOUS`。
 
@@ -111,7 +113,8 @@ argo 的 `deepseek_search` 引擎（官方 `api.deepseek.com/v1/tools/search`，
 
 | argo-dsh | DSH Harness | 说明 |
 |----------|-------------|------|
-| 2.11.2（本机已装） | 0.2.2-rc.1（本机运行中） | `package.json` 的 compatibility 已含该版本；`wide_research` 与原生工具走既有工具面，插件侧无需改动 |
+| 2.16.0（当前） | 0.2.2-rc.5（本机运行中） | 新增路由感知 `web_search` 装饰器（未 pin `searchProvider` 时 DeepSeek 路由透传官方免费搜索，其余路由自动转交 argo）；补齐 `WebSearchProvider` / `WebFetchProvider` 的 `title`/`description`/`ready` 契约；新增 `/argo` 搜索分析工作台（8 专题模式 + 左答右证 SSE + 多轮追问 + 定时监控） |
+| 2.11.2 | 0.2.2-rc.1 | `package.json` 的 compatibility 已含该版本；`wide_research` 与原生工具走既有工具面，插件侧无需改动 |
 | 2.9.9（上一版，兼容） | 0.2.1-rc.2（当前，运行中） | 自带设置页（接入 / 工具 / API 密钥 / 研究 / 高级）新增路由观测卡片（getRouteHealth 只读本机 usage_log / route.jsonl 汇总最近路由决策，无日志不假装有数据）与工具推荐组合（按场景一键套用工具勾选，中英双语）；双栈入口 `startActivation({provider, label, request, signal, delivery})`；rc.2 移除 `toolFilter` 启动期字段后由插件内 tool guard 阻止 worker 嵌套调用 `wide_research`；`wide_research` 端到端实测通过（planner → 2 worker → synthesis，passed=true / 14 sources） |
 | 2.9.7（上一版，兼容） | 0.2.1-alpha.1（实测，兼容） | 旧宿主走 `start(provider, request)` 分支，`toolFilter` 启动期字段仍认；该分支由插件单测覆盖，未在 alpha.x 上重跑端到端 |
 | 2.9.2 | 0.2.1-alpha.1（实测） | 上一轮适配验证基线；rc.2 的新入口与 tool guard 自 2.9.4 起进入 |

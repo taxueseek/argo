@@ -188,3 +188,50 @@ test('workbench CLI args keep every flag before `--` so dash-leading queries sta
   assert.ok(args.slice(0, sep).includes('--no-cache'), 'refresh 的 --no-cache 也须前置')
   assert.ok(!args.slice(0, sep).includes('--list-engines'), 'query 不得混入 flag 区')
 })
+
+test('workbench research gate passes when stats are supplied alongside valid citations', async () => {
+  const { evaluateGates } = await import('../dsh/wide-research.js')
+  const gate = evaluateGates({
+    answer: '核心结论基于多源证据 [1][2][3]。',
+    sources: [
+      { url: 'https://a.example.com/1', title: 'A', domain: 'a.example.com' },
+      { url: 'https://b.example.com/2', title: 'B', domain: 'b.example.com' },
+      { url: 'https://c.example.com/3', title: 'C', domain: 'c.example.com' },
+    ],
+    tracks: [{ id: 't1', title: 'T1' }],
+    warnings: [],
+    stats: { sourceCount: 3, completedTracks: 1, failedTracks: 0 },
+  })
+  assert.equal(gate.passed, true)
+})
+
+test('index apply re-registers envResolver after dispose (HMR safe) and sets rc.5 provider metadata', async () => {
+  const { apply } = await import('../dsh/index.js')
+  const { resolveEnv } = await import('../dsh/runner.js')
+  const cleanups = []
+  const registered = []
+  const mkCtx = () => ({
+    effect: (fn) => { const off = fn(); if (typeof off === 'function') cleanups.push(off) },
+    tools: { register: () => () => {}, guard: () => () => {} },
+    subagents: {},
+    systemPrompt: { section: () => () => {} },
+    web: {
+      registerSearchProvider: (p) => { registered.push(p); return () => {} },
+      registerFetchProvider: (p) => { registered.push(p); return () => {} },
+      search: async () => ({ sources: [] }),
+      searchReady: async () => true,
+    },
+    get: () => undefined,
+  })
+  apply(mkCtx(), { nativeTools: [] })
+  while (cleanups.length) cleanups.pop()()
+  // 二次 apply 模拟同进程 HMR 重载
+  apply(mkCtx(), { nativeTools: [], argoEnv: ['ARGO_NO_CACHE=1'] })
+  const env = await resolveEnv({}, { argoEnv: ['ARGO_NO_CACHE=1'], keyRefs: [] })
+  assert.equal(env?.ARGO_NO_CACHE, '1')
+  const searchProv = registered.find(p => p.id === 'argo' && typeof p.search === 'function')
+  assert.ok(searchProv?.title)
+  assert.ok(searchProv?.description)
+  assert.equal(typeof searchProv?.ready, 'function')
+  while (cleanups.length) cleanups.pop()()
+})
