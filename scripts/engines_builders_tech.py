@@ -181,40 +181,40 @@ def _build_exa_engine(spec: dict[str, Any]) -> Any:
         if not api_key:
             return _exa_mcp_keyless(query, n, to, spec)
         url = "https://api.exa.ai/search"
-        body = json.dumps({
+        payload: dict[str, Any] = {
             "query": query,
             "type": "auto",
             "numResults": min(n, 10),
             "contents": {"text": {"maxCharacters": 400}},
-        }).encode("utf-8")
+        }
+        from query_operators import compile_provider_params, format_exa_notices
+        payload.update(compile_provider_params(
+            "exa", query, operators=kwargs.get("operators"),
+            since=kwargs.get("since"), until=kwargs.get("until"), depth=depth))
+        body = json.dumps(payload).encode("utf-8")
         headers = {"x-api-key": api_key, "Content-Type": "application/json"}
         req = urllib.request.Request(url, data=body, headers=headers)
         try:
             with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
+                notices = format_exa_notices(data.get("notices"))
                 results = []
                 for r in data.get("results", []):
                     snippet = (r.get("text") or r.get("snippet") or "")[:300]
-                    # 轻量清洗：去掉 YAML front-matter（--- 开头的内容块）与导航噪声
                     if snippet.startswith("---"):
                         idx = snippet.find("---", 3)
                         if idx != -1:
                             snippet = snippet[idx + 3:].strip()
-                    # type:auto 模式不返回 score 字段（恒 0 会被 RRF 埋没），
-                    # 无 score 时给固定基线分；并叠加位次衰减。
-                    # 用 None/空串哨兵而不是 `or`：显式 0 分（上游判定不相关）
-                    # 会经 or 被抬成 0.75，与 2026-09-30 修过的同类
-                    # 「0 分垫底变中游」逐字同构。
                     _raw_score = r.get("score")
-                    _base_score = 0.75 if _raw_score is None or _raw_score == "" \
-                        else _raw_score
-                    results.append({
-                        "title": r.get("title", ""),
-                        "url": r.get("url", ""),
-                        "snippet": snippet,
-                        "source": "exa",
+                    _base_score = 0.75 if _raw_score is None or _raw_score == "" else _raw_score
+                    item = {
+                        "title": r.get("title", ""), "url": r.get("url", ""),
+                        "snippet": snippet, "source": "exa",
                         "score": rank_score(_base_score, len(results)),
-                    })
+                    }
+                    if notices and not results:
+                        item["_notices"] = notices
+                    results.append(item)
                 return results
         except Exception as e:
             logger.warning(f"Exa 引擎失败: {e}")

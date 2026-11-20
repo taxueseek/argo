@@ -53,10 +53,98 @@ _SITE_RE = re.compile(r"(?<![\w-])(-?)site:([a-zA-Z0-9.\-]+)(?:\s+OR(?=\s+site:)
 _LANG_RE = re.compile(r"(?<![\w-])lang:([a-zA-Z,]+)")
 # after:/before: 的值：年份或 YYYY-MM-DD
 _DATE_RE = re.compile(r"(?<![\w-])(after|before):(\d{4}(?:-\d{2}-\d{2})?)")
+# country:/region: 的值：ISO-2 代码或单/双词英文国名（如 country:de / region:united states）
+_COUNTRY_RE = re.compile(r"(?<![\w-])(?:country|region)[:=]([A-Za-z][A-Za-z\- ]{0,32})")
 # 排除短语：-"..."（先于单词排除处理）
 _EXCL_PHRASE_RE = re.compile(r'-\s*"([^"]+)"')
 # 排除单词：-词（字母数字或 CJK 串；连字符后紧跟非空白非连字符）
 _EXCL_TERM_RE = re.compile(r"(?<![\w\"])-(\S+)")
+
+# 常用 ISO 3166-1 alpha-2 代码与名称映射（零外部依赖，覆盖主流区域检索）
+_COUNTRY_ALIASES: dict[str, str] = {
+    "us": "US", "usa": "US", "united states": "US", "america": "US",
+    "cn": "CN", "china": "CN",
+    "gb": "GB", "uk": "GB", "united kingdom": "GB", "britain": "GB",
+    "de": "DE", "germany": "DE",
+    "fr": "FR", "france": "FR",
+    "jp": "JP", "japan": "JP",
+    "kr": "KR", "south korea": "KR", "korea": "KR",
+    "sg": "SG", "singapore": "SG",
+    "ca": "CA", "canada": "CA",
+    "au": "AU", "australia": "AU",
+    "in": "IN", "india": "IN",
+    "hk": "HK", "hong kong": "HK",
+    "tw": "TW", "taiwan": "TW",
+    "nl": "NL", "netherlands": "NL",
+    "ch": "CH", "switzerland": "CH",
+    "se": "SE", "sweden": "SE",
+    "es": "ES", "spain": "ES",
+    "it": "IT", "italy": "IT",
+    "br": "BR", "brazil": "BR",
+    "ru": "RU", "russia": "RU",
+}
+_TAVILY_COUNTRY_NAME: dict[str, str] = {
+    "US": "united states", "CN": "china", "GB": "united kingdom",
+    "DE": "germany", "FR": "france", "JP": "japan", "KR": "south korea",
+    "SG": "singapore", "CA": "canada", "AU": "australia", "IN": "india",
+    "HK": "hong kong", "TW": "taiwan", "NL": "netherlands",
+    "CH": "switzerland", "SE": "sweden", "ES": "spain", "IT": "italy",
+    "BR": "brazil", "RU": "russia",
+}
+_CODE_TOPIC_RE = re.compile(
+    r"\b(github|gitlab|npm|pnpm|cargo|pip|pypi|stackoverflow|python|rust|"
+    r"typescript|javascript|golang|react|vue|docker|kubernetes|k8s|linux|"
+    r"api|sdk|graphql|grpc|bug|error|traceback|compiler)\b"
+    r"|(?:代码|函数|接口|报错|崩溃|源码|组件|版本号|仓库|异常|编译)",
+    re.I,
+)
+_RESEARCH_TOPIC_RE = re.compile(
+    r"\b(arxiv|paper|research|benchmark|ablation|dataset|neurips|icml|iclr|cvpr|acl|ieee)\b"
+    r"|(?:论文|学术|评测|基准|消融实验|数据集|研报|文献)",
+    re.I,
+)
+_FINANCE_TOPIC_RE = re.compile(
+    r"\b(stock|shares|nasdaq|nyse|sec|10-k|10-q|earnings|revenue|market cap|valuation|ipo|dividend|ebitda)\b"
+    r"|(?:财报|股价|营收|市值|估值|财季|分红|股票|证券|上市|净利润)",
+    re.I,
+)
+_NEWS_TOPIC_RE = re.compile(
+    r"\b(news|breaking|announced|announcement|press release|headline|coverage)\b"
+    r"|(?:新闻|快讯|发布会|报道|最新消息|突发|头条)",
+    re.I,
+)
+
+
+def resolve_country_code(raw: str) -> str | None:
+    """将 ISO-2 代码或常见英文国名归一化为大写 alpha-2，无法识别返回 None。"""
+    key = re.sub(r"\s+", " ", (raw or "").strip().lower())
+    return _COUNTRY_ALIASES.get(key)
+
+
+def _strip_country_directive(text: str, ops: dict[str, Any]) -> str:
+    """抽取首个 country:/region: 指令（最长合法前缀优先；无效值也剥离防污染）。"""
+    m = _COUNTRY_RE.search(text)
+    if not m:
+        return text
+    tokens = m.group(1).strip().split()[:3]
+    matched_val = ""
+    resolved: str | None = None
+    for n in range(len(tokens), 0, -1):
+        cand = " ".join(tokens[:n])
+        code = resolve_country_code(cand)
+        if code:
+            matched_val = cand
+            resolved = code
+            break
+    if not matched_val:
+        matched_val = tokens[0] if tokens else ""
+    prefix_end = m.start(1)
+    cut_end = prefix_end + len(matched_val)
+    raw_directive = text[m.start():cut_end].strip()
+    ops["dropped"].append(raw_directive)
+    if resolved:
+        ops["country"] = resolved
+    return text[:m.start()] + " " + text[cut_end:]
 
 
 def parse_query_operators(query: str) -> tuple[str, dict[str, Any]]:
@@ -98,6 +186,9 @@ def parse_query_operators(query: str) -> tuple[str, dict[str, Any]]:
         ops[m.group(1)] = m.group(2)
         return _take(m)
     text = _DATE_RE.sub(_date_sub, text)
+
+    # 3.5) 国家/区域指令（country:de / region:united states）
+    text = _strip_country_directive(text, ops)
 
     # 4) 排除短语（先于 -词，避免 " 被当词的一部分）
     def _excl_phrase_sub(m: re.Match) -> str:
@@ -143,6 +234,9 @@ def operator_cache_suffix(operators: dict[str, Any] | None) -> str:
                 if isinstance(v, (str, int, float)) and str(v).strip()]
         if vals:
             parts.append(f"{tag}={','.join(vals)}")
+    cc = str(ops.get("country") or "").strip().upper()
+    if cc:
+        parts.append(f"cc={cc}")
     return "".join(f"|{p}" for p in parts)
 
 
@@ -192,5 +286,134 @@ def filter_results_by_sites(
 def _empty_ops() -> dict[str, Any]:
     return {
         "sites": [], "exclude_sites": [], "exclude_terms": [],
-        "langs": [], "after": None, "before": None, "dropped": [],
+        "langs": [], "country": None, "after": None, "before": None, "dropped": [],
     }
+
+
+def classify_hint_topic(query: str, sites: list[str] | None = None) -> str:
+    """零 LLM 轻量主题判定：code / research / finance / news / general。"""
+    site_set = [str(s).lower() for s in (sites or [])]
+    if any(any(d in s for d in ("github.com", "gitlab.com", "stackoverflow.com")) for s in site_set):
+        return "code"
+    if _CODE_TOPIC_RE.search(query or ""):
+        return "code"
+    if any("arxiv.org" in s for s in site_set) or _RESEARCH_TOPIC_RE.search(query or ""):
+        return "research"
+    if _FINANCE_TOPIC_RE.search(query or ""):
+        return "finance"
+    if _NEWS_TOPIC_RE.search(query or ""):
+        return "news"
+    return "general"
+
+
+def is_evergreen_tech_query(query: str, sites: list[str] | None = None) -> bool:
+    """常青技术/学术查询保护：非新闻场景不因 latest/recent 等词被误加短时效截断。"""
+    topic = classify_hint_topic(query, sites)
+    return topic in ("code", "research")
+
+
+def _norm_ymd(raw: Any) -> str | None:
+    s = str(raw or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return s
+    if re.fullmatch(r"\d{4}", s):
+        return f"{s}-01-01"
+    return None
+
+
+def compile_provider_params(
+    engine: str,
+    query: str,
+    *,
+    operators: dict[str, Any] | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    depth: str = "fast",
+) -> dict[str, Any]:
+    """将统一操作符与意图提示编译为目标引擎的原生请求参数（零 LLM、纯函数）。"""
+    ops = operators if isinstance(operators, dict) else {}
+    sites = [str(s).strip().lower() for s in (ops.get("sites") or []) if str(s).strip()]
+    excl_sites = [str(s).strip().lower() for s in (ops.get("exclude_sites") or []) if str(s).strip()]
+    langs = [str(x).strip().lower() for x in (ops.get("langs") or []) if str(x).strip()]
+    country = str(ops.get("country") or "").strip().upper() or None
+    after = _norm_ymd(since or ops.get("after"))
+    before = _norm_ymd(until or ops.get("before"))
+    topic = classify_hint_topic(query, sites)
+    eng = (engine or "").strip().lower()
+    out: dict[str, Any] = {}
+
+    if eng == "exa":
+        cat_map = {"research": "publication", "news": "news", "finance": "financial report"}
+        if topic in cat_map:
+            out["category"] = cat_map[topic]
+        if sites:
+            out["includeDomains"] = sites
+        if excl_sites:
+            out["excludeDomains"] = excl_sites
+        if after:
+            out["startPublishedDate"] = f"{after}T00:00:00.000Z"
+        if before:
+            out["endPublishedDate"] = f"{before}T23:59:59.999Z"
+        if country:
+            out["userLocation"] = country
+        return out
+
+    if eng == "tavily":
+        if topic in ("news", "finance"):
+            out["topic"] = topic
+        if sites:
+            out["include_domains"] = sites
+        if excl_sites:
+            out["exclude_domains"] = excl_sites
+        if after:
+            out["start_date"] = after
+        if before:
+            out["end_date"] = before
+        if country and country in _TAVILY_COUNTRY_NAME:
+            out["country"] = _TAVILY_COUNTRY_NAME[country]
+        return out
+
+    if eng == "parallel":
+        policy: dict[str, Any] = {}
+        if sites:
+            policy["include_domains"] = sites
+        if excl_sites:
+            policy["exclude_domains"] = excl_sites
+        if after:
+            policy["after_date"] = after
+        if before:
+            policy["before_date"] = before
+        if policy:
+            out["source_policy"] = policy
+        return out
+
+    if eng == "you":
+        if sites:
+            out["boost_domains"] = sites
+        if country:
+            out["country"] = country
+        if langs:
+            out["language"] = langs[0]
+        return out
+
+    return out
+
+
+def format_exa_notices(notices: Any) -> str | None:
+    """将 Exa 3.0 响应中的 notices 扁平化为单行模型可读提示（去重、容错）。"""
+    if not isinstance(notices, list) or not notices:
+        return None
+    lines: list[str] = []
+    for n in notices:
+        line = ""
+        if isinstance(n, str):
+            line = n.strip()
+        elif isinstance(n, dict):
+            for key in ("message", "description", "text", "notice"):
+                val = n.get(key)
+                if isinstance(val, str) and val.strip():
+                    line = val.strip()
+                    break
+        if line and line not in lines:
+            lines.append(line)
+    return f"Exa: {' | '.join(lines)}" if lines else None

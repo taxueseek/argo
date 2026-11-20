@@ -78,12 +78,13 @@ def _build_parallel_engine(spec: dict[str, Any]) -> Any:
                 "excerpt_settings": {"max_chars_per_result": 300},
             },
         }
-        # argo 时间窗 --since → after_date（官方 --after-date）
-        since = kwargs.get("since")
-        if since:
-            date_str = str(since)[:10]
-            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
-                body["advanced_settings"]["source_policy"] = {"after_date": date_str}
+        # argo 原生能力下推：since/until/sites/exclude_sites → source_policy
+        from query_operators import compile_provider_params
+        _p_hints = compile_provider_params(
+            "parallel", query, operators=kwargs.get("operators"),
+            since=kwargs.get("since"), until=kwargs.get("until"), depth=depth)
+        if _p_hints.get("source_policy"):
+            body["advanced_settings"]["source_policy"] = _p_hints["source_policy"]
         req = urllib.request.Request(
             _PARALLEL_URL,
             data=json.dumps(body).encode("utf-8"),
@@ -325,10 +326,19 @@ def _build_you_engine(spec: dict[str, Any]) -> Any:
         if not key:
             return [{"error": "YDC_API_KEY 未设置", "source": "you"}]
         body: dict[str, Any] = {"query": query, "count": max(1, int(n or 5))}
-        freshness = _you_freshness(query)
+        from query_operators import compile_provider_params, is_evergreen_tech_query
+        _y_hints = compile_provider_params(
+            "you", query, operators=kwargs.get("operators"),
+            since=kwargs.get("since"), until=kwargs.get("until"))
+        freshness = _y_hints.get("freshness") or (
+            "" if is_evergreen_tech_query(query) else _you_freshness(query)
+        )
         if freshness:
             body["freshness"] = freshness
-        body["language"] = _you_language(query)
+        body["language"] = _y_hints.get("language") or _you_language(query)
+        for _k in ("country", "boost_domains"):
+            if _k in _y_hints:
+                body[_k] = _y_hints[_k]
         req = urllib.request.Request(
             _YOU_URL,
             data=json.dumps(body).encode("utf-8"),

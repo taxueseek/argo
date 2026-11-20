@@ -299,6 +299,11 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                 out[key] = value
         if (decision or {}).get("video_only") or (decision or {}).get("domain") == "video":
             out["video_only"] = True
+        _ops = (decision or {}).get("operators")
+        if isinstance(_ops, dict) and any(
+            _ops.get(k) for k in ("sites", "exclude_sites", "country", "langs")
+        ):
+            out["operators"] = _ops
         return out
 
     def _exec_engine(eng: str, retries: int | None = None,

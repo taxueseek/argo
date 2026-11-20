@@ -229,6 +229,88 @@ class TestOperatorCacheSuffix(unittest.TestCase):
         self.assertEqual(operator_cache_suffix(ops), "",
                          "时间窗由 since/until 维度负责，不重复进后缀")
 
+    def test_country_is_partitioned(self):
+        _, ops = parse_query_operators("solar policy country:de")
+        self.assertIn("cc=DE", operator_cache_suffix(ops))
+
+
+class TestCountryAndProviderPushdown(unittest.TestCase):
+    """country:/region: 指令与四大高质引擎原生参数下推契约。"""
+
+    def test_country_directive_parsing_and_invalid_stripped(self):
+        clean, ops = parse_query_operators("solar subsidies country:de")
+        self.assertEqual(clean, "solar subsidies")
+        self.assertEqual(ops["country"], "DE")
+
+        clean2, ops2 = parse_query_operators("fed rate region:united states")
+        self.assertEqual(clean2, "fed rate")
+        self.assertEqual(ops2["country"], "US")
+
+        clean3, ops3 = parse_query_operators("test country:marsland")
+        self.assertEqual(clean3, "test")
+        self.assertIsNone(ops3["country"])
+        self.assertTrue(any("country:marsland" in d for d in ops3["dropped"]))
+
+    def test_compile_provider_params_all_four(self):
+        from query_operators import (
+            compile_provider_params,
+            format_exa_notices,
+            is_evergreen_tech_query,
+        )
+        ops = {
+            "sites": ["arxiv.org"],
+            "exclude_sites": ["medium.com"],
+            "langs": ["en"],
+            "country": "US",
+        }
+        exa = compile_provider_params(
+            "exa", "transformer benchmark paper",
+            operators=ops, since="2026-01-01", until="2026-06-01",
+        )
+        self.assertEqual(exa["category"], "publication")
+        self.assertEqual(exa["includeDomains"], ["arxiv.org"])
+        self.assertEqual(exa["excludeDomains"], ["medium.com"])
+        self.assertEqual(exa["startPublishedDate"], "2026-01-01T00:00:00.000Z")
+        self.assertEqual(exa["endPublishedDate"], "2026-06-01T23:59:59.999Z")
+        self.assertEqual(exa["userLocation"], "US")
+
+        tavily = compile_provider_params(
+            "tavily", "NVDA earnings revenue",
+            operators={"sites": ["sec.gov"], "country": "US"},
+            since="2026-01-01",
+        )
+        self.assertEqual(tavily["topic"], "finance")
+        self.assertEqual(tavily["include_domains"], ["sec.gov"])
+        self.assertEqual(tavily["start_date"], "2026-01-01")
+        self.assertEqual(tavily["country"], "united states")
+
+        parallel = compile_provider_params(
+            "parallel", "Rust async runtime",
+            operators={"sites": ["github.com"], "exclude_sites": ["spam.io"]},
+            since="2026-02-01", until="2026-05-01",
+        )
+        self.assertEqual(parallel["source_policy"], {
+            "include_domains": ["github.com"],
+            "exclude_domains": ["spam.io"],
+            "after_date": "2026-02-01",
+            "before_date": "2026-05-01",
+        })
+
+        you = compile_provider_params(
+            "you", "React docs",
+            operators={"sites": ["react.dev"], "country": "GB", "langs": ["en"]},
+        )
+        self.assertEqual(you["boost_domains"], ["react.dev"])
+        self.assertEqual(you["country"], "GB")
+        self.assertEqual(you["language"], "en")
+
+        self.assertTrue(is_evergreen_tech_query("latest React docs typescript"))
+        self.assertFalse(is_evergreen_tech_query("今日 突发 新闻"))
+        self.assertEqual(
+            format_exa_notices([{"message": "Relaxed site filter"}, "Relaxed site filter"]),
+            "Exa: Relaxed site filter",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

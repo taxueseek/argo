@@ -498,6 +498,36 @@ class NetworkIdleTracker:
 
 # ─── 主 API ──────────────────────────────────────────────────────────────────
 
+class NetworkCapture:
+    """轻量 CDP 网络流捕获器：按 URL 模式记录目标 XHR/GraphQL 响应 requestId。"""
+
+    def __init__(self, url_patterns: list[str] | tuple[str, ...]):
+        self._patterns = [p for p in url_patterns if p]
+        self._matched: dict[str, dict[str, Any]] = {}
+        self.finished_ids: list[str] = []
+
+    def feed(self, method: str | None, params: dict) -> None:
+        if method == "Network.responseReceived":
+            req_id = params.get("requestId")
+            resp = params.get("response") or {}
+            url = str(resp.get("url") or "")
+            if req_id and url and any(p in url for p in self._patterns):
+                self._matched[str(req_id)] = {
+                    "request_id": str(req_id),
+                    "url": url,
+                    "status": int(resp.get("status") or 0),
+                    "mime_type": str(resp.get("mimeType") or ""),
+                }
+        elif method == "Network.loadingFinished":
+            req_id = str(params.get("requestId") or "")
+            if req_id in self._matched and req_id not in self.finished_ids:
+                self.finished_ids.append(req_id)
+
+    def pending_entries(self, max_items: int = 20) -> list[dict[str, Any]]:
+        ids = self.finished_ids[:max_items] if self.finished_ids else list(self._matched.keys())[:max_items]
+        return [self._matched[rid] for rid in ids if rid in self._matched]
+
+
 class ChromeCDP:
     """高级 CDP 封装：页面交互 + 内容提取。
 
@@ -524,6 +554,7 @@ class ChromeCDP:
         self._session: _CDPSession | None = None
         self._target_id: str | None = None
         self._net: NetworkIdleTracker | None = None
+        self._capture: NetworkCapture | None = None
         if auto_start:
             try:
                 self.start()
@@ -566,6 +597,46 @@ class ChromeCDP:
     def _on_event(self, method, params) -> None:
         if self._net is not None:
             self._net.feed(method, params)
+        if self._capture is not None:
+            self._capture.feed(method, params)
+
+    def start_network_capture(self, url_patterns: list[str] | tuple[str, ...]) -> NetworkCapture:
+        """开启指定 URL 子串的网络流捕获（适用于 GraphQL/XHR 数据直取）。"""
+        self._capture = NetworkCapture(url_patterns)
+        return self._capture
+
+    def stop_network_capture(self) -> None:
+        self._capture = None
+
+    def collect_captured_json(self, max_items: int = 20) -> list[dict[str, Any]]:
+        """拉取已捕获请求的响应体并解析 JSON（单条解析失败跳过，不中断整批）。"""
+        if self._capture is None or self._session is None:
+            return []
+        import base64
+        out: list[dict[str, Any]] = []
+        for meta in self._capture.pending_entries(max_items=max_items):
+            try:
+                res = self._session.send("Network.getResponseBody", {"requestId": meta["request_id"]})
+            except OSError:
+                continue
+            if not isinstance(res, dict) or "body" not in res:
+                continue
+            raw = res.get("body") or ""
+            if res.get("base64Encoded"):
+                try:
+                    raw = base64.b64decode(raw).decode("utf-8", errors="replace")
+                except (ValueError, UnicodeDecodeError):
+                    continue
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            out.append({
+                "url": meta["url"],
+                "status": meta["status"],
+                "data": data,
+            })
+        return out
 
     def stop(self) -> None:
         if self._session:

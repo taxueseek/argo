@@ -144,3 +144,99 @@ def test_logout_removes_and_refuses_live_chrome(state_dir):
 def test_logout_missing_profile(state_dir):
     out = logout("never-logged-in.com")
     assert out["ok"] is False
+
+
+# ── 四态防抖判别、活体校验、评论封顶、CDP 捕获与诚实错误边界 ────────────────
+
+def test_detect_page_auth_state_all_branches():
+    import engine_states as es
+    from browser_auth import detect_page_auth_state
+
+    assert detect_page_auth_state("https://www.xiaohongshu.com/explore", "小红书", "正常内容") == es.PAGE_AUTH_READY
+    assert detect_page_auth_state("https://www.xiaohongshu.com/explore", "小红书", "登录后查看全部内容") == es.PAGE_AUTH_LOGIN_WALL
+    assert detect_page_auth_state(
+        "https://www.xiaohongshu.com/search_result", "搜索", "请先登录", after_search=True,
+    ) == es.PAGE_AUTH_SEARCH_RESTRICTED
+    assert detect_page_auth_state("https://x.com/i/flow/login", "Login", "") == es.PAGE_AUTH_SIGNED_OUT
+    assert detect_page_auth_state("https://x.com/explore", "安全验证", "请完成验证") == es.PAGE_AUTH_SECURITY_VERIFY
+
+
+def test_wait_for_stable_page_auth_state_debounce():
+    import engine_states as es
+    from browser_auth import wait_for_stable_page_auth_state
+
+    seq = iter([
+        es.PAGE_AUTH_LOGIN_WALL,
+        es.PAGE_AUTH_READY,
+        es.PAGE_AUTH_READY,
+        es.PAGE_AUTH_READY,
+    ])
+    got = wait_for_stable_page_auth_state(
+        lambda: next(seq), settle_s=0, interval_s=0, consecutive=3, max_samples=7,
+    )
+    assert got == es.PAGE_AUTH_READY
+
+
+def test_verify_live_session_and_missing_profile(state_dir):
+    import engine_states as es
+    from browser_auth import verify_live_session
+
+    miss = verify_live_session("example.com", settle_s=0, interval_s=0)
+    assert miss["ok"] is False and miss["state"] == es.PAGE_AUTH_SIGNED_OUT
+    assert miss["retryable"] is False and miss["handoff_required"] is True
+
+    _make_profile(state_dir, "x.com")
+    fake_cdp = MagicMock()
+    fake_cdp.get_url.return_value = "https://x.com/home"
+    fake_cdp.get_title.return_value = "Home / X"
+    fake_cdp.get_text.return_value = "timeline posts"
+    ok_res = verify_live_session("x.com", cdp_factory=lambda: fake_cdp, settle_s=0, interval_s=0)
+    assert ok_res["ok"] is True and ok_res["state"] == es.PAGE_AUTH_READY
+    fake_cdp.stop.assert_called_once()
+
+
+def test_bound_comments_caps_items_and_length():
+    from browser_auth import bound_comments
+
+    raw = [{"id": i, "text": "x" * 900} for i in range(35)]
+    out = bound_comments(raw, max_items=30, max_chars=800)
+    assert out["total"] == 35
+    assert len(out["items"]) == 30
+    assert out["truncated"] is True
+    assert len(out["items"][0]["text"]) == 801
+
+
+def test_cdp_network_capture_collects_json():
+    from chrome_cdp import ChromeCDP
+
+    cdp = ChromeCDP(auto_start=False)
+    cdp._session = MagicMock()
+    cdp._session.send.return_value = {"body": '{"items":[1,2]}', "base64Encoded": False}
+    cdp.start_network_capture(["SearchTimeline"])
+    cdp._on_event("Network.responseReceived", {
+        "requestId": "req-1",
+        "response": {"url": "https://x.com/i/api/graphql/abc/SearchTimeline", "status": 200, "mimeType": "application/json"},
+    })
+    cdp._on_event("Network.loadingFinished", {"requestId": "req-1"})
+    captured = cdp.collect_captured_json()
+    assert len(captured) == 1
+    assert captured[0]["data"] == {"items": [1, 2]}
+
+
+def test_fetch_browser_honest_error_on_login_wall(tmp_path):
+    import engine_states as es
+    from fetch_browser import browser_fetch
+
+    fake_cdp = MagicMock()
+    fake_cdp.get_url.return_value = "https://www.xiaohongshu.com/explore/123"
+    fake_cdp.get_title.return_value = "小红书"
+    fake_cdp.get_text.return_value = "登录后查看全部笔记"
+    fake_cdp.get_html.return_value = "<div>登录后查看</div>"
+
+    with patch("chrome_cdp.ChromeCDP", return_value=fake_cdp):
+        res = browser_fetch("https://www.xiaohongshu.com/explore/123", auth_profile=str(tmp_path))
+    assert res["success"] is False
+    assert res["auth_state"] == es.PAGE_AUTH_LOGIN_WALL
+    assert res["retryable"] is False
+    assert res["handoff_required"] is True
+    assert res["cache_eligible"] is False

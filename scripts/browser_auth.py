@@ -249,6 +249,159 @@ def touch(url_or_host: str) -> None:
         pass
 
 
+# ─── 四态防抖判别、活体会话校验与评论上下文封顶 ─────────────────────────────
+
+_SEC_VERIFY_URL_RE = re.compile(r"captcha|security[._-]?verif|challenge|/account/access", re.I)
+_SEC_VERIFY_TEXT_RE = re.compile(
+    r"安全验证|安全限制|IP存在风险|访问受限|异常访问|操作频繁|请完成验证|verify you are human",
+    re.I,
+)
+_SIGNED_OUT_URL_RE = re.compile(r"website-login|/i/flow/login|/login(?:/|\?|$)|/signin(?:/|\?|$)", re.I)
+_LOGIN_WALL_TEXT_RE = re.compile(
+    r"登录后推荐更懂你的笔记|登录后查看|请先登录|立即登录以继续|log in to continue|sign in to view",
+    re.I,
+)
+
+
+def detect_page_auth_state(
+    url: str,
+    title: str = "",
+    body_text: str = "",
+    *,
+    has_security_modal: bool = False,
+    has_login_modal: bool = False,
+    after_search: bool = False,
+) -> str:
+    """四态(+搜索受限)判别纯函数：全部返回 engine_states.PAGE_AUTH_* 常量。"""
+    import engine_states as _es
+
+    href = url or ""
+    combined = f"{title or ''}\n{(body_text or '')[:4000]}"
+    if has_security_modal or _SEC_VERIFY_URL_RE.search(href) or _SEC_VERIFY_TEXT_RE.search(combined):
+        return _es.PAGE_AUTH_SECURITY_VERIFY
+    if _SIGNED_OUT_URL_RE.search(href):
+        return _es.PAGE_AUTH_SIGNED_OUT
+    if has_login_modal or _LOGIN_WALL_TEXT_RE.search(combined):
+        return _es.PAGE_AUTH_SEARCH_RESTRICTED if after_search else _es.PAGE_AUTH_LOGIN_WALL
+    return _es.PAGE_AUTH_READY
+
+
+def wait_for_stable_page_auth_state(
+    probe_fn,
+    *,
+    settle_s: float = 0.6,
+    interval_s: float = 0.25,
+    consecutive: int = 3,
+    max_samples: int = 7,
+    sleep_fn=time.sleep,
+) -> str:
+    """多帧防抖状态机：连续 consecutive 次观测一致才裁决，避免 SPA 水合瞬间误判。"""
+    import engine_states as _es
+
+    if settle_s > 0:
+        sleep_fn(settle_s)
+    last: str | None = None
+    repeated = 0
+    for idx in range(max(1, max_samples)):
+        current = probe_fn()
+        if current == last:
+            repeated += 1
+        else:
+            last = current
+            repeated = 1
+        if repeated >= max(1, consecutive):
+            return current
+        if interval_s > 0 and idx + 1 < max_samples:
+            sleep_fn(interval_s)
+    return last or _es.PAGE_AUTH_SIGNED_OUT
+
+
+def verify_live_session(
+    url_or_host: str,
+    *,
+    cdp_factory=None,
+    timeout: float = 10.0,
+    settle_s: float = 0.6,
+    interval_s: float = 0.25,
+) -> dict:
+    """活体会话校验：确认持久 profile 存在且打开页面后经多帧防抖处于 PAGE_AUTH_READY。"""
+    import engine_states as _es
+
+    host = site_host(url_or_host)
+    prof = profile_for(host)
+    if not prof:
+        return {
+            "ok": False, "site": host, "state": _es.PAGE_AUTH_SIGNED_OUT,
+            "retryable": False, "handoff_required": True,
+            "error": f"未找到 {host} 的登录态 profile（请先 argo auth login {host}）",
+        }
+    target = url_or_host.strip()
+    if "://" not in target:
+        target = "https://" + target
+
+    if cdp_factory is None:
+        from chrome_cdp import ChromeCDP
+        cdp_factory = lambda: ChromeCDP(auto_start=True, user_data_dir=prof)
+
+    cdp = None
+    try:
+        cdp = cdp_factory()
+        cdp.navigate(target, wait_until="networkidle", timeout=timeout)
+
+        def _probe() -> str:
+            return detect_page_auth_state(
+                cdp.get_url() or target,
+                cdp.get_title() or "",
+                cdp.get_text() or "",
+            )
+
+        state = wait_for_stable_page_auth_state(
+            _probe, settle_s=settle_s, interval_s=interval_s,
+        )
+        usable = _es.is_page_auth_usable(state)
+        non_retry = _es.is_page_auth_non_retryable(state)
+        return {
+            "ok": usable, "site": host, "state": state,
+            "retryable": not non_retry, "handoff_required": non_retry,
+            "error": None if usable else f"{host} 会话不可用（state={state}），请人工重新登录或通过验证",
+        }
+    except (OSError, RuntimeError, ValueError) as e:
+        return {
+            "ok": False, "site": host, "state": _es.PAGE_AUTH_SIGNED_OUT,
+            "retryable": True, "handoff_required": False,
+            "error": f"活体探测失败: {str(e)[:120]}",
+        }
+    finally:
+        if cdp is not None:
+            try:
+                cdp.stop()
+            except (OSError, RuntimeError):
+                pass
+
+
+def bound_comments(
+    comments: list[dict],
+    *,
+    max_items: int = 30,
+    max_chars: int = 800,
+) -> dict:
+    """评论/回复上下文封顶器：最多保留 max_items 条，单条正文截断至 max_chars，显式标 truncated。"""
+    total = len(comments or [])
+    kept: list[dict] = []
+    truncated = total > max_items
+    for raw in (comments or [])[:max_items]:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        for text_key in ("text", "content", "body"):
+            val = item.get(text_key)
+            if isinstance(val, str) and len(val) > max_chars:
+                item[text_key] = val[:max_chars] + "…"
+                truncated = True
+        kept.append(item)
+    return {"items": kept, "total": total, "truncated": truncated}
+
+
 # ─── CLI（bin/argo 的 auth 子命令入口）──────────────────────────────────────
 
 def main(argv: list[str] | None = None) -> None:
@@ -317,7 +470,22 @@ def main(argv: list[str] | None = None) -> None:
             print(f"删除失败：{out.get('error')}", file=sys.stderr)
         sys.exit(0 if out.get("ok") else 1)
 
-    print(f"Unknown auth subcommand: {cmd}（可用：login / status / logout）",
+    if cmd == "verify":
+        if not rest:
+            print("用法：argo auth verify <url_or_host>（活体验证已保存会话）",
+                  file=sys.stderr)
+            sys.exit(1)
+        out = verify_live_session(rest[0])
+        if use_json:
+            _emit_json(out)
+        elif out.get("ok"):
+            print(f"{out['site']} 登录态活体校验通过（state={out['state']}）。")
+        else:
+            print(f"{out['site']} 校验未通过（state={out.get('state')}）：{out.get('error')}",
+                  file=sys.stderr)
+        sys.exit(0 if out.get("ok") else 1)
+
+    print(f"Unknown auth subcommand: {cmd}（可用：login / status / verify / logout）",
           file=sys.stderr)
     sys.exit(1)
 

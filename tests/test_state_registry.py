@@ -38,7 +38,7 @@ class TestRegistryCompleteness:
         "batch_probe", "batch_probe_verdict", "numeric",
         "coverage", "cache", "verification",
         "watch", "envelope", "recovery_level", "conclusion_cap",
-        "validation", "root_cause",
+        "validation", "root_cause", "browser_page_auth",
     })
 
     def test_all_machines_registered(self):

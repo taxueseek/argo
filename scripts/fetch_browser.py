@@ -58,9 +58,40 @@ def browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
         html = cdp.get_html()
         text = cdp.get_text()
         title = cdp.get_title()
+        final_url = cdp.get_url() or url
 
-        result = {
-            "url": url,
+        if auth_profile:
+            from browser_auth import detect_page_auth_state, touch
+            auth_state = detect_page_auth_state(final_url, title or "", text or "")
+            if engine_states.is_page_auth_non_retryable(auth_state):
+                # 诚实错误边界：登录墙/风控/真登出绝不静默当正文返回，也不误标可重试
+                return {
+                    "url": final_url, "content": "", "html": "", "title": title or "",
+                    "length": 0, "success": False,
+                    "error": f"authenticated fetch blocked ({auth_state})",
+                    "fetch_method": engine_states.FETCH_CHROME_CDP,
+                    "login_state_used": True, "cache_eligible": False,
+                    "auth_state": auth_state, "retryable": False,
+                    "handoff_required": True,
+                }
+            result = {
+                "url": final_url,
+                "content": text[:max_chars] if text else "",
+                "html": html[:max_chars * 2] if html else "",
+                "title": title or "",
+                "length": len(text) if text else 0,
+                "success": bool(text),
+                "error": None if text else "empty content",
+                "fetch_method": engine_states.FETCH_CHROME_CDP,
+                "login_state_used": True,
+                "cache_eligible": False,
+                "auth_state": auth_state,
+            }
+            touch(url)
+            return result
+
+        return {
+            "url": final_url,
             "content": text[:max_chars] if text else "",
             "html": html[:max_chars * 2] if html else "",
             "title": title or "",
@@ -69,17 +100,6 @@ def browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
             "error": None if text else "empty content",
             "fetch_method": engine_states.FETCH_CHROME_CDP,
         }
-        if auth_profile:
-            # 登录态 provenance：与 ego-browser 通道的 envelope 语义同源
-            # （candidate_envelope：login_state_used → visibility=authenticated）
-            result["login_state_used"] = True
-            result["cache_eligible"] = False
-            try:
-                from browser_auth import touch
-                touch(url)
-            except Exception:
-                pass
-        return result
     except Exception as e:
         return _fail(url, f"CDP error: {str(e)[:100]}")
     finally:

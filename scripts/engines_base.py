@@ -444,19 +444,18 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 resolved = _resolve(str(v), query, n, allowed_env=_allowed, **kwargs)
                 if k == "search_depth":
                     body[k] = {"fast": "fast", "balanced": "basic", "deep": "advanced", "basic": "basic", "advanced": "advanced", "ultra-fast": "ultra-fast"}.get(str(depth), resolved or "basic")
-                elif resolved.lower() == "true":
-                    body[k] = True
-                elif resolved.lower() == "false":
-                    body[k] = False
+                elif resolved.lower() in ("true", "false"):
+                    body[k] = resolved.lower() == "true"
+                elif resolved.lstrip("-").isdigit():
+                    body[k] = int(resolved)
                 else:
                     try:
-                        body[k] = int(resolved)
+                        body[k] = float(resolved)
                     except ValueError:
-                        try:
-                            body[k] = float(resolved)
-                        except ValueError:
-                            body[k] = resolved
-            # 与 GET 路径保持一致：过滤空/认证前缀残留头；POST 默认走 HttpClient 连接池
+                        body[k] = resolved
+            if eng == "tavily":
+                from query_operators import compile_provider_params
+                body.update(compile_provider_params("tavily", query, operators=kwargs.get("operators"), since=kwargs.get("since"), until=kwargs.get("until"), depth=depth))
             resolved_url = _resolve(url_template, query, n, allowed_env=_allowed, **kwargs)
             resolved_headers = {k: v for k, v in ((k, _resolve(v, query, n, allowed_env=_allowed, **kwargs))
                                                   for k, v in headers.items()) if _header_meaningful(v)}

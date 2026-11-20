@@ -945,3 +945,42 @@ register_state_machine(
     states=VALIDATION_STATUSES,
     description="验证结论：pass / fail / skipped / error",
 )
+
+# ── 28. 浏览器页面登录态（browser_auth / fetch_browser 共用）──────────────────
+PAGE_AUTH_READY = "ready"
+PAGE_AUTH_LOGIN_WALL = "login_wall"
+PAGE_AUTH_SECURITY_VERIFY = "security_verification"
+PAGE_AUTH_SIGNED_OUT = "signed_out"
+PAGE_AUTH_SEARCH_RESTRICTED = "search_restricted"
+
+PAGE_AUTH_STATES = frozenset({
+    PAGE_AUTH_READY,
+    PAGE_AUTH_LOGIN_WALL,
+    PAGE_AUTH_SECURITY_VERIFY,
+    PAGE_AUTH_SIGNED_OUT,
+    PAGE_AUTH_SEARCH_RESTRICTED,
+})
+PAGE_AUTH_NON_RETRYABLE = frozenset({
+    PAGE_AUTH_LOGIN_WALL,
+    PAGE_AUTH_SECURITY_VERIFY,
+    PAGE_AUTH_SIGNED_OUT,
+    PAGE_AUTH_SEARCH_RESTRICTED,
+})
+
+
+def is_page_auth_usable(state: str | None) -> bool:
+    """页面会话是否处于可直接消费状态。"""
+    return state == PAGE_AUTH_READY
+
+
+def is_page_auth_non_retryable(state: str | None) -> bool:
+    """页面是否命中不可重试的登录/风控边界（禁止静默降级造假）。"""
+    return state in PAGE_AUTH_NON_RETRYABLE
+
+
+register_state_machine(
+    "browser_page_auth",
+    states=PAGE_AUTH_STATES,
+    routable=frozenset({PAGE_AUTH_READY}),
+    description="浏览器页面登录态：ready / login_wall / security_verification / signed_out / search_restricted",
+)
