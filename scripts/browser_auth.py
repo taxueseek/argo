@@ -105,6 +105,7 @@ def _read_meta(d: Path) -> dict:
 
 def _write_meta(d: Path, host: str, created: str | None = None) -> None:
     """原子写 meta.json：profile 的 argo 登记标记（Chrome 不认识也不在乎它）。"""
+    import argo_paths
     prev = _read_meta(d)
     meta = {
         "site": host,
@@ -112,9 +113,7 @@ def _write_meta(d: Path, host: str, created: str | None = None) -> None:
         "last_used": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "argo": "browser-profiles/v1",
     }
-    tmp = d / f"meta.json.tmp.{os.getpid()}"
-    tmp.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, d / "meta.json")
+    argo_paths.atomic_write_json(d / "meta.json", meta)
 
 
 def profile_for(url_or_host: str) -> str | None:
@@ -174,6 +173,7 @@ def login(url_or_host: str, chrome_path: str | None = None,
             msg += "（该 profile 可能已有 Chrome 在跑：关掉它或先 argo auth logout）"
         return {"ok": False, "site": host, "error": msg[:200]}
 
+    saved = False
     try:
         if confirm is None:
             print(f"\n[{host}] 已在打开的 Chrome 窗口中登录/扫码。", file=sys.stderr)
@@ -186,12 +186,15 @@ def login(url_or_host: str, chrome_path: str | None = None,
         else:
             confirm()
         _write_meta(d, host)
+        saved = True
         return {"ok": True, "site": host, "profile": str(d)}
     finally:
         try:
             proc.stop()
         except Exception:
             pass
+        if fresh and not saved:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 def status() -> list[dict]:

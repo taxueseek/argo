@@ -267,13 +267,26 @@ class CircuitBreaker:
 
             if state == engine_states.BREAKER_HALF_OPEN:
                 probe_at = float(st.get("half_open_probe_at") or 0)
-                if probe_at > 0 and (time.time() - probe_at) < min(OPEN_SECONDS, 30):
+                window = min(OPEN_SECONDS, 30)
+                if probe_at > 0 and (time.time() - probe_at) < window:
                     return False, "half_open_probe_busy"
+                claimed = [False]
+
                 def _claim_probe() -> None:
+                    now = time.time()
                     fresh = self._engines.get(engine) or {}
-                    fresh["half_open_probe_at"] = time.time()
+                    if fresh.get("state") != engine_states.BREAKER_HALF_OPEN:
+                        return
+                    cur_probe = float(fresh.get("half_open_probe_at") or 0)
+                    if cur_probe > 0 and (now - cur_probe) < window:
+                        return
+                    fresh["half_open_probe_at"] = now
                     self._engines[engine] = fresh
+                    claimed[0] = True
+
                 self._mutate_locked(_claim_probe)
+                if not claimed[0]:
+                    return False, "half_open_probe_busy"
                 return True, engine_states.BREAKER_HALF_OPEN
 
             if state == engine_states.BREAKER_OPEN:
@@ -293,12 +306,22 @@ class CircuitBreaker:
                             self._engines[engine] = fresh
                         self._mutate_locked(_auto_disable)
                         return False, "auto_disabled"
-                    # half-open：允许一次探测
+                    # half-open：锁内校验并写入 half_open_probe_at，防并发双探测惊群
+                    entered = [False]
+
                     def _half_open() -> None:
+                        now = time.time()
                         fresh = self._engines.get(engine) or {}  # 同上：锁内重读
+                        if fresh.get("state") != engine_states.BREAKER_OPEN:
+                            return
                         fresh["state"] = engine_states.BREAKER_HALF_OPEN
+                        fresh["half_open_probe_at"] = now
                         self._engines[engine] = fresh
+                        entered[0] = True
+
                     self._mutate_locked(_half_open)
+                    if not entered[0]:
+                        return False, "half_open_probe_busy"
                     return True, "half_open_probe"
                 remain = int(OPEN_SECONDS - (time.time() - opened_at))
                 return False, f"circuit_open:{remain}s"
@@ -357,13 +380,8 @@ class CircuitBreaker:
         with self._lock:
             self._fresh_locked()
             st = self._engines.get(engine)
-            if st is None:
-                # 首次成功也是一次「交出非空结果」：基线在此立起（record_success
-                # 只在交出可用结果时被调用，见 engine_dispatch 的贡献者判据）。
-                self._engines[engine] = {"state": engine_states.BREAKER_CLOSED, "failures": 0, "opens": 0,
-                                         "ever_nonempty": True}
-                return
-            if (st.get("state", engine_states.BREAKER_CLOSED) == engine_states.BREAKER_CLOSED
+            if (st is not None
+                    and st.get("state", engine_states.BREAKER_CLOSED) == engine_states.BREAKER_CLOSED
                     and not st.get("failures")
                     and not st.get("opens")
                     and not st.get("empty_streak")
@@ -613,9 +631,19 @@ class CircuitBreaker:
             else ERROR_NEGATIVE_TTL
         )
         key = self._neg_key(query, engine)
+        now = time.time()
         with self._lock:
+            if len(self._neg) >= 1000:
+                expired = [k for k, v in self._neg.items() if now >= float(v.get("expires") or 0)]
+                for k in expired:
+                    self._neg.pop(k, None)
+                if len(self._neg) >= 2000:
+                    # 仍超上限则淘汰最早过期的一半，防止常驻进程无限增长
+                    oldest = sorted(self._neg.items(), key=lambda kv: float(kv[1].get("expires") or 0))
+                    for k, _ in oldest[:len(oldest) // 2]:
+                        self._neg.pop(k, None)
             self._neg[key] = {
-                "expires": time.time() + ttl,
+                "expires": now + ttl,
                 "status": status,
                 "engine": engine,
             }

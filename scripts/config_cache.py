@@ -98,7 +98,8 @@ def _loader_sig() -> int:
     global _loader_sig_cache
     if _loader_sig_cache is None:
         sig = 0
-        for mod in (Path(__file__), Path(__file__).parent / "yaml_load.py"):
+        for mod in (Path(__file__), Path(__file__).parent / "config.py",
+                    Path(__file__).parent / "yaml_load.py"):
             try:
                 sig = (sig * 1_000_003 + mod.stat().st_mtime_ns) % (2 ** 62)
             except OSError:
@@ -203,7 +204,7 @@ def _config_disk_cache_key(st: os.stat_result,
       上一个 HOME 的展开路径。
     """
     return {
-        "config_path": str(_config_path()),
+        "config_path": str(_config_path().resolve()),
         "config_digest": digest,
         "config_size": st.st_size,
         "ext_digest": scan[3],
@@ -320,7 +321,7 @@ def _peek_disk_cache_db_path(st: os.stat_result,
         return False, local_db
     key = raw.get("key") or {}
     if (key.get("config_path"), key.get("config_digest")) != (
-            str(_config_path()), digest):
+            str(_config_path().resolve()), digest):
         return False, local_db
     cfg = raw.get("config")
     if not _looks_like_config(cfg):

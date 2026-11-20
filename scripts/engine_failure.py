@@ -420,3 +420,36 @@ def from_note(note: dict[str, Any] | None,
         "confidence": confidence,
         "engine_id": engine_id,
     }
+
+
+class ThreadLocalNotes:
+    """线程隔离失败归因表（防并发查询/早停弃置线程串味），兼容 dict 读写接口。"""
+
+    def __init__(self) -> None:
+        import threading
+        self._local = threading.local()
+
+    def _d(self) -> dict[str, dict[str, Any]]:
+        d = getattr(self._local, "notes", None)
+        if d is None:
+            d = {}
+            self._local.notes = d
+        return d
+
+    def __getitem__(self, k: str) -> dict[str, Any]:
+        return self._d()[k]
+
+    def __setitem__(self, k: str, v: dict[str, Any]) -> None:
+        self._d()[k] = v
+
+    def __contains__(self, k: object) -> bool:
+        return k in self._d()
+
+    def get(self, k: str, default: Any = None) -> Any:
+        return self._d().get(k, default)
+
+    def pop(self, k: str, *args: Any) -> Any:
+        return self._d().pop(k, *args)
+
+    def clear(self) -> None:
+        self._d().clear()

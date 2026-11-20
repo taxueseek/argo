@@ -61,10 +61,9 @@ def _get_logger():
 # 拿到引擎名、状态码、响应体的位置。HTML 引擎的反爬命中走「静默返回空」路径，
 # 没有任何错误文本可供聚合层事后反推；不在这里寄存，封锁就永远伪装成空结果，
 # 被封的引擎会被当成故障累计到熔断里（封错人）。
-_FAIL_NOTES: dict[str, dict[str, Any]] = {}
+from engine_failure import ThreadLocalNotes as _ThreadLocalNotes
+_FAIL_NOTES = _ThreadLocalNotes()
 _FAIL_NOTES_LOCK = threading.Lock()
-
-# HTTPError 错误体读取上限：只用于归因（下游截 400 字符），防大错误页吃进内存/落盘
 _HTTP_ERROR_BODY_CAP = 64 * 1024
 
 # 归因细节里可能回显凭证（OpenAI 风格 "Incorrect API key: sk-…"），

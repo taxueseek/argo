@@ -536,7 +536,7 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                     and outcome["status"] != _s.OUTCOME_NO_RESULTS):
                 outcome["status"] = _mapped
             outcome["detail"] = _text or outcome.get("detail")
-        if _note:
+        if _note and outcome["status"] != _s.OUTCOME_OK:
             # 归因随熔断状态一起持久化（「为什么坏」必须在失败现场写下来，
             # 事后只能看到 kind 粗标签）；原始 HTTP 状态码同时透传进 outcome，
             # 台账结构化可检 403/404/429，不再只埋在 detail 自由文本里。
@@ -936,52 +936,27 @@ def run_dispatch(*, query: str, retrieval_query: str, engines: list[str],
                              tail_grace_s=straggler_grace_s,
                              tail_grace_fn=straggler_tail_fn)
     else:
-        # 串行路径（`parallel=False` 的垂直域）。
-        #
-        # 它此前是**严格串行**：前一个引擎必须耗满自己的超时上限（收紧后
-        # 5-8s）才轮到下一个。实测（2026-09-17，24 条代表性查询）：dispatch
-        # 超出「首个可用引擎完成时刻」的部分 p50 39ms、p90 2436ms、合计
-        # 22.4s（平均 0.93s/查询，占平均墙钟 36%）——尾部全在这里，而
-        # wave-1/wave-2 早就有对冲，只有这条路径没有。
-        #
-        # 改法不是把垂直域改成并行（那会连 happy path 都多发调用），而是
-        # **错开起步**：首个引擎跑过 serial_stagger_s 还没回来才补发备选源。
-        # 首个引擎正常完成时仍然只付一次调用（成本语义不变）；它异常地慢时，
-        # 备选源不再等到它超时才起跑。垂直域的源（行情/宏观/天气/赛事/地理）
-        # 都是免密钥的，增量调用没有成本含义。
-        def _serial_stop(eng: str, goods: list[dict[str, Any]]) -> bool:
-            if not allow_early or no_early or not goods:
-                return False
-            # 答案型域 min_results=1：1 条快照即 early-stop
-            if results_sufficient(goods, mode=mode, min_results=early_min,
-                                  query=query):
-                return True
-            # 默认串行：任一引擎有结果即停（历史行为）；答案型不够用则继续补源。
-            # 词面覆盖守卫同语义：结果与查询几乎无交集 → 试下一引擎（救援线）
-            return early_min is None and query_coverage_ok(goods, query)
+        # 串行路径（`parallel=False` 的垂直域）：错开起步对冲慢尾，首个正常完成只付一次调用。
+        if to_run:
+            def _serial_stop(eng: str, goods: list[dict[str, Any]]) -> bool:
+                if not allow_early or no_early or not goods:
+                    return False
+                if results_sufficient(goods, mode=mode, min_results=early_min, query=query):
+                    return True
+                return early_min is None and query_coverage_ok(goods, query)
 
-        stagger = max(0.0, serial_stagger_s)
-        # 与 wave-1 同一个窗语义（见 _adaptive_grace 的自适应收窄）。显式给
-        # 更大的值是「消融对照 / 完全退回严格串行」的逃生门，原样尊重不收窄。
-        if stagger <= primary_grace_s:
-            stagger = _adaptive_grace(to_run[0], stagger)
-        # 等待上限：给「最晚起步的那个引擎」留足它自己的单引擎预算。
-        # 旧语义等价于 n × 单引擎预算；对冲把引擎错开起步，所以是
-        # (n-1) × stagger + 单引擎预算——差的正是要消灭的那段串行拖尾。
-        _serial_wait = (len(to_run) - 1) * stagger + _budget_cfg
-        if budget_s is not None:
-            # 总预算只管「还起不起新引擎」，不没收已经发出去的枪：已起的
-            # 引擎可以跑完自己的单引擎预算（与旧串行行为一致，不比它更差）
-            _start_before = max(0.0, _deadline - _now())
-        else:
-            _start_before = None
-        if _run_engines_bounded(to_run, _serial_wait,
-                                stop=_serial_stop if allow_early else None,
-                                stagger_s=stagger,
-                                start_before_s=_start_before,
-                                tail_grace_s=straggler_grace_s,
-                tail_grace_fn=straggler_tail_fn):
-            early_stopped = True
+            stagger = max(0.0, serial_stagger_s)
+            if stagger <= primary_grace_s:
+                stagger = _adaptive_grace(to_run[0], stagger)
+            _serial_wait = (len(to_run) - 1) * stagger + _budget_cfg
+            _start_before = max(0.0, _deadline - _now()) if budget_s is not None else None
+            if _run_engines_bounded(to_run, _serial_wait,
+                                    stop=_serial_stop if allow_early else None,
+                                    stagger_s=stagger,
+                                    start_before_s=_start_before,
+                                    tail_grace_s=straggler_grace_s,
+                                    tail_grace_fn=straggler_tail_fn):
+                early_stopped = True
 
     budget_total_ms = int(budget_s * 1000) if budget_s is not None else None
     # 记账口径见 dispatch_result 模块注释；wasted_ms 保留为 abandoned 别名。

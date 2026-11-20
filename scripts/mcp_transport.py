@@ -155,10 +155,29 @@ def run_stdio():
                     continue
             else:
                 _response_format = "content-length"
-                length = int(header_str.split(":")[1].strip())
-                sys.stdin.buffer.readline()  # skip blank line
-                body = sys.stdin.buffer.read(length).decode("utf-8")
-                request = json.loads(body)
+                try:
+                    length = int(header_str.split(":", 1)[1].strip())
+                except ValueError:
+                    _send_error(None, -32700, "Invalid Content-Length")
+                    continue
+                # 读取后续扩展头（如 Content-Type）直至空行，符合 LSP/MCP 帧规范
+                while True:
+                    hdr_line = sys.stdin.buffer.readline()
+                    if not hdr_line or hdr_line in (b"\r\n", b"\n"):
+                        break
+                if length <= 0 or length > 10_000_000:
+                    _send_error(None, -32600, "Invalid Request: Content-Length out of bounds")
+                    continue
+                body = sys.stdin.buffer.read(length).decode("utf-8", errors="replace")
+                try:
+                    request = json.loads(body)
+                except json.JSONDecodeError:
+                    _send_error(None, -32700, "Parse error")
+                    continue
+
+            if not isinstance(request, dict):
+                _send_error(None, -32600, "Invalid Request")
+                continue
 
             method = request.get("method", "")
             params = request.get("params", {})

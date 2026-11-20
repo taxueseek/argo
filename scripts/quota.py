@@ -328,12 +328,20 @@ class QuotaManager:
 
         进程内 threading.Lock 只挡得住同进程线程；CLI / MCP server /
         评测脚本三者并行时，各自读到旧状态、各自 +1、后写者覆盖前写者，
-        计数直接丢失。这里在文件锁内重读最新磁盘态，保证增量不丢。
+        计数直接丢失。这里在进程内锁 + 文件锁内重读最新磁盘态，保证增量不丢，
+        写盘后刷新 `_state_hot` 基线避免本进程下一次访问误判磁盘变化再重读。
         """
-        with argo_paths.file_lock(_state_path()):
-            self._load_state()
-            mutator()
-            argo_paths.atomic_write_json(_state_path(), self._state)
+        with self._lock:
+            with argo_paths.file_lock(_state_path()):
+                self._load_state()
+                mutator()
+                argo_paths.atomic_write_json(_state_path(), self._state)
+            if self._state_hot is not None:
+                try:
+                    self._state_hot.reset()
+                    self._state_hot.changed()
+                except Exception:
+                    pass
 
     def record(self, engine: str, success: bool = True, credits: int = 1) -> None:
         """记录一次 API 调用（单条，跨进程安全）。"""
@@ -631,7 +639,7 @@ class QuotaManager:
             if limit is not None and (limit - st.get("used", 0)) <= 0:
                 return True
             budget = (self._profiles.get(engine) or {}).get("budget_amount")
-            return budget is not None and float(st.get("cost_used", 0.0)) >= float(budget)
+            return budget is not None and _at_or_over_budget(st.get("cost_used", 0.0), budget)
 
     def is_over_budget(self, engine: str) -> bool:
         """只判「月度预算是否用完」，不看次数/限频/远端配额。
@@ -748,11 +756,11 @@ class QuotaManager:
     def get_stats(self) -> dict:
         """获取所有引擎的配额统计。"""
         with self._lock:
+            self._fresh_locked()
             stats = {}
-            for engine in self._profiles:
-                if engine.startswith("_") or not isinstance(self._profiles[engine], dict):
+            for engine, profile in list(self._profiles.items()):
+                if engine.startswith("_") or not isinstance(profile, dict):
                     continue
-                profile = self._profiles[engine]
                 # 残缺状态防御：state JSON 手工编辑/截断时 mark 可能非 dict，
                 # 与 _refresh_remote_state_locked 的 .get 计算方式保持一致
                 raw_mark = (self._state.get(engine) or {}).get("remote_exhausted")

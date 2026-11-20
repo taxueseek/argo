@@ -176,19 +176,22 @@ class AdaptiveLearner:
 
     @contextlib.contextmanager
     def batch(self):
-        """合并多次 record 为单次 SQLite commit，保持 record 调用面不变。"""
-        with self._lock:
-            self._batch_depth = getattr(self, "_batch_depth", 0) + 1
+        """合并多次 record 为单次 SQLite commit，保持 record 调用面不变。
+
+        batch 状态跟随线程局部连接（self._local），避免线程 A 开启 batch 期间
+        线程 B 的独立连接跳过 commit 导致写事务悬空锁库。
+        """
+        self._local.batch_depth = getattr(self._local, "batch_depth", 0) + 1
         try:
             yield
         finally:
-            with self._lock:
-                self._batch_depth = max(0, getattr(self, "_batch_depth", 1) - 1)
-                if self._batch_depth == 0 and getattr(self, "_batch_dirty", False):
+            self._local.batch_depth = max(0, getattr(self._local, "batch_depth", 1) - 1)
+            if self._local.batch_depth == 0 and getattr(self._local, "batch_dirty", False):
+                with self._lock:
                     conn = self._connect()
                     self._prune_foreign(conn)
                     conn.commit()
-                    self._batch_dirty = False
+                    self._local.batch_dirty = False
 
     def _connect(self) -> sqlite3.Connection:
         """线程本地复用连接，避免 route 每次 open/close SQLite。"""
@@ -276,8 +279,8 @@ class AdaptiveLearner:
                 (engine, 1 if success else 0, latency_ms, cost, time.time(),
                  1 if empty else 0, q, dom, lg),
             )
-            if getattr(self, "_batch_depth", 0) > 0:
-                self._batch_dirty = True
+            if getattr(self._local, "batch_depth", 0) > 0:
+                self._local.batch_dirty = True
             else:
                 conn.commit()
             # 清掉该引擎的全部缓存键（含场景分桶键），见 get_score 的缓存口径
@@ -393,8 +396,7 @@ class AdaptiveLearner:
                 score, samples = self._blend_bucket(
                     score, samples,
                     self._bucket_row(engine, domain or "", lang or ""), purpose)
-
-        self._score_cache[key] = (score, samples, now + self.SCORE_CACHE_TTL)
+            self._score_cache[key] = (score, samples, now + self.SCORE_CACHE_TTL)
         return score, samples
 
     # 场景桶向全局分收缩的先验强度：桶内有效观测 n 条时桶的权重为 n/(n+2)。

@@ -324,22 +324,7 @@ class SQLiteCache:
 
     @contextlib.contextmanager
     def _conn(self):
-        """借一个连接：出作用域提交/回滚，并把**自建**连接关掉。
-
-        为什么不是 `with self._connect() as conn:`：sqlite3 的连接上下文管理器
-        管的是**事务**（正常退出 commit、异常 rollback），它**不关连接**。于是
-        此前 9 处调用点每跑一次就新建并遗弃一条文件连接——进程内跑几千次缓存
-        操作就攒下几千个 fd，长驻 MCP 进程迟早撞上 ulimit（EMFILE），而报错点
-        会落在完全无关的 socket/文件调用上，极难归因。
-
-        这里把「作用域」补成真正的作用域语义：commit → close。异常时先
-        rollback 再关，事务状态不留半截。
-
-        `:memory:` 是**共享**连接（每次 connect(":memory:") 都是独立空库），
-        不能关——关掉等于把整层内存缓存作废。锁不在这里取：调用点有的持锁
-        （读改写路径）、有的不持（_evict_if_needed / size_mb 只读统计），
-        保持各自原语义。
-        """
+        """借一个连接：出作用域提交/回滚，并把自建文件连接关闭以防 fd 泄漏。"""
         conn = self._connect()
         shared = conn is self._mem_conn
         try:
@@ -452,44 +437,54 @@ class SQLiteCache:
                 ).fetchone()
         return row is not None and not self._is_expired(row[0], row[1])
 
+    _ACCESS_TOUCH_INTERVAL_S = 60.0  # 60s 内只读命中不回写 accessed_at，避 WAL 写锁争用
     def get(self, key: str) -> Optional[dict]:
         if self._degraded_reason is not None:
             # 降级：一律视作未命中。缓存是加速层，缺它只该变慢，不该变错。
             self._misses += 1
             return None
-        with self._lock:
-            with self._conn() as conn:
-                row = conn.execute(
-                    "SELECT value_blob, compressed, created_at, ttl FROM search_cache WHERE key = ?",
-                    (key,),
-                ).fetchone()
-                if row is None:
-                    self._misses += 1
-                    return None
-                value_blob, compressed, created_at, ttl = row
-                if self._is_expired(created_at, ttl):
-                    conn.execute("DELETE FROM search_cache WHERE key = ?", (key,))
-                    conn.commit()
-                    self._misses += 1
-                    return None
-                conn.execute("UPDATE search_cache SET accessed_at = ? WHERE key = ?",
-                             (time.time(), key))
-                conn.commit()
-                self._hits += 1
-                return self._deserialize(value_blob, compressed)
+        try:
+            with self._lock:
+                with self._conn() as conn:
+                    row = conn.execute(
+                        "SELECT value_blob, compressed, created_at, ttl, accessed_at FROM search_cache WHERE key = ?",
+                        (key,),
+                    ).fetchone()
+                    if row is None:
+                        self._misses += 1
+                        return None
+                    value_blob, compressed, created_at, ttl, accessed_at = row
+                    if self._is_expired(created_at, ttl):
+                        conn.execute("DELETE FROM search_cache WHERE key = ?", (key,))
+                        conn.commit()
+                        self._misses += 1
+                        return None
+                    now = time.time()
+                    if (now - float(accessed_at or 0)) >= self._ACCESS_TOUCH_INTERVAL_S:
+                        conn.execute("UPDATE search_cache SET accessed_at = ? WHERE key = ?",
+                                     (now, key))
+                        conn.commit()
+                    self._hits += 1
+                    return self._deserialize(value_blob, compressed)
+        except _get_sqlite3().Error:
+            self._misses += 1
+            return None
 
     def get_many(self, keys: list[str]) -> dict[str, dict]:
         if not keys or self._degraded_reason is not None:
             return {}
         out: dict[str, dict] = {}
-        with self._lock, self._conn() as conn:
-            ph = ",".join("?" for _ in keys)
-            for k, blob, comp, ts, ttl in conn.execute(
-                f"SELECT key, value_blob, compressed, created_at, ttl "
-                f"FROM search_cache WHERE key IN ({ph})", tuple(keys)
-            ):
-                if not self._is_expired(ts, ttl):
-                    out[k] = self._deserialize(blob, comp)
+        try:
+            with self._lock, self._conn() as conn:
+                ph = ",".join("?" for _ in keys)
+                for k, blob, comp, ts, ttl in conn.execute(
+                    f"SELECT key, value_blob, compressed, created_at, ttl "
+                    f"FROM search_cache WHERE key IN ({ph})", tuple(keys)
+                ):
+                    if not self._is_expired(ts, ttl):
+                        out[k] = self._deserialize(blob, comp)
+        except _get_sqlite3().Error:
+            return {}
         return out
 
     def set(self, key: str, query: str, engine: str, max_results: int,
@@ -501,23 +496,24 @@ class SQLiteCache:
             blob, compressed = self._serialize(value)
             now = time.time()
             effective_ttl = ttl if ttl is not None else self._ttl
-            with self._conn() as conn:
-                conn.execute(
-                    """INSERT OR REPLACE INTO search_cache
-                       (key, query, engine, max_results, domain, mode, depth,
-                        value_blob, compressed, ttl, created_at, accessed_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (key, query, engine, max_results, domain, mode, depth,
-                     blob, compressed, effective_ttl, now, now),
-                )
-                conn.commit()
-            # 驱逐失败不阻断写入方：缓存是加速层，缺它只该变慢不该变错。
-            # 与 self._degraded_reason 的 fail-open 语义同构——DB 损坏/磁盘满/WAL
-            # 异常时，宁可让下次搜索多写一条也不让 execute_search 在最后一步 traceback。
             try:
-                self._evict_if_needed()
+                with self._conn() as conn:
+                    conn.execute(
+                        """INSERT OR REPLACE INTO search_cache
+                           (key, query, engine, max_results, domain, mode, depth,
+                            value_blob, compressed, ttl, created_at, accessed_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (key, query, engine, max_results, domain, mode, depth,
+                         blob, compressed, effective_ttl, now, now),
+                    )
+                    conn.commit()
+                    # 复用同一连接做空间回收（2 次开闭 → 1 次），失败不阻断写入方
+                    try:
+                        self._evict_if_needed(conn=conn)
+                    except _get_sqlite3().Error:
+                        pass
             except _get_sqlite3().Error:
-                pass
+                return
 
     # 过期行回收的节流间隔。扫描是 O(rows) 全表（`created_at + ttl < ?` 不可
     # 走索引），放进每次 set() 的热路径会白付约 6ms/次；稳态下每小时一次足够
@@ -544,9 +540,10 @@ class SQLiteCache:
         except _get_sqlite3().Error:
             pass
 
-    def _evict_if_needed(self):
+    def _evict_if_needed(self, conn=None):
         """空间回收三步：过期行清扫（每小时节流）→ LRU 淘汰（按 payload 口径）→ VACUUM。"""
-        with self._conn() as conn:
+        ctx_mgr = contextlib.nullcontext(conn) if conn is not None else self._conn()
+        with ctx_mgr as conn:
             limit_bytes = self._max_size_mb * 1024 * 1024
             if self._expiry_sweep_due(conn):
                 conn.execute(
@@ -893,9 +890,7 @@ class SearchCache:
         if hit is not None:
             ttl = hit.get("_ttl", 0)
             if ttl > 0 and time.time() - hit.get("_ts", 0) < ttl:
-                out = dict(hit)
-                out["results"] = [dict(r) if isinstance(r, dict) else r
-                                   for r in (hit.get("results") or [])]
+                out = self._copy_hit(hit)
                 out["_cache_level"] = engine_states.CACHE_LEVEL_L1
                 return out
             self._l1.remove(key)
@@ -905,12 +900,16 @@ class SearchCache:
         hit = self._l2.get(key)
         if hit is not None:
             self._l1.set(key, hit)
-            out = dict(hit)
-            out["results"] = [dict(r) if isinstance(r, dict) else r
-                              for r in (hit.get("results") or [])]
+            out = self._copy_hit(hit)
             out["_cache_level"] = engine_states.CACHE_LEVEL_L2
             return out
         return None
+
+    @staticmethod
+    def _copy_hit(hit: dict) -> dict:
+        out = dict(hit)
+        out["results"] = [dict(r) if isinstance(r, dict) else r for r in (hit.get("results") or [])]
+        return out
 
     def _read_many(self, keys: list[str]) -> dict[str, dict]:
         if not keys or self._disabled():
@@ -919,7 +918,7 @@ class SearchCache:
         for k in dict.fromkeys(keys):
             hit = self._l1.get(k)
             if hit is not None and hit.get("_ttl", 0) > 0 and now - hit.get("_ts", 0) < hit.get("_ttl", 0):
-                out[k] = hit
+                out[k] = self._copy_hit(hit)
             else:
                 if hit is not None:
                     self._l1.remove(k)
@@ -928,7 +927,7 @@ class SearchCache:
             l2_hits = self._l2.get_many(miss)
             for k, hit in l2_hits.items():
                 self._l1.set(k, hit)
-                out[k] = hit
+                out[k] = self._copy_hit(hit)
             self._miss_memo = (time.monotonic(), frozenset(k for k in miss if k not in l2_hits))
         return out
 

@@ -516,6 +516,7 @@ class _Server:
                 resp = {"ok": False, "error": "请求超长"}
                 buf = b""
             if buf.strip():
+                op = None
                 try:
                     parsed = json.loads(buf.decode("utf-8", "replace"))
                     if isinstance(parsed, dict):
@@ -828,6 +829,7 @@ def _start(args: argparse.Namespace) -> int:
               else "另一进程正在启动 argo daemon（等待超时）", file=sys.stderr)
         return 1
 
+    is_child = False
     try:
         # socket 还在但 ping 不通：可能是在途请求把 GIL 占满的活 daemon。
         # 不抢跑（bind 必失败、还可能把它的入口当陈尸摘掉），如实报告。
@@ -842,6 +844,9 @@ def _start(args: argparse.Namespace) -> int:
                           else "argo daemon socket 存在但无响应；先 `argo daemon stop`",
                           file=sys.stderr)
                     return 1
+                if e.errno == errno.ECONNREFUSED:
+                    with contextlib.suppress(OSError):
+                        os.unlink(sp)
             except Exception:
                 pass
 
@@ -855,13 +860,15 @@ def _start(args: argparse.Namespace) -> int:
         pid = os.fork()
         if pid > 0:
             return _wait_ready_and_report(args)
+        is_child = True
         os.setsid()
         _redirect_stdio_to_log()
         _serve_child(args)
         return 0
     finally:
-        with contextlib.suppress(OSError):
-            os.unlink(stub)
+        if not is_child:
+            with contextlib.suppress(OSError):
+                os.unlink(stub)
 
 
 def _serve_child(args: argparse.Namespace) -> None:
