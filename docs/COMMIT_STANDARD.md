@@ -71,6 +71,16 @@ hook 却在全量回归里红」），但**这些记录只存在于 commit messa
 其余提交（`docs` / `test` / `refactor` / `style` / `chore` / `feat(local-seek)`
 等子技能改动）不强制，但鼓励写。
 
+## 发布说明提交的纯净性
+
+`docs(release*)` 标题的提交（发布说明、版本统一）只许动文档、版本声明与
+README 面，**不得夹带 `.py` / `.js` 族与 `bin/` 脚本的代码 diff**——行为变更
+必须拆成独立提交并在发布说明里披露。实锤：`0647a33` 在 v2.16.0 发布说明提交
+里夹带 `route_policy.py` 的路由行为变更，四语发布说明只字未提，次日
+`e0b3539` 自查才补救。机械门禁：`tests/test_check_commit_report.py` 的未推
+窗口用例（`origin/main..HEAD` 逐笔检查，判定函数在
+`scripts/check_commit_report.py`）。
+
 ## 回退测试要求
 
 新增测试时，**必须验证它真能抓到退步**：把旧实现放回去，新测试要挂。

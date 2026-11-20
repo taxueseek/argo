@@ -18,6 +18,10 @@ argo 的 pre-commit 注释自己记着两起真实事故：`f702ee2` 把 SKILL.m
 用 `跑了` / `在 commit` / `未跑` 三个名字；`未跑: 无` 是合法写法（确实没漏），
 但整段省略不合法。
 
+另附 `docs(release*)` 纯净性判定（`is_release_docs_title` / `code_diff_violations`
+/ `commit_code_diff_paths`）：发布说明提交不得夹带代码 diff，由
+`tests/test_check_commit_report.py` 的未推窗口门禁消费（2026-11-20 落地）。
+
 用法：
   python3 scripts/check_commit_report.py --message-file .git/COMMIT_EDITMSG
   python3 scripts/check_commit_report.py --message "feat(engines): 接入 X 源"
@@ -87,6 +91,48 @@ def is_high_risk(title: str) -> bool:
 def missing_segments(body: str) -> list[str]:
     """检查清单里缺哪几段（跑了 / 在 commit / 未跑）。"""
     return [name for name, pat in _SEGMENTS.items() if not pat.search(body)]
+
+
+# ── docs(release*) 纯净性：发布说明提交不得夹带代码 diff ─────────────────────
+# 2026-11-20 实锤：0647a33 在 v2.16.0 发布说明提交里夹带 route_policy.py 的
+# 路由行为变更，四语发布说明只字未提，次日 e0b3539 自查才补救。本判定不拦
+# 历史（已推的拦不动），只供未推窗口门禁消费——见
+# tests/test_check_commit_report.py::test_unpushed_release_docs_commits_are_pure。
+_RELEASE_DOCS_TITLE_RE = re.compile(r"^docs\((release[-_a-z]*)\)")
+
+# 代码后缀；bin/ 下无后缀的可执行脚本（bin/argo）也按代码算。
+_CODE_DIFF_SUFFIXES = frozenset({".py", ".js", ".mjs", ".cjs", ".ts", ".jsx", ".tsx", ".sh"})
+
+# 版本声明豁免：这两处 .py 是版本单源契约的机器声明文件（release_check 机械
+# 对账成员），bump 版本号本来就发生在发布提交里——豁免它们，其余 .py/.js
+# 一律不许。行为变更想借道这两处躲门禁，会被版本对账门禁照出形状不符。
+_VERSION_DECLARATION_PATHS = frozenset({"argo_search/__init__.py", "scripts/mcp_transport.py"})
+
+
+def is_release_docs_title(title: str) -> bool:
+    """标题是否为 docs(release*) 发布说明提交。"""
+    return bool(_RELEASE_DOCS_TITLE_RE.match(title.strip()))
+
+
+def code_diff_violations(changed_paths) -> list[str]:
+    """docs(release*) 提交里不许出现的代码路径（版本声明两处豁免）。"""
+    out = []
+    for p in changed_paths:
+        if p in _VERSION_DECLARATION_PATHS:
+            continue
+        if p.startswith("bin/") or Path(p).suffix.lower() in _CODE_DIFF_SUFFIXES:
+            out.append(p)
+    return out
+
+
+def commit_code_diff_paths(rev: str) -> list[str]:
+    """列出某提交改动的文件路径（读不到该提交时返回空，调用方自行定夺）。"""
+    r = subprocess.run(
+        ["git", "-C", str(ROOT), "show", "--name-only", "--pretty=format:", rev],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        return []
+    return [ln for ln in r.stdout.splitlines() if ln.strip()]
 
 
 def parse_message(text: str) -> tuple[str, str]:

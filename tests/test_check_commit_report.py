@@ -178,3 +178,62 @@ def test_standard_doc_lists_the_same_high_risk_patterns():
     assert not missing, f"文档缺高风险 scope: {missing}"
     for seg in ("跑了", "在 commit", "未跑"):
         assert seg in doc, f"文档缺清单段: {seg}"
+
+
+# ── docs(release*) 纯净性：发布说明提交不得夹带代码 diff ──────────────────────
+
+def test_release_docs_title_matcher():
+    """标题判定：docs(release)/docs(release-notes) 命中，docs: 与其他 scope 不命中。"""
+    assert ccr.is_release_docs_title("docs(release): v2.16.0 发布说明") is True
+    assert ccr.is_release_docs_title("docs(release-notes): 补记") is True
+    assert ccr.is_release_docs_title("docs: 补一份说明") is False
+    assert ccr.is_release_docs_title("fix(release): 修版本号") is False
+    assert ccr.is_release_docs_title("docs(route): 补路由文档") is False
+
+
+def test_code_diff_classifier():
+    """代码路径分类：.py/.js 族与 bin/ 脚本算代码；文档、版本声明面与豁免的两处 .py 不算。"""
+    assert ccr.code_diff_violations([
+        "docs/RELEASE_NOTES_v2.16.0.md", "README.zh.md", "README.ja.md",
+        "pyproject.toml", "package.json", "server.json", "docs/CHANGELOG.md",
+        # 版本单源契约的机器声明 .py：bump 版本号合法，豁免（见脚本注释）
+        "argo_search/__init__.py", "scripts/mcp_transport.py",
+    ]) == []
+    assert ccr.code_diff_violations([
+        "scripts/route_policy.py", "packages/dsh-plugin/dsh/workbench.js",
+        "bin/argo", "scripts/x.mjs", "tools/a.sh",
+    ]) == [
+        "scripts/route_policy.py", "packages/dsh-plugin/dsh/workbench.js",
+        "bin/argo", "scripts/x.mjs", "tools/a.sh",
+    ]
+
+
+def test_unpushed_release_docs_commits_are_pure():
+    """未推窗口内的 docs(release*) 提交不得含代码 diff。
+
+    实锤：0647a33 在 v2.16.0 发布说明提交里夹带 route_policy.py 的路由行为
+    变更，四语发布说明只字未提，次日 e0b3539 自查才补救。本门禁拦不了已推
+    历史，只盯 origin/main..HEAD——发布出去之前必须干净。
+    """
+    root = Path(__file__).resolve().parents[1]
+    r = subprocess.run(
+        ["git", "-C", str(root), "log", "origin/main..HEAD",
+         "--format=%H%x00%s"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        pytest.skip("无 origin/main 可比对（浅克隆或无远端）")
+    violations = []
+    for line in r.stdout.splitlines():
+        if "\x00" not in line:
+            continue
+        rev, title = line.split("\x00", 1)
+        if not ccr.is_release_docs_title(title):
+            continue
+        bad = ccr.code_diff_violations(ccr.commit_code_diff_paths(rev))
+        if bad:
+            violations.append(f"{rev[:10]} {title[:50]} -> {bad}")
+    assert not violations, (
+        "docs(release*) 提交不得夹带代码 diff："
+        f"{'; '.join(violations)}。修法=把代码改动拆出为独立提交，"
+        "发布说明提交只留文档与版本声明面。"
+    )
