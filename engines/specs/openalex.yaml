@@ -23,7 +23,12 @@ url: https://api.openalex.org/works
 output_map:
   items: results
   item_title: title
-  item_url: id
-  item_summary: publication_year
+  # doi 是真实可点击链接(https://doi.org/...)——此前映射 id 是 OpenAlex 内部
+  # URL(https://openalex.org/W...),证据链断在自家 ID 上(2026-11-20 审计)
+  item_url: doi
+  # 摘要位此前只有 publication_year 一个数字,证据密度为零;摘要倒排
+  # (abstract_inverted_index)是 dict 需代码重组,声明式给不出,退而拼
+  # 「年份 · 期刊名」;缺期刊名的条目由模板折叠分隔符,退化为年份
+  item_summary_template: "{publication_year} · {primary_location.source.display_name}"
 headers:
   User-Agent: argo-search

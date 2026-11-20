@@ -73,3 +73,34 @@ def test_url_template_fallback_when_url_missing_or_non_http():
     assert [r["url"] for r in out] == ["https://example.com/a/7", "https://example.com/a/9"]
     out2 = p([{"t": "占位空", "objectID": ""}])
     assert out2 == [] or "url" not in out2[0]
+
+
+def test_openalex_url_is_doi_not_internal_id():
+    """openalex 的 item_url 必须映射 doi（真实可点击）而非内部 id（openalex.org/W…）。
+
+    2026-11-20 审计：旧映射 item_url: id 把证据链接断在自家 ID 上；摘要位
+    item_summary: publication_year 只剩一个数字。修复后 url=doi、摘要走
+    item_summary_template（缺字段由模板折叠分隔符）。用合成 fixture 钉行为，
+    不依赖上游网络。
+    """
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from engines_parsers import make_field_parser
+
+    om = next(s for _, eid, s in load_specs() if eid == "openalex")["output_map"]
+    assert om["item_url"] == "doi", "item_url 必须是 doi（真实链接），不得回退到内部 id"
+    assert "item_summary_template" in om, "摘要位须走模板（年份·期刊），不得只有 publication_year"
+
+    p = make_field_parser(
+        om["items"], {"title": om.get("item_title", "title"), "url": om["item_url"]},
+        templates={k: om[k] for k in om if k.endswith("_template")})
+    data = {"results": [
+        {"title": "A", "doi": "https://doi.org/10.1/a", "publication_year": 2021,
+         "primary_location": {"source": {"display_name": "arXiv"}}},
+        {"title": "B", "doi": None, "publication_year": 2022, "primary_location": None},
+    ]}
+    rows = p(data)
+    assert rows[0]["url"] == "https://doi.org/10.1/a"
+    assert rows[0]["snippet"] == "2021 · arXiv"
+    assert rows[1]["snippet"] == "2022", "缺期刊名时模板须折叠成分隔符只剩年份"
+    assert "url" not in rows[1], "doi 为空时不得造半截链接"
