@@ -471,14 +471,13 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
   let watchBusy = false
   let hotspotBusy = false
 
-  const triggerDailyHotspotRefresh = () => {
-    if (hotspotBusy) return
+  const triggerDailyHotspotRefresh = async () => {
+    if (hotspotBusy) return loadHotspotStore()
     hotspotBusy = true
-    const runCli = async (cliArgs) => {
+    try {
       const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
-      return runArgoCli(cliArgs, { env, timeoutMs: 12000 })
-    }
-    refreshDailyHotspots({ runCli }).catch(() => {}).finally(() => { hotspotBusy = false })
+      return await refreshDailyHotspots({ runCli: (cliArgs) => runArgoCli(cliArgs, { env, timeoutMs: 12000 }) })
+    } catch { return loadHotspotStore() } finally { hotspotBusy = false }
   }
 
   const executeWatch = async (watch) => {
@@ -685,12 +684,13 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
           store = updated
         }
         if (body.refreshNow === true) {
-          triggerDailyHotspotRefresh()
+          store = await triggerDailyHotspotRefresh()
         }
         sendJson(res, 200, {
           ok: true,
           refreshTime: store.refreshTime,
           lastRefreshedAt: store.lastRefreshedAt,
+          hotspotCount: (store.zh?.length || 0) + (store.en?.length || 0),
           refreshing: hotspotBusy,
         })
         return

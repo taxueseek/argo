@@ -153,6 +153,8 @@ export function mountArgoWorkbench(ctx, react) {
     const [mode, setMode] = useState('general')
     const [topicSamples, setTopicSamples] = useState(() => Object.fromEntries(TOPIC_CARDS.map(t => [t.id, pickSample(t.samples)])))
     const [suggestions, setSuggestions] = useState([])
+    const [hotspotMeta, setHotspotMeta] = useState({ refreshTime: '08:30', lastRefreshedAt: '' })
+    const [hotspotBusy, setHotspotBusy] = useState(false)
     const [cards, setCards] = useState(() => initialSaved?.cards || [])
     const [turns, setTurns] = useState(() => initialSaved?.turns || [])
     const [stageText, setStageText] = useState('')
@@ -199,7 +201,10 @@ export function mountArgoWorkbench(ctx, react) {
       try {
         const res = await fetch(`/argo/api/suggestions?mode=${encodeURIComponent(targetMode)}&lang=${encodeURIComponent(targetLang)}&shuffle=${shuffle ? '1' : '0'}`)
         const data = await res.json()
-        if (seq === suggestSeqRef.current && Array.isArray(data?.items)) setSuggestions(data.items)
+        if (seq === suggestSeqRef.current && Array.isArray(data?.items)) {
+          setSuggestions(data.items)
+          if (data.meta) setHotspotMeta(prev => ({ ...prev, ...data.meta }))
+        }
       } catch { /* ignore */ }
     }
 
@@ -432,6 +437,7 @@ export function mountArgoWorkbench(ctx, react) {
     }
 
     const updateHotspotRefreshTime = async (refreshTime) => {
+      setHotspotMeta(prev => ({ ...prev, refreshTime }))
       try {
         const res = await fetch('/argo/api/suggestions/config', {
           method: 'POST',
@@ -440,23 +446,32 @@ export function mountArgoWorkbench(ctx, react) {
         })
         const data = await res.json()
         if (data?.ok) {
-          setHealthInfo(prev => ({
-            ...(prev || {}),
-            hotspotSchedule: { refreshTime: data.refreshTime, lastRefreshedAt: data.lastRefreshedAt },
-          }))
+          const sched = { refreshTime: data.refreshTime, lastRefreshedAt: data.lastRefreshedAt }
+          setHotspotMeta(sched)
+          setHealthInfo(prev => ({ ...(prev || {}), hotspotSchedule: sched }))
         }
       } catch { /* ignore */ }
     }
 
     const refreshHotspotsNow = async () => {
+      if (hotspotBusy) return
+      setHotspotBusy(true)
       try {
-        await fetch('/argo/api/suggestions/config', {
+        const res = await fetch('/argo/api/suggestions/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshNow: true }),
         })
-        setTimeout(() => refreshSuggestions(modeRef.current, lang, false), 1500)
-      } catch { /* ignore */ }
+        const data = await res.json()
+        if (data?.ok) {
+          const sched = { refreshTime: data.refreshTime, lastRefreshedAt: data.lastRefreshedAt }
+          setHotspotMeta(sched)
+          setHealthInfo(prev => ({ ...(prev || {}), hotspotSchedule: sched }))
+        }
+        await refreshSuggestions(modeRef.current, lang, false)
+      } catch { /* ignore */ } finally {
+        setHotspotBusy(false)
+      }
     }
 
     const toggleEgoSearch = async () => {
@@ -529,7 +544,20 @@ export function mountArgoWorkbench(ctx, react) {
     if (view === 'home') {
       return h('div', { className: 'aw-root' },
         h('div', { className: 'aw-hero' },
-          h('div', { className: 'aw-hero-top' },
+          h('div', { className: 'aw-hero-top', style: { gap: '8px' } },
+            h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--aw-text-2)' } },
+              h('span', null, lang === 'en' ? 'Daily refresh' : '每日热点'),
+              h('select', {
+                value: hotspotMeta.refreshTime || '08:30',
+                onChange: (e) => updateHotspotRefreshTime(e.target.value),
+                style: { fontSize: '12px', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--aw-border)', background: 'var(--aw-sunken)', color: 'inherit' },
+              }, ['07:00', '08:00', '08:30', '09:00', '12:00', '18:00', '20:00', '22:00'].map(t => h('option', { key: t, value: t }, t)))),
+            h('button', {
+              type: 'button',
+              className: 'aw-icon-btn',
+              disabled: hotspotBusy,
+              onClick: refreshHotspotsNow,
+            }, hotspotBusy ? (lang === 'en' ? 'Refreshing…' : '刷新中…') : (lang === 'en' ? 'Refresh Hotspots' : '刷新热点')),
             h('button', { type: 'button', className: 'aw-icon-btn', onClick: toggleWatchPanel }, `定时搜索 (${watches.length})`)),
           renderWatchDrawer(),
           h('div', { className: 'aw-hero-inner' },
@@ -693,11 +721,11 @@ export function mountArgoWorkbench(ctx, react) {
           h('span', null, '每日热点更新'),
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
             h('select', {
-              value: healthInfo?.hotspotSchedule?.refreshTime || '08:30',
+              value: hotspotMeta.refreshTime || healthInfo?.hotspotSchedule?.refreshTime || '08:30',
               onChange: (e) => updateHotspotRefreshTime(e.target.value),
               style: { fontSize: '12px', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--aw-border)', background: 'var(--aw-sunken)', color: 'inherit' },
             }, ['07:00', '08:00', '08:30', '09:00', '12:00', '18:00', '20:00', '22:00'].map(t => h('option', { key: t, value: t }, t))),
-            h('button', { type: 'button', className: 'aw-pill-btn', onClick: refreshHotspotsNow, style: { fontSize: '11px', padding: '2px 8px' } }, '刷新'))),
+            h('button', { type: 'button', className: 'aw-pill-btn', disabled: hotspotBusy, onClick: refreshHotspotsNow, style: { fontSize: '11px', padding: '2px 8px' } }, hotspotBusy ? '刷新中…' : '刷新'))),
         h('button', {
           type: 'button',
           className: 'aw-icon-btn',
