@@ -456,7 +456,6 @@ export function buildSearchCliArgs(query, mode, refresh = false, overrides = {})
 }
 
 export function createWorkbenchHandler(ctx, config, getCredentials, options = {}) {
-  const searchMode = options.searchMode || null
   const authVerifyCache = new Map()
   const authVerifyInflight = new Set()
   const cache = new Map()
@@ -561,20 +560,6 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
 
       if (path.startsWith('/argo/api/') && !checkLoopbackAndOrigin(ctx, req)) {
         sendJson(res, 403, { error: 'forbidden_origin' })
-        return
-      }
-
-      if (path === '/argo/api/search-mode' && req.method === 'GET') {
-        const sid = url.searchParams.get('sessionId') || 'default'
-        sendJson(res, 200, searchMode ? { ok: true, sessionId: sid, ...searchMode.view(sid) } : { ok: true, sessionId: sid, mode: 'auto', available: false })
-        return
-      }
-
-      if (path === '/argo/api/search-mode' && req.method === 'POST') {
-        const body = await readJsonBody(req)
-        const sid = String(body.sessionId || 'default')
-        const next = searchMode ? searchMode.setMode(sid, body.mode) : 'auto'
-        sendJson(res, 200, { ok: true, sessionId: sid, mode: next, available: Boolean(searchMode?.available?.()) })
         return
       }
 

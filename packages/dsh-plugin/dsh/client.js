@@ -949,6 +949,11 @@ window.__ModuleLoader__.load({
       return PanelBoundary ? h(PanelBoundary, null, h(ArgoPanel, props)) : h(ArgoPanel, props);
     }
 
+    // plugins.item 仅渲染一行只读摘要，完整 7-Tab 配置收敛至唯一 settings.section 入口。
+    function PluginSummaryItem(props) {
+      return SafeArgoPanel({ ...props, view: 'summary' });
+    }
+
     function apply(ctx) {
       const form = ctx.configForms.get(NS);
       const locale = ctx.locale ?? (typeof ctx.get === 'function' ? ctx.get('locale') : undefined);
@@ -959,7 +964,7 @@ window.__ModuleLoader__.load({
       ctx.effect(() => ctx.configForms.whileServed([NS], () => {
         const offs = [
           ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: SECTION_ID, order: 26, label, inject: injected }, SafeArgoPanel)),
-          ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: SECTION_ID, order: 50, label, inject: injected }, SafeArgoPanel)),
+          ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: SECTION_ID, order: 50, label, inject: injected }, PluginSummaryItem)),
         ];
         return () => { for (const off of offs) if (typeof off === 'function') off(); };
       }), 'argo-dsh: settings page');

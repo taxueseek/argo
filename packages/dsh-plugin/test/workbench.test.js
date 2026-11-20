@@ -266,12 +266,9 @@ test('workbench /argo/api/* enforces TCP peer loopback fence against spoofed hea
   }
 })
 
-test('workbench /argo/api/search-mode and /argo/api/auth-status work end-to-end', async () => {
-  const { SearchModeRuntime } = await import('../dsh/search-mode.js')
-  const searchMode = new SearchModeRuntime()
+test('workbench /argo/api/auth-status triggers background live verification once', async () => {
   const verifyCalls = []
   const handler = createWorkbenchHandler({}, {}, () => ({}), {
-    searchMode,
     runAuthCli: async (cliArgs) => {
       if (cliArgs[1] === 'status') return { profiles: [{ site: 'x.com', created: '2026-11-20' }] }
       if (cliArgs[1] === 'verify') {
@@ -282,17 +279,6 @@ test('workbench /argo/api/search-mode and /argo/api/auth-status work end-to-end'
     },
   })
   try {
-    const rGet = mockRes()
-    await handler(mockReq('GET', '/argo/api/search-mode?sessionId=s9'), rGet)
-    assert.equal(rGet.statusCode, 200)
-    assert.equal(rGet.json().mode, 'auto')
-
-    const rPost = mockRes()
-    await handler(mockReq('POST', '/argo/api/search-mode', { sessionId: 's9', mode: 'required' }), rPost)
-    assert.equal(rPost.statusCode, 200)
-    assert.equal(rPost.json().mode, 'required')
-    assert.equal(searchMode.getMode('s9'), 'required')
-
     const rAuth1 = mockRes()
     await handler(mockReq('GET', '/argo/api/auth-status'), rAuth1)
     assert.equal(rAuth1.statusCode, 200)

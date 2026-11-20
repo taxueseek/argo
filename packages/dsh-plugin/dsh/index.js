@@ -63,11 +63,6 @@ import {
   registerArgoWorkbench,
 } from './workbench.js'
 
-import {
-  SearchModeRuntime,
-  installSearchModeRuntime,
-} from './search-mode.js'
-
 /**
  * Schemastery 是可选依赖：装进 DSH profile 后由宿主依赖树提供，仓内单测
  * 没有 node_modules。导入失败时 Config 保持 undefined，宿主按「无 schema」
@@ -493,10 +488,7 @@ export function apply(ctx, providedConfig = {}) {
     })
   } catch { /* ignore */ }
 
-  const searchMode = new SearchModeRuntime(() => config.searchProviderEnabled !== false || asStringArray(config.nativeTools, 20).length > 0)
-  installSearchModeRuntime(ctx, searchMode)
+  registerArgoWorkbench(ctx, config, () => readHostCredentials(ctx))
 
-  registerArgoWorkbench(ctx, config, () => readHostCredentials(ctx), { searchMode })
-
-  return { childIds, syncNativeTools, searchMode }
+  return { childIds, syncNativeTools }
 }
