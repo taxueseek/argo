@@ -330,9 +330,10 @@ def _build_you_engine(spec: dict[str, Any]) -> Any:
         _y_hints = compile_provider_params(
             "you", query, operators=kwargs.get("operators"),
             since=kwargs.get("since"), until=kwargs.get("until"))
-        freshness = _y_hints.get("freshness") or (
-            "" if is_evergreen_tech_query(query) else _you_freshness(query)
-        )
+        # you 分支只产出 boost_domains/country/language（query_operators.compile_provider_params），
+        # 不产 freshness——此前的 _y_hints.get("freshness") 是永远取不到值的死读取
+        # （2026-11-20 审计：接线到一半），freshness 走下面的动态兜底。
+        freshness = "" if is_evergreen_tech_query(query) else _you_freshness(query)
         if freshness:
             body["freshness"] = freshness
         body["language"] = _y_hints.get("language") or _you_language(query)

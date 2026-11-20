@@ -60,6 +60,19 @@ def browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
         title = cdp.get_title()
         final_url = cdp.get_url() or url
 
+        # 单份基座 + 登录态分支补充（acbd34a 曾改双抄，2026-11-20 审计还原）；
+        # 显式 0 分等哨兵教训：基座字段逐个手抄两份必然漂移
+        result = {
+            "url": final_url,
+            "content": text[:max_chars] if text else "",
+            "html": html[:max_chars * 2] if html else "",
+            "title": title or "",
+            "length": len(text) if text else 0,
+            "success": bool(text),
+            "error": None if text else "empty content",
+            "fetch_method": engine_states.FETCH_CHROME_CDP,
+        }
+
         if auth_profile:
             from browser_auth import detect_page_auth_state, touch
             auth_state = detect_page_auth_state(final_url, title or "", text or "")
@@ -74,32 +87,14 @@ def browser_fetch(url: str, max_chars: int = 8000, timeout: float = 15.0,
                     "auth_state": auth_state, "retryable": False,
                     "handoff_required": True,
                 }
-            result = {
-                "url": final_url,
-                "content": text[:max_chars] if text else "",
-                "html": html[:max_chars * 2] if html else "",
-                "title": title or "",
-                "length": len(text) if text else 0,
-                "success": bool(text),
-                "error": None if text else "empty content",
-                "fetch_method": engine_states.FETCH_CHROME_CDP,
+            result.update({
                 "login_state_used": True,
                 "cache_eligible": False,
                 "auth_state": auth_state,
-            }
+            })
             touch(url)
-            return result
 
-        return {
-            "url": final_url,
-            "content": text[:max_chars] if text else "",
-            "html": html[:max_chars * 2] if html else "",
-            "title": title or "",
-            "length": len(text) if text else 0,
-            "success": bool(text),
-            "error": None if text else "empty content",
-            "fetch_method": engine_states.FETCH_CHROME_CDP,
-        }
+        return result
     except Exception as e:
         return _fail(url, f"CDP error: {str(e)[:100]}")
     finally:

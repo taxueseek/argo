@@ -11,6 +11,10 @@ import { CSS, renderMarkdown } from '/argo/workbench-md.js'
 
 const STATE_KEY = 'argo-workbench:state.v1'
 const PREFS_KEY = 'argo-workbench:prefs.v1'
+// 每日热点刷新时间选项与默认值(此前两处下拉手抄同一数组,2026-11-20 审计单源化;
+// 默认值须与 workbench-suggestions.js 的 DEFAULT_REFRESH_TIME 保持一致)
+const REFRESH_TIME_OPTIONS = ['07:00', '08:00', '08:30', '09:00', '12:00', '18:00', '20:00', '22:00']
+const DEFAULT_REFRESH_TIME = '08:30'
 
 const CORE_MODES = [
   { id: 'general', label: '全网搜索', desc: '多源快查，先给结论再列出处', ph: '搜任何问题、概念、报错或资料（Enter 发送，Shift+Enter 换行）…' },
@@ -548,10 +552,10 @@ export function mountArgoWorkbench(ctx, react) {
             h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--aw-text-2)' } },
               h('span', null, lang === 'en' ? 'Daily refresh' : '每日热点'),
               h('select', {
-                value: hotspotMeta.refreshTime || '08:30',
+                value: hotspotMeta.refreshTime || DEFAULT_REFRESH_TIME,
                 onChange: (e) => updateHotspotRefreshTime(e.target.value),
                 style: { fontSize: '12px', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--aw-border)', background: 'var(--aw-sunken)', color: 'inherit' },
-              }, ['07:00', '08:00', '08:30', '09:00', '12:00', '18:00', '20:00', '22:00'].map(t => h('option', { key: t, value: t }, t)))),
+              }, REFRESH_TIME_OPTIONS.map(t => h('option', { key: t, value: t }, t)))),
             h('button', {
               type: 'button',
               className: 'aw-icon-btn',
@@ -721,10 +725,10 @@ export function mountArgoWorkbench(ctx, react) {
           h('span', null, '每日热点更新'),
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
             h('select', {
-              value: hotspotMeta.refreshTime || healthInfo?.hotspotSchedule?.refreshTime || '08:30',
+              value: hotspotMeta.refreshTime || healthInfo?.hotspotSchedule?.refreshTime || DEFAULT_REFRESH_TIME,
               onChange: (e) => updateHotspotRefreshTime(e.target.value),
               style: { fontSize: '12px', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--aw-border)', background: 'var(--aw-sunken)', color: 'inherit' },
-            }, ['07:00', '08:00', '08:30', '09:00', '12:00', '18:00', '20:00', '22:00'].map(t => h('option', { key: t, value: t }, t))),
+            }, REFRESH_TIME_OPTIONS.map(t => h('option', { key: t, value: t }, t))),
             h('button', { type: 'button', className: 'aw-pill-btn', disabled: hotspotBusy, onClick: refreshHotspotsNow, style: { fontSize: '11px', padding: '2px 8px' } }, hotspotBusy ? '刷新中…' : '刷新'))),
         h('button', {
           type: 'button',
