@@ -11,9 +11,21 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEFAULTS, stripBoundary } from './runner.js'
 import { resolveArgoEnv } from './specs.js'
-import { boundedMap, buildCrossLingualTracks, evaluateGates } from './wide-research.js'
+import { buildCrossLingualTracks, evaluateGates } from './wide-research.js'
+import {
+  buildEvidenceContext,
+  buildFallbackSummary,
+  buildSystemPrompt,
+  callArgoSearch,
+  extractCitations,
+  MODES,
+  MODE_LABELS,
+  resolveLocalSearchPath,
+  runClarifyIfShort,
+  runEvidenceScoring,
+  streamLlmAnswer,
+} from './workbench-search.js'
 import {
   buildSuggestions,
   createHotspotRefresher,
@@ -22,14 +34,20 @@ import {
 } from './workbench-suggestions.js'
 import { checkLoopbackAndOrigin, resolveAuthStatusWithBgVerify } from './route-guard.js'
 import {
+  acquireStateFileLock,
   breakerFilePath,
   loadWatches,
   mergedLaunchdPath,
+  mutateWatches,
   readStaticAssetCached,
+  releaseStateFileLock,
   resolveArgoBin,
   runArgoCli,
-  saveWatches,
+  WATCH_STORE_FILE,
 } from './workbench-io.js'
+
+// 供既有测试与外部调用方沿旧入口取用（真源在 workbench-search.js）
+export { buildSearchCliArgs, summarizeTrackRuns } from './workbench-search.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CLIENT_FILE = join(HERE, 'workbench-client.js')
@@ -39,26 +57,6 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 const MAX_CACHE_ENTRIES = 32
 const MAX_DIAGNOSTICS = 20
 const MAX_WATCHES = 20
-
-const CITATION_RULE = [
-  '严格基于提供的检索证据回答，所有事实判断、数据与观点必须在句末使用方括号编号引用，例如 [1] 或 [2][3]。',
-  '严禁编造未出现在证据中的数字、链接或来源；如果证据不足或存在冲突，直接指出并并列呈现不同来源。',
-  '使用清晰的中文 Markdown 结构（小标题、要点列表或对比表格），先给核心结论，再展开细节。',
-].join('\n')
-
-const MODE_SPECS = {
-  general: { label: '全网搜索', searchArgs: { max_results: 12, verify: 2, depth: 'balanced' }, prompt: '当前模式为「全网搜索」：先用 2 到 3 句话给出直接结论，再用清晰小标题展开关键依据与延伸信息。' },
-  hotspot: { label: '热点分析', searchArgs: { max_results: 14, sort: 'newest', since: '14d', depth: 'balanced', verify: 2 }, socialSupplement: true, prompt: '当前模式为「热点分析」：按「一、核心结论与现状」「二、事件脉络」「三、核心争议与各方立场」「四、影响与后续关注点」组织输出。' },
-  verify: { label: '真假核验', searchArgs: { max_results: 12, verify: 5, depth: 'deep', mode: 'deep' }, prompt: '当前模式为「真假核验」：按「一、核验结论（明确给出可信度判断：可信 / 存疑 / 失实 / 证据不足）」「二、关键证据链（优先引用已核验正文）」「三、冲突点与核验边界」组织输出。' },
-  research: { label: '深度研究', searchArgs: { max_results: 16, verify: 5, depth: 'deep', mode: 'deep' }, prompt: '当前模式为「深度研究」：按「一、执行摘要」「二、多维拆解与关键发现」「三、数据与案例支撑」「四、风险、局限与待验证项」组织详尽研究报告。' },
-  compare: { label: '选型对比', searchArgs: { max_results: 14, verify: 3, depth: 'balanced' }, prompt: '当前模式为「选型对比」：按「一、选型结论与推荐」「二、核心维度对比表（Markdown 表格）」「三、各自优缺点与适用人群」「四、替代方案与踩坑提示」组织输出。' },
-  academic: { label: '学术文献', searchArgs: { max_results: 14, domain: 'academic', depth: 'deep', mode: 'deep', verify: 3 }, prompt: '当前模式为「学术文献」：按「一、核心研究结论与共识」「二、代表性论文与方法拆解」「三、实验证据与关键数据」「四、局限性与延伸方向」组织输出。' },
-  plugin: { label: '插件评测', searchArgs: { max_results: 14, domain: 'dsh_plugin_search', verify: 3, depth: 'balanced' }, socialSupplement: true, prompt: '当前模式为「插件评测」：按「一、是否值得安装（结论）」「二、核心能力与亮点」「三、社区真实反馈与局限」「四、替代方案与安装配置注意」组织输出。' },
-  local: { label: '本机检索', searchArgs: { max_results: 16 }, prompt: '当前模式为「本机检索」：基于本机文件与代码命中证据回答，标明文件路径、行号与上下文关联，禁止编造未命中的本地文件。' },
-}
-
-const MODES = new Set(Object.keys(MODE_SPECS))
-const MODE_LABELS = Object.fromEntries(Object.entries(MODE_SPECS).map(([k, v]) => [k, v.label]))
 
 function sendJson(res, status, data) {
   if (res.writableEnded) return
@@ -94,86 +92,6 @@ async function readJsonBody(req, maxBytes = 256 * 1024) {
   return raw ? JSON.parse(raw) : {}
 }
 
-function extractDomain(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./i, '')
-  } catch {
-    return ''
-  }
-}
-
-function normalizeCandidates(payload) {
-  const rawList = Array.isArray(payload?.results) ? payload.results : []
-  const seen = new Set()
-  const cards = []
-  for (const item of rawList) {
-    if (!item || typeof item.url !== 'string' || !item.url.startsWith('http')) continue
-    const key = item.url.trim()
-    if (seen.has(key)) continue
-    seen.add(key)
-    const index = cards.length + 1
-    const title = stripBoundary(item.title) || key
-    const snippet = stripBoundary(item.snippet || item.content || '') || ''
-    const verifiedText = stripBoundary(item.verified_excerpt || item.fetched_excerpt || '') || ''
-    const source = item.engine || item.source || item.provider || 'web'
-    cards.push({
-      id: `c${index}`,
-      index,
-      title,
-      url: key,
-      domain: extractDomain(key),
-      source,
-      snippet,
-      verifiedText,
-      verified: Boolean(item.verified || verifiedText),
-      credibility: typeof item.credibility_fast === 'number'
-        ? item.credibility_fast
-        : (typeof item.credibility === 'number' ? item.credibility : null),
-      publishedAt: item.published_at || item.publishedAt || item.date || '',
-    })
-    if (cards.length >= 16) break
-  }
-  return cards
-}
-
-function buildSystemPrompt(mode) {
-  const spec = MODE_SPECS[mode] || MODE_SPECS.general
-  return `${CITATION_RULE}\n${spec.prompt}`
-}
-
-function normalizeLocalCards(payload) {
-  const rawList = Array.isArray(payload?.matches)
-    ? payload.matches
-    : (Array.isArray(payload?.results) ? payload.results : [])
-  const seen = new Set()
-  const cards = []
-  for (const item of rawList) {
-    const filePath = String(item?.path || item?.file || item?.url || '').trim()
-    if (!filePath) continue
-    const line = item?.line ? `:${item.line}` : ''
-    const dedupKey = `${filePath}${line}`
-    if (seen.has(dedupKey)) continue
-    seen.add(dedupKey)
-    const index = cards.length + 1
-    const snippet = stripBoundary(item?.snippet || item?.text || item?.preview || (Array.isArray(item?.lines) ? item.lines.join('\n') : '')) || ''
-    cards.push({
-      id: `c${index}`,
-      index,
-      title: `${filePath.split('/').slice(-2).join('/')}${line}`,
-      url: filePath.startsWith('file://') ? filePath : `file://${filePath}`,
-      domain: 'local-seek',
-      source: 'local-seek',
-      snippet,
-      verifiedText: '',
-      verified: true,
-      credibility: 1,
-      publishedAt: item?.mtime || '',
-    })
-    if (cards.length >= 16) break
-  }
-  return cards
-}
-
 function readEgoSearchStatus() {
   const statePath = process.env.EGO_SEARCH_STATE || join(process.env.XDG_STATE_HOME || join(homedir(), '.local', 'state'), 'ego-search.json')
   try {
@@ -207,257 +125,6 @@ function readBreakerSummary() {
   } catch {
     return { total: 0, nonClosedCount: 0, topTripped: [] }
   }
-}
-
-function buildEvidenceContext(cards, maxChars = 14000) {
-  const lines = []
-  let used = 0
-  for (const c of cards) {
-    if (!c || typeof c !== 'object') continue
-    const body = c.verifiedText || c.snippet || '(无摘要)'
-    const block = [
-      `[${c.index}] 标题：${c.title}`,
-      `来源：${c.source} (${c.domain})${c.publishedAt ? ` · 时间：${c.publishedAt}` : ''}${c.verified ? ' · [已核验正文]' : ''}`,
-      `链接：${c.url}`,
-      `内容：${body.slice(0, 900)}`,
-    ].join('\n')
-    if (used + block.length > maxChars) break
-    lines.push(block)
-    used += block.length
-  }
-  return lines.join('\n\n')
-}
-
-function buildFallbackSummary(query, mode, cards, failure = null) {
-  const label = MODE_LABELS[mode] || '全网综合'
-  if (cards.length === 0) {
-    return `### 未检索到相关结果\n\n针对「${query}」在 **${label}** 模式下未命中有效网页结果，建议精简关键词或点击右上角「强制刷新」重试。`
-  }
-  const rows = cards.slice(0, 8).map((c) => {
-    const text = (c.verifiedText || c.snippet || '').slice(0, 180).replace(/\n+/g, ' ')
-    return `- **${c.title}** [${c.index}]（${c.domain || c.source}）\n  ${text || '点击右侧卡片查看原文'}`
-  })
-  const hasRealFailure = failure && failure.reason && failure.reason !== 'no_model'
-  const header = hasRealFailure
-    ? `### ${label} · 聚合检索结果（模型调用未完成，已切回直出视图）\n\n默认模型（\`${failure.model || 'unknown'}\`）暂不可用：${failure.message || failure.reason}。已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：`
-    : `### ${label} · 聚合检索结果（零模型直出模式）\n\n当前宿主未配置可用默认模型，已为你整理最相关的 ${cards.length} 条多源证据，可直接在右侧核对原文：`
-  return `${header}\n\n${rows.join('\n\n')}`
-}
-
-function mergeDedupCards(lists, maxCards = 16) {
-  const seen = new Set()
-  const merged = []
-  for (const list of lists) {
-    for (const card of list || []) {
-      if (!card?.url || seen.has(card.url)) continue
-      seen.add(card.url)
-      merged.push({ ...card, id: `c${merged.length + 1}`, index: merged.length + 1 })
-      if (merged.length >= maxCards) return merged
-    }
-  }
-  return merged
-}
-
-async function callLocalSeek(config, env, query, maxResults = 16, signal) {
-  const searchPath = config?.localSearchPath || process.env.ARGO_LOCAL_SEARCH_PATH || join(homedir(), 'Documents')
-  try {
-    const payload = await runArgoCli(
-      ['seek', '--path', searchPath, '--json', '--max', String(Math.min(20, Math.max(1, maxResults))), '--', query],
-      { env, timeoutMs: 15000, signal },
-    )
-    return { payload, cards: normalizeLocalCards(payload) }
-  } catch (err) {
-    return { payload: { errors: [String(err?.message ?? err)] }, cards: [] }
-  }
-}
-
-async function callArgoSearch(config, env, query, mode, refresh, signal, tracks = null) {
-  if (mode === 'local') {
-    return callLocalSeek(config, env, query, MODE_SPECS.local.searchArgs.max_results, signal)
-  }
-
-  const timeoutMs = mode === 'research'
-    ? Math.max(config.searchTimeoutMs ?? 60000, 90000)
-    : (config.searchTimeoutMs ?? DEFAULTS.searchTimeoutMs)
-
-  if (mode === 'research' && Array.isArray(tracks) && tracks.length > 1) {
-    const trackRuns = await boundedMap(tracks, 3, async (track) => {
-      const cliArgs = buildSearchCliArgs(track.question || query, 'research', refresh, { max_results: 10, verify: 3 })
-      const payload = await runArgoCli(cliArgs, { env, timeoutMs, signal }).catch(() => ({}))
-      return { payload, cards: normalizeCandidates(payload) }
-    })
-    return {
-      payload: trackRuns[0]?.payload || {},
-      cards: mergeDedupCards(trackRuns.map(r => r.cards), 16),
-    }
-  }
-
-  const primaryTask = runArgoCli(buildSearchCliArgs(query, mode, refresh), { env, timeoutMs, signal })
-    .then(payload => ({ payload, cards: normalizeCandidates(payload) }))
-
-  // 热点分析与插件评测并行补充社区/社交域召回，避免单靠网页引擎错过一手讨论
-  const socialTask = MODE_SPECS[mode]?.socialSupplement
-    ? runArgoCli(buildSearchCliArgs(query, 'general', refresh, { domain: 'social', max_results: 6, verify: 0 }), { env, timeoutMs: Math.min(timeoutMs, 15000), signal })
-        .then(payload => normalizeCandidates(payload))
-        .catch(() => [])
-    : Promise.resolve([])
-
-  const [primary, socialCards] = await Promise.all([primaryTask, socialTask])
-  let combined = mergeDedupCards([primary.cards, socialCards], 16)
-
-  if (mode === 'plugin' && combined.length < 6) {
-    const fallbackPayload = await runArgoCli(
-      buildSearchCliArgs(`${query} 评测 替代`, 'general', refresh, { verify: 2 }),
-      { env, timeoutMs, signal },
-    ).catch(() => ({}))
-    combined = mergeDedupCards([combined, normalizeCandidates(fallbackPayload)], 16)
-  }
-
-  return { payload: primary.payload, cards: combined }
-}
-
-async function runClarifyIfShort(query, mode, env, signal) {
-  if (mode === 'local' || query.length > 18) return null
-  try {
-    const data = await runArgoCli(['clarify', '--json', '--', query], { env, timeoutMs: 3000, signal })
-    if (!data || (!data.ambiguities?.length && !data.routing?.explanation)) return null
-    return {
-      ambiguities: data.ambiguities || [],
-      explanation: data.routing?.explanation || '',
-      recommendedStrategy: data.recommended_strategy || '',
-    }
-  } catch {
-    return null
-  }
-}
-
-async function runEvidenceScoring(query, cards, env, signal) {
-  if (!cards.length) return { cards, evidenceSummary: null }
-  try {
-    const payload = await runArgoCli(
-      ['evidence', '--', query],
-      {
-        env,
-        stdin: {
-          results: cards.map(c => ({
-            title: c.title,
-            url: c.url,
-            source: c.source,
-            snippet: c.verifiedText || c.snippet,
-            published_at: c.publishedAt,
-          })),
-        },
-        timeoutMs: 5000,
-        signal,
-      },
-    )
-    const scored = Array.isArray(payload?.results) ? payload.results : []
-    const enriched = cards.map((c, idx) => {
-      const ev = scored[idx]?.credibility
-      if (!ev) return c
-      return {
-        ...c,
-        credibility: typeof ev.final === 'number' ? ev.final : c.credibility,
-        authorityTier: ev.authority?.tier || null,
-        authorityReason: ev.authority?.reason || '',
-      }
-    })
-    return {
-      cards: enriched,
-      evidenceSummary: {
-        crossValidation: payload?.cross_validation || null,
-        summary: payload?.summary || null,
-      },
-    }
-  } catch {
-    return { cards, evidenceSummary: null }
-  }
-}
-
-async function streamLlmAnswer(ctx, { system, messages, signal, onDelta }) {
-  const llm = ctx.get?.('llm')
-  const modelService = ctx.get?.('agentDefaultModel')
-  if (!llm || !modelService) return { ok: false, reason: 'no_model' }
-
-  let selection
-  try {
-    selection = modelService.currentSelection?.()
-  } catch {
-    selection = null
-  }
-  if (!selection?.provider || !selection?.model) {
-    return { ok: false, reason: 'no_model' }
-  }
-
-  let text = ''
-  let usage = null
-  let finish = null
-  try {
-    const stream = llm.stream({
-      provider: selection.provider,
-      model: selection.model,
-      ...(selection.reasoningEffort ? { reasoningEffort: selection.reasoningEffort } : {}),
-      signal,
-      system,
-      messages,
-    })
-    for await (const chunk of stream) {
-      if (signal?.aborted) break
-      if (chunk?.type === 'text-delta' && typeof chunk.text === 'string') {
-        text += chunk.text
-        onDelta(chunk.text)
-      } else if (chunk?.type === 'usage') {
-        usage = chunk.usage
-      } else if (chunk?.type === 'finish') {
-        finish = chunk.reason
-      } else if (chunk?.type === 'error') {
-        const msg = chunk.error?.message || chunk.message || 'model stream error'
-        return { ok: false, reason: 'error', message: String(msg), text, model: `${selection.provider}/${selection.model}` }
-      }
-    }
-    if (finish && finish.kind !== 'stop') {
-      const msg = finish.failure?.message || finish.failure?.code || `finish=${finish.kind}`
-      console.warn(`[argo-workbench] llm finish=${finish.kind} model=${selection.provider}/${selection.model} msg=${msg}`)
-      return { ok: false, reason: finish.kind, message: String(msg), text, usage, finish, model: `${selection.provider}/${selection.model}` }
-    }
-    return { ok: true, text, usage, finish, model: `${selection.provider}/${selection.model}` }
-  } catch (err) {
-    return { ok: false, reason: err?.name === 'AbortError' ? 'aborted' : 'error', message: String(err?.message ?? err), text }
-  }
-}
-
-function extractCitations(text, cards) {
-  const used = new Set()
-  const re = /\[(\d+)\]/g
-  let m
-  while ((m = re.exec(text)) !== null) {
-    const n = Number(m[1])
-    if (n >= 1 && n <= cards.length) used.add(n)
-  }
-  return {
-    citedIndices: [...used].sort((a, b) => a - b),
-    totalCards: cards.length,
-  }
-}
-
-// 供测试断言「flag 全部前置、query 经 `--` 分隔殿后」的参数形态
-export function buildSearchCliArgs(query, mode, refresh = false, overrides = {}) {
-  const spec = MODE_SPECS[mode] || MODE_SPECS.general
-  const merged = { ...spec.searchArgs, ...overrides }
-  const args = ['search', '--json', '--envelope']
-  if (merged.max_results) args.push('-n', String(merged.max_results))
-  if (merged.depth) args.push('--depth', String(merged.depth))
-  if (merged.mode) args.push('--mode', String(merged.mode))
-  if (merged.domain) args.push('--domain', String(merged.domain))
-  if (merged.since) args.push('--since', String(merged.since))
-  if (merged.sort) args.push('--sort', String(merged.sort))
-  if (merged.verify) args.push('--verify', String(merged.verify))
-  if (refresh) args.push('--no-cache')
-  // `--` 后的全部 token 被 argparse 当位置参数：flag 必须全部前置，否则
-  // 以 `-` 开头的 query（如 `--list-engines`）会被 CLI 当 flag 吃掉
-  // （2026-11-18 实跑复现：`argo search "--list-engines"` 返回引擎清单）
-  args.push('--', query)
-  return args
 }
 
 export function createWorkbenchHandler(ctx, config, getCredentials, options = {}) {
@@ -513,7 +180,15 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
       watch.nextRunAt = new Date(Date.now() + watch.intervalMinutes * 60000).toISOString()
       watch.lastStatus = `error: ${String(err?.message ?? err)}`
     }
-    saveWatches(watches)
+    // 按 id upsert 合并写：磁盘是唯一真源，另一宿主对其他 watch 的增删改不被抹掉
+    // （旧 saveWatches(watches) 全量覆盖写，2026-11-21 审计 P1）
+    const updated = mutateWatches((list) => {
+      const idx = list.findIndex(w => w.id === watch.id)
+      if (idx >= 0) list[idx] = watch
+      else list.unshift(watch)
+      return list
+    })
+    if (Array.isArray(updated)) watches = updated
     return watch
   }
 
@@ -522,11 +197,17 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
       triggerDailyHotspotRefresh()
     }
     if (watchBusy) return
+    // 每 tick 重读磁盘：另一宿主刚增删的 watch 立即可见，不靠 60s 前的内存快照
+    watches = loadWatches()
     const now = Date.now()
     const due = watches.find(w => w.enabled !== false && (!w.nextRunAt || Date.parse(w.nextRunAt) <= now))
     if (!due) return
+    // 跨宿主执行互斥：单锁串行化全部 watch 执行（最坏 ~80s << 5min stale 阈值），
+    // 抢不到说明另一宿主在跑，本轮让路——被让路的 watch 下轮仍 due 会重试
+    const execLock = acquireStateFileLock(`${WATCH_STORE_FILE}.exec.lock`)
+    if (!execLock) return
     watchBusy = true
-    try { await executeWatch(due) } finally { watchBusy = false }
+    try { await executeWatch(due) } finally { watchBusy = false; releaseStateFileLock(execLock) }
   }, 60 * 1000)
   timer.unref?.()
 
@@ -620,32 +301,42 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
           lastSummary: '',
           lastCards: [],
         }
-        watches.unshift(item)
-        if (watches.length > MAX_WATCHES) watches.length = MAX_WATCHES
-        saveWatches(watches)
+        const updatedList = mutateWatches((list) => {
+          list.unshift(item)
+          if (list.length > MAX_WATCHES) list.length = MAX_WATCHES
+          return list
+        })
+        if (!Array.isArray(updatedList)) { sendJson(res, 409, { error: 'watch_busy' }); return }
+        watches = updatedList
         sendJson(res, 200, { ok: true, item, items: watches })
         return
       }
 
       if (path === '/argo/api/watches/run' && req.method === 'POST') {
         const body = await readJsonBody(req)
+        watches = loadWatches()
         const target = watches.find(w => w.id === body.id)
         if (!target) { sendJson(res, 404, { error: 'watch_not_found' }); return }
         if (watchBusy) { sendJson(res, 409, { error: 'watch_busy' }); return }
+        // 与定时器同锁：手动触发与另一宿主的执行互斥
+        const execLock = acquireStateFileLock(`${WATCH_STORE_FILE}.exec.lock`)
+        if (!execLock) { sendJson(res, 409, { error: 'watch_busy' }); return }
         watchBusy = true
         try {
           const updated = await executeWatch(target)
           sendJson(res, 200, { ok: true, item: updated, items: watches })
         } finally {
           watchBusy = false
+          releaseStateFileLock(execLock)
         }
         return
       }
 
       if (path === '/argo/api/watches' && req.method === 'DELETE') {
         const id = url.searchParams.get('id') || ''
-        watches = watches.filter(w => w.id !== id)
-        saveWatches(watches)
+        const updatedList = mutateWatches((list) => list.filter(w => w.id !== id))
+        if (!Array.isArray(updatedList)) { sendJson(res, 409, { error: 'watch_busy' }); return }
+        watches = updatedList
         sendJson(res, 200, { ok: true, items: watches })
         return
       }
@@ -670,7 +361,12 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
         const shuffle = url.searchParams.get('shuffle') === '1'
         const store = loadHotspotStore()
         if (hotspotRetryDue(store)) triggerDailyHotspotRefresh()
-        sendJson(res, 200, buildSuggestions(reqMode, lang, shuffle, { watches, hotspotStore: store }))
+        // 本机模式建议词与 callLocalSeek 同源同路径
+        sendJson(res, 200, buildSuggestions(reqMode, lang, shuffle, {
+          watches,
+          hotspotStore: store,
+          cwd: resolveLocalSearchPath(config),
+        }))
         return
       }
 
@@ -691,6 +387,9 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
           lastRefreshedAt: store.lastRefreshedAt,
           hotspotCount: (store.zh?.length || 0) + (store.en?.length || 0),
           refreshing: hotspotRefresher.isBusy(),
+          // 锁被另一宿主占时如实回传 skipped，前端提示「另一宿主刷新中」，
+          // 不再拿旧时间戳冒充刚刷过（2026-11-21 审计：假成功边界）
+          skipped: store.skipped || null,
         })
         return
       }
@@ -756,10 +455,12 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
 
           let cards
           let payload
+          let trackStats
           let cached = !refresh ? getCached(cacheKey) : null
           if (cached) {
             cards = cached.cards
             payload = cached.payload
+            trackStats = cached.trackStats
           } else {
             let pending = !refresh ? inflight.get(cacheKey) : null
             if (!pending) {
@@ -772,7 +473,8 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
             const resData = await pending
             cards = resData.cards
             payload = resData.payload
-            if (cards.length > 0) setCached(cacheKey, { cards, payload })
+            trackStats = resData.trackStats
+            if (cards.length > 0) setCached(cacheKey, { cards, payload, trackStats })
           }
 
           if (ac.signal.aborted) return
@@ -829,6 +531,14 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
           const citations = extractCitations(finalText, cards)
           sendSse(res, 'citations', citations)
           if (mode === 'research') {
+            const total = (researchTracks || []).length
+            // 真实 track 成败统计进门禁；旧缓存条目无 trackStats 时按结果有无推断，
+            // 不再恒注入 completedTracks/failedTracks: 0 的假章（2026-11-21 审计）
+            const stats = trackStats || {
+              total,
+              completed: cards.length > 0 ? total : 0,
+              failed: 0,
+            }
             const gate = evaluateGates({
               answer: finalText,
               sources: cards.map(c => ({ url: c.url, title: c.title, domain: c.domain })),
@@ -836,8 +546,8 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
               warnings: [],
               stats: {
                 sourceCount: cards.length,
-                completedTracks: Math.max(1, (researchTracks || []).length),
-                failedTracks: 0,
+                completedTracks: stats.completed,
+                failedTracks: stats.failed,
               },
             })
             sendSse(res, 'gate', gate)

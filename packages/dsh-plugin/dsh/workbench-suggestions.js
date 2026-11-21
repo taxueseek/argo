@@ -8,9 +8,10 @@
  *  4. 静态模板仅作冷启动兜底（真实信号不足 3 条时补位），不抢占正常用户首屏。
  */
 
-import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { resolveStateDir } from './diagnostics.js'
+import { acquireStateFileLock, releaseStateFileLock } from './workbench-io.js'
 
 const RECENT_CACHE_TTL_MS = 30 * 1000
 const RECENT_TAIL_BYTES = 24576
@@ -83,33 +84,10 @@ export function localDateKey(now = new Date()) {
 }
 
 // 跨进程刷新互斥：多个 DSH 宿主各有 60s 定时器，裸跑会双份抓取 4 引擎并
-// last-write-wins 互踩 workbench-hotspots.json（2026-11-20 审计）。Node 无原生
-// flock，用 wx 独占创建等价实现（语义对齐 scripts/pacing.py 的非阻塞文件锁）：
+// last-write-wins 互踩 workbench-hotspots.json（2026-11-20 审计）。锁实现
+// 统一走 workbench-io.acquireStateFileLock（wx 独占创建，语义对齐
+// scripts/pacing.py 的非阻塞文件锁；2026-11-21 起消灭手抄双实现）：
 // 抢不到直接让路——另一宿主当日会刷好并盖章，无需排队等待。
-const HOTSPOT_LOCK_STALE_MS = 5 * 60 * 1000
-
-function acquireHotspotLock() {
-  const lockFile = `${hotspotStoreFile()}.lock`
-  try {
-    return { fd: openSync(lockFile, 'wx'), lockFile }
-  } catch (err) {
-    if (err?.code !== 'EEXIST') return null
-    try {
-      // stale 残留：上次进程崩溃未释放，超 5 分钟（≈40 倍最坏刷新耗时）强取
-      if (Date.now() - statSync(lockFile).mtimeMs > HOTSPOT_LOCK_STALE_MS) {
-        unlinkSync(lockFile)
-        return { fd: openSync(lockFile, 'wx'), lockFile }
-      }
-    } catch { /* 对方刚释放或刚重建，本轮回让路 */ }
-    return null
-  }
-}
-
-function releaseHotspotLock(lock) {
-  if (!lock) return
-  try { closeSync(lock.fd) } catch { /* ignore */ }
-  try { unlinkSync(lock.lockFile) } catch { /* ignore */ }
-}
 
 export function loadHotspotStore() {
   const empty = {
@@ -177,12 +155,16 @@ function cleanTitle(raw) {
 export async function refreshDailyHotspots({ runCli, now = new Date() } = {}) {
   const store = loadHotspotStore()
   if (typeof runCli !== 'function') return store
-  const lock = acquireHotspotLock()
-  if (!lock) return store
+  const lock = acquireStateFileLock(`${hotspotStoreFile()}.lock`)
+  if (!lock) {
+    // 让路要可见：另一宿主正在刷新，调用方（手动 refreshNow）需要据此提示
+    // 「另一宿主刷新中」，而不是拿旧时间戳冒充刚刷过（2026-11-21 审计：假成功）
+    return { ...store, skipped: 'lock_busy' }
+  }
   try {
     return await collectHotspots(store, runCli, now)
   } finally {
-    releaseHotspotLock(lock)
+    releaseStateFileLock(lock)
   }
 }
 
@@ -248,7 +230,6 @@ export function createHotspotRefresher({
   loadStore = loadHotspotStore,
   failRetryMs = 60 * 60 * 1000,
 } = {}) {
-  let busy = false
   let inflight = null
   const retryDue = (store) =>
     isDailyRefreshDue(store) &&
@@ -256,17 +237,18 @@ export function createHotspotRefresher({
       Date.now() - Date.parse(store.lastFailedAt) < failRetryMs)
   const trigger = () => {
     if (inflight) return inflight
-    busy = true
     inflight = (async () => {
       try {
         const runCli = typeof buildRunner === 'function' ? await buildRunner() : undefined
         return await refreshDailyHotspots({ runCli })
       } catch { return loadStore() }
-      finally { busy = false; inflight = null }
+      finally { inflight = null }
     })()
     return inflight
   }
-  return { trigger, retryDue, isBusy: () => busy }
+  // busy 与 inflight 曾是双变量同置同清（2026-11-21 审计：一个概念两处状态），
+  // 收敛为 inflight 单真源派生。
+  return { trigger, retryDue, isBusy: () => inflight !== null }
 }
 
 function readFileTailSync(filePath, maxBytes) {

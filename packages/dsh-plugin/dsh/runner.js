@@ -385,7 +385,10 @@ export async function acquireMcp(options, signal) {
   }
   const matching = mcpPool.filter(entry => entry.configKey === undefined || entry.configKey === targetConfigKey)
   if (matching.length === 0) {
-    // 满池且全部为旧 configKey：新建匹配新配置的连接并替换当前最闲旧连接
+    // 满池且全部为旧 configKey 的忙连接：不可关闭在跑的连接，只能新建一条
+    // 临时超限（pool 瞬时 > max）。超限是自限的：函数开头会把空转的旧
+    // configKey 连接回收，新建的匹配连接下次会被 354 行的 idle 分支复用，
+    // 池随之收敛回 max 以内（2026-11-21 审计：原注释「替换最闲旧连接」与代码不符）
     const conn = createMcpConnection({
       ...options,
       envResolver: () => resolveEnv(options, envCfg),

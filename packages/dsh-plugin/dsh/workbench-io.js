@@ -3,7 +3,7 @@
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,7 +14,7 @@ const MONOREPO_ARGO_BIN = join(HERE, '..', '..', '..', 'bin', 'argo')
 // install.sh 默认安装根（ARGO_HOME 可改，此处只探测默认路径——探测不到就走
 // console script 的 PATH 兜底，不猜 site-packages 里的 wheel _data 布局）
 const INSTALL_VENV_ARGO_BIN = join(homedir(), '.local', 'share', 'argo', '.venv', 'bin', 'argo')
-const WATCH_STORE_FILE = join(homedir(), '.config', 'argo', 'workbench-watches.json')
+export const WATCH_STORE_FILE = join(homedir(), '.config', 'argo', 'workbench-watches.json')
 
 export function mergedLaunchdPath(env = {}) {
   const extraPath = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')].join(':')
@@ -45,6 +45,8 @@ export function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, si
     const out = []
     const err = []
     const timer = setTimeout(() => {
+      // 超时路径也要摘掉 abort 监听器：长生命周期 AbortSignal 下残留会累积
+      signal?.removeEventListener('abort', onAbort)
       child.kill('SIGTERM')
       reject(new Error(`argo ${args[0] || ''} timeout (${timeoutMs}ms)`))
     }, timeoutMs)
@@ -115,6 +117,45 @@ export function saveWatches(items) {
     writeFileSync(tmp, JSON.stringify(items, null, 2), 'utf8')
     renameSync(tmp, WATCH_STORE_FILE)
   } catch { /* ignore */ }
+}
+
+// 跨进程状态文件互斥（wx 独占创建，语义对齐 scripts/pacing.py 的非阻塞文件锁）：
+// 抢不到返回 null 让调用方让路；崩溃残留超 staleMs 强取自愈。
+// 热榜与 watches 共用同一实现，消灭各自手抄（2026-11-21 审计：锁方案四家并存）。
+export function acquireStateFileLock(file, staleMs = 5 * 60 * 1000) {
+  try {
+    return { fd: openSync(file, 'wx'), lockFile: file }
+  } catch (err) {
+    if (err?.code !== 'EEXIST') return null
+    try {
+      if (Date.now() - statSync(file).mtimeMs > staleMs) {
+        unlinkSync(file)
+        return { fd: openSync(file, 'wx'), lockFile: file }
+      }
+    } catch { /* 对方刚释放或刚重建，本轮回让路 */ }
+    return null
+  }
+}
+
+export function releaseStateFileLock(lock) {
+  if (!lock) return
+  try { closeSync(lock.fd) } catch { /* ignore */ }
+  try { unlinkSync(lock.lockFile) } catch { /* ignore */ }
+}
+
+// watches 唯一真源是磁盘文件：读-改-写全程持锁，内存副本只作缓存。
+// 旧「内存快照 + 全量覆盖写」在多宿主下互相抹改（2026-11-21 审计 P1）。
+// 返回 null 表示锁被占（另一宿主写盘中），调用方按忙处理。
+export function mutateWatches(mutator) {
+  const lock = acquireStateFileLock(`${WATCH_STORE_FILE}.lock`)
+  if (!lock) return null
+  try {
+    const next = mutator(loadWatches())
+    if (Array.isArray(next)) saveWatches(next)
+    return Array.isArray(next) ? next : loadWatches()
+  } finally {
+    releaseStateFileLock(lock)
+  }
 }
 
 export function breakerFilePath() {

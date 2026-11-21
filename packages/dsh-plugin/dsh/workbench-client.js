@@ -159,6 +159,7 @@ export function mountArgoWorkbench(ctx, react) {
     const [suggestions, setSuggestions] = useState([])
     const [hotspotMeta, setHotspotMeta] = useState({ refreshTime: '08:30', lastRefreshedAt: '' })
     const [hotspotBusy, setHotspotBusy] = useState(false)
+    const [hotspotNote, setHotspotNote] = useState('')
     const [cards, setCards] = useState(() => initialSaved?.cards || [])
     const [turns, setTurns] = useState(() => initialSaved?.turns || [])
     const [stageText, setStageText] = useState('')
@@ -467,7 +468,12 @@ export function mountArgoWorkbench(ctx, react) {
           body: JSON.stringify({ refreshNow: true }),
         })
         const data = await res.json()
-        if (data?.ok) {
+        if (data?.skipped === 'lock_busy') {
+          // 锁被另一宿主占着：如实提示，不拿旧 lastRefreshedAt 冒充刚刷过
+          setHotspotNote(lang === 'en' ? 'Another host is refreshing…' : '另一宿主刷新中…')
+          window.setTimeout(() => setHotspotNote(''), 8000)
+        } else if (data?.ok) {
+          setHotspotNote('')
           const sched = { refreshTime: data.refreshTime, lastRefreshedAt: data.lastRefreshedAt }
           setHotspotMeta(sched)
           setHealthInfo(prev => ({ ...(prev || {}), hotspotSchedule: sched }))
@@ -561,7 +567,9 @@ export function mountArgoWorkbench(ctx, react) {
               className: 'aw-icon-btn',
               disabled: hotspotBusy,
               onClick: refreshHotspotsNow,
-            }, hotspotBusy ? (lang === 'en' ? 'Refreshing…' : '刷新中…') : (lang === 'en' ? 'Refresh Hotspots' : '刷新热点')),
+            }, hotspotBusy
+              ? (lang === 'en' ? 'Refreshing…' : '刷新中…')
+              : (hotspotNote || (lang === 'en' ? 'Refresh Hotspots' : '刷新热点'))),
             h('button', { type: 'button', className: 'aw-icon-btn', onClick: toggleWatchPanel }, `定时搜索 (${watches.length})`)),
           renderWatchDrawer(),
           h('div', { className: 'aw-hero-inner' },
@@ -729,7 +737,7 @@ export function mountArgoWorkbench(ctx, react) {
               onChange: (e) => updateHotspotRefreshTime(e.target.value),
               style: { fontSize: '12px', padding: '2px 6px', borderRadius: '6px', border: '1px solid var(--aw-border)', background: 'var(--aw-sunken)', color: 'inherit' },
             }, REFRESH_TIME_OPTIONS.map(t => h('option', { key: t, value: t }, t))),
-            h('button', { type: 'button', className: 'aw-pill-btn', disabled: hotspotBusy, onClick: refreshHotspotsNow, style: { fontSize: '11px', padding: '2px 8px' } }, hotspotBusy ? '刷新中…' : '刷新'))),
+            h('button', { type: 'button', className: 'aw-pill-btn', disabled: hotspotBusy, onClick: refreshHotspotsNow, style: { fontSize: '11px', padding: '2px 8px' } }, hotspotBusy ? '刷新中…' : (hotspotNote || '刷新')))),
         h('button', {
           type: 'button',
           className: 'aw-icon-btn',
