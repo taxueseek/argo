@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.16.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.17.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -77,6 +77,7 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 
 | バージョン | 主な変更点 |
 | :--- | :--- |
+| **v2.17.0** | クエリ演算子ネイティブプッシュダウン、4状態認証と `ego-search` ペーシング制御、決定論的根拠アンカー、Workbench デイリーホットトピックと TCP ループバック保護（313ソース） |
 | **v2.16.0** | DSH Argo Workbench UI、CLI 4段階検証パイプライン、`linux.do` + Keenable 無料チャネル（312ソース）、Jina キー不要フォールバック、並行・キャッシュ制御強化 |
 | **v2.15.0** | Zhihu フルチェーン、証拠レイヤー権威透過、キー不要セマンティックフォールバック、MCP 汎用コネクタ（`type: mcp`）、ルーティング ゼロベース評価、311 ソース |
 | **v2.14.1** | ソースアーキテクチャのスリム化、MCP 3+1 ツール統合と互換エイリアス、304 ソース対応、`secret_guard.py` 機密マスキング |
@@ -84,11 +85,15 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 | **v2.13.0** | ドキュメント統合、22 ステートマシン SSOT、ディスパッチ待機改善 |
 
 <details>
-<summary>v2.16.0 リリース概要・機能サマリー</summary>
+<summary>v2.17.0 リリース概要・機能サマリー</summary>
 
-### 現時点の能力概要（v2.16.0）
+### 現時点の能力概要（v2.17.0）
 
-v2.16.0 では DSH プラグインにブラウザ版 **Argo Workbench**（5モード、適応型ホーム提案、左右2ペインの引用・根拠検証ビュー）を追加し、`bin/argo` CLI 4段階検証パイプラインと `local-seek` ローカル検索を統合しました。さらに `linux.do` ソース追加（311→312）および `keenable` 無料チャネル（月10万回）有効化、Jina Reader のキー不要フォールバック、サーキットブレーカー・クォータ・キャッシュスロットの並行制御強化を実施しました。
+v2.17.0 では検索・認証・Workbench の信頼性を仕組みとして収束しました。クエリ演算子のネイティブプッシュダウン（Tavily `language` 対応）、4状態ブラウザ認証デバウンスと CDP キャプチャ、`ego-search` の OS ファイルロック型ペーシングと単一真源の認証状態語彙、決定論的数値根拠アンカー、隔離サブプロセスによる新ソース探索（`argo engine add`）、Argo Workbench のデイリーホットトピック推薦と TCP ループバック保護（DSH `v0.2.2-rc.5` 準拠）、サーキットブレーカー自動復旧、`helve` 有料ソース追加（312→313）を実装しました。
+
+### v2.17.0：クエリネイティブ下押し + 認証・根拠強化 + Workbench デイリーホットトピック
+
+詳細は [docs/RELEASE_NOTES_v2.17.0.md](docs/RELEASE_NOTES_v2.17.0.md) をご参照ください。
 
 ### v2.16.0：Argo Workbench UI + CLI 4段階検証 + ソース・並行制御強化
 

@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.16.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.17.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -77,6 +77,7 @@ argo search "arquitectura de agentes RAG 2026" --verify 2 --json --fields agent
 
 | Versión | Novedades |
 | :--- | :--- |
+| **v2.17.0** | Pushdown nativo de operadores de consulta, autenticación de 4 estados y control de ritmo en `ego-search`, anclaje determinista de evidencia, tendencias diarias en Workbench y barrera TCP loopback (313 fuentes) |
 | **v2.16.0** | Argo Workbench UI en DSH, pipeline CLI de 4 etapas, `linux.do` + canal gratuito Keenable (312 fuentes), fallback sin clave en Jina, endurecimiento de concurrencia y caché |
 | **v2.15.0** | Cadena completa de Zhihu, transmisión de autoridad en evidencia, fallback semántico sin clave, conector MCP genérico (`type: mcp`), evaluación de rutas desde cero, 311 fuentes |
 | **v2.14.1** | Adelgazamiento de arquitectura, herramientas MCP 3+1 y alias compatibles, 304 fuentes, redacción `secret_guard.py` |
@@ -84,11 +85,15 @@ argo search "arquitectura de agentes RAG 2026" --verify 2 --json --fields agent
 | **v2.13.0** | Consolidación documental, máquina de 22 estados SSOT, gracia de despacho |
 
 <details>
-<summary>Resumen de la versión v2.16.0</summary>
+<summary>Resumen de la versión v2.17.0</summary>
 
-### Capacidades actuales (v2.16.0)
+### Capacidades actuales (v2.17.0)
 
-v2.16.0 incorpora el navegador **Argo Workbench** en el plugin DSH (5 modos, sugerencias adaptativas y panel lateral de evidencia verificada) conectado al pipeline CLI de 4 etapas `bin/argo` y búsqueda local `local-seek`; añade la fuente `linux.do` (311→312 fuentes) y activa el canal gratuito `keenable` (100k/mes); refactoriza Jina Reader con fallback sin clave; y endurece la concurrencia en circuit-breaker, cuotas, caché y ordenación por latencia.
+v2.17.0 consolida la fiabilidad de búsqueda, autenticación y Workbench mediante mecanismos estrictos: pushdown nativo de operadores de consulta (incluido `language` en Tavily), autenticación de navegador en 4 estados con captura CDP, control de ritmo entre procesos con bloqueo de archivos OS y vocabulario unificado en `ego-search`, anclaje determinista de evidencia numérica, descubrimiento aislado de fuentes (`argo engine add`), tendencias diarias en Argo Workbench con barrera TCP loopback (compatible con DSH `v0.2.2-rc.5`), autorrecuperación de circuit-breaker por huella de entorno y fuente de pago `helve` (312→313 fuentes).
+
+### v2.17.0: Pushdown Nativo + Autenticación y Evidencia + Tendencias Diarias en Workbench
+
+Consulta [docs/RELEASE_NOTES_v2.17.0.md](docs/RELEASE_NOTES_v2.17.0.md) para más detalles.
 
 ### v2.16.0: Argo Workbench UI + Pipeline CLI de 4 Etapas + Fuentes y Concurrencia
 

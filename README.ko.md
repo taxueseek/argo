@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.16.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.17.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -77,6 +77,7 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 
 | 버전 | 주요 업데이트 |
 | :--- | :--- |
+| **v2.17.0** | 쿼리 연산자 네이티브 푸시다운, 4상태 브라우저 인증 및 `ego-search` 프로세스 간 페이싱, 결정론적 근거 앵커링, Workbench 일일 핫토픽 및 TCP 루프백 가드(313개 소스) |
 | **v2.16.0** | DSH Argo Workbench UI, CLI 4단계 검증 파이프라인, `linux.do` + Keenable 무료 채널(312개 소스), Jina 키리스 폴백, 동시성·캐시 상태 머신 강화 |
 | **v2.15.0** | Zhihu 전체 체인, 증거 레이어 권위 전달, 키 없는 시맨틱 폴백, MCP 범용 커넥터(`type: mcp`), 라우팅 제로베이스 평가, 311개 소스 |
 | **v2.14.1** | 아키텍처 슬리밍, MCP 3+1 도구 수렴 및 호환 별칭, 304개 소스, `secret_guard.py` 보안 마스킹 |
@@ -84,11 +85,15 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 | **v2.13.0** | 문서 통합, 22개 상태 머신 SSOT, 디스패치 테일 유예 |
 
 <details>
-<summary>v2.16.0 릴리스 요약 및 기능 개요</summary>
+<summary>v2.17.0 릴리스 요약 및 기능 개요</summary>
 
-### 현재 기능 개요 (v2.16.0)
+### 현재 기능 개요 (v2.17.0)
 
-v2.16.0에서는 DSH 플러그인에 브라우저 기반 **Argo Workbench**(5가지 모드, 적응형 홈 추천, 좌우 분할 출처 검증 뷰)를 도입하고 `bin/argo` CLI 4단계 검증 파이프라인 및 `local-seek` 로컬 검색을 통합했습니다. 또한 `linux.do` 소스 추가(311→312)와 `keenable` 무료 채널(월 10만 회) 활성화, Jina Reader 키리스 폴백, 서킷 브레이커·쿼터·캐시 슬롯 동시성 제어를 강화했습니다.
+v2.17.0에서는 검색·인증·Workbench 안정성을 메커니즘 수준으로 수렴했습니다. 쿼리 연산자 네이티브 푸시다운(Tavily `language` 포함), 4상태 브라우저 인증 디바운싱 및 CDP 캡처, `ego-search` OS 파일 잠금 페이싱과 단일 진실 원천 인증 상태 어휘 통합, 결정론적 수치 근거 앵커링, 격리 서브프로세스 기반 신규 소스 탐색(`argo engine add`), Argo Workbench 일일 핫토픽 추천 및 TCP 루프백 보안 가드(DSH `v0.2.2-rc.5` 호환), 서킷 브레이커 지문 자가 복구, `helve` 유료 소스 추가(312→313)를 적용했습니다.
+
+### v2.17.0: 쿼리 네이티브 푸시다운 + 인증·근거 강화 + Workbench 일일 핫토픽
+
+자세한 내용은 [docs/RELEASE_NOTES_v2.17.0.md](docs/RELEASE_NOTES_v2.17.0.md)를 참고하세요.
 
 ### v2.16.0: Argo Workbench UI + CLI 4단계 검증 + 소스·동시성 강화
 
