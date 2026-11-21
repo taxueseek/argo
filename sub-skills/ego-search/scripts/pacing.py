@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import sys
+import threading
 import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -172,7 +173,9 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}")
+    # tmp 名带线程号：同进程两线程并发写同一文件时旧名（仅 pid）会互踩
+    # os.replace 抛 FileNotFoundError（2026-11-21 审计）
+    tmp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}.{threading.get_ident()}")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, path)
 
@@ -189,7 +192,11 @@ def pace_site(
         return 0.0
     norm = normalize_site(site)
     path = _pacing_path(root)
-    with _acquire_any([f"pace:{norm}"], wait=DEFAULT_QUEUE_WAIT, root=root):
+    # 写侧锁名统一为 pacing:state：同一状态文件只允许一把写锁——旧 pace:{site}
+    # 与 record_cooldown 的 pacing:state 是两把名字不同的锁，跨进程并发时后写者
+    # 会整体覆盖前写者（丢冷却记录或节奏时间戳，2026-11-21 审计）。本锁内
+    # sleep 至多一个 interval（默认 8s），短于 record_cooldown 的 15s 等待预算。
+    with _acquire_any(["pacing:state"], wait=DEFAULT_QUEUE_WAIT, root=root):
         data = _load_json(path)
         starts = data.setdefault("request_starts", {})
         last = starts.get(norm)

@@ -249,7 +249,10 @@ def assess_auth_with_cookies(
     all_missing = bool(expected) and not matched
     body_suspect = bool(q.get("auth_wall_suspected") or q.get("empty_or_thin"))
 
-    if (strict_cookie_check and all_missing) or (all_missing and body_suspect) or q.get("auth_wall_suspected"):
+    # 判据与 docstring 对齐：Cookie 命中即登录态证据，正文嫌疑只作辅助——
+    # 旧第三子句让 matched 非空也被误判 auth_failed 并自动记 1h 站点冷却
+    # （2026-11-21 审计：误封锁站）。
+    if (strict_cookie_check and all_missing) or (all_missing and body_suspect):
         q["auth_state"] = "auth_failed"
         q["login_likely_ok"] = False
         q["handoff_required"] = True

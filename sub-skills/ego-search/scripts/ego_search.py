@@ -129,16 +129,23 @@ def emit_json(payload: dict[str, Any], *, runtime: str | None = None) -> None:
         p = quality.assess_body(p)
     q_info = p.get("quality") if isinstance(p.get("quality"), dict) else {}
     if p.get("handoff_required") or q_info.get("auth_wall_suspected"):
-        site_key = q_info.get("site") or p.get("url") or p.get("api_url") or p.get("page_url")
+        # 冷却键与读取侧 _target_site_key 同源：URL 优先（normalize 后得域名），
+        # 画像名只作兜底——旧顺序画像名优先导致写入键（如 xueqiu）与检查键
+        # （xueqiu.com）错位，冷却保护时灵时不灵（2026-11-21 审计）。
+        site_key = p.get("url") or p.get("api_url") or p.get("page_url") or q_info.get("site")
         auth_state = str(q_info.get("auth_state") or "auth_failed")
         cd_secs = 7200 if auth_state == "account_restricted" else pacing.DEFAULT_COOLDOWN_SECONDS
         if site_key:
-            pacing.record_cooldown(
-                str(site_key),
-                auth_state,
-                seconds=cd_secs,
-                login_url=str(p.get("login_url") or q_info.get("login_url") or ""),
-            )
+            try:
+                pacing.record_cooldown(
+                    str(site_key),
+                    auth_state,
+                    seconds=cd_secs,
+                    login_url=str(p.get("login_url") or q_info.get("login_url") or ""),
+                )
+            except (pacing.SlotBusyError, OSError) as exc:
+                # 冷却记账失败不吞结果：抓取已完成，stderr 留痕后照常输出
+                log(f"warning: record_cooldown failed ({exc}); result still emitted")
     print(json.dumps(p, ensure_ascii=False, indent=2))
 
 
