@@ -131,7 +131,7 @@ fi
 # 拦截点前移到 commit 时刻——staged 新增 tests/test_*.py 必须入册或
 # 显式 # skip；存量未登记文件不受影响。实测 <0.2s。
 "$PY" scripts/gate_manifest_check.py
-"$PY" -m pytest -q $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST")
+"$PY" -m pytest -q -p no:cacheprovider $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST")
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。
