@@ -50,9 +50,13 @@
 # AGENTS.md 的「~13s」漂移注释修为实测值：hook 实测 20.8s（已超自设 20s
 # 红线）回到 ~17s，新门禁是在这个余量里加的。
 # 2026-11-14 清单单真源收口：42 文件手工枚举迁到 tests/gate_manifest.txt
-# （49 条：42 + env/config 对账门补册 6 + 本门禁自身 1；13 项登记 skip 豁免
-# 带理由），漏册由 test_gate_manifest.py 反向断言拦截，本文件不再随新门禁
-# 逐轮追加。补册 6 项实测 +1.7s，合计 ~19s，仍在 20s 红线内。
+# （49 条：42 + env/config 对账门补册 6 + 本门禁自身 1），漏册由
+# test_gate_manifest.py 反向断言拦截，本文件不再随新门禁逐轮追加。
+# 2026-11-21 根因修复：13 项 skip 豁免全部入册（实测均 <1s），清单 73 条；
+# 串行实测 19.2~21.5s 已跨 20s 红线，故改 4 片并行（墙钟 ~8s，824 用例
+# 零丢失）。取消 skip 层的原因：豁免项只由 CI 兜底，而本地连续 36 笔未推、
+# CI 零覆盖，两次「本地绿、全量红」由此漏库（test_http_attribution、
+# test_subprocess_encoding_gate）。拦截点必须留在本地。
 #
 # 安装：bash scripts/install.sh 自动装调度器 hooks/pre-commit（原有 hook 改名
 # pre-commit.user 先跑，再直接执行本文件，不拷贝）。手动跑：sh scripts/pre-commit
@@ -113,7 +117,7 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-printf "[pre-commit] argo 快门禁（~19s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
+printf "[pre-commit] argo 快门禁（73 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
 # 测试清单单真源：tests/gate_manifest.txt（2026-11-14 收口）。
 # 清单曾在此手工枚举 42 个文件，每轮新门禁「漏一道加一道」（头注释史
 # 至少 6 轮），env/config 对账门三道长期漏册——现由 tests/test_gate_manifest.py
@@ -128,10 +132,42 @@ if [ ! -f "$MANIFEST" ]; then
 fi
 # 新增测试文件当场归类（2026-11-21 审计）：test_gate_manifest.py 的词根
 # 反向断言拦不住命名不带 gate/… 的 <1s 文件（两个漏册实证），本检查把
-# 拦截点前移到 commit 时刻——staged 新增 tests/test_*.py 必须入册或
-# 显式 # skip；存量未登记文件不受影响。实测 <0.2s。
+# 拦截点前移到 commit 时刻——staged 新增 tests/test_*.py 必须入册；存量
+# 未登记文件不受影响。实测 <0.2s。
 "$PY" scripts/gate_manifest_check.py
-"$PY" -m pytest -q -p no:cacheprovider $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST")
+
+# 快门禁分片并行（2026-11-21 根因修复）。
+#
+# 为什么必须并行：清单是全量收录（skip 豁免层已取消），串行实测 19.2~21.5s，
+# 波动跨过自设 20s 红线——而「慢于 20s 就会被 --no-verify 绕过」正是这份
+# 清单当初把 13 道门豁免给 CI 的原因。豁免的代价已实证两次：本地连续 36 笔
+# 未推、CI 零覆盖，test_http_attribution 与 test_subprocess_encoding_gate
+# 两次「本地绿、全量红」漏进库。所以正解不是把门挪走，而是让本地跑得起：
+# 4 片并行墙钟 ~8s（实测两轮 7.88/7.77s，824 用例零丢失、4 片全 rc=0）。
+#
+# 分片插件与 CI 同源（pytest-split + tests/.test_durations），保证本地与
+# CI 看到同一份清单。pytest-split 缺失时回落串行并显式告警——不静默跳过。
+GATE_SPLITS=4
+if ! "$PY" -c "import pytest_split" >/dev/null 2>&1; then
+    echo "[pre-commit] 警告：缺 pytest-split，快门禁回落串行（本地与 CI 清单仍一致，只是慢）" >&2
+    "$PY" -m pytest -q -p no:cacheprovider $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST")
+else
+    pids=""; failed=0
+    for g in $(seq 1 "$GATE_SPLITS"); do
+        "$PY" -m pytest -q -p no:cacheprovider \
+            --splits "$GATE_SPLITS" --group "$g" \
+            --durations-path tests/.test_durations \
+            $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST") &
+        pids="$pids $!"
+    done
+    for p in $pids; do
+        wait "$p" || failed=1
+    done
+    if [ "$failed" -ne 0 ]; then
+        echo "[pre-commit] 快门禁有分片失败（见上方输出）" >&2
+        exit 1
+    fi
+fi
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。

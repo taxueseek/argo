@@ -10,25 +10,15 @@
 #   2. 新门禁测试的文件名遵循门禁命名约定（含 gate/consistency/drift/
 #      snapshot/registry/contract/sync/lint 之一），漏册会被
 #      test_gate_manifest.py 直接拦下；
-#   3. 不进快门禁的门禁类测试在此登记一行豁免：
-#         # skip tests/test_xxx.py <理由>
-#      豁免指向已删除的文件同样会被门禁拦下（防死行累积）；
-#   4. 纳入门槛：单文件 <1s 且属提交期高频回归；慢项/发版场景/CI 元门禁
-#      一律豁免（CI 全量切片兜底）。
+#   3. 不进快门禁的门禁类测试**必须**登记为普通条目（与 CI 同一份清单），
+#      不再使用 # skip 豁免：2026-11-21 取证发现 13 个 skip 项实测全部
+#      <1s（142~727ms），却因此只由 CI 兜底，而本地连续 36 笔未推、CI 零
+#      覆盖，导致 test_http_attribution 与 test_subprocess_encoding_gate
+#      两次「本地绿、全量红」漏到库里。skip 层被取消，拦截点回到本地。
+#   4. 纳入门槛：单文件 <1s 且属提交期高频回归。**已知空集**——真慢项
+#      由 pre-commit 的分片并行消化（4 片墙钟 ~8s，见该文件头注释），
+#      不需要靠「豁免出本地」来换时间。
 #
-# skip tests/test_ci_drift_gate.py CI 自身元门禁，夜间与 CI 专责
-# skip tests/test_health_gate_perf.py 自适应 TTL 性能基准，耗时敏感
-# skip tests/test_hotpath_import_lint.py import 静态扫，CI 全量兜底
-# skip tests/test_negation_gate.py 语义功能门（否定判据回归），非快门禁
-# skip tests/test_noise_gate_fallback.py 功能回归护栏，非快门禁
-# skip tests/test_offline_gates.py 离线矩阵 replay_eval，较重，CI 兜底
-# skip tests/test_output_contract.py 输出契约，CI 全量兜底
-# skip tests/test_package_files_gate.py 打包清单门，发版场景专责
-# skip tests/test_ranking_contract.py 排序功能契约，CI 全量兜底
-# skip tests/test_release_assets_contract.py 发版资产契约，发版场景专责
-# skip tests/test_skill_registry_contract.py skill 注册表对账，CI 全量兜底
-# skip tests/test_stop_gate_discriminative_1026.py 判别力功能测试，CI 全量兜底
-# skip tests/test_subprocess_encoding_gate.py 子进程编码静态扫（0.6s），CI 兜底
 
 tests/test_agents_routing.py
 tests/test_badcase_ledger.py
@@ -36,6 +26,7 @@ tests/test_breaker_reenable_reach.py
 tests/test_caliber_registry_sync.py
 tests/test_check_commit_report.py
 tests/test_child_env_gate.py
+tests/test_ci_drift_gate.py
 tests/test_config_integrity_gate.py
 tests/test_consistency_gates.py
 tests/test_context_budget.py
@@ -55,6 +46,8 @@ tests/test_explicit_only_gate.py
 tests/test_followup_fixes.py
 tests/test_gate_manifest.py
 tests/test_grounding_stall_and_smoke.py
+tests/test_health_gate_perf.py
+tests/test_hotpath_import_lint.py
 tests/test_http_attribution.py
 tests/test_image_sources.py
 tests/test_install_script_contract.py
@@ -67,19 +60,27 @@ tests/test_mcp_consolidated_tools.py
 tests/test_mcp_schema_maas_compliance.py
 tests/test_module_size_gate.py
 tests/test_native_tools_sync.py
+tests/test_negation_gate.py
+tests/test_noise_gate_fallback.py
+tests/test_offline_gates.py
+tests/test_output_contract.py
 tests/test_p0_dangling_combo.py
 tests/test_p0_rss_family.py
 tests/test_p0_sec_edgar_url.py
 tests/test_p2_followup.py
+tests/test_package_files_gate.py
 tests/test_patch_target_gate.py
 tests/test_query_operators.py
+tests/test_ranking_contract.py
 tests/test_redactor_guard.py
+tests/test_release_assets_contract.py
 tests/test_release_consistency.py
 tests/test_research_notes.py
 tests/test_routing_snapshot.py
 tests/test_schema_drift_diagnosis.py
 tests/test_semantic_evidence_jev.py
 tests/test_silent_catch_gate.py
+tests/test_skill_registry_contract.py
 tests/test_smart_inference.py
 tests/test_source_discovery.py
 tests/test_spec_contracts.py
@@ -87,6 +88,8 @@ tests/test_state_literal_drift.py
 tests/test_state_machines_plan_b.py
 tests/test_state_registry.py
 tests/test_static_lint_gate.py
+tests/test_stop_gate_discriminative_1026.py
 tests/test_stub_targets.py
+tests/test_subprocess_encoding_gate.py
 tests/test_ua_single_source_gate.py
 tests/test_usage_doc_gates.py

@@ -68,6 +68,43 @@ def test_gate_named_tests_are_registered_or_exempted():
                 "条目，或登记 '# skip ...' 豁免并写明理由")
 
 
+# 未登记测试总数棘轮（2026-11-21 根因修复）。
+#
+# 为什么需要：词根判据（上面那条）只盖住名字带 gate/consistency/… 的一半，
+# 另一半普通命名的测试可以无限期不登记，只靠 CI 全量分片跑——而本地
+# pre-commit 看不到它们。实证代价：本地连续 36 笔未推、CI 零覆盖期间，
+# test_http_attribution 与 test_subprocess_encoding_gate 两次「本地绿、
+# 全量红」漏进库。
+#
+# 存量 343 个未登记文件实测合计 ~312s（5.2 分钟），不可能全塞进 20s 红线
+# 内的本地 hook，所以这里不追求「清零」，而是把「未登记」从免费变成
+# **有限额**：新增测试要么入册、要么让这个数上涨，而它只能减不能增。
+# 与 BROAD_SILENT_CATCH_BASELINE / AUTO_EMPTY_PROFILE_BASELINE 同范式。
+UNREGISTERED_TEST_BASELINE = 343
+
+
+def _registered() -> set[str]:
+    entries, skips = _load_manifest()
+    return set(entries) | set(skips)
+
+
+def _unregistered() -> list[str]:
+    reg = _registered()
+    return sorted(
+        f"tests/{p.name}" for p in TESTS_DIR.glob("test_*.py")
+        if f"tests/{p.name}" not in reg
+    )
+
+
+def test_unregistered_test_count_does_not_grow():
+    unreg = _unregistered()
+    assert len(unreg) <= UNREGISTERED_TEST_BASELINE, (
+        f"未登记测试 {len(unreg)} > 基线 {UNREGISTERED_TEST_BASELINE}："
+        "新测试要么进 tests/gate_manifest.txt（<1s 的本地门），要么在 "
+        "tests/.test_durations 有耗时记录并靠 CI 兜底；基线只减不增"
+    )
+
+
 def test_skip_entries_point_to_real_files():
     _, skips = _load_manifest()
     for rel, reason in skips.items():
