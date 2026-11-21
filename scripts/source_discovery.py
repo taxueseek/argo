@@ -33,6 +33,17 @@ _SENSITIVE_HEADER_NAMES = frozenset({
     "x-csrf-token", "x-xsrf-token", "x-api-key", "api-key", "x-auth-token",
 })
 
+# HAR 查询参数脱敏名单：与 _SENSITIVE_HEADER_NAMES 同为 HAR 脱敏边界。
+# header 管请求头、此处管 URL query——旧版只脱敏 header，?token=…&apikey=…
+# 会随 extra_params 落盘 candidate_spec.json 与拒绝档案（2026-11-21 审计）。
+# 宁可错杀（草稿可人工补回参数），不可放过凭证。
+_SENSITIVE_PARAM_NAMES = frozenset({
+    "token", "access_token", "auth", "auth_token", "authorization",
+    "apikey", "api_key", "key", "secret", "signature", "sig",
+    "session", "sessionid", "session_id", "password", "passwd", "pwd",
+    "credential", "credentials", "client_secret",
+})
+
 _DEFAULT_UA = "ArgoSourceDiscovery/1.0 (+https://github.com/taxue2025)"
 
 
@@ -309,12 +320,16 @@ def spec_from_har(
     qs = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
     query_param = "q"
     extra_params: dict[str, str] = {}
+    redacted_params: list[str] = []
     for k, vals in qs.items():
         val = vals[0] if vals else ""
         if hint_low and hint_low in val.lower():
             query_param = k
         elif k.lower() in ("q", "query", "keyword", "keywords", "search", "term", "k"):
             query_param = k
+        elif k.lower() in _SENSITIVE_PARAM_NAMES:
+            # 敏感查询参数（token/apikey/sig 等）不进草稿也不落盘
+            redacted_params.append(k)
         else:
             extra_params[k] = val
 
@@ -341,7 +356,11 @@ def spec_from_har(
         "query_param": query_param,
         "cost_tier": "free",
         "timeout": 10.0,
-        "desc": f"{host} 搜索接口（由 HAR 抓包自动合成，已脱敏请求头）",
+        "desc": (
+            f"{host} 搜索接口（由 HAR 抓包自动合成，已脱敏请求头"
+            + (f"；已剥离 {len(redacted_params)} 个敏感查询参数: {','.join(redacted_params)}" if redacted_params else "")
+            + "）"
+        ),
         "headers": safe_headers,
         "output_map": {
             "items": list_path or "results",
@@ -485,8 +504,11 @@ def _default_isolated_smoke(spec_path: Path, timeout: float) -> tuple[bool, str]
     import subprocess
     import sys
 
+    scripts_dir = str(Path(__file__).resolve().parent)
     probe_code = (
         "import json, sys, urllib.request, urllib.parse; "
+        "sys.path.insert(0, sys.argv[3]); "
+        "import net_proxy; "
         "spec = json.loads(open(sys.argv[1], encoding='utf-8').read()); "
         "url = spec.get('url', ''); "
         "qp = spec.get('query_param', 'q'); "
@@ -494,15 +516,18 @@ def _default_isolated_smoke(spec_path: Path, timeout: float) -> tuple[bool, str]
         "target = url if '{query}' in url else f'{url}{sep}{urllib.parse.urlencode({qp: \"test\"})}'; "
         "target = target.replace('{query}', 'test'); "
         "req = urllib.request.Request(target, headers={'Accept': 'application/json', 'User-Agent': 'ArgoSmoke/1.0'}); "
-        "resp = urllib.request.urlopen(req, timeout=float(sys.argv[2])); "
+        # 出口走 net_proxy.open_url：必须经代理出网的环境里裸 urlopen 连不上，
+        # 会把好源误判成 smoke_test_failed 归档（2026-11-21 审计，issue #13 同形态）
+        "resp = net_proxy.open_url(req, timeout=float(sys.argv[2])); "
         "code = getattr(resp, 'status', 200); "
         "body = resp.read(65536); "
+        "resp.close(); "
         "print(json.dumps({'status': code, 'bytes': len(body)})); "
         "sys.exit(0 if (200 <= code < 400 and len(body) > 0) else 1)"
     )
     try:
         proc = subprocess.run(
-            [sys.executable, "-c", probe_code, str(spec_path), str(timeout)],
+            [sys.executable, "-c", probe_code, str(spec_path), str(timeout), scripts_dir],
             capture_output=True,
             text=True,
             encoding="utf-8",

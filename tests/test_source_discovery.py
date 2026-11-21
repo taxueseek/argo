@@ -120,3 +120,63 @@ def test_discover_gaps_from_logs(tmp_path):
     assert rep["scanned_events"] == 3
     assert rep["collapsed_domains"] == [{"domain": "biotech", "zero_result_hits": 2}]
     assert rep["candidate_hosts"] == [{"host": "docs.newsite.io", "hits": 2}]
+
+
+def test_spec_from_har_redacts_sensitive_query_params():
+    """HAR query 里的 token/apikey 等凭证不得随 extra_params 落盘（2026-11-21 审计）。"""
+    har = {
+        "log": {
+            "entries": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": (
+                            "https://api.example.com/v1/search?q=agent&page=2"
+                            "&token=SECRET_QTOKEN&apikey=SECRET_QKEY&sig=abcdef123456"
+                        ),
+                        "headers": [{"name": "Accept", "value": "application/json"}],
+                    },
+                    "response": {
+                        "content": {
+                            "text": json.dumps({
+                                "results": [{"title": "A", "url": "https://e.com/1", "snippet": "s"}],
+                            })
+                        }
+                    },
+                }
+            ]
+        }
+    }
+    spec = source_discovery.spec_from_har(har, transport="http")
+    assert spec["query_param"] == "q"
+    assert spec["extra_params"] == {"page": "2"}
+    blob = json.dumps(spec)
+    assert "SECRET_QTOKEN" not in blob
+    assert "SECRET_QKEY" not in blob
+    assert "abcdef123456" not in blob
+    # 剥离要可见化：desc 必须声明剥了几个敏感参数，方便人工补回非敏感误杀项
+    assert "敏感查询参数" in spec["desc"]
+
+
+def test_isolated_smoke_probe_code_compiles_and_imports_proxy():
+    """烟测子进程 probe 必须语法合法且走 net_proxy 出口——裸 urlopen 在强制代理
+    环境会把好源误判失败归档（2026-11-21 审计）。用坏 spec 路径触发子进程
+    提前失败，检查 stderr 无 SyntaxError（语法非法会在 traceback 里出现）。"""
+    import subprocess
+    import sys
+
+    probe_code = (
+        "import json, sys, urllib.request, urllib.parse; "
+        "sys.path.insert(0, sys.argv[3]); "
+        "import net_proxy; "
+        "spec = json.loads(open(sys.argv[1], encoding='utf-8').read()); "
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", probe_code + "open(sys.argv[1], encoding='utf-8').read()",
+         "/nonexistent/spec.json", "10", "scripts"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=30, check=False, cwd=str(source_discovery.Path(__file__).resolve().parent.parent),
+    )
+    assert proc.returncode != 0
+    assert "SyntaxError" not in proc.stderr
+    assert "ModuleNotFoundError" not in proc.stderr  # net_proxy 可导入（argv[3] 生效）
