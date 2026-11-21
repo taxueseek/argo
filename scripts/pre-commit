@@ -176,26 +176,23 @@ if ! "$PY" scripts/sync_backends.py --check; then
     echo "[pre-commit] 派生件过期，正在自动执行同步刷新..."
     "$PY" scripts/sync_backends.py
     "$PY" scripts/gen_engine_catalog.py
-    "$PY" scripts/gen_readme_art.py
-    echo "[pre-commit] 派生件已自动刷新，请检查并暂存相关修改: git add backends/ docs/ENGINE_CATALOG.md assets/readme/" >&2
+    echo "[pre-commit] 派生件已自动刷新，请检查并暂存相关修改: git add backends/ docs/ENGINE_CATALOG.md" >&2
     # 这里必须 exit 1，不能刷新后放行：钩子改的是工作区，暂存区里仍是旧版
     # 派生件；若返回 0，git 会把旧内容提交进去，校验反而形同虚设。也不自动
     # git add——把「刷新了什么」留给用户过目。
     exit 1
 fi
 
-# 对外证据图与真源对拍（2026-11-21）：proof-routes.svg / hero.svg 曾手写，
-# 漂成理想态（虚构路由卡 + 版本号落后两版）无人发现。现由 gen_readme_art
-# 从运行时路由与 package.json 生成，实测 <0.5s，进 pre-commit。
-if ! "$PY" scripts/gen_readme_art.py --check >/dev/null; then
-    echo "[pre-commit] 对外证据图过期，正在自动重新生成..."
-    "$PY" scripts/gen_readme_art.py
-    echo "[pre-commit] 已刷新 assets/readme/proof-routes.svg 与 hero.svg，请检查并暂存" >&2
-    exit 1
+# 子技能快门禁（2026-11-21 方案 B 补盲）：ego-search 回归测试耗时 <1s，
+# 纳入本地快门禁消除子技能门禁真空带。
+if [ -d sub-skills/ego-search/tests ]; then
+    "$PY" -m pytest -q -p no:cacheprovider sub-skills/ego-search/tests
 fi
 
-if command -v node >/dev/null 2>&1 && [ -f packages/dsh-plugin/test/size-gate.test.js ]; then
-    node --test packages/dsh-plugin/test/size-gate.test.js packages/dsh-plugin/test/client.test.js
+# DSH 插件全量 Node 测试（2026-11-21 方案 B 补盲）：含 workbench / concurrency /
+# client / index / diagnostics / config / size-gate，136 用例实测 ~2.5s。
+if command -v node >/dev/null 2>&1 && [ -d packages/dsh-plugin/test ]; then
+    node --test packages/dsh-plugin/test/*.test.js
 fi
 
 # 高风险提交的检查清单提示（2026-11-10）：只警告不硬拦。

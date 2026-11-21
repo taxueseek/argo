@@ -220,14 +220,29 @@ def catalog_stale(root: Path) -> str:
     return out
 
 
+def readme_art_stale(root: Path) -> str:
+    script = root / "scripts" / "gen_readme_art.py"
+    if not script.is_file():
+        return ""
+    r = subprocess.run(
+        [sys.executable, str(script), "--check"],
+        cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode == 0:
+        return ""
+    return (r.stdout + r.stderr).strip() or "assets/readme/*.svg 过期，请跑 python3 scripts/gen_readme_art.py"
+
+
 def check(root: Path = ROOT) -> list[str]:
-    """全量校验：结构（release_check）+ 内容清单 + 目录计数。"""
+    """全量校验：结构（release_check）+ 内容清单 + 目录计数 + 对外证据图。"""
     ver = current_version(root)
     problems = [f"release_check: {p}" for p in release_check.check(root)]
     problems += content_problems(root, ver)
     stale = catalog_stale(root)
     if stale:
         problems.append(f"目录计数: {stale}")
+    art_stale = readme_art_stale(root)
+    if art_stale:
+        problems.append(f"对外证据图: {art_stale}")
     return problems
 
 

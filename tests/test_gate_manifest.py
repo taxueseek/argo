@@ -21,12 +21,12 @@ MANIFEST = TESTS_DIR / "gate_manifest.txt"
 GATE_NAME_RE = re.compile(
     r"(gate|consistency|drift|snapshot|registry|contract|sync|lint)")
 
-_SKIP_RE = re.compile(r"^#\s*skip\s+(tests/test_[a-z0-9_]+\.py)\s+(.+)$")
+_SKIP_RE = re.compile(r"^#\s*skip\s+(tests/test_[a-z0-9_]+\.py)\b")
 
 
 def _load_manifest():
-    """返回 (条目列表, {skip 路径: 理由})；注释与空行忽略。"""
-    entries, skips = [], {}
+    """返回 (条目列表, skip 违规行列表)；普通注释与空行忽略。"""
+    entries, skips = [], []
     for raw in MANIFEST.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line:
@@ -34,7 +34,7 @@ def _load_manifest():
         if line.startswith("#"):
             m = _SKIP_RE.match(line)
             if m:
-                skips[m.group(1)] = m.group(2).strip()
+                skips.append(m.group(1))
             continue
         entries.append(line)
     return entries, skips
@@ -55,17 +55,26 @@ def test_manifest_sorted():
         "manifest 条目必须排序（见文件头约定 1），减少 diff 冲突"
 
 
-def test_gate_named_tests_are_registered_or_exempted():
-    entries, skips = _load_manifest()
-    in_manifest = set(entries) | set(skips)
+def test_no_skip_exemptions_in_manifest():
+    """skip 豁免层已于 2026-11-21 取消，manifest 不得出现 # skip 放行行。"""
+    _, skips = _load_manifest()
+    assert not skips, (
+        f"检测到已废弃的 # skip 豁免行: {skips} —— 请直接入册，"
+        "本地与 CI 共用同一份清单，耗时由 pre-commit 分片并行消化"
+    )
+
+
+def test_gate_named_tests_are_registered():
+    entries, _ = _load_manifest()
+    in_manifest = set(entries)
     for path in sorted(TESTS_DIR.glob("test_*.py")):
         rel = f"tests/{path.name}"
         if rel == "tests/test_gate_manifest.py":
             continue
         if GATE_NAME_RE.search(path.stem):
             assert rel in in_manifest, (
-                f"门禁命名类测试未入册: {rel} —— 进 tests/gate_manifest.txt "
-                "条目，或登记 '# skip ...' 豁免并写明理由")
+                f"门禁命名类测试未入册: {rel} —— 请直接登记进 tests/gate_manifest.txt"
+            )
 
 
 # 未登记测试总数棘轮（2026-11-21 根因修复）。
@@ -84,8 +93,8 @@ UNREGISTERED_TEST_BASELINE = 343
 
 
 def _registered() -> set[str]:
-    entries, skips = _load_manifest()
-    return set(entries) | set(skips)
+    entries, _ = _load_manifest()
+    return set(entries)
 
 
 def _unregistered() -> list[str]:
@@ -105,18 +114,10 @@ def test_unregistered_test_count_does_not_grow():
     )
 
 
-def test_skip_entries_point_to_real_files():
-    _, skips = _load_manifest()
-    for rel, reason in skips.items():
-        assert (TESTS_DIR.parent / rel).is_file(), \
-            f"skip 豁免指向不存在的文件（防死行累积）: {rel}"
-        assert reason, f"skip 豁免必须写明理由: {rel}"
-
-
 # ── 新增测试文件 commit 期归类检查（scripts/gate_manifest_check.py，2026-11-21）──
 # 词根反向断言盖不全（test_state_machines_plan_b / test_query_operators 两个
 # <1s 文件漏册实证），拦截点前移到 commit 时刻：staged 新增 tests/test_*.py
-# 必须入册或 # skip。此处单测纯函数 check_new_test_files。
+# 必须入册（# skip 已取消）。此处单测纯函数 check_new_test_files。
 
 import sys
 
@@ -139,10 +140,11 @@ def test_new_test_file_registered_passes():
     assert violations == []
 
 
-def test_new_test_file_skip_exempted_passes():
+def test_new_test_file_skip_comment_is_rejected():
+    """# skip 已取消，即使 manifest 里写着 # skip 注释也不得放行。"""
     violations = gate_manifest_check.check_new_test_files(
         ["tests/test_slow_heavy.py"], _MANIFEST_SAMPLE)
-    assert violations == []
+    assert violations == ["tests/test_slow_heavy.py"]
 
 
 def test_new_test_file_unclassified_violates():

@@ -21,20 +21,14 @@ import sys
 from pathlib import Path
 
 _TEST_FILE_RE = re.compile(r"^tests/test_[a-z0-9_]+\.py$")
-_SKIP_RE = re.compile(r"^#\s*skip\s+(tests/test_[a-z0-9_]+\.py)\s+")
 
 
 def check_new_test_files(staged_files: list[str], manifest_text: str) -> list[str]:
-    """返回违规清单：staged 新增 tests/test_*.py 既未入册也未登记 # skip。"""
+    """返回违规清单：staged 新增 tests/test_*.py 未登记进 manifest（# skip 已取消，不再放行）。"""
     known: set[str] = set()
     for raw in manifest_text.splitlines():
         line = raw.strip()
-        if not line:
-            continue
-        if line.startswith("#"):
-            m = _SKIP_RE.match(line)
-            if m:
-                known.add(m.group(1))
+        if not line or line.startswith("#"):
             continue
         known.add(line)
     return sorted(

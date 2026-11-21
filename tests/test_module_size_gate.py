@@ -54,7 +54,6 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_base.py": (1466, "引擎基类 + HTTP 出口 + 输出映射；2026-11-21 收紧 -7：body 值类型收敛下沉 engines_fields（nan/inf 门）"),
     "scripts/cache.py": (1376, "存储实现与门面；2026-11-20 收紧 -1：提取 _copy_hit 并给 _read_many 补浅拷贝、60s 节流 accessed_at、复用 set 连接"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),
-    "scripts/search_rank.py": (986, "RRF 融合 + 去重 + 五维重排；拆分候选：降权分支。2026-11-13 上调 +10：裸吞收口（except_sets 导入 +1，相似度与 quota 联动两处 sqlite/侧信道保持宽口径仅可见化 +9）"),
     "scripts/job.py": (1150, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),
     "scripts/matrix_search_eval.py": (1311, "离线路由矩阵，用例表占多数；2026-11-17 收紧 -2：金标 blob 不再拼 engines_used/engine，删失效的 used 污染空循环"),
 }
