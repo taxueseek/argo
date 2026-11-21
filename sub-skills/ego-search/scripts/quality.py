@@ -7,7 +7,36 @@
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 from typing import Any
+
+# 优先复用主仓 scripts/engine_states.py 单真源；子技能独立运行时回落同值常量
+_ARGO_SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
+if _ARGO_SCRIPTS.is_dir() and str(_ARGO_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_ARGO_SCRIPTS))
+try:
+    from engine_states import (
+        EGO_AUTH_COOLDOWN_STATES,
+        EGO_AUTH_FAILED,
+        EGO_AUTH_HEALTHY,
+        EGO_AUTH_OK,
+        EGO_AUTH_RESTRICTED,
+        EGO_AUTH_TO_PAGE_AUTH,
+        EGO_AUTH_UNKNOWN,
+    )
+except ImportError:  # pragma: no cover - 独立部署兜底
+    EGO_AUTH_OK, EGO_AUTH_HEALTHY = "ok", "healthy"
+    EGO_AUTH_FAILED, EGO_AUTH_RESTRICTED, EGO_AUTH_UNKNOWN = (
+        "auth_failed", "account_restricted", "unknown",
+    )
+    EGO_AUTH_COOLDOWN_STATES = frozenset({EGO_AUTH_FAILED, EGO_AUTH_RESTRICTED})
+    EGO_AUTH_TO_PAGE_AUTH = {
+        EGO_AUTH_OK: "ready",
+        EGO_AUTH_HEALTHY: "ready",
+        EGO_AUTH_FAILED: "signed_out",
+        EGO_AUTH_RESTRICTED: "search_restricted",
+    }
 
 # 中英常见登录墙 / 验证码信号（低噪声关键词）
 _AUTH_WALL_RE = re.compile(
@@ -70,7 +99,7 @@ def assess_body(payload: dict[str, Any]) -> dict[str, Any]:
             payload.get("health_probe") if payload.get("health_probe") is not None else payload.get("data"),
             url=target_url,
         )
-        if probe_res.get("auth_state") in ("account_restricted", "auth_failed"):
+        if probe_res.get("auth_state") in EGO_AUTH_COOLDOWN_STATES:
             q.update(probe_res)
         out = dict(payload)
         out["quality"] = q
@@ -111,7 +140,7 @@ def assess_health_probe(probe_data: Any, *, url: str = "", site: str = "") -> di
 
     profile = site_profiles.get_profile(site) if site else site_profiles.match_site(url)
     if profile is None or probe_data is None:
-        return {"auth_state": "unknown"}
+        return {"auth_state": EGO_AUTH_UNKNOWN}
 
     blob = ""
     code: int | None = None
@@ -127,7 +156,7 @@ def assess_health_probe(probe_data: Any, *, url: str = "", site: str = "") -> di
             return {
                 "site": profile.name,
                 "login_url": profile.login_url,
-                "auth_state": "auth_failed",
+                "auth_state": EGO_AUTH_FAILED,
                 "login_likely_ok": False,
                 "handoff_required": True,
                 "hint": f"{profile.name} 身份探针返回未登录（isLogin=false），请在 {profile.login_url} 登录后重试",
@@ -141,7 +170,7 @@ def assess_health_probe(probe_data: Any, *, url: str = "", site: str = "") -> di
     if hit_code or hit_kw:
         # B 站 -101 属于未登录，其余限权码归 account_restricted
         is_unauth_only = (profile.name == "bilibili" and code == -101)
-        state = "auth_failed" if is_unauth_only else "account_restricted"
+        state = EGO_AUTH_FAILED if is_unauth_only else EGO_AUTH_RESTRICTED
         hint = (
             f"{profile.name} 未登录（code={code}），请在 {profile.login_url} 登录后重试"
             if is_unauth_only
@@ -161,7 +190,7 @@ def assess_health_probe(probe_data: Any, *, url: str = "", site: str = "") -> di
         }
     return {
         "site": profile.name,
-        "auth_state": "healthy",
+        "auth_state": EGO_AUTH_HEALTHY,
         "login_likely_ok": True,
         "handoff_required": False,
     }
@@ -173,7 +202,7 @@ def build_handoff(quality_info: dict[str, Any], *, url: str = "") -> dict[str, A
 
     site_name = str(quality_info.get("site") or "")
     profile = site_profiles.get_profile(site_name) if site_name else site_profiles.match_site(url)
-    auth_state = str(quality_info.get("auth_state") or "auth_failed")
+    auth_state = str(quality_info.get("auth_state") or EGO_AUTH_FAILED)
     login_url = str(quality_info.get("login_url") or (profile.login_url if profile else ""))
     scopes = list(profile.public_web_scopes) if profile else []
     scope_expr = " OR ".join(f"site:{s}" for s in scopes) if scopes else ""
@@ -237,7 +266,7 @@ def assess_auth_with_cookies(
 
     if present_cookie_names is None:
         if q.get("auth_wall_suspected"):
-            q["auth_state"] = "auth_failed"
+            q["auth_state"] = EGO_AUTH_FAILED
             q["handoff_required"] = True
         return q
 
@@ -258,7 +287,7 @@ def assess_auth_with_cookies(
     # 旧第三子句让 matched 非空也被误判 auth_failed 并自动记 1h 站点冷却
     # （2026-11-21 审计：误封锁站）。
     if (strict_cookie_check and all_missing) or (all_missing and body_suspect):
-        q["auth_state"] = "auth_failed"
+        q["auth_state"] = EGO_AUTH_FAILED
         q["login_likely_ok"] = False
         q["handoff_required"] = True
         q["hint"] = (
@@ -266,7 +295,7 @@ def assess_auth_with_cookies(
             f"请在浏览器打开 {profile.login_url} 人工登录后重试"
         )
     else:
-        q["auth_state"] = "ok"
+        q["auth_state"] = EGO_AUTH_OK
         q["handoff_required"] = False
     return q
 

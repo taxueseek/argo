@@ -174,3 +174,20 @@ def test_emit_json_no_site_key_no_crash(monkeypatch, capsys):
     ego_search.emit_json({"handoff_required": True, "quality": {}})
     assert calls == []
     assert json.loads(capsys.readouterr().out)["handoff_required"] is True
+
+
+def test_ego_auth_states_match_engine_states_single_source():
+    """ego-search 与主仓 engine_states 共享同一登录态词表与 PAGE_AUTH 映射，防双套漂移。"""
+    scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    import engine_states as es
+
+    assert quality.EGO_AUTH_OK == es.EGO_AUTH_OK
+    assert quality.EGO_AUTH_HEALTHY == es.EGO_AUTH_HEALTHY
+    assert quality.EGO_AUTH_FAILED == es.EGO_AUTH_FAILED
+    assert quality.EGO_AUTH_RESTRICTED == es.EGO_AUTH_RESTRICTED
+    assert quality.EGO_AUTH_UNKNOWN == es.EGO_AUTH_UNKNOWN
+    assert quality.EGO_AUTH_COOLDOWN_STATES == es.EGO_AUTH_COOLDOWN_STATES
+    assert quality.EGO_AUTH_TO_PAGE_AUTH == es.EGO_AUTH_TO_PAGE_AUTH
+    assert set(es.EGO_AUTH_TO_PAGE_AUTH.values()) <= es.PAGE_AUTH_STATES

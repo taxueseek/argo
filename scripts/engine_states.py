@@ -984,3 +984,14 @@ register_state_machine(
     routable=frozenset({PAGE_AUTH_READY}),
     description="浏览器页面登录态：ready / login_wall / security_verification / signed_out / search_restricted",
 )
+
+# ego-search 登录态结论词表（与 browser_page_auth 共用真源与映射，避免子技能裸字面量漂移）
+EGO_AUTH_OK, EGO_AUTH_HEALTHY = "ok", "healthy"
+EGO_AUTH_FAILED, EGO_AUTH_RESTRICTED, EGO_AUTH_UNKNOWN = "auth_failed", "account_restricted", "unknown"
+EGO_AUTH_COOLDOWN_STATES = frozenset({EGO_AUTH_FAILED, EGO_AUTH_RESTRICTED})
+EGO_AUTH_TO_PAGE_AUTH = {
+    EGO_AUTH_OK: PAGE_AUTH_READY,
+    EGO_AUTH_HEALTHY: PAGE_AUTH_READY,
+    EGO_AUTH_FAILED: PAGE_AUTH_SIGNED_OUT,
+    EGO_AUTH_RESTRICTED: PAGE_AUTH_SEARCH_RESTRICTED,
+}

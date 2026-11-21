@@ -133,12 +133,12 @@ def emit_json(payload: dict[str, Any], *, runtime: str | None = None) -> None:
     # auth_wall_suspected 文本启发式：无画像站正文含 cloudflare/captcha 等
     # 词就记 1h 站点冷却，是误封类同根因的第三分支（2026-11-21 探针 5 实证）。
     # 怀疑但不定论时照常输出 payload，提示语已在 quality.hint 里。
-    if auth_state in ("auth_failed", "account_restricted"):
+    if auth_state in quality.EGO_AUTH_COOLDOWN_STATES:
         # 冷却键与读取侧 _target_site_key 同源：URL 优先（normalize 后得域名），
         # 画像名只作兜底——旧顺序画像名优先导致写入键（如 xueqiu）与检查键
         # （xueqiu.com）错位，冷却保护时灵时不灵（2026-11-21 审计）。
         site_key = p.get("url") or p.get("api_url") or p.get("page_url") or q_info.get("site")
-        cd_secs = 7200 if auth_state == "account_restricted" else pacing.DEFAULT_COOLDOWN_SECONDS
+        cd_secs = 7200 if auth_state == quality.EGO_AUTH_RESTRICTED else pacing.DEFAULT_COOLDOWN_SECONDS
         if site_key:
             try:
                 pacing.record_cooldown(
