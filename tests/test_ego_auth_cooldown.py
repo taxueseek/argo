@@ -191,3 +191,32 @@ def test_ego_auth_states_match_engine_states_single_source():
     assert quality.EGO_AUTH_COOLDOWN_STATES == es.EGO_AUTH_COOLDOWN_STATES
     assert quality.EGO_AUTH_TO_PAGE_AUTH == es.EGO_AUTH_TO_PAGE_AUTH
     assert set(es.EGO_AUTH_TO_PAGE_AUTH.values()) <= es.PAGE_AUTH_STATES
+
+
+def test_ego_auth_fallback_branch_matches_engine_states(monkeypatch):
+    """独立部署走 except ImportError 兜底分支时，词表与映射仍与主仓 engine_states 逐值一致。"""
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[1]
+    scripts_dir = root / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    import engine_states as es
+
+    # 置 None 触发标准 ModuleNotFoundError(ImportError 子类)，强制走 quality.py 兜底分支
+    monkeypatch.setitem(sys.modules, "engine_states", None)
+    quality_path = root / "sub-skills" / "ego-search" / "scripts" / "quality.py"
+    spec = importlib.util.spec_from_file_location("_quality_fallback_probe", quality_path)
+    assert spec and spec.loader
+    fallback_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fallback_mod)
+
+    # 确认真正命中了兜底分支（新建的 dict/frozenset 对象，非主仓同一引用）
+    assert fallback_mod.EGO_AUTH_TO_PAGE_AUTH is not es.EGO_AUTH_TO_PAGE_AUTH
+    assert fallback_mod.EGO_AUTH_OK == es.EGO_AUTH_OK
+    assert fallback_mod.EGO_AUTH_HEALTHY == es.EGO_AUTH_HEALTHY
+    assert fallback_mod.EGO_AUTH_FAILED == es.EGO_AUTH_FAILED
+    assert fallback_mod.EGO_AUTH_RESTRICTED == es.EGO_AUTH_RESTRICTED
+    assert fallback_mod.EGO_AUTH_UNKNOWN == es.EGO_AUTH_UNKNOWN
+    assert fallback_mod.EGO_AUTH_COOLDOWN_STATES == es.EGO_AUTH_COOLDOWN_STATES
+    assert fallback_mod.EGO_AUTH_TO_PAGE_AUTH == es.EGO_AUTH_TO_PAGE_AUTH
