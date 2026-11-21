@@ -311,6 +311,24 @@ class TestCountryAndProviderPushdown(unittest.TestCase):
             "Exa: Relaxed site filter",
         )
 
+    def test_lang_pushdown_tavily_native_and_exa_no_contract_invention(self):
+        """lang 剥离后必须真的下发：tavily 有原生 language（官方文档定案），
+        exa 无语言参数——不下发也不编造契约（2026-11-21 审计）。"""
+        from query_operators import compile_provider_params
+
+        tavily = compile_provider_params(
+            "tavily", "NVDA earnings revenue",
+            operators={"langs": ["zh-cn"]},
+        )
+        self.assertEqual(tavily["language"], "zh-cn")
+
+        exa = compile_provider_params(
+            "exa", "transformer benchmark paper",
+            operators={"langs": ["en"]},
+        )
+        self.assertNotIn("language", exa)
+        self.assertNotIn("userLanguage", exa)
+
 
 if __name__ == "__main__":
     unittest.main()

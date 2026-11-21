@@ -371,6 +371,11 @@ def compile_provider_params(
             out["end_date"] = before
         if country and country in _TAVILY_COUNTRY_NAME:
             out["country"] = _TAVILY_COUNTRY_NAME[country]
+        if langs:
+            # 官方 /search 有原生 language 参数（ISO 639-1 或英文名，boost 语义）；
+            # 旧版剥离 lang 却不下发，语言约束静默丢失（2026-11-21 审计）。
+            # exa 经官方文档逐参数核对无语言参数，维持剥给路由不改（勿编造契约）。
+            out["language"] = langs[0]
         return out
 
     if eng == "parallel":
