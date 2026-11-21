@@ -3,6 +3,24 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## v2.17.0（未发布）
+
+**定位**：机制收口而非堆源。v2.16.0 之后这批改动把「点状修补」升级为「机制约束」：堵住画像空转复发的根因、把出口门禁扩到子技能盲区、给新源发现与隔离准入补文档，并补齐证据锚定与登录态治理。源数不变（313）。
+
+**关键变更**：
+- **空画像棘轮（机制收口）**：`sync_backends` 新增 `check_auto_profiles` 与基线常量 `AUTO_EMPTY_PROFILE_BASELINE=182`——`enabled` 且非 `explicit_only` 的源空 `documents` 即超基线报红。此前 `patch_domain_profiles` 对缺失引擎自动补空模板、准入流程无约束，导致 helve/openaire/fourget 等新源反复空画像重演（86dbaa4 自述）；现改为「新增空画像必须补 documents 或显式声明 explicit_only / research_only」，基线只减不增（`tests/test_consistency_gates.py` 两条对拍 + 回退验证）
+- **出口门禁扩到子技能**：`test_http_attribution` 的 `test_no_module_bypasses_egress_dispatch` 作用域由 `scripts/` 扩到 `sub-skills/`，并收紧判据为 `urllib.request.urlopen(...)` 真调用形态。`ego-search` 的 `runtime.py` / `webbridge_adapter.py` 改为优先 `net_proxy.open_url`、独立打包形态回落裸出口（与 `local-search` 同构；本机回环经 `net_proxy` 解析为直连，行为不变）
+- **新源发现与隔离准入**：`argo engine add` 新增 `--probe-domain`（Discourse/MediaWiki/OpenSearch/llms.txt/RSS 协议探测）、`--from-har`（抓包脱敏合成 Spec）、`--discover-gaps`（日志反推候选）、`--verify-draft`（隔离子进程烟测，失败归档拒绝档案）；`references/usage.md` 补「新源发现」节，写明画像必填纪律
+- **证据锚定与登录态治理**：新增 `evidence_grounding.py`（NFKC 折叠、≥3 位数字防编造门禁、近实体窗口锚定、sha1 摘录哈希、保守中英量级换算）并接入 `numeric_verify`；`ego-search` 新增 `pacing.py`（OS 文件锁跨进程槽位 + 同站节奏锁 + 终态冷却）与 `site_profiles.py`（静默限权探针）；`research_gates` 新增覆盖高水位线停滞传感器
+- **熔断恢复环修复**：路由层 `_breaker_blocked` 对 disabled 硬跳过导致 `allow()` 永不被调用，超冷却 half_open 翻转与指纹自愈整体死代码化（实测 3/5 disabled 引擎 2-12 天无探测字段）；改为 disabled 分支触发 `allow()` 状态翻转，锁内判冷却、零网络请求
+- **插件与工作台**：`route-guard.js` TCP 回环主防线（拒信 `X-Forwarded-For`，叠加 Host/Origin 防 DNS Rebinding）；`search-mode.js` 冗余联网开关删除（净减 538 行）；热榜刷新三修（全失败不盖章、手动刷新复用 inflight、跨进程文件锁让路）；`resolveArgoBin` 候选链
+- **门禁与提交规范**：`test_http_attribution` 补入 pre-commit 清单（57 条）；新增「发布说明纯净性门禁」，盯 `origin/main..HEAD` 未推窗口禁 `docs(release*)` 夹带代码 diff；4 个新回归测试入册
+- **测试**：4 个新测试文件入册 manifest（`test_breaker_reenable_reach` / `test_engine_fingerprint_health` / `test_grounding_stall_and_smoke` / `test_source_discovery`）
+
+**默认关闭开关**：无新增（`--verify-draft`、`--probe-domain` 等为按需显式调用）
+
+---
+
 ## v2.16.0
 
 **定位**：DSH 插件搜索工作台 + 直调 4 阶段查证管线 + `linux.do`/Keenable 信源扩展 + 并发状态机收敛。在 CLI 与 MCP 之外补齐浏览器端可视化搜索工作台，接入 `local-seek` 本机检索与首页自适应推荐，并系统性收敛缓存、熔断、配额与抓取并发路径。源 311→312。

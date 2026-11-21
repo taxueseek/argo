@@ -18,6 +18,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+try:
+    from net_proxy import open_url as _open_url
+except ImportError:
+    # scripts/ 不在路径（独立打包形态）时回退裸 urlopen，行为与改动前一致
+    _open_url = urllib.request.urlopen  # type: ignore[assignment]
+
 # 同目录 safety
 _SCRIPT_DIR = Path(__file__).resolve().parent
 # argo 核心 scripts（全文存档等公共能力）；与本目录其他模块同一解析方式
@@ -135,7 +141,7 @@ def _command(action: str, args: dict | None, session: str, timeout: int = DEFAUL
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _open_url(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return {"ok": False, "error": f"webbridge_unreachable: {e}"}

@@ -442,6 +442,43 @@ class TestDerivedArtifactsInSync:
                             f"{name}.{key}: spec={spec[key]} quota={quota[name][key]}"
         assert declared_specs > 0, "没有任何引擎声明配额，检查取样逻辑"
 
+    def test_empty_profile_baseline_is_pinned(self, sb):
+        """空画像棘轮：基线常量必须等于当前实测值，且只准减不准增。
+
+        2026-11-21：patch_domain_profiles 会为缺失引擎自动补空模板、准入流程
+        无约束，导致 helve/openaire/fourget 等新源反复空画像重演（86dbaa4
+        正文自述）。本测试把「当前值 == 基线」钉住，任何新增空画像都会让
+        等式破裂 → 必须补画像或下调基线（下调需显式改常量并说明）。
+        """
+        engines = sb.load_engines()
+        domain = json.loads(sb.DOMAIN_PROFILES_PATH.read_text(encoding="utf-8"))
+        empty = [
+            name for name, spec in engines.items()
+            if spec.get("enabled") is not False
+            and not spec.get("explicit_only")
+            and spec.get("tier") != "research_only"
+            and not sb._profile_docs(domain, name)
+        ]
+        assert len(empty) == sb.AUTO_EMPTY_PROFILE_BASELINE, (
+            f"enabled-auto 空画像 {len(empty)} ≠ 基线 {sb.AUTO_EMPTY_PROFILE_BASELINE}；"
+            "新增源请补 documents，或下调基线常量（只减不增）")
+
+    def test_empty_profile_baseline_can_actually_fail(self, sb):
+        """回退验证：多一个空画像必须被 check_auto_profiles 报出来。"""
+        engines = sb.load_engines()
+        domain = json.loads(sb.DOMAIN_PROFILES_PATH.read_text(encoding="utf-8"))
+        victim = next(
+            name for name, spec in engines.items()
+            if spec.get("enabled") is not False
+            and not spec.get("explicit_only")
+            and spec.get("tier") != "research_only"
+            and sb._profile_docs(domain, name)
+        )
+        domain[victim] = dict(domain[victim], documents=[])
+        issues = sb.check_auto_profiles(engines, domain)
+        assert any("超基线" in i for i in issues), \
+            f"多一个空画像未触发棘轮: {issues[:3]}"
+
 
 # ── 5. 失败归因唯一来源 ──────────────────────────────────────────────────────
 

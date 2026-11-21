@@ -15,6 +15,12 @@ import urllib.error
 import urllib.request
 from typing import Any, Literal
 
+try:
+    from net_proxy import open_url as _open_url
+except ImportError:
+    # scripts/ 不在路径（独立打包形态）时回退裸 urlopen，行为与改动前一致
+    _open_url = urllib.request.urlopen  # type: ignore[assignment]
+
 RuntimeName = Literal["ego", "webbridge", "none"]
 
 EGO_BIN = os.environ.get("EGO_SEARCH_EGO_BIN", "ego-browser")
@@ -77,7 +83,7 @@ def webbridge_available(*, try_start: bool = False) -> dict[str, Any]:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT) as resp:
+        with _open_url(req, timeout=PROBE_TIMEOUT) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         data = json.loads(raw) if raw else {}
         # 协议：{ok, data:{success, tabs}} 或 data 直接 success

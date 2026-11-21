@@ -28,7 +28,7 @@
 | `argo auth` | 浏览器登录态（login/status/logout；登录墙站点抓取自动带会话） |
 | `argo job` | 招聘多平台聚合 |
 | `argo preflight` | 批量 URL 预检（`--probe` 联网探测） |
-| `argo engine` | 新引擎一键接入（spec→探测→派生→语料→验证→准入→同步；`add --from-yaml/--from-url`） |
+| `argo engine` | 新引擎一键接入（spec→探测→派生→语料→验证→准入→同步；`add --from-yaml/--from-url`，协议探测与 HAR 合成见「新源发现」节） |
 | `argo cite` | DOI 引用条目（四格式） |
 | `argo mcp` | 多客户端 MCP 注入/诊断/还原 |
 | `argo paths` | 路径自省与状态目录自检 |
@@ -73,6 +73,32 @@ argo doctor --json          # 机器可读（紧凑 JSON，走 cli_io.dumps）
 作粗信号——**不要**只看 `engine_results`，会把主力源误判成低价值。
 
 > SKILL.md 只留核心命令；本页是参数大全与输出字段说明。
+
+## 新源发现 — 协议探测与 HAR 合成（2026-11-21）
+
+给一个域名，自动探测它的零维护协议族并直接产出可准入的 Spec 草稿，把「新源接入」
+从手写 YAML 变成先探测、再确认。四条路径：
+
+```bash
+argo engine add --probe-domain example.com        # 探测协议族并产出 Spec 草稿
+argo engine add --from-har capture.har            # 从抓包合成脱敏 Spec（XHR 过滤用 --query-hint）
+argo engine add --discover-gaps                   # 从使用日志反推「高频无直连源」候选
+argo engine add --verify-draft --probe-domain x   # 隔离子进程烟测，失败归档至拒绝档案
+```
+
+**协议族**：Discourse JSON、MediaWiki API、OpenSearch XML、llms.txt、RSS/Atom。
+所有请求强制过 `url_safety.check_url`（SSRF 防护），出口走 `net_proxy.open_url`
+（认 `config.yaml` 的 `network.proxy`）。HAR 合成会剥离 Cookie / Authorization /
+`x-api-key` 等敏感头，不落明文凭证。
+
+**准入纪律**：探测只产草稿，不直接进注册表。草稿要经 `--admit` 才写准入；
+`--verify-draft` 失败会归档到 `<state>/rejected_sources/<id>/validation.json`，
+后续 `probe` 会带 `previously_rejected` 提示，防止重复踩同一个坑。
+
+**画像必填**：`enabled` 且非 `explicit_only` 的源必须在
+`backends/domain_profiles.json` 里有非空 `documents`——否则 TF-IDF 概念相似度恒 0、
+auto 池内恒垫底。`sync_backends --check` 有空画像棘轮（基线只减不增），新源空画像
+直接红。这是硬约束，不是建议。
 
 ## argo daemon — 常驻进程与 UDS 快路径（2026-10）
 

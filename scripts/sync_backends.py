@@ -380,6 +380,26 @@ def write_keyrefs_block(block: str) -> None:
 
 # ── 校验/补全：domain_profiles.json ─────────────────────────────────────────
 
+# 空画像棘轮基线（只准减不准增）：enabled 且非 explicit_only 的源若在
+# domain_profiles.json 里 documents 为空，TF-IDF 概念相似度恒 0、auto 池内
+# 恒垫底（tfidf_router 对无文档引擎返回零向量）。2026-11-21 实测 263 个
+# enabled-auto 源里 182 个空画像（69%），根因是 patch_domain_profiles 会为
+# 缺失引擎自动补空模板、准入流程无任何约束，于是「注册未用」反复重演
+# （86dbaa4 正文自述 helve/openaire/fourget 三新源原样重演）。
+#
+# 这里把 182 钉成基线：新增源再空画像即超基线 → --check 直接红，逼着
+# 「要么补画像、要么显式声明 explicit_only / research_only」。存量要降就
+# 补画像后把本数字下调（与 BROAD_SILENT_CATCH_BASELINE 同范式，只改一处）。
+AUTO_EMPTY_PROFILE_BASELINE = 182
+
+
+def _profile_docs(profiles: dict[str, Any], name: str) -> list[str]:
+    v = profiles.get(name)
+    if not isinstance(v, dict):
+        return []
+    return [d for d in (v.get("documents") or []) if d]
+
+
 def check_domain_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str, Any]) -> list[str]:
     """校验 domain_profiles 引擎名集合与 config 一致。返回问题列表。"""
     issues = []
@@ -392,6 +412,30 @@ def check_domain_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str
     if stale:
         issues.append(f"domain_profiles 含 config 已不存在的引擎: {stale}")
     return issues
+
+
+def check_auto_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str, Any]) -> list[str]:
+    """enabled 且非 explicit_only 的源不得空画像（棘轮，只准减不准增）。
+
+    判据与 route 的可达性口径一致：explicit_only 不进自动路由、research_only
+    只在 deep/research 档参与，二者空画像不影响 auto 池排序，故不约束。
+    """
+    empty = []
+    for name, spec in engines.items():
+        if spec.get("enabled") is False:
+            continue
+        if spec.get("explicit_only") or spec.get("tier") == "research_only":
+            continue
+        if not _profile_docs(profiles, name):
+            empty.append(name)
+    if len(empty) > AUTO_EMPTY_PROFILE_BASELINE:
+        return [
+            f"enabled-auto 空画像源 {len(empty)} 个，超基线 "
+            f"{AUTO_EMPTY_PROFILE_BASELINE}（新增源必须补 documents，或显式声明 "
+            f"explicit_only / research_only）；超基线名单: {empty[:20]}"
+            + ("…" if len(empty) > 20 else "")
+        ]
+    return []
 
 
 def patch_domain_profiles(engines: dict[str, dict[str, Any]], profiles: dict[str, Any]) -> dict[str, Any]:
@@ -465,6 +509,7 @@ def collect_issues(engines: dict[str, dict[str, Any]],
                     f"派生件={cur.get(key)!r}")
 
     issues.extend(check_domain_profiles(engines, domain))
+    issues.extend(check_auto_profiles(engines, domain))
 
     # passthrough 是可选参数：调用方不传就读磁盘现状，保证测试与 --check 同口径
     cur_pt = read_passthrough() if passthrough is None else passthrough

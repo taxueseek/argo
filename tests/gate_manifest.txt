@@ -32,6 +32,7 @@
 
 tests/test_agents_routing.py
 tests/test_badcase_ledger.py
+tests/test_breaker_reenable_reach.py
 tests/test_caliber_registry_sync.py
 tests/test_check_commit_report.py
 tests/test_child_env_gate.py
@@ -43,6 +44,7 @@ tests/test_dependency_source_gate.py
 tests/test_deterministic_failure_gate.py
 tests/test_dsh_plugin_env_gate.py
 tests/test_engine_catalog.py
+tests/test_engine_fingerprint_health.py
 tests/test_engine_states.py
 tests/test_env_alias_consistency.py
 tests/test_env_binding_gate.py
@@ -51,6 +53,7 @@ tests/test_envsync_anysearch_0907.py
 tests/test_explicit_only_gate.py
 tests/test_followup_fixes.py
 tests/test_gate_manifest.py
+tests/test_grounding_stall_and_smoke.py
 tests/test_http_attribution.py
 tests/test_image_sources.py
 tests/test_install_script_contract.py
@@ -76,6 +79,7 @@ tests/test_schema_drift_diagnosis.py
 tests/test_semantic_evidence_jev.py
 tests/test_silent_catch_gate.py
 tests/test_smart_inference.py
+tests/test_source_discovery.py
 tests/test_spec_contracts.py
 tests/test_state_literal_drift.py
 tests/test_state_registry.py

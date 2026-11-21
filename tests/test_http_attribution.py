@@ -131,21 +131,28 @@ class TestNoDirectUrlopenRepoWide:
     def test_no_module_bypasses_egress_dispatch(self):
         offenders = {}
         assert (SCRIPTS_DIR / "net_proxy.py").is_file(), "net_proxy.py 不见了，门禁前提失效"
-        for path in sorted(SCRIPTS_DIR.rglob("*.py")):
-            if path.name in _EGRESS_SOURCE or "__pycache__" in path.parts:
-                continue
-            try:
-                tree = ast.parse(path.read_text(encoding="utf-8"))
-            except (OSError, SyntaxError):
-                continue
-            hits = [
-                node.lineno for node in ast.walk(tree)
-                if isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "urlopen"
-            ]
-            if hits:
-                offenders[str(path.relative_to(SCRIPTS_DIR))] = hits
+        # 作用域含 sub-skills/：子技能是独立打包形态，历史上不在 scripts/ 的
+        # 扫描范围内（ego-search 的 runtime/webbridge_adapter 曾长期直连裸
+        # urlopen 而门全绿）。子技能同样应走 net_proxy，独立形态才回落裸出口。
+        roots = [SCRIPTS_DIR, SKILL_DIR / "sub-skills"]
+        for root in roots:
+            for path in sorted(root.rglob("*.py")):
+                if path.name in _EGRESS_SOURCE or "__pycache__" in path.parts:
+                    continue
+                try:
+                    tree = ast.parse(path.read_text(encoding="utf-8"))
+                except (OSError, SyntaxError):
+                    continue
+                hits = [
+                    node.lineno for node in ast.walk(tree)
+                    if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "urlopen"
+                    and isinstance(node.func.value, ast.Attribute)
+                    and node.func.value.attr == "request"
+                ]
+                if hits:
+                    offenders[str(path.relative_to(SKILL_DIR))] = hits
         assert not offenders, (
             "这些文件绕开了出口调度（不认 config.yaml 的 network.proxy，"
             "在必须走代理的环境里会连不上）："
