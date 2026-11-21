@@ -180,3 +180,42 @@ def test_isolated_smoke_probe_code_compiles_and_imports_proxy():
     assert proc.returncode != 0
     assert "SyntaxError" not in proc.stderr
     assert "ModuleNotFoundError" not in proc.stderr  # net_proxy 可导入（argv[3] 生效）
+
+
+def test_har_sensitive_param_variants_and_hint_steal():
+    """探针 1/2 回归：大写与连字符变体键（X-API-Key/Token/session_id）必须脱敏；
+    hint 词落在敏感参数值里不得把敏感键选成 query_param。"""
+    har = {
+        "log": {
+            "entries": [
+                {
+                    "request": {
+                        "method": "GET",
+                        "url": (
+                            "https://api.example.com/v1/search?q=agent&page=1"
+                            "&Token=S1&X-API-Key=S2&Auth=S3&session_id=S4"
+                        ),
+                        "headers": [{"name": "Accept", "value": "application/json"}],
+                    },
+                    "response": {
+                        "content": {
+                            "text": json.dumps({"results": [{"title": "A", "url": "https://e.com/1"}]}),
+                        }
+                    },
+                }
+            ]
+        }
+    }
+    spec = source_discovery.spec_from_har(har, transport="http")
+    blob = json.dumps(spec)
+    for secret in ("S1", "S2", "S3", "S4"):
+        assert secret not in blob, f"{secret} 泄漏进合成 Spec"
+    assert spec["extra_params"] == {"page": "1"}
+
+    har2 = json.loads(json.dumps(har))
+    har2["log"]["entries"][0]["request"]["url"] = (
+        "https://api.example.com/v1/search?q=realquery&sig=agent-secret-value"
+    )
+    spec2 = source_discovery.spec_from_har(har2, query_hint="agent", transport="http")
+    assert spec2["query_param"] == "q", "hint 词在敏感值里不得顶替 q"
+    assert spec2.get("extra_params") in (None, {})

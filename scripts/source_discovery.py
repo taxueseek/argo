@@ -36,13 +36,20 @@ _SENSITIVE_HEADER_NAMES = frozenset({
 # HAR 查询参数脱敏名单：与 _SENSITIVE_HEADER_NAMES 同为 HAR 脱敏边界。
 # header 管请求头、此处管 URL query——旧版只脱敏 header，?token=…&apikey=…
 # 会随 extra_params 落盘 candidate_spec.json 与拒绝档案（2026-11-21 审计）。
+# 键名统一按 - 归一比对（api_key/api-key 一刀切，X-API-Key 大小写无关），
 # 宁可错杀（草稿可人工补回参数），不可放过凭证。
 _SENSITIVE_PARAM_NAMES = frozenset({
-    "token", "access_token", "auth", "auth_token", "authorization",
-    "apikey", "api_key", "key", "secret", "signature", "sig",
-    "session", "sessionid", "session_id", "password", "passwd", "pwd",
-    "credential", "credentials", "client_secret",
+    "token", "access-token", "auth", "auth-token", "authorization",
+    "apikey", "api-key", "key", "secret", "signature", "sig",
+    "session", "sessionid", "session-id", "password", "passwd", "pwd",
+    "credential", "credentials", "client-secret",
+    "x-api-key", "x-auth-token", "x-csrf-token", "x-xsrf-token",
 })
+
+
+def _is_sensitive_param(name: str) -> bool:
+    norm = name.strip().lower().replace("_", "-")
+    return norm in _SENSITIVE_PARAM_NAMES
 
 _DEFAULT_UA = "ArgoSourceDiscovery/1.0 (+https://github.com/taxue2025)"
 
@@ -323,13 +330,14 @@ def spec_from_har(
     redacted_params: list[str] = []
     for k, vals in qs.items():
         val = vals[0] if vals else ""
-        if hint_low and hint_low in val.lower():
+        # 敏感键最先判定：即便 hint 词出现在其值里也不能选成 query_param
+        # （2026-11-21 探针 2 实证：?sig=agent-secret 会让 sig 顶替 q）
+        if _is_sensitive_param(k):
+            redacted_params.append(k)
+        elif hint_low and hint_low in val.lower():
             query_param = k
         elif k.lower() in ("q", "query", "keyword", "keywords", "search", "term", "k"):
             query_param = k
-        elif k.lower() in _SENSITIVE_PARAM_NAMES:
-            # 敏感查询参数（token/apikey/sig 等）不进草稿也不落盘
-            redacted_params.append(k)
         else:
             extra_params[k] = val
 
