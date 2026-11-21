@@ -82,7 +82,8 @@ def test_emit_json_cooldown_key_symmetric_with_read_side(monkeypatch, capsys):
     payload = {
         "handoff_required": True,
         "url": "https://www.xueqiu.com/today/123",
-        "quality": {"site": "xueqiu"},  # 画像名：旧顺序会被优先选中
+        # 画像名：旧顺序会被优先选中；auth_state 为冷却触发的合法前提
+        "quality": {"site": "xueqiu", "auth_state": "auth_failed"},
     }
     ego_search.emit_json(payload)
     out = json.loads(capsys.readouterr().out)
@@ -97,7 +98,11 @@ def test_emit_json_survives_cooldown_lock_timeout(monkeypatch, capsys):
         raise pacing.SlotBusyError("waited >15.0s for slots pacing:state")
 
     monkeypatch.setattr(pacing, "record_cooldown", boom)
-    ego_search.emit_json({"handoff_required": True, "url": "https://example.com/a"})
+    ego_search.emit_json({
+        "handoff_required": True,
+        "url": "https://example.com/a",
+        "quality": {"auth_state": "auth_failed"},
+    })
     captured = capsys.readouterr()
     out = json.loads(captured.out)
     assert out["handoff_required"] is True
@@ -132,3 +137,40 @@ def test_atomic_write_json_thread_safe(tmp_path):
     assert errors == []
     final = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
     assert final.get("tag") in ("a", "b")
+
+
+def test_unknown_site_text_suspicion_not_escalated():
+    """无画像站点正文嫌疑不升级 auth_failed（探针 5：误封类第三分支）——
+    没有 login_url 的 handoff 与冷却都是死路，正文含 cloudflare 等词不代表真登录墙。"""
+    q = quality.assess_auth_with_cookies(
+        {"auth_wall_suspected": True, "content_chars": 400},
+        url="https://unknown-site-xyz.example.com/page",
+        present_cookie_names=["a"],
+        strict_cookie_check=False,
+    )
+    assert q.get("auth_state") != "auth_failed"
+    assert q.get("handoff_required") is not True
+    assert q["auth_wall_suspected"] is True  # 启发式嫌疑保留，不吞信号
+
+
+def test_emit_json_no_cooldown_on_text_suspicion_alone(monkeypatch, capsys):
+    """冷却只认登录态判定结论：裸 auth_wall_suspected（无 auth_state）不记冷却
+    （探针 5 同根因——emit_json 旧条件挂文本启发式）。"""
+    calls = []
+    monkeypatch.setattr(pacing, "record_cooldown", lambda *a, **k: calls.append(a))
+    ego_search.emit_json({
+        "url": "https://unknown-site-xyz.example.com/page",
+        "quality": {"auth_wall_suspected": True, "empty_or_thin": False},
+    })
+    assert calls == [], "文本嫌疑不得触发站点冷却"
+    out = json.loads(capsys.readouterr().out)
+    assert out["quality"]["auth_wall_suspected"] is True  # 结果照常输出
+
+
+def test_emit_json_no_site_key_no_crash(monkeypatch, capsys):
+    """handoff 但无任何站点键：不崩、不记冷却、JSON 照常输出（探针 4）。"""
+    calls = []
+    monkeypatch.setattr(pacing, "record_cooldown", lambda *a, **k: calls.append(a))
+    ego_search.emit_json({"handoff_required": True, "quality": {}})
+    assert calls == []
+    assert json.loads(capsys.readouterr().out)["handoff_required"] is True

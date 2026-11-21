@@ -122,18 +122,22 @@ def stamp_login_provenance(payload: dict[str, Any], *, runtime: str | None = Non
 
 
 def emit_json(payload: dict[str, Any], *, runtime: str | None = None) -> None:
-    """stdout 输出已打 provenance + 质量信号的 JSON；触发登录墙/handoff 自动记站点冷却。"""
+    """stdout 输出已打 provenance + 质量信号的 JSON；登录态判定失效时自动记站点冷却。"""
     p = stamp_login_provenance(payload, runtime=runtime)
     # fetch / act / api 挂 quality（登录墙/空页/Cookie 存在性）
     if p.get("content") is not None or p.get("detail") is not None or p.get("api_url"):
         p = quality.assess_body(p)
     q_info = p.get("quality") if isinstance(p.get("quality"), dict) else {}
-    if p.get("handoff_required") or q_info.get("auth_wall_suspected"):
+    auth_state = str(q_info.get("auth_state") or "")
+    # 冷却只认登录态判定结论（auth_failed / account_restricted），不认裸的
+    # auth_wall_suspected 文本启发式：无画像站正文含 cloudflare/captcha 等
+    # 词就记 1h 站点冷却，是误封类同根因的第三分支（2026-11-21 探针 5 实证）。
+    # 怀疑但不定论时照常输出 payload，提示语已在 quality.hint 里。
+    if auth_state in ("auth_failed", "account_restricted"):
         # 冷却键与读取侧 _target_site_key 同源：URL 优先（normalize 后得域名），
         # 画像名只作兜底——旧顺序画像名优先导致写入键（如 xueqiu）与检查键
         # （xueqiu.com）错位，冷却保护时灵时不灵（2026-11-21 审计）。
         site_key = p.get("url") or p.get("api_url") or p.get("page_url") or q_info.get("site")
-        auth_state = str(q_info.get("auth_state") or "auth_failed")
         cd_secs = 7200 if auth_state == "account_restricted" else pacing.DEFAULT_COOLDOWN_SECONDS
         if site_key:
             try:

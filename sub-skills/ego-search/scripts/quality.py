@@ -210,7 +210,11 @@ def assess_auth_with_cookies(
     """结合站点声明的登录 Cookie 名，精准区分登录失效与普通内容异常。
 
     规则（只查键名存在性，绝不接触 Cookie 值）：
-      - 若未匹配到站点画像或未采集到 Cookie 列表，保持文本启发式结论，不误报。
+      - 未匹配到站点画像：只保留文本启发式嫌疑，不升级 auth_failed
+        （无 login_url 的 handoff 与冷却都是死路）。
+      - 匹配到画像但未采集到 Cookie 列表：正文/API 异常（auth_wall_suspected
+        或 empty_or_thin）即升级 auth_failed + handoff_required——画像自带
+        login_url，交接可执行。
       - strict_cookie_check=True（如 CDP 全量含 HttpOnly 键名）：关键 Cookie 全部缺失时
         即使页面返回 200 壳子也判定为 auth_failed + handoff_required。
       - strict_cookie_check=False（如页面 document.cookie，看不到 HttpOnly）：仅在
@@ -222,9 +226,10 @@ def assess_auth_with_cookies(
     q = dict(base_quality)
     profile = site_profiles.match_site(url)
     if profile is None:
-        if q.get("auth_wall_suspected"):
-            q["auth_state"] = "auth_failed"
-            q["handoff_required"] = True
+        # 无画像站点只保留文本启发式嫌疑（auth_wall_suspected + hint），不升级
+        # auth_failed / handoff_required：没有站点身份就没有 login_url，升级后
+        # 触发的 1h 站点冷却是条死路，而正文含 cloudflare/captcha 等词并不代表
+        # 真登录墙（2026-11-21 探针 5 实证：误封类第三分支）。
         return q
 
     q["site"] = profile.name
