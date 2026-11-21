@@ -68,6 +68,8 @@ BUDGET_SUBSKILL_MD_BYTES = {
     "sub-skills/local-search/README.md": 5600,
     "sub-skills/local-seek/SKILL.md": 7000,
     "sub-skills/argo-wide-research/SKILL.md": 4000,
+    # js-run 2026-11-21 补登记：此前是五个子技能里唯一不受预算守的（2135B）
+    "sub-skills/js-run/README.md": 4000,
 }
 
 

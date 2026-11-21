@@ -43,6 +43,7 @@ tests/test_deep_budget_tail_grace.py
 tests/test_dependency_source_gate.py
 tests/test_deterministic_failure_gate.py
 tests/test_dsh_plugin_env_gate.py
+tests/test_ego_auth_cooldown.py
 tests/test_engine_catalog.py
 tests/test_engine_fingerprint_health.py
 tests/test_engine_states.py
@@ -71,6 +72,7 @@ tests/test_p0_rss_family.py
 tests/test_p0_sec_edgar_url.py
 tests/test_p2_followup.py
 tests/test_patch_target_gate.py
+tests/test_query_operators.py
 tests/test_redactor_guard.py
 tests/test_release_consistency.py
 tests/test_research_notes.py
@@ -82,6 +84,7 @@ tests/test_smart_inference.py
 tests/test_source_discovery.py
 tests/test_spec_contracts.py
 tests/test_state_literal_drift.py
+tests/test_state_machines_plan_b.py
 tests/test_state_registry.py
 tests/test_static_lint_gate.py
 tests/test_stub_targets.py

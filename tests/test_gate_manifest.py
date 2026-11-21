@@ -74,3 +74,55 @@ def test_skip_entries_point_to_real_files():
         assert (TESTS_DIR.parent / rel).is_file(), \
             f"skip 豁免指向不存在的文件（防死行累积）: {rel}"
         assert reason, f"skip 豁免必须写明理由: {rel}"
+
+
+# ── 新增测试文件 commit 期归类检查（scripts/gate_manifest_check.py，2026-11-21）──
+# 词根反向断言盖不全（test_state_machines_plan_b / test_query_operators 两个
+# <1s 文件漏册实证），拦截点前移到 commit 时刻：staged 新增 tests/test_*.py
+# 必须入册或 # skip。此处单测纯函数 check_new_test_files。
+
+import sys
+
+SCRIPTS_DIR_GATE = TESTS_DIR.parent / "scripts"
+if str(SCRIPTS_DIR_GATE) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR_GATE))
+
+import gate_manifest_check  # noqa: E402
+
+_MANIFEST_SAMPLE = """
+# skip tests/test_slow_heavy.py replay_eval 较重，CI 兜底
+tests/test_registered_fast.py
+tests/test_gate_named_thing.py
+"""
+
+
+def test_new_test_file_registered_passes():
+    violations = gate_manifest_check.check_new_test_files(
+        ["tests/test_registered_fast.py", "scripts/foo.py"], _MANIFEST_SAMPLE)
+    assert violations == []
+
+
+def test_new_test_file_skip_exempted_passes():
+    violations = gate_manifest_check.check_new_test_files(
+        ["tests/test_slow_heavy.py"], _MANIFEST_SAMPLE)
+    assert violations == []
+
+
+def test_new_test_file_unclassified_violates():
+    violations = gate_manifest_check.check_new_test_files(
+        ["tests/test_state_machines_plan_b.py"], _MANIFEST_SAMPLE)
+    assert violations == ["tests/test_state_machines_plan_b.py"]
+
+
+def test_non_test_files_ignored():
+    violations = gate_manifest_check.check_new_test_files(
+        ["scripts/new_script.py", "tests/gate_manifest.txt"], _MANIFEST_SAMPLE)
+    assert violations == []
+
+
+def test_current_repo_new_files_would_be_classified():
+    """存量自检：本地暂存区当前新增的测试文件必须已归类（本仓真数据零违规）。"""
+    root = TESTS_DIR.parent
+    staged = gate_manifest_check.staged_new_test_files(root)
+    manifest = (TESTS_DIR / "gate_manifest.txt").read_text(encoding="utf-8")
+    assert gate_manifest_check.check_new_test_files(staged, manifest) == []

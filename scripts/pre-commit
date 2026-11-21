@@ -126,6 +126,11 @@ if [ ! -f "$MANIFEST" ]; then
     echo "[pre-commit] 缺 $MANIFEST，快门禁清单无真源，门禁视为失败" >&2
     exit 1
 fi
+# 新增测试文件当场归类（2026-11-21 审计）：test_gate_manifest.py 的词根
+# 反向断言拦不住命名不带 gate/… 的 <1s 文件（两个漏册实证），本检查把
+# 拦截点前移到 commit 时刻——staged 新增 tests/test_*.py 必须入册或
+# 显式 # skip；存量未登记文件不受影响。实测 <0.2s。
+"$PY" scripts/gate_manifest_check.py
 "$PY" -m pytest -q $(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST")
 
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
