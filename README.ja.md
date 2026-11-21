@@ -21,7 +21,7 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **taxueseek スキルシリーズ**（検索・ディープリサーチ担当）：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 75★ · [session-digger](https://github.com/taxueseek/session-digger) 34★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★ · [taxueskills](https://github.com/taxueseek/taxueskills) 25★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★ · [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 15★ | **DSH プラグイン**：[dsh-files](https://github.com/taxueseek/dsh-files) 43★ · [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 15★ · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★
+> **taxueseek スキルシリーズ**（検索・ディープリサーチ担当）：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 77★ · [session-digger](https://github.com/taxueseek/session-digger) 34★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★ · [taxueskills](https://github.com/taxueseek/taxueskills) 25★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★ · [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 16★ | **DSH プラグイン**：[plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 48★ · [dsh-files](https://github.com/taxueseek/dsh-files) 44★ · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) 3★ · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★
 
 **Argo（アルゴ）** は AI エージェント向けに設計されたオープンソースのマルチエンジン検索・Web 取得・エビデンス検証ツールです。**クレジットカードや有料 API キー不要**で即座に動作し、18 言語（日本語・英語・中国語・韓国語など）の一次ソースへ自動ルーティングします。
 
