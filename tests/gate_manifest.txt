@@ -72,6 +72,7 @@ tests/test_package_files_gate.py
 tests/test_patch_target_gate.py
 tests/test_query_operators.py
 tests/test_ranking_contract.py
+tests/test_readme_art.py
 tests/test_redactor_guard.py
 tests/test_release_assets_contract.py
 tests/test_release_consistency.py

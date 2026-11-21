@@ -117,7 +117,7 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-printf "[pre-commit] argo 快门禁（73 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
+printf "[pre-commit] argo 快门禁（74 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
 # 测试清单单真源：tests/gate_manifest.txt（2026-11-14 收口）。
 # 清单曾在此手工枚举 42 个文件，每轮新门禁「漏一道加一道」（头注释史
 # 至少 6 轮），env/config 对账门三道长期漏册——现由 tests/test_gate_manifest.py
@@ -176,10 +176,21 @@ if ! "$PY" scripts/sync_backends.py --check; then
     echo "[pre-commit] 派生件过期，正在自动执行同步刷新..."
     "$PY" scripts/sync_backends.py
     "$PY" scripts/gen_engine_catalog.py
+    "$PY" scripts/gen_readme_art.py
     echo "[pre-commit] 派生件已自动刷新，请检查并暂存相关修改: git add backends/ docs/ENGINE_CATALOG.md assets/readme/" >&2
     # 这里必须 exit 1，不能刷新后放行：钩子改的是工作区，暂存区里仍是旧版
     # 派生件；若返回 0，git 会把旧内容提交进去，校验反而形同虚设。也不自动
     # git add——把「刷新了什么」留给用户过目。
+    exit 1
+fi
+
+# 对外证据图与真源对拍（2026-11-21）：proof-routes.svg / hero.svg 曾手写，
+# 漂成理想态（虚构路由卡 + 版本号落后两版）无人发现。现由 gen_readme_art
+# 从运行时路由与 package.json 生成，实测 <0.5s，进 pre-commit。
+if ! "$PY" scripts/gen_readme_art.py --check >/dev/null; then
+    echo "[pre-commit] 对外证据图过期，正在自动重新生成..."
+    "$PY" scripts/gen_readme_art.py
+    echo "[pre-commit] 已刷新 assets/readme/proof-routes.svg 与 hero.svg，请检查并暂存" >&2
     exit 1
 fi
 
