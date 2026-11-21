@@ -104,3 +104,27 @@ def test_openalex_url_is_doi_not_internal_id():
     assert rows[0]["snippet"] == "2021 · arXiv"
     assert rows[1]["snippet"] == "2022", "缺期刊名时模板须折叠成分隔符只剩年份"
     assert "url" not in rows[1], "doi 为空时不得造半截链接"
+
+
+def test_body_value_coercion_rejects_non_json_numerics():
+    """body 模板值类型收敛唯一出口（engines_fields._coerce_body_value）：
+    "nan"/"inf" 必须保留字符串——旧 try/float 会放行成浮点，json.dumps
+    产出非法 JSON（2026-11-21 审计）。"""
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    scripts_dir = _Path(__file__).resolve().parent.parent / "scripts"
+    if str(scripts_dir) not in _sys.path:
+        _sys.path.insert(0, str(scripts_dir))
+    from engines_fields import _coerce_body_value
+
+    assert _coerce_body_value("nan") == "nan"
+    assert _coerce_body_value("-inf") == "-inf"
+    assert _coerce_body_value("Infinity") == "Infinity"
+    assert _coerce_body_value("3.14") == 3.14
+    assert _coerce_body_value("42") == 42
+    assert _coerce_body_value("-7") == -7
+    assert _coerce_body_value("1e5") == 100000.0
+    assert _coerce_body_value("True") is True
+    assert _coerce_body_value("false") is False
+    assert _coerce_body_value("advanced") == "advanced"

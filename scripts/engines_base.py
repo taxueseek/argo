@@ -16,7 +16,7 @@ import threading
 import engine_states as _st  # 失败归因词表唯一真源
 # UA 与礼貌池邮箱单源（engines_http 顶层无反向依赖，不成环）
 from engines_http import UA, contact_email as _contact_email, normalize_ua_headers
-from engines_fields import _coerce_field  # 字段取值原语真源在 engines_fields（无依赖底层），本模块复导出
+from engines_fields import _coerce_body_value, _coerce_field  # 取值/收敛原语真源在 engines_fields（无依赖底层），本模块复导出
 
 import serp_kill_log  # noqa: E402  守卫接线+误杀账本（2026-10-10 拆出，stdlib 级轻量）
 import time
@@ -444,15 +444,8 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
                 resolved = _resolve(str(v), query, n, allowed_env=_allowed, **kwargs)
                 if k == "search_depth":
                     body[k] = {"fast": "fast", "balanced": "basic", "deep": "advanced", "basic": "basic", "advanced": "advanced", "ultra-fast": "ultra-fast"}.get(str(depth), resolved or "basic")
-                elif resolved.lower() in ("true", "false"):
-                    body[k] = resolved.lower() == "true"
-                elif resolved.lstrip("-").isdigit():
-                    body[k] = int(resolved)
                 else:
-                    try:
-                        body[k] = float(resolved)
-                    except ValueError:
-                        body[k] = resolved
+                    body[k] = _coerce_body_value(resolved)
             if eng == "tavily":
                 from query_operators import compile_provider_params
                 body.update(compile_provider_params("tavily", query, operators=kwargs.get("operators"), since=kwargs.get("since"), until=kwargs.get("until"), depth=depth))

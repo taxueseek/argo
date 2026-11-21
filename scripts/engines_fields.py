@@ -89,3 +89,26 @@ def extract_items(data: Any, path: str) -> list:
     if isinstance(obj, dict):
         return [obj]
     return []
+
+
+_NUMERIC_VALUE_RE = re.compile(r"[-+]?\d+(\.\d+)?([eE][-+]?\d+)?")
+
+
+def _coerce_body_value(resolved: str) -> Any:
+    """body 模板值的类型收敛（唯一出口）：bool → int → 数值 → 字符串。
+
+    数值门用全等正则：旧 try/float 会把 "nan"/"inf" 放行成浮点，
+    json.dumps 产出非法 JSON（2026-11-21 审计）。非数值一律保留字符串。
+    放在本模块：与 _coerce_field 同属取值/收敛原语，且 engines_base 的
+    祖父行数上限经不起内联增长（拆出后回到 1473 内）。
+    """
+    lowered = resolved.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if resolved.lstrip("-").isdigit():
+        return int(resolved)
+    if _NUMERIC_VALUE_RE.fullmatch(resolved):
+        return float(resolved)
+    return resolved
