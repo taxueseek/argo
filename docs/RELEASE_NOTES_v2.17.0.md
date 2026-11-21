@@ -5,7 +5,9 @@
 - **What's New**:
   - **Native Query Operator Pushdown & Browser Auth Debounce**: `query_operators.py` compiles provider-native parameters (including Tavily native `language`); `browser_auth.py` and `chrome_cdp.py` add 4-state login debouncing and CDP network capture; `ego-search` adds OS-file-locked cross-process pacing (`pacing.py`), site cookie/shadow-restriction probes (`site_profiles.py`), and unifies auth state constants with `engine_states.py`.
   - **Deterministic Evidence Grounding & Isolated Source Discovery**: Added `evidence_grounding.py` (NFKC folding, ≥3-digit anti-hallucination gate, entity-window anchoring, sha1 excerpt hash) wired into `numeric_verify.py`, `CoverageStallTracker` in `research_gates.py`, and `argo engine add --probe-domain / --from-har / --discover-gaps / --verify-draft` with HAR sanitization and isolated subprocess smoke verification.
-  - **Workbench Daily Hotspots & DSH v0.2.2-rc.5 Alignment**: Added daily real-time hotspot recommendations with zero-LLM interest re-ranking and configurable refresh schedule in Argo Workbench, `route-guard.js` TCP loopback security fence, React `PanelBoundary` fault isolation, route-aware `web_search` decorator for DSH `v0.2.2-rc.5`, and `helve` paid source (`explicit_only`; total sources 312→313).
+  - **Workbench Daily Hotspots & DSH v0.2.2-rc.5 Alignment**: Added daily real-time hotspot recommendations with zero-LLM interest re-ranking and configurable refresh schedule in Argo Workbench, `route-guard.js` TCP loopback security fence, React `PanelBoundary` fault isolation, route-aware `web_search` decorator for DSH `v0.2.2-rc.5`, and `helve` paid source (`explicit_only`; total sources 312→313; thanks to Owen Gallagher / `@helve-dev-mcp` via PR #50).
+- **Contributors**:
+  - Thanks to Owen Gallagher (`@helve-dev-mcp`) for contributing the initial Helve search engine spec in [#50](https://github.com/taxueseek/argo/pull/50).
 - **Key Improvements**:
   - **Circuit-Breaker Self-Healing & Profile Ratchet**: Fixed disabled-engine cooldown recovery loop in `route_combo.py`, added `engine_fingerprint.py` environment-change auto-reset, backfilled 18 domain profiles with an empty-profile ratchet (`AUTO_EMPTY_PROFILE_BASELINE=182`), switched OpenAlex links to direct DOIs, and tightened `nan`/`inf` JSON body serialization in `engines_fields.py`.
   - **Engineering Gates & Data-Driven README Art**: Removed `# skip` exemptions from fast gates, switched `scripts/pre-commit` to 4-way parallel pytest (~12s total) including `sub-skills/ego-search/tests` and all 136 DSH plugin Node tests, extended HTTP egress attribution gates to `sub-skills/`, and replaced hand-edited README SVGs with `scripts/gen_readme_art.py` checked at release time.
@@ -23,7 +25,7 @@
 ## 这次更新有什么（通俗版）
 
 - **新源接入与画像机制收口（源 312→313）**：
-  - 按 `paid + explicit_only` 纪律纳入 `helve` 搜索源；补齐 18 个源的域画像并建立空画像棘轮（`AUTO_EMPTY_PROFILE_BASELINE=182`），杜绝新源反复空画像。
+  - 按 `paid + explicit_only` 纪律纳入 `helve` 搜索源（基于外部 PR [#50](https://github.com/taxueseek/argo/pull/50)，感谢外部贡献者 Owen Gallagher / `@helve-dev-mcp`）；补齐 18 个源的域画像并建立空画像棘轮（`AUTO_EMPTY_PROFILE_BASELINE=182`），杜绝新源反复空画像。
   - OpenAlex 证据链接切换为 DOI 直链并完善摘要拼接；4 个源补齐 `item_upstream_authority` 透传。
 - **查询操作符原生下推与熔断自愈**：
   - `query_operators.py` 落地引擎原生参数下推（含 Tavily 原生 `language` 下发，不再静默丢失）。

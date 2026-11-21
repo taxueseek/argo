@@ -8,7 +8,7 @@
 **定位**：机制收口 + 登录态与证据锚定升级 + 查询原生下推 + 工作台热榜与安全加固。把 v2.16.0 之后的点状修补收敛为硬机制约束：新增 `helve` 付费源（源 312→313）、落地查询操作符原生下推与登录态四态防抖/CDP 网络流捕获、统一 `ego-search` 与主仓登录态词表单真源、上线工作台每日实时热榜与零 LLM 兴趣重排、落地 TCP 回环围栏与快门禁 4 片并行。
 
 **关键变更**：
-- **新源与画像治理（源 312→313）**：按 `paid + explicit_only` 纪律纳入 `helve` 搜索源；补齐 18 个源的域画像并建立空画像棘轮（`AUTO_EMPTY_PROFILE_BASELINE=182`），新增非 `explicit_only` 源空画像直接红灯；OpenAlex 证据链接改 DOI 直链并完善摘要拼接；4 源补齐 `item_upstream_authority` 透传
+- **新源与画像治理（源 312→313）**：按 `paid + explicit_only` 纪律纳入 `helve` 搜索源（基于外部 PR #50，感谢 Owen Gallagher / `@helve-dev-mcp`）；补齐 18 个源的域画像并建立空画像棘轮（`AUTO_EMPTY_PROFILE_BASELINE=182`），新增非 `explicit_only` 源空画像直接红灯；OpenAlex 证据链接改 DOI 直链并完善摘要拼接；4 源补齐 `item_upstream_authority` 透传
 - **查询原生下推与引擎可靠性**：`query_operators.py` 落地引擎原生参数下推（含 Tavily 原生 `language` 下发）；`engines_fields.py` 收敛 body 模板 `nan`/`inf` 序列化唯一出口；打通熔断超冷却探测恢复环（`route_combo.py`）并新增 `engine_fingerprint.py` 环境指纹自愈与健康回归差分
 - **登录态治理与双套单真源**：`browser_auth.py` 与 `chrome_cdp.py` 落地登录态四态防抖与 CDP 网络流捕获；`ego-search` 新增 `pacing.py`（无守护 OS 文件锁跨进程槽位、同站节奏锁与站点级终态冷却）与 `site_profiles.py`（Cookie 探针与静默限权判定），并收敛至 `engine_states.py` 登录态词表单真源（含 `ImportError` 兜底对齐测试）
 - **证据锚定与新源发现**：新增 `evidence_grounding.py`（NFKC 折叠、≥3 位防编造数字门禁、近实体窗口锚定与 sha1 摘录哈希）接入 `numeric_verify.py`；`research_gates.py` 新增覆盖高水位线停滞传感器；`argo engine add` 新增 `--probe-domain` / `--from-har` / `--discover-gaps` / `--verify-draft` 隔离子进程烟测与 HAR 脱敏
