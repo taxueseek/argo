@@ -15,7 +15,9 @@ if str(SCRIPTS_DIR) not in sys.path:
 import source_discovery  # noqa: E402
 
 
-def test_probe_domain_detects_discourse_and_llms_txt():
+def test_probe_domain_detects_discourse_and_llms_txt(monkeypatch):
+    monkeypatch.setattr(source_discovery.url_safety, "check_url", lambda _url: (True, ""))
+
     def fake_fetch(url: str, timeout: float):
         if url.endswith("/latest.json"):
             return 200, {"content-type": "application/json"}, json.dumps({"topic_list": {"topics": []}})
@@ -30,7 +32,9 @@ def test_probe_domain_detects_discourse_and_llms_txt():
     assert rep["spec_draft"]["query_param"] == "q"
 
 
-def test_probe_domain_detects_mediawiki_opensearch_rss():
+def test_probe_domain_detects_mediawiki_opensearch_rss(monkeypatch):
+    monkeypatch.setattr(source_discovery.url_safety, "check_url", lambda _url: (True, ""))
+
     def fake_fetch(url: str, timeout: float):
         if "meta=siteinfo" in url:
             return 200, {}, json.dumps({"query": {"general": {"sitename": "DemoWiki"}}})
