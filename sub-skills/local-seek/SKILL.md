@@ -38,7 +38,8 @@ argo seek "查询词" --json           # 结构化输出
 argo seek "查询词" --exact          # 精确匹配（关扩展）
 argo seek "符号名" --symbol          # 精确符号/词边界匹配
 argo seek "查询词" --exclude 某文件 # 额外排除（可重复）
-argo seek --outline 文件路径        # 文件结构（def/class/标题/顶层key）
+argo seek --outline 文件路径        # 文件结构与精确起止行跨度（def/class/标题/顶层key）
+argo seek --symbol-body 符号 文件   # 一跳直读符号定义源码（≤200 行封顶，超限附续读范围）
 argo seek --lines 10-50 文件路径    # 按行读取，替代 read_file 全文
 argo seek "裸except" --structural   # 结构搜索（空catch/裸except/装饰函数等）
 argo seek --git-log 文件路径        # 文件的最近提交历史

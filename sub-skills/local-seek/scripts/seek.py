@@ -1420,8 +1420,36 @@ _OUTLINE_RULES = {
 }
 
 
+def _outline_level(line, suffix):
+    """返回结构行的层级：Markdown 按 # 数量，其余按前导空白长度。"""
+    if suffix in (".md", ".mdx"):
+        m = re.match(r"^(#{1,6})\s+", line)
+        return len(m.group(1)) if m else 99
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _compute_outline_entries(lines, rules, suffix):
+    """计算文件结构项及其精确起止行 [(start, end, span, text), ...]。"""
+    raw_hits = []
+    for i, ln in enumerate(lines, 1):
+        if any(r.match(ln) for r in rules):
+            raw_hits.append((i, _outline_level(ln, suffix), ln.strip()))
+    total = len(lines)
+    entries = []
+    for idx, (start, lvl, text) in enumerate(raw_hits):
+        end = total
+        for nxt_start, nxt_lvl, _ in raw_hits[idx + 1:]:
+            if nxt_lvl <= lvl:
+                end = nxt_start - 1
+                break
+        while end > start and not lines[end - 1].strip():
+            end -= 1
+        entries.append((start, end, end - start + 1, text))
+    return entries
+
+
 def outline_file(path):
-    """输出代码/文档文件结构，替代整文件读取。返回 (输出文本, 退出码)。"""
+    """输出代码/文档文件结构（含精确起止行跨度），替代整文件读取。返回 (输出文本, 退出码)。"""
     p = Path(path)
     if not p.is_file():
         return f"local-seek: {path} 不是文件", 1
@@ -1429,16 +1457,59 @@ def outline_file(path):
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError as e:
         return f"local-seek: 读取失败 {e}", 1
-    rules = _OUTLINE_RULES.get(p.suffix.lower())
+    suffix = p.suffix.lower()
+    rules = _OUTLINE_RULES.get(suffix)
     if not rules:
         return (f"local-seek: {p.name} 共 {len(lines)} 行"
                 f"（{p.suffix or '无扩展名'} 暂无结构规则）"), 0
-    hits = []
-    for i, ln in enumerate(lines, 1):
-        if any(r.match(ln) for r in rules):
-            hits.append(f"{i}: {ln.strip()[:100]}")
+    entries = _compute_outline_entries(lines, rules, suffix)
+    hits = [f"{s}-{e} ({span}L): {txt[:100]}" for s, e, span, txt in entries]
     head = f"local-seek: {p.name} 结构 {len(hits)} 处 / 共 {len(lines)} 行"
     return "\n".join([head] + hits), 0
+
+
+def read_symbol_body(path, symbol_name, max_lines=200):
+    """按符号名一跳读取定义区间源码（带真实行号，默认 ≤ 200 行封顶）。返回 (输出文本, 退出码)。"""
+    symbol_name = (symbol_name or "").strip()
+    if not symbol_name:
+        return "local-seek: --symbol-body 需要指定符号名", 1
+    p = Path(path)
+    if not p.is_file():
+        return f"local-seek: {path} 不是文件", 1
+    try:
+        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as e:
+        return f"local-seek: 读取失败 {e}", 1
+    suffix = p.suffix.lower()
+    rules = _OUTLINE_RULES.get(suffix)
+    if not rules:
+        return f"local-seek: {p.name} 暂无结构规则（{p.suffix or '无扩展名'}），请改用 --lines", 1
+    entries = _compute_outline_entries(lines, rules, suffix)
+    pat = re.compile(r"(?<!\w)" + re.escape(symbol_name) + r"(?!\w)")
+    matched = [item for item in entries if pat.search(item[3])]
+    if not matched:
+        low = symbol_name.lower()
+        matched = [item for item in entries if low in item[3].lower()]
+    if not matched:
+        return f"local-seek: {p.name} 中未找到符号 {symbol_name!r}（可先运行 --outline 查看结构）", 1
+
+    start, end, span, _ = matched[0]
+    cap = max(1, int(max_lines))
+    shown_end = min(end, start + cap - 1)
+    extra = ""
+    if len(matched) > 1:
+        others = ", ".join(f"{s}-{e}" for s, e, _, _ in matched[1:5])
+        extra = f"；另有 {len(matched) - 1} 处同名: {others}"
+    head = (
+        f"local-seek: {p.name} 符号 {symbol_name} 第 {start}-{shown_end} 行"
+        f"（共 {span} 行 / 文件 {len(lines)} 行{extra}）"
+    )
+    body = [f"{i}: {lines[i - 1]}" for i in range(start, shown_end + 1)]
+    if shown_end < end:
+        body.append(
+            f"... 已截断（上限 {cap} 行），继续读取：argo seek --lines {shown_end + 1}-{end} {path}"
+        )
+    return "\n".join([head] + body), 0
 
 
 def read_lines(path, spec):
@@ -1681,9 +1752,11 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                     help="文件修改时间下限（7d / 2026-08-01），过滤命中文件的 mtime")
     ap.add_argument("--until", default=None,
                     help="文件修改时间上限（7d / 2026-08-01），过滤命中文件的 mtime")
-    ap.add_argument("--outline", action="store_true", help="输出文件结构（文件路径为位置参数）")
+    ap.add_argument("--outline", action="store_true", help="输出文件结构与精确起止行跨度（文件路径为位置参数）")
     ap.add_argument("--lines", default="", metavar="N-M",
                     help="按行读取文件（文件路径为位置参数）")
+    ap.add_argument("--symbol-body", default="", metavar="NAME",
+                    help="按符号名一跳读取定义区间源码，≤200 行封顶（文件路径为位置参数）")
     ap.add_argument("--structural", action="store_true",
                     help="结构搜索：按语义检索（裸except/空catch/装饰函数/函数定义等）")
     ap.add_argument("--git-log", action="store_true",
@@ -1699,9 +1772,11 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
             return DOMAINS_FILE.read_text(encoding="utf-8"), 0
         return "未找到 config/domains.yaml，使用内置默认规则", 0
 
-    # 文件结构 / 按行读取模式（文件路径优先取位置参数，否则取 --path）
-    if args.outline or args.lines:
+    # 文件结构 / 符号体 / 按行读取模式（文件路径优先取位置参数，否则取 --path）
+    if args.outline or args.lines or args.symbol_body:
         target = args.query or str(args.path)
+        if args.symbol_body:
+            return read_symbol_body(target, args.symbol_body, max_lines=args.max or 200)
         if args.lines:
             return read_lines(target, args.lines)
         return outline_file(target)
