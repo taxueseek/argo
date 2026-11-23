@@ -51,6 +51,7 @@ tests/test_hotpath_import_lint.py
 tests/test_http_attribution.py
 tests/test_image_sources.py
 tests/test_install_script_contract.py
+tests/test_intent_and_agent_cli.py
 tests/test_intl_engines.py
 tests/test_launch_passthrough_alignment.py
 tests/test_local_intent.py

@@ -230,6 +230,19 @@ def build_parser() -> argparse.ArgumentParser:
              "fetch_required 保留）。默认 None=自动：stdout 非 tty 时"
              "启用 agent 档（Agent 消费），否则 full",)
     parser.add_argument(
+        "--agent", action="store_true",
+        help="Agent 消费单开关：等价于 --json --fields agent；与 --envelope / "
+             "--fields full 互斥（入口直接报错，避免静默剥离 envelope）",
+    )
+    parser.add_argument(
+        "--intent",
+        choices=("news", "academic", "social", "image-reverse", "calc"),
+        default=None,
+        help="高层意图路由（免记 explicit_only 引擎名）：news=时事（有 key/预算自动用 "
+             "deepseek_search，否则降级）、academic=学术多源、social=社交、image-reverse=反搜图、"
+             "calc=精确计算（wolframalpha）",
+    )
+    parser.add_argument(
         "--archive",
         action="store_true",
         help="将本次搜索 envelope 落盘到工作区归档（不抓正文/不下载）",
@@ -399,6 +412,24 @@ def main():
     ensure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args()
+
+    # --agent 单开关展开与契约互斥校验（Fail-Fast）：
+    # 此前 --envelope 与 --fields agent 同给只在 stderr 告警，随后静默剥成 0 字节。
+    # 入口直接报错可省去整轮无效搜索与重试。
+    if args.agent:
+        if args.fields == "full":
+            parser.error(
+                "--agent 与 --fields full 互斥：--agent 等价于 --json --fields agent；"
+                "需要全量字段请用 --json --fields full"
+            )
+        args.json_output = True
+        args.fields = "agent"
+
+    if args.envelope and args.fields == "agent":
+        parser.error(
+            "--envelope 与 --agent / --fields agent 互斥（agent 档会剥离 envelope 视图）；"
+            "要 provenance 追溯请用 --json --envelope，只要瘦身答案请用 --agent"
+        )
 
     if args.json_output:
         # issue #34 第 7 条：引擎 builder 的 logger.warning（如「OCTEN_API_KEY
@@ -571,9 +602,25 @@ def main():
         depth = args.depth
         engine_domain = args.domain or None
 
+    # --intent 高层意图路由（仅显式传入时懒加载，默认路径零开销）
+    resolved_engine = args.engine
+    intent_res: dict[str, Any] | None = None
+    if args.intent:
+        from intent_router import resolve_intent
+        intent_res = resolve_intent(
+            args.intent,
+            engine=resolved_engine,
+            domain=engine_domain,
+            depth=depth,
+            mode=args.mode,
+        )
+        resolved_engine = intent_res["engine"]
+        engine_domain = intent_res["domain"]
+        depth = intent_res["depth"]
+
     results = super_search(
         query=args.query,
-        engine=args.engine,
+        engine=resolved_engine,
         n=args.max_results,
         explain=args.explain,
         skip_cache=args.no_cache,
@@ -777,6 +824,22 @@ def main():
             _vw_ms = (time.perf_counter() - _t_verifywith0) * 1000.0
             _merge_verify_timing(results["timing"], _vw_ms, stage="verify_with")
 
+    # 若启用了 --intent，将精简解析记录与降级告警附加到结果中
+    if intent_res is not None:
+        results["intent_resolution"] = {
+            "intent": intent_res["intent"],
+            "engine": intent_res["engine"],
+            "domain": intent_res["domain"],
+            "depth": intent_res["depth"],
+            "degraded": intent_res["degraded"],
+            "reason": intent_res["reason"],
+        }
+        if intent_res.get("warnings"):
+            existing_w = results.setdefault("warnings", [])
+            for w in intent_res["warnings"]:
+                if w not in existing_w:
+                    existing_w.append(w)
+
     # 敏感信息自动脱敏拦截（防止真实 API Key / 通用敏感凭据在输出流泄露）
     try:
         from secret_guard import redact_data
@@ -796,13 +859,6 @@ def main():
             and not args.envelope
         )
         if args.fields == "agent" or _auto_agent:
-            if args.envelope:
-                print(
-                    "  [warning] --envelope 与 --fields agent 同时给时 envelope 会被"
-                    "剥光（实测增量 0 字节）：要 provenance 请去掉 --fields agent；"
-                    "只要瘦身就别加 --envelope。",
-                    file=sys.stderr,
-                )
             public = _strip_for_agent(public)
         print(dumps(public))
     else:

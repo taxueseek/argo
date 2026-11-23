@@ -31,13 +31,14 @@ triggers:
 ## 快速上手
 
 ```bash
-argo search "查询词"                     # 自动路由搜索（daemon 需显式启动）
-argo search "查询词" --json --fields agent  # Agent 消费档
-argo search "查询词" --verify 3           # 核验 top-3 并回填证据分
-argo research "复杂问题" --json           # 取证包（扩词或多工作包 → dossier）
+argo search "查询词"               # 自动路由（daemon 需显式启动）
+argo search "查询词" --agent       # Agent 消费单开关（等价 --json --fields agent）
+argo search "查询词" --intent news # 意图路由（news/academic/social/image-reverse/calc）
+argo search "查询词" --verify 3    # 核验 top-3 并回填证据分
+argo research "复杂问题" --json    # 取证包（扩词或多工作包 → dossier）
 ```
 
-默认不附 candidates/sources；`--fields agent` 只留答案（~4.3 KB），要追溯或归档才加 `--envelope`（`--archive` 自动带）。
+默认不附 candidates/sources；`--agent` 只留答案（~4.3 KB），追溯或归档加 `--envelope`（`--archive` 自动带）。
 
 深度研究产出**取证包（dossier）**（来源/覆盖/缺口/达标，不是判断稿）：先读 `references/research-protocol.md` 写工作包再取证，判断分事实/推断/建议。不要另装「专业深度研究」skill。
 
@@ -62,9 +63,9 @@ argo research "复杂问题" --json           # 取证包（扩词或多工作�
 | `--numverify [N]` `--verify-with <引擎>` | 数值印证（对关键数字抓原文确认核对簇）+ 核对配对 |
 | `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域限定 / 关本地统计与查询落盘 |
 
-**按场景选引擎**：时事 → `--engine deepseek_search`，学术 → `--academic-deep`/exa，社交 → anysearch，技能/插件目录 → 自动路由（skill_search/dsh_plugin_search 域）。口径见 `references/usage.md`。
+**按场景路由**：优先 `--intent news|academic|social|image-reverse|calc`（缺 key/超预算自动降级），或显式 `--engine deepseek_search` / `--academic-deep` / `anysearch`，见 `references/usage.md`。
 
-**explicit_only 源不进自动路由**：feed、deepseek_search、tracemoe/saucenao/google_lens/animetrace、wolframalpha、brave/ecosia/qwant/gdelt 等需显式 `--engine <名>`（例：`argo search "x" --engine deepseek_search`），全量见 `argo list-engines`。
+**explicit_only 源**：feed、deepseek_search、tracemoe/saucenao/google_lens/animetrace、wolframalpha、brave/ecosia/qwant/gdelt 默认不进自动路由，用 `--intent` 或 `--engine`，全量见 `argo list-engines`。
 
 ### 图片检索
 
@@ -108,11 +109,11 @@ argo ego-search status|search|fetch|merge  # 登录态专业搜索（需先 enab
 4. **社交帖**：叙事/舆情，不进事实真值
 5. **深度研究**：先读 `references/research-protocol.md`；有决策含义就交工作包，不要靠扩词充问题树；`quality_gate_results.passed=false` 必须降级表述
 6. **引用**：讲给用户的事实带 URL 出处，日常档也要带（URL 在 `results[].url`，零成本）
-7. **上下文纪律**：Agent 用 `--json --fields agent`、按需 `-n`；追溯/归档才加 `--envelope`；引擎状态用 `argo list-engines --detail --engine <名>`（~0.9 KB）。踩坑见 Gotchas
+7. **上下文纪律**：Agent 用 `--agent`（等价 `--json --fields agent`）、按需 `-n`；追溯/归档用 `--json --envelope`；查单源用 `argo list-engines --detail --engine <名>`（~0.9 KB）。踩坑见 Gotchas
 
 ## Gotchas
 
-- **`--envelope` 与 `--fields agent` 别同给**：后者把 envelope 增量剥成 0 字节；要 provenance 就去掉 `--fields agent`。
+- **`--envelope` 与 `--agent` / `--fields agent` 互斥**：入口直接报错；要 provenance 请用 `--json --envelope`。
 - **结果异常少**：看 `funnel` 六格阶段计数，哪格归零即塌陷点。
 - **慢查询**：看 `timing.dispatch` 的 `tail_wait_ms` / `abandoned_engine_ms`。
 - **引擎列表**：别加 `--all`（~54 KB）。

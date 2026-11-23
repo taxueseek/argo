@@ -145,6 +145,8 @@ python3 scripts/search.py "查询词" \
   [--timeout S]\
   [--since 7d|2026-08-01] [--until 2026-08-01] [--sort relevance|oldest|newest]\
   [--domain DOMAIN] [--sub_domain SUB_DOMAIN]  # 垂直域限定\
+  [--intent news|academic|social|image-reverse|calc]  # 高层意图路由（缺 key/超预算自动降级）\
+  [--agent]                    # Agent 消费单开关（等价 --json --fields agent）\
   [--input-kind auto|keyword|url-seed|known-url]\
   [--plan-only] [--force-search] [--envelope]\
   [--timing|--no-timing]       # 输出里的阶段耗时，默认开\
@@ -176,13 +178,11 @@ python3 scripts/search.py "查询词" \
 | `sources` | **引用用这个**：底部相关链接形态的稳定 5 字段投影 | 1.0 KB |
 | `candidates` | **归档/整理素材才要**：完整候选记录，带来源追溯字段（`candidate_id`/`canonical_url`/`platform`/`verification`/`metrics`/`limitations`） | 4.9 KB |
 
-- **Agent 消费再加 `--fields agent`**：剥掉本地使用日志字段、只留答案与质量信号，
-  实测 `-n 2` 输出 1.3 KB。`fetch_required` 与 `limitations` 在各档都保留。
-- **`--envelope` 与 `--fields agent` 不要同给**（2026-09-19 实测）：`_strip_for_agent`
-  会把 `candidates`/`coverage` 一并剥掉，envelope 的增量是 **0 字节**——同一查询
-  `--json` 7226 B、`--fields agent` 5614 B、`--envelope` 19066 B、
-  `--envelope --fields agent` 5614 B。调用方会以为拿到了 provenance、实际没有，
-  所以 CLI 在这个组合下会往 stderr 打一行告警。要 provenance 就去掉 `--fields agent`。
+- **Agent 消费用 `--agent`（等价 `--json --fields agent`）**：剥掉本地使用日志字段、只留答案与质量信号，
+  实测 `-n 2` 输出 1.3 KB。`fetch_required`、`limitations` 与启用 `--intent` 时的 `intent_resolution` 均保留。
+- **`--envelope` 与 `--agent` / `--fields agent` 入口互斥（Fail-Fast）**：`_strip_for_agent`
+  会剥离 `candidates`/`coverage`（envelope 增量为 0 字节），CLI 现已在入口直接报错退出（exit 2），
+  避免跑完一整轮无效搜索。要 provenance 请用 `--json --envelope`，只要瘦身答案请用 `--agent`。
 - 三视图内部确实有重复（同一段 snippet 在三处各写一遍，合计约占全文档 40%）——
   那是**归档要的冗余**：`candidates.jsonl` 一行一条要能自证来源。所以做法是
   「要用时打开 `--envelope`」，不是把视图削瘦（削了归档就残了）。

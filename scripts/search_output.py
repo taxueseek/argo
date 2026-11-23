@@ -240,6 +240,8 @@ def _strip_for_agent(payload: dict[str, Any]) -> dict[str, Any]:
         # 数值印证与核对配对（2026-11-01）：同上「花了墙钟换来的」逻辑——
         # 摘要数字与原文冲突、独立官方核对簇，都是 Agent 引用前的直接依据。
         "numverify", "numeric_reorder", "verify_with",
+        # 高层意图路由解析（--intent 显式传入时存在，默认路径不出现、零增量）
+        "intent_resolution",
     )
     out: dict[str, Any] = {k: payload[k] for k in keep_top
                            if payload.get(k) is not None}
