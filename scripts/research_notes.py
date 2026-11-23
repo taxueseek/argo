@@ -299,22 +299,62 @@ def create_explore_bundle(
     )
 
 
+def _parse_study_stdin(raw: str, pick: int = 0) -> dict[str, str]:
+    """从 stdin JSON（argo fetch --json 或 argo search --agent）提取 study 参数。"""
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("stdin JSON 必须是对象（来自 argo fetch --json 或 argo search --agent）")
+    # 形态 1：argo fetch --json
+    if payload.get("url") and ("content" in payload or "fetch_method" in payload):
+        return {
+            "url": str(payload.get("url") or "").strip(),
+            "title": str(payload.get("title") or "").strip(),
+            "archive_text": str(payload.get("content") or ""),
+            "related": "",
+        }
+    # 形态 2：argo search --agent / --json
+    results = payload.get("results")
+    if isinstance(results, list) and results:
+        idx = max(0, min(pick, len(results) - 1))
+        chosen = results[idx] if isinstance(results[idx], dict) else {}
+        others = [
+            str(r.get("url")) for i, r in enumerate(results)
+            if i != idx and isinstance(r, dict) and r.get("url")
+        ]
+        return {
+            "url": str(chosen.get("url") or "").strip(),
+            "title": str(chosen.get("title") or "").strip(),
+            "archive_text": str(chosen.get("snippet") or ""),
+            "related": ", ".join(others[:5]),
+        }
+    raise ValueError("无法识别的 stdin JSON 结构：缺少 url/content 或 results[]")
+
+
 def _cmd_create(args: argparse.Namespace) -> int:
     kind = args.command
-    target = args.url if kind == "study" else args.problem
+    piped: dict[str, str] = {}
+    if kind == "study" and (not args.url or getattr(args, "from_json", False)):
+        raw = sys.stdin.read().strip() if not sys.stdin.isatty() else ""
+        if raw:
+            piped = _parse_study_stdin(raw, pick=int(getattr(args, "pick", 0) or 0))
+    target = (args.url or piped.get("url") or "") if kind == "study" else args.problem
+    if not target:
+        raise SystemExit("study 需要提供 <url>，或通过管道传入 `argo fetch --json` / `argo search --agent` 输出")
     slug = args.slug or slugify(target)
     out_path = Path(args.output).expanduser().resolve() if args.output else None
     archive_text = ""
     if kind == "study":
-        archive_text = args.archive_text or ""
+        archive_text = args.archive_text or piped.get("archive_text") or ""
         if not archive_text and args.archive and Path(args.archive).is_file():
             try:
                 archive_text = Path(args.archive).read_text(encoding="utf-8", errors="replace")
             except OSError:
                 pass
+    title = args.title or piped.get("title") or slug
+    related = args.related or piped.get("related") or "无"
     res = _create_note_bundle(
-        kind, root=resolve_root(args.root), slug=slug, title=args.title or slug,
-        target=target, related=args.related or "无",
+        kind, root=resolve_root(args.root), slug=slug, title=title,
+        target=target, related=related,
         archive_text=archive_text, output=out_path,
     )
     print(dumps(res))
@@ -339,7 +379,12 @@ def build_parser() -> argparse.ArgumentParser:
         ("explore", "problem", "探索问题或主题", "生成方向探索研报（标准 Markdown + Frontmatter）"),
     ):
         sp = sub.add_parser(name, help=desc)
-        sp.add_argument(arg_name, help=arg_help)
+        if name == "study":
+            sp.add_argument(arg_name, nargs="?", default="", help=f"{arg_help}（省略时从 stdin JSON 读取）")
+            sp.add_argument("--from-json", action="store_true", help="显式从 stdin 读取 fetch/search JSON 管道")
+            sp.add_argument("--pick", type=int, default=0, help="从 search JSON 的 results[] 中选取第 N 条（默认 0）")
+        else:
+            sp.add_argument(arg_name, help=arg_help)
         sp.add_argument("--title", help="标题（缺省用 slug）")
         sp.add_argument("--slug", help="标识符（缺省从对象推导）")
         sp.add_argument("-o", "--output", help="直接指定研报输出文件路径")

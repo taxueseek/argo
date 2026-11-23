@@ -1274,46 +1274,19 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             _video["cached"] = False
             return _strip_html_unless_needed(_video, need_html)
 
-    # 微信专用降级链（HTTP→CDP→搜狗，wechat_article.py，`argo wx` 同实现——用户
-    # 显式取文不走匿名爬虫 robots 口径）【必须在 robots 闸前】mp.weixin/robots.txt
-    # 是 Disallow: /（11-15 实测），闸先跑分支永不可达（6ebb625 实跑复现）。让路同前。
-    if (_is_wechat_article_url(url) and not need_html and not actions
-            and not force_browser):
-        try:
-            from wechat_article import fetch_wechat_article
-            _wx = fetch_wechat_article(url)
-        except Exception:
-            _wx = None
-        if _wx and _wx.get("ok"):
-            _wx_result = {
-                "url": url,
-                "title": _wx.get("title") or "",
-                "content": (_wx.get("content") or "")[:max_chars],
-                "html": "",
-                "length": int(_wx.get("char_count") or 0),
-                "success": True,
-                "fetch_method": engine_states.FETCH_WECHAT + str(
-                    _wx.get("fetch_method") or engine_states.FETCH_HTTP_DIRECT),
-                "author": _wx.get("author") or "",
-                "publish_time": _wx.get("publish_time") or "",
-            }
-            try:
-                _wx_result = _assess_quality(_wx_result)
-            except SHAPE_BENIGN:
-                pass
-            _wx_result["cached"] = False
-            return _strip_html_unless_needed(_wx_result, need_html)
-        # 专用链三级全败即结构化失败、不落回通用链：通用链对 mp.weixin 只会拿
-        # JS 骨架冒充成功（11-01 实测病灶）；_has_content 保证到这里的是真失败。
-        return _strip_html_unless_needed({
-            "url": url,
-            "title": "", "content": "", "html": "",
-            "length": 0, "success": False,
-            "error": (_wx or {}).get("error")
-                     or "微信公众号文章抓取失败（HTTP/浏览器/搜狗三通道均未取到正文）",
-            "fetch_method": engine_states.FETCH_WECHAT_FAILED,
-            "cached": False,
-        }, need_html)
+    # 专用 URL 自动分发（微信 / X 推文 / arXiv 论文 / PDF，fetch_dispatch.py）
+    # 【必须在 robots 闸前】mp.weixin/robots.txt 为 Disallow: /，让路同前。
+    if not need_html and not actions and not force_browser:
+        from fetch_dispatch import dispatch_specialized_fetch
+        _spec = dispatch_specialized_fetch(url, max_chars=max_chars, timeout=timeout)
+        if _spec is not None:
+            if _spec.get("success"):
+                try:
+                    _spec = _assess_quality(_spec)
+                except SHAPE_BENIGN:
+                    pass
+            _spec["cached"] = False
+            return _strip_html_unless_needed(_spec, need_html)
 
     # robots.txt 尊重（合规检查）：被禁路径直接拒绝，抓取失败放行
     try:
@@ -1805,10 +1778,12 @@ if __name__ == "__main__":
                                max_chars=args.max_chars)
 
     # 输出摘要
-    summary = {k: r[k] for k in ("success", "fetch_method", "content_ok",
-                                  "quality_score", "page_type", "source_type",
-                                  "is_official", "length", "url",
-                                  "video_meta") if k in r}
+    summary = {k: r[k] for k in ("success", "fetch_method", "dispatch_handler",
+                                  "content_ok", "quality_score", "page_type",
+                                  "source_type", "is_official", "length",
+                                  "url", "title", "video_meta") if k in r}
+    if args.json and "content" in r:
+        summary["content"] = r["content"]
     # 截断必须可见：只给 8,000 字却不说明「还有多少没给」，调用方会当全文用
     for k in ("truncated", "full_length", "full_text_path", "total_length",
               "offset", "full_source", "final_url",

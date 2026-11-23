@@ -553,14 +553,47 @@ def _usage() -> str:
     return f"""argo — 统一搜索与证据核验 CLI（收录 {head}）
 
 Usage:
-  argo search    "query"          统一搜索（{head}，TF-IDF路由+RRF融合）
+  # 核心原语（高频入口）
+  argo search    "query"          统一搜索（--agent 精简档 / --intent news|academic|social|image-reverse|calc）
+  argo fetch     "url"            统一抓取（自动识别网页、微信、X 推文、arXiv 论文与 PDF；--full 读全文）
+  argo research  "query"          深度研究（问题分解→多源采集→取证包 dossier）
+  argo evidence  "query"          可信度评估（自动搜索 → 评分，或 pipe 搜索结果）
+  argo clarify   "query"          意图消歧（歧义检测+意图分类+路由建议）
+
+  # 保留工作流（全部兼容，可与 search/fetch 管道衔接）
+  argo note      {{study|explore|list}}  研究笔记归档（支持 `argo fetch ... --json | argo note study`）
+  argo watch     {{add|check|list|remove}}  网页快照与变化监控
+  argo job       "query"          招聘岗位多平台聚合
+  argo cite      "doi" [doi...]   DOI → 引用条目（GB/T 7714 / APA / BibTeX）
+  argo seek      "query" [选项]   本机文件与代码三层检索
+  argo local-image {{index|search|stats}}  本地图片 Vision 检索（需 ARGO_LOCAL_IMAGE=1）
+
+  # 专有提取与运维（全部顶层子命令均保留，详表见 argo --help --all）
+  提取族: crawl / extract / wx / article / pdf / paper / tweet / x-search / screenshot / preflight / answer / template / ego-search
+  运维族: auth / mcp / paths / daemon / stats / budget / quota / engine / doctor / settings
+
+Common flags: --agent --intent <name> --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
+
+查看全部子命令详表：argo --help --all
+本机此刻可用几个源：argo search --list-engines --routable-only
+逐源费用/密钥/状态：docs/ENGINE_CATALOG.md
+"""
+
+
+def _usage_all() -> str:
+    n = _engine_count()
+    head = f"{n} 个源" if n else "多源"
+    return f"""argo — 统一搜索与证据核验 CLI（收录 {head}）
+
+Usage:
+  argo search    "query"          统一搜索（{head}，TF-IDF路由+RRF融合；支持 --agent / --intent）
   argo research  "query"          深度研究（问题分解→多源采集→综合报告）
-  argo note study  <url>          单篇精研归档（原文存档 + 五段式笔记骨架 + 索引）
+  argo note study  [url]          单篇精研归档（原文存档 + 五段式笔记骨架 + 索引；支持 stdin JSON 管道）
   argo note explore "<问题>"      方向探索归档（五段式笔记骨架 + 候选方向段）
   argo note list  [查询词]         检索研究笔记索引
   argo evidence  "query"          可信度评估（自动搜索 → 评分，或 pipe 搜索结果）
   argo clarify   "query"          意图消歧（歧义检测+意图分类+路由建议）
-  argo fetch     "url"            抓取单页正文（多级降级：HTTP 内容协商→md 变体回探→TLS 指纹→jina→Parallel→浏览器；--full 读全文存档）
+  argo fetch     "url"            统一抓取（自动分发网页/微信/X/arXiv/PDF；多级降级；--full 读全文存档）
   argo crawl     "url"            站点爬取（BFS/sitemap；--query BM25 聚焦 / --full 全文 / --scope auto|path|domain）
   argo extract   "url"            结构化提取（表格/Meta/JSON-LD）
   argo article   "url"            微信公众号文章全文抓取（标题/正文/图片）
@@ -589,7 +622,7 @@ Usage:
   argo budget  {{list|set|unset}}        按引擎的月度预算（原生币种；默认 DeepSeek ¥5/月）
   argo quota   [--json] [--refresh]    知乎开放平台当日额度（官方 API，不消耗业务额度）
 
-Common flags: --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
+Common flags: --agent --intent <name> --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
 
 本机此刻可用几个源：argo search --list-engines --routable-only
 逐源费用/密钥/状态：docs/ENGINE_CATALOG.md
@@ -618,7 +651,8 @@ def _pin_stdio():
 def main():
     _pin_stdio()
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
-        print(_usage())
+        show_all = "--all" in sys.argv[2:] or "-a" in sys.argv[2:]
+        print(_usage_all() if show_all else _usage())
         # 帮助不是错误：--help/help 正常退出（0），无参数调用才是用法错误（1）
         sys.exit(0 if len(sys.argv) >= 2 else 1)
 

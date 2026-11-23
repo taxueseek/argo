@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""tests/test_plan1_unified_cli_and_fetch.py — 优化版方案一契约门禁。
+
+覆盖三项核心能力：
+  1. fetch_dispatch 统一 URL 自动分发（wechat / tweet / paper / pdf + 失败优雅回落）；
+  2. bin/argo 分层 --help 默认视图瘦身与 --help --all 全量展开（100% 保留工作流）；
+  3. 保留工作流管道衔接：`argo fetch --json | argo note study` 与 `argo search --agent | argo note study`。
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "scripts"
+BIN_ARGO = ROOT / "bin" / "argo"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+import fetch_dispatch  # noqa: E402
+import research_notes  # noqa: E402
+
+
+# ── 1. URL 分类与专用提取分发 ─────────────────────────────────────────────────
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://mp.weixin.qq.com/s/abc123", "wechat"),
+        ("https://mp.weixin.qq.com/s?__biz=123", "wechat"),
+        ("https://x.com/OpenAI/status/1800000000000000000", "tweet"),
+        ("https://twitter.com/karpathy/status/1800000000000000001", "tweet"),
+        ("https://arxiv.org/abs/1706.03762", "paper"),
+        ("https://arxiv.org/html/2401.00001v1", "paper"),
+        ("https://arxiv.org/pdf/1706.03762", "pdf"),
+        ("https://example.org/docs/report.pdf", "pdf"),
+        ("https://docs.python.org/3/library/asyncio.html", None),
+    ],
+)
+def test_classify_specialized_url(url: str, expected: str | None):
+    assert fetch_dispatch.classify_specialized_url(url) == expected
+
+
+def test_dispatch_paper_and_pdf_and_fallback(monkeypatch):
+    # paper 正常分发
+    import paper as paper_mod
+    monkeypatch.setattr(
+        paper_mod,
+        "fetch_meta",
+        lambda aid: {
+            "arxiv_id": aid,
+            "title": "Attention Is All You Need",
+            "authors": ["Vaswani", "Shazeer"],
+            "published": "2017-06-12",
+            "pdf_url": "https://arxiv.org/pdf/1706.03762",
+            "summary": "The dominant sequence transduction models...",
+        },
+    )
+    res_paper = fetch_dispatch.dispatch_specialized_fetch("https://arxiv.org/abs/1706.03762")
+    assert res_paper is not None
+    assert res_paper["success"] is True
+    assert res_paper["dispatch_handler"] == "paper"
+    assert "Attention Is All You Need" in res_paper["content"]
+
+    # pdf 正常分发
+    import pdf_extract
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_pdf",
+        lambda _url: {"success": True, "title": "Spec", "content": "PDF body text", "pages": 3},
+    )
+    res_pdf = fetch_dispatch.dispatch_specialized_fetch("https://example.org/spec.pdf")
+    assert res_pdf is not None
+    assert res_pdf["success"] is True
+    assert res_pdf["dispatch_handler"] == "pdf"
+    assert res_pdf["content"] == "PDF body text"
+
+    # pdf 失败时返回 None（交由 fetch_v3 常规降级链兜底）
+    monkeypatch.setattr(pdf_extract, "extract_pdf", lambda _url: {"success": False})
+    assert fetch_dispatch.dispatch_specialized_fetch("https://example.org/bad.pdf") is None
+
+    # 普通网页直接返回 None
+    assert fetch_dispatch.dispatch_specialized_fetch("https://example.org/index.html") is None
+
+
+# ── 2. bin/argo 分层 --help 视图 ──────────────────────────────────────────────
+
+def test_bin_argo_layered_help_and_all_flag():
+    r_default = subprocess.run(
+        [sys.executable, str(BIN_ARGO), "--help"],
+        capture_output=True, text=True, check=True,
+    )
+    r_all = subprocess.run(
+        [sys.executable, str(BIN_ARGO), "--help", "--all"],
+        capture_output=True, text=True, check=True,
+    )
+    out_def = r_default.stdout
+    out_all = r_all.stdout
+    # 默认视图显著更精简，但保留核心原语与工作流索引
+    assert len(out_def) < len(out_all) * 0.65, (
+        f"默认 --help ({len(out_def)} chars) 应显著瘦于 --help --all ({len(out_all)} chars)"
+    )
+    assert "核心原语" in out_def
+    assert "保留工作流" in out_def
+    assert "argo --help --all" in out_def
+    # --all 视图完整保留全部工作流与运维命令
+    for cmd in ("argo note study", "argo watch", "argo job", "argo local-image", "argo daemon"):
+        assert cmd in out_all
+
+
+# ── 3. 工作流管道衔接：fetch/search JSON → argo note study ────────────────────
+
+def test_note_study_accepts_fetch_and_search_json_via_stdin(monkeypatch, tmp_path, capsys):
+    # 3a. fetch --json 管道直传
+    fetch_payload = json.dumps({
+        "url": "https://example.org/post-1",
+        "title": "Deep Dive Post",
+        "content": "Full extracted body content.",
+        "fetch_method": "http",
+        "success": True,
+    })
+    monkeypatch.setattr(sys, "stdin", io.StringIO(fetch_payload))
+    rc = research_notes.main(["study", "--root", str(tmp_path)])
+    assert rc == 0
+    res1 = json.loads(capsys.readouterr().out)
+    note_text1 = Path(res1["note"]).read_text(encoding="utf-8")
+    assert "Deep Dive Post" in note_text1
+    assert "Full extracted body content." in note_text1
+
+    # 3b. search --agent 管道直传（自动取 Top 1 并将其他结果填入 related）
+    search_payload = json.dumps({
+        "query": "python asyncio",
+        "results": [
+            {"title": "Asyncio Docs", "url": "https://docs.python.org/3/library/asyncio.html", "snippet": "Official docs"},
+            {"title": "PEP 3156", "url": "https://peps.python.org/pep-3156/", "snippet": "PEP spec"},
+        ],
+    })
+    monkeypatch.setattr(sys, "stdin", io.StringIO(search_payload))
+    rc2 = research_notes.main(["study", "--root", str(tmp_path)])
+    assert rc2 == 0
+    res2 = json.loads(capsys.readouterr().out)
+    note_text2 = Path(res2["note"]).read_text(encoding="utf-8")
+    assert "Asyncio Docs" in note_text2
+    assert "https://peps.python.org/pep-3156/" in note_text2

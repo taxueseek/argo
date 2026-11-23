@@ -71,6 +71,7 @@ tests/test_p0_sec_edgar_url.py
 tests/test_p2_followup.py
 tests/test_package_files_gate.py
 tests/test_patch_target_gate.py
+tests/test_plan1_unified_cli_and_fetch.py
 tests/test_query_operators.py
 tests/test_ranking_contract.py
 tests/test_readme_art.py
