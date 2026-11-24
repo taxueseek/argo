@@ -188,7 +188,59 @@ test('workbench CLI args keep every flag before `--` so dash-leading queries sta
   assert.equal(args[args.length - 1], '--list-engines')
   assert.ok(args.slice(0, sep).includes('--json'), 'flag 必须全部前置到 -- 之前')
   assert.ok(args.slice(0, sep).includes('--no-cache'), 'refresh 的 --no-cache 也须前置')
+  assert.ok(!args.slice(0, sep).includes('--envelope'), '默认不附冗余 --envelope')
   assert.ok(!args.slice(0, sep).includes('--list-engines'), 'query 不得混入 flag 区')
+})
+
+test('workbench modes map to --intent for real vertical engine boost', () => {
+  const acad = buildSearchCliArgs('transformer', 'academic')
+  assert.ok(acad.includes('--intent') && acad[acad.indexOf('--intent') + 1] === 'academic')
+  const hot = buildSearchCliArgs('AI 政策', 'hotspot')
+  assert.ok(hot.includes('--intent') && hot[hot.indexOf('--intent') + 1] === 'news')
+  const soc = buildSearchCliArgs('Claude Code', 'general', false, { intent: 'social' })
+  assert.ok(soc.includes('--intent') && soc[soc.indexOf('--intent') + 1] === 'social')
+})
+
+test('workbench /argo/api/local-inspect and /argo/api/note-study bridge local-seek and note study', async () => {
+  const calls = []
+  const handler = createWorkbenchHandler(
+    { get: () => null },
+    { localSearchPath: process.cwd() },
+    null,
+    {
+      runInspectCli: async (cliArgs) => {
+        calls.push(cliArgs)
+        return { ok: true, symbol: 'resolve_intent', start: 78, end: 193, content: '78: def resolve_intent(' }
+      },
+      runNoteCli: async (cliArgs, opts) => {
+        calls.push({ cliArgs, hasStdin: Boolean(opts?.stdin) })
+        return { kind: 'study', note: '/tmp/demo-note.md' }
+      },
+    },
+  )
+
+  const res1 = mockRes()
+  await handler(mockReq('POST', '/argo/api/local-inspect', {
+    path: 'file:///tmp/intent_router.py',
+    symbol: 'resolve_intent',
+  }), res1)
+  assert.equal(res1.statusCode, 200)
+  const b1 = res1.json()
+  assert.equal(b1.ok, true)
+  assert.equal(b1.symbol, 'resolve_intent')
+  assert.deepEqual(calls[0], ['seek', '--json', '--symbol-body', 'resolve_intent', '--', '/tmp/intent_router.py'])
+
+  const res2 = mockRes()
+  await handler(mockReq('POST', '/argo/api/note-study', {
+    title: 'Test Note',
+    payload: { query: 'q', results: [{ title: 'T', url: 'https://example.org/1', snippet: 'S' }] },
+  }), res2)
+  assert.equal(res2.statusCode, 200)
+  const b2 = res2.json()
+  assert.equal(b2.ok, true)
+  assert.equal(b2.note, '/tmp/demo-note.md')
+  assert.equal(calls[1].hasStdin, true)
+  assert.ok(calls[1].cliArgs.includes('--from-json'))
 })
 
 test('workbench research gate passes when stats are supplied alongside valid citations', async () => {

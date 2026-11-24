@@ -19,11 +19,13 @@ import {
   buildSystemPrompt,
   callArgoSearch,
   extractCitations,
+  inspectLocalFile,
   MODES,
   MODE_LABELS,
   resolveLocalSearchPath,
   runClarifyIfShort,
   runEvidenceScoring,
+  saveNoteStudy,
   streamLlmAnswer,
 } from './workbench-search.js'
 import {
@@ -341,6 +343,43 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
         return
       }
 
+      if (path === '/argo/api/local-inspect' && req.method === 'POST') {
+        const body = await readJsonBody(req)
+        const filePath = String(body.path || body.filePath || '').trim()
+        if (!filePath) { sendJson(res, 400, { error: 'missing_path' }); return }
+        try {
+          const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
+          const out = await inspectLocalFile(env, {
+            filePath,
+            symbol: body.symbol || '',
+            lines: body.lines || '',
+            runner: options.runInspectCli || runArgoCli,
+          })
+          sendJson(res, out?.ok === false ? 400 : 200, out)
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: String(err?.message ?? err) })
+        }
+        return
+      }
+
+      if (path === '/argo/api/note-study' && req.method === 'POST') {
+        const body = await readJsonBody(req)
+        const payload = body.payload || (body.results || body.url ? body : null)
+        if (!payload) { sendJson(res, 400, { error: 'missing_payload' }); return }
+        try {
+          const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
+          const out = await saveNoteStudy(env, {
+            payload,
+            title: body.title || '',
+            runner: options.runNoteCli || runArgoCli,
+          })
+          sendJson(res, 200, { ok: true, ...out })
+        } catch (err) {
+          sendJson(res, 500, { ok: false, error: String(err?.message ?? err) })
+        }
+        return
+      }
+
       if (path === '/argo/api/health' && req.method === 'GET') {
         const hasLlm = Boolean(ctx.get?.('llm') && ctx.get?.('agentDefaultModel')?.currentSelection?.()?.model)
         const hs = loadHotspotStore()
@@ -493,6 +532,8 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
             cards,
             funnel: payload?.funnel || null,
             engines: [...new Set(cards.map(c => c.source))],
+            intentResolution: payload?.intent_resolution || null,
+            warnings: Array.isArray(payload?.warnings) ? payload.warnings : [],
           })
           if (ac.signal.aborted) return
 
