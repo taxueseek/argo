@@ -250,6 +250,36 @@ class TestEmptyOpenPipeDoesNotHang:
         assert "read1" not in stripped, (
             "不要用缓冲区 read1 阻塞读；非阻塞 os.read + 轮询才是这里的实现")
 
+    def test_socketpair_stdin_is_detected_and_read(self):
+        """macOS/Linux 下 Node.js libuv spawn 用 socketpair（S_ISSOCK）作 stdin：
+        stdin_is_piped 与 read_stdin_if_piped 均必须正确识别并读完数据。"""
+        import socket
+        if not hasattr(socket, "socketpair"):
+            pytest.skip("当前平台不支持 socketpair")
+        s_read, s_write = socket.socketpair()
+        try:
+            payload = '{"results":[{"title":"sock","url":"https://example.org/1"}]}'
+            s_write.sendall(payload.encode("utf-8"))
+            s_write.close()
+            r = subprocess.run(
+                [
+                    sys.executable, "-c",
+                    "import sys; sys.path.insert(0, 'scripts'); "
+                    "import cli_io; "
+                    "print(cli_io.stdin_is_piped(), cli_io.read_stdin_if_piped())",
+                ],
+                stdin=s_read,
+                capture_output=True,
+                text=True,
+                cwd=str(ROOT),
+                timeout=10,
+            )
+            assert r.returncode == 0, r.stderr
+            assert r.stdout.startswith("True "), r.stdout
+            assert '"title":"sock"' in r.stdout
+        finally:
+            s_read.close()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -243,6 +243,19 @@ test('workbench /argo/api/local-inspect and /argo/api/note-study bridge local-se
   assert.ok(calls[1].cliArgs.includes('--from-json'))
 })
 
+test('workbench-io cross-platform helpers handle win32 PATH and shebang wrapping', async () => {
+  const { mergedLaunchdPath, resolveSpawnCommand } = await import('../dsh/workbench-io.js')
+  const winPath = mergedLaunchdPath({ Path: 'C:\\Windows\\System32;C:\\Python312' }, 'win32')
+  assert.equal(winPath, 'C:\\Windows\\System32;C:\\Python312')
+  assert.ok(!winPath.includes('/opt/homebrew/bin:'))
+
+  const wrapped = resolveSpawnCommand('C:\\repo\\bin\\argo', ['search', '--json'], { ARGO_PYTHON: 'py' }, 'win32')
+  assert.deepEqual(wrapped, { cmd: 'py', argv: ['C:\\repo\\bin\\argo', 'search', '--json'] })
+
+  const posix = resolveSpawnCommand('/repo/bin/argo', ['search', '--json'], {}, 'darwin')
+  assert.deepEqual(posix, { cmd: '/repo/bin/argo', argv: ['search', '--json'] })
+})
+
 test('workbench research gate passes when stats are supplied alongside valid citations', async () => {
   const { evaluateGates } = await import('../dsh/wide-research.js')
   const gate = evaluateGates({

@@ -187,7 +187,7 @@ def read_stdin_if_piped() -> str:
     if stat.S_ISREG(mode):
         # 文件重定向：read() 到 EOF 立即返回，本来就不会挂，无需期限
         return _read_all_text()
-    if not stat.S_ISFIFO(mode):
+    if not (stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)):
         return ""  # 终端 / /dev/null / 其它字符设备：没有数据
     return _read_pipe_with_deadline()
 

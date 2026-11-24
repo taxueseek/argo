@@ -14,11 +14,16 @@ const MONOREPO_ARGO_BIN = join(HERE, '..', '..', '..', 'bin', 'argo')
 // install.sh 默认安装根（ARGO_HOME 可改，此处只探测默认路径——探测不到就走
 // console script 的 PATH 兜底，不猜 site-packages 里的 wheel _data 布局）
 const INSTALL_VENV_ARGO_BIN = join(homedir(), '.local', 'share', 'argo', '.venv', 'bin', 'argo')
+const INSTALL_VENV_ARGO_BIN_WIN = join(
+  process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'),
+  'argo', '.venv', 'Scripts', 'argo.exe',
+)
 export const WATCH_STORE_FILE = join(homedir(), '.config', 'argo', 'workbench-watches.json')
 
-export function mergedLaunchdPath(env = {}) {
+export function mergedLaunchdPath(env = {}, platform = process.platform) {
+  const basePath = env.PATH || env.Path || process.env.PATH || process.env.Path || ''
+  if (platform === 'win32') return basePath
   const extraPath = ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')].join(':')
-  const basePath = env.PATH || process.env.PATH || ''
   return basePath ? `${extraPath}:${basePath}` : extraPath
 }
 
@@ -26,19 +31,31 @@ export function mergedLaunchdPath(env = {}) {
 // 裸名 'argo' 又依赖 PATH——launchd/受限 PATH 下 venv console script 可能不可达。
 // 修法加候选不重排：显式 ARGO_BIN 最优先（用户指路零猜测），其次 monorepo、
 // install.sh 默认 venv，最后裸名走 PATH。
-export function resolveArgoBin(env = {}) {
+export function resolveArgoBin(env = {}, platform = process.platform) {
   const explicit = env.ARGO_BIN || process.env.ARGO_BIN
   if (explicit) return explicit
   if (existsSync(MONOREPO_ARGO_BIN)) return MONOREPO_ARGO_BIN
+  if (platform === 'win32' && existsSync(INSTALL_VENV_ARGO_BIN_WIN)) return INSTALL_VENV_ARGO_BIN_WIN
   if (existsSync(INSTALL_VENV_ARGO_BIN)) return INSTALL_VENV_ARGO_BIN
   return 'argo'
+}
+
+// Windows CreateProcess 不识别 shebang：若解析到无后缀 bin/argo 或 .py 脚本，自动用 Python 解释器包装
+export function resolveSpawnCommand(bin, args = [], env = {}, platform = process.platform) {
+  if (platform === 'win32' && (/[\\/]bin[\\/]argo$/i.test(bin) || /\.py$/i.test(bin))) {
+    const py = env.ARGO_PYTHON || process.env.ARGO_PYTHON || 'python'
+    return { cmd: py, argv: [bin, ...args] }
+  }
+  return { cmd: bin, argv: args }
 }
 
 export function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, signal = null } = {}) {
   const mergedPath = mergedLaunchdPath(env)
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(new Error('aborted')); return }
-    const child = spawn(resolveArgoBin({ ...env, PATH: mergedPath }), args, {
+    const bin = resolveArgoBin({ ...env, PATH: mergedPath })
+    const { cmd, argv } = resolveSpawnCommand(bin, args, env)
+    const child = spawn(cmd, argv, {
       env: { ...process.env, ...env, PATH: mergedPath },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -78,6 +95,7 @@ export function runArgoCli(args, { env = {}, stdin = null, timeoutMs = 30000, si
         reject(new Error(`invalid json from argo ${args[0] || ''}`))
       }
     })
+    child.stdin.on('error', () => {})
     if (stdin !== null && stdin !== undefined) {
       child.stdin.end(typeof stdin === 'string' ? stdin : JSON.stringify(stdin))
     } else {
