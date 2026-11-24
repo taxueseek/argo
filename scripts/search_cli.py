@@ -842,6 +842,11 @@ def main():
         }
         if intent_res.get("engines_boost"):
             ir_out["engines_boost"] = intent_res["engines_boost"]
+        # domain 字段的作用域标注（2026-11-24）：intent 会设 domain，而该字段
+        # 不参与选源（route_query 从不读 engine_domain），只在引擎级缓存键上生效。
+        # 标出来，避免调用方把 `intent_resolution.domain` 读成「结果已被限定在该域」。
+        if intent_res.get("domain"):
+            ir_out["domain_scope"] = "cache_key_only"
         results["intent_resolution"] = ir_out
         if intent_res.get("warnings"):
             existing_w = results.setdefault("warnings", [])

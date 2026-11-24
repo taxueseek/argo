@@ -145,7 +145,7 @@ python3 scripts/search.py "查询词" \
   [--timeout S]\
   [--since 7d|2026-08-01] [--until 2026-08-01] [--sort relevance|oldest|newest]\
   [--domain DOMAIN] [--sub_domain SUB_DOMAIN]  # 垂直域下推（仅 anysearch 消费）+ 缓存键隔离；不参与选源\
-  [--intent news|academic|social|image-reverse|calc]  # 高层意图路由（缺 key/超预算自动降级）\
+  [--intent news|academic|social|image-reverse|calc]  # 高层意图路由（引擎前置/深度调整；缺 key 或超预算自动降级）\
   [--agent]                    # Agent 消费单开关（等价 --json --fields agent）\
   [--input-kind auto|keyword|url-seed|known-url]\
   [--plan-only] [--force-search] [--envelope]\
@@ -183,6 +183,22 @@ python3 scripts/search.py "查询词" \
 - **`--envelope` 与 `--agent` / `--fields agent` 入口互斥（Fail-Fast）**：`_strip_for_agent`
   会剥离 `candidates`/`coverage`（envelope 增量为 0 字节），CLI 现已在入口直接报错退出（exit 2），
   避免跑完一整轮无效搜索。要 provenance 请用 `--json --envelope`，只要瘦身答案请用 `--agent`。
+
+### `--intent` 各分支的真实作用（2026-11-24 实测校准）
+
+`--intent` 改变的是**引擎选择与深度**，不是「把结果限定在该域」。它设的
+`domain` 字段不参与选源（`route_query` 从不读 `engine_domain`），只在引擎级
+缓存键上生效——响应里标为 `intent_resolution.domain_scope = "cache_key_only"`。
+
+| intent | 实际生效的动作 | 降级条件 |
+|--------|----------------|----------|
+| `news` | 有 key 且未超预算 → 单引擎 `deepseek_search`；`mode=fast` 或不可用 → 自动路由 + `news_fallback` 引擎前置 | `degraded=true` |
+| `academic` | `depth=deep` + 学术源前置（arxiv/openalex/semantic_scholar/local_pubmed） | 无（boost 只是前置，不影响可达性） |
+| `social` | 社交源前置（anysearch/reddit/zhihu/hackernews） | 无 |
+| `image-reverse` | 从 animetrace/tracemoe/saucenao/google_lens 选可用源（至多 2 个） | 全部不可用 → `degraded=true`，回落自动路由 |
+| `calc` | 有 `ARGO_WOLFRAM_APPID` 时走 wolframalpha | 缺 key → `degraded=true`，**回落结果是通用网页搜索**，不是计算结果；拿到的引用不可当精确值 |
+
+显式给 `--engine` 会覆盖同一意图的引擎选择，并在 `warnings[]` 留痕。
 - 三视图内部确实有重复（同一段 snippet 在三处各写一遍，合计约占全文档 40%）——
   那是**归档要的冗余**：`candidates.jsonl` 一行一条要能自证来源。所以做法是
   「要用时打开 `--envelope`」，不是把视图削瘦（削了归档就残了）。

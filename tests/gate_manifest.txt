@@ -47,6 +47,7 @@ tests/test_followup_fixes.py
 tests/test_gate_manifest.py
 tests/test_grounding_stall_and_smoke.py
 tests/test_health_gate_perf.py
+tests/test_help_covers_dispatch.py
 tests/test_hotpath_import_lint.py
 tests/test_http_attribution.py
 tests/test_image_sources.py

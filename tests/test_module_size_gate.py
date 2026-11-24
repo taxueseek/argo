@@ -50,7 +50,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_cn.py": (2089, "中文源构建器，itotii/toutiao_hot/bilibili_hot/weibo_hot/douyin_hot 转声明式 YAML 净瘦身 194 行"),
     "scripts/engines_builders_batch9.py": (1263, "批次九源构建器，方案 A 归一 + 共用 engines_http 净瘦身 94 行"),
     "scripts/engines_builders_tech.py": (1174, "技术社区源构建器，方案 A 归一 + 共用 lazy_logger 净瘦身 106 行"),
-    "scripts/fetch_v3.py": (1839, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段。2026-11-13 上调 +1：裸吞窄化引入 except_sets 词汇表导入；2026-11-15 收紧 -1：微信分支移到 robots 闸前（顺序修复），净行数 1906→1905；2026-11-17 收紧 -40：jina 请求层拆到 fetch_jina.py（与 fetch_jsrun / fetch_render_tinyfish 同构），净行数 1905→1865；2026-11-18 收紧 -1：identity_lock/atexit 合并写与注释收口，净行数 1865→1864；2026-11-23 收紧 -25：专用 URL 分发拆出到 fetch_dispatch.py，净行数 1864→1839"),
+    "scripts/fetch_v3.py": (1856, "抓取降级链，每级要保留顺序与超时语义；拆分候选：article_meta 接线段。2026-11-13 上调 +1：裸吞窄化引入 except_sets 词汇表导入；2026-11-15 收紧 -1：微信分支移到 robots 闸前（顺序修复），净行数 1906→1905；2026-11-17 收紧 -40：jina 请求层拆到 fetch_jina.py（与 fetch_jsrun / fetch_render_tinyfish 同构），净行数 1905→1865；2026-11-18 收紧 -1：identity_lock/atexit 合并写与注释收口，净行数 1865→1864；2026-11-23 收紧 -25：专用 URL 分发拆出到 fetch_dispatch.py，净行数 1864→1839；2026-11-24 上调 +17：「成功但零正文」修正（质量评估后判定空正文不得标 success，PDF 二进制不再假成功）"),
     "scripts/engines_base.py": (1466, "引擎基类 + HTTP 出口 + 输出映射；2026-11-21 收紧 -7：body 值类型收敛下沉 engines_fields（nan/inf 门）"),
     "scripts/cache.py": (1376, "存储实现与门面；2026-11-20 收紧 -1：提取 _copy_hit 并给 _read_many 补浅拷贝、60s 节流 accessed_at、复用 set 连接"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),

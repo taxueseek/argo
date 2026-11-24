@@ -167,8 +167,27 @@ def _dispatch_pdf(url: str, max_chars: int) -> dict[str, Any] | None:
     try:
         from pdf_extract import extract_pdf
         res = extract_pdf(url)
-        if not res or not res.get("success"):
+        if not res:
             return None
+        # 依赖缺失是**明确失败**，不是「交给通用链」：pdfplumber / PyMuPDF
+        # 属可选 extras，未装时 extract_pdf 返回 success=False + error。
+        # 旧实现一律 return None，于是调用方回落到通用抓取链——那条链把 PDF
+        # 二进制当 HTML 抓回、正文抽取为空，最终给出 `success=True, length=0`
+        # 的假成功（2026-11-24 实测）。这里把失败显式传回去，让 fetch_v3
+        # 至少能报「为什么没拿到」。
+        if not res.get("success"):
+            err = str(res.get("error") or "PDF 提取失败")
+            return {
+                "url": url,
+                "title": "",
+                "content": "",
+                "html": "",
+                "length": 0,
+                "success": False,
+                "error": err,
+                "fetch_method": engine_states.FETCH_PDF_FAILED,
+                "dispatch_handler": "pdf",
+            }
         content = str(res.get("content") or "")[:max_chars]
         if not content.strip():
             return None

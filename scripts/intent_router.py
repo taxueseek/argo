@@ -106,7 +106,8 @@ def resolve_intent(
         if resolved_depth == "fast":
             resolved_depth = "deep"
         boost = None if explicit_engine else list(_INTENT_BOOST["academic"])
-        reason = "学术多源模式（domain=academic, depth=deep, boost=arxiv/openalex/semantic_scholar/local_pubmed）"
+        reason = ("学术多源模式（depth=deep，引擎前置 arxiv/openalex/"
+                  "semantic_scholar/local_pubmed）")
         if explicit_engine:
             warnings.append(f"--engine {engine} 覆盖了 --intent {intent} 的默认多源路由")
         return _pack(
@@ -118,7 +119,12 @@ def resolve_intent(
         if not resolved_domain:
             resolved_domain = "social"
         boost = None if explicit_engine else list(_INTENT_BOOST["social"])
-        reason = "社交与社区垂直域（domain=social, boost=anysearch/reddit/zhihu/hackernews）"
+        # reason 只说真实发生的事：本意图靠 engines_boost 把社交源前置，
+        # `domain=social` 只是缓存键隔离标记，不参与选源（route_query 从不读
+        # engine_domain）。旧措辞「社交与社区垂直域」会让调用方以为结果已被
+        # 限定在社区域内——实测同一 query 带不带该 domain，路由逐位相同。
+        reason = ("社交意图（引擎前置 anysearch/reddit/zhihu/hackernews；"
+                  "domain 不参与选源，仅隔离缓存键）")
         if explicit_engine:
             warnings.append(f"--engine {engine} 覆盖了 --intent {intent} 的默认多源路由")
         return _pack(

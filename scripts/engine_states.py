@@ -371,6 +371,7 @@ FETCH_WECHAT_FAILED = "wechat_failed"  # 公众号分支失败
 FETCH_FULLTEXT = "fulltext"            # 从本地 fulltext 存档读全文
 FETCH_X_ARTICLE = "x_article"          # X 文章打包
 FETCH_BLOCKED = "blocked"              # SSRF/安全拦截
+FETCH_PDF_FAILED = "pdf_failed"        # PDF 专用提取失败（含解析依赖缺失）
 
 FETCH_METHODS = frozenset({
     FETCH_HTTP_MD, FETCH_HTTP, FETCH_TLS, FETCH_JINA, FETCH_WAYBACK,
@@ -397,7 +398,7 @@ FETCH_FULL = "full"
 FETCH_METHODS_ALL = FETCH_METHODS | frozenset({
     FETCH_HTTP_MOBILE, FETCH_TLS_SPOOF, FETCH_JINA_READER, FETCH_MD_VARIANT,
     FETCH_LLMS_TXT, FETCH_TINYFISH, FETCH_PARALLEL, FETCH_ROBOTS_BLOCKED,
-    FETCH_HTTP_DIRECT, FETCH_FULL,
+    FETCH_HTTP_DIRECT, FETCH_FULL, FETCH_PDF_FAILED,
 })
 
 # 已产出 Markdown 的抓取方式：内容已由站点或阅读器转好，没有 HTML 壳可言。

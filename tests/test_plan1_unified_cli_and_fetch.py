@@ -81,9 +81,19 @@ def test_dispatch_paper_and_pdf_and_fallback(monkeypatch):
     assert res_pdf["dispatch_handler"] == "pdf"
     assert res_pdf["content"] == "PDF body text"
 
-    # pdf 失败时返回 None（交由 fetch_v3 常规降级链兜底）
-    monkeypatch.setattr(pdf_extract, "extract_pdf", lambda _url: {"success": False})
-    assert fetch_dispatch.dispatch_specialized_fetch("https://example.org/bad.pdf") is None
+    # pdf 提取失败必须**显式失败**，不返回 None（2026-11-24 契约修正）。
+    #
+    # 旧契约是「失败返回 None，交由 fetch_v3 常规降级链兜底」。实测那条回落
+    # 路径正是假成功来源：PDF 二进制被当 HTML 抓回 → 正文抽取为空 → 各抓取层
+    # 只按 HTTP 状态码报 success → 调用方拿到 `success=True, length=0`。
+    # 依赖缺失（pdfplumber/PyMuPDF 属可选 extras）与 URL 抓取失败都在此列。
+    monkeypatch.setattr(pdf_extract, "extract_pdf",
+                        lambda _url: {"success": False, "error": "boom"})
+    res_bad = fetch_dispatch.dispatch_specialized_fetch("https://example.org/bad.pdf")
+    assert res_bad is not None
+    assert res_bad["success"] is False
+    assert res_bad["dispatch_handler"] == "pdf"
+    assert res_bad["error"] == "boom"
 
     # 普通网页直接返回 None
     assert fetch_dispatch.dispatch_specialized_fetch("https://example.org/index.html") is None

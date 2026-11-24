@@ -649,6 +649,10 @@ Usage:
   argo stats [-n N]                    使用日志与反馈状态（本地使用日志只读出口）
   argo budget  {{list|set|unset}}        按引擎的月度预算（原生币种；默认 DeepSeek ¥5/月）
   argo quota   [--json] [--refresh]    知乎开放平台当日额度（官方 API，不消耗业务额度）
+  argo doctor [--days N] [--json]      源健康度审计（基于使用日志给出去留建议）
+  argo engine {{list|status|revive|add}}  引擎注册与状态运维（新源准入 / 复活被停用的源）
+  argo settings [子命令]               本地设置页 + 配置写回（页面/list 看透视；--edit/--apply）
+  argo ui                               唤起 argo settings（issue #44 承诺的同义别名）
 
 Common flags: --agent --intent <name> --json --mode {{fast|auto|deep|budget}} --max-results N --depth {{fast|balanced|deep}}
 
