@@ -73,7 +73,8 @@ _AGENT_RESULT_FIELDS = (
     # 中间档，借鉴 DeepSeek Search 的 summary 语义。只在确有核验证据时
     # 出现（backfill_results 回填），未核验结果不造假摘要。
     "summary",
-    "image_url", "image_license",
+    "image_url", "image_url_preview", "image_license",
+    "author", "tags", "similarity",
     # 双通道引擎（同一引擎名背后有匿名与认证两条取数通路）标出本条实际走的
     # 通道：内容范围差异正是两条通路的区别，剥掉它就只能靠猜。
     "channel",
