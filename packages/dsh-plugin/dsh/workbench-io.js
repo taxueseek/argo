@@ -99,9 +99,9 @@ export function readStaticAssetCached(filePath) {
   return text
 }
 
-export function loadWatches() {
+export function loadWatches(file = WATCH_STORE_FILE) {
   try {
-    const raw = readFileSync(WATCH_STORE_FILE, 'utf8')
+    const raw = readFileSync(file, 'utf8')
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : []
   } catch {
@@ -109,13 +109,13 @@ export function loadWatches() {
   }
 }
 
-export function saveWatches(items) {
+export function saveWatches(items, file = WATCH_STORE_FILE) {
   try {
-    mkdirSync(dirname(WATCH_STORE_FILE), { recursive: true })
+    mkdirSync(dirname(file), { recursive: true })
     const uniq = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}`
-    const tmp = `${WATCH_STORE_FILE}.tmp.${uniq}`
+    const tmp = `${file}.tmp.${uniq}`
     writeFileSync(tmp, JSON.stringify(items, null, 2), 'utf8')
-    renameSync(tmp, WATCH_STORE_FILE)
+    renameSync(tmp, file)
   } catch { /* ignore */ }
 }
 
@@ -124,6 +124,7 @@ export function saveWatches(items) {
 // 热榜与 watches 共用同一实现，消灭各自手抄（2026-11-21 审计：锁方案四家并存）。
 export function acquireStateFileLock(file, staleMs = 5 * 60 * 1000) {
   try {
+    mkdirSync(dirname(file), { recursive: true })
     return { fd: openSync(file, 'wx'), lockFile: file }
   } catch (err) {
     if (err?.code !== 'EEXIST') return null
@@ -146,13 +147,13 @@ export function releaseStateFileLock(lock) {
 // watches 唯一真源是磁盘文件：读-改-写全程持锁，内存副本只作缓存。
 // 旧「内存快照 + 全量覆盖写」在多宿主下互相抹改（2026-11-21 审计 P1）。
 // 返回 null 表示锁被占（另一宿主写盘中），调用方按忙处理。
-export function mutateWatches(mutator) {
-  const lock = acquireStateFileLock(`${WATCH_STORE_FILE}.lock`)
+export function mutateWatches(mutator, file = WATCH_STORE_FILE) {
+  const lock = acquireStateFileLock(`${file}.lock`)
   if (!lock) return null
   try {
-    const next = mutator(loadWatches())
-    if (Array.isArray(next)) saveWatches(next)
-    return Array.isArray(next) ? next : loadWatches()
+    const next = mutator(loadWatches(file))
+    if (Array.isArray(next)) saveWatches(next, file)
+    return Array.isArray(next) ? next : loadWatches(file)
   } finally {
     releaseStateFileLock(lock)
   }
