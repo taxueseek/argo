@@ -86,7 +86,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 状态含义：**可直接用** = 自动路由会用上；**需自配密钥 / 需装后端工具** = 配好后即可用；**被上游封锁** = 源站当前拒绝；**已停用** = 配置层面关闭。
 
-### 全网搜索（43）
+### 全网搜索（42）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -129,7 +129,6 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `searxng` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_SEARXNG_URL | 显式调用（--engine） | SearXNG 直连（已废弃，由 T3 替代） |
 | `tavily` | 需自备密钥 | 按调用计费 | 1000/月 | ARGO_TAVILY_API_KEY | 域 semantic_discovery、语义画像命中 | Tavily AI 搜索 API（免费层 1000 次/月，超出按美元计费；与 exa 同为 api 档） |
 | `tinyfish` | 需自备密钥 + 显式专用 | 免费 | 不限 | ARGO_TINYFISH_API_KEY | 显式调用（--engine） | TinyFish 实时网页搜索（免费，浏览器渲染，结果含原文摘要，X-API-Key 认证） |
-| `twitter_cli` | 需装后端工具 + 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X 关键词只读搜索，按返回的作者及发布时间核验简单约束。 |
 | `you` | 需自备密钥 | 按调用计费 | 不限 | YDC_API_KEY | 域 news_realtime | You.com 网页+新闻搜索（时效性强，官方一手源，web/news 合并） |
 | `yuanbao` | 需自备密钥 | 按调用计费 | 2000/月 | ARGO_YUANBAO_API_KEY | 域 chinese_general、域 company_search | 腾讯元宝搜索 |
 | `zhihu_global` | 需自备密钥 | 按调用计费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 chinese_general、域 news_realtime、域 zhihu_content | 知乎开放平台全网搜索（SearchDB=all 全网索引 + Filter host== 站点限定；需 ZHIHU_ACCESS_SECRET） |
@@ -296,7 +295,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `europeana` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 欧洲 27 国文化遗产聚合（官方公共 demo key，共享限额，故显式调用） |
 | `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
 
-### 社区 UGC（19）
+### 社区 UGC（20）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -315,6 +314,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `weibo` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | 微博 |
 | `reddit` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | Reddit |
 | `twitter` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | X/Twitter 关键词搜索（ego-browser 通道，原生布尔语法 from:/-is:retweet/lang:） |
+| `twitter_cli` | 需装后端工具 + 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X 关键词只读搜索，按返回的作者及发布时间核验简单约束。 |
 | `twitter_syndication` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X/Twitter 单条推文（syndication 通道，免登录零 key，含正文/作者/时间/媒体计数） |
 | `xiaohongshu` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | 小红书 |
 | `zhihu` | 需自备密钥 | 免费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 shopping、域 social、域 zhihu_content、域 zhihu_hot_list、语义画像命中 | 知乎站内搜索（结构化 AuthorityLevel/赞同数/时间 + 纯问题自动下钻精选回答；需 ZHIHU_ACCESS_SECRET） |
