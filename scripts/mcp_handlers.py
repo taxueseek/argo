@@ -132,10 +132,10 @@ def _resolve_research_profile(arguments: dict[str, Any]) -> tuple[dict[str, Any]
 
 
 def _search_social_platforms(
-    platforms: list[str], query: str, n: int, timeout: float = 20.0,
+    platforms: list[str], query: str, n: int, timeout: float = 20.0, **kwargs,
 ) -> tuple[dict[str, list], list[str], list[str]]:
     """并行抓取多社交平台（MCP 热路径）。"""
-    return _warm_search_social_platforms(platforms, query, n, timeout=timeout, lazy_cached_fn=_lazy_cached)
+    return _warm_search_social_platforms(platforms, query, n, timeout=timeout, lazy_cached_fn=_lazy_cached, **kwargs)
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -260,7 +260,14 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 query = arguments["query"]
                 n = _clamp_int(
                     arguments.get("max_results", arguments.get("num", 5)), 5, 1, 20)
-                platform_results, engines_used, errors = _search_social_platforms(platforms, query, n)
+                from x_keyword_route import X_ENGINES
+                engine = arguments.get("engine", "auto")
+                if engine in X_ENGINES:
+                    platforms = ["twitter"]
+                outcomes = []
+                platform_results, engines_used, errors = _search_social_platforms(
+                    platforms, query, n, x_engine=engine if engine in X_ENGINES else "auto",
+                    since=arguments.get("since"), until=arguments.get("until"), outcomes=outcomes)
                 if str(arguments.get("mode", "text")).strip().lower() in (
                         "sentiment", "social-sentiment"):
                     research_mod = _lazy_cached("research")
@@ -278,6 +285,9 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                         "count": len(all_results),
                         "engines_used": engines_used,
                     }
+                if outcomes:
+                    output["engine_outcomes"] = outcomes
+                    output["engines_used"] = engines_used
                 if errors:
                     output["errors"] = errors
                 return _ok(output, pretty=pretty)

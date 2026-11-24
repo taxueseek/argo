@@ -409,8 +409,9 @@ argo x-search '(GPT OR Claude) release -is:retweet' --sort top   # 热门榜
 
 - **与 `argo tweet` 的分工**：本命令**发现**（关键词 → 一批推文），`argo tweet`
   **吸收**（单条 URL/ID → 整份内容）。
-- **与 `--engine fxtwitter` 的关系**：后者是 HTTP 免登录搜索通道，上游公开实例的
-  `/2/search` 已停用（恒返回空），关键词搜索请走本命令。
+- **MCP 关键词检索**：`argo_search(domain="social", platforms="twitter", query="OpenAI")` 自动选择关键词通道。限定单个通道时传 `engine="fxtwitter"`（公开 HTTP）、`"twitter_cli"`（本地 CLI）或 `"twitter"`（登录浏览器）；`engine_outcomes` 列出实际尝试，`errors` 记录失败原因。
+- **按作者和时间查证**：`argo search 'from:example release since:2025-01-01 until:2025-02-01' --engine twitter_cli` 使用 twitter-cli 0.8.5 的只读搜索。运行环境需提供 `twitter` 可执行文件及 `TWITTER_AUTH_TOKEN`、`TWITTER_CT0`；凭据由进程环境传入。简单查询按返回的账号和发布时间核验，时间窗含起点、不含终点；纯日期以 UTC 零点计，时间戳须带时区。布尔表达式交由 X 解释。
+- **按链接查证**：`argo search 'https://x.com/jack/status/20' --engine twitter_syndication` 读取该 ID。主通道临时失败时，可在同一超时预算内向 FxTwitter 补读一次；以结果的 `source` 区分通道。受限或删除的帖子直接报告读取失败。
 
 ### argo template — 查询模板
 

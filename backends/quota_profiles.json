@@ -2640,6 +2640,16 @@
     "cost_tier": "free",
     "priority": 50
   },
+  "twitter_cli": {
+    "label": "X/Twitter (twitter-cli)",
+    "qps": 1,
+    "limit": null,
+    "period": "second",
+    "cost_per_call": 0.0,
+    "cost_unit": "free",
+    "cost_tier": "free",
+    "priority": 50
+  },
   "twitter_syndication": {
     "label": "twitter_syndication",
     "qps": 2,

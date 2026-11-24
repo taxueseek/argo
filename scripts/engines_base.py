@@ -25,6 +25,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from time_utils import normalize_epoch as _normalize_epoch
 
 try:
     from config import load_config, get_engines
@@ -436,6 +437,8 @@ def _build_http_engine(spec: dict[str, Any]) -> Any:
             # 失败返回空（与 urllib 失败行为一致，不抛异常）
             raw = _http_get_raw(full_url, resolved_headers, to, engine=eng)
             if raw is None:
+                if eng == "fxtwitter":
+                    return [{"source": eng, "error": "FxTwitter HTTP request failed"}]
                 return []
             return _parse_http_payload(raw, fmt, eng, n, output_map, spec)
         else:
@@ -680,33 +683,6 @@ def _envelope_error(data: Any) -> str:
     return ""
 
 
-def _normalize_epoch(value: Any) -> str:
-    """epoch 秒/毫秒 → `YYYY-MM-DD`，非 epoch 原样返回。
-
-    技能目录源的 updatedAt 单位不统一：SkillsMP 给秒（1786285295），ClawHub
-    给毫秒（1789594554485），相差 1000 倍。原样映射等于把一串数字当
-    published_at 交出去，既读不出日期也无法与别的源比较。
-
-    按量级判别而非按源声明：1e9~1e11 是秒（2001~5138 年），1e11~1e14 是
-    毫秒，两位差三个数量级，不存在擦边区间。范围外的值不猜，原样返回——
-    猜错会把一个可疑值变成看起来正常的值，比留着更糟。
-    """
-    text = str(value).strip()
-    if not text.isdigit():
-        return text
-    num = int(text)
-    if 1_000_000_000 <= num < 100_000_000_000:
-        seconds = num
-    elif 100_000_000_000 <= num < 100_000_000_000_000:
-        seconds = num / 1000
-    else:
-        return text
-    try:
-        return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%Y-%m-%d")
-    except (OverflowError, OSError, ValueError):
-        return text
-
-
 def _apply_url_kind(rows: list[dict[str, Any]], spec: dict) -> list[dict[str, Any]]:
     """声明式 spec 的 url_kind 落到行上（issue #29 口径 B）：none = 本档条目不以
     url 为身份，缺 url 的条目不按壳页整批吞。spec 未声明时行上不出现该字段。"""
@@ -735,7 +711,15 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
         data = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
         _get_logger().warning(f"HTTP 引擎解析失败: {eng} 非 JSON/XML 响应")
+        if eng == "fxtwitter":
+            return [{"source": eng, "error": "FxTwitter returned invalid JSON"}]
         return []
+    if eng == "fxtwitter" and (not isinstance(data, dict) or data.get("code", 200) != 200
+                               or not isinstance(data.get("results"), list)):
+        return [{"source": eng, "error": "FxTwitter returned an unsuccessful or invalid search envelope"}]
+    if eng == "fxtwitter" and any(not isinstance(item, dict) or not item.get("url") or "error" in item
+                                 for item in data["results"]):
+        return [{"source": eng, "error": "FxTwitter returned an invalid post row"}]
     # 业务错误封套优先于条数提取：强封套错误（ResponseMetadata.Error、顶层
     # error 对象）表示本次调用失败，返回结果必然为空或不可信
     env_err = _envelope_error(data)
@@ -798,7 +782,7 @@ def _parse_http_payload(raw: str, fmt: str, eng: str, n: int,
         for r in parsed:
             r.setdefault("source", eng)
             if r.get("published_at"):
-                r["published_at"] = _normalize_epoch(r["published_at"])
+                r["published_at"] = _normalize_epoch(r["published_at"], precise=eng == "fxtwitter")
             if _lic and r.get("image_url"):
                 r.setdefault("image_license", _lic)
             for _fk, _cap in (("title", 500), ("snippet", 300)):

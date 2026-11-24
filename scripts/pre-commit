@@ -117,7 +117,7 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-printf "[pre-commit] argo 快门禁（74 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
+printf "[pre-commit] argo 快门禁（75 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
 # 测试清单单真源：tests/gate_manifest.txt（2026-11-14 收口）。
 # 清单曾在此手工枚举 42 个文件，每轮新门禁「漏一道加一道」（头注释史
 # 至少 6 轮），env/config 对账门三道长期漏册——现由 tests/test_gate_manifest.py

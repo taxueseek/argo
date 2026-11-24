@@ -50,14 +50,14 @@ try { page = task.page("p1"); } catch (e) { page = null; }
 if (!page) page = await task.newPage();
 await page.goto(%(base)s + "?q=" + encodeURIComponent(CFG.query) + "&f=" + CFG.sort);
 // 等首屏：出 article 视为渲染完成；出「无结果」文案也视为渲染完成（真·空结果）
-let rendered = false;
+let rendered = false, empty = false;
 for (let i = 0; i < %(wait_s)d; i++) {
   await page.waitForTimeout(1000);
   const st = await page.evaluate(() => ({
     arts: document.querySelectorAll('[data-testid="cellInnerDiv"] article').length,
     empty: /没有结果|No results for|无结果/i.test(document.body.innerText || ""),
   }));
-  if (st.arts > 0 || st.empty) { rendered = true; break; }
+  if (st.arts > 0 || st.empty) { rendered = true; empty = st.empty && !st.arts; break; }
 }
 let items = [];
 if (rendered) {
@@ -99,7 +99,7 @@ if (rendered) {
     return out;
   });
 }
-console.log("%(marker)s" + JSON.stringify({ok: rendered, items: items.slice(0, CFG.n)}));
+console.log("%(marker)s" + JSON.stringify({ok: rendered, empty, items: items.slice(0, CFG.n)}));
 """
 
 
@@ -164,6 +164,24 @@ def _rows(items: list[dict], n: int) -> list[dict]:
     return rows
 
 
+def search_browser(query: str, n: int, timeout: float, sort: str = "latest") -> list[dict]:
+    """Fetch rendered posts; an empty list requires an explicit no-results page."""
+    if not shutil.which("ego-browser"):
+        raise FileNotFoundError("ego-browser CLI 不存在")
+    proc = subprocess.run(
+        ["ego-browser", "nodejs", "-e", _build_js(query, n, "top" if sort == "top" else "live")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    if proc.returncode:
+        raise RuntimeError(f"ego-browser rc={proc.returncode}")
+    data = _extract_json(proc.stdout) or _extract_json(proc.stderr)
+    if not data or not data.get("ok") or not isinstance(data.get("items"), list):
+        raise RuntimeError("x.com/search 无可解析结果（未登录 / 未渲染 / 页面结构异常）")
+    rows = _rows(data["items"], n)
+    if not rows and not data.get("empty"):
+        raise RuntimeError("x.com/search 未提取到可识别帖子")
+    return rows
+
+
 def main(argv: list | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="argo x-search",
@@ -181,38 +199,11 @@ def main(argv: list | None = None) -> int:
         print("x_search: 搜索词为空", file=sys.stderr)
         return 1
 
-    if not shutil.which("ego-browser"):
-        print("x_search: ego-browser CLI 不存在（Ego Lite 未安装？）", file=sys.stderr)
-        return 1
-
-    sort = "top" if args.sort == "top" else "live"
     try:
-        proc = subprocess.run(
-            ["ego-browser", "nodejs", "-e", _build_js(query, max(1, args.n), sort)],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=args.timeout)
-    except subprocess.TimeoutExpired:
-        print(f"x_search: ego-browser 超时（>{args.timeout:.0f}s）", file=sys.stderr)
+        rows = search_browser(query, max(1, args.n), args.timeout, args.sort)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        print(f"x_search: {exc}", file=sys.stderr)
         return 1
-    except FileNotFoundError:
-        print("x_search: ego-browser 调用失败", file=sys.stderr)
-        return 1
-
-    if proc.returncode != 0:
-        tail = (proc.stderr or "").strip()[:200]
-        print(f"x_search: ego-browser rc={proc.returncode}: {tail}", file=sys.stderr)
-        return 1
-
-    data = _extract_json(proc.stdout) or _extract_json(proc.stderr)
-    if not data:
-        print("x_search: 未能解析 ego-browser 输出", file=sys.stderr)
-        return 1
-    if not data.get("ok"):
-        # 页面没渲染：多半是未登录、被风控拦下，或 X 改版
-        print("x_search: x.com/search 未渲染（未登录 / 风控 / 改版？）", file=sys.stderr)
-        return 1
-
-    rows = _rows(data.get("items") or [], max(1, args.n))
 
     if args.json:
         print(json.dumps(rows, ensure_ascii=False))

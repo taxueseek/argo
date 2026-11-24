@@ -3343,6 +3343,18 @@ engines:
   recommended: true
   explicit_only: false
   desc: X/Twitter 关键词搜索（ego-browser 通道，原生布尔语法 from:/-is:retweet/lang:）
+- name: twitter_cli
+  tier: T1
+  type: twitter_cli
+  coverage:
+  - social
+  - english
+  latency_ms: 2000
+  cost: free
+  status: ok
+  recommended: false
+  explicit_only: true
+  desc: X 关键词只读搜索，按返回的作者及发布时间核验简单约束。
 - name: twitter_syndication
   tier: T1
   type: twitter_syndication

@@ -87,22 +87,26 @@ def _resolve_research_profile(arguments: dict[str, Any], lazy_cached_fn) -> tupl
 
 def _search_social_platforms(
     platforms: list[str], query: str, n: int, timeout: float = 20.0,
-    lazy_cached_fn=None,
+    lazy_cached_fn=None, *, x_engine="auto", since=None, until=None, outcomes=None,
 ) -> tuple[dict[str, list], list[str], list[str]]:
     """并行抓取多社交平台（MCP 热路径）。"""
     platform_results: dict[str, list] = {}
     errors: list[str] = []
     engines_used: list[str] = []
 
-    def _one(platform: str) -> tuple[str, list, str | None]:
+    def _one(platform: str):
+        if platform in ("twitter", "x"):
+            from x_keyword_route import search_x_keywords
+            result = search_x_keywords(query, n, engine=x_engine, since=since, until=until, timeout=timeout)
+            return result["results"], result["errors"], result["engines_used"], result["engine_outcomes"]
         module_name = platform.replace("-", "_") + "_engine"
         try:
             mod = lazy_cached_fn(f"social_engines.{module_name}")
-            return platform, mod.search(query, n=n), None
+            return mod.search(query, n=n), [], [platform], []
         except ImportError:
-            return platform, [], f"Platform {platform} not available (module social_engines.{module_name})"
+            return [], [f"Platform {platform} not available (module social_engines.{module_name})"], [], []
         except Exception as e:
-            return platform, [], f"{platform}: {str(e)[:100]}"
+            return [], [f"{platform}: {str(e)[:100]}"], [], []
 
     workers = min(max(len(platforms), 1), 4)
     import concurrent.futures
@@ -110,12 +114,12 @@ def _search_social_platforms(
     futs = {ex.submit(_one, p): p for p in platforms}
     try:
         for fut in concurrent.futures.as_completed(futs, timeout=timeout):
-            platform, results, err = fut.result()
-            platform_results[platform] = results
-            if err:
-                errors.append(err)
-            elif results is not None:
-                engines_used.append(platform)
+            results, issues, used, attempts = fut.result()
+            platform_results[futs[fut]] = results
+            errors.extend(issues)
+            engines_used.extend(used)
+            if outcomes is not None:
+                outcomes.extend(attempts)
     except concurrent.futures.TimeoutError:
         for fut, platform in futs.items():
             if not fut.done():

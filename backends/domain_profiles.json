@@ -3056,5 +3056,11 @@
     "documents": [],
     "boost_keywords": {},
     "boost_combos": {}
+  },
+  "twitter_cli": {
+    "label": "X/Twitter (twitter-cli)",
+    "documents": [],
+    "boost_keywords": {},
+    "boost_combos": {}
   }
 }

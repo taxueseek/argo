@@ -112,7 +112,7 @@ class TestMain(unittest.TestCase):
 
     def test_genuine_empty_is_ok(self):
         """真·空结果（页面渲染完成、无命中）应 rc=0，不是失败。"""
-        code, out = _run_main(["zzz", "--json"], stdout=_stdout([], ok=True))
+        code, out = _run_main(["zzz", "--json"], stdout=MARKER + json.dumps({"ok": True, "empty": True, "items": []}))
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out), [])
 

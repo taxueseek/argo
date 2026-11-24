@@ -284,3 +284,31 @@ def weather_chronological(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return published, current_first
 
     return sorted(rows, key=_key)
+
+
+def normalize_epoch(value: Any, *, precise: bool = False) -> str:
+    """epoch 秒/毫秒 → `YYYY-MM-DD`，非 epoch 原样返回。
+
+    技能目录源的 updatedAt 单位不统一：SkillsMP 给秒（1786285295），ClawHub
+    给毫秒（1789594554485），相差 1000 倍。原样映射等于把一串数字当
+    published_at 交出去，既读不出日期也无法与别的源比较。
+
+    按量级判别而非按源声明：1e9~1e11 是秒（2001~5138 年），1e11~1e14 是
+    毫秒，两位差三个数量级，不存在擦边区间。范围外的值不猜，原样返回——
+    猜错会把一个可疑值变成看起来正常的值，比留着更糟。
+    """
+    text = str(value).strip()
+    if not text.isdigit():
+        return text
+    num = int(text)
+    if 1_000_000_000 <= num < 100_000_000_000:
+        seconds = num
+    elif 100_000_000_000 <= num < 100_000_000_000_000:
+        seconds = num / 1000
+    else:
+        return text
+    try:
+        instant = datetime.fromtimestamp(seconds, tz=timezone.utc)
+        return instant.isoformat() if precise else instant.strftime("%Y-%m-%d")
+    except (OverflowError, OSError, ValueError):
+        return text

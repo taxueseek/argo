@@ -132,7 +132,7 @@ class TestFxTwitterRichFieldMapping(unittest.TestCase):
             "created_timestamp": 1794736508, "likes": 7, "views": 42,
             "author": {"screen_name": "alice"},
         }]})
-        self.assertEqual(rows[0]["published_at"], "2026-11-15")
+        self.assertEqual(rows[0]["published_at"], "2026-11-15T09:55:08+00:00")
         self.assertEqual(rows[0]["upstream_authority"], "7")
         self.assertEqual(rows[0]["upstream_score"], "42")
 
@@ -145,6 +145,70 @@ class TestFxTwitterRichFieldMapping(unittest.TestCase):
         }]})
         self.assertEqual(rows[0]["upstream_authority"], "0")
         self.assertEqual(rows[0]["upstream_score"], "0")
+
+
+class TestXKeywordRoute(unittest.TestCase):
+    row = {"url": "https://x.com/alice/status/1", "source": "alice",
+           "published_at": "2026-11-15T09:55:08Z", "title": "sample"}
+
+    def run_route(self, outputs, **kwargs):
+        from x_keyword_route import search_x_keywords
+        with patch("x_keyword_route._call", side_effect=outputs) as call:
+            result = search_x_keywords(kwargs.pop("query", "topic"), **kwargs)
+        self.assertEqual([c.args[0] for c in call.call_args_list], result["engines_used"])
+        return result
+
+    def test_anonymous_first_and_empty_stops(self):
+        for rows in ([], [self.row]):
+            result = self.run_route([rows])
+            self.assertEqual(result["engines_used"], ["fxtwitter"])
+            self.assertEqual(result["results"], rows)
+            self.assertFalse(result["errors"])
+
+    def test_error_is_not_a_hit(self):
+        result = self.run_route([[{"error": "HTTP 503"}], [self.row]])
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["engines_used"], ["fxtwitter", "twitter_cli"])
+        self.assertEqual(result["engine_outcomes"][0]["results_count"], 0)
+        self.assertIn("503", result["errors"][0])
+
+    def test_strict_fallback_checks_fields_and_exclusive_end(self):
+        result = self.run_route([[{"error": "not installed", "error_kind": "unavailable"}],
+                                 [{**self.row, "source": "other"},
+                                  {**self.row, "published_at": "2026-11-15T09:55:09Z"}, self.row]],
+                                query="from:alice topic", since="2026-11-15T09:55:08Z",
+                                until="2026-11-15T09:55:09Z")
+        self.assertEqual(result["engines_used"], ["twitter_cli", "fxtwitter"])
+        self.assertEqual(result["engine_outcomes"][0]["error_kind"], "unavailable")
+        self.assertEqual(result["results"], [self.row])
+
+    def test_all_explicit_channels_stay_pinned(self):
+        for engine in ("twitter", "twitter_cli", "fxtwitter"):
+            with self.subTest(engine=engine):
+                r = self.run_route([[{"url": "https://x.com/a/status/2", "error": "failed"}]], engine=engine)
+                self.assertEqual(r["engines_used"], [engine])
+                self.assertEqual(r["count"], 0)
+                self.assertTrue(r["errors"])
+
+    def test_public_search_and_social_mcp(self):
+        from mcp_handlers import execute_tool
+        from search import super_search
+        with patch("x_keyword_route._call", return_value=[self.row]) as call:
+            out = super_search("推特上大家对 GPT 的评价", n=2, include_local=False)
+            self.assertEqual(out["engines_used"], ["fxtwitter"])
+            resp = execute_tool("argo_search", {"query": "topic", "domain": "social", "platforms": "twitter"})
+            self.assertEqual(json.loads(resp["content"][0]["text"])["engines_used"], ["fxtwitter"])
+            self.assertEqual(call.call_count, 2)
+
+    def test_http_failure_and_error_rows_vs_empty(self):
+        from engines_base import _build_http_engine
+        handler = _build_http_engine(dict(get_engines()["fxtwitter"], _name="fxtwitter"))
+        for raw in (None, "not JSON", '{}', '{"code": 503, "results": []}',
+                    '{"results": [{"error": "broken"}]}'):
+            with patch("engines_base._http_get_raw", return_value=raw):
+                self.assertIn("error", handler("topic")[0])
+        with patch("engines_base._http_get_raw", return_value='{"results": []}'):
+            self.assertEqual(handler("topic"), [])
 
 
 @unittest.skipUnless(LIVE, "set ARGO_LIVE=1 for live FxTwitter calls")
