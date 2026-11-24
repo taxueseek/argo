@@ -75,8 +75,7 @@ import fetch_quality as _quality
 import argo_paths as _paths
 from net_proxy import open_url  # 出口调度唯一入口（issue #13 同类修复）
 from engine_env import env_flag, get_env  # env_flag 判开关；get_env 读密钥（os.environ 优先，env 文件热读保底）
-from cli_io import dumps
-from fetch_cli_args import build_parser
+from fetch_cli_output import print_result
 from fetch_jsrun import _jsrun_challenge_fetch, _jsrun_enabled  # js-run 轻量车道（拆出独立模块）
 
 
@@ -1753,9 +1752,39 @@ def _full_view(url: str, args) -> dict:
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-# 人类可读输出的默认显示上限（字符）。--limit 管的是交付窗口，这里是显示上限；
-# 显式 --full / --limit 时按调用方要求放开，截断时打印可翻页的提示。
-_DISPLAY_CHARS = 2000
+def build_parser():
+    """构建抓取命令的参数解析器。"""
+    import argparse
+
+    p = argparse.ArgumentParser(description="Argo fetch v3 — 四级抓取（零依赖）")
+    p.add_argument("url", help="目标 URL")
+    p.add_argument("--max-chars", type=int, default=8000)
+    p.add_argument("--timeout", type=float, default=8.0)
+    p.add_argument("--browser", "--use-browser", dest="browser",
+                   action="store_true",
+                   help="强制使用浏览器（--use-browser 同义）")
+    p.add_argument("--no-fallback", action="store_true", help="禁用浏览器降级")
+    p.add_argument("--actions", type=str,
+                   help="页面交互 JSON（如 '[{\"click\":\"#btn\"}]'）")
+    p.add_argument("--focus", type=str, default="",
+                   help="BM25 聚焦关键词：只返回相关段落，省 token")
+    p.add_argument("--focus-top", type=int, default=5,
+                   help="--focus 无段落超阈值时的回退保留段落数（默认 5）")
+    p.add_argument("--full", action="store_true",
+                   help="取全文：优先读本地全文存档，没有则按抓取全量取回，"
+                        "不受 --max-chars 限制（用于复核被截断的部分）")
+    p.add_argument("--answer-offset", type=int, help="仅在用户明确要求续查知乎回答摘要时传入 next_offset")
+    p.add_argument("--offset", type=int, default=0,
+                   help="从正文第 N 个字符开始输出（配合 --limit 翻页读长文）")
+    p.add_argument("--limit", type=int, default=0,
+                   help="本次输出字符数上限；0 表示不额外限制")
+    p.add_argument("--include-links", action="store_true",
+                   help="JSON 摘要附带正文链接（默认只给 links_count，省 token）")
+    p.add_argument("--json", action="store_true",
+                   help="只输出 JSON 摘要（缺省还会附人类可读的正文段；"
+                        "Usage 一直把 --json 列为 Common flags，此前却报"
+                        " unrecognized arguments）")
+    return p
 
 
 if __name__ == "__main__":
@@ -1789,65 +1818,6 @@ if __name__ == "__main__":
         from zhihu_answer_fetch import finish_focus
         finish_focus(r, args.max_chars)
 
-    # 输出摘要
-    summary = {k: r[k] for k in ("success", "fetch_method", "content_ok",
-                                  "quality_score", "page_type", "source_type",
-                                  "is_official", "length", "url",
-                                  "video_meta") if k in r}
-    # 截断必须可见：只给 8,000 字却不说明「还有多少没给」，调用方会当全文用
-    for k in ("truncated", "full_length", "full_text_path", "total_length",
-              "offset", "full_source", "final_url",
-              "login_state_used", "cache_eligible"):
-        if k in r:
-            summary[k] = r[k]
-    if "content_type" in r and "next_offset" in r:
-        summary.update({k: r[k] for k in ("status", "content_type", "next_offset")})
-        if args.json:
-            summary["content"] = r["content"]
-    if focus_requested:
-        # 显式回报聚焦是否真的生效：正文过短时 focus_applied=False，
-        # 不谎报「已省 token」
-        summary["focus_applied"] = bool(r.get("focus_applied"))
-    if r.get("error"):
-        summary["error"] = r["error"]
-    if r.get("links"):
-        summary["links_count"] = len(r["links"])
-        if args.include_links:
-            summary["links"] = r["links"]
-    print(dumps(summary))
-    # __main__ 块是模块级代码，不能用 return 短路——用 if 包住人类可读段
-    if not args.json:
-        if r.get("title"):
-            print(f"\nTitle: {r['title']}")
-        if focus_requested:
-            print(f"\n[focus] query={args.focus!r} applied={bool(r.get('focus_applied'))} "
-                  f"chars={pre_focus_len} → {r.get('length', 0)}")
-        print(f"\n--- CONTENT ({r['length']} chars) ---")
-        # 默认档保持 2000 字显示上限（护住 agent 上下文），但显式 --full /
-        # --limit 时必须按调用方要求显示完整交付窗口：此前这行硬编码
-        # [:2000]，与 --limit 的语义（本次输出字符数上限，0 表示不限）冲突，
-        # 且表头写的是交付长度，于是「说 8000 字、只给 2000 字、不说明还剩
-        # 多少」——调用方会把截断正文当全文用（证据核验场景尤其危险）。
-        delivered = r.get("content", "") or ""
-        show_all = bool(args.full) or bool(args.limit and args.limit > 0)
-        shown = delivered if show_all else delivered[:_DISPLAY_CHARS]
-        print(shown)
-        if len(shown) < len(delivered):
-            # 两个字段是不同代码路径写的同一事实：fetch_v3 路径给 full_length，
-            # _full_view 路径给 total_length，故这里按可用者兜底。
-            full_len = r.get("full_length") or r.get("total_length") or len(delivered)
-            if focus_requested:
-                # --focus 之后 content 是重排后的段落抽取，不再是正文的连续窗口，
-                # 按「本页起点 + 本页长度」推 --offset 会指向无关区间。宁可不给
-                # 翻页建议，也不能给错的。
-                print(f"\n[truncated] 已显示 {len(shown)}/{len(delivered)} 字"
-                      f"（页面全文 {full_len} 字）。当前为 --focus 抽取结果，"
-                      f"非正文连续窗口；要完整正文请用 --full")
-            else:
-                # --offset 是相对正文全文的绝对偏移（见 _full_view），所以下一页
-                # 要从「本页起点 + 本页长度」继续，否则已翻过页的调用方会原地打转。
-                next_offset = int(r.get("offset") or 0) + len(shown)
-                print(f"\n[truncated] 已显示 {len(shown)}/{len(delivered)} 字"
-                      f"（页面全文 {full_len} 字）。"
-                      f"继续读：--offset {next_offset} --limit {_DISPLAY_CHARS}；"
-                      f"全文：--full")
+    print_result(r, json_only=args.json, include_links=args.include_links,
+                 focus=args.focus, pre_focus_len=pre_focus_len,
+                 full=args.full, limit=args.limit)

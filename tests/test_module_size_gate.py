@@ -50,7 +50,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_cn.py": (2089, "中文源构建器，itotii/toutiao_hot/bilibili_hot/weibo_hot/douyin_hot 转声明式 YAML 净瘦身 194 行"),
     "scripts/engines_builders_batch9.py": (1263, "批次九源构建器，方案 A 归一 + 共用 engines_http 净瘦身 94 行"),
     "scripts/engines_builders_tech.py": (1174, "技术社区源构建器，方案 A 归一 + 共用 lazy_logger 净瘦身 106 行"),
-    "scripts/fetch_v3.py": (1853, "抓取降级链集中编排各级顺序与超时预算；CLI 参数定义见 fetch_cli_args。"),
+    "scripts/fetch_v3.py": (1823, "抓取降级链集中编排各级顺序与超时预算；CLI 输出格式见 fetch_cli_output。"),
     "scripts/engines_base.py": (1466, "引擎基类 + HTTP 出口 + 输出映射；2026-11-21 收紧 -7：body 值类型收敛下沉 engines_fields（nan/inf 门）"),
     "scripts/cache.py": (1376, "存储实现与门面；2026-11-20 收紧 -1：提取 _copy_hit 并给 _read_many 补浅拷贝、60s 节流 accessed_at、复用 set 连接"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),

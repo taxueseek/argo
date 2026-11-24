@@ -23,7 +23,19 @@ def card(url=URL, body=BODY, section='', extra='', button='收起', style=''):
 
 @pytest.fixture(scope='module')
 def browser(tmp_path_factory):
-    with reader.ChromeCDP(user_data_dir=str(tmp_path_factory.mktemp('chrome'))) as cdp:
+    from contextlib import ExitStack
+
+    # Only rendered-DOM cases need a runnable browser. Keep assertion and
+    # evaluation failures outside the optional dependency check.
+    with ExitStack() as stack:
+        try:
+            cdp = stack.enter_context(reader.ChromeCDP(user_data_dir=str(tmp_path_factory.mktemp('chrome'))))
+        except FileNotFoundError:
+            pytest.skip('Chrome/Edge is not installed')
+        except RuntimeError as exc:
+            if not str(exc).startswith('Chrome CDP failed to start on port '):
+                raise
+            pytest.skip('headless Chrome did not expose a local CDP endpoint')
         yield cdp
 
 
