@@ -1390,155 +1390,23 @@ def filter_by_mtime(results, since: str | None, until: str | None):
             if _in_time_window(fp, since_ts, until_ts)]
 
 
-_OUTLINE_RULES = {
-    ".py": [re.compile(r'^\s*(async\s+)?(def|class)\s+\w+')],
-    ".pyi": [re.compile(r'^\s*(async\s+)?(def|class)\s+\w+')],
-    ".js": [re.compile(r'^\s*(export\s+)?(async\s+)?(function|class)\s+\w+'),
-            re.compile(r'^\s*(export\s+)?(const|let|var)\s+\w+')],
-    ".jsx": [re.compile(r'^\s*(export\s+)?(async\s+)?(function|class)\s+\w+'),
-             re.compile(r'^\s*(export\s+)?(const|let|var)\s+\w+')],
-    ".ts": [re.compile(r'^\s*(export\s+)?(async\s+)?(function|class|interface|type|enum)\s+\w+'),
-            re.compile(r'^\s*(export\s+)?(const|let|var)\s+\w+')],
-    ".tsx": [re.compile(r'^\s*(export\s+)?(async\s+)?(function|class|interface|type|enum)\s+\w+'),
-             re.compile(r'^\s*(export\s+)?(const|let|var)\s+\w+')],
-    ".go": [re.compile(r'^\s*func\s+\w+'),
-            re.compile(r'^\s*type\s+\w+\s+(struct|interface)\b')],
-    ".rs": [re.compile(r'^\s*(pub\s+)?(fn|struct|enum|impl|trait|mod|type)\s+\w+')],
-    ".java": [re.compile(r'^\s*(public|private|protected|static|\s)*(class|interface|enum)\s+\w+'),
-              re.compile(r'^\s*(public|private|protected|static|\s)*[\w<>,\[\] ]+\s+\w+\s*\(')],
-    ".sh": [re.compile(r'^\s*function\s+\w+'),
-            re.compile(r'^\s*[a-zA-Z_]\w*\s*\(\)\s*\{?')],
-    ".bash": [re.compile(r'^\s*function\s+\w+'),
-              re.compile(r'^\s*[a-zA-Z_]\w*\s*\(\)\s*\{?')],
-    ".zsh": [re.compile(r'^\s*function\s+\w+'),
-             re.compile(r'^\s*[a-zA-Z_]\w*\s*\(\)\s*\{?')],
-    ".md": [re.compile(r'^#{1,6}\s+')],
-    ".mdx": [re.compile(r'^#{1,6}\s+')],
-    ".json": [re.compile(r'^\s*"[^"]+"\s*:')],
-    ".yaml": [re.compile(r'^[a-zA-Z_][\w.-]*\s*:')],
-    ".yml": [re.compile(r'^[a-zA-Z_][\w.-]*\s*:')],
-}
+# 精读层与历史层已拆至 seek_inspect.py / seek_git.py（保持同名 re-export 兼容既有测试）
+_SEEK_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SEEK_SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SEEK_SCRIPTS_DIR)
 
-
-def _outline_level(line, suffix):
-    """返回结构行的层级：Markdown 按 # 数量，其余按前导空白长度。"""
-    if suffix in (".md", ".mdx"):
-        m = re.match(r"^(#{1,6})\s+", line)
-        return len(m.group(1)) if m else 99
-    return len(line) - len(line.lstrip(" \t"))
-
-
-def _compute_outline_entries(lines, rules, suffix):
-    """计算文件结构项及其精确起止行 [(start, end, span, text), ...]。"""
-    raw_hits = []
-    for i, ln in enumerate(lines, 1):
-        if any(r.match(ln) for r in rules):
-            raw_hits.append((i, _outline_level(ln, suffix), ln.strip()))
-    total = len(lines)
-    entries = []
-    for idx, (start, lvl, text) in enumerate(raw_hits):
-        end = total
-        for nxt_start, nxt_lvl, _ in raw_hits[idx + 1:]:
-            if nxt_lvl <= lvl:
-                end = nxt_start - 1
-                break
-        while end > start and not lines[end - 1].strip():
-            end -= 1
-        entries.append((start, end, end - start + 1, text))
-    return entries
-
-
-def outline_file(path):
-    """输出代码/文档文件结构（含精确起止行跨度），替代整文件读取。返回 (输出文本, 退出码)。"""
-    p = Path(path)
-    if not p.is_file():
-        return f"local-seek: {path} 不是文件", 1
-    try:
-        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as e:
-        return f"local-seek: 读取失败 {e}", 1
-    suffix = p.suffix.lower()
-    rules = _OUTLINE_RULES.get(suffix)
-    if not rules:
-        return (f"local-seek: {p.name} 共 {len(lines)} 行"
-                f"（{p.suffix or '无扩展名'} 暂无结构规则）"), 0
-    entries = _compute_outline_entries(lines, rules, suffix)
-    hits = [f"{s}-{e} ({span}L): {txt[:100]}" for s, e, span, txt in entries]
-    head = f"local-seek: {p.name} 结构 {len(hits)} 处 / 共 {len(lines)} 行"
-    return "\n".join([head] + hits), 0
-
-
-def read_symbol_body(path, symbol_name, max_lines=200):
-    """按符号名一跳读取定义区间源码（带真实行号，默认 ≤ 200 行封顶）。返回 (输出文本, 退出码)。"""
-    symbol_name = (symbol_name or "").strip()
-    if not symbol_name:
-        return "local-seek: --symbol-body 需要指定符号名", 1
-    p = Path(path)
-    if not p.is_file():
-        return f"local-seek: {path} 不是文件", 1
-    try:
-        lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as e:
-        return f"local-seek: 读取失败 {e}", 1
-    suffix = p.suffix.lower()
-    rules = _OUTLINE_RULES.get(suffix)
-    if not rules:
-        return f"local-seek: {p.name} 暂无结构规则（{p.suffix or '无扩展名'}），请改用 --lines", 1
-    entries = _compute_outline_entries(lines, rules, suffix)
-    pat = re.compile(r"(?<!\w)" + re.escape(symbol_name) + r"(?!\w)")
-    matched = [item for item in entries if pat.search(item[3])]
-    if not matched:
-        low = symbol_name.lower()
-        matched = [item for item in entries if low in item[3].lower()]
-    if not matched:
-        return f"local-seek: {p.name} 中未找到符号 {symbol_name!r}（可先运行 --outline 查看结构）", 1
-
-    start, end, span, _ = matched[0]
-    cap = max(1, int(max_lines))
-    shown_end = min(end, start + cap - 1)
-    extra = ""
-    if len(matched) > 1:
-        others = ", ".join(f"{s}-{e}" for s, e, _, _ in matched[1:5])
-        extra = f"；另有 {len(matched) - 1} 处同名: {others}"
-    head = (
-        f"local-seek: {p.name} 符号 {symbol_name} 第 {start}-{shown_end} 行"
-        f"（共 {span} 行 / 文件 {len(lines)} 行{extra}）"
-    )
-    body = [f"{i}: {lines[i - 1]}" for i in range(start, shown_end + 1)]
-    if shown_end < end:
-        body.append(
-            f"... 已截断（上限 {cap} 行），继续读取：argo seek --lines {shown_end + 1}-{end} {path}"
-        )
-    return "\n".join([head] + body), 0
-
-
-def read_lines(path, spec):
-    """按行读取文件（单遍流式，不加载全文）。返回 (输出文本, 退出码)。"""
-    m = re.fullmatch(r"(\d+)-(\d+)", spec)
-    if not m:
-        return "local-seek: --lines 格式应为 N-M（如 10-20）", 1
-    a, b = int(m.group(1)), int(m.group(2))
-    if a < 1 or b < a:
-        return f"local-seek: 行范围无效 {spec}", 1
-    p = Path(path)
-    if not p.is_file():
-        return f"local-seek: {path} 不是文件", 1
-    # 单遍流式读取：边数总行数边收集目标区间。原实现先 open 数行、再 open
-    # 读区间，同一文件开两遍——大文件时 IO 翻倍（2026-10-06 收口）。
-    picked, total = [], 0
-    try:
-        with open(p, encoding="utf-8", errors="replace") as f:
-            for i, ln in enumerate(f, 1):
-                total = i
-                if a <= i <= b:
-                    picked.append(f"{i}: {ln.rstrip()}")
-    except OSError as e:
-        return f"local-seek: 读取失败 {e}", 1
-    if a > total:
-        return f"local-seek: {p.name} 只有 {total} 行，请求从 {a} 行开始", 1
-    end = min(b, total)
-    out = [f"local-seek: {p.name} 第 {a}-{end} 行 / 共 {total} 行"]
-    return "\n".join(out + picked), 0
+from seek_inspect import (  # noqa: E402
+    _OUTLINE_RULES,
+    _compute_outline_entries,
+    _outline_level,
+    outline_file,
+    read_lines,
+    read_symbol_body,
+)
+from seek_git import (  # noqa: E402
+    git_blame as _git_blame_impl,
+    git_log as _git_log_impl,
+)
 
 
 STRUCTURAL_RULES = {
@@ -1632,33 +1500,13 @@ def structural_search(rule_name, path, excludes, max_results, dots=False,
 
 
 def git_log(path, n=10, timeout=None):
-    """输出文件的最近提交历史（git log --oneline）。"""
-    p = Path(path).expanduser()
-    if not p.is_file():
-        return f"local-seek: {path} 不是文件", 1
-    proc = run(["git", "-C", str(p.parent), "log", "--oneline", f"-{n}", "--", p.name],
-               timeout=timeout)
-    if proc is None:
-        return "local-seek: git 执行失败", 1
-    if proc.returncode == 128 or (proc.returncode == 0 and not proc.stdout.strip()):
-        inside = run(["git", "-C", str(p.parent), "rev-parse", "--is-inside-work-tree"])
-        if inside is None or inside.returncode != 0:
-            return f"local-seek: {p.name} 不在 git 仓库中", 1
-        return f"local-seek: {p.name} 无提交历史", 0
-    lines = proc.stdout.splitlines()
-    return "\n".join([f"local-seek: {p.name} 最近 {len(lines)} 条提交"] + lines), 0
+    """输出文件的最近提交历史（委托至 seek_git，注入本模块 run 以兼容单测 monkeypatch）。"""
+    return _git_log_impl(path, n=n, timeout=timeout, runner=run)
 
 
 def git_blame(path, line, timeout=None):
-    """输出文件第 N 行的 blame 信息（谁在哪个提交改的）。"""
-    p = Path(path).expanduser()
-    if not p.is_file():
-        return f"local-seek: {path} 不是文件", 1
-    proc = run(["git", "-C", str(p.parent), "blame", "-L", f"{line},{line}", "--", p.name],
-               timeout=timeout)
-    if proc is None or proc.returncode != 0:
-        return f"local-seek: git blame 失败（{p.name} 可能在 git 仓库外或行号无效）", 1
-    return f"local-seek: {p.name} 第 {line} 行\n{proc.stdout.strip()}", 0
+    """输出文件第 N 行的 blame 信息（委托至 seek_git）。"""
+    return _git_blame_impl(path, line, timeout=timeout, runner=run)
 
 
 def _run_grep_fallback(args, patterns, fixed, path, excludes, exts, max_results,
@@ -1742,6 +1590,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     ap.add_argument("--count", action="store_true", help="只输出每文件命中数")
     ap.add_argument("--context", type=int, default=0, help="上下文行数（默认 0）")
     ap.add_argument("--json", action="store_true", help="JSON 输出")
+    ap.add_argument("--agent", action="store_true",
+                    help="Agent 消费单开关：等价 --json + 紧凑序列化 + 默认 --max 20 上限")
     ap.add_argument("--max", type=int, default=0, help="最大结果数（默认读配置）")
     ap.add_argument("--exact", action="store_true", help="关闭中文扩展（精确匹配）")
     ap.add_argument("--symbol", action="store_true",
@@ -1766,6 +1616,29 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     ap.add_argument("--domains", action="store_true", help="列出知识域与排除规则")
     args = ap.parse_args(argv)
 
+    # --agent 单开关展开：等价 --json + 预算封顶（默认 --max 20，防止大仓库吐爆上下文）
+    if args.agent:
+        args.json = True
+        if not args.max:
+            args.max = 20
+
+    # 互斥动作模式 Fail-Fast 校验（避免位置参数在「查询词」与「文件路径」间静默误判）
+    _active_modes: list[str] = []
+    if args.outline or args.lines or args.symbol_body:
+        _active_modes.append("精读模式(--outline/--lines/--symbol-body)")
+    if args.git_log or args.git_blame:
+        _active_modes.append("历史模式(--git-log/--git-blame)")
+    if args.structural:
+        _active_modes.append("结构搜索(--structural)")
+    if args.filename:
+        _active_modes.append("文件名搜索(--filename)")
+    if args.spotlight:
+        _active_modes.append("Spotlight(--spotlight)")
+    if len(_active_modes) > 1:
+        return f"local-seek: 动作模式互斥（{' 与 '.join(_active_modes)} 不能同时指定）", 2
+    if (args.outline or args.lines or args.symbol_body) and (args.count or args.context):
+        return "local-seek: 精读模式与 --count/--context 互斥", 2
+
     # 知识域展示模式
     if args.domains:
         if DOMAINS_FILE.exists():
@@ -1776,10 +1649,11 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     if args.outline or args.lines or args.symbol_body:
         target = args.query or str(args.path)
         if args.symbol_body:
-            return read_symbol_body(target, args.symbol_body, max_lines=args.max or 200)
+            cap = args.max if (args.max and not args.agent) else 200
+            return read_symbol_body(target, args.symbol_body, max_lines=cap, as_json=args.json)
         if args.lines:
-            return read_lines(target, args.lines)
-        return outline_file(target)
+            return read_lines(target, args.lines, as_json=args.json)
+        return outline_file(target, as_json=args.json)
 
     # git 联动模式：查文件提交历史 / 单行归属
     if args.git_log or args.git_blame:
@@ -2008,13 +1882,35 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
             pass
 
     if err:
+        if args.agent:
+            return json.dumps({"ok": False, "query": args.query, "engine": engine, "error": err}, ensure_ascii=False), 1
         return f"local-seek: {err}", 1
     if not results:
+        if args.agent:
+            handoff = {
+                "expand_path": f'argo seek "{args.query}" --path ~ --spotlight',
+                "web_fallback": f'argo search "{args.query}" --agent',
+            }
+            return json.dumps({
+                "query": args.query,
+                "engine": engine,
+                "mode": mode,
+                "scope": scope,
+                "path": str(path),
+                "elapsed_ms": elapsed,
+                "count": 0,
+                "results": [],
+                "handoff_hint": handoff,
+            }, ensure_ascii=False), 1
         return f"local-seek: 未找到匹配（{engine} · {path} · {elapsed}ms）", 1
 
     if args.json:
-        return to_json(results, engine, mode, scope, path, elapsed, args.query,
-                       since=args.since, until=args.until), 0
+        raw_json = to_json(results, engine, mode, scope, path, elapsed, args.query,
+                           since=args.since, until=args.until)
+        if args.agent:
+            # --agent 输出紧凑单行 JSON（省空白字节）
+            return json.dumps(json.loads(raw_json), ensure_ascii=False, separators=(",", ":")), 0
+        return raw_json, 0
     return format_output(results, engine, mode, path, elapsed, args.query,
                          len(results)), 0
 

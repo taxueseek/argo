@@ -35,6 +35,7 @@ argo seek "查询词" --filename       # 按文件名
 argo seek "查询词" --spotlight      # 全盘兜底
 argo seek "查询词" --type py,ts
 argo seek "查询词" --json           # 结构化输出
+argo seek "查询词" --agent          # Agent 单开关（紧凑 JSON + 默认 --max 20，零命中附 handoff_hint）
 argo seek "查询词" --exact          # 精确匹配（关扩展）
 argo seek "符号名" --symbol          # 精确符号/词边界匹配
 argo seek "查询词" --exclude 某文件 # 额外排除（可重复）
