@@ -144,7 +144,7 @@ python3 scripts/search.py "查询词" \
   [--no-cache] [--explain] [--json]\
   [--timeout S]\
   [--since 7d|2026-08-01] [--until 2026-08-01] [--sort relevance|oldest|newest]\
-  [--domain DOMAIN] [--sub_domain SUB_DOMAIN]  # 垂直域限定\
+  [--domain DOMAIN] [--sub_domain SUB_DOMAIN]  # 垂直域下推（仅 anysearch 消费）+ 缓存键隔离；不参与选源\
   [--intent news|academic|social|image-reverse|calc]  # 高层意图路由（缺 key/超预算自动降级）\
   [--agent]                    # Agent 消费单开关（等价 --json --fields agent）\
   [--input-kind auto|keyword|url-seed|known-url]\
@@ -805,8 +805,8 @@ argo ego-search merge --public /tmp/p.json --login /tmp/l.json
 | `ARGO_NO_DAEMON` | 关闭 UDS 快路径，search 恒走常态冷进程 | 默认开快路径；=1 关闭 |
 | `ARGO_RELEVANCE_V2` | 相关性算子：CJK 二元组覆盖率 | 默认开；=0 退回旧单字覆盖率 |
 | `ARGO_ROUTE_SAMPLE_RATE` | 路由质量分析日志采样率分母 | 默认 20（即 1/20 采样率） |
-| `ARGO_SERIAL_STAGGER_S` | 通用串行引擎启动间隔秒数 | 默认 0.2s，避免并发突发流量 |
-| `ARGO_STRAGGLER_GRACE_S` | 慢源（掉队者）等待宽限时间（秒） | 默认 0.5s，超期即截断早停 |
+| `ARGO_SERIAL_STAGGER_S` | 通用串行引擎启动间隔秒数 | 默认 0.8s（= `_PRIMARY_GRACE_S`，与 wave-1 宽限窗同源），避免并发突发流量 |
+| `ARGO_STRAGGLER_GRACE_S` | 慢源（掉队者）等待宽限时间（秒） | 默认 1.5s（真源 `search._STRAGGLER_GRACE_S`），超期即截断早停；0 关闭 |
 | `ARGO_TOOL_CALL_COALESCE` | MCP 工具并发单飞合并（single-flight）开关 | 默认 1（同一毫秒内相同请求合并执行）；=0 关闭 |
 
 ### 路径与数据位置（13）

@@ -958,24 +958,24 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
             f"{_name}: registry 查无此引擎（拼写错误，或该源未随本版发布）")
 
     # 本机检索账（耗时/命中数/跳过）：口径单点在 local_seek_accounting()。
-    # 意图跳过（公域查询）与用户显式 --no-local 都要留痕，但语义不同：
-    # 前者是系统判据，后者是用户选择——分开标记，日志里可归因。
+    # 意图跳过与用户显式 --no-local 都留痕，但语义不同——响应字段里分开标记。
+    # 跳过条目不落日志（2026-11-24）：local_seek.jsonl 实测 93.7% 是跳过项
+    # （1490 条中 1412 条），stats / badcase_ledger 都不读这个流，唯一效果是
+    # 把「这次没查」刷成与「查了没有」同形的噪声；跳过率已在响应里逐次可见。
     try:
-        _ls_acct = ({"local_seek_skipped": True,
-                     "skip_reason": "public_domain_intent"}
+        _ls_acct = ({"local_seek_skipped": True, "skip_reason": "public_domain_intent"}
                     if _local_seek_intent_skipped else local_seek_accounting())
         result.update(_ls_acct)
         from usage_log import emit as _emit_usage_log
         from search_attribution import is_synthetic_run as _is_syn
-        if include_local or _local_seek_intent_skipped:
-            if not _is_syn(result.get("engines_used")):
-                _ls_acct.update(query=(original_query or "")[:60],
-                                elapsed_ms=result.get("elapsed_ms"),
-                                count=result.get("count"))
-                _emit_usage_log("local_seek", _ls_acct)
+        if include_local and not _local_seek_intent_skipped \
+                and not _is_syn(result.get("engines_used")):
+            _ls_acct.update(query=(original_query or "")[:60],
+                            elapsed_ms=result.get("elapsed_ms"),
+                            count=result.get("count"))
+            _emit_usage_log("local_seek", _ls_acct)
     except Exception:
         pass
-
     return result
 
 

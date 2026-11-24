@@ -61,7 +61,7 @@ argo research "复杂问题" --json    # 取证包（扩词或多工作包 → d
 | `--video` `--min-duration SEC` `--max-duration SEC` | 视频模式（B 站 + YouTube）及时长筛选 |
 | `--verify [N]` | 对 top-N 抓正文回填证据分 |
 | `--numverify [N]` `--verify-with <引擎>` | 数值印证（对关键数字抓原文确认核对簇）+ 核对配对 |
-| `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域限定 / 关本地统计与查询落盘 |
+| `--domain` `--sub_domain` / `ARGO_USAGE_LOG=0` | 垂直域下推（仅 anysearch）+ 缓存键隔离；不参与选源 / 关查询落盘 |
 
 **按场景路由**：优先 `--intent news|academic|social|image-reverse|calc`（缺 key/超预算自动降级），或显式 `--engine deepseek_search` / `--academic-deep` / `anysearch`，见 `references/usage.md`。
 

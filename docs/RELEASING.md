@@ -23,7 +23,7 @@ python3 scripts/release.py publish 2.10.1 --yes
 
 管（确定性）：
 
-- 8 处机器声明：pyproject / package.json / dsh 插件包 / server.json（顶层 + packages）/ `__version__` / SKILL.md / `ARGO_MCP_VERSION`（ZCode 插件三处随 2026-11-13 packages/argo-zcode 剥离退出）
+- 8 处机器声明：pyproject / package.json / dsh 插件包 / server.json（顶层 + packages）/ `__version__` / SKILL.md / `ARGO_MCP_VERSION`
 - 五语 README 徽标、安装段「当前版本」散文、能力段标题
 - package.json 的 files 白名单补新发布说明；缺发布说明时生成带 `<!-- release-todo -->` 的骨架
 - `check`：release_check（结构）+ 内容清单 + `gen_engine_catalog.py --check`（目录计数）+ `gen_readme_art.py --check`（对外证据图）

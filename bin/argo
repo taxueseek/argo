@@ -489,11 +489,18 @@ def _engine_count():
     既与文档里的收录数对不上，配置不可读时还回退到一个写死的旧值（87），
     用户看到的是个假数字。真读不出来就不显示数量，别编。
 
-    快路径：读 `state_root/.engine_count`（`<count>\\n<config.yaml mtime_ns>`），
-    mtime 匹配 → 直接返回（~2ms）；冷启动或 config.yaml 变更 → fallback
-    到完整 load_config()（~30ms）并回填。这样 --help 稳态下省 ~28ms，
-    且不会重蹈「写死 87」的假数字覆辙——缓存键含 config.yaml mtime，
-    config 一变就会走完整解析刷新。
+    快路径：读 `state_root/.engine_count`（`<count>\\n<指纹>`），指纹匹配 →
+    直接返回（~2ms）；冷启动或输入变更 → fallback 到完整 load_config()
+    （~30ms）并回填。这样 --help 稳态下省 ~28ms，且不会重蹈「写死 87」的
+    假数字覆辙。
+
+    指纹必须覆盖**两个**真源：config.yaml 与 engines/**/*.yaml 外置声明。
+    此前只取 config.yaml 的 mtime_ns，而引擎声明的唯一真源是 engines/specs/
+    （config.yaml 的 engines 段是空 dict），于是新增或删除一个 spec 时缓存
+    恒命中，`--help` 报的旧数字与 docs/ENGINE_CATALOG.md、counts.json 长期
+    不一致（2026-11-24 实测：实际 313、缓存 312、catalog 313）。这里复用
+    config._external_engines_scan 的摘要（最新 mtime + 文件数 + 总字节 +
+    逐文件指纹），与配置磁盘缓存同一份判据，不另起第三套扫描逻辑。
     """
     try:
         state_root = (os.environ.get("ARGO_STATE_DIR", "").strip()
@@ -501,9 +508,18 @@ def _engine_count():
         cfg_path = os.path.join(ARGO_HOME, "config.yaml")
         cache_file = os.path.join(state_root, ".engine_count")
         try:
-            cfg_mtime = str(os.stat(cfg_path).st_mtime_ns)
-        except OSError:
-            cfg_mtime = None
+            sys.path.insert(0, SCRIPTS)
+            import config as _cfg
+            fingerprint = "%s|%s" % (
+                os.stat(cfg_path).st_mtime_ns,
+                _cfg._external_engines_scan()[3],
+            )
+        except Exception:
+            try:
+                fingerprint = str(os.stat(cfg_path).st_mtime_ns)
+            except OSError:
+                fingerprint = None
+        cfg_mtime = fingerprint
         if cfg_mtime:
             try:
                 with open(cache_file, encoding="utf-8") as f:

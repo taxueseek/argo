@@ -595,6 +595,9 @@ def main():
     # 同一进程、同一路径上付的那一笔，否则只是把支出提前，不是省下。
     # 回归守卫见 tests/test_plan_a_optimizations.py::TestNoUnconditionalPrewarm。
     # --academic-deep：学术多源模式，自动设置 depth=deep + domain=academic
+    # _user_domain 记录「用户显式传了 --domain/--sub_domain」——内部模式
+    # （--academic-deep / --intent）设置的 engine_domain 不需要作用域告警。
+    _user_domain = bool(args.domain or args.sub_domain)
     if args.academic_deep:
         depth = "deep"
         engine_domain = "academic"
@@ -839,6 +842,32 @@ def main():
             for w in intent_res["warnings"]:
                 if w not in existing_w:
                     existing_w.append(w)
+
+    # --domain / --sub_domain 的作用域提示（2026-11-24）。
+    #
+    # 实测：这两个参数**不参与选源**——路由决策（route_query）从不读它们，
+    # 全仓也只有 anysearch 的 builder 把 `domain` 下推进上游请求体
+    # （engines_builders_tech._build_anysearch_engine），其余 312 个源的
+    # builder 签名里没有这个入参。它们真正的作用是 ① 隔离引擎级缓存键
+    # （search_entry）、② 给 anysearch 传垂直域。
+    #
+    # 于是 `--domain finance` 配任何非 anysearch 的自动路由都是静默无效的：
+    # 退出码 0、无告警、结果与不传给定位「金融域」完全相同。这与 SKILL.md
+    # 写的「垂直域限定」承诺不符。这里不改行为（选了什么源仍由路由决定），
+    # 只让「该参数本次未影响选源」可见——与 issue #34 的 warnings[] 纪律同构。
+    if _user_domain:
+        # 判据用**实际调用过**的引擎（engines_used），不是路由 combo——
+        # combo 尾部常挂着一串 backup，anysearch 在里面并不代表它真被调用。
+        _used = results.get("engines_used") or []
+        if "anysearch" not in _used:
+            _w = (
+                f"--domain/--sub_domain 不参与选源：本次实际调用的引擎 {_used[:3]} "
+                "均不消费该参数，它只隔离了引擎级缓存键；要对单引擎下推垂直域请"
+                "显式 --engine anysearch"
+            )
+            results.setdefault("warnings", [])
+            if _w not in results["warnings"]:
+                results["warnings"].append(_w)
 
     # 敏感信息自动脱敏拦截（防止真实 API Key / 通用敏感凭据在输出流泄露）
     try:

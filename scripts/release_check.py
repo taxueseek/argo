@@ -38,8 +38,7 @@ import re
 import sys
 from pathlib import Path
 
-# 八处机器声明的相对路径（顺序即报错输出顺序；2026-11-13 ZCode 插件随
-# packages/argo-zcode 剥离，插件清单/面板 UI/插件市场三处声明同步退出）
+# 八处机器声明的相对路径（顺序即报错输出顺序）
 JSON_DECLS = (
     "package.json",
     "packages/dsh-plugin/package.json",

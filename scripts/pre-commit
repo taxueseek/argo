@@ -117,7 +117,6 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
-printf "[pre-commit] argo 快门禁（74 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$PY"
 # 测试清单单真源：tests/gate_manifest.txt（2026-11-14 收口）。
 # 清单曾在此手工枚举 42 个文件，每轮新门禁「漏一道加一道」（头注释史
 # 至少 6 轮），env/config 对账门三道长期漏册——现由 tests/test_gate_manifest.py
@@ -130,6 +129,11 @@ if [ ! -f "$MANIFEST" ]; then
     echo "[pre-commit] 缺 $MANIFEST，快门禁清单无真源，门禁视为失败" >&2
     exit 1
 fi
+# 条数从清单真源现算（2026-11-24）：这里是手抄数字的第三个副本，manifest 从
+# 74 涨到 76 时不会变红——AGENTS.md 有 test_agents_md_precommit_file_count_matches
+# 对拍，本行没有。打印值与实际跑的分片内容不一致会误导「跑了多少道门」的判断。
+GATE_COUNT=$(grep -Ev '(^[[:space:]]*#|^[[:space:]]*$)' "$MANIFEST" | wc -l | tr -d ' ')
+printf "[pre-commit] argo 快门禁（%s 条 4 片并行，实测 ~8s，解释器 %s；全量回归请手动跑 tests/）...\n" "$GATE_COUNT" "$PY"
 # 新增测试文件当场归类（2026-11-21 审计）：test_gate_manifest.py 的词根
 # 反向断言拦不住命名不带 gate/… 的 <1s 文件（两个漏册实证），本检查把
 # 拦截点前移到 commit 时刻——staged 新增 tests/test_*.py 必须入册；存量
