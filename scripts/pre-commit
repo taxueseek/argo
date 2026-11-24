@@ -173,6 +173,10 @@ else
     fi
 fi
 
+# L2 变更感知增量选测（2026-11-24 方案三）：按 staged 改动反查未入册的 343 个
+# 存量单测并在 8s 预算内精准执行，补齐「本地绿、全量红」盲区；无命中 <0.25s。
+"$PY" scripts/affected_tests.py --staged --run --budget 8
+
 # 派生件一致性门禁（P0-2）：写完 spec 不跑 sync 就提交，派生件会过期。
 # 实测 0.13s，进 pre-commit 不触发 --no-verify 绕过。
 echo "[pre-commit] 派生件一致性校验与自愈同步..."

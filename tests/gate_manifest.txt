@@ -20,6 +20,7 @@
 #      不需要靠「豁免出本地」来换时间。
 #
 
+tests/test_affected_tests_gate.py
 tests/test_agents_routing.py
 tests/test_badcase_ledger.py
 tests/test_breaker_reenable_reach.py

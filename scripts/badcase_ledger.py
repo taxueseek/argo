@@ -625,6 +625,76 @@ def overview() -> dict[str, Any]:
     return out
 
 
+def propose_actions(
+    *,
+    min_count: int = 5,
+    min_days: int = 3,
+    rows: list[dict[str, Any]] | None = None,
+    engines_cfg: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """将坏例账本转化为可审阅的自动降级/治理提案（只读，不自动改配置）。
+
+    聚焦「仍在自动路由池（非 explicit_only）且跨多日高频失败」的单引擎：
+      - unattributed 占比最高 → fix_attribution（补齐异常归因）
+      - quota_exhausted / rate_limited / auth_expired → demote_to_explicit_only
+      - 其余持续网络/故障 → review_or_demote
+    """
+    if rows is None:
+        rows = [dict(r) for r in _fetch(None, None, 10000)]
+    if engines_cfg is None:
+        try:
+            from config import get_engines
+            engines_cfg = get_engines()
+        except (ImportError, OSError, ValueError):
+            engines_cfg = {}
+
+    per_engine: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        eng_raw = str(r.get("engine") or "").strip()
+        if not eng_raw or "," in eng_raw:
+            continue
+        rc = str(r.get("root_cause") or "unattributed")
+        day = str(r.get("ts") or "")[:10]
+        bucket = per_engine.setdefault(eng_raw, {"count": 0, "days": set(), "causes": {}})
+        bucket["count"] += 1
+        if len(day) == 10:
+            bucket["days"].add(day)
+        bucket["causes"][rc] = bucket["causes"].get(rc, 0) + 1
+
+    proposals: list[dict[str, Any]] = []
+    for eng, info in sorted(per_engine.items(), key=lambda kv: (-kv[1]["count"], kv[0])):
+        cnt = info["count"]
+        day_cnt = len(info["days"])
+        if cnt < min_count or day_cnt < min_days:
+            continue
+        spec = engines_cfg.get(eng) if isinstance(engines_cfg, dict) else None
+        if isinstance(spec, dict) and spec.get("explicit_only"):
+            continue
+        top_cause = max(info["causes"].items(), key=lambda kv: kv[1])[0]
+        if top_cause == "unattributed":
+            action = "fix_attribution"
+        elif top_cause in ("quota_exhausted", "rate_limited", "auth_expired"):
+            action = "demote_to_explicit_only"
+        else:
+            action = "review_or_demote"
+        proposals.append({
+            "engine": eng,
+            "count": cnt,
+            "seen_days": day_cnt,
+            "top_root_cause": top_cause,
+            "causes": info["causes"],
+            "recommended_action": action,
+            "in_registry": isinstance(spec, dict),
+        })
+
+    return {
+        "min_count": min_count,
+        "min_days": min_days,
+        "proposal_count": len(proposals),
+        "proposals": proposals,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="坏例账本（badcase 管理）")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -636,6 +706,9 @@ def main(argv: list[str] | None = None) -> int:
     p_list.add_argument("--limit", type=int, default=10)
     sub.add_parser("stats")
     sub.add_parser("overview")
+    p_propose = sub.add_parser("propose")
+    p_propose.add_argument("--min-count", type=int, default=5)
+    p_propose.add_argument("--min-days", type=int, default=3)
     p_check = sub.add_parser("check")
     p_check.add_argument("--since", default="7d")
     p_check.add_argument("--max", type=int, default=50)
@@ -661,6 +734,11 @@ def main(argv: list[str] | None = None) -> int:
             print("[overview] dormant_sources 取数失败（见输出 error 字段）",
                   file=sys.stderr)
             return 1
+    elif args.cmd == "propose":
+        print(json.dumps(
+            propose_actions(min_count=args.min_count, min_days=args.min_days),
+            ensure_ascii=False,
+        ))
     elif args.cmd == "check":
         report = check(args.since, args.max, args.promote_days)
         print(json.dumps(report, ensure_ascii=False))
