@@ -113,3 +113,89 @@ def test_badcase_propose_actions_filters_by_threshold_and_explicit_only():
     assert set(by_eng.keys()) == {"noisy_src", "mystery_src"}
     assert by_eng["noisy_src"]["recommended_action"] == "demote_to_explicit_only"
     assert by_eng["mystery_src"]["recommended_action"] == "fix_attribution"
+
+
+def test_plan_a_error_classification_and_http_status_fallback():
+    import engine_states
+    import output_transparency
+    import retry_policy
+
+    # 1. 瞬时网络/DNS/TLS/5xx 不再落入 OUTCOME_ERROR (unknown)
+    for msg in (
+        "HTTP 502 Bad Gateway",
+        "503 Service Unavailable",
+        "Connection reset by peer",
+        "urlopen error [Errno 8] nodename nor servname provided",
+        "SSL: CERTIFICATE_VERIFY_FAILED",
+    ):
+        assert retry_policy.classify_error_status(msg) == engine_states.OUTCOME_TIMEOUT, msg
+
+    assert retry_policy.classify_error_status("Too Many Requests") == engine_states.OUTCOME_RATE_LIMITED
+    assert retry_policy.classify_error_status("Please complete CAPTCHA") == engine_states.OUTCOME_BLOCKED
+    assert retry_policy.classify_error_status("Unauthorized: invalid api key") == engine_states.OUTCOME_AUTH_FAILED
+
+    # 2. output_transparency 对通用 error 携带 http_status 时兜底归因
+    failures = output_transparency.build_failures({
+        "engine_outcomes": [
+            {"engine": "src_503", "status": engine_states.OUTCOME_ERROR, "http_status": 503},
+            {"engine": "src_429", "status": engine_states.OUTCOME_ERROR, "http_status": 429},
+            {"engine": "src_401", "status": engine_states.OUTCOME_ERROR, "http_status": 401},
+        ]
+    })
+    by_eng = {f["engine"]: f["category"] for f in failures}
+    assert by_eng == {"src_503": "transient", "src_429": "rate-limit", "src_401": "auth"}
+
+
+def test_plan_a_recovery_log_keeps_unrecovered_and_skips_recovered(tmp_path: Path):
+    import json
+
+    log_file = tmp_path / "recovery.jsonl"
+    log_file.write_text(
+        "\n".join([
+            json.dumps({"ts": "2026-11-24T01:01:00Z", "query": "B", "recovered": False,
+                        "level_used": "L1", "strategy_used": "rewrite", "note": "空结果"}),
+            json.dumps({"ts": "2026-11-24T01:02:00Z", "query": "C", "recovered": True,
+                        "level_used": "L1", "strategy_used": "rewrite"}),
+        ]),
+        encoding="utf-8",
+    )
+    rows = badcase_ledger._rows_from_recovery_log(log_file)
+    assert len(rows) == 1
+    assert rows[0]["query"] == "B"
+    assert "level=L1" in rows[0]["detail"]
+
+
+def test_plan_b_auto_mode_skips_quota_exhausted(monkeypatch):
+    import route_combo
+
+    domain_cfg = {
+        "name": "general",
+        "engines_combo": ["bocha", "anysearch"],
+        "primary": "bocha",
+        "fallback": "anysearch",
+    }
+
+    class _FakeQuota:
+        def __init__(self, blocked: set[str]):
+            self._blocked = blocked
+
+        def is_hard_down(self, _e: str) -> bool:
+            return False
+
+        def is_available(self, e: str, mode: str = "auto") -> bool:
+            return e not in self._blocked
+
+    # auto 模式下配额耗尽引擎被前置跳过，不进入下游打分与派发
+    monkeypatch.setattr(route_combo, "get_quota_manager", lambda: _FakeQuota({"bocha"}))
+    combo_partial = route_combo._get_engines_combo(
+        domain_cfg, {"bocha", "anysearch"}, mode="auto", features={"language": "zh"},
+    )
+    assert "bocha" not in combo_partial
+    assert "anysearch" in combo_partial
+
+    # 全耗尽时集合收缩为 []，交由 route_query 尾部通用保底接管，不再强派已耗尽源
+    monkeypatch.setattr(route_combo, "get_quota_manager", lambda: _FakeQuota({"bocha", "anysearch"}))
+    combo_all_down = route_combo._get_engines_combo(
+        domain_cfg, {"bocha", "anysearch"}, mode="auto", features={"language": "zh"},
+    )
+    assert combo_all_down == []

@@ -28,6 +28,18 @@ _BLOCKED_ERROR_KEYWORDS = (
     "just a moment", "checking your browser", "cf-browser-verification",
     "challenge", "ddos-guard", "perimeterx", "access denied",
     "handshake failure", "unable to handshake", "安全验证", "滑动验证",
+    "captcha", "cloudflare", "verify you are human",
+)
+
+# 瞬时网络 / 连接 / DNS / TLS / 服务端 5xx 错误（与超时同属 transient/network，可重试）
+_TRANSIENT_ERROR_KEYWORDS = (
+    "timeout", "timed out", "connection reset", "connection refused",
+    "connection aborted", "remote disconnected", "eof occurred",
+    "broken pipe", "urlopen error", "getaddrinfo", "name or service not known",
+    "nodename nor servname", "network is unreachable", "temporary failure",
+    "ssl:", "certificate verify failed", "bad gateway", "service unavailable",
+    "gateway timeout", "internal server error", "http 500", "http 502",
+    "http 503", "http 504", " 500 ", " 502 ", " 503 ", " 504 ",
 )
 
 # 确定性失败：源端状态，不是网络抖动。重试只是多烧一次调用并推迟切备选
@@ -55,15 +67,17 @@ def classify_error_status(message: Any) -> str:
     拦截是源端状态，鉴权最后（401/403 也可能来自拦截页）。
     """
     m = str(message or "").lower()
-    if "timeout" in m or "timed out" in m:
+    padded = f" {m} "
+    if any(k in padded for k in _TRANSIENT_ERROR_KEYWORDS):
         return engine_states.OUTCOME_TIMEOUT
     if any(k in m for k in _QUOTA_ERROR_KEYWORDS):
         return engine_states.OUTCOME_QUOTA_EXHAUSTED
-    if "rate" in m or "429" in m:
+    if "rate" in m or "429" in m or "too many requests" in m or "throttl" in m:
         return engine_states.OUTCOME_RATE_LIMITED
     if any(k in m for k in _BLOCKED_ERROR_KEYWORDS):
         return engine_states.OUTCOME_BLOCKED
-    if "auth" in m or "401" in m or "403" in m:
+    if ("auth" in m or "401" in m or "403" in m
+            or "unauthorized" in m or "invalid api key" in m or "invalid key" in m):
         return engine_states.OUTCOME_AUTH_FAILED
     return engine_states.OUTCOME_ERROR
 

@@ -470,10 +470,23 @@ def stats() -> dict:
             "SELECT engine, COUNT(*) FROM badcases WHERE engine != ''"
             " GROUP BY engine ORDER BY COUNT(*) DESC LIMIT 8").fetchall())
         total = con.execute("SELECT COUNT(*) FROM badcases").fetchone()[0]
+        rec_no_strategy = con.execute(
+            "SELECT COUNT(*) FROM badcases WHERE kind = 'recovery' "
+            "AND detail LIKE 'level=None strategy=None%'"
+        ).fetchone()[0]
     finally:
         con.close()
-    return {"total": total, "by_kind": by_kind, "top_engines": by_engine,
-            "by_root_cause": root_cause_stats()}
+    rec_total = int(by_kind.get("recovery", 0))
+    return {
+        "total": total,
+        "by_kind": by_kind,
+        "recovery_breakdown": {
+            "no_strategy": rec_no_strategy,
+            "strategy_failed": max(0, rec_total - rec_no_strategy),
+        },
+        "top_engines": by_engine,
+        "by_root_cause": root_cause_stats(),
+    }
 
 
 # ── LESSONS.md 导出 ─────────────────────────────────────────────────────────

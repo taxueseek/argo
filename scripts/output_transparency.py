@@ -101,6 +101,16 @@ def build_failures(result: dict[str, Any], limit: int = 6) -> list[dict[str, Any
         seen.add(key)
         category, action, retryable = _FAILURE_META.get(
             status, ("unknown", "源端异常；可重试或换源", True))
+        # 当 status 落入通用 error/unknown 但携带原始 HTTP 状态码时，按状态码兜底
+        # 归因，避免 429/401/403/5xx 被降级成 failure_kinds=unknown 污染坏例账本。
+        http_st = o.get("http_status")
+        if category == "unknown" and isinstance(http_st, int):
+            if http_st == 429:
+                category, action, retryable = _FAILURE_META[engine_states.OUTCOME_RATE_LIMITED]
+            elif http_st in (401, 403):
+                category, action, retryable = _FAILURE_META[engine_states.OUTCOME_AUTH_FAILED]
+            elif 500 <= http_st < 600:
+                category, action, retryable = ("transient", f"源端 HTTP {http_st} 临时故障；可重试或换源", True)
         item: dict[str, Any] = {
             "engine": engine,
             "status": status,

@@ -598,10 +598,15 @@ def _get_engines_combo(domain: dict[str, Any], enabled: set[str], mode: str = "a
     except Exception:
         pass
 
-    # fast/budget 模式过滤付费引擎
-    if mode in ("fast", "budget"):
+    # 全模式配额/预算前置预检（2026-11-24 方案 B）：
+    # 旧实现只在 fast/budget 模式检查 is_available，导致 auto/deep 模式下配额已耗尽
+    # 的源（如 bocha/octen）仍被派发并反复撞 quota_exhausted。现全模式前置跳过
+    # （内存查表零额外 IO）；fail-open 保护：若全被排除则保留原列表交执行层报清原因。
+    if filtered:
         quota_mgr = get_quota_manager()
-        filtered = [e for e in filtered if quota_mgr.is_available(e, mode=mode)]
+        _avail = [e for e in filtered if quota_mgr.is_available(e, mode=mode)]
+        if _avail or mode in ("fast", "budget"):
+            filtered = _avail
 
     # fast/budget 模式优先前置零成本子引擎
     if mode in ("fast", "budget"):
