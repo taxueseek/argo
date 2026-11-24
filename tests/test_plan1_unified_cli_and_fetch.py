@@ -102,8 +102,40 @@ def test_dispatch_paper_and_pdf_and_fallback(monkeypatch):
     assert res_empty is not None and res_empty["success"] is False
     assert "为空" in res_empty["error"]
 
+    # PDF 提取抛出异常同样显式失败（不返回 None 落回 HTML 链空跑）
+    def _boom(_url):
+        raise RuntimeError("corrupt pdf header")
+
+    monkeypatch.setattr(pdf_extract, "extract_pdf", _boom)
+    res_exc = fetch_dispatch.dispatch_specialized_fetch("https://example.org/broken.pdf")
+    assert res_exc is not None and res_exc["success"] is False
+    assert res_exc["dispatch_handler"] == "pdf"
+    assert "RuntimeError" in res_exc["error"] and "corrupt pdf header" in res_exc["error"]
+
     # 普通网页直接返回 None
     assert fetch_dispatch.dispatch_specialized_fetch("https://example.org/index.html") is None
+
+
+def test_guard_empty_unknown_result_lives_in_fetch_quality():
+    import fetch_quality
+
+    # 成功 + 空正文 + unknown → 翻为显式失败
+    bad = fetch_quality.guard_empty_unknown_result({
+        "success": True, "content": "  ", "page_type": "unknown",
+    })
+    assert bad["success"] is False and "正文为空" in bad["error"]
+
+    # page_type 已识别（article）即使正文为空也不强翻
+    typed = fetch_quality.guard_empty_unknown_result({
+        "success": True, "content": "", "page_type": "article",
+    })
+    assert typed["success"] is True
+
+    # 正常有正文的结果保持原样
+    ok = fetch_quality.guard_empty_unknown_result({
+        "success": True, "content": "hello", "page_type": "unknown",
+    })
+    assert ok["success"] is True
 
 
 # ── 2. bin/argo 分层 --help 视图 ──────────────────────────────────────────────

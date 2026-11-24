@@ -248,3 +248,16 @@ def test_cli_agent_with_intent_propagates_resolution_and_warnings(monkeypatch, c
     assert out["intent_resolution"]["intent"] == "news"
     assert out["intent_resolution"]["degraded"] is True
     assert any("DEEPSEEK_API_KEY" in w for w in out["warnings"])
+
+
+def test_intent_hardcoded_engines_exist_in_registry():
+    """门禁：intent_router 引用的引擎 ID 必须全部存在于引擎注册表，防改名/下线后静默失效。"""
+    import config
+
+    registered = set(config.get_engines().keys())
+    referenced: set[str] = {"deepseek_search", "wolframalpha"}
+    referenced.update(intent_router._REVERSE_IMAGE_CANDIDATES)
+    for boost_list in intent_router._INTENT_BOOST.values():
+        referenced.update(boost_list)
+    missing = sorted(referenced - registered)
+    assert not missing, f"intent_router 引用了注册表中不存在的引擎: {missing}"

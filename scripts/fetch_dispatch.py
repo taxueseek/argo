@@ -8,8 +8,9 @@
   - pdf    : *.pdf 或 arxiv.org/pdf/<id>   → pdf_extract.extract_pdf
 
 回落原则：
-  - 微信链接保持既有契约（专用链三通道全败即返回 FETCH_WECHAT_FAILED，不落回通用 JS 骨架）；
-  - tweet / paper / pdf 专用提取失败时返回 None，交由 fetch_v3 常规多级降级链兜底。
+  - 微信与 PDF 链接保持显式失败契约（提取失败、空正文或抛出异常时均返回
+    `success=False` 及对应 `FETCH_*_FAILED`，不落回通用 HTML 抓取链）；
+  - tweet / paper 专用提取失败时返回 None，交由 fetch_v3 常规多级降级链兜底。
 """
 
 from __future__ import annotations
@@ -212,8 +213,18 @@ def _dispatch_pdf(url: str, max_chars: int) -> dict[str, Any] | None:
             "pages": res.get("pages"),
             "dispatch_handler": "pdf",
         }
-    except Exception:
-        return None
+    except Exception as exc:
+        return {
+            "url": url,
+            "title": "",
+            "content": "",
+            "html": "",
+            "length": 0,
+            "success": False,
+            "error": f"PDF 提取异常: {type(exc).__name__}: {exc}",
+            "fetch_method": engine_states.FETCH_PDF_FAILED,
+            "dispatch_handler": "pdf",
+        }
 
 
 def dispatch_specialized_fetch(
@@ -235,14 +246,3 @@ def dispatch_specialized_fetch(
     if kind == "pdf":
         return _dispatch_pdf(url, max_chars)
     return None
-
-
-def guard_empty_unknown_result(result: dict[str, Any]) -> dict[str, Any]:
-    """修正「成功但零正文 + page_type 未识别」的假成功（如二进制页被当 HTML 抓回）。"""
-    if (result.get("success") and not (result.get("content") or "").strip()
-            and result.get("page_type") in (None, "", "unknown")):
-        result["success"] = False
-        result["error"] = result.get("error") or (
-            "抓取成功但正文为空（URL 可能指向二进制文件或需专用解析器）"
-        )
-    return result

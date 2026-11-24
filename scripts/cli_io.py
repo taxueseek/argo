@@ -137,12 +137,15 @@ def stdout_is_tty() -> bool:
         return True  # fail-safe：取不到就当终端，不瘦身
 
 
+def _is_stream_mode(mode: int) -> bool:
+    """是否为流式管道 fd（FIFO 管道或 Node.js libuv 在 macOS 上创建的 socketpair）。"""
+    return stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)
+
+
 def stdin_is_piped() -> bool:
     """stdin 是否接了管道、文件重定向或 socketpair（Node.js libuv spawn 在 macOS 上用 socketpair）。"""
     mode = _stdin_mode()
-    return mode is not None and (
-        stat.S_ISFIFO(mode) or stat.S_ISREG(mode) or stat.S_ISSOCK(mode)
-    )
+    return mode is not None and (stat.S_ISREG(mode) or _is_stream_mode(mode))
 
 
 def stdin_is_memory_stream() -> bool:
@@ -187,7 +190,7 @@ def read_stdin_if_piped() -> str:
     if stat.S_ISREG(mode):
         # 文件重定向：read() 到 EOF 立即返回，本来就不会挂，无需期限
         return _read_all_text()
-    if not (stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)):
+    if not _is_stream_mode(mode):
         return ""  # 终端 / /dev/null / 其它字符设备：没有数据
     return _read_pipe_with_deadline()
 

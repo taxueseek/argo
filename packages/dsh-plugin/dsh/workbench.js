@@ -351,11 +351,13 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
           const env = await resolveArgoEnv(config, { credentials: getCredentials?.() })
           const out = await inspectLocalFile(env, {
             filePath,
+            allowedRoot: resolveLocalSearchPath(config),
             symbol: body.symbol || '',
             lines: body.lines || '',
             runner: options.runInspectCli || runArgoCli,
           })
-          sendJson(res, out?.ok === false ? 400 : 200, out)
+          const status = out?.error === 'path_outside_root' ? 403 : (out?.ok === false ? 400 : 200)
+          sendJson(res, status, out)
         } catch (err) {
           sendJson(res, 500, { ok: false, error: String(err?.message ?? err) })
         }

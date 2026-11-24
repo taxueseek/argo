@@ -236,3 +236,14 @@ def _compute_quality(content: str, html: str) -> float:
     return quality_breakdown(content, html)["total"]
 
 
+def guard_empty_unknown_result(result: dict[str, Any]) -> dict[str, Any]:
+    """修正「成功但零正文 + page_type 未识别」的假成功（如二进制页被当 HTML 抓回）。"""
+    if (result.get("success") and not (result.get("content") or "").strip()
+            and result.get("page_type") in (None, "", "unknown")):
+        result["success"] = False
+        result["error"] = result.get("error") or (
+            "抓取成功但正文为空（URL 可能指向二进制文件或需专用解析器）"
+        )
+    return result
+
+

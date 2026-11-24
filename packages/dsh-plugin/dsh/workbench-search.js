@@ -3,8 +3,9 @@
  * 自 workbench.js 拆出以守 1000 行门禁（2026-11-21）；HTTP 骨架与宿主 handler 留在 workbench.js。
  */
 
+import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { DEFAULTS, stripBoundary } from './runner.js'
 import { runArgoCli } from './workbench-io.js'
 import { boundedMap } from './wide-research.js'
@@ -386,10 +387,43 @@ export function buildSearchCliArgs(query, mode, refresh = false, overrides = {})
   return args
 }
 
+function _safeRealpath(p) {
+  const abs = resolve(p)
+  try {
+    return realpathSync(abs)
+  } catch {
+    // 文件尚未存在时对其父目录解析符号链接，避免通过目录 symlink 越界
+    const parent = dirname(abs)
+    if (parent && parent !== abs) {
+      try {
+        return join(realpathSync(parent), relative(parent, abs))
+      } catch { /* ignore */ }
+    }
+    return abs
+  }
+}
+
+export function isPathWithinRoot(targetPath, allowedRoot) {
+  if (!targetPath || !allowedRoot) return false
+  const rootReal = _safeRealpath(allowedRoot)
+  const resolvedTarget = isAbsolute(targetPath) ? targetPath : join(rootReal, targetPath)
+  const targetReal = _safeRealpath(resolvedTarget)
+  const rel = relative(rootReal, targetReal)
+  return rel === '' || (!rel.startsWith('..' + sep) && rel !== '..' && !isAbsolute(rel))
+}
+
 // 本地代码卡片一跳精读：复用 local-seek 的 --symbol-body / --lines / --outline JSON 输出
-export async function inspectLocalFile(env, { filePath, symbol = '', lines = '', signal = null, runner = runArgoCli } = {}) {
+export async function inspectLocalFile(
+  env,
+  { filePath, allowedRoot = '', symbol = '', lines = '', signal = null, runner = runArgoCli } = {},
+) {
   const target = String(filePath || '').replace(/^file:\/\//, '').trim()
   if (!target || target.includes('\0')) return { ok: false, error: 'invalid_path' }
+  const root = String(allowedRoot || '').trim() || resolveLocalSearchPath({})
+  if (!isPathWithinRoot(target, root)) {
+    return { ok: false, error: 'path_outside_root' }
+  }
+  const resolvedTarget = isAbsolute(target) ? resolve(target) : resolve(root, target)
   const cliArgs = ['seek', '--json']
   if (symbol && String(symbol).trim()) {
     cliArgs.push('--symbol-body', String(symbol).trim())
@@ -398,7 +432,7 @@ export async function inspectLocalFile(env, { filePath, symbol = '', lines = '',
   } else {
     cliArgs.push('--outline')
   }
-  cliArgs.push('--', target)
+  cliArgs.push('--', resolvedTarget)
   return runner(cliArgs, { env, timeoutMs: 8000, signal })
 }
 

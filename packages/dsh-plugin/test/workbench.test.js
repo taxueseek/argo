@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { buildSearchCliArgs, createWorkbenchHandler } from '../dsh/workbench.js'
 
@@ -219,16 +220,35 @@ test('workbench /argo/api/local-inspect and /argo/api/note-study bridge local-se
     },
   )
 
+  const allowedFile = join(process.cwd(), 'scripts', 'intent_router.py')
   const res1 = mockRes()
   await handler(mockReq('POST', '/argo/api/local-inspect', {
-    path: 'file:///tmp/intent_router.py',
+    path: `file://${allowedFile}`,
     symbol: 'resolve_intent',
   }), res1)
   assert.equal(res1.statusCode, 200)
   const b1 = res1.json()
   assert.equal(b1.ok, true)
   assert.equal(b1.symbol, 'resolve_intent')
-  assert.deepEqual(calls[0], ['seek', '--json', '--symbol-body', 'resolve_intent', '--', '/tmp/intent_router.py'])
+  assert.deepEqual(calls[0], ['seek', '--json', '--symbol-body', 'resolve_intent', '--', allowedFile])
+
+  // 路径边界防护：越界绝对路径与 ../ 穿越均返回 403 且绝不触发 CLI
+  const resEscapeAbs = mockRes()
+  await handler(mockReq('POST', '/argo/api/local-inspect', {
+    path: '/etc/passwd',
+    lines: '1-5',
+  }), resEscapeAbs)
+  assert.equal(resEscapeAbs.statusCode, 403)
+  assert.equal(resEscapeAbs.json().error, 'path_outside_root')
+
+  const resEscapeRel = mockRes()
+  await handler(mockReq('POST', '/argo/api/local-inspect', {
+    path: '../../../etc/passwd',
+    lines: '1-5',
+  }), resEscapeRel)
+  assert.equal(resEscapeRel.statusCode, 403)
+  assert.equal(resEscapeRel.json().error, 'path_outside_root')
+  assert.equal(calls.length, 1)
 
   const res2 = mockRes()
   await handler(mockReq('POST', '/argo/api/note-study', {

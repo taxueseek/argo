@@ -1566,9 +1566,9 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
         if deadline_hit["flag"]:
             result["deadline_exhausted"] = True
 
-    # 第三级：质量评估 + 空正文假成功守卫（实现收口在 fetch_dispatch，控制主文件体积）
+    # 第三级：质量评估 + 空正文假成功守卫（统一收口在 fetch_quality）
     result = _assess_quality(result)
-    from fetch_dispatch import guard_empty_unknown_result
+    from fetch_quality import guard_empty_unknown_result
     result = guard_empty_unknown_result(result)
 
     # 文章级元数据（链接/作者/站点名/摘要）：与正文同源于本次 HTML，一次解析
