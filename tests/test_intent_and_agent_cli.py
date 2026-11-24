@@ -98,11 +98,14 @@ def test_intent_academic_and_social():
     assert acad["depth"] == "deep"
     assert acad["engine"] == "auto"
     assert acad["degraded"] is False
+    assert "arxiv" in (acad.get("engines_boost") or [])
 
     soc = intent_router.resolve_intent("social")
     assert soc["domain"] == "social"
     assert soc["engine"] == "auto"
     assert soc["degraded"] is False
+    assert "anysearch" in (soc.get("engines_boost") or [])
+    assert "reddit" in (soc.get("engines_boost") or [])
 
 
 def test_intent_image_reverse_selects_available_and_caps_two():

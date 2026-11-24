@@ -607,6 +607,7 @@ def main():
 
     # --intent 高层意图路由（仅显式传入时懒加载，默认路径零开销）
     resolved_engine = args.engine
+    intent_boost: list[str] | None = None
     intent_res: dict[str, Any] | None = None
     if args.intent:
         from intent_router import resolve_intent
@@ -620,6 +621,7 @@ def main():
         resolved_engine = intent_res["engine"]
         engine_domain = intent_res["domain"]
         depth = intent_res["depth"]
+        intent_boost = intent_res.get("engines_boost")
 
     results = super_search(
         query=args.query,
@@ -635,6 +637,7 @@ def main():
         plan_only=args.plan_only,
         force_search=args.force_search,
         envelope=use_envelope,
+        engines_boost=intent_boost,
         since=args.since,
         until=args.until,
         sort=args.sort,
@@ -829,7 +832,7 @@ def main():
 
     # 若启用了 --intent，将精简解析记录与降级告警附加到结果中
     if intent_res is not None:
-        results["intent_resolution"] = {
+        ir_out: dict[str, Any] = {
             "intent": intent_res["intent"],
             "engine": intent_res["engine"],
             "domain": intent_res["domain"],
@@ -837,6 +840,9 @@ def main():
             "degraded": intent_res["degraded"],
             "reason": intent_res["reason"],
         }
+        if intent_res.get("engines_boost"):
+            ir_out["engines_boost"] = intent_res["engines_boost"]
+        results["intent_resolution"] = ir_out
         if intent_res.get("warnings"):
             existing_w = results.setdefault("warnings", [])
             for w in intent_res["warnings"]:

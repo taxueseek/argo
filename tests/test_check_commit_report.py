@@ -237,3 +237,18 @@ def test_unpushed_release_docs_commits_are_pure():
         f"{'; '.join(violations)}。修法=把代码改动拆出为独立提交，"
         "发布说明提交只留文档与版本声明面。"
     )
+
+
+def test_placeholder_commit_sha_is_rejected():
+    """`在 commit` 填 `<待填>` 等非 SHA 占位符必须被拦截。"""
+    msg = (
+        "fix(search): 示例高风险提交\n\n"
+        "检查：\n"
+        "- 跑了：pytest\n"
+        "- 在 commit：<待填>\n"
+        "- 未跑：无\n"
+    )
+    r = ccr.check(msg)
+    assert r["high_risk"] is True
+    assert "在 commit" in r["missing"]
+    assert r["ok"] is False

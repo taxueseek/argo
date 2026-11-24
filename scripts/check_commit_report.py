@@ -61,11 +61,12 @@ _HIGH_RISK = (
     re.compile(r"^build\(deps\)"),
 )
 
-# 检查清单三段。`在 commit` 允许写成 `在 commit:` 或 `在commit:`。
+# 检查清单三段。`在 commit` 允许写成 `在 commit:` 或 `在commit:`，
+# 且值必须为 6–40 位十六进制 SHA（拒绝 `<待填>` 等未填占位符）。
 _SEGMENTS = {
-    "跑了": re.compile(r"^\s*[-*]?\s*跑了\s*[:：]", re.M),
-    "在 commit": re.compile(r"^\s*[-*]?\s*在\s*commit\s*[:：]", re.M),
-    "未跑": re.compile(r"^\s*[-*]?\s*未跑\s*[:：]", re.M),
+    "跑了": re.compile(r"^\s*[-*]?\s*跑了\s*[:：]\s*\S+", re.M),
+    "在 commit": re.compile(r"^\s*[-*]?\s*在\s*commit\s*[:：]\s*[0-9a-fA-F]{6,40}\b", re.M),
+    "未跑": re.compile(r"^\s*[-*]?\s*未跑\s*[:：]\s*\S+", re.M),
 }
 
 # 标题与正文的分界：第一个空行。标题不进正文检查。

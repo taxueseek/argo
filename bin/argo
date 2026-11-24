@@ -508,17 +508,29 @@ def _engine_count():
         cfg_path = os.path.join(ARGO_HOME, "config.yaml")
         cache_file = os.path.join(state_root, ".engine_count")
         try:
-            sys.path.insert(0, SCRIPTS)
-            import config as _cfg
-            fingerprint = "%s|%s" % (
-                os.stat(cfg_path).st_mtime_ns,
-                _cfg._external_engines_scan()[3],
+            # 纯标准库指纹：不 import config（避免入口引入 PyYAML 依赖与 ~8ms 额外启动开销）
+            cfg_mtime_ns = os.stat(cfg_path).st_mtime_ns
+            eng_dir = os.path.join(ARGO_HOME, "engines")
+            spec_count = 0
+            spec_max_mtime = 0
+            spec_total_size = 0
+            if os.path.isdir(eng_dir):
+                for _root, _dirs, _files in os.walk(eng_dir):
+                    for _fn in _files:
+                        if _fn.endswith((".yaml", ".yml")):
+                            try:
+                                _st = os.stat(os.path.join(_root, _fn))
+                                spec_count += 1
+                                if _st.st_mtime_ns > spec_max_mtime:
+                                    spec_max_mtime = _st.st_mtime_ns
+                                spec_total_size += _st.st_size
+                            except OSError:
+                                pass
+            fingerprint = "%s|%s:%s:%s" % (
+                cfg_mtime_ns, spec_count, spec_max_mtime, spec_total_size
             )
-        except Exception:
-            try:
-                fingerprint = str(os.stat(cfg_path).st_mtime_ns)
-            except OSError:
-                fingerprint = None
+        except OSError:
+            fingerprint = None
         cfg_mtime = fingerprint
         if cfg_mtime:
             try:

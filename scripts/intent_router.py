@@ -33,6 +33,13 @@ _REVERSE_IMAGE_CANDIDATES: tuple[str, ...] = (
     "google_lens",
 )
 
+# 垂直意图引擎前置表（传给 super_search.engines_boost，真正驱动选源而不仅改缓存键）
+_INTENT_BOOST: dict[str, list[str]] = {
+    "academic": ["arxiv", "openalex", "semantic_scholar", "local_pubmed"],
+    "social": ["anysearch", "reddit", "zhihu", "hackernews"],
+    "news_fallback": ["anysearch", "google_news", "em_global_news", "cn_ai_news"],
+}
+
 
 def _default_get_engines() -> dict[str, dict[str, Any]]:
     from config import get_engines
@@ -98,23 +105,25 @@ def resolve_intent(
             resolved_domain = "academic"
         if resolved_depth == "fast":
             resolved_depth = "deep"
-        reason = "学术多源模式（domain=academic, depth=deep）"
+        boost = None if explicit_engine else list(_INTENT_BOOST["academic"])
+        reason = "学术多源模式（domain=academic, depth=deep, boost=arxiv/openalex/semantic_scholar/local_pubmed）"
         if explicit_engine:
             warnings.append(f"--engine {engine} 覆盖了 --intent {intent} 的默认多源路由")
         return _pack(
             intent, resolved_engine, resolved_domain, resolved_depth,
-            degraded, reason, explicit_engine, warnings,
+            degraded, reason, explicit_engine, warnings, engines_boost=boost,
         )
 
     if intent == "social":
         if not resolved_domain:
             resolved_domain = "social"
-        reason = "社交与社区垂直域（domain=social）"
+        boost = None if explicit_engine else list(_INTENT_BOOST["social"])
+        reason = "社交与社区垂直域（domain=social, boost=anysearch/reddit/zhihu/hackernews）"
         if explicit_engine:
             warnings.append(f"--engine {engine} 覆盖了 --intent {intent} 的默认多源路由")
         return _pack(
             intent, resolved_engine, resolved_domain, resolved_depth,
-            degraded, reason, explicit_engine, warnings,
+            degraded, reason, explicit_engine, warnings, engines_boost=boost,
         )
 
     if explicit_engine:
@@ -130,11 +139,13 @@ def resolve_intent(
     check_env = check_env_fn or _default_missing_env
     check_quota = check_quota_fn or _default_quota_available
 
+    engines_boost: list[str] | None = None
     if intent == "news":
         if mode == "fast":
             degraded = True
             resolved_domain = resolved_domain or "news"
-            reason = "mode=fast 跳过付费时事源 deepseek_search，已降级为免费新闻自动路由"
+            engines_boost = list(_INTENT_BOOST["news_fallback"])
+            reason = "mode=fast 跳过付费时事源 deepseek_search，已降级为免费新闻优先路由"
             warnings.append(f"[intent:news] {reason}")
         else:
             ok, why = _engine_ready("deepseek_search", engines_cfg, mode, check_env, check_quota)
@@ -144,7 +155,8 @@ def resolve_intent(
             else:
                 degraded = True
                 resolved_domain = resolved_domain or "news"
-                reason = f"{why}，已降级为自动路由（domain=news）"
+                engines_boost = list(_INTENT_BOOST["news_fallback"])
+                reason = f"{why}，已降级为新闻优先自动路由（domain=news）"
                 warnings.append(f"[intent:news] {reason}")
 
     elif intent == "image-reverse":
@@ -177,7 +189,7 @@ def resolve_intent(
 
     return _pack(
         intent, resolved_engine, resolved_domain, resolved_depth,
-        degraded, reason, False, warnings,
+        degraded, reason, False, warnings, engines_boost=engines_boost,
     )
 
 
@@ -190,12 +202,15 @@ def _pack(
     reason: str,
     overridden: bool,
     warnings: list[str],
+    *,
+    engines_boost: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "intent": intent,
         "engine": engine,
         "domain": domain,
         "depth": depth,
+        "engines_boost": engines_boost,
         "degraded": degraded,
         "reason": reason,
         "overridden_by_engine": overridden,
