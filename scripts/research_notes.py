@@ -335,7 +335,8 @@ def _cmd_create(args: argparse.Namespace) -> int:
     piped: dict[str, str] = {}
     if kind == "study" and (not args.url or getattr(args, "from_json", False)):
         from cli_io import stdin_is_memory_stream, stdin_is_piped
-        raw = sys.stdin.read().strip() if (stdin_is_piped() or stdin_is_memory_stream()) else ""
+        should_read = getattr(args, "from_json", False) or stdin_is_piped() or stdin_is_memory_stream()
+        raw = sys.stdin.read().strip() if should_read else ""
         if raw:
             piped = _parse_study_stdin(raw, pick=int(getattr(args, "pick", 0) or 0))
     target = (args.url or piped.get("url") or "") if kind == "study" else args.problem

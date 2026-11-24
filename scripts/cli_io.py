@@ -138,9 +138,11 @@ def stdout_is_tty() -> bool:
 
 
 def stdin_is_piped() -> bool:
-    """stdin 是否接了管道或文件重定向（而非终端 / /dev/null / 未打开）。"""
+    """stdin 是否接了管道、文件重定向或 socketpair（Node.js libuv spawn 在 macOS 上用 socketpair）。"""
     mode = _stdin_mode()
-    return mode is not None and (stat.S_ISFIFO(mode) or stat.S_ISREG(mode))
+    return mode is not None and (
+        stat.S_ISFIFO(mode) or stat.S_ISREG(mode) or stat.S_ISSOCK(mode)
+    )
 
 
 def stdin_is_memory_stream() -> bool:
