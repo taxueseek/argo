@@ -1202,7 +1202,8 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
              force_browser: bool = False,
              skip_cache: bool = False,
              need_html: bool = False,
-             deadline_s: float | None = None) -> dict:
+             deadline_s: float | None = None,
+             answer_offset: int | None = None) -> dict:
     """多级抓取降级链主函数（逐级升级，受全局 deadline 约束）。
 
     执行顺序：
@@ -1247,6 +1248,16 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
             }, need_html)
     except ImportError:
         pass
+
+    from zhihu_answer_fetch import fetch_answer, match_answer
+    if answer_offset is not None or (not need_html and not actions and match_answer(url)):
+        if deadline_s is None:
+            try:
+                deadline_s = float(os.environ.get("ARGO_FETCH_DEADLINE_S", "60") or 60)
+            except ValueError:
+                deadline_s = 60.0
+        return fetch_answer(url, offset=answer_offset, max_chars=max_chars, timeout=timeout,
+                            deadline_s=deadline_s, browser=force_browser or use_browser_fallback)
 
     # URL 优化（Reddit 重写、追踪参数清理）
     url = _optimize_url(url)
@@ -1711,7 +1722,8 @@ def _full_view(url: str, args) -> dict:
     有了这条通道，「先看 8,000 字摘要、需要时再翻全文」才成立。
     """
     from_archive = True
-    text = _read_archived(url)
+    from zhihu_answer_fetch import match_answer
+    text = None if match_answer(url) else _read_archived(url)
     if text is None:
         from_archive = False
         r = fetch_v3(url, max_chars=0, timeout=args.timeout,
@@ -1733,6 +1745,8 @@ def _full_view(url: str, args) -> dict:
         "fetch_method": (engine_states.FETCH_FULLTEXT if from_archive
                       else r.get("fetch_method", "full")),
     })
+    if "next_offset" in out:
+        out["truncated"] = out["length"] < out["total_length"]
     return out
 
 
@@ -1767,6 +1781,7 @@ def build_parser():
     p.add_argument("--full", action="store_true",
                    help="取全文：优先读本地全文存档，没有则按抓取全量取回，"
                         "不受 --max-chars 限制（用于复核被截断的部分）")
+    p.add_argument("--answer-offset", type=int, help="仅在用户明确要求续查知乎回答摘要时传入 next_offset")
     p.add_argument("--offset", type=int, default=0,
                    help="从正文第 N 个字符开始输出（配合 --limit 翻页读长文）")
     p.add_argument("--limit", type=int, default=0,
@@ -1781,7 +1796,10 @@ def build_parser():
 
 
 if __name__ == "__main__":
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.answer_offset is not None and (args.full or args.offset or args.limit or args.actions):
+        parser.error("--answer-offset 仅用于回答摘要续查，不能与正文切片或页面交互组合。")
 
     actions = None
     if args.actions:
@@ -1797,12 +1815,16 @@ if __name__ == "__main__":
                      timeout=args.timeout,
                      force_browser=args.browser,
                      use_browser_fallback=not args.no_fallback,
-                     actions=actions)
+                     actions=actions, answer_offset=args.answer_offset)
 
     focus_requested = bool(args.focus)
     pre_focus_len = r.get("length", 0)
     r = _apply_focus_to_result(r, args.focus, top_k=args.focus_top,
                                max_chars=args.max_chars)
+
+    if focus_requested and not (args.full or args.offset or args.limit):
+        from zhihu_answer_fetch import finish_focus
+        finish_focus(r, args.max_chars)
 
     # 输出摘要
     summary = {k: r[k] for k in ("success", "fetch_method", "content_ok",
@@ -1815,6 +1837,10 @@ if __name__ == "__main__":
               "login_state_used", "cache_eligible"):
         if k in r:
             summary[k] = r[k]
+    if "content_type" in r and "next_offset" in r:
+        summary.update({k: r[k] for k in ("status", "content_type", "next_offset")})
+        if args.json:
+            summary["content"] = r["content"]
     if focus_requested:
         # 显式回报聚焦是否真的生效：正文过短时 focus_applied=False，
         # 不谎报「已省 token」

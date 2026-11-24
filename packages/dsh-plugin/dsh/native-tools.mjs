@@ -349,6 +349,10 @@ export const NATIVE_TOOLS = {
           "type": "integer",
           "description": "返回正文最大字符数（500-50000，默认 8000）"
         },
+        "answer_offset": {
+          "type": "integer",
+          "description": "知乎回答摘要查询偏移：首轮省略；仅在用户明确要求续查时传上次的 next_offset"
+        },
         "use_browser": {
           "type": "boolean",
           "description": "强制用反检测浏览器（HTTP 失败时已自动升级，默认关）"
@@ -369,6 +373,7 @@ export const NATIVE_TOOLS = {
       "extract_mode",
       "focus",
       "max_chars",
+      "answer_offset",
       "use_browser",
       "include_links"
     ]
