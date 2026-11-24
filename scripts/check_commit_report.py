@@ -50,7 +50,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # 改动里更新 docs/COMMIT_STANDARD.md。tests/test_check_commit_report.py
 # 的 test_standard_doc_lists_the_same_high_risk_patterns 会机械对拍两者。
 _HIGH_RISK_SCOPES = frozenset({
-    "engines", "engine", "route", "search", "rank", "states", "state",
+    "engines", "engine", "route", "search", "fetch", "rank", "states", "state",
     "agents", "agent", "release", "deps",
 })
 _HIGH_RISK = (
@@ -80,12 +80,15 @@ def is_high_risk(title: str) -> bool:
     """标题是否命中高风险模式。
 
     判据有两条，命中任一即高风险：
-      1. scope 在 `_HIGH_RISK_SCOPES` 白名单里（带 scope 的常规提交）
-      2. 命中 `_HIGH_RISK` 里的特殊模式（无 scope 的 perf/build 等）
+      1. scope（支持 `fetch+cli` / `search,route` 等复合写法按 `[+,/]` 拆分）
+         中任一子项命中 `_HIGH_RISK_SCOPES` 白名单；
+      2. 命中 `_HIGH_RISK` 里的特殊模式（无 scope 的 perf/build 等）。
     """
     m = _SCOPE_RE.match(title.strip())
-    if m and m.group(2) and m.group(2).strip() in _HIGH_RISK_SCOPES:
-        return True
+    if m and m.group(2):
+        parts = [p.strip() for p in re.split(r"[+,/]", m.group(2)) if p.strip()]
+        if any(p in _HIGH_RISK_SCOPES for p in parts):
+            return True
     return any(p.search(title.strip()) for p in _HIGH_RISK)
 
 

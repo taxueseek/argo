@@ -51,8 +51,8 @@ hook 却在全量回归里红」），但**这些记录只存在于 commit messa
 **带 scope 的提交**：scope 在下面这张白名单里即高风险。`scripts/check_commit_report.py`
 按同一份白名单做机械检查，`tests/test_check_commit_report.py` 会对拍两者。
 
-`engines` / `engine` / `route` / `search` / `rank` / `states` / `state` /
-`agents` / `agent` / `release` / `deps`
+`engines` / `engine` / `route` / `search` / `fetch` / `rank` / `states` / `state` /
+`agents` / `agent` / `release` / `deps`（复合 scope 如 `fetch+cli` 按 `+`/`/`/`,` 拆分判定）
 
 典型形态与要求：
 

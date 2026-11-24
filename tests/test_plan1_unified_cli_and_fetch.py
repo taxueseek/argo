@@ -95,6 +95,13 @@ def test_dispatch_paper_and_pdf_and_fallback(monkeypatch):
     assert res_bad["dispatch_handler"] == "pdf"
     assert res_bad["error"] == "boom"
 
+    # PDF 提取成功但正文为空（如扫描件）同样显式失败，不回落通用 HTML 链
+    monkeypatch.setattr(pdf_extract, "extract_pdf",
+                        lambda _url: {"success": True, "title": "Scan", "content": "   "})
+    res_empty = fetch_dispatch.dispatch_specialized_fetch("https://example.org/scan.pdf")
+    assert res_empty is not None and res_empty["success"] is False
+    assert "为空" in res_empty["error"]
+
     # 普通网页直接返回 None
     assert fetch_dispatch.dispatch_specialized_fetch("https://example.org/index.html") is None
 

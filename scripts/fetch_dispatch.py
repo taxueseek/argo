@@ -190,7 +190,17 @@ def _dispatch_pdf(url: str, max_chars: int) -> dict[str, Any] | None:
             }
         content = str(res.get("content") or "")[:max_chars]
         if not content.strip():
-            return None
+            return {
+                "url": url,
+                "title": str(res.get("title") or ""),
+                "content": "",
+                "html": "",
+                "length": 0,
+                "success": False,
+                "error": "PDF 正文为空（可能为扫描图片页，需启用 OCR）",
+                "fetch_method": engine_states.FETCH_PDF_FAILED,
+                "dispatch_handler": "pdf",
+            }
         return {
             "url": url,
             "title": str(res.get("title") or url.rsplit("/", 1)[-1]),
@@ -225,3 +235,14 @@ def dispatch_specialized_fetch(
     if kind == "pdf":
         return _dispatch_pdf(url, max_chars)
     return None
+
+
+def guard_empty_unknown_result(result: dict[str, Any]) -> dict[str, Any]:
+    """修正「成功但零正文 + page_type 未识别」的假成功（如二进制页被当 HTML 抓回）。"""
+    if (result.get("success") and not (result.get("content") or "").strip()
+            and result.get("page_type") in (None, "", "unknown")):
+        result["success"] = False
+        result["error"] = result.get("error") or (
+            "抓取成功但正文为空（URL 可能指向二进制文件或需专用解析器）"
+        )
+    return result

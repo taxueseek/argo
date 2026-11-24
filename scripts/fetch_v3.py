@@ -1566,25 +1566,10 @@ def fetch_v3(url: str, max_chars: int = 8000, timeout: float = 8.0,
         if deadline_hit["flag"]:
             result["deadline_exhausted"] = True
 
-    # 第三级：质量评估
+    # 第三级：质量评估 + 空正文假成功守卫（实现收口在 fetch_dispatch，控制主文件体积）
     result = _assess_quality(result)
-
-    # 「成功但零正文」修正（2026-11-24 实测）：PDF 二进制被当 HTML 抓回时，
-    # 正文抽取结果为空，而各抓取层只按 HTTP 状态码报 success——于是
-    # `success=True, length=0` 一路走到调用方，表现为「抓成功了但什么都没有」。
-    # 这与本仓反复自我警惕的「失败伪装成成功」是同一形态，只是发生在质量
-    # 评估之后。实测样本：w3.org 的 dummy.pdf 返回 success=True / length=0 /
-    # page_type=unknown（html 字段里躺的是 PDF 二进制原文）。
-    #
-    # 判据：成功标记 + 无正文 + page_type 未识别。page_type 已识别（article /
-    # docs / video …）说明抽取器认得这个页面，即使正文偏短也不翻；两者都空
-    # 就是没拿到可交付内容。
-    if (result.get("success") and not (result.get("content") or "").strip()
-            and result.get("page_type") in (None, "", "unknown")):
-        result["success"] = False
-        result["error"] = result.get("error") or (
-            "抓取成功但正文为空（URL 可能指向二进制文件或需专用解析器）"
-        )
+    from fetch_dispatch import guard_empty_unknown_result
+    result = guard_empty_unknown_result(result)
 
     # 文章级元数据（链接/作者/站点名/摘要）：与正文同源于本次 HTML，一次解析
     # 拿全；调用方不必为了顺着引用继续取证而重抓页面。缓存一起存（链接上限
