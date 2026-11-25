@@ -3,7 +3,7 @@
 > 本文受门禁保护（tests/test_usage_doc_gates.py）：文中命令必须存在于
 > bin/argo 分发表、`ARGO_*` 开关必须代码实存。改命令先改代码，本文随行。
 
-## 命令总览（35 个，唯一事实=bin/argo 分发表）
+## 命令总览（36 个，唯一事实=bin/argo 分发表）
 
 | 命令 | 一句话 |
 |------|--------|
@@ -39,8 +39,9 @@
 | `argo budget` | 按引擎的月度预算（原生币种；list/set/unset） |
 | `argo quota` | 知乎开放平台当日额度（官方 API，不消耗业务额度） |
 | `argo doctor` | 源健康度审计（基于使用日志给出去留建议；`--days`/`--json`） |
-| `argo local-image` | 本地图片检索（Vision 索引；默认关，见「图片检索」节） |
+| `argo local-image` | 本地图片检索（Vision 缩图分流 + FTS5 + 矩阵点积；默认关，见「图片检索」节） |
 | `argo seek` | 本机文件与代码三层检索（rg/fd/mdfind/FTS5，见「local-seek」节） |
+| `argo table` | 本地报表、日志与 SQLite 只读 SQL 分析（可选 DuckDB，见「argo table」节） |
 | `argo ego-search` | 登录态专业搜索（默认关，见「ego-search」节） |
 
 ## argo doctor — 源健康度审计（2026-11-10）
@@ -651,6 +652,19 @@ argo seek "查询词" --path ~/notes --lines   # L3 精读
 - MCP：`argo_local_search` subprocess 调用 seek.py，包装为 `file://` URL + `source=local_files`
 - `--include-local`（2026-10-29，issue #34）：显式开启时找不到 seek.py（未装子技能且没设 `ARGO_LOCAL_SEEK_PATH`）或 cwd 是宽根/argo 安装树，会给一条可归因提示（`--json` 下进 `warnings[]`），不再静默返回空——「跳过没查」与「查了没有」不再同形。`ARGO_LOCAL_SEEK_ROOTS` 可给多个候选根（os.pathsep 分隔）。
 - 注意命名：`local_search`/`local_bing`/`local_360` 等 `local_` 前缀是**本地化/免 key 镜像通道**（网页），不是本机文件；本机文件只走 `source=local_files`。
+
+### argo table（本地报表、日志与 SQLite 只读分析）
+
+基于可选依赖 `duckdb`（`uv pip install duckdb` 或 `pip install 'argo-search[analytics]'`），在白名单文件上执行只读内存 SQL，禁用写操作、外网访问与自动扩展下载：
+
+```bash
+argo table profile sales.csv --agent                          # 探测列结构、行数、空值率与样例行
+argo table query "SELECT region, SUM(rev) FROM t1 GROUP BY 1" --inputs sales.csv --agent
+argo pdf report.pdf --tables --out ./tables_csv               # PDF 抽表落盘 CSV，接 argo table 计算
+```
+
+- 支持格式：`.csv`、`.tsv`、`.parquet`、`.json`/`.jsonl`/`.ndjson`、`.sqlite`/`.db`、`.xlsx`（经可选 `openpyxl` 离线转临时 CSV）
+- 可复算工作包：`recompute` 支持 `sql` 模式，与 `script` 二选一，沿用默认拒绝授权门禁（`--allow-recompute` / `ARGO_ALLOW_RECOMPUTE=1`）
 
 ### ego-search（登录态专业搜索）
 

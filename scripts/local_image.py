@@ -116,23 +116,44 @@ def __getattr__(name: str):
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
-    path        TEXT PRIMARY KEY,
-    mtime       REAL,
-    size        INTEGER,
-    width       INTEGER,
-    height      INTEGER,
-    inode       INTEGER,
-    labels      TEXT,      -- JSON: [{"id":..,"conf":..}]
-    ocr         TEXT,      -- 换行连接的 OCR 文本
-    fp_slot     INTEGER,   -- 指纹在 fp.npy 里的行号（NULL=无指纹）
-    fp_dim      INTEGER,
-    indexed_at  REAL
+    path         TEXT PRIMARY KEY,
+    mtime        REAL,
+    size         INTEGER,
+    width        INTEGER,
+    height       INTEGER,
+    inode        INTEGER,
+    labels       TEXT,      -- JSON: [{"id":..,"conf":..}]
+    ocr          TEXT,      -- 换行连接的 OCR 文本
+    fp_slot      INTEGER,   -- 指纹在 fp.npy 里的行号（NULL=无指纹）
+    fp_dim       INTEGER,
+    indexed_at   REAL,
+    content_hash TEXT       -- 文件内容快速哈希（大小 + 头尾 64KB），供去重复用
 );
 CREATE INDEX IF NOT EXISTS idx_images_inode ON images(inode);
 CREATE INDEX IF NOT EXISTS idx_images_mtime ON images(mtime);
 CREATE INDEX IF NOT EXISTS idx_images_fp_slot ON images(fp_slot);
+CREATE INDEX IF NOT EXISTS idx_images_hash ON images(content_hash);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+CREATE VIRTUAL TABLE IF NOT EXISTS images_fts USING fts5(
+    path UNINDEXED,
+    body,
+    tokenize='unicode61'
+);
 """
+
+from local_image_fts import (  # noqa: E402
+    build_contact_sheet,
+    build_reused_rows as _build_reused_rows,
+    ensure_migrations as _ensure_migrations,
+    fmt_bytes as _fmt_bytes,
+    fts_body_for_row as _fts_body_for_row,
+    fts_split_cjk as _fts_split_cjk,
+    query_candidates as _fts_query_candidates,
+    quick_content_hash as _quick_content_hash,
+    stats,
+    sync_fts_if_empty as _sync_fts_if_empty,
+    upsert_images_with_fts as _upsert_images_with_fts,
+)
 
 
 def _log(msg: str) -> None:
@@ -187,11 +208,12 @@ def open_db(db_path: Path | str | None = None) -> sqlite3.Connection:
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(p), timeout=30)
     conn.row_factory = sqlite3.Row
-    # 迁移必须前置于 executescript：新 schema 会在 fp_slot 上建索引，而旧表
-    # 还没有这一列——先跑 CREATE INDEX 会直接报「no such column: fp_slot」。
-    # _migrate_fp_column 对全新库（连 images 表都没有）直接返回，不影响首建。
+    # 迁移必须前置于 executescript：新 schema 会在 fp_slot/content_hash 上建索引，
+    # 而旧表还没有这些列——先跑 CREATE INDEX 会直接报错。
     _migrate_fp_column(conn, p)
+    _ensure_migrations(conn)
     conn.executescript(_SCHEMA)
+    _sync_fts_if_empty(conn)
     return conn
 
 
@@ -231,6 +253,7 @@ def walk_images(roots: Iterable[str | Path], *, follow_symlinks: bool = False,
 
 def _run_probe(paths: list[Path], *, parallel: int = 4,
                want_ocr: bool = True, want_fp: bool = True,
+               ocr_mode: str = "auto", max_dim: int = 1280,
                timeout: float = 600) -> list[dict[str, Any]]:
     """调 Swift 辅助批量抽取（多进程并行），返回解析后的记录。
 
@@ -245,6 +268,10 @@ def _run_probe(paths: list[Path], *, parallel: int = 4,
     args: list[str] = []
     if not want_ocr:
         args.append("--no-ocr")
+    elif ocr_mode:
+        args.extend(["--ocr-mode", ocr_mode])
+    if max_dim and max_dim >= 256:
+        args.extend(["--max-dim", str(int(max_dim))])
     if not want_fp:
         args.append("--no-fp")
     procs = []
@@ -428,27 +455,24 @@ def index_paths(
     batch: int = 256,
     on_progress: Any = None,
     max_images: int | None = None,
+    ocr_mode: str = "auto",
+    max_dim: int = 1280,
+    min_bytes: int = 0,
+    dedupe: bool = True,
 ) -> dict[str, int]:
-    """建库/增量索引。
+    """建库/增量索引（支持缩图解码、分流 OCR、内容哈希去重与 FTS5 同步）。
 
-    增量判据用 **(inode, mtime, size)** 三元组而非单看路径：路径相同但内容
-    变了（图被重新生成/编辑过）必须重算指纹，否则以图搜图会返回陈旧结果；
-    而单看 mtime 在跨文件系统复制后普遍不可靠，故三者一起比。
-    文件被移动（inode 不变，路径变）时也认得出，不必重算指纹。
-
-    返回统计：total / new / updated / unchanged / gone / failed。
+    返回统计：total / new / updated / unchanged / gone / failed / reused / skipped_small。
     """
     files = walk_images(roots)
-    # gone 判定的磁盘全集必须在 max_images 截断**之前**取：截断只会限制
-    # 「本次要新算指纹的文件数」，不该把没进本次批次的历史条目判成消失。
     disk_all = {str(p) for p in files}
     if max_images is not None:
         files = files[:max_images]
-    stat = {"total": len(files), "new": 0, "updated": 0, "unchanged": 0,
-            "gone": 0, "failed": 0}
+    stat = {
+        "total": len(files), "new": 0, "updated": 0, "unchanged": 0,
+        "gone": 0, "failed": 0, "reused": 0, "skipped_small": 0,
+    }
 
-    # 指纹矩阵与旧 slot：未变的行从旧矩阵搬指纹，不重算。矩阵丢失时无法复用
-    # 旧指纹，退化为全量重算（否则未变行的指纹会被静默清空——那是静默数据损坏）。
     db_path = _db_file(conn)
     old_slots: dict[str, int] = {}
     for row in conn.execute("SELECT path, fp_slot FROM images"):
@@ -460,11 +484,29 @@ def index_paths(
         old_slots = {}
 
     existing: dict[str, tuple[float, int, int]] = {}
+    hash_cache: dict[str, dict[str, Any]] = {}
     if incremental:
-        for row in conn.execute("SELECT path, mtime, size, inode FROM images"):
+        for row in conn.execute(
+            "SELECT path, mtime, size, inode, width, height, labels, ocr, fp_slot, fp_dim, content_hash "
+            "FROM images"
+        ):
             existing[row["path"]] = (row["mtime"], row["size"], row["inode"] or 0)
+            ch = row["content_hash"]
+            if dedupe and ch and ch not in hash_cache:
+                hash_cache[ch] = {
+                    "width": row["width"],
+                    "height": row["height"],
+                    "labels": row["labels"] or "[]",
+                    "ocr": row["ocr"] or "",
+                    "fp_slot": row["fp_slot"],
+                    "fp_dim": row["fp_dim"],
+                }
 
-    todo: list[Path] = []
+    todo: list[tuple[Path, os.stat_result, str]] = []
+    reused_rows: list[tuple[Any, ...]] = []
+    fts_upserts: list[tuple[str, str]] = []
+    fresh: dict[str, Any] = {}
+
     for p in files:
         sp = str(p)
         try:
@@ -472,29 +514,49 @@ def index_paths(
         except OSError:
             stat["failed"] += 1
             continue
+        if min_bytes and st.st_size < min_bytes:
+            stat["skipped_small"] += 1
+            continue
         cur = (st.st_mtime, st.st_size, st.st_ino)
         prev = existing.get(sp)
-        if prev is None:
-            stat["new"] += 1
-            todo.append(p)
-        elif prev != cur:
-            # 三元组整体比较（mtime, size, inode）——docstring 说的「三者一起比」。
-            # 此前只比前两项，inode 被 SELECT 出来、被存进 existing，却在比较时
-            # 被丢弃：跨文件系统复制后 mtime 可能保留，inode 必然不同，
-            # 漏比它就漏掉这次重算（返回陈旧指纹）。
-            stat["updated"] += 1
-            todo.append(p)
-        else:
+        if prev == cur:
             stat["unchanged"] += 1
+            continue
+        is_new = prev is None
+        ch = ""
+        if dedupe:
+            try:
+                ch = _quick_content_hash(p, st.st_size)
+            except OSError:
+                stat["failed"] += 1
+                continue
+            cached = hash_cache.get(ch)
+            if cached is not None:
+                if is_new:
+                    stat["new"] += 1
+                else:
+                    stat["updated"] += 1
+                stat["reused"] += 1
+                c_slot = cached.get("fp_slot")
+                if c_slot is not None and old_mat is not None and 0 <= c_slot < old_mat.shape[0]:
+                    fresh[sp] = old_mat[c_slot]
+                elif cached.get("fp_vec") is not None:
+                    fresh[sp] = cached["fp_vec"]
+                reused_rows.append((
+                    sp, st.st_mtime, st.st_size, cached["width"], cached["height"],
+                    st.st_ino, cached["labels"], cached["ocr"], None,
+                    cached["fp_dim"], time.time(), ch,
+                ))
+                fts_upserts.append((sp, _fts_body_for_row(sp, cached["labels"], cached["ocr"])))
+                continue
 
-    # 消失的文件：清出索引，否则检索会返回打不开的路径
+        if is_new:
+            stat["new"] += 1
+        else:
+            stat["updated"] += 1
+        todo.append((p, st, ch))
+
     if incremental:
-        # gone 判定必须带 root 维度（2026-09-27 数据丢失修复）：索引是多次
-        # 增量累积的，本次只扫了 roots 下的文件。若拿全表路径与本次磁盘集合
-        # 做差，上一次索引的其他 root 下的条目会被整批判为消失删光——实测
-        # 先索引 ~/Pictures 再索引 ~/Downloads，第一次的条目全部误删。
-        # 故只删「属于本次 root 且不在磁盘上」的条目；roots 为空（没扫任何
-        # 东西）时同理不做全表差。
         _root_prefixes = tuple(
             str(Path(r).expanduser()).rstrip(os.sep) + os.sep for r in roots if r)
         disk = disk_all
@@ -507,62 +569,93 @@ def index_paths(
             chunk = gone[i:i + 500]
             conn.executemany("DELETE FROM images WHERE path = ?",
                              [(g,) for g in chunk])
+            conn.executemany("DELETE FROM images_fts WHERE path = ?",
+                             [(g,) for g in chunk])
         conn.commit()
         stat["gone"] = len(gone)
 
-    fresh: dict[str, Any] = {}
+    _upsert_images_with_fts(conn, reused_rows, fts_upserts)
+
     if todo:
-        from PIL import Image  # 只在真正索引时才需要 Pillow
+        try:
+            from PIL import Image as _PILImage  # 可选兜底：仅当 vision_probe 未返回尺寸时使用
+        except ImportError:
+            _PILImage = None
+
+        # 同批次内也按 content_hash 去重，避免重复图多次送 Vision
+        unique_todo: list[tuple[Path, os.stat_result, str]] = []
+        dup_in_batch: list[tuple[Path, os.stat_result, str]] = []
+        seen_batch_hash: set[str] = set()
+        for item in todo:
+            p, st, ch = item
+            if dedupe and ch and ch in seen_batch_hash:
+                dup_in_batch.append(item)
+            else:
+                if ch:
+                    seen_batch_hash.add(ch)
+                unique_todo.append(item)
 
         done = 0
-        for i in range(0, len(todo), batch):
-            chunk = todo[i:i + batch]
-            recs = _run_probe(chunk, parallel=parallel)
+        for i in range(0, len(unique_todo), batch):
+            chunk = unique_todo[i:i + batch]
+            recs = _run_probe(
+                [p for p, _, _ in chunk],
+                parallel=parallel,
+                ocr_mode=ocr_mode,
+                max_dim=max_dim,
+            )
             rows = []
+            fts_batch = []
             by_path = {r.get("path"): r for r in recs if isinstance(r, dict)}
-            for p in chunk:
+            for p, st, ch in chunk:
                 sp = str(p)
                 rec = by_path.get(sp)
                 if not rec or not rec.get("ok"):
                     stat["failed"] += 1
                     continue
-                try:
-                    st = p.stat()
-                except OSError:
-                    stat["failed"] += 1
-                    continue
-                # 尺寸：Vision 不返回像素尺寸，用 Pillow 读（只读头部，不解码）
-                w = h = None
-                try:
-                    with Image.open(p) as im:
-                        w, h = im.size
-                except Exception:
-                    pass
-                labels = rec.get("labels") or []
+                w = rec.get("width")
+                h = rec.get("height")
+                if (w is None or h is None) and _PILImage is not None:
+                    try:
+                        with _PILImage.open(p) as im:
+                            w, h = im.size
+                    except Exception:
+                        pass
+                labels_json = json.dumps(rec.get("labels") or [], ensure_ascii=False)
                 ocr = "\n".join(rec.get("ocr") or [])
+                fp_vec = None
                 blob = _decode_fp(rec.get("fp") or "", int(rec.get("fp_dim") or 0))
                 if blob:
                     import numpy as np
-                    fresh[sp] = np.frombuffer(blob, dtype="<f4")
-                # fp_slot 先写 NULL，末尾 _rebuild_fp 统一回填
+                    fp_vec = np.frombuffer(blob, dtype="<f4")
+                    fresh[sp] = fp_vec
+                if dedupe and ch:
+                    hash_cache[ch] = {
+                        "width": w,
+                        "height": h,
+                        "labels": labels_json,
+                        "ocr": ocr,
+                        "fp_slot": None,
+                        "fp_dim": rec.get("fp_dim"),
+                        "fp_vec": fp_vec,
+                    }
                 rows.append((
                     sp, st.st_mtime, st.st_size, w, h, st.st_ino,
-                    json.dumps(labels, ensure_ascii=False), ocr, None,
-                    rec.get("fp_dim"), time.time(),
+                    labels_json, ocr, None, rec.get("fp_dim"), time.time(), ch,
                 ))
-            if rows:
-                conn.executemany(
-                    "INSERT OR REPLACE INTO images "
-                    "(path,mtime,size,width,height,inode,labels,ocr,fp_slot,fp_dim,indexed_at) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?)", rows)
-                conn.commit()
+                fts_batch.append((sp, _fts_body_for_row(sp, labels_json, ocr)))
+            _upsert_images_with_fts(conn, rows, fts_batch)
             done += len(chunk)
             if on_progress:
-                on_progress(done, len(todo))
+                on_progress(done, len(unique_todo))
 
-    # 指纹矩阵重建：把 fp.npy 对齐到当前 images 表。没有变化（todo 空、无 gone）
-    # 且矩阵在位时跳过——避免每次 no-op 增量都白写 226MB。
-    if todo or stat["gone"] or not _fp_path(db_path).exists():
+        if dup_in_batch:
+            dup_rows, dup_fts, dup_failed = _build_reused_rows(dup_in_batch, hash_cache, fresh)
+            stat["reused"] += len(dup_rows)
+            stat["failed"] += dup_failed
+            _upsert_images_with_fts(conn, dup_rows, dup_fts)
+
+    if todo or reused_rows or stat["gone"] or not _fp_path(db_path).exists():
         _rebuild_fp(conn, db_path, fresh, old_slots, old_mat)
     return stat
 
@@ -663,24 +756,7 @@ def search_local(
     if not q_tokens:
         return []
 
-    # SQL 侧先粗筛：任一 token 出现在 path/ocr/labels 里。避免把 7 万行
-    # 全捞进 Python 打分——全表载入 + 逐行解析标签的成本远高于一次 LIKE。
-    #
-    # 显式列名而非 SELECT *：fp 是指纹 BLOB（768×float32 = 3072 B/行），
-    # 而文本检索的消费方（_score_row 与下方 item 组装）只读 path/ocr/labels/
-    # width/height/size/mtime。一个 token 命中 1 万行时，SELECT * 会连带
-    # 多读约 30 MB 永不使用的 BLOB（2026-09-27 实测口径）。
-    where = " OR ".join(
-        ["path LIKE ? OR ocr LIKE ? OR labels LIKE ?"] * len(q_tokens))
-    params: list[str] = []
-    for t in q_tokens:
-        like = f"%{t}%"
-        params += [like, like, like]
-    sql = (
-        "SELECT path, ocr, labels, width, height, size, mtime FROM images "
-        f"WHERE {where}"
-    )
-    rows = list(conn.execute(sql, params))
+    rows = _fts_query_candidates(conn, q_tokens)
 
     scored: list[tuple[float, list[str], sqlite3.Row]] = []
     for r in rows:
@@ -771,89 +847,10 @@ def _search_by_fingerprint(conn: sqlite3.Connection, image_path: str,
     return out[:max(1, int(limit))]
 
 
-# ── 联络表（交给多模态模型判断）───────────────────────────────────────────
-
-def build_contact_sheet(
-    items: list[dict[str, Any]],
-    out_path: str | Path,
-    *,
-    cell: int = 240,
-    cols: int = 4,
-    label: bool = True,
-    thumb_cache: str | Path | None = None,
-) -> dict[str, Any]:
-    """把候选图拼成一张联络表，返回 {path, count, index} 供模型读取。
-
-    为什么拼图：模型看一张拼图能同时判断 12 张图，成本是一次图像调用。
-    逐张看 12 次既慢又贵。这让「让模型判断上百张候选」第一次可行。
-
-    index 字段把「拼图上的 #N」映射回文件路径——模型回答用编号，调用方
-    换算成路径，不必让模型输出路径（长路径模型容易抄错）。
-    """
-    from PIL import Image, ImageDraw
-
-    items = [it for it in items if it.get("path")]
-    if not items:
-        return {"path": None, "count": 0, "index": {}}
-    cell = max(80, int(cell))
-    cols = max(1, int(cols))
-    pad, lab_h = 4, (16 if label else 0)
-    rows = (len(items) + cols - 1) // cols
-    W = cols * (cell + pad) + pad
-    H = rows * (cell + pad + lab_h) + pad
-    sheet = Image.new("RGB", (W, H), (245, 245, 245))
-    draw = ImageDraw.Draw(sheet)
-
-    index: dict[str, str] = {}
-    for i, it in enumerate(items):
-        r, c = divmod(i, cols)
-        src = Path(it["path"])
-        try:
-            with Image.open(src) as im:
-                im = im.convert("RGB")
-                im.thumbnail((cell, cell))
-                x = pad + c * (cell + pad) + (cell - im.width) // 2
-                y = pad + r * (cell + pad + lab_h)
-                sheet.paste(im, (x, y))
-            index[str(i + 1)] = it["path"]
-        except Exception:
-            continue
-        if label:
-            draw.text((pad + c * (cell + pad) + 4,
-                       pad + r * (cell + pad + lab_h) + cell + 2),
-                      f"#{i + 1}", fill=(0, 0, 0))
-    out = Path(out_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    sheet.save(out)
-    return {"path": str(out), "count": len(items), "index": index,
-            "size": list(sheet.size)}
-
-
-def stats(conn: sqlite3.Connection) -> dict[str, Any]:
-    """索引概况（给用户看「建到哪了/有多少能搜」）。"""
-    row = conn.execute(
-        "SELECT COUNT(*) n, "
-        "SUM(CASE WHEN fp_slot IS NOT NULL THEN 1 ELSE 0 END) with_fp, "
-        "SUM(CASE WHEN ocr IS NOT NULL AND ocr != '' THEN 1 ELSE 0 END) with_ocr, "
-        "SUM(size) bytes FROM images").fetchone()
-    n = row["n"] or 0
-    return {
-        "indexed": n,
-        "with_fingerprint": row["with_fp"] or 0,
-        "with_ocr": row["with_ocr"] or 0,
-        "total_bytes": row["bytes"] or 0,
-    }
+# ── 联络表与统计（实现已拆至 local_image_fts.py，顶部 re-export 保持兼容）──
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────
-
-def _fmt_bytes(n: int) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024 or unit == "GB":
-            return f"{n:.1f} {unit}" if unit != "B" else f"{n} B"
-        n /= 1024.0
-    return f"{n:.1f} GB"
-
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
@@ -872,6 +869,14 @@ def main(argv: list[str] | None = None) -> int:
                        help="并行进程数（默认 4，实测 4 路约 0.12 秒/张）")
     p_idx.add_argument("--full", action="store_true", help="全量重建（忽略增量）")
     p_idx.add_argument("--max", type=int, default=None, help="只索引前 N 张（试跑用）")
+    p_idx.add_argument("--ocr-mode", choices=["auto", "accurate", "fast", "off"], default="auto",
+                       help="OCR 档位（默认 auto：截图/文档精准 OCR，其余快速 OCR）")
+    p_idx.add_argument("--max-dim", type=int, default=1280,
+                       help="缩图解码最大边像素（默认 1280）")
+    p_idx.add_argument("--min-bytes", type=int, default=0,
+                       help="跳过小于该字节数的极小图标（默认 0）")
+    p_idx.add_argument("--no-dedupe", action="store_true",
+                       help="关闭内容哈希去重复用")
 
     p_q = sub.add_parser("search", help="搜索本地图片")
     p_q.add_argument("query", nargs="?", default="", help="查询词（中英文）")
@@ -920,9 +925,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  索引中 {done}/{total} ({pct:.1f}%) "
                   f"{rate:.1f} 张/秒 剩余约 {eta:.1f} 分钟", file=sys.stderr)
 
-        stat = index_paths(conn, roots, parallel=args.parallel,
-                           incremental=not args.full, on_progress=_prog,
-                           max_images=args.max)
+        stat = index_paths(
+            conn, roots, parallel=args.parallel,
+            incremental=not args.full, on_progress=_prog,
+            max_images=args.max,
+            ocr_mode=args.ocr_mode,
+            max_dim=args.max_dim,
+            min_bytes=args.min_bytes,
+            dedupe=not args.no_dedupe,
+        )
         el = time.time() - t0
         print(f"扫描 {stat['total']} 张：新增 {stat['new']}、更新 {stat['updated']}、"
               f"未变 {stat['unchanged']}、已删 {stat['gone']}、失败 {stat['failed']}"

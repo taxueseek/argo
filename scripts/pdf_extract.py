@@ -460,6 +460,47 @@ def format_pdf_result(result: dict[str, Any], include_tables: bool = False) -> s
     return "\n".join(lines).strip()
 
 
+def export_tables_to_csv(
+    tables: list[list[list[Any]]],
+    out_dir: str,
+    prefix: str = "table",
+) -> list[dict[str, Any]]:
+    """将提取出的二维表格列表无损导出为标准 CSV 文件，供 argo table 下游计算。"""
+    import csv as _csv
+    from pathlib import Path as _Path
+
+    target_dir = _Path(out_dir).expanduser().resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    exported: list[dict[str, Any]] = []
+    safe_prefix = re.sub(r"[^0-9A-Za-z_-]+", "_", prefix).strip("_") or "table"
+
+    for idx, raw_table in enumerate(tables or [], 1):
+        if not raw_table:
+            continue
+        cleaned = [
+            ["" if cell is None else re.sub(r"\s+", " ", str(cell).strip())
+             for cell in row]
+            for row in raw_table
+        ]
+        cleaned = [r for r in cleaned if any(c for c in r)]
+        if not cleaned:
+            continue
+        width = max(len(r) for r in cleaned)
+        cleaned = [r + [""] * (width - len(r)) for r in cleaned]
+        csv_path = target_dir / f"{safe_prefix}_{idx:03d}.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = _csv.writer(f)
+            writer.writerows(cleaned)
+        exported.append({
+            "index": idx,
+            "path": str(csv_path),
+            "rows": len(cleaned),
+            "columns": width,
+            "header": cleaned[0],
+        })
+    return exported
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -473,7 +514,11 @@ if __name__ == "__main__":
     p.add_argument("--password", default=None, help="加密 PDF 口令")
     p.add_argument("--force-ocr", action="store_true", help="强制 OCR")
     p.add_argument("--outline", action="store_true",
-                   help="只输出分节大纲（id/level/title/start/end），不输出正文")
+                   help="只输出分节大纲（id/level/title/start/end）与表格数，不输出正文")
+    p.add_argument("--tables", action="store_true",
+                   help="只输出提取的表格清单（配合 --out 落盘为 CSV 供 argo table 计算）")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="配合 --tables：将提取的表格导出为 CSV 到指定目录")
     p.add_argument("--section", default=None, metavar="ID",
                    help="按大纲 id 读取单节正文（先 --outline 看 id）")
     p.add_argument("--start", type=int, default=None, help="分页读取起始偏移")
@@ -488,11 +533,42 @@ if __name__ == "__main__":
                          password=args.password,
                          force_ocr=args.force_ocr)
 
-    if args.outline:
+    if args.tables:
+        tables = result.get("tables") or []
+        payload: dict[str, Any] = {
+            "content_warning": CONTENT_WARNING,
+            "source": args.url_or_path,
+            "title": result.get("title"),
+            "page_count": result.get("page_count"),
+            "table_count": len(tables),
+        }
+        if args.out:
+            from pathlib import Path as _Path
+            stem = _Path(args.url_or_path).stem or "table"
+            exported = export_tables_to_csv(tables, args.out, prefix=stem)
+            payload["exported"] = exported
+            if exported:
+                payload["next_hint"] = (
+                    f"argo table profile \"{exported[0]['path']}\" --agent"
+                )
+        else:
+            payload["tables"] = [
+                {
+                    "index": i,
+                    "rows": len(tbl),
+                    "columns": max((len(r) for r in tbl), default=0),
+                    "preview": tbl[:3],
+                }
+                for i, tbl in enumerate(tables, 1)
+            ]
+        print(dumps(payload))
+    elif args.outline:
         sections = result.get("sections") or []
+        tables = result.get("tables") or []
         print(dumps({"content_warning": CONTENT_WARNING,
                      "title": result.get("title"),
                      "page_count": result.get("page_count"),
+                     "table_count": len(tables),
                      "total_sections": len(sections), "sections": sections,
                      "_cached": result.get("_cached", False)}))
     elif args.section:

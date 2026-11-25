@@ -353,6 +353,81 @@ def run_recompute(
         }
 
 
+def run_recompute_sql(
+    sql: str,
+    inputs: list[dict[str, Any]] | None,
+    *,
+    limit: int = 200,
+    all_varchar: bool = False,
+    max_mem_mb: int = 512,
+    allow_exec: bool = False,
+) -> dict[str, Any]:
+    """受限执行只读 SQL 复算（复用 file_inputs 白名单与默认拒绝门禁）。"""
+    if not sql or not sql.strip():
+        return {"ok": False, "mode": "sql", "skipped_reason": "sql 为空"}
+    if not (allow_exec or _env_allowed()):
+        return {
+            "ok": False,
+            "mode": "sql",
+            "skipped_reason": "默认拒绝：未显式授权（--allow-exec / "
+                              "ARGO_ALLOW_RECOMPUTE=1）",
+        }
+    allowed = _allowed_paths(inputs or [])
+    if not allowed:
+        return {
+            "ok": False,
+            "mode": "sql",
+            "skipped_reason": "无白名单输入文件（file_inputs 未声明）",
+        }
+
+    start = time.time()
+    try:
+        from table_query import TableQueryError, query_tables
+        res = query_tables(
+            sql,
+            allowed,
+            limit=limit,
+            all_varchar=all_varchar,
+            max_mem_mb=max_mem_mb,
+        )
+        stdout_text = dumps({"columns": res["columns"], "rows": res["rows"]})
+        return {
+            "ok": True,
+            "mode": "sql",
+            "exit_code": 0,
+            "timed_out": False,
+            "sql": res["sql"],
+            "inputs": res["inputs"],
+            "columns": res["columns"],
+            "rows": res["rows"],
+            "row_count": res["row_count"],
+            "truncated": res["truncated"],
+            "stdout": stdout_text[-_TAIL_STDOUT:],
+            "stderr": "",
+            "elapsed_ms": res["elapsed_ms"],
+        }
+    except TableQueryError as exc:
+        return {
+            "ok": False,
+            "mode": "sql",
+            "exit_code": 1,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": str(exc)[-_TAIL_STDERR:],
+            "elapsed_ms": int((time.time() - start) * 1000),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "mode": "sql",
+            "exit_code": None,
+            "timed_out": False,
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}"[-_TAIL_STDERR:],
+            "elapsed_ms": int((time.time() - start) * 1000),
+        }
+
+
 def load_table(path: str, **kw: Any) -> list[list[Any]]:
     """表格读取辅助（调试/外部复用）：csv/tsv stdlib；xlsx 需 openpyxl 可选依赖。
 

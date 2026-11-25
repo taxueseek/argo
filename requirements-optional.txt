@@ -16,6 +16,7 @@
 brotli
 beautifulsoup4
 curl_cffi
+duckdb>=1.1.0
 pymupdf
 python-jobspy
 openpyxl

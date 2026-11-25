@@ -628,14 +628,25 @@ def deep_research(query: str, num_sub_queries: int = 4, max_results: int = 5,
             if rec:
                 recompute_expected = True
                 try:
-                    from recompute import run_recompute
-                    res = run_recompute(
-                        rec["script"],
-                        p.get("file_inputs") or [],
-                        timeout_s=rec["budget"]["timeout_s"],
-                        max_mem_mb=rec["budget"]["max_mem_mb"],
-                        allow_exec=allow_recompute,
-                    )
+                    if rec.get("sql"):
+                        from recompute import run_recompute_sql
+                        res = run_recompute_sql(
+                            rec["sql"],
+                            p.get("file_inputs") or [],
+                            limit=rec.get("limit", 200),
+                            all_varchar=bool(rec.get("all_varchar")),
+                            max_mem_mb=rec["budget"]["max_mem_mb"],
+                            allow_exec=allow_recompute,
+                        )
+                    else:
+                        from recompute import run_recompute
+                        res = run_recompute(
+                            rec["script"],
+                            p.get("file_inputs") or [],
+                            timeout_s=rec["budget"]["timeout_s"],
+                            max_mem_mb=rec["budget"]["max_mem_mb"],
+                            allow_exec=allow_recompute,
+                        )
                 except Exception as e:  # 执行器自身异常不入账为失败
                     res = {"ok": False, "skipped_reason": f"执行器异常: {e}"}
                 res["package_id"] = p.get("id") or ""

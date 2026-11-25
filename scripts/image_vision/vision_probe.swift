@@ -1,110 +1,195 @@
-// vision_probe.swift — 批次一次调用同时产出图像分类标签、OCR 文本与特征指纹。
+// vision_probe.swift — 批次一次调用同时产出图像分类标签、OCR 文本、原始尺寸与特征指纹。
 //
-// 为什么用 macOS 内置 Vision 而不是 CLIP：
-//   CLIP 路线（Chinese-CLIP + torch + FAISS）要装 ~2GB 依赖并从 HF 下 ~400MB
-//   模型，建库以小时计。而本机目标只有一件事——**把 7 万张图收敛到几十张候选，
-//   再交给多模态模型判断**。Vision 一次调用就给三样东西（分类标签、OCR 文本、
-//   768 维特征指纹），零依赖、约 0.4 秒/张，足够完成收敛。
+// 性能优化（v2）：
+//   1. ImageIO 缩图解码（CGImageSourceCreateThumbnailAtIndex）：替代 NSImage 全像素解码，
+//      同时零解码读取原图 width/height，消除 5K 截图与大 PNG 的内存与解码开销。
+//   2. 分流 OCR（--ocr-mode auto|accurate|fast|off，默认 auto）：
+//      先执行分类 + 指纹，命中文档/截图/文字类标签或截图命名时跑 .accurate 双语 OCR，
+//      其余常规照片/素材降级为 .fast OCR，兼顾速度与文字兜底召回。
 //
 // 输出协议：每行一个 JSON 对象（JSONL），stdout。字段：
-//   {"path": "...", "ok": true,
+//   {"path": "...", "ok": true, "width": 1920, "height": 1080,
 //    "labels": [{"id": "stairs", "conf": 0.92}, ...],
 //    "ocr": ["文本行1", "文本行2"],
-//    "fp": "<base64 的 float32 数组>"}
+//    "fp": "<base64 的 float32 数组>", "fp_dim": 768}
 //   或 {"path": "...", "ok": false, "error": "..."}
-//
-// 用 JSONL 而不是单个 JSON 数组：逐行 flush 让调用方能流式读取并显示进度，
-// 6 万张图的批处理里「有没有在动」是可用性问题。
-//
-// 特征指纹用 base64 编码 float32 数组而非直接输出 768 个数字：后者每行
-// ~15KB，6 万行就是 900MB 输出。base64 后 ~4KB/行，且解码是 numpy 一行。
 
 import Foundation
 import Vision
-import AppKit
+import ImageIO
 
-let args = Array(CommandLine.arguments.dropFirst())
-// --no-fp 跳过特征指纹（只要标签和 OCR 时能省一半时间）
-let wantFP = !args.contains("--no-fp")
-let wantOCR = !args.contains("--no-ocr")
-let paths = args.filter { !$0.hasPrefix("--") }
+let rawArgs = Array(CommandLine.arguments.dropFirst())
+var wantFP = true
+var ocrMode = "auto"  // auto | accurate | fast | off
+var maxDim = 1280
+var paths: [String] = []
+
+var idx = 0
+while idx < rawArgs.count {
+    let a = rawArgs[idx]
+    if a == "--no-fp" {
+        wantFP = false
+    } else if a == "--no-ocr" {
+        ocrMode = "off"
+    } else if a == "--fast-ocr" {
+        ocrMode = "fast"
+    } else if a == "--ocr-mode", idx + 1 < rawArgs.count {
+        idx += 1
+        ocrMode = rawArgs[idx].lowercased()
+    } else if a == "--max-dim", idx + 1 < rawArgs.count {
+        idx += 1
+        if let v = Int(rawArgs[idx]), v >= 256 {
+            maxDim = v
+        }
+    } else if !a.hasPrefix("--") {
+        paths.append(a)
+    }
+    idx += 1
+}
+
+// 触发精准 OCR 的分类标签子串与路径线索
+let textLabelHints = [
+    "document", "text", "screenshot", "screen", "monitor", "computer",
+    "whiteboard", "blackboard", "poster", "sign", "menu", "book", "page",
+    "receipt", "newspaper", "magazine", "typography", "diagram", "chart",
+    "graph", "webpage", "presentation", "slide", "paper", "card", "letter",
+    "invoice", "envelope", "label", "banner", "billboard", "note",
+]
+let textPathHints = [
+    "screenshot", "screen shot", "截屏", "截图", "微信", "wechat",
+    "ppt", "slide", "doc", "invoice", "发票", "报表", "账单", "白板",
+]
 
 func emit(_ obj: [String: Any]) {
     guard let data = try? JSONSerialization.data(withJSONObject: obj),
           let line = String(data: data, encoding: .utf8) else { return }
     print(line)
-    // 行缓冲：调用方按行读时不被块缓冲卡住
     fflush(stdout)
 }
 
+func loadDownsampled(_ path: String, maxPixel: Int) -> (CGImage, Int, Int)? {
+    let url = URL(fileURLWithPath: path)
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+        return nil
+    }
+    var origW = 0
+    var origH = 0
+    if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] {
+        origW = (props[kCGImagePropertyPixelWidth] as? Int) ?? 0
+        origH = (props[kCGImagePropertyPixelHeight] as? Int) ?? 0
+    }
+    let opts: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceShouldCacheImmediately: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+    ]
+    if let thumb = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) {
+        return (thumb, origW > 0 ? origW : thumb.width, origH > 0 ? origH : thumb.height)
+    }
+    if let full = CGImageSourceCreateImageAtIndex(src, 0, nil) {
+        return (full, origW > 0 ? origW : full.width, origH > 0 ? origH : full.height)
+    }
+    return nil
+}
+
+func shouldUseAccurateOCR(path: String, labels: [[String: Any]]) -> Bool {
+    let lowerPath = path.lowercased()
+    if lowerPath.hasSuffix(".png") {
+        // 截图与设计文字稿多为 PNG；路径命中截图词或含文字标签直接走精准 OCR
+        for h in textPathHints {
+            if lowerPath.contains(h) { return true }
+        }
+    }
+    for h in textPathHints {
+        if lowerPath.contains(h) { return true }
+    }
+    for item in labels {
+        guard let lid = (item["id"] as? String)?.lowercased(),
+              let conf = item["conf"] as? Double, conf >= 0.15 else { continue }
+        for h in textLabelHints {
+            if lid.contains(h) { return true }
+        }
+    }
+    return false
+}
+
 func probe(_ path: String) {
-    guard let img = NSImage(contentsOfFile: path),
-          let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+    guard let (cg, origW, origH) = loadDownsampled(path, maxPixel: maxDim) else {
         emit(["path": path, "ok": false, "error": "load_failed"])
         return
     }
-    var requests: [VNRequest] = []
+
     let clsReq = VNClassifyImageRequest()
-    requests.append(clsReq)
-    var ocrReq: VNRecognizeTextRequest? = nil
-    if wantOCR {
-        let o = VNRecognizeTextRequest()
-        // 双语：本机素材中英混排（截图带中文界面，图库带英文题注）
-        o.recognitionLanguages = ["zh-Hans", "en-US"]
-        o.recognitionLevel = .accurate
-        // 关闭语言纠错：截图里的代码/路径/型号经不起自动纠正
-        o.usesLanguageCorrection = false
-        ocrReq = o
-        requests.append(o)
-    }
+    var firstBatch: [VNRequest] = [clsReq]
     var fpReq: VNGenerateImageFeaturePrintRequest? = nil
     if wantFP {
         let f = VNGenerateImageFeaturePrintRequest()
         fpReq = f
-        requests.append(f)
+        firstBatch.append(f)
+    }
+
+    // 非 auto 模式可直接合并 OCR 到同一次 perform，减少调度开销
+    var ocrReq: VNRecognizeTextRequest? = nil
+    if ocrMode == "accurate" || ocrMode == "fast" {
+        let o = VNRecognizeTextRequest()
+        o.recognitionLanguages = ["zh-Hans", "en-US"]
+        o.recognitionLevel = (ocrMode == "accurate") ? .accurate : .fast
+        o.usesLanguageCorrection = false
+        ocrReq = o
+        firstBatch.append(o)
     }
 
     let handler = VNImageRequestHandler(cgImage: cg, options: [:])
     do {
-        try handler.perform(requests)
+        try handler.perform(firstBatch)
     } catch {
         emit(["path": path, "ok": false, "error": "perform_failed"])
         return
     }
 
-    var out: [String: Any] = ["path": path, "ok": true]
+    var out: [String: Any] = [
+        "path": path,
+        "ok": true,
+        "width": origW,
+        "height": origH,
+    ]
 
-    // 分类标签：只留高置信度前若干个。低分标签（<0.1）噪声大，
-    // 全量带出去会让本地索引的「标签」维度几乎变成随机噪声。
+    var labelList: [[String: Any]] = []
     if let obs = clsReq.results {
-        let labels = obs.prefix(12).compactMap { o -> [String: Any]? in
+        labelList = obs.prefix(12).compactMap { o -> [String: Any]? in
             guard o.confidence >= 0.10 else { return nil }
             return ["id": o.identifier, "conf": Double(o.confidence)]
         }
-        out["labels"] = labels
+        out["labels"] = labelList
     }
 
-    // OCR 文本：按 Vision 的置信度过滤，并把同一行的碎片合并。
+    // auto 模式：根据分类标签与路径特征分流 OCR 档位
+    var actualOCRMode = ocrMode
+    if ocrMode == "auto" {
+        let accurate = shouldUseAccurateOCR(path: path, labels: labelList)
+        actualOCRMode = accurate ? "accurate" : "fast"
+        let o = VNRecognizeTextRequest()
+        o.recognitionLanguages = ["zh-Hans", "en-US"]
+        o.recognitionLevel = accurate ? .accurate : .fast
+        o.usesLanguageCorrection = false
+        do {
+            try handler.perform([o])
+            ocrReq = o
+        } catch {
+            // OCR 失败不影响标签与指纹输出
+        }
+    }
+    out["ocr_mode"] = actualOCRMode
+
     if let o = ocrReq, let res = o.results {
         let lines = res.compactMap { $0.topCandidates(1).first }
             .filter { $0.confidence >= 0.3 }
             .map { $0.string }
-        // 去重且保序：截图里的重复行（列表项、代码）会占满索引
         var seen = Set<String>()
         out["ocr"] = lines.filter { seen.insert($0).inserted }
     }
 
-    // 特征指纹：以图搜图与去重的依据。
-    //
-    // 取数值的唯一稳定路径是 NSKeyedArchiver 归档后从 plist 的 $objects 里
-    // 抠出那个 Data 块——实测 768 维对应 3072 字节（float32）。此前的两条路
-    // 都不通：`value(forKey: "elementData")` 抛 NSUnknownKeyException
-    // （VNSceneObservation 不是 KVC 兼容的），而 `computeDistance` 只给
-    // 两两距离、给不出「指纹本身」，没法存下来做索引。
-    //
-    // 归档格式是私有布局，所以这里**只认字节数**（768×4）而不是靠下标：
-    // 布局变了也能凭尺寸认出正确的块。抠不到就退化成无指纹——标签与 OCR
-    // 两个维度照常可用，不影响调用方。
     if let f = fpReq, let obs = f.results?.first as? VNFeaturePrintObservation {
         let want = obs.elementCount * 4
         if let arch = try? NSKeyedArchiver.archivedData(

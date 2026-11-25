@@ -594,6 +594,7 @@ Usage:
   argo job       "query"          招聘岗位多平台聚合
   argo cite      "doi" [doi...]   DOI → 引用条目（GB/T 7714 / APA / BibTeX）
   argo seek      "query" [选项]   本机文件与代码三层检索
+  argo table     {{profile|query}}  本地报表与日志只读 SQL 分析（可选 DuckDB）
   argo local-image {{index|search|stats}}  本地图片 Vision 检索（需 ARGO_LOCAL_IMAGE=1）
 
   # 专有提取与运维（全部顶层子命令均保留，详表见 argo --help --all）
@@ -642,6 +643,7 @@ Usage:
   argo local-image search "词"      搜本地图片（--similar-to 给图找相似；--sheet 出联络表）
   argo local-image stats            索引概况
   argo seek        "查询词" [选项]  本机文件与代码三层检索（--path/--count/--outline/--lines）
+  argo table       {{profile|query}} 本地报表、日志与 SQLite 只读 SQL 分析（可选 DuckDB）
   argo ego-search {{status|enable|disable|search|fetch|merge}}  登录态专业搜索（默认关，需先 enable）
   argo mcp       {{status|inject|undo}}   多客户端 MCP 一键注入/诊断/还原
   argo paths [--check] [--migrate]     路径自省 / 本机自检 / 搬历史状态到惯例目录
@@ -789,6 +791,8 @@ def main():
         "doctor":    ("source_audit.py", []),
         # seek：本机文件与代码三层检索（rg/fd/mdfind/FTS5 统一入口）
         "seek":      ("../sub-skills/local-seek/scripts/seek.py", []),
+        # table：本地结构化报表、日志与 SQLite 只读分析（可选 DuckDB 惰性导入）
+        "table":     ("table_query.py", []),
         # ego-search：登录态专业搜索子技能（默认关，需显式 enable 后使用）。
         "ego-search": ("../sub-skills/ego-search/scripts/ego_search.py", []),
     }

@@ -1908,8 +1908,28 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
         raw_json = to_json(results, engine, mode, scope, path, elapsed, args.query,
                            since=args.since, until=args.until)
         if args.agent:
-            # --agent 输出紧凑单行 JSON（省空白字节）
-            return json.dumps(json.loads(raw_json), ensure_ascii=False, separators=(",", ":")), 0
+            # --agent 输出紧凑单行 JSON（省空白字节）；命中报表或 PDF 时附轻量分析入口提示
+            payload = json.loads(raw_json)
+            table_exts = {".csv", ".tsv", ".parquet", ".xlsx", ".jsonl", ".ndjson", ".sqlite", ".db"}
+            first_table = None
+            first_pdf = None
+            for r in results:
+                fp = r[0] if isinstance(r, (list, tuple)) and r else str(r)
+                ext = Path(fp).suffix.lower()
+                if first_table is None and ext in table_exts:
+                    first_table = fp
+                elif first_pdf is None and ext == ".pdf":
+                    first_pdf = fp
+                if first_table and first_pdf:
+                    break
+            hints: dict[str, str] = {}
+            if first_table:
+                hints["table_profile"] = f'argo table profile "{first_table}" --agent'
+            if first_pdf:
+                hints["pdf_outline"] = f'argo pdf "{first_pdf}" --outline'
+            if hints:
+                payload["handoff_hint"] = hints
+            return json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 0
         return raw_json, 0
     return format_output(results, engine, mode, path, elapsed, args.query,
                          len(results)), 0

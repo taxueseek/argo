@@ -14,38 +14,49 @@ from typing import Any
 
 # 允许入账的本地文件类型（kind 未给时按扩展名推断）
 _ALLOWED_KINDS = frozenset({
-    "csv", "tsv", "xlsx", "xls", "parquet", "json", "md", "txt", "pdf",
+    "csv", "tsv", "xlsx", "xls", "parquet", "json", "jsonl", "sqlite", "md", "txt", "pdf",
 })
 _EXT_KIND = {
     ".csv": "csv", ".tsv": "tsv", ".xlsx": "xlsx", ".xls": "xls",
-    ".parquet": "parquet", ".json": "json", ".md": "md", ".txt": "txt",
-    ".pdf": "pdf",
+    ".parquet": "parquet", ".json": "json", ".jsonl": "jsonl", ".ndjson": "jsonl",
+    ".sqlite": "sqlite", ".sqlite3": "sqlite", ".db": "sqlite",
+    ".md": "md", ".txt": "txt", ".pdf": "pdf",
 }
 
 
 def normalize_recompute(raw: Any) -> dict[str, Any] | None:
-    """校验工作包 recompute 契约：{script 必填, budget 可选}。
+    """校验工作包 recompute 契约：{script 或 sql 二选一必填, budget 可选}。
 
-    不在此处执行（由 recompute.run_recompute 的授权检查负责，默认拒绝）。
+    不在此处执行（由 recompute.run_recompute / run_recompute_sql 的授权检查负责，默认拒绝）。
     """
     if raw is None:
         return None
     if not isinstance(raw, dict):
         raise ValueError("recompute 须为对象")
     script = str(raw.get("script") or "").strip()
-    if not script:
-        raise ValueError("recompute 缺少 script")
+    sql = str(raw.get("sql") or "").strip()
+    if not script and not sql:
+        raise ValueError("recompute 缺少 script 或 sql")
+    if script and sql:
+        raise ValueError("recompute 的 script 与 sql 不能同时指定")
     budget = raw.get("budget") or {}
     if not isinstance(budget, dict):
         raise ValueError("recompute.budget 须为对象")
-    return {
+    out: dict[str, Any] = {
         "script": script,
+        "sql": sql,
         "expect": str(raw.get("expect") or "").strip(),
         "budget": {
             "timeout_s": max(5, min(int(budget.get("timeout_s") or 30), 300)),
             "max_mem_mb": max(64, min(int(budget.get("max_mem_mb") or 512), 4096)),
         },
     }
+    if sql:
+        if raw.get("limit") is not None:
+            out["limit"] = max(1, min(int(raw["limit"]), 5000))
+        if raw.get("all_varchar"):
+            out["all_varchar"] = True
+    return out
 
 
 def normalize_file_inputs(items: Any) -> list[dict[str, Any]]:

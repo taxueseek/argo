@@ -31,12 +31,16 @@ fast = [
     "curl_cffi>=0.7.0",
     "rapidfuzz>=3.0.0",
 ]
-# full = CI 的 extras 作业与「装全可选依赖」的用户档。九件在代码里全是函数内
+analytics = [
+    "duckdb>=1.1.0; python_version >= '3.10'",
+]
+# full = CI 的 extras 作业与「装全可选依赖」的用户档。十件在代码里全是函数内
 # 惰性导入，缺失时主流程必须仍可用（同 requirements-optional.txt 的口径）。
 full = [
     "brotli; python_version >= '3.10'",
     "beautifulsoup4; python_version >= '3.10'",
     "curl_cffi; python_version >= '3.10'",
+    "duckdb>=1.1.0; python_version >= '3.10'",
     "pymupdf; python_version >= '3.10'",
     "python-jobspy; python_version >= '3.10'",
     "openpyxl; python_version >= '3.10'",
