@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { openSync, closeSync, unlinkSync, mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { acquireStateFileLock, releaseStateFileLock, mutateWatches, WATCH_STORE_FILE } from '../dsh/workbench-io.js'
+import { acquireStateFileLock, releaseStateFileLock, mutateWatches } from '../dsh/workbench-io.js'
 import { refreshDailyHotspots, createHotspotRefresher } from '../dsh/workbench-suggestions.js'
 import { evaluateGates } from '../dsh/wide-research.js'
 
@@ -36,24 +36,22 @@ test('state file lock: mutual exclusion, release and stale takeover', () => {
   releaseStateFileLock(again)
 })
 
-test('mutateWatches is single-truth read-modify-write under lock', () => {
-  // WATCH_STORE_FILE 是模块级常量（~/.config/argo/workbench-watches.json），
-  // 本测试直接用它并自清理：测的就是真实文件上的合并语义
-  const added = mutateWatches(list => { list.unshift({ id: 'w_test_a', query: 'a' }); return list })
+test('mutateWatches is single-truth read-modify-write under lock', withTempStateDir(async (dir) => {
+  const file = join(dir, 'config', 'workbench-watches.json')
+  const added = mutateWatches(list => { list.unshift({ id: 'w_test_a', query: 'a' }); return list }, file)
   assert.ok(Array.isArray(added), 'mutate returns list when lock acquired')
-  const after = mutateWatches(list => { list.unshift({ id: 'w_test_b', query: 'b' }); return list })
+  const after = mutateWatches(list => { list.unshift({ id: 'w_test_b', query: 'b' }); return list }, file)
   assert.ok(after.some(w => w.id === 'w_test_a'), 'second mutate preserves first-host change (no overwrite)')
   assert.ok(after.some(w => w.id === 'w_test_b'), 'second mutate applies its own change')
   // 锁被占时返回 null（忙语义）
-  const lock = acquireStateFileLock(`${WATCH_STORE_FILE}.lock`)
+  const lock = acquireStateFileLock(`${file}.lock`)
+  assert.ok(lock)
   try {
-    assert.equal(mutateWatches(list => list), null, 'mutateWatches yields null while lock held')
+    assert.equal(mutateWatches(list => list, file), null, 'mutateWatches yields null while lock held')
   } finally {
     releaseStateFileLock(lock)
   }
-  // 清理测试数据
-  mutateWatches(list => list.filter(w => w.id !== 'w_test_a' && w.id !== 'w_test_b'))
-})
+}))
 
 test('refreshDailyHotspots reports skipped=lock_busy instead of fake success', withTempStateDir(async (dir) => {
   // 先让另一「宿主」持锁
