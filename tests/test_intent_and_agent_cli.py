@@ -13,10 +13,20 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_logging_disable():
+    prev = logging.root.manager.disable
+    try:
+        yield
+    finally:
+        logging.disable(prev)
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "scripts"

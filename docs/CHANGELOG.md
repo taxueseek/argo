@@ -3,6 +3,24 @@
 > 单一时间线，按版本倒序。每版保留「定位 + 关键变更 + 默认关闭开关」三段，细节见提交历史与 `references/`。
 > 源数口径以 `docs/ENGINE_CATALOG.md`（生成）与 `argo search --list-engines`（本机）为准。
 
+## v2.18.0
+
+**定位**：Agent 入口收口 + 统一 URL 分发 + `local-seek` 精读与工作台直连 + 社区 4 项 PR 合入（源 313→314）。完整吸纳社区贡献者 `@OMSociety`（山海学社OMSociety）的 PR #52、#53、#54、#55 并保留原始提交署名。
+
+**关键变更**：
+- **社区贡献合入（感谢 `@OMSociety`，PR #52/#53/#54/#55）**：
+  - 知乎指定回答精确抓取（PR #54）：`argo fetch` 与 MCP 支持读取已核验展开正文与开放平台游标分页摘要回退（`--answer-offset` / `answer_offset`），保留 `--offset` 切片语义并拆出 `scripts/fetch_cli_output.py`
+  - X 关键词核验检索与单帖补读（PR #55，源 313→314）：新增 `twitter_cli` 社交源与自动选路、`from:` 与时间窗精确核验、`twitter_syndication` 单帖临时失败回退 FxTwitter 并校验 ID，MCP 同步暴露 `platforms` 与 `engine_outcomes`
+  - `--fields agent` 保留图片元数据（PR #52）：`search_output.py` 白名单补齐 `author`、`tags`、`similarity`、`image_url_preview`
+  - DSH 工作台状态锁目录修复（PR #53）：`acquireStateFileLock` 创建锁前先 `mkdirSync` 父目录，并发测试隔离至临时目录
+- **Agent 入口与统一 URL 分发**：新增 `--agent` 单开关与 `--intent` 意图路由（`intent_router.py` + `engines_boost` 真实选源 + `--envelope` 冲突 Fail-Fast）；新增 `fetch_dispatch.py` 统一分发微信、推文、arXiv 论文与 PDF（空正文 PDF 显式失败），升级分层 `--help` 与 `S_ISSOCK` 管道兼容
+- **`local-seek` 与工作台直连**：`local-seek` 拆出 `seek_inspect.py` 与 `seek_git.py`，新增 `--outline` 行跨度、`--symbol-body` 符号直读与零命中 `handoff_hint`；DSH 工作台直连 `--intent`、`/argo/api/local-inspect`（带路径沙箱）与 `/argo/api/note-study`，加固 Windows/EPIPE 跨平台 I/O
+- **质量与工程门禁**：补齐源头错误分类、HTTP 状态码归因与全模式配额预检；新增开关默认值对拍门禁（`test_switch_defaults_gate.py`）与 L2 变更感知增量选测（`scripts/affected_tests.py`）；快门禁扩展至 83 项
+
+**默认关闭开关**：`twitter_cli` 按运行环境凭据按需启用
+
+---
+
 ## v2.17.0
 
 **定位**：机制收口 + 登录态与证据锚定升级 + 查询原生下推 + 工作台热榜与安全加固。把 v2.16.0 之后的点状修补收敛为硬机制约束：新增 `helve` 付费源（源 312→313）、落地查询操作符原生下推与登录态四态防抖/CDP 网络流捕获、统一 `ego-search` 与主仓登录态词表单真源、上线工作台每日实时热榜与零 LLM 兴趣重排、落地 TCP 回环围栏与快门禁 4 片并行。

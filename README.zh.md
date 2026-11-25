@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.17.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.18.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -206,6 +206,7 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 
 | 版本 | 核心更新 |
 | :--- | :--- |
+| **v2.18.0** | `--agent` 与 `--intent` 路由、统一 `fetch_dispatch` 分发、`local-seek` 符号精读与工作台直连，合入 `@OMSociety` 社区 4 项 PR（知乎指定回答精确抓取、X 关键词核验与单帖补读、图片元数据保留、工作台锁目录修复；314 个源） |
 | **v2.17.0** | 查询操作符原生下推、登录态四态防抖与 `ego-search` 跨进程节奏锁、确定性证据锚定、工作台每日热点与 TCP 回环围栏（313 个源） |
 | **v2.16.0** | DSH 插件 Argo 搜索工作台、直调 CLI 四阶段查证管线、`linux.do` 与 Keenable 免费通道（312 个源）、Jina 无 Key 兜底、并发与缓存状态机收敛 |
 | **v2.15.0** | 知乎全链、证据层权威透传、无 key 语义兜底、MCP 通用连接器（`type: mcp`）、路由零基域评分、311 个源 |
@@ -214,11 +215,15 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 | **v2.13.0** | 文档收口、22 台状态机单一真源、派发尾宽宽限 |
 
 <details>
-<summary>v2.17.0 版本摘要与当前能力</summary>
+<summary>v2.18.0 版本摘要与当前能力</summary>
 
-### 当前大致能力（v2.17.0）
+### 当前大致能力（v2.18.0）
 
-v2.17.0 将检索、登录态与工作台演进收口为硬机制约束：落地查询操作符原生下推（含 Tavily 原生 `language`）、浏览器四态登录防抖与 CDP 捕获、`ego-search` 跨进程 OS 锁节奏控制与主仓单真源登录态词表、确定性数字证据锚定与隔离子进程新源探测（`argo engine add`）；DSH 工作台新增每日实时热榜与零 LLM 兴趣重排、TCP 回环安全围栏并全面对齐 DSH `v0.2.2-rc.5`；打通熔断指纹自愈、纳入 `helve` 付费源（源 312→313）并实现对外证据图数据驱动生成。
+v2.18.0 完成 Agent 入口收口、统一 URL 分发与社区社媒检索增强：新增 `--agent` 单开关与 `--intent` 高层意图路由（`intent_router.py`）、统一专用抓取分发层（`fetch_dispatch.py` 覆盖微信、推文、arXiv 论文与 PDF）、`local-seek` 模块化精读（`--outline` 行跨度与 `--symbol-body` 符号直读）并直连 DSH 工作台（`local-inspect` 路径沙箱与 `note-study` 管道）、L2 变更感知增量选测（`affected_tests.py`）；完整吸纳社区贡献者 `@OMSociety` 4 项 PR（#52/#53/#54/#55：知乎指定回答精确抓取与 `--answer-offset` 续查、X 关键词核验选路与单帖 FxTwitter 补读、agent 档图片元数据保留、工作台状态锁目录修复；源 313→314）。
+
+### v2.18.0：Agent 入口与统一抓取分发 + 社区 4 项 PR（#52–#55）
+
+详见 [docs/RELEASE_NOTES_v2.18.0.md](docs/RELEASE_NOTES_v2.18.0.md) 与 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ### v2.17.0：查询原生下推 + 登录态与证据锚定 + 工作台每日热榜与门禁收口
 
