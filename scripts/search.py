@@ -782,38 +782,38 @@ def super_search(query: str, engine: str = "auto", n: int = 5, explain: bool = F
 
     # L1 并行化：本地搜索与主搜索并行提交（仅显式开启时在宽根下提示）。
     _local_seek_explicit = include_local is not None
-    # 「用户没有显式关掉」= 自动路径或显式 True；显式 False 不报跳过
-    # （用户说了不要，不必再解释）。None 是自动路径，必须算「请求过」。
     _include_local_requested = include_local is not False
     include_local = _resolve_include_local(include_local, mode, query,
                                           decision.get("domain"))
-    # 自动路径被判据跳过（公域查询 + 无本地信号）：这是「没跑」而非「跑了没
-    # 命中」，必须留痕，否则与显式 --no-local 无法区分（前者是系统优化，
-    # 后者是用户选择）。显式 False 不写——用户已经说了不要，不必再报。
     _local_seek_intent_skipped = (_include_local_requested and not include_local)
+    from x_keyword_route import is_x_request, search_x_keywords
+    x_route = not local_first and not video_only and is_x_request(engine, query, decision)
+    if x_route:
+        include_local = _local_seek_intent_skipped = False
     _local_seek_future = None
     if include_local:
         _local_seek_future = _get_local_seek_executor().submit(
             _run_local_seek, query, n, warn=_local_seek_explicit,
             echo=not quiet)
 
-    result = execute_search(
-        query=search_query, decision=decision, max_results=n,
-        timeout=timeout, depth=depth, cache=cache,
-        skip_cache=skip_cache, mode=mode, on_progress=on_progress,
-        since=since, until=until, sort=sort, timing=timing,
-        engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
-    )
+    if x_route:
+        result = search_x_keywords(query, n, engine=engine, since=since, until=until, timeout=timeout)
+        from time_utils import sort_results_by_time
+        result['results'] = sort_results_by_time(result['results'], sort)
+        result.update(mode=mode, depth=depth)
+    else:
+        result = execute_search(
+            query=search_query, decision=decision, max_results=n,
+            timeout=timeout, depth=depth, cache=cache,
+            skip_cache=skip_cache, mode=mode, on_progress=on_progress,
+            since=since, until=until, sort=sort, timing=timing,
+            engine_domain=engine_domain, engine_sub_domain=engine_sub_domain,
+        )
 
-    # include-local 等待预算（H1，2026-09-29）：deadline 跨两个等待点共享
-    #（此处的预等待 + 下方 shape_response 的合并等待），总预算不叠加。
-    # 主结果命中缓存时收窄到宽限窗（_local_seek_grace_s() 调用时取值：
-    # 模块级常量只在 import 时读 env，MCP 常驻进程里改 ARGO_LOCAL_SEEK_GRACE_S
-    # 不生效——与 _straggler_grace()/_serial_stagger() 同一原则）。
+    # 两个等待点共享截止时间；主结果命中缓存时使用更短的宽限窗。
     _local_wait_cached = isinstance(result, dict) and bool(result.get("cached"))
     _local_deadline = time.monotonic() + (_local_seek_grace_s() if _local_wait_cached
                                           else _LOCAL_SEEK_TIMEOUT_S)
-    # 主搜索完成后，本地搜索应已就绪；若未完成则等待剩余预算
     if _local_seek_future is not None:
         try:
             _local_seek_future.result(timeout=max(_local_deadline - time.monotonic(), 0))

@@ -1,0 +1,17 @@
+engine_id: twitter_cli
+type: twitter_cli
+label: X/Twitter (twitter-cli)
+desc: X 关键词只读搜索，按返回的作者及发布时间核验简单约束。
+enabled: true
+explicit_only: true
+recommended: false
+coverage: [social, english]
+cost_tier: free
+qps: 1
+timeout: 20
+canary_query: 'from:elonmusk the bird is freed since:2022-10-28 until:2022-10-29'
+allowed_env: [TWITTER_AUTH_TOKEN, TWITTER_CT0, TWITTER_PROXY]
+requires:
+  - bin: twitter
+    optional: true
+    fix: 安装 twitter-cli 0.8.5 并配置该引擎的账号环境变量。

@@ -35,6 +35,8 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
         "input_kind": result.get("input_kind"),
         "login_hint": result.get("login_hint"),
     }
+    if result.get("errors"):
+        out["errors"] = result["errors"][:12]
     results = []
     for r in result.get("results") or []:
         if not isinstance(r, dict):
@@ -95,6 +97,7 @@ def _compact_search_result(result: dict[str, Any], summary: bool = False) -> dic
                 "status": o.get("status"),
                 "latency_ms": o.get("latency_ms"),
                 "results_count": o.get("results_count"),
+                **({"error_kind": o["error_kind"]} if o.get("error_kind") else {}),
             }
             for o in outcomes
             if isinstance(o, dict)

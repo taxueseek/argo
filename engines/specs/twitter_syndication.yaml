@@ -1,9 +1,8 @@
 # X/Twitter 单条推文（syndication 免登录通道）
 #
 # 定位：按推文取单条的抽取型引擎，与 twitter（搜索型）互为补充。
-# 通道原理：面向第三方网页嵌入的公开接口，访问凭证由推文 ID 本地推导
-#（见 engines_builders_intl.syndication_token），无需任何账号或密钥——
-# X 网页与官方 API 对未登录请求一律拒绝，这是常年可用的第二条通道。
+# 首选公开 syndication 嵌入接口；临时故障时以同一 ID 请求一次 FxTwitter。
+# 补读结果来源为 twitter_syndication/fxtwitter。访问受限、已删除或 ID 不符时终止。
 #
 # 查询词形态：推文 URL（x.com / twitter.com / 分享链接带 tweet_id 参数）或裸 ID。
 # 示例：

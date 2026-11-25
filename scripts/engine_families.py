@@ -145,6 +145,7 @@ _ENGINE_FAMILY_OVERRIDES: dict[str, str] = {
     "juejin": "social",
     "reddit": "social",
     "twitter": "social",
+    "twitter_cli": "social",
     "fxtwitter": "social",
     "xiaohongshu": "social",
     "bilibili": "social",

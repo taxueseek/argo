@@ -6,12 +6,12 @@
 
 ## 一、总量与口径
 
-- **收录 313 个源**（`engines/specs/*.yaml` 声明总数）
+- **收录 314 个源**（`engines/specs/*.yaml` 声明总数）
 - **开箱可用 261 个**：不需要你配任何密钥或装额外工具（其中显式专用源需 `--engine` 调用，见下方「显式专用」清单）
 - **需自备密钥 40 个**：`bocha`、`bocha_ai`、`brave`、`byted`、`deepseek_search`、`em_miaoxiang`、`felo`、`fourget`、`google_lens`、`helve`、`keenable`、`metaso`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`octen`、`opencorporates`、`parallel`、`qweather`、`saucenao`、`sciverse`、`searxng`、`seltz`、`tavily`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`unpaywall`、`weread`、`wolframalpha`、`you`、`yuanbao`、`zhihu`、`zhihu_global`、`zhihu_hot`、`zhihu_kb`、`zhihu_questions`、`zhihu_user`（没配也不影响搜索，路由会跳过）
-- **需装后端工具 4 个**：`digup`、`reddit`、`twitter`、`xiaohongshu`（装好并登录后即可用）
+- **需装后端工具 5 个**：`digup`、`reddit`、`twitter`、`twitter_cli`、`xiaohongshu`（装好并登录后即可用）
 - **已停用 8 个**：`ecosia`、`jikan`、`local_bing_news`、`local_goodreads`、`nbs_stats`、`qwant`、`realtime_index`、`soilgrids`
-- **显式专用 44 个**：`ai_labs`、`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`europeana`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`grepapp_mcp`、`helve`、`local_baidu`、`local_npm`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`、`zhihu_kb`、`zhihu_questions`（设计上不进自动路由，按 `--engine` 或交接提示调用）
+- **显式专用 45 个**：`ai_labs`、`animetrace`、`bing_rss`、`brave`、`datagov_uk`、`deepseek_search`、`digup`、`doi`、`ecosia`、`europeana`、`feed`、`felo`、`fourget`、`gdelt`、`google_lens`、`grepapp_mcp`、`helve`、`local_baidu`、`local_npm`、`local_seek`、`local_yandex`、`metaso_doc`、`metaso_image`、`metaso_podcast`、`metaso_scholar`、`metaso_video`、`ncpssd`、`opencitations`、`pixiv`、`qwant`、`saucenao`、`sciverse`、`searxng`、`tinyfish`、`tinyfish_news`、`tinyfish_paper`、`tracemoe`、`twitter_cli`、`twitter_syndication`、`unpaywall`、`wolframalpha`、`x_trending`、`zbmath`、`zhihu_kb`、`zhihu_questions`（设计上不进自动路由，按 `--engine` 或交接提示调用）
 
 自己核一遍（口径不同，别混用）：
 
@@ -26,7 +26,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 
 ## 二、费用与密钥：哪些白用、哪些要钱
 
-- **免费档 290 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 18 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_kb、zhihu_questions、zhihu_user
+- **免费档 291 个**（含已停用）：无需密钥，或只需免费注册的密钥；其中 18 个要自备密钥（免费额度）：em_miaoxiang、fourget、keenable、opencorporates、qweather、saucenao、searxng、tinyfish、tinyfish_news、tinyfish_paper、unpaywall、weread、wolframalpha、zhihu、zhihu_hot、zhihu_kb、zhihu_questions、zhihu_user
 - **计费档 23 个**（下表逐个列出，档位取自各源自己的 `cost_tier` 声明）
 
 | 引擎 | 档位 | 是否进自动路由 | 需自备密钥 |
@@ -295,7 +295,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `europeana` | 显式专用 | 免费 | 不限 | — | 语义画像命中 | 欧洲 27 国文化遗产聚合（官方公共 demo key，共享限额，故显式调用） |
 | `opencorporates` | 需自备密钥 | 免费 | 不限 | OPENCORPORATES_API_TOKEN | 域 company_search | OpenCorporates 全球公司注册（尽调/反欺诈，需 api_token） |
 
-### 社区 UGC（19）
+### 社区 UGC（20）
 
 | 引擎 | 状态 | 费用 | 频率上限 | 需自备密钥 | 什么时候用到 | 说明 |
 |---|---|---|---|---|---|---|
@@ -314,6 +314,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `weibo` | 可直接用 | 免费 | 不限 | — | 域 social、语义画像命中 | 微博 |
 | `reddit` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | Reddit |
 | `twitter` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | X/Twitter 关键词搜索（ego-browser 通道，原生布尔语法 from:/-is:retweet/lang:） |
+| `twitter_cli` | 需装后端工具 + 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X 关键词只读搜索，按返回的作者及发布时间核验简单约束。 |
 | `twitter_syndication` | 显式专用 | 免费 | 不限 | — | 显式调用（--engine） | X/Twitter 单条推文（syndication 通道，免登录零 key，含正文/作者/时间/媒体计数） |
 | `xiaohongshu` | 需装后端工具 | 免费 | 不限 | — | 域 social、语义画像命中 | 小红书 |
 | `zhihu` | 需自备密钥 | 免费 | 5000/天 | ARGO_ZHIHU_ACCESS_SECRET | 域 shopping、域 social、域 zhihu_content、域 zhihu_hot_list、语义画像命中 | 知乎站内搜索（结构化 AuthorityLevel/赞同数/时间 + 纯问题自动下钻精选回答；需 ZHIHU_ACCESS_SECRET） |
@@ -628,7 +629,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 ## 七、怎么自己查当前状态
 
 ```bash
-argo search --list-engines --detail | python3 -m json.tool | less   # 全部 313 个源的详情
+argo search --list-engines --detail | python3 -m json.tool | less   # 全部 314 个源的详情
 argo search --list-engines --detail --routable-only              # 只看现在能用的
 python3 scripts/matrix_search_eval.py --offline                   # 可达性门：有没有死源
 python3 scripts/engine_validate.py --engine <名> --stage all       # 单个源的健康+质量双阶段体检

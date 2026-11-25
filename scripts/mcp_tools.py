@@ -117,6 +117,7 @@ TOOLS = [
             "properties": {
                 "query": {"type": "string", "description": "搜索查询词"},
                 "domain": {"type": "string", "enum": ["web", "social", "job", "local"], "description": "搜索领域：web 统一网络搜索（默认），social 社交媒体/论坛讨论，job 招聘岗位聚合，local 本机文件搜索"},
+                "platforms": {"type": "string", "description": "domain=social 的平台名，逗号分隔。twitter 表示 X 关键词自动选路；固定通道用 engine=fxtwitter/twitter_cli/twitter。"},
                 "engine": {"type": "string", "description": "指定搜索引擎（auto 自动选择；可选 octen/anysearch/exa/zhihu/eastmoney/arxiv/byted/bocha/tavily/deepseek_search/github/wikipedia/semantic_scholar/local_search 等，默认 auto；deepseek_search 为按次计费的官方 DeepSeek 搜索，结果带权威分级与发布时间，新闻时事类查询优先考虑）"},
                 "max_results": {"type": "integer", "description": "返回结果条数（1-20，默认 5）"},
                 "depth": {"type": "string", "enum": ["fast", "balanced", "deep"], "description": "搜索深度：fast 快、deep 全（慢），默认 fast"},

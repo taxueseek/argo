@@ -32,12 +32,13 @@ def social_sentiment_research(query: str, platforms: list[str] | None = None,
     engines_used: set[str] = set()
     t0 = time.time()
 
-    def _one(platform: str) -> tuple[str, list[dict], set[str]]:
-        try:
+    def _one(platform: str):
+        if platform in ("twitter", "x"):
+            from x_keyword_route import search_x_keywords
+            result = search_x_keywords(query, max_results)
+        else:
             result = super_search(query, engine=platform, n=max_results, mode="fast")
-            return platform, result.get("results", []), set(result.get("engines_used", []))
-        except Exception:
-            return platform, [], set()
+        return platform, result.get("results", []), result.get("engines_used", []), result.get("errors", [])
 
     # 并行抓取各平台（串行时 3 平台 × 秒级延迟累积；并行取最慢平台耗时）。
     # 总时限 90s：到点就拿已完成部分返回，没完成的平台记空结果，不再被卡住的
@@ -50,7 +51,8 @@ def social_sentiment_research(query: str, platforms: list[str] | None = None,
             platform_results[platform] = []
             social_errors.append(f"{platform}: {type(value.exc).__name__}")
             continue
-        _platform, results, used = value
+        _platform, results, used, errors = value
+        social_errors.extend(errors)
         platform_results[_platform] = results
         all_results.extend(results)
         engines_used.update(used)

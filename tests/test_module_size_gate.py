@@ -51,7 +51,7 @@ GRANDFATHERED: dict[str, tuple[int, str]] = {
     "scripts/engines_builders_batch9.py": (1263, "批次九源构建器，方案 A 归一 + 共用 engines_http 净瘦身 94 行"),
     "scripts/engines_builders_tech.py": (1174, "技术社区源构建器，方案 A 归一 + 共用 lazy_logger 净瘦身 106 行"),
     "scripts/fetch_v3.py": (1798, "抓取降级链集中编排各级顺序与超时预算；专用 URL 分发见 fetch_dispatch，CLI 输出格式见 fetch_cli_output"),
-    "scripts/engines_base.py": (1466, "引擎基类 + HTTP 出口 + 输出映射；2026-11-21 收紧 -7：body 值类型收敛下沉 engines_fields（nan/inf 门）"),
+    "scripts/engines_base.py": (1450, "引擎基类、HTTP 出口与声明式输出映射共用此模块"),
     "scripts/cache.py": (1376, "存储实现与门面；2026-11-20 收紧 -1：提取 _copy_hit 并给 _read_many 补浅拷贝、60s 节流 accessed_at、复用 set 连接"),
     "scripts/http_client.py": (1035, "UA 轮换 + Cookie + 重试 + 主机节流共用一个会话对象"),
     "scripts/job.py": (1150, "招聘多平台聚合，各平台解析各成一段（数据表性质）"),

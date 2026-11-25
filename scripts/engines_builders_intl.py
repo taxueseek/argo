@@ -554,120 +554,46 @@ def _build_qq_music_engine(spec: dict[str, Any]) -> Any:
 
 # ── X/Twitter 单条推文（syndication 免登录通道）─────────────────────────────
 
-# 推文 URL / 裸 ID 提取：覆盖两代域名、/statuses/ 老路径与 query 参数形态；
-# URL/query 允许 1~25 位早期短 ID，裸数字仍按 10~20 位防普通数字误判。
-_TWEET_URL_RE = re.compile(
-    r"(?:x\.com|twitter\.com)/[^/\s]+/(?:status|statuses)/(\d{1,25})", re.I)
-_TWEET_BARE_ID_RE = re.compile(r"^\d{10,20}$")
-_TWEET_QUERY_ID_RE = re.compile(r"[?&](?:tweet_id|status_id|id)=(\d{1,25})")
+_TWEET_PATH = re.compile(r"/(?:[\w]+|i/web)/status(?:es)?/([0-9]{1,25})(?:/.*)?$")
 
 
 def extract_tweet_id(text: str) -> str | None:
-    """从查询词提取推文 ID：完整 URL、分享链接参数、裸 ID 均可。"""
-    if not text:
-        return None
-    m = _TWEET_URL_RE.search(text)
-    if m:
-        return m.group(1)
-    m = _TWEET_QUERY_ID_RE.search(text)
-    if m:
-        return m.group(1)
-    text = text.strip()
-    if _TWEET_BARE_ID_RE.match(text):
+    """接受 X/Twitter 的状态链接、分享参数或 10–20 位裸 ID。"""
+    text = (text or "").strip()
+    if re.fullmatch(r"[0-9]{10,20}", text):
         return text
+    try:
+        url = urllib.parse.urlsplit(text if "://" in text else "https://" + text)
+        if url.scheme not in ("http", "https") or url.hostname not in {
+                "x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"}:
+            return None
+    except ValueError:
+        return None
+    m = _TWEET_PATH.fullmatch(url.path)
+    if m:
+        return m.group(1)
+    for key, value in urllib.parse.parse_qsl(url.query):
+        if key in ("tweet_id", "status_id", "id") and re.fullmatch(r"[0-9]{1,25}", value):
+            return value
     return None
 
 
-# syndication 端点要求 token 参数存在，但值不参与校验。
-# 实测 2026-09-12（推文 1585841080431321088）：token=a、token=0、
-# token=aaaaaaaaaaaa 三者都返回完整推文，省略 token 参数则返回空响应体。
-# 因此这里用固定值——按 id 推导 base36 没有意义：那段手写浮点实现既与服务端
-# 计算方式无关（服务端不校验），也与它自己声称的公式不一致（固定 12 位小数 vs
-# 最短往返表示；只去首尾 0 vs 去所有 0），测试还把它锁成了金标。
-# 若将来服务端真的开始校验，再按公开公式
-#   ((id / 1e15) * π).toString(36) 去掉所有 '0' 与 '.'
-# 重做推导，并在此处补真实向量测试。
-_SYNDICATION_TOKEN = "argo"
-
-
 def syndication_token(tweet_id: str) -> str:
-    """syndication 展示参数（服务端不校验值，见上方常量注释）。
-
-    保留函数签名：调用方与测试按「请求必须带非空 token」这一契约依赖它。
-    """
-    return _SYNDICATION_TOKEN
+    """公开嵌入端点要求非空 token 参数。"""
+    return "argo"
 
 
 def _build_twitter_syndication_engine(spec: dict[str, Any]) -> Any:
-    """X/Twitter 单条推文（syndication 通道，免登录、零 key）。
+    from twitter_single_read import read_tweet
 
-    为什么需要第二条通道：X 的网页与官方 API 对未登录请求一律拒绝，
-    唯一常年开放的入口是面向第三方网页嵌入的 syndication 接口——它
-    本来就是给外部站点引用单条推文用的，天然公开且带完整正文与媒体。
-
-    语义是「按推文取单条」的抽取型引擎，不是搜索：查询词接受推文 URL
-    （x.com / twitter.com / 带 tweet_id 参数的分享链接）或裸 ID。拿它搜
-    关键词时诚实返回空列表，不回落到伪造结果——syndication 没有搜索端点。
-    """
     timeout = spec.get("timeout", 8)
 
-    @safe_search
     def _engine(query: str, n: int = 5, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
-        to = _timeout or timeout
         tweet_id = extract_tweet_id(query)
         if not tweet_id:
             return []
-        token = syndication_token(tweet_id)
-        url = (f"https://cdn.syndication.twimg.com/tweet-result"
-               f"?id={tweet_id}&token={token}")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/150.0.0.0 Safari/537.36",
-            "Accept": "application/json",
-            "Referer": "https://platform.twitter.com/",
-        }
-        from engines_base import _http_get_raw
-        raw = _http_get_raw(url, headers, to, engine="twitter_syndication")
-        if not raw:
-            return []
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-        # 正常推文 __typename="Tweet"；墓碑（已删除/受限）返回 TweetTombstone
-        # 等其他类型或空对象，一律按无结果处理，不伪造占位
-        if not isinstance(data, dict) or not data:
-            return []
-        if data.get("__typename") and data["__typename"] != "Tweet":
-            return []
-        text = str(data.get("text") or "")
-        # 作者字段：现行响应在 user 键（author 为历史兼容候选）
-        author = data.get("user") or data.get("author") or {}
-        screen_name = str(author.get("screen_name") or "")
-        display_name = str(author.get("name") or "")
-        created = str(data.get("created_at") or "")
-        media = data.get("mediaDetails") or (data.get("entities") or {}).get("media") or []
-        media_note = f"（含 {len(media)} 项媒体）" if media else ""
-        canonical_url = (f"https://x.com/{screen_name}/status/{tweet_id}"
-                         if screen_name else
-                         f"https://x.com/i/web/status/{tweet_id}")
-        title = f"@{screen_name}: {text[:80]}" if screen_name else text[:80]
-        snippet_parts = []
-        if created:
-            snippet_parts.append(created)
-        if display_name:
-            snippet_parts.append(display_name)
-        snippet_parts.append(text[:280])
-        if media_note:
-            snippet_parts.append(media_note)
-        return [{
-            "title": title[:100],
-            "url": canonical_url,
-            "snippet": " | ".join(p for p in snippet_parts if p),
-            "source": "twitter_syndication",
-            "score": 0.9,
-        }]
+        return read_tweet(tweet_id, syndication_token(tweet_id), _timeout or timeout)
+
     return _engine
 
 

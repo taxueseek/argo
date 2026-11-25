@@ -98,6 +98,7 @@ tests/test_stop_gate_discriminative_1026.py
 tests/test_stub_targets.py
 tests/test_subprocess_encoding_gate.py
 tests/test_switch_defaults_gate.py
+tests/test_twitter_cli.py
 tests/test_ua_single_source_gate.py
 tests/test_usage_doc_gates.py
 tests/test_zhihu_answer_body.py

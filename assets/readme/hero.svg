@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
   <title id="title">Argo — Multi-Engine Search &amp; Evidence Verification for AI Agents</title>
-  <desc id="desc">Unified metasearch, deep research, and evidence verification across 313 sources and 18 languages with keyless local fallback.</desc>
+  <desc id="desc">Unified metasearch, deep research, and evidence verification across 314 sources and 18 languages with keyless local fallback.</desc>
 
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="380" gradientUnits="userSpaceOnUse">
@@ -46,7 +46,7 @@
       <text x="52" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#94A3B8">2.17.0</text>
 
       <rect x="116" width="136" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
-      <text x="184" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8">313 sources</text>
+      <text x="184" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#38BDF8">314 sources</text>
 
       <rect x="264" width="108" height="32" rx="8" fill="#121A2B" stroke="#1E2A3F"/>
       <text x="318" y="21" text-anchor="middle" font-family="ui-monospace, Menlo, monospace" font-size="12" fill="#A78BFA">19 MCP</text>

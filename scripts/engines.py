@@ -48,6 +48,7 @@ from engines_base import (
     _CUSTOM_JSON_PARSERS,
 )
 from engines_mcp import _build_mcp_engine
+from engines_twitter_cli import _build_twitter_cli_engine
 from recovery import strip_structured
 from cli_io import dumps
 
@@ -428,6 +429,7 @@ _BUILDERS = {
     "ths_hot": _build_ths_hot_engine,
     "cls_telegraph": _build_cls_telegraph_engine,
     "twitter_syndication": _build_twitter_syndication_engine,
+    "twitter_cli": _build_twitter_cli_engine,
     "deps_dev": _build_deps_dev_engine,
     "biorxiv": _build_biorxiv_engine,
     "un_comtrade": _build_un_comtrade_engine,
