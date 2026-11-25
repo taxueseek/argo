@@ -44,6 +44,7 @@ tests/test_env_binding_gate.py
 tests/test_env_declaration_consistency.py
 tests/test_envsync_anysearch_0907.py
 tests/test_explicit_only_gate.py
+tests/test_fetch_zhihu_answer.py
 tests/test_followup_fixes.py
 tests/test_gate_manifest.py
 tests/test_grounding_stall_and_smoke.py
@@ -99,3 +100,5 @@ tests/test_subprocess_encoding_gate.py
 tests/test_switch_defaults_gate.py
 tests/test_ua_single_source_gate.py
 tests/test_usage_doc_gates.py
+tests/test_zhihu_answer_body.py
+tests/test_zhihu_answer_lookup.py

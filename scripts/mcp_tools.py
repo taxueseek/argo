@@ -245,6 +245,7 @@ TOOLS = [
                 "extract_mode": {"type": "string", "enum": ["tables", "metadata", "jsonld", "all"], "description": "mode=extract 时的提取子模式，默认 all"},
                 "focus": {"type": "string", "description": "BM25 聚焦查询词：只返回相关段落，省 token（仅 mode=text）"},
                 "max_chars": {"type": "integer", "description": "返回正文最大字符数（500-50000，默认 8000）"},
+                "answer_offset": {"type": "integer", "description": "知乎回答摘要查询偏移：首轮省略；仅在用户明确要求续查时传上次的 next_offset"},
                 "use_browser": {"type": "boolean", "description": "强制用反检测浏览器（HTTP 失败时已自动升级，默认关）"},
                 "include_links": {"type": "boolean", "description": "附带正文内链接（最多 30 条；默认只回 links_count，省 token，默认关）"},
             },

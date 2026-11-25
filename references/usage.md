@@ -360,6 +360,8 @@ argo fetch "https://cloudflare-protected.com" --use-browser     # 强制反检�
 argo fetch "https://example.com/post" --json --include-links    # 附带正文链接（默认只给 links_count）
 ```
 
+- **知乎指定回答**：对 `https://www.zhihu.com/question/{问题ID}/answer/{回答ID}`，首轮优先读取经核验的已展开正文 (`content_type=body`)，其次按精确 URL 和回答 ID 取开放平台摘要 (`summary`)。`truncated=true` 表示返回文字已按字符上限裁剪；摘要即使未裁剪也只是摘要。`status=continue` 时保留 `next_offset`，仅在用户明确要求后，用同一 URL 加 `--answer-offset N`（MCP：`answer_offset`）续查摘要；`not_found` 表示已到末页，`error` 表示查询失败。首轮省略偏移，显式传 `0` 也会直接查询摘要。
+
 - **文章级元数据**：同一份 HTML 里顺带提取 `byline` / `excerpt` / `site_name` / `published_at`，不额外联网；`--include-links` 时附带 `<article>/<main>` 内的链接（最多 30 条，相对链接已解析）。没有语义容器时宁可不给，也不把导航链接当正文引用。
 
 - **降级链顺序**：HTTP（带内容协商；桌面/移动 UA，抖音等分流站移动优先）→ `{url}.md` 直出探测（主请求没拿到 Markdown 才回探）→ TLS 指纹 → jina/Parallel 免费云渲染 → Wayback/浏览器 自动降级 + BM25 聚焦提取 + 质量信号 + 内容安全引擎

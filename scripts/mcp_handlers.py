@@ -431,6 +431,13 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             url = arguments["url"]
             mode = arguments.get("mode", "text")
 
+            if "answer_offset" in arguments and (mode != "text" or type(arguments["answer_offset"]) is not int or arguments["answer_offset"] < 0):
+                raise ValueError("answer_offset 仅用于 text 模式，须为非负整数。")
+            if "answer_offset" in arguments:
+                from zhihu_answer_fetch import match_answer
+                if not match_answer(url):
+                    raise ValueError("answer_offset 需要精确的知乎回答 URL。")
+
             # 微信公众号文章原生自适应
             if "mp.weixin.qq.com" in url or mode == "article":
                 article_mod = _lazy_cached("article")
@@ -497,14 +504,17 @@ def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 timeout=_env_int("ARGO_MCP_TIMEOUT_FETCH", _int_param(arguments, "timeout", 15)),
                 use_browser_fallback=True,
                 force_browser=arguments.get("use_browser", False),
+                answer_offset=arguments.get("answer_offset"),
             )
             if focus_query and result.get("success"):
                 focus_mod = _lazy_cached("focus_extract")
                 focus_mod.apply_focus(result, focus_query,
                                       max_chars=_clamp_int(
                                           _int_param(arguments, "max_chars", 8000), 8000, 500, 50000))
+                from zhihu_answer_fetch import finish_focus
+                finish_focus(result, _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000))
                 if not result.get("focus_applied"):
-                    result["focus_note"] = "内容未达聚焦阈值，返回全文"
+                    result["focus_note"] = "内容未达聚焦阈值，按字符上限返回"
             if arguments.get("summary", True) and isinstance(result.get("content"), str):
                 max_c = _clamp_int(_int_param(arguments, "max_chars", 8000), 8000, 500, 50000)
                 if len(result["content"]) > max_c:
