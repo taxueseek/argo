@@ -200,6 +200,17 @@ class TestAgentTierKeepsQualitySignals(unittest.TestCase):
             "--fields agent 剥掉了质量信号（agent 无从判断结果能用到什么程度）："
             + ", ".join(missing))
 
+    def test_image_metadata_survives_agent_tier(self):
+        metadata = {
+            "author": "artist", "tags": ["landscape", "night"],
+            "similarity": 0.0, "image_url_preview": "https://example.org/preview.jpg",
+        }
+        rows = [{"title": "image", **metadata}, {"title": "article"}]
+        for key in ("results", "web_results", "local_results"):
+            with self.subTest(key=key):
+                out = search._strip_for_agent({key: rows})
+                self.assertEqual(out[key], rows)
+
     def test_limitations_specifically_survive(self):
         """独立检查 limitations——本次修复的核心，值得单独钉住。"""
         out = search._strip_for_agent(self._payload())
