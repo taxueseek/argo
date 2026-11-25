@@ -932,11 +932,12 @@ domains:
   - bilibili_hot
   - weibo_hot
   - douyin_hot
+  - zhihu_hot_app
   - ths_hot
   - zhihu_hot
-  - zhihu_hot_app
-  fallback: baidu_hot
+  fallback: toutiao_hot
   name: hot_trending
+  no_early_stop: true
   priority: 520
   intents: [social, news]
   parallel: true

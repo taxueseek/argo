@@ -573,7 +573,7 @@ argo search --list-engines --detail                 # 逐源状态/密钥/依赖
 | `modal_card` | `bocha_ai` | `bocha_ai`、`bocha`、`train` |
 | `jin10_flash` | `jin10` | `jin10`、`cls_telegraph` |
 | `zhihu_hot_list` | `zhihu_hot` | `zhihu_hot`、`zhihu` |
-| `hot_trending` | `baidu_hot` | `baidu_hot`、`toutiao_hot`、`bilibili_hot`、`weibo_hot`、`douyin_hot`、`ths_hot`、`zhihu_hot`、`zhihu_hot_app` |
+| `hot_trending` | `baidu_hot` | `baidu_hot`、`toutiao_hot`、`bilibili_hot`、`weibo_hot`、`douyin_hot`、`zhihu_hot_app`、`ths_hot`、`zhihu_hot` |
 | `patent_search` | `google_patents` | `google_patents`、`semantic_scholar`、`local_arxiv` |
 | `crypto_search` | `coingecko` | `coingecko`、`defillama`、`anysearch` |
 | `package_search` | `pypi` | `pypi`、`npm`、`crates`、`maven`、`nuget`、`docker_hub`、`github` |

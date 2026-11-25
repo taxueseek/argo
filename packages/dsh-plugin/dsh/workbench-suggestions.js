@@ -8,7 +8,7 @@
  *  4. 静态模板仅作冷启动兜底（真实信号不足 3 条时补位），不抢占正常用户首屏。
  */
 
-import { mkdirSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { resolveStateDir } from './diagnostics.js'
 import { acquireStateFileLock, releaseStateFileLock } from './workbench-io.js'
@@ -20,7 +20,7 @@ const DEFAULT_REFRESH_TIME = '08:30'
 const TIME_HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/
 
 const HOTSPOT_ENGINES = {
-  zh: ['zhihu_hot', 'bilibili_hot'],
+  zh: ['toutiao_hot', 'weibo_hot', 'zhihu_hot_app', 'douyin_hot', 'bilibili_hot'],
   en: ['hackernews', 'x_trending'],
 }
 
@@ -174,19 +174,37 @@ async function collectHotspots(store, runCli, now) {
   const seen = new Set()
 
   const collect = async (lang, engines, bucket) => {
-    const query = lang === 'zh' ? '今日热点' : 'trending'
+    const query = lang === 'zh' ? '今日热榜' : 'trending'
     const settled = await Promise.allSettled(
       engines.map((eng) => runCli(['search', query, '--engine', eng, '-n', '8', '--json', '--fields', 'agent'])),
     )
+    // 按平台轮询交错取样（round-robin），避免前 2 个引擎各 8 条直接占满 16 槽把后续平台挤死
+    const perEngine = []
     for (const res of settled) {
       if (res.status !== 'fulfilled' || !res.value) continue
       const list = Array.isArray(res.value.results) ? res.value.results : []
+      const cleaned = []
       for (const item of list) {
         const title = cleanTitle(item?.title)
-        if (title.length < 5 || seen.has(title)) continue
-        seen.add(title)
-        if (bucket.length < 16) bucket.push(title)
+        if (title.length >= 5) cleaned.push(title)
       }
+      if (cleaned.length > 0) perEngine.push(cleaned)
+    }
+    let idx = 0
+    while (bucket.length < 16) {
+      let progressed = false
+      for (const list of perEngine) {
+        if (idx >= list.length) continue
+        progressed = true
+        const title = list[idx]
+        if (!seen.has(title)) {
+          seen.add(title)
+          bucket.push(title)
+          if (bucket.length >= 16) break
+        }
+      }
+      if (!progressed) break
+      idx += 1
     }
   }
 

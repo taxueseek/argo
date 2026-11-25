@@ -877,28 +877,28 @@ def _build_baidu_hot_engine(spec: dict[str, Any]) -> Any:
     @safe_search
     def _engine(query: str, n: int = 10, _timeout: float | None = None, **kwargs) -> list[dict[str, Any]]:
         import urllib.parse as up
-        to = _timeout or timeout
-        url = "https://top.baidu.com/board?tab=realtime"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        req = urllib.request.Request(url, headers=headers)
+        req = urllib.request.Request("https://top.baidu.com/board?tab=realtime", headers={"User-Agent": "Mozilla/5.0"})
         try:
-            with http_open(req, timeout=to, engine=spec.get("_name", "")) as resp:
+            with http_open(req, timeout=_timeout or timeout, engine=spec.get("_name", "")) as resp:
                 page = resp.read().decode("utf-8", "replace")
-            words = re.findall(r'word":"([^"]+)"', page)
             results, seen = [], set()
-            for w in words:
-                if w in seen:
-                    continue
+            def _add(w: str, snippet: str) -> None:
                 seen.add(w)
-                results.append({
-                    "title": w[:60],
-                    "url": "https://www.baidu.com/s?wd=" + up.quote(w),
-                    "snippet": "百度热搜",
-                    "source": "baidu_hot",
-                    "score": max(1.0 - len(results) * 0.05, 0.1),
-                })
-                if len(results) >= n:
-                    break
+                results.append({"title": w[:60], "url": "https://top.baidu.com/board?tab=realtime&word=" + up.quote(w),
+                                "snippet": snippet, "source": "baidu_hot", "score": max(1.0 - len(results) * 0.05, 0.1)})
+            for m in re.finditer(r'\{[^{}]*"word":"([^"]+)"[^{}]*\}', page):
+                w = m.group(1)
+                if w and w not in seen:
+                    dm, hm = re.search(r'"desc":"([^"]*)"', m.group(0)), re.search(r'"hotScore":"?(\d+)"?', m.group(0))
+                    parts = ["百度热搜"] + ([f"热度 {hm.group(1)}"] if hm else []) + ([dm.group(1).strip()[:120]] if dm and dm.group(1).strip() else [])
+                    _add(w, " · ".join(parts))
+                    if len(results) >= n:
+                        break
+            for w in (() if results else re.findall(r'word":"([^"]+)"', page)):
+                if w not in seen:
+                    _add(w, "百度热搜")
+                    if len(results) >= n:
+                        break
             return results
         except Exception as e:
             logger.warning(f"百度热搜失败: {e}")

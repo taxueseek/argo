@@ -503,3 +503,73 @@ test('resolveArgoBin: ARGO_BIN 显式覆盖 > monorepo > install venv > PATH 裸
   const expected = chain.find((p, i) => i === chain.length - 1 || existsSync(p))
   assert.equal(resolveArgoBin({}), expected)
 })
+
+test('workbench hotspot mode bypasses --intent news for hot-list queries and drops dead plugin --domain', () => {
+  // 榜单类查询走 Argo 原生 hot_trending 多平台热榜路由，不被 --intent news 锁死单引擎 deepseek_search
+  const hotList = buildSearchCliArgs('今日热榜', 'hotspot')
+  assert.ok(!hotList.includes('--intent'), `榜单查询不应带 --intent: ${hotList.join(' ')}`)
+  assert.ok(!hotList.includes('--since'), `榜单查询不应带 --since: ${hotList.join(' ')}`)
+  // 普通热点事件仍走 --intent news
+  const newsEvent = buildSearchCliArgs('AI 政策', 'hotspot')
+  assert.ok(newsEvent.includes('--intent') && newsEvent[newsEvent.indexOf('--intent') + 1] === 'news')
+  // plugin 模式不再传无效死参数 --domain dsh_plugin_search
+  const pluginArgs = buildSearchCliArgs('argo plugin', 'plugin')
+  assert.ok(!pluginArgs.includes('--domain'), `plugin 模式不应传无效 --domain: ${pluginArgs.join(' ')}`)
+})
+
+test('refreshDailyHotspots: 中文热榜覆盖 4+ 主流平台且轮询交错取样不被前两源占满', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const prevState = process.env.ARGO_STATE_DIR
+  process.env.ARGO_STATE_DIR = mkdtempSync(join(tmpdir(), 'argo-wb-rr-'))
+  try {
+    const { refreshDailyHotspots } = await import('../dsh/workbench-suggestions.js')
+    const calledZh = []
+    const out = await refreshDailyHotspots({
+      runCli: async (args) => {
+        const eng = args[args.indexOf('--engine') + 1]
+        if (!['hackernews', 'x_trending'].includes(eng)) calledZh.push(eng)
+        return {
+          results: Array.from({ length: 8 }, (_, i) => ({
+            title: `${eng}平台热点新闻第${i + 1}条样本`,
+          })),
+        }
+      },
+      now: new Date('2026-11-25T09:00:00'),
+    })
+    assert.ok(calledZh.length >= 4, `中文热榜源应覆盖至少 4 个平台，实得: ${calledZh}`)
+    const represented = new Set(out.zh.map(t => t.split('平台')[0]))
+    assert.ok(represented.size >= 4, `轮询交错后至少 4 个平台须进入热榜池，实得: ${[...represented]}`)
+  } finally {
+    process.env.ARGO_STATE_DIR = prevState
+  }
+})
+
+test('workbench buildSuggestions: 读取 usage_log/query.jsonl 近期常搜不因缺 import 瘫痪', async () => {
+  const { mkdirSync, mkdtempSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const prevState = process.env.ARGO_STATE_DIR
+  const stateDir = mkdtempSync(join(tmpdir(), 'argo-wb-recent-'))
+  mkdirSync(join(stateDir, 'usage_log'), { recursive: true })
+  writeFileSync(
+    join(stateDir, 'usage_log', 'query.jsonl'),
+    JSON.stringify({ query: '量子计算最新突破', count: 5 }) + '\n',
+    'utf8',
+  )
+  process.env.ARGO_STATE_DIR = stateDir
+  try {
+    const { buildSuggestions } = await import('../dsh/workbench-suggestions.js')
+    const res = buildSuggestions('general', 'zh', false, {
+      hotspotStore: { refreshTime: '08:30', lastRefreshedDate: '', lastRefreshedAt: '', zh: [], en: [] },
+      watches: [],
+    })
+    assert.ok(
+      res.items.some(it => it.source === 'history' && it.query === '量子计算最新突破'),
+      `应从 query.jsonl 读出近期常搜，实得: ${JSON.stringify(res.items)}`,
+    )
+  } finally {
+    process.env.ARGO_STATE_DIR = prevState
+  }
+})

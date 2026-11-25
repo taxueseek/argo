@@ -533,7 +533,7 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     # 只看「有没有结果」，不看「是不是垃圾」。判据见 query_signals.is_query_echo。
     try:
         from postprocess_signals import echo_recovery_needed as _echo_needed
-        _echo_triggered = _echo_needed(merged, query)
+        _echo_triggered = _echo_needed(merged, query, domain=domain)
     except OPT_IMPORT + SHAPE_BENIGN:  # 守卫不可用不设卡（fail-open）
         _echo_triggered = False
     # 视频/时长模式不做恢复链：恢复链会跨域补搜普通网页，补进来的结果要么被
@@ -585,38 +585,27 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
     local_rerank_on = env_flag("ARGO_LOCAL_RERANK")
     reranker_status = engine_states.RERANK_SKIPPED_SHORT
     rank_method = "none"
-    if mode == "fast" or depth == "fast":
+    if mode == "fast" or depth == "fast" or domain == "hot_trending":
         reranker_status = engine_states.RERANK_SKIPPED_FAST
     elif merged and len(merged) > 1:
-        # 全量重排（top_n=len），由最终输出统一截断 max_results
         merged, reranker_status = rerank_results(query, merged, top_n=len(merged))
         if reranker_status == engine_states.RERANK_OK:
             rank_method = "bocha"
 
-    # 本地五维 rerank 保底：受 ARGO_LOCAL_RERANK 开关控制（可观测 rank_method）。
-    # 触发计算方式走 _RERANK_DEGRADED_STATUSES 唯一来源：新增「bocha 未出排序」的
-    # 状态时只改那一处，不会漏掉这里的保底（漏了就是既不精排也不保底）。
-    if local_rerank_on and merged and len(merged) > 1 and \
+    if local_rerank_on and domain != "hot_trending" and merged and len(merged) > 1 and \
             reranker_status in _RERANK_DEGRADED_STATUSES:
         try:
-            # top_n=max_results（而非 len(merged)）：下游 _apply_consensus_and_sort
-            # 紧接着就按 max_results 截断，尾部不会有人用。传真实 K 才能启用
-            # 函数内的 K 相关剪枝（可证明前 K 个选序不变），n=200 时把 O(n²)
-            # 贪心从 ~33ms 压到毫秒级。
             merged = local_five_dim_rerank(query, merged, domain=domain,
                                            top_n=max_results)
             rank_method = "local_five_dim"
         except Exception as e:
             _log(
                 f"本地五维 rerank 跳过: {type(e).__name__}")
-    # TF-IDF 语义抛光 + none 兜底（方案 A；实现与开关在 postprocess_signals）。
-    # 2026-10-16 提取：特性钩子各带 try/except 与开关，留在主管线会把它顶破
-    # 模块体积门禁（1070 > 上限 1033），且放大主管线的异常面。ran=False
-    # 覆盖「开关关 / fast 档 / 结果不足 / 执行失败」——无论哪种本轮排序都
-    # 没有 TF-IDF 贡献，none 兜底都应生效（含 rerank_tfidf 抛异常的边缘态，
-    # 此前该态会被误留 stale rank_method）。
-    merged, rank_method, _tfidf_ran = apply_tfidf_polish(
-        query, merged, max_results, mode, reranker_status, rank_method, _log)
+    if domain != "hot_trending":
+        merged, rank_method, _tfidf_ran = apply_tfidf_polish(
+            query, merged, max_results, mode, reranker_status, rank_method, _log)
+    else:
+        _tfidf_ran = False
     if not local_rerank_on and reranker_status in _RERANK_DEGRADED_STATUSES \
             and not _tfidf_ran:
         rank_method = "none"
@@ -641,7 +630,11 @@ def postprocess(req: _SearchRequest, run: _SearchRun, hooks: Any) -> _SearchRun:
             site_filtered = 0
 
     if merged:
-        merged = _apply_consensus_and_sort(merged, max_results)
+        if domain == "hot_trending":
+            from postprocess_signals import interleave_by_source
+            merged = interleave_by_source(merged, max_results)
+        else:
+            merged = _apply_consensus_and_sort(merged, max_results)
         # 天气结果按时间序收口：当前天气在前，逐日预报升序。放在最终截断
         # 之后，避免五维 rerank 的新颖性把最远一天顶到最前（见函数 docstring）。
         # 显式 `--engine open_meteo` 时 domain 会被置成 general，所以判据同时

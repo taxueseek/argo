@@ -104,18 +104,63 @@ def detect_number_conflict(
 # 主管线（search_pipeline）只留调用点，逻辑不落在那里。
 
 
-def echo_recovery_needed(results: list[dict[str, Any]], query: str) -> bool:
+_LIST_DOMAINS: frozenset[str] = frozenset({
+    "hot_trending",
+    "zhihu_hot_list",
+    "ths_hot_search",
+})
+
+
+def echo_recovery_needed(
+    results: list[dict[str, Any]],
+    query: str,
+    *,
+    domain: str | None = None,
+) -> bool:
     """恢复链是否该因「查询词回声」触发——有结果、但整批是查询某一个词的
     词典释义（判据见 query_signals.is_query_echo）。
 
     零结果走 `if not merged` 的老路；这里补的是「有结果却是垃圾」：anysearch
     超时后仅剩的 local_bing 回声会被原样交付（2026-10-17 实锤）。
+    榜单型域（hot_trending 等）按设计忽略查询词，标题偶发命中查询单字不是回声。
     """
+    if domain in _LIST_DOMAINS:
+        return False
     try:
         from query_signals import is_query_echo
     except ImportError:
         return False  # 判据不可用不拦（fail-open）
     return bool(results) and is_query_echo(results, query)
+
+
+def interleave_by_source(
+    results: list[dict[str, Any]],
+    max_results: int,
+) -> list[dict[str, Any]]:
+    """按平台轮询交错取样，保证全网热榜等横向聚合域各平台头部均衡露出。"""
+    if not results or max_results <= 0:
+        return []
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for r in results:
+        src = str(r.get("source") or r.get("_engine") or "unknown")
+        buckets.setdefault(src, []).append(r)
+    if len(buckets) <= 1:
+        return results[:max_results]
+    ordered = list(buckets.values())
+    out: list[dict[str, Any]] = []
+    idx = 0
+    while len(out) < max_results:
+        progressed = False
+        for lst in ordered:
+            if idx < len(lst):
+                progressed = True
+                out.append(lst[idx])
+                if len(out) >= max_results:
+                    break
+        if not progressed:
+            break
+        idx += 1
+    return out
 
 
 def drop_echo_items(results: list[dict[str, Any]],
