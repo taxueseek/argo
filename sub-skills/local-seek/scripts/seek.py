@@ -1607,8 +1607,27 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
         # 会让调用方把 AST 的精确结果误读成正则近似结果。
         _backend = "astgrep-structural" if sg_available() else "rg-structural"
         if err:
+            if args.json:
+                return json.dumps({
+                    "ok": False,
+                    "query": args.query,
+                    "engine": _backend,
+                    "mode": "structural",
+                    "error": err,
+                }, ensure_ascii=False), 1
             return f"local-seek: {err}", 1
         if not results:
+            if args.json:
+                return json.dumps({
+                    "query": args.query,
+                    "engine": _backend,
+                    "mode": "structural",
+                    "scope": args.scope,
+                    "path": str(args.path),
+                    "elapsed_ms": elapsed,
+                    "count": 0,
+                    "results": [],
+                }, ensure_ascii=False), 1
             return f"local-seek: 未找到匹配（{_backend} · {args.path} · {elapsed}ms）", 1
         if args.json:
             return to_json(results, _backend, "structural", args.scope,

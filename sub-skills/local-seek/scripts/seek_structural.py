@@ -81,12 +81,9 @@ def _resolve_sg() -> str | None:
     return None
 
 
-_SG_PATH = _resolve_sg()
-
-
 def sg_available() -> bool:
     """本机是否装有 ast-grep（决定走 AST 还是 rg 回落）。"""
-    return _SG_PATH is not None
+    return _resolve_sg() is not None
 
 
 # ── 规则表 ─────────────────────────────────────────────────────────────
@@ -242,7 +239,7 @@ def structural_search_rg(rule: dict[str, Any], path, excludes, max_results,
         if dots:
             cmd += ["--hidden", "--follow"]
         for ex in excludes:
-            cmd += ["-g", f"!{ex}"]
+            cmd += ["-g", ex if ex.startswith("!") else f"!{ex}"]
         for e in exts:
             cmd += ["-g", f"*.{e}"]
         cmd += ["-e", pat, str(path)]
@@ -268,7 +265,7 @@ def _invoke_sg(patterns: list[tuple[tuple[str, ...], str]], root, excludes,
     按 (exts, pattern) 逐条调用：`--lang` 必须显式给，否则 ast-grep 按扩展名
     推断，tsx 会被当成 ts 而零命中（实测）。每个 exts 集合一次扫描，扫描根传目录。
     """
-    sg = _SG_PATH
+    sg = _resolve_sg()
     if not sg:
         return []
     run_impl = runner or _run
@@ -285,7 +282,7 @@ def _invoke_sg(patterns: list[tuple[tuple[str, ...], str]], root, excludes,
         if dots:
             cmd += ["--no-ignore", "hidden", "--follow"]
         for ex in excludes:
-            cmd += ["--globs", f"!{ex}"]
+            cmd += ["--globs", ex if ex.startswith("!") else f"!{ex}"]
         for e in exts:
             cmd += ["--globs", f"*.{e}"]
         cmd.append(str(root))
@@ -423,8 +420,10 @@ def structural_search_ast(rule: dict[str, Any], path, excludes, max_results,
         seen: set = set()
         out: list[tuple[str, int, str]] = []
         for fp, ln, txt in ast_hits:
-            key = _dedup_key(fp, ln, txt)
-            if key and key not in seen:
+            key = _dedup_key(fp, ln, txt) or (
+                os.path.abspath(os.path.expanduser(fp)), ln, txt.strip()[:60]
+            )
+            if key not in seen:
                 seen.add(key)
                 out.append((fp, ln, txt))
             if len(out) >= max_results:
@@ -475,9 +474,10 @@ def structural_search(rule_name, path, excludes, max_results, dots=False,
 
 def describe_backend() -> dict[str, Any]:
     """可观测性：当前走哪条路、哪些规则是 AST 全量覆盖。"""
+    sg = _resolve_sg()
     return {
-        "ast_grep": _SG_PATH,
-        "backend": "ast-grep" if sg_available() else "rg-fallback",
+        "ast_grep": sg,
+        "backend": "ast-grep" if sg else "rg-fallback",
         "rules": {
             k: {"ast_scope": v.get("ast_scope", "none"),
                 "rg_patterns": len(v.get("patterns", [])),

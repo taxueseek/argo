@@ -283,6 +283,57 @@ class TestEndToEndIfToolPresent(unittest.TestCase):
         backend = "astgrep-structural" if ss.sg_available() else "rg-structural"
         self.assertIn(backend, first_line, first_line)
 
+    def test_full_scope_does_not_drop_non_keyword_ast_hits(self):
+        """ast_scope=full 时，首行不含 _DEF_KEYWORDS 的合法命中不得被静默丢弃。"""
+        import json as _json
+        fake_stream = _json.dumps({
+            "file": "/tmp/demo.py",
+            "range": {"start": {"line": 4}},
+            "text": "eval(user_input)",
+        }) + "\n"
+
+        class _Proc:
+            returncode = 0
+            stdout = fake_stream
+
+        orig_resolve = ss._resolve_sg
+        ss._resolve_sg = lambda: "/usr/bin/ast-grep"
+        try:
+            rule = {"ast_scope": "full", "ast_patterns": [(("py",), "eval($X)")]}
+            hits, scope = ss.structural_search_ast(
+                rule, "/tmp", ["!*.log"], 10, runner=lambda cmd, timeout=None: _Proc()
+            )
+        finally:
+            ss._resolve_sg = orig_resolve
+
+        self.assertEqual(scope, "full")
+        self.assertEqual(len(hits), 1)
+        self.assertIn("eval(user_input)", hits[0][2])
+
+    def test_structural_json_empty_and_error_return_valid_json(self):
+        """--structural --json 在无匹配或未知规则时必须返回合法 JSON，不能吐纯文本。"""
+        import json as _json
+        proc_path = SCRIPTS / "seek.py"
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "clean.py").write_text("x = 1\n", encoding="utf-8")
+            empty_res = __import__("subprocess").run(
+                [sys.executable, str(proc_path), "裸except", "--structural", "--path", d, "--json"],
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(empty_res.returncode, 1)
+            empty_obj = _json.loads(empty_res.stdout)
+            self.assertEqual(empty_obj["count"], 0)
+            self.assertEqual(empty_obj["results"], [])
+
+            err_res = __import__("subprocess").run(
+                [sys.executable, str(proc_path), "不存在的规则", "--structural", "--path", d, "--json"],
+                capture_output=True, text=True, timeout=60,
+            )
+            self.assertEqual(err_res.returncode, 1)
+            err_obj = _json.loads(err_res.stdout)
+            self.assertFalse(err_obj["ok"])
+            self.assertIn("error", err_obj)
+
 
 if __name__ == "__main__":
     unittest.main()
