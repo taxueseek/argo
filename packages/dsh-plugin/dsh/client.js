@@ -942,7 +942,7 @@ window.__ModuleLoader__.load({
             return h('div', { style: { padding: 12, color: '#dc2626', fontSize: 12, whiteSpace: 'pre-wrap' } },
               '[argo-dsh] 设置页渲染异常：' + String(this.state.error?.message ?? this.state.error));
           }
-          return this.props.children;
+          return /** @type {any} */ (this).props.children;
         }
       }
       : null;

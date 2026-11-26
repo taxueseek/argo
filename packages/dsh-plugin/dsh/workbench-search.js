@@ -445,7 +445,7 @@ export function isPathWithinRoot(targetPath, allowedRoot) {
 // 本地代码卡片一跳精读：复用 local-seek 的 --symbol-body / --lines / --outline JSON 输出
 export async function inspectLocalFile(
   env,
-  { filePath, allowedRoot = '', symbol = '', lines = '', signal = null, runner = runArgoCli } = {},
+  { filePath = '', allowedRoot = '', symbol = '', lines = '', signal = null, runner = runArgoCli } = {},
 ) {
   const target = String(filePath || '').replace(/^file:\/\//, '').trim()
   if (!target || target.includes('\0')) return { ok: false, error: 'invalid_path' }
@@ -467,7 +467,7 @@ export async function inspectLocalFile(
 }
 
 // 工作台一键沉淀研报：通过 stdin JSON 管道直连 `argo note study --from-json`
-export async function saveNoteStudy(env, { payload, title = '', signal = null, runner = runArgoCli } = {}) {
+export async function saveNoteStudy(env, { payload = null, title = '', signal = null, runner = runArgoCli } = {}) {
   if (!payload || typeof payload !== 'object') return { ok: false, error: 'missing_payload' }
   const cliArgs = ['note', 'study', '--from-json']
   if (title && String(title).trim()) cliArgs.push('--title', String(title).trim())

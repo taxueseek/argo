@@ -71,6 +71,7 @@ import {
  */
 let Schema
 try {
+  /** @type {any} */
   const schemastery = await import('@deepseek-ai/schemastery')
   Schema = schemastery.default ?? schemastery.Schema ?? schemastery
 } catch {

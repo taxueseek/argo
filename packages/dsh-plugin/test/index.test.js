@@ -1399,7 +1399,8 @@ test('pool: already-aborted signal never spawns a connection', async () => {
 
 test('pool: request timeout evicts the wedged connection so the next call spawns a fresh one', async () => {
   stubEnv({ ARGO_STUB_DELAY_MS: '2000' })
-  const tool = stubTool({ nativeTimeoutMs: 120, searchConcurrency: 1 })
+  // 留足 300ms 给并发单测下的 Node 子进程启动与 spawn 计数落盘（仍远小于 2000ms stub 延迟）
+  const tool = stubTool({ nativeTimeoutMs: 300, searchConcurrency: 1 })
   await assert.rejects(
     () => tool.execute({ query: 'slow' }),
     (err) => err.code === 'ARGO_TIMEOUT',

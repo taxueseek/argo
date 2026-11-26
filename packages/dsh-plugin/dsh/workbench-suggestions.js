@@ -152,7 +152,7 @@ function cleanTitle(raw) {
     .slice(0, 44)
 }
 
-export async function refreshDailyHotspots({ runCli, now = new Date() } = {}) {
+export async function refreshDailyHotspots({ runCli = undefined, now = new Date() } = {}) {
   const store = loadHotspotStore()
   if (typeof runCli !== 'function') return store
   const lock = acquireStateFileLock(`${hotspotStoreFile()}.lock`)
@@ -244,7 +244,7 @@ async function collectHotspots(store, runCli, now) {
  * buildRunner 每次触发时调用，返回当次生效的 runCli（可 async，内部先取 env/凭证）。
  */
 export function createHotspotRefresher({
-  buildRunner,
+  buildRunner = undefined,
   loadStore = loadHotspotStore,
   failRetryMs = 60 * 60 * 1000,
 } = {}) {

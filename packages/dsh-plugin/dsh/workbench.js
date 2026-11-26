@@ -443,7 +443,7 @@ export function createWorkbenchHandler(ctx, config, getCredentials, options = {}
             resolveArgoBin({ PATH: mergedLaunchdPath() }),
             ['ego-search', action],
             { timeout: 8000, env: { ...process.env, PATH: mergedLaunchdPath() } },
-            () => resolve(),
+            () => resolve(undefined),
           )
         })
         sendJson(res, 200, { ok: true, egoSearch: readEgoSearchStatus() })

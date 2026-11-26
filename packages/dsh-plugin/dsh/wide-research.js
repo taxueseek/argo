@@ -408,6 +408,7 @@ export async function startStructured(ctx, providerName, parent, signal, label,
         delivery: 'caller',
       })
     } else {
+      /** @type {any} */
       const legacy = { label, ...base, signal }
       if (toolFilter !== undefined) legacy.toolFilter = toolFilter
       run = await ctx.subagents.start(providerName, legacy)
