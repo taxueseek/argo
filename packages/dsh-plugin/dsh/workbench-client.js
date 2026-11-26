@@ -870,13 +870,13 @@ export function mountArgoWorkbench(ctx, react) {
           ctx.get?.('layout')?.selectPanel?.('argo-workbench')
         } catch { /* ignore */ }
       },
-    }, 'Argo 分析')
+    }, resolveLang() === 'en' ? 'Argo Analyze' : 'Argo 分析')
   }
 
   const offs = [
     ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'argo-workbench' }, WorkbenchApp)),
     ctx.slots.inject('sidebar.panellist', () => ctx.slots.register(
-      { name: 'sidebar.panellist', id: 'argo-workbench', order: 5, label: 'Argo 搜索' },
+      { name: 'sidebar.panellist', id: 'argo-workbench', order: 5, label: () => (resolveLang() === 'en' ? 'Argo Search' : 'Argo 搜索') },
       ({ size = 20, active }) => h('svg', {
         width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
         stroke: active ? '#ea580c' : 'currentColor', strokeWidth: 1.8,

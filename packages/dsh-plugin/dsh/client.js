@@ -310,9 +310,9 @@ window.__ModuleLoader__.load({
     };
 
     const PRESETS = [
-      { id: 'fast', titleKey: 'presetFast', descKey: 'presetFastDesc', badge: '15s 超时', badgeColor: 'blue', env: { ARGO_TFIDF_RERANK: '0', ARGO_NUMBER_CROSSCHECK: '0', ARGO_PAID_SEARCH: 'off', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.5' }, fields: { searchTimeoutMs: 15000, fetchTimeoutMs: 15000 } },
-      { id: 'standard', titleKey: 'presetStandard', descKey: 'presetStandardDesc', badge: '标准生产', badgeColor: 'green', env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_PAID_SEARCH: 'auto', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.8' }, fields: { searchTimeoutMs: 30000, fetchTimeoutMs: 25000 } },
-      { id: 'deep', titleKey: 'presetDeep', descKey: 'presetDeepDesc', badge: '深度核验', badgeColor: 'blue', env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_SEMANTIC_EVIDENCE: '1', ARGO_ADAPTIVE_GRACE: '1', ARGO_PAID_SEARCH: 'auto' }, fields: { searchTimeoutMs: 45000, fetchTimeoutMs: 35000, nativeTimeoutMs: 60000 } },
+      { id: 'fast', titleKey: 'presetFast', descKey: 'presetFastDesc', badge: '15s 超时', badgeEn: '15s timeout', badgeColor: 'blue', env: { ARGO_TFIDF_RERANK: '0', ARGO_NUMBER_CROSSCHECK: '0', ARGO_PAID_SEARCH: 'off', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.5' }, fields: { searchTimeoutMs: 15000, fetchTimeoutMs: 15000 } },
+      { id: 'standard', titleKey: 'presetStandard', descKey: 'presetStandardDesc', badge: '标准生产', badgeEn: 'Balanced', badgeColor: 'green', env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_PAID_SEARCH: 'auto', ARGO_ADAPTIVE_GRACE: '1', ARGO_SERIAL_STAGGER_S: '0.8' }, fields: { searchTimeoutMs: 30000, fetchTimeoutMs: 25000 } },
+      { id: 'deep', titleKey: 'presetDeep', descKey: 'presetDeepDesc', badge: '深度核验', badgeEn: 'Deep verify', badgeColor: 'blue', env: { ARGO_TFIDF_RERANK: '1', ARGO_NUMBER_CROSSCHECK: '1', ARGO_MINHASH_DEDUPE: '1', ARGO_SEMANTIC_EVIDENCE: '1', ARGO_ADAPTIVE_GRACE: '1', ARGO_PAID_SEARCH: 'auto' }, fields: { searchTimeoutMs: 45000, fetchTimeoutMs: 35000, nativeTimeoutMs: 60000 } },
     ];
 
     const col = (gap) => ({ display: 'flex', flexDirection: 'column', gap });
@@ -761,11 +761,12 @@ window.__ModuleLoader__.load({
         const searchOn = value.searchProviderEnabled !== false;
         const fetchOn = value.fetchProviderEnabled !== false;
         const poolConc = asNumber(value.searchConcurrency, DEFAULTS.searchConcurrency);
+        const isEn = lang === 'en';
         const metrics = [
-          { k: 'pool', label: t('poolTitle'), val: `${poolConc} 并发`, dot: poolConc > 0, sub: `${t('poolStatusHealthy')} · 空闲回收 ${asNumber(value.searchIdleMs, DEFAULTS.searchIdleMs) / 1000}s` },
-          { k: 'seam', label: t('accessTitle'), val: searchOn && fetchOn ? '双路接管' : (searchOn || fetchOn ? '单路接管' : '未接管'), sub: `Search: ${searchOn ? 'ON' : 'OFF'} · Fetch: ${fetchOn ? 'ON' : 'OFF'}` },
-          { k: 'tools', label: t('toolsTitle'), val: `${asArray(value.nativeTools).length} / ${TOOLS.length}`, sub: '已就绪原生 MCP 工具' },
-          { k: 'keys', label: t('keysTitle'), val: `${configuredKeys} 配置 · ${CORE_ENGINES.filter((e) => e.keyless).length} 免密`, sub: '覆盖全局多源引擎' },
+          { k: 'pool', label: t('poolTitle'), val: isEn ? `${poolConc} concurrent` : `${poolConc} 并发`, dot: poolConc > 0, sub: `${t('poolStatusHealthy')} · ${isEn ? 'idle recycle' : '空闲回收'} ${asNumber(value.searchIdleMs, DEFAULTS.searchIdleMs) / 1000}s` },
+          { k: 'seam', label: t('accessTitle'), val: searchOn && fetchOn ? (isEn ? 'Dual seam' : '双路接管') : (searchOn || fetchOn ? (isEn ? 'Single seam' : '单路接管') : (isEn ? 'Direct' : '未接管')), sub: `Search: ${searchOn ? 'ON' : 'OFF'} · Fetch: ${fetchOn ? 'ON' : 'OFF'}` },
+          { k: 'tools', label: t('toolsTitle'), val: `${asArray(value.nativeTools).length} / ${TOOLS.length}`, sub: isEn ? 'Native tools ready' : '已就绪原生工具' },
+          { k: 'keys', label: t('keysTitle'), val: isEn ? `${configuredKeys} configured · ${CORE_ENGINES.filter((e) => e.keyless).length} keyless` : `${configuredKeys} 配置 · ${CORE_ENGINES.filter((e) => e.keyless).length} 免密`, sub: isEn ? 'Multi-source engine coverage' : '覆盖全局多源引擎' },
         ];
         panel.push(h('div', { key: 'metrics', style: S.metricGrid }, metrics.map((m) => h('div', { key: m.k, style: S.metricCard }, [
           h('span', { key: 'l', style: S.metricLabel }, m.label),
@@ -784,8 +785,8 @@ window.__ModuleLoader__.load({
         panel.push(h(Card, { key: 'route', title: t('routeHealthTitle'), hint: t('routeHealthHint') }, [
           routeHealth && Array.isArray(routeHealth.samples) && routeHealth.samples.length > 0
             ? h('div', { key: 'rows', style: col(6) }, [
-                rhSummary ? h('div', { key: 'sum', style: S.sub }, `${rhSummary.total} 条 · 兜底 ${Math.round((rhSummary.fallbackRate || 0) * 100)}%${topLangs ? ' · ' + topLangs : ''}`) : null,
-                topDomains ? h('div', { key: 'doms', style: S.sub }, `高频域：${topDomains}`) : null,
+                rhSummary ? h('div', { key: 'sum', style: S.sub }, `${rhSummary.total} ${isEn ? 'queries · fallback' : '条 · 兜底'} ${Math.round((rhSummary.fallbackRate || 0) * 100)}%${topLangs ? ' · ' + topLangs : ''}`) : null,
+                topDomains ? h('div', { key: 'doms', style: S.sub }, `${isEn ? 'Top domains: ' : '高频域：'}${topDomains}`) : null,
                 ...routeHealth.samples.slice(-5).reverse().map((r, i) => {
                   const langTag = r.effective_lang || r.primary_lang || '-';
                   const intentTag = Array.isArray(r.intents) && r.intents.length > 0 ? ` · ${r.intents.join(',')}` : '';
@@ -805,7 +806,7 @@ window.__ModuleLoader__.load({
             const isMatch = Object.entries(p.fields || {}).every(([k, v]) => cur[k] === v)
               && Object.entries(p.env || {}).every(([k, v]) => String(em[k] ?? '') === String(v));
             return h('div', { key: p.id, style: S.presetCard(isMatch), onClick: () => { void applyPreset(p); } }, [
-              h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, t(p.titleKey)), h('span', { key: 'badge', style: S.badge(p.badgeColor) }, p.badge)]),
+              h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, t(p.titleKey)), h('span', { key: 'badge', style: S.badge(p.badgeColor) }, isEn ? p.badgeEn : p.badge)]),
               h('span', { key: 'd', style: S.sub }, t(p.descKey)),
             ]);
           })),
@@ -836,7 +837,7 @@ window.__ModuleLoader__.load({
         panel.push(h(Card, { key: 'presets', title: t('toolPresetTitle'), hint: t('toolPresetHint') }, [
           h('div', { key: 'grid', style: S.presetGrid }, TOOL_PRESETS.map((pr) =>
             h('button', { key: pr.id, type: 'button', disabled, style: S.presetCard(false), onClick: () => { void applyToolPreset(pr.tools); } }, [
-              h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, lang === 'en' ? pr.en : pr.zh), h('span', { key: 'badge', style: S.badge('blue') }, `${pr.tools.length} 工具`)]),
+              h('div', { key: 't', style: rowBetween() }, [h('span', { key: 'title', style: S.label }, lang === 'en' ? pr.en : pr.zh), h('span', { key: 'badge', style: S.badge('blue') }, `${pr.tools.length}${lang === 'en' ? ' tools' : ' 工具'}`)]),
               h('span', { key: 'd', style: S.sub }, lang === 'en' ? pr.descEn : pr.descZh),
             ]))),
         ]));

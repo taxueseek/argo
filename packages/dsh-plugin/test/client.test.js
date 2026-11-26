@@ -659,3 +659,73 @@ test('keys tab does not leak raw keySource i18n key for unknown hyphenated sourc
   assert.ok(texts.some((s) => s.includes('项目 .env')), '已知 source=project-env 应正常显示中文标签')
   assert.ok(!texts.some((s) => s.includes('keySourceCustomVault')), '未知连字符 source 不应泄漏原始 i18n key')
 })
+
+test('ArgoPanel in English locale leaks zero CJK characters across all 7 tabs and summary', () => {
+  // 多语言机械门禁：切到 en 后，7 个页签（含 routeHealth 有样本态）与 summary 视图
+  // 不得残留硬编码中文，避免双语字典维护漏项。
+  const definition = loadBundle()
+  const { react, hooks, reset } = statefulReact()
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error(`unexpected require: ${id}`)
+  })
+  const value = {
+    nativeTools: ['argo_search', 'argo_fetch'],
+    keyRefs: ['DEEPSEEK_API_KEY'],
+    argoEnv: ['ARGO_NO_CACHE=1'],
+    searchProviderEnabled: true,
+    fetchProviderEnabled: true,
+  }
+  const props = {
+    useArgoForm: (select) => select({ status: 'ready', writable: true, value }),
+    set: async () => true,
+    mutate: async () => true,
+    credentials: { describe: async () => ({ ok: true, value: {} }) },
+    remote: { $on: () => () => {} },
+    locale: { getSnapshot: () => ({ active: 'en' }), subscribe: () => () => {} },
+    view: 'page',
+  }
+  const collectTexts = (node, out = []) => {
+    if (!node) return out
+    if (Array.isArray(node)) { node.forEach((n) => collectTexts(n, out)); return out }
+    if (typeof node !== 'object') { out.push(String(node)); return out }
+    if (typeof node.type === 'function') {
+      const nextProps = { ...node.props }
+      if (node.children && node.children.length > 0) {
+        nextProps.children = node.children.length === 1 ? node.children[0] : node.children
+      }
+      return collectTexts(node.type(nextProps), out)
+    }
+    if (typeof node.props?.placeholder === 'string') out.push(node.props.placeholder)
+    ;(node.children || []).forEach((c) => collectTexts(c, out))
+    return out
+  }
+  const leaks = []
+  for (const tab of ['dashboard', 'access', 'tools', 'engines', 'keys', 'research', 'advanced']) {
+    reset()
+    hooks.length = 0
+    hooks[1] = tab
+    if (tab === 'dashboard') {
+      // hooks[14] = routeHealth
+      hooks[14] = {
+        summary: { total: 10, fallbackRate: 0.2, langCounts: { en: 8 }, topDomains: [{ name: 'tech', count: 5 }] },
+        samples: [{ domain: 'tech', engine: 'brave', effective_lang: 'en', intents: ['docs'], confidence: 0.9 }],
+      }
+    }
+    const cjk = [...new Set(collectTexts(mod.ArgoPanel(props)).filter((s) => /[\u4e00-\u9fff]/.test(s)))]
+    if (cjk.length > 0) leaks.push(`${tab}: ${cjk.join(' | ')}`)
+  }
+  reset()
+  hooks.length = 0
+  const sumEn = mod.ArgoPanel({ ...props, view: 'summary' })
+  if (/[\u4e00-\u9fff]/.test(String(sumEn))) leaks.push(`summary: ${sumEn}`)
+  assert.deepEqual(leaks, [], `英文模式下仍残留硬编码中文：\n${leaks.join('\n')}`)
+})
+
+test('workbench-client sidebar.panellist label uses locale-aware thunk (no hardcoded CJK)', () => {
+  const src = readFileSync(new URL('../dsh/workbench-client.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(src, /id:\s*'argo-workbench'[^}]*label:\s*'Argo 搜索'/,
+    'sidebar.panellist 的 label 应使用随 locale 切换的函数，而非硬编码中文字符串')
+  assert.match(src, /id:\s*'argo-workbench'[^}]*label:\s*\(\)\s*=>/,
+    'sidebar.panellist 应提供 label thunk 供 DSH resolveSlotLabel 响应语言切换')
+})

@@ -1320,7 +1320,6 @@ test('fetch: abort during the single-shot fallback is classified as aborted, not
   // 没有这条计数，这个失败是静默的。
   let fallbackCalls = 0
   const controller = new AbortController()
-  setTimeout(() => controller.abort(), 60)
   const started = Date.now()
   await assert.rejects(
     () => fetchViaArgo('https://stub.example/page', controller.signal, {
@@ -1332,6 +1331,8 @@ test('fetch: abort during the single-shot fallback is classified as aborted, not
     }, {
       run: (spec, timeoutMs, signal) => {
         fallbackCalls += 1
+        // 进入单发兜底后再触发 abort，消除「池路尚未失败就被外部定时 abort 抢先」的竞态抖动
+        setTimeout(() => controller.abort(), 20)
         return runNativeCall({ command: '/bin/sleep', args: ['3'] }, timeoutMs, signal)
       },
     }),
