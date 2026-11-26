@@ -448,3 +448,214 @@ test('SafeArgoPanel wraps ArgoPanel in an ErrorBoundary that isolates render fai
   assert.equal(fallback.type, 'div')
   assert.match(String(fallback.children[0]), /boom/)
 })
+
+test('plugins.item honours view=summary vs view=page and label follows locale (issue #56)', () => {
+  // 回归 issue #56：DSH 0.2.3 详情页头部用 view=summary、正文用 view=page 渲染同一
+  // plugins.item 槽位。旧实现 PluginSummaryItem 强行覆写 view='summary'，导致正文
+  // 配置区空白且摘要重复显示两次。必须通过实际注册进 slots 的组件入口验证，而不是绕过
+  // 注册直接调 mod.ArgoPanel。
+  const definition = loadBundle()
+  const { react, hooks, reset } = statefulReact()
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error(`unexpected require: ${id}`)
+  })
+
+  let activeLocale = 'zh'
+  const registered = new Map()
+  const value = {
+    nativeTools: ['argo_search', 'argo_fetch'],
+    keyRefs: ['DEEPSEEK_API_KEY'],
+    argoEnv: [],
+    searchProviderEnabled: true,
+    fetchProviderEnabled: true,
+  }
+  const form = {
+    getSnapshot: () => ({ status: 'ready', value, writable: true }),
+    subscribe: () => () => {},
+    set: async () => true,
+    mutate: async () => true,
+  }
+  const ctx = {
+    configForms: {
+      get: () => form,
+      whileServed: (_ns, register) => register(new Set(['wide-research'])),
+    },
+    slots: {
+      inject: (_name, register) => register(),
+      register: (options, component) => {
+        registered.set(options.name, { options, component })
+        return () => {}
+      },
+    },
+    locale: { getSnapshot: () => ({ active: activeLocale }), subscribe: () => () => {} },
+    remote: { credentials: {}, $on: () => () => {} },
+    effect: (callback) => { callback() },
+  }
+  mod.apply(ctx)
+
+  const itemEntry = registered.get('plugins.item')
+  const sectionEntry = registered.get('settings.section')
+  assert.ok(itemEntry && sectionEntry)
+
+  // label 跟随宿主语言切换
+  assert.equal(itemEntry.options.label(), 'Argo 搜索')
+  activeLocale = 'en'
+  assert.equal(itemEntry.options.label(), 'Argo Search')
+  assert.equal(sectionEntry.options.label(), 'Argo Search')
+  activeLocale = 'zh'
+
+  const baseProps = {
+    useArgoForm: (select) => select(form.getSnapshot()),
+    set: form.set,
+    mutate: form.mutate,
+    credentials: { describe: async () => ({ ok: true, value: {} }) },
+    remote: ctx.remote,
+    locale: ctx.locale,
+  }
+
+  // 迷你渲染：展开 SafeArgoPanel -> ArgoPanel
+  const renderEntry = (entry, extraProps) => {
+    reset()
+    hooks.length = 0
+    let node = entry.component({ ...baseProps, ...extraProps })
+    while (node && typeof node === 'object' && typeof node.type === 'function') {
+      const nextProps = { ...node.props }
+      if (node.children && node.children.length > 0) {
+        nextProps.children = node.children.length === 1 ? node.children[0] : node.children
+      }
+      node = node.type(nextProps)
+    }
+    return node
+  }
+
+  // view=summary -> 单行字符串摘要
+  const summaryOut = renderEntry(itemEntry, { view: 'summary' })
+  assert.equal(typeof summaryOut, 'string')
+  assert.match(summaryOut, /Argo · web_search/)
+
+  // view=page -> 完整配置面板（div，绝不能退化成字符串摘要）
+  const pageOut = renderEntry(itemEntry, { view: 'page' })
+  assert.equal(typeof pageOut, 'object')
+  assert.equal(pageOut.type, 'div', 'plugins.item 在 view=page 下必须渲染完整配置面板')
+
+  // settings.section（无 view）-> 完整配置面板
+  const sectionOut = renderEntry(sectionEntry, {})
+  assert.equal(typeof sectionOut, 'object')
+  assert.equal(sectionOut.type, 'div')
+})
+
+test('engines tab saveEnvGroup persists edits and clears draft without ReferenceError', async () => {
+  // 回归同类缺陷：saveEnvGroup 成功写入后引用了未定义的 specs 变量，导致保存必然抛
+  // ReferenceError: specs is not defined，既在界面报红又清不掉 envDraft。
+  const definition = loadBundle()
+  const { react, hooks, reset } = statefulReact()
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error(`unexpected require: ${id}`)
+  })
+
+  const writes = []
+  const value = { nativeTools: [], keyRefs: [], argoEnv: [] }
+  const props = {
+    useArgoForm: (select) => select({ status: 'ready', writable: true, value }),
+    set: async (field, next) => { writes.push({ field, next }); return true },
+    mutate: async () => true,
+    credentials: { describe: async () => ({ ok: true, value: {} }) },
+    remote: { $on: () => () => {} },
+    locale: { getSnapshot: () => ({ active: 'zh' }), subscribe: () => () => {} },
+    view: 'page',
+  }
+
+  const collect = (node, out = []) => {
+    if (!node) return out
+    if (Array.isArray(node)) { node.forEach((n) => collect(n, out)); return out }
+    if (typeof node !== 'object') return out
+    if (typeof node.type === 'function') {
+      const nextProps = { ...node.props }
+      if (node.children && node.children.length > 0) {
+        nextProps.children = node.children.length === 1 ? node.children[0] : node.children
+      }
+      return collect(node.type(nextProps), out)
+    }
+    out.push(node)
+    ;(node.children || []).forEach((c) => collect(c, out))
+    return out
+  }
+
+  // 首次渲染 engines tab 并编辑 ARGO_PROXY 输入框
+  reset()
+  hooks.length = 0
+  hooks[1] = 'engines'
+  let nodes = collect(mod.ArgoPanel(props))
+  const proxyLabel = nodes.find((n) => n.type === 'label' && JSON.stringify(n.children).includes('argo 全局代理'))
+  assert.ok(proxyLabel, '应找到 argo 全局代理 字段标签')
+  const proxyInput = collect(proxyLabel).find((n) => n.type === 'input')
+  assert.ok(proxyInput, '应找到 ARGO_PROXY 输入框')
+  proxyInput.props.onChange({ target: { value: 'http://127.0.0.1:7890' } })
+
+  // 第二次渲染拿到绑定了新 envDraft 的 net 分组保存按钮并点击
+  reset()
+  nodes = collect(mod.ArgoPanel(props))
+  const saveButtons = nodes.filter((n) => n.type === 'button' && n.children.includes('保存'))
+  assert.ok(saveButtons.length > 0, '应存在引擎分组保存按钮')
+  for (const btn of saveButtons) btn.props.onClick()
+  // 等微任务队列完成异步 saveEnvGroup
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  assert.equal(writes.length, 1, '应写入一次 argoEnv')
+  assert.equal(writes[0].field, 'argoEnv')
+  assert.ok(writes[0].next.includes('ARGO_PROXY=http://127.0.0.1:7890'))
+
+  // 第三次渲染检查状态提示为「已保存」且未报错，且 envDraft 已清空
+  reset()
+  nodes = collect(mod.ArgoPanel(props))
+  const statusNode = nodes.find((n) => n.props && n.props.role === 'status')
+  assert.ok(statusNode, '保存后应显示状态提示')
+  assert.equal(statusNode.children[0], '已保存', `保存不应触发 ReferenceError，实际提示：${statusNode.children[0]}`)
+})
+
+test('keys tab does not leak raw keySource i18n key for unknown hyphenated source', () => {
+  const definition = loadBundle()
+  const { react, hooks, reset } = statefulReact()
+  const mod = definition.factory((id) => {
+    if (id === 'react') return react
+    throw new Error(`unexpected require: ${id}`)
+  })
+  const props = {
+    useArgoForm: (select) => select({ status: 'ready', writable: true, value: { nativeTools: [], keyRefs: [], argoEnv: [] } }),
+    set: async () => true,
+    mutate: async () => true,
+    credentials: { describe: async () => ({ ok: true, value: {} }) },
+    remote: { $on: () => () => {} },
+    locale: { getSnapshot: () => ({ active: 'zh' }), subscribe: () => () => {} },
+    view: 'page',
+  }
+
+  // 预置 tab='keys' 与 credentials（hooks[6]）
+  reset()
+  hooks.length = 0
+  hooks[1] = 'keys'
+  hooks[6] = {
+    DEEPSEEK_API_KEY: { configured: true, writable: true, source: 'custom-vault' },
+    TAVILY_API_KEY: { configured: true, writable: true, source: 'project-env' },
+  }
+  const texts = []
+  const walk = (node) => {
+    if (!node) return
+    if (Array.isArray(node)) { node.forEach(walk); return }
+    if (typeof node !== 'object') { texts.push(String(node)); return }
+    if (typeof node.type === 'function') {
+      const nextProps = { ...node.props }
+      if (node.children && node.children.length > 0) {
+        nextProps.children = node.children.length === 1 ? node.children[0] : node.children
+      }
+      walk(node.type(nextProps))
+      return
+    }
+    ;(node.children || []).forEach(walk)
+  }
+  walk(mod.ArgoPanel(props))
+  assert.ok(texts.some((s) => s.includes('项目 .env')), '已知 source=project-env 应正常显示中文标签')
+  assert.ok(!texts.some((s) => s.includes('keySourceCustomVault')), '未知连字符 source 不应泄漏原始 i18n key')
+})

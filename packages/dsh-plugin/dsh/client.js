@@ -652,7 +652,7 @@ window.__ModuleLoader__.load({
           if (ok) {
             setEnvDraft((prev) => {
               const next = { ...prev };
-              for (const spec of specs) delete next[spec.name];
+              for (const name of Object.keys(updates)) delete next[name];
               return next;
             });
           }
@@ -720,11 +720,12 @@ window.__ModuleLoader__.load({
         const info = credentials[entry.ref];
         const configured = info && info.configured === true;
         const rowWritable = !info || info.writable !== false;
-        const sourceLabel = configured && typeof info.source === 'string'
-          ? t('keySource' + info.source.split('-').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(''))
+        const sourceKey = configured && typeof info.source === 'string'
+          ? 'keySource' + info.source.split('-').map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('')
           : '';
+        const sourceLabel = sourceKey ? t(sourceKey) : '';
         const statusParts = [configured ? t('configured') : t('notConfigured')];
-        if (sourceLabel && sourceLabel !== 'keySource' + info.source) statusParts.push(sourceLabel);
+        if (sourceLabel && sourceLabel !== sourceKey) statusParts.push(sourceLabel);
         if (configured && !rowWritable) statusParts.push(t('keyReadonly'));
         if (configured && rowWritable && info.source !== undefined && info.source !== 'file') statusParts.push(t('keyOverrideHint'));
         return h('div', { key: entry.ref, style: S.keyRow }, [
@@ -949,22 +950,17 @@ window.__ModuleLoader__.load({
       return PanelBoundary ? h(PanelBoundary, null, h(ArgoPanel, props)) : h(ArgoPanel, props);
     }
 
-    // plugins.item 仅渲染一行只读摘要，完整 7-Tab 配置收敛至唯一 settings.section 入口。
-    function PluginSummaryItem(props) {
-      return SafeArgoPanel({ ...props, view: 'summary' });
-    }
-
     function apply(ctx) {
       const form = ctx.configForms.get(NS);
       const locale = ctx.locale ?? (typeof ctx.get === 'function' ? ctx.get('locale') : undefined);
       const credentials = ctx.remote ? ctx.remote.credentials : undefined;
-      const label = () => 'Argo 搜索';
+      const label = () => (locale && locale.getSnapshot && locale.getSnapshot().active === 'en' ? 'Argo Search' : 'Argo 搜索');
       const injected = () => ({ hooks: { argoForm: form }, set: (f, n) => form.set(f, n), mutate: (ops) => form.mutate(ops), credentials, remote: ctx.remote, locale });
 
       ctx.effect(() => ctx.configForms.whileServed([NS], () => {
         const offs = [
           ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: SECTION_ID, order: 26, label, inject: injected }, SafeArgoPanel)),
-          ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: SECTION_ID, order: 50, label, inject: injected }, PluginSummaryItem)),
+          ctx.slots.inject('plugins.item', () => ctx.slots.register({ name: 'plugins.item', id: SECTION_ID, order: 50, label, inject: injected }, SafeArgoPanel)),
         ];
         return () => { for (const off of offs) if (typeof off === 'function') off(); };
       }), 'argo-dsh: settings page');
