@@ -124,6 +124,14 @@ EVALS = [
         "expect_msg": "未知结构查询",
     },
     {
+        # 后端标注必须归因真实实现：装了 ast-grep 走 AST，未装回落 rg。
+        # 两种标注都合法，但**必须**是其中之一——恒写 rg 会把 AST 的精确结果
+        # 误读成正则近似结果（同形即误读）。
+        "name": "结构-后端标注",
+        "args": ["裸except", "--structural", "--path", CORPUS, "--max", "3"],
+        "expect_any_msg": ["astgrep-structural", "rg-structural"],
+    },
+    {
         "name": "git-log",
         # 夹具从 README.md（已被删除）换成 SEEK：seek.py 在 argo 仓内有提交历史
         "args": ["--git-log", str(SEEK)],
@@ -190,6 +198,8 @@ def run_one(ev):
         fails.append(f"模式非「{ev['expect_mode']}」")
     if "expect_msg" in ev and ev["expect_msg"] not in out:
         fails.append(f"缺少提示「{ev['expect_msg']}」")
+    if "expect_any_msg" in ev and not any(m in out for m in ev["expect_any_msg"]):
+        fails.append(f"缺少任一标注「{' 或 '.join(ev['expect_any_msg'])}」")
     if "elapsed_lt" in ev and elapsed > ev["elapsed_lt"]:
         fails.append(f"耗时 {elapsed}ms 超限 {ev['elapsed_lt']}ms")
     return ev["name"], fails, elapsed, proc.returncode

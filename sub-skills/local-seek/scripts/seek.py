@@ -1408,95 +1408,24 @@ from seek_git import (  # noqa: E402
     git_log as _git_log_impl,
 )
 
-
-STRUCTURAL_RULES = {
-    "empty-catch": {
-        "aliases": ("empty catch", "空catch", "空catch块", "空捕获", "空异常处理"),
-        "patterns": [
-            (("js", "jsx", "ts", "tsx"), r"catch\s*\([^)]*\)\s*\{\s*\}"),
-        ],
-    },
-    "bare-except": {
-        "aliases": ("bare except", "裸except", "裸异常", "无类型except"),
-        "patterns": [
-            (("py",), r"except\s*:"),
-        ],
-    },
-    "unwrapped-error": {
-        "aliases": ("unwrapped error", "错误未包装", "裸错误返回", "裸return err"),
-        "patterns": [
-            (("go",), r"return\s+err\b"),
-        ],
-    },
-    "decorated-fn": {
-        "aliases": ("decorated function", "装饰函数", "装饰器函数", "decorator"),
-        "patterns": [
-            (("py",), r"^\s*@\w[\w.]*\s*\n\s*(async\s+)?def\s+"),
-        ],
-    },
-    "function-def": {
-        "aliases": ("function definition", "函数定义", "找函数"),
-        "patterns": [
-            (("py", "pyi"), r"^\s*(async\s+)?def\s+\w+"),
-            (("js", "jsx", "ts", "tsx"), r"^\s*(export\s+)?(async\s+)?function\s+\w+"),
-            (("go",), r"^\s*func\s+\w+"),
-            (("rs",), r"^\s*(pub\s+)?fn\s+\w+"),
-        ],
-    },
-    "class-def": {
-        "aliases": ("class definition", "类定义", "找类"),
-        "patterns": [
-            (("py", "pyi"), r"^\s*class\s+\w+"),
-            (("js", "jsx", "ts", "tsx"), r"^\s*(export\s+)?class\s+\w+"),
-            (("go",), r"^\s*type\s+\w+\s+struct\b"),
-            (("java",), r"^\s*(public|private|protected)?\s*class\s+\w+"),
-        ],
-    },
-}
-
-_STRUCT_ALIAS = {}
-for _key, _rule in STRUCTURAL_RULES.items():
-    _STRUCT_ALIAS[_key] = _key
-    for _a in _rule["aliases"]:
-        _STRUCT_ALIAS[_a] = _key
+# 结构搜索已拆至 seek_structural.py（含 ast-grep 优先与 rg 回落），此处同名
+# re-export 保持既有调用与测试签名不变。拆分原因：本文件受 1000 行门禁管辖，
+# 结构规则表与 AST 模式表只会更长。runner 注入点保留本模块 run，让既有
+# 「mock seek.run 拦超时」的探测口径继续成立。
+from seek_structural import (  # noqa: E402,F401
+    STRUCTURAL_RULES,
+    describe_backend as describe_structural_backend,
+    resolve_rule as resolve_structural_rule,
+    sg_available,
+    structural_search as _structural_search_impl,
+)
 
 
 def structural_search(rule_name, path, excludes, max_results, dots=False,
                       timeout=None):
-    """结构搜索：按语义规则（空 catch/裸 except/未包装错误/装饰函数等）检索。
-    零安装实现：rg -U 多行 + 语言感知 pattern；本机装 ast-grep 后可升级为 AST 精确匹配。"""
-    key = _STRUCT_ALIAS.get(rule_name.strip().lower())
-    if not key:
-        avail = "、".join(STRUCTURAL_RULES)
-        return [], f"未知结构查询「{rule_name}」，可用：{avail}"
-    results = []
-    for exts, pat in STRUCTURAL_RULES[key]["patterns"]:
-        cmd = ["rg", "--line-number", "--no-heading", "-U", "-i", "--color", "never"]
-        if dots:
-            cmd += ["--hidden", "--follow"]
-        for ex in excludes:
-            cmd += ["-g", f"!{ex}"]
-        for e in exts:
-            cmd += ["-g", f"*.{e}"]
-        cmd += ["-e", pat, str(path)]
-        # timeout 与其他搜索器同源：H2 后进程内调用传紧预算，缺省走 30s。
-        # 此前漏下传，MCP 进程内调用可被挂满 30s 占死单线程 executor。
-        proc = run(cmd, timeout=timeout)
-        if proc is None:
-            continue
-        if proc.returncode == 1:
-            continue  # 该语言无命中
-        # 返回码 2 表示「有结果，但过程中报了错」（比如软链指向的文件不存在）。
-        # 不能一见非零就当没结果，否则加上 --dot 以后，结构搜索会从有结果变成没找到。
-        if proc.returncode not in (0, 2):
-            continue
-        for line in proc.stdout.splitlines():
-            m = re.match(r"^(.*?):(\d+):(.*)$", line)
-            if m:
-                results.append((m.group(1), int(m.group(2)), truncate(m.group(3))))
-            if len(results) >= max_results:
-                return results, None
-    return results, None
+    """结构搜索（实现见 seek_structural.py；此处只做 runner 注入转发）。"""
+    return _structural_search_impl(rule_name, path, excludes, max_results,
+                                   dots=dots, timeout=timeout, runner=run)
 
 
 def git_log(path, n=10, timeout=None):
@@ -1673,15 +1602,19 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                                          timeout=time_budget)
         elapsed = int((time.time() - start) * 1000)
         results = filter_by_mtime(results, args.since, args.until)
+        # 引擎标注归因真实后端：ast-grep 可用时走 AST，否则整条 rg 回落。
+        # 「跳过没查」与「查了没有」必须不同形——此处同理：同一条命令换个名字
+        # 会让调用方把 AST 的精确结果误读成正则近似结果。
+        _backend = "astgrep-structural" if sg_available() else "rg-structural"
         if err:
             return f"local-seek: {err}", 1
         if not results:
-            return f"local-seek: 未找到匹配（rg-structural · {args.path} · {elapsed}ms）", 1
+            return f"local-seek: 未找到匹配（{_backend} · {args.path} · {elapsed}ms）", 1
         if args.json:
-            return to_json(results, "rg-structural", "structural", args.scope,
+            return to_json(results, _backend, "structural", args.scope,
                            args.path, elapsed, args.query,
                            since=args.since, until=args.until), 0
-        return format_output(results, "rg-structural", "structural",
+        return format_output(results, _backend, "structural",
                              args.path, elapsed, args.query, len(results)), 0
 
     if not args.query:

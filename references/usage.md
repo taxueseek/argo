@@ -652,7 +652,7 @@ argo seek "查询词" --path ~/notes --lines   # L3 精读
 ```
 
 - 路由：rg（正文）→ fd（文件名）→ mdfind（Spotlight 全盘保底）；中文「精确优先、2-gram 扩展保底」
-- 扩展：`--structural`（裸 except/空 catch/装饰函数）、`--git-log`/`--git-blame`、`--outline`、`--domains`
+- 扩展：`--structural`（裸 except/空 catch/装饰函数；本机装 ast-grep 时走 AST 精确匹配，未装则回落 rg -U 多行正则）、`--git-log`/`--git-blame`、`--outline`、`--domains`
 - MCP：`argo_local_search` subprocess 调用 seek.py，包装为 `file://` URL + `source=local_files`
 - `--include-local`（2026-10-29，issue #34）：显式开启时找不到 seek.py（未装子技能且没设 `ARGO_LOCAL_SEEK_PATH`）或 cwd 是宽根/argo 安装树，会给一条可归因提示（`--json` 下进 `warnings[]`），不再静默返回空——「跳过没查」与「查了没有」不再同形。`ARGO_LOCAL_SEEK_ROOTS` 可给多个候选根（os.pathsep 分隔）。
 - 注意命名：`local_search`/`local_bing`/`local_360` 等 `local_` 前缀是**本地化/免 key 镜像通道**（网页），不是本机文件；本机文件只走 `source=local_files`。
