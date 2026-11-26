@@ -148,6 +148,8 @@ python3 scripts/search.py "查询词" \
   [--domain DOMAIN] [--sub_domain SUB_DOMAIN]  # 垂直域下推（仅 anysearch 消费）+ 缓存键隔离；不参与选源\
   [--intent news|academic|social|image-reverse|calc]  # 高层意图路由（引擎前置/深度调整；缺 key 或超预算自动降级）\
   [--agent]                    # Agent 消费单开关（等价 --json --fields agent）\
+  [--yaml] [--format json|yaml] # Agent 紧凑 YAML 输出（无损去重+省 Token；与 --json/--envelope 互斥）\
+  [--schema]                   # 离线返回参数、互斥规则与结果字段自描述契约（支持 --yaml）\
   [--input-kind auto|keyword|url-seed|known-url]\
   [--plan-only] [--force-search] [--envelope]\
   [--timing|--no-timing]       # 输出里的阶段耗时，默认开\
@@ -179,9 +181,11 @@ python3 scripts/search.py "查询词" \
 | `sources` | **引用用这个**：底部相关链接形态的稳定 5 字段投影 | 1.0 KB |
 | `candidates` | **归档/整理素材才要**：完整候选记录，带来源追溯字段（`candidate_id`/`canonical_url`/`platform`/`verification`/`metrics`/`limitations`） | 4.9 KB |
 
-- **Agent 消费用 `--agent`（等价 `--json --fields agent`）**：剥掉本地使用日志字段、只留答案与质量信号，
-  实测 `-n 2` 输出 1.3 KB。`fetch_required`、`limitations` 与启用 `--intent` 时的 `intent_resolution` 均保留。
-- **`--envelope` 与 `--agent` / `--fields agent` 入口互斥（Fail-Fast）**：`_strip_for_agent`
+- **Agent 消费用 `--yaml` 或 `--agent`**：
+  - `--yaml`（推荐）：在 `agent` 档基础上无损去重（省略与 `results` 完全重复的 `web_results` 与空分面、折叠 `timing` 为 `elapsed_ms`/`engines_run`）并以 YAML-Compact 格式输出，实测可比 `--agent` 再省约 60%+ 字节与 Token。
+  - `--agent`（等价 `--json --fields agent`）：剥掉本地使用日志字段、只留答案与质量信号，兼容已有 JSON 管道。`fetch_required`、`limitations` 与启用 `--intent` 时的 `intent_resolution` 均保留。
+- **`--schema`**：零网络开销离线输出 `argo search` 自描述参数与结果字段契约（支持 `--yaml`）。
+- **`--envelope` 与 `--yaml` / `--agent` / `--fields agent` 入口互斥（Fail-Fast）**：`_strip_for_agent`
   会剥离 `candidates`/`coverage`（envelope 增量为 0 字节），CLI 现已在入口直接报错退出（exit 2），
   避免跑完一整轮无效搜索。要 provenance 请用 `--json --envelope`，只要瘦身答案请用 `--agent`。
 

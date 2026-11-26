@@ -235,6 +235,19 @@ def build_parser() -> argparse.ArgumentParser:
              "--fields full 互斥（入口直接报错，避免静默剥离 envelope）",
     )
     parser.add_argument(
+        "--yaml", action="store_true", dest="yaml_output",
+        help="Agent 紧凑 YAML 输出：在 agent 档基础上无损去重与 YAML-Compact 序列化，"
+             "比 --agent 显著节省上下文 Token；与 --json / --envelope / --fields full 互斥",
+    )
+    parser.add_argument(
+        "--format", choices=("json", "yaml"), default=None, dest="output_format",
+        help="显式指定结构化输出格式（json 或 yaml）；不传时保持原有 --json/文本行为",
+    )
+    parser.add_argument(
+        "--schema", action="store_true",
+        help="离线自描述契约：零网络开销返回参数、互斥规则与结果字段说明（支持 --yaml）",
+    )
+    parser.add_argument(
         "--intent",
         choices=("news", "academic", "social", "image-reverse", "calc"),
         default=None,
@@ -416,7 +429,30 @@ def main():
     # --agent 单开关展开与契约互斥校验（Fail-Fast）：
     # 此前 --envelope 与 --fields agent 同给只在 stderr 告警，随后静默剥成 0 字节。
     # 入口直接报错可省去整轮无效搜索与重试。
+    if args.output_format == "yaml":
+        args.yaml_output = True
+    elif args.output_format == "json" and args.yaml_output:
+        parser.error("--yaml 与 --format json 互斥")
+
+    if args.yaml_output and args.json_output:
+        parser.error("--yaml 与 --json 互斥：请二选一")
+
+    if args.yaml_output:
+        if args.fields == "full":
+            parser.error(
+                "--yaml 与 --fields full 互斥：--yaml 专为 Agent 紧凑输出设计；"
+                "需要全量字段请用 --json --fields full"
+            )
+        if args.envelope:
+            parser.error(
+                "--envelope 与 --yaml 互斥：要 provenance 追溯请用 --json --envelope，"
+                "只要瘦身答案请用 --yaml"
+            )
+        args.fields = "agent"
+
     if args.agent:
+        if args.yaml_output:
+            parser.error("--agent 与 --yaml 互斥：--agent 为 JSON 输出，紧凑 YAML 请直接用 --yaml")
         if args.fields == "full":
             parser.error(
                 "--agent 与 --fields full 互斥：--agent 等价于 --json --fields agent；"
@@ -425,13 +461,22 @@ def main():
         args.json_output = True
         args.fields = "agent"
 
+    if args.schema:
+        from agent_output import build_search_schema, dumps_yaml_compact
+        schema_obj = build_search_schema()
+        if args.yaml_output:
+            print(dumps_yaml_compact(schema_obj))
+        else:
+            print(dumps(schema_obj))
+        return
+
     if args.envelope and args.fields == "agent":
         parser.error(
             "--envelope 与 --agent / --fields agent 互斥（agent 档会剥离 envelope 视图）；"
             "要 provenance 追溯请用 --json --envelope，只要瘦身答案请用 --agent"
         )
 
-    if args.json_output:
+    if args.json_output or args.yaml_output:
         # issue #34 第 7 条：引擎 builder 的 logger.warning（如「OCTEN_API_KEY
         # 未设置」）经 logging 的最后兜底 handler 打到 stderr，调用方一旦
         # 2>&1 合并就解析失败。JSON 模式只留 ERROR：非致命告警静默，可行动
@@ -887,7 +932,7 @@ def main():
     except Exception:
         pass
 
-    if args.json_output:
+    if args.yaml_output or args.json_output:
         public = {k: v for k, v in results.items() if not k.startswith("_")}
         # Agent 消费自动瘦身：stdout 非 tty（管道/Agent 调用）且未显式指定
         # --fields 时，自动启用 agent 档。实测输出从 15.4KB → 4.3KB
@@ -898,9 +943,13 @@ def main():
             and args.fields is None
             and not args.envelope
         )
-        if args.fields == "agent" or _auto_agent:
+        if args.yaml_output or args.fields == "agent" or _auto_agent:
             public = _strip_for_agent(public)
-        print(dumps(public))
+        if args.yaml_output:
+            from agent_output import compact_for_yaml, dumps_yaml_compact
+            print(dumps_yaml_compact(compact_for_yaml(public)))
+        else:
+            print(dumps(public))
     else:
         print(format_text_output(results))
         if results.get("timing"):

@@ -21,10 +21,10 @@
 | 改发版或依赖 | `docs/RELEASING.md` + `pyproject.toml`（真源） | `pytest tests/test_release_*.py tests/test_dependency_source_gate.py` |
 | 写提交 | `docs/COMMIT_STANDARD.md` | `scripts/check_commit_report.py --last` |
 | 查看或维护系统台账/棘轮 | `docs/LEDGERS.md` + `scripts/badcase_ledger.py` | `python3 scripts/badcase_ledger.py stats` / `propose` |
-| 提交前自检 | — | `bash scripts/pre-commit`（84 个 pytest 文件 4 片并行 + L2 变更感知增量选测 `scripts/affected_tests.py` + `ego-search` 子技能测试 + 全量 DSH 插件 Node 测试，~11s；清单真源 `tests/gate_manifest.txt`，与 CI 同一份） |
+| 提交前自检 | — | `bash scripts/pre-commit`（85 个 pytest 文件 4 片并行 + L2 变更感知增量选测 `scripts/affected_tests.py` + `ego-search` 子技能测试 + 全量 DSH 插件 Node 测试，~11s；清单真源 `tests/gate_manifest.txt`，与 CI 同一份） |
 | 全量回归 | — | `python3 -m pytest tests/ -q`（约 5 分钟，不放进 hook） |
 | 新增或改门禁测试 | `tests/gate_manifest.txt`（唯一真源）+ `tests/test_gate_manifest.py` | 新文件必须进清单（本地与 CI 同一份，禁 `# skip`）→ `bash scripts/pre-commit`；未登记总数受 `UNREGISTERED_TEST_BASELINE` 棘轮约束，只减不增 |
-| 判断「某道门该不该本地跑」 | `scripts/pre-commit` 分片并行节 | 慢不是豁免理由——84 条 4 片并行实测 ~8s；「本地绿全量红」的根因是拦截点外推，不是门太慢 |
+| 判断「某道门该不该本地跑」 | `scripts/pre-commit` 分片并行节 | 慢不是豁免理由——85 条 4 片并行实测 ~8s；「本地绿全量红」的根因是拦截点外推，不是门太慢 |
 
 ## 不可回退的决定
 

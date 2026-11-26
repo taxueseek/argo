@@ -21,6 +21,7 @@
 #
 
 tests/test_affected_tests_gate.py
+tests/test_agent_yaml_and_schema.py
 tests/test_agents_routing.py
 tests/test_badcase_ledger.py
 tests/test_breaker_reenable_reach.py

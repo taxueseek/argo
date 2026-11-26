@@ -860,8 +860,14 @@ def main():
         print("evidence 需要查询词。用法：argo evidence \"query\"", file=sys.stderr)
         sys.exit(1)
 
-    # --explain 与 --json 冲突（explain 输出纯文本干扰 JSON），自动去 --json
-    if "--explain" in rest and "--json" in defaults:
+    # --explain / --yaml 与默认注入的 --json 冲突，自动去 --json
+    _wants_yaml = (
+        "--yaml" in rest
+        or "--format=yaml" in rest
+        or any(rest[i] == "--format" and i + 1 < len(rest) and rest[i + 1] == "yaml"
+               for i in range(len(rest)))
+    )
+    if ("--explain" in rest or _wants_yaml) and "--json" in defaults:
         defaults.remove("--json")
 
     args = defaults + rest
@@ -869,9 +875,9 @@ def main():
     # daemon 快路径：search 是被 agent 循环调用最密的子命令，「解释器启动 +
     # engines 全家 import」~85ms 固定成本放大最狠。命中常驻进程时把拼好的
     # args 原样发过去（daemon 侧 runpy 语义与这里的原地路径一字不差），本地
-    # 只付 stdio/env 同步/_self_capable 约 20ms。--help 不走快路径（argparse
+    # 只付 stdio/env 同步/_self_capable 约 20ms。--help/--schema 不走快路径（argparse
     # 本地直接答）。任何失败在 _daemon_run 内部静默退回常态，绝不污染输出。
-    if sub == "search" and not any(a in ("-h", "--help") for a in rest):
+    if sub == "search" and not any(a in ("-h", "--help", "--schema") for a in rest):
         if _daemon_run(args, py):
             return
 

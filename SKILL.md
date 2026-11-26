@@ -32,15 +32,17 @@ triggers:
 
 ```bash
 argo search "查询词"               # 自动路由（daemon 需显式启动）
-argo search "查询词" --agent       # Agent 消费单开关（等价 --json --fields agent）
+argo search "查询词" --yaml        # Agent 紧凑 YAML（省 ~60% Token）
+argo search "查询词" --agent       # Agent JSON（--json --fields agent）
+argo search --schema               # 离线自描述契约
 argo search "查询词" --intent news # 意图路由（news/academic/social/image-reverse/calc）
 argo search "查询词" --verify 3    # 核验 top-3 并回填证据分
 argo research "复杂问题" --json    # 取证包（扩词或多工作包 → dossier）
 ```
 
-默认不附 candidates/sources；`--agent` 只留答案（~4.3 KB），追溯或归档加 `--envelope`（`--archive` 自动带）。
+默认不附 candidates/sources；`--yaml`/`--agent` 只留答案，追溯加 `--envelope`。
 
-深度研究产出**取证包（dossier）**（来源/覆盖/缺口/达标，不是判断稿）：先读 `references/research-protocol.md` 写工作包再取证，判断分事实/推断/建议。不要另装「专业深度研究」skill。
+深度研究产出**取证包**（来源/覆盖/缺口/达标，不是判断稿）：先读 `references/research-protocol.md` 写工作包再取证，判断分事实/推断/建议。不要另装深度研究 skill。
 
 研究笔记归档（判断稿一等公民化）：`argo note study|explore|list`，`research` 存证据、`note` 存结论。用法见 `references/usage.md`。
 
@@ -109,11 +111,11 @@ argo ego-search status|search|fetch|merge  # 登录态专业搜索（需先 enab
 4. **社交帖**：叙事/舆情，不进事实真值
 5. **深度研究**：先读 `references/research-protocol.md`；有决策含义就交工作包，不要靠扩词充问题树；`quality_gate_results.passed=false` 必须降级表述
 6. **引用**：讲给用户的事实带 URL 出处，日常档也要带（URL 在 `results[].url`，零成本）
-7. **上下文纪律**：Agent 用 `--agent`（等价 `--json --fields agent`）、按需 `-n`；追溯/归档用 `--json --envelope`；查单源用 `argo list-engines --detail --engine <名>`（~0.9 KB）。踩坑见 Gotchas
+7. **上下文纪律**：Agent 用 `--yaml` 或 `--agent`、按需 `-n`；追溯用 `--json --envelope`；查单源用 `argo list-engines --detail --engine <名>`。见 Gotchas
 
 ## Gotchas
 
-- **`--envelope` 与 `--agent` / `--fields agent` 互斥**：入口直接报错；要 provenance 请用 `--json --envelope`。
+- **`--envelope` 与 `--yaml`/`--agent` 互斥**：入口报错；要 provenance 用 `--json --envelope`。
 - **结果异常少**：看 `funnel` 六格阶段计数，哪格归零即塌陷点。
 - **慢查询**：看 `timing.dispatch` 的 `tail_wait_ms` / `abandoned_engine_ms`。
 - **引擎列表**：别加 `--all`（~54 KB）。
