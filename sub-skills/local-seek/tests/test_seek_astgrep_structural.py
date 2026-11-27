@@ -26,9 +26,12 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
@@ -334,6 +337,63 @@ class TestEndToEndIfToolPresent(unittest.TestCase):
             self.assertFalse(err_obj["ok"])
             self.assertIn("error", err_obj)
 
+
+def _write_foreign_sg(directory: Path) -> Path:
+    """造一个与 shadow 的 `sg` 同形态的替身：不认参数，打用法并以非零码退出。"""
+    if os.name == "nt":
+        stub = directory / "sg.cmd"
+        stub.write_text(
+            "@echo off\r\necho Usage: sg group [[-c] command] 1>&2\r\nexit /b 1\r\n",
+            encoding="utf-8",
+        )
+    else:
+        stub = directory / "sg"
+        stub.write_text(
+            "#!/bin/sh\necho 'Usage: sg group [[-c] command]' >&2\nexit 1\n",
+            encoding="utf-8",
+        )
+        stub.chmod(0o755)
+    return stub
+
+
+class TestForeignSgOnPath(unittest.TestCase):
+    """PATH 上的 `sg` 若是别的程序，不得被当成 ast-grep 用。
+
+    shadow（切用户组的命令）也叫 `sg`，不认 `run -p`：误认后每条命中都因非零
+    退出码被跳过，对外只剩「未找到匹配」，而标签照样写着 astgrep-structural。
+    """
+
+    def setUp(self):
+        self.rg = shutil.which("rg")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        _write_foreign_sg(self.dir)
+        # 只留替身与 rg 所在目录：PATH 上还有真 ast-grep 的机器会让用例失去意义。
+        parts = [str(self.dir)]
+        if self.rg:
+            parts.append(str(Path(self.rg).parent))
+        patcher = unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join(parts)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_foreign_sg_is_not_ast_grep(self):
+        self.assertIsNone(ss._resolve_sg())
+        self.assertFalse(ss.sg_available())
+
+    def test_structural_search_falls_back_to_rg(self):
+        if not self.rg:
+            self.skipTest("本机没有 rg，回落路径无从验证")
+        (self.dir / "a.py").write_text(
+            "def ok():\n    pass\n\ntry:\n    pass\nexcept:\n    pass\n",
+            encoding="utf-8",
+        )
+        hits, err = ss.structural_search("裸except", str(self.dir), [], 10)
+        self.assertIsNone(err)
+        self.assertEqual(len(hits), 1, hits)
+
+    def test_backend_label_reports_rg(self):
+        self.assertEqual(ss.describe_backend()["backend"], "rg-fallback")
 
 if __name__ == "__main__":
     unittest.main()

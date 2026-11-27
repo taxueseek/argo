@@ -32,6 +32,8 @@ AST 精确性有代价：每种语言的 pattern 都要按语法树写死，未�
   `range.byteOffset.start` / `file` / `lines`。行号从 0 起。
 - 零命中退出码仍为 0，故**不能**用退出码判有无结果，只看输出行数。
 - `--no-ignore hidden` 对应 rg 的 `--hidden`；`--follow` 对应 `--follow`。
+- `sg` 在部分系统上属于别的程序（shadow 的切换用户组命令）：同名不代表有能力，
+  按 `--version` 验明正身，认不出即当未安装、整条回落 rg。
 """
 
 from __future__ import annotations
@@ -73,10 +75,31 @@ def truncate(text: str, n: int = 120) -> str:
     return text if len(text) <= n else text[: n - 1] + "…"
 
 
+# 验身结果按可执行文件绝对路径缓存：同一进程内只问一次 `--version`。
+# 中途装了或换掉工具需要重启调用方（CLI 每次都是新进程，常驻的 MCP 进程例外）。
+_SG_VERIFIED: dict[str, bool] = {}
+
+
+def _is_ast_grep(path: str) -> bool:
+    """按 `--version` 验明正身，挡住同名的别的程序。
+
+    结构搜索按「工具在不在」分派，认错人就是能力降级且无提示：别的程序以非零
+    码退出，每条命中被 `_invoke_sg` 跳过，对外只剩「未找到匹配」，而标签照样
+    写 AST。故候选名命中后必须再问一次版本号，认不出就当没装、走 rg 回落。
+    """
+    if path in _SG_VERIFIED:
+        return _SG_VERIFIED[path]
+    proc = _run([path, "--version"], timeout=5.0)
+    ok = bool(proc is not None and proc.returncode == 0
+              and "ast-grep" in (proc.stdout or "").lower())
+    _SG_VERIFIED[path] = ok
+    return ok
+
+
 def _resolve_sg() -> str | None:
     for name in _SG_CANDIDATES:
         p = shutil.which(name)
-        if p:
+        if p and _is_ast_grep(p):
             return p
     return None
 
