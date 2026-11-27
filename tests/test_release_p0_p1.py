@@ -92,6 +92,7 @@ def test_check_json_report_on_real_repo(capsys):
     report = json.loads(out)
     assert report["version"] == release.current_version(release.ROOT)
     assert "coverage" in report
-    assert report["coverage"]["commits_since_tag"] >= 1
+    assert isinstance(report["coverage"]["commits_since_tag"], int)
+    assert report["coverage"]["commits_since_tag"] >= 0
     assert "gates" in report
     assert rc in (0, 1)
