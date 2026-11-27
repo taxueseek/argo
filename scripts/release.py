@@ -36,6 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import release_audit  # noqa: E402
 import release_check  # noqa: E402
 
 README_LANGS = release_check.README_LANGS
@@ -163,15 +164,18 @@ def ensure_whitelist(root: Path, old: str, new: str, dry: bool) -> str:
 
 
 def ensure_notes(root: Path, new: str, dry: bool) -> str:
-    """发布说明不存在时生成带 TODO 标记的骨架，避免结构性预检红。支持中英双语规范。"""
+    """发布说明不存在时生成带 TODO 标记的双语骨架（附 git log 自动归类草稿）。"""
     rel = f"docs/RELEASE_NOTES_v{new}.md"
     path = root / rel
     if path.is_file():
         return f"{rel}: 已存在"
+    draft_info = release_audit.collect_commits_since_last_tag(root)
+    draft_block = release_audit.render_commit_draft(draft_info)
     if not dry:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             f"# Argo v{new}\n\n{NOTES_TODO}\n\n"
+            f"{draft_block}"
             "## Highlights (English / TL;DR)\n\n"
             "- **What's New**:\n"
             "- **Key Improvements**:\n"
@@ -184,7 +188,9 @@ def ensure_notes(root: Path, new: str, dry: bool) -> str:
             "**X / Twitter (280 chars)**:\n\n"
             "**开发者群广播**:\n" % new,
             encoding="utf-8", newline="\n")
-    return f"{rel}: 生成双语骨架（记得去掉 {NOTES_TODO}）"
+    n_commits = draft_info.get("commit_count", 0)
+    suffix = f"，含 {n_commits} 笔提交草稿" if n_commits else ""
+    return f"{rel}: 生成双语骨架（记得去掉 {NOTES_TODO}{suffix}）"
 
 
 # ── 内容清单：脚本不写文案，但缺一段就不让发 ────────────────────────────────
@@ -205,6 +211,7 @@ def content_problems(root: Path, ver: str) -> list[str]:
             problems.append(f"{rel}: 「当前大致能力」标题未跟进到 v{ver}")
         if not re.search(rf"(?m)^v{re.escape(ver)}", text):
             problems.append(f"{rel}: 能力段缺以 v{ver} 开头的新段落")
+    problems.extend(release_audit.scan_release_leakage(root, ver, README_LANGS))
     return problems
 
 
@@ -405,7 +412,12 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--force-branch", action="store_true")
     b.add_argument("--no-git-checks", action="store_true", help=argparse.SUPPRESS)
 
-    c = sub.add_parser("check", help="结构 + 内容 + 目录计数校验")
+    c = sub.add_parser("check", help="结构 + 内容 + 脱敏红线 + 目录计数校验")
+    c.add_argument("--json", action="store_true", dest="json_output",
+                   help="输出统一结构化审计报告（含覆盖度与门禁状态）")
+
+    s = sub.add_parser("sync", help="从 RELEASE_NOTES 单源派生更新 CHANGELOG 与五语 README")
+    s.add_argument("--dry-run", action="store_true")
 
     p = sub.add_parser("publish", help="测试 → 提交 → 打标签 → 发 npm → 轮询核验")
     p.add_argument("version")
@@ -426,13 +438,32 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print("\n下一步：填发布说明与五语 README 三块，然后 release.py check")
         elif args.cmd == "check":
+            ver = current_version(ROOT)
             problems = check(ROOT)
+            if args.json_output:
+                leakage = release_audit.scan_release_leakage(ROOT, ver, README_LANGS)
+                report = release_audit.build_check_report(
+                    ROOT, ver, problems,
+                    catalog_ok=not any(p.startswith("目录计数:") for p in problems),
+                    art_ok=not any(p.startswith("对外证据图:") for p in problems),
+                    leakage_hits=leakage,
+                )
+                print(json.dumps(report, ensure_ascii=False, separators=(",", ":")))
+                return 1 if problems else 0
             if problems:
                 print(f"release.py check: {len(problems)} 项待修", file=sys.stderr)
                 for x in problems:
                     print(f"  !! {x}", file=sys.stderr)
                 return 1
-            print(f"release.py check: v{current_version(ROOT)} 全绿")
+            print(f"release.py check: v{ver} 全绿")
+        elif args.cmd == "sync":
+            ver = current_version(ROOT)
+            for line in release_audit.sync_from_release_notes(
+                ROOT, ver, README_LANGS, dry=args.dry_run
+            ):
+                print(f"  - {line}")
+            if args.dry_run:
+                print("dry-run，未写入")
         else:
             publish(ROOT, args.version, args.yes, args.skip_tests,
                     args.skip_npm, args.wait, args.dry_run)

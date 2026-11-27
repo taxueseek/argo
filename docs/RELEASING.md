@@ -9,11 +9,12 @@
 python3 scripts/release.py bump 2.10.1
 
 # 2. 填内容（脚本会列出缺哪几块，`check` 全绿前不让发）
-#    - docs/CHANGELOG.md（去掉 <!-- release-todo -->）
-#    - 五语 README 的「最近更新」段、能力段、发布记录表行
+#    - bump 会从上一公开 tag 至今的 git log 自动生成归类草稿进 RELEASE_NOTES 骨架
+#    - 填好 docs/RELEASE_NOTES_v<ver>.md（去掉 <!-- release-todo -->）后，可用单源派生补齐：
+python3 scripts/release.py sync
 
-# 3. 校验并发布
-python3 scripts/release.py check
+# 3. 校验并发布（支持 --json 输出覆盖度与红线审计报告）
+python3 scripts/release.py check --json
 python3 scripts/release.py publish 2.10.1 --yes
 ```
 

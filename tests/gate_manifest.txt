@@ -82,6 +82,7 @@ tests/test_readme_art.py
 tests/test_redactor_guard.py
 tests/test_release_assets_contract.py
 tests/test_release_consistency.py
+tests/test_release_p0_p1.py
 tests/test_research_notes.py
 tests/test_routing_snapshot.py
 tests/test_schema_drift_diagnosis.py
