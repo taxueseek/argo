@@ -31,11 +31,11 @@
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
 
-> **属于 taxueseek Skill 系列**（负责搜索与深度研究）：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 77★（专业消除 AI 味）· [session-digger](https://github.com/taxueseek/session-digger) 34★（跨环境会话历史挖掘）· [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★（投资分析方法论）· [taxueskills](https://github.com/taxueseek/taxueskills) 25★（踏雪决策系统）· [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★（创意插画风格库）· [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 16★（豆包/微信输入法词库工具）。
+> **属于 [taxueseek](https://github.com/taxueseek) 技能系列**：[plainspoken-writing](https://github.com/taxueseek/plainspoken-writing)（白描去 AI 味）· [session-digger](https://github.com/taxueseek/session-digger)（跨工具记忆库）· [taxue-invest](https://github.com/taxueseek/taxue-invest)（投资研究）· [taxueskills](https://github.com/taxueseek/taxueskills)（踏雪决策系统）· [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style)（创意插画风格）· [ime-lexicon](https://github.com/taxueseek/ime-lexicon)（输入法词库工具）。
 >
-> **同作者 DeepSeek Harness（DSH）插件生态**：[plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 48★（插件升级自适应）· [dsh-files](https://github.com/taxueseek/dsh-files) 44★（文件夹上传与文档解析）· [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) 3★（一体化视觉创作）· [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★（插件安装前安全体检）。
+> **DeepSeek Harness（DSH）生态插件**：[plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt)（插件升级适配）· [dsh-files](https://github.com/taxueseek/dsh-files)（文件夹上传与文档解析）· [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan)（一体化 AI 画师）· [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard)（安装前安全体检）。
 
-**Argo（阿尔戈）** 是专为 AI Agent 打造的开源多引擎搜索、网页抓取与证据核验工具。它把「**免费与本地引擎兜底 + 主流 AI 搜索聚合 + 公众号/知乎/小红书垂直穿透 + 原文抓取与证据核验**」融进同一套 CLI / MCP / Skill 接口，覆盖 18 种语言与近百个业务域。
+**Argo（阿尔戈）** 是专为 AI Agent 打造的开源搜索与证据核验工具。它把「**免费与本地引擎兜底、主流 AI 搜索聚合、公众号/知乎/小红书等平台直达检索，以及原文抓取与可信度核验**」融进同一套 CLI / MCP / Skill 接口，覆盖 18 种语言与近百个常见领域。
 
 ---
 
