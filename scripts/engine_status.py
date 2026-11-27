@@ -286,6 +286,7 @@ def list_engines_detail(
     routable_only: bool = False,
     include_disabled: bool = True,
     engines: Iterable[str] | None = None,
+    include_local: bool = True,
 ) -> list[dict[str, Any]]:
     """引擎详细状态行。
 
@@ -293,9 +294,12 @@ def list_engines_detail(
     全量诊断转储 2026-09-16 实测 151 KB（runtime 24% + admission 7% 是大头，
     此前误记 22 KB）——CLI 在不带 `--engine` 过滤时改出 compact_engine_row
     瘦身投影（约 1/4 体积），要全量就按引擎过滤，别把转储拉进上下文。
+
+    include_local=False 给生成公开产物的调用方（docs/ENGINE_CATALOG.md）：
+    本机停用状态不能写进随发版的文档。
     """
     wanted = set(engines) if engines else None
-    cfg = load_config()
+    cfg = load_config(include_local=include_local)
     tiers = get_cost_tiers(cfg)
     specs = _all_engine_specs(cfg)
     adaptive_scores = _adaptive_scores_snapshot()

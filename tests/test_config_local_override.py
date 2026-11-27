@@ -96,6 +96,87 @@ def test_local_override_can_add_new_engine(local_cfg):
     assert "my_local_probe" in _reload()["engines"]
 
 
+# ── 1b. 域表按 name 合并 ────────────────────────────────────────────────────
+
+def _domain(cfg: dict, name: str) -> dict:
+    for d in cfg["domains"]:
+        if d.get("name") == name:
+            return d
+    raise AssertionError(f"配置里没有域 {name}")
+
+
+def test_local_domain_override_merges_by_name(local_cfg):
+    """domains 按 name 合并：只写源序，域的其余键（patterns/priority…）不丢。
+
+    整份替换要求本机抄全 99 个域才能改一个域的源序，实际不可用；但也不能让
+    未提及的域消失——同名的原位深合并，其余原样。
+    """
+    before = _reload()
+    target = "chinese_general"
+    orig = dict(_domain(before, target))
+    local_cfg.write_text(
+        "domains:\n"
+        f"  - name: {target}\n"
+        "    engines_combo: [metaso, anysearch]\n"
+        "    primary: metaso\n",
+        encoding="utf-8")
+    cfg = _reload()
+    dom = _domain(cfg, target)
+    assert dom["engines_combo"] == ["metaso", "anysearch"]
+    assert dom["primary"] == "metaso"
+    assert dom["patterns"] == orig["patterns"]  # 未写的键保持公共值
+    assert dom["priority"] == orig["priority"]
+    assert len(cfg["domains"]) == len(before["domains"])  # 未提及的域一个不少
+
+
+def test_local_domain_override_leaves_sibling_domains_untouched(local_cfg):
+    """只动点名的域：兄弟域的源序不被顺手改掉。"""
+    before = _reload()
+    local_cfg.write_text(
+        "domains:\n  - name: local_chinese\n    engines_combo: [local_search]\n",
+        encoding="utf-8")
+    after = _reload()
+    assert _domain(after, "local_chinese")["engines_combo"] == ["local_search"]
+    for name in ("chinese_general", "world_news"):
+        assert _domain(after, name) == _domain(before, name)
+
+
+def test_local_domain_override_can_add_new_domain(local_cfg):
+    """覆盖层能新增本机专属域（未知名追加，不影响既有域）。"""
+    before = _reload()["domains"]
+    local_cfg.write_text(
+        "domains:\n"
+        "  - name: my_local_domain\n"
+        "    engines_combo: [anysearch]\n"
+        "    primary: anysearch\n",
+        encoding="utf-8")
+    after = _reload()["domains"]
+    assert len(after) == len(before) + 1
+    assert _domain({"domains": after}, "my_local_domain")["primary"] == "anysearch"
+
+
+def test_public_artifacts_read_domains_without_local(local_cfg):
+    """公共派生件与门禁只看公共域表：本机改了源序，休眠台账/文档生成不变红。
+
+    这两处若走 load_config() 默认口径，本机把某源提到主源位次就会让
+    sync_backends --check 报「台账过期」、gen_engine_catalog --check 报文档过期
+    ——本机状态污染公共产物，正是覆盖层要挡的事。
+    """
+    import dormant_ledger as DL
+    import gen_engine_catalog as GC
+
+    before = DL.dormant_engines()
+    local_cfg.write_text(
+        "domains:\n"
+        "  - name: chinese_general\n"
+        "    engines_combo: [metaso, anysearch]\n"
+        "    primary: metaso\n",
+        encoding="utf-8")
+    assert DL.check_dormant_ledger() == []
+    assert DL.dormant_engines() == before
+    assert GC._count_truth()["domains"] == str(len(C.load_config(include_local=False)["domains"]))
+
+
 # ── 2. 失效判据认它 ──────────────────────────────────────────────────────────
 
 def test_local_file_change_invalidates_stamp(local_cfg, monkeypatch):

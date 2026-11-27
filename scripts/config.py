@@ -36,6 +36,11 @@ CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 # 只写「要改的键」，深度合并进最终配置——本机状态（账户欠费临时停用某引擎、
 # 本机路径、本机调优）落在这里，不随公开仓发版。详见 _merge_local_config。
 LOCAL_CONFIG_PATH = Path(__file__).parent.parent / "config.local.yaml"
+# 覆盖层里按 name 逐项合并的列表键：domains 是「99 个域的清单」，整份替换要求
+# 本机抄全 99 项才能改一个域的源序，实际不可用；按 name 合并后本机只写改动项。
+# 其余列表键（超时表、过滤词表等）保持整体替换——它们没有稳定主键，逐项合并
+# 会变成「删不掉任何一项」。
+KEYED_LIST_KEYS = ("domains",)
 # 外置引擎声明目录：engines/*.yaml（不含 plugins/、templates/、_ 前缀）
 ENGINES_DIR = Path(__file__).parent.parent / "engines"
 
@@ -285,6 +290,28 @@ def _load_local_config() -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _merge_by_name(base: list[Any], override: list[Any]) -> list[Any]:
+    """按 name 合并两份 list[dict]：同名项深度合并到原位，未知名追加到末尾。
+
+    顺序沿用 base：域在清单里的位置属于公共配置（决定探针顺序与目录分组），
+    本机改的应该是域**内部**的源序（engines_combo），不是域与域的先后。
+    """
+    out = list(base)
+    pos_by_name = {
+        item.get("name"): i for i, item in enumerate(out) if isinstance(item, dict)
+    }
+    for item in override:
+        name = item.get("name") if isinstance(item, dict) else None
+        idx = pos_by_name.get(name) if name is not None else None
+        if idx is None:
+            if name is not None:
+                pos_by_name[name] = len(out)
+            out.append(item)
+        else:
+            out[idx] = _deep_merge(out[idx], item)
+    return out
+
+
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """override **深度**覆盖 base：dict 逐键递归，其余（含 list）整体替换。
 
@@ -292,11 +319,15 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     外置 spec 是「整份引擎声明」（浅覆盖才能整份换掉），本机覆盖层是「只写要
     改的键」（深合并才能让 `engines.parallel.enabled: false` 只翻一个布尔而不
     把整个 parallel 声明换成三行）。两种覆盖语义不同，各留一处实现，别合并。
+
+    KEYED_LIST_KEYS 里的键（domains）例外：按 name 逐项合并，见 _merge_by_name。
     """
     out = dict(base)
     for key, value in override.items():
         if isinstance(value, dict) and isinstance(out.get(key), dict):
             out[key] = _deep_merge(out[key], value)
+        elif key in KEYED_LIST_KEYS and isinstance(value, list) and isinstance(out.get(key), list):
+            out[key] = _merge_by_name(out[key], value)
         else:
             out[key] = value
     return out
