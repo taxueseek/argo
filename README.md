@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.18.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.19.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -209,6 +209,7 @@ The built-in **Argo Workbench** provides a browser UI with 5 modes (Web Search, 
 
 | Version | Highlights |
 | :--- | :--- |
+| **v2.19.0** | **What's New**: |
 | **v2.18.0** | `--agent` switch &amp; `--intent` routing, unified `fetch_dispatch`, modular `local-seek` `--symbol-body`, plus 4 community PRs from `@OMSociety` (exact Zhihu answer fetch, verified X search &amp; fallback, agent image metadata, DSH lock fix; 314 sources) |
 | **v2.17.0** | Native query operator pushdown, 4-state browser auth &amp; `ego-search` OS-locked pacing, deterministic evidence grounding, Workbench daily hotspots &amp; TCP loopback fence (313 sources) |
 | **v2.16.0** | DSH Argo Workbench UI, direct 4-stage CLI verification, `linux.do` + Keenable free channel (312 sources), Jina keyless fallback, concurrency &amp; cache hardening |
@@ -218,11 +219,17 @@ The built-in **Argo Workbench** provides a browser UI with 5 modes (Web Search, 
 | **v2.13.0** | Documentation consolidation, 22-state-machine SSOT, dispatch tail grace |
 
 <details>
-<summary>v2.18.0 Release Summary &amp; Capability Snapshot</summary>
+<summary>v2.19.0 Release Summary &amp; Capability Snapshot</summary>
 
-### Capabilities (v2.18.0)
+### Capabilities (v2.19.0)
+
+v2.19.0 delivers Agent-native compact YAML output (`argo search --yaml`, reducing payload size by 39.8%–46.7% with lossless evidence) and offline `--schema` self-description; upgrades local code search with identifier-aware full-text indexing (`ARGO_LOCAL_FTS=1`, 0.55 ms Top-1 symbol hits), core-definition ranking, `--block` one-hop enclosing boundaries (-47.5% latency), and syntax-aware structural matching (`ast-grep` optional); adds `argo table` read-only SQL analytics with PDF table extraction and local image indexing (`ARGO_LOCAL_IMAGE=1`); fixes hot-topic aggregation issues, polishes the DSH plugin (`plugin-fast-adapt` continuous adaptation), and strengthens cross-platform launching and release preflight.
 
 v2.18.0 unifies Agent-first entrypoints, specialized URL fetching, and community social-retrieval upgrades: adds `--agent` and `--intent` routing (`intent_router.py`), unified URL dispatch (`fetch_dispatch.py` for WeChat, X tweets, arXiv papers, and PDFs), modular `local-seek` (`--outline` spans and `--symbol-body` one-hop reads) wired directly into Argo Workbench (`/argo/api/local-inspect` and `/argo/api/note-study`), L2 change-aware test selection (`affected_tests.py`), and four community PRs from `@OMSociety` (#52/#53/#54/#55: exact Zhihu answer fetch with `--answer-offset`, verified X keyword routing &amp; single-tweet FxTwitter fallback bringing total sources to 314, agent-tier image metadata retention, and DSH lock directory initialization).
+
+### v2.19.0: **What's New**:
+
+See [docs/RELEASE_NOTES_v2.19.0.md](docs/RELEASE_NOTES_v2.19.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ### v2.18.0: Agent Entrypoints + Unified Fetch Dispatch + Community PRs (#52–#55)
 

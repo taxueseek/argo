@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.18.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.19.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -79,6 +79,7 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 
 | バージョン | 主な変更点 |
 | :--- | :--- |
+| **v2.19.0** | **What's New**: |
 | **v2.18.0** | `--agent`・`--intent` ルーティング、統一 `fetch_dispatch`、`local-seek` シンボル精読と Workbench 連携、`@OMSociety` コミュニティ PR 4件統合（Zhihu 指定回答取得・X キーワード検証とフォールバック・画像メタデータ保持・ロック初期化修正、314ソース） |
 | **v2.17.0** | クエリ演算子ネイティブプッシュダウン、4状態認証と `ego-search` ペーシング制御、決定論的根拠アンカー、Workbench デイリーホットトピックと TCP ループバック保護（313ソース） |
 | **v2.16.0** | DSH Argo Workbench UI、CLI 4段階検証パイプライン、`linux.do` + Keenable 無料チャネル（312ソース）、Jina キー不要フォールバック、並行・キャッシュ制御強化 |
@@ -88,11 +89,17 @@ argo search "Rust async tokio エラーハンドリング" --verify 2 --json --f
 | **v2.13.0** | ドキュメント統合、22 ステートマシン SSOT、ディスパッチ待機改善 |
 
 <details>
-<summary>v2.18.0 リリース概要・機能サマリー</summary>
+<summary>v2.19.0 リリース概要・機能サマリー</summary>
 
-### 現時点の能力概要（v2.18.0）
+### 現時点の能力概要（v2.19.0）
+
+v2.19.0 では Agent 向けコンパクト YAML 出力（`argo search --yaml`、サイズ 39.8%–46.7% 削減）とオフライン `--schema` を追加し、ローカルコード検索で識別子展開（`ARGO_LOCAL_FTS=1`、0.55ms ヒット）、コア定義優先順位付け、`--block` ワンホップ範囲取得（所要時間 -47.5%）、構文ベース構造検索（`ast-grep` 任意対応）を実現しました。さらに `argo table` 読み取り専用 SQL 分析・ローカル画像検索（`ARGO_LOCAL_IMAGE=1`）・ホットトピック検索修正・DSH プラグインの安定化（`plugin-fast-adapt` 継続最適化）を反映しています。
 
 v2.18.0 では Agent 向けエントリーポイント・専用 URL 取得・コミュニティ由来の SNS 検索を統合強化しました。`--agent` と `--intent` ルーティング（`intent_router.py`）、WeChat・X・arXiv・PDF を自動振り分けする `fetch_dispatch.py`、`local-seek` の `--outline` 範囲表示と `--symbol-body` 直読および Workbench 直結（`local-inspect`・`note-study`）、L2 変更検知テスト選択（`affected_tests.py`）を追加。さらに `@OMSociety` 氏による 4 件のコミュニティ PR（#52/#53/#54/#55：Zhihu 指定回答の本文・ページング要約取得、X キーワード検索検証と単体ポスト補完（313→314）、agent 出力での画像メタデータ保持、DSH 状態ロックディレクトリ初期化修正）を原作者署名付きで取り込みました。
+
+### v2.19.0: **What's New**:
+
+See [docs/RELEASE_NOTES_v2.19.0.md](docs/RELEASE_NOTES_v2.19.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ### v2.18.0：Agent エントリー統一 + `fetch_dispatch` + コミュニティ PR（#52–#55）
 

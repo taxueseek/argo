@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.18.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.19.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -79,6 +79,7 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 
 | 버전 | 주요 업데이트 |
 | :--- | :--- |
+| **v2.19.0** | **What's New**: |
 | **v2.18.0** | `--agent` 및 `--intent` 라우팅, 통합 `fetch_dispatch`, 모듈화된 `local-seek` `--symbol-body` 및 Workbench 연동, `@OMSociety` 커뮤니티 PR 4건 통합(Zhihu 지정 답변 수집, X 키워드 검증 및 단건 폴백, 이미지 메타데이터 유지, DSH 락 초기화 수정, 314개 소스) |
 | **v2.17.0** | 쿼리 연산자 네이티브 푸시다운, 4상태 브라우저 인증 및 `ego-search` 프로세스 간 페이싱, 결정론적 근거 앵커링, Workbench 일일 핫토픽 및 TCP 루프백 가드(313개 소스) |
 | **v2.16.0** | DSH Argo Workbench UI, CLI 4단계 검증 파이프라인, `linux.do` + Keenable 무료 채널(312개 소스), Jina 키리스 폴백, 동시성·캐시 상태 머신 강화 |
@@ -88,11 +89,17 @@ argo search "LLM 에이전트 RAG 최신 아키텍처" --verify 2 --json --field
 | **v2.13.0** | 문서 통합, 22개 상태 머신 SSOT, 디스패치 테일 유예 |
 
 <details>
-<summary>v2.18.0 릴리스 요약 및 기능 개요</summary>
+<summary>v2.19.0 릴리스 요약 및 기능 개요</summary>
 
-### 현재 기능 개요 (v2.18.0)
+### 현재 기능 개요 (v2.19.0)
+
+v2.19.0에서는 Agent용 압축 YAML 출력(`argo search --yaml`, 크기 39.8%–46.7% 절감)과 오프라인 `--schema`를 추가하고, 로컬 코드 검색에 식별자 확장(`ARGO_LOCAL_FTS=1`, 0.55ms Top-1 매칭), 핵심 정의 우선 정렬, `--block` 원홉 블록 범위 반환(지연 -47.5%), 구문 기반 구조 검색(`ast-grep` 선택 지원)을 도입했습니다. 또한 `argo table` 읽기 전용 SQL 분석, 로컬 이미지 인덱싱(`ARGO_LOCAL_IMAGE=1`), 핫토픽 검색 수정 및 DSH 플러그인 안정화(`plugin-fast-adapt` 지속 최적화)를 반영했습니다.
 
 v2.18.0에서는 Agent 우선 진입점, 전용 URL 수집 및 커뮤니티 소셜 검색 기능을 통합 강화했습니다. `--agent` 스위치와 `--intent` 라우팅(`intent_router.py`), WeChat·X·arXiv·PDF 통합 분기(`fetch_dispatch.py`), `local-seek`의 `--outline` 범위 및 `--symbol-body` 심볼 원문 직독과 Workbench 직결(`local-inspect`·`note-study`), L2 변경 감지 테스트 선택(`affected_tests.py`)을 도입했습니다. 또한 `@OMSociety`의 커뮤니티 PR 4건(#52/#53/#54/#55: Zhihu 지정 답변 본문 및 페이징 요약 수집, X 키워드 검증 라우팅과 단건 FxTwitter 폴백(313→314), agent 출력 이미지 메타데이터 유지, DSH 상태 락 디렉터리 초기화 수정)을 원작자 서명과 함께 반영했습니다.
+
+### v2.19.0: **What's New**:
+
+See [docs/RELEASE_NOTES_v2.19.0.md](docs/RELEASE_NOTES_v2.19.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ### v2.18.0: Agent 진입점 + 통합 `fetch_dispatch` + 커뮤니티 PR (#52–#55)
 

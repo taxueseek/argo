@@ -26,7 +26,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.18.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.19.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -206,6 +206,7 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 
 | 版本 | 核心更新 |
 | :--- | :--- |
+| **v2.19.0** | Agent 紧凑 YAML 输出（体积再降 40%+）+ 零依赖本地代码检索精度与一跳效率跃升 + 本地表格 SQL 分析 + 热榜与  |
 | **v2.18.0** | `--agent` 与 `--intent` 路由、统一 `fetch_dispatch` 分发、`local-seek` 符号精读与工作台直连，合入 `@OMSociety` 社区 4 项 PR（知乎指定回答精确抓取、X 关键词核验与单帖补读、图片元数据保留、工作台锁目录修复；314 个源） |
 | **v2.17.0** | 查询操作符原生下推、登录态四态防抖与 `ego-search` 跨进程节奏锁、确定性证据锚定、工作台每日热点与 TCP 回环围栏（313 个源） |
 | **v2.16.0** | DSH 插件 Argo 搜索工作台、直调 CLI 四阶段查证管线、`linux.do` 与 Keenable 免费通道（312 个源）、Jina 无 Key 兜底、并发与缓存状态机收敛 |
@@ -215,11 +216,17 @@ Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh
 | **v2.13.0** | 文档收口、22 台状态机单一真源、派发尾宽宽限 |
 
 <details>
-<summary>v2.18.0 版本摘要与当前能力</summary>
+<summary>v2.19.0 版本摘要与当前能力</summary>
 
-### 当前大致能力（v2.18.0）
+### 当前大致能力（v2.19.0）
+
+v2.19.0 新增 Agent 紧凑 YAML 输出（`argo search --yaml`，实测体积再降 39.8%–46.7% 且证据无损）与离线 `--schema` 自描述；升级本地代码检索，支持跨词搜连写符号（`ARGO_LOCAL_FTS=1`，0.55 ms Top-1 命中）、核心定义置顶、`--block` 一跳获取函数/章节边界（耗时降 47.5%）与语法级结构搜索（可选 `ast-grep`）；新增 `argo table` 只读 SQL 分析与 PDF 抽表联动及本地图片检索（`ARGO_LOCAL_IMAGE=1`）；修复全网热榜早停与霸屏问题，优化 DSH 插件细节并补充 `plugin-fast-adapt` 持续适配说明，同时升级跨平台启动与发版单源校验流程。
 
 v2.18.0 完成 Agent 入口收口、统一 URL 分发与社区社媒检索增强：新增 `--agent` 单开关与 `--intent` 高层意图路由（`intent_router.py`）、统一专用抓取分发层（`fetch_dispatch.py` 覆盖微信、推文、arXiv 论文与 PDF）、`local-seek` 模块化精读（`--outline` 行跨度与 `--symbol-body` 符号直读）并直连 DSH 工作台（`local-inspect` 路径沙箱与 `note-study` 管道）、L2 变更感知增量选测（`affected_tests.py`）；完整吸纳社区贡献者 `@OMSociety` 4 项 PR（#52/#53/#54/#55：知乎指定回答精确抓取与 `--answer-offset` 续查、X 关键词核验选路与单帖 FxTwitter 补读、agent 档图片元数据保留、工作台状态锁目录修复；源 313→314）。
+
+### v2.19.0: Agent 紧凑 YAML 输出（体积再降 40%+）+ 零依赖本地代码检索精度与一跳效率跃升 + 本地表格 SQL 分析 + 热榜与 DSH 插件稳定性加固。
+
+详见 [docs/RELEASE_NOTES_v2.19.0.md](docs/RELEASE_NOTES_v2.19.0.md) 与 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ### v2.18.0：Agent 入口与统一抓取分发 + 社区 4 项 PR（#52–#55）
 

@@ -500,6 +500,7 @@ def main(argv: list[str] | None = None) -> int:
     p_q.add_argument("--agent", action="store_true", help="紧凑 JSON 输出")
 
     args = parser.parse_args(argv)
+    is_compact = bool(args.agent) and not bool(args.json)
     try:
         if args.action == "profile":
             res = profile_table(
@@ -520,15 +521,15 @@ def main(argv: list[str] | None = None) -> int:
                 all_varchar=args.all_varchar,
                 max_mem_mb=args.max_mem_mb,
             )
-        _emit(res, compact=bool(args.agent))
+        _emit(res, compact=is_compact)
         return 0
     except TableQueryError as exc:
-        _emit({"ok": False, "error": str(exc)}, compact=bool(getattr(args, "agent", False)))
+        _emit({"ok": False, "error": str(exc)}, compact=is_compact)
         return 1
     except Exception as exc:
         _emit(
             {"ok": False, "error": f"{type(exc).__name__}: {exc}"},
-            compact=bool(getattr(args, "agent", False)),
+            compact=is_compact,
         )
         return 1
 

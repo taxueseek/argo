@@ -16,7 +16,7 @@
   <a href="https://skills.sh/taxueseek/argo"><img alt="skills.sh" src="https://img.shields.io/badge/skills.sh-argo-black"></a>
   <img alt="license" src="https://img.shields.io/badge/license-Apache_2.0-blue">
   <img alt="python" src="https://img.shields.io/badge/python-3.9+-green">
-  <img alt="version" src="https://img.shields.io/badge/version-2.18.0-informational">
+  <img alt="version" src="https://img.shields.io/badge/version-2.19.0-informational">
   <img alt="engines" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftaxueseek%2Fargo%2Fmain%2Fassets%2Freadme%2Fcounts.json">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-19%20tools-purple">
 </p>
@@ -79,6 +79,7 @@ argo search "arquitectura de agentes RAG 2026" --verify 2 --json --fields agent
 
 | Versión | Novedades |
 | :--- | :--- |
+| **v2.19.0** | **What's New**: |
 | **v2.18.0** | Interruptor `--agent` y enrutamiento `--intent`, `fetch_dispatch` unificado, `local-seek` modular (`--symbol-body`) conectado a Workbench, y 4 PRs comunitarios de `@OMSociety` (respuesta exacta de Zhihu, búsqueda verificada en X con fallback, metadatos de imagen y fix de bloqueo DSH; 314 fuentes) |
 | **v2.17.0** | Pushdown nativo de operadores de consulta, autenticación de 4 estados y control de ritmo en `ego-search`, anclaje determinista de evidencia, tendencias diarias en Workbench y barrera TCP loopback (313 fuentes) |
 | **v2.16.0** | Argo Workbench UI en DSH, pipeline CLI de 4 etapas, `linux.do` + canal gratuito Keenable (312 fuentes), fallback sin clave en Jina, endurecimiento de concurrencia y caché |
@@ -88,11 +89,17 @@ argo search "arquitectura de agentes RAG 2026" --verify 2 --json --fields agent
 | **v2.13.0** | Consolidación documental, máquina de 22 estados SSOT, gracia de despacho |
 
 <details>
-<summary>Resumen de la versión v2.18.0</summary>
+<summary>Resumen de la versión v2.19.0</summary>
 
-### Capacidades actuales (v2.18.0)
+### Capacidades actuales (v2.19.0)
+
+v2.19.0 añade salida YAML compacta para agentes (`argo search --yaml`, con reducción del 39.8%–46.7% en tamaño sin pérdida de evidencia) y `--schema` sin conexión; mejora la búsqueda local de código con expansión de identificadores (`ARGO_LOCAL_FTS=1`, 0.55 ms Top-1), priorización de definiciones principales, bloques en un paso con `--block` (-47.5% de latencia) y búsqueda estructural sintáctica (`ast-grep` opcional); incorpora analítica SQL de solo lectura `argo table`, indexación local de imágenes (`ARGO_LOCAL_IMAGE=1`), correcciones en tendencias y mejoras continuas del plugin DSH mediante `plugin-fast-adapt`.
 
 v2.18.0 unifica la entrada orientada a agentes, el despacho especializado de URL y las mejoras comunitarias de búsqueda social: añade `--agent` y enrutamiento `--intent` (`intent_router.py`), despacho unificado (`fetch_dispatch.py` para WeChat, X, arXiv y PDF), `local-seek` modular (`--outline` con rangos y `--symbol-body`) conectado directamente a Argo Workbench (`local-inspect` y `note-study`), selección incremental de pruebas L2 (`affected_tests.py`) y 4 PRs de `@OMSociety` (#52/#53/#54/#55: lectura exacta de respuestas de Zhihu con `--answer-offset`, búsqueda verificada en X con fallback FxTwitter (313→314), retención de metadatos de imagen en `--fields agent` e inicialización del directorio de bloqueo en DSH) conservando la autoría original.
+
+### v2.19.0: **What's New**:
+
+See [docs/RELEASE_NOTES_v2.19.0.md](docs/RELEASE_NOTES_v2.19.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md).
 
 ### v2.18.0: Entrada Agent + `fetch_dispatch` Unificado + PRs Comunitarios (#52–#55)
 
