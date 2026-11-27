@@ -1536,6 +1536,8 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
                     help="按行读取文件（文件路径为位置参数）")
     ap.add_argument("--symbol-body", default="", metavar="NAME",
                     help="按符号名一跳读取定义区间源码，≤200 行封顶（文件路径为位置参数）")
+    ap.add_argument("--block", action="store_true",
+                    help="一跳附带命中行所属函数/类/章节的起止行边界与签名（省去再调 --outline）")
     ap.add_argument("--structural", action="store_true",
                     help="结构搜索：按语义检索（裸except/空catch/装饰函数/函数定义等）")
     ap.add_argument("--git-log", action="store_true",
@@ -1859,32 +1861,56 @@ def run_query(argv=None, time_budget=None) -> tuple[str, int]:
     if args.json:
         raw_json = to_json(results, engine, mode, scope, path, elapsed, args.query,
                            since=args.since, until=args.until)
-        if args.agent:
-            # --agent 输出紧凑单行 JSON（省空白字节）；命中报表或 PDF 时附轻量分析入口提示
+        if args.block or args.agent:
             payload = json.loads(raw_json)
-            table_exts = {".csv", ".tsv", ".parquet", ".xlsx", ".jsonl", ".ndjson", ".sqlite", ".db"}
-            first_table = None
-            first_pdf = None
-            for r in results:
-                fp = r[0] if isinstance(r, (list, tuple)) and r else str(r)
-                ext = Path(fp).suffix.lower()
-                if first_table is None and ext in table_exts:
-                    first_table = fp
-                elif first_pdf is None and ext == ".pdf":
-                    first_pdf = fp
-                if first_table and first_pdf:
-                    break
-            hints: dict[str, str] = {}
-            if first_table:
-                hints["table_profile"] = f'argo table profile "{first_table}" --agent'
-            if first_pdf:
-                hints["pdf_outline"] = f'argo pdf "{first_pdf}" --outline'
-            if hints:
-                payload["handoff_hint"] = hints
-            return json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 0
+            if args.block:
+                from seek_inspect import resolve_enclosing_block
+                blk_cache: dict = {}
+                for item in payload.get("results") or []:
+                    if isinstance(item, dict) and item.get("path") and item.get("line"):
+                        blk = resolve_enclosing_block(item["path"], int(item["line"]), cache=blk_cache)
+                        if blk:
+                            item["block"] = blk
+            if args.agent:
+                # --agent 输出紧凑单行 JSON（省空白字节）；命中报表或 PDF 时附轻量分析入口提示
+                table_exts = {".csv", ".tsv", ".parquet", ".xlsx", ".jsonl", ".ndjson", ".sqlite", ".db"}
+                first_table = None
+                first_pdf = None
+                for r in results:
+                    fp = r[0] if isinstance(r, (list, tuple)) and r else str(r)
+                    ext = Path(fp).suffix.lower()
+                    if first_table is None and ext in table_exts:
+                        first_table = fp
+                    elif first_pdf is None and ext == ".pdf":
+                        first_pdf = fp
+                    if first_table and first_pdf:
+                        break
+                hints: dict[str, str] = {}
+                if first_table:
+                    hints["table_profile"] = f'argo table profile "{first_table}" --agent'
+                if first_pdf:
+                    hints["pdf_outline"] = f'argo pdf "{first_pdf}" --outline'
+                if hints:
+                    payload["handoff_hint"] = hints
+                return json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 0
+            return json.dumps(payload, ensure_ascii=False, indent=2), 0
         return raw_json, 0
-    return format_output(results, engine, mode, path, elapsed, args.query,
-                         len(results)), 0
+    out_text = format_output(results, engine, mode, path, elapsed, args.query,
+                             len(results))
+    if args.block and results and isinstance(results[0], (list, tuple)):
+        from seek_inspect import resolve_enclosing_block
+        blk_cache = {}
+        extra_lines = []
+        for r in results[:20]:
+            if len(r) >= 2 and isinstance(r[1], int) and r[1] > 0:
+                blk = resolve_enclosing_block(r[0], r[1], cache=blk_cache)
+                if blk:
+                    extra_lines.append(
+                        f"  ↳ [{Path(r[0]).name}:{r[1]}] {blk['symbol']} (L{blk['start_line']}-{blk['end_line']}, {blk['span']}L)"
+                    )
+        if extra_lines:
+            out_text = out_text + "\n" + "\n".join(extra_lines)
+    return out_text, 0
 
 
 def main(argv=None):

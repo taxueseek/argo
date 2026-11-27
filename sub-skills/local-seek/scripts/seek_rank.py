@@ -45,6 +45,7 @@ eval_rank 基线实测，11 用例 topk_hit 5/11、MRR 0.36）。本模块在**�
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections import Counter
 
@@ -276,8 +277,25 @@ def _row_fields(fp: str, text: str) -> dict[str, Counter]:
     return fields
 
 
+def rrf_scores(
+    n_items: int,
+    ranked_lists: list[tuple[list[int], float]],
+    k: int = 60,
+) -> list[float]:
+    """Reciprocal Rank Fusion (Cormack et al., SIGIR 2009)：无量纲多路融合。"""
+    fused = [0.0] * n_items
+    for indices, weight in ranked_lists:
+        if weight <= 0.0:
+            continue
+        for rank, idx in enumerate(indices, start=1):
+            fused[idx] += weight / (k + rank)
+    return fused
+
+
 def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
-              boost_fn=None) -> list[tuple[str, int, str]]:
+              boost_fn=None, *,
+              graph_scores: dict[str, float] | None = None,
+              use_rrf: bool = True) -> list[tuple[str, int, str]]:
     """BM25F 重排：返回相关度降序的新列表（并列分按 (路径, 行号) 升序）。
 
     rows 是 rg_search 有界池的 (路径, 行号, 截断行文本) 三元组（≤400 条）。
@@ -434,6 +452,30 @@ def rank_rows(rows: list[tuple[str, int, str]], raw_query: str,
             idxs.sort(key=lambda idx: (-scores[idx], rows[idx][1]))
             for rank_in_file, idx in enumerate(idxs[2:], start=2):
                 scores[idx] /= (1.0 + 0.35 * (rank_in_file - 1))
+
+    # P0/P1 RRF 多路融合：内容 BM25F+ 排名 + AST 符号引用图 PageRank 中心性排名
+    if use_rrf and len(by_fp) >= 2:
+        if graph_scores is None and os.environ.get("ARGO_SEEK_GRAPH_PAGERANK", "1") != "0":
+            try:
+                import seek_graph
+                graph_scores = seek_graph.rank_files_by_pagerank(list(by_fp.keys()))
+            except Exception:
+                graph_scores = None
+        if graph_scores and any(v > 0.0 for v in graph_scores.values()):
+            content_rank = sorted(
+                range(n_rows),
+                key=lambda i: (-scores[i], rows[i][0], rows[i][1]),
+            )
+            graph_rank = sorted(
+                range(n_rows),
+                key=lambda i: (-graph_scores.get(rows[i][0], 0.0), -scores[i], rows[i][0], rows[i][1]),
+            )
+            fused = rrf_scores(n_rows, [(content_rank, 1.0), (graph_rank, 0.22)])
+            order = sorted(
+                range(n_rows),
+                key=lambda i: (-fused[i], -scores[i], rows[i][0], rows[i][1]),
+            )
+            return [rows[i] for i in order]
 
     order = sorted(range(n_rows),
                    key=lambda i: (-scores[i], rows[i][0], rows[i][1]))

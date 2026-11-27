@@ -107,18 +107,64 @@ _SPLIT = re.compile(
 )
 
 
-def _index_body(raw: bytes) -> str:
-    """字节 → 索引正文。ASCII 快路免正则（代码语料的大头）；CJK 才逐字切分。"""
+_CAMEL_SPLIT = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)|[0-9]+")
+_IDENT_RUN = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]{2,}\b")
+_DEF_SYM_RE = re.compile(
+    r"^\s*(?:(?:async|pub|export|public|private|protected|static|inline|const)\s+)*"
+    r"(?:def|class|fn|func|struct|interface|enum|type|trait)\s+([A-Za-z_]\w*)",
+    re.M,
+)
+
+
+def _expand_identifiers(text: str) -> str:
+    """代码标识符展开：把 camelCase / snake_case 拆成子词附加，保留原词。"""
+    extra: list[str] = []
+    seen: set[str] = set()
+    for ident in _IDENT_RUN.findall(text):
+        if "_" in ident or any(c.isupper() for c in ident[1:]):
+            parts: list[str] = []
+            for seg in ident.split("_"):
+                if seg:
+                    parts.extend(m.group(0).lower() for m in _CAMEL_SPLIT.finditer(seg))
+            for p in parts:
+                if len(p) >= 2 and p not in seen:
+                    seen.add(p)
+                    extra.append(p)
+    if not extra:
+        return text
+    return text + "\n" + " ".join(extra)
+
+
+def _extract_symbols(text: str) -> str:
+    """抽取文件内的符号定义名并做标识符子词展开（供 BM25F symbols 域）。"""
+    syms = _DEF_SYM_RE.findall(text)
+    if not syms:
+        return ""
+    joined = " ".join(syms)
+    return _expand_identifiers(joined)
+
+
+def _path_terms(path: str) -> str:
+    """抽取路径与文件名词元并展开驼峰/蛇形（供 BM25F path_terms 域）。"""
+    parts = re.findall(r"[A-Za-z0-9_]+|[" + _CJK_CLASS + r"]+", path)
+    raw = " ".join(parts)
     if raw.isascii():
-        return raw.decode("ascii", "replace")
-    return _SPLIT.sub(" ", raw.decode("utf-8", "replace"))
+        return _expand_identifiers(raw)
+    return _SPLIT.sub(" ", _expand_identifiers(raw))
 
 
-def _build_match_query(keyword: str, max_terms: int = 12):
-    """查侧改写：CJK 逐字短语 + ASCII 前缀星；无 token 可用时返回 None。
+def _index_body(raw: bytes) -> str:
+    """字节 → 索引正文。支持标识符子词展开与 CJK 逐字切分。"""
+    if raw.isascii():
+        return _expand_identifiers(raw.decode("ascii", "replace"))
+    text = raw.decode("utf-8", "replace")
+    return _SPLIT.sub(" ", _expand_identifiers(text))
+
+
+def _build_match_query(keyword: str, max_terms: int = 16):
+    """查侧改写：CJK 逐字短语 + ASCII/驼峰蛇形拆分前缀星；无 token 可用时返回 None。
 
     丢弃标点与 FTS5 操作符（AND/NEAR/引号/冒号），同时关掉查询注入面。
-    与写侧 _index_body 的切分口径不对称会静默漏召回——两侧必须同改。
     """
     if not keyword or not keyword.strip():
         return None
@@ -129,6 +175,18 @@ def _build_match_query(keyword: str, max_terms: int = 12):
     for part in parts:
         if _CJK_RUN.fullmatch(part):
             out.append('"' + " ".join(part) + '"')
+        elif "_" in part or any(c.isupper() for c in part[1:]):
+            # 驼峰/蛇形查询支持原词或拆分子词匹配
+            sub: list[str] = []
+            for seg in part.split("_"):
+                if seg:
+                    sub.extend(m.group(0).lower() for m in _CAMEL_SPLIT.finditer(seg))
+            if len(sub) > 1:
+                sub_expr = " AND ".join(f'"{s}"*' for s in sub if len(s) >= 2)
+                if sub_expr:
+                    out.append(f'("{part}"* OR ({sub_expr}))')
+                    continue
+            out.append(f'"{part}"*')
         else:
             out.append(f'"{part}"*')
     return " ".join(out)
@@ -166,9 +224,15 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         " path TEXT PRIMARY KEY, mtime REAL NOT NULL, size INTEGER NOT NULL,"
         " root TEXT NOT NULL)")
     con.execute("CREATE INDEX IF NOT EXISTS files_root ON files(root)")
+    cols = {r[1] for r in con.execute("PRAGMA table_info(content)").fetchall()}
+    if cols and cols != {"path", "path_terms", "symbols", "body"}:
+        # 从旧版 2 列 FTS5 自动迁移到 BM25F 4 列（path, path_terms, symbols, body）
+        con.execute("DROP TABLE IF EXISTS content")
+        con.execute("DELETE FROM files")
+        con.execute("DELETE FROM meta")
     con.execute(
         "CREATE VIRTUAL TABLE IF NOT EXISTS content USING fts5("
-        " path UNINDEXED, body, tokenize='unicode61')")
+        " path UNINDEXED, path_terms, symbols, body, tokenize='unicode61')")
     con.execute(
         "CREATE TABLE IF NOT EXISTS meta ("
         " root TEXT PRIMARY KEY, updated_ts REAL, complete INTEGER, files INTEGER)")
@@ -317,8 +381,11 @@ def refresh(root: str, dots: bool = False, budget_s: float | None = None,
             for p, _m, _s, raw in rows:
                 if p in old:  # 只在确实有旧行时才删——首建时逐条 DELETE 是 O(n²)
                     con.execute("DELETE FROM content WHERE path = ?", (p,))
-                con.execute("INSERT INTO content(path, body) VALUES (?, ?)",
-                            (p, _index_body(raw)))
+                text_decoded = raw.decode("utf-8", "replace")
+                con.execute(
+                    "INSERT INTO content(path, path_terms, symbols, body) VALUES (?, ?, ?, ?)",
+                    (p, _path_terms(p), _extract_symbols(text_decoded), _index_body(raw)),
+                )
             out["indexed"] = len(rows)
         gone = [p for p in old if p not in want]
         if gone:
@@ -388,12 +455,13 @@ def content_candidates(query: str, root: str, dots: bool = False,
         sql = (
             "SELECT f.path FROM content JOIN files f ON f.path = content.path "
             "WHERE content MATCH ? AND " + " AND ".join(where) +
-            " ORDER BY bm25(content) LIMIT ?")
+            " ORDER BY bm25(content, 5.0, 3.0, 1.0) LIMIT ?")
         hits = [r[0] for r in
                 con.execute(sql, [match] + params + [_MAX_FILES_PER_QUERY])]
         if not hits:
             return []  # 索引完整且新鲜 → 这是真没有
         q_low = query.lower()
+        q_sub_terms = [t.lower() for t in _TOKEN.findall(query) if len(t) >= 2]
         out: list = []
         total = 0
         for path in hits:
@@ -406,7 +474,10 @@ def content_candidates(query: str, root: str, dots: bool = False,
                 continue
             for ln, line in enumerate(
                     data.decode("utf-8", "replace").splitlines(), 1):
-                if q_low in line.lower():
+                line_low = line.lower()
+                if q_low in line_low or (
+                    len(q_sub_terms) >= 2 and all(t in line_low for t in q_sub_terms)
+                ):
                     t = line.strip()  # 截断口径与 seek.truncate 逐位一致
                     out.append((path, ln,
                                 t if len(t) <= 120 else t[:119] + "…"))

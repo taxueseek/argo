@@ -240,3 +240,47 @@ def read_lines(path: str | Path, spec: str, *, as_json: bool = False) -> tuple[s
         }, ensure_ascii=False), 0
     out = [f"local-seek: {p.name} 第 {a}-{end} 行 / 共 {total} 行"]
     return "\n".join(out + picked), 0
+
+
+def resolve_enclosing_block(
+    path: str | Path,
+    line_no: int,
+    *,
+    cache: dict[str, list[tuple[int, int, int, str]]] | None = None,
+) -> dict[str, Any] | None:
+    """一跳定位命中行所属的最小语法块（函数/类/Markdown 章节）。
+
+    返回 {"symbol": str, "start_line": int, "end_line": int, "span": int} 或 None。
+    """
+    if line_no <= 0:
+        return None
+    p = Path(path)
+    key = str(p)
+    entries = cache.get(key) if cache is not None else None
+    if entries is None:
+        suffix = p.suffix.lower()
+        rules = _OUTLINE_RULES.get(suffix)
+        if not rules or not p.is_file():
+            if cache is not None:
+                cache[key] = []
+            return None
+        try:
+            lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return None
+        entries = _compute_outline_entries(lines, rules, suffix)
+        if cache is not None:
+            cache[key] = entries
+    best: tuple[int, int, int, str] | None = None
+    for start, end, span, text in entries:
+        if start <= line_no <= end:
+            if best is None or span < best[2]:
+                best = (start, end, span, text)
+    if best is None:
+        return None
+    return {
+        "symbol": best[3],
+        "start_line": best[0],
+        "end_line": best[1],
+        "span": best[2],
+    }
