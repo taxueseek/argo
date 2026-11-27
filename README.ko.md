@@ -22,6 +22,8 @@
 </p>
 
 > **taxueseek 스킬 시리즈** (검색·딥리서치): [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 77★ · [session-digger](https://github.com/taxueseek/session-digger) 34★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★ · [taxueskills](https://github.com/taxueseek/taxueskills) 25★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★ · [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 16★ | **DSH 플러그인**: [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 48★ · [dsh-files](https://github.com/taxueseek/dsh-files) 44★ · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) 3★ · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★
+>
+> DSH 플러그인(`@taxueseek/argo-dsh`)은 [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt)를 통해 최신 DeepSeek Harness 업그레이드 호환성과 코드 품질을 지속적으로 최적화합니다.
 
 **Argo(아르고)**는 AI 에이전트를 위한 오픈소스 멀티 엔진 검색·웹 수집·증거 검증 도구입니다. **유료 API 키 없이도 무료 로컬 폴백으로 즉시 실행**되며, 18개 언어와 도메인(학술, 코드, 금융, 뉴스)에 맞춰 자동 라우팅하고 원문 기반 신뢰도 검증을 제공합니다.
 

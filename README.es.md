@@ -22,6 +22,8 @@
 </p>
 
 > **Serie de skills taxueseek** (búsqueda e investigación profunda): [plainspoken-writing](https://github.com/taxueseek/plainspoken-writing) 77★ · [session-digger](https://github.com/taxueseek/session-digger) 34★ · [taxue-invest](https://github.com/taxueseek/taxue-invest) 30★ · [taxueskills](https://github.com/taxueseek/taxueskills) 25★ · [taxue-creative-style](https://github.com/taxueseek/taxue-creative-style) 19★ · [ime-lexicon](https://github.com/taxueseek/ime-lexicon) 16★ | **Plugins DSH**: [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 48★ · [dsh-files](https://github.com/taxueseek/dsh-files) 44★ · [taxue-dsh-artisan](https://github.com/taxueseek/taxue-dsh-artisan) 3★ · [dsh-plugin-guard](https://github.com/taxueseek/dsh-plugin-guard) 2★
+>
+> El plugin DSH (`@taxueseek/argo-dsh`) se adapta y optimiza continuamente para las últimas versiones de DeepSeek Harness mediante [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt).
 
 **Argo** es una herramienta de código abierto para búsqueda multi-motor, extracción web y verificación de evidencia diseñada para agentes de IA. Funciona **sin necesidad de claves API de pago** mediante respaldo local gratuito, enruta consultas en **18 idiomas** y verifica hechos directamente sobre el texto completo de las fuentes.
 

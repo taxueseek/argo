@@ -164,7 +164,7 @@ Argo exposes **3 orthogonal Skills** (`argo`, `argo-wide-research`, `local-seek`
 
 ## DSH Plugin
 
-Argo ships a first-class **DeepSeek Harness (DSH)** plugin (`@taxueseek/argo-dsh`) with three invocation channels from one capability set:
+Argo ships a first-class **DeepSeek Harness (DSH)** plugin (`@taxueseek/argo-dsh`)—continuously adapted and audited against the latest DSH host releases via [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) (upgrade scanning, breaking-change checks, and defensive code review)—with three invocation channels from one capability set:
 1. **19 `mcp__argo__*` tools** (full MCP bundle; default MCP surface exposes 4 core tools, set `ARGO_MCP_TOOLS=all` for all 19).
 2. **Search + `wide_research` parallel orchestration** (subpackage).
 3. **Host `web_search` / `web_fetch` seam replacement** (requires explicit provider pin in the web profile; see [packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)).

@@ -161,7 +161,7 @@ Argo 对外只暴露 **3 个正交 Skill**（`argo`、`argo-wide-research`、`lo
 
 ## DSH 插件
 
-Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh`），同一套能力支持三条调用通道：
+Argo 提供完整的 **DeepSeek Harness（DSH）** 插件（`@taxueseek/argo-dsh`），通过 [plugin-fast-adapt](https://github.com/taxueseek/plugin-fast-adapt) 持续完成最新版宿主升级适配、破坏性变更扫描与防御性代码审查优化，同一套能力支持三条调用通道：
 1. **19 个 `mcp__argo__*` 工具**（主包全量；MCP 默认暴露 4 个核心工具，设 `ARGO_MCP_TOOLS=all` 开启全部 19 个）。
 2. **搜索工具 + `wide_research` 并行研究编排**（子包）。
 3. **接管宿主 `web_search` / `web_fetch` 接缝**（在 web profile 中需显式指定 provider pin，避免 `WEB_PROVIDER_AMBIGUOUS`，详见 [packages/dsh-plugin/README.md](packages/dsh-plugin/README.md)）。
