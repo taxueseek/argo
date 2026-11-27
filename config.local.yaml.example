@@ -9,7 +9,7 @@
 #
 # 合并语义：**深度合并**，本文件优先级最高（config.yaml → engines/*.yaml 外置
 # 声明 → 本文件）。所以只需写要改的键，不用整份抄引擎声明。dict 逐键递归，
-# list 整体替换。
+# list 整体替换；唯一例外是 domains——它按 name 逐项合并（见例 4）。
 #
 # 生效范围：所有读取 load_config() 的地方（引擎表、域规则、cache、execution…）。
 # 改完立即生效（config_stamp / 磁盘缓存键都认它）；本文件损坏时静默忽略，
@@ -38,6 +38,21 @@
 # engines:
 #   some_engine:
 #     enabled: false
+
+
+# ── 例 4：本机改某个域的源序（domains 按 name 合并）─────────────────────────
+# domains 是 99 个域的清单，整份替换要抄全表；所以这一个键按 name 逐项合并：
+# 写哪个域就只动哪个域，域内没写的键（patterns / priority / desc）保持公共值。
+# 典型用途：某源本机欠费停用后，把仍有额度的源提到预算窗口内（窗口只到第 2~3 位，
+# 位次靠后的源实际不参与自动路由）。
+#
+# domains:
+#   - name: chinese_general
+#     engines_combo: [metaso, anysearch]
+#     primary: metaso
+#
+# 覆盖层改了域序后，随公开发的派生物（docs/ENGINE_CATALOG.md、
+# backends/engine_registry.yaml）和休眠台账仍按 config.yaml 计算，不受影响。
 
 # ── 不想用覆盖层时 ───────────────────────────────────────────────────────────
 # 直接删掉或改名 config.local.yaml 即可，config.yaml 的行为完全不受影响。

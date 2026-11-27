@@ -95,9 +95,11 @@ def _collect() -> dict[str, Any]:
     from engine_status import list_engines_detail
     import research as _research
 
-    cfg = load_config()
+    # include_local=False：这份文档随公开仓发版，本机覆盖层（停用某引擎、改域源
+    # 序）不该出现在里面，否则每台机器生成出不同的 catalog。
+    cfg = load_config(include_local=False)
     specs = cfg.get("engines", {})
-    rows = list_engines_detail()
+    rows = list_engines_detail(include_local=False)
     quota = json.loads((SKILL_DIR / "backends" / "quota_profiles.json")
                        .read_text(encoding="utf-8"))
 
@@ -403,7 +405,7 @@ def _count_truth() -> dict[str, str]:
     return {
         "total": str(total),
         "usable": str(usable),
-        "domains": str(len(get_domains(load_config()))),
+        "domains": str(len(get_domains(load_config(include_local=False)))),
         "tools": str(len(TOOLS)),
         "version": version.group(1),
     }

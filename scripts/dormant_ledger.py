@@ -188,7 +188,11 @@ DORMANT_ALLOWLIST: dict[str, str] = {
 }
 
 def dormant_engines() -> dict[str, list[tuple[str, int]]]:
-    """位置性休眠盘点：引擎在它出现的**每一个**域里都落预算外。"""
+    """位置性休眠盘点：引擎在它出现的**每一个**域里都落预算外。
+
+    读**公共配置**（include_local=False）：这份台账核对的是随发版的 config.yaml
+    里的域表，本机覆盖层改了源序不该让台账在本机变红。
+    """
     import route
     from engine_policy import combo_budget, get_engine_tier
 
@@ -196,7 +200,7 @@ def dormant_engines() -> dict[str, list[tuple[str, int]]]:
     slot = route._VERTICAL_NEW_SOURCE
     lang_keep = {e for v in route._LANG_PREFERRED_ENGINES.values() for e in v}
     appear: dict[str, list[tuple[str, int, bool, bool]]] = {}
-    for d in (load_config().get("domains") or []):
+    for d in (load_config(include_local=False).get("domains") or []):
         if not isinstance(d, dict):
             continue
         combo = list(d.get("engines_combo") or [])
